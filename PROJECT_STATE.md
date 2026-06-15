@@ -31,10 +31,11 @@ Confirmed lineup:
 - [x] Initialize repo, write BUILD-SPEC rev1 to docs/, create GitHub repo (private).
 - [x] Research spike (6 parallel) grounding every beat against June 2026 reality →
       research/01..06. Verification method: web research vs official docs, dated 2026-06-15.
-- [ ] **NEXT:** Write BUILD-SPEC rev2 — apply the scope reframe AND the research
-      corrections below. Update VERSIONS.lock candidates.
-- [ ] Build-spike the two unverified load-bearing facts (see Risks) before Phase 4/MCP
-      beat are committed as live.
+- [x] Write BUILD-SPEC rev2 — scope reframe + all research corrections applied
+      (docs/BUILD-SPEC.md). Bad-MCP beat planned LIVE, gated on Phase 4b build-spike.
+- [ ] **NEXT:** Begin build at Phase 0 (host cluster + tooling + VERSIONS.lock) on the
+      netcup VPS, OR review rev2 first if Michael wants changes before building.
+- [ ] Run Phase 4b build-spikes before beats 2 (native webhook variant) and 3 go live.
 - [ ] Phases 0–9 build per rev2.
 
 ## Research corrections that MUST flow into rev2 (source of truth: research/*.md)
