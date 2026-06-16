@@ -104,9 +104,22 @@ full section-by-section reconciliation of the spec is still pending.
   output Regex blocks+redacts FAKE-PROD-DB-PASSWORD-sentinel-9f2a (is_valid=false, [REDACTED]),
   passes clean output; input PromptInjection (DeBERTa) blocks an injection (is_valid=false),
   passes benign. Verdict envelope confirmed: {is_valid, scanners, sanitized_output/prompt}.
-  Fixed: pod needed numeric runAsUser (image uses named user). REMAINING for Beat 2: wire the
-  guard into the agent PATH (agentgateway request-phase input guard + LLM Guard output sidecar);
-  carries the documented agentgateway-A2A [SPIKE]s.
+  Fixed: pod needed numeric runAsUser (image uses named user).
+- 2026-06-17 **Beat 2 guard-proxy built + plumbed (live)** — realized the spec's output
+  "sidecar" as a real A2A-aware reverse proxy (agent/gateway/guard-proxy/proxy.py, stdlib,
+  runs from stock python image via ConfigMap; kagent owns the agent pod so the inspection
+  point is a proxy in front of the agent Service, not an in-pod sidecar). Deployed as
+  guard-proxy in attendee-test; forwards A2A to the agent and calls LLM Guard; input-block
+  (403 on injection) + output-scrub (redact/block sentinel) toggled by INPUT_GUARD/OUTPUT_GUARD.
+- **BLOCKER (account-level): Bedrock Anthropic use-case form not submitted.** All Anthropic
+  models on account 515966504359 fail with ResourceNotFoundException "Model use case details
+  have not been submitted." `aws bedrock get-use-case-for-model-access` => form never filled.
+  Base model ids reject on-demand (must use us.* inference profiles); the us.* profiles fail
+  the use-case gate. The one early PONG hit a brief propagation window. FIX is Michael's:
+  submit the Anthropic use-case form (Bedrock console -> Model access) OR authorize me to run
+  `put-use-case-for-model-access` + `create-foundation-model-agreement` with Accenture's real
+  use-case details. Until then the live agent LLM path (and the end-to-end agent-exfil demo for
+  Beat 2) is blocked. The guard engine + proxy are verified independently.
 - Infra fixes landed: EBS CSI driver + default gp3 SC (EKS ships neither); IRSA for
   agent-sa -> Bedrock. Deleted kagent's default agent fleet (broken default OpenAI config).
 - DEFERRED: kube-prometheus-stack install wedged on the test cluster; redo (lighter,
