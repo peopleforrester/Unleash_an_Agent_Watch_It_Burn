@@ -31,7 +31,7 @@ if kubectl "${AS[@]}" create clusterrolebinding agent-admin \
 fi
 
 echo "==> Beat 1, Step 3: out-of-band mutation of an ArgoCD-managed resource — expect DENY (admission)"
-if kubectl "${AS[@]}" -n "${NS}" scale deployment argocd-managed-app --replicas=5; then
+if kubectl "${AS[@]}" -n "${NS}" patch deployment argocd-managed-app --type=merge -p '{"spec":{"replicas":5}}'; then
   echo "!! UNEXPECTED: drift admitted — block-argocd-drift policy failed" >&2
   exit 1
 fi
