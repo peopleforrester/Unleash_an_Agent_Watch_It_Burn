@@ -1,0 +1,13 @@
+# ABOUTME: Default gp3 StorageClass (EBS CSI) applied to every cluster after creation.
+# ABOUTME: EKS ships only an in-tree gp2 class that cannot provision without the CSI driver.
+apiVersion: storage.k8s.io/v1
+kind: StorageClass
+metadata:
+  name: gp3
+  annotations:
+    storageclass.kubernetes.io/is-default-class: "true"
+provisioner: ebs.csi.aws.com
+volumeBindingMode: WaitForFirstConsumer
+allowVolumeExpansion: true
+parameters:
+  type: gp3
