@@ -42,10 +42,22 @@ full section-by-section reconciliation of the spec is still pending.
       research/01..06. Verification method: web research vs official docs, dated 2026-06-15.
 - [x] Write BUILD-SPEC rev2 — scope reframe + all research corrections applied
       (docs/BUILD-SPEC.md). Bad-MCP beat planned LIVE, gated on Phase 4b build-spike.
-- [ ] **NEXT:** Begin build at Phase 0 (host cluster + tooling + VERSIONS.lock) on the
-      netcup VPS, OR review rev2 first if Michael wants changes before building.
-- [ ] Run Phase 4b build-spikes before beats 2 (native webhook variant) and 3 go live.
-- [ ] Phases 0–9 build per rev2.
+- [x] **Declarative build wave complete (on `staging`, commit 6d31e5c).** Every
+      buildable-without-a-cluster artifact authored + static-validated (shell syntax,
+      YAML parse, py_compile): Kyverno policies, scoped agent RBAC + kagent v1alpha2
+      Bedrock manifests, agentgateway + LLM Guard configs + all toggles, all three
+      beats with deterministic fallbacks, ArgoCD ApplicationSet + hub/spoke eksctl
+      configs, verify harness, observability/Falco, teardown/cost, facilitation. All
+      carry verify-at-build flags. NOTHING verified on a live cluster.
+- [ ] **NEXT — needs Michael + a live cluster (Track B):** (1) attendee count N +
+      ceiling; (2) confirm AWS account 515966504359 / user nwuser is the right place to
+      spend; (3) go-ahead to provision real EKS (cost scales with N); (4) install
+      eksctl + docker + asciinema on the VPS (may need sudo). Then: bootstrap hub,
+      provision spokes, run Phase 4b spikes, fill VERSIONS.lock, record fallbacks,
+      merge `staging` → `main` only after verify/run-all.sh passes.
+- [ ] Resolve build placeholders surfaced by the build wave: egress-proxy sidecar
+      image (agent/gateway/llm-guard-sidecar.yaml), Bedrock model id + region, LLM Guard
+      image digest (laiyer/llm-guard-api:0.3.16), region (us-west-2 placeholder).
 
 ## Research corrections that MUST flow into rev2 (source of truth: research/*.md)
 
