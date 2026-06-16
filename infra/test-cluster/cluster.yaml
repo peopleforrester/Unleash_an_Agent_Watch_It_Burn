@@ -1,0 +1,32 @@
+# ABOUTME: Small single-cluster EKS config for live validation of the workshop stack.
+# ABOUTME: Not the final topology — used to verify the beats before scaling to hub+spokes.
+# Node role carries bedrock:InvokeModel so kagent can reach Bedrock via the default cred chain.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: watch-it-burn-test
+  region: us-west-2
+  # k8s version omitted on purpose -> eksctl uses its current default supported version.
+
+iam:
+  withOIDC: true # enables IRSA later (gateway/LLM Guard/Bedrock pod-scoped creds)
+
+managedNodeGroups:
+  - name: ng-default
+    instanceType: t3.large
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    volumeSize: 40
+    labels:
+      workshop-spoke: "true" # so the ArgoCD ApplicationSet cluster generator can target it later
+    iam:
+      attachPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+            Resource: "*"
