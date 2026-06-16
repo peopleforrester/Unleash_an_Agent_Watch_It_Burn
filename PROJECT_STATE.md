@@ -100,6 +100,13 @@ full section-by-section reconciliation of the spec is still pending.
   main resource (not /scale).
 - 2026-06-17 **kagent + Bedrock PASS** — agent (v1alpha2, Bedrock ModelConfig,
   us.anthropic.claude-sonnet-4-6, IRSA creds) answered a prompt over A2A end to end.
+- 2026-06-17 **Beat 2 guardrail engine PASS (LLM Guard, live)** — deterministic core proven:
+  output Regex blocks+redacts FAKE-PROD-DB-PASSWORD-sentinel-9f2a (is_valid=false, [REDACTED]),
+  passes clean output; input PromptInjection (DeBERTa) blocks an injection (is_valid=false),
+  passes benign. Verdict envelope confirmed: {is_valid, scanners, sanitized_output/prompt}.
+  Fixed: pod needed numeric runAsUser (image uses named user). REMAINING for Beat 2: wire the
+  guard into the agent PATH (agentgateway request-phase input guard + LLM Guard output sidecar);
+  carries the documented agentgateway-A2A [SPIKE]s.
 - Infra fixes landed: EBS CSI driver + default gp3 SC (EKS ships neither); IRSA for
   agent-sa -> Bedrock. Deleted kagent's default agent fleet (broken default OpenAI config).
 - DEFERRED: kube-prometheus-stack install wedged on the test cluster; redo (lighter,
