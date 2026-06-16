@@ -45,3 +45,7 @@ addons:
   - name: coredns
   - name: kube-proxy
   - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true # creates the IRSA role the driver needs; without it PVCs never bind
+# NOTE: also apply a default gp3 StorageClass after creation (ebs.csi.aws.com) — see
+# infra/test-cluster/bootstrap-test.sh / the gp3 SC manifest. EKS ships only an in-tree gp2 SC.

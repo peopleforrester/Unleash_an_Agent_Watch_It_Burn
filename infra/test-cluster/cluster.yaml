@@ -30,3 +30,12 @@ managedNodeGroups:
               - bedrock:InvokeModel
               - bedrock:InvokeModelWithResponseStream
             Resource: "*"
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true # EKS has no CSI driver by default; PVCs (kagent Postgres, etc.) need it.
+      # A default gp3 StorageClass is applied post-create (see the storage step in the build log).
