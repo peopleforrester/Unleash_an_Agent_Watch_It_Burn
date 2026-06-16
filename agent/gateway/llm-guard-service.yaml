@@ -103,6 +103,11 @@ spec:
       automountServiceAccountToken: false
       securityContext:
         runAsNonRoot: true
+        # The laiyer image declares a NAMED user ("user", home /home/user); k8s needs a NUMERIC
+        # uid to verify non-root. 1000 is that account — also owns the model cache dir.
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
