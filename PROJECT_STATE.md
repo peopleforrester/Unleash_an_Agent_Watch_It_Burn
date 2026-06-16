@@ -91,10 +91,23 @@ full section-by-section reconciliation of the spec is still pending.
   first-class (`execute_tool` / `gen_ai.tool.name`). Content capture OFF by default;
   re-leak trap is real. Backend: Grafana Tempo + Grafana.
 
+## LIVE VERIFICATION LOG (test cluster watch-it-burn-test, us-west-2, EKS 1.34.8)
+
+- 2026-06-17 **Beat 1 PASS** — `verify/beat-01.sh` green against the live cluster:
+  non-compliant workload admits in Audit / rejects in Enforce; ClusterRoleBinding
+  forbidden by RBAC; out-of-band drift denied by admission. Fixed two real bugs:
+  block-argocd-drift must exclude system SAs/nodes/admins; drift test must patch the
+  main resource (not /scale).
+- 2026-06-17 **kagent + Bedrock PASS** — agent (v1alpha2, Bedrock ModelConfig,
+  us.anthropic.claude-sonnet-4-6, IRSA creds) answered a prompt over A2A end to end.
+- Infra fixes landed: EBS CSI driver + default gp3 SC (EKS ships neither); IRSA for
+  agent-sa -> Bedrock. Deleted kagent's default agent fleet (broken default OpenAI config).
+- DEFERRED: kube-prometheus-stack install wedged on the test cluster; redo (lighter,
+  Tempo+Grafana focus) at the observability step.
+
 ## Verification method
 
-Research-based (web search vs official docs/GitHub, dated 2026-06-15). NOTHING below
-has been verified on a live cluster yet. "Verified" in research notes = confirmed against
+Research-based for unbuilt parts; LIVE-on-EKS for Beat 1 and the agent (above). "Verified" in research notes = confirmed against
 current docs, not against a running build.
 
 ## Unverified, load-bearing — build-spike BEFORE committing as live

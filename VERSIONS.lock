@@ -27,3 +27,16 @@ kube-prometheus-stack  chart 86.2.3
 otel-collector         v0.154.0 (contrib distro)
 agentgateway           OSS v1.2.1  chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (digest TODO at deploy)
+
+## INSTALLED & VERIFIED on test cluster watch-it-burn-test (live, 2026-06-17)
+eks-kubernetes         v1.34.8-eks-0de9cde
+argo-cd                chart argo-cd-9.5.21        app v3.4.3   (deployed)
+kyverno                chart kyverno-3.8.1         app v1.18.1  (deployed)
+falco                  chart falco-9.1.0          app 0.44.1   (deployed)
+kagent                 chart kagent-0.9.7         app 0.9.7    (running; helm status 'failed' due to --wait timeout, workloads healthy)
+kagent-crds            chart kagent-crds-0.9.7
+aws-ebs-csi-driver     EKS addon + IRSA role witb-ebs-csi-role; default gp3 StorageClass
+agent-bedrock-irsa     role witb-agent-bedrock on sa attendee-test/agent-sa
+kube-prometheus-stack  chart 86.2.3 app v0.91.0   (install wedged on test cluster; redo at observability step)
+LIVE RESULT: Beat 1 verified (verify/beat-01.sh PASS); kagent agent answered a prompt
+             through Bedrock us.anthropic.claude-sonnet-4-6 (A2A round-trip, 800 tokens).
