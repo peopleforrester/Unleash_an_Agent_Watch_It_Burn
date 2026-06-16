@@ -17,11 +17,13 @@ test-cluster           watch-it-burn-test (eksctl; EKS default k8s version)
 
 ## Component versions (research-grounded 2026-06-16; exact pins confirmed at install)
 kagent                 chart 0.9.7  (CRD group kagent.dev/v1alpha2; Bedrock native)
+                       chart ref: oci://ghcr.io/kagent-dev/kagent/helm/kagent (CONFIRMED reachable 2026-06-16)
+                       crds ref:  oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds (confirm at deploy)
 vcluster               REMOVED (architecture = separate EKS cluster per attendee)
 kyverno                app v1.18.1 / chart 3.8.1  (rule-level validate.failureAction)
 argocd                 v3.4.3
 falco                  0.44.1
 kube-prometheus-stack  chart 86.2.3
 otel-collector         v0.154.0 (contrib distro)
-agentgateway           OSS v1.2.1 (oci://cr.agentgateway.dev/charts)
+agentgateway           OSS v1.2.1  chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (digest TODO at deploy)
