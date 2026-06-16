@@ -107,7 +107,9 @@ fi
 ORIG_REPLICAS="$("${KUBECTL[@]}" -n "${NS}" get deployment "${ARGOCD_MANAGED}" \
     -o jsonpath='{.spec.replicas}' 2>/dev/null || echo "")"
 
-DRIFT_OUT="$("${KUBECTL[@]}" "${AS[@]}" -n "${NS}" scale deployment "${ARGOCD_MANAGED}" --replicas=5 2>&1)" \
+# Patch the MAIN resource (not the /scale subresource): scale needs a different RBAC verb
+# and is not intercepted by a policy matching Deployment UPDATE, so it would bypass the wall.
+DRIFT_OUT="$("${KUBECTL[@]}" "${AS[@]}" -n "${NS}" patch deployment "${ARGOCD_MANAGED}" --type=merge -p '{"spec":{"replicas":5}}' 2>&1)" \
     && fail "drift mutation ADMITTED -- block-argocd-drift admission policy failed (§2 wall 3 broken)"
 echo "${DRIFT_OUT}" | grep -qiE 'admission|drift|denied|argocd|not allowed' \
     || fail "drift rejection was not an admission message: ${DRIFT_OUT}"
