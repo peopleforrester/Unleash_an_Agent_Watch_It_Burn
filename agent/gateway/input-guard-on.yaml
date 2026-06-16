@@ -1,0 +1,55 @@
+# ABOUTME: Toggle state — INPUT prompt-injection guard ON (beat-2 input "after").
+# ABOUTME: Wires the request-phase prompt-guard webhook to LLM Guard; injection is HARD-REJECTED.
+#
+# CONFIRMED mechanism (research/02-agentgateway.md §3): request-phase prompt-guard `webhook`
+# action supports RejectAction (hard block + status_code), so a prompt-injection request is
+# rejected at the gateway BEFORE it reaches the agent. The webhook target is the LLM-Guard-backed
+# wrapper that speaks the agentgateway guardrail contract (POST /request -> Pass|Mask|Reject) and
+# calls LLM Guard /analyze/prompt with the PromptInjection (DeBERTa) scanner underneath.
+#
+# verify-at-build: confirm guardrails.request[].webhook.target.host field path on the OSS 1.2.1
+#   standalone schema (research note pins the path from docs; re-confirm against live v1.2.1).
+# verify-at-build: [SPIKE] confirm the request webhook fires for the kagent A2A backend, not only
+#   for a recognized chat-completions LLM provider (research/02-agentgateway.md §"Unverified").
+# verify-at-build: confirm fail-CLOSED — if the webhook/LLM Guard is down the request must be
+#   rejected, not passed through (no silent fail-open; research §Risks.4).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: agentgateway
+    workshop.toggle/input-guard: "on"
+data:
+  config.yaml: |
+    listeners:
+      - name: agent-a2a
+        protocol: HTTP
+        port: 3000
+        routes:
+          - name: to-agent
+            backends:
+              - host: workshop-agent.ATTENDEE_NAMESPACE.svc.cluster.local
+                port: 8080 # verify-at-build: confirm the kagent A2A serving port
+            policies:
+              # ON: request-phase prompt-guard active -> hard reject on prompt injection.
+              promptGuard:
+                request:
+                  webhook:
+                    target:
+                      host: llm-guard-webhook.ATTENDEE_NAMESPACE.svc.cluster.local:8001
+                  # the wrapper returns RejectAction{status_code:403} when LLM Guard's
+                  # PromptInjection scanner flags the request -> agent never sees it.
+      - name: agent-mcp
+        protocol: HTTP
+        port: 3001
+        targets:
+          - name: workshop-mcp
+            host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
+            port: 8080
+    policies:
+      mcpAuthorization:
+        rules:
+          - 'true' # MCP authz governed by its own toggle files; left at default Allow here.

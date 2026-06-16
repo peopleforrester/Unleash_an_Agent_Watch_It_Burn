@@ -1,0 +1,85 @@
+# ABOUTME: Child ArgoCD Applications for one spoke — one per IDP/agent/beats component.
+# ABOUTME: Created on the hub; each syncs its real repo path into the spoke (destination: in-cluster).
+#
+# verify-at-build: confirmed against Argo CD v3.4.3 (research/06-cncf-stack.md).
+#  - These are rendered once per spoke by the parent ApplicationSet (app-of-apps). They live in the
+#    spoke's argocd content path and target `https://kubernetes.default.svc` because, once the parent
+#    Application lands them, ArgoCD on the hub reconciles each against the SAME destination the parent
+#    chose. Keeping namespace=workshop matches the parent.
+#  - Children whose component dir is still in flight (Phase 4/5) are marked below; flip them on only
+#    once the path renders. Do NOT point a child at a missing/empty path — it will sync to nothing.
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kyverno-policies
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: workshop
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: main
+    path: platform/kyverno/policies # beat-1 require-limits (Audit) + block-argocd-drift (Enforce)
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workshop
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: agent
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: workshop
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: main
+    path: agent # kagent Agent + Bedrock ModelConfig + scoped Role/RoleBinding (rbac/)
+    directory:
+      recurse: true
+      exclude: "gateway/*" # gateway is its own child Application below
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workshop
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: beats
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: workshop
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: main
+    # The planted fake secrets AND the ArgoCD-managed sample app that beat 1's drift
+    # attack + self-heal acts on. recurse so each beat's plant-*.yaml is picked up.
+    path: beats
+    directory:
+      recurse: true
+      include: "*plant-fake-secret.yaml" # only declarative cluster state; scripts/prompts/md are not manifests
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: workshop
+  syncPolicy:
+    automated: { prune: true, selfHeal: true } # selfHeal here is the beat-1 self-heal demo target
+    syncOptions: [CreateNamespace=true, ServerSideApply=true]
+# ---
+# verify-at-build: the following children are enabled once their component dirs render (Phase 4/5).
+# Uncomment after `kubectl kustomize <path>` (or a raw-manifest check) succeeds for each.
+#
+# - falco         -> path: platform/falco              (runtime detection)
+# - observability -> path: platform/observability      (OTel collector; exporter points at HUB Tempo)
+# - gateway       -> path: agent/gateway               (agentgateway + LLM Guard, Regex-only default)

@@ -1,0 +1,31 @@
+# ABOUTME: The scoped workshop agent (kagent v1alpha2), bound to the tight SA.
+# ABOUTME: MCP tools are attached with an EXPLICIT toolNames allowlist — never omit it.
+#
+# verify-at-build: confirmed against kagent 0.9.7 / kagent.dev/v1alpha2 (research/01-kagent.md).
+#  - spec.declarative.modelConfig is a string reference to the ModelConfig name.
+#  - spec.declarative.deployment.serviceAccountName binds the agent pod to our scoped SA.
+#  - spec.declarative.tools[].mcpServer.toolNames is the per-agent allowlist. Omitting it
+#    exposes ALL of a server's tools — that omission is the beat-3 footgun and is demonstrated
+#    there deliberately, NOT here. This "good" agent lists only the tools the beats need.
+#  - requireApproval (per-tool human gate) exists in the schema but its runtime enforcement
+#    through the serving path is [SPIKE] (Phase 3) — do not rely on it until verified.
+apiVersion: kagent.dev/v1alpha2
+kind: Agent
+metadata:
+  name: workshop-agent
+  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+spec:
+  declarative:
+    modelConfig: bedrock-claude
+    systemMessage: >-
+      You are a platform engineering assistant operating inside a single Kubernetes
+      namespace. You help deploy and inspect workloads using the tools provided.
+    deployment:
+      serviceAccountName: agent-sa
+    tools:
+      - mcpServer:
+          name: workshop-mcp
+          toolNames:
+            - list_pods
+            - apply_manifest
+            - get_secret

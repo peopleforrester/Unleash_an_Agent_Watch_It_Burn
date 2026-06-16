@@ -1,0 +1,90 @@
+# ABOUTME: Toggle state — OUTPUT exfil guard ON (beat-2 output "after"; PRIMARY mechanism).
+# ABOUTME: Injects the LLM Guard reverse-proxy sidecar and routes responses through /analyze/output.
+#
+# ON adds the sidecar from llm-guard-sidecar.yaml to the agent pod and points inbound traffic at
+# the proxy port (9090) instead of the raw agent port. Every agent response is sent to LLM Guard
+# POST /analyze/output:
+#   is_valid == false (sentinel matched the output Regex scanner) -> BLOCK (hard error, raw body
+#                                                                     never leaves)
+#   is_valid == true  -> forward sanitized_output (redacted) instead of the raw response
+# So FAKE-PROD-DB-PASSWORD-sentinel-9f2a does NOT appear in the response (the exfil "after").
+#
+# This is the PRIMARY output guard precisely because the agentgateway native response webhook can
+# only Mask-not-Reject and is unverified for an A2A backend (see llm-guard-sidecar.yaml header and
+# GATEWAY-NOTES.md). The sidecar gives the hard block the beat-2 "blocked" copy needs.
+#
+# verify-at-build: build + pin the egress-proxy image digest (it is a real proxy, not a mock).
+# verify-at-build: confirm the strategic-merge patch lands the sidecar on the kagent-rendered
+#   Deployment without clobbering the agent container; confirm the Service targetPort move to 9090
+#   actually forces all responses through the proxy. Make the apply idempotent.
+# verify-at-build: confirm fail-CLOSED (PROXY_FAIL_CLOSED=true in the sidecar) blocks when LLM
+#   Guard is unreachable — never pass the raw response through (no silent fallback).
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-agent # verify-at-build: must match the Deployment kagent renders for Agent workshop-agent
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    workshop.toggle/output-guard: "on"
+spec:
+  template:
+    spec:
+      # The sidecar container is defined in full in llm-guard-sidecar.yaml; this patch adds it.
+      # Kept in sync with that file — see llm-guard-sidecar.yaml for the authoritative spec + env.
+      containers:
+        - name: llm-guard-egress-proxy
+          image: PLACEHOLDER_EGRESS_PROXY_IMAGE # verify-at-build: same image as llm-guard-sidecar.yaml; pin @sha256
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: proxy
+              containerPort: 9090
+          env:
+            - name: UPSTREAM_AGENT_URL
+              value: "http://127.0.0.1:8080" # verify-at-build: kagent A2A serving port
+            - name: LLM_GUARD_URL
+              value: "http://llm-guard.ATTENDEE_NAMESPACE.svc.cluster.local:8000"
+            - name: LLM_GUARD_ANALYZE_PATH
+              value: "/analyze/output"
+            - name: LLM_GUARD_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-guard-auth
+                  key: token
+            - name: ON_INVALID
+              value: "block"
+            - name: PROXY_FAIL_CLOSED
+              value: "true"
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+---
+# Route inbound agent traffic through the proxy port so all responses traverse the guard.
+apiVersion: v1
+kind: Service
+metadata:
+  name: workshop-agent
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    workshop.toggle/output-guard: "on"
+spec:
+  ports:
+    - name: a2a
+      port: 8080
+      targetPort: 9090 # verify-at-build: redirect to the sidecar proxy so responses are inspected

@@ -1,0 +1,15 @@
+# ABOUTME: Binds the workshop agent ServiceAccount to its tight namespaced Role.
+# ABOUTME: No ClusterRoleBinding anywhere — the agent is never cluster-scoped.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: workshop-agent
+  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: workshop-agent
+subjects:
+  - kind: ServiceAccount
+    name: agent-sa
+    namespace: ATTENDEE_NAMESPACE

@@ -1,0 +1,42 @@
+# ABOUTME: eksctl ClusterConfig for the small HUB EKS cluster (ArgoCD + Grafana/Tempo only).
+# ABOUTME: One control plane for the whole workshop; spokes register to its ArgoCD. Provider var: EKS.
+#
+# verify-at-build: confirm the EKS control-plane version against the eksctl/AWS supported range at
+# build time and re-pin `version` below. The hub runs NO attendee workloads — it only hosts ArgoCD,
+# kube-prometheus-stack (Grafana), and Tempo, so a small 2-node group is enough. Provider abstraction:
+# this file is the one place the provider lives (EKS default); swap to a GKE/AKS equivalent to change it.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: workshop-hub
+  region: us-west-2 # verify-at-build: Bedrock model availability + Moscone latency; align with spokes
+  version: "1.33" # verify-at-build: re-pin to a currently supported EKS version
+
+iam:
+  withOIDC: true # required so ArgoCD/Grafana/Tempo can use IRSA if they need AWS APIs (e.g. Tempo->S3)
+
+managedNodeGroups:
+  - name: hub-ng
+    # Small: the hub only runs the facilitator control plane (ArgoCD + Grafana + Tempo).
+    instanceType: m6i.large # 2 vCPU / 8 GiB
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    volumeSize: 50
+    privateNetworking: false
+    labels:
+      workshop.role: hub
+    tags:
+      workshop: unleash-an-agent
+      role: hub
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver # Tempo/Prometheus PVCs need a CSI driver for persistence
+
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["audit", "authenticator"] # cheap audit trail for the facilitator

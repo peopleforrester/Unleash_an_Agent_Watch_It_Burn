@@ -1,0 +1,204 @@
+# ABOUTME: agentgateway OSS v1.2.1 deployment + config fronting the kagent agent and its MCP traffic.
+# ABOUTME: Wires the request-phase prompt-guard webhook to LLM Guard; mcpAuthorization present (default Allow).
+#
+# verify-at-build: build STRICTLY from the OSS standalone docs
+#   (agentgateway.dev/docs/standalone/latest), NOT the Solo Enterprise 2.x docs
+#   (docs.solo.io/agentgateway/2.x). The OSS binary is on the 1.x line; Enterprise is 2.x and
+#   the field names drift between them (research/02-agentgateway.md §1).
+# verify-at-build: OSS standalone install is a TWO-CHART OCI Helm install — agentgateway-crds
+#   then agentgateway from oci://cr.agentgateway.dev/charts/ — pin --version v1.2.1 and record
+#   the resolved chart version + image digest in VERSIONS.lock (research note left the chart
+#   version unpinned; releases are binary/container tags on the 1.x line).
+# verify-at-build: do NOT pin a v1.3.x prerelease (v1.3.0 was in beta 2026-06-12; guardrail/MCP
+#   config fields may move). v1.2.1 is the stable line for the event.
+#
+# This file is the BASELINE config. The toggle files (input-guard-*, output-guard-*, mcp-authz-*)
+# are overlay states applied on top of it; at workshop start the baseline + the *-off states are live.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentgateway
+  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/version: "1.2.1"
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentgateway
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: agentgateway
+        app.kubernetes.io/component: gateway
+    spec:
+      serviceAccountName: agentgateway
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: agentgateway
+          # verify-at-build: resolve the exact OSS standalone container ref published for v1.2.1
+          #   (the chart sets this; pin the digest in VERSIONS.lock). Placeholder tag below.
+          image: ghcr.io/agentgateway/agentgateway:v1.2.1 # verify-at-build: confirm registry/path + pin @sha256 digest
+          imagePullPolicy: IfNotPresent
+          args: ["--file", "/etc/agentgateway/config.yaml"]
+          ports:
+            - name: proxy
+              containerPort: 3000
+            - name: admin
+              containerPort: 15000
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: admin
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          volumeMounts:
+            - name: config
+              mountPath: /etc/agentgateway
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: agentgateway-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: agentgateway
+spec:
+  selector:
+    app.kubernetes.io/name: agentgateway
+  ports:
+    - name: proxy
+      port: 3000
+      targetPort: proxy
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: agentgateway
+data:
+  # verify-at-build: the OSS standalone config schema (agentgateway.dev/docs/standalone/latest).
+  #   The structure below mirrors the documented examples; confirm every field path against the
+  #   live v1.2.1 docs before relying on it. Field paths flagged inline.
+  config.yaml: |
+    # agentgateway OSS v1.2.1 standalone config.
+    #
+    # Two listeners conceptually fronted here:
+    #   1. the kagent agent's A2A serving endpoint (the agent the attendee talks to)
+    #   2. the agent's MCP tool traffic (the MCPServer the agent calls tools through)
+    #
+    # INPUT GUARD (CONFIRMED mechanism, research/02-agentgateway.md §3):
+    #   request-phase prompt-guard with a `webhook` action. The request phase supports
+    #   RejectAction (hard block + chosen status_code), so prompt injection is rejected
+    #   BEFORE it reaches the agent. The webhook target is the LLM-Guard-backed wrapper that
+    #   speaks the agentgateway guardrail webhook contract (POST /request -> Pass|Mask|Reject)
+    #   and calls LLM Guard /analyze/prompt (PromptInjection scanner) underneath.
+    #
+    # The request webhook is shown here in its BASELINE (guard wired but the deny is gated by
+    # the toggle state). input-guard-off.yaml / input-guard-on.yaml flip whether the request
+    # prompt-guard is active. See those files for the actual on/off overlay.
+    #
+    # verify-at-build: field path for guardrails is documented under llm.models[].guardrails
+    #   with a recognized provider. The agent here is a kagent A2A endpoint, not a chat-completions
+    #   LLM provider — the request-phase webhook is the supported hard-reject path, but confirm it
+    #   fires for an A2A backend at build (this is the same backend-type question the OUTPUT guard
+    #   sidesteps by using the sidecar — research/02-agentgateway.md §"Unverified").
+
+    listeners:
+      - name: agent-a2a
+        protocol: HTTP
+        port: 3000
+        routes:
+          - name: to-agent
+            # backendRefs points at the kagent agent serving endpoint inside the namespace.
+            backends:
+              - host: workshop-agent.ATTENDEE_NAMESPACE.svc.cluster.local
+                port: 8080 # verify-at-build: confirm the kagent A2A serving port
+            policies:
+              # INPUT prompt-guard, request phase. BASELINE = present-but-inert; the
+              # input-guard-on.yaml overlay turns the webhook action live (reject on injection).
+              # verify-at-build: confirm guardrails.request[].webhook.target.host field path on
+              #   the OSS 1.2.1 standalone schema.
+              promptGuard:
+                request:
+                  # [SPIKE] does the request-phase prompt-guard fire for an A2A (JSON-RPC) backend,
+                  # not just a recognized chat-completions LLM provider? Confirm at build.
+                  webhook:
+                    target:
+                      host: llm-guard-webhook.ATTENDEE_NAMESPACE.svc.cluster.local:8001
+                  # baseline behavior is governed by the toggle overlays; off = no enforcement.
+
+      - name: agent-mcp
+        protocol: HTTP
+        port: 3001
+        # MCP traffic: agentgateway fronts the MCPServer the agent calls tools through.
+        # The mcpAuthorization policy below governs which tools are reachable.
+        targets:
+          # MCP server allowlist is structural: only targets listed here are reachable.
+          - name: workshop-mcp
+            host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
+            port: 8080 # verify-at-build: confirm the MCPServer port
+
+    policies:
+      # MCP AUTHORIZATION (CONFIRMED mechanism, research/02-agentgateway.md §4).
+      # CEL rules over mcp.tool.name / mcp.tool.target / jwt claims, evaluated per MCP method
+      # (list_tools, call_tool). Rules OR together; any match grants access. Disallowed tools
+      # are auto-filtered out of list_tools so the agent never sees them.
+      #
+      # BASELINE = default ALLOW (no deny). This is the beat-3 "before" state: all of the
+      # MCP server's tools are reachable, including the rogue read_internal_config.
+      # The DENY lives in mcp-authz-on.yaml (the toggle), NOT here.
+      #
+      # verify-at-build: [SPIKE] (Phase 4b) — whether mcpAuthorization CEL Deny actually ENFORCES
+      #   on the Apache OSS v1.2.1 build with a kagent agent in front is the single load-bearing
+      #   unknown for beat 3. Gate beat-3-live on this spike; the recorded fallback is built
+      #   regardless (docs/BUILD-SPEC.md §11.1, beats/03-.../BUILD-SPIKE.md).
+      mcpAuthorization:
+        rules:
+          # Default Allow: a permissive rule so every tool is reachable in the baseline/off state.
+          # mcp-authz-on.yaml replaces this section with explicit Allow entries + a Deny on
+          # read_internal_config (the rogue tool beat 3 induces) plus a targets allowlist.
+          - 'true' # default Allow — all tools, all targets (beat-3 "before")

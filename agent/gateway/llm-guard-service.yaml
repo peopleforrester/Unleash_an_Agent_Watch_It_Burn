@@ -1,0 +1,179 @@
+# ABOUTME: LLM Guard (Protect AI, MIT) API-server Deployment+Service with a mounted scanners.yml.
+# ABOUTME: Output Regex matches the FAKE-...sentinel patterns; input PromptInjection; Sensitive NER OFF.
+#
+# verify-at-build: IMAGE NAMESPACE — the official deployment doc uses `laiyer/llm-guard-api`
+#   (Laiyer = the company Protect AI acquired). `protectai/llm-guard-api` does NOT exist on
+#   Docker Hub (404 confirmed 2026-06-16), so `laiyer/` is the authoritative published image.
+#   It is stale-ish (latest tag 0.3.16, pushed ~1 year ago) but it is the only one published.
+#   Pin a DIGEST, not :latest (no GitHub releases exist; research/03-llm-guard.md §Unverified).
+# verify-at-build: also pin the PyPI `llm-guard` version into VERSIONS.lock
+#   (`pip index versions llm-guard`); the live PyPI version was NOT confirmed in the spike.
+# verify-at-build: config mount path is /home/user/app/config/scanners.yml (from the official
+#   deployment doc). Confirm against the live image before relying on it.
+#
+# RAM FOOTPRINT (research/03-llm-guard.md §Run, §Risks.5): the docs recommend >=16 GB for the
+# Docker image at default settings because model-backed scanners (the NER in Sensitive, and the
+# DeBERTa PromptInjection classifier) load into memory. To keep each per-spoke node small:
+#   - OUTPUT path is Regex-ONLY by default (pure pattern matching, model-free) — see scanners.yml.
+#   - Sensitive (NER + regex PII) is OPT-IN / OFF by default; enabling it loads the NER model and
+#     blows the per-spoke RAM budget (spec §5/§10/§11). Turn it on only with a sizing decision.
+#   - INPUT PromptInjection loads the DeBERTa model (~hundreds of MB–GB); lazy_load mitigates.
+#   - lazy_load + low_cpu_mem_usage are enabled to defer/shrink model loads.
+# verify-at-build: validate actual RSS in Phase 2 and record in infra/SIZING.md (shared service
+#   vs per-spoke decision turns on this number).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: llm-guard-scanners
+  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+  labels:
+    app.kubernetes.io/name: llm-guard
+data:
+  # verify-at-build: scanners.yml shape — top-level input_scanners / output_scanners, each entry
+  #   is `type:` + `params:`. Confirmed structure from the repo config (research/03-llm-guard.md).
+  #   Read the live http://<host>:8000/swagger.json at build to confirm the verdict envelope
+  #   (is_valid / sanitized_output / scores) before wiring the gateway + sidecar filters.
+  scanners.yml: |
+    # LLM Guard API-server scanner config.
+    #
+    # app-level options: lazy_load + low_cpu_mem_usage keep model loads deferred/lean so the
+    # Regex-only output path stays cheap and Sensitive/PromptInjection only pay their RAM cost
+    # when actually exercised.
+    app:
+      lazy_load: true
+      low_cpu_mem_usage: true
+      scan_prompt_timeout: 10
+      scan_output_timeout: 10
+
+    input_scanners:
+      # INPUT guard for beat 2 (prompt injection). DeBERTa HF classifier — MODEL-BASED, not
+      # deterministic; do not describe it as a rule engine in attendee copy (spec §3).
+      # Model: ProtectAI/deberta-v3-base-prompt-injection-v2.
+      - type: PromptInjection
+        params:
+          threshold: 0.5            # verify-at-build: tune against the beat-2 injection prompt
+          # match_type defaults to full; leave default unless build testing needs otherwise.
+
+    output_scanners:
+      # OUTPUT guard, Regex-ONLY by default — the provably model-free control that is
+      # demonstrated live (spec §3). It matches the planted sentinel formats. There is NO
+      # "Secrets" output scanner — Secrets is INPUT-only (rev1 spec error corrected;
+      # research/03-llm-guard.md §Risks.1).
+      - type: Regex
+        params:
+          # verify-at-build: confirm the Regex output-scanner param names on the pinned version
+          #   (patterns / is_blocked / redact / match_type). The repo doc names are used below.
+          patterns:
+            - 'FAKE-PROD-DB-PASSWORD-sentinel-[0-9a-f]{4}'   # beat-2 exfil sentinel
+            - 'FAKE-MCP-EXFIL-sentinel-[0-9a-f]{4}'           # beat-3 MCP exfil sentinel
+            - 'FAKE-[A-Z0-9-]+-sentinel-[0-9a-f]+'            # any documented FAKE- sentinel
+          is_blocked: true          # match -> is_valid=false (the sidecar hard-blocks on this)
+          redact: true              # also produce sanitized_output with the match redacted
+          match_type: search
+
+      # Sensitive (NER + regex PII) is OPT-IN and OFF by default. Uncommenting it loads the NER
+      # model and breaks the per-spoke RAM budget — enable only with a SIZING decision. It is
+      # NOT an LLM-as-judge (spec rule honored) but it is NOT pure pattern-matching either.
+      # - type: Sensitive
+      #   params:
+      #     entity_types: ["CREDIT_CARD", "EMAIL", "PERSON"]
+      #     redact: true
+      #     threshold: 0.75
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-guard
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: llm-guard
+    app.kubernetes.io/component: guardrail-engine
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: llm-guard
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: llm-guard
+        app.kubernetes.io/component: guardrail-engine
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: llm-guard-api
+          # verify-at-build: resolve laiyer/ vs protectai/ (laiyer/ is authoritative — protectai/
+          #   404s) and pin a DIGEST. Placeholder tag below MUST be replaced with @sha256 in
+          #   VERSIONS.lock before the event.
+          image: laiyer/llm-guard-api:0.3.16 # verify-at-build: pin @sha256 digest, confirm latest maintained tag
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8000
+          env:
+            - name: APP_WORKERS
+              value: "1"
+            - name: LOG_LEVEL
+              value: "INFO"
+            - name: AUTH_TOKEN
+              # verify-at-build: AUTH_TOKEN is the API bearer token. Source it from a Secret, not a
+              #   literal (rules/infra/kubernetes.md). The gateway + sidecar must send it.
+              valueFrom:
+                secretKeyRef:
+                  name: llm-guard-auth
+                  key: token
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            # Regex-only output + lazy-loaded input model. Sized for the model-free output path;
+            # raise limits (and the node) if Sensitive or PromptInjection are loaded eagerly.
+            # verify-at-build: confirm real RSS in Phase 2; >=16 GB is the docs default at full load.
+            requests:
+              cpu: "250m"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "3Gi" # verify-at-build: PromptInjection (DeBERTa) load may exceed this — measure
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          startupProbe:
+            # model loads are slow; give the server room to come up before liveness kicks in.
+            httpGet:
+              path: /healthz
+              port: http
+            failureThreshold: 30
+            periodSeconds: 10
+          volumeMounts:
+            - name: scanners
+              mountPath: /home/user/app/config
+              readOnly: true
+      volumes:
+        - name: scanners
+          configMap:
+            name: llm-guard-scanners
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-guard
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: llm-guard
+spec:
+  selector:
+    app.kubernetes.io/name: llm-guard
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http

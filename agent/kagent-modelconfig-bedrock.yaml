@@ -1,0 +1,18 @@
+# ABOUTME: kagent ModelConfig wiring the workshop agent to AWS Bedrock.
+# ABOUTME: Native Bedrock provider (NOT the OpenAI-baseURL shim tutorials show).
+#
+# verify-at-build: confirmed against kagent chart 0.9.7, CRD group kagent.dev/v1alpha2
+# (research/01-kagent.md). Bedrock exists ONLY in v1alpha2. `spec.bedrock.region` is the
+# only required Bedrock sub-field; credentials resolve via the AWS credential chain when
+# `apiKeySecret` is omitted (preferred on EKS via IRSA / pod identity).
+# verify-at-build: confirm a Bedrock model id enabled in the account/region before pinning.
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: bedrock-claude
+  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+spec:
+  provider: Bedrock
+  model: us.anthropic.claude-sonnet-4-6 # verify-at-build: confirm exact Bedrock model id + region availability
+  bedrock:
+    region: us-east-2

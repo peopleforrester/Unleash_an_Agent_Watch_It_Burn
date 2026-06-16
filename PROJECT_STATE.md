@@ -26,6 +26,15 @@ Confirmed lineup:
 - **Observability** is NOT a standalone beat — it is the lens every beat is narrated
   through (the trace view), plus the **trace re-leak trap** as the 2-hour advanced beat.
 
+### ARCHITECTURE DECISION (2026-06-16) — supersedes BUILD-SPEC §3 rev1/rev2
+
+Isolation model changed from vCluster-per-attendee to **separate EKS cluster per
+attendee, hub-and-spoke**. Hub EKS cluster = ArgoCD + Grafana/Tempo. Each attendee =
+own spoke EKS cluster, registered to hub ArgoCD, which delivers the IDP stack via an
+ApplicationSet cluster generator. vCluster removed. LLM Guard per-spoke, output-`Regex`-only
+by default. Cost + AWS quotas scale linearly with N. BUILD-SPEC carries a rev3 banner;
+full section-by-section reconciliation of the spec is still pending.
+
 ## Task checklist
 
 - [x] Initialize repo, write BUILD-SPEC rev1 to docs/, create GitHub repo (private).

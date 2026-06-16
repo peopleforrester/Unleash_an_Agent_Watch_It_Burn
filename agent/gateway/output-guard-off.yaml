@@ -1,0 +1,44 @@
+# ABOUTME: Toggle state — OUTPUT exfil guard OFF (beat-2 output "before"; workshop default).
+# ABOUTME: Removes the LLM Guard reverse-proxy sidecar so the agent's raw response leaves unredacted.
+#
+# The PRIMARY output guard is the reverse-proxy sidecar (llm-guard-sidecar.yaml). OFF means the
+# agent Deployment runs WITHOUT that sidecar and traffic targets the agent's raw serving port —
+# so a response containing FAKE-PROD-DB-PASSWORD-sentinel-9f2a leaves intact (the exfil "before").
+#
+# This is applied as a strategic-merge patch that drops the sidecar container and points traffic
+# back at the raw agent port. It is the inverse of output-guard-on.yaml.
+#
+# verify-at-build: confirm the rendered kagent Deployment name + serving container name/port so
+#   the patch removes exactly the sidecar and nothing else, and restores the original targetPort.
+# verify-at-build: a strategic-merge patch cannot delete a list element by absence alone — use a
+#   $patch:delete directive (shown) or render the full container list. Confirm the apply path
+#   (kubectl patch --type=strategic vs kustomize) is idempotent before the event.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-agent # verify-at-build: must match the Deployment kagent renders for Agent workshop-agent
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    workshop.toggle/output-guard: "off"
+spec:
+  template:
+    spec:
+      containers:
+        # Remove the sidecar. $patch:delete drops this named container from the pod spec.
+        - name: llm-guard-egress-proxy
+          $patch: delete
+---
+# Route traffic back to the agent's raw serving port (no proxy in front).
+apiVersion: v1
+kind: Service
+metadata:
+  name: workshop-agent
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    workshop.toggle/output-guard: "off"
+spec:
+  ports:
+    - name: a2a
+      port: 8080
+      targetPort: 8080 # verify-at-build: raw kagent A2A serving port (no sidecar interception)

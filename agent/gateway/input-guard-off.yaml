@@ -1,0 +1,46 @@
+# ABOUTME: Toggle state — INPUT prompt-injection guard OFF (beat-2 input "before"; workshop default).
+# ABOUTME: Removes the request-phase prompt-guard webhook so injections reach the agent unfiltered.
+#
+# Applied by beats/02-sanitization/toggle-input-guard-on.sh's inverse, or at provisioning to set
+# the default. This overlays agentgateway.yaml's baseline by clearing the request prompt-guard.
+#
+# verify-at-build: confirm the OSS v1.2.1 standalone way to express "no request guard" — either
+#   omit promptGuard.request entirely (as below) or set an explicit disabled flag. Read the live
+#   docs; do not assume. The toggle must be idempotent (kubectl apply re-runnable).
+# verify-at-build: the input guard's hard-reject is the CONFIRMED request-phase RejectAction path
+#   (research/02-agentgateway.md §3); the only [SPIKE] is whether the request webhook fires for an
+#   A2A backend at all (same backend-type question flagged in agentgateway.yaml).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: agentgateway
+    workshop.toggle/input-guard: "off"
+data:
+  # OFF: the agent-a2a route carries NO request prompt-guard. Prompt injection passes straight
+  # through to the agent (the beat-2 input "before" state).
+  config.yaml: |
+    listeners:
+      - name: agent-a2a
+        protocol: HTTP
+        port: 3000
+        routes:
+          - name: to-agent
+            backends:
+              - host: workshop-agent.ATTENDEE_NAMESPACE.svc.cluster.local
+                port: 8080 # verify-at-build: confirm the kagent A2A serving port
+            # policies.promptGuard.request intentionally ABSENT -> input guard OFF.
+      - name: agent-mcp
+        protocol: HTTP
+        port: 3001
+        targets:
+          - name: workshop-mcp
+            host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
+            port: 8080
+    policies:
+      mcpAuthorization:
+        rules:
+          - 'true' # MCP authz governed by its own toggle files; left at default Allow here.

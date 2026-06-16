@@ -1,0 +1,27 @@
+# ABOUTME: The scoping boundary for the workshop agent's ServiceAccount.
+# ABOUTME: Grants exactly what the beats need; withholds the verbs that would let
+# ABOUTME: privilege-escalation succeed. (Two ABOUTME lines required; this third is intent.)
+#
+# Design notes (see docs/BUILD-SPEC.md Phase 3, research/06-cncf-stack.md):
+#  - create/get/list/patch workloads in the attendee namespace  -> beat 1 step 1, beat 2/3 workloads
+#  - get/list secrets                                           -> read the planted FAKE- secrets
+#  - patch on argocd-managed kinds is INTENTIONALLY granted so beat-1 step 3 reaches
+#    the admission check (block-argocd-drift) instead of dying at RBAC. RBAC runs BEFORE
+#    admission; without this the GitOps-drift wall is never demonstrated.
+#  - NO rules for clusterroles/clusterrolebindings/roles/rolebindings -> beat-1 step 2
+#    (privilege escalation) fails at RBAC with Forbidden, by omission.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: workshop-agent
+  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+rules:
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["create", "get", "list", "patch"]
+  - apiGroups: [""]
+    resources: ["pods", "configmaps", "services"]
+    verbs: ["create", "get", "list", "patch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list"]

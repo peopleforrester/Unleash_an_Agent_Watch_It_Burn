@@ -1,0 +1,87 @@
+# ABOUTME: OTel Collector config for the workshop SPOKE clusters — receives GenAI traces from
+# ABOUTME: kagent/agentgateway and forwards to the HUB Tempo, with a redaction processor as the §4 re-leak-trap mitigation.
+#
+# Architecture (BUILD-SPEC rev3): this Collector runs on EACH attendee SPOKE EKS cluster.
+# It accepts OTLP from the local agent + agentgateway and exports to the central HUB cluster's
+# Tempo. The redaction/transform processor strips GenAI content attributes so that even when
+# OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT is turned on for the re-leak-trap beat, the
+# planted FAKE-...-sentinel does NOT ride into the trace store. Content capture is OFF by default
+# upstream (default false); this processor is the symmetric, telemetry-side mitigation.
+#
+# Collector version: v0.154.0 (contrib distro — needed for the transform processor / OTTL).  # verify-at-build
+# GenAI semconv: all attributes are Development status as of 2026-06-15. Attribute names below are
+# verified against open-telemetry/semantic-conventions-genai (raw gen-ai-spans.md / gen-ai-agent-spans.md).
+# Opt into newest names with OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental on the EMITTERS,
+# and re-confirm the exact emitted names from a live span before trusting this redaction.  # verify-at-build
+
+# --- RECEIVERS: OTLP over gRPC (4317) and HTTP (4318) ---
+# Standard OTLP intake. The local agentgateway/kagent push spans here.
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+# --- PROCESSORS ---
+processors:
+  # batch: standard batching before export. Reduces egress calls from the spoke to the hub.
+  batch:
+    # Defaults are fine for workshop scale; left explicit for clarity.
+    send_batch_size: 512
+    timeout: 5s
+
+  # redaction (re-leak-trap mitigation, telemetry-side):
+  # The redaction processor masks the VALUES of named attributes. We list the three GenAI
+  # content-bearing attributes that carry prompt/response text. With these blocked, the planted
+  # sentinel cannot survive into Tempo even if message-content capture is enabled for the beat.
+  # blocked_key_patterns removes the attributes entirely (the values never reach the exporter).
+  # NOTE: the redaction processor operates on span ATTRIBUTES; tool-call arguments that land on
+  # gen_ai.tool.* attributes are also covered by the transform stage below.
+  redaction:
+    # Do NOT operate in allow-list mode — we want to keep all other attributes, only block these.
+    allow_all_keys: true
+    blocked_key_patterns:
+      - gen_ai\.input\.messages          # chat history sent to the model (Opt-In, Development)
+      - gen_ai\.output\.messages         # model responses (Opt-In, Development)
+      - gen_ai\.system_instructions      # system prompt (Opt-In, Development)
+    # Belt-and-suspenders: also scrub the FAKE sentinel prefix wherever it appears in any
+    # remaining string value (e.g. if an emitter stashes content under a non-standard key).
+    blocked_values:
+      - 'FAKE-[A-Za-z0-9-]+sentinel-[0-9a-f]{4}'
+    summary: debug
+
+  # transform (defense-in-depth over OTTL):
+  # Hard-deletes the same content attributes at the span level. Two reasons to keep both:
+  # 1. it covers the case where an emitter writes content as a structured/JSON attribute the
+  #    redaction processor's value-regex would not fully mask;
+  # 2. it lets the re-leak-trap beat show a clean "attribute is gone" state in the span view.
+  transform:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - delete_key(attributes, "gen_ai.input.messages")
+          - delete_key(attributes, "gen_ai.output.messages")
+          - delete_key(attributes, "gen_ai.system_instructions")
+
+# --- EXPORTERS: forward to the HUB cluster's Tempo over OTLP ---
+# The spoke Collector ships traces cross-cluster to the facilitator's Tempo on the hub.
+# Endpoint is the hub Tempo's OTLP gRPC ingest. Replace the host with the real hub Tempo
+# address (in-mesh DNS, LB, or VPC endpoint depending on hub<->spoke networking).  # verify-at-build
+exporters:
+  otlp/tempo-hub:
+    endpoint: tempo-hub.observability.svc.cluster.local:4317  # HUB Tempo OTLP gRPC  # verify-at-build
+    tls:
+      insecure: true   # workshop-internal hub<->spoke link; tighten if it crosses untrusted network  # verify-at-build
+
+# --- SERVICE: wire the traces pipeline ---
+# Pipeline order is deliberate: batch first, then redaction, then transform, then export.
+# Redaction + transform run BEFORE the exporter so nothing sensitive ever leaves the spoke.
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [batch, redaction, transform]
+      exporters: [otlp/tempo-hub]

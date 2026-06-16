@@ -1,0 +1,25 @@
+# ABOUTME: ArgoCD AppProject for the workshop — scopes which repos/clusters/kinds the spoke apps may use.
+# ABOUTME: Applied on the HUB; referenced by the ApplicationSet (spec.project: workshop) and child apps.
+#
+# verify-at-build: confirmed against Argo CD v3.4.3. destinations '*' covers every registered spoke
+# server (the cluster generator picks the real set); tighten to a namePattern if Michael wants it.
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: workshop
+  namespace: argocd
+spec:
+  description: Per-attendee spoke content delivered by the attendee-spokes ApplicationSet.
+  sourceRepos:
+    - https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+  destinations:
+    - server: "*" # any registered spoke; the cluster generator constrains the actual set
+      namespace: workshop
+    - server: https://kubernetes.default.svc
+      namespace: workshop
+  clusterResourceWhitelist:
+    - group: "*"
+      kind: "*" # spokes need ClusterPolicy (Kyverno), ClusterRole bits for RBAC tests, etc.
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

@@ -1,0 +1,69 @@
+# ABOUTME: Toggle state — MCP authorization ON (beat-3 "after"): CEL Deny on the rogue tool.
+# ABOUTME: Denies read_internal_config + sets a targets allowlist; the rogue call is blocked/filtered.
+#
+# This overlays agentgateway.yaml's policies.mcpAuthorization to enforce the beat-3 "after":
+#   - the rogue tool read_internal_config (the one beat 3's poisoned MCP description induces, which
+#     leaks FAKE-MCP-EXFIL-sentinel-4c1d) is DENIED;
+#   - the legitimate tools the good agent needs are explicitly Allowed;
+#   - the targets allowlist confines authz to the one known MCP server.
+# Because agentgateway auto-filters disallowed tools from list_tools, the agent should no longer
+# even SEE read_internal_config; an explicit call to it is rejected.
+#
+# CONFIRMED mechanism (research/02-agentgateway.md §4): CEL rules over mcp.tool.name evaluated per
+# MCP method; rules OR together (any match Allows). To express a DENY, the safe pattern on the OSS
+# build is an allowlist whose rules name ONLY the permitted tools — anything not matched (incl.
+# read_internal_config) is implicitly denied and filtered. Where the build supports explicit
+# action: Deny, an explicit Deny on read_internal_config is the clearest demo. Both are encoded
+# below; pick the one the OSS v1.2.1 schema actually supports at build.
+#
+# verify-at-build: [SPIKE] (Phase 4b, gates beat-3 LIVE) — confirm mcpAuthorization Deny/allowlist
+#   ENFORCES on Apache OSS v1.2.1 with kagent in front (docs/BUILD-SPEC.md §11.1). PASS -> beat 3
+#   live; FAIL -> recorded segment + governance-map row. Record in beats/03-.../BUILD-SPIKE.md.
+# verify-at-build: confirm whether OSS v1.2.1 rules carry an `action: Allow|Deny` field or are
+#   allow-only-with-implicit-deny. The research note shows allow-style CEL string rules; the spec
+#   references `action: Allow|Deny`. Resolve which the pinned build honors and keep ONE form.
+# verify-at-build: confirm the targets-allowlist field path (research §4: structural via `targets`).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  namespace: ATTENDEE_NAMESPACE
+  labels:
+    app.kubernetes.io/name: agentgateway
+    workshop.toggle/mcp-authz: "on"
+data:
+  config.yaml: |
+    listeners:
+      - name: agent-a2a
+        protocol: HTTP
+        port: 3000
+        routes:
+          - name: to-agent
+            backends:
+              - host: workshop-agent.ATTENDEE_NAMESPACE.svc.cluster.local
+                port: 8080
+      - name: agent-mcp
+        protocol: HTTP
+        port: 3001
+        targets:
+          # targets allowlist: only this MCP server is reachable for tool calls.
+          - name: workshop-mcp
+            host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
+            port: 8080
+    policies:
+      mcpAuthorization:
+        # FORM A (allow-only, implicit-deny) — matches the research-note CEL string examples.
+        # Only these tools are reachable; read_internal_config is not listed, so it is denied and
+        # filtered out of list_tools.
+        rules:
+          - 'mcp.tool.name == "list_pods"'
+          - 'mcp.tool.name == "apply_manifest"'
+          - 'mcp.tool.name == "get_secret"'
+        # FORM B (explicit Deny) — use INSTEAD of FORM A if the pinned OSS v1.2.1 build supports an
+        # `action` field on rules (the spec references action: Allow|Deny). Do NOT keep both.
+        # rules:
+        #   - expression: 'mcp.tool.name == "read_internal_config"'
+        #     action: Deny      # block the rogue tool explicitly (beat-3 headline)
+        #   - expression: 'true'
+        #     action: Allow      # everything else allowed

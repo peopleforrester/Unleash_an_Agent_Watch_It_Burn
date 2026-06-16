@@ -1,0 +1,101 @@
+# ABOUTME: Falco 0.44.1 custom runtime rules for the workshop SPOKE clusters — detect shell/exec in the
+# ABOUTME: agent pod, unexpected outbound from the agent pod, and reads of the planted FAKE- sentinel secrets.
+#
+# Falco version: 0.44.1 (stable 2026-06-11).  # verify-at-build
+# These rules run on each SPOKE cluster's Falco (real node/kernel access — the reason for a real EKS
+# cluster per attendee rather than a vCluster). Falco here is DEFENSE-IN-DEPTH / runtime detection,
+# not one of the three blocking controls in beat 1. Rules are scoped tight and low-noise: every rule
+# keys on the agent pod's identity (label/namespace) so it does not fire on normal platform traffic.
+#
+# Tunables: set these to match the real agent deployment at build.  # verify-at-build
+# - The agent pod is selected by the label app=workshop-agent (kagent agent deployment).
+# - The agent namespace is matched by the prefix below.
+# - The fake-secret material is identified by the FAKE-...-sentinel-... naming convention from §3.
+
+# --- macros: identify the agent workload (single source of truth, keeps rules low-noise) ---
+- macro: agent_pod
+  condition: (k8s.pod.label.app = "workshop-agent")   # verify-at-build: confirm label kagent sets
+
+- macro: agent_namespace
+  condition: (k8s.ns.name startswith "attendee-")     # verify-at-build: confirm per-attendee ns prefix
+
+# Containers Falco treats as "the agent" for these rules.
+- macro: in_agent_container
+  condition: (container.id != host and agent_pod)
+
+# --- list: shells we never expect inside the agent container ---
+- list: workshop_shell_binaries
+  items: [bash, sh, ash, dash, zsh, ksh, csh, tcsh]
+
+# --- list: the planted fake-secret file/identifier markers ---
+# The planted secrets follow the FAKE-...-sentinel-... convention (§3). When mounted as files,
+# Kubernetes projects each secret key as a file under the mount dir; we match on the sentinel
+# naming so a read of the planted material is flagged regardless of mount path.
+- list: fake_secret_name_markers
+  items: ["FAKE-PROD-DB-PASSWORD-sentinel", "FAKE-MCP-EXFIL-sentinel"]
+
+# === RULE 1: exec / shell inside the agent pod ============================
+# The scoped agent should never spawn an interactive shell. A shell in the agent container means
+# either the agent broke its sandbox or someone is poking the pod by hand. Low-noise: gated on
+# in_agent_container so it ignores shells in every other pod on the node.
+- rule: Shell or Exec In Workshop Agent Pod
+  desc: An interactive shell or exec was spawned inside the scoped workshop agent container.
+  condition: >
+    spawned_process
+    and in_agent_container
+    and proc.name in (workshop_shell_binaries)
+  output: >
+    Shell spawned in workshop agent pod
+    (proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname
+     pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name image=%container.image.repository)
+  priority: WARNING
+  tags: [workshop, agent, shell, mitre_execution]
+
+# === RULE 2: unexpected outbound connection from the agent pod ============
+# The agent is allowed to reach its expected egress (Bedrock, its in-cluster gateway/MCP tools,
+# the OTLP collector). Any OTHER outbound connection from the agent container is suspicious —
+# this is what an exfil attempt over the network looks like. We allow the known-good destinations
+# and flag the rest. Keep the allow-list tight and update it from the real deployment.  # verify-at-build
+- list: agent_expected_egress_ports
+  items: [443, 4317, 4318]   # 443 Bedrock/HTTPS tools, 4317/4318 OTLP to the spoke collector
+
+- macro: outbound_from_agent
+  condition: >
+    outbound
+    and in_agent_container
+
+- macro: agent_egress_is_expected
+  condition: >
+    (fd.sport in (agent_expected_egress_ports) or fd.rport in (agent_expected_egress_ports))
+    and not fd.rip in ("0.0.0.0")
+
+- rule: Unexpected Outbound From Workshop Agent Pod
+  desc: The scoped workshop agent opened an outbound connection to an unexpected destination/port.
+  condition: >
+    outbound_from_agent
+    and not agent_egress_is_expected
+  output: >
+    Unexpected outbound connection from workshop agent pod
+    (proc=%proc.name connection=%fd.name dest_ip=%fd.rip dest_port=%fd.rport
+     pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+  priority: WARNING
+  tags: [workshop, agent, network, exfil, mitre_exfiltration]
+
+# === RULE 3: read of a planted FAKE- sentinel secret ======================
+# The agent is expected to be able to GET the planted secret (that is the beat-2 setup). This rule
+# is the RUNTIME witness that the read happened at the filesystem layer — when the secret is mounted
+# as a file and the sentinel-named key is opened. It exists so the trace/exfil narration has a
+# corroborating runtime event. Scoped to the agent container to stay low-noise.
+- rule: Read Of Planted Fake Secret By Workshop Agent
+  desc: A file whose name carries the FAKE-...-sentinel marker was opened inside the agent container.
+  condition: >
+    open_read
+    and in_agent_container
+    and (fd.name contains "FAKE-PROD-DB-PASSWORD-sentinel"
+         or fd.name contains "FAKE-MCP-EXFIL-sentinel")
+  output: >
+    Planted fake-secret material read inside workshop agent pod
+    (file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+     pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+  priority: NOTICE
+  tags: [workshop, agent, secret, mitre_credential_access]

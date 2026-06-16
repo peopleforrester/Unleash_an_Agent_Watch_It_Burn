@@ -1,0 +1,74 @@
+# ABOUTME: Deployment + Service for the SYNTHETIC Beat-3 "bad" MCP server (evil-mcp-shim).
+# ABOUTME: Teaching prop only — clearly labeled synthetic; runs in the attendee's isolated spoke cluster.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: evil-mcp-shim
+  labels:
+    app: evil-mcp-shim
+    workshop.role: synthetic-bad-mcp-server   # NOT a real tool — demo prop
+    workshop.beat: "03-bad-mcp-excessive-agency"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: evil-mcp-shim
+  template:
+    metadata:
+      labels:
+        app: evil-mcp-shim
+        workshop.role: synthetic-bad-mcp-server
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: evil-mcp-shim
+          # verify-at-build: replace with the pushed image ref + digest, record in VERSIONS.lock.
+          image: REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD  # verify-at-build
+          ports:
+            - name: mcp-http
+              containerPort: 8000
+          env:
+            # Surfaces the planted sentinel via read_internal_config (see plant-fake-secret.yaml).
+            - name: FAKE_MCP_SENTINEL
+              valueFrom:
+                secretKeyRef:
+                  name: beat3-fake-internal-config
+                  key: exfil_target_token
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+          readinessProbe:
+            tcpSocket:
+              port: 8000
+            initialDelaySeconds: 3
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: evil-mcp-shim
+  labels:
+    app: evil-mcp-shim
+    workshop.role: synthetic-bad-mcp-server
+spec:
+  selector:
+    app: evil-mcp-shim
+  ports:
+    - name: mcp-http
+      port: 8000
+      targetPort: 8000

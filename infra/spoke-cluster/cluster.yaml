@@ -1,0 +1,47 @@
+# ABOUTME: eksctl ClusterConfig TEMPLATE for ONE attendee SPOKE EKS cluster (per-attendee isolation).
+# ABOUTME: Sized to run the per-spoke IDP stack; LLM Guard is Regex-only to keep the node small.
+#
+# verify-at-build: confirm the EKS version against the eksctl/AWS supported range and re-pin `version`.
+# This is a TEMPLATE: substitute ATTENDEE_ID for each spoke (e.g. envsubst) when provisioning the fleet.
+# See README.md for the parallel-provisioning loop and `argocd cluster add` registration.
+#
+# Per-spoke node sizing rationale (rev3):
+#  - One spoke runs: Kyverno (+policies), Falco (DaemonSet, real node/kernel access), a per-spoke OTel
+#    collector, the planted secrets, the kagent agent + Bedrock ModelConfig, agentgateway, LLM Guard
+#    (output Regex ONLY by default — the Sensitive NER model is opt-in and would blow the RAM budget),
+#    the evil-mcp-shim, and the ArgoCD-managed sample app for beat 1.
+#  - With LLM Guard Regex-only there is no NER model resident, so a single 4 vCPU / 16 GiB node holds
+#    the whole stack with headroom. If a spoke opts into Sensitive NER, bump to m6i.xlarge -> .2xlarge
+#    and record it; see ../SIZING.md.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: workshop-spoke-ATTENDEE_ID # verify-at-build: substituted per attendee at provision time
+  region: us-west-2 # keep aligned with the hub and with Bedrock model availability
+  version: "1.33" # verify-at-build: re-pin to a currently supported EKS version
+
+iam:
+  withOIDC: true # IRSA so the kagent agent can use the AWS credential chain for Bedrock (no static keys)
+
+managedNodeGroups:
+  - name: spoke-ng
+    instanceType: m6i.xlarge # 4 vCPU / 16 GiB — fits the full per-spoke IDP stack with Regex-only LLM Guard
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 2 # Falco + admission webhooks tolerate a brief 2-node window during rollout
+    volumeSize: 40
+    privateNetworking: false
+    labels:
+      workshop.role: spoke
+      workshop.attendee: ATTENDEE_ID
+    tags:
+      workshop: unleash-an-agent
+      role: spoke
+      attendee: ATTENDEE_ID
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver

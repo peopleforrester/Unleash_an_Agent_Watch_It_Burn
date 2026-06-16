@@ -1,0 +1,51 @@
+# ABOUTME: Beat-1 control. Blocks out-of-band mutation of ArgoCD-managed resources.
+# ABOUTME: Enforce from the start (no toggle); ArgoCD self-heal is defense in depth.
+# verify-at-build: confirmed approach against Kyverno v1.18.1 + Argo CD v3.4.3
+# (research/06-cncf-stack.md). background MUST be false for userInfo-based excludes.
+#
+# [SPIKE] The excluded principal below is the identity the HUB ArgoCD acts as when it
+# reconciles into this SPOKE cluster (the identity mapped by the spoke's cluster
+# registration / RBAC). Confirm it in Phase 4b on a live spoke — a wrong value either
+# deadlocks self-heal or lets beat-1 step 3 through. Do not declare beat 1 live until verified.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: block-argocd-drift
+  annotations:
+    policies.kyverno.io/title: Block ArgoCD Drift
+    policies.kyverno.io/category: Workshop / Beat 1
+spec:
+  background: false
+  rules:
+    - name: deny-drift-on-argocd-managed
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - ConfigMap
+                - Service
+              selector:
+                matchExpressions:
+                  - key: app.kubernetes.io/instance
+                    operator: Exists
+      preconditions:
+        all:
+          - key: "{{ request.operation }}"
+            operator: AnyIn
+            value:
+              - UPDATE
+              - DELETE
+      validate:
+        failureAction: Enforce
+        message: >-
+          This resource is managed by ArgoCD. Change it in Git, not in the cluster.
+          Direct mutation by a non-ArgoCD principal is rejected.
+        deny:
+          conditions:
+            all:
+              - key: "{{ request.userInfo.username }}"
+                operator: AnyNotIn
+                value:
+                  # [SPIKE] confirm the in-vcluster ArgoCD controller principal
+                  - system:serviceaccount:argocd:argocd-application-controller

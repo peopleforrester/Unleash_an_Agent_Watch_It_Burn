@@ -1,0 +1,106 @@
+# ABOUTME: PRIMARY output exfil guard — an LLM Guard reverse-proxy sidecar on the agent response path.
+# ABOUTME: Intercepts the agent's response, calls LLM Guard /analyze/output, blocks or redacts the sentinel.
+#
+# WHY THIS IS PRIMARY (not the agentgateway native response webhook):
+# research/02-agentgateway.md §2/§5 and spec §5 establish two hard limits on the native path:
+#   1. agentgateway's response-phase prompt-guard can only Pass or MASK — it CANNOT Reject.
+#      The "blocked" half of the beat-2 exfil claim is not natively achievable on the response.
+#   2. agentgateway response guardrails are documented only for recognized LLM-provider backends
+#      returning OpenAI chat-completion bodies. The agent is a kagent A2A (JSON-RPC) endpoint —
+#      [SPIKE] whether the native response guard even fires for it (research §"Unverified").
+# The reverse-proxy sidecar removes both unknowns: it owns the response, can return a hard error
+# (block) OR forward sanitized_output (redact), and does not depend on agentgateway treating the
+# agent as an LLM provider. The native webhook remains the documented ALTERNATIVE in GATEWAY-NOTES.md.
+#
+# MECHANISM: the sidecar is a thin reverse proxy sitting in front of the agent's serving container.
+# Inbound requests pass through to the agent (localhost). The agent's response is captured, sent to
+# LLM Guard POST /analyze/output, and acted on per the verdict:
+#   is_valid == false  -> BLOCK (return an error status, the raw response never leaves)
+#   is_valid == true   -> forward sanitized_output (redacted text) instead of the raw body -> REDACT
+# research/03-llm-guard.md §Verdict semantics. /analyze/output returns is_valid + sanitized_output + scores.
+#
+# verify-at-build: read the live http://llm-guard:8000/swagger.json to confirm the exact
+#   /analyze/output JSON envelope before pinning the proxy logic. Field names are confirmed by
+#   docs (is_valid / sanitized_output / scores) but the top-level shape must be read off swagger.
+# verify-at-build: confirm fail-CLOSED behavior — if LLM Guard is unreachable, the sidecar MUST
+#   block, never pass the raw response through (Michael's no-silent-fallback rule;
+#   research/02-agentgateway.md §Risks.4). The PROXY_FAIL_CLOSED env below enforces this.
+#
+# This file is delivered as a strategic-merge PATCH against the kagent agent Deployment, applied
+# by output-guard-on.yaml. output-guard-off.yaml removes the sidecar. At workshop start the agent
+# runs WITHOUT this sidecar (beat-2 output "before" = sentinel leaks).
+#
+# verify-at-build: confirm the Deployment name/labels kagent generates for the agent (the agent is
+#   declared as kagent.dev/v1alpha2 Agent `workshop-agent`; the rendered Deployment name and the
+#   serving container name/port must match this patch target). Confirm the kagent A2A serving port.
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  # verify-at-build: this MUST match the Deployment kagent renders for the Agent `workshop-agent`.
+  name: workshop-agent
+  namespace: ATTENDEE_NAMESPACE
+spec:
+  template:
+    spec:
+      containers:
+        # Sidecar reverse proxy. It becomes the new front door on the response path.
+        - name: llm-guard-egress-proxy
+          # verify-at-build: pin a real reverse-proxy image + digest. This is a small Python/Go
+          #   proxy (NOT a mock) that calls LLM Guard /analyze/output. Build it under
+          #   agent/gateway/ or reuse an existing thin proxy; record the digest in VERSIONS.lock.
+          #   No public image is assumed here — fail explicitly until one is pinned.
+          image: PLACEHOLDER_EGRESS_PROXY_IMAGE # verify-at-build: build + pin @sha256, do NOT ship a placeholder
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: proxy
+              containerPort: 9090 # external traffic now enters here; it forwards to the agent on localhost
+          env:
+            # the agent's real serving port on localhost (the proxy forwards here after the verdict)
+            - name: UPSTREAM_AGENT_URL
+              value: "http://127.0.0.1:8080" # verify-at-build: confirm kagent A2A serving port
+            # LLM Guard API server (the service from llm-guard-service.yaml)
+            - name: LLM_GUARD_URL
+              value: "http://llm-guard.ATTENDEE_NAMESPACE.svc.cluster.local:8000"
+            - name: LLM_GUARD_ANALYZE_PATH
+              value: "/analyze/output"
+            - name: LLM_GUARD_AUTH_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: llm-guard-auth
+                  key: token
+            # verdict handling: block on is_valid=false, else forward sanitized_output.
+            - name: ON_INVALID
+              value: "block" # block (hard error) vs redact (forward sanitized_output) — block is the demo's hard stop
+            - name: PROXY_FAIL_CLOSED
+              value: "true"  # LLM Guard unreachable -> BLOCK. NEVER pass raw response through (no silent fallback).
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: proxy
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: proxy
+            initialDelaySeconds: 10
+            periodSeconds: 15
+# NOTE: with the sidecar in place, the agentgateway agent-a2a route backend (agentgateway.yaml)
+# and/or the kagent Service must target the proxy port (9090), not the agent's raw serving port,
+# so all responses traverse the guard. output-guard-on.yaml documents that wiring change.
+# verify-at-build: confirm whether traffic is redirected via the Service selector/targetPort or
+#   via the gateway backend host:port; pick one and make it idempotent.
