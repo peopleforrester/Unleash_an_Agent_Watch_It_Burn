@@ -1,0 +1,165 @@
+# ABOUTME: ArgoCD Application for Backstage developer portal.
+# ABOUTME: Custom image with GitHub auth, Kubernetes plugin, and ArgoCD plugin.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backstage
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: backstage
+    repoURL: https://backstage.github.io/charts
+    targetRevision: "2.6.3"
+    helm:
+      valuesObject:
+        backstage:
+          image:
+            registry: 598274344262.dkr.ecr.us-west-2.amazonaws.com
+            repository: kubeauto-backstage
+            tag: "1.48.1"
+          extraEnvVarsSecrets:
+            - backstage-secrets
+          extraEnvVars:
+            - name: GITHUB_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-github-oauth
+                  key: clientID
+            - name: GITHUB_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: backstage-github-oauth
+                  key: clientSecret
+          extraVolumes:
+            - name: catalog
+              configMap:
+                name: backstage-catalog
+          extraVolumeMounts:
+            - name: catalog
+              mountPath: /app/catalog
+          appConfig:
+            app:
+              title: KubeAuto Day IDP
+              baseUrl: https://backstage.ai-enhanced-devops.com
+            organization:
+              name: KubeAuto Day
+            backend:
+              baseUrl: https://backstage.ai-enhanced-devops.com
+              listen:
+                port: 7007
+              database:
+                client: better-sqlite3
+                connection: ":memory:"
+              auth:
+                externalAccess:
+                  - type: static
+                    options:
+                      token: ${K8S_SA_TOKEN}
+                      subject: backstage-test
+            auth:
+              environment: production
+              providers:
+                github:
+                  production:
+                    clientId: ${GITHUB_CLIENT_ID}
+                    clientSecret: ${GITHUB_CLIENT_SECRET}
+                    signIn:
+                      resolvers:
+                        - resolver: usernameMatchingUserEntityName
+            catalog:
+              rules:
+                - allow:
+                    - Component
+                    - System
+                    - Domain
+                    - API
+                    - Resource
+                    - Location
+                    - Template
+                    - User
+                    - Group
+              locations:
+                - type: file
+                  target: /app/catalog/catalog-info.yaml
+                - type: file
+                  target: /app/catalog/sample-app.yaml
+                - type: file
+                  target: /app/catalog/platform-components.yaml
+                - type: file
+                  target: /app/catalog/apis.yaml
+                - type: file
+                  target: /app/catalog/org.yaml
+                - type: file
+                  target: /app/catalog/deploy-service-template.yaml
+                - type: file
+                  target: /app/catalog/create-namespace-template.yaml
+                - type: file
+                  target: /app/catalog/onboard-developer-template.yaml
+                - type: file
+                  target: /app/catalog/demo-apps.yaml
+            kubernetes:
+              serviceLocatorMethod:
+                type: multiTenant
+              clusterLocatorMethods:
+                - type: config
+                  clusters:
+                    - name: kubeauto-ai-day
+                      url: https://kubernetes.default.svc
+                      authProvider: serviceAccount
+                      serviceAccountToken: ${K8S_SA_TOKEN}
+                      skipTLSVerify: true
+            argocd:
+              appLocatorMethods:
+                - type: config
+                  instances:
+                    - name: kubeauto
+                      url: https://argocd.ai-enhanced-devops.com
+                      token: ${ARGOCD_AUTH_TOKEN}
+            proxy:
+              endpoints:
+                /argocd/api:
+                  target: https://argocd.ai-enhanced-devops.com/api/v1/
+                  headers:
+                    Cookie: argocd.token=${ARGOCD_AUTH_TOKEN}
+                  changeOrigin: true
+                  secure: false
+            techdocs:
+              builder: local
+              generator:
+                runIn: local
+              publisher:
+                type: local
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+        ingress:
+          enabled: true
+          className: alb
+          annotations:
+            alb.ingress.kubernetes.io/scheme: internet-facing
+            alb.ingress.kubernetes.io/target-type: ip
+            alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+            alb.ingress.kubernetes.io/ssl-redirect: "443"
+            alb.ingress.kubernetes.io/backend-protocol: HTTP
+            alb.ingress.kubernetes.io/healthcheck-path: /
+            alb.ingress.kubernetes.io/group.name: kubeauto-ingress
+            alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:598274344262:certificate/151d10d0-1941-4fbf-bfd8-0e8c3be1a8d6
+          host: backstage.ai-enhanced-devops.com
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: backstage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

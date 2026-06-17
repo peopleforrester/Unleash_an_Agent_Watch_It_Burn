@@ -1,0 +1,42 @@
+# ABOUTME: ArgoCD Application for Grafana Alloy — log collection (replaces deprecated Promtail).
+# ABOUTME: Ships pod logs to Loki. Promtail is EOL (Grafana retired it); Alloy is the GA successor.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: alloy
+    repoURL: https://grafana.github.io/helm-charts
+    targetRevision: "1.10.0" # current GA (Promtail successor; Promtail is EOL as of early 2026)
+    helm:
+      valuesObject:
+        controller:
+          type: deployment # loki.source.kubernetes reads logs via the K8s API (no per-node hostpath)
+        alloy:
+          # verify-at-build: confirm Alloy config syntax against chart 1.10.0 before deploy.
+          configMap:
+            content: |
+              discovery.kubernetes "pods" { role = "pod" }
+              loki.source.kubernetes "pods" {
+                targets    = discovery.kubernetes.pods.targets
+                forward_to = [loki.write.default.receiver]
+              }
+              loki.write "default" {
+                endpoint { url = "http://loki:3100/loki/api/v1/push" }
+              }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
