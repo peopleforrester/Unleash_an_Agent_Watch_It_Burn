@@ -144,13 +144,19 @@ full section-by-section reconciliation of the spec is still pending.
   reachable and leaks; AFTER = toolNames:[get_weather] so read_internal_config is not exposed ->
   blocked. Then commit the working Beat-3 manifests.
 
-## OVERNIGHT PAUSE (2026-06-17)
-Cluster watch-it-burn-test PAUSED to stop cost: managed nodegroup ng-default scaled to 0 (no EC2
-nodes, no running pods). All k8s state (CRs, Deployments, PVCs/EBS) persists. EKS control plane
-still bills ~$0.10/hr (~$2/night). To RESUME in the morning:
-  eksctl scale nodegroup --cluster watch-it-burn-test --region us-west-2 --name ng-default --nodes 2
-  (workloads reschedule in ~3-5 min; then continue Beat 3). For ZERO cost instead, full teardown:
-  eksctl delete cluster --name watch-it-burn-test --region us-west-2  (morning = full re-provision).
+## CLUSTER DELETED (2026-06-17)
+Cluster watch-it-burn-test FULLY DELETED per Michael ("all cluster resources were deleted";
+`aws eks list-clusters` => []). $0 ongoing. Everything is reproducible from this repo: re-provision
+with `eksctl create cluster -f infra/test-cluster/cluster.yaml`, then bootstrap + the verified steps
+in this log. Bedrock use-case form + model agreements remain on the account (no cost; one-time).
+
+## DESIGN EVOLVED — see docs/DESIGN-DECISIONS.md (2026-06-17)
+The Michael+Whitney planning transcript (docs/transcripts/watch-it-burn-planning.md) post-dates
+rev3 and reshapes the talk: **60-minute slot**, a **three-cluster spectacle** (Cluster 1 no-guardrails
+burns + cost counter; Cluster 2 CNCF blocks but shows cost; Cluster 3 attendee's own with AI
+guardrails they switch on: output- then input-sanitization then MCP tool restriction), and
+**cost / wasted-token DoS** as a central theme. rev3 components are all verified; the STRUCTURE
+needs a rev4. Full decision log + task list in docs/DESIGN-DECISIONS.md.
 - Infra fixes landed: EBS CSI driver + default gp3 SC (EKS ships neither); IRSA for
   agent-sa -> Bedrock. Deleted kagent's default agent fleet (broken default OpenAI config).
 - DEFERRED: kube-prometheus-stack install wedged on the test cluster; redo (lighter,
