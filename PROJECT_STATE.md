@@ -158,6 +158,28 @@ guardrails they switch on: output- then input-sanitization then MCP tool restric
 **cost / wasted-token DoS** as a central theme. rev3 components are all verified; the STRUCTURE
 needs a rev4. Full decision log + task list in docs/DESIGN-DECISIONS.md.
 
+## KUBEAUTO IDP PORT (2026-06-18, offline, cluster deleted -> $0)
+Major correction: the full best-practice IDP already exists, conference-proven, at
+~/repos/_archive/events/kubeauto-ai-day (27 components, 59 tests). Watch It Burn now REUSES it
+(docs/WATCH-IT-BURN-REUSE-MAP.md) instead of the minimal subset I'd been building. Done so far:
+- Copied the EKS foundation into the repo: gitops/ (app-of-apps + apps + namespaces + bootstrap),
+  security/ (rbac, falco, eso, cert-manager, quotas-pdbs), observability-idp/, backstage/,
+  policies/kyverno (6 KubeAuto policies + my minimal-floor + block-argocd-drift = 8).
+- Dropped ecom-*/sample-app/load-generator; KEPT *-party apps as the agent's BURN TARGETS.
+- RE-PINNED every chart to current GA 2026-06-18 (was Feb/Mar pins). Flagged breaking: ESO v1->v2
+  (manifests use external-secrets.io/v1 GA, verify at deploy), Loki v6->v7 (values review).
+  REPLACED deprecated/EOL Promtail with Grafana Alloy 1.10.0. Full table in VERSIONS.lock.
+- Added kagent + agent namespaces; wired kagent-crds + kagent ArgoCD apps (OCI helm).
+- Guardrails decision (Michael): LLM Guard (OSS) + kagent + block-list, NO AWS-native/Bedrock
+  Guardrails. Model = Claude on Bedrock. Backstage = nice-to-have. No external red-team.
+- Fleet (Michael): 3x Cluster1 (no-guardrails + minimal-floor, rotated as they burn), 3x Cluster2
+  (CNCF), 2x instructor Cluster3, per-attendee Cluster3 + reserve.
+REMAINING offline: (a) materialize the AI layer (agent ModelConfig+Agent+RBAC, guard-proxy+proxy.py
+configmap, llm-guard, evil-mcp+RemoteMCPServer) into GitOps-ready manifests w/ concrete namespace
+(IRSA can't be GitOps'd -> bootstrap or Pod Identity/ACK); (b) three-cluster app-of-apps profiles
+(trim child apps per role); (c) fresh provision + deploy the FULL IDP via ArgoCD + re-verify.
+For now the AI layer deploys via infra/cluster3-setup.sh (imperative, verified).
+
 ## REV4 LIVE VERIFICATION (2026-06-17, re-provisioned watch-it-burn-test)
 Cluster re-provisioned (EBS CSI baked into the config now — came up clean, no manual storage fix).
 Full Cluster-3 profile applied via the new one-shot `infra/cluster3-setup.sh`. Verified live:
