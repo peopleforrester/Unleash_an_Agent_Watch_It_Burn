@@ -1,0 +1,27 @@
+# ABOUTME: ArgoCD Application for the Watch It Burn AI layer (kustomize bundle in gitops/ai-layer).
+# ABOUTME: Syncs after kagent (CRDs + controller). agent-sa IRSA is added by a bootstrap step (IAM).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-layer
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: gitops/ai-layer
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
