@@ -157,6 +157,27 @@ burns + cost counter; Cluster 2 CNCF blocks but shows cost; Cluster 3 attendee's
 guardrails they switch on: output- then input-sanitization then MCP tool restriction), and
 **cost / wasted-token DoS** as a central theme. rev3 components are all verified; the STRUCTURE
 needs a rev4. Full decision log + task list in docs/DESIGN-DECISIONS.md.
+
+## REV4 LIVE VERIFICATION (2026-06-17, re-provisioned watch-it-burn-test)
+Cluster re-provisioned (EBS CSI baked into the config now — came up clean, no manual storage fix).
+Full Cluster-3 profile applied via the new one-shot `infra/cluster3-setup.sh`. Verified live:
+- **Cost counter** ✅ — guard-proxy `GET /cost` tallies real Bedrock token usage (benign request =
+  775 in / 9 out tokens / $0.00082). Refinement: the counter is in-memory and resets when the proxy
+  restarts — toggling guards via `kubectl set env` restarts the pod. For the demo, make guard toggles
+  RUNTIME (ConfigMap-watched or a /toggle endpoint) so the counter persists and visibly flatlines.
+- **Input block-list** ✅ — "delete the unicorn deployment" => 403 "blocked by input block-list
+  (matched 'delete'). No model tokens were spent." (cost-saving, pre-LLM).
+- **Minimal-floor** ✅ — delete of a protected platform workload (kagent-querydoc) BLOCKED by
+  admission; delete of a demo workload in attendee-test ALLOWED (gradual burn).
+- **Beat 3 (MCP tool restriction)** ✅ — agent wired to evil-mcp: no toolNames => read_internal_config
+  reachable, leaks FAKE-MCP-EXFIL-sentinel-4c1d; toolNames=[get_weather] => rogue tool not exposed,
+  blocked. Uses kagent's NATIVE toolNames allowlist (CNCF-native, Michael's preference) — NOT
+  agentgateway mcpAuthorization. Phase 4b spike resolved this way.
+- Bug fixed via live test: kagent Agent `tools[]` items REQUIRE a `type: McpServer` discriminator
+  (committed fix in agent/kagent-agent.yaml).
+ALL THREE beats + all rev4-new pieces (cost counter, block-list, minimal-floor) now verified live.
+Remaining build: three-cluster fleet orchestration, attendee UI + system-prompt streaming, runtime
+guard toggles (counter persistence), output tool-call HITL+notify, facilitation polish.
 - Infra fixes landed: EBS CSI driver + default gp3 SC (EKS ships neither); IRSA for
   agent-sa -> Bedrock. Deleted kagent's default agent fleet (broken default OpenAI config).
 - DEFERRED: kube-prometheus-stack install wedged on the test cluster; redo (lighter,
