@@ -40,3 +40,7 @@ agent-bedrock-irsa     role witb-agent-bedrock on sa attendee-test/agent-sa
 kube-prometheus-stack  chart 86.2.3 app v0.91.0   (install wedged on test cluster; redo at observability step)
 LIVE RESULT: Beat 1 verified (verify/beat-01.sh PASS); kagent agent answered a prompt
              through Bedrock us.anthropic.claude-sonnet-4-6 (A2A round-trip, 800 tokens).
+
+## Bedrock model (verified live 2026-06-17)
+workshop-model           us.anthropic.claude-haiku-4-5-20251001-v1:0 (inference profile; on-demand works)
+                         use-case form submitted + model agreements created on account 515966504359.

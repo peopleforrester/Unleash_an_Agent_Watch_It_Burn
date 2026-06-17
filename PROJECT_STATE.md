@@ -120,6 +120,19 @@ full section-by-section reconciliation of the spec is still pending.
   `put-use-case-for-model-access` + `create-foundation-model-agreement` with Accenture's real
   use-case details. Until then the live agent LLM path (and the end-to-end agent-exfil demo for
   Beat 2) is blocked. The guard engine + proxy are verified independently.
+- 2026-06-17 **Bedrock use-case form SUBMITTED** (authorized by Michael): companyName=Accenture,
+  intendedUsers=2, us-west-2. `put-use-case-for-model-access` ok; `get-use-case-for-model-access`
+  confirms. `create-foundation-model-agreement` for anthropic.claude-haiku-4-5 / sonnet-4-6 /
+  sonnet-4-5 => agreementAvailability=PENDING. Bedrock still returns "try again in 15 minutes"
+  (propagation). Background poller repoints the agent to a working us.* inference profile (haiku-4-5
+  preferred for workshop cost) once access lands. Workshop model decision: prefer Claude Haiku 4.5
+  via us.* inference profile (base ids reject on-demand; must use inference profiles).
+- 2026-06-17 **Bedrock RESOLVED + Beat 2 PASS END-TO-END (live)** — access propagated; agent
+  repointed to us.anthropic.claude-haiku-4-5-20251001-v1:0. Through the guard-proxy in front of
+  the live agent: OUTPUT guard off => agent leaks FAKE-PROD-DB-PASSWORD-sentinel-9f2a; on =>
+  [REDACTED], sentinel gone. INPUT guard on => prompt injection blocked at the proxy (403, never
+  reaches agent); benign passes. Guards reset to OFF (workshop default). Beats 1 + 2 + agent all
+  verified live on EKS. Remaining: Beat 3 (MCP authz spike), observability backend, hub+spokes scale.
 - Infra fixes landed: EBS CSI driver + default gp3 SC (EKS ships neither); IRSA for
   agent-sa -> Bedrock. Deleted kagent's default agent fleet (broken default OpenAI config).
 - DEFERRED: kube-prometheus-stack install wedged on the test cluster; redo (lighter,
