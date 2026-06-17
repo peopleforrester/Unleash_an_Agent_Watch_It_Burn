@@ -1,0 +1,33 @@
+# ABOUTME: ArgoCD Application for Let's Encrypt ClusterIssuers.
+# ABOUTME: Deploys staging and production ACME issuers using HTTP-01 challenge.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-issuers
+  namespace: argocd
+  annotations:
+    # Wave 2: Depends on cert-manager (wave 1) for CRDs and admission webhook.
+    # Retry config handles the case where CRDs are not yet registered.
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: security/cert-manager
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -1,0 +1,75 @@
+# ABOUTME: ClusterRoles for IDP platform RBAC model.
+# ABOUTME: Defines demo-cluster-admin, app-developer, and app-viewer roles.
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: demo-cluster-admin
+  labels:
+    app.kubernetes.io/part-of: kubeauto-idp
+# NOTE: Intentional cluster-admin equivalent for the demo platform — *:* on *:*.
+# Named demo-cluster-admin (not platform-admin) so readers cribbing the
+# manifest do not adopt a misleading mental model. For production, bind
+# scoped roles like app-developer instead.
+# See ADR-007 for auth strategy rationale.
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: app-developer
+  labels:
+    app.kubernetes.io/part-of: kubeauto-idp
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources:
+      - pods
+      - pods/log
+      - pods/exec
+      - deployments
+      - replicasets
+      - services
+      - configmaps
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources:
+      - secrets
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources:
+      - horizontalpodautoscalers
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: app-viewer
+  labels:
+    app.kubernetes.io/part-of: kubeauto-idp
+rules:
+  - apiGroups: ["", "apps", "batch"]
+    resources:
+      - pods
+      - pods/log
+      - deployments
+      - replicasets
+      - services
+      - configmaps
+      - jobs
+      - cronjobs
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources:
+      - ingresses
+      - networkpolicies
+    verbs: ["get", "list", "watch"]
