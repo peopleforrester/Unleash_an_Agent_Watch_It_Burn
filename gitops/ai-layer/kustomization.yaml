@@ -1,0 +1,25 @@
+# ABOUTME: Kustomize bundle for the Watch It Burn AI layer — everything lands in namespace 'agent'.
+# ABOUTME: Generates the proxy.py / server.py ConfigMaps and the LLM Guard auth Secret from local files.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agent
+
+resources:
+  - resources.yaml
+
+configMapGenerator:
+  - name: guard-proxy-src
+    files:
+      - proxy.py
+  - name: evil-mcp-src
+    files:
+      - server.py
+
+secretGenerator:
+  - name: llm-guard-auth
+    literals:
+      - token=witb-llm-guard-token # verify-at-build: source from a real secret store (ESO) for prod
+
+generatorOptions:
+  disableNameSuffixHash: true # stable names — Deployments reference these by fixed name
