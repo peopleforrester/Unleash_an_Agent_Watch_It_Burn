@@ -1,0 +1,31 @@
+# ABOUTME: ArgoCD Application for the kagent controller (AI layer — Watch It Burn only).
+# ABOUTME: The agent runtime; our Bedrock ModelConfig + scoped Agent CRs are applied on top.
+# verify-at-build: OCI Helm via ArgoCD may require the registry registered as an OCI Helm repo.
+# NOTE: the scoped Agent + Bedrock ModelConfig + guard layer (LLM Guard/guard-proxy/evil-MCP) still
+# deploy via infra/cluster3-setup.sh because they need IRSA (IAM — not GitOps-able without ACK/Crossplane),
+# the proxy.py ConfigMap, and a concrete namespace. Materializing those into GitOps is the open follow-up.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kagent
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: ghcr.io/kagent-dev/kagent/helm
+    chart: kagent
+    targetRevision: "0.9.7"
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kagent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
