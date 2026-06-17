@@ -1,0 +1,41 @@
+# ABOUTME: eksctl template for one facilitator burn/instructor cluster (Cluster 1 / 2 / instructor 3).
+# ABOUTME: Same node shape across roles; what differs is the BOOTSTRAP PROFILE (see README.md).
+# Substitute CLUSTER_ID per instance, e.g. c1-1, c1-2, c1-3, c2-1..3, c3-inst-1..2 (envsubst).
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: watch-it-burn-CLUSTER_ID
+  region: us-west-2
+
+iam:
+  withOIDC: true # IRSA for the agent's Bedrock creds (Cluster 2/3 roles)
+
+managedNodeGroups:
+  - name: ng-default
+    instanceType: t3.large # C1/C2 are light; instructor C3 may want t3.xlarge (see README)
+    desiredCapacity: 2
+    minSize: 2
+    maxSize: 3
+    volumeSize: 40
+    labels:
+      workshop.role: CLUSTER_ID
+    iam:
+      attachPolicy:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Action:
+              - bedrock:InvokeModel
+              - bedrock:InvokeModelWithResponseStream
+              - bedrock:Converse
+              - bedrock:ConverseStream
+            Resource: "*"
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true

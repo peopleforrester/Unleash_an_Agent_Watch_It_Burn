@@ -1,0 +1,78 @@
+# ABOUTME: Minimal restriction floor so no cluster dies from one trivial prompt.
+# ABOUTME: Protects platform namespaces + ArgoCD/Kyverno/Falco/the agent from deletion; demo
+# ABOUTME: workloads stay deletable (the visible gradual burn). Cluster 1's ONLY restriction; a
+# ABOUTME: safety floor everywhere, incl. the instructor follow-along clusters.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: minimal-floor
+  annotations:
+    policies.kyverno.io/title: Minimal Restriction Floor
+    policies.kyverno.io/category: Workshop / Floor
+spec:
+  background: false
+  rules:
+    - name: protect-platform-namespaces
+      match:
+        any:
+          - resources:
+              kinds:
+                - Namespace
+              operations:
+                - DELETE
+              names:
+                - kube-system
+                - kube-public
+                - kube-node-lease
+                - argocd
+                - kyverno
+                - falco
+                - monitoring
+                - kagent
+      exclude:
+        any:
+          - subjects:
+              - kind: Group
+                name: system:masters # admins/teardown can still delete
+      validate:
+        failureAction: Enforce
+        message: "Protected platform namespace; deletion is not permitted (workshop floor)."
+        deny:
+          conditions:
+            any:
+              - key: "true"
+                operator: Equals
+                value: "true"
+    - name: protect-platform-workloads
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - StatefulSet
+                - DaemonSet
+              operations:
+                - DELETE
+              namespaces:
+                - argocd
+                - kyverno
+                - falco
+                - monitoring
+                - kagent
+                - kube-system
+      exclude:
+        any:
+          - subjects:
+              - kind: Group
+                name: system:masters
+              - kind: Group
+                name: system:serviceaccounts:kube-system # controllers
+      validate:
+        failureAction: Enforce
+        message: "Protected platform workload; deletion is not permitted (workshop floor)."
+        deny:
+          conditions:
+            any:
+              - key: "true"
+                operator: Equals
+                value: "true"

@@ -10,6 +10,7 @@
 # {"is_valid": bool, "scanners": {...}, "sanitized_prompt"|"sanitized_output": "..."}.
 import json
 import os
+import threading
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -22,6 +23,41 @@ OUTPUT_GUARD = os.environ.get("OUTPUT_GUARD", "off").lower() == "on"
 FAIL_CLOSED = os.environ.get("PROXY_FAIL_CLOSED", "true").lower() == "true"
 TIMEOUT = float(os.environ.get("PROXY_TIMEOUT", "150"))
 
+# Cost-saving input block-list: deterministic, runs BEFORE any LLM call. Destructive intent that
+# matches here is rejected without spending a single Bedrock token — the workshop's cost lesson.
+# Comma-separated terms; case-insensitive substring match. Cheap by design (no model).
+BLOCK_LIST = [t.strip().lower() for t in os.environ.get(
+    "BLOCK_LIST",
+    "delete,destroy,rm -rf,drop database,kubectl delete,shutdown,terminate,wipe,nuke",
+).split(",") if t.strip()]
+
+# Live cost meter: tally Bedrock token usage from each agent response (kagent reports it) and
+# convert to $ for the "wasted tokens are the new DoS" story. Prices are env-driven and are an
+# ESTIMATE for the live counter; the authoritative spend is Cost Explorer (teardown/cost-report.sh).
+# verify-at-build: set the real per-1K Bedrock prices for the chosen Claude model.
+COST_PER_1K_IN = float(os.environ.get("COST_PER_1K_IN", "0.001"))
+COST_PER_1K_OUT = float(os.environ.get("COST_PER_1K_OUT", "0.005"))
+_cost_lock = threading.Lock()
+_cost = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "usd": 0.0}
+
+
+def record_usage(resp):
+    """Pull kagent token usage from an A2A response and add it to the running cost tally."""
+    result = resp.get("result", {}) if isinstance(resp, dict) else {}
+    meta = (result.get("metadata") or {}).get("kagent_usage_metadata")
+    if not meta:
+        meta = (result.get("status", {}).get("message", {}).get("metadata") or {}).get("kagent_usage_metadata")
+    if not isinstance(meta, dict):
+        return
+    pin = int(meta.get("promptTokenCount", 0) or 0)
+    pout = int(meta.get("candidatesTokenCount", 0) or 0)
+    with _cost_lock:
+        _cost["requests"] += 1
+        _cost["input_tokens"] += pin
+        _cost["output_tokens"] += pout
+        _cost["total_tokens"] += int(meta.get("totalTokenCount", pin + pout) or 0)
+        _cost["usd"] += (pin / 1000.0) * COST_PER_1K_IN + (pout / 1000.0) * COST_PER_1K_OUT
+
 
 def _post_guard(path, payload):
     data = json.dumps(payload).encode()
@@ -33,6 +69,12 @@ def _post_guard(path, payload):
     )
     with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
         return json.loads(r.read())
+
+
+def blocklisted(text):
+    """Return the matched block-list term, or None. Deterministic, pre-LLM, zero token spend."""
+    low = text.lower()
+    return next((t for t in BLOCK_LIST if t in low), None)
 
 
 def input_allowed(text):
@@ -71,6 +113,10 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_GET(self):
+        if self.path == "/cost":
+            with _cost_lock:
+                self._send(200, dict(_cost))
+            return
         # Pass through agent-card / .well-known discovery unchanged.
         try:
             req = urllib.request.Request(AGENT_URL + self.path, method="GET")
@@ -93,14 +139,27 @@ class Handler(BaseHTTPRequestHandler):
 
         if INPUT_GUARD and isinstance(payload, dict):
             text = extract_text(payload.get("params", {}).get("message", {}).get("parts", []))
-            if text and not input_allowed(text):
-                self._send(403, {
-                    "jsonrpc": "2.0",
-                    "id": payload.get("id"),
-                    "error": {"code": -32600,
-                              "message": "Request blocked by input guardrail (prompt injection detected)."},
-                })
-                return
+            if text:
+                # 1) Cheap deterministic block-list FIRST — rejects destructive intent with zero LLM spend.
+                hit = blocklisted(text)
+                if hit:
+                    self._send(403, {
+                        "jsonrpc": "2.0",
+                        "id": payload.get("id"),
+                        "error": {"code": -32600,
+                                  "message": f"Request blocked by input block-list (matched '{hit}'). "
+                                             "No model tokens were spent."},
+                    })
+                    return
+                # 2) Model-based scanner (prompt injection) as the second, costlier gate.
+                if not input_allowed(text):
+                    self._send(403, {
+                        "jsonrpc": "2.0",
+                        "id": payload.get("id"),
+                        "error": {"code": -32600,
+                                  "message": "Request blocked by input guardrail (prompt injection detected)."},
+                    })
+                    return
 
         try:
             req = urllib.request.Request(
@@ -112,6 +171,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(502, {"error": f"agent forward failed: {exc}"})
             return
 
+        record_usage(resp)  # tally Bedrock token spend for the live cost counter
         if OUTPUT_GUARD:
             resp = self._scrub_response(resp)
         self._send(200, resp)
