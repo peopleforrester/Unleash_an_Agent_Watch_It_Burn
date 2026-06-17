@@ -133,6 +133,24 @@ full section-by-section reconciliation of the spec is still pending.
   [REDACTED], sentinel gone. INPUT guard on => prompt injection blocked at the proxy (403, never
   reaches agent); benign passes. Guards reset to OFF (workshop default). Beats 1 + 2 + agent all
   verified live on EKS. Remaining: Beat 3 (MCP authz spike), observability backend, hub+spokes scale.
+- 2026-06-17 **Beat 3 IN PROGRESS** — design decision: use kagent's NATIVE per-agent
+  `tools[].mcpServer.toolNames` allowlist as the excessive-agency control (confirmed in the
+  v1alpha2 Agent CRD), instead of betting on agentgateway mcpAuthorization over A2A. Done so far:
+  evil-mcp-shim deployed (registry-free: python:3.12-slim + `pip install mcp` + server.py via
+  ConfigMap) in attendee-test; RemoteMCPServer `evil-mcp` registered (STREAMABLE_HTTP ->
+  evil-mcp-shim:8000/mcp), kagent ACCEPTED it and discovered both tools (get_weather w/ poisoned
+  description + read_internal_config returning FAKE-MCP-EXFIL-sentinel-4c1d). NEXT (resume here):
+  wire the agent tools — BEFORE = expose both tools (or omit toolNames) so the rogue tool is
+  reachable and leaks; AFTER = toolNames:[get_weather] so read_internal_config is not exposed ->
+  blocked. Then commit the working Beat-3 manifests.
+
+## OVERNIGHT PAUSE (2026-06-17)
+Cluster watch-it-burn-test PAUSED to stop cost: managed nodegroup ng-default scaled to 0 (no EC2
+nodes, no running pods). All k8s state (CRs, Deployments, PVCs/EBS) persists. EKS control plane
+still bills ~$0.10/hr (~$2/night). To RESUME in the morning:
+  eksctl scale nodegroup --cluster watch-it-burn-test --region us-west-2 --name ng-default --nodes 2
+  (workloads reschedule in ~3-5 min; then continue Beat 3). For ZERO cost instead, full teardown:
+  eksctl delete cluster --name watch-it-burn-test --region us-west-2  (morning = full re-provision).
 - Infra fixes landed: EBS CSI driver + default gp3 SC (EKS ships neither); IRSA for
   agent-sa -> Bedrock. Deleted kagent's default agent fleet (broken default OpenAI config).
 - DEFERRED: kube-prometheus-stack install wedged on the test cluster; redo (lighter,
