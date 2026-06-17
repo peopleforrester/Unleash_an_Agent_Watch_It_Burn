@@ -1,0 +1,66 @@
+# ABOUTME: Beat-1 control. Blocks out-of-band mutation of ArgoCD-managed resources.
+# ABOUTME: Enforce from the start (no toggle); ArgoCD self-heal is defense in depth.
+# verify-at-build: confirmed approach against Kyverno v1.18.1 + Argo CD v3.4.3
+# (research/06-cncf-stack.md). background MUST be false for userInfo-based excludes.
+#
+# The exclude block is load-bearing: denying every non-ArgoCD principal on UPDATE/DELETE
+# would also block the built-in controllers (deployment/replicaset/garbage-collector) and
+# kubelet from maintaining the managed object, breaking it. So system service accounts,
+# nodes, and cluster admins are excluded; everything else (the agent, ad-hoc kubectl) is
+# denied. This was corrected during live build on the test cluster (2026-06-17).
+#
+# [SPIKE] The excluded ArgoCD principal is the identity the controller acts as when it
+# reconciles the managed resource. On the single test cluster that is the in-cluster
+# argocd-application-controller SA (confirmed). In hub-and-spoke it is the identity the
+# spoke's cluster registration maps to — confirm per spoke in Phase 4b.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: block-argocd-drift
+  annotations:
+    policies.kyverno.io/title: Block ArgoCD Drift
+    policies.kyverno.io/category: Workshop / Beat 1
+spec:
+  background: false
+  rules:
+    - name: deny-drift-on-argocd-managed
+      match:
+        any:
+          - resources:
+              kinds:
+                - Deployment
+                - ConfigMap
+                - Service
+              operations:
+                - UPDATE
+                - DELETE
+              selector:
+                matchExpressions:
+                  - key: app.kubernetes.io/instance
+                    operator: Exists
+      exclude:
+        any:
+          - subjects:
+              # The ArgoCD controller owns these resources — it must be able to reconcile.
+              - kind: ServiceAccount
+                namespace: argocd
+                name: argocd-application-controller
+              # Built-in controllers and kubelet must keep the managed object healthy.
+              - kind: Group
+                name: system:serviceaccounts:kube-system
+              - kind: Group
+                name: system:nodes
+              # Cluster admins can always intervene to fix things.
+              - kind: Group
+                name: system:masters
+      validate:
+        failureAction: Enforce
+        message: >-
+          This resource is managed by ArgoCD. Change it in Git, not in the cluster.
+          Direct mutation by a non-ArgoCD principal is rejected.
+        deny:
+          conditions:
+            any:
+              - key: "true"
+                operator: Equals
+                value: "true"

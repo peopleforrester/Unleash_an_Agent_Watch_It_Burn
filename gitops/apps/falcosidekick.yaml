@@ -14,7 +14,7 @@ spec:
   source:
     chart: falcosidekick
     repoURL: https://falcosecurity.github.io/charts
-    targetRevision: "0.12.1"
+    targetRevision: "0.14.0"
     helm:
       valuesObject:
         config:

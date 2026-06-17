@@ -60,3 +60,18 @@ metadata:
   name: cert-manager
   labels:
     app.kubernetes.io/part-of: kubeauto-idp
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kagent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn
+    app.kubernetes.io/component: ai-layer
