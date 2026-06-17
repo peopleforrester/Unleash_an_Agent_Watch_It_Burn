@@ -23,7 +23,12 @@ spec:
     deployment:
       serviceAccountName: agent-sa
     tools:
-      - mcpServer:
+        # verify-at-build: tool items REQUIRE a `type` discriminator ("McpServer") — confirmed live
+        # 2026-06-17 (the schema rejects an mcpServer item without it).
+      - type: McpServer
+        mcpServer:
+          kind: RemoteMCPServer
+          apiGroup: kagent.dev
           name: workshop-mcp
           toolNames:
             - list_pods
