@@ -1,0 +1,15 @@
+# Imported context archive from a separate pilot run — not part of this build, AI-named.
+claude-ai-context/
+
+# Secrets — never commit (symlinked into ~/secrets per env-vault convention).
+.env
+*.env
+
+# Python / tooling
+__pycache__/
+*.pyc
+.DS_Store
+
+# Local scratch
+/tmp/
+*.b64
