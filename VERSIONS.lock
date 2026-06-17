@@ -44,3 +44,17 @@ LIVE RESULT: Beat 1 verified (verify/beat-01.sh PASS); kagent agent answered a p
 ## Bedrock model (verified live 2026-06-17)
 workshop-model           us.anthropic.claude-haiku-4-5-20251001-v1:0 (inference profile; on-demand works)
                          use-case form submitted + model agreements created on account <ACCOUNT_ID>.
+
+## IDP foundation (ported from kubeauto-ai-day, RE-PINNED to current GA 2026-06-18)
+argo-cd                chart 9.5.21      app v3.4.3    (verified live)
+kyverno                chart 3.8.1       app v1.18.1   (was 3.7.0)
+falco                  chart 9.1.0       app 0.44.1    (was 8.0.0)
+falcosidekick          chart 0.14.0      app 2.31.1    (was 0.12.1)
+external-secrets       chart 2.6.0       app v2.6.0    (was 1.3.2; MAJOR v1->v2 — manifests use external-secrets.io/v1 GA, verify v2 still serves v1 at deploy)
+cert-manager           chart v1.20.2                   (was v1.19.3)
+kube-prometheus-stack  chart 86.2.3      app v0.91.0   (was 82.1.0)
+loki                   chart 7.0.0       app 3.6.7     (was 6.29.0; MAJOR v6->v7 — review values at deploy)
+tempo                  chart 1.24.4      app 2.9.0     (was 1.18.1)
+grafana-alloy          chart 1.10.0      app v1.17.0   (REPLACES deprecated/EOL promtail 6.16.6)
+opentelemetry-collector chart 0.158.2    app 0.153.0   (was 0.145.0)
+backstage              chart 2.8.2                     (was 2.6.3)

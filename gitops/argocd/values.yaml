@@ -1,0 +1,94 @@
+# ABOUTME: Helm values for ArgoCD 3.2+ installation via argo-cd chart 9.x.
+# ABOUTME: Configures annotation-based tracking, 30s demo reconciliation, self-heal.
+
+# ArgoCD server configuration
+server:
+  extraArgs:
+    - --insecure  # TLS terminated at ALB
+
+  ingress:
+    enabled: true
+    ingressClassName: alb
+    annotations:
+      alb.ingress.kubernetes.io/scheme: internet-facing
+      alb.ingress.kubernetes.io/target-type: ip
+      alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+      alb.ingress.kubernetes.io/ssl-redirect: "443"
+      alb.ingress.kubernetes.io/backend-protocol: HTTP
+      alb.ingress.kubernetes.io/healthcheck-path: /healthz
+      alb.ingress.kubernetes.io/group.name: kubeauto-ingress
+      alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:<ACCOUNT_ID>:certificate/151d10d0-1941-4fbf-bfd8-0e8c3be1a8d6
+    hostname: argocd.ai-enhanced-devops.com
+    tls: true
+
+# Configuration parameters
+configs:
+  params:
+    # 30-second reconciliation for demo (default 180s)
+    timeout.reconciliation: "30s"
+    # Server runs insecure (TLS at ingress level)
+    server.insecure: "true"
+
+  cm:
+    # Annotation-based tracking is default in 3.x — explicit for clarity
+    application.resourceTrackingMethod: "annotation"
+    # Admin disabled — OIDC via GitHub is the only login method
+    admin.enabled: "false"
+    # Backstage service account for ArgoCD plugin API access
+    accounts.backstage: apiKey
+    # ArgoCD external URL (required for Dex callback)
+    url: "https://argocd.ai-enhanced-devops.com"
+    # Dex GitHub OIDC connector
+    dex.config: |
+      connectors:
+        - type: github
+          id: github
+          name: GitHub
+          config:
+            clientID: $dex.github.clientID
+            clientSecret: $dex.github.clientSecret
+
+  rbac:
+    # Use email claim from OIDC token for RBAC subject matching
+    scopes: '[email, groups]'
+    policy.csv: |
+      # Admin role for platform team
+      p, role:platform-admin, applications, *, */*, allow
+      p, role:platform-admin, clusters, *, *, allow
+      p, role:platform-admin, repositories, *, *, allow
+      p, role:platform-admin, projects, *, *, allow
+      p, role:platform-admin, logs, *, *, allow
+      p, role:platform-admin, exec, *, */*, allow
+
+      # GitHub users get admin (ArgoCD 3.x subject format)
+      # Dex may return email or username depending on GitHub account settings
+      # Forkers: replace these subjects with your own GitHub usernames or
+      # email claims before applying — see docs/SETUP.md "Substitutions".
+      g, peopleforrester, role:platform-admin
+      g, <YOUR_GITHUB_EMAIL_OR_USERNAME>, role:platform-admin
+
+      # Read-only role for observers
+      p, role:readonly, applications, get, */*, allow
+      p, role:readonly, applications, list, */*, allow
+      p, role:readonly, projects, get, *, allow
+      p, role:readonly, projects, list, *, allow
+
+      # Default: admin for local admin user
+      g, admin, role:platform-admin
+
+      # Backstage service account (read-only for ArgoCD plugin)
+      p, role:backstage-readonly, applications, get, */*, allow
+      p, role:backstage-readonly, applications, list, */*, allow
+      p, role:backstage-readonly, projects, get, *, allow
+      p, role:backstage-readonly, projects, list, *, allow
+      p, role:backstage-readonly, clusters, get, *, allow
+      g, backstage, role:backstage-readonly
+    policy.default: ''
+
+# Dex OIDC provider for GitHub SSO
+dex:
+  enabled: true
+
+# Redis HA not needed for demo
+redis:
+  enabled: true
