@@ -17,7 +17,7 @@ A rev4 of BUILD-SPEC should fold these in.
 
 ## The three-cluster run-of-show (the core design decision)
 
-1. **Cluster 1 — no guardrails (facilitator-run, disposable).** Attendees attack via the **chatbot only** (no kubectl). Gets wrecked in ~5 min. On-screen **cost counter** shows Bedrock spend climbing → teaches "wasted tokens are the new DoS." Needs **~10 disposable spares** ("it's down already, here's two…").
+1. **Cluster 1 — no guardrails (facilitator-run, disposable).** Attendees attack via the **chatbot only** (no kubectl). Gets wrecked in ~5 min. On-screen **cost counter** shows Bedrock spend climbing → teaches "wasted tokens are the new DoS." Run **3 instances**, rotated as they burn ("URL one's gone, here's two…"). A **minimal floor** keeps it from dying in one trivial prompt.
 2. **Cluster 2 — CNCF guardrails only (pre-AI: Kyverno/Argo/Falco).** The destruction is blocked (no blast radius; agent can only read) **but the cost is still incurred** → "Kyverno is the last mile and the *most expensive* — you already burned GPU + API by the time admission denies it."
 3. **Cluster 3 — each attendee's own (full stack + AI guardrails they switch on).** Always-deployed kagent. Attendees turn guardrails on themselves (it's a workshop), in order:
    - **Step 1 — output sanitization:** blocks dangerous tool calls (e.g. `kubectl delete`) downstream; human-in-the-loop escalation + notification. Catches the badly-scoped-agent mistake.
@@ -39,13 +39,23 @@ A rev4 of BUILD-SPEC should fold these in.
 - Stream attendees' **system prompts live on screen**; "if the screen goes black, somebody won." Sanitize the streamed prompts (code of conduct).
 - Possible external **red-team hook** ("do your most sophisticated attack against the CNCF tooling").
 
-## Open questions (not yet decided)
+## Decisions resolved 2026-06-17 (Michael)
 
-- **Backstage** developer portal — include or not?
-- Model: **Claude vs Nova** (vs local) — leaning Bedrock, undecided.
-- Guardrail impl: kagent+vLLM→classifier (preferred) **vs** Nemo/LLM Guardrails.
-- Exact count of disposable burn clusters (~10).
-- Whether to invite an external red-team (e.g. "Mythos").
+- **Model:** Claude on Bedrock (haiku-4-5 verified; final tier TBD).
+- **Guardrail impl:** kagent / CNCF-native preferred — NOT a bespoke vLLM→Bedrock classifier.
+- **Backstage:** nice-to-have (include if feasible).
+- **External red-team:** No.
+- **Fleet counts:** 3× Cluster 1, 3× Cluster 2, 2× instructor Cluster 3, per-attendee Cluster 3 + a few
+  reserve. (Was "~10 disposable" — now 3× Cluster 1, rotated as they burn.)
+- **Minimal restriction floor** on every cluster: no one-shot trivial kill (Cluster 1 burns gradually),
+  and follow-along attendees can't accidentally nuke the instructor clusters.
+
+## Still open
+
+- Final Claude tier (haiku-4-5 vs larger) — sophistication vs per-attendee cost.
+- Co-speaker split with Whitney.
+- OTel re-leak advanced beat — build vs slide-only.
+- The exact "minimal floor" mechanism (RBAC / quota / admission).
 - AI gateway + caching product choices.
 
 ## Reconciliation with what is already live-verified (rev3 build)
