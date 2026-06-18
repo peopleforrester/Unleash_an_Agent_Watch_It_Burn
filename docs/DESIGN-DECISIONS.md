@@ -10,7 +10,7 @@ A rev4 of BUILD-SPEC should fold these in.
 
 ## What changed vs the build (headline)
 
-- **Slot is now 60 minutes** (was 90/120). Compress to ~1–2 of the CNCF "80%" + 2–4 AI-specific guardrails.
+- **Slot is 2 hours (120 min)** — confirmed on the AI Engineer schedule: Day 1, 2:20–4:20pm, Track 5. Compress to ~1–2 of the CNCF "80%" + 2–4 AI-specific guardrails.
 - **Structure is a three-cluster spectacle**, not one aggregate beat.
 - **Cost / wasted-token DoS is now a central theme** — brand new vs rev3.
 - **Observability (input + output + tool calls on a live dashboard) is the headline payoff**, not just a lens — "even with no guardrails, seeing the prompts and tool calls melts their brains."
@@ -74,7 +74,7 @@ A rev4 of BUILD-SPEC should fold these in.
 
 ## Implied tasks / next steps (for triage with Michael)
 
-1. **Rev4 the BUILD-SPEC** to the 60-min three-cluster run-of-show + cost theme (supersede rev3's structure; keep verified components).
+1. **Rev4 the BUILD-SPEC** to the 2-hour three-cluster run-of-show + cost theme (supersede rev3's structure; keep verified components).
 2. **Update the abstract** (Michael said he would — the run-of-show is now concrete).
 3. Design the **disposable burn-cluster fleet** (~10) + fast re-provision (the 15-min re-provision caveat).
 4. Build the **live Bedrock cost counter** + on-screen display.
