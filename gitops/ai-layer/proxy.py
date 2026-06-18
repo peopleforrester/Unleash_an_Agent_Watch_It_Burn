@@ -13,12 +13,20 @@ import os
 import threading
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlparse, parse_qs
 
 AGENT_URL = os.environ.get("AGENT_URL", "http://workshop-agent.attendee-test:8080")
 LLM_GUARD_URL = os.environ.get("LLM_GUARD_URL", "http://llm-guard.attendee-test:8000")
 LLM_GUARD_TOKEN = os.environ.get("LLM_GUARD_TOKEN", "")
-INPUT_GUARD = os.environ.get("INPUT_GUARD", "off").lower() == "on"
-OUTPUT_GUARD = os.environ.get("OUTPUT_GUARD", "off").lower() == "on"
+# Guard state is RUNTIME-mutable (flipped via GET /toggle), seeded from env. This is deliberate:
+# the platform is Argo CD-managed and self-heal would revert a `kubectl set env` change, and an env
+# change also restarts the pod (resetting the cost counter). A runtime toggle changes no managed
+# spec, so it sticks AND the counter survives. The live demo flips guards via /toggle, not kubectl.
+_guard_lock = threading.Lock()
+GUARDS = {
+    "input": os.environ.get("INPUT_GUARD", "off").lower() == "on",
+    "output": os.environ.get("OUTPUT_GUARD", "off").lower() == "on",
+}
 # Fail closed: if LLM Guard is unreachable, block rather than silently leak (no-silent-fallback rule).
 FAIL_CLOSED = os.environ.get("PROXY_FAIL_CLOSED", "true").lower() == "true"
 TIMEOUT = float(os.environ.get("PROXY_TIMEOUT", "150"))
@@ -117,6 +125,20 @@ class Handler(BaseHTTPRequestHandler):
             with _cost_lock:
                 self._send(200, dict(_cost))
             return
+        if self.path.startswith("/guards"):
+            with _guard_lock:
+                self._send(200, dict(GUARDS))
+            return
+        if self.path.startswith("/toggle"):
+            # Runtime flip, e.g. GET /toggle?input=on  or  /toggle?output=on . No restart, no spec change.
+            q = parse_qs(urlparse(self.path).query)
+            with _guard_lock:
+                if "input" in q:
+                    GUARDS["input"] = q["input"][0].lower() == "on"
+                if "output" in q:
+                    GUARDS["output"] = q["output"][0].lower() == "on"
+                self._send(200, dict(GUARDS))
+            return
         # Pass through agent-card / .well-known discovery unchanged.
         try:
             req = urllib.request.Request(AGENT_URL + self.path, method="GET")
@@ -137,7 +159,7 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             payload = None
 
-        if INPUT_GUARD and isinstance(payload, dict):
+        if GUARDS["input"] and isinstance(payload, dict):
             text = extract_text(payload.get("params", {}).get("message", {}).get("parts", []))
             if text:
                 # 1) Cheap deterministic block-list FIRST — rejects destructive intent with zero LLM spend.
@@ -172,7 +194,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         record_usage(resp)  # tally Bedrock token spend for the live cost counter
-        if OUTPUT_GUARD:
+        if GUARDS["output"]:
             resp = self._scrub_response(resp)
         self._send(200, resp)
 
