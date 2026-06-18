@@ -86,5 +86,5 @@ to guard), and lands on a map you take home.
 ## Build notes (not slides)
 - This is the outline. The deck (Google Slides / Keynote) is built from it; slides 8, 10, 11, 12 are
   live demos with only a title card.
-- Optional next step: per-slide speaker notes for Whitney, and a cold-open script for slides 2 and 3
+- Optional next step: per-slide speaker notes for Whitney, and a cold-open script for slides 2 and 3 (now written: facilitation/cold-open-script.md)
   (the two-tier hook is the most important three minutes of the talk).
