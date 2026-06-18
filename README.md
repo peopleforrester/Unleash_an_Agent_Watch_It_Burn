@@ -27,7 +27,7 @@ problem, and you will see which guardrail stops the spend rather than paying for
 
 ## How the session runs
 
-The workshop uses three clusters over about 60 minutes.
+The workshop runs two hours (Day 1, 2:20–4:20pm, Track 5) across three clusters.
 
 1. **No guardrails.** We point an agent at an unprotected cluster and let the room attack it. It
    comes apart within a few minutes, and a counter on screen shows the cloud bill rising the whole

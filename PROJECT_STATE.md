@@ -152,7 +152,7 @@ in this log. Bedrock use-case form + model agreements remain on the account (no 
 
 ## DESIGN EVOLVED — see docs/DESIGN-DECISIONS.md (2026-06-17)
 The Michael+Whitney planning transcript (docs/transcripts/watch-it-burn-planning.md) post-dates
-rev3 and reshapes the talk: **60-minute slot**, a **three-cluster spectacle** (Cluster 1 no-guardrails
+rev3 and reshapes the talk: **2-hour slot (confirmed: Day 1, 2:20–4:20pm, Track 5)**, a **three-cluster spectacle** (Cluster 1 no-guardrails
 burns + cost counter; Cluster 2 CNCF blocks but shows cost; Cluster 3 attendee's own with AI
 guardrails they switch on: output- then input-sanitization then MCP tool restriction), and
 **cost / wasted-token DoS** as a central theme. rev3 components are all verified; the STRUCTURE

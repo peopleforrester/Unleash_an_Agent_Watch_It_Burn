@@ -4,6 +4,8 @@ Frozen reference. This file captures the accepted abstract as submitted (Version
 
 This is the canonical "Proposed Amended Description" the build must make literally true (see `BUILD-SPEC.md` §2 and the "abstract truth" rule). If the build and this abstract disagree on behavior, the abstract wins.
 
+> **Scheduled slot (confirmed on the AI Engineer schedule):** 2 hours, Day 1 (Workshop Day), 2:20–4:20pm, Track 5. The Format field below reads "1–2 hours" as submitted; the booked slot is the full 2 hours. The public schedule currently lists Michael solo; organizers have been emailed to add Whitney as co-speaker.
+
 ---
 
 ## Version 1 — As Submitted (Solo, Frozen)
