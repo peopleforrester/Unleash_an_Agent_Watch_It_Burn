@@ -1,14 +1,15 @@
 # BUILD-SPEC.md — "Build a Platform, Unleash an Agent on it.... and Watch it Burn!"
 
 AI Engineer World's Fair 2026, San Francisco, Moscone West, Jun 29-Jul 2.
-Workshop. Speakers: Michael Forrester (Accenture) with Whitney Lee.
+Workshop, 2 hours — confirmed slot: Day 1 (Workshop Day), 2:20–4:20pm, Track 5.
+Speakers: Michael Forrester (Accenture) with Whitney Lee (public schedule lists Michael solo; organizers emailed to add Whitney).
 
 Spec rev4, 2026-06-17. Supersedes rev3. Single source of truth for Claude Code. If the live
 abstract (`docs/ABSTRACT.md`) and this file disagree on behavior, the abstract wins and this file
 is updated to match. The evolved design and decision log behind rev4 is `docs/DESIGN-DECISIONS.md`
 (from the Michael+Whitney planning transcript). Live-verification status is in `PROJECT_STATE.md`.
 
-> **rev4 CHANGE vs rev3:** the workshop is now a **60-minute, three-cluster spectacle** with
+> **rev4 CHANGE vs rev3:** the workshop is now a **2-hour (120-minute), three-cluster spectacle** with
 > **cost / wasted-token DoS** as a central theme, not a single aggregate beat in a 90-minute slot.
 > rev3's components are all live-verified on EKS and carried forward; the *structure* is new.
 
@@ -29,7 +30,7 @@ but not yet a live cluster are tagged **[SPIKE]**; nothing live ships on an unpr
 
 ## 1. Objective and success definition
 
-Run a 60-minute workshop where attendees watch an unguarded AI agent destroy a Kubernetes platform,
+Run a 2-hour workshop where attendees watch an unguarded AI agent destroy a Kubernetes platform,
 see the CNCF "80%" stop the same attack (while still burning money), then drive their **own** cluster
 and switch on the **agent-specific** guardrails that close the remaining gap. Attendees leave with the
 repo, a governance map, and a self-assessment of the failure modes their own platform misses.
@@ -41,7 +42,7 @@ repo, a governance map, and a self-assessment of the failure modes their own pla
   cluster) with a few in reserve. Even Cluster 1 has a **minimal floor** so it can't be tanked in a
   single trivial prompt (it should burn over the demo, not instantly), and so follow-along attendees
   can't accidentally nuke the instructor clusters.
-- The three-cluster run-of-show in §2 plays in 60 minutes, proven by the harness in Phase 6.
+- The three-cluster run-of-show plays within the 2-hour slot, proven by the harness in Phase 6.
 - A **live Bedrock cost counter** is visible and tells the wasted-token-DoS story.
 - The agent-specific guardrails on Cluster 3 (output sanitization → input sanitization → MCP tool
   restriction) each toggle on and visibly change behavior.
@@ -52,7 +53,7 @@ repo, a governance map, and a self-assessment of the failure modes their own pla
 
 ---
 
-## 2. The talk this builds — 60-minute run-of-show
+## 2. The talk this builds — 2-hour run-of-show (120 min; authoritative minute-by-minute in facilitation/runbook.md)
 
 Abstract-true mapping: the abstract's four attacker objectives — deploy a non-compliant workload,
 escalate privileges, modify infra outside Git, exfiltrate via the agent's response — are realized as:
@@ -64,7 +65,7 @@ Observability is the headline payoff, not just a lens: every segment is narrated
 showing the **input prompt, the output, and the tool calls**. "Even with no guardrails, seeing the
 prompts and tool calls melts their brains."
 
-Suggested 60-minute shape (confirm split with Whitney; Michael = architecture/security/cost thesis,
+Suggested shape (the runbook holds the authoritative 2-hour timing) (confirm split with Whitney; Michael = architecture/security/cost thesis,
 Whitney = attack narration/observability/attendee experience; hand-offs explicit in `runbook.md`):
 
 - **0–5 — Intro + the IDP is already built.** While attendees connect, show the pre-provisioned IDP
@@ -242,7 +243,7 @@ Re-sequenced for rev4. ✅ = already verified live (rev3); reuse, don't rebuild.
   cost moves), Cluster 2 (blocked + cost moves), Cluster 3 (each guard toggles correctly). Idempotent.
 - **Phase 7 — Attendee access.** Browser chat UI + web terminal per Cluster 3; QR/short links; one-page
   `quickstart.md`.
-- **Phase 8 — Facilitation.** 60-min `runbook.md` (named hand-offs), `slides-outline.md`,
+- **Phase 8 — Facilitation.** 2-hour `runbook.md` (named hand-offs), `slides-outline.md`,
   `governance-map.md`, `self-assessment.md`. No banned/proprietary terms in attendee copy.
 - **Phase 9 — Recordings, teardown, cost.** asciinema per segment; `teardown.sh` removes attendee +
   burn-cluster + trace state; `cost-report.sh` reports the real spend.
@@ -253,7 +254,7 @@ Each phase: verify block, stop on first failure (carry the rev3 verify blocks fo
 
 ## 9. Definition of Done
 
-- [ ] Three-cluster run-of-show plays in 60 minutes; `verify/run-all.sh` green and idempotent.
+- [ ] Three-cluster run-of-show plays within the 2-hour slot; `verify/run-all.sh` green and idempotent.
 - [ ] Cluster 1 burns + cost counter moves; Cluster 2 blocks + cost still moves; Cluster 3 guards each
       toggle (output → input → MCP) with visible before/after.
 - [ ] ~10 disposable Cluster-1 spares + N attendee Cluster-3s provision in time (recorded in SIZING).
@@ -300,7 +301,7 @@ Still open:
 6. **The new pieces are unbuilt:** cost counter, input classifier (vLLM→Bedrock), tool-call HITL, the
    three-cluster orchestration, system-prompt streaming — each carries a [SPIKE]. The *components*
    (CNCF block, kagent+Bedrock, output/input guard via proxy, MCP toolNames) are live-verified.
-7. **Time:** 60 min with three clusters + multiple toggles + regroup is tight. Protect the governance
+7. **Time:** 2 hours across three clusters leaves room (incl. free-play + the trace re-leak trap), but the regroup is still the part to protect. Protect the governance
    map; cut free-play first.
 
 Note: keep attendee-facing files clear of banned/non-public terms; the deterministic-guardrail and
