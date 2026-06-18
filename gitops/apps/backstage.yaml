@@ -1,5 +1,7 @@
 # ABOUTME: ArgoCD Application for Backstage developer portal.
 # ABOUTME: Custom image with GitHub auth, Kubernetes plugin, and ArgoCD plugin.
+# verify-at-build: image is KubeAuto private ECR (kubeauto-backstage). Build/push our own Backstage
+# image (or use a public demo) before deploy; expected ImagePullBackOff until then. Backstage is nice-to-have.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
