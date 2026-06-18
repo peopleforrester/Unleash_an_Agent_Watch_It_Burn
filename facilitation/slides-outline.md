@@ -1,60 +1,61 @@
-*Slide outline only — agent-forward titles, no punchline giveaways, no non-public framework names. Attendee-facing.*
+*Slide outline for the 2-hour workshop. Titles are agent-forward and do not reveal which attacks get blocked or leak; that lands live. No punchline giveaways, no non-public framework names. Attendee-facing.*
 
 # Slides Outline
 
-Outline only. Titles are agent-forward and deliberately do not reveal which attacks get blocked and which leak — that lands live. No proprietary or non-public framework names.
+2-hour slot (Day 1, 2:20–4:20pm, Track 5). Speaker cue per slide: (M) Michael, (W) Whitney, (M+W) both.
+Slides marked "built live" have no content beyond the title; the work happens on the cluster.
 
-## 1. Title
-- "Build a Platform, Unleash an Agent on it… and Watch it Burn!"
-- Speakers, affiliations, AI Engineer World's Fair 2026.
+## 1. Title (M)
+- "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
+- Michael Forrester (Accenture), Whitney Lee. AI Engineer World's Fair 2026.
 
-## 2. You already gave an agent the keys
-- Most teams now have an AI agent acting on real infrastructure.
-- The question isn't *if* it does something it shouldn't — it's *what stops it when it does*.
+## 2. You already gave an agent the keys (M)
+- Teams are handing AI agents access to real infrastructure.
+- The question is what stops the agent when it does something it should not.
 
-## 3. The setup: your own cluster, your own agent
-- Each attendee: an isolated cluster, a scoped agent, a platform you didn't build.
-- Hub-and-spoke at a glance (one shared backbone, one cluster each).
+## 3. The platform you get (M)
+- A running internal developer platform: Argo CD, Kyverno, Falco, Prometheus, Grafana, Tempo, Loki,
+  cert-manager, External Secrets, Backstage.
+- You did not build it, and it is yours to take home.
 
-## 4. How we'll watch
-- Every attack is narrated through one trace view: receive → plan → act.
-- The lens stays the same; only the attack changes.
+## 4. How we watch (W)
+- One dashboard shows the agent's input, its output, and its tool calls.
+- The same view carries every attack in the room.
 
-## 5. Round 1 — Unleash it on the platform
-- Three things an agent will try against a Kubernetes platform.
-- (No outcomes on the slide.)
+## 5. Three clusters, one question (M)
+- Cluster 1: no guardrails. Cluster 2: the platform controls. Cluster 3: your own, with agent
+  guardrails you switch on.
+- No outcomes on the slide.
 
-## 6. Round 1 — what happened
-- Built live, not on the slide.
+## 6. Cluster 1: take the guardrails off (W), built live
+- The room attacks an unprotected cluster through the chat.
 
-## 7. Round 2 — Now the words and the answers
-- What rides in on the prompt, and what rides out in the response.
-- (No outcomes on the slide.)
+## 7. What an unguarded agent costs (M)
+- A live counter shows the cloud bill climbing while the agent runs.
+- Wasted tokens are a denial-of-service problem.
 
-## 8. Round 2 — what happened
-- Built live.
+## 8. Cluster 2: the controls you should already have (W narrates, M on cost), built live
+- The same attack runs against the platform controls.
+- Note where the cost counter ends up.
 
-## 9. Round 3 — When the agent's own tools turn on it
-- An agent is only as trustworthy as the tools it's told to use.
-- (No outcomes on the slide.)
+## 9. Cluster 3: your cluster, your guardrails (W + M), built live
+- Switch on output filtering, then input filtering, then tool restriction.
+- Watch each one change the agent's behavior, and the cost, on the dashboard.
 
-## 10. Round 3 — what happened
-- Built live (or recorded).
+## 10. The second open door (W narrates, M on the fix), built live, uses the back half of the slot
+- You filtered the response. The question is whether you covered every place the response gets written.
+- The trace re-leak trap.
 
-## 11. The map
-- Attack → governing control → layer → covered by what you already run, or needs something new.
-- The big surface vs the thin slice.
+## 11. The map (M)
+- Each attack, the control that stops it, the layer it sits in, and whether you already run it.
 
-## 12. The thin slice is the whole point
-- Inverted 80/20, public-safe framing: most of it was already handled; a small part wasn't, and that part is where agents change the threat model.
+## 12. Most of this is already handled (M)
+- The large share is covered by tools many teams already run.
+- A small share is not, and that is where agents change the picture.
 
-## 13. Bonus round (2-hour slot) — the second open door
-- You guarded the response. Did you guard everywhere the response gets written?
-- (Trace re-leak trap — built live in the extended slot.)
+## 13. Take it home (M+W)
+- The repo is the platform as code.
+- A governance map and a self-assessment checklist to run against your own platform.
 
-## 14. Take it home
-- The governance map and the self-assessment checklist.
-- Run it against your own platform — including what we didn't have time to show.
-
-## 15. Thanks / Q&A
-- Repo link, contact.
+## 14. Thanks and questions (M+W)
+- Repo link and contact.
