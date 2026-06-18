@@ -172,6 +172,27 @@ Stopped mid full-IDP deploy. The GitOps port is COMPLETE and committed to stagin
 NOT YET PROVEN: the full app-of-apps sync on a live cluster (the GA-bump interop). Everything else
 through Beat 3 + cost counter + block-list + minimal-floor was verified live on prior provisions.
 
+## FULL IDP GITOPS DEPLOY — VERIFIED on EKS 1.35 (2026-06-18)
+Provisioned watch-it-burn-test on K8s 1.35 (chosen over 1.36 for certainty), ran infra/deploy-full-idp.sh
+(ArgoCD + private-repo creds + ghcr OCI + app-of-apps). RESULT:
+- Full 27-component IDP + the AI layer deployed via the Argo CD app-of-apps. INTEROP PROVEN: all
+  GA-bumped charts Synced/Healthy together on 1.35 — external-secrets (v1->v2), loki (v6->v7),
+  cert-manager v1.20, falco/falcosidekick, otel-collector, tempo, kagent-crds + kagent (OCI).
+- Agent answers via Bedrock (IRSA role witb-agent-bedrock-gitops on agent/agent-sa). Block-list
+  verified on the GitOps instance ("blocked by input block-list ... No model tokens were spent").
+- FINDING (build item): Argo CD selfHeal REVERTS kubectl-level guard toggles. The live demo toggles
+  must be an ArgoCD-safe runtime mechanism (proxy /toggle endpoint or a watched ConfigMap outside the
+  synced spec), not a deployment env edit. Had to pause selfHeal on the ai-layer app to test, then restored.
+- Reds remaining (NOT interop): *-party + backstage + templated-test-svc = ImagePullBackOff from
+  KubeAuto's PRIVATE ECR (acct <ACCOUNT_ID>) — repoint to public/our ECR; ESO secrets Degraded (no
+  AWS Secrets Manager entries -> Grafana admin secret missing -> grafana config error); kagent default
+  agent fleet recreated as noise (disable via kagent chart values); cert-manager-issuers Degraded (no real issuer).
+- SPEND: Cost Explorer ~$6.75 through partial Jun 18; ~$7-9 total project once ingested.
+- Cluster DELETED after verify -> $0.
+REMAINING BUILD: runtime guard toggles; repoint *-party/backstage images; wire Grafana admin secret
+(static or real AWS SM); disable kagent default agents; three-cluster fleet (task #7); then the
+presentation/slides for Whitney.
+
 ## KUBEAUTO IDP PORT (2026-06-18, offline, cluster deleted -> $0)
 Major correction: the full best-practice IDP already exists, conference-proven, at
 ~/repos/_archive/events/kubeauto-ai-day (27 components, 59 tests). Watch It Burn now REUSES it
