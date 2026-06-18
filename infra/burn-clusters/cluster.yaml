@@ -7,6 +7,7 @@ kind: ClusterConfig
 metadata:
   name: watch-it-burn-CLUSTER_ID
   region: us-west-2
+  version: "1.36" # latest GA on EKS standard support (confirmed 2026-06-18)
 
 iam:
   withOIDC: true # IRSA for the agent's Bedrock creds (Cluster 2/3 roles)
