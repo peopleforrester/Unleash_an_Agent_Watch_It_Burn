@@ -7,7 +7,7 @@ kind: ClusterConfig
 metadata:
   name: watch-it-burn-test
   region: us-west-2
-  version: "1.36" # latest GA on EKS standard support (confirmed via describe-cluster-versions 2026-06-18)
+  version: "1.35" # EKS default / most-tested GA on standard support (1.36 exists but is newer/less proven)
 
 iam:
   withOIDC: true # enables IRSA later (gateway/LLM Guard/Bedrock pod-scoped creds)
