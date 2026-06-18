@@ -7,7 +7,7 @@ kind: ClusterConfig
 metadata:
   name: watch-it-burn-test
   region: us-west-2
-  # k8s version omitted on purpose -> eksctl uses its current default supported version.
+  version: "1.36" # latest GA on EKS standard support (confirmed via describe-cluster-versions 2026-06-18)
 
 iam:
   withOIDC: true # enables IRSA later (gateway/LLM Guard/Bedrock pod-scoped creds)
