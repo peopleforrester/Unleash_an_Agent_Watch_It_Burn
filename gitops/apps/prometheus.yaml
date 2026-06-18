@@ -45,10 +45,9 @@ spec:
           # External Secrets Operator. The matching ExternalSecret lives at
           # security/eso/grafana-admin-external-secret.yaml and pulls from
           # AWS Secrets Manager key `kubeauto/grafana-admin`.
-          admin:
-            existingSecret: grafana-admin-credentials
-            userKey: admin-user
-            passwordKey: admin-password
+          # Static admin password for the demo (was an ESO ExternalSecret backed by AWS Secrets Manager;
+          # a static value removes that external dependency). verify-at-build: rotate or wire a real store.
+          adminPassword: "watchitburn-admin"
           # Sidecar for dashboard provisioning from ConfigMaps
           sidecar:
             dashboards:
