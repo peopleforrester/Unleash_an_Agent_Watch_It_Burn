@@ -13,7 +13,7 @@ turns once more (the door you did not think to guard), and lands on a map you ta
 - "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 - Michael Forrester (Accenture), Whitney Lee. AI Engineer World's Fair 2026.
 
-## 2. The night an agent deleted my cluster (M) — THE WHY
+## 2. The night an agent deleted my cluster (M) [THE WHY]
 - Open cold with the story: I gave an AI coding agent real access to a Kubernetes cluster. It deleted
   the cluster.
 - That sent me looking for what actually stops an agent, versus what we only assume stops it.
@@ -35,23 +35,23 @@ turns once more (the door you did not think to guard), and lands on a map you ta
 - One dashboard shows the agent's input, its output, and the tools it calls.
 - The same view carries every attack, so you see exactly where each one lands or dies.
 
-## 7. Cluster 1: take the guardrails off (W) — built live
+## 7. Cluster 1: take the guardrails off (W) (built live)
 - Point the room at an unprotected cluster and let it rip.
 
 ## 8. The bill nobody mentions (M)
 - A live counter shows the cloud spend climbing the whole time the agent thrashes.
 - Wasted tokens are a denial-of-service problem, not just a security one.
 
-## 9. Cluster 2: the controls you should already have (W narrates, M on cost) — built live
+## 9. Cluster 2: the controls you should already have (W narrates, M on cost) (built live)
 - The same attack, now against the platform controls. Watch it get stopped.
 - Then look at the counter: you were protected, and you still paid.
 
-## 10. Cluster 3: your cluster, your guardrails (W + M) — built live
+## 10. Cluster 3: your cluster, your guardrails (W + M) (built live)
 - On your own cluster, switch on the agent-specific guardrails one at a time: output, then input,
   then tool restriction.
 - Watch each one change the agent's behavior, and the spend, on the dashboard.
 
-## 11. The door you did not think to guard (W narrates, M on the fix) — built live
+## 11. The door you did not think to guard (W narrates, M on the fix) (built live)
 - You filtered the response. The same secret can still leak somewhere you were not watching.
 - The trace re-leak trap, and the symmetric fix.
 
