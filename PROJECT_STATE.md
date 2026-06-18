@@ -271,3 +271,16 @@ current docs, not against a running build.
 
 Attendee count + ceiling; access model; co-speaker split; 90 vs 120 min; host provider
 (EKS default); whether to build the OTel re-leak advanced beat or keep it slide-only.
+
+## SESSION CLOSE 2026-06-19 — fleet + presentation done (offline)
+- Three-cluster fleet (task #7) authored: gitops/bootstrap/app-of-apps-burn.yaml (C1 burn profile,
+  directory.include subset, no enforcing policies), full app-of-apps for C2/C3; minimal-floor split to
+  policies/floor; deploy-full-idp.sh takes a profile (full|burn). VERIFY-AT-BUILD: the burn include-glob
+  + C1 composition not yet live-tested (no cluster up).
+- Presentation: slides-outline rebuilt with a two-tier hook (personal incident -> enterprise stakes:
+  data/revenue/reputation/compliance/cost + shared-network blast radius), cold-open script for slides 2-3
+  (facilitation/cold-open-script.md). All public-facing docs audit-clean (0 em-dashes).
+- 2-hour slot confirmed (Day 1 2:20-4:20pm Track 5) folded through all docs; runbook is 120-min primary.
+- Cluster deleted -> $0. Everything on staging.
+- REMAINING (not done): live-verify the fleet profiles on a provision; build the actual slide deck;
+  speaker notes for non-hook slides (Michael has these); custom Backstage image; system-prompt streaming UI.
