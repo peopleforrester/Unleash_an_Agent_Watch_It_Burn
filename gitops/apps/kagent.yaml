@@ -19,6 +19,20 @@ spec:
     repoURL: ghcr.io/kagent-dev/kagent/helm
     chart: kagent
     targetRevision: "0.9.7"
+    helm:
+      valuesObject:
+        # Disable the chart's built-in agent fleet — we run only our own workshop-agent. The defaults
+        # otherwise CrashLoop/CreateContainerConfigError on a missing OpenAI secret and waste resources.
+        argo-rollouts-agent: { enabled: false }
+        cilium-debug-agent: { enabled: false }
+        cilium-manager-agent: { enabled: false }
+        cilium-policy-agent: { enabled: false }
+        helm-agent: { enabled: false }
+        istio-agent: { enabled: false }
+        k8s-agent: { enabled: false }
+        kgateway-agent: { enabled: false }
+        observability-agent: { enabled: false }
+        promql-agent: { enabled: false }
   destination:
     server: https://kubernetes.default.svc
     namespace: kagent
