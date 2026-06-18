@@ -158,6 +158,20 @@ guardrails they switch on: output- then input-sanitization then MCP tool restric
 **cost / wasted-token DoS** as a central theme. rev3 components are all verified; the STRUCTURE
 needs a rev4. Full decision log + task list in docs/DESIGN-DECISIONS.md.
 
+## STOPPED FOR THE NIGHT 2026-06-18 — RESUME STEPS (cluster DELETED -> $0)
+Stopped mid full-IDP deploy. The GitOps port is COMPLETE and committed to staging (app-of-apps with
+28 components, GA-pinned, AI layer kustomize-validated). To resume tomorrow:
+  1. eksctl create cluster -f infra/test-cluster/cluster.yaml   (EBS CSI baked in; ~15-20 min)
+  2. ./infra/deploy-full-idp.sh   (installs ArgoCD, registers the private repo, applies the app-of-apps)
+  3. Watch: kubectl get applications -n argocd  — triage any that fail (likely the GA-bump breakers:
+     ESO v1->v2, Loki v6->v7). This is the live interop proof that was NOT yet completed.
+  4. Add agent Bedrock IRSA (see infra/cluster3-setup.sh step [4]) + restart workshop-agent.
+  5. Re-verify the three beats; then pull spend from teardown/cost-report.sh.
+  6. Open: three-cluster fleet (task #7); claude-ai-context/ local copy (gitignored) pending Michael's
+     call to delete here (belongs in his agentic-covenants project).
+NOT YET PROVEN: the full app-of-apps sync on a live cluster (the GA-bump interop). Everything else
+through Beat 3 + cost counter + block-list + minimal-floor was verified live on prior provisions.
+
 ## KUBEAUTO IDP PORT (2026-06-18, offline, cluster deleted -> $0)
 Major correction: the full best-practice IDP already exists, conference-proven, at
 ~/repos/_archive/events/kubeauto-ai-day (27 components, 59 tests). Watch It Burn now REUSES it
