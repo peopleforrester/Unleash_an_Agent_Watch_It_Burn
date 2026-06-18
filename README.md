@@ -1,60 +1,86 @@
-*What this workshop is, its public-safe thesis, the three beats, the repo layout, and how to build it. Attendee- and public-facing.*
+# Build a Platform, Unleash an Agent on it... and Watch it Burn!
 
-# Build a Platform, Unleash an Agent on it… and Watch it Burn!
+A hands-on workshop at AI Engineer World's Fair 2026 (San Francisco, Moscone West).
+Presented by Michael Forrester (Accenture) with Whitney Lee.
 
-A hands-on workshop for **AI Engineer World's Fair 2026** (San Francisco, Moscone West). Speakers: Michael Forrester (Accenture) with Whitney Lee. Slot: 1–2 hours.
+## What this is
 
-## What it is
+You get a Kubernetes cluster that already runs a full internal developer platform: Argo CD for
+GitOps, Kyverno for admission policy, Falco for runtime security, Prometheus and Grafana for
+observability, plus secrets management, certificates, and a Backstage portal. You also get an AI
+agent with access to that cluster.
 
-Every attendee gets their own real Kubernetes cluster and a scoped AI agent already running on a pre-built Internal Developer Platform on a CNCF stack. You then unleash that agent through a sequence of attacks and watch — live, through a single trace view — what the platform stops and what it doesn't.
+The exercise is to make the agent do damage. Ask it to deploy a workload the policies forbid. Ask
+it to give itself more permissions. Ask it to change infrastructure without going through Git. Ask
+it to read a secret and hand the value back to you. Some of those attempts are stopped by the
+platform. The rest get through, until you switch on guardrails meant for agents specifically.
 
-Some attacks bounce off controls a mature platform already runs. The rest expose gaps those controls can't see, because the attack rides in natural language and in tool calls rather than in the Kubernetes control plane. We close each gap live by switching on an agent-specific guardrail, then you take home a governance map and a self-assessment checklist for your own platform.
+## What you learn
 
-## The thesis (the inverted 80/20)
+Most of what an agent will try against a real platform is already handled by tools many teams run
+today, such as admission control, RBAC, and GitOps. Turn the right control on and the attack stops.
 
-Most of what an agent will try against a real platform is **already covered** by controls you likely already have — admission policy, RBAC, GitOps reconciliation. That's the big surface, and it's the setup, not the story.
+What those tools cannot see is the agent's input, its output, and the tools it is allowed to reach.
+That is the part agents change, and it is where this workshop spends its time. You will also watch
+an unguarded agent run up a real cloud bill, because wasted tokens are their own denial-of-service
+problem, and you will see which guardrail stops the spend rather than paying for it after the fact.
 
-The thin slice that *isn't* covered — input it can't vet, output it can't scrub, tools it shouldn't call — is small in area but it's exactly where agents change the threat model. That thin slice is the whole point.
+## How the session runs
 
-## The three beats
+The workshop uses three clusters over about 60 minutes.
 
-1. **The CNCF wall** — the agent tries to deploy a non-compliant workload, escalate its own privileges, and change infrastructure outside Git. Three distinct walls (admission, RBAC, GitOps), and one of them flips from watch-only to blocking live. This is the big surface your platform already handles.
-2. **Sanitization, both directions** — what rides in on the prompt, and what rides out in the response. Two controls switched on live: one for input, one for output. The control plane never sees either.
-3. **When the agent's own tools turn on it** — the agent is wired to an untrusted tool server whose poisoned tool description induces it to call something it never should. One tool-authorization control, switched on live (or shown recorded, depending on a build-time verification).
+1. **No guardrails.** We point an agent at an unprotected cluster and let the room attack it. It
+   comes apart within a few minutes, and a counter on screen shows the cloud bill rising the whole
+   time. We keep spares, because these do not survive.
+2. **CNCF guardrails.** The same attack runs against a cluster with the platform controls in place.
+   The damage is blocked, but the bill still moved, because the request reached the model before
+   admission rejected it.
+3. **Your own cluster.** You drive your own agent and switch on the agent-specific guardrails one at
+   a time: output filtering, then input filtering, then tool restriction. You watch each one change
+   the agent's behavior on the dashboard.
 
-Observability is not a separate beat — it's the lens every beat is narrated through. In the extended 2-hour slot it earns one dedicated moment: the trace re-leak trap, where the telemetry you use to watch the agent turns out to be a second place a blocked secret can leak.
+You work in a browser. There is a chat window to your agent and a terminal to your cluster. No local
+install is required.
 
-## Repo layout
+## What you take home
 
-```
-README.md             # this file
-PROJECT_STATE.md      # durable build state — read this and the spec to build
-docs/BUILD-SPEC.md    # the single source of truth for the build (rev3)
-VERSIONS.lock         # pinned versions/digests (written at build time)
-research/             # grounding notes, dated, with sources
-infra/                # host/hub + spoke sizing, cost, bootstrap
-  SIZING.md           # node sizing, cost as a function of N, LLM Guard placement
-platform/             # ArgoCD, Kyverno, Falco, observability manifests
-agent/                # the scoped agent, its RBAC, gateway + guardrail config
-beats/                # the three beats: instructions, prompts, toggles, fallbacks
-verify/               # the verification harness (before/after for every beat)
-access/               # per-attendee web terminal + quickstart handout
-facilitation/         # runbook, slides outline, governance map, self-assessment
-fallback/recordings/  # asciinema per beat (recorded fallback)
-teardown/             # teardown + cost report
-```
+- This repository. It is the platform as code, so you can hand it to a coding agent and stand up
+  something close to production.
+- A governance map that lists each attack, the control that stops it, the layer it sits in, and
+  whether existing tooling already covers it.
+- A checklist you can run against your own platform to find the gaps.
 
-## How to run the build
+## The stack
 
-The build is spec-driven and runs phase by phase. Do not start a phase until the prior phase's verification passes.
+Everything here is CNCF or open source. Argo CD delivers the whole platform to every cluster from a
+single app-of-apps.
 
-1. Read **`docs/BUILD-SPEC.md`** in full — it is the single source of truth (architecture, version pins, the nine build phases, and their verification blocks).
-2. Read **`PROJECT_STATE.md`** for current state, the architecture decision (separate cluster per attendee, hub-and-spoke), and the open decisions still owned by Michael.
-3. Check **`infra/SIZING.md`** for node sizing, cost as a function of attendee count, and the resource budget per attendee cluster before you provision anything.
-4. Follow the phases in order. Each phase has acceptance criteria; stop on the first failed verification and report it.
+- GitOps: Argo CD
+- Policy: Kyverno
+- Runtime security: Falco and Falcosidekick
+- Secrets and certificates: External Secrets Operator, cert-manager
+- Observability: Prometheus, Grafana, Tempo, Loki, OpenTelemetry, Grafana Alloy
+- Developer portal: Backstage
+- Agent: kagent (a CNCF project) on Amazon Bedrock
+- AI guardrails: LLM Guard
 
-Architecture in one line: a small shared **hub** cluster runs GitOps and observability; each attendee gets their own isolated **spoke** cluster, delivered the full platform stack from the hub. Cost and provisioning scale with the number of attendees — see `infra/SIZING.md`.
+Pinned versions are in [`VERSIONS.lock`](VERSIONS.lock).
 
-## For attendees on the day
+## Repository layout
 
-You need a browser. No local install. See `access/quickstart.md` for how to reach your terminal and talk to your agent.
+| Path | Contents |
+|---|---|
+| `gitops/` | Argo CD app-of-apps: the whole platform as code |
+| `gitops/ai-layer/` | the agent and the AI guardrails (kagent, LLM Guard, MCP) |
+| `policies/kyverno/` | the admission policies |
+| `security/`, `observability-idp/`, `backstage/` | the platform foundation |
+| `agent/`, `beats/` | guardrail sources and the attack content |
+| `infra/` | cluster provisioning and bootstrap scripts |
+| `verify/` | the verification scripts |
+| `facilitation/` | governance map, self-assessment, run-of-show |
+| `docs/` | the build spec, the abstract, and the design decisions |
+
+## Safety
+
+Everything here is synthetic. Planted secrets are obviously fake and carry a `FAKE-` prefix. No real
+credential goes into a cluster, a trace, or a recording. The clusters are disposable on purpose.
