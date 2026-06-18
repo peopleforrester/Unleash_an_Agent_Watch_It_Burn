@@ -5,6 +5,13 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_URL="https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
+# Profile selects which root app-of-apps to apply: "full" (Cluster 2/3) or "burn" (Cluster 1).
+PROFILE="${1:-full}"
+case "${PROFILE}" in
+    full) ROOT_APP="gitops/bootstrap/app-of-apps.yaml" ;;
+    burn) ROOT_APP="gitops/bootstrap/app-of-apps-burn.yaml" ;;
+    *)    echo "usage: deploy-full-idp.sh [full|burn]" >&2; exit 2 ;;
+esac
 log() { printf '\n==> %s\n' "$*" >&2; }
 
 log "[1] default gp3 StorageClass"
@@ -44,8 +51,8 @@ stringData:
   enableOCI: "true"
 EOF
 
-log "[4] apply the app-of-apps (targetRevision: staging) — ArgoCD deploys all 28 components"
-kubectl apply -f "${REPO}/gitops/bootstrap/app-of-apps.yaml"
+log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging) — ArgoCD deploys the components"
+kubectl apply -f "${REPO}/${ROOT_APP}"
 
 log "Deploy issued. Watch sync with: kubectl get applications -n argocd"
 log "NOTE: after the 'ai-layer' app creates agent-sa, add Bedrock IRSA + restart the agent:"
