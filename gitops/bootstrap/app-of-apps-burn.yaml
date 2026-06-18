@@ -1,0 +1,36 @@
+# ABOUTME: Root app-of-apps for the BURN cluster (Cluster 1, the "no guardrails" spectacle).
+# ABOUTME: Lightweight + deliberately weak: Kyverno engine + minimal-floor ONLY (no enforcing
+# ABOUTME: policies, no RBAC scoping app, no GitOps-drift block), the agent + cost-meter proxy, and the
+# ABOUTME: party burn targets. It is meant to be wrecked; the floor only stops a one-shot control-plane kill.
+# verify-at-build: confirm ArgoCD directory.include brace-glob selects exactly these child apps.
+# NOTE: the agent still needs Bedrock IRSA per cluster (IAM, not GitOps) — see infra/cluster3-setup.sh / deploy.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps-burn
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: gitops/apps
+    directory:
+      recurse: false
+      # Burn subset: NO enforcing kyverno-policies, NO falco/observability/cert-manager/eso/backstage.
+      include: '{namespaces,kyverno,minimal-floor,kagent-crds,kagent,ai-layer,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
