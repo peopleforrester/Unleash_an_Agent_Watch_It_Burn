@@ -1,7 +1,7 @@
 ABOUTME: Grounded research spike on agentgateway (Solo.io / Linux Foundation) for the
-ABOUTME: "Watch It Burn" workshop — version, guardrail mechanism, MCP policy, fallback assessment.
+ABOUTME: "Watch It Burn" workshop, version, guardrail mechanism, MCP policy, fallback assessment.
 
-# agentgateway — Research Spike (Phase 4 / Section 5 FLAG resolution)
+# agentgateway, Research Spike (Phase 4 / Section 5 FLAG resolution)
 
 ## Verification Method
 
@@ -34,7 +34,7 @@ ABOUTME: "Watch It Burn" workshop — version, guardrail mechanism, MCP policy, 
   are the OSS standalone binary. They are NOT the same version line. Pin to the OSS
   standalone docs for a no-license build.
 
-### 2. Mechanism — OUTPUT guardrail on the agent's response
+### 2. Mechanism, OUTPUT guardrail on the agent's response
 
 The mechanism is a **native prompt-guard with a `webhook` action on the response phase**.
 agentgateway calls an external HTTP webhook server with the LLM response body; the server
@@ -69,11 +69,11 @@ returns Pass / Mask / Reject. This is the path that calls out to an external ser
   (field path `llm.models[].guardrails.response[].webhook.target.host`).
 
 - The external webhook server contract (the API LLM Guard's wrapper must speak):
-  - `POST /request` — body `{ body: { messages: [{role, content}] } }`
-  - `POST /response` — body `{ body: { choices: [{ message: {role, content} }] } }`
+  - `POST /request`, body `{ body: { messages: [{role, content}] } }`
+  - `POST /response`, body `{ body: { choices: [{ message: {role, content} }] } }`
   - Action responses: `PassAction {reason?}`, `MaskAction {body, reason?}`,
     `RejectAction {body, status_code, reason?}`.
-  - **RejectAction is available on `/request` but NOT on `/response`** — the response
+  - **RejectAction is available on `/request` but NOT on `/response`**, the response
     path can only Pass or **Mask**, not hard-reject. This directly affects the attack-4
     "blocked or redacted" claim: on the response the deterministic outcome is **redaction
     (mask), not a hard block**. Plan attendee copy around redaction.
@@ -85,7 +85,7 @@ It is therefore **NOT** Envoy `ext_proc` and **NOT** an in-process native scanne
 a webhook/transformation filter calling an external HTTP server. That external server is
 where LLM Guard runs.
 
-### 3. Mechanism — INPUT guardrail on the incoming request
+### 3. Mechanism, INPUT guardrail on the incoming request
 
 Same prompt-guard system, **request phase**. Use `guardrails.request[].webhook` pointing
 at the same (or a separate) LLM-Guard-backed webhook server, OR the native **regex** guard
@@ -97,7 +97,7 @@ OpenAPI spec above.
 
 ### 4. MCP policy (the "bad MCP server / excessive agency" beat)
 
-agentgateway has real, current MCP policy — this is a genuine strength, not vapor.
+agentgateway has real, current MCP policy, this is a genuine strength, not vapor.
 
 - **MCP authorization** via an `mcpAuthorization` policy whose `rules` are **CEL
   expressions** evaluated per MCP method invocation (`list_tools`, `call_tool`).
@@ -123,7 +123,7 @@ agentgateway has real, current MCP policy — this is a genuine strength, not va
 - **MCP authentication:** OAuth 2.0 / JWT, agentgateway acts as resource server; built-in
   Keycloak and Auth0 IdP support. Source: `https://agentgateway.dev/docs/standalone/latest/mcp/mcp-authn/`
 
-### 5. Fallback assessment — LLM Guard reverse-proxy sidecar on the response path
+### 5. Fallback assessment, LLM Guard reverse-proxy sidecar on the response path
 
 The spec's documented fallback (an LLM Guard reverse-proxy sidecar inspecting the agent
 response) is **sound and, given the constraint below, likely the cleaner primary** for
@@ -145,7 +145,7 @@ service (LLM Guard API server, MIT, Protect AI), not a mock.
   LLM backend) will trigger the response prompt-guard. This is the single biggest open
   question for Phase 4 and must be tested before building on it.
 - **Mask granularity / format** on `/response` (does Mask preserve the rest of the message,
-  what masking token) — not confirmed from docs; verify with the LLM Guard `Secrets`/`Sensitive`
+  what masking token), not confirmed from docs; verify with the LLM Guard `Secrets`/`Sensitive`
   scanner output at build.
 - **MCP human-in-the-loop / approval workflow:** not found in current docs. MCP policy is
   allow/deny/filter via CEL, evaluated automatically. No documented interactive approval
@@ -165,12 +165,12 @@ service (LLM Guard API server, MIT, Protect AI), not a mock.
   response path as the PRIMARY mechanism**, not the agentgateway response-phase webhook.
   Rationale: (a) the build places the inspection point in front of a **kagent A2A agent
   endpoint**, and agentgateway's response guardrails are documented only for recognized
-  LLM-provider backends returning OpenAI chat-completion bodies — unverified against an A2A
-  agent; (b) the response-phase webhook **cannot Reject, only Mask** — the "blocked"
+  LLM-provider backends returning OpenAI chat-completion bodies, unverified against an A2A
+  agent; (b) the response-phase webhook **cannot Reject, only Mask**, the "blocked"
   half of the attack-4 claim is not natively achievable on the response, only redaction.
   A reverse-proxy sidecar removes both unknowns and keeps the deterministic Secrets/Sensitive
   scanners. Keep the agentgateway response-phase webhook as the documented *alternative* in
-  `GATEWAY-NOTES.md`, and re-test it once the A2A-backend question is resolved — if it works,
+  `GATEWAY-NOTES.md`, and re-test it once the A2A-backend question is resolved, if it works,
   it is the more elegant story for the talk ("the gateway itself sees the response").
   Either way, frame the attack-4 "after" state as **redact-or-block**, and if you need a
   hard block, the sidecar can return an error rather than mask.
@@ -178,7 +178,7 @@ service (LLM Guard API server, MIT, Protect AI), not a mock.
 - **MCP policy:** use agentgateway's native **`mcpAuthorization` CEL rules + `targets`
   allowlist** for the bad-MCP/excessive-agency beat. This is real, current, and well
   documented. Per-tool allowlisting + automatic filtering from `list_tools` is the headline
-  demo. Do NOT promise human-in-the-loop approval — it is not native; if the talk needs
+  demo. Do NOT promise human-in-the-loop approval, it is not native; if the talk needs
   HITL, narrate it as an explicit gap / future control.
 
 ## Risks for the build
@@ -194,7 +194,7 @@ service (LLM Guard API server, MIT, Protect AI), not a mock.
    OSS binary and have field names not match. Build strictly from
    `agentgateway.dev/docs/standalone/latest`; record the exact OSS version in `VERSIONS.lock`.
 4. **Webhook fail-open behavior unknown.** If the webhook/LLM Guard server is down,
-   confirm agentgateway fails closed (or wrap so it does) — a silent fail-open re-leaks the
+   confirm agentgateway fails closed (or wrap so it does), a silent fail-open re-leaks the
    secret and violates the no-silent-fallback rule.
 5. **v1.3.0 churn.** v1.3 is in beta as of 2026-06-12; guardrail/MCP config fields may move.
    Pin v1.2.1 (stable) and do not chase the beta before the event.
