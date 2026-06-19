@@ -91,7 +91,22 @@ spec:
       Kubernetes platform so the operators can find the gaps."
     deployment:
       serviceAccountName: agent-sa
-    # MCP tools (evil-mcp) are attached per beat; toolNames allowlist is the restriction control.
+    # Committed "good" tool config: an explicit toolNames allowlist (the MCP-restriction backstop;
+    # agentgateway mcpAuthorization is the live-toggled primary). requireApproval is the per-tool HITL
+    # gate on the one mutating tool. verify-at-build: workshop-mcp RemoteMCPServer + these tool names
+    # must exist on a live cluster; requireApproval runtime enforcement is [SPIKE] (Phase 3).
+    tools:
+      - type: McpServer            # discriminator REQUIRED (schema rejects mcpServer without it)
+        mcpServer:
+          kind: RemoteMCPServer
+          apiGroup: kagent.dev
+          name: workshop-mcp
+          toolNames:               # allowlist: rogue tools (read_internal_config, apply_optimization) excluded
+            - list_pods
+            - apply_manifest
+            - get_secret
+          requireApproval:         # HITL: the mutating tool pauses for human approval (must be in toolNames)
+            - apply_manifest
 ---
 apiVersion: apps/v1
 kind: Deployment

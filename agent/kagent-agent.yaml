@@ -34,3 +34,5 @@ spec:
             - list_pods
             - apply_manifest
             - get_secret
+          requireApproval:        # HITL gate on the mutating tool (must be a subset of toolNames)
+            - apply_manifest
