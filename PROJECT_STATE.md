@@ -23,6 +23,18 @@ Last updated: 2026-06-19
   the earlier `eksctl delete cluster`. Month-to-date spend $11.69; forward run
   rate ~$0/day.
 
+### Build plan adopted (2026-06-19, external review reconciled)
+
+- `docs/BUILD-PLAN.md` is the operating contract for the final push: render gate, resolved decisions,
+  prioritized punch-list. Read it first when building.
+- Rulings folded in across runbook/BUILD-SPEC/burn-clusters/ABSTRACT/GATEWAY-NOTES + the burn code:
+  **Cluster 1 has NO floor** (dies in one prompt, ~10 disposable spares; removed minimal-floor + kyverno
+  from `app-of-apps-burn.yaml`); **staged is abstract-truth** (verify asserts the staged before/after);
+  **trace re-leak trap is optional**; **input guard is two stages** (block-list then classifier,
+  progressive); **Fable 5 unavailable**; cost counter meters live at the guard-proxy.
+- Two gaps the review missed, tracked in BUILD-PLAN: rate-limit the demo itself; CNI (VPC-CNI vs Cilium).
+- Remaining open: co-speaker split confirmation with Whitney.
+
 ## Current plan summary
 
 Spec-driven build of a repeatable workshop: attendees drive a scoped AI agent

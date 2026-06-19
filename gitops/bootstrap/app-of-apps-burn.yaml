@@ -1,7 +1,7 @@
 # ABOUTME: Root app-of-apps for the BURN cluster (Cluster 1, the "no guardrails" spectacle).
-# ABOUTME: Lightweight + deliberately weak: Kyverno engine + minimal-floor ONLY (no enforcing
-# ABOUTME: policies, no RBAC scoping app, no GitOps-drift block), the agent + cost-meter proxy, and the
-# ABOUTME: party burn targets. It is meant to be wrecked; the floor only stops a one-shot control-plane kill.
+# ABOUTME: Deliberately bare: NO admission control at all (no Kyverno, no floor), no RBAC scoping app,
+# ABOUTME: no GitOps-drift block. Just the agent + cost-meter proxy and the party burn targets. It is
+# ABOUTME: meant to die in one prompt; the facilitator rotates ~10 disposable C1 spares from SSH.
 # verify-at-build: confirm ArgoCD directory.include brace-glob selects exactly these child apps.
 # NOTE: the agent still needs Bedrock IRSA per cluster (IAM, not GitOps) — see infra/cluster3-setup.sh / deploy.
 apiVersion: argoproj.io/v1alpha1
@@ -19,8 +19,9 @@ spec:
     path: gitops/apps
     directory:
       recurse: false
-      # Burn subset: NO enforcing kyverno-policies, NO falco/observability/cert-manager/eso/backstage.
-      include: '{namespaces,kyverno,minimal-floor,kagent-crds,kagent,ai-layer,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
+      # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
+      # observability/cert-manager/eso/backstage. Just the agent + ai-layer (cost meter) + burn targets.
+      include: '{namespaces,kagent-crds,kagent,ai-layer,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
