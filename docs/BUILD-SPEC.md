@@ -40,9 +40,9 @@ repo, a governance map, and a self-assessment of the failure modes their own pla
 - A facilitator **burn-cluster fleet** exists: **3× Cluster 1** (no-guardrails) + **3× Cluster 2**
   (CNCF-only) + **3× instructor Cluster 3** (one per model tier for the side-by-side comparison;
   one doubles as the follow-along), plus a **per-attendee Cluster 3** (own
-  cluster) with a few in reserve. Even Cluster 1 has a **minimal floor** so it can't be tanked in a
-  single trivial prompt (it should burn over the demo, not instantly), and so follow-along attendees
-  can't accidentally nuke the instructor clusters.
+  cluster) with a few in reserve. **Cluster 1 has no floor and no admission control**: it dies in one
+  prompt, and the facilitator rotates ~10 disposable spares from SSH ("that one's gone, here's two").
+  Follow-along is on the instructor Cluster 3s, which are protected by their full CNCF stack, not a floor.
 - The three-cluster run-of-show plays within the 2-hour slot, proven by the harness in Phase 6.
 - A **live Bedrock cost counter** is visible and tells the wasted-token-DoS story.
 - The agent-specific guardrails on Cluster 3 (output sanitization → input sanitization → MCP tool
@@ -73,9 +73,9 @@ Whitney = attack narration/observability/attendee experience; hand-offs explicit
   (ArgoCD, Kyverno, Falco, observability). "This is all in the repo, it's yours, take it home, feed it
   to your coding agent, it deploys a near-production platform."
 - **5–15, Cluster 1, no guardrails (the burn).** Attendees attack via the chat UI only (no kubectl).
-  The agent deletes workloads; the cluster dies over the segment (a minimal floor stops a one-shot
-  instant kill). The **cost counter** climbs, "wasted tokens are the new DoS." Run 3 instances:
-  "here's URL one… someone destroyed it… here's URL two…"
+  The agent deletes workloads; with no floor and no admission control, a single destructive prompt
+  kills it, so it dies fast and the facilitator rotates spares. The **cost counter** climbs, "wasted
+  tokens are the new DoS." Rotate ~10 disposable spares: "here's URL one… someone destroyed it… here's URL two…"
 - **15–25, Cluster 2, CNCF 80% (blocked, but it cost you).** Same attack; Kyverno admission / scoped
   RBAC / ArgoCD-drift block it, no blast radius, the agent can only read. **But the cost counter still
   moved**, "Kyverno is the last mile and the *most expensive*; you already burned GPU + API by the
@@ -103,8 +103,8 @@ SIDE BY SIDE on parallel instructor clusters: one instructor Cluster 3 per tier 
 Sonnet 4.6, Opus 4.8), each pinned to its tier, shown on adjacent screens at the same time so the
 room watches the escalation live ("Haiku barely rattles the bars; Opus is picking the lock"). The
 live cost counter is the payoff: the frontier-tier cluster's counter climbs faster, which is the
-wasted-token-DoS thesis in one image. Fable 5 is a wildcard fourth cluster, conditional on its
-Bedrock availability returning. Each tier cluster pins its model by the Agent's `modelConfig`
+wasted-token-DoS thesis in one image. (Fable 5 is not available; access is suspended.) Each tier
+cluster pins its model by the Agent's `modelConfig`
 reference plus that tier's live ModelConfig (`gitops/ai-layer/resources.yaml` ships Haiku as the
 default; the Sonnet/Opus configs are commented, verify the inference-profile id then uncomment).
 The per-cluster tier assignment is injected by the provisioning ApplicationSet, never a live
@@ -121,9 +121,10 @@ running, which is a feature here (it IS the cost story), not a bug.
   side by side). No vCluster, no namespace-only
   tenancy (rationale unchanged: real privilege-escalation + Falco + admission webhooks + CRDs are cleaner
   on real clusters).
-- **A minimal restriction floor on every cluster** so none can be tanked by a single trivial prompt , 
-  Cluster 1 should burn *over the segment* as a spectacle, not vanish instantly, and follow-along
-  attendees must not be able to accidentally destroy the instructor clusters.
+- **Cluster 1 has no floor and no admission control.** It dies in one prompt by design; the spectacle
+  is the speed of death plus the cost counter, and the facilitator rotates ~10 disposable spares. C2/C3
+  are not tanked in one prompt because they carry the real CNCF stack (not a "floor"). Follow-along runs
+  on instructor Cluster 3s, protected by that full stack.
 - **Scoped agent, never cluster-admin.** kagent runs under a tight ServiceAccount
   (`spec.declarative.deployment.serviceAccountName`); enough RBAC to *reach* admission for the CNCF
   demo, never enough for escalation/GitOps-drift to succeed.
@@ -164,9 +165,9 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
 - **Per-attendee Cluster 3**, own EKS cluster: full IDP (ArgoCD, Kyverno, Falco, observability) +
   always-on kagent agent + the guard layer + the (initially open) MCP wiring. Attendee drives via chat
   UI and kubectl.
-- **Facilitator Cluster 1 (no guardrails) ×3**, only a minimal floor (so it burns over the segment,
-  not in one shot); the agent destroys it. Re-provision is ~15 min, so the 3 are pre-provisioned and
-  rotated ("URL one's gone, here's two").
+- **Facilitator Cluster 1 (no guardrails) ×3 live + ~10 disposable spares**, no floor, no admission;
+  the agent destroys it in one prompt. Re-provision is ~15 min, so live ones + spares are
+  pre-provisioned and rotated ("URL one's gone, here's two").
 - **Facilitator Cluster 2 (CNCF-only) ×3**, Kyverno + RBAC + ArgoCD drift, no AI guardrails; blocks the
   destruction, still shows cost.
 - **Instructor Cluster 3 ×2**, follow-along copies of the attendee cluster so a single attendee
@@ -288,19 +289,20 @@ Each phase: verify block, stop on first failure (carry the rev3 verify blocks fo
 Resolved 2026-06-17 (Michael):
 - **Model:** Claude on Bedrock. Tier is a comparison variable, not a single pick: Haiku 4.5 (verified
   working) is the default; Sonnet 4.6 and Opus 4.8 run on parallel instructor clusters side by side
-  (§2 model-tier comparison); Fable 5 conditional on Bedrock availability.
+  (§2 model-tier comparison); Fable 5 unavailable (access suspended).
 - **Guardrail impl:** kagent / CNCF-native preferred, NOT a bespoke vLLM→Bedrock classifier.
 - **Backstage:** nice-to-have (include if time/feasibility allow).
 - **External red-team:** No.
-- **Fleet:** 3× Cluster 1, 3× Cluster 2, 3× instructor Cluster 3 (one per model tier, side by side), per-attendee Cluster 3 + a few reserve.
-- **Minimal restriction floor** on all clusters (no one-shot trivial kill; protect follow-along clusters).
+- **Fleet:** 3× Cluster 1 live + ~10 disposable spares, 3× Cluster 2, 3× instructor Cluster 3 (one per model tier, side by side), per-attendee Cluster 3 + a few reserve.
+- **No floor on Cluster 1** (dies in one prompt, rotate spares). C2/C3 are protected by their full CNCF stack, not a floor.
 
 Still open:
-1. Final Claude tier (haiku-4-5 vs a larger Claude), sophistication vs per-attendee cost.
-2. Co-speaker split with Whitney, confirm the §2 division.
-3. OTel re-leak advanced beat, build it or keep slide-only.
-4. The exact "minimal floor" mechanism (RBAC/quota/admission) that lets Cluster 1 burn gradually
-   without instant one-prompt destruction.
+1. Co-speaker split with Whitney, confirm the §2 division.
+
+Resolved (2026-06-19, see `docs/BUILD-PLAN.md`):
+- Model tier is a comparison variable: Haiku 4.5 default; Sonnet 4.6 / Opus 4.8 on parallel instructor clusters for the optional closing demo; Fable 5 unavailable (access suspended).
+- OTel trace re-leak trap: optional beat, built and kept as a recorded beat.
+- Cluster 1: no floor mechanism to build (dies in one prompt, rotate ~10 spares).
 
 ---
 

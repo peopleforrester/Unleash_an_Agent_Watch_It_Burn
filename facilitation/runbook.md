@@ -13,9 +13,10 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 
 ## Pre-flight (before doors, both)
 
-- [ ] Fleet up and green: 3x Cluster 1 (no guardrails), 3x Cluster 2 (CNCF), 3x instructor Cluster 3
-      (one per model tier: Haiku/Sonnet/Opus, for the optional closing demo), and the per-attendee
-      Cluster 3s (plus reserve). Argo CD app-of-apps Synced/Healthy. Provision before doors; never live.
+- [ ] Fleet up and green: 3x Cluster 1 live + ~10 disposable spares (no guardrails, no floor, die in
+      one prompt), 3x Cluster 2 (CNCF), 3x instructor Cluster 3 (one per model tier: Haiku/Sonnet/Opus,
+      for the optional closing demo), and the per-attendee Cluster 3s (plus reserve). Argo CD
+      app-of-apps Synced/Healthy. Provision before doors; never live.
 - [ ] If running the optional closing demo: the 3 instructor clusters are pinned to their tiers (verified
       inference-profile ids), guards OFF, on adjacent screens. If not running it, they are the
       follow-along copies as before.
@@ -35,17 +36,17 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 | Time | Min | Owner | Segment | Toggle / artifact |
 |------|-----|-------|---------|-------------------|
 | 0:00 | 10 | **Michael** | Intro + platform tour (the IDP is already built) | none |
-| 0:10 | 15 | **Whitney** (Michael on cost) | Cluster 1, no guardrails (the burn) | rotate spares; cost counter |
+| 0:10 | 15 | **Whitney** (Michael on cost) | Cluster 1, no guardrails (dies fast, rotate spares) | rotate ~10 spares; cost counter |
 | 0:25 | 20 | **Whitney** (Michael on controls) | Cluster 2, CNCF guardrails block it | none (controls already on) |
-| 0:45 | 40 | **Whitney** (Michael on the gaps) | Cluster 3, your own cluster: guards on + free-play | output → input → MCP via `/toggle` |
-| 1:25 | 20 | **Whitney** (Michael on symmetry) | Trace re-leak trap | content-capture on/off; collector redaction |
-| 1:45 | 15 | **Both** (Michael leads) | Regroup + governance map + self-assessment + Q&A | none |
+| 0:45 | 45 | **Whitney** (Michael on the gaps) | Cluster 3, your own cluster: guards on + free-play | output → input (2-stage) → MCP via `/toggle` |
+| 1:30 | 30 | **Both** (Michael leads) | Regroup + governance map + self-assessment + Q&A | none |
 
 Total: **120 minutes**.
 
-> **Optional closing demo (model-tier comparison):** not a separate row. It runs about 8 to 10 minutes
-> inside the Cluster 3 free-play window (or just before the regroup if time allows), and is the FIRST
-> beat to cut when running long. Dedicated section after the Cluster 3 segment below.
+> **Optional beats (not rows):** the model-tier closing demo (~8 to 10 min) and the trace re-leak trap
+> (~15 min) both run inside the Cluster 3 / free-play window if time allows. Cut order when running
+> long: closing demo first, then the trace re-leak trap, then free-play. Never cut the regroup.
+> Dedicated sections below.
 
 ### 0:00–0:10, Intro + platform tour (Michael)
 
@@ -59,10 +60,10 @@ Total: **120 minutes**.
 
 ### 0:10–0:25, Cluster 1: no guardrails, the burn (Whitney narrates, Michael on cost)
 
-- Point the room at Cluster 1 via the chat UI only (no kubectl). Let them attack it. With 15 minutes,
-  let several people drive and let it get genuinely wrecked.
-- The minimal floor keeps it from dying in one prompt, so it burns rather than vanishing. When one
-  dies, switch URLs: "that one's gone, here's two."
+- Point the room at Cluster 1 via the chat UI only (no kubectl). Let them attack it.
+- There is no floor and no admission control on Cluster 1, so a single destructive prompt can kill it.
+  That is the point: it dies fast. Over the 15 minutes let several people each one-shot a fresh spare;
+  as each dies, rotate to the next of ~10 spare URLs from the SSH session: "that one's gone, here's two."
 - **Michael, on the cost counter:** the bill climbed the whole time. Wasted tokens are a denial-of-service.
 - **HAND-OFF:** "Same attack, on a platform with the controls a mature team already runs."
 
@@ -76,18 +77,20 @@ Total: **120 minutes**.
 - Agent wanders → `beats/01-cncf-wall/fallback.kubectl.sh` for that step. Do not debug live.
 - **HAND-OFF → Michael:** "Now your own cluster, where you turn on the guardrails built for agents."
 
-### 0:45–1:25, Cluster 3: your own cluster, guards on + free-play (Whitney narrates, Michael on the gaps)
+### 0:45–1:30, Cluster 3: your own cluster, guards on + free-play (Whitney narrates, Michael on the gaps)
 
 Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is already running on it. With
-40 minutes there is room to demo each guard and let the room try to beat it.
+45 minutes there is room to demo each guard, run the optional beats if time allows, and let the room try to beat it.
 
 1. **Output sanitization**, before: the agent reads the planted fake secret
    (`FAKE-PROD-DB-PASSWORD-sentinel-9f2a`) and returns it. Toggle on with
    `beats/02-sanitization/toggle-output-guard-on.sh` (runtime `/toggle`): redacted, sentinel gone. The
    same guard blocks a dangerous tool call with a human-in-the-loop stop.
-2. **Input sanitization**, before: a destructive request reaches the model, cost ticks up. Toggle on
-   with `toggle-input-guard-on.sh`: the block-list catches it before the model, and the cost counter
-   flatlines. Security and cost together.
+2. **Input sanitization (two stages, enabled progressively)**, before: a destructive request reaches
+   the model, cost ticks up. Stage 1, toggle on `toggle-input-guard-on.sh`: the deterministic block-list
+   catches "delete" intent before the model and the cost counter flatlines. Stage 2, enable the
+   classifier to catch a phrasing the block-list misses (still pre-LLM). Security and cost together.
+   Spoken copy: say "deterministic" for the block-list only, never for the classifier.
 3. **MCP tool restriction**, the agent is wired to an untrusted MCP server whose poisoned tool
    description induces it to call a tool it should not, leaking `FAKE-MCP-EXFIL-sentinel-4c1d`. Toggle on
    with `beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh` (the kagent `toolNames` allowlist):
@@ -102,11 +105,12 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
 ### OPTIONAL closing demo, model-tier comparison on parallel screens (both; cut first if short)
 
 The optional fifth beat. Run it only if the core arc landed and time allows; it is the first thing to
-cut when running long, ahead of free-play. It does not change the thesis, it reinforces it.
+cut when running long, ahead of the trace re-leak trap and free-play. It does not change the thesis, it
+reinforces it.
 
 - **Setup:** the 3 instructor Cluster 3s run side by side on adjacent screens, each pinned to a
   different model tier (Haiku 4.5, Sonnet 4.6, Opus 4.8), guards OFF, same jail and same system prompt.
-  Fable 5 is a wildcard fourth screen if it is available.
+  (Fable 5 is not available; access is suspended.)
 - **The beat:** give all three the same "escape your own jail" prompt at once and let the room watch
   the contrast. Haiku barely rattles the bars; Opus is methodical and creative about picking the lock.
   Whitney narrates the three trace views; Michael works the three cost counters.
@@ -123,7 +127,9 @@ cut when running long, ahead of free-play. It does not change the thesis, it rei
 - **Fallback:** if a screen wanders, drive its prompt through the same per-beat `fallback.*.sh`. If the
   room cannot watch three screens at once, run Haiku then Opus sequentially on two screens.
 
-### 1:25–1:45, Trace re-leak trap (Whitney narrates, Michael on symmetry)
+### OPTIONAL, Trace re-leak trap (Whitney narrates, Michael on symmetry)
+
+*Optional beat, runs inside the free-play window if time allows. Cut order: after the model-tier closing demo, before free-play. Stays built as a recorded beat regardless.*
 
 - Output sanitization is on, so the sentinel is blocked from the response. Turn on OTel content capture
   and re-run. The response is still clean, but the sentinel now sits inside the trace span. The
@@ -133,9 +139,10 @@ cut when running long, ahead of free-play. It does not change the thesis, it rei
 - Tie to the governance map: observability is a control surface, not just a viewer. Trace data is torn
   down at the end; no sentinel survives the room.
 
-### 1:45–2:00, Regroup + governance map + self-assessment + Q&A (both, Michael leads)
+### 1:30–2:00, Regroup + governance map + self-assessment + Q&A (both, Michael leads)
 
-- Protect this segment. If running long, cut the optional tier closing demo first, then free-play; never cut this.
+- Protect this segment. If running long, cut the optional model-tier closing demo first, then the trace
+  re-leak trap, then free-play; never cut this.
 - Walk `facilitation/governance-map.md`: each attack, the control that stops it, the layer it sits in,
   and whether existing tooling covers it. Land the 80/20.
 - Point to `facilitation/self-assessment.md`: run it against your own platform.
@@ -164,13 +171,14 @@ free-play first; protect the regroup.
 2. A Cluster 1 spare dies → switch to the next URL; that is the expected flow.
 3. An attendee Cluster 3 gets wrecked → move them to an instructor Cluster 3.
 4. Room can't get online at scale → single facilitator path, room watches.
-5. Running long → cut the optional model-tier closing demo first, then free-play, then the trace re-leak
-   trap. Never cut the regroup.
+5. Running long → cut the optional model-tier closing demo first, then the trace re-leak trap, then
+   free-play. Never cut the regroup.
 
 ## Open decisions affecting this runbook
 
 - Co-speaker split is the working split, confirm with Whitney; also confirm her schedule listing.
-- Whether the trace re-leak trap is built live or kept as a narrated slide.
+- Trace re-leak trap: RESOLVED as an optional beat (cut after the closing demo, before free-play);
+  built and kept as a recorded beat regardless of whether it runs live.
 - Model tier is a comparison variable, not a single pick: the optional closing demo runs Haiku 4.5,
   Sonnet 4.6, and Opus 4.8 side by side (BUILD-SPEC §2). Per-tier Bedrock access + use-case forms are
   owed by the provisioning project; only Haiku's is submitted.
