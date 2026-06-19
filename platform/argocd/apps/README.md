@@ -5,7 +5,7 @@
 The hub `attendee-spokes` ApplicationSet (`../appset-attendee.yaml`) creates one
 Application per registered spoke, all pointing here (`platform/argocd/apps`). This
 directory is a Kustomization whose resources are themselves ArgoCD `Application`
-objects — the standard app-of-apps pattern. Each child Application targets the
+objects, the standard app-of-apps pattern. Each child Application targets the
 **same spoke** (it inherits the destination via the parent's `destination.server`,
 which the children re-state with the in-cluster reference because they are created
 *on the hub* but sync content *into the spoke* the parent selected).
@@ -18,7 +18,7 @@ which the children re-state with the in-cluster reference because they are creat
 
 | Child Application      | Path                                | Beat / role |
 |------------------------|-------------------------------------|-------------|
-| `kyverno-policies`     | `platform/kyverno/policies`         | Beat 1 — require-resource-limits (Audit start), block-argocd-drift (Enforce) |
+| `kyverno-policies`     | `platform/kyverno/policies`         | Beat 1, require-resource-limits (Audit start), block-argocd-drift (Enforce) |
 | `falco`                | `platform/falco`                    | Runtime detection (defense-in-depth) |
 | `observability`        | `platform/observability`           | Per-spoke OTel collector → forwards traces to the **hub** Tempo |
 | `agent`                | `agent`                             | kagent Agent + Bedrock ModelConfig + scoped RBAC |
@@ -40,6 +40,6 @@ which the children re-state with the in-cluster reference because they are creat
 - Confirm each child path exists and renders (`kubectl kustomize <path>` or
   `argocd app create --dry-run`). Component dirs `platform/falco`,
   `platform/observability`, `agent/gateway`, and `beats` may still be in progress
-  per Phase 4/5 — children for not-yet-built paths are marked with
+  per Phase 4/5, children for not-yet-built paths are marked with
   `# verify-at-build` in `child-apps.yaml` and should stay disabled until their
   content lands, rather than syncing an empty/invalid path.

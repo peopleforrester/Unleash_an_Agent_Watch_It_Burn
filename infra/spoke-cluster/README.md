@@ -2,20 +2,20 @@
 
 # Spoke clusters
 
-One **EKS cluster per attendee** (rev3 — no vCluster). Each spoke runs the full
+One **EKS cluster per attendee** (rev3, no vCluster). Each spoke runs the full
 per-attendee IDP stack and is registered to the hub ArgoCD as a sync destination.
-`cluster.yaml` is a **template** — `ATTENDEE_ID` is substituted per attendee.
+`cluster.yaml` is a **template**, `ATTENDEE_ID` is substituted per attendee.
 
 ## N is a build variable
 
 `N` (default **25**, hard ceiling TBD by Michael) drives the spoke fleet size,
-provision parallelism, and AWS quota consumption. Nothing here hardcodes a count —
+provision parallelism, and AWS quota consumption. Nothing here hardcodes a count , 
 the provisioning loop reads `N` from the environment.
 
 ## Node sizing
 
 `m6i.xlarge` (4 vCPU / 16 GiB) per spoke. The whole per-spoke stack fits **because
-LLM Guard runs output-`Regex`-only by default** — no Sensitive NER model is resident.
+LLM Guard runs output-`Regex`-only by default**, no Sensitive NER model is resident.
 Opt-in NER requires a larger instance; record any deviation in `../SIZING.md`.
 
 ## Provision the fleet (parallel, time-boxed)
@@ -58,21 +58,21 @@ done
 Once labelled, the ApplicationSet renders an `attendee-<name>` Application per
 spoke automatically. No per-attendee edit on the hub.
 
-> verify-at-build: the cluster-Secret labelling one-liner above is the fiddly part —
+> verify-at-build: the cluster-Secret labelling one-liner above is the fiddly part , 
 > confirm the selector path against the real `argocd cluster add` Secret shape at
 > build (the Secret `data.name` is base64 of the cluster name). If awkward, label by
 > iterating `kubectl -n argocd get secret -l argocd.argoproj.io/secret-type=cluster`.
 
-## AWS service-quota risk — PRE-DAY CHECK (do this before scaling N)
+## AWS service-quota risk, PRE-DAY CHECK (do this before scaling N)
 
 Spokes consume real quota that scales linearly with N. Verify **before** the event:
 
-- **EKS cluster count per region** — default soft limit is commonly **100**, but
+- **EKS cluster count per region**, default soft limit is commonly **100**, but
   confirm the account's actual value; N spokes + 1 hub must fit.
-- **EC2 vCPU (On-Demand Standard family)** — `m6i.xlarge` = 4 vCPU each, so N=25 is
+- **EC2 vCPU (On-Demand Standard family)**, `m6i.xlarge` = 4 vCPU each, so N=25 is
   **100 vCPU** of spoke nodes plus the hub. Default per-region On-Demand vCPU limits
-  routinely sit at 5–64 unless raised — this is the most likely blocker.
-- **Elastic IPs / NAT gateways / VPCs** — each `eksctl create cluster` builds a VPC
+  routinely sit at 5–64 unless raised, this is the most likely blocker.
+- **Elastic IPs / NAT gateways / VPCs**, each `eksctl create cluster` builds a VPC
   by default; VPC-per-region (default 5) and EIP limits bite fast at N spokes.
 
 ```bash

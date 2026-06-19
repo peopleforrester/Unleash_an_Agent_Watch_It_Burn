@@ -1,4 +1,4 @@
-*Watch It Burn — planning transcript (excerpt). AI Inevitable (podcast/media pipeline) content removed per scope; only Watch-It-Burn workshop design, decisions, and the 60-minute run-of-show are retained.*
+*Watch It Burn, planning transcript (excerpt). AI Inevitable (podcast/media pipeline) content removed per scope; only Watch-It-Burn workshop design, decisions, and the 60-minute run-of-show are retained.*
 
 Speaker 1: We talked about burning it down. Alright, so you have access to the original MD file that has Doritos on it. You also have access to the original MD file.
 

@@ -1,4 +1,4 @@
-# Watch It Burn — KubeAuto IDP Reuse Map
+# Watch It Burn, KubeAuto IDP Reuse Map
 
 How the proven **kubeauto-ai-day** IDP (EKS, 27/27 components, 59 live tests, 2026-03) becomes the
 Watch It Burn platform. Source: `~/repos/_archive/events/kubeauto-ai-day/`
@@ -7,7 +7,7 @@ GKE BurritoBot port this is **mostly COPY**, not ADAPT.
 
 Legend: **COPY** as-is · **ADAPT** copy + change · **EXTEND** base + AI layer · **IGNORE** omit · **NEW** Watch-It-Burn only.
 
-## Foundation (reused from KubeAuto) — the 27-component IDP
+## Foundation (reused from KubeAuto), the 27-component IDP
 
 | Area | Decision | Notes |
 |---|---|---|
@@ -23,7 +23,7 @@ Legend: **COPY** as-is · **ADAPT** copy + change · **EXTEND** base + AI layer 
 | `gitops/manifests/ecom-*`, `sample-app`, `load-generator` | IGNORE | Prior-demo workloads; dropped. |
 | Terraform / EKS infra | IGNORE | WITB uses its own `infra/` eksctl configs. |
 
-## AI layer (NEW — Watch It Burn only; not in KubeAuto)
+## AI layer (NEW, Watch It Burn only; not in KubeAuto)
 
 These already exist + are **live-verified**; they get wired into the app-of-apps as ArgoCD apps:
 

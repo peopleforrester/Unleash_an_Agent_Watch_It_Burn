@@ -1,7 +1,7 @@
 <!-- ABOUTME: The gating verification doc for Beat 3 (BUILD-SPEC Phase 4b). Confirms whether -->
 <!-- ABOUTME: agentgateway mcpAuthorization CEL deny enforces on the Apache OSS build with kagent in front. -->
 
-# Beat 3 Build-Spike — MCP tool-authorization enforcement
+# Beat 3 Build-Spike, MCP tool-authorization enforcement
 
 **Gate:** This beat is declared **live** only if the spike below **PASSES**. If it FAILS, Beat 3
 demotes to a pre-recorded segment plus a governance-map row (see Fallback). The recorded segment is
@@ -9,14 +9,14 @@ built regardless (BUILD-SPEC §3, §11).
 
 **Single load-bearing unknown** (from `research/04-mcp-security.md` and `research/02-agentgateway.md`):
 whether agentgateway's `mcpAuthorization` CEL `Deny` over `mcp.tool.name` actually enforces on the
-**Apache OSS build (`v1.2.1`)** with a **kagent agent in front** — as opposed to being an
+**Apache OSS build (`v1.2.1`)** with a **kagent agent in front**, as opposed to being an
 Enterprise-only (`EnterpriseAgentgatewayPolicy`) capability, or simply not firing when the caller is
 a kagent agent consuming the MCP server through the gateway.
 
 ## Verification Method (fill in at build)
 
 - Method: live cluster (spoke), hands-on. NOT research. # verify-at-build
-- agentgateway OSS version under test: `v1.2.1` # verify-at-build — confirm and record in VERSIONS.lock
+- agentgateway OSS version under test: `v1.2.1` # verify-at-build, confirm and record in VERSIONS.lock
 - kagent chart version: `0.9.7`, API group `kagent.dev/v1alpha2` # verify-at-build
 - MCP SDK version in evil-mcp-shim image + image digest: # verify-at-build
 - Date run / operator:  # fill in
@@ -32,7 +32,7 @@ a kagent agent consuming the MCP server through the gateway.
 
 ## Steps
 
-### Step A — BEFORE (deny rule OFF): confirm the over-reach fires deterministically
+### Step A, BEFORE (deny rule OFF): confirm the over-reach fires deterministically
 1. Apply the off state: `beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --off`
 2. Run the model-independent path:
    `beats/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-allow`
@@ -40,7 +40,7 @@ a kagent agent consuming the MCP server through the gateway.
 4. (Optional, model path) Run `agent-prompt.txt` against the live agent and confirm the sentinel
    appears in the reply and the gateway access log shows a `read_internal_config` tool call.
 
-### Step B — AFTER (deny rule ON): confirm the gateway BLOCKS the call
+### Step B, AFTER (deny rule ON): confirm the gateway BLOCKS the call
 1. Apply the on state: `beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --on`
 2. Run the model-independent path:
    `beats/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-deny`
@@ -49,10 +49,10 @@ a kagent agent consuming the MCP server through the gateway.
    # verify-at-build
 4. (Optional, model path) Re-run `agent-prompt.txt`; confirm the reply contains no sentinel.
 
-### Step C — Confirm tool filtering (secondary, expected per docs)
+### Step C, Confirm tool filtering (secondary, expected per docs)
 1. With the deny rule ON, list tools through the gateway and confirm `read_internal_config` is
    filtered out of the `list_tools` response (agentgateway auto-filters disallowed tools).
-   # verify-at-build — confirms the documented filtering behavior on the OSS build.
+   # verify-at-build, confirms the documented filtering behavior on the OSS build.
 
 ## Evidence to capture
 
@@ -88,7 +88,7 @@ a kagent agent consuming the MCP server through the gateway.
 If RESULT = FAIL, do NOT run Beat 3 as a live toggle. Instead:
 
 1. **Recorded segment.** Play the asciinema recording under `fallback/recordings/` showing the
-   before (sentinel leaks) and after (blocked) on a rig where enforcement was confirmed — or, if
+   before (sentinel leaks) and after (blocked) on a rig where enforcement was confirmed, or, if
    enforcement is unavailable anywhere on OSS, record the BEFORE over-reach and narrate the
    control as an Enterprise/architecture gap rather than a demonstrated OSS toggle. The Beat-3
    recording is mandatory regardless of spike result (BUILD-SPEC §3).

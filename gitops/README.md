@@ -89,6 +89,6 @@ Gaps between groups are reserved for future components.
 1. Create the Kubernetes manifests or identify the Helm chart
 2. Create a new `gitops/apps/<name>.yaml` ArgoCD Application manifest
 3. Set the appropriate sync wave annotation
-4. Commit and push — ArgoCD will detect and deploy within 30 seconds
+4. Commit and push, ArgoCD will detect and deploy within 30 seconds
 
 See [ADR-002](../docs/adr/ADR-002-gitops-engine.md) for the ArgoCD selection rationale.
