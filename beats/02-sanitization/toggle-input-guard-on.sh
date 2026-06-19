@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: Beat-2 INPUT guard toggle — runtime flip via the guard-proxy /toggle endpoint.
+# ABOUTME: Beat-2 INPUT guard STAGE 1 (deterministic block-list) toggle — runtime flip via the guard-proxy /toggle endpoint.
 # ABOUTME: Argo CD-safe: changes no managed spec and does not restart the pod, so the cost counter
 # ABOUTME: survives and self-heal will not revert it. Pass --off to disable.
 set -euo pipefail
@@ -18,4 +18,4 @@ command -v kubectl >/dev/null 2>&1 || { echo "kubectl not found" >&2; exit 1; }
 echo "==> input guard -> ${STATE} (runtime, via guard-proxy.${NS}:8080/toggle)" >&2
 kubectl run "guardtoggle-in-${RANDOM}" --rm -i --restart=Never -n "${NS}" \
   --image=curlimages/curl:8.10.1 --command -- \
-  curl -s "http://guard-proxy.${NS}:8080/toggle?input=${STATE}"
+  curl -s "http://guard-proxy.${NS}:8080/toggle?input_blocklist=${STATE}"
