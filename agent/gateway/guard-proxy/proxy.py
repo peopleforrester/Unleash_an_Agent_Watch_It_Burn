@@ -8,9 +8,11 @@
 #
 # Verdict envelope (confirmed live 2026-06-17): /analyze/prompt and /analyze/output return
 # {"is_valid": bool, "scanners": {...}, "sanitized_prompt"|"sanitized_output": "..."}.
+import collections
 import json
 import os
 import threading
+import time
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
@@ -23,13 +25,49 @@ LLM_GUARD_TOKEN = os.environ.get("LLM_GUARD_TOKEN", "")
 # change also restarts the pod (resetting the cost counter). A runtime toggle changes no managed
 # spec, so it sticks AND the counter survives. The live demo flips guards via /toggle, not kubectl.
 _guard_lock = threading.Lock()
+# Input guard is TWO progressively-enabled stages (ruling 2026-06-19): stage 1 is the deterministic
+# block-list (cheapest, pre-LLM, zero tokens), stage 2 is the model-based classifier. They toggle
+# INDEPENDENTLY so the demo shows "cheaper first" on the cost counter. Output is the exfil sidecar.
+# Back-compat: INPUT_GUARD=on seeds both input stages on.
+_input_legacy = os.environ.get("INPUT_GUARD", "").lower() == "on"
 GUARDS = {
-    "input": os.environ.get("INPUT_GUARD", "off").lower() == "on",
+    "input_blocklist": _input_legacy or os.environ.get("INPUT_BLOCKLIST", "off").lower() == "on",
+    "input_classifier": _input_legacy or os.environ.get("INPUT_CLASSIFIER", "off").lower() == "on",
     "output": os.environ.get("OUTPUT_GUARD", "off").lower() == "on",
 }
 # Fail closed: if LLM Guard is unreachable, block rather than silently leak (no-silent-fallback rule).
 FAIL_CLOSED = os.environ.get("PROXY_FAIL_CLOSED", "true").lower() == "true"
 TIMEOUT = float(os.environ.get("PROXY_TIMEOUT", "150"))
+
+# Rate-limit + cost-cap the demo ITSELF: a room hammering the chaos agent must not run up the real
+# Bedrock bill or DoS the demo (the cost demo cannot itself run away). Both are per-cluster (this
+# proxy fronts one cluster) and env-tunable; 0 disables. verify-at-build: set caps to the room size.
+COST_CAP_USD = float(os.environ.get("COST_CAP_USD", "0") or "0")     # reject once this cluster's tally hits it
+RATE_LIMIT_RPM = int(os.environ.get("RATE_LIMIT_RPM", "0") or "0")   # max model-bound requests per 60s
+_rate_lock = threading.Lock()
+_req_times = collections.deque()  # timestamps of recent forwarded POSTs (sliding 60s window)
+
+
+def rate_limited():
+    """True if this cluster is over its requests-per-minute cap. Sliding 60s window."""
+    if RATE_LIMIT_RPM <= 0:
+        return False
+    now = time.monotonic()
+    with _rate_lock:
+        while _req_times and now - _req_times[0] > 60.0:
+            _req_times.popleft()
+        if len(_req_times) >= RATE_LIMIT_RPM:
+            return True
+        _req_times.append(now)
+        return False
+
+
+def cost_capped():
+    """True if this cluster's metered spend has reached the cap."""
+    if COST_CAP_USD <= 0:
+        return False
+    with _cost_lock:
+        return _cost["usd"] >= COST_CAP_USD
 
 # Cost-saving input block-list: deterministic, runs BEFORE any LLM call. Destructive intent that
 # matches here is rejected without spending a single Bedrock token — the workshop's cost lesson.
@@ -172,13 +210,17 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, dict(GUARDS))
             return
         if self.path.startswith("/toggle"):
-            # Runtime flip, e.g. GET /toggle?input=on  or  /toggle?output=on . No restart, no spec change.
+            # Runtime flip, no restart, no spec change. Keys: input_blocklist, input_classifier, output.
+            # Convenience: input=on flips BOTH input stages. e.g. /toggle?input_blocklist=on
             q = parse_qs(urlparse(self.path).query)
             with _guard_lock:
                 if "input" in q:
-                    GUARDS["input"] = q["input"][0].lower() == "on"
-                if "output" in q:
-                    GUARDS["output"] = q["output"][0].lower() == "on"
+                    on = q["input"][0].lower() == "on"
+                    GUARDS["input_blocklist"] = on
+                    GUARDS["input_classifier"] = on
+                for k in ("input_blocklist", "input_classifier", "output"):
+                    if k in q:
+                        GUARDS[k] = q[k][0].lower() == "on"
                 self._send(200, dict(GUARDS))
             return
         # Pass through agent-card / .well-known discovery unchanged.
@@ -201,29 +243,48 @@ class Handler(BaseHTTPRequestHandler):
         except Exception:
             payload = None
 
-        if GUARDS["input"] and isinstance(payload, dict):
+        text = ""
+        if isinstance(payload, dict):
             text = extract_text(payload.get("params", {}).get("message", {}).get("parts", []))
-            if text:
-                # 1) Cheap deterministic block-list FIRST — rejects destructive intent with zero LLM spend.
-                hit = blocklisted(text)
-                if hit:
-                    self._send(403, {
-                        "jsonrpc": "2.0",
-                        "id": payload.get("id"),
-                        "error": {"code": -32600,
-                                  "message": f"Request blocked by input block-list (matched '{hit}'). "
-                                             "No model tokens were spent."},
-                    })
-                    return
-                # 2) Model-based scanner (prompt injection) as the second, costlier gate.
-                if not input_allowed(text):
-                    self._send(403, {
-                        "jsonrpc": "2.0",
-                        "id": payload.get("id"),
-                        "error": {"code": -32600,
-                                  "message": "Request blocked by input guardrail (prompt injection detected)."},
-                    })
-                    return
+
+        # Stage 1: deterministic block-list (cheapest, pre-LLM, zero tokens). Toggled independently.
+        if GUARDS["input_blocklist"] and text:
+            hit = blocklisted(text)
+            if hit:
+                self._send(403, {
+                    "jsonrpc": "2.0", "id": payload.get("id"),
+                    "error": {"code": -32600,
+                              "message": f"Request blocked by input block-list (matched '{hit}'). "
+                                         "No model tokens were spent."},
+                })
+                return
+        # Stage 2: model-based prompt-injection classifier (costlier gate; NOT deterministic). Independent.
+        if GUARDS["input_classifier"] and text:
+            if not input_allowed(text):
+                self._send(403, {
+                    "jsonrpc": "2.0", "id": payload.get("id"),
+                    "error": {"code": -32600,
+                              "message": "Request blocked by input guardrail (prompt injection detected)."},
+                })
+                return
+
+        # Protect the demo from itself: rate-limit + cost-cap BEFORE spending any Bedrock tokens.
+        if rate_limited():
+            self._send(429, {
+                "jsonrpc": "2.0", "id": payload.get("id") if isinstance(payload, dict) else None,
+                "error": {"code": -32000,
+                          "message": f"Rate limit reached ({RATE_LIMIT_RPM}/min on this cluster). "
+                                     "Slow down; the cost demo will not run away."},
+            })
+            return
+        if cost_capped():
+            self._send(429, {
+                "jsonrpc": "2.0", "id": payload.get("id") if isinstance(payload, dict) else None,
+                "error": {"code": -32000,
+                          "message": f"Cost cap reached (${COST_CAP_USD:.2f} on this cluster). "
+                                     "Spend is frozen for the rest of the segment."},
+            })
+            return
 
         try:
             req = urllib.request.Request(
