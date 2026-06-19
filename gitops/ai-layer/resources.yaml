@@ -177,6 +177,8 @@ spec:
             - { name: INPUT_GUARD, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
             - { name: PROXY_FAIL_CLOSED, value: "true" }
+            # Per-cluster tier for the cost counter price; set to sonnet/opus on those tier clusters.
+            - { name: MODEL_TIER, value: "haiku" }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
@@ -188,6 +190,11 @@ apiVersion: v1
 kind: Service
 metadata:
   name: guard-proxy
+  annotations:
+    # kube-prometheus scrapes the live cost counter from /metrics so Grafana graphs it climbing.
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
 spec:
   selector: { app.kubernetes.io/name: guard-proxy }
   ports: [{ name: http, port: 8080, targetPort: http }]

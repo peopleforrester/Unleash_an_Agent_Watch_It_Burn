@@ -55,6 +55,13 @@ Repo-buildable here; live provisioning/verification is Michael's separate projec
 3. **Cost counter (Phase 4c, headline `[SPIKE]`).** Meter tokens at the guard-proxy times per-tier
    price, per cluster, on screen. *Render:* climbs during C1, still moves on C2 (blocked but paid),
    flatlines when the input guard blocks pre-LLM.
+   - **DONE (logic + render-gate test green):** real per-tier prices (Haiku/Sonnet/Opus, sourced
+     2026-06-19, no hardcoded counter), `MODEL_TIER` per-cluster selection, Prometheus `/metrics`
+     endpoint + scrape annotations so Grafana graphs the climbing counter, block-list path proven to
+     flatline. Proof: `verify/test_cost_counter.py` (11 checks green).
+   - **Remaining (needs a live cluster, provisioning project):** confirm kagent's real A2A usage
+     field names (`promptTokenCount` / `candidatesTokenCount`) against a live response, and capture
+     the live dashboard before/after (climb, flatline) as the recorded render.
 4. **Input guard, two-stage progressive (Phase 4).** Block-list (deterministic) as stage 1; DeBERTa
    classifier as stage 2, toggled on as needed. *Render:* "delete" intent blocked before the LLM,
    counter flatlines; classifier stage catches a phrasing the block-list misses.

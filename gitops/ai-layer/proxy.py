@@ -39,14 +39,29 @@ BLOCK_LIST = [t.strip().lower() for t in os.environ.get(
     "delete,destroy,rm -rf,drop database,kubectl delete,shutdown,terminate,wipe,nuke",
 ).split(",") if t.strip()]
 
-# Live cost meter: tally Bedrock token usage from each agent response (kagent reports it) and
-# convert to $ for the "wasted tokens are the new DoS" story. Prices are env-driven and are an
-# ESTIMATE for the live counter; the authoritative spend is Cost Explorer (teardown/cost-report.sh).
-# verify-at-build: set the real per-1K Bedrock prices for the chosen Claude model.
-COST_PER_1K_IN = float(os.environ.get("COST_PER_1K_IN", "0.001"))
-COST_PER_1K_OUT = float(os.environ.get("COST_PER_1K_OUT", "0.005"))
+# Live cost meter: tally Bedrock token usage from each agent response (kagent reports the real
+# promptTokenCount / candidatesTokenCount) and convert to USD for the "wasted tokens are the new DoS"
+# story. The COUNTER value is never hardcoded; only the per-tier PRICE table is config, and the
+# authoritative post-hoc total is Cost Explorer (teardown/cost-report.sh).
+#
+# Per-1K-token list prices (USD), sourced 2026-06-19 from Anthropic + AWS Bedrock pricing pages:
+#   Haiku 4.5 $1/$5, Sonnet 4.6 $3/$15, Opus 4.8 $5/$25 per 1M tokens.
+# verify-at-build: confirm the Bedrock list price for the deployed region. Anthropic API list prices
+#   (used here) historically match Bedrock for these models, but confirm before quoting a number.
+TIER_PRICES_PER_1K = {
+    "haiku":  {"in": 0.001, "out": 0.005},
+    "sonnet": {"in": 0.003, "out": 0.015},
+    "opus":   {"in": 0.005, "out": 0.025},
+}
+# Which tier this cluster runs (set per cluster to match the kagent ModelConfig). Defaults to haiku.
+MODEL_TIER = os.environ.get("MODEL_TIER", "haiku").lower()
+_tier_price = TIER_PRICES_PER_1K.get(MODEL_TIER, TIER_PRICES_PER_1K["haiku"])
+# Optional explicit per-1K overrides; if unset, the tier table above is authoritative.
+COST_PER_1K_IN = float(os.environ.get("COST_PER_1K_IN", str(_tier_price["in"])))
+COST_PER_1K_OUT = float(os.environ.get("COST_PER_1K_OUT", str(_tier_price["out"])))
 _cost_lock = threading.Lock()
-_cost = {"requests": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "usd": 0.0}
+_cost = {"tier": MODEL_TIER, "requests": 0, "input_tokens": 0, "output_tokens": 0,
+         "total_tokens": 0, "usd": 0.0}
 
 
 def record_usage(resp):
@@ -124,6 +139,33 @@ class Handler(BaseHTTPRequestHandler):
         if self.path == "/cost":
             with _cost_lock:
                 self._send(200, dict(_cost))
+            return
+        if self.path == "/metrics":
+            # Prometheus text format so kube-prometheus scrapes it and Grafana graphs the climbing
+            # counter live. Block-listed requests never reach record_usage, so witb_requests_total /
+            # witb_cost_usd flatline exactly when the input guard fires (the cost lesson, on a graph).
+            with _cost_lock:
+                c = dict(_cost)
+            tier = c["tier"]
+            lines = [
+                "# HELP witb_cost_usd Estimated Bedrock spend (USD), metered from real token usage.",
+                "# TYPE witb_cost_usd counter",
+                f'witb_cost_usd{{tier="{tier}"}} {c["usd"]:.6f}',
+                "# HELP witb_tokens_total Bedrock tokens metered at the guard-proxy.",
+                "# TYPE witb_tokens_total counter",
+                f'witb_tokens_total{{tier="{tier}",kind="input"}} {c["input_tokens"]}',
+                f'witb_tokens_total{{tier="{tier}",kind="output"}} {c["output_tokens"]}',
+                "# HELP witb_requests_total Agent requests that reached the model (block-listed excluded).",
+                "# TYPE witb_requests_total counter",
+                f'witb_requests_total{{tier="{tier}"}} {c["requests"]}',
+                "",
+            ]
+            body = "\n".join(lines).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if self.path.startswith("/guards"):
             with _guard_lock:
