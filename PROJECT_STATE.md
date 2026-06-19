@@ -16,7 +16,7 @@ Last updated: 2026-06-19
   folder (`1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU`, account michaelrishiforrester@gmail.com)
   and converted to native Google Docs: START HERE, Abstract, Run of Show (the
   demo flow), Slide Outline, Cold Open Script, Build Spec (technical reference).
-- **Cost / teardown:** full AWS sweep of account 515966504359 (us-west-2 +
+- **Cost / teardown:** full AWS sweep of the workshop AWS account (us-west-2 +
   us-east-1/2, us-west-1). Zero EKS clusters, EC2, NAT gateways, load balancers,
   snapshots, ECR repos, Elastic IPs. Deleted 5 orphaned EBS volumes (13 GB,
   watch-it-burn-test PVC leftovers: kagent-postgres ×3, tempo, loki) that survived
@@ -80,7 +80,7 @@ full section-by-section reconciliation of the spec is still pending.
       configs, verify harness, observability/Falco, teardown/cost, facilitation. All
       carry verify-at-build flags. NOTHING verified on a live cluster.
 - [ ] **NEXT, needs Michael + a live cluster (Track B):** (1) attendee count N +
-      ceiling; (2) confirm AWS account 515966504359 / user nwuser is the right place to
+      ceiling; (2) confirm the workshop AWS account / the operator user is the right place to
       spend; (3) go-ahead to provision real EKS (cost scales with N); (4) install
       eksctl + docker + asciinema on the VPS (may need sudo). Then: bootstrap hub,
       provision spokes, run Phase 4b spikes, fill VERSIONS.lock, record fallbacks,
@@ -142,7 +142,7 @@ full section-by-section reconciliation of the spec is still pending.
   guard-proxy in attendee-test; forwards A2A to the agent and calls LLM Guard; input-block
   (403 on injection) + output-scrub (redact/block sentinel) toggled by INPUT_GUARD/OUTPUT_GUARD.
 - **BLOCKER (account-level): Bedrock Anthropic use-case form not submitted.** All Anthropic
-  models on account 515966504359 fail with ResourceNotFoundException "Model use case details
+  models on the workshop AWS account fail with ResourceNotFoundException "Model use case details
   have not been submitted." `aws bedrock get-use-case-for-model-access` => form never filled.
   Base model ids reject on-demand (must use us.* inference profiles); the us.* profiles fail
   the use-case gate. The one early PONG hit a brief propagation window. FIX is Michael's:
