@@ -174,11 +174,16 @@ spec:
             - { name: LLM_GUARD_URL, value: "http://llm-guard.agent.svc.cluster.local:8000" }
             - name: LLM_GUARD_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }
-            - { name: INPUT_GUARD, value: "off" }
+            # Input guard, two stages toggled independently (start off; flipped live via /toggle).
+            - { name: INPUT_BLOCKLIST, value: "off" }
+            - { name: INPUT_CLASSIFIER, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
             - { name: PROXY_FAIL_CLOSED, value: "true" }
             # Per-cluster tier for the cost counter price; set to sonnet/opus on those tier clusters.
             - { name: MODEL_TIER, value: "haiku" }
+            # Protect the demo from itself (0 = disabled). verify-at-build: set to room size + budget.
+            - { name: RATE_LIMIT_RPM, value: "120" }
+            - { name: COST_CAP_USD, value: "25" }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
