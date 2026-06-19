@@ -7,7 +7,7 @@ shape (`cluster.yaml`), differentiated by which bootstrap profile is applied aft
 |---|---|---|---|
 | **Cluster 1** (no guardrails) | **3** | `minimal-floor` ONLY (platform/kyverno/policies/minimal-floor.yaml) + the agent | Burns over the segment; rotated as each dies ("URL one's gone, here's two"). Cost counter climbs. |
 | **Cluster 2** (CNCF-only) | **3** | CNCF stack: ArgoCD + Kyverno (require-resource-limits, block-argocd-drift) + RBAC + Falco + floor + agent. No AI guardrails. | Blocks the destruction; cost still incurred. |
-| **Instructor Cluster 3** | **2** | Full Cluster-3 stack (CNCF + kagent + guard-proxy + LLM Guard + MCP wiring) | Follow-along copies so one attendee wrecking theirs doesn't break the demo. |
+| **Instructor Cluster 3** | **3** (one per model tier; +1 if Fable returns) | Full Cluster-3 stack (CNCF + kagent + guard-proxy + LLM Guard + MCP wiring), each pinned to a tier (Haiku/Sonnet/Opus) | Side-by-side model-tier comparison; the Haiku one also serves as the follow-along so one attendee wrecking theirs doesn't break the demo. |
 | **Attendee Cluster 3** | **N + reserve** | Full Cluster-3 stack, delivered by the ApplicationSet cluster generator | Each attendee's own; a few held in reserve. |
 
 ## Why the minimal floor on Cluster 1
@@ -31,6 +31,9 @@ can hit them. Tear the whole fleet down with `teardown/teardown.sh`.
 ## Sizing note
 Cluster 1/2 are light (t3.large ×2). Instructor/attendee Cluster 3 runs the full stack incl. LLM Guard
 (Regex-only), t3.large works in test; bump to t3.xlarge if Sensitive NER or heavier guards are added.
+The 3 instructor Cluster 3s run side by side during the model-tier comparison; the frontier-tier one
+(Opus) costs more per minute while running, which is expected (it is the cost story), but keep the
+segment short and tear the fleet down right after.
 
 ## Deploy per role (which root app to apply)
 
@@ -40,7 +43,7 @@ Two deployment profiles, selected by `infra/deploy-full-idp.sh <profile>`:
 |---|---|---|---|---|
 | **Cluster 1** | 3 | `burn` | `gitops/bootstrap/app-of-apps-burn.yaml` | no enforcing policies; gets wrecked; cost counter via the guard-proxy |
 | **Cluster 2** | 3 | `full` | `gitops/bootstrap/app-of-apps.yaml` | full IDP; **run with AI guards OFF** = the CNCF-only experience |
-| **Instructor Cluster 3** | 2 | `full` | `gitops/bootstrap/app-of-apps.yaml` | full IDP + AI layer; guards toggled on during the demo |
+| **Instructor Cluster 3** | 3 (one per model tier; +1 if Fable returns) | `full` | `gitops/bootstrap/app-of-apps.yaml` | full IDP + AI layer; each pinned to a tier (Haiku/Sonnet/Opus) for the side-by-side comparison; the Haiku one doubles as the follow-along where guards are toggled |
 | **Attendee Cluster 3** | N + reserve | `full` | `gitops/bootstrap/app-of-apps.yaml` | each attendee's own; they toggle guards |
 
 C2 and C3 share the **full** deployment and differ only in operation (C2: guards stay off; C3: guards
