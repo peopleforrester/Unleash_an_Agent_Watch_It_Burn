@@ -148,6 +148,81 @@ spec:
               priority: WARNING
               tags: [container, filesystem, mitre_persistence]
               source: syscall
+
+          workshop-agent-rules.yaml: |
+            # Workshop agent-pod runtime detections (ported from platform/falco/rules-workshop.yaml
+            # during the GitOps canonicalization; that copy is the non-canonical duplicate).
+            # Defense-in-depth on each Cluster 3: shell/exec in the agent pod, unexpected outbound
+            # from the agent pod, and reads of the planted FAKE- sentinel secrets.
+            # verify-at-build: the agent pod selector + namespace prefix below must match the real
+            # kagent agent deployment; confirm on a live cluster before relying on these rules.
+
+            - macro: agent_pod
+              condition: (k8s.pod.label.app = "workshop-agent")   # verify-at-build: confirm label kagent sets
+
+            - macro: agent_namespace
+              condition: (k8s.ns.name startswith "attendee-")     # verify-at-build: confirm per-attendee ns prefix
+
+            - macro: in_agent_container
+              condition: (container.id != host and agent_pod)
+
+            - list: workshop_shell_binaries
+              items: [bash, sh, ash, dash, zsh, ksh, csh, tcsh]
+
+            - list: agent_expected_egress_ports
+              items: [443, 4317, 4318]   # 443 Bedrock/HTTPS tools, 4317/4318 OTLP to the spoke collector
+
+            - macro: outbound_from_agent
+              condition: >
+                outbound
+                and in_agent_container
+
+            - macro: agent_egress_is_expected
+              condition: >
+                (fd.sport in (agent_expected_egress_ports) or fd.rport in (agent_expected_egress_ports))
+                and not fd.rip in ("0.0.0.0")
+
+            - rule: Shell or Exec In Workshop Agent Pod
+              desc: An interactive shell or exec was spawned inside the scoped workshop agent container.
+              condition: >
+                spawned_process
+                and in_agent_container
+                and proc.name in (workshop_shell_binaries)
+              output: >
+                Shell spawned in workshop agent pod
+                (proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name image=%container.image.repository)
+              priority: WARNING
+              tags: [workshop, agent, shell, mitre_execution]
+              source: syscall
+
+            - rule: Unexpected Outbound From Workshop Agent Pod
+              desc: The scoped workshop agent opened an outbound connection to an unexpected destination/port.
+              condition: >
+                outbound_from_agent
+                and not agent_egress_is_expected
+              output: >
+                Unexpected outbound connection from workshop agent pod
+                (proc=%proc.name connection=%fd.name dest_ip=%fd.rip dest_port=%fd.rport
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+              priority: WARNING
+              tags: [workshop, agent, network, exfil, mitre_exfiltration]
+              source: syscall
+
+            - rule: Read Of Planted Fake Secret By Workshop Agent
+              desc: A file whose name carries the FAKE-...-sentinel marker was opened inside the agent container.
+              condition: >
+                open_read
+                and in_agent_container
+                and (fd.name contains "FAKE-PROD-DB-PASSWORD-sentinel"
+                     or fd.name contains "FAKE-MCP-EXFIL-sentinel")
+              output: >
+                Planted fake-secret material read inside workshop agent pod
+                (file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+              priority: NOTICE
+              tags: [workshop, agent, secret, mitre_credential_access]
+              source: syscall
         tolerations:
           - effect: NoSchedule
             operator: Exists
