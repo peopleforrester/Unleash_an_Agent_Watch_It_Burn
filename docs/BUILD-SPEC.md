@@ -22,7 +22,7 @@ platform up from the manifests here. Nothing assumes a specific account, region,
 On whatever host you drive from, you need `kubectl`, `eksctl`, `helm`, `aws`, and `docker`. AWS
 credentials come from your own environment (profile, SSO, or instance role); no account id or
 credential is stored in this repo. Region is yours to choose; the example cluster configs default to
-one region you can override.
+**us-west-2** (newest Claude models on Bedrock tend to land there first), which you can override.
 
 Everything is reproducible from the repo: `eksctl create cluster -f infra/test-cluster/cluster.yaml`,
 then the bootstrap + verified steps in `PROJECT_STATE.md`. Idempotency rule: every step is safe to
