@@ -13,6 +13,8 @@ metadata:
   namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
 spec:
   provider: Bedrock
-  model: us.anthropic.claude-sonnet-4-6 # verify-at-build: confirm exact Bedrock model id + region availability
+  # NON-CANONICAL copy. The source of truth is gitops/ai-layer/resources.yaml (GitOps canonical).
+  # Aligned to Haiku 4.5 to match canonical; tier swaps + the comparison live in the canonical file.
+  model: us.anthropic.claude-haiku-4-5-20251001-v1:0 # Haiku 4.5 inference profile (verified)
   bedrock:
-    region: us-east-2
+    region: us-west-2
