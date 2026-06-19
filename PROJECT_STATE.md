@@ -3,7 +3,25 @@
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
 
-Last updated: 2026-06-15
+Last updated: 2026-06-19
+
+### Session-close note (2026-06-19)
+
+- **AI-isms:** whole repo swept clean. Bulk em-dash strip across 26 docs
+  (research, beats, infra READMEs, design docs); only residual checker flag is
+  `BUILD-SPEC.md`, which is false positives (the talk-title word "Unleash",
+  three "test harness" references, and "lets" misread as "let's") and was left
+  as-is. Verification method: `check-ai-isms/check.py` repo scan.
+- **Whitney handoff:** the six handoff files were uploaded to the shared Drive
+  folder (`1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU`, account <redacted-email>)
+  and converted to native Google Docs: START HERE, Abstract, Run of Show (the
+  demo flow), Slide Outline, Cold Open Script, Build Spec (technical reference).
+- **Cost / teardown:** full AWS sweep of account <ACCOUNT_ID> (us-west-2 +
+  us-east-1/2, us-west-1). Zero EKS clusters, EC2, NAT gateways, load balancers,
+  snapshots, ECR repos, Elastic IPs. Deleted 5 orphaned EBS volumes (13 GB,
+  watch-it-burn-test PVC leftovers: kagent-postgres ×3, tempo, loki) that survived
+  the earlier `eksctl delete cluster`. Month-to-date spend $11.69; forward run
+  rate ~$0/day.
 
 ## Current plan summary
 
