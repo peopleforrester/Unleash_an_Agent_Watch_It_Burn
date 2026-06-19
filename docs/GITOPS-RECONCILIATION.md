@@ -58,8 +58,9 @@ Until then, `platform/` stays in place so Model B does not break, but it is non-
 If a policy needs to change, change the canonical copy under `policies/` or `security/` or
 `gitops/apps/`, never the `platform/` copy.
 
-## Open item flagged separately
+## Resolved: model tier
 
-`agent/kagent-modelconfig-bedrock.yaml` declares `claude-sonnet-4-6` while `BUILD-SPEC.md`
-pins `claude-haiku-4-5`. Pick one before any slide quotes a model-card number. Not part of
-this reconciliation.
+The earlier `claude-sonnet-4-6` vs `claude-haiku-4-5` mismatch is resolved. The canonical AI
+layer (`gitops/ai-layer/resources.yaml`) was already Haiku 4.5; the non-canonical `agent/` copy
+was aligned to it. Model tier is now an intentional comparison variable (Haiku 4.5 live default,
+Sonnet 4.6 / Opus 4.8 commented alternates, Fable 5 conditional), documented in BUILD-SPEC §2.
