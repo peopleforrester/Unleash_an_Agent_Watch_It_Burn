@@ -15,14 +15,16 @@ Every load-bearing config fact carries a `# verify-at-build` comment in the YAML
 
 ## CONFIRMED mechanisms
 
-### 1. Input guard, agentgateway request-phase prompt-guard webhook (CAN hard-reject)
-- **What:** agentgateway's native prompt-guard, **request phase**, `webhook` action, pointing at an
-  LLM-Guard-backed wrapper. The request phase supports **`RejectAction`** (hard block + chosen
-  `status_code`), so a prompt-injection request is **rejected at the gateway before it reaches the
-  agent**. (`research/02-agentgateway.md` §3.)
-- **LLM Guard side:** input **`PromptInjection`** scanner, DeBERTa classifier
-  (`ProtectAI/deberta-v3-base-prompt-injection-v2`). **Model-based, NOT deterministic**, never
-  describe it as a rule engine in attendee copy (spec §3).
+### 1. Input guard, TWO STAGES enabled progressively (ruling 2026-06-19; CAN hard-reject)
+The input guard has two stages, built and toggled progressively (see `docs/BUILD-PLAN.md`):
+- **Stage 1, deterministic block-list (default, cheapest):** the guard-proxy matches a block-list
+  (e.g. "delete" intent) and hard-rejects **before** the LLM, so zero tokens are spent and the cost
+  counter flatlines. This stage IS deterministic.
+- **Stage 2, classifier (toggle on as needed):** agentgateway request-phase `webhook` to an
+  LLM-Guard-backed wrapper running the input **`PromptInjection`** scanner, DeBERTa
+  (`ProtectAI/deberta-v3-base-prompt-injection-v2`); the request phase supports **`RejectAction`**
+  (hard block + `status_code`). This stage is **model-based, NOT deterministic**, never call the
+  combined guard "deterministic" in attendee copy once stage 2 is in the path (spec §3).
 - **Files:** baseline in `gateway/agentgateway.yaml`; toggles
   `gateway/input-guard-off.yaml` (default) / `gateway/input-guard-on.yaml`.
 - **Verdict wiring:** the wrapper calls LLM Guard `/analyze/prompt`; flagged → `RejectAction 403`.

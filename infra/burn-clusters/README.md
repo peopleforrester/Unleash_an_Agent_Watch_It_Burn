@@ -5,16 +5,16 @@ shape (`cluster.yaml`), differentiated by which bootstrap profile is applied aft
 
 | Role | Count | Bootstrap profile (what gets installed) | Purpose |
 |---|---|---|---|
-| **Cluster 1** (no guardrails) | **3** | `minimal-floor` ONLY (platform/kyverno/policies/minimal-floor.yaml) + the agent | Burns over the segment; rotated as each dies ("URL one's gone, here's two"). Cost counter climbs. |
+| **Cluster 1** (no guardrails) | **3 live + ~10 disposable spares** | NO admission at all (no Kyverno, no floor) + the agent + cost-meter proxy | Dies in one prompt; facilitator rotates spares from SSH as each dies ("URL one's gone, here's two"). Cost counter climbs. |
 | **Cluster 2** (CNCF-only) | **3** | CNCF stack: ArgoCD + Kyverno (require-resource-limits, block-argocd-drift) + RBAC + Falco + floor + agent. No AI guardrails. | Blocks the destruction; cost still incurred. |
 | **Instructor Cluster 3** | **3** (one per model tier; +1 if Fable returns) | Full Cluster-3 stack (CNCF + kagent + guard-proxy + LLM Guard + MCP wiring), each pinned to a tier (Haiku/Sonnet/Opus) | Side-by-side model-tier comparison; the Haiku one also serves as the follow-along so one attendee wrecking theirs doesn't break the demo. |
 | **Attendee Cluster 3** | **N + reserve** | Full Cluster-3 stack, delivered by the ApplicationSet cluster generator | Each attendee's own; a few held in reserve. |
 
-## Why the minimal floor on Cluster 1
-Even Cluster 1 carries `minimal-floor` so it can't be killed by one trivial prompt, it should burn
-*gradually* over the segment (delete demo workloads = visible burn) while the control plane, ArgoCD,
-and the agent itself survive long enough to keep the spectacle running. The same floor protects the
-instructor follow-along clusters from accidental destruction.
+## Why no floor on Cluster 1
+Cluster 1 carries NO admission control and no floor: a single destructive prompt kills it. That is the
+point, the spectacle is the speed of death plus the climbing cost counter, not a gradual burn. The
+facilitator rotates ~10 disposable spares from the SSH session as each dies. Follow-along happens on the
+instructor Cluster 3s, which are protected by their full CNCF stack (not a floor).
 
 ## Provision (parallel) + rotate
 ```bash
