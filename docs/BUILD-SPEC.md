@@ -95,6 +95,18 @@ Whitney = attack narration/observability/attendee experience; hand-offs explicit
 Gamification (optional, time-permitting): stream attendees' system prompts on a side screen, "screen
 goes black, someone won", with sanitization to keep it within code of conduct.
 
+Model-tier chaos-engineering comparison: the model behind the agent is an INDEPENDENT VARIABLE,
+not a fixed pick. Run the same scoped agent (same jail, same system prompt) on escalating Claude
+tiers, Haiku 4.5 (cheap/fast default) then Sonnet 4.6 then Opus 4.8, and show how differently each
+tier tries to escape its own jail. The live cost counter is the payoff: a frontier model burns more
+dollars per escape attempt, which is the wasted-token-DoS thesis in one image. Fable 5 is a wildcard
+tier, conditional on its Bedrock availability returning. Tier configs live in
+`gitops/ai-layer/resources.yaml` (Haiku is the live default; the others are commented, verify the
+inference-profile id then uncomment). Swap a tier by repointing the Agent's `modelConfig` (commit +
+resync, or run a different tier per instructor Cluster 3 in parallel), never a live kubectl patch
+(ArgoCD selfHeal reverts it). Gating, owned by the provisioning project: each model needs Bedrock
+access + the Anthropic use-case form; Opus is the most expensive, which is a feature here, not a bug.
+
 ---
 
 ## 3. Hard constraints (non-negotiable)
