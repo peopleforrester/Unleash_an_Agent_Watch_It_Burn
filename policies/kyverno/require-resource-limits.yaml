@@ -1,29 +1,29 @@
-# ABOUTME: Kyverno policy requiring CPU and memory limits on all containers.
-# ABOUTME: Enforced only in apps namespace to prevent blocking platform components.
+# ABOUTME: Beat-1 target policy. Requires CPU+memory limits on pods.
+# ABOUTME: Starts in Audit (admits + reports); the beat-1 toggle flips it to Enforce.
+# verify-at-build: confirmed against Kyverno v1.18.1 (research/06-cncf-stack.md).
+# In 1.18 the action is RULE-LEVEL `validate.failureAction` (the old top-level
+# spec.validationFailureAction is deprecated). The beat-1 toggle patches the path
+# /spec/rules/0/validate/failureAction from Audit to Enforce.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
   name: require-resource-limits
   annotations:
     policies.kyverno.io/title: Require Resource Limits
-    policies.kyverno.io/category: Best Practices
-    policies.kyverno.io/severity: medium
-    policies.kyverno.io/description: >-
-      Require all pods in the apps namespace to have CPU and memory limits set.
+    policies.kyverno.io/category: Workshop / Beat 1
 spec:
-  validationFailureAction: Enforce
   background: true
   rules:
-    - name: require-limits
+    - name: require-pod-resource-limits
       match:
         any:
           - resources:
               kinds:
                 - Pod
-              namespaces:
-                - apps
       validate:
-        message: "CPU and memory limits are required for all containers in apps namespace."
+        failureAction: Audit
+        message: >-
+          CPU and memory resource limits are required on every container.
         pattern:
           spec:
             containers:
