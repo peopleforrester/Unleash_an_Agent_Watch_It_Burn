@@ -13,9 +13,12 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 
 ## Pre-flight (before doors, both)
 
-- [ ] Fleet up and green: 3x Cluster 1 (no guardrails), 3x Cluster 2 (CNCF), 2x instructor Cluster 3,
-      and the per-attendee Cluster 3s (plus reserve). Argo CD app-of-apps Synced/Healthy. Provision
-      before doors; never live.
+- [ ] Fleet up and green: 3x Cluster 1 (no guardrails), 3x Cluster 2 (CNCF), 3x instructor Cluster 3
+      (one per model tier: Haiku/Sonnet/Opus, for the optional capstone), and the per-attendee
+      Cluster 3s (plus reserve). Argo CD app-of-apps Synced/Healthy. Provision before doors; never live.
+- [ ] If running the optional capstone: the 3 instructor clusters are pinned to their tiers (verified
+      inference-profile ids), guards OFF, on adjacent screens. If not running it, they are the
+      follow-along copies as before.
 - [ ] Cost counter visible on the shared screen, reading from the live clusters.
 - [ ] Guard start state on Cluster 3: output `off`, input `off`, MCP authz `off`. Guards flip at
       runtime via the guard-proxy `/toggle` endpoint (Argo CD-safe; no restart, counter survives) , 
@@ -39,6 +42,10 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 | 1:45 | 15 | **Both** (Michael leads) | Regroup + governance map + self-assessment + Q&A | none |
 
 Total: **120 minutes**.
+
+> **Optional capstone (model-tier comparison):** not a separate row. It runs about 8 to 10 minutes
+> inside the Cluster 3 free-play window (or just before the regroup if time allows), and is the FIRST
+> beat to cut when running long. Dedicated section after the Cluster 3 segment below.
 
 ### 0:00–0:10, Intro + platform tour (Michael)
 
@@ -92,6 +99,30 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
   what is proven, not the model's mood.
 - **HAND-OFF → Whitney:** "One more, the thing you have been trusting all session."
 
+### OPTIONAL capstone, model-tier comparison on parallel screens (both; cut first if short)
+
+The optional fifth beat. Run it only if the core arc landed and time allows; it is the first thing to
+cut when running long, ahead of free-play. It does not change the thesis, it reinforces it.
+
+- **Setup:** the 3 instructor Cluster 3s run side by side on adjacent screens, each pinned to a
+  different model tier (Haiku 4.5, Sonnet 4.6, Opus 4.8), guards OFF, same jail and same system prompt.
+  Fable 5 is a wildcard fourth screen if it is available.
+- **The beat:** give all three the same "escape your own jail" prompt at once and let the room watch
+  the contrast. Haiku barely rattles the bars; Opus is methodical and creative about picking the lock.
+  Whitney narrates the three trace views; Michael works the three cost counters.
+- **The payoff (two punches):** (1) the frontier cluster's cost counter climbs fastest, a more capable
+  model burns more tokens per escape attempt, the same denial-of-service shape at a higher rate;
+  (2) the smarter model did NOT change whether Kyverno would block it or whether the output guard
+  would catch the sentinel. Capability is orthogonal to governance. The model card claims it resists
+  this; the platform is what actually enforces it.
+- **Why agent held constant on Clusters 1/2/3:** the spine is a controlled experiment, only the
+  guardrail layer changes there, so outcomes are attributable to the controls. Agent and model variety
+  belongs HERE, where guardrails are held constant instead.
+- **Cost / teardown:** about 8 to 10 minutes, drawn from the Cluster 3 free-play window. Tear the tier
+  clusters down with the rest of the fleet right after; the frontier tier is the most expensive to leave up.
+- **Fallback:** if a screen wanders, drive its prompt through the same per-beat `fallback.*.sh`. If the
+  room cannot watch three screens at once, run Haiku then Opus sequentially on two screens.
+
 ### 1:25–1:45, Trace re-leak trap (Whitney narrates, Michael on symmetry)
 
 - Output sanitization is on, so the sentinel is blocked from the response. Turn on OTel content capture
@@ -104,7 +135,7 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
 
 ### 1:45–2:00, Regroup + governance map + self-assessment + Q&A (both, Michael leads)
 
-- Protect this segment. If running long, cut free-play first; never cut this.
+- Protect this segment. If running long, cut the optional tier capstone first, then free-play; never cut this.
 - Walk `facilitation/governance-map.md`: each attack, the control that stops it, the layer it sits in,
   and whether existing tooling covers it. Land the 80/20.
 - Point to `facilitation/self-assessment.md`: run it against your own platform.
@@ -122,7 +153,8 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
 | 0:25 | 25 | Whitney/Michael | Cluster 3, guards on (output → input → MCP) |
 | 0:50 | 10 | Both | Regroup + governance map |
 
-Drop the trace re-leak trap and free-play first; protect the regroup.
+The model-tier capstone is not part of the 60-minute version. Drop the trace re-leak trap and
+free-play first; protect the regroup.
 
 ---
 
@@ -132,10 +164,16 @@ Drop the trace re-leak trap and free-play first; protect the regroup.
 2. A Cluster 1 spare dies → switch to the next URL; that is the expected flow.
 3. An attendee Cluster 3 gets wrecked → move them to an instructor Cluster 3.
 4. Room can't get online at scale → single facilitator path, room watches.
-5. Running long → cut free-play, then the trace re-leak trap. Never cut the regroup.
+5. Running long → cut the optional model-tier capstone first, then free-play, then the trace re-leak
+   trap. Never cut the regroup.
 
 ## Open decisions affecting this runbook
 
 - Co-speaker split is the working split, confirm with Whitney; also confirm her schedule listing.
 - Whether the trace re-leak trap is built live or kept as a narrated slide.
-- Final Claude tier on Bedrock (haiku-4-5 verified), affects per-attendee cost, not the script.
+- Model tier is a comparison variable, not a single pick: the optional capstone runs Haiku 4.5,
+  Sonnet 4.6, and Opus 4.8 side by side (BUILD-SPEC §2). Per-tier Bedrock access + use-case forms are
+  owed by the provisioning project; only Haiku's is submitted.
+- Considered and set aside: different agent TYPES on Clusters 1/2/3. Holding the agent constant across
+  the three keeps the governance comparison a clean controlled experiment (only the guardrail layer
+  changes); agent and model variety lives in the capstone instead. Revisit if you want it.
