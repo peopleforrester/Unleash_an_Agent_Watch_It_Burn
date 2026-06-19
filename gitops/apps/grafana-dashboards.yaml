@@ -14,7 +14,7 @@ spec:
   source:
     repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
     targetRevision: staging
-    path: observability/grafana/dashboards
+    path: observability-idp/grafana/dashboards
     directory:
       recurse: true
   destination:
