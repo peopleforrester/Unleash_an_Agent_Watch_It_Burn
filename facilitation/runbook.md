@@ -14,9 +14,9 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 ## Pre-flight (before doors, both)
 
 - [ ] Fleet up and green: 3x Cluster 1 (no guardrails), 3x Cluster 2 (CNCF), 3x instructor Cluster 3
-      (one per model tier: Haiku/Sonnet/Opus, for the optional capstone), and the per-attendee
+      (one per model tier: Haiku/Sonnet/Opus, for the optional closing demo), and the per-attendee
       Cluster 3s (plus reserve). Argo CD app-of-apps Synced/Healthy. Provision before doors; never live.
-- [ ] If running the optional capstone: the 3 instructor clusters are pinned to their tiers (verified
+- [ ] If running the optional closing demo: the 3 instructor clusters are pinned to their tiers (verified
       inference-profile ids), guards OFF, on adjacent screens. If not running it, they are the
       follow-along copies as before.
 - [ ] Cost counter visible on the shared screen, reading from the live clusters.
@@ -43,7 +43,7 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 
 Total: **120 minutes**.
 
-> **Optional capstone (model-tier comparison):** not a separate row. It runs about 8 to 10 minutes
+> **Optional closing demo (model-tier comparison):** not a separate row. It runs about 8 to 10 minutes
 > inside the Cluster 3 free-play window (or just before the regroup if time allows), and is the FIRST
 > beat to cut when running long. Dedicated section after the Cluster 3 segment below.
 
@@ -99,7 +99,7 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
   what is proven, not the model's mood.
 - **HAND-OFF → Whitney:** "One more, the thing you have been trusting all session."
 
-### OPTIONAL capstone, model-tier comparison on parallel screens (both; cut first if short)
+### OPTIONAL closing demo, model-tier comparison on parallel screens (both; cut first if short)
 
 The optional fifth beat. Run it only if the core arc landed and time allows; it is the first thing to
 cut when running long, ahead of free-play. It does not change the thesis, it reinforces it.
@@ -135,7 +135,7 @@ cut when running long, ahead of free-play. It does not change the thesis, it rei
 
 ### 1:45–2:00, Regroup + governance map + self-assessment + Q&A (both, Michael leads)
 
-- Protect this segment. If running long, cut the optional tier capstone first, then free-play; never cut this.
+- Protect this segment. If running long, cut the optional tier closing demo first, then free-play; never cut this.
 - Walk `facilitation/governance-map.md`: each attack, the control that stops it, the layer it sits in,
   and whether existing tooling covers it. Land the 80/20.
 - Point to `facilitation/self-assessment.md`: run it against your own platform.
@@ -153,7 +153,7 @@ cut when running long, ahead of free-play. It does not change the thesis, it rei
 | 0:25 | 25 | Whitney/Michael | Cluster 3, guards on (output → input → MCP) |
 | 0:50 | 10 | Both | Regroup + governance map |
 
-The model-tier capstone is not part of the 60-minute version. Drop the trace re-leak trap and
+The model-tier closing demo is not part of the 60-minute version. Drop the trace re-leak trap and
 free-play first; protect the regroup.
 
 ---
@@ -164,16 +164,16 @@ free-play first; protect the regroup.
 2. A Cluster 1 spare dies → switch to the next URL; that is the expected flow.
 3. An attendee Cluster 3 gets wrecked → move them to an instructor Cluster 3.
 4. Room can't get online at scale → single facilitator path, room watches.
-5. Running long → cut the optional model-tier capstone first, then free-play, then the trace re-leak
+5. Running long → cut the optional model-tier closing demo first, then free-play, then the trace re-leak
    trap. Never cut the regroup.
 
 ## Open decisions affecting this runbook
 
 - Co-speaker split is the working split, confirm with Whitney; also confirm her schedule listing.
 - Whether the trace re-leak trap is built live or kept as a narrated slide.
-- Model tier is a comparison variable, not a single pick: the optional capstone runs Haiku 4.5,
+- Model tier is a comparison variable, not a single pick: the optional closing demo runs Haiku 4.5,
   Sonnet 4.6, and Opus 4.8 side by side (BUILD-SPEC §2). Per-tier Bedrock access + use-case forms are
   owed by the provisioning project; only Haiku's is submitted.
 - Considered and set aside: different agent TYPES on Clusters 1/2/3. Holding the agent constant across
   the three keeps the governance comparison a clean controlled experiment (only the guardrail layer
-  changes); agent and model variety lives in the capstone instead. Revisit if you want it.
+  changes); agent and model variety lives in the closing demo instead. Revisit if you want it.
