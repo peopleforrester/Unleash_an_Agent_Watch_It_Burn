@@ -1,7 +1,7 @@
 <!-- ABOUTME: Grounded research spike on LLM Guard (Protect AI, MIT) for the workshop exfil output guardrail. -->
 <!-- ABOUTME: Resolves API-server mode, scanner determinism, and verdict semantics against current official docs as of 2026-06-15. -->
 
-# LLM Guard — Research Spike (Phase 4 exfil guardrail)
+# LLM Guard, Research Spike (Phase 4 exfil guardrail)
 
 ## Verification Method
 
@@ -14,7 +14,7 @@ Sources consulted:
 - API deployment doc: https://protectai.github.io/llm-guard/api/deployment/
 - API overview: https://protectai.github.io/llm-guard/api/overview/
 - GitHub repo root: https://github.com/protectai/llm-guard
-- GitHub releases: https://github.com/protectai/llm-guard/releases (empty — no GitHub releases)
+- GitHub releases: https://github.com/protectai/llm-guard/releases (empty, no GitHub releases)
 - Output scanner dir listing: https://github.com/protectai/llm-guard/tree/main/docs/output_scanners
 - Input scanner dir listing: https://github.com/protectai/llm-guard/tree/main/docs/input_scanners
 - Secrets input scanner: https://github.com/protectai/llm-guard/blob/main/docs/input_scanners/secrets.md
@@ -52,7 +52,7 @@ docker run -d -p 8000:8000 -e APP_WORKERS=1 -e AUTH_TOKEN='my-token' \
 - Env vars: `AUTH_TOKEN` (bearer auth), `LOG_LEVEL`, `APP_WORKERS`.
 - App-level options seen: `lazy_load`, `low_cpu_mem_usage`, `scan_prompt_timeout`,
   `scan_output_timeout`. **>=16 GB RAM** recommended for Docker (drops fast if you
-  trim scanners — relevant to the per-vCluster sizing in spec section 5).
+  trim scanners, relevant to the per-vCluster sizing in spec section 5).
 
 `scanners.yml` shape (top-level `input_scanners` / `output_scanners`, each entry is
 `type:` + `params:`):
@@ -70,7 +70,7 @@ output_scanners:
 ```
 Source for YAML shape: scanners.yml structure as summarized from the repo config.
 
-### Output scanners — what actually exists
+### Output scanners, what actually exists
 Authoritative directory listing of `docs/output_scanners/`
 (https://github.com/protectai/llm-guard/tree/main/docs/output_scanners) contains:
 ban_code, ban_competitors, ban_substrings, ban_topics, bias, code, deanonymize,
@@ -88,13 +88,13 @@ url_reachability.
   scanner. See Risks. Confirmed by absence from the output_scanners dir listing and
   presence in the input_scanners dir listing.
 
-### Input scanners — what exists
+### Input scanners, what exists
 `docs/input_scanners/` (https://github.com/protectai/llm-guard/tree/main/docs/input_scanners):
 anonymize, ban_code, ban_competitors, ban_substrings, ban_topics, code,
 emotion_detection, gibberish, invisible_text, language, **prompt_injection**, regex,
 **secrets**, sentiment, token_limit, toxicity.
 
-- **`Secrets` (input):** wraps Yelp's **detect-secrets** library — high-entropy strings
+- **`Secrets` (input):** wraps Yelp's **detect-secrets** library, high-entropy strings
   (Base64 + Hex) plus regex token plugins. **Deterministic** (pattern/entropy, no ML, no
   LLM). Params: `redact_mode` (partial / hide / hash), `detect_secrets_config` (custom
   detect-secrets config). Source:
@@ -110,8 +110,8 @@ emotion_detection, gibberish, invisible_text, language, **prompt_injection**, re
   and `/scan/prompt`, `/scan/output` (validation only, lower latency, no text mutation).
 - Every scanner shares one interface `scan() -> (sanitized_text, is_valid, risk_score)`,
   and the API surfaces the same fields:
-  - **`is_valid`** (bool) — overall pass/fail; API aggregates all scanner results.
-  - **`sanitized_output`** / **`sanitized_prompt`** (string) — text with redactions applied.
+  - **`is_valid`** (bool), overall pass/fail; API aggregates all scanner results.
+  - **`sanitized_output`** / **`sanitized_prompt`** (string), text with redactions applied.
   - **`scores`** (dict, per-scanner risk score 0–1).
 - Gateway logic for the exfil beat: call `/analyze/output` on the agent response;
   if `is_valid == false` → **block**; else forward **`sanitized_output`** (redacted text)
@@ -125,7 +125,7 @@ emotion_detection, gibberish, invisible_text, language, **prompt_injection**, re
 ## Unverified / Could not confirm
 
 - **Exact pinned version.** GitHub Releases page is empty
-  (https://github.com/protectai/llm-guard/releases) — the project does not cut GitHub
+  (https://github.com/protectai/llm-guard/releases), the project does not cut GitHub
   releases. Versioning is via PyPI (`llm-guard`) and Docker image tags. PyPI page failed
   to render on fetch; the live PyPI version was NOT confirmed and must be pinned at build
   by `pip index versions llm-guard` / inspecting Docker Hub tags. Do not hardcode a number.
@@ -154,17 +154,17 @@ not use any LLM-as-judge scanner").
 
 | Scanner | Stage | Mechanism | Deterministic? | Fits the rule? |
 |---|---|---|---|---|
-| Sensitive | output | NER model + regex (PII) | Partly — regex is deterministic; the NER step is a small ML model (not an LLM judge) | YES for the spec's intent (no LLM-as-judge), but it is **not pure pattern-matching** — it loads an NER model |
-| Secrets | **input only** | detect-secrets: entropy + regex | YES, fully deterministic, no ML | YES — but **NOT available as an output scanner** |
-| PromptInjection | input | DeBERTa HF classifier | NO — ML model | N/A (input beat; spec rule targets output) |
+| Sensitive | output | NER model + regex (PII) | Partly, regex is deterministic; the NER step is a small ML model (not an LLM judge) | YES for the spec's intent (no LLM-as-judge), but it is **not pure pattern-matching**, it loads an NER model |
+| Secrets | **input only** | detect-secrets: entropy + regex | YES, fully deterministic, no ML | YES, but **NOT available as an output scanner** |
+| PromptInjection | input | DeBERTa HF classifier | NO, ML model | N/A (input beat; spec rule targets output) |
 | Regex | input + output | pure regex | YES, fully deterministic | YES |
 
 Key nuance for the talk's "deterministic guardrails" thesis: **detect-secrets (the truly
 deterministic, entropy+regex secret detector) is an INPUT scanner**, while on the OUTPUT
 side the closest match is `Sensitive`, which catches credentials/PII via **NER (a small
-ML model) + regex**. So the output guardrail is "rule/NER-based, no LLM-as-judge" — which
+ML model) + regex**. So the output guardrail is "rule/NER-based, no LLM-as-judge", which
 honors the section-4 design rule (the probabilistic actor is the agent, the guard is not an
-LLM) — but it is not 100% pattern-only. If Michael wants the OUTPUT path to be purely
+LLM), but it is not 100% pattern-only. If Michael wants the OUTPUT path to be purely
 deterministic (no model at all), pair the **output `Regex` scanner** (with patterns matching
 the `FAKE-PROD-DB-PASSWORD-sentinel-*` format and common secret shapes) alongside or instead
 of `Sensitive`. That keeps the output guardrail demonstrably model-free for the sentinel
@@ -178,7 +178,7 @@ injection detector is an ML classifier, not a rule engine.
 
 ## Risks for the build
 
-1. **SPEC CORRECTION — "Secrets" is not an output scanner.** Section 5 and Phase 4 both
+1. **SPEC CORRECTION, "Secrets" is not an output scanner.** Section 5 and Phase 4 both
    list `Secrets` as an *output* scanner. It does not exist on the output side. The OUTPUT
    exfil guardrail must use **`Sensitive`** and/or the output **`Regex`** scanner. Update
    `agent/gateway/llm-guard-service.yaml` config and the Phase 4 verification text. This is
@@ -195,7 +195,7 @@ injection detector is an ML classifier, not a rule engine.
    before baking it into the manifest.
 5. **16 GB RAM default footprint.** Each per-vCluster LLM Guard instance can be heavy with
    model-backed scanners (Sensitive NER, and any PromptInjection). Spec section 5 budgets
-   ~1.5–2.5 GB per vCluster total — that will NOT hold if Sensitive's NER model loads per
+   ~1.5–2.5 GB per vCluster total, that will NOT hold if Sensitive's NER model loads per
    instance at default settings. Mitigate: enable `lazy_load` + `low_cpu_mem_usage`, run the
    output guardrail with `Regex` only (model-free) for the sentinel, or run one shared
    LLM Guard service the gateways call rather than one per vCluster. Validate RAM in Phase 2.

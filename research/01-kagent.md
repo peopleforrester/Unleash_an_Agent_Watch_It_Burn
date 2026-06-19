@@ -1,4 +1,4 @@
-# Research Spike 01 — kagent (CNCF Sandbox agent framework)
+# Research Spike 01, kagent (CNCF Sandbox agent framework)
 
 Subject: kagent. Resolves BUILD-SPEC.md section 5 "Agent" + Phase 3 FLAGs.
 
@@ -22,7 +22,7 @@ beside each material claim.
 
 ## Verified
 
-### 1. Current stable Helm chart version (spec said 0.7.7 from April 2026 — it MOVED)
+### 1. Current stable Helm chart version (spec said 0.7.7 from April 2026, it MOVED)
 
 The spec's `0.7.7` is stale. kagent has shipped the entire 0.8.x and 0.9.x lines since.
 
@@ -45,10 +45,10 @@ IMPORTANT API-GROUP DRIFT: kagent renamed fields and bumped the API group around
 manifest written for ≤0.7 (including the spec's 0.7.7 assumption) will use the older
 shape. Write all manifests against `kagent.dev/v1alpha2`.
 
-### 2. AWS Bedrock model-provider config — EXACT field names (verified from CRD)
+### 2. AWS Bedrock model-provider config, EXACT field names (verified from CRD)
 
 Bedrock is a **first-class native provider** in v1alpha2 (it was a feature request, issue
-#183, now shipped — it is NOT an OpenAI-compat shim, despite some tutorials wiring it that
+#183, now shipped, it is NOT an OpenAI-compat shim, despite some tutorials wiring it that
 way via `provider: OpenAI` + a bedrock-runtime baseUrl). Use the native path.
 
 Model wiring is two CRDs: a `ModelConfig` (the provider/credentials) that an `Agent`
@@ -69,18 +69,18 @@ spec:
   bedrock:
     region: us-east-1               # ONLY required sub-field of the bedrock block
     # additionalModelRequestFields: {...}   # optional, forwarded as-is to Converse API
-  # apiKeySecret: bedrock-credentials   # OPTIONAL — see auth note below
+  # apiKeySecret: bedrock-credentials   # OPTIONAL, see auth note below
   # apiKeySecretKey: <key-in-secret>
 ```
 
 Verified exact facts:
 - `spec.provider` enum in **v1alpha2** is: `Anthropic, OpenAI, AzureOpenAI, Ollama, Gemini,
   GeminiVertexAI, AnthropicVertexAI, Bedrock, SAPAICore`. The **v1alpha1** enum stops at
-  `AnthropicVertexAI` — no `Bedrock`. (CRD lines: v1alpha2 provider enum; v1alpha1 enum.)
+  `AnthropicVertexAI`, no `Bedrock`. (CRD lines: v1alpha2 provider enum; v1alpha1 enum.)
 - The Bedrock sub-block is literally `spec.bedrock`, with exactly two properties:
   `region` (string, **required**) and `additionalModelRequestFields` (free-form, for things
   like Claude extended thinking / top_k). There is NO `bedrock.accessKeyId`,
-  `bedrock.profile`, or `bedrock.endpoint` field — credentials are handled outside the
+  `bedrock.profile`, or `bedrock.endpoint` field, credentials are handled outside the
   bedrock block.
 - Credentials / auth (CRD descriptions, verbatim sense):
   - Preferred: omit `apiKeySecret` and let the agent pod use the **AWS credential chain**
@@ -115,7 +115,7 @@ spec:
           name: mcp-website-fetcher  # required: name of the MCPServer/RemoteMCPServer
           kind: MCPServer            # or RemoteMCPServer
           apiGroup: kagent.dev
-          toolNames:                 # ALLOWLIST — only these tools are exposed (maxItems: 50)
+          toolNames:                 # ALLOWLIST, only these tools are exposed (maxItems: 50)
             - fetch
           requireApproval:           # PER-TOOL human-approval gate (maxItems: 50)
             - fetch                  # each entry MUST also appear in toolNames
@@ -124,16 +124,16 @@ spec:
 ```
 
 **Two distinct authorization mechanisms exist, both per-agent, both verified in the CRD:**
-1. `toolNames` — an explicit allowlist. If set, only the named tools from that MCP server
+1. `toolNames`, an explicit allowlist. If set, only the named tools from that MCP server
    are made available to the agent, even if the server exposes more. (Default-deny is NOT
    automatic: if `toolNames` is OMITTED, kagent exposes ALL tools the server advertises.
-   This is the excessive-agency footgun — for the workshop, the "bad" config is leaving
+   This is the excessive-agency footgun, for the workshop, the "bad" config is leaving
    `toolNames` off; the "good" config is a tight allowlist.)
-2. `requireApproval` — a per-tool human-in-the-loop gate. Listed tools pause execution and
+2. `requireApproval`, a per-tool human-in-the-loop gate. Listed tools pause execution and
    prompt the user before the call runs. A CEL validation enforces every `requireApproval`
    entry also be in `toolNames`.
    NOTE: `requireApproval` appears in the v1alpha2 CRD shipped in 0.9.7. It is newer than
-   the spec's 0.7.7 assumption — verify it actually enforces at runtime in your build
+   the spec's 0.7.7 assumption, verify it actually enforces at runtime in your build
    (CRD presence ≠ controller wiring; see Risks).
 
 Header/auth propagation to MCP tools is controlled by `allowedHeaders`; Authorization
@@ -185,7 +185,7 @@ live CRD `kagent.dev_agents.yaml` @ 0.9.7 (deployment.serviceAccountName/service
 - **Exact model ID availability.** `us.anthropic.claude-sonnet-4-20250514-v1:0` is the doc
   example; the actual enabled Bedrock model/region for Michael's AWS account must be
   confirmed at build (model access must be granted in the Bedrock console).
-- **agentgateway integration version compatibility with kagent 0.9.7** — out of scope for
+- **agentgateway integration version compatibility with kagent 0.9.7**, out of scope for
   this spike (separate FLAG in spec §5/§Phase 4), but note 0.9.7 is much newer than the
   spec baseline, so re-verify the gateway↔agent serving contract.
 
@@ -213,16 +213,16 @@ kagent_tools_subchart  = 0.2.1
    Every kagent manifest in the spec's repo layout (`agent/kagent-agent.yaml`) must be
    authored against `v1alpha2`, not copied from any pre-0.8 tutorial. Pin 0.9.7 hard.
 
-2. **Bedrock is v1alpha2-only and field names differ from every OpenAI tutorial (HIGH —
+2. **Bedrock is v1alpha2-only and field names differ from every OpenAI tutorial (HIGH , 
    this was the spec's explicit FLAG).** The real path is `spec.provider: Bedrock` +
    `spec.bedrock.region`, credentials via AWS chain (no key) or `spec.apiKeySecret`. Do NOT
    use the `provider: OpenAI` + bedrock-runtime baseUrl shim that the DEV.to/Medium tutorials
-   show — it is a compatibility hack, not the native provider. Bedrock model access must be
+   show, it is a compatibility hack, not the native provider. Bedrock model access must be
    granted in the AWS console for the chosen region or the agent will fail opaquely.
 
 3. **Excessive-agency default is the footgun, which is good for the beat but must be set
    deliberately (MEDIUM).** Omitting `toolNames` exposes ALL of an MCP server's tools to the
-   agent — that IS the "bad MCP server" demo. The fix (tight `toolNames` allowlist, optionally
+   agent, that IS the "bad MCP server" demo. The fix (tight `toolNames` allowlist, optionally
    `requireApproval`) is per-agent and verified in the 0.9.7 CRD. Build both states explicitly.
 
 4. **`requireApproval` runtime not yet proven (MEDIUM).** It is in the CRD but may not be

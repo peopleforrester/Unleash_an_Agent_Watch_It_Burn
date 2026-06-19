@@ -11,7 +11,7 @@ shape (`cluster.yaml`), differentiated by which bootstrap profile is applied aft
 | **Attendee Cluster 3** | **N + reserve** | Full Cluster-3 stack, delivered by the ApplicationSet cluster generator | Each attendee's own; a few held in reserve. |
 
 ## Why the minimal floor on Cluster 1
-Even Cluster 1 carries `minimal-floor` so it can't be killed by one trivial prompt — it should burn
+Even Cluster 1 carries `minimal-floor` so it can't be killed by one trivial prompt, it should burn
 *gradually* over the segment (delete demo workloads = visible burn) while the control plane, ArgoCD,
 and the agent itself survive long enough to keep the spectacle running. The same floor protects the
 instructor follow-along clusters from accidental destruction.
@@ -25,12 +25,12 @@ done; wait
 # then per role, apply the matching bootstrap profile + default gp3 StorageClass (infra/gp3-storageclass.yaml)
 ```
 Re-provision is ~15 min, so the 3× Cluster 1 are warm before doors open; when one dies the facilitator
-switches to the next URL. Watch AWS EKS-cluster and EC2 vCPU quotas — the fleet (3+3+2 + N attendee)
+switches to the next URL. Watch AWS EKS-cluster and EC2 vCPU quotas, the fleet (3+3+2 + N attendee)
 can hit them. Tear the whole fleet down with `teardown/teardown.sh`.
 
 ## Sizing note
 Cluster 1/2 are light (t3.large ×2). Instructor/attendee Cluster 3 runs the full stack incl. LLM Guard
-(Regex-only) — t3.large works in test; bump to t3.xlarge if Sensitive NER or heavier guards are added.
+(Regex-only), t3.large works in test; bump to t3.xlarge if Sensitive NER or heavier guards are added.
 
 ## Deploy per role (which root app to apply)
 

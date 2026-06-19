@@ -56,6 +56,6 @@ GitHub OAuth for user login. See [ADR-007](../docs/adr/ADR-007-auth-strategy.md)
    [Backstage descriptor format](https://backstage.io/docs/features/software-catalog/descriptor-format)
 2. Reference it from `catalog/catalog-info.yaml`
 3. Update the ConfigMap in `k8s/catalog-configmap.yaml`
-4. Commit and push — ArgoCD deploys, Backstage picks up on next refresh
+4. Commit and push, ArgoCD deploys, Backstage picks up on next refresh
 
 See [ADR-006](../docs/adr/ADR-006-developer-portal.md) for Backstage selection rationale.

@@ -1,7 +1,7 @@
 <!-- ABOUTME: Grounded research spike on OTel GenAI observability for the Watch-It-Burn workshop. -->
 <!-- ABOUTME: Resolves semconv status, content-capture flag, backend choice, collector config, and the trace re-leak trap. -->
 
-# OTel GenAI Observability — Research Spike
+# OTel GenAI Observability, Research Spike
 
 ## Verification Method
 
@@ -11,7 +11,7 @@ docs site into a dedicated repo** (`open-telemetry/semantic-conventions-genai`);
 `opentelemetry.io/docs/specs/semconv/gen-ai/*` pages now redirect/forward there. Raw spec markdown
 from that repo was read directly. Backend and kagent claims are from project docs.
 
-Do not trust training-data attribute names — verified live against the repo's raw `.md` files.
+Do not trust training-data attribute names, verified live against the repo's raw `.md` files.
 
 ---
 
@@ -26,7 +26,7 @@ Do not trust training-data attribute names — verified live against the repo's 
   Sources: raw `gen-ai-spans.md` and `gen-ai-agent-spans.md` from
   `github.com/open-telemetry/semantic-conventions-genai` (main branch);
   https://opentelemetry.io/blog/2026/genai-observability/
-- Some secondary write-ups claim client spans "exited experimental in early 2026" — **this is NOT
+- Some secondary write-ups claim client spans "exited experimental in early 2026", **this is NOT
   confirmed by the spec itself**, which still badges client/inference span attributes as Development.
   Treat the "stable" claim as marketing drift. See Unverified below.
   (claim source: https://www.digitalapplied.com/blog/agent-observability-platforms-langsmith-langfuse-arize-2026)
@@ -43,7 +43,7 @@ Do not trust training-data attribute names — verified live against the repo's 
   `gen_ai.operation.name` = `chat`, `embeddings`, etc.
 - Agent invocation: `invoke_agent` (CLIENT for remote agent service, INTERNAL for in-process).
 - Agent creation: `create_agent`. Multi-agent: `invoke_workflow`.
-- **Agent reasoning step: `plan`** — "an agent planning or task decomposition phase".
+- **Agent reasoning step: `plan`**, "an agent planning or task decomposition phase".
 - **Tool call: `execute_tool {gen_ai.tool.name}`** (e.g. `execute_tool Flights`), span kind INTERNAL.
   This is the span the workshop narrates for rogue MCP tool calls.
 
@@ -65,10 +65,10 @@ Do not trust training-data attribute names — verified live against the repo's 
 So tool calls ARE first-class: `execute_tool <name>` span + `gen_ai.tool.name`/`.call.id` is exactly
 what shows "the agent called this tool" in a trace waterfall. This is the connective-tissue lens.
 
-### 3. Content capture — the re-leak vector (CRITICAL)
+### 3. Content capture, the re-leak vector (CRITICAL)
 
 - **Prompts/responses/tool arguments are NOT captured by default.** The spec says instrumentations
-  "SHOULD NOT capture them by default" — an intentional privacy decision because they "can contain
+  "SHOULD NOT capture them by default", an intentional privacy decision because they "can contain
   sensitive data". (source: raw `gen-ai-spans.md`)
 - When opted in, content lands as **structured span attributes**:
   `gen_ai.input.messages` (chat history), `gen_ai.output.messages` (model responses),
@@ -100,7 +100,7 @@ what shows "the agent called this tool" in a trace waterfall. This is the connec
 - kagent docs demonstrate filtering by an **`agent_run [<agent>]`** operation (e.g.
   `agent_run [k8s-agent]`) in the backend UI. The doc shows Jaeger all-in-one as the example backend.
 - The kagent doc does **not** explicitly state GenAI-semconv compliance or whether it captures
-  prompt/response content — see Unverified. Treat content capture from kagent as a thing to test, not
+  prompt/response content, see Unverified. Treat content capture from kagent as a thing to test, not
   assume.
 - **agentgateway** (in front of the agent per the build) emits OTLP traces; its own observability stack
   guide wires an **OTLP receiver (gRPC 4317 / HTTP 4318) → Grafana Tempo** with three collectors
@@ -144,7 +144,7 @@ service:
 - Whether agentgateway tags LLM/tool traffic with `gen_ai.*` (its OTel-stack page is generic proxy
   tracing; LLM-specific instrumentation is documented elsewhere or in source). Verify at build.
 - No public timeline for GenAI semconv stabilization. (source: 2026 semconv roadmap is open for
-  proposals; nothing committed — https://github.com/open-telemetry/semantic-conventions/releases)
+  proposals; nothing committed, https://github.com/open-telemetry/semantic-conventions/releases)
 
 ---
 
@@ -160,7 +160,7 @@ inside an already-Grafana-centric IDP):
    agentgateway's own guide already targets Tempo+Grafana. One backend, one UI surface, zero new auth
    for attendees. A trace waterfall in Grafana shows `invoke_agent → plan → execute_tool <toolname>`
    nesting, which is exactly the rogue-MCP-call narration. Trade-off: Tempo gives no LLM-specific UI
-   (no prompt diff, no eval views) — fine here, the workshop narrates spans, it doesn't eval models.
+   (no prompt diff, no eval views), fine here, the workshop narrates spans, it doesn't eval models.
    (source: https://www.spheron.network/blog/llm-observability-gpu-cloud-langfuse-arize-phoenix-helicone/)
 2. **Phoenix as optional GenAI lens.** If you want the "look how readable agent tool calls are"
    moment, Arize Phoenix is OTel-native, self-hostable, and renders agent/tool spans with a purpose
@@ -170,10 +170,10 @@ inside an already-Grafana-centric IDP):
 
 **Decision:** default to **Tempo + Grafana** (no new dependency, matches §5 and agentgateway).
 Add **Phoenix** only if §10 open-decision #6 (the 2-hour advanced beat) is built in and you want a
-GenAI-styled view. Do NOT pull in Langfuse — its storage footprint is unjustified for N vClusters.
+GenAI-styled view. Do NOT pull in Langfuse, its storage footprint is unjustified for N vClusters.
 
 Collector: single OTel Collector on the host stack (already specced), OTLP receiver 4317/4318,
-batch + (critically) a **redaction processor by default** — see trap below — exporting to Tempo.
+batch + (critically) a **redaction processor by default**, see trap below, exporting to Tempo.
 
 ---
 
@@ -183,13 +183,13 @@ batch + (critically) a **redaction processor by default** — see trap below —
 output guardrail (agentgateway → LLM Guard) inspects the agent's *response to the user*. But if OTel
 content capture is ON, the same secret rides into the **trace** via `gen_ai.input.messages` /
 `gen_ai.output.messages` / `gen_ai.system_instructions` (and into tool args on the `execute_tool`
-span). Observability becomes a **second, unguarded exfil channel** — the response guardrail never sees
+span). Observability becomes a **second, unguarded exfil channel**, the response guardrail never sees
 the span pipeline. Anyone with Grafana/Tempo read access reads the planted secret. This is the §4 trap
 made concrete: the thing you added for safety leaks the thing you were protecting.
 
 **Why it's a clean teaching beat:** the default is your friend. Content capture is `false` by default
 (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=false`). So the trap requires *deliberately*
-turning it on — which is the demo. You flip one flag, re-run attack 4, and the sentinel appears in the
+turning it on, which is the demo. You flip one flag, re-run attack 4, and the sentinel appears in the
 span attributes in Grafana even with the output guardrail enabled. The lesson: guardrails must cover
 *every* sink, not just the user-facing response.
 
@@ -201,7 +201,7 @@ span attributes in Grafana even with the output guardrail enabled. The lesson: g
    leaks nothing real.
 3. **Belt-and-suspenders redaction in the Collector** even when capture is on for the beat: add an
    `attributes`/`redaction` or `transform` processor that masks `gen_ai.input.messages`,
-   `gen_ai.output.messages`, `gen_ai.system_instructions` (regex on the sentinel prefix) — then the beat
+   `gen_ai.output.messages`, `gen_ai.system_instructions` (regex on the sentinel prefix), then the beat
    can show "capture on, secret in span" *then* "redaction processor on, secret masked in span" as the
    collector-side mitigation, mirroring the response-side guardrail. This makes the lesson symmetric:
    inspect/redact at the response sink AND the telemetry sink.
@@ -222,7 +222,7 @@ span attributes in Grafana even with the output guardrail enabled. The lesson: g
    instrumentation to surface tool calls.
 3. **Per-instrumentation flag names differ.** The content-capture toggle is not one universal env var.
    Confirm the exact flag for whatever actually emits content (kagent vs agentgateway vs SDK) before
-   relying on "default false" — a wrong assumption here either silently leaks (trap fires early) or the
+   relying on "default false", a wrong assumption here either silently leaks (trap fires early) or the
    beat won't fire at all.
 4. **Trace store is an access-control surface.** Whoever can reach Grafana/Tempo can read whatever is in
    spans. Even with fake secrets, scope Grafana access for attendees and keep content capture off on the
