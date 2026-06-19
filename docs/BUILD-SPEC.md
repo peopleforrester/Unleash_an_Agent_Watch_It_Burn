@@ -38,7 +38,8 @@ repo, a governance map, and a self-assessment of the failure modes their own pla
 "Done" means all of:
 
 - A facilitator **burn-cluster fleet** exists: **3× Cluster 1** (no-guardrails) + **3× Cluster 2**
-  (CNCF-only) + **2× instructor Cluster 3** (follow-along), plus a **per-attendee Cluster 3** (own
+  (CNCF-only) + **3× instructor Cluster 3** (one per model tier for the side-by-side comparison;
+  one doubles as the follow-along), plus a **per-attendee Cluster 3** (own
   cluster) with a few in reserve. Even Cluster 1 has a **minimal floor** so it can't be tanked in a
   single trivial prompt (it should burn over the demo, not instantly), and so follow-along attendees
   can't accidentally nuke the instructor clusters.
@@ -97,22 +98,27 @@ goes black, someone won", with sanitization to keep it within code of conduct.
 
 Model-tier chaos-engineering comparison: the model behind the agent is an INDEPENDENT VARIABLE,
 not a fixed pick. Run the same scoped agent (same jail, same system prompt) on escalating Claude
-tiers, Haiku 4.5 (cheap/fast default) then Sonnet 4.6 then Opus 4.8, and show how differently each
-tier tries to escape its own jail. The live cost counter is the payoff: a frontier model burns more
-dollars per escape attempt, which is the wasted-token-DoS thesis in one image. Fable 5 is a wildcard
-tier, conditional on its Bedrock availability returning. Tier configs live in
-`gitops/ai-layer/resources.yaml` (Haiku is the live default; the others are commented, verify the
-inference-profile id then uncomment). Swap a tier by repointing the Agent's `modelConfig` (commit +
-resync, or run a different tier per instructor Cluster 3 in parallel), never a live kubectl patch
-(ArgoCD selfHeal reverts it). Gating, owned by the provisioning project: each model needs Bedrock
-access + the Anthropic use-case form; Opus is the most expensive, which is a feature here, not a bug.
+tiers and show how differently each one tries to escape its own jail. The chosen staging is
+SIDE BY SIDE on parallel instructor clusters: one instructor Cluster 3 per tier (Haiku 4.5,
+Sonnet 4.6, Opus 4.8), each pinned to its tier, shown on adjacent screens at the same time so the
+room watches the escalation live ("Haiku barely rattles the bars; Opus is picking the lock"). The
+live cost counter is the payoff: the frontier-tier cluster's counter climbs faster, which is the
+wasted-token-DoS thesis in one image. Fable 5 is a wildcard fourth cluster, conditional on its
+Bedrock availability returning. Each tier cluster pins its model by the Agent's `modelConfig`
+reference plus that tier's live ModelConfig (`gitops/ai-layer/resources.yaml` ships Haiku as the
+default; the Sonnet/Opus configs are commented, verify the inference-profile id then uncomment).
+The per-cluster tier assignment is injected by the provisioning ApplicationSet, never a live
+kubectl patch (ArgoCD selfHeal reverts it). Gating, owned by the provisioning project: each model
+needs Bedrock access + the Anthropic use-case form; the parallel frontier clusters cost more while
+running, which is a feature here (it IS the cost story), not a bug.
 
 ---
 
 ## 3. Hard constraints (non-negotiable)
 
 - **Isolation via separate EKS clusters.** Per-attendee Cluster 3 = own EKS cluster (+ a few reserve).
-  Facilitator fleet: 3× Cluster 1, 3× Cluster 2, 2× instructor Cluster 3. No vCluster, no namespace-only
+  Facilitator fleet: 3× Cluster 1, 3× Cluster 2, 3× instructor Cluster 3 (one per model tier, run
+  side by side). No vCluster, no namespace-only
   tenancy (rationale unchanged: real privilege-escalation + Falco + admission webhooks + CRDs are cleaner
   on real clusters).
 - **A minimal restriction floor on every cluster** so none can be tanked by a single trivial prompt , 
@@ -280,11 +286,13 @@ Each phase: verify block, stop on first failure (carry the rev3 verify blocks fo
 ## 10. Decisions
 
 Resolved 2026-06-17 (Michael):
-- **Model:** Claude on Bedrock (haiku-4-5 verified working; confirm final Claude tier).
+- **Model:** Claude on Bedrock. Tier is a comparison variable, not a single pick: Haiku 4.5 (verified
+  working) is the default; Sonnet 4.6 and Opus 4.8 run on parallel instructor clusters side by side
+  (§2 model-tier comparison); Fable 5 conditional on Bedrock availability.
 - **Guardrail impl:** kagent / CNCF-native preferred, NOT a bespoke vLLM→Bedrock classifier.
 - **Backstage:** nice-to-have (include if time/feasibility allow).
 - **External red-team:** No.
-- **Fleet:** 3× Cluster 1, 3× Cluster 2, 2× instructor Cluster 3, per-attendee Cluster 3 + a few reserve.
+- **Fleet:** 3× Cluster 1, 3× Cluster 2, 3× instructor Cluster 3 (one per model tier, side by side), per-attendee Cluster 3 + a few reserve.
 - **Minimal restriction floor** on all clusters (no one-shot trivial kill; protect follow-along clusters).
 
 Still open:
