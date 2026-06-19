@@ -1,4 +1,4 @@
-# AI Engineer World's Fair 2026 — Accepted Talk Abstract
+# AI Engineer World's Fair 2026, Accepted Talk Abstract
 
 Frozen reference. This file captures the accepted abstract as submitted (Version 1, solo) and a co-speaker variant adding Whitney Lee (Version 2). The talk content, title, description, and speaker pitch are unchanged between versions. Only the speaker attribution differs.
 
@@ -8,7 +8,7 @@ This is the canonical "Proposed Amended Description" the build must make literal
 
 ---
 
-## Version 1 — As Submitted (Solo, Frozen)
+## Version 1, As Submitted (Solo, Frozen)
 
 - **Event:** AI Engineer World's Fair 2026, San Francisco, Moscone West, Jun 29 – Jul 2
 - **Speaker:** Michael Forrester (Accenture), solo
@@ -40,7 +40,7 @@ I gave an AI coding agent full Kubernetes cluster access. It deleted my cluster.
 
 ---
 
-## Version 2 — With Whitney Lee as Co-Speaker
+## Version 2, With Whitney Lee as Co-Speaker
 
 - **Event:** AI Engineer World's Fair 2026, San Francisco, Moscone West, Jun 29 – Jul 2
 - **Speakers:** Michael Forrester (Accenture) with co-speaker Whitney Lee
@@ -75,6 +75,6 @@ I gave an AI coding agent full Kubernetes cluster access. It deleted my cluster.
 ## Reconciliation notes vs the current build (BUILD-SPEC rev3)
 
 - The abstract lists the four attacker objectives: **deploy a non-compliant workload, escalate privileges, modify infrastructure outside Git, exfiltrate data through an agent response.** The rev3 build maps these as: the first three are the aggregate **Beat 1 (CNCF wall)**; the exfil is **Beat 2 (output sanitization)**. The bad-MCP / excessive-agency beat (Beat 3) is an extension beyond the literal abstract text and must not contradict it.
-- The abstract names **ArgoCD, Kyverno, Falco, Prometheus** as the pre-built stack — all present in the build. Observability is the narration lens; the abstract's "Prometheus for observability" is satisfied by the kube-prometheus-stack + trace backend.
-- The abstract's promised takeaways — **a concrete governance map** and **the exact list of failure modes your platform isn't covering** — are the `facilitation/governance-map.md` and `facilitation/self-assessment.md` artifacts.
+- The abstract names **ArgoCD, Kyverno, Falco, Prometheus** as the pre-built stack, all present in the build. Observability is the narration lens; the abstract's "Prometheus for observability" is satisfied by the kube-prometheus-stack + trace backend.
+- The abstract's promised takeaways, **a concrete governance map** and **the exact list of failure modes your platform isn't covering**, are the `facilitation/governance-map.md` and `facilitation/self-assessment.md` artifacts.
 - The "Eight Guardrails Framework" in the speaker pitch is Michael's framing and is NOT a public/proprietary term to expose in attendee-facing copy beyond the pitch itself (see BUILD-SPEC §11 banned-terms note).
