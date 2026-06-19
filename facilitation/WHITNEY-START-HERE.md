@@ -39,9 +39,10 @@ experience. The run-of-show marks every hand-off.
 ## What is attached in this folder
 
 - Watch It Burn, Abstract: the accepted talk abstract (the source of truth for what we promised).
-- Watch It Burn, Run of Show: the minute-by-minute 2-hour runbook with hand-offs and the toggles.
+- Watch It Burn, Run of Show (demo flow): the minute-by-minute 2-hour runbook with hand-offs and the toggles. This is the demo flow.
 - Watch It Burn, Slide Outline: the deck outline, slide by slide, with speaker cues.
 - Watch It Burn, Cold Open Script: the word-for-word opening for the first three minutes (the hook).
+- Watch It Burn, Build Spec (technical reference): the full platform build spec. Background, not required reading; it explains how the platform is constructed if you want the detail.
 
 ## A few things worth your input
 
