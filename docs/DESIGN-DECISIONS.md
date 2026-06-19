@@ -45,7 +45,8 @@ A rev4 of BUILD-SPEC should fold these in.
 - **Guardrail impl:** kagent / CNCF-native preferred, NOT a bespoke vLLM→Bedrock classifier.
 - **Backstage:** nice-to-have (include if feasible).
 - **External red-team:** No.
-- **Fleet counts:** 3× Cluster 1, 3× Cluster 2, 2× instructor Cluster 3, per-attendee Cluster 3 + a few
+- **Fleet counts:** 3× Cluster 1, 3× Cluster 2, 3× instructor Cluster 3 (one per model tier, run side
+  by side for the chaos-engineering comparison), per-attendee Cluster 3 + a few
   reserve. (Was "~10 disposable", now 3× Cluster 1, rotated as they burn.)
 - **Minimal restriction floor** on every cluster: no one-shot trivial kill (Cluster 1 burns gradually),
   and follow-along attendees can't accidentally nuke the instructor clusters.
