@@ -17,14 +17,18 @@ is updated to match. The evolved design and decision log behind rev4 is `docs/DE
 
 ## 0. How to run this spec
 
-Execution environment: netcup VPS over autossh + tmux; `kubectl`/`eksctl`/`helm`/`aws`/`docker` and
-AWS creds live on the server (account 515966504359, us-west-2). Laptop is a thin client.
+This repo is the source of truth and is self-contained: bring your own AWS account and stand the
+platform up from the manifests here. Nothing assumes a specific account, region, or operator machine.
+On whatever host you drive from, you need `kubectl`, `eksctl`, `helm`, `aws`, and `docker`. AWS
+credentials come from your own environment (profile, SSO, or instance role); no account id or
+credential is stored in this repo. Region is yours to choose; the example cluster configs default to
+one region you can override.
 
-The test cluster was torn down to $0 after rev3 verification; everything is reproducible from this
-repo (`eksctl create cluster -f infra/test-cluster/cluster.yaml`, then bootstrap + the verified steps
-in `PROJECT_STATE.md`). Idempotency rule unchanged: every step safe to re-run (`helm upgrade
---install`, `kubectl apply`, ArgoCD sync). Build-spike rule unchanged: facts confirmed against docs
-but not yet a live cluster are tagged **[SPIKE]**; nothing live ships on an unproven assumption.
+Everything is reproducible from the repo: `eksctl create cluster -f infra/test-cluster/cluster.yaml`,
+then the bootstrap + verified steps in `PROJECT_STATE.md`. Idempotency rule: every step is safe to
+re-run (`helm upgrade --install`, `kubectl apply`, ArgoCD sync). Build-spike rule: facts confirmed
+against docs but not yet on a live cluster are tagged **[SPIKE]**; nothing live ships on an unproven
+assumption. Teardown returns the account to $0 (`teardown/teardown.sh`).
 
 ---
 
