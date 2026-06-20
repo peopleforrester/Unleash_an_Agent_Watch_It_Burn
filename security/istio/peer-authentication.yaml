@@ -1,0 +1,24 @@
+# ABOUTME: Istio STRICT mTLS for the agent + apps namespaces. The workload certs Istio issues ARE
+# ABOUTME: SPIFFE identities (spiffe://cluster.local/ns/<ns>/sa/<sa>), so this is the SPIFFE identity layer.
+#
+# verify-at-build: the agent + apps namespaces must be enrolled in ambient
+#   (label `istio.io/dataplane-mode=ambient`); add that label to those Namespace objects on the live
+#   cluster (or in gitops/namespaces). STRICT requires every peer in the namespace to be in the mesh.
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: strict-mtls
+  namespace: agent
+spec:
+  mtls:
+    mode: STRICT
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: strict-mtls
+  namespace: apps
+spec:
+  mtls:
+    mode: STRICT

@@ -34,6 +34,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | Supply chain | Kyverno verifyImages (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | `verifyImages` keyless attestor (Audit) [verify-at-build] |
 | Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
+| Mesh | Istio 1.30.1 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
 | Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs |
 | Identity | scoped RBAC + IRSA | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; IRSA for Bedrock |
 | Agent | kagent 0.9.7 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
@@ -75,6 +76,10 @@ blocks the agent from harming the platform itself, regardless of the AI guardrai
   `tools[].mcpServer.toolNames`). Our MCP restriction is **kagent toolNames + agentgateway authz**.
 - **"Can we configure these at the platform level?"** Yes, and that is the thesis: the guardrails live
   at the cluster abstraction layer, so they apply to every workload, not per-app.
+- **SPIFFE/SPIRE?** We get workload identity from **Istio**: its mTLS certificates ARE SPIFFE
+  identities (`spiffe://cluster.local/ns/<ns>/sa/<sa>`), so adding Istio (ambient, STRICT mTLS)
+  delivers the SPIFFE identity layer. A standalone SPIRE deployment stays narrated (it is the same
+  identity model, more than we need live for a 2-hour workshop).
 - **"What is the trace re-leak trap?"** Output sanitization scrubs the sentinel from the reply, but if
   OTel content-capture is on, the sentinel lands in the trace span. Observability becomes a second,
   unguarded exfil sink; the fix is symmetric collector-side redaction.
