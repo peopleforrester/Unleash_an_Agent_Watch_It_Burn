@@ -1,0 +1,29 @@
+# ABOUTME: The villain Deployment the agent is induced to apply (Beat 2). On Cluster 1 it comes up; on
+# ABOUTME: Cluster 2 the Kyverno registry allowlist refuses the image (docker.io/<user>/* is not allowed).
+# verify-at-build: replace DOCKERHUB_USER with the public account the villain images were pushed to.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: villain-app
+  namespace: apps
+  labels: { app: villain-app, workshop.beat: "02-villain-app" }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: villain-app } }
+  template:
+    metadata: { labels: { app: villain-app } }
+    spec:
+      containers:
+        - name: villain
+          image: docker.io/DOCKERHUB_USER/villain-joker:latest # public user namespace -> C2 refuses
+          ports: [{ containerPort: 80 }]
+          resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: villain-app
+  namespace: apps
+spec:
+  selector: { app: villain-app }
+  ports: [{ port: 80, targetPort: 80 }]
