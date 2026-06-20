@@ -20,6 +20,10 @@ spec:
         config:
           prometheus:
             extralabels: ""
+          # Forward CRITICAL events (the fork bomb) to Falco Talon for auto-remediation (kill the pod).
+          talon:
+            address: http://falco-talon:2803
+            minimumpriority: critical
         webui:
           enabled: false
         podAnnotations:
