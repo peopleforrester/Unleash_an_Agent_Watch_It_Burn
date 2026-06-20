@@ -68,6 +68,38 @@ From her Google Doc comments (Michael handles the substantive replies; these are
   pinned 1.30.1); its mTLS certs are SPIFFE identities, so it also delivers the SPIFFE identity layer
   (standalone SPIRE stays narrated per the research spike).
 
+## Design evolution + decisions (2026-06-20, from the Drive docs 8/9)
+
+The Drive docs (Claude.ai-authored) sharpened the design. Doc 8 "Challenges (games) v3" + Doc 9
+"Control rationale" are now the target. Clusters 1+2 run **three canonical attacks** (Whitney's
+structure), each succeeding on C1 and blocked on C2 by a DIFFERENT control:
+
+1. **Exfiltrate customer data** (basketball): blocked at C2 by **NetworkPolicy default-deny egress**
+   (S3 path). The reply-channel leak is NOT blocked here, that is the C3 output-sanitization beat.
+2. **Deploy a villain app**: blocked at C2 by **Kyverno registry-allowlist** (Enforce); optional
+   cosign/Harbor signing upgrade.
+3. **Fork bomb** (kill the cluster): the REAL block is a **per-pod PID limit** (kubelet podPidsLimit);
+   **Falco + Falcosidekick + Falco Talon** are the detect-and-respond beat on top (reactive).
+
+Decisions (Michael, 2026-06-20):
+- **Stay on VPC-CNI + Istio ambient.** Not switching to Cilium (Istio already covers SPIFFE identity +
+  mTLS; Cilium would only add L7/DNS egress we do not need). Told Whitney via a comment reply.
+- **Add cosign + Harbor image signing** (the verifyImages policy exists in Audit; wire Harbor).
+- **Attack 1 gets an optional "sniff the stream" variant** so Istio mTLS earns its own beat, if time allows.
+- **Exfil split confirmed:** S3 version at C2 (NetworkPolicy), reply-leak at C3 (output sanitization).
+- **Datadog primary** (done); **Namecheap demo URLs** on agenticburn.com (tool built, write deferred).
+
+### Tier-2 build queue (to match docs 8/9; "build the rest, make it flow, then wire it up")
+
+- [ ] PID limit: kubelet `podPidsLimit` on the node groups (the real fork-bomb block). verify-at-build AMI path.
+- [ ] Falco fork-bomb rule (process-storm) + **Falco Talon** app + terminate-pod response action.
+- [ ] NetworkPolicy default-deny **egress allowlist** (Bedrock, DNS, in-cluster) = the exfil block.
+- [ ] Kyverno **registry-allowlist in Enforce** + **Harbor** + cosign verifyImages (villain-app block).
+- [ ] Fake **customer-data streaming app + consumer** (the exfil target).
+- [ ] **Villain images** per attendee (Joker/Burns/Gargamel) on a public registry.
+- [ ] Reconcile the edited Run of Show + Build Spec Docs back into the repo .md (Docs lead the repo).
+- [ ] Drive: docs updated IN PLACE (Drive API re-import), older versions archived, never delete+reupload.
+
 ## Build punch-list (priority order, each with its render bar)
 
 Repo-buildable here; live provisioning/verification is Michael's separate project.
