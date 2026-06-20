@@ -29,15 +29,17 @@ problem, and you will see which guardrail stops the spend rather than paying for
 
 The workshop runs two hours (Day 1, 2:20–4:20pm, Track 5) across three clusters.
 
-1. **No guardrails.** We point an agent at an unprotected cluster and let the room attack it. It
-   comes apart within a few minutes, and a counter on screen shows the cloud bill rising the whole
-   time. We keep spares, because these do not survive.
-2. **CNCF guardrails.** The same attack runs against a cluster with the platform controls in place.
-   The damage is blocked, but the bill still moved, because the request reached the model before
-   admission rejected it.
-3. **Your own cluster.** You drive your own agent and switch on the agent-specific guardrails one at
-   a time: output filtering, then input filtering, then tool restriction. You watch each one change
-   the agent's behavior on the dashboard.
+Clusters 1 and 2 run the same three attacks: exfiltrate customer data, deploy a villain app, and
+fork-bomb the cluster.
+
+1. **No guardrails.** All three attacks succeed. A counter on screen shows the cloud bill rising, and
+   the fork bomb takes the cluster down. We keep spares, because these do not survive.
+2. **CNCF guardrails.** The same three attacks run against a cluster with the platform controls in
+   place. Each is blocked by a different control, NetworkPolicy egress, a Kyverno registry allowlist,
+   and a per-pod PID limit, but the bill still moved, because the request reached the model first.
+3. **Your own cluster.** You drive your own agent, switch on the agent-specific guardrails (output
+   filtering, input filtering, tool restriction), and play the AI-layer challenges. You watch each
+   control change the agent's behavior on the dashboard.
 
 You work in a browser. There is a chat window to your agent and a terminal to your cluster. No local
 install is required.
@@ -56,13 +58,14 @@ Everything here is CNCF or open source. Argo CD delivers the whole platform to e
 single app-of-apps.
 
 - GitOps: Argo CD
-- Policy: Kyverno
-- Runtime security: Falco and Falcosidekick
+- Policy: Kyverno (incl. registry allowlist, PID limit, cosign image signing)
+- Runtime security: Falco, Falcosidekick, and Falco Talon (detect and respond)
+- Service mesh and identity: Istio ambient (mTLS, SPIFFE workload identity)
 - Secrets and certificates: External Secrets Operator, cert-manager
-- Observability: Prometheus, Grafana, Tempo, Loki, OpenTelemetry, Grafana Alloy
+- Observability: Datadog (primary), with Prometheus, Grafana, Tempo, Loki, OpenTelemetry as the fallback
 - Developer portal: Backstage
 - Agent: kagent (a CNCF project) on Amazon Bedrock
-- AI guardrails: LLM Guard
+- AI guardrails: LLM Guard, agentgateway (MCP authorization)
 
 Pinned versions are in [`VERSIONS.lock`](VERSIONS.lock).
 
@@ -75,10 +78,11 @@ Pinned versions are in [`VERSIONS.lock`](VERSIONS.lock).
 | `policies/kyverno/` | the admission policies |
 | `security/`, `observability-idp/`, `backstage/` | the platform foundation |
 | `agent/`, `beats/` | guardrail sources and the attack content |
-| `infra/` | cluster provisioning and bootstrap scripts |
-| `verify/` | the verification scripts |
-| `facilitation/` | governance map, self-assessment, run-of-show |
-| `docs/` | the build spec, the abstract, and the design decisions |
+| `games/` | the attendee challenges (exfil basketball, the Cluster-3 games) |
+| `infra/` | cluster provisioning, bootstrap, and demo DNS (agenticburn.com) |
+| `verify/` | the verification scripts + the offline render-gate test suite |
+| `facilitation/` | run-of-show, governance map, self-assessment, the question tracker |
+| `docs/` | build spec, build plan, abstract, design decisions, and the stack walkthrough |
 
 ## Safety
 
