@@ -260,3 +260,35 @@ spec:
   timeout: 30s
   sseReadTimeout: 5m0s
   terminateOnClose: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chat-ui
+  labels: { app.kubernetes.io/name: chat-ui }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: chat-ui } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: chat-ui } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.27-alpine # verify-at-build: pin @sha256
+          ports: [{ name: http, containerPort: 8080 }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
+          volumeMounts: [{ name: web, mountPath: /usr/share/nginx/html, readOnly: true }]
+      volumes:
+        - name: web
+          configMap: { name: chat-ui-src }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chat-ui
+spec:
+  selector: { app.kubernetes.io/name: chat-ui }
+  ports: [{ name: http, port: 80, targetPort: http }]

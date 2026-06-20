@@ -15,6 +15,10 @@ configMapGenerator:
   - name: evil-mcp-src
     files:
       - server.py
+  - name: chat-ui-src
+    files:
+      - web/index.html
+      - web/app.js
 
 secretGenerator:
   - name: llm-guard-auth

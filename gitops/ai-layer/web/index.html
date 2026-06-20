@@ -1,0 +1,43 @@
+<!-- ABOUTME: Attendee chat UI for Watch It Burn. Browser-only; talks to the guard-proxy A2A endpoint. -->
+<!-- ABOUTME: Shows the live cost counter (guard-proxy /cost) so attendees see the burn as they attack. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- verify-at-build: set proxy-base if the UI is not served same-origin with the guard-proxy
+       (ingress should route / and /cost to guard-proxy, or set this to the proxy URL with CORS). -->
+  <meta name="proxy-base" content="" />
+  <title>Watch It Burn — Your Agent</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #0f1117; color: #e6e6e6; }
+    header { padding: 12px 16px; background: #171a23; border-bottom: 1px solid #262b38; display: flex; justify-content: space-between; align-items: center; }
+    header h1 { font-size: 16px; margin: 0; }
+    #cost { font-variant-numeric: tabular-nums; font-weight: 700; color: #ffb454; }
+    #log { padding: 16px; max-width: 900px; margin: 0 auto; }
+    .msg { margin: 10px 0; padding: 10px 12px; border-radius: 8px; white-space: pre-wrap; }
+    .you { background: #1d2330; }
+    .agent { background: #14241c; }
+    .err { background: #2a1719; color: #ff8a8a; }
+    footer { position: sticky; bottom: 0; background: #171a23; border-top: 1px solid #262b38; padding: 10px; }
+    .row { display: flex; gap: 8px; max-width: 900px; margin: 0 auto; }
+    #prompt { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #2b3242; background: #0f1117; color: #e6e6e6; }
+    button { padding: 10px 16px; border: 0; border-radius: 6px; background: #ffb454; color: #15151a; font-weight: 700; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: default; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Watch It Burn — your agent</h1>
+    <div>cost: <span id="cost">$0.0000</span> <span id="tier"></span></div>
+  </header>
+  <div id="log"></div>
+  <footer>
+    <div class="row">
+      <input id="prompt" placeholder="Tell your agent what to do…" autocomplete="off" />
+      <button id="send">Send</button>
+    </div>
+  </footer>
+  <script src="app.js"></script>
+</body>
+</html>
