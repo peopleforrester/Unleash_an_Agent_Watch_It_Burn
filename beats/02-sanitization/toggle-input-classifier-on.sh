@@ -14,8 +14,11 @@ case "${1:-}" in
 esac
 
 command -v kubectl >/dev/null 2>&1 || { echo "kubectl not found" >&2; exit 1; }
+# Kube-context safety (see CLAUDE.md): target an explicit context; never the global current-context.
+CONTEXT="${CONTEXT:?set CONTEXT to the target kube-context}"
+KCTL=(kubectl --context "${CONTEXT}")
 
 echo "==> input classifier (stage 2) -> ${STATE} (runtime, via guard-proxy.${NS}:8080/toggle)" >&2
-kubectl run "guardtoggle-incls-${RANDOM}" --rm -i --restart=Never -n "${NS}" \
+"${KCTL[@]}" run "guardtoggle-incls-${RANDOM}" --rm -i --restart=Never -n "${NS}" \
   --image=curlimages/curl:8.10.1 --command -- \
   curl -s "http://guard-proxy.${NS}:8080/toggle?input_classifier=${STATE}"
