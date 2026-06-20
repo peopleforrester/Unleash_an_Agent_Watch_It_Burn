@@ -65,6 +65,25 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 The CNCF floor (Kyverno admission, RBAC, Argo CD drift, Falco) sits underneath all of this and is what
 blocks the agent from harming the platform itself, regardless of the AI guardrails.
 
+## How the agent itself is built
+
+The agent is not custom code; it is a **kagent `Agent` custom resource** (v1alpha2), reconciled by the
+kagent controller into a running Deployment. The whole agent is declarative, in
+`gitops/ai-layer/resources.yaml`:
+
+- **`spec.declarative.modelConfig`** points at a `ModelConfig` (provider Bedrock, Claude). Swapping the
+  reference swaps the model tier (Haiku default; Sonnet/Opus for the side-by-side comparison).
+- **`spec.declarative.systemMessage`** is the agent's brief. For the burn it is a chaos prompt ("probe
+  and try to break the guardrails"). The cost-saver variant additionally tells the agent which
+  guardrails exist so it does not waste tokens on already-blocked actions.
+- **`spec.declarative.tools[]`** lists MCP servers with a `toolNames` allowlist (the MCP restriction)
+  and `requireApproval` (the HITL gate). Omitting the allowlist exposes every tool, the Beat 3 footgun.
+- **`spec.declarative.deployment.serviceAccountName`** binds the agent pod to a tight ServiceAccount;
+  Bedrock credentials come from IRSA on that SA, never from the repo.
+
+So "building the agent" here means writing that one CR and letting kagent run it. There is no app to
+compile; the controls live around it (guard-proxy, gateway, RBAC, the CNCF floor), which is the point.
+
 ## Naming clarifications (Whitney's exact questions)
 
 - **"kgateway?"** No. It is **agentgateway** (the OSS Linux Foundation / Agentic AI Foundation project,
