@@ -1,0 +1,39 @@
+# ABOUTME: Falco Talon response engine. Falco detects the fork bomb -> Falcosidekick forwards (critical)
+# ABOUTME: -> Talon terminates the offending pod. This is the detect-and-RESPOND beat; the real BLOCK
+# ABOUTME: is the per-pod PID limit (infra/node-config/), since detect-to-act has latency a bomb outruns.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco-talon
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: falco-talon
+    repoURL: https://falcosecurity.github.io/charts
+    targetRevision: "0.3.0" # verify-at-build: app v0.3.0; confirm chart version (helm search repo falcosecurity/falco-talon)
+    helm:
+      valuesObject:
+        resources:
+          requests: { cpu: 50m, memory: 64Mi }
+          limits: { cpu: 200m, memory: 128Mi }
+        # Talon rules: on the fork-bomb Falco event, terminate the offending pod.
+        rulesOverride: |
+          - action: Terminate the fork-bomb pod
+            actionner: kubernetes:terminate
+            match:
+              rules:
+                - Fork Bomb In Workload Container
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: falco
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
