@@ -26,8 +26,9 @@ spec:
                 - apps
       verifyImages:
         - imageReferences:
-            - "*"                 # verify-at-build: scope to your registry, e.g. "ghcr.io/<org>/*"
-          failureAction: Audit    # verify-at-build: confirm 1.18 placement; flip to Enforce to require
+            - "harbor.agenticburn.com/*" # verify-at-build: the Harbor host. Scoped so ONLY Harbor images
+                                         # must be signed; allowlisted public images (python/nginx) are unaffected.
+          failureAction: Enforce  # require a valid signature for Harbor images (the cosign demo)
           required: true
           verifyDigest: true
           mutateDigest: true

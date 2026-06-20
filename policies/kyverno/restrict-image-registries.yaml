@@ -25,8 +25,10 @@ spec:
       validate:
         message: >-
           Images must come from allowed registries:
-          ghcr.io, docker.io/library, registry.k8s.io, or ECR.
+          the internal Harbor, ghcr.io, docker.io/library, registry.k8s.io, or ECR.
         pattern:
           spec:
             containers:
-              - image: "ghcr.io/* | docker.io/library/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/*"
+              # verify-at-build: set the real Harbor host. Harbor images are additionally signature-checked
+              # by verify-image-signatures (Enforce). Public villain images (docker.io/<user>/*) match none of these.
+              - image: "harbor.agenticburn.com/* | ghcr.io/* | docker.io/library/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/*"
