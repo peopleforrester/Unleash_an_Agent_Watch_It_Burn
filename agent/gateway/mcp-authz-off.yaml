@@ -9,11 +9,12 @@
 # over mcp.tool.name etc., evaluated per MCP method (list_tools, call_tool); rules OR together,
 # any match grants access; disallowed tools are auto-filtered from list_tools.
 #
-# verify-at-build: [SPIKE] (Phase 4b, gates beat-3 LIVE) — whether mcpAuthorization Deny actually
-#   ENFORCES on the Apache OSS v1.2.1 build with a kagent agent in front is the single load-bearing
-#   unknown for beat 3. If the spike FAILS, beat 3 demotes to a recorded segment + governance-map
-#   row; the recording is built regardless (docs/BUILD-SPEC.md §11.1, beats/03-.../BUILD-SPIKE.md).
-# verify-at-build: confirm CEL rule syntax + the targets allowlist field path on OSS 1.2.1 standalone.
+# verify-at-build: [SPIKE] (Phase 4b, gates beat-3 LIVE) — whether the mcpAuthorization allowlist
+#   actually ENFORCES on the Apache OSS v1.3.0 build with a kagent agent in front is the single
+#   load-bearing unknown for beat 3. If the spike FAILS, beat 3 demotes to a recorded segment +
+#   governance-map row; the recording is built regardless (docs/BUILD-SPEC.md §11.1).
+# verify-at-build: confirm CEL rule syntax + the mcp.{targets,policies} nesting on OSS v1.3.0
+#   standalone (research/14 §2c).
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -38,12 +39,14 @@ data:
       - name: agent-mcp
         protocol: HTTP
         port: 3001
-        targets:
-          - name: workshop-mcp
-            host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
-            port: 8080
-    policies:
-      mcpAuthorization:
-        rules:
-          # OFF: default Allow — no deny anywhere. read_internal_config is reachable.
-          - 'true'
+    # MCP config nests under `mcp.` (research/14 §2c): targets allowlist + mcpAuthorization policy.
+    mcp:
+      targets:
+        - name: workshop-mcp
+          host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
+          port: 8080
+      policies:
+        mcpAuthorization:
+          rules:
+            # OFF: default Allow — no deny anywhere. read_internal_config is reachable.
+            - 'true'

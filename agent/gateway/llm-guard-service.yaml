@@ -33,7 +33,9 @@ data:
   # verify-at-build: scanners.yml shape — top-level input_scanners / output_scanners, each entry
   #   is `type:` + `params:`. Confirmed structure from the repo config (research/03-llm-guard.md).
   #   Read the live http://<host>:8000/swagger.json at build to confirm the verdict envelope
-  #   (is_valid / sanitized_output / scores) before wiring the gateway + sidecar filters.
+  #   (is_valid / sanitized_output / scanners) before wiring the gateway + sidecar filters.
+  #   The per-scanner field is `scanners` (Dict[str, float] of risk scores), not `scores`
+  #   (research/14 §4, confirmed against llm_guard_api/app/schemas.py).
   scanners.yml: |
     # LLM Guard API-server scanner config.
     #

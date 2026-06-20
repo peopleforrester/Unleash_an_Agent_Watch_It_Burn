@@ -7,17 +7,19 @@
 demotes to a pre-recorded segment plus a governance-map row (see Fallback). The recorded segment is
 built regardless (BUILD-SPEC §3, §11).
 
-**Single load-bearing unknown** (from `research/04-mcp-security.md` and `research/02-agentgateway.md`):
-whether agentgateway's `mcpAuthorization` CEL `Deny` over `mcp.tool.name` actually enforces on the
-**Apache OSS build (`v1.2.1`)** with a **kagent agent in front**, as opposed to being an
-Enterprise-only (`EnterpriseAgentgatewayPolicy`) capability, or simply not firing when the caller is
-a kagent agent consuming the MCP server through the gateway.
+**Single load-bearing unknown** (from `research/04-mcp-security.md`, `research/02-agentgateway.md`,
+`research/14-verify-at-build-sweep-2026.md` §2): whether agentgateway's `mcpAuthorization` allowlist
+over `mcp.tool.name` actually enforces on the **Apache OSS build (`v1.3.0`)** with a **kagent agent in
+front**, as opposed to being an Enterprise-only (`EnterpriseAgentgatewayPolicy`) capability, or simply
+not firing when the caller is a kagent agent consuming the MCP server through the gateway. (The OSS
+model is allow-only CEL with implicit deny — there is no `Deny` action; the rogue tool is blocked by
+omission from the allowlist.)
 
 ## Verification Method (fill in at build)
 
 - Method: live cluster (spoke), hands-on. NOT research. # verify-at-build
-- agentgateway OSS version under test: `v1.2.1` # verify-at-build, confirm and record in VERSIONS.lock
-- kagent chart version: `0.9.7`, API group `kagent.dev/v1alpha2` # verify-at-build
+- agentgateway OSS version under test: `v1.3.0` # verify-at-build, confirm and record in VERSIONS.lock
+- kagent chart version: `0.9.9`, API group `kagent.dev/v1alpha2` # verify-at-build
 - MCP SDK version in evil-mcp-shim image + image digest: # verify-at-build
 - Date run / operator:  # fill in
 
@@ -70,7 +72,7 @@ a kagent agent consuming the MCP server through the gateway.
 |                                                                       |
 |   RESULT:  [ ] PASS    [ ] FAIL          <-- TODO: record at build    |
 |                                                                       |
-|   PASS  => mcpAuthorization CEL Deny enforces on OSS v1.2.1 with      |
+|   PASS  => mcpAuthorization allowlist enforces on OSS v1.3.0 with     |
 |            kagent in front; Beat 3 ships LIVE with the toggle.        |
 |                                                                       |
 |   FAIL  => deny did NOT enforce (Enterprise-gated / did not fire /    |

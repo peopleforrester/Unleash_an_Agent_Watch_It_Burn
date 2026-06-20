@@ -44,9 +44,11 @@ subjects:
 # `modelConfig` reference (commit + resync, or run a different tier on each instructor
 # Cluster 3 in parallel). Do NOT kubectl-patch it live: ArgoCD selfHeal reverts the change.
 # Per-model gating (provisioning project): each model needs Bedrock model access enabled plus
-# the Anthropic use-case form; exact date-stamped inference-profile ids come from
-# `aws bedrock list-inference-profiles`. Only Haiku is a live CR here so the sync stays valid;
-# uncomment a tier (and fill its verified id) to make it selectable.
+# the Anthropic use-case form. The inference-profile ids are verified below (research/13, confirmed
+# ACTIVE/SYSTEM_DEFINED via `aws bedrock list-inference-profiles` in us-west-2). Only Haiku is a
+# live CR here so the sync stays valid; uncomment a tier to make it selectable.
+# NOTE: Sonnet 4.6 and Opus 4.8 do NOT support In-Region in us-west-2 — the `us.` Geo inference
+# profile (or `global.`) is mandatory; an In-Region model id will fail.
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
@@ -63,7 +65,7 @@ spec:
 #   name: bedrock-sonnet
 # spec:
 #   provider: Bedrock
-#   model: us.anthropic.claude-sonnet-4-6-<DATE>-v1:0 # Sonnet 4.6 (mid tier)  # verify-at-build
+#   model: us.anthropic.claude-sonnet-4-6 # Sonnet 4.6 (mid tier; no date stamp; us. Geo required)
 #   bedrock:
 #     region: us-west-2
 # ---
@@ -73,12 +75,19 @@ spec:
 #   name: bedrock-opus
 # spec:
 #   provider: Bedrock
-#   model: us.anthropic.claude-opus-4-8-<DATE>-v1:0 # Opus 4.8 (frontier; loudest cost counter)  # verify-at-build
+#   model: us.anthropic.claude-opus-4-8 # Opus 4.8 (frontier; loudest cost counter; no date stamp; us. Geo required)
 #   bedrock:
 #     region: us-west-2
 # ---
-# Fable 5 tier is conditional on its Bedrock availability returning; add bedrock-fable with
-# its inference-profile id once/if the model is offered on Bedrock again.
+# apiVersion: kagent.dev/v1alpha2
+# kind: ModelConfig
+# metadata:
+#   name: bedrock-fable
+# spec:
+#   provider: Bedrock
+#   model: us.anthropic.claude-fable-5 # Fable 5 (now live on Bedrock, research/13)
+#   bedrock:
+#     region: us-west-2
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: Agent

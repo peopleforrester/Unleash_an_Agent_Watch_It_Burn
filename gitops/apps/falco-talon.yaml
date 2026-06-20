@@ -15,7 +15,7 @@ spec:
   source:
     chart: falco-talon
     repoURL: https://falcosecurity.github.io/charts
-    targetRevision: "0.3.0" # verify-at-build: app v0.3.0; confirm chart version (helm search repo falcosecurity/falco-talon)
+    targetRevision: "0.4.1" # verify-at-build: app v0.3.0; confirm chart version (helm search repo falcosecurity/falco-talon)
     helm:
       valuesObject:
         resources:

@@ -3,7 +3,39 @@
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
 
-Last updated: 2026-06-19
+Last updated: 2026-06-20
+
+### Doc-accuracy spike corrections applied (2026-06-20)
+
+Four multi-agent doc-accuracy spikes landed (research/11 version re-pin, research/12 mechanism
+verification, research/13 model cards + Bedrock IDs, research/14 verify-at-build sweep). All
+corrections applied and the full offline suite is green (136 checks, 18 files). Verification method:
+live web research against vendor primary sources + `aws bedrock list-inference-profiles`.
+
+- **Cost-counter key bug (CRITICAL, research/14 §3a):** kagent emits Google ADK metadata under
+  `adk_usage_metadata`, NOT `kagent_usage_metadata`. The old key would tally ZERO tokens and break
+  the cost story. Fixed in both proxy.py copies, cost/README.md, and the two tests
+  (test_cost_counter, test_proxy_guards).
+- **agentgateway v1.2.1 → v1.3.0** (GA 2026-06-17): bumped in agentgateway.yaml, mcp-authz-on/off,
+  GATEWAY-NOTES, BUILD-SPEC, beats/03 BUILD-SPIKE, VERSIONS.lock. mcpAuthorization is allow-only CEL
+  with implicit deny (NO `action` field) — deleted FORM B; MCP config re-nested under
+  `mcp.{targets,policies}`; tests updated.
+- **Tempo chart repointed** to `grafana-community/helm-charts` 2.2.3 / app 2.10.7 (old grafana repo
+  path is a dead stub after the 2026-01-30 migration). loki/alloy correctly stay at grafana/helm-charts.
+- **Bedrock model IDs (research/13):** Sonnet `us.anthropic.claude-sonnet-4-6`, Opus
+  `us.anthropic.claude-opus-4-8` (NO date stamp — the `<DATE>` placeholders were wrong), Fable
+  `us.anthropic.claude-fable-5` (now live on Bedrock). Sonnet/Opus require the `us.` Geo profile
+  (no In-Region in us-west-2). Applied in resources.yaml, VERSIONS.lock, BUILD-SPEC.
+- **Other:** Kyverno restrict-image-registries on rule-level `validate.failureAction: Enforce`
+  (deprecated spec-level removed); pid-limit delivery corrected to eksctl `overrideBootstrapCommand`
+  (not /etc/eks/nodeadm.d/); egress allowlist S3-gateway-endpoint caveat added; LLM Guard verdict
+  field is `scanners` not `scores`; EKS pinned 1.35 relabeled "current standard-support" (1.36 now
+  newest); kagent 0.9.7→0.9.9, argocd 9.5.21→9.6.0/v3.4.4, falco-talon chart 0.4.1.
+- **Harbor/cosign Enforce upgrade:** verify-image-signatures flipped Audit→Enforce, scoped to
+  `harbor.agenticburn.com/*` so public demo images are unaffected.
+
+NEXT: reconcile Docs 3 (Run of Show) and 6 (Build Spec) into the repo — the explicitly-deferred
+final step (held earlier because in-place re-import risks orphaning their Drive comments).
 
 ### Session-close note (2026-06-19)
 
