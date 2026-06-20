@@ -199,6 +199,8 @@ spec:
             # Protect the demo from itself (0 = disabled). verify-at-build: set to room size + budget.
             - { name: RATE_LIMIT_RPM, value: "120" }
             - { name: COST_CAP_USD, value: "25" }
+            # Optional side-screen prompt stream; ON only once moderation is confirmed (code of conduct).
+            - { name: STREAM_PROMPTS, value: "off" }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
