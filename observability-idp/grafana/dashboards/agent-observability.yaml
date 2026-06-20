@@ -1,0 +1,72 @@
+# ABOUTME: Grafana dashboard ConfigMap for the agent-observability narration surface (P4).
+# ABOUTME: Cost counter + token rate (from the guard-proxy /metrics) and the gen_ai trace view (Tempo).
+# Auto-provisioned by the Grafana sidecar via the grafana_dashboard label.
+# verify-at-build: confirm the Prometheus datasource uid on the live Grafana (kube-prometheus-stack
+#   default is "prometheus"); the Tempo datasource uid is pinned to "tempo" in prometheus.yaml.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agent-observability-dashboard
+  namespace: monitoring
+  labels:
+    grafana_dashboard: "1"
+data:
+  agent-observability.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "schemaVersion": 39,
+      "tags": ["watch-it-burn", "agent", "cost"],
+      "time": { "from": "now-15m", "to": "now" },
+      "title": "Agent Observability (Watch It Burn)",
+      "uid": "witb-agent-obs",
+      "panels": [
+        {
+          "id": 1,
+          "type": "stat",
+          "title": "Live cost (USD) by tier",
+          "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 }, "overrides": [] },
+          "targets": [
+            { "refId": "A", "expr": "sum by (tier) (witb_cost_usd)", "legendFormat": "{{tier}}" }
+          ]
+        },
+        {
+          "id": 2,
+          "type": "timeseries",
+          "title": "Token spend rate (tokens/sec) — flatlines when the input guard blocks pre-LLM",
+          "gridPos": { "h": 6, "w": 16, "x": 8, "y": 0 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+          "targets": [
+            { "refId": "A", "expr": "sum by (kind) (rate(witb_tokens_total[1m]))", "legendFormat": "{{kind}}" }
+          ]
+        },
+        {
+          "id": 3,
+          "type": "timeseries",
+          "title": "Model-bound requests/min (block-listed requests excluded)",
+          "gridPos": { "h": 6, "w": 12, "x": 0, "y": 6 },
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+          "targets": [
+            { "refId": "A", "expr": "sum(rate(witb_requests_total[1m])) * 60", "legendFormat": "req/min" }
+          ]
+        },
+        {
+          "id": 4,
+          "type": "traces",
+          "title": "Agent traces (input / output / tool-call gen_ai spans)",
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 6 },
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "targets": [
+            { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
+              "queryType": "traceql", "query": "{ span.gen_ai.system != \"\" }" }
+          ]
+        }
+      ]
+    }

@@ -23,7 +23,7 @@ spec:
             # Enable remote write receiver for OTel Collector
             enableRemoteWriteReceiver: true
             # Retention for demo
-            retention: 24h
+            retention: 3h
             # Resource limits
             resources:
               requests:
@@ -60,6 +60,7 @@ spec:
           additionalDataSources:
             - name: Tempo
               type: tempo
+              uid: tempo
               url: http://tempo.monitoring:3100
               access: proxy
               isDefault: false
@@ -109,8 +110,9 @@ spec:
             tls:
               - hosts:
                   - grafana.ai-enhanced-devops.com
-        # AlertManager
+        # AlertManager not needed for the workshop; disabled to slim the per-attendee node.
         alertmanager:
+          enabled: false
           alertmanagerSpec:
             resources:
               requests:
