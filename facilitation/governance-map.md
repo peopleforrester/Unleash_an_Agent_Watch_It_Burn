@@ -26,4 +26,18 @@ Layers used below: **admission** (request-time policy at the API server), **RBAC
 - **Beats 2 and 3 are the gaps.** They are smaller in surface area but they are exactly where agents change the threat model: the attack rides in language and in tool calls, which the control plane cannot inspect. These need controls built for the agent path, input inspection, output inspection, and tool authorization.
 - **Observability is both the lens and a gap.** The same telemetry you use to watch the agent can re-leak what your output control just blocked, unless you guard it symmetrically.
 
+## The cost ladder: earlier is cheaper
+
+The controls above also order by COST of interception. This is the second lesson, and the live cost counter is the proof: the earlier a control sits, the cheaper it is, because fewer tokens have been spent by the time it fires. AI-specific guardrails earn their place by intercepting earlier and cheaper, not by doing something Kyverno cannot.
+
+| Order | Control | When it fires | Token cost when it blocks |
+|---|---|---|---|
+| 1 (cheapest) | Input block-list (deterministic) | Before the model call | **Zero.** The request never reaches Bedrock; the counter flatlines. |
+| 2 | Input classifier (prompt-injection) | Before the model call | Near zero. A small classifier runs; no Bedrock tokens spent. |
+| 3 | Tool scoping / least privilege | Config time | Zero at request time. The dangerous tool was never granted. |
+| 4 | Output inspection (exfil / tool-call HITL) | After the model produced output | The model round-trip is already paid for; you catch it before execution. |
+| 5 (most expensive) | Kyverno admission | At apply time, after the model acted | Highest. By the time admission denies the action, the LLM tokens are spent and the GPU/API bill already moved. |
+
+Kyverno is the correct last mile AND the most expensive mile. The cost counter still moves on the CNCF-only cluster precisely because admission is the LAST line, not the first. That is the case for the agent-specific controls in rows 1 to 4: same Swiss-cheese defense, intercepting earlier and cheaper.
+
 Pair this with `self-assessment.md` to check your own platform against every row, including the failure modes not demonstrated live.
