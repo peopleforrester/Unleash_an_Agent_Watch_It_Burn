@@ -39,6 +39,17 @@ see the CNCF "80%" stop the same attack (while still burning money), then drive 
 and switch on the **agent-specific** guardrails that close the remaining gap. Attendees leave with the
 repo, a governance map, and a self-assessment of the failure modes their own platform misses.
 
+Thesis augments (2026-06-20, from Whitney's feedback):
+
+- **Cost is two costs.** Wasted tokens are the visible one; the quieter one is **maintenance**.
+  Per-agent or per-app guardrails multiply the surface you have to maintain and the chances of
+  missing one. Doing it at the **cluster abstraction layer** means it happens for every workload
+  automatically. "Earlier and cheaper" includes cheaper to operate, not just cheaper per request.
+- **Prompt caching** is part of the cost story: cache the system prompt / repeated context so the
+  capped-cost demo reflects how a real deployment keeps spend down.
+- **Tell the agent its own jail.** Putting the active guardrails into the agent's system prompt so it
+  does not attempt actions that are already blocked is itself a cost saver (no tokens spent failing).
+
 "Done" means all of:
 
 - A facilitator **burn-cluster fleet** exists: **3× Cluster 1** (no-guardrails) + **3× Cluster 2**

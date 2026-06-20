@@ -50,13 +50,14 @@ Total: **120 minutes**.
 
 ### 0:00–0:10, Intro + platform tour (Michael)
 
-- While the room connects, tour the running IDP: Argo CD, Kyverno, Falco, Prometheus/Grafana/Tempo/Loki,
-  cert-manager, External Secrets, Backstage. "You did not build this and you do not fully trust it. It
-  is all in the repo. It is yours to take home and stand up with your own coding agent."
+- **Reveal-style (Whitney):** tour the MINIMAL, guards-OFF platform here. Show Argo CD + the running
+  apps + the telemetry view (Datadog primary, Grafana fallback), and note "it is all in the repo, take
+  it home." Do NOT explain the whole security suite now. The CNCF security projects (Kyverno enforce,
+  Falco, NetworkPolicy, ESO, image signing) get introduced WHEN they turn on at Cluster 2.
 - Frame the two hours: turn an AI agent loose on this platform and watch what stops it.
 - Public-safe 80/20 line: "most of what you would try is already handled; a thin slice is not, and that
   slice is the whole point." Do not preview which attacks leak.
-- **HAND-OFF → Whitney:** "Let's take the guardrails off entirely and see what happens."
+- **HAND-OFF → Whitney:** "It is wide open right now. Let's see what happens."
 
 ### 0:10–0:25, Cluster 1: no guardrails, the burn (Whitney narrates, Michael on cost)
 
@@ -69,6 +70,10 @@ Total: **120 minutes**.
 
 ### 0:25–0:45, Cluster 2: CNCF guardrails block it (Whitney narrates, Michael on controls)
 
+- **CNCF security tour, now that they are ON (Whitney presents some):** introduce the projects as the
+  room meets them here, not in the intro: Kyverno (admission), Falco (runtime), NetworkPolicy,
+  External Secrets, image signing / Harbor, and (planned) a service mesh for mTLS + SPIFFE/SPIRE
+  identity feeding Kyverno cluster policy. Keep it to the ones actually enabled on Cluster 2.
 - Same destructive attack against Cluster 2. Walk each wall with its distinct error: Kyverno admission
   message, RBAC Forbidden, Argo CD drift block with self-heal reverting the change.
 - **Michael:** the damage was stopped, but the cost counter still moved. The request reached the model
@@ -101,6 +106,20 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
 - Model wanders → that beat's `fallback.*.sh` drives the request through the guard so the guardrail is
   what is proven, not the model's mood.
 - **HAND-OFF → Whitney:** "One more, the thing you have been trusting all session."
+
+### OPTIONAL challenges, attendee free-play games (Whitney; cut under time pressure)
+
+Run in the Cluster 3 free-play window if time allows; they make the room compete instead of just watch.
+
+- **ESO / S3 exfil "basketball":** a shared External Secrets Operator (AWS ESO; Vault a possible
+  addition) holds one planted secret. The room uses system prompts to get their agent to exfiltrate it
+  and post it into a target S3 bucket; first to score wins. verify-at-build: spike the difficulty and
+  the ESO/Vault + S3 wiring.
+- **Challenge ladder (evaluate difficulty per level):** (1) exfiltrate some data, (2) get the agent to
+  reveal a secret, (3) break the cluster. Plant funny Kubernetes secrets for flavor. Each level needs a
+  spike confirming it behaves as intended on the guards-off vs guards-on state.
+- **Partner cluster-breaking (LAST resort only):** trade agent endpoints and try to break each other's
+  Cluster 3. Lower priority (attendees must restore); keep it as a final optional challenge, not a beat.
 
 ### OPTIONAL closing demo, model-tier comparison on parallel screens (both; cut first if short)
 
