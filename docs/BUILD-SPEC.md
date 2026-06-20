@@ -226,11 +226,15 @@ tools, and the cost counter makes the economic argument the control plane can't 
 
 ## 6. Version pinning
 
-Live-verified pins (2026-06-17): kagent chart `0.9.7` / CRD `v1alpha2`; Argo CD `v3.4.3`; Kyverno app
-`v1.18.1` / chart `3.8.1`; Falco `0.44.1`; kube-prometheus-stack `86.2.3`; OTel Collector `v0.154.0`;
-agentgateway OSS `v1.2.1` (`oci://cr.agentgateway.dev/charts/agentgateway`); LLM Guard
-`laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.34`; aws-ebs-csi-driver addon + gp3 default SC;
-Bedrock model `us.anthropic.claude-haiku-4-5-20251001-v1:0`. vCluster is removed. `VERSIONS.lock` is
+Pins (live-verified 2026-06-17, re-pinned to current GA 2026-06-20): kagent chart `0.9.9` / CRD
+`v1alpha2`; Argo CD `v3.4.4` / chart `9.6.0`; Kyverno app `v1.18.1` / chart `3.8.1`; Falco `0.44.1`;
+kube-prometheus-stack `86.2.3`; OTel Collector chart `0.158.2` / app `0.153.0`; agentgateway OSS
+`v1.3.0` (GA 2026-06-17; `oci://cr.agentgateway.dev/charts/agentgateway`); Tempo chart `2.2.3` @
+`grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.35`;
+aws-ebs-csi-driver addon + gp3 default SC; Bedrock models
+`us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku), `us.anthropic.claude-sonnet-4-6` (Sonnet),
+`us.anthropic.claude-opus-4-8` (Opus), `us.anthropic.claude-fable-5` (Fable; now live) — Sonnet/Opus
+need the `us.` Geo profile (no In-Region in us-west-2). vCluster is removed. `VERSIONS.lock` is
 authoritative; re-confirm at build.
 
 ---

@@ -9,20 +9,18 @@
 # Because agentgateway auto-filters disallowed tools from list_tools, the agent should no longer
 # even SEE read_internal_config; an explicit call to it is rejected.
 #
-# CONFIRMED mechanism (research/02-agentgateway.md §4): CEL rules over mcp.tool.name evaluated per
-# MCP method; rules OR together (any match Allows). To express a DENY, the safe pattern on the OSS
-# build is an allowlist whose rules name ONLY the permitted tools — anything not matched (incl.
-# read_internal_config) is implicitly denied and filtered. Where the build supports explicit
-# action: Deny, an explicit Deny on read_internal_config is the clearest demo. Both are encoded
-# below; pick the one the OSS v1.2.1 schema actually supports at build.
+# CONFIRMED mechanism (research/02-agentgateway.md §4, research/14 §2b): the OSS standalone
+# mcpAuthorization model is ALLOW-ONLY CEL with implicit deny. There is NO `action` field on rules.
+# A request is allowed if any rule matches; anything not matched is denied and filtered out of
+# list_tools. So the DENY is expressed as an allowlist naming ONLY the permitted tools —
+# read_internal_config is not listed, so it is implicitly denied and the agent never sees it.
 #
-# verify-at-build: [SPIKE] (Phase 4b, gates beat-3 LIVE) — confirm mcpAuthorization Deny/allowlist
-#   ENFORCES on Apache OSS v1.2.1 with kagent in front (docs/BUILD-SPEC.md §11.1). PASS -> beat 3
+# verify-at-build: [SPIKE] (Phase 4b, gates beat-3 LIVE) — confirm mcpAuthorization allowlist
+#   ENFORCES on Apache OSS v1.3.0 with kagent in front (docs/BUILD-SPEC.md §11.1). PASS -> beat 3
 #   live; FAIL -> recorded segment + governance-map row. Record in beats/03-.../BUILD-SPIKE.md.
-# verify-at-build: confirm whether OSS v1.2.1 rules carry an `action: Allow|Deny` field or are
-#   allow-only-with-implicit-deny. The research note shows allow-style CEL string rules; the spec
-#   references `action: Allow|Deny`. Resolve which the pinned build honors and keep ONE form.
-# verify-at-build: confirm the targets-allowlist field path (research §4: structural via `targets`).
+# verify-at-build: the doc schema nests mcpAuthorization under mcp.policies.mcpAuthorization (and
+#   targets under mcp.targets[]). Re-verify the exact mcp.{targets,policies} nesting against the
+#   v1.3.0 standalone config schema at build (research/14 §2c).
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -46,24 +44,18 @@ data:
       - name: agent-mcp
         protocol: HTTP
         port: 3001
-        targets:
-          # targets allowlist: only this MCP server is reachable for tool calls.
-          - name: workshop-mcp
-            host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
-            port: 8080
-    policies:
-      mcpAuthorization:
-        # FORM A (allow-only, implicit-deny) — matches the research-note CEL string examples.
-        # Only these tools are reachable; read_internal_config is not listed, so it is denied and
-        # filtered out of list_tools.
-        rules:
-          - 'mcp.tool.name == "list_pods"'
-          - 'mcp.tool.name == "apply_manifest"'
-          - 'mcp.tool.name == "get_secret"'
-        # FORM B (explicit Deny) — use INSTEAD of FORM A if the pinned OSS v1.2.1 build supports an
-        # `action` field on rules (the spec references action: Allow|Deny). Do NOT keep both.
-        # rules:
-        #   - expression: 'mcp.tool.name == "read_internal_config"'
-        #     action: Deny      # block the rogue tool explicitly (beat-3 headline)
-        #   - expression: 'true'
-        #     action: Allow      # everything else allowed
+    # MCP config nests under `mcp.` (research/14 §2c): targets allowlist + mcpAuthorization policy.
+    mcp:
+      targets:
+        # targets allowlist is structural: only this MCP server is reachable for tool calls.
+        - name: workshop-mcp
+          host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
+          port: 8080
+      policies:
+        mcpAuthorization:
+          # Allow-only, implicit-deny: only these tools are reachable. read_internal_config is not
+          # listed, so it is denied and filtered out of list_tools (the beat-3 "after").
+          rules:
+            - 'mcp.tool.name == "list_pods"'
+            - 'mcp.tool.name == "apply_manifest"'
+            - 'mcp.tool.name == "get_secret"'

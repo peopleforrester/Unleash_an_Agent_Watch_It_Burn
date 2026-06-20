@@ -20,7 +20,7 @@ kubectl apply -f "${REPO}/infra/gp3-storageclass.yaml"
 log "[2] ArgoCD (pinned chart 9.5.21 / app v3.4.3)"
 helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
 helm repo update >/dev/null
-helm upgrade --install argocd argo/argo-cd --version 9.5.21 \
+helm upgrade --install argocd argo/argo-cd --version 9.6.0 \
   -n argocd --create-namespace --set dex.enabled=false --wait --timeout 10m
 
 log "[3] register the private repo (token from gh) + ghcr OCI helm for kagent"

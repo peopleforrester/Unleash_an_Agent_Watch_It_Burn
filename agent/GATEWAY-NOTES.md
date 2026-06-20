@@ -3,7 +3,7 @@
 # Gateway & Guardrail Notes
 
 Architecture context: separate EKS spoke cluster per attendee. Everything below runs in each
-attendee's spoke. agentgateway OSS **v1.2.1** fronts the kagent agent's A2A serving endpoint and
+attendee's spoke. agentgateway OSS **v1.3.0** fronts the kagent agent's A2A serving endpoint and
 its MCP tool traffic. LLM Guard (Protect AI, MIT) runs in API-server mode per spoke,
 **output-`Regex`-only by default** to keep each spoke node small.
 
@@ -67,7 +67,7 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
 
 ## The [SPIKE]s (load-bearing unknowns, gate before declaring live)
 
-1. **[SPIKE] MCP authz enforcement on OSS v1.2.1 with kagent in front** (Phase 4b, gates **beat 3
+1. **[SPIKE] MCP authz enforcement on OSS v1.3.0 with kagent in front** (Phase 4b, gates **beat 3
    LIVE**). The single most load-bearing unknown. Whether `mcpAuthorization` Deny/allowlist actually
    enforces on the Apache OSS build with a kagent agent fronted is unconfirmed.
    - PASS → beat 3 ships live with the toggle.
@@ -106,10 +106,13 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   does NOT exist on Docker Hub (404 confirmed 2026-06-16). `laiyer/` is somewhat stale (latest tag
   `0.3.16`) but it is the only published image. **Pin a `@sha256` digest, not `:latest`** (no GitHub
   releases exist). Also pin the PyPI `llm-guard` version. → `VERSIONS.lock`.
-- **agentgateway version:** OSS **v1.2.1** (stable). Do NOT pin the v1.3.0 beta. Install is a
+- **agentgateway version:** OSS **v1.3.0** (GA 2026-06-17; supersedes the v1.2.1 pin). Install is a
   two-chart OCI Helm install (`agentgateway-crds` then `agentgateway` from
   `oci://cr.agentgateway.dev/charts/`); pin the resolved chart version + container digest in
   `VERSIONS.lock`. Build strictly from the OSS standalone docs (the Enterprise 2.x docs drift).
+  Re-verify the guardrail/MCP field paths against the v1.3.0 standalone docs (they may have moved
+  between 1.2.1 and 1.3.0); MCP config nests under `mcp.{targets,policies}` and mcpAuthorization is
+  allow-only CEL with implicit deny (no `action` field) — research/14 §2.
 - **Egress-proxy sidecar image:** a real thin reverse proxy (NOT a mock) calling `/analyze/output`.
   It is a `PLACEHOLDER_EGRESS_PROXY_IMAGE` until built and pinned, ship no placeholder to the event.
 - **Default toggle states at workshop start:** input-guard OFF, output-guard OFF, mcp-authz OFF

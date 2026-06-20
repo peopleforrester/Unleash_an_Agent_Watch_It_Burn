@@ -33,7 +33,7 @@ check("rate limit disabled when 0", not proxy.rate_limited())
 # Cost cap: freeze spend once the cluster's metered tally hits the cap.
 proxy.COST_CAP_USD = 0
 check("cost cap disabled when 0", not proxy.cost_capped())
-proxy.record_usage({"result": {"metadata": {"kagent_usage_metadata": {
+proxy.record_usage({"result": {"metadata": {"adk_usage_metadata": {
     "promptTokenCount": 100000, "candidatesTokenCount": 100000, "totalTokenCount": 200000}}}})
 proxy.COST_CAP_USD = 0.0001
 check("cost cap trips once spend exceeds the cap", proxy.cost_capped())
