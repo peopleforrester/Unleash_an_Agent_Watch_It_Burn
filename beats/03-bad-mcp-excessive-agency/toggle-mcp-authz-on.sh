@@ -3,6 +3,10 @@
 # ABOUTME: Idempotent (kubectl apply). Use --off to apply mcp-authz-off.yaml and remove the deny rule.
 set -euo pipefail
 
+# Kube-context safety (see CLAUDE.md): target an explicit context; never the global current-context.
+CONTEXT="${CONTEXT:?set CONTEXT to the target kube-context}"
+KCTL=(kubectl --context "${CONTEXT}")
+
 # The gateway config files (mcp-authz-on.yaml / mcp-authz-off.yaml) are authored by another agent
 # and live under agent/gateway/. This toggle only applies them. ON = CEL Deny over mcp.tool.name
 # for read_internal_config (+ targets allowlist); OFF = no tool-authz rule (the "before" state).
@@ -28,7 +32,7 @@ fi
 
 echo "==> Applying MCP tool authorization state: ${STATE}"
 echo "==> Manifest: ${MANIFEST_PATH}"
-kubectl apply -f "${MANIFEST_PATH}"
+"${KCTL[@]}" apply -f "${MANIFEST_PATH}"
 
 echo "==> Done. MCP authorization is now '${STATE}'."
 echo "==> Verify with: beats/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-$([[ "${STATE}" == on ]] && echo deny || echo allow)"
