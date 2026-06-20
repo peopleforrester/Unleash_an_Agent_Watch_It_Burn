@@ -223,6 +223,28 @@ spec:
               priority: NOTICE
               tags: [workshop, agent, secret, mitre_credential_access]
               source: syscall
+
+          workshop-forkbomb-rules.yaml: |
+            # Detection for the Beat 3 fork bomb. This is the DETECT-and-RESPOND beat (Falco -> Talon);
+            # the real BLOCK is the per-pod PID limit (kubelet podPidsLimit, see infra/node-config/).
+            # The classic bomb is `:(){ :|:& };:`; match its cmdline signature in a workload container.
+            - macro: workload_container
+              condition: (container and k8s.ns.name in (apps))
+
+            - rule: Fork Bomb In Workload Container
+              desc: A fork-bomb-style self-replicating process pattern ran in a workload container.
+              condition: >
+                spawned_process and workload_container
+                and (proc.cmdline contains ":|:&"
+                     or proc.cmdline contains ":(){"
+                     or proc.cmdline contains ":() { :|:")
+              output: >
+                Fork bomb detected in workload container
+                (cmdline=%proc.cmdline proc=%proc.name pod=%k8s.pod.name ns=%k8s.ns.name
+                 container=%container.name image=%container.image.repository)
+              priority: CRITICAL
+              tags: [workshop, availability, forkbomb, mitre_impact]
+              source: syscall
         tolerations:
           - effect: NoSchedule
             operator: Exists
