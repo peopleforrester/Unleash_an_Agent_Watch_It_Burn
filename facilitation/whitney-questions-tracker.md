@@ -32,9 +32,9 @@ full answer; the real answers live in `docs/STACK-WALKTHROUGH.md` and the files 
 
 ## The open list to talk through (the real agenda for the next Michael + Whitney sync)
 
-1. **Her narration story + comfort with the AI-guardrail layer** (#1) — a working session against the walkthrough.
-2. **Central observability for narration + Datadog real-time lag** (#5, #17) — how do we show the room a live view when each attendee is in their own Datadog?
-3. **Datadog before/after-gateway prompt visibility** (#2) — design + confirm.
-4. **Service mesh (Istio) + SPIFFE/SPIRE scope** (#16) — how far do we take it? (research spike says SPIFFE narrated, not live.)
+1. **Her narration story + comfort with the AI-guardrail layer** (#1), a working session against the walkthrough.
+2. **Central observability for narration + Datadog real-time lag** (#5, #17), how do we show the room a live view when each attendee is in their own Datadog?
+3. **Datadog before/after-gateway prompt visibility** (#2), design + confirm.
+4. **Service mesh (Istio) + SPIFFE/SPIRE scope** (#16), how far do we take it? (research spike says SPIFFE narrated, not live.)
 5. **Do we cover/demo building the agent itself** (#18)?
-6. **Difficulty spikes for the games + challenge ladder** (#3, #10, #17) — confirm each level is achievable as intended.
+6. **Difficulty spikes for the games + challenge ladder** (#3, #10, #17), confirm each level is achievable as intended.
