@@ -43,7 +43,7 @@ spec:
             resource:
               attributes:
                 - key: cluster.name
-                  value: kubeauto-ai-day
+                  value: watch-it-burn
                   action: upsert
           exporters:
             prometheusremotewrite:
