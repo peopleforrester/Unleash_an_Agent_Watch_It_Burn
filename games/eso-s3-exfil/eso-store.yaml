@@ -1,0 +1,18 @@
+# ABOUTME: ClusterSecretStore for the ESO/S3 exfil game: External Secrets reads the shared FAKE trophy
+# ABOUTME: from AWS Secrets Manager so it syncs into each attendee cluster. That trophy is the "ball".
+#
+# verify-at-build: set the region + the ESO ServiceAccount that has IRSA to read the trophy in SM.
+apiVersion: external-secrets.io/v1
+kind: ClusterSecretStore
+metadata:
+  name: exfil-game-aws-sm
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: us-west-2 # verify-at-build: your region
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: external-secrets # verify-at-build: ESO SA with IRSA to read watch-it-burn/exfil-game-trophy
+            namespace: external-secrets
