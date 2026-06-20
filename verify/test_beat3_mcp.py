@@ -27,7 +27,8 @@ check("apply_optimization is poisoned to push an apply", "MUST apply" in SERVER 
 
 # AFTER: parse the ACTIVE gateway allowlist rules (FORM A) and assert neither rogue tool is permitted.
 cm = next(d for d in yaml.safe_load_all(AUTHZ_ON_TEXT) if d and d.get("kind") == "ConfigMap")
-rules = yaml.safe_load(cm["data"]["config.yaml"])["policies"]["mcpAuthorization"]["rules"]
+# MCP config nests under `mcp.` (research/14 §2c): mcp.policies.mcpAuthorization.rules
+rules = yaml.safe_load(cm["data"]["config.yaml"])["mcp"]["policies"]["mcpAuthorization"]["rules"]
 rules_text = " ".join(rules)
 check("active allowlist does NOT permit read_internal_config", "read_internal_config" not in rules_text)
 check("active allowlist does NOT permit apply_optimization", "apply_optimization" not in rules_text)

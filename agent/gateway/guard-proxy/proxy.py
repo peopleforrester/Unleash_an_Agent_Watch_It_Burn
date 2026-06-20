@@ -126,9 +126,9 @@ def moderate(text):
 def record_usage(resp):
     """Pull kagent token usage from an A2A response and add it to the running cost tally."""
     result = resp.get("result", {}) if isinstance(resp, dict) else {}
-    meta = (result.get("metadata") or {}).get("kagent_usage_metadata")
+    meta = (result.get("metadata") or {}).get("adk_usage_metadata")
     if not meta:
-        meta = (result.get("status", {}).get("message", {}).get("metadata") or {}).get("kagent_usage_metadata")
+        meta = (result.get("status", {}).get("message", {}).get("metadata") or {}).get("adk_usage_metadata")
     if not isinstance(meta, dict):
         return
     pin = int(meta.get("promptTokenCount", 0) or 0)

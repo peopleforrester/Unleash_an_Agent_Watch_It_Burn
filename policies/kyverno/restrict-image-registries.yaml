@@ -11,7 +11,6 @@ metadata:
     policies.kyverno.io/description: >-
       Only allow images from trusted registries in the apps namespace.
 spec:
-  validationFailureAction: Enforce
   background: true
   rules:
     - name: validate-registries
@@ -23,6 +22,7 @@ spec:
               namespaces:
                 - apps
       validate:
+        failureAction: Enforce # Kyverno 1.18 rule-level (spec.validationFailureAction is deprecated)
         message: >-
           Images must come from allowed registries:
           the internal Harbor, ghcr.io, docker.io/library, registry.k8s.io, or ECR.

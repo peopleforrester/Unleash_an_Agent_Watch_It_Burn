@@ -6,6 +6,12 @@
 # Bedrock must be reached via a VPC endpoint (PrivateLink, an in-VPC IP) and S3 via the internet (denied).
 # verify-at-build: create a Bedrock VPC endpoint; set the cidr below to the cluster VPC CIDR. Combines
 # with default-deny egress (policies/network-policies/default-deny.yaml); Cluster 1 omits all of this.
+#
+# CAVEAT (verify-at-build): an S3 GATEWAY endpoint would DEFEAT this control. A gateway endpoint routes
+# S3 traffic via the VPC route table to an AWS-managed prefix list — that traffic looks in-VPC at L3 and
+# a CIDR allow cannot distinguish it, so the agent's S3 PutObject would succeed. For this control to hold,
+# the VPC must have NO S3 gateway endpoint reachable from the apps subnets (and no S3 interface endpoint
+# in the allowed CIDR); S3 must egress only via the internet path, which has no allow here.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

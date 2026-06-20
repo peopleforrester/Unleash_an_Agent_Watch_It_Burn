@@ -15,7 +15,7 @@ spec:
   source:
     repoURL: ghcr.io/kagent-dev/kagent/helm
     chart: kagent-crds
-    targetRevision: "0.9.7" # current GA (2026-06; CRD group kagent.dev/v1alpha2, Bedrock-capable)
+    targetRevision: "0.9.9" # current GA (2026-06; CRD group kagent.dev/v1alpha2, Bedrock-capable)
   destination:
     server: https://kubernetes.default.svc
     namespace: kagent

@@ -12,7 +12,8 @@ failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
 
-check("registry policy is Enforce", pol["spec"].get("validationFailureAction") == "Enforce")
+# Kyverno 1.18 rule-level validate.failureAction (spec.validationFailureAction is deprecated)
+check("registry policy is Enforce", rule["validate"].get("failureAction") == "Enforce")
 check("registry policy scoped to apps namespace", "apps" in rule["match"]["any"][0]["resources"]["namespaces"])
 check("allowlist permits docker.io/library only (not arbitrary docker.io users)",
       "docker.io/library/*" in allow and "docker.io/*" not in allow)

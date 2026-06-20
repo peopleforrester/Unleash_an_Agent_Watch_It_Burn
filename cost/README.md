@@ -5,7 +5,7 @@
 ## Approach (implemented in the guard proxy)
 The guard proxy (`agent/gateway/guard-proxy/proxy.py`) already sits in front of the agent and sees
 every A2A response, and kagent reports token usage in each one
-(`result.metadata.kagent_usage_metadata`: `promptTokenCount`, `candidatesTokenCount`, `totalTokenCount`,
+(`result.metadata.adk_usage_metadata`: `promptTokenCount`, `candidatesTokenCount`, `totalTokenCount`,
 confirmed live 2026-06-17). So the proxy tallies tokens and exposes:
 
 ```
