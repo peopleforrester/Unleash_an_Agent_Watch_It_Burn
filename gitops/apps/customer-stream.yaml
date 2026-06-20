@@ -1,0 +1,17 @@
+# ABOUTME: ArgoCD app for the Beat-1 fake-customer-data stream (the exfil target) in the apps namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: customer-stream
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "2" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: gitops/manifests/customer-stream
+  destination: { server: https://kubernetes.default.svc, namespace: apps }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

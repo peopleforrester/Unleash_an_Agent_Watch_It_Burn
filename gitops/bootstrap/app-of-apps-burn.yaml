@@ -21,7 +21,7 @@ spec:
       recurse: false
       # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
       # observability/cert-manager/eso/backstage. Just the agent + ai-layer (cost meter) + burn targets.
-      include: '{namespaces,kagent-crds,kagent,ai-layer,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
+      include: '{namespaces,kagent-crds,kagent,ai-layer,customer-stream,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
