@@ -7,6 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly BEAT_01="${SCRIPT_DIR}/beat-01.sh"
 readonly BEAT_02="${SCRIPT_DIR}/beat-02.sh"
 readonly BEAT_03="${SCRIPT_DIR}/beat-03.sh"
+readonly BEAT_COST="${SCRIPT_DIR}/beat-cost.sh"
 
 usage() {
     cat >&2 <<'EOF'
@@ -28,13 +29,13 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 2; fi
 CONTEXT="${1:?$(usage)}"
 NS="${2:?$(usage)}"
 
-for s in "${BEAT_01}" "${BEAT_02}" "${BEAT_03}"; do
+for s in "${BEAT_01}" "${BEAT_02}" "${BEAT_03}" "${BEAT_COST}"; do
     [[ -x "${s}" ]] || { echo "FAIL: beat script not executable: ${s}" >&2; exit 1; }
 done
 
 declare -A RESULT
-ORDER=(beat-01 beat-02 beat-03)
-declare -A SCRIPT=([beat-01]="${BEAT_01}" [beat-02]="${BEAT_02}" [beat-03]="${BEAT_03}")
+ORDER=(beat-01 beat-02 beat-03 beat-cost)
+declare -A SCRIPT=([beat-01]="${BEAT_01}" [beat-02]="${BEAT_02}" [beat-03]="${BEAT_03}" [beat-cost]="${BEAT_COST}")
 
 echo "================================================================" >&2
 echo " Phase-6 harness  context=${CONTEXT}  namespace=${NS}" >&2
