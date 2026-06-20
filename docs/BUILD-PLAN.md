@@ -41,6 +41,31 @@ Hard rules:
    per-tier price. Cost Explorer is post-hoc only (`cost-report.sh`); it lags too much to drive a live
    counter.
 
+## Whitney feedback incorporated (2026-06-20)
+
+From her Google Doc comments (Michael handles the substantive replies; these are the build changes):
+
+- **Telemetry: Datadog primary, Grafana/Tempo/Prometheus secondary fallback.** Each attendee uses
+  their own Datadog; the OTel collector exports to Datadog first (primary) and to prometheus/tempo as
+  the analog fallback. Done in `gitops/apps/otel-collector.yaml` (datadog exporter, BYO `datadog-secret`).
+- **Thesis: maintenance cost, not just spend.** Per-agent/per-app guardrails mean more to maintain and
+  more to miss; doing it at the cluster abstraction layer is the win. Folded into BUILD-SPEC §1.
+- **Thesis: prompt caching** for the capped-cost story. Folded into BUILD-SPEC §1.
+- **Thesis: tell the agent what guardrails exist** in its system prompt so it does not burn tokens
+  trying blocked actions (a cost saver). Folded into BUILD-SPEC §1.
+- **Reveal-style structure:** the Cluster 1 platform tour is the guards-OFF / minimal-security view;
+  the CNCF security projects are introduced WHEN they turn on at Cluster 2, not all upfront. Whitney
+  presents some of them. Folded into `facilitation/runbook.md`.
+- **ESO / S3 exfil "basketball" game:** a shared External Secrets Operator (AWS ESO; possibly Vault)
+  holds one secret; attendees use system prompts to get the agent to exfiltrate it, then post it to a
+  target S3 bucket. Captured as an optional challenge in the runbook + a difficulty spike.
+- **Challenge ladder** (optional, evaluate difficulty per level): (1) exfiltrate data, (2) get the
+  agent to reveal secrets, (3) break the cluster. Use funny Kubernetes secrets. In the runbook.
+- **Partner-cluster breaking:** lower priority (restore burden); kept only as a possible LAST challenge.
+- **Considered CNCF adds:** Harbor + image signing -> an image-verification Kyverno policy added now
+  (`policies/kyverno/verify-image-signatures.yaml`); NetworkPolicy / Falco / ESO already present;
+  **Istio service mesh (mTLS) is a planned addition** (spike), not yet built.
+
 ## Build punch-list (priority order, each with its render bar)
 
 Repo-buildable here; live provisioning/verification is Michael's separate project.

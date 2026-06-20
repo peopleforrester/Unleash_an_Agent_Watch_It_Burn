@@ -1,0 +1,41 @@
+# ABOUTME: Kyverno image-signature verification (the "Harbor + image signing" CNCF control Whitney raised).
+# ABOUTME: Starts in Audit so it never blocks the demo unexpectedly; flip to Enforce to require signatures.
+#
+# verify-at-build: confirm the verifyImages schema for the pinned Kyverno v1.18.1 (failureAction
+#   placement) and fill the cosign attestor for YOUR supply chain (keyless subject/issuer for the
+#   registry/CI that signs the workshop images, or a public key). imageReferences must scope to your
+#   registry, not "*". This is the signing half of the Harbor + image-signing story; Harbor itself is
+#   a registry choice, not required for the policy to work.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: verify-image-signatures
+  annotations:
+    policies.kyverno.io/title: Verify Image Signatures
+    policies.kyverno.io/category: Supply Chain / CNCF
+spec:
+  background: false
+  rules:
+    - name: require-signed-images
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - apps
+      verifyImages:
+        - imageReferences:
+            - "*"                 # verify-at-build: scope to your registry, e.g. "ghcr.io/<org>/*"
+          failureAction: Audit    # verify-at-build: confirm 1.18 placement; flip to Enforce to require
+          required: true
+          verifyDigest: true
+          mutateDigest: true
+          attestors:
+            - count: 1
+              entries:
+                - keyless:        # verify-at-build: keyless (Fulcio/Rekor) attestor for your CI signer
+                    subject: "https://github.com/<org>/<repo>/.github/workflows/*"
+                    issuer: "https://token.actions.githubusercontent.com"
+                    rekor:
+                      url: https://rekor.sigstore.dev
