@@ -56,6 +56,13 @@ spec:
               endpoint: tempo.monitoring.svc.cluster.local:4317
               tls:
                 insecure: true
+            # PRIMARY telemetry sink: Datadog (Whitney's account). prometheusremotewrite + otlp/tempo
+            # are the secondary "analog" fallback. DD_API_KEY / DD_SITE come from the datadog-secret
+            # (BYO; never stored in this repo). verify-at-build: create the secret + set the DD site.
+            datadog:
+              api:
+                key: ${env:DD_API_KEY}
+                site: ${env:DD_SITE}
             debug:
               verbosity: basic
               sampling_initial: 5
@@ -75,7 +82,8 @@ spec:
                   - batch
                   - resource
                 exporters:
-                  - prometheusremotewrite
+                  - datadog               # primary
+                  - prometheusremotewrite # secondary / fallback
                   - debug
               traces:
                 receivers:
@@ -85,8 +93,20 @@ spec:
                   - batch
                   - resource
                 exporters:
-                  - otlp/tempo
+                  - datadog     # primary
+                  - otlp/tempo  # secondary / fallback
                   - debug
+        # Datadog credentials for the primary exporter (BYO secret; not stored in this repo).
+        # verify-at-build: create `datadog-secret` (key api-key) from Whitney's Datadog account and
+        # set DD_SITE to that account's site (e.g. datadoghq.com, us5.datadoghq.com, datadoghq.eu).
+        extraEnvs:
+          - name: DD_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: datadog-secret
+                key: api-key
+          - name: DD_SITE
+            value: "datadoghq.com"
         service:
           enabled: true
           type: ClusterIP

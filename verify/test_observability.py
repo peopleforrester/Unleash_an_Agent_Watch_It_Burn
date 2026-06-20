@@ -29,6 +29,15 @@ check("collector traces pipeline exports to Tempo", "otlp/tempo" in cfg["service
 check("collector cluster.name is not the stale KubeAuto value",
       all(a.get("value") != "kubeauto-ai-day" for a in cfg["processors"]["resource"]["attributes"]))
 
+# Datadog is the PRIMARY sink; Grafana/Tempo/Prometheus are the secondary fallback.
+check("Datadog is the primary traces exporter", cfg["service"]["pipelines"]["traces"]["exporters"][0] == "datadog")
+check("Datadog is the primary metrics exporter", cfg["service"]["pipelines"]["metrics"]["exporters"][0] == "datadog")
+check("Grafana/Tempo kept as the secondary traces fallback", "otlp/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
+check("Datadog API key is NOT hardcoded (env reference)", cfg["exporters"]["datadog"]["api"]["key"].startswith("${env:"))
+_vals = otel["spec"]["source"]["helm"]["valuesObject"]
+_ddenv = {e["name"]: e for e in _vals.get("extraEnvs", [])}
+check("DD_API_KEY sourced from a BYO secret (not in repo)", "secretKeyRef" in _ddenv.get("DD_API_KEY", {}).get("valueFrom", {}))
+
 # Prometheus: slimmed (alertmanager off) + a single alertmanager key + short retention.
 pvals = prom["spec"]["source"]["helm"]["valuesObject"]
 check("alertmanager disabled (slim the per-attendee node)", pvals["alertmanager"]["enabled"] is False)
