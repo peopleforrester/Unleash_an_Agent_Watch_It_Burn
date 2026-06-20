@@ -12,6 +12,7 @@ Layers used below: **admission** (request-time policy at the API server), **RBAC
 | 1a | Agent deploys a non-compliant workload | Admission policy (Kyverno), flipped from audit to enforce | Admission | **CNCF tooling covers it.** Admission control already in the platform. |
 | 1b | Agent tries to escalate its own privileges (self-granted ClusterRoleBinding) | Scoped RBAC, the agent's ServiceAccount lacks the verbs | RBAC | **CNCF tooling covers it.** Standard Kubernetes authorization. |
 | 1c | Agent mutates an ArgoCD-managed resource outside Git | Admission block on non-GitOps principals + GitOps self-heal reverts drift | GitOps (+ admission) | **CNCF tooling covers it.** GitOps reconciliation + admission. |
+| 1d | Agent moves laterally / sniffs unencrypted pod-to-pod traffic | Istio STRICT mTLS + SPIFFE workload identity | Mesh | **CNCF tooling covers it.** Service mesh (Istio ambient); the mTLS certs are SPIFFE identities, so this is also the identity layer. |
 | **Beat 2, what the control plane can't see (AGENT-SPECIFIC GAP)** | | | | |
 | 2a | Prompt injection steers the agent off task | Input inspection at the gateway request phase (hard reject) | Input inspection | **Agent-specific control required.** No admission controller, RBAC rule, or GitOps reconciler inspects natural-language input. |
 | 2b | Agent reads a planted secret and returns it (exfil) | Output inspection at the gateway (block/redact the sentinel) | Output inspection | **Agent-specific control required.** The leak rides out in the response body; the control plane never sees it. |

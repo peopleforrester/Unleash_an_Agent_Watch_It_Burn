@@ -4,7 +4,7 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 fail=0
-for t in test_cost_counter.py test_proxy_guards.py test_beat3_mcp.py test_agent_hitl.py test_observability.py test_takeaways.py test_verify_harness.py test_chat_ui.py; do
+for t in test_cost_counter.py test_proxy_guards.py test_beat3_mcp.py test_agent_hitl.py test_observability.py test_takeaways.py test_verify_harness.py test_chat_ui.py test_mesh.py; do
     printf '\n== %s ==\n' "${t}"
     python3 "${SCRIPT_DIR}/${t}" || fail=1
 done
