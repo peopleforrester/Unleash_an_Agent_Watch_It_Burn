@@ -1,0 +1,108 @@
+# ABOUTME: Istio service mesh (ambient mode) as ArgoCD apps: base, CNI, istiod, ztunnel, mesh config.
+# ABOUTME: Provides mTLS (encrypted pod-to-pod) whose workload certs ARE SPIFFE identities. Pinned 1.30.1.
+# Ambient (sidecarless) chosen to keep the per-attendee node footprint down. verify-at-build: confirm
+# ztunnel + waypoint footprint on t3.large; ambient GA since 1.24, current stable 1.30.1 (2026-06-04).
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-base
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-6" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    chart: base
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: "1.30.1"
+    helm:
+      valuesObject:
+        defaultRevision: default
+  destination: { server: https://kubernetes.default.svc, namespace: istio-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-cni
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-6" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    chart: cni
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: "1.30.1"
+    helm:
+      valuesObject:
+        profile: ambient
+  destination: { server: https://kubernetes.default.svc, namespace: istio-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istiod
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-5" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    chart: istiod
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: "1.30.1"
+    helm:
+      valuesObject:
+        profile: ambient
+        pilot:
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+  destination: { server: https://kubernetes.default.svc, namespace: istio-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ztunnel
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-4" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    chart: ztunnel
+    repoURL: https://istio-release.storage.googleapis.com/charts
+    targetRevision: "1.30.1"
+    helm:
+      valuesObject: {}
+  destination: { server: https://kubernetes.default.svc, namespace: istio-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }
+    syncOptions: [CreateNamespace=true]
+---
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: istio-mesh-config
+  namespace: argocd
+  annotations: { argocd.argoproj.io/sync-wave: "-3" }
+  finalizers: [resources-finalizer.argocd.argoproj.io]
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: security/istio
+  destination: { server: https://kubernetes.default.svc, namespace: istio-system }
+  syncPolicy:
+    automated: { prune: true, selfHeal: true }

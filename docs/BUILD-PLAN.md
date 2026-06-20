@@ -62,9 +62,11 @@ From her Google Doc comments (Michael handles the substantive replies; these are
 - **Challenge ladder** (optional, evaluate difficulty per level): (1) exfiltrate data, (2) get the
   agent to reveal secrets, (3) break the cluster. Use funny Kubernetes secrets. In the runbook.
 - **Partner-cluster breaking:** lower priority (restore burden); kept only as a possible LAST challenge.
-- **Considered CNCF adds:** Harbor + image signing -> an image-verification Kyverno policy added now
-  (`policies/kyverno/verify-image-signatures.yaml`); NetworkPolicy / Falco / ESO already present;
-  **Istio service mesh (mTLS) is a planned addition** (spike), not yet built.
+- **Considered CNCF adds:** Harbor + image signing -> an image-verification Kyverno policy added
+  (`policies/kyverno/verify-image-signatures.yaml`); NetworkPolicy / Falco / ESO already present.
+  **Istio service mesh (ambient, STRICT mTLS) now BUILT** (`gitops/apps/istio.yaml` + `security/istio/`,
+  pinned 1.30.1); its mTLS certs are SPIFFE identities, so it also delivers the SPIFFE identity layer
+  (standalone SPIRE stays narrated per the research spike).
 
 ## Build punch-list (priority order, each with its render bar)
 
