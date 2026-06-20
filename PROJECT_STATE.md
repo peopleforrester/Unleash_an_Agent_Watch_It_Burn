@@ -35,6 +35,34 @@ Last updated: 2026-06-19
 - Two gaps the review missed, tracked in BUILD-PLAN: rate-limit the demo itself; CNI (VPC-CNI vs Cilium).
 - Remaining open: co-speaker split confirmation with Whitney.
 
+### Build status (2026-06-20): buildable backlog complete
+
+Everything buildable-without-a-cluster is done, tested, and on **main == staging**. Offline render-gate
+suite: **11 test files, 94 checks, all green** (`verify/run-tests.sh`).
+
+- **P1** cost counter (real per-tier pricing, Prometheus /metrics, flatline-on-block).
+- **P3** input two-stage guard + rate-limit/cost-cap, bad-MCP clown-file, HITL + MCP allowlist.
+- **P4** slim Prometheus + trace dashboard; **Datadog primary**, Grafana/Tempo analog fallback.
+- **P5** attendee chat UI (browser-only, live cost counter).
+- **P6** live cost-counter assertion (`beat-cost`) in the verify harness.
+- **P8** governance-map cost-ladder.
+- **Whitney's feedback:** thesis augments (maintenance, caching, tell-the-agent-its-jail), reveal-style
+  structure (guards-off tour, CNCF intros at C2), cosign image-signing policy, **Istio ambient mTLS =
+  SPIFFE identity** (1.30.1), the **ESO/S3 exfil game**, the optional moderated prompt-stream display.
+- **Docs:** `docs/STACK-WALKTHROUGH.md` (Doc 7) + `facilitation/whitney-questions-tracker.md` +
+  `facilitation/whitney-comments-archive.md` (Drive backup). 13 build-pointer + 7 walkthrough-link
+  replies posted on her comments.
+
+**Provisioning track (verify-at-build, needs a live cluster):** kagent A2A usage field names, agentgateway
+mcpAuthorization + requireApproval runtime, LLM Guard envelope, VPC-CNI NetworkPolicy enforcement,
+Datadog account/key, Bedrock per-tier access (Sonnet/Opus forms), the game difficulty spikes.
+
+**Open for Michael + Whitney (tracker):** her narration story, central observability + Datadog lag,
+before/after-gateway prompt visibility, service-mesh/SPIFFE depth, difficulty spikes.
+
+**Doc-sync note:** Run of Show (Doc 3) + Build Spec (Doc 6) content re-syncs are HELD to protect her
+in-doc comments; comments are archived as a backup. Docs 7 + the archive are safe to re-sync (no comments).
+
 ## Current plan summary
 
 Spec-driven build of a repeatable workshop: attendees drive a scoped AI agent
