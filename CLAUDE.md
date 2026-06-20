@@ -19,7 +19,15 @@ global kube state. Be explicit about the target cluster on every single command.
 5. **Scripts take the context explicitly.** The verify harness (`verify/*.sh`) already takes a
    `<kube-context>` arg; the demo toggle/fallback scripts read a required `CONTEXT` env. A script that
    cannot determine its target context must fail loudly, never fall back to the current-context.
-6. **AWS profiles too:** pass `--region` (and `--profile` when relevant) explicitly; do not depend on
+6. **AWS profiles too:** pass `--region` and `AWS_PROFILE` explicitly (per command), do not depend on
    a shared default region/profile that another session may have changed.
+7. **Pull creds into an isolated file:** `aws eks update-kubeconfig --kubeconfig /tmp/<cluster>.kubeconfig
+   --name <cluster> --region <r>`. Never let it write `~/.kube/config`.
+8. **Verify before every mutation:** confirm `KUBECONFIG=<file> kubectl config current-context` matches
+   the cluster you provisioned; if it does not match, STOP. Prefer a guarded one-liner:
+   `KUBECONFIG=/tmp/x.kubeconfig AWS_PROFILE=p kubectl config current-context | grep -q <expected> && KUBECONFIG=/tmp/x.kubeconfig AWS_PROFILE=p kubectl apply ...`
+9. **Only operate on clusters you provisioned this session.** If you did not create it, do not touch it.
+   Confirm ownership by the context name and cluster ARN, not by assumption.
 
-If you are unsure which cluster a command will hit, stop and make the context explicit first.
+If you are unsure which cluster a command will hit, stop and make the context explicit first. This
+mirrors the global rule `~/.claude/rules/infra/kubernetes.md` (Cluster Context Safety).
