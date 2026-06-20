@@ -1,0 +1,35 @@
+# ABOUTME: Attack-1 (exfil) control for Cluster 2. Egress allowlist for the apps namespace: DNS + in-VPC
+# ABOUTME: only. The agent's S3 PutObject goes to the internet, which has no allow, so it is denied. The
+# ABOUTME: reply-channel leak is NOT covered here (that is the Cluster-3 output guard); this is the S3 path.
+#
+# Honest L3/L4 design (VPC-CNI, no Cilium): we cannot tell Bedrock-443 from S3-443 by name at L3/L4, so
+# Bedrock must be reached via a VPC endpoint (PrivateLink, an in-VPC IP) and S3 via the internet (denied).
+# verify-at-build: create a Bedrock VPC endpoint; set the cidr below to the cluster VPC CIDR. Combines
+# with default-deny egress (policies/network-policies/default-deny.yaml); Cluster 1 omits all of this.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: apps-egress-allowlist
+  namespace: apps
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS resolution
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    # In-VPC only: in-cluster services + AWS VPC endpoints (Bedrock via PrivateLink). NOT the internet.
+    - to:
+        - ipBlock:
+            cidr: 10.0.0.0/16 # verify-at-build: set to the cluster VPC CIDR (NOT 0.0.0.0/0)
+      ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 8080 }
+        - { protocol: TCP, port: 8000 }
