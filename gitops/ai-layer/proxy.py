@@ -101,6 +101,27 @@ _cost_lock = threading.Lock()
 _cost = {"tier": MODEL_TIER, "requests": 0, "input_tokens": 0, "output_tokens": 0,
          "total_tokens": 0, "usd": 0.0}
 
+# Optional gamification: stream attendees' prompts to a side screen ("screen goes black, someone won").
+# Projecting attendee input on a public screen needs moderation under the code of conduct, so capture
+# is DEFAULT OFF and the /prompts feed only ever returns MODERATED text. verify-at-build: for a real
+# public screen, back this with a content-moderation service (agentgateway external moderation / LLM
+# Guard), not just this deterministic mask.
+STREAM_ENABLED = os.environ.get("STREAM_PROMPTS", "off").lower() == "on"
+PROFANITY = [t.strip().lower() for t in os.environ.get("PROFANITY_LIST", "").split(",") if t.strip()]
+_stream_lock = threading.Lock()
+_prompts = collections.deque(maxlen=50)  # recent MODERATED prompts for the display
+
+
+def moderate(text):
+    """Mask block-listed + profane terms so the side-screen stays within the code of conduct."""
+    masked = text
+    low = masked.lower()
+    for term in set(BLOCK_LIST + PROFANITY):
+        if term and term in low:
+            masked = masked.replace(term, "[redacted]").replace(term.upper(), "[redacted]")
+            low = masked.lower()
+    return masked[:280]
+
 
 def record_usage(resp):
     """Pull kagent token usage from an A2A response and add it to the running cost tally."""
@@ -178,6 +199,11 @@ class Handler(BaseHTTPRequestHandler):
             with _cost_lock:
                 self._send(200, dict(_cost))
             return
+        if self.path == "/prompts":
+            # Side-screen feed: MODERATED prompts only, and only if capture is enabled.
+            with _stream_lock:
+                self._send(200, {"enabled": STREAM_ENABLED, "prompts": list(_prompts)})
+            return
         if self.path == "/metrics":
             # Prometheus text format so kube-prometheus scrapes it and Grafana graphs the climbing
             # counter live. Block-listed requests never reach record_usage, so witb_requests_total /
@@ -246,6 +272,9 @@ class Handler(BaseHTTPRequestHandler):
         text = ""
         if isinstance(payload, dict):
             text = extract_text(payload.get("params", {}).get("message", {}).get("parts", []))
+        if STREAM_ENABLED and text:
+            with _stream_lock:
+                _prompts.append(moderate(text))  # moderated; side-screen feed only
 
         # Stage 1: deterministic block-list (cheapest, pre-LLM, zero tokens). Toggled independently.
         if GUARDS["input_blocklist"] and text:

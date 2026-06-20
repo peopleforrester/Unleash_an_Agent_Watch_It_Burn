@@ -19,6 +19,8 @@ configMapGenerator:
     files:
       - web/index.html
       - web/app.js
+      - web/display.html
+      - web/display.js
 
 secretGenerator:
   - name: llm-guard-auth

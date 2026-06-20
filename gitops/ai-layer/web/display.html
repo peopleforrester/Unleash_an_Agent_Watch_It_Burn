@@ -1,0 +1,24 @@
+<!-- ABOUTME: Side-screen display of the MODERATED attendee prompt stream (optional gamification). -->
+<!-- ABOUTME: Reads guard-proxy /prompts; only shows moderated text, and only if STREAM_PROMPTS=on. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="proxy-base" content="" />
+  <title>Watch It Burn — live attack stream</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #000; color: #ffb454; }
+    h1 { font-size: 20px; padding: 12px 20px; margin: 0; color: #e6e6e6; border-bottom: 1px solid #222; }
+    #stream { padding: 16px 24px; font-size: 22px; line-height: 1.5; }
+    .p { padding: 8px 0; border-bottom: 1px solid #161616; white-space: pre-wrap; }
+    #off { padding: 40px; color: #777; font-size: 18px; }
+  </style>
+</head>
+<body>
+  <h1>Live attack stream (moderated)</h1>
+  <div id="off" hidden>Prompt streaming is disabled (STREAM_PROMPTS=off).</div>
+  <div id="stream"></div>
+  <script src="display.js"></script>
+</body>
+</html>
