@@ -79,15 +79,7 @@ spec:
 #   bedrock:
 #     region: us-west-2
 # ---
-# apiVersion: kagent.dev/v1alpha2
-# kind: ModelConfig
-# metadata:
-#   name: bedrock-fable
-# spec:
-#   provider: Bedrock
-#   model: us.anthropic.claude-fable-5 # Fable 5 (now live on Bedrock, research/13)
-#   bedrock:
-#     region: us-west-2
+# Fable 5 is retired from this workshop; not a tier in the comparison.
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: Agent

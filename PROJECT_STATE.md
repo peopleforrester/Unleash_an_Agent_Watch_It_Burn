@@ -44,10 +44,10 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
-OPEN (design call for Michael, NOT auto-changed): research/13 found Fable 5 is now LIVE on Bedrock
-(`us.anthropic.claude-fable-5`). Docs 3 (line ~92) and 6 (lines ~196/213) plus repo BUILD-SPEC/runbook
-still say "Fable 5 unavailable (access suspended)". Whether to add Fable as a 4th model-tier
-cluster/screen is a demo-design decision, so those lines were left for Michael to decide.
+Fable 5: RETIRED from this workshop (Michael, 2026-06-21). Not a tier in the comparison. The Fable
+additions made during the doc-accuracy pass were reverted (resources.yaml, VERSIONS.lock, BUILD-SPEC);
+research/13 still records that it went live on Bedrock as a dated finding, but it is out of scope here.
+Do not re-raise Fable; Michael will say if it comes back.
 
 ### Session-close note (2026-06-19)
 
