@@ -55,6 +55,29 @@ The nice-to-have items may come for free depending on which architectural path w
 
 The answer depends on what the research spikes reveal about what each component natively emits and what Datadog auto-discovers.
 
+**Unified Service Tagging (cross-cutting option for any path):**
+Datadog UST requires three labels on every workload pod: `env`, `service`, `version`. When present,
+Datadog correlates metrics, traces, and logs automatically — service map, trace↔log pivots, and the
+correlated service view appear without extra config. For the workshop this means attendees can click
+from a Falco alert into traces into logs for the same service in one UI flow.
+
+The OTel Collector path maps OTel resource attributes directly to UST tags:
+- `service.name` → `service`
+- `service.version` → `version`
+- `deployment.environment.name` → `env` (requires Datadog Exporter v0.110.0+)
+
+**Confirmed:** Tag mapping works via OTel Exporter. `DD_SERVICE` / `DD_ENV` / `DD_VERSION` env vars
+are NOT supported on the OTel path — must use `OTEL_RESOURCE_ATTRIBUTES` or SDK resource config.
+
+**Unconfirmed (needs live-cluster check):** Whether the full service map and trace↔log correlation
+lands in the Datadog UI via pure OTel Exporter (no Agent). The hybrid path sidesteps this: the
+Agent handles log tag injection, the OTel Exporter handles trace/metric tagging — both use the same
+`env`/`service`/`version` values, so correlation is complete.
+
+For the workshop, the most natural implementation: set `OTEL_RESOURCE_ATTRIBUTES` on the AI layer
+pods with `service.name=guard-proxy` (or `agentgateway`, `kagent`), `service.version` matching the
+cluster tier (`cluster-1`, `cluster-2`, `cluster-3`), and `deployment.environment.name=watch-it-burn`.
+
 ---
 
 ## What we know about the current state of the repo
@@ -117,7 +140,7 @@ Written when v1.2.1 was current (now stale — v1.3.0 is GA). Covers guardrail m
 
 ### Spike A — Datadog on EKS + what each component natively emits ✅ Complete
 
-Full findings in [`research/19-datadog-integrations-stack-2026.md`](19-datadog-integrations-stack-2026.md).
+Full findings in [`research/18-datadog-integrations-stack-2026.md`](../../research/18-datadog-integrations-stack-2026.md).
 
 **Architectural decision (answered):** Hybrid path. Keep the existing OTel Collector for OTLP (kagent, agentgateway, Kyverno). Add the Datadog Agent DaemonSet for EKS infra auto-discovery and named integrations. Pre-bake pod annotations into platform manifests. DDOT is the 2025/2026 recommended path over two separate DaemonSets but requires Agent v7.65+; evaluate at build time.
 

@@ -8,6 +8,7 @@
 |------|---------|
 | 2026-06-21 | Initial research — per-component Datadog integration + native telemetry survey |
 | 2026-06-21 | Added KubeArmor row — separate Prometheus exporter required, no native OTLP, no named Datadog integration |
+| 2026-06-21 | Added Unified Service Tagging section — OTel attribute mapping confirmed, full UI payoff needs live verification |
 
 ## Findings
 
@@ -134,6 +135,38 @@ entirely. See `~/.claude/rules/ddot-gotchas.md`.
 **Hostname alignment required:** Both Agent and Collector must report the same host using
 `k8s.node.name`. Mismatched identifiers create duplicate host entries and double billing.
 
+### Unified Service Tagging (UST)
+
+UST requires three labels on every workload pod: `env`, `service`, `version`. When present across
+metrics, traces, and logs, Datadog's service map, trace↔log correlated pivots, and the service view
+all work automatically — no extra config.
+
+**OTel Collector → Datadog Exporter path (confirmed):**
+
+| OTel Resource Attribute | Datadog UST Tag |
+|---|---|
+| `service.name` | `service` |
+| `service.version` | `version` |
+| `deployment.environment.name` | `env` |
+| `deployment.environment` (deprecated) | `env` |
+
+Requires Datadog Exporter v0.110.0+. `DD_SERVICE` / `DD_ENV` / `DD_VERSION` env vars are NOT
+supported on the OTel path — use `OTEL_RESOURCE_ATTRIBUTES` or OTel SDK resource config instead.
+Source: https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging/
+
+**What is NOT confirmed from docs:** Whether the full service map and trace↔log correlation appears
+in the Datadog UI via pure OTel Exporter without the Datadog Agent. Tag mapping is confirmed; the
+complete UI payoff needs live-cluster verification. The hybrid path (Agent + OTel Collector) avoids
+this uncertainty — Agent handles log tagging, Exporter handles trace/metric tagging, both use the
+same `env`/`service`/`version` values.
+
+**Workshop implementation:** Set `OTEL_RESOURCE_ATTRIBUTES` on the AI layer pods:
+- `service.name`: `guard-proxy`, `agentgateway`, `kagent` (per component)
+- `service.version`: cluster tier string, e.g. `cluster-1`, `cluster-2`, `cluster-3`
+- `deployment.environment.name`: `watch-it-burn`
+
+This is a cross-cutting option that works regardless of which architectural path is chosen.
+
 ### Workshop Recommendation
 
 For a 2-hour workshop where "Datadog shows you everything" is the payoff:
@@ -145,6 +178,8 @@ For a 2-hour workshop where "Datadog shows you everything" is the payoff:
 4. Accept the gaps: ESO, Grafana, Backstage need more work — narrate as "these need wiring" rather
    than demoing them.
 5. Istio ambient: don't promise L7 metrics without deploying a waypoint proxy.
+6. Add UST labels (`env`, `service`, `version`) to all AI layer pods via `OTEL_RESOURCE_ATTRIBUTES`.
+   Verify on a live cluster that service map and trace↔log pivots appear in the Datadog UI.
 
 ## Sources
 
@@ -163,4 +198,6 @@ For a 2-hour workshop where "Datadog shows you everything" is the payoff:
 - https://istio.io/latest/docs/reference/config/metrics/ — Istio ambient metric shapes
 - https://falco.org/docs/outputs/ — Falco output destinations
 - https://grafana.com/docs/loki/latest/operations/observability/ — Loki metrics + cardinality warning
+- https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging/ — UST OTel attribute mapping confirmed
+- https://github.com/kubearmor/kubearmor-prometheus-exporter — KubeArmor Prometheus exporter, 9 alert counters
 - https://kyverno.io/docs/monitoring/ — Kyverno OTel/OTLP opt-in
