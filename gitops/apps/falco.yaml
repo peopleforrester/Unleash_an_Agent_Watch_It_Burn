@@ -223,7 +223,11 @@ spec:
               tags: [workshop, agent, secret, mitre_credential_access]
               source: syscall
 
-          workshop-forkbomb-rules.yaml: |
+          # NOTE the 00- prefix: Falco fires only the FIRST matching rule per event, and rules.d
+          # files load alphabetically. The generic "Exec Into Pod Detected" (custom-rules.yaml) also
+          # matches the fork-bomb entry-shell execve, so without sorting this file first it would
+          # shadow the fork-bomb rule and nothing would route to Talon (caught live on watch-it-burn-test).
+          00-workshop-forkbomb-rules.yaml: |
             # Detection for the Beat 3 fork bomb. This is the DETECT-and-RESPOND beat (Falco -> Talon);
             # the real BLOCK is the per-pod PID limit (kubelet podPidsLimit, see infra/node-config/).
             # The classic bomb is `:(){ :|:& };:`; match its cmdline signature in a workload container.
