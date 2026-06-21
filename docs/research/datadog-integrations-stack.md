@@ -7,6 +7,7 @@
 | Date | Summary |
 |------|---------|
 | 2026-06-21 | Initial research — per-component Datadog integration + native telemetry survey |
+| 2026-06-21 | Added KubeArmor row — separate Prometheus exporter required, no native OTLP, no named Datadog integration |
 
 ## Findings
 
@@ -49,6 +50,23 @@ every cluster.
 **EKS etcd metrics are not available via Prometheus scrape.** 🟡 Medium confidence
 AWS manages etcd; those metrics only come through CloudWatch `AWS/EKS` namespace.
 
+**KubeArmor Prometheus metrics require a separate exporter deployment.** 🟢 High confidence
+KubeArmor does NOT expose Prometheus metrics natively. Metrics only appear if you deploy the separate
+`kubearmor/kubearmor-prometheus-exporter` — a distinct pod/service not bundled with the main
+KubeArmor DaemonSet. The exporter exposes 9 alert counters: `kubearmor_alerts_in_host_total`,
+`kubearmor_alerts_in_namespace_total`, `kubearmor_alerts_in_pod_total`,
+`kubearmor_alerts_in_container_total`, `kubearmor_alerts_with_policy_total`,
+`kubearmor_alerts_with_severity_total`, `kubearmor_alerts_with_type_total`,
+`kubearmor_alerts_with_operation_total`, `kubearmor_alerts_with_action_total`.
+There is no native OTLP output and no named Datadog integration.
+Source: https://github.com/kubearmor/kubearmor-prometheus-exporter
+
+**KubeArmor and Falco serve different roles — they complement each other.**
+Falco detects and alerts but never blocks. KubeArmor enforces via eBPF/LSM and prevents syscalls
+from completing. For the workshop's "Cluster 2 survives the fork bomb" story, KubeArmor is the
+enforcement layer; Falco is still valuable as the observability/alerting layer with its named
+Datadog integration and OOTB dashboards.
+
 **Loki high-cardinality risk.** 🟡 Medium confidence
 The `tenant` label on many Loki metrics means `"metrics": [".*"]` generates very high custom
 metric counts in Datadog. Scope the metrics list deliberately.
@@ -65,6 +83,7 @@ Source: https://docs.datadoghq.com/integrations/cert_manager/
 | **ArgoCD** | Yes (Agent 7.42+) | No | No — pod annotations, 3 ports | Prometheus (8082/8083/8084) | Medium |
 | **Kyverno** | Yes (Agent 7.56+) | No | No — per-controller annotations (4 pods) | Prometheus + **OTel/OTLP opt-in** | Medium |
 | **Falco** | Yes (Agent 7.59.1+) | **Yes** | No — `falco.yaml` edits + annotations | Prometheus; Falcosidekick adds OTLP fan-out | Medium |
+| **KubeArmor** | **No** | No | No | Prometheus via **separate** `kubearmor-prometheus-exporter` deploy (`kubearmor_alerts_*` counters); gRPC log stream; no native OTLP | High (extra deploy; no named DD integration; enforcement-only, not observability) |
 | **Istio ambient** | Yes (Agent 6.1+) | Unconfirmed | **Broken** — sidecar auto_conf doesn't fire in ambient | Prometheus + OTel via Telemetry API; **L4 only without waypoint** | High |
 | **ESO** | **No** | No | No | Prometheus only | High (generic openmetrics) |
 | **cert-manager** | Yes (Agent 7.22+) | **Yes** | No — single endpoint config | Prometheus (port 9402) | Low |
