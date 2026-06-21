@@ -8,6 +8,13 @@ metadata:
   name: watch-it-burn-test
   region: us-west-2
   version: "1.35" # EKS default / most-tested GA on standard support (1.36 exists but is newer/less proven)
+  # Collision-avoidance tags: this AWS account is shared with a separate Packt project. Every resource
+  # we create carries project=watch-it-burn so ours are unambiguous and never confused with theirs.
+  # eksctl applies metadata.tags to the cluster and its shared CloudFormation resources.
+  tags:
+    project: watch-it-burn
+    event: ai-engineer-worldsfair-2026
+    role: test
 
 iam:
   withOIDC: true # enables IRSA later (gateway/LLM Guard/Bedrock pod-scoped creds)
@@ -21,6 +28,9 @@ managedNodeGroups:
     volumeSize: 40
     labels:
       workshop-spoke: "true" # so the ArgoCD ApplicationSet cluster generator can target it later
+    tags:
+      project: watch-it-burn # propagate to the EC2/ASG so nodes are tagged ours too
+      role: test
     iam:
       attachPolicy:
         Version: "2012-10-17"
