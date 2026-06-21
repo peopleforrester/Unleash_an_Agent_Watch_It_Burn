@@ -59,6 +59,14 @@ spec:
           image: ghcr.io/agentgateway/agentgateway:v1.3.0 # verify-at-build: confirm registry/path + pin @sha256 digest
           imagePullPolicy: IfNotPresent
           args: ["--file", "/etc/agentgateway/config.yaml"]
+          env:
+            # Unified Service Tagging for Datadog correlation (service / version / env), same scheme as
+            # the guard-proxy. verify-at-build: substitute CLUSTER_TIER per cluster; confirm the
+            # collector Service name for the pinned chart release.
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=agentgateway,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317"
           ports:
             - name: proxy
               containerPort: 3000

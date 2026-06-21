@@ -44,6 +44,18 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
+Observability wiring DONE (2026-06-21, path-independent): (1) OTel Collector spanmetrics connector with
+add_resource_attributes:true wired into traces-exporters + metrics-receivers (so span metrics carry UST
+tags for Datadog correlation; this was the missing connectors block); (2) UST via OTEL_RESOURCE_ATTRIBUTES
+(service.name + service.version=CLUSTER_TIER + deployment.environment.name=watch-it-burn) on guard-proxy,
+agentgateway, and the kagent Agent deployment.env (kagent env support is verify-at-build); (3) Falcosidekick
+native Datadog output via DATADOG_APIKEY from the shared datadog-secret (env overrides yaml; no key in repo;
+additive/swappable, Talon path preserved). Datadog stays swappable per the principle (drop the datadog
+exporter + these blocks to run OSS-only). test_observability.py extended (+9 checks; suite 163). TECH-STATUS.md
+refreshed (was stale at 15 files/118 checks; now 19/163, done items un-stale, research-spike inventory +
+parked/deferred section added). verify-at-build carried: datadog-secret must exist in security ns too; set
+DD_SITE/DATADOG_HOST to Whitney's account; confirm collector Service name + kagent deployment.env + chart extraEnv.
+
 TS agent ON HOLD (Michael, 2026-06-21): the optional TypeScript agent / custom-framework addition is
 DEFERRED until after the demo is finished. Sticking with kagent only for now — a second agent
 framework is unnecessary complexity before the demo works end to end (a comment to this effect is on
