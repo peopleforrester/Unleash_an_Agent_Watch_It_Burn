@@ -157,7 +157,7 @@ spec:
             # kagent agent deployment; confirm on a live cluster before relying on these rules.
 
             - macro: agent_pod
-              condition: (k8s.pod.label.app = "workshop-agent")   # verify-at-build: confirm label kagent sets
+              condition: (k8s.pod.label[app] = "workshop-agent")   # bracket syntax (Falco requires k8s.pod.label[key]); verify-at-build: confirm the label kagent sets
 
             - macro: agent_namespace
               condition: (k8s.ns.name startswith "attendee-")     # verify-at-build: confirm per-attendee ns prefix
