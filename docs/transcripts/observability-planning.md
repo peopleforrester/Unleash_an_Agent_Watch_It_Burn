@@ -169,12 +169,17 @@ If kagent installs Istio itself (not just labels namespaces), the `istio_mode: a
 
 More interesting workshop angle: if the agent SA has `update` on namespace labels, kagent removing `istio.io/dataplane-mode=ambient` from a namespace silently removes mTLS. That shows up as a drop in ztunnel connections — subtle in metrics, but a Falco rule watching for namespace label modifications would catch it explicitly. Worth verifying the agent SA RBAC in `agent/rbac/agent-role.yaml` does not include namespace label update permissions unless the attack is intentional.
 
-### Spike B — Datadog LLM Observability with OTel gen_ai.* spans (blocks AI layer PRD design)
-No existing research covers this. Questions:
-- Does Datadog's LLM Observability product surface from pure OTel `gen_ai.*` spans sent via the Datadog Exporter — without `ddtrace`?
-- What does it actually show? Prompt/response diffs, token cost, tool calls, before/after sanitization?
-- Or does "LLM Observability" here just mean APM traces with `gen_ai.*` attributes?
-- This determines whether the workshop's telemetry payoff is in a purpose-built Datadog product or just APM.
+### Spike B — Datadog LLM Observability with OTel gen_ai.* spans ✅ COMPLETE
+
+**Conclusion:** Log-trace and metrics-to-logs correlation work equivalently on the pure OTel path.
+No dd-trace required. See `research/19-datadog-otel-ust-correlation-2026.md`.
+
+Key findings:
+- "View Trace in APM," Logs tab in APM trace view, and Trace tab in Logs Explorer all work with OTLP-ingested data
+- Datadog natively accepts `trace_id` / `span_id` in 32/16-char lowercase hex — no decimal conversion
+- Metrics-to-logs correlation is tag-based; matching UST tags (`service`/`env`/`version`) is sufficient
+- **Critical:** `spanmetricsconnector` drops `env`/`version` resource attributes from generated metrics by default — requires `add_resource_attributes: true` in the Collector config or metrics-to-logs pivots silently fail
+- `service.name` is NOT auto-remapped for logs via the Agent log pipeline; use `OTEL_RESOURCE_ATTRIBUTES` on pods
 
 ### Open question — TypeScript rewrite scope
 - Confirmed: Michael is rewriting the main app into TypeScript
