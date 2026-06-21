@@ -1,5 +1,9 @@
-*Purpose: provision N independent attendee EKS clusters in parallel from the template, each into the
-one shared VPC, each self-bootstrapping its own in-cluster ArgoCD. No hub.*
+> **Provisioning is Terraform, not eksctl.** The per-attendee cluster is defined in
+> `infra/terraform/cluster/` and stamped out by `infra/terraform/fleet/fleet.sh` (per-attendee
+> isolated state, parallel). This doc describes the attendee-cluster *model*; the IaC lives there.
+
+*Purpose: provision N independent attendee EKS clusters in parallel from the Terraform cluster module,
+each into the one shared VPC, each self-bootstrapping its own in-cluster ArgoCD. No hub.*
 
 # Attendee clusters (independent, take-home)
 

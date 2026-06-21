@@ -1,0 +1,3 @@
+# Per-attendee state and apply/destroy logs are machine-local, not committed.
+states/
+logs/

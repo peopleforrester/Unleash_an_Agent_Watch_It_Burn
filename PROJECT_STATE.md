@@ -5,6 +5,45 @@ AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Fo
 
 Last updated: 2026-06-21
 
+### PROVISIONING CONVERTED eksctl -> TERRAFORM (Michael directive, 2026-06-21)
+
+Michael's call, non-negotiable: drop eksctl, provision with Terraform. Rationale = the standard across
+his workshop repos AND multi-cloud portability (GKE next month, AKS the month after); eksctl is EKS-only
+and would be a from-scratch rewrite per cloud. Decisions (via AskUserQuestion): per-attendee ISOLATED
+state (fan-out), and EKS-now with a portable seam (GKE/AKS later = swap just the cluster module).
+
+Research spike (3 parallel agents) read the reference repos. WINNER = the Packt sister repo
+(`~/repos/events/Packt-agentic-devops/scripts/provision/`): a `lab-vpc/` shared root + a parameterized
+`cluster/` root + a `fleet.sh` driver doing per-attendee isolated state (`-state=states/<name>.tfstate`)
+in a parallel pool (MAX_PARALLEL). KCD-Texas confirmed secondary patterns (workspaces, enableNetworkPolicy);
+KubeAuto is single-cluster (not a fleet). I MODELED ours directly on Packt.
+
+Built `infra/terraform/` (all `terraform validate` clean; offline suite 164 green):
+- `lab-vpc/main.tf` - shared VPC (10.0.0.0/16, two /18 private, one shared NAT, role-only subnet tags),
+  VPC module ~>5.0, provider ~>6.0. Replaces the README-only `infra/shared-vpc/` stub (there was NO
+  shared-infra IaC before; the test cluster made its own throwaway VPC).
+- `cluster/main.tf` - one independent attendee EKS cluster, EKS module ~>21.0 (API: name,
+  kubernetes_version 1.35, addons{}, eks_managed_node_groups, enable_irsa). Takes vpc_id +
+  private_subnet_ids as inputs (shares the lab VPC). EBS CSI via IRSA; AWS LBC via Pod Identity.
+  THREE Watch-It-Burn deltas vs Packt: (1) podPidsLimit=1024 in cloudinit_pre_nodeadm NodeConfig
+  (fork-bomb cap; Packt only sets maxPods); (2) enableNetworkPolicy="true" on vpc-cni (egress beat);
+  (3) Bedrock via EKS Pod Identity association for agent:agent-sa (fleet-safe: no SA annotation in
+  gitops, no 60 OIDC trusts; eks-pod-identity-agent addon feeds the AWS SDK chain kagent uses).
+- `fleet/fleet.sh` - up/down/status, per-attendee state, MAX_PARALLEL pool, `assert_ours` refuses any
+  non-watch-it-burn name (cannot touch co-tenant Packt). `fleet/cleanup-log-groups.sh` sweeps orphaned
+  EKS log groups (create_cloudwatch_log_group=false for idempotent reprovision). `infra/terraform/README.md`.
+- Node default 1x t3.2xlarge (Packt's validated single-node AI-platform shape), parameterized.
+  verify-at-build: confirm the full IDP fits the attendee node (validated live on 6x t3.large); bump if Pending.
+REMOVED eksctl: infra/{test-cluster,node-config,attendee-cluster/cluster.yaml,burn-clusters/cluster.yaml,
+bootstrap.sh,cluster3-setup.sh}. Rewrote teardown/teardown.sh to delegate to the Terraform fleet
+(prefix-scoped). Re-pointed render-gate tests (test_tagging/test_egress/test_forkbomb_defense) at the
+Terraform instead of the deleted eksctl YAML; same safety properties asserted (podPidsLimit in cloudinit,
+enableNetworkPolicy on vpc-cni, project=watch-it-burn default_tags, fleet name-refusal). Docs updated
+(shared-vpc/attendee/burn READMEs, TAGGING.md, deploy-full-idp.sh note). All AWS-LAYER live validations
+from earlier this session (B2/PID/fork-bomb) still hold; they were Kubernetes-layer and are unaffected by
+the provisioning swap. NOT YET DONE: a live `terraform apply` of a cluster (the prior live validation was
+on the eksctl cluster, now torn down); the GCP/AKS module variants (seam is ready, deferred per decision).
+
 ### LIVE VALIDATION SESSION 2026-06-21 (watch-it-burn-test, 6x t3.large, accen-dev/us-west-2)
 
 Ran the remaining live validations (Michael's plan: B2, PID limit, fork bomb) on a fresh cluster with
