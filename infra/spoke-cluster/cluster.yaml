@@ -32,7 +32,9 @@ iam:
 
 managedNodeGroups:
   - name: spoke-ng
-    instanceType: m6i.xlarge # 4 vCPU / 16 GiB — fits the full per-spoke IDP stack with Regex-only LLM Guard
+    instanceType: t3.xlarge # 4 vCPU / 16 GiB, burstable. CONSERVATIVE START for a 2-hour intermittent
+    # lab: cheaper than fixed m-series and bursty engagement suits credits. If a live 2-hour test run
+    # actually chokes CPU credits, bump (t3.2xlarge, then fixed m6i/m7i) - measured, not pre-emptive.
     desiredCapacity: 1
     minSize: 1
     maxSize: 2 # Falco + admission webhooks tolerate a brief 2-node window during rollout
