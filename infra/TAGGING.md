@@ -23,32 +23,31 @@ both the label and the grouping mechanism.
 |---|---|---|
 | `project` | `watch-it-burn` | every resource (the discriminator) |
 | `event` | `ai-engineer-worldsfair-2026` | clusters, buckets, secrets |
-| `role` | `hub` / `spoke` / `test` / `c1-1` / `c2-3` / `c3-inst-1` / ... | clusters + nodegroups |
-| `attendee` | the attendee id | spoke clusters only |
+| `role` | `attendee` / `test` / `c1-1` / `c2-3` / `c3-inst-1` / ... | clusters + nodegroups |
+| `attendee` | the attendee id | attendee clusters only |
 | `component` | `exfil-game-hoop` / `exfil-game-trophy` / ... | non-cluster AWS resources |
 
 ## Naming
 
-All EKS cluster names start with `watch-it-burn-`:
+All EKS cluster names start with `watch-it-burn-` (independent clusters; no hub):
 
-- `watch-it-burn-hub` (facilitator control plane)
+- `watch-it-burn-attendee-<ATTENDEE_ID>` (one independent cluster per attendee, take-home)
 - `watch-it-burn-test` (validation cluster)
-- `watch-it-burn-<CLUSTER_ID>` (burn/instructor: `c1-1`, `c2-3`, `c3-inst-1`, ...)
-- `watch-it-burn-spoke-<ATTENDEE_ID>` (per-attendee)
+- `watch-it-burn-<CLUSTER_ID>` (burn/instructor/presenter: `c1-1`, `c2-3`, `c3-inst-1`, ...)
 
 S3 buckets: `watch-it-burn-<purpose>` (e.g. `watch-it-burn-exfil-hoop`).
 Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-trophy`).
 
 ## Where the tags are applied
 
-- **EKS clusters** — `metadata.tags` in each `infra/*/cluster.yaml`. eksctl applies
+- **EKS clusters** - `metadata.tags` in each `infra/*/cluster.yaml`. eksctl applies
   these to the cluster and its shared CloudFormation resources (VPC, IRSA roles,
   addon roles), so the whole stack inherits `project=watch-it-burn`.
-- **Node groups** — `managedNodeGroups[].tags` (propagates to the EC2 instances / ASG).
-- **S3 buckets** — `aws s3api put-bucket-tagging` in `games/eso-s3-exfil/s3-hoop-setup.sh`.
-- **Secrets Manager** — `--tags` on `create-secret` in `games/eso-s3-exfil/plant-trophy.sh`.
+- **Node groups** - `managedNodeGroups[].tags` (propagates to the EC2 instances / ASG).
+- **S3 buckets** - `aws s3api put-bucket-tagging` in `games/eso-s3-exfil/s3-hoop-setup.sh`.
+- **Secrets Manager** - `--tags` on `create-secret` in `games/eso-s3-exfil/plant-trophy.sh`.
 - **Load balancers** (when a demo Service is exposed as `type: LoadBalancer` at
-  provision time) — the AWS Load Balancer Controller does NOT inherit cluster tags,
+  provision time) - the AWS Load Balancer Controller does NOT inherit cluster tags,
   so the Service must carry:
   ```yaml
   metadata:
@@ -63,7 +62,7 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
 Every scoping or teardown action filters on our name prefix or our tag. Never run an
 account-wide delete. Examples already in the repo:
 
-- spoke teardown: `eksctl delete cluster --name "watch-it-burn-spoke-${i}"` (name-scoped).
+- teardown: prefix-scoped to `watch-it-burn-*` (teardown/teardown.sh refuses any other prefix).
 - exfil game: operates only on `watch-it-burn-exfil-hoop` / `watch-it-burn/exfil-game-trophy`.
 
 ## Verify what is ours (read-only)
@@ -80,7 +79,7 @@ aws resource-groups create-group --profile accen-dev --region us-west-2 \
   --resource-query '{"Type":"TAG_FILTERS_1_0","Query":"{\"ResourceTypeFilters\":[\"AWS::AllSupported\"],\"TagFilters\":[{\"Key\":\"project\",\"Values\":[\"watch-it-burn\"]}]}"}'
 ```
 
-## Public-URL linkage (agenticburn.com) — provisioning TODO
+## Public-URL linkage (agenticburn.com) - provisioning TODO
 
 The provisioning process will attach public URLs to each cluster:
 

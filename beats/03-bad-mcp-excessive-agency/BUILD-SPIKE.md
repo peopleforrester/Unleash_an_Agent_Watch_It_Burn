@@ -12,12 +12,12 @@ built regardless (BUILD-SPEC §3, §11).
 over `mcp.tool.name` actually enforces on the **Apache OSS build (`v1.3.0`)** with a **kagent agent in
 front**, as opposed to being an Enterprise-only (`EnterpriseAgentgatewayPolicy`) capability, or simply
 not firing when the caller is a kagent agent consuming the MCP server through the gateway. (The OSS
-model is allow-only CEL with implicit deny — there is no `Deny` action; the rogue tool is blocked by
+model is allow-only CEL with implicit deny - there is no `Deny` action; the rogue tool is blocked by
 omission from the allowlist.)
 
 ## Verification Method (fill in at build)
 
-- Method: live cluster (spoke), hands-on. NOT research. # verify-at-build
+- Method: live attendee cluster, hands-on. NOT research. # verify-at-build
 - agentgateway OSS version under test: `v1.3.0` # verify-at-build, confirm and record in VERSIONS.lock
 - kagent chart version: `0.9.9`, API group `kagent.dev/v1alpha2` # verify-at-build
 - MCP SDK version in evil-mcp-shim image + image digest: # verify-at-build
@@ -25,7 +25,7 @@ omission from the allowlist.)
 
 ## Preconditions
 
-1. Spoke cluster reachable; agent + agentgateway + evil-mcp-shim all running in the attendee spoke.
+1. Attendee cluster reachable; agent + agentgateway + evil-mcp-shim all running in the attendee cluster.
 2. `evil-mcp-shim` deployed (`evil-mcp-shim/k8s-manifest.yaml`) and registered as an MCP `target`
    behind agentgateway. # verify-at-build: confirm the gateway target/route config (gateway author)
 3. Planted sentinel applied (`plant-fake-secret.yaml`); `read_internal_config` returns
@@ -103,4 +103,4 @@ If RESULT = FAIL, do NOT run Beat 3 as a live toggle. Instead:
 ## Result log
 
 - RESULT: **TODO** (run the spike; fill the decision box above).
-- Verified hands-on against a live spoke: **TODO**.
+- Verified hands-on against a live attendee cluster: **TODO**.

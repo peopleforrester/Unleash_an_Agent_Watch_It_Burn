@@ -1,0 +1,71 @@
+# ABOUTME: eksctl ClusterConfig TEMPLATE for ONE attendee's INDEPENDENT EKS cluster (take-home).
+# ABOUTME: Each attendee gets their own standalone cluster; it runs its OWN in-cluster ArgoCD that
+# ABOUTME: reconciles itself from Git (gitops/bootstrap/app-of-apps.yaml). No hub, no central control plane.
+#
+# verify-at-build: confirm the EKS version against the eksctl/AWS supported range and re-pin `version`.
+# This is a TEMPLATE: substitute ATTENDEE_ID for each cluster (e.g. envsubst) when provisioning the fleet.
+# All attendee clusters share ONE pre-provisioned VPC (see infra/shared-vpc/README.md), NOT one VPC each.
+# See README.md for the parallel-provisioning loop and the in-cluster ArgoCD bootstrap (no hub registration).
+#
+# Per-cluster node sizing rationale:
+#  - One cluster runs: Kyverno (+policies), Falco (DaemonSet, real node/kernel access), an OTel
+#    collector, the planted secrets, the kagent agent + Bedrock ModelConfig, agentgateway, LLM Guard
+#    (output Regex ONLY by default; the Sensitive NER model is opt-in and would blow the RAM budget),
+#    the evil-mcp-shim, the Datadog Agent (hybrid path), and the ArgoCD-managed sample app for beat 1.
+#  - Conservative start on burstable T3 (see node group). Measure one live cluster before pinning the
+#    fleet; scale only if a real 2-hour run chokes credits. See ../SIZING.md and research/24.
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: watch-it-burn-attendee-ATTENDEE_ID # independent per-attendee cluster; substituted at provision time
+  region: us-west-2 # aligned with Bedrock model availability and the shared VPC
+  version: "1.35" # EKS default / most-tested GA on standard support
+  # Collision-avoidance tags: account shared with a separate Packt project; project=watch-it-burn marks ours.
+  tags:
+    project: watch-it-burn
+    event: ai-engineer-worldsfair-2026
+    role: attendee
+    attendee: ATTENDEE_ID
+
+# Shared VPC: all attendee clusters are created INTO one pre-provisioned VPC (10.0.0.0/16) sharing two
+# private /18 subnets across two AZs. NOT one VPC per attendee (research/25). verify-at-build: substitute
+# the real shared VPC id + subnet ids; eksctl will NOT create NAT/IGW/routes for an existing VPC, so the
+# VPC must be provisioned once up front (infra/shared-vpc/README.md).
+vpc:
+  id: "vpc-SHARED_ID" # verify-at-build: the one shared VPC
+  subnets:
+    private:
+      us-west-2a: { id: "subnet-SHARED_A" }
+      us-west-2b: { id: "subnet-SHARED_B" }
+
+iam:
+  withOIDC: true # IRSA so the kagent agent can use the AWS credential chain for Bedrock (no static keys)
+
+managedNodeGroups:
+  - name: attendee-ng
+    instanceType: t3.xlarge # 4 vCPU / 16 GiB, burstable. CONSERVATIVE START for a 2-hour intermittent
+    # lab: cheaper than fixed m-series and bursty engagement suits credits. If a live 2-hour test run
+    # actually chokes CPU credits, bump (t3.2xlarge, then fixed m6i/m7i) - measured, not pre-emptive.
+    desiredCapacity: 1
+    minSize: 1
+    maxSize: 2 # Falco + admission webhooks tolerate a brief 2-node window during rollout
+    volumeSize: 40
+    privateNetworking: true # nodes in the shared private subnets; egress via the shared VPC NAT
+    labels:
+      workshop.role: attendee
+      workshop.attendee: ATTENDEE_ID
+    tags:
+      project: watch-it-burn
+      role: attendee
+      attendee: ATTENDEE_ID
+
+addons:
+  - name: vpc-cni
+  - name: coredns
+  - name: kube-proxy
+  - name: aws-ebs-csi-driver
+    wellKnownPolicies:
+      ebsCSIController: true # creates the IRSA role the driver needs; without it PVCs never bind
+# NOTE: also apply a default gp3 StorageClass after creation (ebs.csi.aws.com) — see
+# infra/test-cluster/bootstrap-test.sh / the gp3 SC manifest. EKS ships only an in-tree gp2 SC.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: Phase-6 verification harness — runs beat-01/02/03 against one fresh test attendee spoke.
+# ABOUTME: Phase-6 verification harness - runs beat-01/02/03 against one fresh test attendee spoke.
 # ABOUTME: The abstract-truth gate: asserts every §2 before/after outcome, idempotent, exits non-zero on any failure.
 set -euo pipefail
 
@@ -13,7 +13,7 @@ usage() {
     cat >&2 <<'EOF'
 Usage: run-all.sh <kube-context> <attendee-namespace>
 
-  <kube-context>         kubeconfig context for a FRESH test attendee SPOKE cluster
+  <kube-context>         kubeconfig context for a FRESH test attendee cluster
   <attendee-namespace>   namespace the scoped agent / gateway live in
 
 Runs the Beat 1, 2, and 3 assertions in order and prints a pass/fail summary.
@@ -63,8 +63,8 @@ done
 echo "================================================================" >&2
 
 if [[ "${OVERALL}" -eq 0 ]]; then
-    echo "ALL BEATS PASS — the §2 abstract is true on this attendee spoke." >&2
+    echo "ALL BEATS PASS - the §2 abstract is true on this attendee spoke." >&2
 else
-    echo "FAILURE — at least one beat does not match §2. The talk's claims are NOT yet true." >&2
+    echo "FAILURE - at least one beat does not match §2. The talk's claims are NOT yet true." >&2
 fi
 exit "${OVERALL}"
