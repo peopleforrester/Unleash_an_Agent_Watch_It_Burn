@@ -49,7 +49,7 @@ LIVE RESULT: Beat 1 verified (verify/beat-01.sh PASS); kagent agent answered a p
 workshop-model (haiku)   us.anthropic.claude-haiku-4-5-20251001-v1:0 (inference profile; on-demand works)
 tier-sonnet              us.anthropic.claude-sonnet-4-6   (NO date stamp; In-Region NOT supported in us-west-2 → us. Geo profile mandatory)
 tier-opus                us.anthropic.claude-opus-4-8     (NO date stamp; In-Region NOT supported in us-west-2 → us. Geo profile mandatory)
-tier-fable               us.anthropic.claude-fable-5      (now live on Bedrock — reverses the prior "if availability returns" note)
+# Fable 5 retired from this workshop; not a tier in the comparison.
                          use-case form submitted + model agreements created on your own AWS account.
                          The earlier us.anthropic.claude-sonnet-4-6-<DATE>-v1:0 placeholders were wrong: delete the <DATE>, there is no date stamp.
 
