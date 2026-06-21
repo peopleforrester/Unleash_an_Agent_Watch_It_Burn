@@ -44,6 +44,15 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
+Google Drive reorganized (2026-06-21): top level trimmed to the core 7 (1 START HERE ... 7 Walkthrough)
+plus 3 subfolders. "Decisions" (8 Challenges, 9 Control rationale, 10 Tech status, TS-agent proposal,
+KubeArmor/Falco doc, Readiness Checklist). "Research Spikes" (Whitney's 4 spike docs + a new index doc
+pointing to repo research/11-27). "Archive" (Comment Archive backup + older versions). Docs 3/6/7 got a
+comment-safe ARCHITECTURE-UPDATE banner (insertText at top, no body rewrite) pointing to the revised repo
+BUILD-SPEC/SIZING as the source of truth; all anchored comments verified intact (18/2/0, none deleted).
+Note: a full comment-safe prose rewrite of Docs 3/6/7 to the new architecture is impractical (pervasive
+changes vs 18+2 anchored comments), so the banner + authoritative-repo-pointer is the chosen approach.
+
 ARCHITECTURE REVISED (Michael approved, 2026-06-21): dropped hub-and-spoke -> INDEPENDENT per-attendee
 clusters. Each attendee gets their own standalone EKS cluster (take-home) running its OWN in-cluster
 ArgoCD reconciling itself from gitops/bootstrap/app-of-apps.yaml (destination kubernetes.default.svc).
