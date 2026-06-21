@@ -1,0 +1,28 @@
+# ABOUTME: Project metadata and dependencies for the Watch It Burn credential
+# ABOUTME: distribution Flask app. Managed with uv (pyproject.toml + uv.lock).
+
+[project]
+name = "lab-provisioning-website"
+version = "1.0.0"
+description = "Flask app distributing pre-provisioned EKS cluster credentials to Watch It Burn workshop attendees."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "flask>=3.1",
+    "gunicorn>=23.0",
+    "requests>=2.32",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+]
+
+[tool.uv]
+# Flat single-module app (app.py at the repo root), not an installable package -
+# uv manages the environment and dependencies only, it does not build a wheel.
+package = false
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["test_app.py"]

@@ -1,0 +1,17 @@
+{% extends "_base.html" %}
+
+{% block title %}All clusters claimed - Watch It Burn{% endblock %}
+{% block page_title %}Pool Exhausted{% endblock %}
+
+{% block main %}
+  <section class="card" style="text-align:center;">
+    <div style="font-size:40px;line-height:1;margin-bottom:8px;color:var(--accent);">&#9873;</div>
+    <h1 style="margin:0 0 8px;color:var(--navy);">All clusters claimed</h1>
+    <p style="color:var(--navy);margin:0;">Every cluster in the pool has been assigned.</p>
+  </section>
+
+  <div class="callout" style="margin-top:24px;">
+    <strong style="font-style:normal;color:var(--navy);">Ask {{ workshop_host }}.</strong>
+    There are usually a few spare clusters set aside for situations exactly like this.
+  </div>
+{% endblock %}
