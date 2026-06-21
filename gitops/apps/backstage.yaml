@@ -20,10 +20,11 @@ spec:
     helm:
       valuesObject:
         backstage:
+          # Our image (not KubeAuto's private ECR). Push to peopleforrester/watch-it-burn:backstage.
           image:
-            registry: 598274344262.dkr.ecr.us-west-2.amazonaws.com
-            repository: kubeauto-backstage
-            tag: "1.48.1"
+            registry: docker.io
+            repository: peopleforrester/watch-it-burn
+            tag: "backstage"
           extraEnvVarsSecrets:
             - backstage-secrets
           extraEnvVars:
