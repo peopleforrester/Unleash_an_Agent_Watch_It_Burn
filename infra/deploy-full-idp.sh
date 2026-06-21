@@ -51,9 +51,10 @@ stringData:
   enableOCI: "true"
 EOF
 
-log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging) — ArgoCD deploys the components"
+log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging), ArgoCD deploys the components"
 kubectl apply -f "${REPO}/${ROOT_APP}"
 
 log "Deploy issued. Watch sync with: kubectl get applications -n argocd"
-log "NOTE: after the 'ai-layer' app creates agent-sa, add Bedrock IRSA + restart the agent:"
-log "  (IRSA is IAM — not GitOps-able; see infra/cluster3-setup.sh step [4] for the eksctl iamserviceaccount call)"
+log "NOTE: agent Bedrock access is provisioned by Terraform (infra/terraform/cluster) as an EKS Pod"
+log "  Identity association for agent:agent-sa, no SA annotation or kubectl step needed. The"
+log "  eks-pod-identity-agent addon injects creds via the AWS SDK chain kagent already uses."
