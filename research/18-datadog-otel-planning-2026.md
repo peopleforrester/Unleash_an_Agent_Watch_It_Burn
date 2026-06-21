@@ -117,7 +117,7 @@ Written when v1.2.1 was current (now stale — v1.3.0 is GA). Covers guardrail m
 
 ### Spike A — Datadog on EKS + what each component natively emits ✅ Complete
 
-Full findings in [`docs/research/datadog-integrations-stack.md`](../docs/research/datadog-integrations-stack.md).
+Full findings in [`research/19-datadog-integrations-stack-2026.md`](19-datadog-integrations-stack-2026.md).
 
 **Architectural decision (answered):** Hybrid path. Keep the existing OTel Collector for OTLP (kagent, agentgateway, Kyverno). Add the Datadog Agent DaemonSet for EKS infra auto-discovery and named integrations. Pre-bake pod annotations into platform manifests. DDOT is the 2025/2026 recommended path over two separate DaemonSets but requires Agent v7.65+; evaluate at build time.
 
