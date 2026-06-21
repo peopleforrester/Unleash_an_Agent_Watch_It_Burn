@@ -57,11 +57,19 @@ Proposal Google Doc created + shared with Whitney (notified) + comment tagging h
 <redacted-doc-link>
 (folder "Watch it Burn" 1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU; Whitney = <redacted-email>).
 
-KubeArmor research spike (2026-06-21): LAUNCHED (background sub-agent) -> research/17-kubearmor-forkbomb-2026.md.
-Question: can KubeArmor (CNCF, LSM-based) prevent a fork bomb, and how does it compare to the current
-defenses (kubelet podPidsLimit = real inline block; Falco+Talon = detect+respond). Do NOT fold
-KubeArmor in as a 2nd/3rd option beyond Falco until the spike lands. May get its own Google Doc on
-the KubeArmor/Falco paths.
+KubeArmor research spike (2026-06-21): DONE -> research/17-kubearmor-forkbomb-2026.md. Verdict:
+KubeArmor v1.7.3 CANNOT prevent a fork bomb the way podPidsLimit does — its KubeArmorPolicy has NO
+process-count/thread-count/fork-rate/PID field (verified vs the shipped spec); it only allow/denies
+named binary exec, file, network, capabilities (syscalls are audit-only regardless of action). The
+`rate: 10p1s` seen in some material is a telemetry throttle, not enforcement (trap, flagged). It
+enforces inline at LSM hooks (BPF-LSM preferred); EKS AL2023 ships kernel 6.1 with BPF-LSM enabled
+by default so enforcement is plausible but MUST be verified on the node (`/sys/kernel/security/lsm`
+contains `bpf`, `karmor probe`, live Block test). DECISION: keep podPidsLimit as the SOLE inline
+fork-bomb block + Falco/Talon as detect+respond; do NOT add KubeArmor to the fork-bomb story. KubeArmor
+is a candidate DIFFERENT-attack station (CNCF-native inline prevention: default-deny exec, block
+secret-file reads, block egress) — still an OPEN option, not folded in. No repo defense changed.
+Findings Google Doc (silently shared with Whitney):
+<redacted-doc-link>
 
 AWS collision-avoidance tagging (2026-06-21): accen-dev is shared with a separate Packt project (its
 own clusters; we never share resources). Convention established in `infra/TAGGING.md`: every resource
