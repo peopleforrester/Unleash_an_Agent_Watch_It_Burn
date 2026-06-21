@@ -47,11 +47,13 @@ spans verbatim). Exported OAuth tokens deleted after use.
 Google Drive reorganized (2026-06-21): top level trimmed to the core 7 (1 START HERE ... 7 Walkthrough)
 plus 3 subfolders. "Decisions" (8 Challenges, 9 Control rationale, 10 Tech status, TS-agent proposal,
 KubeArmor/Falco doc, Readiness Checklist). "Research Spikes" (Whitney's 4 spike docs + a new index doc
-pointing to repo research/11-27). "Archive" (Comment Archive backup + older versions). Docs 3/6/7 got a
-comment-safe ARCHITECTURE-UPDATE banner (insertText at top, no body rewrite) pointing to the revised repo
-BUILD-SPEC/SIZING as the source of truth; all anchored comments verified intact (18/2/0, none deleted).
-Note: a full comment-safe prose rewrite of Docs 3/6/7 to the new architecture is impractical (pervasive
-changes vs 18+2 anchored comments), so the banner + authoritative-repo-pointer is the chosen approach.
+pointing to repo research/11-27). "Archive" (Comment Archive backup + older versions). Docs 3/6/7 updated in place to the new architecture, comment-safe (banners removed after):
+Doc 7 (0 comments) full-rewritten from repo docs/STACK-WALKTHROUGH.md via media-PATCH; Doc 6 (2 comments)
+surgically edited via Docs API replaceAllText on its 4 real stale lines (ApplicationSet/cluster-generator
+-> in-cluster ArgoCD app-of-apps; deleted-tree + hub-cluster/spoke-cluster refs -> attendee-cluster/
+burn-clusters/shared-vpc), the 2 comments untouched/intact; Doc 3 (18 comments) needed NO body edits
+(its demo-flow is topology-neutral). All comments verified intact (Doc6 2, Doc3 18). Verified: 0 residual
+stale terms in Doc 6, Doc 7 carries the shared-VPC/independent content.
 
 ARCHITECTURE REVISED (Michael approved, 2026-06-21): dropped hub-and-spoke -> INDEPENDENT per-attendee
 clusters. Each attendee gets their own standalone EKS cluster (take-home) running its OWN in-cluster
