@@ -22,7 +22,7 @@ def check(name, cond):
 
 # 1. Real metering climbs by (tokens x tier price). The counter is computed, never hardcoded.
 pin, pout = 1000, 200
-sample = {"result": {"metadata": {"adk_usage_metadata": {
+sample = {"result": {"metadata": {"kagent_usage_metadata": {
     "promptTokenCount": pin, "candidatesTokenCount": pout, "totalTokenCount": pin + pout}}}}
 before = dict(proxy._cost)
 proxy.record_usage(sample)

@@ -54,8 +54,9 @@ install is required.
 
 ## The stack
 
-Everything here is CNCF or open source. Argo CD delivers the whole platform to every cluster from a
-single app-of-apps.
+Everything here is CNCF or open source. Each cluster is independent and take-home: its own in-cluster
+Argo CD reconciles the whole platform from a single app-of-apps against the local cluster, with no hub
+and no central control plane.
 
 - GitOps: Argo CD
 - Policy: Kyverno (incl. registry allowlist, PID limit, cosign image signing)

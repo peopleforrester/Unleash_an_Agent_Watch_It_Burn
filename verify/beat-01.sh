@@ -28,7 +28,7 @@ EOF
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 2; fi
-CONTEXT="${1:?$(usage)}"
+export CONTEXT="${1:?$(usage)}"
 NS="${2:?$(usage)}"
 
 readonly SA="system:serviceaccount:${NS}:agent-sa"
