@@ -67,6 +67,15 @@ spec:
               verbosity: basic
               sampling_initial: 5
               sampling_thereafter: 200
+          connectors:
+            # Generates RED metrics from spans. add_resource_attributes propagates the UST resource
+            # attributes (deployment.environment.name -> env, service.version) onto the generated
+            # metrics; it defaults to false, and without it Datadog "View related logs" from a
+            # span-derived metric silently finds nothing (research/19, research/23).
+            # verify-at-build: confirm the connector key is `spanmetrics` and that
+            # add_resource_attributes is supported on collector-contrib 0.158.2.
+            spanmetrics:
+              add_resource_attributes: true
           service:
             telemetry:
               logs:
@@ -77,6 +86,7 @@ spec:
               metrics:
                 receivers:
                   - otlp
+                  - spanmetrics # RED metrics generated from spans (carry UST tags for correlation)
                 processors:
                   - memory_limiter
                   - batch
@@ -93,8 +103,9 @@ spec:
                   - batch
                   - resource
                 exporters:
-                  - datadog     # primary
-                  - otlp/tempo  # secondary / fallback
+                  - datadog      # primary
+                  - otlp/tempo   # secondary / fallback
+                  - spanmetrics  # feed the connector so it can derive metrics from these spans
                   - debug
         # Datadog credentials for the primary exporter (BYO secret; not stored in this repo).
         # verify-at-build: create `datadog-secret` (key api-key) from Whitney's Datadog account and
