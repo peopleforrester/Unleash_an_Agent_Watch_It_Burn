@@ -14,6 +14,12 @@ def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
 
 check("PID limit (the real block) sets podPidsLimit", node["spec"]["kubelet"]["config"]["podPidsLimit"] >= 1)
+# The PID cap is inert unless the nodegroup actually delivers it. Confirm every cluster config ships
+# podPidsLimit via overrideBootstrapCommand (the live gate run added this; dry-run + node pids.max verified).
+for rel in ["infra/test-cluster/cluster.yaml", "infra/attendee-cluster/cluster.yaml", "infra/burn-clusters/cluster.yaml"]:
+    cfg = yaml.safe_load((REPO / rel).read_text())
+    obc = " ".join((ng.get("overrideBootstrapCommand", "") or "") for ng in cfg.get("managedNodeGroups", []))
+    check(f"{rel}: nodegroup delivers podPidsLimit via overrideBootstrapCommand", "podPidsLimit" in obc)
 check("Falco has a fork-bomb detection rule", any(r.get("rule") == FORK_RULE for r in forkrules if isinstance(r, dict)))
 check("the fork-bomb rule is CRITICAL (so it routes to Talon)", any(r.get("rule")==FORK_RULE and r.get("priority")=="CRITICAL" for r in forkrules if isinstance(r,dict)))
 check("Falcosidekick forwards to Talon", sidekick["spec"]["source"]["helm"]["valuesObject"]["config"].get("talon", {}).get("address","").startswith("http://falco-talon"))
