@@ -44,7 +44,10 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 - [x] Falcosidekick -> Datadog output (BYO secret; additive/swappable); [~] datadog-secret in security ns
 - [x] Prometheus/Grafana/Tempo/Loki/Alloy (analog fallback, swappable), slimmed; [~] live trace view
 - [x] Cost counter (real metering) + Prometheus /metrics + agent-observability dashboard
-- [ ] Datadog path decision (hybrid vs full) + service-map live verify (research/23 decision points)
+- [x] Datadog path SETTLED = HYBRID: OTel Collector stays the neutral primary (already wired); add a
+  Datadog Agent DaemonSet for EKS infra auto-discovery + named integrations. Datadog stays swappable.
+  Whitney owns the Datadog account/keys/Agent install/dashboards; we own the OTel side + manifest
+  annotations + the datadog-secret consumption. [~] service-map live verify; impl spec in research/24
 
 ## Demo, games, access
 
