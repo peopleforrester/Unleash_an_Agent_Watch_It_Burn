@@ -55,6 +55,18 @@ burn-clusters/shared-vpc), the 2 comments untouched/intact; Doc 3 (18 comments) 
 (its demo-flow is topology-neutral). All comments verified intact (Doc6 2, Doc3 18). Verified: 0 residual
 stale terms in Doc 6, Doc 7 carries the shared-VPC/independent content.
 
+PHASE-GATE SESSION CLOSED (2026-06-21): Michael's 4-step plan complete. (1) Agent gates validated:
+beat-cost PASS live (cost counter moves on real spend, flatlines on block-list; #8 kagent_usage_metadata
+key fix confirmed). (2) Teardown + clean reprovision: fresh watch-it-burn-test came up with all fixes baked
+in. (3) #5 egress VALIDATED CLEAN on the fresh cluster (enableNetworkPolicy from create): S3 BLOCKED, DNS OK.
+(4) Teardown complete - 0 clusters, 0 watch-it-burn EC2, nothing billing; lab-distribution/ pulled in
+(adapted KCD distributor, code only, no PII/creds). Net: 8 real issues caught+fixed before the event
+(#1 Falco syntax, #2 workshop-mcp built, #3 CONTEXT export, #4 selfHeal ignoreDifferences, #5 enableNetworkPolicy,
+#7 A2A messageId, #8 cost-counter key; #6 harness ephemeral-curl-pod still OPEN - validations used
+port-forward, harness needs a port-forward refactor). REMAINING live-validation (next cluster): beat-02
+output-redaction, beat-03 mcp-authz (needs agentgateway deployed), PID-limit fork bomb (needs a nodegroup
+with overrideBootstrapCommand). Offline suite 166 green.
+
 LIVE PHASE-GATE RUN (2026-06-21, watch-it-burn-test, 6x t3.large, accen-dev/us-west-2, isolated
 kubeconfig /tmp/watch-it-burn-test.kubeconfig). Full IDP deployed via app-of-apps. The run caught
 6 real issues; commits pushed to staging+main:
