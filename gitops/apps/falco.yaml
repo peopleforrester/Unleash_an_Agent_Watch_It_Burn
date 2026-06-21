@@ -150,8 +150,7 @@ spec:
               source: syscall
 
           workshop-agent-rules.yaml: |
-            # Workshop agent-pod runtime detections (ported from platform/falco/rules-workshop.yaml
-            # during the GitOps canonicalization; that copy is the non-canonical duplicate).
+            # Workshop agent-pod runtime detections (canonical home: these rules live inline here).
             # Defense-in-depth on each Cluster 3: shell/exec in the agent pod, unexpected outbound
             # from the agent pod, and reads of the planted FAKE- sentinel secrets.
             # verify-at-build: the agent pod selector + namespace prefix below must match the real

@@ -53,9 +53,9 @@ EOF
 eksctl create iamserviceaccount -f /tmp/agent-irsa.yaml --override-existing-serviceaccounts --approve
 
 log "[5] Kyverno policies: minimal-floor + block-argocd-drift + require-resource-limits (scoped, Audit)"
-kubectl apply -f "${REPO}/platform/kyverno/policies/minimal-floor.yaml"
-kubectl apply -f "${REPO}/platform/kyverno/policies/block-argocd-drift.yaml"
-python3 - "$NS" "${REPO}/platform/kyverno/policies/require-resource-limits.yaml" <<'PY' | kubectl apply -f -
+kubectl apply -f "${REPO}/policies/floor/minimal-floor.yaml"
+kubectl apply -f "${REPO}/policies/kyverno/block-argocd-drift.yaml"
+python3 - "$NS" "${REPO}/policies/kyverno/require-resource-limits.yaml" <<'PY' | kubectl apply -f -
 import sys, yaml
 ns, path = sys.argv[1], sys.argv[2]
 d = yaml.safe_load(open(path))
