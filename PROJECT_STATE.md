@@ -3,7 +3,51 @@
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
 
-Last updated: 2026-06-20
+Last updated: 2026-06-21
+
+### LIVE VALIDATION SESSION 2026-06-21 (watch-it-burn-test, 6x t3.large, accen-dev/us-west-2)
+
+Ran the remaining live validations (Michael's plan: B2, PID limit, fork bomb) on a fresh cluster with
+the full IDP deployed via the app-of-apps. ALL PASS. Isolated kubeconfig /tmp/watch-it-burn-test.kubeconfig,
+explicit --context per command, ephemeral curl pods (NO port-forward, per Michael). Caught + fixed 4 more
+real bugs; all on staging+main with render-gate guards. Offline suite now 172 checks, green.
+
+- **Deploy gotcha (recurring):** ArgoCD helm install hangs in pending-install with `--wait` (zero pods,
+  >15min). FIX (same as prior): uninstall the stuck release, reinstall WITHOUT `--wait`, then apply repo
+  creds + app-of-apps; ArgoCD syncs the rest. (deploy-full-idp.sh still uses --wait; left as-is, the
+  manual recovery is fast and documented here.)
+- **#8b agent IRSA flag:** `eksctl create iamserviceaccount` does NOT accept `--kubeconfig` (only `create
+  cluster` does); it reads the exported KUBECONFIG. Re-ran without the flag -> role witb-agent-bedrock
+  created + agent-sa annotated; ServerSideApply on ai-layer let the role-arn annotation coexist with ArgoCD.
+- **B2 sanitization PASS (live, 4 states):** rewrote beat-02.sh to drive the live guard-proxy via ephemeral
+  curl pods (old beat-02 called fallback.curl.sh with a mismatched contract needing an external host:port).
+  INPUT off->injection reaches agent; INPUT classifier on->403 at proxy; OUTPUT off->sentinel leaks;
+  OUTPUT on->[REDACTED]. Two harness subtleties fixed: scope output assertions to the AGENT output (not
+  the user-echo in history), and raw_decode the response (kubectl run --rm appends "pod ... deleted" to stdout).
+- **PID-limit fork-bomb block PASS (live):** definitive node-level read of the pod cgroup
+  `pids.max=1024` (kubepods-burstable-pod<uid>.slice); behavioral: a real fork bomb hits
+  `sh: can't fork: Resource temporarily unavailable` at the cap and all 6 nodes stay Ready. The
+  in-CONTAINER `pids.max=9289` is the cgroup-namespaced container view, NOT the enforced pod cap (the
+  prior "9289 looks unapplied" reading was this misread; configz + node cgroup are authoritative = 1024).
+- **Falco->Talon fork-bomb response PASS (live):** terminated the offending pod in ~4s. Caught 3 bugs:
+  - **#9 Falco rule shadowing:** the generic "Exec Into Pod Detected" (custom-rules.yaml) matched the
+    fork-bomb entry-shell execve first (Falco fires only the FIRST matching rule per event; rules.d loads
+    alphabetically). Renamed the fork-bomb rules file to `00-workshop-forkbomb-rules.yaml` so it wins.
+  - **#10 Talon rules not loaded:** key was top-level `rulesOverride` but the chart key is
+    `config.rulesOverride` (top-level ignored -> chart default action with no match -> "0 rules loaded").
+    AND the v0.3.0 schema needs SEPARATE `- action:` and `- rule:` (match+actions) entries; an action with
+    an embedded `match:` is invalid. Fixed both -> "1 rule(s) loaded", rule "Fork Bomb Response".
+  - **#11 Falcosidekick->Talon NXDOMAIN:** sidekick (ns security) addressed Talon as `http://falco-talon:2803`
+    which resolves only in 'security'; Talon's Service is in 'falco'. Fixed to the cross-namespace FQDN
+    `falco-talon.falco.svc.cluster.local:2803` -> "Talon - POST OK (200)".
+  Render-gate checks added for all three (rule-file sort order, config.rulesOverride + v0.3.0 schema, FQDN).
+- Minor (non-blocking): the 2 Talon replicas log a transient NATS leader-election i/o timeout (port 4222);
+  the acting replica still terminated the pod. Consider single-replica or NATS svc check as a follow-up.
+- Known-degraded apps (do NOT block the beats): cert-manager-issuers (no real issuer), eso-resources
+  (no AWS SM entries), istio-base (CRD timing), *-party burn targets (private-ECR ImagePullBackOff).
+- Commits on staging->main: beat-02 ephemeral-curl rewrite; falco rule precedence (00- prefix); Talon
+  routing (config.rulesOverride + cross-ns FQDN); Talon v0.3.0 schema. Cluster torn down after -> $0.
+
 
 ### Doc-accuracy spike corrections applied (2026-06-20)
 
