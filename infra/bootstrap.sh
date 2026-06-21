@@ -77,9 +77,9 @@ report() {
     printf '    Grafana       (port-forward): kubectl -n %s port-forward svc/kube-prometheus-stack-grafana 3000:80\n' \
         "${MONITORING_NS}" >&2
     printf '    Tempo OTLP in-cluster:        tempo.%s.svc:4317 (grpc) / :4318 (http)\n' "${TEMPO_NS}" >&2
-    printf '\n    Next: kubectl apply -f platform/argocd/appproject-workshop.yaml\n' >&2
-    printf '          kubectl apply -f platform/argocd/appset-attendee.yaml\n' >&2
-    printf '          then the cluster self-reconciles via its own ArgoCD (see infra/attendee-cluster/README.md).\n' >&2
+    printf '\n    Next: kubectl apply -f gitops/bootstrap/app-of-apps.yaml\n' >&2
+    printf '          then this cluster self-reconciles via its own in-cluster ArgoCD\n' >&2
+    printf '          (independent model, no hub; see infra/attendee-cluster/README.md).\n' >&2
 }
 
 main() {
