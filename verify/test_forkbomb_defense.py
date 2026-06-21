@@ -9,7 +9,10 @@ cr = falco["spec"]["source"]["helm"]["valuesObject"]["customRules"]
 # 00- prefix so the fork-bomb rule loads first in rules.d and is not shadowed by the generic
 # "Exec Into Pod Detected" rule (Falco fires only the first matching rule per event).
 forkrules = yaml.safe_load(cr.get("00-workshop-forkbomb-rules.yaml", "[]"))
-talon_rules = talon["spec"]["source"]["helm"]["valuesObject"].get("rulesOverride", "")
+talon_vo = talon["spec"]["source"]["helm"]["valuesObject"]
+# The falco-talon chart key is config.rulesOverride; a top-level rulesOverride is ignored (the chart
+# then loads its default action with no match -> "0 rules loaded"; caught live on watch-it-burn-test).
+talon_rules = talon_vo.get("config", {}).get("rulesOverride", "")
 FORK_RULE = "Fork Bomb In Workload Container"
 failures = []
 def check(n, c):
@@ -31,7 +34,13 @@ check("fork-bomb rules file sorts before the generic exec-detection file (not sh
       bool(fb_key) and all(fb_key < k for k in exec_keys))
 check("Falco has a fork-bomb detection rule", any(r.get("rule") == FORK_RULE for r in forkrules if isinstance(r, dict)))
 check("the fork-bomb rule is CRITICAL (so it routes to Talon)", any(r.get("rule")==FORK_RULE and r.get("priority")=="CRITICAL" for r in forkrules if isinstance(r,dict)))
-check("Falcosidekick forwards to Talon", sidekick["spec"]["source"]["helm"]["valuesObject"]["config"].get("talon", {}).get("address","").startswith("http://falco-talon"))
+check("Talon rules are under config.rulesOverride (the chart key), not top-level",
+      "rulesOverride" not in talon_vo and bool(talon_vo.get("config", {}).get("rulesOverride")))
+# Falcosidekick (ns security) must reach Talon (ns falco) by cross-namespace FQDN; a bare service name
+# resolves in 'security' and NXDOMAINs (caught live: "lookup falco-talon ... no such host").
+_talon_addr = sidekick["spec"]["source"]["helm"]["valuesObject"]["config"].get("talon", {}).get("address", "")
+check("Falcosidekick forwards to Talon via cross-namespace FQDN (falco-talon.falco)",
+      _talon_addr.startswith("http://falco-talon.falco"))
 check("Talon terminates the pod on the fork-bomb rule",
       "kubernetes:terminate" in talon_rules and FORK_RULE in talon_rules)
 check("Talon chart pinned (verify-at-build noted)", talon["spec"]["source"]["targetRevision"])
