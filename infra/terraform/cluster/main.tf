@@ -100,6 +100,16 @@ variable "pod_pids_limit" {
   default = 1024
 }
 
+# Root volume size (GiB). MUST be set via block_device_mappings below, NOT the node group's disk_size:
+# cloudinit_pre_nodeadm (for the PID cap) forces a custom launch template, and disk_size is silently
+# ignored with a custom LT -> the node falls back to the AL2023 default 20 GiB, which trips DiskPressure
+# under this image-heavy IDP and leaves pods Pending (found live on watch-it-burn-attendee-001). 100 GiB
+# holds the full image set + logs + the attendee burn workloads with headroom; gp3 is cheap + ephemeral.
+variable "node_disk_size" {
+  type    = number
+  default = 100
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -151,7 +161,26 @@ module "eks" {
       min_size       = var.node_min_size
       max_size       = var.node_max_size
       desired_size   = var.node_desired_size
-      disk_size      = 80
+      # Force the rolling update past pod-eviction blockers. On a single-node cluster the IDP's
+      # PodDisruptionBudgets (ArgoCD/Prometheus/etc., minAvailable:1) make a node drain unsatisfiable,
+      # so a launch-template change (e.g. the disk fix) wedges with PodEvictionFailure. These clusters
+      # are disposable, so force the update rather than respecting PDBs during a node roll. (Fresh
+      # provisions never roll, so the event path is unaffected; this only matters for config changes.)
+      force_update_version = true
+      # Root volume via block_device_mappings, NOT disk_size: cloudinit_pre_nodeadm forces a custom
+      # launch template, under which the module ignores disk_size (node would fall back to AL2023's
+      # 20 GiB default and hit DiskPressure). See the node_disk_size variable for the why.
+      block_device_mappings = {
+        xvda = {
+          device_name = "/dev/xvda"
+          ebs = {
+            volume_size           = var.node_disk_size
+            volume_type           = "gp3"
+            encrypted             = true
+            delete_on_termination = true
+          }
+        }
+      }
       # AL2023 nodeadm ignores prefix delegation when computing max-pods, so set it explicitly.
       # podPidsLimit is the Watch It Burn delta: the fork-bomb cap, delivered via the same nodeadm
       # NodeConfig (eksctl delivered this via overrideBootstrapCommand; Terraform via cloudinit_pre_nodeadm).
@@ -232,7 +261,9 @@ module "agent_bedrock_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 1.0"
 
-  name                   = "${var.name}-agent-bedrock"
+  # Name kept short: the module derives the IAM role from name_prefix = "${name}-", which is capped
+  # at 38 chars. "<cluster>-agent-bedrock-" overran it (40>38); "<cluster>-bedrock-" fits.
+  name                   = "${var.name}-bedrock"
   additional_policy_arns = { bedrock = aws_iam_policy.bedrock_invoke.arn }
 
   associations = {

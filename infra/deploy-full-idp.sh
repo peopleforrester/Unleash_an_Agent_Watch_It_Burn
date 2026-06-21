@@ -17,11 +17,18 @@ log() { printf '\n==> %s\n' "$*" >&2; }
 log "[1] default gp3 StorageClass"
 kubectl apply -f "${REPO}/infra/gp3-storageclass.yaml"
 
-log "[2] ArgoCD (pinned chart 9.5.21 / app v3.4.3)"
+log "[2] ArgoCD (chart 9.6.0 / app v3.4.4)"
 helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
 helm repo update >/dev/null
+# NOTE: do NOT use --wait here. On EKS the helm install with --wait repeatedly hangs in
+# pending-install (zero pods, no events, >15min) and times out; installing without --wait completes
+# immediately and the pods come up normally. Wait on the core components explicitly afterwards.
 helm upgrade --install argocd argo/argo-cd --version 9.6.0 \
-  -n argocd --create-namespace --set dex.enabled=false --wait --timeout 10m
+  -n argocd --create-namespace --set dex.enabled=false
+log "    waiting for ArgoCD core components..."
+kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=180s
+kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=180s
+kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
 
 log "[3] register the private repo (token from gh) + ghcr OCI helm for kagent"
 GH_TOKEN="$(gh auth token)"
