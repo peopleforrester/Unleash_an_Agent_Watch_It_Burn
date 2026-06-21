@@ -44,6 +44,13 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
+Datadog path SETTLED = HYBRID (Michael, 2026-06-21): OTel Collector stays the neutral primary (wired);
+add a Datadog Agent DaemonSet for EKS infra auto-discovery + named integrations. Datadog stays swappable
+(drop the Agent + the collector's datadog exporter to run OSS-only). DIVISION OF LABOR: Whitney owns the
+Datadog account, API keys, Agent install, and dashboards (we do NOT have keys yet, and that is her piece);
+we own the OTel-side wiring (done), the manifest annotations for named integrations, and consuming the
+datadog-secret. Next-level implementation + node sizing in research/24.
+
 Observability wiring DONE (2026-06-21, path-independent): (1) OTel Collector spanmetrics connector with
 add_resource_attributes:true wired into traces-exporters + metrics-receivers (so span metrics carry UST
 tags for Datadog correlation; this was the missing connectors block); (2) UST via OTEL_RESOURCE_ATTRIBUTES
