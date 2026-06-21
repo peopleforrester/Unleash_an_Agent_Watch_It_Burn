@@ -43,6 +43,8 @@ managedNodeGroups:
 
 addons:
   - name: vpc-cni
+    configurationValues: |-
+      enableNetworkPolicy: "true"   # REQUIRED for NetworkPolicy enforcement (default-deny + egress allowlist); the live gate run on watch-it-burn-test found policies inert without it (research/14 §6)
   - name: coredns
   - name: kube-proxy
   - name: aws-ebs-csi-driver
