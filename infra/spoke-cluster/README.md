@@ -44,8 +44,8 @@ generator selects it. The label is what wires a spoke into delivery.
 ```bash
 # Hub ArgoCD must be logged in first (argocd login <hub-server>).
 for i in $(seq -w 1 "${N}"); do
-  ctx="$(kubectl config get-contexts -o name | grep "workshop-spoke-${i}")"
-  name="workshop-spoke-${i}"
+  ctx="$(kubectl config get-contexts -o name | grep "watch-it-burn-spoke-${i}")"
+  name="watch-it-burn-spoke-${i}"
   argocd cluster add "${ctx}" --name "${name}" --yes
   # Tag the generated cluster Secret so the cluster generator picks it up.
   kubectl -n argocd label secret \
@@ -89,8 +89,10 @@ N. Do not discover this on the morning of the workshop.
 ## Teardown
 
 ```bash
+# Scoped by our watch-it-burn-* name, so this can only ever delete OUR spokes,
+# never a Packt cluster sharing this account.
 for i in $(seq -w 1 "${N}"); do
-  eksctl delete cluster --name "workshop-spoke-${i}" --region us-west-2 &
+  eksctl delete cluster --name "watch-it-burn-spoke-${i}" --region us-west-2 &
 done
 wait
 ```

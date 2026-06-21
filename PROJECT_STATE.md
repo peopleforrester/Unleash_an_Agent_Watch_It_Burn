@@ -44,6 +44,18 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
+AWS collision-avoidance tagging (2026-06-21): accen-dev is shared with a separate Packt project (its
+own clusters; we never share resources). Convention established in `infra/TAGGING.md`: every resource
+carries `project=watch-it-burn` and every cluster name starts with `watch-it-burn-`. Applied: all 4
+eksctl configs (renamed `workshop-hub`→`watch-it-burn-hub`, `workshop-spoke-*`→`watch-it-burn-spoke-*`;
+added `metadata.tags` + nodegroup tags; tag key was `workshop:unleash-an-agent`, now `project:watch-it-burn`);
+S3 hoop bucket (`put-bucket-tagging`) and trophy secret (`--tags`); spoke README cluster-name refs.
+Teardown scripts confirmed name/prefix-scoped (can only ever hit `watch-it-burn-*`, never Packt).
+New render-gate test `test_tagging.py` enforces it (suite now 154 checks). AWS Resource Group bundling
+= tag query on `project=watch-it-burn` (commands in TAGGING.md). Public-URL linkage
+(cluster→LB hostname→`*.agenticburn.com` via `infra/dns/set-demo-dns.py`) documented; LB-service tag
+annotation requirement noted; full per-cluster automation is deferred provisioning work.
+
 Fable 5: RETIRED from this workshop (Michael, 2026-06-21). Not a tier in the comparison. The Fable
 additions made during the doc-accuracy pass were reverted (resources.yaml, VERSIONS.lock, BUILD-SPEC);
 research/13 still records that it went live on Bedrock as a dated finding, but it is out of scope here.
