@@ -44,6 +44,12 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
+TS agent ON HOLD (Michael, 2026-06-21): the optional TypeScript agent / custom-framework addition is
+DEFERRED until after the demo is finished. Sticking with kagent only for now — a second agent
+framework is unnecessary complexity before the demo works end to end (a comment to this effect is on
+a shared Google Doc). spiny-orb hookup waits on that. Do NOT build the TS agent until Michael reopens
+it. The research below stays as the record. ↓
+
 TypeScript agent option + spiny-orb (2026-06-21): "Spiny/Weaver" = Whitney's repo
 github.com/wiggitywhitney/spinybacked-orbweaver (`spiny-orb`), an AI agent that auto-adds OTel
 instrumentation to JS/TS code and validates against a Weaver semconv registry. It instruments JS/TS
@@ -70,6 +76,28 @@ is a candidate DIFFERENT-attack station (CNCF-native inline prevention: default-
 secret-file reads, block egress) — still an OPEN option, not folded in. No repo defense changed.
 Findings Google Doc (silently shared with Whitney):
 docs.google.com/document/d/1UZMsLxqol5ASiXWgU3tlNIxBV3pCsLdLlrAFIARLNBw
+
+Runtime-enforcement + observability spikes (2026-06-21): research/20-23.
+- research/20 (Tetragon): does NOT replace the PID cap for fork bombs — Sigkill is kill-on-detect
+  (outrunnable), Override is all-or-nothing (zero forks, not a ceiling of N), --cgroup-rate is a
+  telemetry throttle. Standalone w/o Cilium CNI CONFIRMED (v1.7.0, VPC-CNI ok). Value = different-role
+  (process lineage + inline Override of OTHER agent misbehavior). AL2023 Override needs
+  CONFIG_BPF_KPROBE_OVERRIDE + non-confidentiality lockdown — verify at build.
+- research/21 (KubeArmor claims, cited): research/17 CONFIRMED adversarially — no count/rate/PID field,
+  syscalls audit-only; captured AL2023 node artifact shows bpf live in /sys/kernel/security/lsm. Safe
+  to hand Whitney.
+- research/22 (4-way comparison, cited): only podPidsLimit prevents a fork bomb inline (cgroup PIDs
+  controller returns -EAGAIN at fork). Falco+Talon/Tetragon = detect+kill (outrunnable); KubeArmor =
+  nothing as a count cap. Framing: PID cap = wall, Falco = alarm, Tetragon-or-KubeArmor = locked door
+  (pick at most one for inline prevention of OTHER attacks).
+- research/23 (decision points for Whitney): 8 decisions w/ pros/cons; design principle = Datadog
+  REQUIRED+primary for this event, OTel neutral layer, OSS (Prom/Grafana/Tempo) swappable fallback,
+  Datadog additive via OTEL_RESOURCE_ATTRIBUTES (not DD_*). Verified live: OTel Collector has NO
+  connectors: block; Falcosidekick forwards only to Talon (DD/OTLP wiring is net-new). NOTE: Decision 4
+  (TS agent) is now resolved = ON HOLD per above.
+NET fork-bomb decision UNCHANGED: podPidsLimit stays the sole inline block + Falco/Talon detect-respond.
+Tetragon/KubeArmor remain OPEN candidates for a different-attack station only. Nothing folded into the
+repo defense. Whitney's branch left untouched.
 
 AWS collision-avoidance tagging (2026-06-21): accen-dev is shared with a separate Packt project (its
 own clusters; we never share resources). Convention established in `infra/TAGGING.md`: every resource
