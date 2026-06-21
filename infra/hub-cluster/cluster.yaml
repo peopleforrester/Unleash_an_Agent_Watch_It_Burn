@@ -9,9 +9,14 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: workshop-hub
+  name: watch-it-burn-hub # name carries "burn" so it is distinct from the Packt project in this account
   region: us-west-2 # verify-at-build: Bedrock model availability + Moscone latency; align with spokes
   version: "1.33" # verify-at-build: re-pin to a currently supported EKS version
+  # Collision-avoidance tags: account shared with a separate Packt project; project=watch-it-burn marks ours.
+  tags:
+    project: watch-it-burn
+    event: ai-engineer-worldsfair-2026
+    role: hub
 
 iam:
   withOIDC: true # required so ArgoCD/Grafana/Tempo can use IRSA if they need AWS APIs (e.g. Tempo->S3)
@@ -28,7 +33,7 @@ managedNodeGroups:
     labels:
       workshop.role: hub
     tags:
-      workshop: unleash-an-agent
+      project: watch-it-burn
       role: hub
 
 addons:

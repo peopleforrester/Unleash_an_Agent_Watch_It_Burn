@@ -17,9 +17,15 @@ apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
 
 metadata:
-  name: workshop-spoke-ATTENDEE_ID # verify-at-build: substituted per attendee at provision time
+  name: watch-it-burn-spoke-ATTENDEE_ID # name carries "burn"; substituted per attendee at provision time
   region: us-west-2 # keep aligned with the hub and with Bedrock model availability
   version: "1.35" # EKS default / most-tested GA on standard support
+  # Collision-avoidance tags: account shared with a separate Packt project; project=watch-it-burn marks ours.
+  tags:
+    project: watch-it-burn
+    event: ai-engineer-worldsfair-2026
+    role: spoke
+    attendee: ATTENDEE_ID
 
 iam:
   withOIDC: true # IRSA so the kagent agent can use the AWS credential chain for Bedrock (no static keys)
@@ -36,7 +42,7 @@ managedNodeGroups:
       workshop.role: spoke
       workshop.attendee: ATTENDEE_ID
     tags:
-      workshop: unleash-an-agent
+      project: watch-it-burn
       role: spoke
       attendee: ATTENDEE_ID
 

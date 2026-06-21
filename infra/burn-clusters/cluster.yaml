@@ -8,6 +8,12 @@ metadata:
   name: watch-it-burn-CLUSTER_ID
   region: us-west-2
   version: "1.35" # EKS default / most-tested GA on standard support
+  # Collision-avoidance tags: account shared with a separate Packt project; project=watch-it-burn marks ours.
+  # role carries the per-instance CLUSTER_ID (c1-1, c2-3, c3-inst-1, ...) so each burn cluster is identifiable.
+  tags:
+    project: watch-it-burn
+    event: ai-engineer-worldsfair-2026
+    role: CLUSTER_ID
 
 iam:
   withOIDC: true # IRSA for the agent's Bedrock creds (Cluster 2/3 roles)
@@ -21,6 +27,9 @@ managedNodeGroups:
     volumeSize: 40
     labels:
       workshop.role: CLUSTER_ID
+    tags:
+      project: watch-it-burn
+      role: CLUSTER_ID
     iam:
       attachPolicy:
         Version: "2012-10-17"
