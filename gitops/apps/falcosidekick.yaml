@@ -21,9 +21,31 @@ spec:
           prometheus:
             extralabels: ""
           # Forward CRITICAL events (the fork bomb) to Falco Talon for auto-remediation (kill the pod).
+          # Falcosidekick runs in 'security' and Talon's Service lives in 'falco', so the address MUST be
+          # the cross-namespace FQDN; a bare 'falco-talon' resolves in 'security' and fails with NXDOMAIN
+          # (caught live on watch-it-burn-test: "lookup falco-talon ... no such host").
           talon:
-            address: http://falco-talon:2803
+            address: http://falco-talon.falco.svc.cluster.local:2803
             minimumpriority: critical
+          # Forward Falco alerts to Datadog (so runtime detections show in the Datadog story). The
+          # apikey is supplied via the DATADOG_APIKEY env from the shared datadog-secret (env overrides
+          # yaml; populating the key enables the output), so no key is stored in this repo. Stays
+          # swappable: drop this datadog block + the env to run Datadog-free (Falco still feeds Talon
+          # and Prometheus). DATADOG_HOST defaults to https://api.datadoghq.com.
+          datadog:
+            minimumpriority: notice
+        # verify-at-build: the datadog-secret (key api-key) must exist in the `security` namespace
+        # (falcosidekick's namespace), not only in `monitoring`; sync it with ESO or create per-ns.
+        # Set DATADOG_HOST to Whitney's site (e.g. https://api.us5.datadoghq.com, https://api.datadoghq.eu).
+        # Confirm the chart honors `extraEnv` on the pinned chart 0.14.0 (app 2.31.1).
+        extraEnv:
+          - name: DATADOG_APIKEY
+            valueFrom:
+              secretKeyRef:
+                name: datadog-secret
+                key: api-key
+          - name: DATADOG_HOST
+            value: "https://api.datadoghq.com"
         webui:
           enabled: false
         podAnnotations:

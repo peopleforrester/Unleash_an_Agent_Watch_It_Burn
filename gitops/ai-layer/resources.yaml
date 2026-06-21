@@ -1,6 +1,6 @@
-# ABOUTME: GitOps-materialized AI layer (Watch It Burn only) — agent + guard + bad-MCP, namespace 'agent'.
+# ABOUTME: GitOps-materialized AI layer (Watch It Burn only) - agent + guard + bad-MCP, namespace 'agent'.
 # ABOUTME: namespace is set by kustomization (namespace: agent); cross-service URLs use .agent DNS.
-# NOTE: agent-sa needs an IRSA annotation (eks.amazonaws.com/role-arn) for Bedrock — IAM cannot be
+# NOTE: agent-sa needs an IRSA annotation (eks.amazonaws.com/role-arn) for Bedrock - IAM cannot be
 # created via GitOps; a bootstrap step (eksctl/Pod Identity/ACK) adds it. See infra/cluster3-setup.sh.
 ---
 apiVersion: v1
@@ -47,7 +47,7 @@ subjects:
 # the Anthropic use-case form. The inference-profile ids are verified below (research/13, confirmed
 # ACTIVE/SYSTEM_DEFINED via `aws bedrock list-inference-profiles` in us-west-2). Only Haiku is a
 # live CR here so the sync stays valid; uncomment a tier to make it selectable.
-# NOTE: Sonnet 4.6 and Opus 4.8 do NOT support In-Region in us-west-2 — the `us.` Geo inference
+# NOTE: Sonnet 4.6 and Opus 4.8 do NOT support In-Region in us-west-2 - the `us.` Geo inference
 # profile (or `global.`) is mandatory; an In-Region model id will fail.
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
@@ -79,15 +79,7 @@ spec:
 #   bedrock:
 #     region: us-west-2
 # ---
-# apiVersion: kagent.dev/v1alpha2
-# kind: ModelConfig
-# metadata:
-#   name: bedrock-fable
-# spec:
-#   provider: Bedrock
-#   model: us.anthropic.claude-fable-5 # Fable 5 (now live on Bedrock, research/13)
-#   bedrock:
-#     region: us-west-2
+# Fable 5 is retired from this workshop; not a tier in the comparison.
 ---
 apiVersion: kagent.dev/v1alpha2
 kind: Agent
@@ -100,6 +92,14 @@ spec:
       Kubernetes platform so the operators can find the gaps."
     deployment:
       serviceAccountName: agent-sa
+      # Unified Service Tagging for Datadog correlation on the kagent agent pod (same scheme as
+      # guard-proxy / agentgateway). service.version carries the cluster tier so the model-tier cost
+      # race is one panel. verify-at-build: confirm the v1alpha2 Agent `deployment.env` field is honored
+      # on kagent chart 0.9.9; if not, set OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template
+      # instead. Substitute CLUSTER_TIER per cluster (cluster-1 / cluster-2 / cluster-3).
+      env:
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name=kagent,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
     # Committed "good" tool config: an explicit toolNames allowlist (the MCP-restriction backstop;
     # agentgateway mcpAuthorization is the live-toggled primary). requireApproval is the per-tool HITL
     # gate on the one mutating tool. verify-at-build: workshop-mcp RemoteMCPServer + these tool names
@@ -303,3 +303,45 @@ metadata:
 spec:
   selector: { app.kubernetes.io/name: chat-ui }
   ports: [{ name: http, port: 80, targetPort: http }]
+---
+# The GOOD workshop MCP: the legit tools the scoped agent is allowed to use. Counterpart to evil-mcp-shim.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-mcp
+  labels: { app: workshop-mcp }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: workshop-mcp } }
+  template:
+    metadata: { labels: { app: workshop-mcp } }
+    spec:
+      containers:
+        - name: shim
+          image: python:3.12-slim # verify-at-build: bake server.py into an image for prod
+          command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]
+          ports: [{ name: mcp, containerPort: 8000 }]
+          volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
+      volumes:
+        - name: src
+          configMap: { name: workshop-mcp-src }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workshop-mcp
+spec:
+  selector: { app: workshop-mcp }
+  ports: [{ name: mcp, port: 8000, targetPort: mcp }]
+---
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: workshop-mcp
+spec:
+  description: "The good workshop MCP server (legit agent tools: list_pods, apply_manifest, get_secret)"
+  protocol: STREAMABLE_HTTP
+  url: http://workshop-mcp.agent:8000/mcp
+  timeout: 30s
+  sseReadTimeout: 5m0s
+  terminateOnClose: true

@@ -51,6 +51,17 @@ spec:
               value: "off" # default OFF at workshop start; beat-2 output toggle flips to "on"
             - name: PROXY_FAIL_CLOSED
               value: "true"
+            # Unified Service Tagging for Datadog correlation (service / version / env). The Datadog
+            # exporter maps deployment.environment.name -> env (Exporter v0.110.0+) and service.version
+            # -> version; service.version carries the cluster tier so the model-tier cost race is one
+            # panel. The Datadog Agent also reads this env to tag this pod's container logs.
+            # verify-at-build: substitute CLUSTER_TIER per cluster (cluster-1 / cluster-2 / cluster-3).
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=guard-proxy,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
+            # Where OTLP telemetry goes once proxy.py is instrumented (OTel SDK is a separate task).
+            # verify-at-build: confirm the collector Service name for the pinned chart release.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317"
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true

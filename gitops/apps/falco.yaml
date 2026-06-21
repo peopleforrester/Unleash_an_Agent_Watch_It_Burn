@@ -150,15 +150,14 @@ spec:
               source: syscall
 
           workshop-agent-rules.yaml: |
-            # Workshop agent-pod runtime detections (ported from platform/falco/rules-workshop.yaml
-            # during the GitOps canonicalization; that copy is the non-canonical duplicate).
+            # Workshop agent-pod runtime detections (canonical home: these rules live inline here).
             # Defense-in-depth on each Cluster 3: shell/exec in the agent pod, unexpected outbound
             # from the agent pod, and reads of the planted FAKE- sentinel secrets.
             # verify-at-build: the agent pod selector + namespace prefix below must match the real
             # kagent agent deployment; confirm on a live cluster before relying on these rules.
 
             - macro: agent_pod
-              condition: (k8s.pod.label.app = "workshop-agent")   # verify-at-build: confirm label kagent sets
+              condition: (k8s.pod.label[app] = "workshop-agent")   # bracket syntax (Falco requires k8s.pod.label[key]); verify-at-build: confirm the label kagent sets
 
             - macro: agent_namespace
               condition: (k8s.ns.name startswith "attendee-")     # verify-at-build: confirm per-attendee ns prefix
@@ -224,7 +223,11 @@ spec:
               tags: [workshop, agent, secret, mitre_credential_access]
               source: syscall
 
-          workshop-forkbomb-rules.yaml: |
+          # NOTE the 00- prefix: Falco fires only the FIRST matching rule per event, and rules.d
+          # files load alphabetically. The generic "Exec Into Pod Detected" (custom-rules.yaml) also
+          # matches the fork-bomb entry-shell execve, so without sorting this file first it would
+          # shadow the fork-bomb rule and nothing would route to Talon (caught live on watch-it-burn-test).
+          00-workshop-forkbomb-rules.yaml: |
             # Detection for the Beat 3 fork bomb. This is the DETECT-and-RESPOND beat (Falco -> Talon);
             # the real BLOCK is the per-pod PID limit (kubelet podPidsLimit, see infra/node-config/).
             # The classic bomb is `:(){ :|:& };:`; match its cmdline signature in a workload container.

@@ -10,7 +10,7 @@ usage() {
     cat >&2 <<'EOF'
 Usage: beat-cost.sh <kube-context> <attendee-namespace>
 
-  <kube-context>         kubeconfig context for the attendee's SPOKE cluster
+  <kube-context>         kubeconfig context for the attendee's cluster
   <attendee-namespace>   namespace the guard-proxy / agent live in
 
 Asserts the cost counter's §2 outcomes (the headline "wasted tokens are the new DoS"):
@@ -34,9 +34,12 @@ readonly PROXY="http://guard-proxy.${NS}:8080"
 command -v kubectl >/dev/null 2>&1 || { echo "FAIL: kubectl not found on PATH" >&2; exit 1; }
 command -v python3 >/dev/null 2>&1 || { echo "FAIL: python3 not found on PATH" >&2; exit 1; }
 
-# Run a curl inside the spoke (the proxy is a ClusterIP service). Prints the response to stdout.
+# Run a curl inside the cluster (the proxy is a ClusterIP service). Prints the response to stdout.
+# --pod-running-timeout=180s so a cold first image pull does not trip "timed out waiting for the
+# condition" (the live gate run hit the 1m default). Ephemeral pod by design; no port-forward.
 in_cluster_curl() {
     "${KUBECTL[@]}" run "costcurl-${RANDOM}" --rm -i --restart=Never -n "${NS}" \
+        --pod-running-timeout=180s \
         --image=curlimages/curl:8.10.1 --command -- "$@" 2>/dev/null
 }
 
@@ -47,7 +50,7 @@ cost_usd() {
 send_prompt() {
     local text="$1"
     in_cluster_curl curl -s -X POST "${PROXY}/" -H 'Content-Type: application/json' \
-        -d "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"kind\":\"text\",\"text\":\"${text}\"}]}}}" >/dev/null
+        -d "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"messageId\":\"witb-${RANDOM}${RANDOM}\",\"parts\":[{\"kind\":\"text\",\"text\":\"${text}\"}]}}}" >/dev/null
 }
 
 toggle() { in_cluster_curl curl -s "${PROXY}/toggle?$1" >/dev/null; }

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # ABOUTME: Queries AWS Cost Explorer for the real workshop spend across the hub + spoke EKS clusters
-# ABOUTME: over the run window and prints the actual dollar number — never estimated or hardcoded.
+# ABOUTME: over the run window and prints the actual dollar number - never estimated or hardcoded.
 #
 # Reports the REAL AWS cost for the workshop run for Accenture expensing (BUILD-SPEC Phase 9).
 # Uses `aws ce get-cost-and-usage`. Costs are attributed by cost-allocation tag (default key
-# "workshop") so hub + all spoke clusters tagged with that key are summed. No figure is estimated
+# "workshop") so all watch-it-burn clusters tagged with that key are summed. No figure is estimated
 # or baked into this script; it reports whatever Cost Explorer returns for the window.
 
 set -euo pipefail
@@ -27,7 +27,7 @@ estimated or hardcoded.
 
 Required:
   --start YYYY-MM-DD     Run-window start date (inclusive).
-  --end   YYYY-MM-DD     Run-window end date (exclusive — Cost Explorer convention; use the day
+  --end   YYYY-MM-DD     Run-window end date (exclusive - Cost Explorer convention; use the day
                          AFTER the last billed day to include the final day).
 
 Options:
@@ -98,7 +98,7 @@ TOTAL=$(aws ce get-cost-and-usage \
   --query 'ResultsByTime[].Total.UnblendedCost.Amount' \
   --output text)
 
-# Sum the per-period amounts into one number (awk, no hardcoding — operates on live API output).
+# Sum the per-period amounts into one number (awk, no hardcoding - operates on live API output).
 TOTAL_SUM=$(printf '%s\n' "$TOTAL" | awk '{ s += $1 } END { printf "%.2f", s }')
 CURRENCY=$(aws ce get-cost-and-usage \
   --time-period "Start=${START},End=${END}" \

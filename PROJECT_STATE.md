@@ -3,7 +3,90 @@
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
 
-Last updated: 2026-06-20
+Last updated: 2026-06-21
+
+### PROVISIONING CONVERTED eksctl -> TERRAFORM (Michael directive, 2026-06-21)
+
+Michael's call, non-negotiable: drop eksctl, provision with Terraform. Rationale = the standard across
+his workshop repos AND multi-cloud portability (GKE next month, AKS the month after); eksctl is EKS-only
+and would be a from-scratch rewrite per cloud. Decisions (via AskUserQuestion): per-attendee ISOLATED
+state (fan-out), and EKS-now with a portable seam (GKE/AKS later = swap just the cluster module).
+
+Research spike (3 parallel agents) read the reference repos. WINNER = the Packt sister repo
+(`~/repos/events/Packt-agentic-devops/scripts/provision/`): a `lab-vpc/` shared root + a parameterized
+`cluster/` root + a `fleet.sh` driver doing per-attendee isolated state (`-state=states/<name>.tfstate`)
+in a parallel pool (MAX_PARALLEL). KCD-Texas confirmed secondary patterns (workspaces, enableNetworkPolicy);
+KubeAuto is single-cluster (not a fleet). I MODELED ours directly on Packt.
+
+Built `infra/terraform/` (all `terraform validate` clean; offline suite 164 green):
+- `lab-vpc/main.tf` - shared VPC (10.0.0.0/16, two /18 private, one shared NAT, role-only subnet tags),
+  VPC module ~>5.0, provider ~>6.0. Replaces the README-only `infra/shared-vpc/` stub (there was NO
+  shared-infra IaC before; the test cluster made its own throwaway VPC).
+- `cluster/main.tf` - one independent attendee EKS cluster, EKS module ~>21.0 (API: name,
+  kubernetes_version 1.35, addons{}, eks_managed_node_groups, enable_irsa). Takes vpc_id +
+  private_subnet_ids as inputs (shares the lab VPC). EBS CSI via IRSA; AWS LBC via Pod Identity.
+  THREE Watch-It-Burn deltas vs Packt: (1) podPidsLimit=1024 in cloudinit_pre_nodeadm NodeConfig
+  (fork-bomb cap; Packt only sets maxPods); (2) enableNetworkPolicy="true" on vpc-cni (egress beat);
+  (3) Bedrock via EKS Pod Identity association for agent:agent-sa (fleet-safe: no SA annotation in
+  gitops, no 60 OIDC trusts; eks-pod-identity-agent addon feeds the AWS SDK chain kagent uses).
+- `fleet/fleet.sh` - up/down/status, per-attendee state, MAX_PARALLEL pool, `assert_ours` refuses any
+  non-watch-it-burn name (cannot touch co-tenant Packt). `fleet/cleanup-log-groups.sh` sweeps orphaned
+  EKS log groups (create_cloudwatch_log_group=false for idempotent reprovision). `infra/terraform/README.md`.
+- Node default 1x t3.2xlarge (Packt's validated single-node AI-platform shape), parameterized.
+  verify-at-build: confirm the full IDP fits the attendee node (validated live on 6x t3.large); bump if Pending.
+REMOVED eksctl: infra/{test-cluster,node-config,attendee-cluster/cluster.yaml,burn-clusters/cluster.yaml,
+bootstrap.sh,cluster3-setup.sh}. Rewrote teardown/teardown.sh to delegate to the Terraform fleet
+(prefix-scoped). Re-pointed render-gate tests (test_tagging/test_egress/test_forkbomb_defense) at the
+Terraform instead of the deleted eksctl YAML; same safety properties asserted (podPidsLimit in cloudinit,
+enableNetworkPolicy on vpc-cni, project=watch-it-burn default_tags, fleet name-refusal). Docs updated
+(shared-vpc/attendee/burn READMEs, TAGGING.md, deploy-full-idp.sh note). All AWS-LAYER live validations
+from earlier this session (B2/PID/fork-bomb) still hold; they were Kubernetes-layer and are unaffected by
+the provisioning swap. NOT YET DONE: a live `terraform apply` of a cluster (the prior live validation was
+on the eksctl cluster, now torn down); the GCP/AKS module variants (seam is ready, deferred per decision).
+
+### LIVE VALIDATION SESSION 2026-06-21 (watch-it-burn-test, 6x t3.large, accen-dev/us-west-2)
+
+Ran the remaining live validations (Michael's plan: B2, PID limit, fork bomb) on a fresh cluster with
+the full IDP deployed via the app-of-apps. ALL PASS. Isolated kubeconfig /tmp/watch-it-burn-test.kubeconfig,
+explicit --context per command, ephemeral curl pods (NO port-forward, per Michael). Caught + fixed 4 more
+real bugs; all on staging+main with render-gate guards. Offline suite now 172 checks, green.
+
+- **Deploy gotcha (recurring):** ArgoCD helm install hangs in pending-install with `--wait` (zero pods,
+  >15min). FIX (same as prior): uninstall the stuck release, reinstall WITHOUT `--wait`, then apply repo
+  creds + app-of-apps; ArgoCD syncs the rest. (deploy-full-idp.sh still uses --wait; left as-is, the
+  manual recovery is fast and documented here.)
+- **#8b agent IRSA flag:** `eksctl create iamserviceaccount` does NOT accept `--kubeconfig` (only `create
+  cluster` does); it reads the exported KUBECONFIG. Re-ran without the flag -> role witb-agent-bedrock
+  created + agent-sa annotated; ServerSideApply on ai-layer let the role-arn annotation coexist with ArgoCD.
+- **B2 sanitization PASS (live, 4 states):** rewrote beat-02.sh to drive the live guard-proxy via ephemeral
+  curl pods (old beat-02 called fallback.curl.sh with a mismatched contract needing an external host:port).
+  INPUT off->injection reaches agent; INPUT classifier on->403 at proxy; OUTPUT off->sentinel leaks;
+  OUTPUT on->[REDACTED]. Two harness subtleties fixed: scope output assertions to the AGENT output (not
+  the user-echo in history), and raw_decode the response (kubectl run --rm appends "pod ... deleted" to stdout).
+- **PID-limit fork-bomb block PASS (live):** definitive node-level read of the pod cgroup
+  `pids.max=1024` (kubepods-burstable-pod<uid>.slice); behavioral: a real fork bomb hits
+  `sh: can't fork: Resource temporarily unavailable` at the cap and all 6 nodes stay Ready. The
+  in-CONTAINER `pids.max=9289` is the cgroup-namespaced container view, NOT the enforced pod cap (the
+  prior "9289 looks unapplied" reading was this misread; configz + node cgroup are authoritative = 1024).
+- **Falco->Talon fork-bomb response PASS (live):** terminated the offending pod in ~4s. Caught 3 bugs:
+  - **#9 Falco rule shadowing:** the generic "Exec Into Pod Detected" (custom-rules.yaml) matched the
+    fork-bomb entry-shell execve first (Falco fires only the FIRST matching rule per event; rules.d loads
+    alphabetically). Renamed the fork-bomb rules file to `00-workshop-forkbomb-rules.yaml` so it wins.
+  - **#10 Talon rules not loaded:** key was top-level `rulesOverride` but the chart key is
+    `config.rulesOverride` (top-level ignored -> chart default action with no match -> "0 rules loaded").
+    AND the v0.3.0 schema needs SEPARATE `- action:` and `- rule:` (match+actions) entries; an action with
+    an embedded `match:` is invalid. Fixed both -> "1 rule(s) loaded", rule "Fork Bomb Response".
+  - **#11 Falcosidekick->Talon NXDOMAIN:** sidekick (ns security) addressed Talon as `http://falco-talon:2803`
+    which resolves only in 'security'; Talon's Service is in 'falco'. Fixed to the cross-namespace FQDN
+    `falco-talon.falco.svc.cluster.local:2803` -> "Talon - POST OK (200)".
+  Render-gate checks added for all three (rule-file sort order, config.rulesOverride + v0.3.0 schema, FQDN).
+- Minor (non-blocking): the 2 Talon replicas log a transient NATS leader-election i/o timeout (port 4222);
+  the acting replica still terminated the pod. Consider single-replica or NATS svc check as a follow-up.
+- Known-degraded apps (do NOT block the beats): cert-manager-issuers (no real issuer), eso-resources
+  (no AWS SM entries), istio-base (CRD timing), *-party burn targets (private-ECR ImagePullBackOff).
+- Commits on staging->main: beat-02 ephemeral-curl rewrite; falco rule precedence (00- prefix); Talon
+  routing (config.rulesOverride + cross-ns FQDN); Talon v0.3.0 schema. Cluster torn down after -> $0.
+
 
 ### Doc-accuracy spike corrections applied (2026-06-20)
 
@@ -18,12 +101,12 @@ live web research against vendor primary sources + `aws bedrock list-inference-p
   (test_cost_counter, test_proxy_guards).
 - **agentgateway v1.2.1 → v1.3.0** (GA 2026-06-17): bumped in agentgateway.yaml, mcp-authz-on/off,
   GATEWAY-NOTES, BUILD-SPEC, beats/03 BUILD-SPIKE, VERSIONS.lock. mcpAuthorization is allow-only CEL
-  with implicit deny (NO `action` field) — deleted FORM B; MCP config re-nested under
+  with implicit deny (NO `action` field) - deleted FORM B; MCP config re-nested under
   `mcp.{targets,policies}`; tests updated.
 - **Tempo chart repointed** to `grafana-community/helm-charts` 2.2.3 / app 2.10.7 (old grafana repo
   path is a dead stub after the 2026-01-30 migration). loki/alloy correctly stay at grafana/helm-charts.
 - **Bedrock model IDs (research/13):** Sonnet `us.anthropic.claude-sonnet-4-6`, Opus
-  `us.anthropic.claude-opus-4-8` (NO date stamp — the `<DATE>` placeholders were wrong), Fable
+  `us.anthropic.claude-opus-4-8` (NO date stamp - the `<DATE>` placeholders were wrong), Fable
   `us.anthropic.claude-fable-5` (now live on Bedrock). Sonnet/Opus require the `us.` Geo profile
   (no In-Region in us-west-2). Applied in resources.yaml, VERSIONS.lock, BUILD-SPEC.
 - **Other:** Kyverno restrict-image-registries on rule-level `validate.failureAction: Enforce`
@@ -44,10 +127,164 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
-OPEN (design call for Michael, NOT auto-changed): research/13 found Fable 5 is now LIVE on Bedrock
-(`us.anthropic.claude-fable-5`). Docs 3 (line ~92) and 6 (lines ~196/213) plus repo BUILD-SPEC/runbook
-still say "Fable 5 unavailable (access suspended)". Whether to add Fable as a 4th model-tier
-cluster/screen is a demo-design decision, so those lines were left for Michael to decide.
+Google Drive reorganized (2026-06-21): top level trimmed to the core 7 (1 START HERE ... 7 Walkthrough)
+plus 3 subfolders. "Decisions" (8 Challenges, 9 Control rationale, 10 Tech status, TS-agent proposal,
+KubeArmor/Falco doc, Readiness Checklist). "Research Spikes" (Whitney's 4 spike docs + a new index doc
+pointing to repo research/11-27). "Archive" (Comment Archive backup + older versions). Docs 3/6/7 updated in place to the new architecture, comment-safe (banners removed after):
+Doc 7 (0 comments) full-rewritten from repo docs/STACK-WALKTHROUGH.md via media-PATCH; Doc 6 (2 comments)
+surgically edited via Docs API replaceAllText on its 4 real stale lines (ApplicationSet/cluster-generator
+-> in-cluster ArgoCD app-of-apps; deleted-tree + hub-cluster/spoke-cluster refs -> attendee-cluster/
+burn-clusters/shared-vpc), the 2 comments untouched/intact; Doc 3 (18 comments) needed NO body edits
+(its demo-flow is topology-neutral). All comments verified intact (Doc6 2, Doc3 18). Verified: 0 residual
+stale terms in Doc 6, Doc 7 carries the shared-VPC/independent content.
+
+PHASE-GATE SESSION CLOSED (2026-06-21): Michael's 4-step plan complete. (1) Agent gates validated:
+beat-cost PASS live (cost counter moves on real spend, flatlines on block-list; #8 kagent_usage_metadata
+key fix confirmed). (2) Teardown + clean reprovision: fresh watch-it-burn-test came up with all fixes baked
+in. (3) #5 egress VALIDATED CLEAN on the fresh cluster (enableNetworkPolicy from create): S3 BLOCKED, DNS OK.
+(4) Teardown complete - 0 clusters, 0 watch-it-burn EC2, nothing billing; lab-distribution/ pulled in
+(adapted KCD distributor, code only, no PII/creds). Net: 8 real issues caught+fixed before the event
+(#1 Falco syntax, #2 workshop-mcp built, #3 CONTEXT export, #4 selfHeal ignoreDifferences, #5 enableNetworkPolicy,
+#7 A2A messageId, #8 cost-counter key; #6 harness ephemeral-curl-pod still OPEN - validations used
+port-forward, harness needs a port-forward refactor). REMAINING live-validation (next cluster): beat-02
+output-redaction, beat-03 mcp-authz (needs agentgateway deployed), PID-limit fork bomb (needs a nodegroup
+with overrideBootstrapCommand). Offline suite 166 green.
+
+LIVE PHASE-GATE RUN (2026-06-21, watch-it-burn-test, 6x t3.large, accen-dev/us-west-2, isolated
+kubeconfig /tmp/watch-it-burn-test.kubeconfig). Full IDP deployed via app-of-apps. The run caught
+6 real issues; commits pushed to staging+main:
+- #1 Falco rule k8s.pod.label.app -> k8s.pod.label[app] (was crashlooping). FIXED+validated.
+- #2 agent referenced workshop-mcp RemoteMCPServer that was never deployed -> agent could not compile.
+  BUILT the good workshop-mcp shim (gitops/ai-layer/workshop-mcp-server.py + Deployment/Service/
+  RemoteMCPServer, mirrors evil-mcp-shim; tools list_pods/apply_manifest/get_secret). Agent now
+  Accepted=True Ready=True, pod Running. FIXED+validated.
+- #3 beats didn't export CONTEXT to toggle subscripts. FIXED.
+- #4 ArgoCD selfHeal reverted live toggles -> added ignoreDifferences (kyverno-policies failureAction;
+  ai-layer guard-proxy env). FIXED+validated (beat-1 Enforce toggle now sticks).
+- #5 vpc-cni addon lacked enableNetworkPolicy -> egress/default-deny inert. Added configurationValues
+  enableNetworkPolicy=true to test/attendee/burn configs + render-gate check. FIXED in config; live
+  retrofit on the running cluster stuck in addon UPDATING >15min (no errors) -> validate on a FRESH
+  cluster (config applies at create).
+- #6 OPEN: verify harness (beat-cost/02/03) uses an ephemeral `kubectl run ... curlimages/curl` helper
+  that times out ("timed out waiting for the condition") on this cluster -> beat-cost/02/03 can't
+  complete. Agent + wiring confirmed correct (AGENT_URL -> workshop-agent.agent:8080). Needs a harness
+  fix (helper-pod path) to run the agent gates.
+AGENT GATES VALIDATED LIVE (2026-06-21, post-fixes): beat-cost PASS - benign request moved the cost counter 0.0->$0.001588 (1164 tokens) and a block-listed destructive request flatlined it (pre-LLM, 0 tokens). Confirms #8 (live kagent 0.9.9 key is result.metadata.kagent_usage_metadata, NOT adk_; research/14 was wrong - record_usage now accepts both, kagent first) and #7 (A2A message/send needs params.message.messageId). Agent compiles, answers via Bedrock Haiku, calls the workshop-mcp list_pods tool. #6 (harness ephemeral curl-pod times out) still OPEN - validations done via kubectl port-forward; harness needs a port-forward refactor. beat-02 output-redaction + beat-03 mcp-authz (needs agentgateway) = remaining live items.
+
+GATES PASS: Kyverno Audit->Enforce toggle (beat-1, post-#4), RBAC escalation FORBIDDEN, image-registry
+villain block (Enforce), require-probes/labels/limits admission. NOT TESTABLE here: PID-limit fork bomb
+(test-cluster has no overrideBootstrapCommand; unsafe without the cap). Offline suite 166 green.
+Cluster STILL UP (~$0.50/hr). Teardown: teardown/teardown.sh --prefix watch-it-burn-test --yes.
+
+QUEUE (Michael): pull a copy of portfolio/lab-provisionin-website (Flask pool-based key/lab distributor:
+app.py, pool.csv, pool.db, railway.json) into this repo's provisioning for our own use.
+
+ARCHITECTURE REVISED (Michael approved, 2026-06-21): dropped hub-and-spoke -> INDEPENDENT per-attendee
+clusters. Each attendee gets their own standalone EKS cluster (take-home) running its OWN in-cluster
+ArgoCD reconciling itself from gitops/bootstrap/app-of-apps.yaml (destination kubernetes.default.svc).
+No hub, no central control plane. Matches the Packt sister repo. Networking: ONE shared VPC
+(10.0.0.0/16, two /18 private subnets across 2 AZs); all clusters share it (NOT one VPC each). T3
+burstable (t3.xlarge, unlimited mode), conservative start. Changes made: deleted platform/argocd/
+(appset-attendee generator + appproject + duplicate apps tree) and infra/hub-cluster/; renamed
+infra/spoke-cluster -> infra/attendee-cluster; cluster name watch-it-burn-spoke-* -> watch-it-burn-attendee-*;
+added vpc.id/subnets refs + infra/shared-vpc/README.md; rewrote teardown.sh (prefix-scoped, no hub, no
+Tempo-wipe); rewrote attendee README + bootstrap.sh wording; prose docs (BUILD-SPEC/STACK-WALKTHROUGH/
+TECH-STATUS/SIZING/README) updated by a scoped subagent; GITOPS-RECONCILIATION marked resolved; tests
+updated (163 green). Quotas (research/25): EKS clusters default 100 (60 fits); the ask is EC2 vCPU
+L-1216C47A ~1000. STILL OWED (separate pass): the platform/ duplicate tree (observability, kyverno) is
+partly referenced (falco rules) and needs its own reconciliation; Google Docs 1/3/6/7/10 still describe
+hub-and-spoke and need the comment-safe update.
+
+Datadog path SETTLED = HYBRID (Michael, 2026-06-21): OTel Collector stays the neutral primary (wired);
+add a Datadog Agent DaemonSet for EKS infra auto-discovery + named integrations. Datadog stays swappable
+(drop the Agent + the collector's datadog exporter to run OSS-only). DIVISION OF LABOR: Whitney owns the
+Datadog account, API keys, Agent install, and dashboards (we do NOT have keys yet, and that is her piece);
+we own the OTel-side wiring (done), the manifest annotations for named integrations, and consuming the
+datadog-secret. Next-level implementation + node sizing in research/24.
+
+Observability wiring DONE (2026-06-21, path-independent): (1) OTel Collector spanmetrics connector with
+add_resource_attributes:true wired into traces-exporters + metrics-receivers (so span metrics carry UST
+tags for Datadog correlation; this was the missing connectors block); (2) UST via OTEL_RESOURCE_ATTRIBUTES
+(service.name + service.version=CLUSTER_TIER + deployment.environment.name=watch-it-burn) on guard-proxy,
+agentgateway, and the kagent Agent deployment.env (kagent env support is verify-at-build); (3) Falcosidekick
+native Datadog output via DATADOG_APIKEY from the shared datadog-secret (env overrides yaml; no key in repo;
+additive/swappable, Talon path preserved). Datadog stays swappable per the principle (drop the datadog
+exporter + these blocks to run OSS-only). test_observability.py extended (+9 checks; suite 163). TECH-STATUS.md
+refreshed (was stale at 15 files/118 checks; now 19/163, done items un-stale, research-spike inventory +
+parked/deferred section added). verify-at-build carried: datadog-secret must exist in security ns too; set
+DD_SITE/DATADOG_HOST to Whitney's account; confirm collector Service name + kagent deployment.env + chart extraEnv.
+
+TS agent ON HOLD (Michael, 2026-06-21): the optional TypeScript agent / custom-framework addition is
+DEFERRED until after the demo is finished. Sticking with kagent only for now - a second agent
+framework is unnecessary complexity before the demo works end to end (a comment to this effect is on
+a shared Google Doc). spiny-orb hookup waits on that. Do NOT build the TS agent until Michael reopens
+it. The research below stays as the record. ↓
+
+TypeScript agent option + spiny-orb (2026-06-21): "Spiny/Weaver" = Whitney's repo
+github.com/wiggitywhitney/spinybacked-orbweaver (`spiny-orb`), an AI agent that auto-adds OTel
+instrumentation to JS/TS code and validates against a Weaver semconv registry. It instruments JS/TS
+ONLY, so for Whitney to use it on our code there must be TS code. Decision (Michael): KEEP the
+kagent Python agent as primary/fallback; ADD an OPTIONAL TS agent (recommended shape: Mastra or
+Vercel AI SDK, wrapped as a kagent `type: BYO` A2A backend so it keeps agentgateway + MCP + HITL +
+LLM Guard), shipping a `spiny-orb.yaml` + Weaver registry + OTel SDK init so spiny-orb runs out of
+the box -> Datadog. Research: research/16 (corrected; the earlier Spiny=Pixie guess is void).
+BUILD IS GATED on Whitney's answers (framework, Weaver registry, how she runs spiny-orb on stage).
+Proposal Google Doc created + shared with Whitney (notified) + comment tagging her:
+<redacted-doc-link>
+(folder "Watch it Burn" 1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU; Whitney = <redacted-email>).
+
+KubeArmor research spike (2026-06-21): DONE -> research/17-kubearmor-forkbomb-2026.md. Verdict:
+KubeArmor v1.7.3 CANNOT prevent a fork bomb the way podPidsLimit does - its KubeArmorPolicy has NO
+process-count/thread-count/fork-rate/PID field (verified vs the shipped spec); it only allow/denies
+named binary exec, file, network, capabilities (syscalls are audit-only regardless of action). The
+`rate: 10p1s` seen in some material is a telemetry throttle, not enforcement (trap, flagged). It
+enforces inline at LSM hooks (BPF-LSM preferred); EKS AL2023 ships kernel 6.1 with BPF-LSM enabled
+by default so enforcement is plausible but MUST be verified on the node (`/sys/kernel/security/lsm`
+contains `bpf`, `karmor probe`, live Block test). DECISION: keep podPidsLimit as the SOLE inline
+fork-bomb block + Falco/Talon as detect+respond; do NOT add KubeArmor to the fork-bomb story. KubeArmor
+is a candidate DIFFERENT-attack station (CNCF-native inline prevention: default-deny exec, block
+secret-file reads, block egress) - still an OPEN option, not folded in. No repo defense changed.
+Findings Google Doc (silently shared with Whitney):
+<redacted-doc-link>
+
+Runtime-enforcement + observability spikes (2026-06-21): research/20-23.
+- research/20 (Tetragon): does NOT replace the PID cap for fork bombs - Sigkill is kill-on-detect
+  (outrunnable), Override is all-or-nothing (zero forks, not a ceiling of N), --cgroup-rate is a
+  telemetry throttle. Standalone w/o Cilium CNI CONFIRMED (v1.7.0, VPC-CNI ok). Value = different-role
+  (process lineage + inline Override of OTHER agent misbehavior). AL2023 Override needs
+  CONFIG_BPF_KPROBE_OVERRIDE + non-confidentiality lockdown - verify at build.
+- research/21 (KubeArmor claims, cited): research/17 CONFIRMED adversarially - no count/rate/PID field,
+  syscalls audit-only; captured AL2023 node artifact shows bpf live in /sys/kernel/security/lsm. Safe
+  to hand Whitney.
+- research/22 (4-way comparison, cited): only podPidsLimit prevents a fork bomb inline (cgroup PIDs
+  controller returns -EAGAIN at fork). Falco+Talon/Tetragon = detect+kill (outrunnable); KubeArmor =
+  nothing as a count cap. Framing: PID cap = wall, Falco = alarm, Tetragon-or-KubeArmor = locked door
+  (pick at most one for inline prevention of OTHER attacks).
+- research/23 (decision points for Whitney): 8 decisions w/ pros/cons; design principle = Datadog
+  REQUIRED+primary for this event, OTel neutral layer, OSS (Prom/Grafana/Tempo) swappable fallback,
+  Datadog additive via OTEL_RESOURCE_ATTRIBUTES (not DD_*). Verified live: OTel Collector has NO
+  connectors: block; Falcosidekick forwards only to Talon (DD/OTLP wiring is net-new). NOTE: Decision 4
+  (TS agent) is now resolved = ON HOLD per above.
+NET fork-bomb decision UNCHANGED: podPidsLimit stays the sole inline block + Falco/Talon detect-respond.
+Tetragon/KubeArmor remain OPEN candidates for a different-attack station only. Nothing folded into the
+repo defense. Whitney's branch left untouched.
+
+AWS collision-avoidance tagging (2026-06-21): accen-dev is shared with a separate Packt project (its
+own clusters; we never share resources). Convention established in `infra/TAGGING.md`: every resource
+carries `project=watch-it-burn` and every cluster name starts with `watch-it-burn-`. Applied: all 4
+eksctl configs (renamed `workshop-hub`→`watch-it-burn-hub`, `workshop-spoke-*`→`watch-it-burn-spoke-*`;
+added `metadata.tags` + nodegroup tags; tag key was `workshop:unleash-an-agent`, now `project:watch-it-burn`);
+S3 hoop bucket (`put-bucket-tagging`) and trophy secret (`--tags`); spoke README cluster-name refs.
+Teardown scripts confirmed name/prefix-scoped (can only ever hit `watch-it-burn-*`, never Packt).
+New render-gate test `test_tagging.py` enforces it (suite now 154 checks). AWS Resource Group bundling
+= tag query on `project=watch-it-burn` (commands in TAGGING.md). Public-URL linkage
+(cluster→LB hostname→`*.agenticburn.com` via `infra/dns/set-demo-dns.py`) documented; LB-service tag
+annotation requirement noted; full per-cluster automation is deferred provisioning work.
+
+Fable 5: RETIRED from this workshop (Michael, 2026-06-21). Not a tier in the comparison. The Fable
+additions made during the doc-accuracy pass were reverted (resources.yaml, VERSIONS.lock, BUILD-SPEC);
+research/13 still records that it went live on Bedrock as a dated finding, but it is out of scope here.
+Do not re-raise Fable; Michael will say if it comes back.
 
 ### Session-close note (2026-06-19)
 

@@ -1,0 +1,74 @@
+{% extends "_base.html" %}
+
+{% block title %}Watch It Burn - Claim Your Cluster{% endblock %}
+{% block page_title %}Claim Your Cluster{% endblock %}
+{% block meta_description %}Enter your email to claim a pre-provisioned EKS cluster for Unleash an Agent, Watch it Burn workshop at Watch It Burn - sponsored by Accenture.{% endblock %}
+
+{% block hero %}
+  <section class="hero">
+    <h1>Unleash an Agent, Watch it Burn</h1>
+  </section>
+{% endblock %}
+
+{% block main %}
+  <style>
+    main.page { padding: 24px 32px; max-width: 560px; }
+    main.page h1 { margin-bottom: 8px; }
+    main.page p { margin-bottom: 16px; }
+    .sponsor-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: var(--light-gray);
+      margin-bottom: 16px;
+    }
+    .sponsor-strip img { height: 24px; width: auto; display: inline-block; }
+    @media (max-width: 640px) { main.page { padding: 16px; } }
+  </style>
+
+  <div class="sponsor-strip" role="img" aria-label="Sponsored by Accenture">
+    <span aria-hidden="true">Sponsored by</span>
+    <img src="{{ url_for('static', filename='img/accenture-logo.svg') }}" alt=""
+         onerror="this.outerHTML='<span style=&quot;color:#A100FF;font-weight:700;text-transform:none;letter-spacing:0;&quot;>accenture &gt;</span>';">
+  </div>
+
+  <h1>Claim your workshop cluster</h1>
+  <p id="form-help">
+    Enter your email to receive AWS credentials and the six setup commands for a
+    pre-provisioned EKS cluster. We&rsquo;ll email you a backup copy. Re-enter the same
+    email any time to redisplay your credentials.
+  </p>
+
+  {% if error %}
+    <div class="error" role="alert">{{ error }}</div>
+  {% endif %}
+
+  <form id="claim-form" method="post" action="{{ url_for('eks_claim') }}"
+        style="display:flex;flex-direction:column;gap:12px;margin-top:0;">
+    <label for="email" style="font-size:14px;color:var(--navy);font-weight:600;">Email</label>
+    <input id="email" name="email" type="email" required autocomplete="email"
+           inputmode="email" autofocus placeholder="you@example.com"
+           aria-describedby="form-help"
+           class="field">
+    <button id="claim-submit" type="submit" class="btn" style="align-self:flex-start;"
+            data-loading-text="Claiming&hellip;">Claim my cluster</button>
+  </form>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Disable the button + swap label so users don't double-click the form while
+  // Resend is doing its ~1s round-trip.
+  document.getElementById('claim-form').addEventListener('submit', function () {
+    var b = document.getElementById('claim-submit');
+    if (b.disabled) return;
+    b.dataset.originalText = b.textContent;
+    b.textContent = b.dataset.loadingText;
+    b.disabled = true;
+  });
+</script>
+{% endblock %}
