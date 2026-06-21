@@ -47,11 +47,11 @@ spec:
           appConfig:
             app:
               title: KubeAuto Day IDP
-              baseUrl: https://backstage.ai-enhanced-devops.com
+              baseUrl: https://backstage.agenticburn.com
             organization:
               name: KubeAuto Day
             backend:
-              baseUrl: https://backstage.ai-enhanced-devops.com
+              baseUrl: https://backstage.agenticburn.com
               listen:
                 port: 7007
               database:
@@ -120,12 +120,12 @@ spec:
                 - type: config
                   instances:
                     - name: kubeauto
-                      url: https://argocd.ai-enhanced-devops.com
+                      url: https://argocd.agenticburn.com
                       token: ${ARGOCD_AUTH_TOKEN}
             proxy:
               endpoints:
                 /argocd/api:
-                  target: https://argocd.ai-enhanced-devops.com/api/v1/
+                  target: https://argocd.agenticburn.com/api/v1/
                   headers:
                     Cookie: argocd.token=${ARGOCD_AUTH_TOKEN}
                   changeOrigin: true
@@ -153,9 +153,9 @@ spec:
             alb.ingress.kubernetes.io/ssl-redirect: "443"
             alb.ingress.kubernetes.io/backend-protocol: HTTP
             alb.ingress.kubernetes.io/healthcheck-path: /
-            alb.ingress.kubernetes.io/group.name: kubeauto-ingress
-            alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:<ACCOUNT_ID>:certificate/151d10d0-1941-4fbf-bfd8-0e8c3be1a8d6
-          host: backstage.ai-enhanced-devops.com
+            alb.ingress.kubernetes.io/group.name: watch-it-burn-ingress
+            alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:<ACCOUNT_ID>:certificate/REPLACE-WITH-AGENTICBURN-CERT
+          host: backstage.agenticburn.com
   destination:
     server: https://kubernetes.default.svc
     namespace: backstage
