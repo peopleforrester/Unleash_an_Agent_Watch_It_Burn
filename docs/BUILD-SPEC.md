@@ -122,8 +122,8 @@ wasted-token-DoS thesis in one image. (Fable 5 is not available; access is suspe
 cluster pins its model by the Agent's `modelConfig`
 reference plus that tier's live ModelConfig (`gitops/ai-layer/resources.yaml` ships Haiku as the
 default; the Sonnet/Opus configs are commented, verify the inference-profile id then uncomment).
-The per-cluster tier assignment is injected by the provisioning ApplicationSet, never a live
-kubectl patch (ArgoCD selfHeal reverts it). Gating, owned by the provisioning project: each model
+Each instructor tier cluster pins its model in its own committed config, reconciled by that cluster's
+in-cluster ArgoCD, never a live kubectl patch (ArgoCD selfHeal reverts it). Gating, owned by the provisioning project: each model
 needs Bedrock access + the Anthropic use-case form; the parallel frontier clusters cost more while
 running, which is a feature here (it IS the cost story), not a bug.
 
@@ -131,11 +131,12 @@ running, which is a feature here (it IS the cost story), not a bug.
 
 ## 3. Hard constraints (non-negotiable)
 
-- **Isolation via separate EKS clusters.** Per-attendee Cluster 3 = own EKS cluster (+ a few reserve).
+- **Isolation via separate EKS clusters.** Per-attendee Cluster 3 = own standalone EKS cluster
+  (`watch-it-burn-attendee-<id>`, + a few reserve), self-reconciled by its own in-cluster ArgoCD.
   Facilitator fleet: 3× Cluster 1, 3× Cluster 2, 3× instructor Cluster 3 (one per model tier, run
-  side by side). No vCluster, no namespace-only
-  tenancy (rationale unchanged: real privilege-escalation + Falco + admission webhooks + CRDs are cleaner
-  on real clusters).
+  side by side). All clusters share one VPC (provisioned up front). No hub cluster, no vCluster, no
+  namespace-only tenancy (rationale unchanged: real privilege-escalation + Falco + admission webhooks +
+  CRDs are cleaner on real clusters).
 - **Cluster 1 has no floor and no admission control.** It dies in one prompt by design; the spectacle
   is the speed of death plus the cost counter, and the facilitator rotates ~10 disposable spares. C2/C3
   are not tanked in one prompt because they carry the real CNCF stack (not a "floor"). Follow-along runs
@@ -177,7 +178,13 @@ running, which is a feature here (it IS the cost story), not a bug.
 Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSIONS.lock`).
 
 ### Cluster topology
-- **Per-attendee Cluster 3**, own EKS cluster: full IDP (ArgoCD, Kyverno, Falco, observability) +
+- **Independent per-student clusters.** Each student gets their **own standalone EKS cluster**, take-home,
+  running its **own in-cluster ArgoCD** that reconciles itself from Git
+  (`gitops/bootstrap/app-of-apps.yaml`, destination the local cluster `kubernetes.default.svc`). There is
+  no hub cluster and no central ArgoCD managing other clusters. The facilitator/presenter cluster and the
+  burn clusters are simply more independent clusters of the same shape. Per-attendee clusters are named
+  `watch-it-burn-attendee-<id>`. This matches the sister Packt repo (one cluster per student, in-cluster ArgoCD).
+- **Per-attendee Cluster 3**, own EKS cluster: full IDP (in-cluster ArgoCD, Kyverno, Falco, observability) +
   always-on kagent agent + the guard layer + the (initially open) MCP wiring. Attendee drives via chat
   UI and kubectl.
 - **Facilitator Cluster 1 (no guardrails) ×3 live + ~10 disposable spares**, no floor, no admission;
@@ -187,8 +194,14 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
   destruction, still shows cost.
 - **Instructor Cluster 3 ×2**, follow-along copies of the attendee cluster so a single attendee
   wrecking theirs doesn't break the demonstration.
-- Delivery: ArgoCD ApplicationSet (cluster generator) + **sync-waves** order components by dependency.
-  **Crossplane was tried and removed**, eksctl/Terraform provisions, ArgoCD takes over.
+- **Shared VPC.** All clusters share **one VPC** (`10.0.0.0/16`, two private `/18` subnets across two AZs
+  plus small public `/24`s for NAT/ingress), provisioned **once up front**; each cluster config references
+  the existing VPC id + subnet ids. Not one VPC per student. Rationale: take-home portability (a
+  hub-managed cluster goes inert when detached from its hub), blast-radius isolation (correct for a chaos
+  lab), and avoiding ArgoCD sharding past the ~20-30 clusters-per-instance guidance for a 2-hour event.
+  See `infra/SIZING.md` and `research/25-eks-quotas-shared-vpc-topology-2026.md`.
+- Delivery: each cluster's **in-cluster ArgoCD** runs the app-of-apps with **sync-waves** ordering
+  components by dependency. **Crossplane was tried and removed**, eksctl/Terraform provisions, ArgoCD takes over.
 
 ### Verified component stack (live on EKS)
 - **kagent** chart `0.9.7`, CRDs `kagent.dev/v1alpha2`. Agent answers via A2A; per-agent
@@ -233,7 +246,7 @@ kube-prometheus-stack `86.2.3`; OTel Collector chart `0.158.2` / app `0.153.0`; 
 `grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.35`;
 aws-ebs-csi-driver addon + gp3 default SC; Bedrock models
 `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku), `us.anthropic.claude-sonnet-4-6` (Sonnet),
-`us.anthropic.claude-opus-4-8` (Opus) — Sonnet/Opus need the `us.` Geo profile (no In-Region in
+`us.anthropic.claude-opus-4-8` (Opus) - Sonnet/Opus need the `us.` Geo profile (no In-Region in
 us-west-2); Fable retired. vCluster is removed. `VERSIONS.lock` is authoritative; re-confirm at build.
 
 ---
@@ -241,8 +254,8 @@ us-west-2); Fable retired. vCluster is removed. `VERSIONS.lock` is authoritative
 ## 7. Repository structure
 
 Existing tree stands (`platform/`, `agent/` incl. `agent/gateway/guard-proxy/`, `beats/`, `verify/`,
-`infra/` with `test-cluster/`+`hub-cluster/`+`spoke-cluster/`, `facilitation/`, `research/`, `docs/`,
-`teardown/`). rev4 additions to create:
+`infra/` with `test-cluster/` + the shared-VPC config + per-cluster (attendee/burn/instructor) configs,
+`facilitation/`, `research/`, `docs/`, `teardown/`). rev4 additions to create:
 ```
   infra/burn-clusters/        # Cluster 1 (no-guardrails) + Cluster 2 (CNCF-only) eksctl configs + spares
   cost/                       # live Bedrock cost-counter service + dashboard wiring
@@ -261,9 +274,10 @@ Re-sequenced for rev4. ✅ = already verified live (rev3); reuse, don't rebuild.
   config + bootstrap + EBS-CSI/gp3 verified. Re-provision a base cluster from `infra/test-cluster/`.
 - **Phase 1, IDP stack.** ✅ ArgoCD/Kyverno/Falco verified; kube-prometheus + OTel→Tempo to finish
   (rev3 kps install wedged, redo lighter, focus Tempo+Grafana trace view).
-- **Phase 2, Cluster fleet.** Build the burn clusters (1 no-guardrails, 2 CNCF-only) + ~10 disposable
-  Cluster-1 spares + per-attendee Cluster-3 ApplicationSet (cluster generator, sync-waves). Record
-  per-cluster provision time + the fleet cost.
+- **Phase 2, Cluster fleet.** Provision the shared VPC once, then build the burn clusters (1
+  no-guardrails, 2 CNCF-only) + ~10 disposable Cluster-1 spares + per-attendee Cluster-3s
+  (`watch-it-burn-attendee-<id>`), each self-reconciled by its own in-cluster ArgoCD app-of-apps
+  (sync-waves). Record per-cluster provision time + the fleet cost.
 - **Phase 3, Scoped agent.** ✅ kagent v1alpha2 + Bedrock (haiku-4-5) + scoped RBAC + IRSA verified.
   Re-apply; confirm the chaos system prompt; capture the gen_ai/tool-call spans for the dashboard.
 - **Phase 4, Guard layer.** ✅ output Regex + guard proxy verified. **NEW:** build the input
@@ -332,8 +346,11 @@ Resolved (2026-06-19, see `docs/BUILD-PLAN.md`):
 2. **Bedrock model gating.** Anthropic use-case form is account-wide and was submitted; new accounts or
    opt-in regions need it again, with ~15-min propagation. Base model ids reject on-demand, always use
    `us.*` inference profiles. Verified working with haiku-4-5.
-3. **Disposable-cluster provisioning at scale.** ~15 min/cluster + AWS EKS/EC2 quotas. Pre-provision the
-   burn stack before doors; a wrecked cluster's replacement must already be warm.
+3. **Disposable-cluster provisioning at scale.** ~15 min/cluster + AWS EKS/EC2 quotas. EKS
+   clusters-per-region defaults to 100 (60 fits, no increase); the real ask is EC2 On-Demand Standard
+   vCPU (L-1216C47A, target ~1,000 vCPU for an all-`t3.xlarge` fleet). Shared VPC makes VPC/EIP/NAT
+   quotas moot. Pre-provision the burn stack before doors; a wrecked cluster's replacement must already
+   be warm. See `infra/SIZING.md`.
 4. **Attendee access at scale over Moscone WiFi.** Browser chat UI + web terminal entry point; QR/links;
    facilitator-driven single path if the room can't get online.
 5. **Agent prompt reliability.** Deterministic fallbacks per segment; the guard lesson is independent of

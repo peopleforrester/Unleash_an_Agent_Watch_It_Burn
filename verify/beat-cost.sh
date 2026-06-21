@@ -10,7 +10,7 @@ usage() {
     cat >&2 <<'EOF'
 Usage: beat-cost.sh <kube-context> <attendee-namespace>
 
-  <kube-context>         kubeconfig context for the attendee's SPOKE cluster
+  <kube-context>         kubeconfig context for the attendee's cluster
   <attendee-namespace>   namespace the guard-proxy / agent live in
 
 Asserts the cost counter's §2 outcomes (the headline "wasted tokens are the new DoS"):

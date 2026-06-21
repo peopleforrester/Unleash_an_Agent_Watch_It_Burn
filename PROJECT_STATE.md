@@ -18,12 +18,12 @@ live web research against vendor primary sources + `aws bedrock list-inference-p
   (test_cost_counter, test_proxy_guards).
 - **agentgateway v1.2.1 → v1.3.0** (GA 2026-06-17): bumped in agentgateway.yaml, mcp-authz-on/off,
   GATEWAY-NOTES, BUILD-SPEC, beats/03 BUILD-SPIKE, VERSIONS.lock. mcpAuthorization is allow-only CEL
-  with implicit deny (NO `action` field) — deleted FORM B; MCP config re-nested under
+  with implicit deny (NO `action` field) - deleted FORM B; MCP config re-nested under
   `mcp.{targets,policies}`; tests updated.
 - **Tempo chart repointed** to `grafana-community/helm-charts` 2.2.3 / app 2.10.7 (old grafana repo
   path is a dead stub after the 2026-01-30 migration). loki/alloy correctly stay at grafana/helm-charts.
 - **Bedrock model IDs (research/13):** Sonnet `us.anthropic.claude-sonnet-4-6`, Opus
-  `us.anthropic.claude-opus-4-8` (NO date stamp — the `<DATE>` placeholders were wrong), Fable
+  `us.anthropic.claude-opus-4-8` (NO date stamp - the `<DATE>` placeholders were wrong), Fable
   `us.anthropic.claude-fable-5` (now live on Bedrock). Sonnet/Opus require the `us.` Geo profile
   (no In-Region in us-west-2). Applied in resources.yaml, VERSIONS.lock, BUILD-SPEC.
 - **Other:** Kyverno restrict-image-registries on rule-level `validate.failureAction: Enforce`
@@ -43,6 +43,22 @@ version corrections (its tier/VPC-CNI content is already correct). Doc 6 (Build 
 pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.154.0→v0.158.2, agentgateway
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
+
+ARCHITECTURE REVISED (Michael approved, 2026-06-21): dropped hub-and-spoke -> INDEPENDENT per-attendee
+clusters. Each attendee gets their own standalone EKS cluster (take-home) running its OWN in-cluster
+ArgoCD reconciling itself from gitops/bootstrap/app-of-apps.yaml (destination kubernetes.default.svc).
+No hub, no central control plane. Matches the Packt sister repo. Networking: ONE shared VPC
+(10.0.0.0/16, two /18 private subnets across 2 AZs); all clusters share it (NOT one VPC each). T3
+burstable (t3.xlarge, unlimited mode), conservative start. Changes made: deleted platform/argocd/
+(appset-attendee generator + appproject + duplicate apps tree) and infra/hub-cluster/; renamed
+infra/spoke-cluster -> infra/attendee-cluster; cluster name watch-it-burn-spoke-* -> watch-it-burn-attendee-*;
+added vpc.id/subnets refs + infra/shared-vpc/README.md; rewrote teardown.sh (prefix-scoped, no hub, no
+Tempo-wipe); rewrote attendee README + bootstrap.sh wording; prose docs (BUILD-SPEC/STACK-WALKTHROUGH/
+TECH-STATUS/SIZING/README) updated by a scoped subagent; GITOPS-RECONCILIATION marked resolved; tests
+updated (163 green). Quotas (research/25): EKS clusters default 100 (60 fits); the ask is EC2 vCPU
+L-1216C47A ~1000. STILL OWED (separate pass): the platform/ duplicate tree (observability, kyverno) is
+partly referenced (falco rules) and needs its own reconciliation; Google Docs 1/3/6/7/10 still describe
+hub-and-spoke and need the comment-safe update.
 
 Datadog path SETTLED = HYBRID (Michael, 2026-06-21): OTel Collector stays the neutral primary (wired);
 add a Datadog Agent DaemonSet for EKS infra auto-discovery + named integrations. Datadog stays swappable
@@ -64,7 +80,7 @@ parked/deferred section added). verify-at-build carried: datadog-secret must exi
 DD_SITE/DATADOG_HOST to Whitney's account; confirm collector Service name + kagent deployment.env + chart extraEnv.
 
 TS agent ON HOLD (Michael, 2026-06-21): the optional TypeScript agent / custom-framework addition is
-DEFERRED until after the demo is finished. Sticking with kagent only for now — a second agent
+DEFERRED until after the demo is finished. Sticking with kagent only for now - a second agent
 framework is unnecessary complexity before the demo works end to end (a comment to this effect is on
 a shared Google Doc). spiny-orb hookup waits on that. Do NOT build the TS agent until Michael reopens
 it. The research below stays as the record. ↓
@@ -83,7 +99,7 @@ docs.google.com/document/d/1Iel4yyUEbTf5s3W1PGoAbHSM0MQh6nLJQ_Zzv_2xCLk
 (folder "Watch it Burn" 1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU; Whitney = wiggitywhitney@gmail.com).
 
 KubeArmor research spike (2026-06-21): DONE -> research/17-kubearmor-forkbomb-2026.md. Verdict:
-KubeArmor v1.7.3 CANNOT prevent a fork bomb the way podPidsLimit does — its KubeArmorPolicy has NO
+KubeArmor v1.7.3 CANNOT prevent a fork bomb the way podPidsLimit does - its KubeArmorPolicy has NO
 process-count/thread-count/fork-rate/PID field (verified vs the shipped spec); it only allow/denies
 named binary exec, file, network, capabilities (syscalls are audit-only regardless of action). The
 `rate: 10p1s` seen in some material is a telemetry throttle, not enforcement (trap, flagged). It
@@ -92,17 +108,17 @@ by default so enforcement is plausible but MUST be verified on the node (`/sys/k
 contains `bpf`, `karmor probe`, live Block test). DECISION: keep podPidsLimit as the SOLE inline
 fork-bomb block + Falco/Talon as detect+respond; do NOT add KubeArmor to the fork-bomb story. KubeArmor
 is a candidate DIFFERENT-attack station (CNCF-native inline prevention: default-deny exec, block
-secret-file reads, block egress) — still an OPEN option, not folded in. No repo defense changed.
+secret-file reads, block egress) - still an OPEN option, not folded in. No repo defense changed.
 Findings Google Doc (silently shared with Whitney):
 docs.google.com/document/d/1UZMsLxqol5ASiXWgU3tlNIxBV3pCsLdLlrAFIARLNBw
 
 Runtime-enforcement + observability spikes (2026-06-21): research/20-23.
-- research/20 (Tetragon): does NOT replace the PID cap for fork bombs — Sigkill is kill-on-detect
+- research/20 (Tetragon): does NOT replace the PID cap for fork bombs - Sigkill is kill-on-detect
   (outrunnable), Override is all-or-nothing (zero forks, not a ceiling of N), --cgroup-rate is a
   telemetry throttle. Standalone w/o Cilium CNI CONFIRMED (v1.7.0, VPC-CNI ok). Value = different-role
   (process lineage + inline Override of OTHER agent misbehavior). AL2023 Override needs
-  CONFIG_BPF_KPROBE_OVERRIDE + non-confidentiality lockdown — verify at build.
-- research/21 (KubeArmor claims, cited): research/17 CONFIRMED adversarially — no count/rate/PID field,
+  CONFIG_BPF_KPROBE_OVERRIDE + non-confidentiality lockdown - verify at build.
+- research/21 (KubeArmor claims, cited): research/17 CONFIRMED adversarially - no count/rate/PID field,
   syscalls audit-only; captured AL2023 node artifact shows bpf live in /sys/kernel/security/lsm. Safe
   to hand Whitney.
 - research/22 (4-way comparison, cited): only podPidsLimit prevents a fork bomb inline (cgroup PIDs

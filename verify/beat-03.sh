@@ -17,7 +17,7 @@ usage() {
     cat >&2 <<'EOF'
 Usage: beat-03.sh <kube-context> <attendee-namespace>
 
-  <kube-context>         kubeconfig context for the attendee's SPOKE cluster
+  <kube-context>         kubeconfig context for the attendee's cluster
   <attendee-namespace>   namespace holding the gateway, agent, and evil-mcp-shim
 
 Asserts Beat 3's §2 outcome. The beat is SPIKE-GATED (§2, Phase 4b):
@@ -43,7 +43,7 @@ step() { echo "==> [beat-03] $*" >&2; }
 
 # ---- Decide path from the spike marker -----------------------------------------------------
 # Phase 4b records the result in BUILD-SPIKE.md. We treat the spike as PASSED only on an
-# AFFIRMATIVE, recorded result — never on the template's prose ("PASS / FAIL decision box"),
+# AFFIRMATIVE, recorded result - never on the template's prose ("PASS / FAIL decision box"),
 # its empty checkbox ("[ ] PASS"), or its TODO/TBD placeholders. The file ships as TODO, so
 # this returns false until a human records the result. The check is per-line: one line must
 # both affirm PASS and be free of any placeholder token. Recognised PASS forms (one line):
@@ -75,7 +75,7 @@ spike_passed() {
 
 recorded_artifact_exists() {
     [[ -d "${RECORDINGS_DIR}" ]] || return 1
-    # asciinema cast for beat 3 — match common naming (beat-03, beat3, bad-mcp, excessive-agency).
+    # asciinema cast for beat 3 - match common naming (beat-03, beat3, bad-mcp, excessive-agency).
     find "${RECORDINGS_DIR}" -maxdepth 2 -type f \
         \( -iname '*beat*03*' -o -iname '*beat3*' -o -iname '*bad*mcp*' -o -iname '*excessive*agency*' \) \
         -size +0c 2>/dev/null | grep -q . && return 0
