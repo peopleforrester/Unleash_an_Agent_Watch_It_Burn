@@ -34,6 +34,15 @@ managedNodeGroups:
     minSize: 2
     maxSize: 3
     volumeSize: 40
+    # PID cap (the real fork-bomb block): deliver the nodeadm podPidsLimit via overrideBootstrapCommand.
+    # eksctl prepends this NodeConfig to the AL2023 launch-template user-data; nodeadm merges it (research/14 §1b).
+    overrideBootstrapCommand: |
+      apiVersion: node.eks.aws/v1alpha1
+      kind: NodeConfig
+      spec:
+        kubelet:
+          config:
+            podPidsLimit: 1024
     labels:
       workshop.role: CLUSTER_ID
     tags:

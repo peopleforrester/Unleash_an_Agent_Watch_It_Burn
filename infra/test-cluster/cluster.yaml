@@ -22,12 +22,22 @@ iam:
 managedNodeGroups:
   - name: ng-default
     instanceType: t3.large
-    desiredCapacity: 2
-    minSize: 2
-    maxSize: 3
+    desiredCapacity: 6 # holds the full IDP for live gate validation
+    minSize: 6
+    maxSize: 6
     volumeSize: 40
+    # PID cap (the real fork-bomb block): deliver the nodeadm podPidsLimit via overrideBootstrapCommand.
+    # eksctl prepends this NodeConfig to the AL2023 launch-template user-data; nodeadm merges it with the
+    # EKS default. verify-at-build (research/14 §1b): confirm pids.max on the node after create.
+    overrideBootstrapCommand: |
+      apiVersion: node.eks.aws/v1alpha1
+      kind: NodeConfig
+      spec:
+        kubelet:
+          config:
+            podPidsLimit: 1024
     labels:
-      workshop-spoke: "true" # so the ArgoCD ApplicationSet cluster generator can target it later
+      workshop.role: test
     tags:
       project: watch-it-burn # propagate to the EC2/ASG so nodes are tagged ours too
       role: test
