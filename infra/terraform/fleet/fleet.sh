@@ -70,24 +70,43 @@ assert_ours() {
     [[ "${name}" == watch-it-burn-* ]] || { log "REFUSING non-watch-it-burn name: ${name}"; exit 1; }
 }
 
+# Record a per-cluster failure so the parent command can report it and exit non-zero. A backgrounded
+# job's exit code is otherwise lost in the pool, which would silently half-provision a 60-cluster fleet.
+record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
+
 up_one() {
     local name="$1"; assert_ours "${name}"
-    terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
+    if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" \
-        >"${LOG_DIR}/${name}.apply.log" 2>&1
+        >"${LOG_DIR}/${name}.apply.log" 2>&1; then
+        log "  ok: ${name}"
+    else
+        log "  FAILED: ${name} (see ${LOG_DIR}/${name}.apply.log)"; record_fail "${name}"
+    fi
 }
 
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
-    terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
+    if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" \
-        >"${LOG_DIR}/${name}.destroy.log" 2>&1 \
-        && rm -f "${STATE_DIR}/${name}.tfstate"
+        >"${LOG_DIR}/${name}.destroy.log" 2>&1; then
+        rm -f "${STATE_DIR}/${name}.tfstate"; log "  ok: ${name}"
+    else
+        log "  FAILED: ${name} (see ${LOG_DIR}/${name}.destroy.log)"; record_fail "${name}"
+    fi
+}
+
+# Print any recorded failures and return non-zero if there were any. Call after a pool run.
+report_failures() {
+    [[ -f "${LOG_DIR}/.failures" ]] || { log "  all succeeded"; return 0; }
+    local n; n="$(wc -l <"${LOG_DIR}/.failures")"
+    log "  ${n} cluster(s) FAILED:"; sed 's/^/    - /' "${LOG_DIR}/.failures" >&2
+    return 1
 }
 
 # Run a function over names, capped at MAX_PARALLEL.
@@ -112,12 +131,14 @@ cmd_up() {
     [[ $# -ge 1 ]] || usage
     require_tools
     mkdir -p "${STATE_DIR}" "${LOG_DIR}"
+    rm -f "${LOG_DIR}/.failures"
     read_vpc
     log "init cluster module..."
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local names; mapfile -t names < <(expand_names "$@")
     log "provisioning ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
     run_pool up_one "${names[@]}"
+    report_failures
 }
 
 cmd_down() {
@@ -132,8 +153,10 @@ cmd_down() {
         mapfile -t names < <(expand_names "$@")
     fi
     [[ "${#names[@]}" -gt 0 ]] || { log "no clusters to destroy"; return 0; }
+    rm -f "${LOG_DIR}/.failures"
     log "destroying ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
     run_pool down_one "${names[@]}"
+    report_failures
 }
 
 cmd_status() {

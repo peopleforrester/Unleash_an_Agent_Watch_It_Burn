@@ -44,7 +44,13 @@ in_cluster_curl() {
 }
 
 cost_usd() {
-    in_cluster_curl curl -s "${PROXY}/cost" | python3 -c "import sys,json; print(json.load(sys.stdin).get('usd',0.0))"
+    # raw_decode tolerates the "pod ... deleted" line kubectl run --rm can append to stdout after the
+    # JSON (seen live; plain json.load fails with "Extra data"). Parse the leading object, ignore the rest.
+    in_cluster_curl curl -s "${PROXY}/cost" | python3 -c "
+import sys, json
+raw = sys.stdin.read(); i = raw.find('{')
+print(json.JSONDecoder().raw_decode(raw[i:])[0].get('usd', 0.0) if i >= 0 else 0.0)
+"
 }
 
 send_prompt() {
