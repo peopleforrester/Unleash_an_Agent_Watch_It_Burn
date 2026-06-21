@@ -1,0 +1,95 @@
+{% extends "_base.html" %}
+
+{% block title %}Admin - Watch It Burn{% endblock %}
+{% block page_title %}Admin{% endblock %}
+
+{% block main %}
+  <h2>Combined attendance</h2>
+
+  <section class="stats">
+    <div class="stat">
+      <div class="label">Combined attendees</div>
+      <div class="value">{{ combined }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">Browser share</div>
+      <div class="value" style="color:var(--navy);">{{ browser_pct }}%</div>
+    </div>
+    <div class="stat">
+      <div class="label">EKS share</div>
+      <div class="value" style="color:var(--accent);">{{ eks_pct }}%</div>
+    </div>
+  </section>
+
+  <h2 style="margin-top:24px;">EKS cluster pool</h2>
+  <section class="stats">
+    <div class="stat">
+      <div class="label">Total</div>
+      <div class="value">{{ total }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">Claimed</div>
+      <div class="value" style="color:var(--accent);">{{ claimed }}</div>
+    </div>
+    <div class="stat">
+      <div class="label">Available</div>
+      <div class="value">{{ available }}</div>
+    </div>
+  </section>
+
+  <h2 style="margin-top:24px;">Browser path (KodeKloud)</h2>
+  <section class="stats" style="grid-template-columns: 1fr;">
+    <div class="stat">
+      <div class="label">Browser claims</div>
+      <div class="value" style="color:var(--navy);">{{ browser_count }}</div>
+    </div>
+  </section>
+
+  <h2 style="margin-top:24px;">Last 10 EKS claims</h2>
+  {% if recent %}
+    <table class="admin">
+      <thead>
+        <tr>
+          <th>Cluster</th>
+          <th>Region</th>
+          <th>Email</th>
+          <th>Claimed at (UTC)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent %}
+          <tr>
+            <td class="cluster">{{ r["name"] }}</td>
+            <td>{{ r["region"] }}</td>
+            <td>{{ r["claimed_by"] }}</td>
+            <td style="color:var(--light-gray);">{{ r["claimed_at"] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="color:var(--light-gray);">No EKS claims yet.</p>
+  {% endif %}
+
+  <h2 style="margin-top:24px;">Last 10 browser claims</h2>
+  {% if browser_recent %}
+    <table class="admin">
+      <thead>
+        <tr>
+          <th>Email</th>
+          <th>Claimed at (UTC)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in browser_recent %}
+          <tr>
+            <td>{{ r["email"] }}</td>
+            <td style="color:var(--light-gray);">{{ r["claimed_at"] }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    <p style="color:var(--light-gray);">No browser claims yet.</p>
+  {% endif %}
+{% endblock %}

@@ -1,0 +1,413 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Watch It Burn Workshop{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Claim your Accenture-sponsored EKS cluster for Unleash an Agent, Watch it Burn workshop at Watch It Burn.{% endblock %}">
+  <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
+  <meta property="og:description" content="{{ self.meta_description() }}">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="{{ url_for('static', filename='img/watch-it-burn-logo.png', _external=True) }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
+  <style>
+    :root {
+      --navy:       #1E2761;
+      --dark-navy:  #101A42;
+      --light-blue: #CADCFC;
+      --accent:     #FF6B35;
+      --mid-gray:   #4A4A4A;
+      --light-gray: #6B6B6B;    /* bumped from #888 to satisfy WCAG AA on white (5.1:1) */
+      --white:      #FFFFFF;
+      --bg-cream:   #FDF6EE;
+    }
+    *, *::before, *::after { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--mid-gray);
+      background: var(--white);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      line-height: 1.5;
+    }
+
+    /* Visually-hidden utility (for screen-reader-only content like aria-live). */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border: 0;
+    }
+
+    /* Skip-to-content link - visible only when focused via Tab. */
+    .skip-link {
+      position: absolute;
+      top: -40px;
+      left: 8px;
+      background: var(--navy);
+      color: var(--white);
+      padding: 8px 14px;
+      border-radius: 0 0 6px 6px;
+      text-decoration: none;
+      font-weight: 700;
+      z-index: 1000;
+      transition: top 0.15s ease;
+    }
+    .skip-link:focus { top: 0; }
+
+    /* Visible focus rings everywhere - keyboard users can see where they are. */
+    a:focus-visible,
+    button:focus-visible,
+    input:focus-visible,
+    .accenture-card:focus-visible,
+    .copy-btn:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Header */
+    header.site {
+      background: var(--navy);
+      color: var(--white);
+      border-bottom: 3px solid var(--accent);
+      padding: 0 24px;
+      height: 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    header.site .title {
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+    }
+    header.site .logo {
+      height: 50px;
+      width: auto;
+      display: block;
+    }
+    header.site .logo.missing {
+      display: inline-block;
+      color: var(--white);
+      font-weight: 700;
+      font-size: 14px;
+      line-height: 50px;
+    }
+
+    /* Hero. Light skyline background; navy text. */
+    section.hero {
+      background-color: var(--light-blue);
+      background-image: url("{{ url_for('static', filename='img/hero-bg-dark.png') }}");
+      background-size: cover;
+      background-position: center;
+      color: var(--navy);
+      text-align: center;
+      padding: 22px 24px;
+      max-height: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    section.hero h1 {
+      margin: 0;
+      font-size: 24px;
+      font-weight: 700;
+      line-height: 1.2;
+      color: var(--navy);
+    }
+    section.hero p.lede {
+      margin: 4px 0 0;
+      font-size: 14px;
+      line-height: 1.2;
+      color: var(--mid-gray);
+    }
+
+    /* Main */
+    main.page {
+      flex: 1;
+      width: 100%;
+      max-width: 720px;
+      margin: 0 auto;
+      background: var(--white);
+      padding: 40px 32px;
+    }
+    main.page h1 {
+      margin: 0 0 16px;
+      color: var(--navy);
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+    main.page h2 {
+      margin: 0 0 16px;
+      color: var(--navy);
+      font-size: 22px;
+      font-weight: 700;
+    }
+    main.page p { margin: 0 0 14px; }
+
+    /* Buttons */
+    .btn {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--white);
+      font-weight: 600;
+      font-size: 16px;
+      padding: 12px 24px;
+      border: 0;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background-color 0.15s ease-in-out;
+      text-decoration: none;
+    }
+    .btn:hover, .btn:focus { background: #e95a26; }
+    .btn[disabled] { opacity: 0.65; cursor: progress; }
+
+    /* Cards */
+    .card {
+      background: var(--light-blue);
+      border-radius: 12px;
+      padding: 20px;
+      color: var(--navy);
+    }
+    .card .label {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 11px;
+      color: var(--navy);
+      opacity: 0.7;
+      font-weight: 700;
+    }
+
+    /* Code blocks */
+    .codeblock {
+      position: relative;
+      background: var(--dark-navy);
+      color: var(--white);
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      padding: 16px 18px;
+      border-radius: 8px;
+      overflow-x: auto;
+      line-height: 1.55;
+      white-space: pre;
+      margin: 0;
+    }
+    .codeblock .copy-btn {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      background: rgba(255,255,255,0.08);
+      color: var(--white);
+      border: 1px solid rgba(255,255,255,0.18);
+      font-size: 11px;
+      padding: 5px 9px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    .codeblock .copy-btn:hover { background: rgba(255,255,255,0.16); }
+
+    /* Inline copy row (credential lines on success page) */
+    .copy-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--white);
+      border: 1px solid #d6d6d6;
+      border-radius: 8px;
+      padding: 10px 12px;
+      margin-top: 8px;
+    }
+    .copy-row .key-label {
+      font-size: 11px;
+      color: var(--navy);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      width: 90px;
+      flex-shrink: 0;
+      font-weight: 700;
+    }
+    .copy-row code {
+      flex: 1;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      color: var(--dark-navy);
+      word-break: break-all;
+    }
+    .copy-row .copy-btn {
+      background: var(--white);
+      color: var(--navy);
+      border: 1px solid var(--navy);
+      font-size: 11px;
+      padding: 5px 9px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+
+    /* Callout */
+    .callout {
+      border-left: 3px solid var(--accent);
+      padding: 8px 12px;
+      color: var(--navy);
+      font-style: italic;
+      background: rgba(202,220,252,0.35);
+      border-radius: 0 6px 6px 0;
+      margin: 20px 0;
+    }
+
+    /* Form */
+    .field {
+      display: block;
+      width: 100%;
+      font-size: 16px;
+      padding: 14px 16px;
+      border: 1.5px solid #cfd3df;
+      border-radius: 8px;
+      color: var(--dark-navy);
+      background: var(--white);
+      outline: none;
+    }
+    .field:focus { border-color: var(--navy); }
+
+    .error {
+      background: #ffe5d6;
+      border: 1px solid var(--accent);
+      color: #8a3210;
+      padding: 10px 14px;
+      border-radius: 6px;
+      margin-bottom: 14px;
+      font-size: 14px;
+    }
+
+    /* Footer */
+    footer.site {
+      position: relative;
+      background-color: var(--light-blue);
+      background-image: url("{{ url_for('static', filename='img/skyline-footer.png') }}");
+      background-repeat: no-repeat;
+      background-position: bottom center;
+      background-size: cover;
+      min-height: 140px;
+      padding: 20px 24px 24px;
+      text-align: center;
+      color: var(--mid-gray);
+      font-size: 12px;
+    }
+    footer.site .small {
+      color: var(--light-gray);
+      font-size: 11px;
+      font-style: italic;
+      margin-top: 6px;
+    }
+
+    /* Tables (admin) */
+    table.admin {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    table.admin th, table.admin td {
+      padding: 10px;
+      border-bottom: 1px solid #e2e4ee;
+      text-align: left;
+    }
+    table.admin th { color: var(--navy); font-weight: 700; }
+    table.admin td { color: var(--mid-gray); }
+    table.admin td.cluster { font-family: "SFMono-Regular", Consolas, monospace; color: var(--dark-navy); }
+
+    /* Stat grid */
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    .stats .stat {
+      background: var(--light-blue);
+      border-radius: 12px;
+      padding: 18px;
+      color: var(--navy);
+    }
+    .stats .stat .label {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 11px;
+      opacity: 0.7;
+      font-weight: 700;
+    }
+    .stats .stat .value {
+      font-size: 32px;
+      font-weight: 700;
+      margin-top: 6px;
+    }
+
+    /* Mobile */
+    @media (max-width: 640px) {
+      header.site { height: 64px; padding: 0 16px; }
+      header.site .logo { height: 38px; }
+      header.site .title { font-size: 16px; }
+      section.hero { padding: 16px 16px; max-height: 100px; }
+      section.hero h1 { font-size: 20px; }
+      section.hero p.lede { font-size: 13px; }
+      main.page { padding: 24px 16px; }
+      main.page h1 { font-size: 22px; }
+      .stats { grid-template-columns: 1fr; }
+    }
+
+    /* Sub-480px: stack the credential rows so the long access/secret keys
+       get their own line and can be horizontally scrolled cleanly without
+       mid-string wrapping. */
+    @media (max-width: 480px) {
+      .copy-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 6px;
+        padding: 10px 12px;
+      }
+      .copy-row .key-label { width: auto; }
+      .copy-row code {
+        word-break: keep-all;
+        white-space: nowrap;
+        overflow-x: auto;
+        background: #f3f4fa;
+        padding: 6px 8px;
+        border-radius: 4px;
+      }
+      .copy-row .copy-btn { align-self: flex-end; }
+    }
+  </style>
+</head>
+<body>
+  <a href="#main-content" class="skip-link">Skip to main content</a>
+  <header class="site">
+    <div class="title">{% block page_title %}Watch It Burn{% endblock %}</div>
+    <img class="logo" src="{{ url_for('static', filename='img/watch-it-burn-logo.png') }}" alt="Watch It Burn"
+         onerror="this.outerHTML='<span class=&quot;logo missing&quot;>Watch It Burn</span>';">
+  </header>
+
+  {% block hero %}{% endblock %}
+
+  <main class="page" id="main-content">
+    {% block main %}{% endblock %}
+  </main>
+
+  <footer class="site">
+    <div>Watch It Burn &bull; Unleash an Agent, Watch it Burn Workshop</div>
+    {% block footer_hint %}{% endblock %}
+  </footer>
+
+  <div id="copy-status" class="sr-only" aria-live="polite" aria-atomic="true"></div>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>
