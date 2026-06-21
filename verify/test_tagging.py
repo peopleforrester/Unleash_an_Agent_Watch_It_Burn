@@ -1,38 +1,39 @@
 # ABOUTME: Render-gate check for the AWS tagging/naming convention (collision avoidance in the shared
 # ABOUTME: accen-dev account). Every cluster name starts with watch-it-burn-; every resource is tagged ours.
-import pathlib, sys, yaml
+# Provisioning is Terraform (infra/terraform/), so these assertions read the Terraform + fleet driver.
+import pathlib, sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
+TF = REPO / "infra" / "terraform"
 failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
 
-CLUSTERS = [
-    "infra/test-cluster/cluster.yaml",
-    "infra/burn-clusters/cluster.yaml",
-    "infra/attendee-cluster/cluster.yaml",
-]
-for rel in CLUSTERS:
-    cfg = yaml.safe_load((REPO / rel).read_text())
-    md = cfg.get("metadata", {})
-    name = md.get("name", "")
-    tags = md.get("tags", {}) or {}
-    check(f"{rel}: cluster name starts with watch-it-burn-", name.startswith("watch-it-burn-"))
-    check(f"{rel}: metadata.tags project=watch-it-burn", tags.get("project") == "watch-it-burn")
-    # every managed nodegroup carries the project tag too (propagates to EC2/ASG)
-    ngs = cfg.get("managedNodeGroups", []) or []
-    check(f"{rel}: every nodegroup tagged project=watch-it-burn",
-          bool(ngs) and all((ng.get("tags", {}) or {}).get("project") == "watch-it-burn" for ng in ngs))
+lab_vpc = (TF / "lab-vpc" / "main.tf").read_text()
+cluster = (TF / "cluster" / "main.tf").read_text()
+fleet = (TF / "fleet" / "fleet.sh").read_text()
 
-# No stale tag key or pre-rename cluster names linger in the cluster configs.
-joined = "\n".join((REPO / rel).read_text() for rel in CLUSTERS)
-check("no stale 'unleash-an-agent' tag value remains", "unleash-an-agent" not in joined)
-check("no pre-rename 'workshop-hub'/'workshop-spoke-' cluster names remain",
-      "name: workshop-hub" not in joined and "name: workshop-spoke-" not in joined)
-# Independent-cluster model: no hub, no 'spoke' naming anywhere in the cluster configs.
+# Every Terraform root tags all resources project=watch-it-burn via provider default_tags.
+for name, txt in [("lab-vpc", lab_vpc), ("cluster", cluster)]:
+    check(f"{name}/main.tf default_tags set project=watch-it-burn",
+          "default_tags" in txt and 'project   = "watch-it-burn"' in txt)
+# The per-attendee cluster also carries an attendee=<name> tag (propagates to its EC2/EBS).
+check("cluster/main.tf tags each cluster with attendee=<name>", 'attendee  = var.name' in cluster)
+
+# Cluster names start with watch-it-burn- (the collision boundary): the fleet generates
+# watch-it-burn-attendee-NNN and refuses any name that is not watch-it-burn-*.
+check("fleet names attendee clusters watch-it-burn-attendee-*",
+      'NAME_PREFIX="watch-it-burn-attendee"' in fleet)
+check("fleet refuses any non-watch-it-burn cluster name (cannot touch co-tenant Packt)",
+      "assert_ours" in fleet and "watch-it-burn-*" in fleet)
+
+# Independent-cluster model: no hub/spoke naming anywhere in the provisioning.
+joined = lab_vpc + cluster + fleet
 check("no hub/spoke naming remains (independent-cluster model)",
       "watch-it-burn-spoke" not in joined and "watch-it-burn-hub" not in joined)
-check("attendee clusters share the one VPC (vpc.id reference present)",
-      "vpc-SHARED_ID" in (REPO / "infra/attendee-cluster/cluster.yaml").read_text())
+check("no stale 'unleash-an-agent' tag value remains", "unleash-an-agent" not in joined)
+# One shared lab VPC (not one per cluster): the cluster module takes vpc_id as an input.
+check("attendee clusters share the one lab VPC (cluster takes vpc_id as input)",
+      'variable "vpc_id"' in cluster and "module \"vpc\"" in lab_vpc)
 
 # AWS-resource scripts tag what they create and stay name-scoped (cannot touch Packt resources).
 s3 = (REPO / "games/eso-s3-exfil/s3-hoop-setup.sh").read_text()
@@ -47,6 +48,7 @@ check("teardown is prefix-scoped to watch-it-burn (cannot hit the co-tenant Pack
       and 'refusing prefix' in teardown)
 check("tagging convention doc exists", (REPO / "infra/TAGGING.md").exists())
 check("shared-VPC doc exists (one VPC, not per-cluster)", (REPO / "infra/shared-vpc/README.md").exists())
+check("Terraform provisioning README exists", (TF / "README.md").exists())
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)"); sys.exit(1)

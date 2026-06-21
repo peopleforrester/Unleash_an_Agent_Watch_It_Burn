@@ -24,17 +24,18 @@ network isolation, and 60 VPCs would burn the VPC-per-region quota for no benefi
 - Independent VPCs are only warranted for hard isolation or compliance (regulatory, overlapping CIDRs,
   real customer data). None apply here.
 
-## Provisioning order (load-bearing)
+## Provisioning (Terraform)
 
-1. Create the shared VPC + subnets + NAT ONCE, up front, before any cluster.
-2. Record the VPC id and the two private subnet ids.
-3. Substitute them into every cluster config (`vpc.id`, `vpc.subnets.private.*`) before
-   `eksctl create cluster`.
+This is now implemented as Terraform in `infra/terraform/lab-vpc/` (the shape this doc describes).
+The per-attendee cluster module reads the VPC id + private subnet ids straight from the lab-vpc
+state, no manual id substitution.
 
-eksctl gotcha (CONFIRMED, research/25): when a ClusterConfig references an EXISTING VPC/subnets,
-eksctl does NOT create the VPC, NAT gateway, internet gateway, or routes. Those must already exist on
-the shared VPC. So the one-time VPC build is a prerequisite, not something eksctl does per cluster.
+1. Provision the shared VPC + subnets + NAT ONCE, up front, before any cluster:
+   `cd infra/terraform/lab-vpc && terraform init && terraform apply`.
+2. The fleet driver (`infra/terraform/fleet/fleet.sh`) reads `vpc_id` and `private_subnet_ids` from
+   the lab-vpc outputs and passes them to each attendee cluster as `-var`. Nothing to copy by hand.
+3. The cluster module creates only the cluster INTO the shared VPC; it does not create a VPC, NAT,
+   internet gateway, or routes (those live on the shared VPC). So the one-time VPC build is a
+   prerequisite, not something each cluster does.
 
-verify-at-build: pick the provisioning tool for the shared VPC (a small CloudFormation/Terraform stack,
-or `eksctl create cluster` for the first cluster with `vpc.cidr` then reuse its VPC/subnets). Pin the
-resulting ids here and in the cluster configs.
+See `infra/terraform/README.md` for the full provisioning + teardown workflow.

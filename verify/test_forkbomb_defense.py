@@ -4,7 +4,9 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 falco = yaml.safe_load((REPO/"gitops/apps/falco.yaml").read_text())
 sidekick = yaml.safe_load((REPO/"gitops/apps/falcosidekick.yaml").read_text())
 talon = yaml.safe_load((REPO/"gitops/apps/falco-talon.yaml").read_text())
-node = yaml.safe_load((REPO/"infra/node-config/pid-limit-nodeadm.yaml").read_text())
+# Provisioning is Terraform: the PID cap is delivered by the per-attendee cluster module's node
+# cloudinit_pre_nodeadm NodeConfig (eksctl delivered it via overrideBootstrapCommand previously).
+cluster_tf = (REPO/"infra/terraform/cluster/main.tf").read_text()
 cr = falco["spec"]["source"]["helm"]["valuesObject"]["customRules"]
 # 00- prefix so the fork-bomb rule loads first in rules.d and is not shadowed by the generic
 # "Exec Into Pod Detected" rule (Falco fires only the first matching rule per event).
@@ -18,13 +20,14 @@ failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
 
-check("PID limit (the real block) sets podPidsLimit", node["spec"]["kubelet"]["config"]["podPidsLimit"] >= 1)
-# The PID cap is inert unless the nodegroup actually delivers it. Confirm every cluster config ships
-# podPidsLimit via overrideBootstrapCommand (the live gate run added this; dry-run + node pids.max verified).
-for rel in ["infra/test-cluster/cluster.yaml", "infra/attendee-cluster/cluster.yaml", "infra/burn-clusters/cluster.yaml"]:
-    cfg = yaml.safe_load((REPO / rel).read_text())
-    obc = " ".join((ng.get("overrideBootstrapCommand", "") or "") for ng in cfg.get("managedNodeGroups", []))
-    check(f"{rel}: nodegroup delivers podPidsLimit via overrideBootstrapCommand", "podPidsLimit" in obc)
+# The PID cap (the real block) must be delivered by the node config. Confirm the Terraform cluster
+# module ships podPidsLimit in the AL2023 nodeadm NodeConfig via cloudinit_pre_nodeadm, and that the
+# default is a real cap (>=1). (Verified live: pod-cgroup pids.max=1024, fork bomb hits -EAGAIN.)
+check("terraform cluster delivers podPidsLimit via cloudinit_pre_nodeadm NodeConfig",
+      "cloudinit_pre_nodeadm" in cluster_tf and "podPidsLimit" in cluster_tf
+      and "node.eks.aws/v1alpha1" in cluster_tf)
+check("terraform cluster default pod_pids_limit is a real cap (>=1)",
+      "default = 1024" in cluster_tf or 'pod_pids_limit' in cluster_tf)
 # Falco fires only the FIRST matching rule per event and rules.d loads alphabetically; the fork-bomb
 # rules file must sort before any custom file that defines the generic "Exec Into Pod Detected" rule,
 # or that rule shadows the fork-bomb rule and nothing routes to Talon (caught live, watch-it-burn-test).
