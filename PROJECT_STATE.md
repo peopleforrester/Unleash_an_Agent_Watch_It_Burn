@@ -74,6 +74,8 @@ kubeconfig /tmp/watch-it-burn-test.kubeconfig). Full IDP deployed via app-of-app
   that times out ("timed out waiting for the condition") on this cluster -> beat-cost/02/03 can't
   complete. Agent + wiring confirmed correct (AGENT_URL -> workshop-agent.agent:8080). Needs a harness
   fix (helper-pod path) to run the agent gates.
+AGENT GATES VALIDATED LIVE (2026-06-21, post-fixes): beat-cost PASS - benign request moved the cost counter 0.0->$0.001588 (1164 tokens) and a block-listed destructive request flatlined it (pre-LLM, 0 tokens). Confirms #8 (live kagent 0.9.9 key is result.metadata.kagent_usage_metadata, NOT adk_; research/14 was wrong - record_usage now accepts both, kagent first) and #7 (A2A message/send needs params.message.messageId). Agent compiles, answers via Bedrock Haiku, calls the workshop-mcp list_pods tool. #6 (harness ephemeral curl-pod times out) still OPEN - validations done via kubectl port-forward; harness needs a port-forward refactor. beat-02 output-redaction + beat-03 mcp-authz (needs agentgateway) = remaining live items.
+
 GATES PASS: Kyverno Audit->Enforce toggle (beat-1, post-#4), RBAC escalation FORBIDDEN, image-registry
 villain block (Enforce), require-probes/labels/limits admission. NOT TESTABLE here: PID-limit fork bomb
 (test-cluster has no overrideBootstrapCommand; unsafe without the cap). Offline suite 166 green.
