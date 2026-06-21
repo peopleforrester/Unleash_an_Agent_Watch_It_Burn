@@ -1,0 +1,6 @@
+# Terraform working files: never commit state, plans, provider plugins, or lockfile churn.
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log

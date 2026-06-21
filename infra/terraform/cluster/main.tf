@@ -1,0 +1,257 @@
+# ABOUTME: One attendee EKS cluster, attached to the shared lab VPC. Instantiated once per
+# ABOUTME: attendee by the fleet driver, each with its own state. Independent take-home cluster.
+#
+# Modeled on the Packt sister repo's cluster/ module (proven shape on the same shared account):
+# takes vpc_id + private_subnet_ids as inputs (no VPC of its own), VPC-CNI prefix delegation +
+# maxPods=110, EBS CSI via IRSA, Pod Identity for the AWS LB controller, and
+# create_cloudwatch_log_group=false so reprovision is idempotent.
+#
+# THREE Watch-It-Burn deltas vs Packt (our controls; Packt does not have these):
+#   1. podPidsLimit=1024 in the node NodeConfig  -> the fork-bomb cap (verified live on EKS).
+#   2. enableNetworkPolicy="true" in vpc-cni     -> the egress default-deny/allowlist beat.
+#   3. Pod Identity for agent:agent-sa -> Bedrock -> the kagent agent's model access, fleet-safe
+#      (a reusable role + per-cluster association, not 60 OIDC trust policies / SA annotations).
+
+terraform {
+  required_version = ">= 1.10"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
+provider "aws" {
+  region  = var.region
+  profile = var.profile
+  default_tags {
+    tags = {
+      project   = "watch-it-burn"
+      event     = "ai-engineer-worldsfair-2026"
+      Purpose   = "attendee-cluster"
+      ManagedBy = "terraform"
+      attendee  = var.name
+    }
+  }
+}
+
+variable "region" {
+  type    = string
+  default = "us-west-2"
+}
+
+variable "profile" {
+  type    = string
+  default = "accen-dev"
+}
+
+variable "name" {
+  type        = string
+  description = "Unique cluster name, one per attendee (e.g. watch-it-burn-attendee-001)."
+}
+
+variable "kubernetes_version" {
+  type    = string
+  default = "1.35"
+}
+
+variable "vpc_id" {
+  type        = string
+  description = "Shared lab VPC id (from the lab-vpc root)."
+}
+
+variable "private_subnet_ids" {
+  type        = list(string)
+  description = "Shared lab private subnet ids (from the lab-vpc root)."
+}
+
+# Node sizing. Default mirrors Packt's validated single-node AI-platform shape (1x t3.2xlarge +
+# prefix delegation). verify-at-build: the full Watch It Burn IDP (Istio, Kyverno, Falco DaemonSet,
+# ESO, cert-manager, ArgoCD, observability, kagent + AI layer, burn targets) was validated on a
+# 6x t3.large test cluster; confirm it fits the chosen attendee node and bump instance_types or
+# node count if pods stay Pending. Conservative start, scale up only if necessary.
+variable "instance_types" {
+  type    = list(string)
+  default = ["t3.2xlarge"]
+}
+
+variable "node_min_size" {
+  type    = number
+  default = 1
+}
+
+variable "node_max_size" {
+  type    = number
+  default = 1
+}
+
+variable "node_desired_size" {
+  type    = number
+  default = 1
+}
+
+# The per-pod PID cap (cgroup pids.max). This is the ONLY thing that inline-blocks a fork bomb
+# (the kernel returns -EAGAIN at the cap); Falco+Talon are detect-and-respond on top. Verified
+# live on EKS: pod-cgroup pids.max=1024, a fork bomb hits "can't fork: Resource temporarily
+# unavailable" and the node stays Ready.
+variable "pod_pids_limit" {
+  type    = number
+  default = 1024
+}
+
+module "eks" {
+  source  = "terraform-aws-modules/eks/aws"
+  version = "~> 21.0"
+
+  name               = var.name
+  kubernetes_version = var.kubernetes_version
+
+  endpoint_public_access                   = true
+  enable_cluster_creator_admin_permissions = true
+  enable_irsa                              = true
+
+  # EKS auto-creates the control-plane log group and it survives destroy; let EKS own it so a
+  # reused name never collides with "already exists" on reprovision. (Orphans are swept by
+  # fleet/cleanup-log-groups.sh, scoped to our cluster-name prefix.)
+  create_cloudwatch_log_group = false
+
+  vpc_id     = var.vpc_id
+  subnet_ids = var.private_subnet_ids
+
+  addons = {
+    vpc-cni = {
+      before_compute = true
+      # Prefix delegation raises t3.2xlarge from 58 to ~110 pods so the platform fits one node.
+      # enableNetworkPolicy is the Watch It Burn delta: VPC-CNI enforces NetworkPolicy in-kernel,
+      # which the egress beat (default-deny + allowlist) depends on. Without it, policies are inert
+      # (found live on watch-it-burn-test). Pairs with the node group maxPods=110 below.
+      configuration_values = jsonencode({
+        enableNetworkPolicy = "true"
+        env = {
+          ENABLE_PREFIX_DELEGATION = "true"
+          WARM_PREFIX_TARGET       = "1"
+        }
+      })
+    }
+    kube-proxy = {
+      before_compute = true
+    }
+    coredns                = {}
+    eks-pod-identity-agent = {}
+    aws-ebs-csi-driver = {
+      service_account_role_arn = module.ebs_csi_irsa.iam_role_arn
+    }
+  }
+
+  eks_managed_node_groups = {
+    default = {
+      ami_type       = "AL2023_x86_64_STANDARD"
+      instance_types = var.instance_types
+      min_size       = var.node_min_size
+      max_size       = var.node_max_size
+      desired_size   = var.node_desired_size
+      disk_size      = 80
+      # AL2023 nodeadm ignores prefix delegation when computing max-pods, so set it explicitly.
+      # podPidsLimit is the Watch It Burn delta: the fork-bomb cap, delivered via the same nodeadm
+      # NodeConfig (eksctl delivered this via overrideBootstrapCommand; Terraform via cloudinit_pre_nodeadm).
+      cloudinit_pre_nodeadm = [{
+        content_type = "application/node.eks.aws"
+        content      = <<-EOT
+          apiVersion: node.eks.aws/v1alpha1
+          kind: NodeConfig
+          spec:
+            kubelet:
+              config:
+                maxPods: 110
+                podPidsLimit: ${var.pod_pids_limit}
+        EOT
+      }]
+    }
+  }
+}
+
+module "ebs_csi_irsa" {
+  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
+  version = "~> 5.0"
+
+  role_name             = "${var.name}-ebs-csi"
+  attach_ebs_csi_policy = true
+
+  oidc_providers = {
+    main = {
+      provider_arn               = module.eks.oidc_provider_arn
+      namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
+    }
+  }
+}
+
+# Pod Identity for the AWS Load Balancer Controller (Packt pattern: a reusable role + a per-cluster
+# association instead of 60 OIDC trust policies). The Helm chart creates the SA in kube-system.
+module "aws_lb_controller_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 1.0"
+
+  name                            = "${var.name}-aws-lbc"
+  attach_aws_lb_controller_policy = true
+
+  associations = {
+    main = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "kube-system"
+      service_account = "aws-load-balancer-controller"
+    }
+  }
+}
+
+# Bedrock access for the kagent agent (agent:agent-sa). Pod Identity, not IRSA, so the fleet binds
+# a per-cluster role to the SA with NO ServiceAccount annotation in gitops (the gitops manifests are
+# identical across all 60 clusters) and NO per-cluster OIDC trust. The eks-pod-identity-agent addon
+# (above) injects the creds via the standard AWS SDK chain, which kagent already uses for Bedrock.
+# verify-at-build: we validated the IRSA path live; confirm kagent picks up Pod Identity creds on a
+# real cluster (same SDK chain; high confidence). Fall back to IRSA + a fleet annotate step if not.
+resource "aws_iam_policy" "bedrock_invoke" {
+  name        = "${var.name}-bedrock-invoke"
+  description = "Bedrock model invocation for the Watch It Burn agent on ${var.name}."
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:Converse",
+        "bedrock:ConverseStream",
+      ]
+      Resource = "*"
+    }]
+  })
+}
+
+module "agent_bedrock_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 1.0"
+
+  name                   = "${var.name}-agent-bedrock"
+  additional_policy_arns = { bedrock = aws_iam_policy.bedrock_invoke.arn }
+
+  associations = {
+    main = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "agent"
+      service_account = "agent-sa"
+    }
+  }
+}
+
+output "cluster_name" {
+  value = module.eks.cluster_name
+}
+
+output "agent_bedrock_role_arn" {
+  value = module.agent_bedrock_pod_identity.iam_role_arn
+}
+
+output "kubeconfig_command" {
+  value = "aws eks update-kubeconfig --name ${module.eks.cluster_name} --region ${var.region} --profile ${var.profile} --kubeconfig /tmp/${module.eks.cluster_name}.kubeconfig"
+}

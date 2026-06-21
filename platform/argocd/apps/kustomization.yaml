@@ -1,6 +1,0 @@
-# ABOUTME: App-of-apps Kustomization — bundles the per-spoke child Applications into one root sync.
-# ABOUTME: The hub ApplicationSet points each spoke's root Application at this directory.
-apiVersion: kustomize.config.k8s.io/v1beta1
-kind: Kustomization
-resources:
-  - child-apps.yaml

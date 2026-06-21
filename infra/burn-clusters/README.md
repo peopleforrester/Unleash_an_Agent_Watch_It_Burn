@@ -1,5 +1,9 @@
-*The facilitator cluster fleet for the three-cluster run-of-show (BUILD-SPEC §2/§5). Same eksctl
-shape (`cluster.yaml`), differentiated by which bootstrap profile is applied after creation.*
+> **Provisioning is Terraform, not eksctl.** Burn clusters use the same
+> `infra/terraform/cluster/` module as attendee clusters (provision with `fleet.sh`); they are
+> differentiated only by which gitops profile is applied after creation (the burn app-of-apps).
+
+*The facilitator cluster fleet for the three-cluster run-of-show (BUILD-SPEC §2/§5). Same Terraform
+cluster module as attendees, differentiated by which bootstrap profile is applied after creation.*
 
 # Burn-cluster fleet
 

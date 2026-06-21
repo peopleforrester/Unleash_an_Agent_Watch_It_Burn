@@ -39,3 +39,6 @@ The tool reads the current records first and **merges**, so the existing parking
 - **TLS:** once a URL resolves to the LB, issue certs with cert-manager + Let's Encrypt (HTTP-01 per
   host is simplest; DNS-01 via a Namecheap webhook solver is the wildcard option). Not wired yet.
 - **Mutation safety:** `--apply` changes live DNS; per the namecheap-api rule it needs explicit go.
+- **Tag the LB too:** when the demo Service is exposed as `type: LoadBalancer`, add the
+  `aws-load-balancer-additional-resource-tags: project=watch-it-burn,...` annotation so the ELB is
+  tagged ours in the shared account. See `infra/TAGGING.md` (the full naming/tagging convention).
