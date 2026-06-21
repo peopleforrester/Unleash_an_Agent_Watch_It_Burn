@@ -41,8 +41,18 @@ check("Talon rules are under config.rulesOverride (the chart key), not top-level
 _talon_addr = sidekick["spec"]["source"]["helm"]["valuesObject"]["config"].get("talon", {}).get("address", "")
 check("Falcosidekick forwards to Talon via cross-namespace FQDN (falco-talon.falco)",
       _talon_addr.startswith("http://falco-talon.falco"))
-check("Talon terminates the pod on the fork-bomb rule",
-      "kubernetes:terminate" in talon_rules and FORK_RULE in talon_rules)
+# Talon v0.3.0 schema: a TRIGGERING entry is `- rule:` with match.rules + actions referencing a
+# `- action:` whose actionner is kubernetes:terminate. An action with an embedded match: is invalid
+# and loads as 0 rules (caught live on watch-it-burn-test).
+_talon_parsed = yaml.safe_load(talon_rules) or []
+_term_actions = {e["action"] for e in _talon_parsed
+                 if isinstance(e, dict) and e.get("actionner") == "kubernetes:terminate" and "rule" not in e}
+_fork_rule = next((e for e in _talon_parsed
+                   if isinstance(e, dict) and "rule" in e and FORK_RULE in (e.get("match", {}).get("rules") or [])), None)
+check("Talon has a `- rule:` entry matching the fork-bomb Falco rule (not an action with embedded match)",
+      _fork_rule is not None)
+check("that Talon rule invokes a kubernetes:terminate action",
+      bool(_fork_rule) and any(a.get("action") in _term_actions for a in (_fork_rule.get("actions") or [])))
 check("Talon chart pinned (verify-at-build noted)", talon["spec"]["source"]["targetRevision"])
 if failures: print(f"\nFAILED: {len(failures)}"); sys.exit(1)
 print("\nAll fork-bomb-defense checks passed.")
