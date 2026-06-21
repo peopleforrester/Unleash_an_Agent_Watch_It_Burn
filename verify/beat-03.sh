@@ -35,7 +35,7 @@ EOF
 }
 
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then usage; exit 2; fi
-CONTEXT="${1:?$(usage)}"
+export CONTEXT="${1:?$(usage)}"
 NS="${2:?$(usage)}"
 
 fail() { echo "FAIL [beat-03]: $*" >&2; exit 1; }
