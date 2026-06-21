@@ -44,6 +44,25 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
+TypeScript agent option + spiny-orb (2026-06-21): "Spiny/Weaver" = Whitney's repo
+github.com/wiggitywhitney/spinybacked-orbweaver (`spiny-orb`), an AI agent that auto-adds OTel
+instrumentation to JS/TS code and validates against a Weaver semconv registry. It instruments JS/TS
+ONLY, so for Whitney to use it on our code there must be TS code. Decision (Michael): KEEP the
+kagent Python agent as primary/fallback; ADD an OPTIONAL TS agent (recommended shape: Mastra or
+Vercel AI SDK, wrapped as a kagent `type: BYO` A2A backend so it keeps agentgateway + MCP + HITL +
+LLM Guard), shipping a `spiny-orb.yaml` + Weaver registry + OTel SDK init so spiny-orb runs out of
+the box -> Datadog. Research: research/16 (corrected; the earlier Spiny=Pixie guess is void).
+BUILD IS GATED on Whitney's answers (framework, Weaver registry, how she runs spiny-orb on stage).
+Proposal Google Doc created + shared with Whitney (notified) + comment tagging her:
+docs.google.com/document/d/1Iel4yyUEbTf5s3W1PGoAbHSM0MQh6nLJQ_Zzv_2xCLk
+(folder "Watch it Burn" 1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU; Whitney = wiggitywhitney@gmail.com).
+
+KubeArmor research spike (2026-06-21): LAUNCHED (background sub-agent) -> research/17-kubearmor-forkbomb-2026.md.
+Question: can KubeArmor (CNCF, LSM-based) prevent a fork bomb, and how does it compare to the current
+defenses (kubelet podPidsLimit = real inline block; Falco+Talon = detect+respond). Do NOT fold
+KubeArmor in as a 2nd/3rd option beyond Falco until the spike lands. May get its own Google Doc on
+the KubeArmor/Falco paths.
+
 AWS collision-avoidance tagging (2026-06-21): accen-dev is shared with a separate Packt project (its
 own clusters; we never share resources). Convention established in `infra/TAGGING.md`: every resource
 carries `project=watch-it-burn` and every cluster name starts with `watch-it-burn-`. Applied: all 4
