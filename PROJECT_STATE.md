@@ -44,10 +44,49 @@ pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.15
 OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
 spans verbatim). Exported OAuth tokens deleted after use.
 
-OPEN (design call for Michael, NOT auto-changed): research/13 found Fable 5 is now LIVE on Bedrock
-(`us.anthropic.claude-fable-5`). Docs 3 (line ~92) and 6 (lines ~196/213) plus repo BUILD-SPEC/runbook
-still say "Fable 5 unavailable (access suspended)". Whether to add Fable as a 4th model-tier
-cluster/screen is a demo-design decision, so those lines were left for Michael to decide.
+TypeScript agent option + spiny-orb (2026-06-21): "Spiny/Weaver" = Whitney's repo
+github.com/wiggitywhitney/spinybacked-orbweaver (`spiny-orb`), an AI agent that auto-adds OTel
+instrumentation to JS/TS code and validates against a Weaver semconv registry. It instruments JS/TS
+ONLY, so for Whitney to use it on our code there must be TS code. Decision (Michael): KEEP the
+kagent Python agent as primary/fallback; ADD an OPTIONAL TS agent (recommended shape: Mastra or
+Vercel AI SDK, wrapped as a kagent `type: BYO` A2A backend so it keeps agentgateway + MCP + HITL +
+LLM Guard), shipping a `spiny-orb.yaml` + Weaver registry + OTel SDK init so spiny-orb runs out of
+the box -> Datadog. Research: research/16 (corrected; the earlier Spiny=Pixie guess is void).
+BUILD IS GATED on Whitney's answers (framework, Weaver registry, how she runs spiny-orb on stage).
+Proposal Google Doc created + shared with Whitney (notified) + comment tagging her:
+docs.google.com/document/d/1Iel4yyUEbTf5s3W1PGoAbHSM0MQh6nLJQ_Zzv_2xCLk
+(folder "Watch it Burn" 1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU; Whitney = wiggitywhitney@gmail.com).
+
+KubeArmor research spike (2026-06-21): DONE -> research/17-kubearmor-forkbomb-2026.md. Verdict:
+KubeArmor v1.7.3 CANNOT prevent a fork bomb the way podPidsLimit does — its KubeArmorPolicy has NO
+process-count/thread-count/fork-rate/PID field (verified vs the shipped spec); it only allow/denies
+named binary exec, file, network, capabilities (syscalls are audit-only regardless of action). The
+`rate: 10p1s` seen in some material is a telemetry throttle, not enforcement (trap, flagged). It
+enforces inline at LSM hooks (BPF-LSM preferred); EKS AL2023 ships kernel 6.1 with BPF-LSM enabled
+by default so enforcement is plausible but MUST be verified on the node (`/sys/kernel/security/lsm`
+contains `bpf`, `karmor probe`, live Block test). DECISION: keep podPidsLimit as the SOLE inline
+fork-bomb block + Falco/Talon as detect+respond; do NOT add KubeArmor to the fork-bomb story. KubeArmor
+is a candidate DIFFERENT-attack station (CNCF-native inline prevention: default-deny exec, block
+secret-file reads, block egress) — still an OPEN option, not folded in. No repo defense changed.
+Findings Google Doc (silently shared with Whitney):
+docs.google.com/document/d/1UZMsLxqol5ASiXWgU3tlNIxBV3pCsLdLlrAFIARLNBw
+
+AWS collision-avoidance tagging (2026-06-21): accen-dev is shared with a separate Packt project (its
+own clusters; we never share resources). Convention established in `infra/TAGGING.md`: every resource
+carries `project=watch-it-burn` and every cluster name starts with `watch-it-burn-`. Applied: all 4
+eksctl configs (renamed `workshop-hub`→`watch-it-burn-hub`, `workshop-spoke-*`→`watch-it-burn-spoke-*`;
+added `metadata.tags` + nodegroup tags; tag key was `workshop:unleash-an-agent`, now `project:watch-it-burn`);
+S3 hoop bucket (`put-bucket-tagging`) and trophy secret (`--tags`); spoke README cluster-name refs.
+Teardown scripts confirmed name/prefix-scoped (can only ever hit `watch-it-burn-*`, never Packt).
+New render-gate test `test_tagging.py` enforces it (suite now 154 checks). AWS Resource Group bundling
+= tag query on `project=watch-it-burn` (commands in TAGGING.md). Public-URL linkage
+(cluster→LB hostname→`*.agenticburn.com` via `infra/dns/set-demo-dns.py`) documented; LB-service tag
+annotation requirement noted; full per-cluster automation is deferred provisioning work.
+
+Fable 5: RETIRED from this workshop (Michael, 2026-06-21). Not a tier in the comparison. The Fable
+additions made during the doc-accuracy pass were reverted (resources.yaml, VERSIONS.lock, BUILD-SPEC);
+research/13 still records that it went live on Bedrock as a dated finding, but it is out of scope here.
+Do not re-raise Fable; Michael will say if it comes back.
 
 ### Session-close note (2026-06-19)
 
