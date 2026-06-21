@@ -26,8 +26,15 @@ Whitney to "hook spiny-orb in," there must be JavaScript/TypeScript code in the 
 run against. This makes the TypeScript path a genuine requirement, not cosmetic. The earlier
 "language-agnostic, TS buys nothing" note (written under the wrong Pixie assumption) is VOID.
 
-**Decision (Michael, 2026-06-21):** keep the kagent-managed Python agent as primary/fallback; ADD an
-OPTIONAL TypeScript agent so spiny-orb can instrument it. Recommended shape stays **Option B** below:
+**UPDATE (Michael, 2026-06-21) — ON HOLD:** the optional TypeScript agent is DEFERRED until after
+the demo is finished. We are sticking with kagent only for now; adding a second agent framework is
+unnecessary complexity before the demo works end to end. A comment to this effect is on one of the
+shared Google Docs. The analysis below stays as the record for when/if the TS option is revisited;
+do NOT start building the TS agent until Michael reopens it.
+
+**Earlier decision (now superseded by the hold above):** keep the kagent-managed Python agent as
+primary/fallback; ADD an OPTIONAL TypeScript agent so spiny-orb can instrument it. Recommended shape
+was **Option B** below:
 a TS agent (Mastra or Vercel AI SDK) wrapped as a kagent `type: BYO` A2A backend, keeping
 agentgateway + MCP + HITL + LLM Guard. Ship a `spiny-orb.yaml` + a Weaver semconv registry +
 an OTel SDK init file in the TS component so `spiny-orb instrument` works out of the box and its
