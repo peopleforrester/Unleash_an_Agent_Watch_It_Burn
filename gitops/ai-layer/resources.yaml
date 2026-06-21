@@ -303,3 +303,45 @@ metadata:
 spec:
   selector: { app.kubernetes.io/name: chat-ui }
   ports: [{ name: http, port: 80, targetPort: http }]
+---
+# The GOOD workshop MCP: the legit tools the scoped agent is allowed to use. Counterpart to evil-mcp-shim.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workshop-mcp
+  labels: { app: workshop-mcp }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: workshop-mcp } }
+  template:
+    metadata: { labels: { app: workshop-mcp } }
+    spec:
+      containers:
+        - name: shim
+          image: python:3.12-slim # verify-at-build: bake server.py into an image for prod
+          command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]
+          ports: [{ name: mcp, containerPort: 8000 }]
+          volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
+      volumes:
+        - name: src
+          configMap: { name: workshop-mcp-src }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workshop-mcp
+spec:
+  selector: { app: workshop-mcp }
+  ports: [{ name: mcp, port: 8000, targetPort: mcp }]
+---
+apiVersion: kagent.dev/v1alpha2
+kind: RemoteMCPServer
+metadata:
+  name: workshop-mcp
+spec:
+  description: "The good workshop MCP server (legit agent tools: list_pods, apply_manifest, get_secret)"
+  protocol: STREAMABLE_HTTP
+  url: http://workshop-mcp.agent:8000/mcp
+  timeout: 30s
+  sseReadTimeout: 5m0s
+  terminateOnClose: true

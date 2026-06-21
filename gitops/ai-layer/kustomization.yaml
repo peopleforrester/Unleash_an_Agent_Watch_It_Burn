@@ -15,6 +15,9 @@ configMapGenerator:
   - name: evil-mcp-src
     files:
       - server.py
+  - name: workshop-mcp-src
+    files:
+      - server.py=workshop-mcp-server.py # key is server.py so the container's /app/server.py path matches
   - name: chat-ui-src
     files:
       - web/index.html
