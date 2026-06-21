@@ -9,10 +9,14 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 
 ## The picture (layers, bottom up)
 
-1. **Cloud + cluster.** AWS EKS, one cluster per attendee, created with `eksctl`. CNI is **VPC-CNI**
-   (its NetworkPolicy feature enforces the default-deny). `infra/*/cluster.yaml`.
-2. **Kubernetes + GitOps.** **Argo CD** (app-of-apps + sync-waves) reconciles everything declaratively.
-   `gitops/bootstrap/app-of-apps.yaml` (full) and `app-of-apps-burn.yaml` (Cluster 1, bare).
+1. **Cloud + cluster.** AWS EKS, one independent standalone cluster per attendee (take-home), created
+   with `eksctl`. All clusters share **one VPC** (`10.0.0.0/16`, two private `/18` subnets across two AZs),
+   provisioned once up front. CNI is **VPC-CNI** (its NetworkPolicy feature enforces the default-deny).
+   `infra/*/cluster.yaml`.
+2. **Kubernetes + GitOps.** Each cluster runs its **own in-cluster Argo CD** (app-of-apps + sync-waves)
+   that reconciles the cluster from Git, destination the local cluster `kubernetes.default.svc`. No hub,
+   no central ArgoCD managing other clusters. `gitops/bootstrap/app-of-apps.yaml` (full) and
+   `app-of-apps-burn.yaml` (Cluster 1, bare).
 3. **CNCF security floor (the "80%").** Kyverno (admission), Falco (runtime), NetworkPolicy
    (default-deny), External Secrets Operator, cert-manager, scoped RBAC, cosign image signing.
 4. **Agent runtime.** **kagent** (a CRD-defined agent) running **Claude on AWS Bedrock** via a native
@@ -28,8 +32,8 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 
 | Layer | Technology | Role | Where (file) | Mechanism |
 |---|---|---|---|---|
-| Cluster | EKS + VPC-CNI | isolation, networking | `infra/*/cluster.yaml` | per-attendee cluster; CNI enforces NetworkPolicy |
-| GitOps | Argo CD v3.4.3 | declarative reconcile + drift control | `gitops/` | app-of-apps; self-heal reverts out-of-band change |
+| Cluster | EKS + VPC-CNI | isolation, networking | `infra/*/cluster.yaml` | independent per-attendee cluster, shared VPC; CNI enforces NetworkPolicy |
+| GitOps | Argo CD v3.4.3 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
 | Admission | Kyverno v1.18.1 | block non-compliant workloads | `policies/kyverno/` | ClusterPolicy, rule-level `validate.failureAction` Audit to Enforce |
 | Supply chain | Kyverno verifyImages (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | `verifyImages` keyless attestor (Audit) [verify-at-build] |
 | Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |

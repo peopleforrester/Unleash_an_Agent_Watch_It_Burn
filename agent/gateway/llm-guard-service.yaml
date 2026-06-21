@@ -1,7 +1,7 @@
 # ABOUTME: LLM Guard (Protect AI, MIT) API-server Deployment+Service with a mounted scanners.yml.
 # ABOUTME: Output Regex matches the FAKE-...sentinel patterns; input PromptInjection; Sensitive NER OFF.
 #
-# verify-at-build: IMAGE NAMESPACE — the official deployment doc uses `laiyer/llm-guard-api`
+# verify-at-build: IMAGE NAMESPACE - the official deployment doc uses `laiyer/llm-guard-api`
 #   (Laiyer = the company Protect AI acquired). `protectai/llm-guard-api` does NOT exist on
 #   Docker Hub (404 confirmed 2026-06-16), so `laiyer/` is the authoritative published image.
 #   It is stale-ish (latest tag 0.3.16, pushed ~1 year ago) but it is the only one published.
@@ -13,14 +13,14 @@
 #
 # RAM FOOTPRINT (research/03-llm-guard.md §Run, §Risks.5): the docs recommend >=16 GB for the
 # Docker image at default settings because model-backed scanners (the NER in Sensitive, and the
-# DeBERTa PromptInjection classifier) load into memory. To keep each per-spoke node small:
-#   - OUTPUT path is Regex-ONLY by default (pure pattern matching, model-free) — see scanners.yml.
+# DeBERTa PromptInjection classifier) load into memory. To keep each per-cluster node small:
+#   - OUTPUT path is Regex-ONLY by default (pure pattern matching, model-free) - see scanners.yml.
 #   - Sensitive (NER + regex PII) is OPT-IN / OFF by default; enabling it loads the NER model and
-#     blows the per-spoke RAM budget (spec §5/§10/§11). Turn it on only with a sizing decision.
+#     blows the per-cluster RAM budget (spec §5/§10/§11). Turn it on only with a sizing decision.
 #   - INPUT PromptInjection loads the DeBERTa model (~hundreds of MB–GB); lazy_load mitigates.
 #   - lazy_load + low_cpu_mem_usage are enabled to defer/shrink model loads.
 # verify-at-build: validate actual RSS in Phase 2 and record in infra/SIZING.md (shared service
-#   vs per-spoke decision turns on this number).
+#   vs per-cluster decision turns on this number).
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -30,7 +30,7 @@ metadata:
   labels:
     app.kubernetes.io/name: llm-guard
 data:
-  # verify-at-build: scanners.yml shape — top-level input_scanners / output_scanners, each entry
+  # verify-at-build: scanners.yml shape - top-level input_scanners / output_scanners, each entry
   #   is `type:` + `params:`. Confirmed structure from the repo config (research/03-llm-guard.md).
   #   Read the live http://<host>:8000/swagger.json at build to confirm the verdict envelope
   #   (is_valid / sanitized_output / scanners) before wiring the gateway + sidecar filters.
@@ -49,7 +49,7 @@ data:
       scan_output_timeout: 10
 
     input_scanners:
-      # INPUT guard for beat 2 (prompt injection). DeBERTa HF classifier — MODEL-BASED, not
+      # INPUT guard for beat 2 (prompt injection). DeBERTa HF classifier - MODEL-BASED, not
       # deterministic; do not describe it as a rule engine in attendee copy (spec §3).
       # Model: ProtectAI/deberta-v3-base-prompt-injection-v2.
       - type: PromptInjection
@@ -58,9 +58,9 @@ data:
           # match_type defaults to full; leave default unless build testing needs otherwise.
 
     output_scanners:
-      # OUTPUT guard, Regex-ONLY by default — the provably model-free control that is
+      # OUTPUT guard, Regex-ONLY by default - the provably model-free control that is
       # demonstrated live (spec §3). It matches the planted sentinel formats. There is NO
-      # "Secrets" output scanner — Secrets is INPUT-only (rev1 spec error corrected;
+      # "Secrets" output scanner - Secrets is INPUT-only (rev1 spec error corrected;
       # research/03-llm-guard.md §Risks.1).
       - type: Regex
         params:
@@ -75,7 +75,7 @@ data:
           match_type: search
 
       # Sensitive (NER + regex PII) is OPT-IN and OFF by default. Uncommenting it loads the NER
-      # model and breaks the per-spoke RAM budget — enable only with a SIZING decision. It is
+      # model and breaks the per-cluster RAM budget - enable only with a SIZING decision. It is
       # NOT an LLM-as-judge (spec rule honored) but it is NOT pure pattern-matching either.
       # - type: Sensitive
       #   params:
@@ -106,7 +106,7 @@ spec:
       securityContext:
         runAsNonRoot: true
         # The laiyer image declares a NAMED user ("user", home /home/user); k8s needs a NUMERIC
-        # uid to verify non-root. 1000 is that account — also owns the model cache dir.
+        # uid to verify non-root. 1000 is that account - also owns the model cache dir.
         runAsUser: 1000
         runAsGroup: 1000
         fsGroup: 1000
@@ -114,7 +114,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: llm-guard-api
-          # verify-at-build: resolve laiyer/ vs protectai/ (laiyer/ is authoritative — protectai/
+          # verify-at-build: resolve laiyer/ vs protectai/ (laiyer/ is authoritative - protectai/
           #   404s) and pin a DIGEST. Placeholder tag below MUST be replaced with @sha256 in
           #   VERSIONS.lock before the event.
           image: laiyer/llm-guard-api:0.3.16 # verify-at-build: pin @sha256 digest, confirm latest maintained tag
@@ -147,7 +147,7 @@ spec:
               memory: "1Gi"
             limits:
               cpu: "1"
-              memory: "3Gi" # verify-at-build: PromptInjection (DeBERTa) load may exceed this — measure
+              memory: "3Gi" # verify-at-build: PromptInjection (DeBERTa) load may exceed this - measure
           readinessProbe:
             httpGet:
               path: /healthz

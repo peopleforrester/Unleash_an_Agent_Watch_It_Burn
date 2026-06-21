@@ -16,7 +16,7 @@ usage() {
     cat >&2 <<'EOF'
 Usage: beat-02.sh <kube-context> <attendee-namespace>
 
-  <kube-context>         kubeconfig context for the attendee's SPOKE cluster
+  <kube-context>         kubeconfig context for the attendee's cluster
   <attendee-namespace>   namespace holding the gateway, LLM Guard, and planted secret
 
 Asserts Beat 2's §2 outcomes, model-independently, via fallback.curl.sh

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: Installs the HUB stack on the hub EKS cluster — ArgoCD, kube-prometheus-stack, Tempo.
+# ABOUTME: Bootstraps the platform onto the current-context cluster (independent; no hub): ArgoCD + observability.
 # ABOUTME: Idempotent (helm upgrade --install + kubectl apply); safe to re-run. Run after `eksctl create`.
 set -euo pipefail
 
@@ -17,12 +17,12 @@ usage() {
     cat >&2 <<'EOF'
 Usage: infra/bootstrap.sh
 
-Installs the workshop HUB stack onto the cluster in the current kubectl context:
-  - ArgoCD               (GitOps control plane spokes register to)
+Bootstraps the platform onto the cluster in the current kubectl context (independent cluster, no hub):
+  - ArgoCD               (in-cluster GitOps; reconciles THIS cluster from Git)
   - kube-prometheus-stack (Grafana + Prometheus)
-  - Grafana Tempo        (shared trace backend; per-spoke OTel collectors forward here)
+  - Grafana Tempo        (in-cluster trace fallback; Datadog is the primary sink)
 
-Idempotent. Re-running upgrades in place. Requires: kubectl, helm, a reachable hub cluster.
+Idempotent. Re-running upgrades in place. Requires: kubectl, helm, a reachable cluster (current context).
 EOF
 }
 
@@ -62,7 +62,7 @@ install_monitoring() {
 
 install_tempo() {
     printf '==> [4/5] Installing Grafana Tempo (%s) into ns/%s\n' "${TEMPO_RELEASE}" "${TEMPO_NS}" >&2
-    # Single-binary Tempo is sufficient for workshop trace volume; receives OTLP from spoke collectors.
+    # Single-binary Tempo is sufficient for workshop trace volume; receives OTLP from the in-cluster collector.
     helm upgrade --install "${TEMPO_RELEASE}" grafana/tempo \
         --namespace "${TEMPO_NS}" --create-namespace \
         --set "tempo.receivers.otlp.protocols.grpc.endpoint=0.0.0.0:4317" \
@@ -71,7 +71,7 @@ install_tempo() {
 }
 
 report() {
-    printf '==> [5/5] Hub stack ready. Endpoints:\n' >&2
+    printf '==> [5/5] Platform ready on this cluster. Endpoints:\n' >&2
     printf '    ArgoCD server (port-forward): kubectl -n %s port-forward svc/argocd-server 8080:443\n' \
         "${ARGOCD_NS}" >&2
     printf '    Grafana       (port-forward): kubectl -n %s port-forward svc/kube-prometheus-stack-grafana 3000:80\n' \
@@ -79,7 +79,7 @@ report() {
     printf '    Tempo OTLP in-cluster:        tempo.%s.svc:4317 (grpc) / :4318 (http)\n' "${TEMPO_NS}" >&2
     printf '\n    Next: kubectl apply -f platform/argocd/appproject-workshop.yaml\n' >&2
     printf '          kubectl apply -f platform/argocd/appset-attendee.yaml\n' >&2
-    printf '          then register spokes (see infra/spoke-cluster/README.md).\n' >&2
+    printf '          then the cluster self-reconciles via its own ArgoCD (see infra/attendee-cluster/README.md).\n' >&2
 }
 
 main() {
@@ -91,9 +91,9 @@ main() {
     require_tool kubectl
     require_tool helm
 
-    printf '==> Verifying hub cluster is reachable\n' >&2
+    printf '==> Verifying the current-context cluster is reachable\n' >&2
     kubectl get nodes >/dev/null || {
-        printf 'ERROR: kubectl cannot reach a cluster. Create the hub first (infra/hub-cluster/).\n' >&2
+        printf 'ERROR: kubectl cannot reach a cluster. Create one first (infra/attendee-cluster/ or infra/test-cluster/).\n' >&2
         exit 1
     }
 
@@ -103,7 +103,7 @@ main() {
     install_tempo
     report
 
-    printf '==> Hub bootstrap complete.\n' >&2
+    printf '==> Cluster bootstrap complete.\n' >&2
 }
 
 main "$@"

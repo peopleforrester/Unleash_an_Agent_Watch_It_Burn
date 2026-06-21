@@ -8,9 +8,8 @@ def check(n, c):
 
 CLUSTERS = [
     "infra/test-cluster/cluster.yaml",
-    "infra/hub-cluster/cluster.yaml",
     "infra/burn-clusters/cluster.yaml",
-    "infra/spoke-cluster/cluster.yaml",
+    "infra/attendee-cluster/cluster.yaml",
 ]
 for rel in CLUSTERS:
     cfg = yaml.safe_load((REPO / rel).read_text())
@@ -29,6 +28,11 @@ joined = "\n".join((REPO / rel).read_text() for rel in CLUSTERS)
 check("no stale 'unleash-an-agent' tag value remains", "unleash-an-agent" not in joined)
 check("no pre-rename 'workshop-hub'/'workshop-spoke-' cluster names remain",
       "name: workshop-hub" not in joined and "name: workshop-spoke-" not in joined)
+# Independent-cluster model: no hub, no 'spoke' naming anywhere in the cluster configs.
+check("no hub/spoke naming remains (independent-cluster model)",
+      "watch-it-burn-spoke" not in joined and "watch-it-burn-hub" not in joined)
+check("attendee clusters share the one VPC (vpc.id reference present)",
+      "vpc-SHARED_ID" in (REPO / "infra/attendee-cluster/cluster.yaml").read_text())
 
 # AWS-resource scripts tag what they create and stay name-scoped (cannot touch Packt resources).
 s3 = (REPO / "games/eso-s3-exfil/s3-hoop-setup.sh").read_text()
@@ -37,10 +41,12 @@ check("s3 hoop setup tags the bucket project=watch-it-burn",
 trophy = (REPO / "games/eso-s3-exfil/plant-trophy.sh").read_text()
 check("trophy secret created with project=watch-it-burn tag",
       "create-secret" in trophy and "Key=project,Value=watch-it-burn" in trophy)
-spoke_readme = (REPO / "infra/spoke-cluster/README.md").read_text()
-check("spoke teardown is name-scoped to watch-it-burn-spoke (cannot hit Packt)",
-      'delete cluster --name "watch-it-burn-spoke-' in spoke_readme)
+teardown = (REPO / "teardown/teardown.sh").read_text()
+check("teardown is prefix-scoped to watch-it-burn (cannot hit the co-tenant Packt clusters)",
+      'CLUSTER_PREFIX' in teardown and "watch-it-burn" in teardown
+      and 'refusing prefix' in teardown)
 check("tagging convention doc exists", (REPO / "infra/TAGGING.md").exists())
+check("shared-VPC doc exists (one VPC, not per-cluster)", (REPO / "infra/shared-vpc/README.md").exists())
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)"); sys.exit(1)

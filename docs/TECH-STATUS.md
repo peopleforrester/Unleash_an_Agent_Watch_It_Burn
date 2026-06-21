@@ -59,7 +59,10 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 
 ## Infra + ops
 
-- [x] eksctl cluster configs (1.35, EBS CSI, OIDC); [~] live provision + fleet sizing
+- [x] eksctl cluster configs (1.35, EBS CSI, OIDC): independent per-student clusters
+  (`watch-it-burn-attendee-<id>`) sharing one up-front VPC (10.0.0.0/16, two private /18 subnets),
+  each self-reconciled by its own in-cluster ArgoCD; t3.xlarge unlimited default; [~] live provision +
+  T3 fleet sizing (measure one cluster before pinning, infra/SIZING.md)
 - [x] Naming/tagging convention for the shared accen-dev account (project=watch-it-burn on every
   resource; cluster names watch-it-burn-*; teardown name/prefix-scoped) - infra/TAGGING.md
 - [x] Namecheap demo-DNS tool (agenticburn.com); [~] DNS write deferred to post-provision
