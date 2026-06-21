@@ -47,7 +47,7 @@ cost_usd() {
 send_prompt() {
     local text="$1"
     in_cluster_curl curl -s -X POST "${PROXY}/" -H 'Content-Type: application/json' \
-        -d "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"parts\":[{\"kind\":\"text\",\"text\":\"${text}\"}]}}}" >/dev/null
+        -d "{\"jsonrpc\":\"2.0\",\"id\":\"1\",\"method\":\"message/send\",\"params\":{\"message\":{\"role\":\"user\",\"messageId\":\"witb-${RANDOM}${RANDOM}\",\"parts\":[{\"kind\":\"text\",\"text\":\"${text}\"}]}}}" >/dev/null
 }
 
 toggle() { in_cluster_curl curl -s "${PROXY}/toggle?$1" >/dev/null; }

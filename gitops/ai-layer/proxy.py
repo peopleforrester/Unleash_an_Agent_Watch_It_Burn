@@ -126,9 +126,18 @@ def moderate(text):
 def record_usage(resp):
     """Pull kagent token usage from an A2A response and add it to the running cost tally."""
     result = resp.get("result", {}) if isinstance(resp, dict) else {}
-    meta = (result.get("metadata") or {}).get("adk_usage_metadata")
+
+    # Live kagent 0.9.9 emits the token usage at result.metadata.kagent_usage_metadata (confirmed on a
+    # real A2A response on watch-it-burn-test, 2026-06-21). research/14 read the published docs as
+    # `adk_usage_metadata`, but the running controller uses `kagent_usage_metadata`; the live cluster is
+    # ground truth. Accept both keys (kagent first) so a future re-key does not silently zero the counter.
+    def _usage(metadata):
+        metadata = metadata or {}
+        return metadata.get("kagent_usage_metadata") or metadata.get("adk_usage_metadata")
+
+    meta = _usage(result.get("metadata"))
     if not meta:
-        meta = (result.get("status", {}).get("message", {}).get("metadata") or {}).get("adk_usage_metadata")
+        meta = _usage(result.get("status", {}).get("message", {}).get("metadata"))
     if not isinstance(meta, dict):
         return
     pin = int(meta.get("promptTokenCount", 0) or 0)
