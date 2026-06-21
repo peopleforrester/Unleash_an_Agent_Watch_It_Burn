@@ -15,4 +15,8 @@ else
 fi
 aws s3api put-public-access-block --bucket "${BUCKET}" \
     --public-access-block-configuration BlockPublicAcls=true,IgnorePublicAcls=true,BlockPublicPolicy=true,RestrictPublicBuckets=true >/dev/null
+# Collision-avoidance: tag the bucket project=watch-it-burn so it is unambiguously ours in a shared
+# account (the Packt project also uses this account). Cost allocation + Resource Groups key on this tag.
+aws s3api put-bucket-tagging --bucket "${BUCKET}" --tagging \
+    'TagSet=[{Key=project,Value=watch-it-burn},{Key=event,Value=ai-engineer-worldsfair-2026},{Key=component,Value=exfil-game-hoop}]' >/dev/null
 echo "==> hoop ready: s3://${BUCKET}" >&2

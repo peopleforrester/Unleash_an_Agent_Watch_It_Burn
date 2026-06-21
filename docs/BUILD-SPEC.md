@@ -233,9 +233,8 @@ kube-prometheus-stack `86.2.3`; OTel Collector chart `0.158.2` / app `0.153.0`; 
 `grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.35`;
 aws-ebs-csi-driver addon + gp3 default SC; Bedrock models
 `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku), `us.anthropic.claude-sonnet-4-6` (Sonnet),
-`us.anthropic.claude-opus-4-8` (Opus), `us.anthropic.claude-fable-5` (Fable; now live) — Sonnet/Opus
-need the `us.` Geo profile (no In-Region in us-west-2). vCluster is removed. `VERSIONS.lock` is
-authoritative; re-confirm at build.
+`us.anthropic.claude-opus-4-8` (Opus) — Sonnet/Opus need the `us.` Geo profile (no In-Region in
+us-west-2); Fable retired. vCluster is removed. `VERSIONS.lock` is authoritative; re-confirm at build.
 
 ---
 
