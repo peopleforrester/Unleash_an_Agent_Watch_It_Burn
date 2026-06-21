@@ -55,6 +55,33 @@ burn-clusters/shared-vpc), the 2 comments untouched/intact; Doc 3 (18 comments) 
 (its demo-flow is topology-neutral). All comments verified intact (Doc6 2, Doc3 18). Verified: 0 residual
 stale terms in Doc 6, Doc 7 carries the shared-VPC/independent content.
 
+LIVE PHASE-GATE RUN (2026-06-21, watch-it-burn-test, 6x t3.large, accen-dev/us-west-2, isolated
+kubeconfig /tmp/watch-it-burn-test.kubeconfig). Full IDP deployed via app-of-apps. The run caught
+6 real issues; commits pushed to staging+main:
+- #1 Falco rule k8s.pod.label.app -> k8s.pod.label[app] (was crashlooping). FIXED+validated.
+- #2 agent referenced workshop-mcp RemoteMCPServer that was never deployed -> agent could not compile.
+  BUILT the good workshop-mcp shim (gitops/ai-layer/workshop-mcp-server.py + Deployment/Service/
+  RemoteMCPServer, mirrors evil-mcp-shim; tools list_pods/apply_manifest/get_secret). Agent now
+  Accepted=True Ready=True, pod Running. FIXED+validated.
+- #3 beats didn't export CONTEXT to toggle subscripts. FIXED.
+- #4 ArgoCD selfHeal reverted live toggles -> added ignoreDifferences (kyverno-policies failureAction;
+  ai-layer guard-proxy env). FIXED+validated (beat-1 Enforce toggle now sticks).
+- #5 vpc-cni addon lacked enableNetworkPolicy -> egress/default-deny inert. Added configurationValues
+  enableNetworkPolicy=true to test/attendee/burn configs + render-gate check. FIXED in config; live
+  retrofit on the running cluster stuck in addon UPDATING >15min (no errors) -> validate on a FRESH
+  cluster (config applies at create).
+- #6 OPEN: verify harness (beat-cost/02/03) uses an ephemeral `kubectl run ... curlimages/curl` helper
+  that times out ("timed out waiting for the condition") on this cluster -> beat-cost/02/03 can't
+  complete. Agent + wiring confirmed correct (AGENT_URL -> workshop-agent.agent:8080). Needs a harness
+  fix (helper-pod path) to run the agent gates.
+GATES PASS: Kyverno Audit->Enforce toggle (beat-1, post-#4), RBAC escalation FORBIDDEN, image-registry
+villain block (Enforce), require-probes/labels/limits admission. NOT TESTABLE here: PID-limit fork bomb
+(test-cluster has no overrideBootstrapCommand; unsafe without the cap). Offline suite 166 green.
+Cluster STILL UP (~$0.50/hr). Teardown: teardown/teardown.sh --prefix watch-it-burn-test --yes.
+
+QUEUE (Michael): pull a copy of portfolio/lab-provisionin-website (Flask pool-based key/lab distributor:
+app.py, pool.csv, pool.db, railway.json) into this repo's provisioning for our own use.
+
 ARCHITECTURE REVISED (Michael approved, 2026-06-21): dropped hub-and-spoke -> INDEPENDENT per-attendee
 clusters. Each attendee gets their own standalone EKS cluster (take-home) running its OWN in-cluster
 ArgoCD reconciling itself from gitops/bootstrap/app-of-apps.yaml (destination kubernetes.default.svc).
