@@ -54,6 +54,38 @@ check("dashboard has a Tempo traces panel for gen_ai spans",
       any(p.get("type") == "traces" for p in dashboard["panels"])
       and any("gen_ai" in t.get("query", "") for p in dashboard["panels"] for t in p.get("targets", [])))
 
+# Span metrics connector: generated metrics must carry UST resource attributes for DD correlation.
+conns = cfg.get("connectors", {})
+check("collector has a spanmetrics connector", "spanmetrics" in conns)
+check("spanmetrics propagates resource attributes (UST) onto generated metrics",
+      conns.get("spanmetrics", {}).get("add_resource_attributes") is True)
+check("spanmetrics wired into traces exporters", "spanmetrics" in cfg["service"]["pipelines"]["traces"]["exporters"])
+check("spanmetrics wired into metrics receivers", "spanmetrics" in cfg["service"]["pipelines"]["metrics"]["receivers"])
+
+
+# Unified Service Tagging on the AI-layer pods (service.name + env via OTEL_RESOURCE_ATTRIBUTES).
+def _container_env(path):
+    docs = [d for d in yaml.safe_load_all((REPO / path).read_text()) if d]
+    dep = next(d for d in docs if d.get("kind") == "Deployment")
+    c = dep["spec"]["template"]["spec"]["containers"][0]
+    return {e["name"]: e.get("value", "") for e in c.get("env", [])}
+
+
+gp_ust = _container_env("agent/gateway/guard-proxy/guard-proxy.yaml").get("OTEL_RESOURCE_ATTRIBUTES", "")
+check("guard-proxy carries UST (service.name + env) via OTEL_RESOURCE_ATTRIBUTES",
+      "service.name=guard-proxy" in gp_ust and "deployment.environment.name=watch-it-burn" in gp_ust)
+ag_ust = _container_env("agent/gateway/agentgateway.yaml").get("OTEL_RESOURCE_ATTRIBUTES", "")
+check("agentgateway carries UST (service.name) via OTEL_RESOURCE_ATTRIBUTES",
+      "service.name=agentgateway" in ag_ust)
+
+# Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.
+fvals = yaml.safe_load((REPO / "gitops" / "apps" / "falcosidekick.yaml").read_text())["spec"]["source"]["helm"]["valuesObject"]
+check("falcosidekick has a Datadog output", "datadog" in fvals["config"])
+fenv = {e["name"]: e for e in fvals.get("extraEnv", [])}
+check("falcosidekick DATADOG_APIKEY from a BYO secret (not hardcoded)",
+      "secretKeyRef" in fenv.get("DATADOG_APIKEY", {}).get("valueFrom", {}))
+check("falcosidekick still feeds Talon (Datadog is additive/swappable)", "talon" in fvals["config"])
+
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
     sys.exit(1)

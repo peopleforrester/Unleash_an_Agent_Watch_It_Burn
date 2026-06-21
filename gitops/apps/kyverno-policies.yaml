@@ -17,6 +17,16 @@ spec:
     path: policies/kyverno
   destination:
     server: https://kubernetes.default.svc
+  # Beat-1 LIVE TOGGLE: the demo flips require-resource-limits validate.failureAction Audit<->Enforce
+  # via kubectl patch (beats/01-cncf-wall/toggle-kyverno-enforce.sh). Without this, selfHeal reverts
+  # the live toggle instantly. Ignore drift ONLY on that one field so selfHeal still corrects all
+  # other drift (the live gate run on watch-it-burn-test caught this).
+  ignoreDifferences:
+    - group: kyverno.io
+      kind: ClusterPolicy
+      name: require-resource-limits
+      jsonPointers:
+        - /spec/rules/0/validate/failureAction
   syncPolicy:
     automated:
       prune: true

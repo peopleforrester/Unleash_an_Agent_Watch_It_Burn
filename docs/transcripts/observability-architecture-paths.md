@@ -1,7 +1,22 @@
 # Observability Architecture Paths
 
 *Planning synthesis, 2026-06-21. Follows from `observability-planning.md`.*
-*Whitney's inclination: Path 3. Decision pending Michael's input, especially on the service map.*
+*Updated same day to reflect decisions made by Michael + Whitney.*
+
+**Decision: Path 2 (hybrid) with OTel-neutral instrumentation.**
+OTel Collector is the neutral primary — all OTLP/GenAI semconv instrumentation routes through it,
+Datadog stays swappable. Datadog Agent (or DDOT) is additive for EKS infra + named integrations,
+gated behind a feature flag. Dropping the `datadog` exporter must leave Prometheus + Grafana + Tempo
+functional. See `research/23-observability-decision-points-2026.md` for the full rationale and
+`research/24-datadog-hybrid-impl-sizing-2026.md` for the implementation spec.
+
+**Division of labor:** Whitney owns Datadog account/keys/Agent install/dashboards; Michael owns
+OTel-side wiring + manifest annotations + datadog-secret consumption.
+
+**Already implemented (commit `6c6a81d`):**
+- `spanmetricsconnector` with `add_resource_attributes: true` wired into the Collector
+- UST tags via `OTEL_RESOURCE_ATTRIBUTES` on guard-proxy, agentgateway, kagent
+- Falcosidekick → Datadog native output via `datadog-secret`
 
 ---
 
@@ -220,28 +235,16 @@ tedious to build but stable once committed. Fragile pieces stay out.
 
 ---
 
-## Open Issue: KubeArmor Cannot Stop a Fork Bomb
+## Fork Bomb / KubeArmor — Resolved ✅
 
-Research spike 17 confirmed: KubeArmor has no process-count, thread-count, or fork-rate field in
-its enforcement policy. The `syscalls:` section is audit-only regardless of `action:`. A classic
-fork bomb (`:(){ :|:& };:`) calls `fork()` on an already-running shell — KubeArmor cannot cap
-that. The `podPidsLimit` cgroup control is already in the repo and is the correct tool.
+Live validation session (2026-06-21, commit `f424d45`) confirmed: fork bomb is stopped by
+`podPidsLimit`. Falco detects the attempt; Falco Talon responds (kill pod). This pair is
+live-validated and shipped.
 
-**Decision needed (Michael + Whitney) — three options:**
-
-**Option A — Change the attack vector.** Use an attack KubeArmor can inline-block: the agent
-drops an attacker binary and tries to exec it; a process allow-list policy denies the `execve`
-inline. This is actually closer to the real AI-agent threat model. The PID cap handles fork
-bombs quietly in the background.
-
-**Option B — Keep the fork bomb, attribute the block correctly.** The fork bomb is stopped by
-`podPidsLimit`. Narrate it that way. KubeArmor's role is CNCF-native inline prevention for
-other attacks. "The PID cap is the floor; KubeArmor is the wall."
-
-**Option C — Drop KubeArmor entirely.** Falco (detect/alert) + `podPidsLimit` (prevent) is
-the already-verified pair. KubeArmor is a CNCF Sandbox project adding a second eBPF DaemonSet
-that needs coexistence verification on every node. If the workshop does not explicitly demo
-binary exec blocking, the operational overhead may not be worth it.
+KubeArmor cannot stop a fork bomb (no process-count/fork-rate field; `syscalls:` is audit-only).
+See `research/17-kubearmor-forkbomb-2026.md`, `research/21-kubearmor-claims-verification-2026.md`,
+and `research/22-runtime-enforcement-comparison-2026.md` for the full analysis.
+KubeArmor's status in the stack is tracked separately.
 
 ---
 

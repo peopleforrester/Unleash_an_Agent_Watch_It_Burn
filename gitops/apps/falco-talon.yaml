@@ -21,13 +21,25 @@ spec:
         resources:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { cpu: 200m, memory: 128Mi }
-        # Talon rules: on the fork-bomb Falco event, terminate the offending pod.
-        rulesOverride: |
-          - action: Terminate the fork-bomb pod
-            actionner: kubernetes:terminate
-            match:
-              rules:
-                - Fork Bomb In Workload Container
+        config:
+          # Talon rules: on the fork-bomb Falco event, terminate the offending pod.
+          # MUST be config.rulesOverride (the chart key); a top-level rulesOverride is silently ignored,
+          # leaving Talon on the chart-default action that has no match -> "0 rules loaded" (caught live
+          # on watch-it-burn-test). The chart renders this into rules.yaml, the file Talon reads (-r).
+          # Talon v0.3.0 schema: ACTIONS (- action: + actionner:) and RULES (- rule: + match: + actions:)
+          # are SEPARATE entries; an action with an embedded match: is invalid and loads as 0 rules.
+          rulesOverride: |
+            - action: Terminate the fork-bomb pod
+              actionner: kubernetes:terminate
+              parameters:
+                grace_period_seconds: 0
+
+            - rule: Fork Bomb Response
+              match:
+                rules:
+                  - Fork Bomb In Workload Container
+              actions:
+                - action: Terminate the fork-bomb pod
   destination:
     server: https://kubernetes.default.svc
     namespace: falco
