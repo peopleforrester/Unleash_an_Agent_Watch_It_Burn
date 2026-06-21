@@ -29,12 +29,10 @@ check("no NetworkPolicy opens internet egress (0.0.0.0/0) -> S3 path denied", no
 
 # The NetworkPolicies are inert unless the VPC-CNI addon enforces them. The live gate run on
 # watch-it-burn-test found S3 reachable because enableNetworkPolicy was unset on the addon.
-for rel in ["infra/test-cluster/cluster.yaml", "infra/attendee-cluster/cluster.yaml", "infra/burn-clusters/cluster.yaml"]:
-    cfg = yaml.safe_load((REPO / rel).read_text())
-    vpccni = next((a for a in cfg.get("addons", []) if a.get("name") == "vpc-cni"), {})
-    cv = str(vpccni.get("configurationValues", ""))
-    check(f"{rel}: vpc-cni addon enables NetworkPolicy enforcement",
-          "enableNetworkPolicy" in cv and "true" in cv)
+# Provisioning is Terraform now: the per-attendee cluster module must enable it on the vpc-cni addon.
+cluster_tf = (REPO / "infra" / "terraform" / "cluster" / "main.tf").read_text()
+check("terraform cluster vpc-cni addon enables NetworkPolicy enforcement",
+      "vpc-cni" in cluster_tf and "enableNetworkPolicy" in cluster_tf and 'enableNetworkPolicy = "true"' in cluster_tf)
 
 if failures: print(f"\nFAILED: {len(failures)}: {internet}"); sys.exit(1)
 print("\nAll egress-control checks passed.")

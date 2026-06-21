@@ -40,10 +40,12 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
 
 ## Where the tags are applied
 
-- **EKS clusters** - `metadata.tags` in each `infra/*/cluster.yaml`. eksctl applies
-  these to the cluster and its shared CloudFormation resources (VPC, IRSA roles,
-  addon roles), so the whole stack inherits `project=watch-it-burn`.
-- **Node groups** - `managedNodeGroups[].tags` (propagates to the EC2 instances / ASG).
+- **EKS clusters + all AWS resources** - Terraform `provider "aws" { default_tags { ... } }` in
+  `infra/terraform/lab-vpc/main.tf` and `infra/terraform/cluster/main.tf`. default_tags applies
+  `project=watch-it-burn` to every resource the provider creates (VPC, cluster, node group, IRSA /
+  Pod Identity roles, EBS), so the whole stack inherits it. The per-attendee cluster also gets
+  `attendee=<name>`. (Provisioning is Terraform, not eksctl.)
+- **Node groups / EC2 / EBS** - inherited from the provider default_tags above.
 - **S3 buckets** - `aws s3api put-bucket-tagging` in `games/eso-s3-exfil/s3-hoop-setup.sh`.
 - **Secrets Manager** - `--tags` on `create-secret` in `games/eso-s3-exfil/plant-trophy.sh`.
 - **Load balancers** (when a demo Service is exposed as `type: LoadBalancer` at
