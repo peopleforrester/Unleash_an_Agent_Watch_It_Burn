@@ -3,7 +3,47 @@
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
 
-Last updated: 2026-06-21
+Last updated: 2026-06-22
+
+### TERRAFORM LIVE-VALIDATED on attendee-001 (2026-06-22)
+
+Stood up the Terraform stack end to end and ran the full verify harness. The eksctl->Terraform
+conversion is PROVEN on real infra. Sequence: terraform apply lab-vpc (shared VPC) -> fleet.sh up
+watch-it-burn-attendee-001 (1x t3.2xlarge) -> deploy-full-idp.sh -> full verify -> teardown to $0.
+
+RIGHT-SIZING (Michael's question, answered with data): the full IDP fits ONE t3.2xlarge easily -
+46 pods, CPU requests 3045m (38% of 7.9 vCPU), memory 5946Mi (19% of 30 GiB). The old 6x t3.large
+gate cluster was ~4x overprovisioned (an arbitrary number, never measured). t3.2xlarge default stands,
+now data-validated. NOTE: node ROOT disk is the real single-node constraint, not CPU/mem (see #16).
+
+FULL VERIFY PASS on the Terraform cluster (identical behavior to the eksctl runs):
+- beat-cost PASS: cost $0->$0.0019 then flatlines on block-list. This PROVES the agent reaches Bedrock
+  via EKS POD IDENTITY with real token spend - the headline verify-at-build flag of the conversion
+  (Pod Identity, not IRSA; no SA annotation, no per-cluster OIDC trust). GREEN.
+- beat-02 PASS: all 4 sanitization states (input classifier blocks injection; output guard -> [REDACTED]).
+- PID cap: pod-cgroup pids.max=1024 read from the node (Terraform cloudinit_pre_nodeadm delivered it).
+- Falco->Talon PASS: CRITICAL "Fork bomb detected" -> rule "Fork Bomb Response" -> kubernetes:terminate
+  -> pod terminated in 4s.
+
+FIVE bugs caught by the live apply that terraform validate/plan CANNOT catch (all fixed+committed):
+- #14 agent Bedrock Pod Identity role name overran the IAM name_prefix 38-char cap -> shortened to
+  <cluster>-bedrock.
+- #15 fleet.sh swallowed backgrounded apply/destroy exit codes (false "success" on a failed apply)
+  -> record per-cluster failures, exit non-zero.
+- #16 disk_size=80 SILENTLY IGNORED: cloudinit_pre_nodeadm forces a custom launch template, under
+  which the module ignores disk_size -> node fell back to AL2023 default 20 GiB -> DiskPressure ->
+  pods Pending. FIX: set root volume via block_device_mappings (node_disk_size default 100 GiB).
+  (This also affects Packt's template - same disk_size+cloudinit combo.)
+- #17 node ROLL wedges on a single-node cluster: the IDP PDBs (minAvailable:1) make a drain
+  unsatisfiable -> PodEvictionFailure. FIX: force_update_version=true on the node group. Fresh
+  provisions never roll, so the event path is unaffected; this only bites config changes.
+- #18 deploy-full-idp.sh ArgoCD helm --wait hangs in pending-install on EKS -> dropped --wait, wait
+  on core components explicitly. Also beat-cost.sh needed the raw_decode fix for the kubectl run --rm
+  "pod deleted" stdout line (same as beat-02).
+OPERATIONAL LESSON: do NOT manually terminate an MNG-managed node or rapidly re-pin scaling - it sent
+the ASG into destructive oscillation (had to pin min=3 to stop it). Let Terraform own node rolls
+(force_update_version handles the PDB wedge). Fresh provision is clean (the first apply gave 1 clean node).
+Branches reconciled: merged another session's observability commits; staging==main==62f8956.
 
 ### PROVISIONING CONVERTED eksctl -> TERRAFORM (Michael directive, 2026-06-21)
 
