@@ -34,8 +34,20 @@ live web research against vendor primary sources + `aws bedrock list-inference-p
 - **Harbor/cosign Enforce upgrade:** verify-image-signatures flipped Audit→Enforce, scoped to
   `harbor.agenticburn.com/*` so public demo images are unaffected.
 
-NEXT: reconcile Docs 3 (Run of Show) and 6 (Build Spec) into the repo — the explicitly-deferred
-final step (held earlier because in-place re-import risks orphaning their Drive comments).
+Docs 3/6 reconciliation (2026-06-21): DONE, comment-safe. Research spike research/15 established that
+comment THREADS survive any update at the data layer (even media-PATCH); only the editor's visual
+anchor orphans. Method used: surgical Docs API `documents.batchUpdate` `replaceAllText` on the same
+file ID, with each comment's `quotedFileContent` treated as a no-edit zone, gated on
+`requiredRevisionId`, after pinning a `keepForever` rollback revision. Doc 3 (Run of Show) needed NO
+version corrections (its tier/VPC-CNI content is already correct). Doc 6 (Build Spec): 8 stale version
+pins corrected (kagent 0.9.7→0.9.9, ArgoCD/Argo CD v3.4.3→v3.4.4, OTel v0.154.0→v0.158.2, agentgateway
+OSS v1.2.1→v1.3.0, EKS 1.34→1.35). Both Doc-6 comments verified intact (count 2, none deleted, quoted
+spans verbatim). Exported OAuth tokens deleted after use.
+
+OPEN (design call for Michael, NOT auto-changed): research/13 found Fable 5 is now LIVE on Bedrock
+(`us.anthropic.claude-fable-5`). Docs 3 (line ~92) and 6 (lines ~196/213) plus repo BUILD-SPEC/runbook
+still say "Fable 5 unavailable (access suspended)". Whether to add Fable as a 4th model-tier
+cluster/screen is a demo-design decision, so those lines were left for Michael to decide.
 
 ### Session-close note (2026-06-19)
 
