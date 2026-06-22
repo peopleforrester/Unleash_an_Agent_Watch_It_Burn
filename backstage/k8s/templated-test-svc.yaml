@@ -29,7 +29,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: templated-test-svc
-          image: docker.io/peopleforrester/watch-it-burn:sample-app
+          image: ghcr.io/peopleforrester/watch-it-burn:sample-app
           ports:
             - containerPort: 8080
               protocol: TCP

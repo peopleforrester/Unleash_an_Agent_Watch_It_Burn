@@ -22,7 +22,7 @@ spec:
         backstage:
           # Our image (not Watch It Burn's private ECR). Push to peopleforrester/watch-it-burn:backstage.
           image:
-            registry: docker.io
+            registry: ghcr.io
             repository: peopleforrester/watch-it-burn
             tag: "backstage"
           extraEnvVarsSecrets:
