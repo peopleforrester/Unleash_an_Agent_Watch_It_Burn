@@ -43,9 +43,9 @@ Platform is built + live-validated (all beats, Terraform provisioning, rebrand).
   path, extend pool schema with url + datadog_url, show them on the success page, Railway deploy at
   provisioning.agenticburn.com (Namecheap CNAME at deploy once Railway gives the target).
 - **NEW - update all READMEs** across the repo (post-rebrand + Terraform + ghcr accuracy pass).
-- **NEW - tech.agenticburn.com technical walkthrough:** a reveal.js (or similar) slide deck covering
+- **NEW - walkthrough.agenticburn.com technical walkthrough:** a reveal.js (or similar) slide deck covering
   EVERY component foundation->up, clear + visual, so Michael + Whitney can study the whole stack.
-  Host at tech.agenticburn.com.
+  Host at walkthrough.agenticburn.com.
 
 ### TERRAFORM LIVE-VALIDATED on attendee-001 (2026-06-22)
 
