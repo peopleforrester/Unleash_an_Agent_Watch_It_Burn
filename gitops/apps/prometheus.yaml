@@ -99,17 +99,12 @@ spec:
             annotations:
               alb.ingress.kubernetes.io/scheme: internet-facing
               alb.ingress.kubernetes.io/target-type: ip
-              alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-              alb.ingress.kubernetes.io/ssl-redirect: "443"
+              alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
               alb.ingress.kubernetes.io/backend-protocol: HTTP
               alb.ingress.kubernetes.io/healthcheck-path: /api/health
               alb.ingress.kubernetes.io/group.name: watch-it-burn-ingress
-              alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:515966504359:certificate/REPLACE-WITH-AGENTICBURN-CERT
             hosts:
               - grafana.agenticburn.com
-            tls:
-              - hosts:
-                  - grafana.agenticburn.com
         # AlertManager not needed for the workshop; disabled to slim the per-attendee node.
         alertmanager:
           enabled: false
