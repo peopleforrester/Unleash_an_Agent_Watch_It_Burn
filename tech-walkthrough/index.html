@@ -15,6 +15,20 @@
     .reveal section { font-size: 30px; }
     .reveal pre { width:100%; font-size:0.5em; box-shadow:none; }
     .reveal pre.mermaid { background:transparent; }
+    /* Reveal's slide font-size cascades into the mermaid SVG and renders labels wider than the boxes
+       mermaid measured at 16px, clipping the text. Pin the SVG label text back to mermaid's own size. */
+    .reveal .mermaid svg text,
+    .reveal .mermaid svg .nodeLabel,
+    .reveal .mermaid svg .edgeLabel,
+    .reveal .mermaid svg foreignObject div,
+    .reveal .mermaid svg foreignObject span { font-size:16px !important; line-height:1.3 !important; }
+    /* mermaid sizes the foreignObject to its measured text width with overflow hidden; the rasterized
+       font renders a hair wider and clips. Let it overflow visibly (no wrap) so the full label shows
+       within the node box (which already has room). */
+    .reveal .mermaid svg foreignObject { overflow:visible !important; }
+    .reveal .mermaid svg foreignObject > div,
+    .reveal .mermaid svg .nodeLabel,
+    .reveal .mermaid svg .label { overflow:visible !important; white-space:nowrap !important; }
     .reveal .small { font-size:0.7em; color:#bbb; }
     .reveal .tag { display:inline-block; background:#222; border:1px solid var(--wib-orange);
       color:var(--wib-orange); border-radius:4px; padding:2px 8px; font-size:0.55em; margin:2px; }
@@ -55,17 +69,17 @@ Give a scoped AI agent a real, production-grade IDP and let attendees attack it.
   <h2>Architecture at a glance</h2>
   <pre class="mermaid">
 flowchart TB
-  subgraph AWS["AWS (accen-dev, us-west-2)"]
-    VPC["Shared lab VPC · one /16 · single NAT"]
-    subgraph C["Independent per-attendee EKS cluster (x60, take-home)"]
-      ARGO["in-cluster ArgoCD (app-of-apps)"]
-      PLAT["Platform: Kyverno · Falco/Talon · ESO · cert-manager · Istio"]
-      OBS["Observability: OTel · Prom/Grafana/Loki/Tempo · Datadog"]
-      AI["AI layer: kagent + Bedrock · guard-proxy · LLM Guard · MCP"]
-      BURN["Burn targets: *-party apps"]
+  subgraph AWS["AWS account"]
+    VPC["Shared lab VPC"]
+    subgraph C["Per-attendee EKS cluster (x60)"]
+      ARGO["in-cluster ArgoCD"]
+      PLAT["Platform controls"]
+      OBS["Observability"]
+      AI["AI layer"]
+      BURN["Burn targets"]
     end
   end
-  TF["Terraform fleet (lab-vpc + cluster module + fleet.sh)"] -->|provisions| C
+  TF["Terraform fleet"] -->|provisions| C
   VPC --- C
   ARGO --> PLAT & OBS & AI & BURN
   </pre>
@@ -182,11 +196,11 @@ ClusterPolicies enforced at **admission** (rule-level `validate.failureAction: E
   <h3>Fork bomb: a wall + an alarm</h3>
   <pre class="mermaid">
 flowchart LR
-  FB["fork bomb in apps pod"] -->|"hits cgroup pids.max=1024"| BLOCK["EAGAIN - node survives"]
-  FB -. "syscall" .-> FALCO["Falco (CRITICAL rule)"]
+  FB["fork bomb"] -->|"pids.max=1024"| BLOCK["EAGAIN<br/>node survives"]
+  FB -. "syscall" .-> FALCO["Falco<br/>CRITICAL"]
   FALCO --> SK["Falcosidekick"]
-  SK -->|"falco-talon.falco.svc:2803"| TALON["Falco Talon"]
-  TALON -->|"kubernetes:terminate"| KILL["pod terminated (~4s)"]
+  SK -->|"forward"| TALON["Falco Talon"]
+  TALON -->|"terminate"| KILL["pod killed (~4s)"]
   </pre>
   <p class="small"><strong>podPidsLimit</strong> is the inline block (the wall). <strong>Falco→Talon</strong> is detect-and-respond (the alarm). Both validated live.</p>
 </section>
@@ -225,11 +239,11 @@ flowchart LR
   <h3>The lens for every beat</h3>
   <pre class="mermaid">
 flowchart LR
-  APP["workloads + guard-proxy + kagent"] -->|"OTLP"| OTEL["OTel Collector"]
-  OTEL -->|"metrics"| PROM["Prometheus → Grafana"]
+  APP["workloads<br/>guard-proxy<br/>kagent"] -->|"OTLP"| OTEL["OTel Collector"]
+  OTEL -->|"metrics"| PROM["Prometheus<br/>Grafana"]
   OTEL -->|"traces"| TEMPO["Tempo"]
   ALLOY["Alloy"] -->|"logs"| LOKI["Loki"]
-  OTEL -->|"spanmetrics + UST tags"| DD["Datadog (primary for the event)"]
+  OTEL -->|"spanmetrics"| DD["Datadog"]
   FALCO["Falcosidekick"] --> DD
   </pre>
   <p class="small">Path-independent: Datadog is required for the event but the OTel layer keeps it swappable (drop the Datadog exporter to run OSS-only).</p>
@@ -255,14 +269,14 @@ flowchart LR
   <h3>How a prompt reaches a model</h3>
   <pre class="mermaid">
 flowchart LR
-  UI["chat-ui"] --> GP["guard-proxy (A2A)"]
-  GP -->|"input guards"| LG1["LLM Guard /analyze/prompt"]
+  UI["chat-ui"] --> GP["guard-proxy"]
+  GP -->|"input guard"| LG1["LLM Guard"]
   GP -->|"forward"| AG["kagent agent"]
-  AG -->|"Bedrock (Pod Identity)"| BR["Claude on Bedrock"]
-  AG -->|"tools"| MCP["workshop-mcp (good) / evil-mcp (rogue)"]
+  AG -->|"Pod Identity"| BR["Claude<br/>on Bedrock"]
+  AG -->|"tools"| MCP["MCP<br/>good / rogue"]
   AG -->|"response"| GP
-  GP -->|"output guard"| LG2["LLM Guard /analyze/output"]
-  GP -->|"meter tokens"| COST["/cost counter"]
+  GP -->|"output guard"| LG2["LLM Guard"]
+  GP -->|"meter"| COST["cost counter"]
   </pre>
   <p class="small"><span class="repo">gitops/ai-layer/</span> - guard-proxy fronts the kagent-owned agent pod (the inspection point).</p>
 </section>
@@ -373,12 +387,17 @@ Terraform → EKS → VPC-CNI/NetworkPolicy → Pod Identity
 <script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/notes/notes.js"></script>
 <script type="module">
   import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-  mermaid.initialize({ startOnLoad: false, theme: 'dark', themeVariables: { primaryColor: '#ff6b35' } });
+  // Pin a system font (instantly available) so mermaid measures node-box widths correctly; a
+  // web-font-load race otherwise sizes boxes for a narrower fallback font and clips the labels.
+  mermaid.initialize({ startOnLoad: false, theme: 'dark',
+    themeVariables: { primaryColor: '#ff6b35', fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif' },
+    flowchart: { htmlLabels: false, useMaxWidth: true } });
   const deck = new Reveal({
     hash: true, slideNumber: 'c/t', plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
   });
   await deck.initialize();
-  // Render mermaid after markdown sections are built, then re-layout.
+  // Render mermaid only after fonts are loaded (correct text measurement), then re-layout.
+  if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
   await mermaid.run({ querySelector: '.reveal .mermaid' });
   deck.layout();
 </script>
