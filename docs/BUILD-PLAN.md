@@ -107,8 +107,9 @@ Repo-buildable here; live provisioning/verification is Michael's separate projec
 1. **Observability + trace view (Phase 1).** Slim kube-prometheus-stack for the per-attendee node;
    OTel Collector to Tempo; Grafana trace view showing input / output / tool-call (gen_ai) spans.
    *Render:* all three span types visible live for one Cluster-3 run.
-2. **Cluster fleet (Phase 2).** eksctl configs: 3x C1 (no guardrails, no floor, ~10 disposable
-   spares), 3x C2 (CNCF-only), per-attendee C3 via ApplicationSet (cluster generator + sync-waves);
+2. **Cluster fleet (Phase 2).** Terraform (`infra/terraform/`, `fleet.sh up`): 3x C1 (no guardrails, no
+   floor, ~10 disposable spares), 3x C2 (CNCF-only), per-attendee C3 each self-reconciled by its own
+   in-cluster ArgoCD app-of-apps (sync-waves);
    3x instructor C3 only if the optional model-tier demo runs. *Render:* each provisions
    Synced/Healthy; C1 dies in one prompt and rotates; provision time + fleet cost recorded in SIZING.
 3. **Cost counter (Phase 4c, headline `[SPIKE]`).** Meter tokens at the guard-proxy times per-tier
