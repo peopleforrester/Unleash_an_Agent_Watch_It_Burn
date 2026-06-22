@@ -6,8 +6,7 @@
 
 ## Confirmed facts from this session
 
-- **Michael is rewriting the app (guard-proxy / server.py) into TypeScript.** This means Spiny-orb (spinybacked-orbweaver) can instrument the main agent app directly once the rewrite is done. The Python OTel research spike is not needed — wait for the rewrite before instrumenting the AI layer.
-- **Spiny-orb does not support Python.** It targets JavaScript and TypeScript only. The Python apps (evil-mcp-shim, customer-stream generator) either need to wait for rewrites or use the Python OTel SDK separately.
+- **The TypeScript rewrite of guard-proxy is NOT happening.** Spiny-orb (spinybacked-orbweaver) cannot instrument Python code. AI layer instrumentation (guard-proxy, evil-mcp-shim, customer-stream generator) must use the Python OTel SDK directly, or rely on kagent's built-in OTel tracing and agentgateway's built-in OTel output. Decision 4 in research/23 (optional TS agent as spiny-orb target) is superseded by this fact.
 
 ---
 
@@ -181,11 +180,8 @@ Key findings:
 - **Critical:** `spanmetricsconnector` drops `env`/`version` resource attributes from generated metrics by default — requires `add_resource_attributes: true` in the Collector config or metrics-to-logs pivots silently fail
 - `service.name` is NOT auto-remapped for logs via the Agent log pipeline; use `OTEL_RESOURCE_ATTRIBUTES` on pods
 
-### Open question — TypeScript rewrite scope
-- Confirmed: Michael is rewriting the main app into TypeScript
-- Open: Does this include the evil-mcp-shim (`beats/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py`)?
-- Open: Does this include the customer-stream fake data generator?
-- If those stay Python, need to decide: Python OTel SDK or defer
+### TypeScript rewrite scope — resolved (2026-06-22)
+The TypeScript rewrite of guard-proxy is NOT happening. All Python apps (guard-proxy, evil-mcp-shim, customer-stream generator) stay Python. AI layer OTel instrumentation uses the Python OTel SDK directly, or relies on kagent's built-in OTel tracing and agentgateway's built-in OTel output.
 
 ---
 
