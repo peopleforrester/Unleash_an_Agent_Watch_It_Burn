@@ -6,7 +6,7 @@ metadata:
   name: argocd-server-pdb
   namespace: argocd
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   minAvailable: 1
   selector:
@@ -19,7 +19,7 @@ metadata:
   name: argocd-repo-server-pdb
   namespace: argocd
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   minAvailable: 1
   selector:
@@ -32,7 +32,7 @@ metadata:
   name: prometheus-pdb
   namespace: monitoring
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   minAvailable: 1
   selector:
@@ -45,7 +45,7 @@ metadata:
   name: grafana-pdb
   namespace: monitoring
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   minAvailable: 1
   selector:
@@ -58,7 +58,7 @@ metadata:
   name: backstage-pdb
   namespace: backstage
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   minAvailable: 1
   selector:

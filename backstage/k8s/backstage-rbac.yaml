@@ -7,7 +7,7 @@ metadata:
   namespace: backstage
   labels:
     app.kubernetes.io/name: backstage
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
