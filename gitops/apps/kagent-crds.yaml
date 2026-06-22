@@ -1,4 +1,4 @@
-# ABOUTME: ArgoCD Application for kagent CRDs (AI layer — Watch It Burn only, not in KubeAuto).
+# ABOUTME: ArgoCD Application for kagent CRDs (AI layer — Watch It Burn only, not in Watch It Burn).
 # ABOUTME: Must sync before the kagent controller and any Agent/ModelConfig CRs.
 # verify-at-build: OCI Helm via ArgoCD may require the registry registered as an OCI Helm repo.
 apiVersion: argoproj.io/v1alpha1

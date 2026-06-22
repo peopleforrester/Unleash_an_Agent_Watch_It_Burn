@@ -21,18 +21,18 @@ data:
     apiVersion: backstage.io/v1alpha1
     kind: System
     metadata:
-      name: kubeauto-idp
-      description: KubeAuto Day Internal Developer Platform on EKS
+      name: watch-it-burn-idp
+      description: Watch It Burn Internal Developer Platform on EKS
       tags:
         - kubernetes
         - eks
         - platform
         - cncf
       links:
-        - url: https://argocd.ai-enhanced-devops.com
+        - url: https://argocd.agenticburn.com
           title: ArgoCD Dashboard
           icon: dashboard
-        - url: https://backstage.ai-enhanced-devops.com
+        - url: https://backstage.agenticburn.com
           title: Developer Portal
           icon: catalog
     spec:
@@ -54,13 +54,13 @@ data:
         - flask
         - otel
       links:
-        - url: https://backstage.ai-enhanced-devops.com/catalog/default/component/sample-app
+        - url: https://backstage.agenticburn.com/catalog/default/component/sample-app
           title: Catalog Page
     spec:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       providesApis:
         - sample-app-api
 
@@ -80,14 +80,14 @@ data:
         - cncf-graduated
         - argocd
       links:
-        - url: https://argocd.ai-enhanced-devops.com
+        - url: https://argocd.agenticburn.com
           title: ArgoCD UI
           icon: dashboard
     spec:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       providesApis:
         - argocd-api
     ---
@@ -109,7 +109,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       providesApis:
         - prometheus-api
     ---
@@ -131,7 +131,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       providesApis:
         - grafana-api
     ---
@@ -154,7 +154,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -176,14 +176,14 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
     metadata:
       name: external-secrets-operator
       title: External Secrets Operator
-      description: Syncs secrets from AWS Secrets Manager to Kubernetes (v1.3.2). Uses IRSA for authentication, scoped to kubeauto/* resources.
+      description: Syncs secrets from AWS Secrets Manager to Kubernetes (v1.3.2). Uses IRSA for authentication, scoped to watch-it-burn/* resources.
       annotations:
         argocd/app-name: external-secrets
         backstage.io/kubernetes-label-selector: "app.kubernetes.io/name=external-secrets"
@@ -197,7 +197,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -218,7 +218,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -239,7 +239,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -256,14 +256,14 @@ data:
         - cncf-incubating
         - backstage
       links:
-        - url: https://backstage.ai-enhanced-devops.com
+        - url: https://backstage.agenticburn.com
           title: Backstage UI
           icon: catalog
     spec:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -282,7 +282,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -302,7 +302,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -322,7 +322,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -342,7 +342,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -361,7 +361,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
 
   apis.yaml: |
     apiVersion: backstage.io/v1alpha1
@@ -374,13 +374,13 @@ data:
         - rest
         - argocd
       links:
-        - url: https://argocd.ai-enhanced-devops.com/swagger-ui
+        - url: https://argocd.agenticburn.com/swagger-ui
           title: Swagger UI
     spec:
       type: openapi
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       definition: |
         openapi: 3.0.0
         info:
@@ -388,7 +388,7 @@ data:
           version: v3.3.0
           description: ArgoCD REST API for GitOps application management
         servers:
-          - url: https://argocd.ai-enhanced-devops.com/api/v1
+          - url: https://argocd.agenticburn.com/api/v1
         paths:
           /applications:
             get:
@@ -438,7 +438,7 @@ data:
       type: openapi
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       definition: |
         openapi: 3.0.0
         info:
@@ -504,7 +504,7 @@ data:
       type: openapi
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       definition: |
         openapi: 3.0.0
         info:
@@ -543,7 +543,7 @@ data:
       type: openapi
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       definition: |
         openapi: 3.0.0
         info:
@@ -571,7 +571,7 @@ data:
     kind: Group
     metadata:
       name: platform-team
-      description: Platform engineering team responsible for the KubeAuto Day IDP
+      description: Platform engineering team responsible for the Watch It Burn IDP
     spec:
       type: team
       children: []
@@ -678,7 +678,7 @@ data:
             exposeExternally:
               title: Expose via ALB Ingress
               type: boolean
-              description: Create an ALB Ingress with TLS at <name>.ai-enhanced-devops.com
+              description: Create an ALB Ingress with TLS at <name>.agenticburn.com
               default: true
             isNginxBased:
               title: Nginx-based Image
@@ -743,7 +743,7 @@ data:
                   app: ${{ parameters.name }}
                   version: v1.0.0
                   app.kubernetes.io/name: ${{ parameters.name }}
-                  app.kubernetes.io/part-of: kubeauto-idp
+                  app.kubernetes.io/part-of: watch-it-burn-idp
               spec:
                 replicas: ${{ parameters.replicas }}
                 selector:
@@ -821,7 +821,7 @@ data:
                     protocol: TCP
               ---
               # ALB Ingress with TLS (shared ALB, wildcard cert)
-              # URL: https://${{ parameters.name }}.ai-enhanced-devops.com
+              # URL: https://${{ parameters.name }}.agenticburn.com
               apiVersion: networking.k8s.io/v1
               kind: Ingress
               metadata:
@@ -834,12 +834,11 @@ data:
                   alb.ingress.kubernetes.io/ssl-redirect: "443"
                   alb.ingress.kubernetes.io/backend-protocol: HTTP
                   alb.ingress.kubernetes.io/healthcheck-path: /
-                  alb.ingress.kubernetes.io/group.name: kubeauto-ingress
-                  alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:598274344262:certificate/151d10d0-1941-4fbf-bfd8-0e8c3be1a8d6
+                  alb.ingress.kubernetes.io/group.name: watch-it-burn-ingress
               spec:
                 ingressClassName: alb
                 rules:
-                  - host: ${{ parameters.name }}.ai-enhanced-devops.com
+                  - host: ${{ parameters.name }}.agenticburn.com
                     http:
                       paths:
                         - path: /
@@ -861,14 +860,14 @@ data:
           name: Register in Backstage Catalog
           action: catalog:register
           input:
-            catalogInfoUrl: https://backstage.ai-enhanced-devops.com/catalog
+            catalogInfoUrl: https://backstage.agenticburn.com/catalog
             optional: true
       output:
         links:
           - title: View in Catalog
             url: /catalog/default/component/${{ parameters.name }}
           - title: Live URL
-            url: https://${{ parameters.name }}.ai-enhanced-devops.com
+            url: https://${{ parameters.name }}.agenticburn.com
 
   create-namespace-template.yaml: |
     apiVersion: scaffolder.backstage.io/v1beta3
@@ -1085,7 +1084,7 @@ data:
       type: website
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -1105,7 +1104,7 @@ data:
       type: website
       lifecycle: production
       owner: ecommerce-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       dependsOn:
         - component:ecom-api
     ---
@@ -1129,7 +1128,7 @@ data:
       type: service
       lifecycle: production
       owner: ecommerce-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       providesApis:
         - ecom-api
       dependsOn:
@@ -1154,7 +1153,7 @@ data:
       type: service
       lifecycle: production
       owner: ecommerce-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -1174,7 +1173,7 @@ data:
       type: service
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -1195,7 +1194,7 @@ data:
       type: website
       lifecycle: production
       owner: connected-homes-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -1216,7 +1215,7 @@ data:
       type: website
       lifecycle: production
       owner: advertising-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -1237,7 +1236,7 @@ data:
       type: website
       lifecycle: production
       owner: ecommerce-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: Component
@@ -1258,7 +1257,7 @@ data:
       type: website
       lifecycle: production
       owner: ecommerce-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
     ---
     apiVersion: backstage.io/v1alpha1
     kind: API
@@ -1274,7 +1273,7 @@ data:
       type: openapi
       lifecycle: production
       owner: platform-team
-      system: kubeauto-idp
+      system: watch-it-burn-idp
       definition: |
         openapi: 3.0.0
         info:
