@@ -31,19 +31,25 @@ targets → the beats recap → provisioning and distribution.
 Every component slide carries its pinned version; the versions are kept in sync with the gitops
 `targetRevision` pins and the Terraform module versions (source of truth).
 
-## Host it at walkthrough.agenticburn.com
+## Hosting (LIVE at https://walkthrough.agenticburn.com)
 
-The deck is static, so any static host works. Two simple paths:
+Hosted on **Railway** (the repo is private, so GitHub Pages would need a paid plan). The `Dockerfile`
+here serves the deck with nginx; `railway.json` builds from it. How it was deployed and wired:
 
-1. **Railway static site** (matches the lab-distribution host): serve this directory; add the custom
-   domain `walkthrough.agenticburn.com` in Railway; it prints a CNAME (and a verify TXT) to add at Namecheap.
-2. **GitHub Pages**: publish `tech-walkthrough/` from the repo; set the Pages custom domain to
-   `walkthrough.agenticburn.com`.
+```bash
+cd tech-walkthrough
+railway init --name watch-it-burn-walkthrough     # project on Michael's Railway workspace
+railway up --ci                                    # builds the Dockerfile, deploys the service
+railway variables --set PORT=80                    # REQUIRED: Railway's edge routes to $PORT; nginx
+                                                   # listens on 80, so without this it 502s
+railway domain walkthrough.agenticburn.com         # prints the CNAME + the _railway-verify TXT
+```
 
-DNS lives at **Namecheap** (agenticburn.com). Add the CNAME with the Namecheap API using the
-read-then-merge pattern (never replace the whole host set):
-see `~/.claude/rules/tools/namecheap-api.md`. The `HostName` is `tech`, the target is whatever the
-chosen host gives (Railway `*.up.railway.app` or GitHub Pages `peopleforrester.github.io`).
+DNS lives at **Namecheap** (agenticburn.com). Both records (CNAME `walkthrough` → the
+`*.up.railway.app` target, and TXT `_railway-verify.walkthrough` → `railway-verify=...`) were added
+with the Namecheap API using the **read-then-merge** pattern (getHosts, append, setHosts) so the
+existing host set is never clobbered. See `~/.claude/rules/tools/namecheap-api.md`. The verify TXT is
+load-bearing: without it Railway's cert stays stuck at `VALIDATING_OWNERSHIP`.
 
 ## Keeping versions accurate
 
