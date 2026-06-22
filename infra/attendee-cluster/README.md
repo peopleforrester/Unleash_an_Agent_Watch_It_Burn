@@ -1,98 +1,68 @@
-> **Provisioning is Terraform, not eksctl.** The per-attendee cluster is defined in
-> `infra/terraform/cluster/` and stamped out by `infra/terraform/fleet/fleet.sh` (per-attendee
-> isolated state, parallel). This doc describes the attendee-cluster *model*; the IaC lives there.
-
-*Purpose: provision N independent attendee EKS clusters in parallel from the Terraform cluster module,
-each into the one shared VPC, each self-bootstrapping its own in-cluster ArgoCD. No hub.*
+<!-- ABOUTME: The attendee-cluster MODEL (independent, take-home, own in-cluster ArgoCD). The IaC that -->
+<!-- ABOUTME: actually provisions it is Terraform at infra/terraform/ (lab-vpc + cluster + fleet). -->
 
 # Attendee clusters (independent, take-home)
 
 One **independent EKS cluster per attendee** (no vCluster, no hub-and-spoke). Each cluster runs the
-full per-attendee IDP stack and its **own in-cluster ArgoCD**, which reconciles the cluster from Git
-(`gitops/bootstrap/app-of-apps.yaml`, whose destination is the local cluster). A student takes their
+full per-attendee IDP and its **own in-cluster ArgoCD**, which reconciles the cluster from Git
+(`gitops/bootstrap/app-of-apps.yaml`, destination `kubernetes.default.svc`). An attendee takes their
 cluster home and it keeps working, because nothing depends on a central control plane.
-`cluster.yaml` is a **template**; `ATTENDEE_ID` is substituted per attendee.
+
+> **Provisioning is Terraform.** This doc is the *model*; the IaC lives in `infra/terraform/`
+> (`lab-vpc/` shared VPC + `cluster/` per-attendee module + `fleet/fleet.sh`). See
+> `infra/terraform/README.md` for the full workflow.
 
 ## N is a build variable
 
-`N` (working number **60**, hard ceiling owned by Michael) drives the fleet size, provision
-parallelism, and AWS quota consumption. Nothing here hardcodes a count; the loop reads `N` from the
-environment.
+`N` (working number **60**, ceiling owned by Michael) drives the fleet size and parallelism. Nothing
+hardcodes a count; `fleet.sh up <N>` generates `watch-it-burn-attendee-001 .. -<N>`.
 
-## Shared VPC (provision once, first)
+## Shared VPC (provisioned once, first)
 
-All attendee clusters share ONE pre-provisioned VPC (see `infra/shared-vpc/README.md`), not one VPC
-each. Build the VPC + subnets + NAT once, record the ids, and substitute them into `cluster.yaml`
-(`vpc.id`, `vpc.subnets.private.*`) before creating any cluster. eksctl will NOT create a VPC/NAT/routes
-when a config references an existing VPC, so the shared VPC must exist first.
+All attendee clusters share ONE VPC (`infra/terraform/lab-vpc/`), not one each. Apply it once; the
+`cluster/` module reads its `vpc_id` + private subnet ids straight from the lab-vpc state, so there is
+no manual id substitution. See `infra/shared-vpc/README.md`.
 
-## Node sizing
+## Node sizing (validated)
 
-`t3.xlarge` (4 vCPU / 16 GiB) burstable, unlimited credit mode, per cluster. Conservative start for a
-2-hour intermittent lab; the stack fits because LLM Guard runs output-`Regex`-only by default (no
-Sensitive NER model resident). Measure one live cluster before pinning the fleet; scale only if a real
-run chokes credits. See `../SIZING.md` and `research/24`.
+**1× t3.2xlarge** per cluster, 100 GiB root, prefix delegation + `maxPods: 110`. Measured live: the
+full IDP runs at ~38% CPU / 19% memory on one node, so one t3.2xlarge holds it with headroom. Defaults
+live in `infra/terraform/cluster/main.tf` (`instance_types`, `node_disk_size`); scale only if a real
+run chokes. See `../SIZING.md`.
 
-## Provision the fleet (parallel, time-boxed)
+## Provision the fleet
 
 ```bash
-export N="${N:-60}"   # build variable; raise only after the quota check below
+# 1. Shared VPC, once.
+cd infra/terraform/lab-vpc && terraform init && terraform apply
 
-# eksctl create runs ~15-20 min per cluster; run them concurrently and wait.
-for i in $(seq -w 1 "${N}"); do
-  ATTENDEE_ID="$i" envsubst < infra/attendee-cluster/cluster.yaml \
-    > "/tmp/attendee-${i}.yaml"
-  eksctl create cluster -f "/tmp/attendee-${i}.yaml" &   # parallel, into the shared VPC
-done
-wait
-echo "All ${N} attendee clusters created."
+# 2. N attendee clusters (parallel, per-attendee isolated state).
+cd ../fleet && ./fleet.sh up 60          # or: ./fleet.sh up watch-it-burn-attendee-007
+./fleet.sh status
+
+# 3. Deploy the IDP onto each cluster (installs ArgoCD + applies the app-of-apps).
+KUBECONFIG=/tmp/watch-it-burn-attendee-001.kubeconfig \
+  aws eks update-kubeconfig --name watch-it-burn-attendee-001 --region us-west-2 --profile accen-dev
+infra/deploy-full-idp.sh full
 ```
 
-Record median per-cluster provision time in `../SIZING.md` (Phase 2 verification).
+Each cluster self-bootstraps its own ArgoCD (no `argocd cluster add`, no central generator); the
+app-of-apps `destination` is the local cluster, which is what makes it take-home.
 
-## Bootstrap each cluster's own ArgoCD (no hub registration)
+## AWS quota (pre-day check)
 
-Each cluster manages itself. Per cluster: install ArgoCD, then apply the in-cluster app-of-apps; ArgoCD
-reconciles the rest from Git. There is no `argocd cluster add` and no central generator.
-
-```bash
-for i in $(seq -w 1 "${N}"); do
-  ctx="$(kubectl config get-contexts -o name | grep "watch-it-burn-attendee-${i}")"
-  # Install ArgoCD into THIS cluster, then point it at itself via the app-of-apps.
-  kubectl --context "${ctx}" create namespace argocd --dry-run=client -o yaml | kubectl --context "${ctx}" apply -f -
-  helm --kube-context "${ctx}" upgrade --install argo-cd argo/argo-cd -n argocd --wait
-  kubectl --context "${ctx}" apply -f gitops/bootstrap/app-of-apps.yaml
-done
-```
-
-verify-at-build: confirm the ArgoCD chart version pin (deploy-full-idp.sh) and that the app-of-apps
-`destination` is `https://kubernetes.default.svc` (the local cluster). The same self-bootstrap is what
-makes the cluster take-home.
-
-## AWS service-quota risk, PRE-DAY CHECK (do this before scaling N)
-
-Clusters consume quota that scales with N. With the SHARED VPC, the binding quota is EC2 vCPU, not VPCs
-(research/25). Verify **before** the event:
-
-- **EKS clusters per region**: default **100**, so N=60 fits with no increase. Confirm the account's
-  actual value and that combined usage with the co-tenant Packt project stays under 100.
-- **EC2 vCPU (On-Demand Standard)**: `t3.xlarge` = 4 vCPU each, so 60 clusters is ~240-480 vCPU.
-  Default per-region limits routinely sit at 5-64; this is the one increase to request early
-  (approval is not instant). Target ~1,000 vCPU.
-- **Shared VPC** means VPC-per-region (default 5), Elastic IP, and NAT quotas are moot.
+With the shared VPC the binding quota is **EC2 vCPU**, not VPCs. EKS clusters-per-region default is
+100 (60 fits). For an all-t3.2xlarge fleet (8 vCPU each) request a vCPU increase early (target
+~1,000 vCPU); the lab team handles this.
 
 ```bash
-# The one that binds (run pre-day; raise via Service Quotas if short).
 aws service-quotas get-service-quota --profile accen-dev --region us-west-2 \
   --service-code ec2 --quota-code L-1216C47A   # Running On-Demand Standard vCPUs
 ```
 
 ## Teardown
 
-Use the prefix-scoped teardown (cannot touch the co-tenant Packt clusters):
-
 ```bash
-teardown/teardown.sh --region us-west-2 --prefix watch-it-burn-attendee --yes
+teardown/teardown.sh         # destroys all watch-it-burn-* clusters (prefix-scoped; cannot hit Packt)
+teardown/teardown.sh --vpc   # also remove the shared lab VPC when the event is over
 ```
-
-The shared VPC is left intact by cluster deletes; remove it separately, last (`infra/shared-vpc/`).
