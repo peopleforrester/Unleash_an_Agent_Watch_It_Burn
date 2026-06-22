@@ -5,6 +5,30 @@ AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Fo
 
 Last updated: 2026-06-22
 
+### WALKTHROUGH DECK REDESIGN + DOC SYNC (2026-06-22)
+
+- **Deck redesigned** (`tech-walkthrough/index.html`): was a dense 26-slide component
+  inventory; now a 17-slide TEACHING ARC — stakes -> one mental model -> the five attacks
+  (each try/stop/already-have) -> verdict -> the four layers (now motivated) -> takeaway.
+  All build-reference detail (versions, repo paths, mechanisms) moved into reveal.js SPEAKER
+  NOTES so slides stay lean and carry no internal-structure surface. Packt refs scrubbed.
+  Mermaid fix: render diagrams BEFORE reveal.initialize() (hidden slides collapse a diagram
+  to zero width); node labels shortened/stacked to avoid clipping. All 4 diagrams verified
+  full-size + clean via puppeteer. LIVE again at walkthrough.agenticburn.com (HTTP 200,
+  PORT=80 persisted). Committed 659570b.
+- **Doc sync check (Michael asked):** the eksctl->Terraform + IRSA->Pod Identity changes had
+  NOT propagated into PROSE (the 06-21 doc pass fixed topology only). Fixed in repo (commit
+  8183a00): BUILD-SPEC.md, STACK-WALKTHROUGH.md, TECH-STATUS.md, BUILD-PLAN.md — provisioning
+  eksctl/test-cluster.yaml -> Terraform fleet; agent identity IRSA -> EKS Pod Identity (IRSA
+  scoped to EBS CSI); two stale walkthrough version pins (Argo CD v3.4.4, kagent 0.9.9).
+- **Google Docs synced (comment-safe, Michael approved):** Doc 6 (Build Spec, 2 Whitney
+  comments) + Doc 7 (Stack Walkthrough, 0 comments) updated via Docs API replaceAllText after
+  pinning keepForever rollback revisions (Doc6 rev14, Doc7 rev5). Confirmed none of my target
+  strings overlapped Whitney's quoted comment spans ("Architecture", "kube-prometheus+OTel...").
+  Verified post-edit: residual stale = CLEAN, Doc6 still has its 2 comments. Docs 1/2/3/4/5
+  were already clean (Doc3 "spoke" was "spoken copy"). Token minted in-process from gog keyring
+  (jwcrypto decrypt -> refresh); never written to disk or printed.
+
 ### READINESS PUNCH-LIST (2026-06-22, Michael's triage)
 
 Platform is built + live-validated (all beats, Terraform provisioning, rebrand). Remaining:
