@@ -11,18 +11,18 @@
 
 This is a **meta-PRD**: its milestones do not implement observability directly. Each milestone is a
 design conversation with Whitney that produces a **child PRD** (via `/prd-create`) implementing one
-**vertical slice** of the observability strategy — a thin end-to-end increment that is verifiable in
+**vertical milestone** of the observability strategy — a thin end-to-end increment that is verifiable in
 the Datadog UI on its own.
 
-**Walking-skeleton ordering.** Slice 1 is a minimal end-to-end MVP: real telemetry visible in one
-Datadog trial account. Each later slice adds exactly one capability that can be verified in the
+**Walking-skeleton ordering.** Milestone 1 is a minimal end-to-end MVP: real telemetry visible in one
+Datadog trial account. Each later milestone adds exactly one capability that can be verified in the
 Datadog UI before the next begins. We do NOT build horizontal layers that show nothing until several
 are done.
 
 **Design order = build order, pipelined.** Michael's build system implements each child PRD as soon
-as it is written. Therefore **every child PRD must be buildable on only what earlier slices already
-built — never on a later slice.** This is the `prd-dependency-management` rule: each PRD is mergeable
-on top of `main` as it exists. We design Slice N, hand it off, and design Slice N+1 while Slice N is
+as it is written. Therefore **every child PRD must be buildable on only what earlier milestones already
+built — never on a later milestone.** This is the `prd-dependency-management` rule: each PRD is mergeable
+on top of `main` as it exists. We design Milestone N, hand it off, and design Milestone N+1 while Milestone N is
 built.
 
 **Each milestone is executed by a fresh AI instance with no memory of prior milestones.** Every
@@ -74,64 +74,67 @@ naming, and style. Specifically:
 - `docs/DESIGN-DECISIONS.md` — previously settled decisions
 - `docs/transcripts/observability-planning.md` — planning session notes and confirmed facts
 - `docs/transcripts/observability-architecture-paths.md` — background on the options considered (it uses "Path 1/2/3" labels; ignore those labels — the chosen architecture is described under "Settled decisions" below, not by a path number)
-- `docs/observability-priorities.md` — living must-have vs. nice-to-have list (created in Slice 1)
+- `docs/observability-priorities.md` — living must-have vs. nice-to-have list (created in Milestone 1)
 
 **Settled decisions — do NOT re-litigate:**
 - **Architecture (described by capability, not by a path number):**
   - OTel Collector handles all OTLP/GenAI telemetry: standalone otelcol-contrib (pinned `0.158.2`) as the fleet collector. Do NOT make DDOT the fleet collector (DDOT optional on the instructor cluster only) — `research/24` §1.1.
   - Datadog Agent DaemonSet for EKS infrastructure (nodes/pods/containers) and log collection.
-  - **Full Universal Service Tagging so the Datadog Service Map renders** — this is a confirmed must-have (Slice 6).
+  - **Full Universal Service Tagging so the Datadog Service Map renders** — this is a confirmed must-have (Milestone 6).
   - **Out-of-the-box integration dashboards are fine** (they come free with the Agent: EKS, Falco, cert-manager, Collector).
   - **Do NOT build custom dashboards or custom metrics for supporting tech that is never center stage** (e.g. ArgoCD, Kyverno, KubeArmor enforcement panels). Story-related custom dashboards (e.g. the model-tier cost comparison) are **deferred to dress rehearsal** — not built in this PRD sequence.
 - **TypeScript rewrite of guard-proxy is NOT happening.** All Python apps stay Python. spiny-orb is off the table. AI-layer instrumentation uses the Python OTel SDK directly, or kagent/agentgateway built-in OTel output.
 - **Already wired:** `spanmetricsconnector` with `add_resource_attributes: true`; UST tags via `OTEL_RESOURCE_ATTRIBUTES` on guard-proxy/agentgateway/kagent; `cluster.name=watch-it-burn` upserted by the Collector `resource` processor; OTel Collector pinned at contrib `0.158.2`.
-- **Falcosidekick → Datadog:** wired in commit `6c6a81d`, but `research/23` (predates the commit) observed Falcosidekick forwarding only to Talon. Verify-at-build in Slice 4; not a confirmed-working fact.
+- **Falcosidekick → Datadog:** wired in commit `6c6a81d`, but `research/23` (predates the commit) observed Falcosidekick forwarding only to Talon. Verify-at-build in Milestone 4; not a confirmed-working fact.
 - **Cost-counter key (live-resolved):** live validation (kagent 0.9.9) found the key is `result.metadata.kagent_usage_metadata`, NOT `adk_usage_metadata` (`research/14` was wrong); `record_usage()` already accepts both, kagent-first. Verify it still holds; not an open bug.
-- **Attendee Datadog model:** **per-attendee trial orgs** (confirmed 2026-06-22). The MVP (Slice 1) uses ONE trial account; per-attendee scale-out is Slice 8. `PROJECT_STATE.md`'s "one shared org" line is stale — corrected in Slice 8.
+- **Attendee Datadog model:** **per-attendee trial orgs** (confirmed 2026-06-22). The MVP (Milestone 1) uses ONE trial account; per-attendee scale-out is Milestone 8. `PROJECT_STATE.md`'s "one shared org" line is stale — corrected in Milestone 8.
 - **Division of labor:** Whitney owns Datadog accounts/keys/Agent install/dashboards. Michael owns OTel-side wiring + manifest annotations + `datadog-secret` consumption.
 
 ---
 
 ## Living Document: `docs/observability-priorities.md`
 
-Created in Slice 1, updated at the end of every later slice if design conversations shifted
-priorities. **Read it in Step 0 of every slice after Slice 1.**
+Created in Milestone 1, updated at the end of every later milestone if design conversations shifted
+priorities. **Read it in Step 0 of every milestone after Milestone 1.**
 
 Known must-haves going in:
-- **Service Map renders in the Datadog UI** (`guard-proxy → agentgateway → kagent → Bedrock`, each node health-indicated) — requires UST done correctly (Slice 6)
-- LLM call waterfall visible in APM traces (Slice 2)
-- Rogue MCP tool-call chain visible as a trace waterfall — Beat 3 (Slice 3)
-- Cost counter accumulating in real time (Slice 1 proves it; refined later)
-- Before/after sanitization visible in traces — re-leak trap beat (Slice 3)
-- Falco runtime alerts surfacing in Datadog when exfil is attempted (Slice 4)
+- **Service Map renders in the Datadog UI** (`guard-proxy → agentgateway → kagent → Bedrock`, each node health-indicated) — requires UST done correctly (Milestone 6)
+- LLM call waterfall visible in APM traces (Milestone 2)
+- Rogue MCP tool-call chain visible as a trace waterfall — Beat 3 (Milestone 3)
+- Cost counter accumulating in real time (Milestone 1 proves it; refined later)
+- Before/after sanitization visible in traces — re-leak trap beat (Milestone 3)
+- Falco runtime alerts surfacing in Datadog when exfil is attempted (Milestone 4)
 
 ---
 
-## Cross-Cutting Decisions — locked in Slice 1
+## Cross-Cutting Decisions — locked in Milestone 1
 
-These, if decided late, force rework of earlier slices. Slice 1 settles them even though their full
+These, if decided late, force rework of earlier milestones. Milestone 1 settles them even though their full
 payoff arrives later:
 - **Collector pipeline shape** — confirm standalone contrib `0.158.2`; whether `datadog/connector` is added (Trace Metrics since otelcol-contrib v0.95.0); `datadog.prometheusScrape.enabled` stays **off** (double metrics + billing).
-- **UST tag vocabulary** — exact `service.name` per component and `service.version` = the component's real **software version** (v1/v2/v3 as releases roll out). `service.version` is NOT a model-tier label. (Prior docs that proposed cluster-tier or model-name for `service.version` are superseded by this decision.) The **model dimension** for cost comparison comes from OTel GenAI semconv (`gen_ai.request.model`), captured in Slice 2 and surfaced in Datadog LLM Observability — never from `service.version`.
-- **Account model for MVP** — one trial account now; per-attendee scale-out deferred to Slice 8.
-- **Weaver schema** — decide whether a Weaver registry encoding the OTel GenAI semconv (to `weaver registry live-check` `gen_ai.*` in CI) is worthwhile. If yes, **start the registry in Slice 1** so later slices validate against it from the first traces.
+- **UST tag vocabulary** — exact `service.name` per component and `service.version` = the component's real **software version** (v1/v2/v3 as releases roll out). `service.version` is NOT a model-tier label. (Prior docs that proposed cluster-tier or model-name for `service.version` are superseded by this decision.) The **model dimension** for cost comparison comes from OTel GenAI semconv (`gen_ai.request.model`), captured in Milestone 2 and surfaced in Datadog LLM Observability — never from `service.version`.
+- **Account model for MVP** — one trial account now; per-attendee scale-out deferred to Milestone 8.
+
+(The Weaver-schema decision is NOT a Milestone 1 cross-cutting lock — it validates `gen_ai.*`, which doesn't exist until the Milestone 2 gen_ai migration. It lives in Milestone 2.)
 
 ---
 
-## Milestones (Vertical Slices)
+## Milestones
 
-> Every slice is self-contained: it lists its own reads, problem framing, decisions, and child-PRD
-> creation steps. Follow the steps written in your slice; do not look to a shared template.
+> Every milestone is self-contained: it lists its own reads, problem framing, decisions, and child-PRD
+> creation steps. Follow the steps written in your milestone; do not look to a shared template.
 
 ---
 
-### Slice 1 — MVP walking skeleton: data in one Datadog account, visible in the UI
+### Milestone 1 — MVP walking skeleton: data in one Datadog account, visible in the UI
 
-**End-state goal:** A single Datadog trial account shows the AI layer's existing telemetry — the
-guard-proxy `witb_cost_usd` / `witb_tokens_total` / `witb_requests_total` metrics and whatever traces
-flow today — arriving through the existing Collector + Datadog exporter and **visible in the Datadog
-UI**, with the cost counter reading non-zero. This is the smallest end-to-end proof that the pipeline
-works. It also locks the Cross-Cutting Decisions above.
+**End-state goal:** A single Datadog trial account shows the AI layer's **existing telemetry — Michael's
+current custom conventions** (the guard-proxy `witb_cost_usd` / `witb_tokens_total` /
+`witb_requests_total` counters, labeled by `tier`, plus whatever traces flow today) — arriving through
+the existing Collector + Datadog exporter and **visible in the Datadog UI**, with the cost counter
+reading non-zero. No new instrumentation: this proves Datadog is installed and the pipeline works
+end-to-end using what already exists. (Migrating these custom conventions to OTel GenAI semconv is
+Milestone 2.) It also locks the Cross-Cutting Decisions above.
 
 **Step 0 — Read:**
 - This meta-PRD's top matter (conventions, settled decisions, cross-cutting decisions)
@@ -141,68 +144,79 @@ works. It also locks the Cross-Cutting Decisions above.
 
 **Step 1 — Problem (write 3-5 sentences):** What is the minimal set of telemetry already emitted, and
 what is the shortest path to seeing it in one Datadog account's UI? What cross-cutting decisions must
-be locked now to avoid reworking later slices?
+be locked now to avoid reworking later milestones?
 
 **Step 2 — Resolve with Whitney (one at a time):**
 1. **Collector pipeline shape** — confirm standalone contrib `0.158.2`; decide `datadog/connector` (Trace Metrics); confirm `datadog.prometheusScrape.enabled` off with reasoning.
-2. **UST tag vocabulary** — define `service.name` per component; `service.version` = each component's real software version (v1/v2/v3), NOT a model-tier label. The model dimension for cost comparison lives in `gen_ai.request.model` (Slice 2), not UST. Note: `DD_SERVICE`/`DD_ENV`/`DD_VERSION` env vars do NOT work on the OTel path — UST flows via `OTEL_RESOURCE_ATTRIBUTES`; `deployment.environment.name`→`env` needs Agent ≥7.58.0 or Datadog Exporter ≥v0.110.0.
-3. **MVP account** — confirm one trial account for the MVP; how its `datadog-secret` is supplied for the slice (manual is fine for one account).
+2. **UST tag vocabulary** — define `service.name` per component; `service.version` = each component's real software version (v1/v2/v3), NOT a model-tier label. The model dimension for cost comparison lives in `gen_ai.request.model` (Milestone 2), not UST. Note: `DD_SERVICE`/`DD_ENV`/`DD_VERSION` env vars do NOT work on the OTel path — UST flows via `OTEL_RESOURCE_ATTRIBUTES`; `deployment.environment.name`→`env` needs Agent ≥7.58.0 or Datadog Exporter ≥v0.110.0.
+3. **MVP account** — confirm one trial account for the MVP; how its `datadog-secret` is supplied for the milestone (manual is fine for one account).
 4. **Cost-counter verify** — confirm `record_usage()` reads `kagent_usage_metadata` (live-resolved) and the MVP shows non-zero spend.
-5. **Weaver schema worthwhile?** — decide. If yes, start a Weaver registry encoding the OTel GenAI semconv for CI `live-check`; if no, record why.
+(The Weaver-schema decision moved to Milestone 2 — it validates `gen_ai.*`, which doesn't exist until the gen_ai migration.)
 
 **Step 3 — Produce the child PRD:**
 1. Create `docs/observability-priorities.md` and populate must-have/nice-to-have (seed from "Known must-haves").
-2. Run `/prd-create` for a child PRD implementing the MVP per decisions 1-5, acceptance including "AI-layer metrics + traces visible in one Datadog trial account's UI; cost counter non-zero" (`/prd-update-decisions` for the Decision Log).
+2. Run `/prd-create` for a child PRD implementing the MVP per decisions 1-4, acceptance including "AI-layer metrics + traces visible in one Datadog trial account's UI; cost counter non-zero" (`/prd-update-decisions` for the Decision Log).
 3. Add to `docs/ROADMAP.md` as `- MVP: telemetry in one Datadog account (PRD #[issue-id])`, first in build order.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Slice 2.
+5. Clear context; run `/prd-next` for Milestone 2.
 
 **Done when:**
-- [ ] Cross-cutting decisions (collector shape, UST vocabulary incl. `service.version`, MVP account, Weaver) recorded in the child PRD's Decision Log with reasoning
+- [ ] Cross-cutting decisions (collector shape, UST vocabulary incl. `service.version`, MVP account) recorded in the child PRD's Decision Log with reasoning
 - [ ] `docs/observability-priorities.md` exists and lists the Service Map as a must-have
-- [ ] A child PRD issue exists whose acceptance includes telemetry visible in one account's UI + non-zero cost counter
+- [ ] A child PRD issue exists whose acceptance includes Michael's existing telemetry visible in one account's UI + non-zero cost counter
 - [ ] ROADMAP updated, MVP first in build order
 
 ---
 
-### Slice 2 — LLM call waterfall + tool-call visibility
+### Milestone 2 — Migrate off Michael's custom conventions to OTel GenAI semantic conventions
 
-**End-state goal:** The Datadog APM trace view shows the `invoke_agent → plan → execute_tool`
-waterfall for the AI layer, with `gen_ai.*` attributes (model, token counts) and `execute_tool` spans
-naming tools — visible in the UI on the same account from Slice 1.
+**End-state goal:** The AI layer emits **OTel GenAI semantic-convention** telemetry (the
+`invoke_agent → chat → execute_tool` waterfall with `gen_ai.request.model`, `gen_ai.usage.*` tokens,
+tool names) flowing into **Datadog LLM Observability**, replacing Michael's custom `witb_*`/`tier`
+conventions. The LLM call waterfall and per-model token/cost data are visible in the Datadog LLM
+Observability UI.
+
+**Preliminary research (seed only — run the full `/research` spike DURING this milestone, not before):**
+A scoping search on 2026-06-22 found (verify in the milestone's own spike):
+- **Datadog LLM Observability natively ingests OTel `gen_ai.*` spans (v1.37+) over OTLP — no dd-trace, no Datadog SDK.** Paths: direct OTLP intake, the Datadog Agent (OTLP mode), or the OTel Collector. ([Datadog OTel instrumentation docs](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/))
+- **kagent's base, Google ADK, emits gen_ai semconv natively** (`invoke_agent → chat → execute_tool`), enabled via standard `OTEL_*` env vars. ([Google Cloud: instrument ADK with OpenTelemetry](https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk))
+- **Gotchas to confirm:** Datadog supports **OpenLLMetry 0.47+** but **NOT OpenInference**; Datadog requires semconv **v1.37+** (`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` for frameworks on older specs); ADK content-capture wants `EVENT_ONLY`, and setting it to `true` under latest semconv is an **invalid config that collects no data**.
+- **Likely lowest-effort path:** enable native kagent/ADK tracing → OTLP → Datadog, rather than writing new Python instrumentation. Confirm in the spike.
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- The MVP child PRD + its Decision Log (Slice 1) — **gates this slice**
-- `research/05-otel-genai-observability.md`, `research/14-verify-at-build-sweep-2026.md`, `research/23-…`
-- Codebase: `agent/gateway/guard-proxy/` (current span output), `agent/gateway/agentgateway.yaml`, `gitops/ai-layer/resources.yaml`; `beats/` directories that depend on the trace waterfall
+- The MVP child PRD + its Decision Log (Milestone 1) — **gates this milestone**
+- `research/05-otel-genai-observability.md`, `research/06-cncf-stack.md`, `research/14-verify-at-build-sweep-2026.md`, `research/23-…`
+- Codebase: `agent/gateway/guard-proxy/proxy.py` (the custom `witb_*` conventions to migrate; currently NO OTel), `agent/gateway/agentgateway.yaml`, `gitops/ai-layer/resources.yaml`, the kagent Helm values; `beats/` directories that depend on the trace waterfall
 
-**Step 1 — Problem (write 3-5 sentences):** Which demo beats need the LLM/tool waterfall, and what is
-emitted today vs. missing?
+**Step 1 — Problem (write 3-5 sentences):** Which demo beats need the gen_ai waterfall, what does Michael's
+custom telemetry emit today, and what must change to move to OTel GenAI semconv in Datadog LLM Observability?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Does Datadog LLM Observability surface from pure OTel `gen_ai.*` spans, or does it require dd-trace?** No existing spike answers this (`research/05` names it a gap). Run a net-new `/research` spike before presenting.
-2. **GenAI semconv stability / opt-in** — all `gen_ai.*` is Development; names churned v1.36→v1.37; `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` must be set deliberately (`research/05`, `research/06`). Pin a version; decide the opt-in. If Weaver was started in Slice 1, validate against the registry.
-3. **Python OTel SDK instrumentation plan for guard-proxy** — which spans to emit manually vs. relying on kagent/agentgateway built-in OTel output (kagent tracing is off by default — `otel.tracing.enabled: true`).
-4. **agentgateway v1.3.0 field-path verification** — repo has v1.2.1 pins; verify field paths against v1.3.0 GA before finalizing.
-5. **`gen_ai.request.model` capture** — confirm the model identifier is captured on the spans so the model dimension is available in Datadog LLM Observability. This (not `service.version`) is what a later model-tier cost comparison groups by; capture it now even though that dashboard is deferred to dress rehearsal.
+1. **Run the proper `/research` spike** (the full one deferred from planning): confirm the Datadog LLM Observability OTLP ingestion path for this stack and the auto-instrumentation landscape. Save it to `research/NN-…`; include full output, do not summarize.
+2. **What in Python needs instrumenting, and how** — for each component (kagent/ADK agent, agentgateway, guard-proxy, evil-mcp-shim): native built-in OTel, an auto-instrumentation library (OpenLLMetry — Datadog-supported; NOT OpenInference), or manual spans. Decide per component; some may need nothing (ADK is native).
+3. **Enable kagent/ADK gen_ai tracing** — `otel.tracing.enabled: true` (off by default); confirm it emits `gen_ai.*` and the `execute_tool {gen_ai.tool.name}` spans.
+4. **Migrate off `witb_*`** — decide the fate of the custom `witb_*`/`tier` counters: retire in favor of `gen_ai.usage.*` + `gen_ai.request.model`, or keep `witb_cost_usd` for the cost lesson (USD is not a standard gen_ai attribute — cost is always derived). Update the four touch-points if renaming: `agent/gateway/guard-proxy/proxy.py`, `gitops/ai-layer/proxy.py`, the Grafana dashboard, `verify/test_observability.py`.
+5. **GenAI semconv version + opt-in + Weaver** — pin a semconv version; set `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` (Datadog needs v1.37+); decide whether a Weaver registry validating `gen_ai.*` in CI `live-check` is worthwhile and, if so, build it here.
+6. **agentgateway v1.3.0 field-path verification** — repo has v1.2.1 pins; verify field paths against v1.3.0 GA.
+7. **`gen_ai.request.model` capture** — confirm the model identifier is on the spans so the model dimension is available in LLM Observability (this, not `service.version`, is what a deferred model-tier cost comparison groups by).
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD per decisions 1-5, acceptance including "LLM/tool-call waterfall visible in APM" and "`gen_ai.request.model` visible in LLM Observability" (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- LLM call & tool-call waterfall (PRD #[issue-id])`, after the MVP.
+2. Run `/prd-create` for a child PRD per decisions 1-7, acceptance including "AI layer emits OTel GenAI semconv telemetry visible in Datadog LLM Observability" and "Michael's custom `witb_*` conventions migrated/retired per decision 4" (`/prd-update-decisions`).
+3. Add to `docs/ROADMAP.md` as `- Migrate to OTel GenAI semconv (PRD #[issue-id])`, after the MVP.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Slice 3.
+5. Clear context; run `/prd-next` for Milestone 3.
 
 **Done when:**
-- [ ] Decisions 1-5 recorded with reasoning
-- [ ] A net-new research spike for Datadog LLM Observability from pure OTel gen_ai.* spans exists in `research/`
-- [ ] A child PRD issue exists whose acceptance includes the waterfall visible in APM
+- [ ] Decisions 1-7 recorded with reasoning
+- [ ] The full gen_ai-instrumentation/Datadog-LLM-Obs research spike exists in `research/`
+- [ ] A child PRD issue exists whose acceptance includes gen_ai semconv telemetry in Datadog LLM Observability and the `witb_*` migration decision
 - [ ] ROADMAP updated
 
 ---
 
-### Slice 3 — Security beats: before/after sanitization + rogue MCP tool chain
+### Milestone 3 — Security beats: before/after sanitization + rogue MCP tool chain
 
 **End-state goal:** The Datadog trace view shows the re-leak-trap story (before vs. after
 sanitization at the guard-proxy) and Beat 3's rogue MCP tool-call chain as a trace waterfall —
@@ -210,7 +224,7 @@ visible in the UI.
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- The LLM-waterfall child PRD + its Decision Log (Slice 2) — **gates this slice**
+- The gen_ai-semconv-migration child PRD + its Decision Log (Milestone 2) — **gates this milestone**
 - `research/05-otel-genai-observability.md` (re-leak trap design), `research/12-mechanism-verification-2026.md` (collector-side symmetric redaction), `research/04-mcp-security.md`
 - Codebase: `agent/gateway/guard-proxy/` (sanitization logic, before/after text held in memory), `beats/03-bad-mcp-excessive-agency/` and its `evil-mcp-shim/server.py`
 
@@ -225,9 +239,9 @@ rogue-tool beat, and what is the re-leak risk if content capture is naive?
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
 2. Run `/prd-create` for a child PRD per decisions 1-3, acceptance including "before/after sanitization and rogue MCP chain visible in traces" (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- Security-beat traces (PRD #[issue-id])`, after Slice 2.
+3. Add to `docs/ROADMAP.md` as `- Security-beat traces (PRD #[issue-id])`, after Milestone 2.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Slice 4.
+5. Clear context; run `/prd-next` for Milestone 4.
 
 **Done when:**
 - [ ] Decisions 1-3 recorded with reasoning
@@ -236,14 +250,14 @@ rogue-tool beat, and what is the re-leak risk if content capture is naive?
 
 ---
 
-### Slice 4 — Falco runtime alerts into Datadog
+### Milestone 4 — Falco runtime alerts into Datadog
 
 **End-state goal:** When exfil/abuse is attempted, the Falco alert is visible in Datadog (OOTB Falco
 dashboard or events), confirmed live.
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- Prior slice child PRDs + Decision Logs — **gate this slice**
+- Prior milestone child PRDs + Decision Logs — **gate this milestone**
 - `research/06-cncf-stack.md` (Falco/Falcosidekick), `research/18-…` (Falco integration row), `research/23-…`
 - Codebase: Falco + Falcosidekick manifests in `gitops/apps/`, `gitops/ai-layer/resources.yaml`
 
@@ -252,15 +266,15 @@ Falcosidekick→Datadog path actually live?
 
 **Step 2 — Resolve with Whitney (one at a time):**
 1. **Falcosidekick → Datadog (verify-at-build)** — confirm Falcosidekick forwards security events to Datadog, not only to Talon. Commit `6c6a81d` wired it but `research/23` observed Talon-only; confirm on a live cluster.
-2. **Falco integration vs. Falcosidekick native output** — decide which path surfaces alerts (named integration Agent 7.59.1+ has an OOTB dashboard; Falcosidekick has native Datadog output). Note the Agent integration depends on Slice 5; if Slice 5 isn't built yet, use Falcosidekick native output so this slice stays buildable.
+2. **Falco integration vs. Falcosidekick native output** — decide which path surfaces alerts (named integration Agent 7.59.1+ has an OOTB dashboard; Falcosidekick has native Datadog output). Note the Agent integration depends on Milestone 5; if Milestone 5 isn't built yet, use Falcosidekick native output so this milestone stays buildable.
 3. **Which alerts/rules** must be visible for the demo.
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
 2. Run `/prd-create` for a child PRD per decisions 1-3, acceptance including "Falco alert visible in Datadog on a live exfil attempt" (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- Falco alerts in Datadog (PRD #[issue-id])`, after Slice 3.
+3. Add to `docs/ROADMAP.md` as `- Falco alerts in Datadog (PRD #[issue-id])`, after Milestone 3.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Slice 5.
+5. Clear context; run `/prd-next` for Milestone 5.
 
 **Done when:**
 - [ ] Decisions 1-3 recorded with reasoning
@@ -270,14 +284,14 @@ Falcosidekick→Datadog path actually live?
 
 ---
 
-### Slice 5 — EKS infrastructure + named integrations ("Datadog sees everything")
+### Milestone 5 — EKS infrastructure + named integrations ("Datadog sees everything")
 
 **End-state goal:** The Datadog Agent DaemonSet is deployed; EKS nodes/pods/containers and the chosen
 named integrations are visible and correct in the Datadog UI.
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- Prior slice child PRDs + Decision Logs — **gate this slice**
+- Prior milestone child PRDs + Decision Logs — **gate this milestone**
 - `research/05-…`, `research/06-…`, `research/18-…`, `research/23-…`, `research/24-…`
 - Codebase: every YAML in `gitops/apps/`, `gitops/ai-layer/resources.yaml`; `beats/` (what each beat's component needs)
 
@@ -298,9 +312,9 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 1. Write `research/28-…` (decision 1 deliverable).
 2. Update `docs/observability-priorities.md` if priorities shifted.
 3. Run `/prd-create` for a child PRD per decisions 2-8, acceptance including a per-integration UI verification checklist (`/prd-update-decisions`).
-4. Add to `docs/ROADMAP.md` as `- EKS infra & named integrations (PRD #[issue-id])`, after Slice 4.
+4. Add to `docs/ROADMAP.md` as `- EKS infra & named integrations (PRD #[issue-id])`, after Milestone 4.
 5. Run `/prd-update-progress` to commit + push.
-6. Clear context; run `/prd-next` for Slice 6.
+6. Clear context; run `/prd-next` for Milestone 6.
 
 **Done when:**
 - [ ] `research/28-…` exists with a wire-or-skip decision (+ reasoning) per component
@@ -310,7 +324,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 
 ---
 
-### Slice 6 — UST at full fidelity + Service Map + correlation pivots
+### Milestone 6 — UST at full fidelity + Service Map + correlation pivots
 
 **End-state goal:** The Datadog **Service Map renders** (`guard-proxy → agentgateway → kagent →
 Bedrock`, each node health-indicated), and "View related logs" pivots from a trace and "View Trace in
@@ -319,15 +333,15 @@ component's real software version (the model dimension lives in `gen_ai.request.
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- Prior slice child PRDs + Decision Logs (esp. Slice 1's UST vocabulary, Slice 5's Agent deploy) — **gate this slice**
+- Prior milestone child PRDs + Decision Logs (esp. Milestone 1's UST vocabulary, Milestone 5's Agent deploy) — **gate this milestone**
 - `research/19-datadog-otel-ust-correlation-2026.md`, `research/23-…` (Decisions 5, 8)
 - Codebase: `gitops/ai-layer/resources.yaml`, `agent/gateway/agentgateway.yaml`, `agent/gateway/guard-proxy/` (log output format), every workload manifest in `gitops/apps/` (UST-label inventory), `gitops/apps/otel-collector.yaml`
 
 **Step 1 — Problem (write 3-5 sentences):** What correlation and Service-Map gaps remain after the
-earlier slices, given UST vocabulary was locked in Slice 1?
+earlier milestones, given UST vocabulary was locked in Milestone 1?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Full UST rollout + gap inventory** — apply the Slice 1 vocabulary to every workload; list which workloads still lack UST labels.
+1. **Full UST rollout + gap inventory** — apply the Milestone 1 vocabulary to every workload; list which workloads still lack UST labels.
 2. **Same-tag mechanism for correlation** — how the Agent (logs) and OTel Exporter (traces/metrics) carry identical `service`/`env`/`version`.
 3. **`peer.service` + span-kind prerequisite** — the pure-OTel Service Map infers edges from `peer.service` and correct span kinds (`research/23` Decision 8); decide where these are set.
 4. **Log-trace correlation for Python apps** — first determine **which pipeline the Python logs are on: OTLP vs. file/stdout scraping**. On the OTLP pipeline the Agent auto-injects trace context; on file/stdout the `trace_id`/`span_id` fields must be explicit in the log JSON (`research/19`). Then decide: does UST alone suffice, or is explicit injection required? If injection is needed: Python OTel SDK log bridge vs. manual extraction from the active span context. This likely needs a live-cluster `/research` check — run it before presenting the decision.
@@ -336,9 +350,9 @@ earlier slices, given UST vocabulary was locked in Slice 1?
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` (Service Map is a must-have).
 2. Run `/prd-create` for a child PRD per decisions 1-5, acceptance including "Service Map renders in the UI" and both correlation pivots working (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- UST, Service Map & correlation (PRD #[issue-id])`, after Slice 5.
+3. Add to `docs/ROADMAP.md` as `- UST, Service Map & correlation (PRD #[issue-id])`, after Milestone 5.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Slice 7.
+5. Clear context; run `/prd-next` for Milestone 7.
 
 **Done when:**
 - [ ] Decisions 1-5 recorded with reasoning
@@ -347,18 +361,18 @@ earlier slices, given UST vocabulary was locked in Slice 1?
 
 ---
 
-### Slice 7 — Custom dashboards: DEFERRED to dress rehearsal (do not build now)
+### Milestone 7 — Custom dashboards: DEFERRED to dress rehearsal (do not build now)
 
 **Decision:** Custom workshop dashboards are **not built in this PRD sequence.** Whitney will decide
 which story dashboards to build during dress rehearsal. Two constraints stand:
 - **No custom dashboards or custom metrics for supporting tech that is never center stage** (ArgoCD, Kyverno, KubeArmor enforcement, etc.). Out-of-the-box Agent dashboards (EKS, Falco, cert-manager, Collector) are already free and stay.
-- **Story-related custom dashboards** (e.g. the model-tier cost comparison — token spend grouped by `gen_ai.request.model`, Haiku vs Sonnet vs Opus) are deferred to dress rehearsal. They are cheap to add then because Slice 2 already captures `gen_ai.request.model` and it is available in LLM Observability. (This groups by `gen_ai.request.model`, NOT `service.version` — `service.version` is the software version.)
+- **Story-related custom dashboards** (e.g. the model-tier cost comparison — token spend grouped by `gen_ai.request.model`, Haiku vs Sonnet vs Opus) are deferred to dress rehearsal. They are cheap to add then because Milestone 2 already captures `gen_ai.request.model` and it is available in LLM Observability. (This groups by `gen_ai.request.model`, NOT `service.version` — `service.version` is the software version.)
 
-**Do NOT run `/prd-create` for this slice.** There is no child PRD here. When you reach this slice,
+**Do NOT run `/prd-create` for this milestone.** There is no child PRD here. When you reach this milestone,
 confirm with Whitney that dashboards remain deferred, record any story-dashboard candidates surfaced
 during the build in `docs/observability-priorities.md` under nice-to-have, and move on.
 
-When confirmed, clear context and run `/prd-next` for Slice 8.
+When confirmed, clear context and run `/prd-next` for Milestone 8.
 
 **Done when:**
 - [ ] Confirmed with Whitney that custom dashboards stay deferred to dress rehearsal
@@ -366,7 +380,7 @@ When confirmed, clear context and run `/prd-next` for Slice 8.
 
 ---
 
-### Slice 8 — Scale-out: per-attendee accounts, credential store & distribution
+### Milestone 8 — Scale-out: per-attendee accounts, credential store & distribution
 
 **End-state goal:** A workable mechanism to provision 60-70 per-attendee Datadog trial orgs, store
 their sensitive credentials as a source of truth the build service reads and Whitney shares with
@@ -374,7 +388,7 @@ Michael, surface each attendee's credentials during the workshop, and land each 
 Kubernetes secrets in that attendee's cluster.
 
 Confirmed model: **per-attendee trial orgs**. `PROJECT_STATE.md`'s "one shared org" line is
-stale/superseded — corrected as part of this slice.
+stale/superseded — corrected as part of this milestone.
 
 Each trial org has this shape (sensitive — contains API key, app key, and a password; **never commit
 to the repo**):
@@ -390,7 +404,7 @@ to the repo**):
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- All prior slice child PRDs + Decision Logs — **gate this slice** (scale-out multiplies the single-account MVP across attendees)
+- All prior milestone child PRDs + Decision Logs — **gate this milestone** (scale-out multiplies the single-account MVP across attendees)
 - `research/24-…` (§3 secret injection), `research/25-eks-quotas-shared-vpc-topology-2026.md`, `research/26-aiewf-2026-logistics-2026.md`, `research/27-conference-demo-resilience-2026.md`
 - Codebase: `gitops/apps/` (ESO config and existing secret patterns), `docs/BUILD-SPEC.md` (attendee experience), `PROJECT_STATE.md` (stale shared-org line to correct)
 
@@ -406,25 +420,25 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 6. **Rotation/expiry** — schema carries `expiration`; no doc addresses the rotation flow.
 
 **Step 3 — Produce the child PRD:**
-1. Update `docs/observability-priorities.md` if priorities shifted. Correct `PROJECT_STATE.md`'s stale "one shared org" line to per-attendee orgs as part of this slice.
+1. Update `docs/observability-priorities.md` if priorities shifted. Correct `PROJECT_STATE.md`'s stale "one shared org" line to per-attendee orgs as part of this milestone.
 2. Run `/prd-create` for a child PRD per decisions 1-6 (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Attendee accounts & credentials (PRD #[issue-id])`, last in build order.
 4. Run `/prd-update-progress` to commit + push.
-5. Final slice — when its child PRD exists, mark this meta-PRD complete and run `/prd-done` for issue #7.
+5. Final milestone — when its child PRD exists, mark this meta-PRD complete and run `/prd-done` for issue #7.
 
 **Done when:**
 - [ ] Decisions 1-6 recorded with reasoning
 - [ ] A net-new research spike for org provisioning (decision 1) exists in `research/`
 - [ ] A child PRD issue exists for provisioning + credential store + distribution + injection
 - [ ] ROADMAP updated
-- [ ] All 8 slices complete → this meta-PRD closed
+- [ ] All 8 milestones complete → this meta-PRD closed
 
 ---
 
 ## Acceptance Criteria (this meta-PRD)
 
-- [ ] 7 child PRDs exist (Slices 1-6 and 8; Slice 7 is deferred and produces no child PRD), each issue-backed and labeled "PRD"
-- [ ] `research/28-…` per-component synthesis exists (produced in Slice 5)
+- [ ] 7 child PRDs exist (Milestones 1-6 and 8; Milestone 7 is deferred and produces no child PRD), each issue-backed and labeled "PRD"
+- [ ] `research/28-…` per-component synthesis exists (produced in Milestone 5)
 - [ ] `docs/observability-priorities.md` reflects the final must-have/nice-to-have list
 - [ ] `docs/ROADMAP.md` lists all child PRDs in build order, each as `- [desc] (PRD #[issue-id])`
 - [ ] `PROGRESS.md` updated to reflect meta-PRD creation and completion
@@ -433,19 +447,22 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 
 | Date | Decision | Reasoning |
 |------|----------|-----------|
-| 2026-06-22 | `service.version` = real software version, not a model-tier label | Whitney: `service.version` is for v1/v2/v3 software releases. The model dimension for cost comparison comes from OTel GenAI semconv `gen_ai.request.model` (captured in Slice 2, surfaced in LLM Observability), never from UST. Resolves the prior cluster-tier-vs-model-name conflict — it was a false choice |
+| 2026-06-22 | Renamed "Slice" → "Milestone" throughout | The `/prd-*` skills parse milestone structure; "Slice" headings would confuse `prd-next` / `prd-update-progress`. "Vertical slice" remains only as a concept in the framing intro |
+| 2026-06-22 | Milestone 1 proves Datadog works using Michael's EXISTING custom conventions | MVP is the fastest possible pipeline proof with zero new instrumentation: get the `witb_*`/`tier` counters (and any existing traces) into one Datadog account. Migration to OTel GenAI semconv is Milestone 2 |
+| 2026-06-22 | Milestone 2 = migrate off Michael's conventions to OTel GenAI semconv | Adopt `gen_ai.*` (waterfall, tokens, model) into Datadog LLM Observability, replacing the custom `witb_*`/`tier` scheme. Seeded with preliminary scoping research (Datadog ingests OTel gen_ai natively v1.37+; ADK emits it natively; OpenLLMetry supported, OpenInference not); the full `/research` spike + the Python manual-vs-auto instrumentation decisions run DURING the milestone. Weaver-schema decision moved here from Milestone 1 (it validates `gen_ai.*`, which doesn't exist until this migration) |
+| 2026-06-22 | `service.version` = real software version, not a model-tier label | Whitney: `service.version` is for v1/v2/v3 software releases. The model dimension for cost comparison comes from OTel GenAI semconv `gen_ai.request.model` (captured in Milestone 2, surfaced in LLM Observability), never from UST. Resolves the prior cluster-tier-vs-model-name conflict — it was a false choice |
 | 2026-06-22 | KubeArmor is not in the workshop narrative | Whitney: no KubeArmor observability at all. Skip it in the per-component synthesis; no KubeArmor enforcement panel. The fork bomb is handled by `podPidsLimit` + Falco/Talon |
 | 2026-06-22 | Architecture chosen by capability, NOT by a "Path" number | Whitney never chose "Path 2"; that label was wrong and is removed so no implementing agent inherits it. Chosen: OTel Collector (contrib 0.158.2) for OTLP/GenAI + Datadog Agent for EKS infra + **full UST so the Service Map renders**. OOTB integration dashboards stay (free with the Agent); NO custom dashboards/metrics for never-center-stage supporting tech; story dashboards deferred to dress rehearsal |
 | 2026-06-22 | TypeScript rewrite not happening | All Python apps stay Python; spiny-orb off the table; AI-layer instrumentation uses Python OTel SDK / built-in kagent+agentgateway OTel |
 | 2026-06-22 | Decisions documented in PRDs, not separate planning docs | `/prd-create` + `/prd-update-decisions` capture decisions in each child PRD's Decision Log; a parallel `docs/planning/` would drift |
-| 2026-06-22 | Accounts/credentials/secrets consolidated into one slice (Slice 8) | Tightly coupled; splitting would repeat the same design conversations |
+| 2026-06-22 | Accounts/credentials/secrets consolidated into one milestone (Milestone 8) | Tightly coupled; splitting would repeat the same design conversations |
 | 2026-06-22 | `/prd-update-progress` pushes after committing | Michael needs visibility into planning progress |
-| 2026-06-22 | Attendee Datadog model: per-attendee trial orgs (confirmed) | Whitney confirmed per-attendee over shared org; `PROJECT_STATE.md`'s "one shared org" line is stale, corrected in Slice 8. Org provisioning has no research backing — Slice 8 needs a net-new spike |
+| 2026-06-22 | Attendee Datadog model: per-attendee trial orgs (confirmed) | Whitney confirmed per-attendee over shared org; `PROJECT_STATE.md`'s "one shared org" line is stale, corrected in Milestone 8. Org provisioning has no research backing — Milestone 8 needs a net-new spike |
 | 2026-06-22 | Cost-counter key live-resolved to `kagent_usage_metadata` | Live validation (kagent 0.9.9) showed `research/14` was wrong; `record_usage()` already accepts both, kagent-first. MVP verifies, does not "fix a bug" |
 | 2026-06-22 | DDOT-vs-contrib not a blank slate | `research/24` §1.1 confirmed: standalone contrib `0.158.2` as fleet collector, DDOT optional on instructor cluster only |
-| 2026-06-22 | Master credential store is a distinct Slice 8 decision | Storing the sensitive trial-org pool (API/app keys + passwords) as a source of truth the build service reads and Whitney shares with Michael is separate from per-cluster ESO injection; org schema embedded for the implementer |
-| 2026-06-22 | Restructured from horizontal layers to MVP-first vertical slices | Michael's build system builds each child PRD as it is written; vertical slices are verifiable in the Datadog UI per slice, and design order = build order. Cross-cutting decisions (collector shape, UST vocabulary, account model, Weaver) locked in Slice 1 to bound rework |
-| 2026-06-22 | Weaver schema decision moved to Slice 1 (MVP) | Encoding GenAI semconv for CI `live-check` is cross-cutting; if worthwhile, the registry must exist from the first traces so later slices validate against it |
-| 2026-06-22 | Per-component synthesis (`research/28`) feeds the infra/integration slice rather than standing alone | A survey alone implements nothing; in the vertical structure it is produced inside Slice 5 and consumed in the same slice, so its findings directly drive wire/skip decisions instead of becoming a research dead-end |
-| 2026-06-22 | Meta-PRD content was reconciled from research 14/18/23/24/25/27 + PROJECT_STATE via a read-only audit | Provenance: a reconciliation agent surfaced settled decisions and unrepresented open questions from prior docs; they were folded into the slices. A second audit agent verified the horizontal→vertical restructure dropped no substantive item |
-| 2026-06-22 | `PROJECT_STATE.md` stale "one shared org" line corrected in Slice 8, not now | The shared-org→per-attendee correction lands when the work lands, so the state doc changes alongside implementation rather than ahead of it |
+| 2026-06-22 | Master credential store is a distinct Milestone 8 decision | Storing the sensitive trial-org pool (API/app keys + passwords) as a source of truth the build service reads and Whitney shares with Michael is separate from per-cluster ESO injection; org schema embedded for the implementer |
+| 2026-06-22 | Restructured from horizontal layers to MVP-first vertical milestones | Michael's build system builds each child PRD as it is written; vertical milestones are verifiable in the Datadog UI per milestone, and design order = build order. Cross-cutting decisions (collector shape, UST vocabulary, account model, Weaver) locked in Milestone 1 to bound rework |
+| 2026-06-22 | Weaver schema decision moved to Milestone 1 (MVP) | Encoding GenAI semconv for CI `live-check` is cross-cutting; if worthwhile, the registry must exist from the first traces so later milestones validate against it |
+| 2026-06-22 | Per-component synthesis (`research/28`) feeds the infra/integration milestone rather than standing alone | A survey alone implements nothing; in the vertical structure it is produced inside Milestone 5 and consumed in the same milestone, so its findings directly drive wire/skip decisions instead of becoming a research dead-end |
+| 2026-06-22 | Meta-PRD content was reconciled from research 14/18/23/24/25/27 + PROJECT_STATE via a read-only audit | Provenance: a reconciliation agent surfaced settled decisions and unrepresented open questions from prior docs; they were folded into the milestones. A second audit agent verified the horizontal→vertical restructure dropped no substantive item |
+| 2026-06-22 | `PROJECT_STATE.md` stale "one shared org" line corrected in Milestone 8, not now | The shared-org→per-attendee correction lands when the work lands, so the state doc changes alongside implementation rather than ahead of it |
