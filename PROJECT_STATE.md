@@ -3,7 +3,23 @@
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
 
-Last updated: 2026-06-22
+Last updated: 2026-06-23
+
+### WALKTHROUGH REFRAMED -> LIVE-DELIVERY RUN-OF-SHOW (2026-06-23, Michael correction)
+
+Michael: the walkthrough deck modeled the WRONG thing. It was a foundation-up architecture/stack
+study; but "the walkthrough" = how we actually run the lab with students (open cold, tell them they
+already have a cluster, leap into attacking it). A deck that opens on Terraform is backwards for the
+session. DECISION (AskUserQuestion): REPLACE the stack-study deck entirely (not keep both).
+Rebuilt tech-walkthrough/index.html as the run-of-show in delivery order, sourced from
+facilitation/runbook.md + cold-open-script.md + governance-map.md: open cold (agent-deleted-my-cluster
+hook -> production stakes) -> promise + "you have a cluster, leap in" -> trace dashboard -> three-cluster
+spine (C1 burns + cost counter / C2 CNCF blocks but bill moved / C3 your cluster, toggle output->input->MCP
++ free-play) -> optional trace re-leak -> governance map + cost ladder -> take it home. 14 slides.
+Facilitator detail (timing, owners M/W, /toggle scripts, hand-offs, fallbacks) in SPEAKER NOTES;
+controls introduced WHEN they turn on (runbook reveal discipline), not as an opening lecture. Dropped
+mermaid (HTML three-column spine + HTML tables for map/ladder = robust). READMEs updated. Live again
+at walkthrough.agenticburn.com (HTTP 200). Commit 8b3f61b. The prior foundation-up arc is retired.
 
 ### WALKTHROUGH DECK REDESIGN + DOC SYNC (2026-06-22)
 
