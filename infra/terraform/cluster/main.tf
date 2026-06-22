@@ -233,6 +233,25 @@ module "aws_lb_controller_pod_identity" {
   }
 }
 
+# Pod Identity for External Secrets Operator (platform:external-secrets) -> AWS Secrets Manager.
+# Same fleet-safe pattern as the agent/LB roles: a per-cluster role + association, no SA IRSA
+# annotation, no per-cluster OIDC trust. Replaces the prior IRSA role (modern June-2026 convention).
+module "eso_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 1.0"
+
+  name                           = "${var.name}-eso"
+  attach_external_secrets_policy = true
+
+  associations = {
+    main = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "platform"
+      service_account = "external-secrets"
+    }
+  }
+}
+
 # Bedrock access for the kagent agent (agent:agent-sa). Pod Identity, not IRSA, so the fleet binds
 # a per-cluster role to the SA with NO ServiceAccount annotation in gitops (the gitops manifests are
 # identical across all 60 clusters) and NO per-cluster OIDC trust. The eks-pod-identity-agent addon
