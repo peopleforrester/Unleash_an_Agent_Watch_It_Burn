@@ -17,4 +17,4 @@ spec:
   type: service
   lifecycle: production
   owner: platform-team
-  system: kubeauto-idp
+  system: watch-it-burn-idp

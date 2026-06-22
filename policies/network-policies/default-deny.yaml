@@ -6,7 +6,7 @@ metadata:
   name: default-deny-all
   namespace: apps
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   podSelector: {}
   policyTypes:
