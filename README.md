@@ -51,6 +51,8 @@ install is required.
 - A governance map that lists each attack, the control that stops it, the layer it sits in, and
   whether existing tooling already covers it.
 - A checklist you can run against your own platform to find the gaps.
+- A full technical walkthrough of the stack, foundation to AI layer, as a reveal.js deck
+  (`tech-walkthrough/`, hosted at tech.agenticburn.com) so you can study each component.
 
 ## The stack
 
