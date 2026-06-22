@@ -6,14 +6,16 @@ Forward-looking implementation order. Completed work lives in `PROGRESS.md`, not
 
 ## Observability Suite (Short-term — pre-workshop)
 
-These PRDs are created via the meta-PRD (`prds/00-observability-meta.md`) and implemented in dependency order.
+Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7)), one per milestone, then implemented in the order below. Entries are added as each child PRD is created.
 
-- [Observability Meta-PRD](../prds/00-observability-meta.md) — defines and sequences the 8 child observability PRDs; milestone per child PRD
-- Per-component telemetry survey PRD — foundational; documents what each IDP component natively emits and how to capture it; informs all other observability PRDs
-- OTel Collector config and telemetry collection strategy PRD — authoritative pipeline spec; depends on component survey
-- Datadog deployment and configuration PRD — Agent DaemonSet, named integrations, UI verification; depends on Collector config
-- UST strategy and implementation PRD — tag vocabulary, OTEL_RESOURCE_ATTRIBUTES per workload, service map; depends on Datadog deployment
-- Log/metric/trace correlation PRD — end-to-end correlation verification; likely needs live-cluster spike; depends on UST
-- GenAI semconv and LLM Observability PRD — gen_ai.* spans, prompt/response capture, before/after sanitization, cost counter fix; depends on Collector config
-- Custom dashboards PRD — which dashboards to build and what data each requires; depends on all pipeline PRDs
-- Attendee accounts, credentials, and K8s secrets PRD — trial org provisioning, credential distribution, per-cluster K8s secrets; relatively decoupled, late in sequence
+- Observability meta-PRD ([PRD #7](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7)) — defines and sequences the child observability PRDs
+
+**Implementation order (child PRDs added as created):**
+
+1. OTel Collector config & telemetry collection strategy — foundational pipeline; gated by the per-component synthesis (research/28)
+2. Datadog deployment & integrations — Agent/DDOT, named integrations, UI verification; depends on Collector config
+3. UST strategy — tag vocabulary + Service Map; can only be validated after collection exists
+4. Log/metric/trace correlation — end-to-end pivot verification; depends on UST
+5. GenAI semconv & LLM Observability — gen_ai.* spans, prompt/response capture, sanitization, cost-counter fix; depends on Collector config
+6. Custom dashboards — depends on all upstream data sources flowing
+7. Attendee accounts & credentials — trial-org provisioning, credential distribution, per-cluster K8s secrets; relatively decoupled, late in sequence
