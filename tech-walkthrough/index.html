@@ -41,342 +41,347 @@
 <body>
 <div class="reveal"><div class="slides">
 
+<!-- ============================================================ -->
+<!-- ACT 0 · THE STAKES                                            -->
+<!-- ============================================================ -->
+
 <!-- ===== TITLE ===== -->
 <section data-markdown><textarea data-template>
 # 🔥 Watch It Burn
+
 ### Build a Platform, Unleash an Agent on it... and Watch it Burn!
-AI Engineer World's Fair 2026 · Day 1 · Track 5
 
-Michael Forrester + Whitney Lee
+<span class="small">AI Engineer World's Fair 2026 · Michael Forrester + Whitney Lee</span>
 
-<span class="small">A foundation-to-AI-layer walkthrough of every component in the stack.</span>
+Note:
+Study deck for the two of us. The slides carry the teaching arc; the speaker
+notes (this pane, press S) hold the build detail — versions, repo paths,
+mechanisms. So we can study the stack without the slides becoming a manual.
+Pinned versions live in VERSIONS.lock (source of truth).
 </textarea></section>
 
-<!-- ===== THESIS ===== -->
+<!-- ===== THE QUESTION ===== -->
 <section data-markdown><textarea data-template>
-## The thesis
+## The question
 
-Give a scoped AI agent a real, production-grade IDP and let attendees attack it.
+Give a capable AI agent the keys to a real platform.
 
-- Some attacks are **blocked by controls they should already have** (CNCF: admission, RBAC, GitOps drift, NetworkPolicy, PID caps).
-- The rest expose **AI-specific gaps** (prompt injection, secret exfil, excessive agency via a rogue MCP, wasted-token DoS).
+### What burns — and what holds?
 
-<span class="lead">Observability is the lens every beat is narrated through.</span>
+<span class="lead">Attendees drive the agent and try to make it do damage. We watch which attacks land.</span>
+
+Note:
+This is the whole talk in one line. Everything after this answers it.
+The platform is a full production-grade IDP (GitOps, admission, runtime
+security, observability, secrets, a portal) plus a scoped agent with cluster
+access. The exercise is adversarial: ask the agent to deploy a forbidden
+workload, escalate its own permissions, exfiltrate a secret, fork-bomb the box.
 </textarea></section>
 
-<!-- ===== ARCHITECTURE OVERVIEW ===== -->
+<!-- ============================================================ -->
+<!-- ACT 1 · ONE MENTAL MODEL                                     -->
+<!-- ============================================================ -->
 <section>
-  <h2>Architecture at a glance</h2>
+  <h2>One mental model</h2>
+  <h3>The agent attacks top-down; each layer catches something</h3>
   <pre class="mermaid">
 flowchart TB
-  subgraph AWS["AWS account"]
-    VPC["Shared lab VPC"]
-    subgraph C["Per-attendee EKS cluster (x60)"]
-      ARGO["in-cluster ArgoCD"]
-      PLAT["Platform controls"]
-      OBS["Observability"]
-      AI["AI layer"]
-      BURN["Burn targets"]
-    end
-  end
-  TF["Terraform fleet"] -->|provisions| C
-  VPC --- C
-  ARGO --> PLAT & OBS & AI & BURN
+  AGENT["AI agent<br/>the attacker"]
+  AGENT --> AI["AI layer"]
+  AI --> PLAT["Platform"]
+  PLAT --> RUN["Runtime"]
+  RUN --> FOUND["Foundation"]
   </pre>
-  <p class="small">Each attendee gets their <strong>own</strong> cluster (no hub/spoke), reconciling itself from Git. Provisioned by Terraform.</p>
+  <p class="small">Top&nbsp;→&nbsp;bottom: <strong>AI layer</strong> (input · output · tools) → <strong>Platform</strong> (admission · RBAC · network) → <strong>Runtime</strong> (PID caps · detect &amp; respond) → <strong>Foundation</strong> (cluster · identity · GitOps). The agent attacks from the top; each layer catches something. Hold this picture — the rest hangs off it.</p>
+  <aside class="notes">
+    This single diagram replaces the four redundant topology views the old deck
+    had. The teaching claim: defense-in-depth still applies to agents — but the
+    AI layer (top) is the one most teams don't have yet. The lower four layers
+    are standard CNCF platform engineering. Observability is the lens we narrate
+    every layer through, not a layer of its own.
+  </aside>
 </section>
 
 <!-- ============================================================ -->
-<!-- 1. FOUNDATION                                                -->
+<!-- ACT 2 · THE FIVE ATTACKS (the core)                          -->
 <!-- ============================================================ -->
 <section data-markdown><textarea data-template>
-## 1 · Foundation
-### Terraform → EKS → network → identity
+## The five attacks
 
-<span class="small">Everything below is provisioned as code. Modeled on the Packt sister repo's proven fleet shape.</span>
+For each one, the same three questions:
+
+1. What does the agent **try**?
+2. What **stops** it — and at which layer?
+3. **Do you already have that control?**
+
+<span class="small">That third question is the point of the workshop.</span>
+
+Note:
+Pacing: this Act is the core. Spend time here, move fast through Act 3 (the
+build detail). Each attack maps to a deterministic verify gate (verify/beat-*.sh),
+all validated live on EKS.
 </textarea></section>
 
+<!-- ===== ATTACK 1 ===== -->
 <section data-markdown><textarea data-template>
-### Terraform provisioning
-<span class="repo">infra/terraform/</span>
+### Attack 1 · Break the rules
 
-- **`lab-vpc/`** - one shared VPC (`10.0.0.0/16`, two `/18` private subnets, single NAT). Provisioned once.
-- **`cluster/`** - one independent attendee EKS cluster; takes `vpc_id` + subnets as inputs.
-- **`fleet/fleet.sh`** - stamps out N clusters, **per-attendee isolated state**, parallel pool, refuses any non-`watch-it-burn-*` name.
+**Tries:** deploy a non-compliant workload → give itself more permissions → change infra outside Git.
 
-<span class="tag">EKS module ~>21</span> <span class="tag">VPC ~>5</span> <span class="tag">k8s 1.35</span>
+**Stops it:** Kyverno admission + scoped RBAC + ArgoCD drift detection — three controls, in concert.
 
-<span class="small">Live-validated end-to-end: 48 resources, cluster ACTIVE, full verify passed.</span>
+### ✅ You already have this
+
+<span class="small">Standard CNCF platform engineering. The live Audit → Enforce toggle is the reveal.</span>
+
+Note:
+Kyverno ClusterPolicies at admission (rule-level validate.failureAction: Enforce):
+restrict-image-registries (apps-ns allowlist), require-probes/labels/resource-limits,
+disallow-privileged, restrict host namespaces (restricted PSA), and block-argocd-drift
+(out-of-band changes to ArgoCD-managed resources denied). Scoped agent RBAC: the
+ServiceAccount cannot create a ClusterRoleBinding — escalation FORBIDDEN.
+Repo: policies/kyverno/, security/rbac. Kyverno v1.18.1.
+The minimal-floor admission policy protects platform workloads from deletion so
+the "burn" is gradual (demo apps go, the platform stays).
 </textarea></section>
 
+<!-- ===== ATTACK 2 ===== -->
 <section data-markdown><textarea data-template>
-### Node configuration
-<span class="repo">infra/terraform/cluster/main.tf</span>
+### Attack 2 · Talk it into leaking
 
-- **1× t3.2xlarge** holds the whole IDP (measured: 38% CPU / 19% mem).
-- **`podPidsLimit: 1024`** via `cloudinit_pre_nodeadm` NodeConfig - the fork-bomb cap.
-- **100 GiB root** via `block_device_mappings` (the AL2023 default 20 GiB tripped DiskPressure).
-- **Prefix delegation** + `maxPods: 110` so the platform fits one node.
+**Tries:** smuggle a prompt injection **in** → get a planted secret handed back **out**.
 
-<span class="small">All three were caught/fixed by a real apply - `terraform validate` can't see them.</span>
+**Stops it:** an input classifier (catches the injection) + an output guard (redacts the secret).
+
+### 🔥 AI-specific gap
+
+<span class="small">Admission and RBAC never see this. The request is just text reaching a model.</span>
+
+Note:
+guard-proxy (stdlib Python, A2A-aware reverse proxy in front of the kagent agent;
+runtime /toggle, ArgoCD-safe). Input guard is two stages: a deterministic block-list
+(pre-LLM, zero tokens) then a DeBERTa prompt-injection classifier. Output guard: LLM
+Guard Regex scanner redacts the FAKE-…-sentinel-… string. Validated live: leak with
+guard off, [REDACTED] with guard on; injection blocked at the proxy (403) before it
+reaches the agent. Repo: gitops/ai-layer/proxy.py. LLM Guard 0.3.16.
 </textarea></section>
 
+<!-- ===== ATTACK 3 ===== -->
 <section data-markdown><textarea data-template>
-### Networking & identity
+### Attack 3 · Hand it a poisoned tool
 
-- **VPC-CNI** with `enableNetworkPolicy: "true"` - in-kernel NetworkPolicy enforcement (the egress beat is inert without it).
-- **EKS Pod Identity** (June-2026 convention) for the agent→Bedrock, AWS LB controller, and ESO - no per-cluster OIDC trust, no SA annotations.
-- **IRSA** retained only for the EBS CSI driver.
+**Tries:** a rogue MCP server offers a tool whose description tricks the agent into over-reaching.
 
-<span class="tag">default-deny + egress allowlist</span> <span class="tag">Pod Identity</span>
+**Stops it:** a per-agent tool allowlist — the agent can only call tools you approved.
+
+### 🔥 AI-specific gap
+
+<span class="small">Excessive agency: the agent's reach is whatever tools it can see. Scope the tools.</span>
+
+Note:
+workshop-mcp = the trusted server (list_pods, apply_manifest, get_secret; synthetic
+data). evil-mcp-shim = rogue: a poisoned tool description plus read_internal_config that
+leaks a sentinel. Control = kagent's native per-agent toolNames allowlist. No allowlist →
+rogue tool reachable and leaks; allowlist → blocked. Also requireApproval (HITL) per tool.
+Repo: gitops/ai-layer/. kagent CRD kagent.dev/v1alpha2, FastMCP streamable-http.
 </textarea></section>
 
-<!-- ============================================================ -->
-<!-- 2. GITOPS                                                    -->
-<!-- ============================================================ -->
+<!-- ===== ATTACK 4 ===== -->
 <section data-markdown><textarea data-template>
-## 2 · GitOps
-### ArgoCD app-of-apps
-<span class="repo">gitops/bootstrap/app-of-apps.yaml</span>
+### Attack 4 · Just burn money
 
-- Each cluster runs its **own in-cluster ArgoCD**, reconciling itself from this repo (`destination: kubernetes.default.svc`).
-- One root **app-of-apps** fans out to ~30 child Applications, ordered by **sync-waves**.
-- `ignoreDifferences` exempts the demo's live toggles (guard-proxy env, Kyverno failureAction) from selfHeal.
+**Tries:** hammer the agent with work — every request spends real tokens, even the ones that get blocked downstream.
 
-<span class="tag">ArgoCD v3.4.4</span> <span class="small">deploy: infra/deploy-full-idp.sh (helm install WITHOUT --wait)</span>
+**Stops it:** a deterministic block-list rejects the request **before** the model is called → zero tokens.
+
+### 🔥 AI-specific gap
+
+<span class="lead">Wasted tokens are the new denial-of-service. A cost counter makes it visible.</span>
+
+Note:
+guard-proxy meters real Bedrock token usage (kagent_usage_metadata), priced per tier,
+exposed as Prometheus metrics → a live cost graph. A model-bound request MOVES the
+counter; a block-listed request FLATLINES it (rejected pre-LLM, zero tokens). The teaching
+point: the request reaches the model first unless you stop it earlier — so the cheapest
+guard is the deterministic pre-LLM block. Validated: $0 → $0.0019, flatlines on block.
 </textarea></section>
 
-<!-- ============================================================ -->
-<!-- 3. PLATFORM CONTROLS (the CNCF wall)                         -->
-<!-- ============================================================ -->
-<section data-markdown><textarea data-template>
-## 3 · Platform controls
-### The CNCF wall - Beat 1 in concert
-
-<span class="small">Admission + RBAC + GitOps drift block three agent moves at once.</span>
-</textarea></section>
-
-<section data-markdown><textarea data-template>
-### Kyverno
-<span class="repo">gitops/apps/kyverno.yaml · policies/kyverno/</span>
-
-ClusterPolicies enforced at **admission** (rule-level `validate.failureAction: Enforce`):
-
-- `restrict-image-registries` (apps-ns only; allowlist) · `require-probes` · `require-labels` · `require-resource-limits`
-- `disallow-privileged` · `restrict host namespaces` (restricted PSA)
-- **`block-argocd-drift`** - out-of-band changes to ArgoCD-managed resources are denied
-- The live **Audit → Enforce** toggle is Beat 1's reveal.
-
-<span class="tag">Kyverno v1.18.1</span>
-</textarea></section>
-
-<section data-markdown><textarea data-template>
-### RBAC · quotas · floor
-<span class="repo">security/rbac · security/quotas-pdbs · policies/floor</span>
-
-- **Scoped agent RBAC** - the agent's ServiceAccount can't escalate (ClusterRoleBinding creation is FORBIDDEN).
-- **ResourceQuota + PDBs** per namespace.
-- **`minimal-floor`** - admission protects platform workloads from deletion, so the agent's "burn" is gradual (demo apps go, the platform stays).
-</textarea></section>
-
-<section data-markdown><textarea data-template>
-### NetworkPolicies (the exfil wall)
-<span class="repo">policies/network-policies/</span>
-
-- **default-deny-all** + **allow-dns** + **allow-intra-namespace** + **egress allowlist** (in-VPC + OTel only).
-- No policy opens `0.0.0.0/0`, so the **S3 exfil** has no egress path.
-- Enforced by VPC-CNI (see Foundation). Validated live: S3 BLOCKED, DNS OK.
-</textarea></section>
-
-<!-- ============================================================ -->
-<!-- 4. RUNTIME SECURITY (fork bomb)                              -->
-<!-- ============================================================ -->
+<!-- ===== ATTACK 5 ===== -->
 <section>
-  <h2>4 · Runtime security</h2>
-  <h3>Fork bomb: a wall + an alarm</h3>
+  <h2>Attack 5 · Fork-bomb the box</h2>
+  <h3>A wall and an alarm</h3>
   <pre class="mermaid">
 flowchart LR
-  FB["fork bomb"] -->|"pids.max=1024"| BLOCK["EAGAIN<br/>node survives"]
-  FB -. "syscall" .-> FALCO["Falco<br/>CRITICAL"]
-  FALCO --> SK["Falcosidekick"]
-  SK -->|"forward"| TALON["Falco Talon"]
-  TALON -->|"terminate"| KILL["pod killed (~4s)"]
+  FB["fork bomb"] -->|"PID cap hit"| BLOCK["fork fails<br/>node survives"]
+  FB -. "syscall seen" .-> FALCO["Falco<br/>CRITICAL"]
+  FALCO --> TALON["Falco Talon"]
+  TALON -->|"terminate"| KILL["pod killed<br/>~4s"]
   </pre>
-  <p class="small"><strong>podPidsLimit</strong> is the inline block (the wall). <strong>Falco→Talon</strong> is detect-and-respond (the alarm). Both validated live.</p>
+  <p class="small">The per-pod PID cap is the <strong>wall</strong> (inline, the node never falls over). Falco→Talon is the <strong>alarm</strong> (detect &amp; respond). <strong>✅ You already have both.</strong></p>
+  <aside class="notes">
+    podPidsLimit: 1024 delivered via cloudinit_pre_nodeadm NodeConfig — the fork hits
+    EAGAIN at the cap, node stays Ready. Falco (DaemonSet, modern_ebpf) custom CRITICAL
+    rule loads first via a 00- filename prefix so it isn't shadowed by the generic
+    exec rule. Falcosidekick forwards CRITICAL → Talon over a cross-namespace FQDN →
+    Talon rule "Fork Bomb Response" → kubernetes:terminate. Pod killed in ~4s, validated
+    live. Falco 0.44.1 · Falcosidekick 0.14.0 · Talon chart 0.4.1.
+  </aside>
 </section>
 
+<!-- ===== THE VERDICT ===== -->
 <section data-markdown><textarea data-template>
-### Falco / Falcosidekick / Talon
-<span class="repo">gitops/apps/falco*.yaml · falco-talon.yaml</span>
+## The verdict
 
-- **Falco** (DaemonSet, modern_ebpf) - custom CRITICAL rule "Fork Bomb In Workload Container" (loads first via `00-` prefix so it isn't shadowed).
-- **Falcosidekick** - forwards CRITICAL → Talon (cross-namespace FQDN) and → Datadog.
-- **Falco Talon** - `config.rulesOverride` rule "Fork Bomb Response" → `kubernetes:terminate`.
+| Attack | Stopped at | Already have it? |
+|---|---|---|
+| Break the rules | Platform (admission/RBAC/GitOps) | ✅ |
+| Fork-bomb | Runtime (PID cap + Falco/Talon) | ✅ |
+| Prompt injection in | **AI layer** (input guard) | 🔥 |
+| Secret exfil out | **AI layer** (output guard) | 🔥 |
+| Poisoned MCP tool | **AI layer** (tool allowlist) | 🔥 |
 
-<span class="tag">Falco 0.44.1</span> <span class="tag">Falcosidekick 0.14.0</span> <span class="tag">Talon chart 0.4.1</span>
+<span class="lead">Most of what an agent tries, your platform already handles. The gap is the AI layer.</span>
+
+Note:
+This is the thesis, landed with evidence rather than asserted up front. The takeaway
+attendees leave with: turn on the CNCF controls you should already run, then add the
+three AI-layer guards (input, output, tools) — that's the new surface agents introduce.
 </textarea></section>
 
 <!-- ============================================================ -->
-<!-- 5. MESH + CERTS + SECRETS                                    -->
+<!-- ACT 3 · THE LAYERS, NOW MOTIVATED                            -->
 <!-- ============================================================ -->
 <section data-markdown><textarea data-template>
-### Istio (ambient) · cert-manager · ESO
+## How it's built
 
-- **Istio ambient mesh** (ztunnel) - SPIFFE workload identity + mTLS, no sidecars.
-- **cert-manager** - in-cluster certificate issuance.
-- **External Secrets Operator** - syncs from AWS Secrets Manager via **EKS Pod Identity** (`watch-it-burn/*` keys).
+You've seen the attacks. Now the four layers underneath — one slide each.
 
-<span class="tag">Istio 1.30.1</span> <span class="tag">cert-manager v1.20.2</span> <span class="tag">ESO 2.6.0</span>
+<span class="small">Build detail (versions, repo paths, mechanisms) is in the speaker notes.</span>
 
-<span class="repo">security/istio · security/cert-manager · security/eso · gitops/apps/external-secrets.yaml</span>
+Note:
+Move quickly here. The audience now knows WHY each layer exists; this Act answers HOW.
+Provisioning is Terraform end-to-end (live-validated: 48 resources, full verify passed).
 </textarea></section>
 
-<!-- ============================================================ -->
-<!-- 6. OBSERVABILITY                                             -->
-<!-- ============================================================ -->
+<!-- ===== FOUNDATION ===== -->
+<section data-markdown><textarea data-template>
+### Foundation
+#### cluster · network · identity
+
+- **Terraform** stamps out one independent EKS cluster per attendee — take-home, no shared control plane.
+- **VPC-CNI NetworkPolicy** enforces the egress wall in-kernel.
+- **EKS Pod Identity** gives the agent its Bedrock access — no static keys, no per-cluster trust setup.
+
+Note:
+infra/terraform/: lab-vpc/ (one shared VPC, 10.0.0.0/16, two /18 private subnets, single
+NAT, provisioned once); cluster/ (one attendee EKS cluster, EKS module ~>21, k8s 1.35, takes
+vpc_id + subnets); fleet/fleet.sh (N clusters, per-attendee isolated state, parallel pool,
+refuses any non-watch-it-burn-* name). Node: 1× t3.2xlarge holds the whole IDP (measured 38%
+CPU / 19% mem), 100 GiB root via block_device_mappings, podPidsLimit 1024 + maxPods 110 via
+cloudinit_pre_nodeadm. Pod Identity for agent→Bedrock, AWS LB controller, ESO; IRSA only for
+EBS CSI. Five real bugs were caught by a live apply that terraform validate cannot see.
+</textarea></section>
+
+<!-- ===== GITOPS + PLATFORM ===== -->
+<section data-markdown><textarea data-template>
+### GitOps & platform controls
+#### the cluster reconciles itself
+
+- Each cluster runs its **own in-cluster ArgoCD**, syncing the whole platform from one **app-of-apps**.
+- That app-of-apps installs the controls Attack 1 ran into: **Kyverno, RBAC, NetworkPolicies, the floor**.
+- The platform is **code** — which is exactly why "change infra outside Git" is a detectable attack.
+
+Note:
+gitops/bootstrap/app-of-apps.yaml: destination kubernetes.default.svc, fans out to ~30 child
+Applications ordered by sync-waves. ignoreDifferences exempts the demo's live toggles
+(guard-proxy env, Kyverno failureAction) from selfHeal. ArgoCD v3.4.4; deploy via
+infra/deploy-full-idp.sh (helm install WITHOUT --wait — the --wait variant hangs pending-install
+on EKS). NetworkPolicies: default-deny-all + allow-dns + allow-intra-namespace + egress allowlist
+(in-VPC + OTel only); no 0.0.0.0/0, so S3 exfil has no path. Enforced by VPC-CNI.
+</textarea></section>
+
+<!-- ===== RUNTIME + MESH/SECRETS ===== -->
+<section data-markdown><textarea data-template>
+### Runtime, mesh & secrets
+
+- **Falco + Talon** — detect-and-respond (the fork-bomb alarm from Attack 5).
+- **Istio ambient** — workload identity + mTLS with no sidecars.
+- **cert-manager + External Secrets** — certs and secrets pulled in via Pod Identity, never checked into Git.
+
+Note:
+Falco (DaemonSet, modern_ebpf) → Falcosidekick → Talon (kubernetes:terminate). Istio ambient
+(ztunnel) = SPIFFE workload identity + mTLS, no sidecars (Istio 1.30.1). cert-manager v1.20.2.
+External Secrets Operator 2.6.0 syncs from AWS Secrets Manager via EKS Pod Identity (watch-it-burn/*
+keys); the IRSA annotation was dropped when ESO moved to Pod Identity. Repo: security/istio,
+security/cert-manager, security/eso, gitops/apps/falco*.yaml.
+</textarea></section>
+
+<!-- ===== OBSERVABILITY (the lens) ===== -->
 <section>
-  <h2>6 · Observability</h2>
-  <h3>The lens for every beat</h3>
+  <h2>Observability · the lens</h2>
+  <h3>Every attack is narrated through this</h3>
   <pre class="mermaid">
 flowchart LR
-  APP["workloads<br/>guard-proxy<br/>kagent"] -->|"OTLP"| OTEL["OTel Collector"]
-  OTEL -->|"metrics"| PROM["Prometheus<br/>Grafana"]
-  OTEL -->|"traces"| TEMPO["Tempo"]
-  ALLOY["Alloy"] -->|"logs"| LOKI["Loki"]
-  OTEL -->|"spanmetrics"| DD["Datadog"]
+  APP["workloads<br/>guard-proxy<br/>agent"] -->|"OTLP"| OTEL["OTel<br/>Collector"]
+  OTEL --> PROM["Prometheus<br/>Grafana"]
+  OTEL --> TEMPO["Tempo<br/>traces"]
+  OTEL --> DD["Datadog"]
   FALCO["Falcosidekick"] --> DD
   </pre>
-  <p class="small">Path-independent: Datadog is required for the event but the OTel layer keeps it swappable (drop the Datadog exporter to run OSS-only).</p>
+  <p class="small">Not a separate beat — it's how the audience <em>sees</em> each control act. The cost counter graphs here; the trace view shows the agent's every move.</p>
+  <aside class="notes">
+    OTel Collector is the neutral primary; a spanmetrics connector carries UST tags for Datadog
+    correlation. Prometheus + Grafana (the live cost counter graphs here). Loki + Alloy for logs;
+    Tempo for traces (the trace re-leak trap is the advanced beat). Datadog is hybrid: Agent
+    DaemonSet for infra + the OTel feed (Whitney owns the account/keys). Path-independent: drop the
+    Datadog exporter to run OSS-only. OTel 0.158.2 · kube-prometheus 86.2.3 · Loki 7.0.0 · Tempo
+    2.2.3 · Alloy 1.10.0.
+  </aside>
 </section>
 
-<section data-markdown><textarea data-template>
-### Observability components
-<span class="repo">gitops/apps/{otel-collector,prometheus,loki,tempo,alloy}.yaml</span>
-
-- **OTel Collector** - neutral primary; spanmetrics connector carries UST tags for Datadog correlation.
-- **Prometheus + Grafana** - metrics + dashboards (the live **cost counter** graphs here).
-- **Loki + Alloy** - logs. **Tempo** - traces (the **trace re-leak trap** is the advanced beat).
-- **Datadog** - hybrid: Agent DaemonSet for infra + the OTel feed (Whitney owns the account/keys).
-
-<span class="tag">OTel 0.158.2</span> <span class="tag">kube-prometheus 86.2.3</span> <span class="tag">Loki 7.0.0</span> <span class="tag">Tempo 2.2.3</span> <span class="tag">Alloy 1.10.0</span>
-</textarea></section>
-
-<!-- ============================================================ -->
-<!-- 7. AI LAYER                                                  -->
-<!-- ============================================================ -->
+<!-- ===== AI LAYER ===== -->
 <section>
-  <h2>7 · The AI layer</h2>
-  <h3>How a prompt reaches a model</h3>
+  <h2>The AI layer</h2>
+  <h3>How a prompt reaches a model — and where we inspect it</h3>
   <pre class="mermaid">
 flowchart LR
   UI["chat-ui"] --> GP["guard-proxy"]
   GP -->|"input guard"| LG1["LLM Guard"]
-  GP -->|"forward"| AG["kagent agent"]
+  GP --> AG["kagent<br/>agent"]
   AG -->|"Pod Identity"| BR["Claude<br/>on Bedrock"]
   AG -->|"tools"| MCP["MCP<br/>good / rogue"]
-  AG -->|"response"| GP
+  AG --> GP
   GP -->|"output guard"| LG2["LLM Guard"]
-  GP -->|"meter"| COST["cost counter"]
+  GP -->|"meter"| COST["cost<br/>counter"]
   </pre>
-  <p class="small"><span class="repo">gitops/ai-layer/</span> - guard-proxy fronts the kagent-owned agent pod (the inspection point).</p>
+  <p class="small">The guard-proxy fronts the agent — the one place we see input, output, tools, and spend. <strong>This is the surface Attacks 2–4 live on.</strong></p>
+  <aside class="notes">
+    kagent (CRD kagent.dev/v1alpha2): Agent + ModelConfig + RemoteMCPServer. Model = Claude Haiku 4.5
+    on Bedrock (us. inference profile); creds via EKS Pod Identity (validated with real token spend).
+    guard-proxy is the inspection point because kagent owns the agent pod — so the guard is a reverse
+    proxy in front of the agent Service, not an in-pod sidecar. Input/output guards + the cost meter
+    all live here. Repo: gitops/ai-layer/. kagent 0.9.9, A2A message/send.
+  </aside>
 </section>
 
-<section data-markdown><textarea data-template>
-### kagent + Bedrock
-<span class="repo">gitops/ai-layer/resources.yaml</span>
-
-- **kagent** (CRD `kagent.dev/v1alpha2`): `Agent` + `ModelConfig` + `RemoteMCPServer`.
-- Model = **Claude Haiku 4.5 on Bedrock** (`us.` inference profile); creds via **EKS Pod Identity** (validated with real token spend).
-- Per-agent `toolNames` allowlist + `requireApproval` (HITL) are the excessive-agency controls.
-
-<span class="tag">kagent 0.9.9</span> <span class="tag">A2A message/send</span>
-</textarea></section>
-
-<section data-markdown><textarea data-template>
-### guard-proxy + LLM Guard - Beat 2
-<span class="repo">gitops/ai-layer/proxy.py</span>
-
-- **guard-proxy** (stdlib Python via ConfigMap) - A2A-aware reverse proxy in front of the agent. Runtime `/toggle` (ArgoCD-safe).
-- **Input guard** - two stages: deterministic block-list (pre-LLM, zero tokens) → DeBERTa prompt-injection classifier.
-- **Output guard** - LLM Guard `Regex` scanner redacts the `FAKE-…-sentinel-…` exfil. Validated: leaks off, `[REDACTED]` on.
-
-<span class="tag">LLM Guard 0.3.16</span>
-</textarea></section>
-
-<section data-markdown><textarea data-template>
-### MCP: good vs rogue - Beat 3
-<span class="repo">gitops/ai-layer/workshop-mcp-server.py · evil-mcp</span>
-
-- **workshop-mcp** - the trusted server (`list_pods`, `apply_manifest`, `get_secret`; synthetic data).
-- **evil-mcp-shim** - a rogue server with a poisoned tool description + `read_internal_config` that leaks a sentinel.
-- **Control:** kagent's native per-agent `toolNames` allowlist. No allowlist → the rogue tool is reachable and leaks; allowlist → blocked.
-
-<span class="tag">FastMCP streamable-http</span>
-</textarea></section>
-
-<section data-markdown><textarea data-template>
-### The cost counter - "wasted tokens are the new DoS"
-<span class="repo">gitops/ai-layer/proxy.py · /cost /metrics</span>
-
-- Meters **real Bedrock token usage** at the proxy (`kagent_usage_metadata`), priced per tier.
-- A model-bound request **moves** the counter; a block-listed request **flatlines** it (rejected pre-LLM, zero tokens).
-- Exposed as Prometheus metrics → graphs the climbing spend live. Validated: `$0 → $0.0019`, flatlines on block.
-</textarea></section>
-
 <!-- ============================================================ -->
-<!-- 8. BACKSTAGE + BURN TARGETS                                  -->
+<!-- ACT 4 · THE TAKEAWAY                                          -->
 <!-- ============================================================ -->
 <section data-markdown><textarea data-template>
-### Backstage + burn targets
+## What you take home
 
-- **Backstage** - developer portal (catalog of the components + the demo apps). Our image: `ghcr.io/peopleforrester/watch-it-burn:backstage`.
-- **`*-party` apps** (unicorn / hedgehog / spider / wombat / mantis-shrimp) - the agent's **burn targets** ("delete the unicorn deployment"). Public nginx images.
+Most of what an agent will try against a real platform is **already handled** by tools many teams run today — admission, RBAC, GitOps, PID caps.
 
-<span class="repo">gitops/apps/backstage.yaml · gitops/manifests/*-party/</span>
-</textarea></section>
-
-<!-- ============================================================ -->
-<!-- 9. THE BEATS (recap)                                         -->
-<!-- ============================================================ -->
-<section data-markdown><textarea data-template>
-## The beats - what attendees run
-
-| Beat | Attack | Control |
-|---|---|---|
-| **1 · CNCF wall** | deploy non-compliant → escalate → infra outside Git | Kyverno + RBAC + ArgoCD drift |
-| **2 · Sanitization** | prompt injection in / secret exfil out | input classifier + output guard |
-| **3 · Excessive agency** | rogue MCP induces over-reach | kagent `toolNames` allowlist |
-| **Cost / DoS** | hammer the agent, waste tokens | block-list + rate/cost cap |
-| **Fork bomb** | self-replicating process | `podPidsLimit` + Falco→Talon |
-
-<span class="small">Every beat has a deterministic verify gate (verify/beat-*.sh) - all validated live on EKS.</span>
-</textarea></section>
-
-<!-- ============================================================ -->
-<!-- 10. DISTRIBUTION                                             -->
-<!-- ============================================================ -->
-<section data-markdown><textarea data-template>
-### Provisioning & distribution
-
-- **Terraform fleet** stamps out 60 independent clusters (per-attendee isolated state, parallel).
-- **lab-distribution** (Flask on Railway, `provisioning.agenticburn.com`) hands each attendee, by email, their cluster creds + URLs + Datadog link from a pool.
-- **Teardown** is prefix-scoped to `watch-it-burn-*` (can never touch the co-tenant Packt clusters).
-
-<span class="repo">infra/terraform/fleet · lab-distribution/ · teardown/</span>
-</textarea></section>
-
-<!-- ===== CLOSE ===== -->
-<section data-markdown><textarea data-template>
-## The whole stack, foundation → up
-
-Terraform → EKS → VPC-CNI/NetworkPolicy → Pod Identity
-→ ArgoCD → Kyverno/RBAC/floor → Falco/Talon → Istio/cert-manager/ESO
-→ OTel/Prom/Grafana/Loki/Tempo/Datadog
-→ kagent+Bedrock / guard-proxy / LLM Guard / MCP / cost counter
-→ Backstage + burn targets.
+What those tools can't see is the agent's **input, its output, and the tools it can reach.** That's the new surface. That's where to spend.
 
 ### 🔥 Watch It Burn
 <span class="small">walkthrough.agenticburn.com</span>
+
+Note:
+Close on the governance map idea: each attack, the control that stops it, the layer it sits in,
+whether existing tooling covers it. The attendee leaves with a checklist they can run against
+their own platform to find the AI-layer gaps. Everything in the stack is CNCF or open source;
+each cluster is independent and take-home.
 </textarea></section>
 
 </div></div>
@@ -392,13 +397,19 @@ Terraform → EKS → VPC-CNI/NetworkPolicy → Pod Identity
   mermaid.initialize({ startOnLoad: false, theme: 'dark',
     themeVariables: { primaryColor: '#ff6b35', fontFamily: 'system-ui, -apple-system, Segoe UI, sans-serif' },
     flowchart: { htmlLabels: false, useMaxWidth: true } });
+  // Render mermaid BEFORE reveal initializes. Reveal hides off-screen slides
+  // (display:none), and a diagram measured inside a hidden slide collapses to
+  // zero width. Pre-render while every section is still measurable, after fonts
+  // are loaded (correct text measurement), then hand off to reveal.
+  if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
+  const sections = [...document.querySelectorAll('.reveal .slides section')];
+  sections.forEach(s => { s.style.display = 'block'; s.style.visibility = 'visible'; s.style.position = 'relative'; });
+  await mermaid.run({ querySelector: '.reveal .mermaid' });
+  sections.forEach(s => { s.style.display = ''; s.style.visibility = ''; s.style.position = ''; });
   const deck = new Reveal({
     hash: true, slideNumber: 'c/t', plugins: [RevealMarkdown, RevealHighlight, RevealNotes],
   });
   await deck.initialize();
-  // Render mermaid only after fonts are loaded (correct text measurement), then re-layout.
-  if (document.fonts && document.fonts.ready) { await document.fonts.ready; }
-  await mermaid.run({ querySelector: '.reveal .mermaid' });
   deck.layout();
 </script>
 </body>
