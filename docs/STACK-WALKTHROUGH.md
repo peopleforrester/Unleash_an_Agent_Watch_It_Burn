@@ -9,10 +9,10 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 
 ## The picture (layers, bottom up)
 
-1. **Cloud + cluster.** AWS EKS, one independent standalone cluster per attendee (take-home), created
-   with `eksctl`. All clusters share **one VPC** (`10.0.0.0/16`, two private `/18` subnets across two AZs),
-   provisioned once up front. CNI is **VPC-CNI** (its NetworkPolicy feature enforces the default-deny).
-   `infra/*/cluster.yaml`.
+1. **Cloud + cluster.** AWS EKS, one independent standalone cluster per attendee (take-home), provisioned
+   with **Terraform** (`infra/terraform/`). All clusters share **one VPC** (`10.0.0.0/16`, two private `/18`
+   subnets across two AZs), provisioned once up front. CNI is **VPC-CNI** (its NetworkPolicy feature enforces
+   the default-deny). `infra/terraform/{lab-vpc,cluster,fleet}/`.
 2. **Kubernetes + GitOps.** Each cluster runs its **own in-cluster Argo CD** (app-of-apps + sync-waves)
    that reconciles the cluster from Git, destination the local cluster `kubernetes.default.svc`. No hub,
    no central ArgoCD managing other clusters. `gitops/bootstrap/app-of-apps.yaml` (full) and
@@ -32,16 +32,16 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 
 | Layer | Technology | Role | Where (file) | Mechanism |
 |---|---|---|---|---|
-| Cluster | EKS + VPC-CNI | isolation, networking | `infra/*/cluster.yaml` | independent per-attendee cluster, shared VPC; CNI enforces NetworkPolicy |
-| GitOps | Argo CD v3.4.3 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
+| Cluster | EKS + VPC-CNI | isolation, networking | `infra/terraform/` | independent per-attendee cluster (Terraform), shared VPC; CNI enforces NetworkPolicy |
+| GitOps | Argo CD v3.4.4 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
 | Admission | Kyverno v1.18.1 | block non-compliant workloads | `policies/kyverno/` | ClusterPolicy, rule-level `validate.failureAction` Audit to Enforce |
 | Supply chain | Kyverno verifyImages (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | `verifyImages` keyless attestor (Audit) [verify-at-build] |
 | Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
 | Mesh | Istio 1.30.1 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
-| Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs |
-| Identity | scoped RBAC + IRSA | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; IRSA for Bedrock |
-| Agent | kagent 0.9.7 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
+| Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs; creds via EKS Pod Identity |
+| Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
+| Agent | kagent 0.9.9 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
 | Model | Bedrock Claude (Haiku 4.5 default) | the LLM | same | native `ModelConfig` provider: Bedrock |
 | AI gateway | agentgateway v1.3.0 GA | front A2A + MCP, MCP authz | `agent/gateway/` | `mcpAuthorization` CEL over `mcp.tool.name` [verify-at-build] |
 | Guard glue | guard-proxy (stdlib) | input/output guards, cost meter, caps | `gitops/ai-layer/proxy.py` | A2A reverse proxy; runtime `/toggle` |
@@ -83,7 +83,7 @@ kagent controller into a running Deployment. The whole agent is declarative, in
 - **`spec.declarative.tools[]`** lists MCP servers with a `toolNames` allowlist (the MCP restriction)
   and `requireApproval` (the HITL gate). Omitting the allowlist exposes every tool, the Beat 3 footgun.
 - **`spec.declarative.deployment.serviceAccountName`** binds the agent pod to a tight ServiceAccount;
-  Bedrock credentials come from IRSA on that SA, never from the repo.
+  Bedrock credentials come from an **EKS Pod Identity** association on that SA, never from the repo.
 
 So "building the agent" here means writing that one CR and letting kagent run it. There is no app to
 compile; the controls live around it (guard-proxy, gateway, RBAC, the CNCF floor), which is the point.

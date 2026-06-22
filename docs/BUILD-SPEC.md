@@ -19,13 +19,13 @@ is updated to match. The evolved design and decision log behind rev4 is `docs/DE
 
 This repo is the source of truth and is self-contained: bring your own AWS account and stand the
 platform up from the manifests here. Nothing assumes a specific account, region, or operator machine.
-On whatever host you drive from, you need `kubectl`, `eksctl`, `helm`, `aws`, and `docker`. AWS
+On whatever host you drive from, you need `kubectl`, `terraform`, `helm`, `aws`, and `docker`. AWS
 credentials come from your own environment (profile, SSO, or instance role); no account id or
-credential is stored in this repo. Region is yours to choose; the example cluster configs default to
+credential is stored in this repo. Region is yours to choose; the Terraform defaults to
 **us-west-2** (newest Claude models on Bedrock tend to land there first), which you can override.
 
-Everything is reproducible from the repo: `eksctl create cluster -f infra/test-cluster/cluster.yaml`,
-then the bootstrap + verified steps in `PROJECT_STATE.md`. Idempotency rule: every step is safe to
+Everything is reproducible from the repo: `cd infra/terraform/lab-vpc && terraform apply`, then
+`cd ../fleet && ./fleet.sh up <N>`, then the deploy + verified steps in `PROJECT_STATE.md`. Idempotency rule: every step is safe to
 re-run (`helm upgrade --install`, `kubectl apply`, ArgoCD sync). Build-spike rule: facts confirmed
 against docs but not yet on a live cluster are tagged **[SPIKE]**; nothing live ships on an unproven
 assumption. Teardown returns the account to $0 (`teardown/teardown.sh`).
@@ -201,14 +201,14 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
   lab), and avoiding ArgoCD sharding past the ~20-30 clusters-per-instance guidance for a 2-hour event.
   See `infra/SIZING.md` and `research/25-eks-quotas-shared-vpc-topology-2026.md`.
 - Delivery: each cluster's **in-cluster ArgoCD** runs the app-of-apps with **sync-waves** ordering
-  components by dependency. **Crossplane was tried and removed**, eksctl/Terraform provisions, ArgoCD takes over.
+  components by dependency. **Crossplane was tried and removed**; **Terraform** provisions, ArgoCD takes over.
 
 ### Verified component stack (live on EKS)
 - **kagent** chart `0.9.7`, CRDs `kagent.dev/v1alpha2`. Agent answers via A2A; per-agent
   `tools[].mcpServer.toolNames` allowlist is the MCP-restriction control. `oci://ghcr.io/kagent-dev/kagent/helm/kagent`.
 - **Model: AWS Bedrock**, `us.anthropic.claude-haiku-4-5-20251001-v1:0` (inference profile; base ids
   reject on-demand). Use-case form + model agreements submitted on the account. ModelConfig
-  `spec.provider: Bedrock`, `spec.bedrock.region`. Creds via IRSA on the agent SA.
+  `spec.provider: Bedrock`, `spec.bedrock.region`. Creds via **EKS Pod Identity** on the agent SA (no IRSA annotation; IRSA is retained only for the EBS CSI driver).
 - **Output guard:** LLM Guard (API-server, `laiyer/llm-guard-api:0.3.16`, output `Regex` matching the
   sentinels) behind a small **A2A-aware guard proxy** in front of the agent Service (kagent owns the
   agent pod, so the inspection point is a proxy, not an in-pod sidecar). Live-verified block/redact.
@@ -254,10 +254,10 @@ us-west-2); Fable retired. vCluster is removed. `VERSIONS.lock` is authoritative
 ## 7. Repository structure
 
 Existing tree stands (`platform/`, `agent/` incl. `agent/gateway/guard-proxy/`, `beats/`, `verify/`,
-`infra/` with `test-cluster/` + the shared-VPC config + per-cluster (attendee/burn/instructor) configs,
+`infra/` with `terraform/` (`lab-vpc/` + `cluster/` + `fleet/`) + the attendee/burn-cluster model READMEs,
 `facilitation/`, `research/`, `docs/`, `teardown/`). rev4 additions to create:
 ```
-  infra/burn-clusters/        # Cluster 1 (no-guardrails) + Cluster 2 (CNCF-only) eksctl configs + spares
+  infra/burn-clusters/        # Cluster 1/2 MODEL README (same Terraform cluster module, different gitops profile)
   cost/                       # live Bedrock cost-counter service + dashboard wiring
   agent/guard-proxy/          # the verified A2A guard proxy (input classifier + output Regex)
   ui/                         # attendee chat UI + the system-prompt streaming display
@@ -270,15 +270,15 @@ Existing tree stands (`platform/`, `agent/` incl. `agent/gateway/guard-proxy/`, 
 
 Re-sequenced for rev4. ✅ = already verified live (rev3); reuse, don't rebuild.
 
-- **Phase 0, Tooling + reproduce base cluster.** ✅ eksctl/helm/kubectl/aws/docker confirmed; cluster
-  config + bootstrap + EBS-CSI/gp3 verified. Re-provision a base cluster from `infra/test-cluster/`.
+- **Phase 0, Tooling + reproduce base cluster.** ✅ terraform/helm/kubectl/aws/docker confirmed; cluster
+  config + deploy + EBS-CSI/gp3 verified. Re-provision a base cluster with `infra/terraform/` (`fleet.sh up`).
 - **Phase 1, IDP stack.** ✅ ArgoCD/Kyverno/Falco verified; kube-prometheus + OTel→Tempo to finish
   (rev3 kps install wedged, redo lighter, focus Tempo+Grafana trace view).
 - **Phase 2, Cluster fleet.** Provision the shared VPC once, then build the burn clusters (1
   no-guardrails, 2 CNCF-only) + ~10 disposable Cluster-1 spares + per-attendee Cluster-3s
   (`watch-it-burn-attendee-<id>`), each self-reconciled by its own in-cluster ArgoCD app-of-apps
   (sync-waves). Record per-cluster provision time + the fleet cost.
-- **Phase 3, Scoped agent.** ✅ kagent v1alpha2 + Bedrock (haiku-4-5) + scoped RBAC + IRSA verified.
+- **Phase 3, Scoped agent.** ✅ kagent v1alpha2 + Bedrock (haiku-4-5) + scoped RBAC + EKS Pod Identity verified.
   Re-apply; confirm the chaos system prompt; capture the gen_ai/tool-call spans for the dashboard.
 - **Phase 4, Guard layer.** ✅ output Regex + guard proxy verified. **NEW:** build the input
   **classifier + block-list** (cost-saving) and the output **tool-call block + HITL + notification**;

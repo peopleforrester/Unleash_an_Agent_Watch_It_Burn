@@ -18,7 +18,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 - [x] Falco + custom rules (agent-pod detections, fork-bomb); [x] Falcosidekick -> Talon + Datadog wired
 - [x] Falco Talon (terminate pod on fork bomb); [x] chart 0.4.1 (app v0.3.0)
 - [x] NetworkPolicy default-deny + egress allowlist (no internet -> S3 blocked); [~] VPC CIDR + Bedrock endpoint
-- [x] PID limit nodeadm config (podPidsLimit); [~] delivery via eksctl overrideBootstrapCommand on AL2023
+- [x] PID limit nodeadm config (podPidsLimit); [x] delivery via Terraform cloudinit_pre_nodeadm NodeConfig on AL2023
   (the only true inline fork-bomb block; Tetragon/KubeArmor confirmed NOT to replace it, research/20-22)
 - [x] Istio ambient + STRICT mTLS (= SPIFFE identity); [~] ztunnel footprint on t3.large
 - [x] External Secrets Operator, cert-manager, Backstage; [~] ESO store backing, certs live
@@ -59,7 +59,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 
 ## Infra + ops
 
-- [x] eksctl cluster configs (1.35, EBS CSI, OIDC): independent per-student clusters
+- [x] Terraform cluster configs (1.35, EBS CSI, Pod Identity): independent per-student clusters
   (`watch-it-burn-attendee-<id>`) sharing one up-front VPC (10.0.0.0/16, two private /18 subnets),
   each self-reconciled by its own in-cluster ArgoCD; t3.xlarge unlimited default; [~] live provision +
   T3 fleet sizing (measure one cluster before pinning, infra/SIZING.md)
