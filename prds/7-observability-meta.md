@@ -388,22 +388,35 @@ per-cluster-filtered dashboard link" line is **stale/superseded** — do not des
 **Step 1 — Problem (write 3-5 sentences):** What is unresolved about provisioning and distributing
 per-attendee Datadog access at workshop scale, and what is the blast radius if it fails on the day?
 
+Each trial org has this shape (sensitive — contains API key, app key, and a password; **never commit
+to the repo**):
+
+```json
+{
+  "userId": "", "datadogUserId": "", "datadogHandle": "", "datadogOrgName": "",
+  "datadogApiKey": "", "datadogAppKey": "", "expiration": 0, "password": "",
+  "formattedExpiration": "Account expires in 13 days and 20 hours",
+  "publicOrgId": "", "internalOrgId": ""
+}
+```
+
 **Step 2 — Resolve with Whitney (one at a time):**
 1. **Provisioning (NET-NEW RESEARCH REQUIRED)** — how do 60-70 Datadog trial orgs get created? No doc in the repo addresses this; it is the riskiest unsupported scope. Run a net-new `/research` spike before presenting options (Manual, Datadog API, Terraform, other).
-2. **Surfacing credentials** — how do attendees receive their access during the workshop, and what is in each bundle (org URL, API key, app key?, kubeconfig, chat-UI token)? `research/27` §1.9 settles "pre-generate per-attendee bundles + a claim mechanism (code on a card / per-seat URL)" but leaves the mechanism and bundle contents open.
-3. **Are app keys (`datadogAppKey`) needed at all?** App keys are only for dashboard/monitor API automation, not ingest (`research/24` §3.2). Decide whether attendees need them or whether API key + site suffices.
-4. **Keys into the cluster** — `research/24` §3.3 Option A is the recommended approach: `datadog-secret` in `monitoring`, `security`, and (if Agent enabled) `datadog` namespaces, materialized via one ESO `ExternalSecret` per namespace from a single AWS Secrets Manager source. Confirm or revise. (Topology is independent per-student standalone clusters, no hub — `research/25`.)
-5. **Rotation/expiry** — how is trial-account expiry handled? No doc addresses this.
+2. **Master credential store** — where the full pool of trial-org credentials (the JSON above, ×60-70) lives as the source of truth, such that: (a) the build/provisioning service can read it to inject per-cluster, and (b) Whitney can share it with Michael. It holds API keys, app keys, and passwords — must never be committed. Candidate: AWS Secrets Manager (the same source ESO already reads in decision 5), one secret holding the pool or one per attendee keyed by `userId`; sharing with Michael via IAM grant. Resolve the store + access-control + sharing mechanism.
+3. **Surfacing credentials** — how do attendees receive their access during the workshop, and what is in each bundle (org URL, API key, app key?, password, kubeconfig, chat-UI token)? `research/27` §1.9 settles "pre-generate per-attendee bundles + a claim mechanism (code on a card / per-seat URL)" but leaves the mechanism and bundle contents open.
+4. **Are app keys (`datadogAppKey`) needed at all?** App keys are only for dashboard/monitor API automation, not ingest (`research/24` §3.2). Decide whether attendees need them or whether API key + site suffices.
+5. **Keys into the cluster** — `research/24` §3.3 Option A is the recommended approach: `datadog-secret` in `monitoring`, `security`, and (if Agent enabled) `datadog` namespaces, materialized via one ESO `ExternalSecret` per namespace from the master credential store (decision 2). Confirm or revise. (Topology is independent per-student standalone clusters, no hub — `research/25`.)
+6. **Rotation/expiry** — how is trial-account expiry handled? The schema carries `expiration`; no doc addresses the rotation flow.
 
 **Step 3 — Produce the child PRD:**
-1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD implementing account provisioning + credential distribution + secret storage per decisions 1-5 (`/prd-update-decisions` for the Decision Log).
+1. Update `docs/observability-priorities.md` if priorities shifted. Also update `PROJECT_STATE.md` here — its stale "one shared org" line is corrected to per-attendee orgs as part of this milestone's implementation.
+2. Run `/prd-create` for a child PRD implementing account provisioning + credential storage + distribution + secret injection per decisions 1-6 (`/prd-update-decisions` for the Decision Log).
 3. Add to `docs/ROADMAP.md` as `- Attendee accounts & credentials (PRD #[issue-id])`.
 4. Run `/prd-update-progress` to commit + push.
 5. This is the final milestone — when its child PRD exists, mark this meta-PRD complete and run `/prd-done` for issue #7.
 
 **Done when:**
-- [ ] Decisions 1-5 recorded in the child PRD's Decision Log with reasoning
+- [ ] Decisions 1-6 recorded in the child PRD's Decision Log with reasoning
 - [ ] A net-new research spike for org provisioning (decision 1) exists in `research/`
 - [ ] A child PRD issue exists for provisioning + distribution + secret storage
 - [ ] ROADMAP updated
@@ -435,3 +448,5 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 | 2026-06-22 | Cost-counter key live-resolved to `kagent_usage_metadata` | Live validation (kagent 0.9.9) showed `research/14` was wrong; `record_usage()` already accepts both keys, kagent-first. Milestone 6 verifies, does not "fix a bug" |
 | 2026-06-22 | DDOT-vs-contrib not a blank slate | `research/24` §1.1 already confirmed: standalone contrib `0.158.2` as fleet collector, DDOT optional on instructor cluster only. Milestone 2 confirms rather than re-decides |
 | 2026-06-22 | Reconciliation pass folded research 14/18/23/24/25/27 + PROJECT_STATE findings into milestones | A read-only audit agent reconciled prior docs against this meta-PRD; settled decisions and unrepresented open questions were absorbed into the relevant milestones |
+| 2026-06-22 | `PROJECT_STATE.md` stale org line corrected in Milestone 8, not now | The shared-org→per-attendee correction lands when the work lands, so the state doc changes alongside implementation rather than ahead of it |
+| 2026-06-22 | Added master-credential-store decision to Milestone 8 | Storing the sensitive trial-org pool (API/app keys + passwords) as a source of truth the build service reads and Whitney shares with Michael is distinct from per-cluster ESO injection; the org schema is embedded for the implementer |
