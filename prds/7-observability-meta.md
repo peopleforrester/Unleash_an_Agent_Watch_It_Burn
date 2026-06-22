@@ -70,9 +70,12 @@ Settled strategic context — read before any milestone:
 - `docs/observability-priorities.md` — living must-have vs. nice-to-have list (created in Milestone 1)
 
 **Settled decisions — do NOT re-litigate:**
-- **Architecture: Path 2 hybrid** — OTel Collector for OTLP/GenAI + Datadog Agent DaemonSet for EKS infra.
+- **Architecture: Path 2 hybrid** — OTel Collector for OTLP/GenAI + Datadog Agent DaemonSet for EKS infra. The deployment shape is settled in `research/24` §1.1: standalone otelcol-contrib Collector + standalone Datadog Agent DaemonSet for infra only; do NOT make DDOT the fleet collector (DDOT optional on the instructor cluster only).
 - **TypeScript rewrite of guard-proxy is NOT happening.** All Python apps stay Python. spiny-orb is off the table. AI-layer instrumentation uses the Python OTel SDK directly, or kagent/agentgateway built-in OTel output.
-- **Already wired:** `spanmetricsconnector` with `add_resource_attributes: true`; UST tags via `OTEL_RESOURCE_ATTRIBUTES` on guard-proxy/agentgateway/kagent; Falcosidekick → Datadog native output.
+- **Already wired:** `spanmetricsconnector` with `add_resource_attributes: true`; UST tags via `OTEL_RESOURCE_ATTRIBUTES` on guard-proxy/agentgateway/kagent; `cluster.name=watch-it-burn` upserted by the Collector `resource` processor; OTel Collector pinned at contrib `0.158.2`.
+- **Falcosidekick → Datadog:** wired in commit `6c6a81d`, but `research/23` (which predates the commit) observed Falcosidekick forwarding only to Talon. Treat as a **verify-at-build item in Milestone 3**, not a confirmed-working fact.
+- **Cost-counter key (live-resolved):** `PROJECT_STATE.md` live validation (kagent 0.9.9) found the key is `result.metadata.kagent_usage_metadata`, NOT `adk_usage_metadata` — `research/14` was wrong. `record_usage()` now accepts both, kagent-first. Milestone 6 verifies this still holds; it is not an open bug.
+- **Attendee Datadog model:** **per-attendee trial orgs** (confirmed 2026-06-22). `PROJECT_STATE.md`'s "one shared org" line is **stale/superseded** — see Milestone 8.
 - **Division of labor:** Whitney owns Datadog accounts/keys/Agent install/dashboards. Michael owns OTel-side wiring + manifest annotations + `datadog-secret` consumption.
 
 ---
@@ -162,7 +165,7 @@ to deliver traces and metrics into Datadog from the AI layer.
 Collector config? What must the pipeline guarantee for the demo to work?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **DDOT vs. otelcol-contrib** — Datadog's Agent-embedded Collector (requires Agent ≥v7.65) vs. the standalone contrib DaemonSet already deployed. The paths doc said "evaluate at build time"; decide it here.
+1. **DDOT vs. otelcol-contrib** — `research/24` §1.1 already made this a CONFIRMED choice: keep the standalone contrib DaemonSet (pinned `0.158.2`) as the fleet collector; do NOT make DDOT the fleet collector; DDOT optional on the instructor cluster only. Confirm this with Whitney rather than re-opening it; only revisit if new info contradicts research/24.
 2. **`datadog/connector`** — add it? (Required for Trace Metrics since otelcol-contrib v0.95.0; the Datadog Exporter no longer computes them.)
 3. **`datadog.prometheusScrape.enabled`** — confirm it stays **off**; document why (double metrics + double billing).
 4. **Prometheus scraping ownership** — for each component category, decide whether the Collector scrapes it or the Datadog Agent does.
@@ -201,11 +204,15 @@ workshop story, and what does "working" look like in the UI for each?
 1. Carry forward the DDOT vs. two-DaemonSets decision from Milestone 2 (confirm, do not re-open unless new info).
 2. For each named integration in `research/28-…`: **wire it or skip it** for the workshop — one component at a time.
 3. **UI verification checklist** — define what proves each wired integration works (which dashboard, which metric, which view).
-4. **Hostname alignment** — Agent and Collector must both key on `k8s.node.name`; confirm the config.
+4. **Hostname alignment** — Datadog computes the host as `<k8s.node.name>-<cluster name>`. `cluster.name=watch-it-burn` is already upserted by the Collector; the missing pieces are `k8s.node.name` on host-identifying telemetry and a matching `DD_CLUSTER_NAME` on the Agent (`research/24` §1.2). Confirm both.
+5. **Falcosidekick → Datadog (verify-at-build)** — confirm Falcosidekick actually forwards security events to Datadog, not only to Talon. Commit `6c6a81d` wired it but `research/23` observed Talon-only; this can only be confirmed on a live cluster.
+6. **Istio ambient: L7 or L4-only?** — accept L4-only ztunnel metrics and narrate it, or deploy a per-namespace waypoint for L7/mesh traces (`research/23` Decision 6, `research/18` Istio rows). One decision.
+7. **EKS + CloudWatch cross-account integration scope** — is it in scope at all, and almost certainly NOT per-attendee (`research/24` §1.4)? Decide facilitator-only vs. skip.
+8. **Datadog Agent resource footprint** — carry the sizing from `research/24` §2 (node Agent 200m/256Mi, Process Agent 100m/200Mi, Cluster Agent 200m/256Mi; APM + System Probe OFF) into the child PRD.
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD implementing the Agent deploy + integrations + UI verification per decisions 1-4 (`/prd-update-decisions` for the Decision Log).
+2. Run `/prd-create` for a child PRD implementing the Agent deploy + integrations + UI verification per decisions 1-8 (`/prd-update-decisions` for the Decision Log).
 3. Add to `docs/ROADMAP.md` as `- Datadog deployment & integrations (PRD #[issue-id])`, after the Collector PRD.
 4. Run `/prd-update-progress` to commit + push.
 5. Clear context; run `/prd-next` for Milestone 4.
@@ -233,17 +240,18 @@ panels can be split by model tier. If the Service Map does not draw, this is not
 beats depend on the Service Map?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **`service.version` semantics** — cluster-tier string (`cluster-1/2/3`) vs. model name (`haiku/sonnet/opus`). Determines whether the model-tier cost-race panel works.
+1. **`service.version` semantics** — cluster-tier string (`cluster-1/2/3`) vs. model name (`haiku/sonnet/opus`). Determines whether the model-tier cost-race panel works. NOTE: the corpus already contains BOTH answers — `research/23` picked model-name, while the planning transcript, `research/18`, `research/19`, and `TECH-STATUS.md` say cluster-tier. Resolve the conflict explicitly; do not assume.
 2. **Complete tag vocabulary + gap inventory** — the exact `service.name` per component and the list of workloads missing UST labels today.
 3. **Same-tag mechanism for correlation** — how the Agent (logs) and OTel Exporter (traces/metrics) are made to carry identical `service`/`env`/`version`.
-4. **Weaver schema now?** — encode the UST vocabulary in a Weaver registry for CI validation before app-level traces exist, or defer. (`/research` if the CI value is unclear.)
-5. **Version prerequisite** — confirm Agent ≥7.58.0 or Datadog Exporter ≥v0.110.0 so `deployment.environment.name` maps to `env`.
+4. **`peer.service` + span-kind prerequisite** — the pure-OTel Service Map infers edges from `peer.service` and correct span kinds (`research/23` Decision 8). Decide where these are set so the map can draw `guard-proxy → agentgateway → kagent → Bedrock`.
+5. **Weaver schema now?** — encode the UST vocabulary in a Weaver registry for CI validation before app-level traces exist, or defer. (`/research` if the CI value is unclear.)
+6. **Version prerequisite** — confirm Agent ≥7.58.0 or Datadog Exporter ≥v0.110.0 so `deployment.environment.name` maps to `env`.
    Note: `DD_SERVICE`/`DD_ENV`/`DD_VERSION` env vars do NOT work on the OTel path — UST must flow via `OTEL_RESOURCE_ATTRIBUTES`.
-   Open risk to resolve here: whether the full Service Map renders from pure OTLP export without the Agent handling traces (research/19 flags this unverified) — carry a `/research` or live-cluster check.
+   Open risk to resolve here: whether the full Service Map renders from pure OTLP export without the Agent handling traces (research/19 flags this Medium-confidence/unverified) — this needs a **live-cluster check**, not just `/research`.
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` (Service Map is a must-have).
-2. Run `/prd-create` for a child PRD implementing UST per decisions 1-5, acceptance including "Service Map renders in the Datadog UI" (`/prd-update-decisions` for the Decision Log).
+2. Run `/prd-create` for a child PRD implementing UST per decisions 1-6, acceptance including "Service Map renders in the Datadog UI" (`/prd-update-decisions` for the Decision Log).
 3. Add to `docs/ROADMAP.md` as `- UST strategy (PRD #[issue-id])`, placed **after** the Datadog-deployment PRD (UST can only be validated once collection exists).
 4. Run `/prd-update-progress` to commit + push.
 5. Clear context; run `/prd-next` for Milestone 5.
@@ -303,25 +311,27 @@ accurate cost counter. Confirmed visible in Datadog.
 - Codebase: `agent/gateway/guard-proxy/` in full (sanitization logic, `record_usage()`, cost counter, current span output), `agent/gateway/agentgateway.yaml`, `gitops/ai-layer/resources.yaml`, every directory in `beats/`
 
 **Step 1 — Problem (write 3-5 sentences):** Which demo beats depend on `gen_ai.*` telemetry, and
-what is missing today (note: the cost counter currently reports zero — see decision 2)?
+what is missing today?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Does Datadog LLM Observability surface from pure OTel `gen_ai.*` spans, or does it require dd-trace?** Run a `/research` spike before presenting this.
-2. **`adk_usage_metadata` vs. `kagent_usage_metadata`** — guard-proxy parses the wrong key, so `witb_cost_usd` silently tallies zero. Confirm the key the live kagent ADK agent actually uses (live-cluster verification), then fix `record_usage()`.
+1. **Does Datadog LLM Observability surface from pure OTel `gen_ai.*` spans, or does it require dd-trace?** No existing spike answers this (`research/05` names it a gap; `research/19` covers correlation, not the LLM Observability product). Run a net-new `/research` spike before presenting this.
+2. **Cost-counter key — already live-resolved; verify it still holds.** `PROJECT_STATE.md` live validation (kagent 0.9.9) found the key is `kagent_usage_metadata`, NOT `adk_usage_metadata` (`research/14` was wrong); `record_usage()` already accepts both, kagent-first. This is NOT an open bug — confirm the live key still holds on the workshop cluster and that the fallback remains.
 3. **`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`** — where it's set and the security/privacy implications for the workshop (content capture is load-bearing for the re-leak trap, but must be redacted symmetrically — see research/12).
-4. **Python OTel SDK instrumentation plan for guard-proxy** — which spans to emit manually vs. relying on kagent/agentgateway built-in OTel output. (No spiny-orb — Python only.)
-5. **agentgateway v1.3.0 field-path verification** — the repo has v1.2.1 pins; verify field paths against v1.3.0 before finalizing.
+4. **GenAI semconv stability / opt-in.** All `gen_ai.*` semconv is Development status; names churned v1.36→v1.37; `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` must be set deliberately (`research/05`, `research/06`). Decide which semconv version to pin and whether to set the opt-in.
+5. **Python OTel SDK instrumentation plan for guard-proxy** — which spans to emit manually vs. relying on kagent/agentgateway built-in OTel output. (No spiny-orb — Python only.)
+6. **agentgateway v1.3.0 field-path verification** — the repo has v1.2.1 pins; verify field paths against v1.3.0 before finalizing.
+7. **Re-leak-trap trace teardown** — ensure trace data is torn down in teardown so no span store retains even the fake sentinel post-run (`research/05` re-leak control #4).
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD implementing GenAI telemetry per decisions 1-5, acceptance including the four demo views above visible in Datadog and the cost counter reporting non-zero (`/prd-update-decisions` for the Decision Log).
+2. Run `/prd-create` for a child PRD implementing GenAI telemetry per decisions 1-7, acceptance including the four demo views above visible in Datadog and the cost counter reporting non-zero (`/prd-update-decisions` for the Decision Log).
 3. Add to `docs/ROADMAP.md` as `- GenAI semconv & LLM Observability (PRD #[issue-id])`.
 4. Run `/prd-update-progress` to commit + push.
 5. Clear context; run `/prd-next` for Milestone 7.
 
 **Done when:**
-- [ ] Decisions 1-5 recorded in the child PRD's Decision Log with reasoning
-- [ ] Research spikes for decisions 1 and 2 exist in `research/`
+- [ ] Decisions 1-7 recorded in the child PRD's Decision Log with reasoning
+- [ ] A net-new research spike for decision 1 (Datadog LLM Observability from pure OTel gen_ai.* spans) exists in `research/`
 - [ ] A child PRD issue exists whose acceptance includes the four demo views + accurate cost counter
 - [ ] ROADMAP updated
 
@@ -372,24 +382,29 @@ as Kubernetes secrets in that attendee's cluster.
 - `research/25-eks-quotas-shared-vpc-topology-2026.md`, `research/26-aiewf-2026-logistics-2026.md`, `research/27-conference-demo-resilience-2026.md`
 - Codebase: `gitops/apps/` (ESO config and existing secret patterns), `docs/BUILD-SPEC.md` (attendee experience section)
 
+Confirmed model: **per-attendee trial orgs** (2026-06-22). `PROJECT_STATE.md`'s "one shared org +
+per-cluster-filtered dashboard link" line is **stale/superseded** — do not design around it.
+
 **Step 1 — Problem (write 3-5 sentences):** What is unresolved about provisioning and distributing
-attendee Datadog access at workshop scale, and what is the blast radius if it fails on the day?
+per-attendee Datadog access at workshop scale, and what is the blast radius if it fails on the day?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Provisioning** — how do 60-70 Datadog trial orgs get created? (Manual, Datadog API, Terraform, other?)
-2. **Surfacing credentials** — how do attendees receive their keys during the workshop? (Printed card, QR, projected, other?)
-3. **Keys into the cluster** — how do per-attendee keys reach Kubernetes secrets? (ESO, init container, CI, other?)
-4. **Rotation/expiry** — how is trial-account expiry handled?
+1. **Provisioning (NET-NEW RESEARCH REQUIRED)** — how do 60-70 Datadog trial orgs get created? No doc in the repo addresses this; it is the riskiest unsupported scope. Run a net-new `/research` spike before presenting options (Manual, Datadog API, Terraform, other).
+2. **Surfacing credentials** — how do attendees receive their access during the workshop, and what is in each bundle (org URL, API key, app key?, kubeconfig, chat-UI token)? `research/27` §1.9 settles "pre-generate per-attendee bundles + a claim mechanism (code on a card / per-seat URL)" but leaves the mechanism and bundle contents open.
+3. **Are app keys (`datadogAppKey`) needed at all?** App keys are only for dashboard/monitor API automation, not ingest (`research/24` §3.2). Decide whether attendees need them or whether API key + site suffices.
+4. **Keys into the cluster** — `research/24` §3.3 Option A is the recommended approach: `datadog-secret` in `monitoring`, `security`, and (if Agent enabled) `datadog` namespaces, materialized via one ESO `ExternalSecret` per namespace from a single AWS Secrets Manager source. Confirm or revise. (Topology is independent per-student standalone clusters, no hub — `research/25`.)
+5. **Rotation/expiry** — how is trial-account expiry handled? No doc addresses this.
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD implementing account provisioning + credential distribution + secret storage per decisions 1-4 (`/prd-update-decisions` for the Decision Log).
+2. Run `/prd-create` for a child PRD implementing account provisioning + credential distribution + secret storage per decisions 1-5 (`/prd-update-decisions` for the Decision Log).
 3. Add to `docs/ROADMAP.md` as `- Attendee accounts & credentials (PRD #[issue-id])`.
 4. Run `/prd-update-progress` to commit + push.
 5. This is the final milestone — when its child PRD exists, mark this meta-PRD complete and run `/prd-done` for issue #7.
 
 **Done when:**
-- [ ] Decisions 1-4 recorded in the child PRD's Decision Log with reasoning
+- [ ] Decisions 1-5 recorded in the child PRD's Decision Log with reasoning
+- [ ] A net-new research spike for org provisioning (decision 1) exists in `research/`
 - [ ] A child PRD issue exists for provisioning + distribution + secret storage
 - [ ] ROADMAP updated
 - [ ] All 8 milestones complete → this meta-PRD closed
@@ -416,3 +431,7 @@ attendee Datadog access at workshop scale, and what is the blast radius if it fa
 | 2026-06-22 | Accounts/credentials/secrets consolidated into one PRD (Milestone 8) | Tightly coupled; splitting would repeat the same design conversations |
 | 2026-06-22 | UST and correlation kept as separate PRDs (Milestones 4, 5) | UST is the mechanism; correlation is the verification. Separation forces explicit confirmation that correlation works end-to-end |
 | 2026-06-22 | `/prd-update-progress` pushes after committing | Michael needs visibility into planning progress |
+| 2026-06-22 | Attendee Datadog model: per-attendee trial orgs (confirmed) | Whitney confirmed per-attendee orgs over shared org; `PROJECT_STATE.md`'s "one shared org" line is stale and must be updated. Org provisioning has no research backing — Milestone 8 needs a net-new spike |
+| 2026-06-22 | Cost-counter key live-resolved to `kagent_usage_metadata` | Live validation (kagent 0.9.9) showed `research/14` was wrong; `record_usage()` already accepts both keys, kagent-first. Milestone 6 verifies, does not "fix a bug" |
+| 2026-06-22 | DDOT-vs-contrib not a blank slate | `research/24` §1.1 already confirmed: standalone contrib `0.158.2` as fleet collector, DDOT optional on instructor cluster only. Milestone 2 confirms rather than re-decides |
+| 2026-06-22 | Reconciliation pass folded research 14/18/23/24/25/27 + PROJECT_STATE findings into milestones | A read-only audit agent reconciled prior docs against this meta-PRD; settled decisions and unrepresented open questions were absorbed into the relevant milestones |
