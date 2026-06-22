@@ -73,11 +73,16 @@ naming, and style. Specifically:
 - `PROJECT_STATE.md` — current implementation status
 - `docs/DESIGN-DECISIONS.md` — previously settled decisions
 - `docs/transcripts/observability-planning.md` — planning session notes and confirmed facts
-- `docs/transcripts/observability-architecture-paths.md` — Path 1/2/3 comparison; **Path 2 chosen**
+- `docs/transcripts/observability-architecture-paths.md` — background on the options considered (it uses "Path 1/2/3" labels; ignore those labels — the chosen architecture is described under "Settled decisions" below, not by a path number)
 - `docs/observability-priorities.md` — living must-have vs. nice-to-have list (created in Slice 1)
 
 **Settled decisions — do NOT re-litigate:**
-- **Architecture: Path 2 hybrid** — OTel Collector for OTLP/GenAI + Datadog Agent DaemonSet for EKS infra. Deployment shape settled in `research/24` §1.1: standalone otelcol-contrib Collector (pinned `0.158.2`) as the fleet collector + standalone Datadog Agent DaemonSet for infra only; do NOT make DDOT the fleet collector (DDOT optional on the instructor cluster only).
+- **Architecture (described by capability, not by a path number):**
+  - OTel Collector handles all OTLP/GenAI telemetry: standalone otelcol-contrib (pinned `0.158.2`) as the fleet collector. Do NOT make DDOT the fleet collector (DDOT optional on the instructor cluster only) — `research/24` §1.1.
+  - Datadog Agent DaemonSet for EKS infrastructure (nodes/pods/containers) and log collection.
+  - **Full Universal Service Tagging so the Datadog Service Map renders** — this is a confirmed must-have (Slice 6).
+  - **Out-of-the-box integration dashboards are fine** (they come free with the Agent: EKS, Falco, cert-manager, Collector).
+  - **Do NOT build custom dashboards or custom metrics for supporting tech that is never center stage** (e.g. ArgoCD, Kyverno, KubeArmor enforcement panels). Story-related custom dashboards (e.g. the model-tier cost comparison) are **deferred to dress rehearsal** — not built in this PRD sequence.
 - **TypeScript rewrite of guard-proxy is NOT happening.** All Python apps stay Python. spiny-orb is off the table. AI-layer instrumentation uses the Python OTel SDK directly, or kagent/agentgateway built-in OTel output.
 - **Already wired:** `spanmetricsconnector` with `add_resource_attributes: true`; UST tags via `OTEL_RESOURCE_ATTRIBUTES` on guard-proxy/agentgateway/kagent; `cluster.name=watch-it-burn` upserted by the Collector `resource` processor; OTel Collector pinned at contrib `0.158.2`.
 - **Falcosidekick → Datadog:** wired in commit `6c6a81d`, but `research/23` (predates the commit) observed Falcosidekick forwarding only to Talon. Verify-at-build in Slice 4; not a confirmed-working fact.
@@ -107,7 +112,7 @@ Known must-haves going in:
 These, if decided late, force rework of earlier slices. Slice 1 settles them even though their full
 payoff arrives later:
 - **Collector pipeline shape** — confirm standalone contrib `0.158.2`; whether `datadog/connector` is added (Trace Metrics since otelcol-contrib v0.95.0); `datadog.prometheusScrape.enabled` stays **off** (double metrics + billing).
-- **UST tag vocabulary** — exact `service.name` per component and, critically, **`service.version` semantics**: cluster-tier (`cluster-1/2/3`) vs. model name (`haiku/sonnet/opus`). The corpus contains BOTH answers (`research/23` says model-name; planning transcript, `research/18`, `research/19`, `TECH-STATUS.md` say cluster-tier) — resolve explicitly.
+- **UST tag vocabulary** — exact `service.name` per component and `service.version` = the component's real **software version** (v1/v2/v3 as releases roll out). `service.version` is NOT a model-tier label. (Prior docs that proposed cluster-tier or model-name for `service.version` are superseded by this decision.) The **model dimension** for cost comparison comes from OTel GenAI semconv (`gen_ai.request.model`), captured in Slice 2 and surfaced in Datadog LLM Observability — never from `service.version`.
 - **Account model for MVP** — one trial account now; per-attendee scale-out deferred to Slice 8.
 - **Weaver schema** — decide whether a Weaver registry encoding the OTel GenAI semconv (to `weaver registry live-check` `gen_ai.*` in CI) is worthwhile. If yes, **start the registry in Slice 1** so later slices validate against it from the first traces.
 
@@ -140,7 +145,7 @@ be locked now to avoid reworking later slices?
 
 **Step 2 — Resolve with Whitney (one at a time):**
 1. **Collector pipeline shape** — confirm standalone contrib `0.158.2`; decide `datadog/connector` (Trace Metrics); confirm `datadog.prometheusScrape.enabled` off with reasoning.
-2. **UST tag vocabulary + `service.version` semantics** — resolve cluster-tier vs. model-name (corpus conflict above); define `service.name` per component. Note: `DD_SERVICE`/`DD_ENV`/`DD_VERSION` env vars do NOT work on the OTel path — UST flows via `OTEL_RESOURCE_ATTRIBUTES`; `deployment.environment.name`→`env` needs Agent ≥7.58.0 or Datadog Exporter ≥v0.110.0.
+2. **UST tag vocabulary** — define `service.name` per component; `service.version` = each component's real software version (v1/v2/v3), NOT a model-tier label. The model dimension for cost comparison lives in `gen_ai.request.model` (Slice 2), not UST. Note: `DD_SERVICE`/`DD_ENV`/`DD_VERSION` env vars do NOT work on the OTel path — UST flows via `OTEL_RESOURCE_ATTRIBUTES`; `deployment.environment.name`→`env` needs Agent ≥7.58.0 or Datadog Exporter ≥v0.110.0.
 3. **MVP account** — confirm one trial account for the MVP; how its `datadog-secret` is supplied for the slice (manual is fine for one account).
 4. **Cost-counter verify** — confirm `record_usage()` reads `kagent_usage_metadata` (live-resolved) and the MVP shows non-zero spend.
 5. **Weaver schema worthwhile?** — decide. If yes, start a Weaver registry encoding the OTel GenAI semconv for CI `live-check`; if no, record why.
@@ -180,16 +185,17 @@ emitted today vs. missing?
 2. **GenAI semconv stability / opt-in** — all `gen_ai.*` is Development; names churned v1.36→v1.37; `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` must be set deliberately (`research/05`, `research/06`). Pin a version; decide the opt-in. If Weaver was started in Slice 1, validate against the registry.
 3. **Python OTel SDK instrumentation plan for guard-proxy** — which spans to emit manually vs. relying on kagent/agentgateway built-in OTel output (kagent tracing is off by default — `otel.tracing.enabled: true`).
 4. **agentgateway v1.3.0 field-path verification** — repo has v1.2.1 pins; verify field paths against v1.3.0 GA before finalizing.
+5. **`gen_ai.request.model` capture** — confirm the model identifier is captured on the spans so the model dimension is available in Datadog LLM Observability. This (not `service.version`) is what a later model-tier cost comparison groups by; capture it now even though that dashboard is deferred to dress rehearsal.
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD per decisions 1-4, acceptance including "LLM/tool-call waterfall visible in APM" (`/prd-update-decisions`).
+2. Run `/prd-create` for a child PRD per decisions 1-5, acceptance including "LLM/tool-call waterfall visible in APM" and "`gen_ai.request.model` visible in LLM Observability" (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- LLM call & tool-call waterfall (PRD #[issue-id])`, after the MVP.
 4. Run `/prd-update-progress` to commit + push.
 5. Clear context; run `/prd-next` for Slice 3.
 
 **Done when:**
-- [ ] Decisions 1-4 recorded with reasoning
+- [ ] Decisions 1-5 recorded with reasoning
 - [ ] A net-new research spike for Datadog LLM Observability from pure OTel gen_ai.* spans exists in `research/`
 - [ ] A child PRD issue exists whose acceptance includes the waterfall visible in APM
 - [ ] ROADMAP updated
@@ -279,7 +285,7 @@ named integrations are visible and correct in the Datadog UI.
 setup cost for the workshop, and what does "working" look like in the UI for each?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Per-component telemetry synthesis (research deliverable)** — produce `research/28-per-component-telemetry-synthesis-2026.md`: per IDP component (ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO, cert-manager, Backstage, kagent, agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator) — what it emits, Datadog integration status, OOTB dashboard, UST applicability, gotcha, and **wire-or-skip with reasoning**. Run `/research <specific question>` for any unverified component; include full output.
+1. **Per-component telemetry synthesis (research deliverable)** — produce `research/28-per-component-telemetry-synthesis-2026.md`: per IDP component (ArgoCD, Kyverno, Falco, Istio ambient, ESO, cert-manager, Backstage, kagent, agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator) — what it emits, Datadog integration status, OOTB dashboard, UST applicability, gotcha, and **wire-or-skip with reasoning**. **KubeArmor is NOT in the workshop narrative — skip its observability entirely (no synthesis row needed beyond noting it is out).** Bias every wire/skip toward OOTB integrations only; do NOT build custom dashboards or custom metrics for components that are never center stage. Run `/research <specific question>` for any unverified component; include full output.
 2. **DDOT vs. contrib** — `research/24` §1.1 already confirmed: keep standalone contrib `0.158.2` as fleet collector; standalone Agent for infra only; DDOT optional on instructor cluster. Confirm, do not re-open without new info.
 3. **Wire-or-skip per named integration** — one component at a time. For each integration wired, define its **UI-verification checklist**: which dashboard, which metric, and which view proves it works in the Datadog UI.
 4. **Hostname alignment** — Datadog computes host as `<k8s.node.name>-<cluster name>`; `cluster.name` already upserted; confirm `k8s.node.name` on host telemetry + matching `DD_CLUSTER_NAME` on the Agent (`research/24` §1.2).
@@ -308,8 +314,8 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 
 **End-state goal:** The Datadog **Service Map renders** (`guard-proxy → agentgateway → kagent →
 Bedrock`, each node health-indicated), and "View related logs" pivots from a trace and "View Trace in
-APM" pivots from a log — confirmed end-to-end on the live cluster. Token-cost panels can split by
-model tier.
+APM" pivots from a log — confirmed end-to-end on the live cluster. `service.version` carries each
+component's real software version (the model dimension lives in `gen_ai.request.model`, not UST).
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
@@ -341,37 +347,22 @@ earlier slices, given UST vocabulary was locked in Slice 1?
 
 ---
 
-### Slice 7 — Custom workshop dashboards
+### Slice 7 — Custom dashboards: DEFERRED to dress rehearsal (do not build now)
 
-**End-state goal:** The agreed must-have workshop dashboards exist as committed definitions, each
-backed by data confirmed already flowing from earlier slices.
+**Decision:** Custom workshop dashboards are **not built in this PRD sequence.** Whitney will decide
+which story dashboards to build during dress rehearsal. Two constraints stand:
+- **No custom dashboards or custom metrics for supporting tech that is never center stage** (ArgoCD, Kyverno, KubeArmor enforcement, etc.). Out-of-the-box Agent dashboards (EKS, Falco, cert-manager, Collector) are already free and stay.
+- **Story-related custom dashboards** (e.g. the model-tier cost comparison — token spend grouped by `gen_ai.request.model`, Haiku vs Sonnet vs Opus) are deferred to dress rehearsal. They are cheap to add then because Slice 2 already captures `gen_ai.request.model` and it is available in LLM Observability. (This groups by `gen_ai.request.model`, NOT `service.version` — `service.version` is the software version.)
 
-**Step 0 — Read:**
-- This meta-PRD's top matter and `docs/observability-priorities.md`
-- All prior slice child PRDs + Decision Logs — **gate this slice** (a dashboard can't be built on absent data)
-- `research/24-…`, `docs/transcripts/observability-architecture-paths.md` (Path 3 candidate dashboard list)
-- Codebase: `agent/gateway/guard-proxy/` (confirm `witb_cost_usd`/`witb_tokens_total`/`witb_requests_total`), `beats/`
+**Do NOT run `/prd-create` for this slice.** There is no child PRD here. When you reach this slice,
+confirm with Whitney that dashboards remain deferred, record any story-dashboard candidates surfaced
+during the build in `docs/observability-priorities.md` under nice-to-have, and move on.
 
-**Step 1 — Problem (write 3-5 sentences):** Which dashboards tell the workshop story, and is each
-one's data confirmed flowing before we commit to building it?
-
-**Step 2 — Resolve with Whitney (one at a time):**
-1. For each candidate (Wasted Tokens Over Time, Model Tier Cost Race, Tool Call Heatmap, KubeArmor Enforcement, Guardrail Toggle Timeline): **must-have or nice-to-have?**
-2. For each must-have: **is its data source confirmed flowing?** If not, defer — do not build on absent data.
-3. **Dashboard JSON as code (committed)** vs. UI-built?
-
-**Step 3 — Produce the child PRD:**
-1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD per decisions 1-3 (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- Custom dashboards (PRD #[issue-id])`, after Slice 6.
-4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Slice 8.
+When confirmed, clear context and run `/prd-next` for Slice 8.
 
 **Done when:**
-- [ ] Must-have/nice-to-have decided per dashboard with reasoning
-- [ ] Each must-have dashboard's data source is confirmed flowing (or explicitly deferred)
-- [ ] A child PRD issue exists for the chosen dashboards
-- [ ] ROADMAP updated
+- [ ] Confirmed with Whitney that custom dashboards stay deferred to dress rehearsal
+- [ ] Any story-dashboard candidates noted in `docs/observability-priorities.md` (nice-to-have)
 
 ---
 
@@ -432,7 +423,7 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 
 ## Acceptance Criteria (this meta-PRD)
 
-- [ ] 8 child PRDs exist (Slices 1-8), each issue-backed and labeled "PRD"
+- [ ] 7 child PRDs exist (Slices 1-6 and 8; Slice 7 is deferred and produces no child PRD), each issue-backed and labeled "PRD"
 - [ ] `research/28-…` per-component synthesis exists (produced in Slice 5)
 - [ ] `docs/observability-priorities.md` reflects the final must-have/nice-to-have list
 - [ ] `docs/ROADMAP.md` lists all child PRDs in build order, each as `- [desc] (PRD #[issue-id])`
@@ -442,7 +433,9 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 
 | Date | Decision | Reasoning |
 |------|----------|-----------|
-| 2026-06-22 | Architecture: Path 2 hybrid | OTel Collector for OTLP, Datadog Agent DaemonSet for EKS infra; see observability-architecture-paths.md |
+| 2026-06-22 | `service.version` = real software version, not a model-tier label | Whitney: `service.version` is for v1/v2/v3 software releases. The model dimension for cost comparison comes from OTel GenAI semconv `gen_ai.request.model` (captured in Slice 2, surfaced in LLM Observability), never from UST. Resolves the prior cluster-tier-vs-model-name conflict — it was a false choice |
+| 2026-06-22 | KubeArmor is not in the workshop narrative | Whitney: no KubeArmor observability at all. Skip it in the per-component synthesis; no KubeArmor enforcement panel. The fork bomb is handled by `podPidsLimit` + Falco/Talon |
+| 2026-06-22 | Architecture chosen by capability, NOT by a "Path" number | Whitney never chose "Path 2"; that label was wrong and is removed so no implementing agent inherits it. Chosen: OTel Collector (contrib 0.158.2) for OTLP/GenAI + Datadog Agent for EKS infra + **full UST so the Service Map renders**. OOTB integration dashboards stay (free with the Agent); NO custom dashboards/metrics for never-center-stage supporting tech; story dashboards deferred to dress rehearsal |
 | 2026-06-22 | TypeScript rewrite not happening | All Python apps stay Python; spiny-orb off the table; AI-layer instrumentation uses Python OTel SDK / built-in kagent+agentgateway OTel |
 | 2026-06-22 | Decisions documented in PRDs, not separate planning docs | `/prd-create` + `/prd-update-decisions` capture decisions in each child PRD's Decision Log; a parallel `docs/planning/` would drift |
 | 2026-06-22 | Accounts/credentials/secrets consolidated into one slice (Slice 8) | Tightly coupled; splitting would repeat the same design conversations |
