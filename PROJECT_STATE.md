@@ -5,6 +5,30 @@ AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Fo
 
 Last updated: 2026-06-22
 
+### READINESS PUNCH-LIST (2026-06-22, Michael's triage)
+
+Platform is built + live-validated (all beats, Terraform provisioning, rebrand). Remaining:
+
+1. **Build+push images** to `peopleforrester/watch-it-burn` (backstage + sample-app). DO. (Assess
+   buildability: no Backstage app source in-repo; either build one, use the public chart, or drop
+   backstage. The sample-app image likewise needs source/a Dockerfile.)
+2. **Pre-recordings / demo resilience.** DEFERRED (Michael).
+3. **60-cluster fleet dry-run.** DEFERRED 1-2 days until the EC2 vCPU quota lands; Michael emailed
+   the lab team. (One attendee cluster already validated clean end-to-end.)
+4. **Lab distribution** (`lab-distribution/`). DO, but needs ARCHITECTURE DECISIONS first: Railway
+   deploy + attach to `provisioning.agenticburn.com`, and wire it differently than the KCD distributor
+   because it must also drive Datadog distribution wiring plus per-attendee cluster + URL access (not
+   just key handout). Design pass needed before build.
+5. **ESO -> EKS Pod Identity.** DO NOW (modern June-2026 convention; agent + LB controller already use
+   it). Drop the IRSA role annotation; bind platform:external-secrets via a pod-identity association.
+   Also wire the Grafana admin secret. (EBS CSI still IRSA from the Packt template - optional consistency
+   switch, on a validated path, deferred.)
+6. **Burn-cluster (Cluster 1, no-floor) profile** never live-tested. DO.
+7. **Datadog** - Whitney, tomorrow (account/keys/Agent/dashboards). OTel side wired + waiting.
+8. **Co-speaker division of labor** - to be figured out with Whitney.
+9. **Whitney's open questions** (`facilitation/whitney-questions-tracker.md`) - review later.
+10. **TS agent / spiny-orb** - HOLD (deferred until after the demo).
+
 ### TERRAFORM LIVE-VALIDATED on attendee-001 (2026-06-22)
 
 Stood up the Terraform stack end to end and ran the full verify harness. The eksctl->Terraform
