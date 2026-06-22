@@ -1,10 +1,10 @@
-# ABOUTME: Root Backstage catalog file for the KubeAuto Day IDP.
+# ABOUTME: Root Backstage catalog file for the Watch It Burn IDP.
 # ABOUTME: Defines the top-level system that all components belong to.
 apiVersion: backstage.io/v1alpha1
 kind: System
 metadata:
-  name: kubeauto-idp
-  description: KubeAuto Day Internal Developer Platform
+  name: watch-it-burn-idp
+  description: Watch It Burn Internal Developer Platform
   annotations:
     backstage.io/techdocs-ref: dir:.
   tags:

@@ -8,7 +8,7 @@ metadata:
   labels:
     app: ${{ values.name }}
     app.kubernetes.io/name: ${{ values.name }}
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   replicas: ${{ values.replicas }}
   selector:
@@ -19,7 +19,7 @@ spec:
       labels:
         app: ${{ values.name }}
         app.kubernetes.io/name: ${{ values.name }}
-        app.kubernetes.io/part-of: kubeauto-idp
+        app.kubernetes.io/part-of: watch-it-burn-idp
         version: v1.0.0
     spec:
       securityContext:

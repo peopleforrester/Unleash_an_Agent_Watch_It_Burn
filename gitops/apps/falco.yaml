@@ -38,7 +38,7 @@ spec:
         # Custom rules loaded via ConfigMap
         customRules:
           custom-rules.yaml: |
-            # Custom Falco rules for KubeAuto Day IDP
+            # Custom Falco rules for Watch It Burn IDP
             # Detects exec-into-pod, sensitive file access, unexpected outbound connections
 
             - list: allowed_outbound_ports

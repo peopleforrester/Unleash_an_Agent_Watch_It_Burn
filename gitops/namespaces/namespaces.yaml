@@ -6,35 +6,35 @@ kind: Namespace
 metadata:
   name: platform
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: argocd
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: monitoring
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: backstage
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: apps
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
     pod-security.kubernetes.io/enforce: baseline
     pod-security.kubernetes.io/enforce-version: latest
     pod-security.kubernetes.io/warn: restricted
@@ -45,21 +45,21 @@ kind: Namespace
 metadata:
   name: security
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: kyverno
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: v1
 kind: Namespace
 metadata:
   name: cert-manager
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 ---
 apiVersion: v1
 kind: Namespace

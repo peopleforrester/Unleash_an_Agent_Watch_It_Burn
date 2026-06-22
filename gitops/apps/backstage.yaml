@@ -1,6 +1,6 @@
 # ABOUTME: ArgoCD Application for Backstage developer portal.
 # ABOUTME: Custom image with GitHub auth, Kubernetes plugin, and ArgoCD plugin.
-# verify-at-build: image is KubeAuto private ECR (kubeauto-backstage). Build/push our own Backstage
+# verify-at-build: image is Watch It Burn private ECR (watch-it-burn-backstage). Build/push our own Backstage
 # image (or use a public demo) before deploy; expected ImagePullBackOff until then. Backstage is nice-to-have.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -20,7 +20,7 @@ spec:
     helm:
       valuesObject:
         backstage:
-          # Our image (not KubeAuto's private ECR). Push to peopleforrester/watch-it-burn:backstage.
+          # Our image (not Watch It Burn's private ECR). Push to peopleforrester/watch-it-burn:backstage.
           image:
             registry: docker.io
             repository: peopleforrester/watch-it-burn
@@ -47,10 +47,10 @@ spec:
               mountPath: /app/catalog
           appConfig:
             app:
-              title: KubeAuto Day IDP
+              title: Watch It Burn IDP
               baseUrl: http://backstage.agenticburn.com
             organization:
-              name: KubeAuto Day
+              name: Watch It Burn
             backend:
               baseUrl: http://backstage.agenticburn.com
               listen:
@@ -111,7 +111,7 @@ spec:
               clusterLocatorMethods:
                 - type: config
                   clusters:
-                    - name: kubeauto-ai-day
+                    - name: watch-it-burn
                       url: https://kubernetes.default.svc
                       authProvider: serviceAccount
                       serviceAccountToken: ${K8S_SA_TOKEN}
@@ -120,7 +120,7 @@ spec:
               appLocatorMethods:
                 - type: config
                   instances:
-                    - name: kubeauto
+                    - name: watch-it-burn
                       url: http://argocd.agenticburn.com
                       token: ${ARGOCD_AUTH_TOKEN}
             proxy:
