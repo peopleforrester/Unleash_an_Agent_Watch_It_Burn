@@ -8,7 +8,7 @@ metadata:
   labels:
     app: templated-test-svc
     app.kubernetes.io/name: templated-test-svc
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   replicas: 1
   selector:
@@ -19,7 +19,7 @@ spec:
       labels:
         app: templated-test-svc
         app.kubernetes.io/name: templated-test-svc
-        app.kubernetes.io/part-of: kubeauto-idp
+        app.kubernetes.io/part-of: watch-it-burn-idp
         version: v1.0.0
     spec:
       securityContext:
@@ -29,7 +29,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: templated-test-svc
-          image: 598274344262.dkr.ecr.us-west-2.amazonaws.com/kubeauto-sample-app:v1.0.0
+          image: docker.io/peopleforrester/watch-it-burn:sample-app
           ports:
             - containerPort: 8080
               protocol: TCP

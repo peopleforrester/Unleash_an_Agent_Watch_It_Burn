@@ -6,7 +6,7 @@ metadata:
   name: apps-quota
   namespace: apps
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
   hard:
     pods: "20"
