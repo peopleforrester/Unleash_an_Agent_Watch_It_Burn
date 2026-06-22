@@ -2,8 +2,8 @@
 # Written incrementally during the live build (BUILD-SPEC §6). verify-at-build
 # items are confirmed and pinned here as each component is installed.
 
-## Build host tooling (confirmed 2026-06-16, netcup VPS)
-eksctl                 0.227.0
+## Build host tooling (confirmed 2026-06-22, netcup VPS)
+terraform              v1.15.6   (provisioning; see infra/terraform/)
 docker                 present (Engine Community)
 kubectl                v1.36.2
 helm                   v4.2.1
@@ -13,7 +13,8 @@ asciinema              TODO (install before Phase 9 recordings)
 ## Cloud / cluster
 aws-account            (bring your own; not pinned in a public repo)
 region                 us-west-2
-test-cluster           watch-it-burn-test (eksctl; EKS default k8s version)
+provisioning           Terraform — infra/terraform/ (lab-vpc + cluster + fleet/fleet.sh)
+terraform-modules      EKS ~> 21.0 · VPC ~> 5.0 · eks-pod-identity ~> 1.0 · aws provider ~> 6.0
 
 ## Component versions (research-grounded; RE-PINNED to current GA 2026-06-20, research/11 + research/14)
 kagent                 chart 0.9.9 / app v0.9.9  (CRD group kagent.dev/v1alpha2; Bedrock native; was 0.9.7)
@@ -31,18 +32,13 @@ agentgateway           OSS v1.3.0  (GA 2026-06-17; was v1.2.1) chart ref: oci://
                        mcpAuthorization is allow-only CEL, implicit deny, NO action field; MCP config nests under mcp.{targets,policies} — research/14 §2
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (digest TODO at deploy; verdict envelope field is `scanners`, not `scores`)
 
-## INSTALLED & VERIFIED on test cluster watch-it-burn-test (live, 2026-06-17)
-eks-kubernetes         v1.34.8-eks-0de9cde
-argo-cd                chart argo-cd-9.5.21        app v3.4.3   (deployed)
-kyverno                chart kyverno-3.8.1         app v1.18.1  (deployed)
-falco                  chart falco-9.1.0          app 0.44.1   (deployed)
-kagent                 chart kagent-0.9.7         app 0.9.7    (running; helm status 'failed' due to --wait timeout, workloads healthy)
-kagent-crds            chart kagent-crds-0.9.7
-aws-ebs-csi-driver     EKS addon + IRSA role witb-ebs-csi-role; default gp3 StorageClass
-agent-bedrock-irsa     role witb-agent-bedrock on sa attendee-test/agent-sa
-kube-prometheus-stack  chart 86.2.3 app v0.91.0   (install wedged on test cluster; redo at observability step)
-LIVE RESULT: Beat 1 verified (verify/beat-01.sh PASS); kagent agent answered a prompt
-             through Bedrock us.anthropic.claude-sonnet-4-6 (A2A round-trip, 800 tokens).
+## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
+## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.
+eks-kubernetes         1.35   (Terraform-provisioned; full IDP fits 1x t3.2xlarge — 38% CPU / 19% mem)
+aws-ebs-csi-driver     EKS addon via IRSA (the only remaining IRSA use); default gp3 StorageClass
+agent-bedrock          EKS Pod Identity association on agent:agent-sa (NOT IRSA; no SA annotation)
+LIVE RESULT: full verify GREEN on EKS — beat-cost (Bedrock spend via Pod Identity), beat-02
+             sanitization (4 states), PID cap=1024 (node cgroup), Falco->Talon fork-bomb kill (~4s).
 
 ## Bedrock models (Haiku verified live 2026-06-17; Sonnet/Opus/Fable ids confirmed ACTIVE/SYSTEM_DEFINED
 ## via aws bedrock list-inference-profiles in us-west-2, research/13 2026-06-20)
@@ -53,8 +49,8 @@ tier-opus                us.anthropic.claude-opus-4-8     (NO date stamp; In-Reg
                          use-case form submitted + model agreements created on your own AWS account.
                          The earlier us.anthropic.claude-sonnet-4-6-<DATE>-v1:0 placeholders were wrong: delete the <DATE>, there is no date stamp.
 
-## IDP foundation (ported from kubeauto-ai-day, RE-PINNED to current GA 2026-06-20)
-argo-cd                chart 9.6.0       app v3.4.4    (deploy-full-idp.sh pin; test cluster ran 9.5.21/v3.4.3)
+## IDP foundation (RE-PINNED to current GA 2026-06-20)
+argo-cd                chart 9.6.0       app v3.4.4    (deploy-full-idp.sh pin)
 kyverno                chart 3.8.1       app v1.18.1   (was 3.7.0)
 falco                  chart 9.1.0       app 0.44.1    (was 8.0.0)
 falcosidekick          chart 0.14.0      app 2.31.1    (was 0.12.1)
