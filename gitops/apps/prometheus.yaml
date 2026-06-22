@@ -44,7 +44,7 @@ spec:
           # Admin credentials are sourced from a Secret synced by the
           # External Secrets Operator. The matching ExternalSecret lives at
           # security/eso/grafana-admin-external-secret.yaml and pulls from
-          # AWS Secrets Manager key `kubeauto/grafana-admin`.
+          # AWS Secrets Manager key `watch-it-burn/grafana-admin`.
           # Static admin password for the demo (was an ESO ExternalSecret backed by AWS Secrets Manager;
           # a static value removes that external dependency). verify-at-build: rotate or wire a real store.
           adminPassword: "watchitburn-admin"

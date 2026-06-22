@@ -8,7 +8,7 @@ metadata:
   name: app-developer-binding
   namespace: apps
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
@@ -25,7 +25,7 @@ metadata:
   name: app-viewer-binding
   namespace: apps
   labels:
-    app.kubernetes.io/part-of: kubeauto-idp
+    app.kubernetes.io/part-of: watch-it-burn-idp
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
