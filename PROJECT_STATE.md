@@ -29,6 +29,24 @@ Platform is built + live-validated (all beats, Terraform provisioning, rebrand).
 9. **Whitney's open questions** (`facilitation/whitney-questions-tracker.md`) - review later.
 10. **TS agent / spiny-orb** - HOLD (deferred until after the demo).
 
+### NEW ASKS + RESOLVED DECISIONS (2026-06-22)
+
+- **Images DONE:** backstage + sample-app built and pushed to ghcr.io/peopleforrester/watch-it-burn
+  (package set PUBLIC by Michael; anonymous pull confirmed). Manifests repointed docker.io->ghcr.io.
+  Backstage = freshly scaffolded app, source at images/watch-it-burn-backstage/ (reproducible build via
+  node:22 container). k8s/argocd Backstage plugins not yet wired into the base image (follow-up).
+- **ESO -> Pod Identity DONE** (PR #4 merged): TF association + stale IRSA annotation removed.
+- **DNS = Namecheap.** agenticburn.com is at Namecheap (use ~/.claude/rules/tools/namecheap-api.md;
+  read-then-merge setHosts so existing records are never clobbered; mutations are deploy-time).
+- **Lab distribution (next):** Datadog = ONE shared org + per-cluster-filtered dashboard link (default);
+  cluster access = per-cluster IAM creds (current pool.csv model). Rework: drop the KodeKloud /browser
+  path, extend pool schema with url + datadog_url, show them on the success page, Railway deploy at
+  provisioning.agenticburn.com (Namecheap CNAME at deploy once Railway gives the target).
+- **NEW - update all READMEs** across the repo (post-rebrand + Terraform + ghcr accuracy pass).
+- **NEW - tech.agenticburn.com technical walkthrough:** a reveal.js (or similar) slide deck covering
+  EVERY component foundation->up, clear + visual, so Michael + Whitney can study the whole stack.
+  Host at tech.agenticburn.com.
+
 ### TERRAFORM LIVE-VALIDATED on attendee-001 (2026-06-22)
 
 Stood up the Terraform stack end to end and ran the full verify harness. The eksctl->Terraform
