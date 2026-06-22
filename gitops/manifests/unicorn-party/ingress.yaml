@@ -1,5 +1,5 @@
 # ABOUTME: Ingress for the Unicorn Party demo app via shared ALB.
-# ABOUTME: Exposes unicorn.ai-enhanced-devops.com with TLS via wildcard cert.
+# ABOUTME: Exposes unicorn.agenticburn.com over HTTP (lab; no TLS).
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -9,16 +9,14 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: "443"
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
     alb.ingress.kubernetes.io/backend-protocol: HTTP
     alb.ingress.kubernetes.io/healthcheck-path: /
-    alb.ingress.kubernetes.io/group.name: kubeauto-ingress
-    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-west-2:<ACCOUNT_ID>:certificate/151d10d0-1941-4fbf-bfd8-0e8c3be1a8d6
+    alb.ingress.kubernetes.io/group.name: watch-it-burn-ingress
 spec:
   ingressClassName: alb
   rules:
-    - host: unicorn.ai-enhanced-devops.com
+    - host: unicorn.agenticburn.com
       http:
         paths:
           - path: /
