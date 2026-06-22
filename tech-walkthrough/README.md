@@ -1,7 +1,7 @@
-<!-- ABOUTME: The tech.agenticburn.com technical walkthrough: a self-contained reveal.js deck of the -->
+<!-- ABOUTME: The walkthrough.agenticburn.com technical walkthrough: a self-contained reveal.js deck of the -->
 <!-- ABOUTME: whole Watch It Burn stack, foundation to AI layer. How to view it and how to host it. -->
 
-# Technical walkthrough (tech.agenticburn.com)
+# Technical walkthrough (walkthrough.agenticburn.com)
 
 A self-contained [reveal.js](https://revealjs.com/) slide deck that walks the entire Watch It Burn
 stack, foundation to AI layer, one focused slide per component, with mermaid diagrams for the
@@ -31,14 +31,14 @@ targets → the beats recap → provisioning and distribution.
 Every component slide carries its pinned version; the versions are kept in sync with the gitops
 `targetRevision` pins and the Terraform module versions (source of truth).
 
-## Host it at tech.agenticburn.com
+## Host it at walkthrough.agenticburn.com
 
 The deck is static, so any static host works. Two simple paths:
 
 1. **Railway static site** (matches the lab-distribution host): serve this directory; add the custom
-   domain `tech.agenticburn.com` in Railway; it prints a CNAME (and a verify TXT) to add at Namecheap.
+   domain `walkthrough.agenticburn.com` in Railway; it prints a CNAME (and a verify TXT) to add at Namecheap.
 2. **GitHub Pages**: publish `tech-walkthrough/` from the repo; set the Pages custom domain to
-   `tech.agenticburn.com`.
+   `walkthrough.agenticburn.com`.
 
 DNS lives at **Namecheap** (agenticburn.com). Add the CNAME with the Namecheap API using the
 read-then-merge pattern (never replace the whole host set):
