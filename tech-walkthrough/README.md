@@ -1,13 +1,19 @@
 <!-- ABOUTME: The walkthrough.agenticburn.com technical walkthrough: a self-contained reveal.js deck of the -->
 <!-- ABOUTME: whole Watch It Burn stack, foundation to AI layer. How to view it and how to host it. -->
 
-# Technical walkthrough (walkthrough.agenticburn.com)
+# Workshop walkthrough (walkthrough.agenticburn.com)
 
-A self-contained [reveal.js](https://revealjs.com/) slide deck that walks the entire Watch It Burn
-stack, foundation to AI layer, one focused slide per component, with mermaid diagrams for the
-architecture and the beat flows. Built so Michael and Whitney can study every part of the stack.
+A self-contained [reveal.js](https://revealjs.com/) slide deck that walks the **live delivery of the
+workshop** — the run-of-show as it is actually run with attendees: open cold on the hook, tell the room
+they already have a cluster and leap in, the three-cluster spine (it burns → it's blocked but still
+costs → you guard it yourself), and land on the governance map. It is the facilitator's how-we-run-it
+walkthrough, not a foundation-up architecture tour.
 
-`index.html` is the whole deck. reveal.js and mermaid load from a CDN, so there is no build step.
+The slides are what the room sees; the **speaker notes** (press `S`) carry the delivery detail —
+timing, who leads (Michael / Whitney), the `/toggle` commands, the hand-offs, and the fallbacks.
+Source of truth: `facilitation/runbook.md`, `cold-open-script.md`, and `governance-map.md`.
+
+`index.html` is the whole deck. reveal.js loads from a CDN, so there is no build step.
 
 ## View it locally
 
@@ -21,15 +27,15 @@ imports (reveal + mermaid). Press `S` for speaker view, `Esc` for the slide over
 
 ## What it covers
 
-Title and thesis → architecture overview → Foundation (Terraform / EKS / VPC-CNI / Pod Identity /
-node config) → GitOps (ArgoCD app-of-apps) → Platform controls (Kyverno / RBAC / floor /
-NetworkPolicies) → Runtime security (Falco / Talon / podPidsLimit) → Mesh and certs and secrets
-(Istio / cert-manager / ESO) → Observability (OTel / Prometheus / Grafana / Loki / Tempo / Datadog)
-→ AI layer (kagent + Bedrock / guard-proxy / LLM Guard / MCP / cost counter) → Backstage and burn
-targets → the beats recap → provisioning and distribution.
+The session in delivery order: open cold (the agent-deleted-my-cluster hook → production stakes) →
+the promise + "you already have a cluster, leap in" → how we watch (the trace dashboard) → the
+three-cluster spine (Cluster 1 burns + the cost counter → Cluster 2 CNCF controls block it but the
+bill still moved → Cluster 3 your own cluster, toggle output/input/MCP guards + free-play) → the
+optional trace re-leak trap → the governance map + cost ladder → take it home.
 
-Every component slide carries its pinned version; the versions are kept in sync with the gitops
-`targetRevision` pins and the Terraform module versions (source of truth).
+Component detail (what Kyverno / Pod Identity / kagent actually are) lives in the **speaker notes**,
+surfacing only where the flow hits each control — never as an opening lecture, mirroring the runbook's
+reveal discipline (introduce each control WHEN it turns on, not up front).
 
 ## Hosting (LIVE at https://walkthrough.agenticburn.com)
 
@@ -51,8 +57,8 @@ with the Namecheap API using the **read-then-merge** pattern (getHosts, append, 
 existing host set is never clobbered. See `~/.claude/rules/tools/namecheap-api.md`. The verify TXT is
 load-bearing: without it Railway's cert stays stuck at `VALIDATING_OWNERSHIP`.
 
-## Keeping versions accurate
+## Keeping it in sync
 
-When a component version changes in `gitops/apps/*.yaml` (`targetRevision`) or in the Terraform
-module pins, update the matching `<span class="tag">` in `index.html`. The version tags are the
-study reference, so they must match what actually deploys.
+When the run-of-show changes (timing, owners, toggles, beats), update `index.html` to match
+`facilitation/runbook.md` — the runbook is the source of truth for delivery. This deck is the visual
+walkthrough of it, not a second copy to drift. Pinned component versions live in `VERSIONS.lock`.
