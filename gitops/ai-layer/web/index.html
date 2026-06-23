@@ -5,9 +5,9 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <!-- verify-at-build: set proxy-base if the UI is not served same-origin with the guard-proxy
-       (ingress should route / and /cost to guard-proxy, or set this to the proxy URL with CORS). -->
-  <meta name="proxy-base" content="" />
+  <!-- Served inside the console frontend, which routes /a2a/ -> guard-proxy (A2A) and /cost -> guard-proxy.
+       proxy-base is /a2a so the A2A POST lands on the guard-proxy; /cost is polled absolute. -->
+  <meta name="proxy-base" content="/a2a" />
   <title>Watch It Burn — Your Agent</title>
   <style>
     body { font-family: system-ui, sans-serif; margin: 0; background: #0f1117; color: #e6e6e6; }
