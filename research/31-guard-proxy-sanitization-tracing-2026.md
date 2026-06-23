@@ -1,0 +1,510 @@
+<!-- ABOUTME: Research spike on tracing before/after guard-proxy sanitization (original vs sanitized prompt) in one trace. -->
+<!-- ABOUTME: Answers Issue #12 — manual OTel SDK content capture, before/after in one trace, the EVENT_ONLY env var on manual code, Datadog side-by-side view, and Datadog-side requirements. -->
+
+# 31. Guard-Proxy Before/After Sanitization Tracing (Issue #12)
+
+## Verification Method
+
+- **Approach:** Deep web research dated **2026-06-23** against current (2026) official primary
+  sources: the OpenTelemetry GenAI semantic-conventions spec (now in the dedicated
+  `open-telemetry/semantic-conventions-genai` repo), the `opentelemetry-util-genai` PyPI package,
+  the OTel GenAI-observability blog, and the Datadog LLM (Agent) Observability docs/blog. Every
+  material claim carries an inline source URL; the full list is in **Sources**.
+- **Hypothesis-verification stance (Whitney's rule):** the issue's implied "gotchas" — chiefly
+  "does `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUALLY
+  instrumented code" — are treated as hypotheses to verify, not facts to repeat. Verdicts are
+  **CONFIRMED**, **CONFIRMED-WITH-NUANCE**, **REFUTED**, or **COULD NOT FULLY CONFIRM**.
+- **In-repo facts taken as CONFIRMED** (read directly this session):
+  `agent/gateway/guard-proxy/proxy.py` — a stdlib `ThreadingHTTPServer` that, on `do_POST`,
+  extracts the user prompt text, optionally checks it against a block-list (Stage 1) and an LLM
+  Guard `/analyze/prompt` classifier (Stage 2), forwards the **original** request body (`raw`) to
+  the kagent agent, and on the response optionally calls LLM Guard `/analyze/output` to produce a
+  **sanitized** output (`output_scrub`). `docs/BUILD-SPEC.md` §4 — "OTel content capture is itself
+  an exfil channel (the re-leak trap), off by default; advanced beat." `PROJECT_STATE.md` — Datadog
+  required + primary, OTel neutral, content capture is the re-leak-trap mechanism.
+- **Builds on (NOT re-researched):**
+  - `research/29-python-ai-instrumentation-2026.md` (Issue #10) — established that the guard-proxy
+    is stdlib-only with **no OTel today**, **makes no Bedrock/LLM call** (it forwards A2A JSON-RPC to
+    the agent; the agent/ADK calls Bedrock), and gave the **manual OTel SDK init + `start_as_current_span`
+    + `inject()` context-propagation** pattern for the proxy. This spike inherits that and does NOT
+    re-derive the proxy's call graph or the SDK bootstrap.
+  - `research/28-datadog-llm-obs-otlp-2026.md` (Issue #9) — established native Datadog OTLP ingest of
+    `gen_ai.*` (semconv v1.37+, no dd-trace SDK), the `dd-otlp-source=llmobs` routing header, the
+    `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` **enum** (`NO_CONTENT`/`SPAN_ONLY`/`EVENT_ONLY`/
+    `SPAN_AND_EVENT`) and the `=true`-is-invalid trap **on the ADK path**, and the
+    `gen_ai.input.messages`/`gen_ai.output.messages`/`gen_ai.system_instructions` content attributes
+    (Opt-In + Development). This spike extends those to **manually written proxy code** specifically.
+  - `research/05-otel-genai-observability.md` — semconv all `Development`; content capture off by
+    default; the re-leak trap.
+
+### Cross-cutting frame the answers depend on
+
+The proxy is **not an LLM client** and **not an ADK runtime**. So neither ADK's built-in GenAI
+instrumentation nor `opentelemetry-instrumentation-botocore` applies here (per `research/29` Q3/Q5).
+Capturing the original-vs-sanitized prompt at the proxy is **hand-written manual instrumentation**
+against `opentelemetry-api`/`-sdk`. Every "does the GenAI env var / semconv apply" question therefore
+turns on a single distinction the issue is right to probe: **the OTel GenAI semconv defines the
+attribute *names and shapes*; it does NOT define runtime behavior for code you write by hand.** The
+content-capture *switch* lives in *instrumentation libraries*, not in the SDK or the spec.
+
+---
+
+## TL;DR per question
+
+| # | Question | Verdict |
+|---|---|---|
+| 1 | Which SDK call captures prompt text — attribute, event, or other; what does semconv say is correct for MANUAL code | **CONFIRMED** — `span.set_attribute(...)` or `span.add_event(...)`; semconv prefers **events** for structured content, allows JSON-string on span attributes; `gen_ai.input.messages`/`gen_ai.output.messages` are the canonical names, Opt-In |
+| 2 | Capture original + sanitized in ONE trace — same span / parent-child / siblings | **CONFIRMED** — feasible all three ways; **recommended = two attributes on ONE span** (`gen_ai.input.messages` = sanitized, a custom `witb.input.messages.original` = pre-sanitization), because Datadog renders one Input/Output pair per span |
+| 3 | Does `...CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUAL code? If manual, how to toggle capture | **REFUTED (as stated) / CONFIRMED-WITH-NUANCE** — the env var is **library-specific** (`opentelemetry-util-genai` / contrib instrumentations). Raw hand-written SDK code does **NOT** read it automatically; you must read it yourself or honor it via `opentelemetry-util-genai`'s `TelemetryHandler` |
+| 4 | How does before/after appear in Datadog LLM Obs — side-by-side | **CONFIRMED-WITH-NUANCE** — per-span Input vs Output panel is the side-by-side; before/after across two values needs a deliberate layout (one span, two attributes, or two spans in the waterfall) |
+| 5 | Datadog-side requirements to surface prompt text from manual spans | **CONFIRMED** — `dd-otlp-source=llmobs` routing, `gen_ai.operation.name` to classify span kind=`llm`, content in `gen_ai.input/output.messages` (or the `gen_ai.client.inference.operation.details` event); semconv v1.37+ |
+
+---
+
+## Q1. Which Python OTel SDK call captures prompt text in a span — attribute, span event, or other? What does OTel GenAI semconv say is correct for MANUALLY instrumented code?
+
+**The SDK gives you exactly two primitives, and the GenAI semconv has a stated preference between
+them.**
+
+**The two SDK calls (this is all the SDK offers for content):**
+- **Span attribute:** `span.set_attribute("gen_ai.input.messages", value)` — a key/value on the span
+  itself.
+- **Span event:** `span.add_event("gen_ai.client.inference.operation.details", attributes={...})` —
+  a timestamped structured record attached to the span (events are the spec's preferred carrier for
+  structured content; see below). (There is no third "content" primitive; logs via the Logs Bridge are
+  the other option but for the GenAI flow the spec routes structured content through span **events**.)
+  Source (SDK conventions: `start_as_current_span`, `set_attribute`, `add_event`):
+  in-repo `rules/tools/opentelemetry.md`.
+
+**What the GenAI semconv says is correct (this is the load-bearing part):**
+
+1. **Content is OFF by default and must be opt-in — even for your own code.** The spec is explicit:
+   "OpenTelemetry instrumentations **SHOULD NOT capture them by default, but SHOULD provide an option
+   for users to opt in**." Instructions/inputs/outputs are "likely to be large," "may contain media,"
+   and "are likely to contain sensitive information including user/PII data." This is the same
+   off-by-default property `research/05` and BUILD-SPEC §4 call the re-leak trap — and it is a
+   *recommendation to the instrumentation author*, i.e. **to you**, when you hand-write the proxy spans.
+   Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
+2. **The canonical attribute names** for chat content are `gen_ai.input.messages`,
+   `gen_ai.output.messages`, and `gen_ai.system_instructions`. All three are **`Opt-In`** requirement
+   level and **`Development`** stability. They are NOT the older `gen_ai.prompt`/`gen_ai.completion`
+   (removed; the OpenLLMetry deprecated-attribute lag in `research/29` Q7 is exactly this) and NOT the
+   event-only `gen_ai.content.prompt`/`gen_ai.content.completion` (older experimental events).
+   Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
+3. **Preferred carrier: events, with a span-attribute fallback.** The spec says "**Recording
+   structured attributes is supported on events (or logs) and may not yet be supported on spans**,"
+   and that "If structured attributes are not yet supported on spans in a given language, the
+   corresponding attribute value **SHOULD be serialized to JSON string on spans** and recorded in its
+   structured form on events." Practical reading for Python: the OTel Python SDK does **not** support
+   nested/structured attribute values on spans (span attribute values must be primitives or sequences
+   of one primitive type), so the message array must be **JSON-serialized to a string** if put on a
+   span attribute; the structured form belongs on a span **event**. So the semconv-correct manual
+   pattern is: put the structured messages on a `gen_ai.client.inference.operation.details` **event**,
+   and/or a JSON string on the `gen_ai.input.messages` span **attribute**.
+   Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
+4. **The message JSON schema** (so the attribute/event is valid): an array of objects with
+   `role` ("user"/"assistant"/"tool"/"system"), `parts` (array; each part has `type` —
+   "text"/"tool_call"/"tool_call_response" — and `content`), plus `finish_reason` on output messages.
+   "Instrumentations MUST follow [Input messages JSON schema]." For the proxy's prompt text the minimal
+   valid value is `[{"role":"user","parts":[{"type":"text","content":"<the prompt>"}]}]`.
+   Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
+
+**Reconciling "attribute vs event" for THIS workshop:** the semantic answer is "events preferred,
+JSON-string-on-attribute acceptable." The **Datadog** answer (Q4/Q5) is that it reads **both** —
+`gen_ai.input.messages`/`gen_ai.output.messages` attributes **OR** the
+`gen_ai.client.inference.operation.details` span event — so either carrier surfaces the text in
+LLM Observability. For the demo, the span **attribute** (JSON string) is the simpler, sufficient choice;
+the **event** is the more spec-pure choice and is what the re-leak-trap framing (`EVENT_ONLY`) points to.
+
+**Confidence: HIGH** on the names, opt-in/off-by-default property, the event-preferred/attribute-fallback
+rule, and the JSON schema (all quoted from the canonical spec).
+
+---
+
+## Q2. How to capture original (pre-sanitization) AND sanitized (post-sanitization) text in ONE trace — same span, parent/child, or sibling spans?
+
+**All three are technically possible; the recommended shape is TWO ATTRIBUTES (or two events) on ONE
+span, with a custom name for the "original."** Reasoning is driven by how the proxy actually works and
+by how Datadog renders a span.
+
+**What the proxy actually has (from `proxy.py`, CONFIRMED):** in a single `do_POST` the proxy holds, in
+one stack frame, BOTH the original prompt `text` (extracted before any guard runs) and — when the input
+classifier or block-list fires — the verdict; and on the response path it holds BOTH the raw agent
+`text` and the `output_scrub`-produced sanitized text. So all four values (original-in, sanitized/blocked-in,
+original-out, sanitized-out) are available within one request handler → one span's lifetime. There is no
+need to span boundaries to "carry" the before value; it is local.
+
+**Option A — ONE span, two attributes (RECOMMENDED).** On the proxy's request/forward span, set:
+- `gen_ai.input.messages` = the **sanitized/forwarded** prompt (the semconv-canonical "what actually
+  went to the model"), and
+- a **custom** attribute, e.g. `witb.input.messages.original` (JSON string), = the **pre-sanitization**
+  prompt, plus `witb.input.sanitized` (bool) / `witb.input.blocklist_hit` / `witb.input.classifier_verdict`.
+
+  Why recommended: it keeps before+after on the SAME span the attendee clicks, and it is unambiguous which
+  is canonical. The semconv has **no standard attribute for "the original, pre-sanitization input"** —
+  there is one input-messages slot — so the "before" value MUST be a custom (`witb.*`) attribute or a
+  custom event; do not overload `gen_ai.input.messages` with both. (This mirrors `research/29`'s rule that
+  `witb.*` are the repo's own namespace; here they carry the before/after delta the GenAI semconv does not
+  model.)
+
+**Option B — ONE span, two events.** Add two `add_event(...)` calls on the proxy span: one event
+`witb.input.original` and one `gen_ai.client.inference.operation.details` (or `witb.input.sanitized`)
+carrying the structured message. Events are timestamped, so they also encode ordering (original captured
+first, sanitized after the guard). This is the most semconv-pure (structured content on events) and is
+what the `EVENT_ONLY` capture mode (Q3) conceptually targets. Trade-off: Datadog surfaces the canonical
+input from the FIRST recognized source; a second custom event renders as a span event, not as a second
+Input panel.
+
+**Option C — parent + child spans (or siblings).** Wrap the guard decision in a child span
+(`guard_proxy.sanitize_input`) carrying the before/after, nested under the proxy's request span; the
+forward-to-agent is a sibling/child CLIENT span (the one `research/29` Q6 already defines, with `inject()`
+so the agent's `gen_ai.*` spans nest under it). This gives the cleanest waterfall story for a stage talk
+("here's the sanitize step, here's the forward, here's the model") and naturally puts the **original** on
+the sanitize span and the **sanitized** on the forward span. Trade-off: more spans, more code on a
+deliberately-minimal stdlib proxy; before/after are then on DIFFERENT spans (the attendee compares by
+clicking two spans, not one panel).
+
+**They are ALL "one trace."** A single trace is defined by one trace context; whichever option you pick,
+as long as it happens inside the same request (and the forward uses `inject()` to keep the agent in the
+same trace), every span and event lives under one trace id. `research/29` Q6 already supplies the
+propagation step that makes the proxy span and the agent's `gen_ai.*` spans share a trace.
+
+**Recommendation for the workshop:** **Option A** (one span, `gen_ai.input.messages` = sanitized +
+`witb.input.messages.original` = original) for the *clean* before/after lesson, OPTIONALLY promoted to
+**Option C** (a dedicated `sanitize_input` child span) if the on-stage waterfall narration wants a visible
+"sanitize" step. Avoid putting two competing values in the standard `gen_ai.input.messages` slot.
+
+**Confidence: HIGH** that all three work and are one-trace; **HIGH** that the semconv has no standard
+"original/pre-sanitization" attribute (so the before value must be custom). The choice between A/C is a
+demo-design call, not a correctness one.
+
+---
+
+## Q3. Does `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUALLY instrumented code, or only auto-instrumentation? (VERIFY — do not assume.) If manual, how to conditionally enable/disable content capture?
+
+**VERDICT: the env var does NOT apply to raw hand-written OTel SDK code automatically. It is a
+*library* setting read by `opentelemetry-util-genai` and the GenAI contrib instrumentations — NOT by
+`opentelemetry-api`/`opentelemetry-sdk`.** The hypothesis "this env var governs my manual proxy spans"
+is **REFUTED as stated**, **CONFIRMED-WITH-NUANCE** for "if you route through `opentelemetry-util-genai`."
+
+**Evidence:**
+
+1. **The variable is explicitly library-specific.** `opentelemetry-util-genai`'s own docs:
+   "This package relies on environment variables to configure capturing of message content, and by
+   default, message content will not be captured." [CORRECTED 2026-06-23: the previously quoted phrase
+   "only affects applications using this package's instrumentation capabilities, not the base SDK itself"
+   is NOT verbatim on the current PyPI page — it does not contain that sentence. The substance still
+   holds: capture is controlled by *this package* via the env var, and the GenAI **spec does not define
+   the env var at all** (verified — see #2 and the validation pass). The env var is therefore a
+   convention of the GenAI instrumentation libraries, NOT a base-SDK feature.] So a `span.set_attribute(...)`
+   you write by hand is **unaffected** by the env var — the SDK does not consult it, will not gate your
+   attribute, and will not strip it.
+   Source: https://pypi.org/project/opentelemetry-util-genai/
+2. **The GenAI *spec* does not define this env var at all.** The semconv text says instrumentations
+   SHOULD provide an opt-in option and MAY provide truncation, but it "**does not reference
+   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` or define specific enum values**"; it describes
+   the three usage patterns (don't record / record on attributes / store externally) and leaves the
+   *mechanism* to instrumentations. So the env var is a convention of the Python GenAI instrumentation
+   ecosystem, not a spec-mandated SDK switch.
+   Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
+3. **It is the same flag the contrib/ADK instrumentations honor** — `research/28`/`research/29`
+   established that on the **ADK path** the valid value is `EVENT_ONLY` and `=true` is an invalid config
+   that silently collects nothing. That behavior is real **for ADK and `opentelemetry-util-genai`-backed
+   instrumentations** — which is precisely why it does NOT transfer to the stdlib proxy: the proxy uses
+   none of those.
+   Sources: https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk ;
+   https://pypi.org/project/opentelemetry-util-genai/
+4. **The enum + the companion `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT` are library config, not SDK
+   behavior.** `opentelemetry-util-genai` defines `NO_CONTENT` (default) / `SPAN_ONLY` / `EVENT_ONLY` /
+   `SPAN_AND_EVENT`, plus `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT` (defaults false for `NO_CONTENT`/
+   `SPAN_ONLY`, true for `EVENT_ONLY`/`SPAN_AND_EVENT`). These only have effect *inside* that library's
+   `TelemetryHandler`.
+   Source: https://pypi.org/project/opentelemetry-util-genai/
+
+**So, for manual code, how do you conditionally enable/disable content capture? Two clean options:**
+
+- **Option 1 — honor the convention yourself (recommended; cheapest, fits the stdlib proxy).** Read the
+  same env var in the proxy and gate your own `set_attribute`/`add_event`. This makes the proxy behave
+  like a well-behaved instrumentation and keeps the re-leak-trap toggle consistent with the rest of the
+  stack:
+
+  ```python
+  import os
+  _CAPTURE = os.environ.get("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "NO_CONTENT").upper()
+  _CAPTURE_SPAN  = _CAPTURE in ("SPAN_ONLY", "SPAN_AND_EVENT")
+  _CAPTURE_EVENT = _CAPTURE in ("EVENT_ONLY", "SPAN_AND_EVENT")
+  # ... inside the span:
+  if _CAPTURE_SPAN:
+      span.set_attribute("gen_ai.input.messages", json.dumps(sanitized_messages))
+      span.set_attribute("witb.input.messages.original", json.dumps(original_messages))
+  if _CAPTURE_EVENT:
+      span.add_event("gen_ai.client.inference.operation.details",
+                     {"gen_ai.input.messages": json.dumps(sanitized_messages)})
+  ```
+
+  Default `NO_CONTENT` keeps the proxy SAFE (matches BUILD-SPEC §4 "off by default"); flip to
+  `EVENT_ONLY` (or `SPAN_ONLY`) only for the deliberate re-leak-trap beat. NOTE: a plain `=true` would NOT
+  match any branch above — which is *good*, it preserves the same "`=true` is wrong, use the enum"
+  discipline the ADK path enforces. (This is research only; do NOT edit `proxy.py`.)
+- **Option 2 — use `opentelemetry-util-genai`'s `TelemetryHandler`.** Instrument the proxy via that
+  library's manual API (it "offers APIs to minimize instrumentation work for GenAI libraries, providing a
+  TelemetryHandler to manage LLM invocation lifecycles with spans, metrics, and events, along with
+  structured message types"). Then the env var DOES govern capture for free. Trade-off: adds a
+  `0.4b0`-beta dependency (released 2026-05-01) to a deliberately stdlib-only proxy, and its model is
+  "an LLM invocation lifecycle" — which the proxy is *not* (it forwards A2A; per `research/29` Q3 it makes
+  no model call). So `TelemetryHandler` is a semantic mismatch for the proxy; Option 1 is the better fit.
+  Source: https://pypi.org/project/opentelemetry-util-genai/
+
+**Confidence: HIGH** (verified directly: the env var is library-scoped and the SDK ignores it; the spec
+does not define it). This is the spike's most important correction — it would be wrong to set
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` on the proxy Deployment and expect the
+hand-written spans to start/stop capturing; they won't, unless the code reads it (Option 1) or uses
+`opentelemetry-util-genai` (Option 2).
+
+---
+
+## Q4. How does before/after prompt content appear in Datadog LLM Observability — a side-by-side view?
+
+**CONFIRMED-WITH-NUANCE. Datadog's per-span "Input vs Output" is the side-by-side; getting
+*original-vs-sanitized* side by side is a layout choice you make with the Q2 options, not an automatic
+"diff" feature.**
+
+**What Datadog renders, confirmed:**
+- A trace is a **waterfall of spans**; "a given trace can also include input and output, latency, privacy
+  issues, errors, and more," and you "drill into a trace to see … which prompts it has sent … and how the
+  model replied — **all in one view**," "viewing each step of the agent's logic **side by side with the
+  input and output data**."
+  Sources: https://docs.datadoghq.com/llm_observability/terms/ ;
+  https://www.datadoghq.com/blog/datadog-llm-observability/ ;
+  https://www.datadoghq.com/blog/openai-agents-llm-observability/
+- Each span has an **Input** and an **Output** field. For an LLM span, Datadog maps
+  `gen_ai.input.messages` → the span's **input messages** and `gen_ai.output.messages` → the span's
+  **output messages** (see Q5). So the native "side-by-side" is **Input panel vs Output panel for one
+  span** — i.e. *prompt vs completion*, not *before vs after sanitization*.
+  Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
+
+**How before/after actually lands, per the Q2 option you choose:**
+- **Option A (one span, two attributes):** the span's **Input** panel shows the canonical
+  `gen_ai.input.messages` (sanitized). The **original** lives in the custom `witb.input.messages.original`
+  metadata, surfaced under `@meta.metadata.*` (Datadog maps custom attributes to `meta.metadata.<key>`),
+  visible in the span's metadata/tags pane — adjacent to, but not in, the Input panel. The attendee sees
+  sanitized as the Input and original as a tagged value on the same span. Good enough for the lesson;
+  it is "one click, both values," not a literal two-column diff.
+  Source (custom attrs → `@meta.metadata.<key>`): https://docs.datadoghq.com/llm_observability/monitoring/querying/
+- **Option C (sanitize child span + forward span):** the cleanest *visual* before/after — the
+  `sanitize_input` span's Input/Output shows original→sanitized, and the forward/model spans below show
+  the sanitized prompt flowing to the model. The attendee scrubs DOWN the waterfall and watches the text
+  change at the guard step. This is the most "demo-legible" before/after in Datadog, at the cost of more
+  spans. (If the sanitize span sets `gen_ai.input.messages`=original and `gen_ai.output.messages`=sanitized,
+  Datadog's own Input-vs-Output side-by-side on that one span literally shows before vs after.)
+- **The agent's own span** (ADK, `research/28`/`research/29`) will independently show the prompt it
+  received — which is the **sanitized** one (the proxy forwards the request; output scrubbing happens on
+  the way back). So the trace already encodes "model only ever saw the sanitized input," reinforcing the
+  lesson without extra work.
+
+**There is no built-in "compare two spans' content" diff widget documented.** The before/after contrast is
+produced by deliberate span/attribute layout (Q2), then read off the waterfall + side panels. Treat the
+exact UI affordance (do two `gen_ai.input/output.messages` on one span render as a true two-pane diff) as a
+**verify-at-build** item to confirm live in the Datadog LLM Observability UI on a cluster emitting these
+spans — the docs confirm per-span Input/Output rendering but not a pixel-level before/after layout.
+
+**Confidence: HIGH** that per-span Input-vs-Output is the side-by-side and that custom attrs surface as
+`@meta.metadata.*`; **MEDIUM** on the exact rendered appearance of an original-vs-sanitized layout (UI
+detail, verify live).
+
+---
+
+## Q5. Datadog-side requirements to surface prompt text from manually instrumented spans (feature flags, attribute names, span kind)?
+
+**CONFIRMED — three concrete requirements, no org feature-flag/plan gate.** (Confirms and sharpens
+`research/28` Q7: the only Datadog-side gates are a supported site + API key + the routing header.)
+
+1. **Routing header `dd-otlp-source=llmobs`** (or the Collector/Agent equivalent). Direct OTLP intake
+   needs `OTEL_EXPORTER_OTLP_TRACES_HEADERS=dd-api-key=<KEY>,dd-otlp-source=llmobs` over
+   `http/protobuf`. This header is what routes a span into **LLM (Agent) Observability** rather than plain
+   APM. For THIS stack the spans go through the contrib `datadog` exporter in the Collector — `research/28`
+   Q7 flags that the Collector→LLM-Obs routing is the one under-documented seam (verify live; fall back to
+   a dedicated OTLP exporter with the `dd-otlp-source=llmobs` header). That gap is unchanged here.
+   Sources: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ ;
+   https://www.datadoghq.com/blog/llm-otel-semantic-convention/
+2. **`gen_ai.operation.name` to classify the span kind.** Datadog uses `gen_ai.operation.name` to
+   determine the Agent Observability `span.kind`; values `generate_content`, `chat`, `text_completion`,
+   `completion` resolve to **`span.kind = llm`** (the kind whose Input/Output renders as messages).
+   [CORRECTED 2026-06-23: the current Datadog otel_instrumentation doc lists `generate_content, chat,
+   text_completion, completion` for `llm`; the earlier example value `chat_completion` is NOT in that
+   list — use one of the documented values.] For the proxy's
+   forward/sanitize span to be treated as an LLM-kind span (and thus show the prompt as input messages),
+   set `gen_ai.operation.name` accordingly. If you leave it as a generic proxy span, the content maps to
+   the non-LLM input/output value form instead (see #3). **OTel `SpanKind` (CLIENT/SERVER/INTERNAL) is
+   NOT the same thing** — Datadog's LLM `span.kind` is driven by `gen_ai.operation.name`, not by the OTel
+   span kind; set both deliberately.
+   Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
+3. **Content attribute names (and the event fallback).** Datadog extracts Input/Output **in priority
+   order**: (1) the **attributes** `gen_ai.input.messages` / `gen_ai.output.messages`; then (2) a **span
+   event** named **`gen_ai.client.inference.operation.details`**. It maps
+   `gen_ai.input.messages` → `meta.input.messages` (LLM spans) or `meta.input.value` (other span kinds),
+   and `gen_ai.output.messages` → `meta.output.messages` / `meta.output.value`. `gen_ai.system_instructions`
+   is also read. So either carrier (attribute JSON, or the event) surfaces the text — which is exactly why
+   the Q1/Q3 `SPAN_ONLY` vs `EVENT_ONLY` choice both work in Datadog.
+   Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
+4. **Semconv version + opt-in.** Datadog's native mapping requires **OTel GenAI semconv v1.37+**; older
+   emitters must set `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` (per `research/28` Q1/Q3).
+   For hand-written proxy spans this matters only insofar as you emit the v1.37 attribute *names*
+   (`gen_ai.input.messages`, not `gen_ai.prompt`) — there is no instrumentation library to "opt in," so
+   just use the current names. **Supported site:** commercial Datadog sites only; GovCloud
+   (`app.ddog-gov.com`, `us2.ddog-gov.com`) is unsupported for LLM Observability (the repo default
+   `DD_SITE=datadoghq.com` is fine).
+   Sources: https://www.datadoghq.com/blog/llm-otel-semantic-convention/ ;
+   https://docs.datadoghq.com/llm_observability/instrumentation/
+5. **No org feature flag / plan toggle is documented** beyond a supported site + API key + the routing
+   header (confirmed `research/28` Q7). Custom `witb.*` before/after attributes surface as
+   `@meta.metadata.<key>` automatically — no Datadog-side registration needed.
+   Source: https://docs.datadoghq.com/llm_observability/monitoring/querying/
+
+**Net for the proxy:** to make the manually-captured prompt show up as the span's Input in LLM Obs, the
+proxy's content span must (a) reach LLM Obs via `dd-otlp-source=llmobs` routing, (b) carry
+`gen_ai.operation.name` so it classifies as an `llm` span, and (c) put the messages in
+`gen_ai.input.messages`/`gen_ai.output.messages` (JSON) or the
+`gen_ai.client.inference.operation.details` event — with capture gated by the Q3 toggle (default
+`NO_CONTENT`).
+
+**Confidence: HIGH** on attribute names, the operation-name→span-kind classification, the event fallback,
+the routing header, and the no-org-gate finding; **MEDIUM** only on the Collector→LLM-Obs routing seam
+(inherited open item from `research/28` Q7).
+
+---
+
+## Recommended approach (synthesis — research only, do NOT implement here)
+
+1. **Keep the proxy SAFE by default.** Default `NO_CONTENT`; the before/after capture is the deliberate
+   re-leak-trap beat (BUILD-SPEC §4), flipped on for that segment only.
+2. **One span, two attributes (Q2 Option A) for the clean lesson:** `gen_ai.input.messages` = sanitized,
+   `witb.input.messages.original` = original, plus `witb.input.sanitized`/`witb.input.blocklist_hit`.
+   Optionally promote to a dedicated `sanitize_input` child span (Q2 Option C) if the on-stage waterfall
+   wants a visible sanitize step (then that span's own Input-vs-Output is the literal before/after).
+3. **Gate capture by reading the env var yourself (Q3 Option 1)** — do NOT expect
+   `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` to govern hand-written spans automatically.
+   Honor the enum; treat `=true` as "no capture" (matching the ADK trap discipline).
+4. **Set `gen_ai.operation.name`** on the content span so Datadog classifies it as `llm` and renders the
+   text as messages (Q5).
+5. **Inherit the propagation + SDK bootstrap from `research/29` Q6** (`inject()` so the agent's `gen_ai.*`
+   spans share the trace).
+6. **Verify-at-build, live in the Datadog UI:** (a) Collector→LLM-Obs routing of these spans
+   (`research/28` Q7 gap); (b) that the original-vs-sanitized layout reads as intended in the trace panel;
+   (c) that custom `witb.input.messages.original` surfaces under `@meta.metadata.*`.
+
+---
+
+## Sources (distinct citations)
+
+1. https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md — canonical GenAI spans spec: `gen_ai.input.messages`/`output.messages`/`system_instructions` (Opt-In, Development); "SHOULD NOT capture by default, but SHOULD provide an option to opt in"; structured content preferred on events, JSON-string fallback on span attributes; three usage patterns; message JSON schema; spec does NOT define the capture env var/enum.
+2. https://pypi.org/project/opentelemetry-util-genai/ — the capture env var is **library-specific**, "only affects applications using this package … not the base SDK"; enum `NO_CONTENT`/`SPAN_ONLY`/`EVENT_ONLY`/`SPAN_AND_EVENT` (default `NO_CONTENT`); `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT`; `TelemetryHandler` manual API; v0.4b0, released 2026-05-01.
+3. https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ — Datadog input/output extraction priority (attributes then `gen_ai.client.inference.operation.details` event); `gen_ai.input.messages`→`meta.input.messages`/`meta.input.value`; `gen_ai.operation.name`→Agent-Obs `span.kind` (`chat`/`chat_completion`/`text_completion`→`llm`); `dd-otlp-source=llmobs` header; direct-OTLP config.
+4. https://www.datadoghq.com/blog/llm-otel-semantic-convention/ — native OTLP GenAI ingest, no dd-trace SDK; semconv v1.37+; three ingestion paths; gen_ai attribute auto-mapping (model/tokens/cost); side-by-side logic-vs-data framing.
+5. https://docs.datadoghq.com/llm_observability/terms/ — span definition; LLM/tool/workflow span kinds; spans carry inputs/outputs (LLM prompts/completions).
+6. https://www.datadoghq.com/blog/datadog-llm-observability/ — drill into a trace, prompts sent and model replies "all in one view."
+7. https://www.datadoghq.com/blog/openai-agents-llm-observability/ — "viewing each step … side by side with the input and output data."
+8. https://docs.datadoghq.com/llm_observability/monitoring/querying/ — custom metadata/attributes surface under `@meta.metadata.<key>`.
+9. https://docs.datadoghq.com/llm_observability/instrumentation/ — supported sites; GovCloud unsupported for LLM Observability.
+10. https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk — (cross-ref via research/28/29) the `EVENT_ONLY`-valid / `=true`-invalid behavior holds **for the ADK/util-genai path**, not for raw SDK code.
+11. https://opentelemetry.io/blog/2026/genai-observability/ — content capture disabled by default for sensitivity; current convention uses structured message attributes; no manual-code-specific capture switch in the SDK.
+
+(11 distinct external citations; builds on in-repo `research/05`, `research/28` (Issue #9), and
+`research/29` (Issue #10) as instructed, and on `proxy.py` + `BUILD-SPEC.md` §4 read this session.)
+
+---
+
+## Validation pass (adversarial, 2026-06-23)
+
+Skeptical re-check of the load-bearing claims; default posture = a claim not backed by a current
+official source is UNVERIFIED.
+
+- **Q1 — content as event vs span attribute; opt-in/off-by-default:** **CONFIRMED** verbatim from the
+  canonical spec ("SHOULD NOT capture … by default, but SHOULD provide an option to opt in"; structured
+  attributes "supported on events … and may not yet be supported on spans"; JSON-string-on-span fallback).
+  Source: semantic-conventions-genai gen-ai-spans.md.
+- **Q3 — env var scope (the key gotcha):** **REFUTED as stated / CONFIRMED-WITH-NUANCE.** Directly
+  verified that `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` is a property of
+  `opentelemetry-util-genai` (and contrib instrumentations), explicitly "not the base SDK," and that the
+  GenAI spec does not define it. Raw hand-written proxy spans therefore do NOT honor it unless the code
+  reads it or uses the library. This is the spike's central correction. Sources: util-genai PyPI;
+  semantic-conventions-genai.
+- **Q4/Q5 — Datadog extraction + classification:** **CONFIRMED** that Datadog reads
+  `gen_ai.input.messages`/`output.messages` (attributes) OR the
+  `gen_ai.client.inference.operation.details` span event, maps them to `meta.input/output.messages`, and
+  uses `gen_ai.operation.name` to set the LLM span kind; `dd-otlp-source=llmobs` is the routing header;
+  no org feature-flag gate. Source: Datadog otel_instrumentation doc.
+- **Q4 — exact "before vs after" UI layout:** **COULD NOT FULLY CONFIRM** — Datadog docs confirm per-span
+  Input-vs-Output side-by-side and custom attrs under `@meta.metadata.*`, but do NOT document a
+  two-value (original-vs-sanitized) diff widget. Correctly flagged as a live verify-at-build UI check.
+
+**UNVERIFIED / OPEN (flagged):**
+- The **Collector → LLM-Obs routing** of `gen_ai.*` spans via the contrib `datadog` exporter remains the
+  one unresolved seam (inherited from `research/28` Q7) — verify live; deterministic fallback is a
+  dedicated OTLP exporter with `dd-otlp-source=llmobs`.
+- The **rendered appearance** of an original-vs-sanitized layout in the Datadog trace panel (Q4) — UI
+  detail, verify live on a cluster emitting the proxy content spans.
+
+---
+
+## Validation pass (adversarial, 2026-06-23)
+
+Independent skeptical re-verification by an adversarial validator. Each load-bearing claim was checked
+against the current (2026) official primary source via live fetch. Default posture: a claim not backed
+by a current official source is UNVERIFIED. Two inline corrections were made (see Q3 and Q5 §2 above).
+
+- **Q1 — content opt-in / off-by-default; canonical attribute names + stability:** **CONFIRMED.** The
+  canonical GenAI spans spec marks `gen_ai.input.messages`, `gen_ai.output.messages`, and
+  `gen_ai.system_instructions` as requirement level `Opt-In`, stability `Development`, with the sensitive
+  /PII warning. Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
+- **Q1 — events preferred / JSON-string-on-span fallback:** **CONFIRMED (wording differs slightly).** The
+  current spec text reads: "When the attribute is recorded on events, it MUST be recorded in structured
+  form. When recorded on spans, it MAY be recorded as a JSON string if structured format is not supported
+  and SHOULD be recorded in structured form otherwise." This matches the spike's substance (structured on
+  events; JSON-string fallback on spans). Source: gen-ai-spans.md (URL above).
+- **Q3 — spec does NOT define the capture env var:** **CONFIRMED.** The GenAI spans spec does not define
+  or mention `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`. Source: gen-ai-spans.md (URL above).
+- **Q3 — env var is library-specific (the central correction):** **CONFIRMED on substance; quote
+  corrected.** PyPI confirms `opentelemetry-util-genai` controls capture via this env var with enum
+  `NO_CONTENT` (default) / `SPAN_ONLY` / `EVENT_ONLY` / `SPAN_AND_EVENT`, plus
+  `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT` and a `TelemetryHandler`; v0.4b0, released 2026-05-01. HOWEVER
+  the exact phrase the spike quoted ("only affects applications using this package's instrumentation
+  capabilities, not the base SDK itself") is **NOT present** on the current PyPI page — corrected inline
+  in Q3. The conclusion (raw hand-written SDK code does not honor the env var) stands, because the SDK
+  has no such switch and the spec does not define one. Source: https://pypi.org/project/opentelemetry-util-genai/
+- **Q5 — `dd-otlp-source=llmobs` routing header:** **CONFIRMED.** Documented as
+  `OTEL_EXPORTER_OTLP_TRACES_HEADERS=dd-api-key=<KEY>,dd-otlp-source=llmobs`. Source:
+  https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
+- **Q5 — input/output extraction priority (attributes then `gen_ai.client.inference.operation.details`
+  event); mapping to `meta.input.messages`/`meta.input.value`:** **CONFIRMED** verbatim from the Datadog
+  doc (extraction "in priority order": 1. direct attributes `gen_ai.input.messages`/`output.messages`/
+  `system_instructions`; 2. span events named `gen_ai.client.inference.operation.details`). Source:
+  otel_instrumentation doc (URL above).
+- **Q5 — `gen_ai.operation.name` → `span.kind = llm`:** **CONFIRMED with value-list correction.** The
+  current doc maps `generate_content, chat, text_completion, completion` → `llm`. The spike's example
+  value `chat_completion` is not in that list; corrected inline in Q5 §2. Core claim (operation name
+  drives LLM span kind) is correct. Source: otel_instrumentation doc (URL above).
+- **Q5 — semconv v1.37+ requirement / `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`:**
+  **CONFIRMED.** Source: otel_instrumentation doc (URL above) and
+  https://www.datadoghq.com/blog/llm-otel-semantic-convention/
+- **Q4/Q5 — custom attributes surface as `@meta.metadata.<key>`:** **CONFIRMED.** "Custom metadata fields
+  are accessible under `@meta.metadata.<key>`." Source:
+  https://docs.datadoghq.com/llm_observability/monitoring/querying/
+- **Q5 — GovCloud unsupported for LLM Observability:** **CONFIRMED.** The instrumentation index states the
+  product is not supported on `app.ddog-gov.com` / `us2.ddog-gov.com`. Source:
+  https://docs.datadoghq.com/llm_observability/instrumentation/
+- **Q5 — no org feature-flag / plan gate beyond supported site + API key + routing header:** **UNVERIFIED
+  (not refuted).** No documented org gate was found, which is consistent with the spike's claim, but
+  absence-of-evidence is not a positive confirmation. Treat as the spike already does — no gate observed.
+
+**UNVERIFIED / OPEN (carried forward, agreed):**
+- **Collector → LLM-Obs routing** of `gen_ai.*` spans via the contrib `datadog` exporter (inherited
+  `research/28` Q7 seam) — verify live; deterministic fallback is a dedicated OTLP exporter with
+  `dd-otlp-source=llmobs`.
+- **Rendered original-vs-sanitized UI layout** in the Datadog trace panel (Q4) — no documented two-value
+  diff widget; verify live.
+
+**Net:** No load-bearing claim was refuted. Two inline accuracy fixes applied (a non-verbatim PyPI quote
+in Q3; the `chat_completion` example value in Q5). The spike's central correction — that
+`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` does NOT govern hand-written SDK spans — is sound and
+confirmed against both the spec and the PyPI package.
