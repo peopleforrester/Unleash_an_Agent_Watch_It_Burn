@@ -5,11 +5,12 @@
 
 ## Verification Method
 
-- **Approach:** Deep web research dated **2026-06-23** against current (2026) official docs:
+- **Approach:** Deep web research, re-verified **2026-06-23** against current (2026) official docs:
   kagent (`kagent.dev/docs`, `github.com/kagent-dev/kagent`), agentgateway
   (`agentgateway.dev/docs/standalone`), Google ADK (Google Cloud Observability),
   OpenTelemetry Python contrib (`opentelemetry-python-contrib`, PyPI), OpenLLMetry
-  (`github.com/traceloop/openllmetry`), and Datadog LLM Observability docs/blog. Every
+  (`github.com/traceloop/openllmetry`), and Datadog **Agent Observability** docs/blog (the
+  product Datadog historically branded "LLM Observability" — see the naming note in Q7). Every
   material claim carries an inline source URL.
 - **In-repo facts taken as CONFIRMED** (read directly this session):
   `gitops/ai-layer/resources.yaml` (kagent v1alpha2 Agent + ModelConfig, guard-proxy,
@@ -105,8 +106,12 @@ verify-at-build caveat. The chain of evidence:
 **Correction (validation pass 2026-06-23):** The original draft listed
 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` as a plain on/off flag. Google's ADK
 instrumentation doc is explicit that with `gen_ai_latest_experimental` semconv the valid value
-is `EVENT_ONLY` and that setting it to `true` "results in an invalid configuration." Set it to
-`EVENT_ONLY` (not `true`) on the ADK path; see Q5.
+is `EVENT_ONLY` and that setting it to `true` "results in an invalid configuration … therefore,
+log and trace data isn't collected." Set it to `EVENT_ONLY` (not `true`) on the ADK path; see Q5.
+The same Google ADK doc (re-verified 2026-06-23) also recommends
+`ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS='false'` to prevent PII/prompt content from landing in
+spans — relevant to the content re-leak trap `research/05` flags for the redaction beat.
+Source: https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk
 
 **The caveat (verify-at-build, not config):** The kagent tracing doc itself does **not**
 state semconv compliance and only demonstrates filtering by `service.name=kagent` and the
@@ -411,9 +416,11 @@ OpenTelemetry as a project.** Nuances, all verified:
 - **The project is alive and maintained.** ServiceNow **acquired Traceloop/OpenLLMetry in
   March 2026**, which "validated OTel as the substrate, confirming OpenLLMetry's ongoing
   maintenance and support." The README still ships 30+ Python integrations (incl. Bedrock,
-  Anthropic, Google GenAI, LangChain, etc.) and a 2026 changelog.
+  Anthropic, Google GenAI, LangChain, etc.) and an active 2026 release cadence — latest
+  **v0.61.0 (2026-05-31)**, 258 releases, ~7.2k GitHub stars (re-verified 2026-06-23). The
+  GitHub org now displays as **"traceloop from ServiceNow"** (corroborating the acquisition).
   Sources: https://futureagi.com/blog/openinference-vs-openllmetry-vs-openlit-2026/ ;
-  https://github.com/traceloop/openllmetry
+  https://github.com/traceloop/openllmetry ; https://github.com/traceloop
 - **"Absorbed into OpenTelemetry" is half-true and must be stated precisely.** What was
   contributed upstream is the **semantic conventions**, not the codebase: the README states
   "Our semantic conventions are now part of OpenTelemetry!" OpenLLMetry remains a **separate
@@ -448,18 +455,36 @@ recommended path is, in order:
    Sources: https://futureagi.com/blog/openinference-vs-openllmetry-vs-openlit-2026/ ;
    https://zylos.ai/research/2026-02-28-opentelemetry-ai-agent-observability
 
-**Is the OTel-native path Datadog-supported?** **Yes, first-class.** Datadog LLM Observability
-"natively supports OpenTelemetry GenAI Semantic Conventions (v1.37 and up)" with **no code
+**Is the OTel-native path Datadog-supported?** **Yes, first-class.**
+
+**Datadog product-name note (updated 2026-06-23).** The Datadog product that ingests
+`gen_ai.*` spans is now branded **"Agent Observability"** — the current docs landing page
+(`/llm_observability/`) is titled **"Agent Observability"**, and the marketing
+product page's browser title is **"Agent Observability | LLM Observability"** (the two names refer to the
+same offering; "LLM Observability" is the prior/legacy brand and is still used interchangeably,
+including in the original December-2025 blog and in the still-`/llm_observability/`-rooted docs
+URLs). The docs and blog cited below predate the rename in their *prose* but are the same
+product surface. Datadog also added Agentic-AI features (AI Agent Monitoring — agent decision-path
+graphs, AI Agents Console, LLM Experiments; GA announced at DASH June 2025) and shipped
+**automatic instrumentation for Google ADK** in Feb 2026 — directly relevant to the kagent/ADK
+path in Q1.
+Sources: https://docs.datadoghq.com/llm_observability/ (landing-page title "Agent Observability") ;
+https://www.datadoghq.com/products/ai/agent-observability/ (browser title "Agent Observability | LLM Observability") ;
+https://www.infoq.com/news/2026/02/datadog-google-llm-observability/ (Datadog auto-instruments Google ADK).
+
+It "natively supports OpenTelemetry GenAI Semantic Conventions (v1.37 and up)" with **no code
 changes** — it ingests `gen_ai.*` spans "from any OTel-compatible SDK or framework that emits
 spans conforming to the GenAI Semantic Conventions v1.37 schema," via direct OTLP intake, the
 Datadog Agent in OTLP mode, or the OTel Collector / DDOT. It auto-maps `gen_ai.request.model`,
-`gen_ai.usage.input_tokens`, `gen_ai.operation.name`, `gen_ai.provider.name` to its native LLM
-Observability schema (latency / tokens / cost / model / finish reason), and explicitly lists
-**Bedrock** among supported frameworks. This is exactly the Datadog-additive / OTel-neutral
+`gen_ai.usage.input_tokens`, `gen_ai.usage.output_tokens`, `gen_ai.operation.name`,
+`gen_ai.provider.name` to its native Agent/LLM Observability schema (latency / tokens / cost /
+model / finish reason), and explicitly lists **Bedrock** (via
+`opentelemetry-instrumentation-botocore >= 1.31.57`) among tested frameworks alongside agent
+frameworks (e.g. Strands Agents). This is exactly the Datadog-additive / OTel-neutral
 principle from `research/23`: instrument once in OTel GenAI semconv, Datadog and the OSS
 backends both consume it.
 Sources: https://www.datadoghq.com/blog/llm-otel-semantic-convention/ (2025-12-01) ;
-https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ ;
+https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ (H1 "OpenTelemetry Instrumentation"; body refers to "Agent Observability" supporting OTel GenAI semconv v1.37+) ;
 https://docs.datadoghq.com/llm_observability/instrumentation/auto_instrumentation/
 
 **Confidence: HIGH** on standalone/maintained, the semconv-contribution nuance, the deprecated-
@@ -508,12 +533,17 @@ attribute caveat, and Datadog's native OTel-GenAI support.
 11. https://futureagi.com/blog/openinference-vs-openllmetry-vs-openlit-2026/ — ServiceNow acquired Traceloop/OpenLLMetry (March 2026); maintained; OpenLLMetry scope = LLM client libs/frameworks.
 12. https://zylos.ai/research/2026-02-28-opentelemetry-ai-agent-observability — industry convergence on OTel GenAI semconv; native/contrib emission.
 13. https://www.datadoghq.com/blog/llm-otel-semantic-convention/ — Datadog natively supports OTel GenAI semconv v1.37+; no code changes; attribute mapping; Bedrock supported (2025-12-01).
-14. https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ — Datadog OTLP ingest of GenAI spans; Bedrock auto-instrumentation via boto3/botocore.
+14. https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ — Datadog OTLP ingest of GenAI spans; page H1 "OpenTelemetry Instrumentation" (body: "Agent Observability supports … OTel 1.37+ GenAI semconv"); Bedrock via `opentelemetry-instrumentation-botocore >= 1.31.57`; agent frameworks (Strands).
 15. https://docs.datadoghq.com/llm_observability/instrumentation/auto_instrumentation/ — Datadog auto-instrumentation framework list (incl. Bedrock).
-16. https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/ — GenAI agent spans: `execute_tool {gen_ai.tool.name}`, `invoke_agent`, tool-call first-class.
+16. https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/ — GenAI agent spans: `execute_tool {gen_ai.tool.name}`, `invoke_agent`, tool-call first-class (now relocated; see #18).
 17. https://greptime.com/blogs/2026-05-09-opentelemetry-genai-semantic-conventions — GenAI semconv still Development (v1.41); `OTEL_SEMCONV_STABILITY_OPT_IN` behavior.
+18. https://docs.datadoghq.com/llm_observability/ — Datadog docs landing page now titled **"Agent Observability"** (the rename of the LLM Observability product surface).
+19. https://www.datadoghq.com/products/ai/agent-observability/ — Datadog product page titled **"Agent Observability | LLM Observability"**; AI Agent Monitoring / Agents Console / Experiments.
+20. https://www.infoq.com/news/2026/02/datadog-google-llm-observability/ — Datadog ships automatic instrumentation for Google ADK (Feb 2026).
+21. https://github.com/traceloop — GitHub org displays as "traceloop from ServiceNow" (corroborates the acquisition).
+22. https://opentelemetry.io/docs/specs/semconv/gen-ai/ — GenAI semconv spec "Moved" notice (spec relocated to the dedicated semantic-conventions-genai repo).
 
-(17 distinct external citations; builds on in-repo `research/05` and `research/23` as
+(22 distinct external citations; builds on in-repo `research/05` and `research/23` as
 instructed, and on `research/01`/`research/02` for kagent/agentgateway CRD + guardrail context.)
 
 ---
@@ -606,3 +636,111 @@ Source: https://github.com/traceloop/openllmetry
 spike already flagged as live-cluster verify-at-build (kagent chart 0.9.9 bundling ADK ≥1.17.0
 and honoring `deployment.env`; full `gen_ai.*` enrichment for an agentgateway A2A/JSON-RPC
 backend) remain correctly scoped as build-time checks, not doc-verifiable claims.
+
+---
+
+## Validation pass (adversarial, 2026-06-23 — re-run for issue updates)
+
+Second re-verification, triggered by Whitney's directive to re-check the time-sensitive claims
+(OpenLLMetry status/ownership, agentgateway v1.3.0 fields, ADK version + `EVENT_ONLY` enum) and
+to reflect Datadog's current product name (Agent Observability vs LLM Observability). Live
+WebSearch/WebFetch against current official sources.
+
+- **Datadog product name (NEW — the substantive change this re-run).** **CONFIRMED that the
+  product is now branded "Agent Observability."** The Datadog docs landing page
+  (`/llm_observability/`) and the OTel-instrumentation docs page are both titled **"Agent
+  Observability"**; the marketing product page is titled **"Agent Observability | LLM
+  Observability."** "LLM Observability" is the legacy brand, still used interchangeably (incl.
+  the Dec-2025 blog and the unchanged `/llm_observability/` URL roots). Datadog also shipped
+  agentic features (AI Agent Monitoring GA at DASH June 2025) and **auto-instrumentation for
+  Google ADK** (Feb 2026). The file's Q7 Datadog subsection and the Sources list were updated.
+  Sources: https://docs.datadoghq.com/llm_observability/ ;
+  https://www.datadoghq.com/products/ai/agent-observability/ ;
+  https://www.infoq.com/news/2026/02/datadog-google-llm-observability/
+- **OpenLLMetry status/ownership — CONFIRMED, refreshed.** Still standalone, Apache-2.0,
+  actively maintained; latest **v0.61.0 (2026-05-31)**, 258 releases, ~7.2k stars; README still
+  states "Our semantic conventions are now part of OpenTelemetry"; GitHub org now shows
+  **"traceloop from ServiceNow"** (corroborates the March-2026 acquisition). Bedrock + Anthropic
+  still in the integration list. Verdict unchanged: do not adopt it for this stack.
+  Sources: https://github.com/traceloop/openllmetry ; https://github.com/traceloop
+- **agentgateway v1.3.0 fields — CONFIRMED, unchanged.** Tracing is enabled in the config file
+  under `frontendPolicies.tracing` with `otlpEndpoint` + `randomSampling`; the docs document
+  **no** `OTEL_EXPORTER_OTLP_ENDPOINT` env-var path; GenAI attributes (`gen_ai.operation.name`,
+  `gen_ai.request.model`) referenced via the separate LLM-observability section. The repo's
+  env-var path remains wrong; the config-file field is the supported activation.
+  Source: https://agentgateway.dev/docs/standalone/main/integrations/observability/opentelemetry/
+- **ADK version + content-capture enum — CONFIRMED, unchanged + one new detail.** ADK ≥ 1.17.0
+  has built-in OTel; with `gen_ai_latest_experimental` the valid value is
+  `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT='EVENT_ONLY'`, and `true` "results in an
+  invalid configuration … therefore, log and trace data isn't collected." New this pass: the
+  doc also recommends `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS='false'` for PII safety (added to Q1).
+  Source: https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk
+- **botocore instrumentation — CONFIRMED, unchanged.** Latest `opentelemetry-instrumentation-botocore`
+  is **0.63b1 (2026-05-21)**; Bedrock Converse/ConverseStream/InvokeModel/InvokeModelWithResponseStream
+  GenAI semconv, Anthropic Claude (incl. tool calls for Claude 3+).
+  Source: https://pypi.org/project/opentelemetry-instrumentation-botocore/
+- **GenAI semconv status — CONFIRMED, unchanged.** Still **Development** (not Stable) as of
+  semconv **v1.41** (latest tag v1.41.1, a k8s codegen fix, no GenAI change); `gen_ai.*`
+  attributes can change without a major bump. The opentelemetry.io GenAI spec index now shows a
+  **"Moved"** notice (spec relocated to the dedicated `semantic-conventions-genai` repo) — the
+  doc-location note already in the prior validation pass holds.
+  Sources: https://greptime.com/blogs/2026-05-09-opentelemetry-genai-semantic-conventions ;
+  https://opentelemetry.io/docs/specs/semconv/gen-ai/
+
+**Net change vs prior run:** only the Datadog product-name rebrand (LLM Observability → Agent
+Observability) is materially new; every other load-bearing claim re-verified identical. Nothing
+refuted this pass. Live-cluster verify-at-build items remain as previously scoped.
+
+---
+
+## Validation pass (adversarial, 2026-06-23 — independent re-verification)
+
+Third, fully independent skeptical re-verification by the adversarial validator, focused on the
+NEW/CHANGED claims this re-run introduced (Datadog "Agent Observability" rebrand, OpenLLMetry
+v0.61.0 + "traceloop from ServiceNow", ADK `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS='false'`,
+botocore 0.63b1). Live WebFetch/WebSearch against current official sources. Default posture:
+unbacked → UNVERIFIED. One inline overstatement was corrected (see below).
+
+- **Datadog "Agent Observability" rebrand — CONFIRMED.** The docs landing page
+  (`/llm_observability/`) carries the H1 **"Agent Observability"**; the marketing product page's
+  browser title is **"Agent Observability | LLM Observability."** Both names are used
+  interchangeably as the spike states.
+  Sources: https://docs.datadoghq.com/llm_observability/ ;
+  https://www.datadoghq.com/products/ai/agent-observability/
+- **REFUTED (overstatement, corrected inline) — the OTel-instrumentation docs page is NOT
+  "titled Agent Observability."** That specific page's H1 is **"OpenTelemetry Instrumentation"**;
+  its *body* states "Agent Observability supports ingesting OpenTelemetry traces that follow the
+  OpenTelemetry 1.37+ semantic conventions for generative AI." The prior pass and Q7/Source #14
+  over-claimed the page title. Corrected in Q7's Datadog subsection and Source #14. The
+  substantive claim (Datadog natively ingests OTel GenAI semconv v1.37+; Bedrock via
+  `opentelemetry-instrumentation-botocore >= 1.31.57`) is CONFIRMED.
+  Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
+- **OpenLLMetry v0.61.0 (2026-05-31), 258 releases, ~7.2k stars — CONFIRMED.** README confirms
+  "Our semantic conventions are now part of OpenTelemetry"; Bedrock + Anthropic in the
+  integration list. The org display name **"traceloop from ServiceNow"** is CONFIRMED on the org
+  page header (corroborates the March-2026 acquisition).
+  Sources: https://github.com/traceloop/openllmetry ; https://github.com/traceloop
+- **ADK PII flag — CONFIRMED.** Google's ADK doc explicitly recommends
+  `ADK_CAPTURE_MESSAGE_CONTENT_IN_SPANS='false'` to keep PII off spans and stay under the
+  attribute size limit; ADK 1.17.0+ has built-in OTel; `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`
+  valid value is `EVENT_ONLY` and `true` "results in an invalid configuration." All as stated.
+  Source: https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk
+- **botocore 0.63b1 (2026-05-21) — CONFIRMED.** Bedrock Converse/ConverseStream/InvokeModel/
+  InvokeModelWithResponseStream GenAI semconv, Anthropic Claude (incl. tool calls for Claude 3+).
+  Source: https://pypi.org/project/opentelemetry-instrumentation-botocore/
+- **Datadog auto-instrumentation for Google ADK — CONFIRMED.** Corroborated by InfoQ and the
+  Google Cloud blog; Datadog auto-instruments ADK agents (no code changes), tracing orchestration
+  + tool calls, token/cost per branch. (Minor: the announcement timing reads as
+  January–February 2026 across sources; the spike's "Feb 2026" matches the InfoQ article slug —
+  not load-bearing.)
+  Sources: https://www.infoq.com/news/2026/02/datadog-google-llm-observability/ ;
+  https://cloud.google.com/blog/products/management-tools/datadog-integrates-agent-development-kit-or-adk
+
+**UNVERIFIED:** none of the load-bearing external claims failed verification this pass. The two
+live-cluster verify-at-build items (kagent chart 0.9.9 bundling ADK ≥1.17.0 and honoring
+`deployment.env`; full `gen_ai.*` enrichment for an agentgateway A2A/JSON-RPC backend) remain
+correctly scoped as Phase-3 build-time checks, not doc-verifiable.
+
+**Net result this pass:** one overstatement refuted and fixed inline (OTel-instrumentation docs
+page H1 is "OpenTelemetry Instrumentation," not "Agent Observability"); all other NEW/CHANGED
+claims confirmed against current official sources.
