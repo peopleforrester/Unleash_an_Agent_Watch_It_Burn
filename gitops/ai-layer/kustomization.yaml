@@ -24,6 +24,13 @@ configMapGenerator:
       - web/app.js
       - web/display.html
       - web/display.js
+  - name: console-src
+    files:
+      - web/console.html
+      - web/console.js
+  - name: console-conf
+    files:
+      - default.conf=console.conf # nginx conf.d entry
 
 secretGenerator:
   - name: llm-guard-auth

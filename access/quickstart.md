@@ -4,19 +4,19 @@
 
 Welcome. You have your own isolated Kubernetes cluster and an AI agent already running on it. Everything happens in your browser. **No local install.**
 
-## 1. Get to your terminal
+## 1. Open your console
 
-- Open the **link** (or scan the **QR code**) the facilitators handed you.
-- A web terminal loads in your browser, already connected to *your* cluster. No login, no setup.
-- You'll see a shell prompt. That's your cluster. Anything you run here only touches your cluster, not your neighbor's.
+- Open the **link** (or scan the **QR code**) the facilitators handed you. Your console loads in the browser — no login, no setup, no install.
+- **Left:** the instructions for the current beat. **Right:** two tabs — **Terminal** and **Agent chat** — with a live **cost counter** at the top.
+- The **Terminal** is a shell already connected to *your* cluster (`kubectl` just works — try `kubectl get pods -A`). Anything you run touches only your cluster, not your neighbor's.
 
-If the terminal doesn't load, tell a facilitator before trying anything else. There's a fallback (below), but the web terminal is the main path.
+If the console doesn't load, tell a facilitator before trying anything else. There's a fallback (below), but the console is the main path.
 
 ## 2. Talk to your agent
 
-- Your agent is already deployed and scoped. Send it a prompt the way the facilitators show you on screen.
+- Switch to the **Agent** tab. Your agent is already deployed and scoped — send it a prompt the way the facilitators show you on screen.
 - Start with the warm-up prompt they give you and confirm you get a response. That proves your path works before any attack.
-- You'll watch what the agent does in a shared **trace view** on the facilitators' screen, that's how we'll follow each attack as it lands or gets stopped.
+- Watch the cost counter move, and follow the agent's input/output/tool calls on the shared **trace view** on the facilitators' screen — that's how we follow each attack as it lands or gets stopped.
 
 ## 3. Where the beats live
 
