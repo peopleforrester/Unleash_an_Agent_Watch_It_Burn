@@ -363,23 +363,40 @@ earlier milestones, given UST vocabulary was locked in Milestone 1?
 
 ---
 
-### Milestone 7 — Custom dashboards: DEFERRED to dress rehearsal (do not build now)
+### Milestone 7 — Dashboards: import community dashboards + decide custom/story dashboards
 
-**Decision:** Custom workshop dashboards are **not built in this PRD sequence.** Whitney will decide
-which story dashboards to build during dress rehearsal. Two constraints stand:
-- **No custom dashboards or custom metrics for supporting tech that is never center stage** (ArgoCD, Kyverno, KubeArmor enforcement, etc.). Out-of-the-box Agent dashboards (EKS, Falco, cert-manager, Collector) are already free and stay.
-- **Story-related custom dashboards** (e.g. the model-tier cost comparison — token spend grouped by `gen_ai.request.model`, Haiku vs Sonnet vs Opus) are deferred to dress rehearsal. They are cheap to add then because Milestone 2 already captures `gen_ai.request.model` and it is available in LLM Observability. (This groups by `gen_ai.request.model`, NOT `service.version` — `service.version` is the software version.)
-- **Importable community dashboards** surfaced in the Milestone 5 community-dashboard survey are candidates to **import** here (not hand-build) for any stack component lacking an official Datadog dashboard. Importing an existing community/Grafana dashboard is distinct from building custom ones and is allowed; decide which (if any) at dress rehearsal.
+**End-state goal:** The importable community/Grafana dashboards chosen from the Milestone 5 survey are
+imported into Datadog for stack components that lack an official Datadog dashboard, and the
+custom/story dashboard decisions are made (build now, defer specific ones to dress rehearsal, or skip).
 
-**Do NOT run `/prd-create` for this milestone.** There is no child PRD here. When you reach this milestone,
-confirm with Whitney that dashboards remain deferred, record any story-dashboard candidates surfaced
-during the build in `docs/observability-priorities.md` under nice-to-have, and move on.
+**Step 0 — Read:**
+- This meta-PRD's top matter and `docs/observability-priorities.md`
+- The Milestone 5 child PRD + `research/28-…` (the community-dashboard survey with sources) — **gates this milestone**
+- All prior milestone child PRDs + Decision Logs — a dashboard can't be built/imported on data that isn't flowing
+- `research/24-…`, `docs/transcripts/observability-architecture-paths.md` (candidate custom-dashboard list)
+- Codebase: `agent/gateway/guard-proxy/` (confirm metric names `witb_cost_usd`/`witb_tokens_total`/`witb_requests_total` — or their gen_ai-semconv successors per Milestone 2), `beats/`
 
-When confirmed, clear context and run `/prd-next` for Milestone 8.
+**Step 1 — Problem (write 3-5 sentences):** Which dashboards tell the workshop story, which importable
+community dashboards fill gaps for components without an official Datadog dashboard, and is each one's
+data confirmed flowing?
+
+**Step 2 — Resolve with Whitney (one at a time):**
+1. **Import which community dashboards?** — for each importable candidate from the `research/28` survey (whole stack, incl. KubeArmor): import it or skip? One component at a time. Importing an existing community/Grafana dashboard is allowed even for supporting tech; hand-building custom ones for never-center-stage tech is not.
+2. **Custom/story dashboards** — for each candidate (Wasted Tokens Over Time, Model Tier Cost Race [group by `gen_ai.request.model`], Tool Call Heatmap, Guardrail Toggle Timeline): **build now, defer to dress rehearsal, or skip?** Confirm the data source is flowing before committing to build.
+3. **Dashboard JSON as code (committed)** vs. UI-built?
+
+**Step 3 — Produce the child PRD:**
+1. Update `docs/observability-priorities.md` if priorities shifted.
+2. Run `/prd-create` for a child PRD implementing the chosen community-dashboard imports + any custom dashboards decided to build now (deferring the rest to dress rehearsal) per decisions 1-3 (`/prd-update-decisions`).
+3. Add to `docs/ROADMAP.md` as `- Dashboards: community imports + custom (PRD #[issue-id])`, after Milestone 6.
+4. Run `/prd-update-progress` to commit + push.
+5. Clear context; run `/prd-next` for Milestone 8.
 
 **Done when:**
-- [ ] Confirmed with Whitney that custom dashboards stay deferred to dress rehearsal
-- [ ] Any story-dashboard candidates noted in `docs/observability-priorities.md` (nice-to-have)
+- [ ] Import/skip decided per community dashboard with reasoning; chosen ones imported
+- [ ] Build-now/defer/skip decided per custom dashboard, with data-flowing confirmed for any built now
+- [ ] A child PRD issue exists for the dashboard imports + custom builds
+- [ ] ROADMAP updated
 
 ---
 
@@ -440,7 +457,7 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 
 ## Acceptance Criteria (this meta-PRD)
 
-- [ ] 7 child PRDs exist (Milestones 1-6 and 8; Milestone 7 is deferred and produces no child PRD), each issue-backed and labeled "PRD"
+- [ ] 8 child PRDs exist (Milestones 1-8), each issue-backed and labeled "PRD"
 - [ ] `research/28-…` per-component synthesis exists (produced in Milestone 5)
 - [ ] `docs/observability-priorities.md` reflects the final must-have/nice-to-have list
 - [ ] `docs/ROADMAP.md` lists all child PRDs in build order, each as `- [desc] (PRD #[issue-id])`
@@ -450,6 +467,7 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 
 | Date | Decision | Reasoning |
 |------|----------|-----------|
+| 2026-06-22 | Milestone 7 is a real milestone, not deferred | It imports the community/Grafana dashboards chosen in the Milestone 5 survey (for components lacking an official Datadog dashboard) AND decides custom/story dashboards (build now / defer to dress rehearsal / skip). Importing community dashboards is distinct from hand-building custom ones; the latter for never-center-stage tech is still out |
 | 2026-06-22 | Add a community-dashboard survey across the whole stack (incl. KubeArmor) to Milestone 5 | For any component lacking an official Datadog dashboard, find an importable community/Grafana dashboard so we import rather than hand-build (skips the "no custom dashboards" rule). Surveying ≠ wiring; KubeArmor stays out of the narrative. Candidates feed the deferred Milestone 7 |
 | 2026-06-22 | Renamed "Slice" → "Milestone" throughout | The `/prd-*` skills parse milestone structure; "Slice" headings would confuse `prd-next` / `prd-update-progress`. "Vertical slice" remains only as a concept in the framing intro |
 | 2026-06-22 | Milestone 1 proves Datadog works using Michael's EXISTING custom conventions | MVP is the fastest possible pipeline proof with zero new instrumentation: get the `witb_*`/`tier` counters (and any existing traces) into one Datadog account. Migration to OTel GenAI semconv is Milestone 2 |
