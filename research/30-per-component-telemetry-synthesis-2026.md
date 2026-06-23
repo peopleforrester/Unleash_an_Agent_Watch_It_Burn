@@ -3,7 +3,7 @@
 
 # 30. Per-Component Telemetry Synthesis (13 components)
 
-**Date:** 2026-06-23
+**Date:** 2026-06-23 (re-run reflecting the #9/#10 re-runs of `research/28`/`research/29`)
 **Issue:** #11 — per-component telemetry synthesis
 **Scope:** ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO, cert-manager, Backstage, kagent,
 agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator.
@@ -21,11 +21,17 @@ agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator.
     native-telemetry survey, UST attribute→tag mapping, the DDOT-vs-two-DaemonSets and
     `prometheusScrape` gotchas, the Istio-ambient autodiscovery break, the cert-manager
     `rename_labels` collision, KubeArmor's separate exporter.
-  - `research/28-datadog-llm-obs-otlp-2026.md` (issue #9) — what kagent/ADK emits natively
-    (`invoke_agent`→`call_llm`→`execute_tool` waterfall, `gen_ai.*` attribute list,
-    `gen_ai.usage.input_tokens/output_tokens`, `gen_ai.request.model`); Datadog LLM-Obs OTLP ingest
-    (v1.37+ semconv, `dd-otlp-source=llmobs`, the Collector→LLM-Obs routing gap).
-  - `research/29-python-ai-instrumentation-2026.md` (issue #10) — kagent `otel.tracing.enabled`
+  - `research/28-datadog-llm-obs-otlp-2026.md` (issue #9, **re-run 2026-06-23**) — what kagent/ADK
+    emits natively (`invoke_agent`→`call_llm`→`execute_tool` waterfall, `gen_ai.*` attribute list,
+    `gen_ai.usage.input_tokens/output_tokens`, `gen_ai.request.model`); Datadog native OTLP ingest
+    (v1.37+ semconv, `dd-otlp-source=llmobs`, the Collector→LLM-Obs routing gap). **The #9 re-run
+    establishes two facts carried into this synthesis:** (i) the Datadog product is now branded
+    **"Agent Observability"** (formerly "LLM Observability") — a surface rename only; the
+    `/llm_observability/` doc URLs and the `dd-otlp-source=llmobs` routing header are unchanged, and
+    all seven of #28's verdicts still hold; (ii) Agent Observability now ships a **built-in Sensitive
+    Data Scanner (SDS)** that scans Agent-Obs traces, including LLM inputs/outputs, for PII/secret
+    redaction (server-side, after ingest; not on by default).
+  - `research/29-python-ai-instrumentation-2026.md` (issue #10, **re-run 2026-06-23**) — kagent `otel.tracing.enabled`
     field path; agentgateway built-in GenAI-semconv tracing via `frontendPolicies.tracing.otlpEndpoint`
     (repo's env-var path is wrong); **guard-proxy makes NO Bedrock call** (it proxies A2A; instrument
     as a proxy/guard span, not `gen_ai.*`); evil-mcp-shim needs no instrumentation (visible via the
@@ -78,7 +84,7 @@ dashboard," not "build one."
 | 6 | **ESO** | metrics | **Prometheus only**; ESO-specific (`externalsecret_*`, controller-runtime) | **No** | No | Grafana **21640** (External Secrets, upstream) — known data-display issues |
 | 7 | **cert-manager** | metrics | **Prometheus only**; cert-manager-specific (`certmanager_*`) | **Yes** (Agent 7.22+) | **No** (not in doc — corrects #18) | Grafana **11001** (cert-manager, project-referenced); cert-manager-mixin |
 | 8 | **Backstage** | **nothing by default** | **OTel SDK** (must be added) — generic HTTP/process semconv, not GenAI | **No** (UI-embed plugin only, not an Agent check) | No | none meaningful until instrumented (background; no dashboard proposed) |
-| 9 | **kagent / agent** | traces (+ token usage in spans) | **OTel**, **GenAI semconv** (`invoke_agent`/`call_llm`/`execute_tool`, `gen_ai.*`); Prometheus unconfirmed | No (native OTLP → Collector → DD) | No (lands in DD **LLM Observability**, not a classic integration dashboard) | n/a (center-stage; trace view is the dashboard) |
+| 9 | **kagent / agent** | traces (+ token usage in spans) | **OTel**, **GenAI semconv** (`invoke_agent`/`call_llm`/`execute_tool`, `gen_ai.*`); Prometheus unconfirmed | No (native OTLP → Collector → DD) | No (lands in DD **Agent Observability** [formerly LLM Observability], not a classic integration dashboard; built-in **Sensitive Data Scanner** can redact PII in the captured `gen_ai.*` in/out) | n/a (center-stage; trace view is the dashboard) |
 | 10 | **agentgateway** | traces, metrics, logs | **OTel**, **GenAI semconv** built-in (`frontendPolicies.tracing.otlpEndpoint`) + Prometheus | No | No | n/a (center-stage) |
 | 11 | **guard-proxy** | metrics (Prometheus `witb_*`) today; **no traces today** | **Prometheus** now; **OTel manual spans** to add (proxy/guard span, NOT `gen_ai.*`) | No | No | n/a (center-stage; powers the cost counter) |
 | 12 | **evil-mcp-shim** | **nothing** (intentionally) | none — visible via the **agent's** `execute_tool {gen_ai.tool.name}` span | No | No | n/a (do NOT instrument — that is the lesson) |
@@ -283,12 +289,23 @@ dashboard if no official OOTB.
    agent pod (`deployment.env`; verify-at-build that chart 0.9.9 honors it). Content capture stays
    `NO_CONTENT` on the shared path; `EVENT_ONLY` only for the re-leak beat (never `=true` — invalid,
    silently captures nothing — `research/28` Q5). **Datadog routing:** `gen_ai.*` spans land in
-   Datadog **LLM Observability** (not a classic integration dashboard); the Collector→LLM-Obs routing
-   is the one flagged verify-at-build gap (`research/28` Q7 — confirm in the LLM-Obs UI, fall back to
-   the direct-OTLP `dd-otlp-source=llmobs` header path).
+   Datadog **Agent Observability** (the rebranded LLM Observability product — not a classic
+   integration dashboard); the Collector→Agent-Obs routing is the one flagged verify-at-build gap
+   (`research/28` Q7 — confirm in the Agent-Obs traces UI, fall back to the direct-OTLP
+   `dd-otlp-source=llmobs` header path, which is **unchanged** despite the rename).
 4. **Official DD integration / OOTB dashboard:** **No** classic integration. The agent surfaces in
-   **Datadog LLM Observability** via native OTLP GenAI ingest (v1.37+), no SDK — that *is* the Datadog
-   surface, distinct from an Agent-check OOTB dashboard. (`research/28` Q1/Q2.)
+   **Datadog Agent Observability** (formerly "LLM Observability"; the docs landing page is now titled
+   "Agent Observability" and the `/llm_observability/` URL roots and `dd-otlp-source=llmobs` header are
+   unchanged) via native OTLP GenAI ingest (v1.37+), no SDK — that *is* the Datadog surface, distinct
+   from an Agent-check OOTB dashboard. **New built-in capability (from the #9 re-run):** Agent
+   Observability includes **Sensitive Data Scanner (SDS)**, which scans Agent-Obs traces — including
+   the LLM inputs/outputs (`gen_ai.input.messages`/`gen_ai.output.messages`) — and can redact PII /
+   secrets / proprietary data. Unlike general telemetry-data scanning (where you must manually create
+   a scanning group + rules), Agent-Obs scanning is the **automated/pre-configured** case: a **default
+   scanning group is auto-created** for the org on first visit to the Agent-Obs Settings page (rules
+   are then editable / disable-able), and it acts **server-side after ingest** — so it is a
+   defense-in-depth backstop for the re-leak beat, not a substitute for
+   Collector-side pre-egress redaction (`research/28` product-naming + SDS notes). (`research/28` Q1/Q2.)
 5. **Community dashboard:** n/a — center-stage; the live **trace view** (input/output/tool calls) is
    the dashboard, and the cost counter is the second panel.
 
@@ -381,7 +398,7 @@ dashboard if no official OOTB.
 | ESO | **HIGH** | Prometheus-only + community-dashboard-with-caveat confirmed |
 | cert-manager | **HIGH** | OOTB-dashboard correction re-verified; `rename_labels` confirmed |
 | Backstage | **HIGH** | emits-nothing + UI-embed-not-Agent-check confirmed |
-| kagent/agent | **HIGH** (extracted from #28/#29) | Prometheus metrics for kagent itself remain unconfirmed (flagged) |
+| kagent/agent | **HIGH** (extracted from #28/#29 re-runs) | Datadog surface = **Agent Observability** (rebranded; SDS now built-in); Prometheus metrics for kagent itself remain unconfirmed (flagged) |
 | agentgateway | **HIGH** (extracted from #29) | A2A-backend full `gen_ai.*` enrichment is verify-at-build |
 | guard-proxy | **HIGH** (extracted from #29) | no-Bedrock-call correction is from direct source read |
 | evil-mcp-shim | **HIGH** (extracted from #29) | emits-nothing-by-design |
@@ -395,10 +412,10 @@ dashboard if no official OOTB.
 2. **kagent's own Prometheus `/metrics`:** docs claim Prometheus metrics but list no names/scrape
    config (carried from `research/18`/`#29`). Resolve by inspecting a running pod — the agent's
    *traces* (GenAI semconv) are confirmed; its *metrics* endpoint is not.
-3. **Collector → Datadog LLM-Observability routing** for `gen_ai.*` spans (inherited from
-   `research/28` Q7): not doc-resolvable; verify in the LLM-Obs UI, fall back to direct-OTLP
-   `dd-otlp-source=llmobs`. (Affects how the agent's spans surface in Datadog, not whether they are
-   emitted.)
+3. **Collector → Datadog Agent-Observability routing** for `gen_ai.*` spans (inherited from
+   `research/28` Q7; same gap, now under the renamed product): not doc-resolvable; verify in the
+   Agent-Obs traces UI, fall back to direct-OTLP `dd-otlp-source=llmobs` (header unchanged by the
+   rename). (Affects how the agent's spans surface in Datadog, not whether they are emitted.)
 
 ---
 
@@ -424,10 +441,14 @@ dashboard if no official OOTB.
 18. https://backstage.io/docs/tutorials/setup-opentelemetry/ — Backstage emits nothing without the OTel SDK; the DD Backstage plugin is UI-embed only (via research/18).
 19. https://docs.datadoghq.com/getting_started/tagging/unified_service_tagging/ — UST OTel attribute→DD tag mapping (`service.name`/`service.version`/`deployment.environment.name`); `DD_*` not supported on the OTel path.
 20. research/18-datadog-integrations-stack-2026.md (in-repo, primary) — per-component DD integration survey, DDOT/`prometheusScrape` gotchas, KubeArmor exporter, Istio ambient break, cert-manager `rename_labels`.
-21. research/28-datadog-llm-obs-otlp-2026.md (in-repo, issue #9) — kagent/ADK native GenAI emission (`invoke_agent`/`call_llm`/`execute_tool`, `gen_ai.usage.*`, `gen_ai.request.model`); Datadog LLM-Obs OTLP ingest + Collector→LLM-Obs routing gap; content-capture enum.
-22. research/29-python-ai-instrumentation-2026.md (in-repo, issue #10) — kagent `otel.tracing.enabled`; agentgateway `frontendPolicies.tracing.otlpEndpoint` (repo env-var path wrong); guard-proxy makes no Bedrock call (instrument as proxy/guard span); evil-mcp-shim needs no instrumentation; OpenLLMetry status.
+21. research/28-datadog-llm-obs-otlp-2026.md (in-repo, issue #9, **re-run 2026-06-23**) — kagent/ADK native GenAI emission (`invoke_agent`/`call_llm`/`execute_tool`, `gen_ai.usage.*`, `gen_ai.request.model`); Datadog native OTLP ingest + Collector→Agent-Obs routing gap; content-capture enum; **product rename LLM Observability → Agent Observability** (URLs/header unchanged); **built-in Sensitive Data Scanner** for PII redaction of Agent-Obs traces.
+22. research/29-python-ai-instrumentation-2026.md (in-repo, issue #10, **re-run 2026-06-23**) — kagent `otel.tracing.enabled`; agentgateway `frontendPolicies.tracing.otlpEndpoint` (repo env-var path wrong); guard-proxy makes no Bedrock call (instrument as proxy/guard span); evil-mcp-shim needs no instrumentation; OpenLLMetry status; Datadog "Agent Observability" product-name note + ADK auto-instrumentation.
+23. https://docs.datadoghq.com/llm_observability/ — Datadog docs landing page now titled **"Agent Observability"** (rename of the LLM Observability surface; `/llm_observability/` URL root unchanged).
+24. https://www.datadoghq.com/products/ai/agent-observability/ — Agent Observability product page; "Sensitive Data Scanner is included and scales with LLM usage"; "Catch hallucinations, prompt injection attempts, and PII exposure as they happen."
+25. https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ — "Agent Observability integrates with Sensitive Data Scanner, which helps prevent data leakage by identifying and redacting any sensitive information."
+26. https://docs.datadoghq.com/security/sensitive_data_scanner/ — SDS scans Agent-Obs traces incl. LLM inputs/outputs; Agent-Obs scanning is the automated/pre-configured case (a default scanning group is auto-created on first Agent-Obs Settings visit; rules editable/disable-able) — distinct from general telemetry scanning, which requires manual group+rules; server-side, after ingest.
 
-(19 distinct external sources [1–19] + 3 in-repo prior spikes [20–22] this synthesis builds on.)
+(23 distinct external sources [1–19, 23–26] + 3 in-repo prior spikes [20–22] this synthesis builds on.)
 
 ---
 
@@ -470,3 +491,49 @@ nothing; customer-stream emits nothing. These remain as the author marked them. 
 "could-not-fully-resolve" items (Istio ambient DD OOTB dashboard rendering, kagent's own Prometheus
 `/metrics`, Collector→LLM-Obs routing) are correctly flagged as UNVERIFIED in-file and were not
 resolvable from docs this pass either — they stand.
+
+---
+
+## Validation pass (adversarial, 2026-06-23 — re-run for the #9/#10 re-runs)
+
+Second re-run, triggered by Whitney's directive: `research/28` (#9) and `research/29` (#10) were
+re-run, surfacing two changes that propagate into the AI-layer rows here — (a) the Datadog product is
+now branded **"Agent Observability"** (formerly "LLM Observability"), and (b) Agent Observability now
+ships a **built-in Sensitive Data Scanner (SDS)**. This pass independently re-verified those two
+deltas and **re-verified every load-bearing per-component Datadog integration fact** against the
+current (2026) official docs, live this pass.
+
+**Net result: all per-component Datadog facts re-confirmed IDENTICAL to the prior run; the two
+AI-layer deltas (rename + SDS) CONFIRMED. ONE refutation:** the original SDS wording "not on by
+default (requires a scanning group + rules)" was **REFUTED** against the current SDS doc — Agent-Obs
+scanning is the automated/pre-configured case (a default scanning group is auto-created and active on
+first Settings visit; the manual-group requirement is for general telemetry scanning). Corrected in
+place in the kagent/agent row and source [26]. No wire-or-skip decision was made (still the
+Milestone-5 conversation). Nothing else changed.
+
+> **Adversarial re-validation (independent skeptical pass, 2026-06-23):** the rename, the
+> `dd-otlp-source=llmobs` header continuity, the SDS "built-in / included" claim, and SDS scanning
+> Agent-Obs traces incl. LLM in/out were each re-fetched live and CONFIRMED with verbatim quotes (see
+> the table above, rows 6–9). The single inaccuracy found — SDS "not on by default" — was corrected
+> inline rather than left as written.
+
+| # | Claim | Verdict | Source checked (2026-06-23 re-run) |
+|---|---|---|---|
+| 1 | **ArgoCD DD integration: Agent 7.42+; ports 8082/8083/8084; integration *doc* does not enumerate an OOTB dashboard** | **CONFIRMED, unchanged** ("Minimum Agent version: 7.41.0 … requires Agent v7.42.0+"; ports 8082/8083/8084; no dashboard on the doc page) | https://docs.datadoghq.com/integrations/argocd/ |
+| 2 | **Falco DD OOTB dashboards = Yes; Agent 7.59.1+** | **CONFIRMED, unchanged** (verbatim: "The integration provides insights into alert logs through the out-of-the-box dashboards."; min Agent 7.59.1) | https://docs.datadoghq.com/integrations/falco/ |
+| 3 | **cert-manager DD OOTB dashboard = No; Agent 7.22+; `rename_labels` `name`→`cert_name`** | **CONFIRMED, unchanged** (no OOTB dashboard on the doc page; "Minimum Agent version: 7.22.0"; `rename_labels: {name: cert_name}` example present) | https://docs.datadoghq.com/integrations/cert-manager/ |
+| 4 | **Kyverno DD OOTB dashboard = No; included Agent 7.56+ (check req. 7.55+); OpenMetrics `/metrics` port 8000** | **CONFIRMED, unchanged** (no OOTB dashboard mentioned; min 7.55.0, included 7.56.0+; port 8000) | https://docs.datadoghq.com/integrations/kyverno/ |
+| 5 | **Istio DD integration Agent 6.1+; `istio_mode: ambient` + `ztunnel_endpoint`/`waypoint_endpoint`/`istiod_endpoint`; ztunnel L4, waypoint L7** | **CONFIRMED, unchanged** (verbatim: "ztunnel DaemonSet (L4 zero-trust tunneling) and optional `waypoint` proxies (L7 HTTP/gRPC processing)"; min Agent 6.1.0) | https://docs.datadoghq.com/integrations/istio/ |
+| 6 | **AI-layer Datadog surface renamed: "LLM Observability" → "Agent Observability"** (URLs + `dd-otlp-source=llmobs` header unchanged) | **CONFIRMED** — docs landing page titled "Agent Observability"; product page "Agent Observability \| LLM Observability"; per `research/28` re-run all 7 of its verdicts unchanged by the rename | https://docs.datadoghq.com/llm_observability/ ; https://www.datadoghq.com/products/ai/agent-observability/ |
+| 7 | **Built-in Sensitive Data Scanner (SDS)** in Agent Observability — scans Agent-Obs traces incl. LLM in/out, redacts PII/secrets; server-side after ingest | **CONFIRMED** ("Sensitive Data Scanner is included and scales with LLM usage"; "Catch … PII exposure as they happen"; "Agent Observability integrates with Sensitive Data Scanner, which helps prevent data leakage by identifying and redacting any sensitive information"; SDS doc: "Sensitive Data Scanner can scan Agent Observability traces, including inputs and outputs from LLM applications"; "A default scanning group is automatically created for your organization when you first access the Agent Observability Settings page") | https://www.datadoghq.com/products/ai/agent-observability/ ; https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ ; https://docs.datadoghq.com/security/sensitive_data_scanner/ |
+| 8 | **SDS "not on by default" / "requires a scanning group + rules"** (original file wording) | **REFUTED → CORRECTED in place** — the SDS doc explicitly contrasts Agent-Obs scanning as the **automated/pre-configured** case: a **default scanning group is auto-created** on first Agent-Obs Settings visit and you "modify existing rules, **disable** rules you don't need, or add custom scanning rules" — implying the default group/rules are active once created, NOT off-by-default. The "manually create a group + rules" requirement applies to **general telemetry-data** scanning, not Agent-Obs scanning. File corrected: dropped "not on by default," reframed as the auto-created/pre-configured default group. | https://docs.datadoghq.com/security/sensitive_data_scanner/ |
+| 9 | **`dd-otlp-source=llmobs` header still routes OTLP into Agent Observability (unchanged by rename)** | **CONFIRMED** (OTel instrumentation doc shows `headers={"dd-api-key":…, "dd-ml-app":…, "dd-otlp-source":"llmobs"}` to route OTLP traces to Agent Observability) | https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ |
+
+**What changed vs the prior run of THIS file:** only the AI-layer kagent/agent row and the
+verification-method block — the Datadog surface is now named **Agent Observability** (rename only;
+ingest path, `dd-otlp-source=llmobs` header, and v1.37+ semconv minimum all unchanged), and the
+built-in **Sensitive Data Scanner** is added as a server-side PII-redaction backstop relevant to the
+re-leak beat. The non-AI components (ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO,
+cert-manager, Backstage, customer-stream) are **unchanged** — every load-bearing DD integration fact
+re-verified identical this pass. The three "could-not-fully-resolve" items still stand (the
+Collector→Agent-Obs routing item is the same gap, now under the renamed product).
