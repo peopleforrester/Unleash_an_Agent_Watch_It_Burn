@@ -1,5 +1,5 @@
 <!-- ABOUTME: Research spike on the Datadog LLM Observability OTLP ingestion path for the Watch-It-Burn stack. -->
-<!-- ABOUTME: Answers PRD #7 Milestone 2 / Issue #9 — native gen_ai OTLP ingest, semconv v1.37, paths, content capture, ADK emission, org config. -->
+<!-- ABOUTME: Answers PRD #7 Milestone 2 / Issue #9: native gen_ai OTLP ingest, semconv v1.37, paths, content capture, ADK emission, org config. -->
 
 # 28. Datadog LLM Observability OTLP Ingestion Path for This Stack
 
@@ -18,17 +18,17 @@ the doc is treated as authoritative and the gap is flagged.
 > "Agent Observability"**, there is a dedicated product page (`.../products/ai/agent-observability/`),
 > and the OTel instrumentation doc now refers to the **"Agent Observability SDK"** (formerly the "LLM
 > Observability SDK"). The **`/llm_observability/` URL paths and the `dd-otlp-source=llmobs` header are
-> unchanged** — only the surface name changed; "LLM Observability" persists as a legacy/encompassed
+> unchanged**: only the surface name changed; "LLM Observability" persists as a legacy/encompassed
 > term. **All 7 verdicts below are unchanged by the rename.** This spike now uses "Agent Observability
 > (LLM Observability)" where the distinction matters.
 
 This spike **builds on** and does not re-derive:
-- `research/05-otel-genai-observability.md` — GenAI semconv is all `Development`; span names
+- `research/05-otel-genai-observability.md`: GenAI semconv is all `Development`; span names
   (`invoke_agent`, `execute_tool {gen_ai.tool.name}`, the model/inference span); content capture OFF
   by default; the re-leak trap; kagent tracing enabled via Helm `otel.tracing.enabled`.
-- `research/18-datadog-integrations-stack-2026.md` — per-component Datadog integration survey; UST
+- `research/18-datadog-integrations-stack-2026.md`: per-component Datadog integration survey; UST
   attribute→tag mapping (`service.name`/`service.version`/`deployment.environment.name`).
-- `research/23-observability-decision-points-2026.md` — Datadog-additive principle; pure-OTel
+- `research/23-observability-decision-points-2026.md`: Datadog-additive principle; pure-OTel
   Collector → `datadog` exporter is the shipped path; DDOT optional; service-map verification gate.
 - PRD #7 Milestone 2 "Preliminary research" block (the seed this spike confirms or corrects).
 
@@ -37,9 +37,11 @@ guard-proxy (Python → AWS Bedrock) → agentgateway → kagent (Google ADK) �
 standalone `otelcol-contrib 0.158.2` (DaemonSet) whose `datadog` exporter is the primary sink
 (alongside `prometheusremotewrite` + `otlp/tempo` fallback).
 
+
 > **Hypothesis-verification stance (Whitney's rule):** the issue's stated "gotchas" are treated as
 > hypotheses. Each is marked **CONFIRMED**, **CONFIRMED-WITH-NUANCE**, or **COULD NOT FULLY
 > CONFIRM** below.
+
 
 ---
 
@@ -54,8 +56,8 @@ standalone `otelcol-contrib 0.158.2` (DaemonSet) whose `datadog` exporter is the
 | 5 | `...CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` correct; `=true` invalid, no content | **CONFIRMED-WITH-NUANCE** |
 | 6 | What kagent/ADK emits natively (spans/attrs/hierarchy) | **CONFIRMED** |
 | 7 | Datadog-side config / feature flags / org settings | **CONFIRMED-WITH-NUANCE** (one Collector-routing gap, flagged) |
-| — | **Product name** (was "LLM Observability") | **CHANGED** → now **"Agent Observability"** (URLs/header unchanged) |
-| — | **Built-in Sensitive Data Scanner (PII redaction)** | **CONFIRMED** — included, scans Agent-Obs traces incl. LLM in/out; not on by default (default scanning group auto-created on first Settings visit) |
+| n/a | **Product name** (was "LLM Observability") | **CHANGED** → now **"Agent Observability"** (URLs/header unchanged) |
+| n/a | **Built-in Sensitive Data Scanner (PII redaction)** | **CONFIRMED**: included, scans Agent-Obs traces incl. LLM in/out; not on by default (default scanning group auto-created on first Settings visit) |
 
 ---
 
@@ -74,19 +76,19 @@ standalone `otelcol-contrib 0.158.2` (DaemonSet) whose `datadog` exporter is the
   (https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/)
 
 **What did NOT change (load-bearing for this stack):**
-- The **doc URL paths still use `/llm_observability/`** — so existing links in this spike and in PRD #7
+- The **doc URL paths still use `/llm_observability/`**, so existing links in this spike and in PRD #7
   remain valid.
 - The **`dd-otlp-source=llmobs` routing header is unchanged** (still `llmobs`, not `agentobs`).
 - **It still natively ingests OTel `gen_ai.*` spans over OTLP** at semconv **v1.37+** with no Datadog
-  SDK/Agent — re-confirmed verbatim this run (see Q1).
+  SDK/Agent, re-confirmed verbatim this run (see Q1).
 - "LLM Observability" persists as a legacy/encompassed term; Datadog uses both names interchangeably.
 
-**New capability relevant to this stack — built-in Sensitive Data Scanner (SDS) for PII redaction.**
+**New capability relevant to this stack: built-in Sensitive Data Scanner (SDS) for PII redaction.**
 Agent Observability now **includes Sensitive Data Scanner** ("Sensitive Data Scanner is included and
 scales with LLM usage"); the product page lists catching "hallucinations, prompt injection attempts,
 and **PII exposure** as they happen."
 (https://www.datadoghq.com/products/ai/agent-observability/)
-- SDS **scans Agent Observability traces, including the inputs and outputs from LLM applications** — it
+- SDS **scans Agent Observability traces, including the inputs and outputs from LLM applications**. It
   "helps prevent exposing sensitive data like PII, API keys, or proprietary information in prompts,
   completions, and LLM workflow metadata."
   (https://docs.datadoghq.com/security/sensitive_data_scanner/)
@@ -96,18 +98,18 @@ and **PII exposure** as they happen."
   and redacting any sensitive information (such as personal data, financial details, or proprietary
   information)."
   (https://docs.datadoghq.com/llm_observability/data_security_and_rbac/)
-- **Not on by default — it must be configured.** SDS requires a **scanning group** + **scanning rules**;
+- **Not on by default; it must be configured.** SDS requires a **scanning group** + **scanning rules**;
   for Agent Observability, "a default scanning group is automatically created for your organization when
   you first access the Agent Observability Settings page," and Datadog ships a **predefined rule library**
   (email addresses, credit-card numbers, API keys, authorization tokens, network/device info). Note: it
-  classifies/redacts telemetry **after ingest, server-side** at Datadog — it does **not** redact before
+  classifies/redacts telemetry **after ingest, server-side** at Datadog. It does **not** redact before
   data leaves your network. For pre-egress redaction, use the **Collector** (OTel transform/redaction
-  processors) or the in-app **span processors** — see the re-leak-trap note in Q5.
+  processors) or the in-app **span processors** (see the re-leak-trap note in Q5).
   (https://docs.datadoghq.com/security/sensitive_data_scanner/ ;
   https://docs.datadoghq.com/llm_observability/data_security_and_rbac/)
 
 **Demo relevance (PRD #7 Milestone 3 re-leak trap):** SDS is a *Datadog-side* mitigation that can be
-narrated as the "the platform caught the leaked secret" beat — it scans/redacts the `gen_ai.input.messages`
+narrated as the "the platform caught the leaked secret" beat. It scans/redacts the `gen_ai.input.messages`
 / `gen_ai.output.messages` content that the `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY`
 trap deliberately captures (Q5). But because SDS acts **after** the span reaches Datadog, the
 **Collector-side symmetric redaction** (`research/12`) remains the network-egress mitigation; SDS is the
@@ -117,12 +119,12 @@ defense-in-depth backstop in the UI, not a replacement for it.
 
 ## Q1. Does Datadog LLM Observability natively ingest OTel `gen_ai.*` spans over OTLP (no dd-trace/SDK)? Min semconv v1.37+?
 
-**CONFIRMED — yes, natively, no Datadog SDK or `dd-trace`; minimum semconv is v1.37+.**
+**CONFIRMED: yes, natively, no Datadog SDK or `dd-trace`; minimum semconv is v1.37+.**
 
 - Datadog's OTel-instrumentation doc states you can "send LLM traces directly from
   OpenTelemetry-instrumented applications to Datadog **without requiring the Agent Observability SDK
   or a Datadog Agent**." (Re-confirmed verbatim 2026-06-23; the doc now names the **"Agent
-  Observability SDK"** where the prior run quoted "LLM Observability SDK" — see the product-naming note
+  Observability SDK"** where the prior run quoted "LLM Observability SDK", see the product-naming note
   above. The capability is identical.)
   (https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/)
 - The minimum is explicit: Agent Observability ingests OpenTelemetry traces "that follow the
@@ -133,7 +135,7 @@ defense-in-depth backstop in the UI, not a replacement for it.
   https://www.datadoghq.com/blog/llm-otel-semantic-convention/ , published 2025-12-01)
 - Datadog "automatically maps GenAI attributes (e.g., `gen_ai.request.model`,
   `gen_ai.usage.input_tokens`, `gen_ai.provider.name`, and `gen_ai.operation.name`) to the native
-  LLM Observability schema" for latency, token usage, cost, model/provider, and finish reason — so
+  LLM Observability schema" for latency, token usage, cost, model/provider, and finish reason, so
   the standard `gen_ai.*` span is enough; no proprietary attributes are required.
   (https://www.datadoghq.com/blog/llm-otel-semantic-convention/)
 
@@ -141,11 +143,11 @@ defense-in-depth backstop in the UI, not a replacement for it.
 semconv version at which Datadog pinned its native mapping. Note the cross-cutting caveat from
 `research/05`: all `gen_ai.*` semconv is still **`Development`** status in the OTel spec
 (attribute-name churn is a live risk), so pin emitter versions and record actual emitted names.
-(https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/ — Inference span still badged
+(https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/ : Inference span still badged
 `Development`.)
 
 **Implication for this stack:** the guard-proxy currently emits Michael's custom `witb_*` metrics
-(NOT `gen_ai.*` spans) — see PRD #7 Milestone 2. Native LLM-Obs ingest depends on the AI layer
+(NOT `gen_ai.*` spans); see PRD #7 Milestone 2. Native LLM-Obs ingest depends on the AI layer
 actually emitting `gen_ai.*` v1.37 spans. That migration is the Milestone-2 work; this spike confirms
 the *target* path is real, not that the stack emits it today.
 
@@ -153,7 +155,7 @@ the *target* path is real, not that the stack emits it today.
 
 ## Q2. Which OTLP ingestion paths work: direct OTLP intake, Agent in OTLP mode, or via the Collector?
 
-**CONFIRMED — all three are officially supported.** The launch blog enumerates them verbatim:
+**CONFIRMED: all three are officially supported.** The launch blog enumerates them verbatim:
 
 1. **"directly from your OTLP exporter to Datadog's OTLP intake endpoint"** (no Agent, no Collector);
 2. **"via the Datadog Agent with OTLP ingest enabled"**;
@@ -177,21 +179,21 @@ The load-bearing token is the **`dd-otlp-source=llmobs`** header, which routes t
 (https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/)
 
 **What this means for OUR stack (the standalone `otelcol-contrib 0.158.2` → `datadog` exporter,
-path 3).** This is the genuinely under-documented seam — see **Q7** for the full treatment and the
-explicit flag. Short version: the repo's Collector uses the contrib **`datadog`** exporter (which
+path 3).** This is the genuinely under-documented seam (see **Q7** for the full treatment and the
+explicit flag). Short version: the repo's Collector uses the contrib **`datadog`** exporter (which
 maps to APM), not the direct-intake `dd-otlp-source=llmobs` header path. Whether `gen_ai.*` spans
-arriving via the contrib `datadog` exporter auto-populate LLM Observability — or whether an
-equivalent of `dd-otlp-source=llmobs` must be set on the Collector/exporter — is **not stated in the
+arriving via the contrib `datadog` exporter auto-populate LLM Observability, or whether an
+equivalent of `dd-otlp-source=llmobs` must be set on the Collector/exporter, is **not stated in the
 sources I could reach**. This must be **verified live in the Datadog UI** (LLM Observability traces
 page) during Milestone 2. The portable fallback is path 1: point the AI-layer pods' OTLP exporter (or
 a dedicated Collector exporter) straight at the intake endpoint with the `dd-otlp-source=llmobs`
-header — that path is fully documented and header-deterministic.
+header. That path is fully documented and header-deterministic.
 
 ---
 
 ## Q3. Correct `OTEL_SEMCONV_STABILITY_OPT_IN` value for frameworks on older specs?
 
-**CONFIRMED — `gen_ai_latest_experimental`.**
+**CONFIRMED: `gen_ai_latest_experimental`.**
 
 - Datadog doc: "If your framework previously supported a pre-1.37 OpenTelemetry specification version,
   you also need to set: **`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`**." The doc names
@@ -206,16 +208,16 @@ header — that path is fully documented and header-deterministic.
   (https://pypi.org/project/opentelemetry-util-genai/)
 
 So this is the correct, cross-vendor-consistent value. It opts the instrumentation into the newest
-(`gen_ai_latest_experimental`) attribute shape — which is exactly the v1.37+ shape Datadog's native
+(`gen_ai_latest_experimental`) attribute shape, which is exactly the v1.37+ shape Datadog's native
 mapping expects. **Set it on the kagent/ADK agent pod and on any other AI-layer emitter** that
 defaults to a pre-1.37 attribute set. (`research/05` already flagged this as a deliberate, not casual,
 setting because of `Development`-status name churn.)
 
 ---
 
-## Q4. Datadog supports OpenLLMetry 0.47+ but NOT OpenInference — verify; what does "support" mean operationally?
+## Q4. Datadog supports OpenLLMetry 0.47+ but NOT OpenInference: verify; what does "support" mean operationally?
 
-**CONFIRMED — both halves, verbatim from the Datadog doc:**
+**CONFIRMED: both halves, verbatim from the Datadog doc:**
 - **"OpenLLMetry version 0.47+ is supported."**
 - **"OpenInference is not supported."**
   (https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/)
@@ -234,10 +236,10 @@ maps that library's span/attribute shape into the LLM Observability schema**:
 
 **Operational guidance for this stack:** the AI layer is **Python + Google ADK (kagent) + a custom
 guard-proxy**. The lowest-effort route is **native ADK gen_ai emission** (Q6), which already follows
-the OTel GenAI conventions Datadog maps — so OpenLLMetry is not strictly required for the agent path.
+the OTel GenAI conventions Datadog maps, so OpenLLMetry is not strictly required for the agent path.
 Where auto-instrumentation *is* wanted on a plain-Python component (e.g. the guard-proxy's Bedrock
 call), **use OpenLLMetry ≥ 0.47, never OpenInference.** (PRD #7 Milestone 2 already records
-"OpenLLMetry — Datadog-supported; NOT OpenInference" — this spike confirms it against the doc.)
+"OpenLLMetry, Datadog-supported; NOT OpenInference"; this spike confirms it against the doc.)
 
 ---
 
@@ -248,17 +250,17 @@ call), **use OpenLLMetry ≥ 0.47, never OpenInference.** (PRD #7 Milestone 2 al
 nuance: the variable's value space changed from a boolean to an **enum**, so the precise failure mode
 ("appears to enable, collects nothing") is version/convention-dependent, not universal.
 
-**The current enum (authoritative — `opentelemetry-util-genai` + Google ADK doc):**
+**The current enum (authoritative, from `opentelemetry-util-genai` + Google ADK doc):**
 | Value | Behavior |
 |---|---|
 | `NO_CONTENT` | Do not capture message content **(default)** |
 | `SPAN_ONLY` | Capture message content in spans only |
 | `EVENT_ONLY` | Capture message content in events only |
 | `SPAN_AND_EVENT` | Capture in both spans and events |
-(https://pypi.org/project/opentelemetry-util-genai/ — values + default quoted verbatim.)
+(https://pypi.org/project/opentelemetry-util-genai/ ; values + default quoted verbatim.)
 
 **The `=true` trap (CONFIRMED against Google's ADK doc):** "When you use the most recent semantic
-conventions, setting the value of this variable to **`true` results in an invalid configuration**" —
+conventions, setting the value of this variable to **`true` results in an invalid configuration**,"
 and in that state "log and trace data isn't collected." So `=true` is exactly the silent-failure
 config the issue describes: it looks like the old boolean-on switch, but under v1.37+/`gen_ai_latest_
 experimental` it is unrecognized and captures nothing.
@@ -269,12 +271,12 @@ historically) used a boolean `true/false` for this flag. Once you opt into the l
 conventions (`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`), the flag is the **enum**
 above, and the boolean string is invalid. The two flags are coupled: the enum is in force precisely
 when you've also set the stability opt-in. (`research/05` already noted the default is "off"/no-content
-and that the flag name/shape is per-instrumentation — this spike pins the enum + the `=true` failure.)
+and that the flag name/shape is per-instrumentation; this spike pins the enum + the `=true` failure.)
 
 **For this workshop specifically:** content capture is the **re-leak-trap** mechanism
 (`research/05` §"Re-leak trap"; PRD #7 Milestone 3). The correct on-switch is
 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` (or `SPAN_ONLY`/`SPAN_AND_EVENT` if you
-want the secret to land in span attributes specifically) — **not `=true`**, which would make the trap
+want the secret to land in span attributes specifically), **not `=true`**, which would make the trap
 silently fail to fire. Keep it `NO_CONTENT` (default) on the shared path; flip to `EVENT_ONLY` only
 for the deliberate trap beat, with the Collector-side symmetric redaction (`research/12`) as the
 mitigation half of the lesson. The captured-content attributes (`gen_ai.input.messages`,
@@ -285,10 +287,10 @@ mitigation half of the lesson. The captured-content attributes (`gen_ai.input.me
 
 ## Q6. What does kagent/ADK emit natively via gen_ai semconv when `otel.tracing.enabled: true`? Span names, attributes, hierarchy.
 
-**CONFIRMED — kagent's base, Google ADK, natively emits OTel GenAI-semconv spans, and the
+**CONFIRMED: kagent's base, Google ADK, natively emits OTel GenAI-semconv spans, and the
 `invoke_agent → model-call → execute_tool` waterfall is exactly the workshop's narration target.**
 
-**Enablement (two layers — both true, applied at different surfaces):**
+**Enablement (two layers, both true, applied at different surfaces):**
 - **kagent layer (the workshop's actual lever):** tracing is **off by default**, enabled via Helm
   `otel.tracing.enabled: true` with an OTLP exporter endpoint (`research/05` §4, from
   https://www.kagent.dev/docs/kagent/observability/tracing). This turns on OTLP export from the kagent
@@ -306,21 +308,21 @@ mitigation half of the lesson. The captured-content attributes (`gen_ai.input.me
   Agent deployment is itself a verify-at-build item per `PROJECT_STATE.md`.
 
 **Span names ADK emits (verbatim from `adk.dev/observability/traces`):**
-- **`invoke_agent`** — "Describes GenAI agent invocation over a remote service or locally."
-- **`invoke_workflow`** — "the invocation of a multi-step agentic workflow."
-- **`execute_tool`** — "the execution of a specific tool or function call" (this is the rogue-MCP-call
+- **`invoke_agent`**: "Describes GenAI agent invocation over a remote service or locally."
+- **`invoke_workflow`**: "the invocation of a multi-step agentic workflow."
+- **`execute_tool`**: "the execution of a specific tool or function call" (this is the rogue-MCP-call
   span the demo narrates; named `execute_tool {gen_ai.tool.name}` per the OTel spec).
-- **`generate_content {model.name}`** — "the invocation of the underlying language model." (Google
+- **`generate_content {model.name}`**: "the invocation of the underlying language model." (Google
   Cloud's ADK doc shows the model span surfaced as **`call_llm`** in its UI; both refer to the
   inference call. The OTel spec form is `{gen_ai.operation.name} {gen_ai.request.model}`, e.g.
-  `chat <model>`. Expect the concrete name to be ADK-version-specific — **record the actual emitted
+  `chat <model>`. Expect the concrete name to be ADK-version-specific: **record the actual emitted
   name at build**, do not hardcode from this doc.)
   (https://adk.dev/observability/traces/ ;
   https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk ;
   https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/)
 
 **Hierarchy (waterfall):** "an agent run is a root span, which contains child spans for LLM
-operations, which may in turn contain child spans for tool executions" —
+operations, which may in turn contain child spans for tool executions,"
 i.e. `invoke_agent` (root) → model/`call_llm` span → `execute_tool {tool}` (nested under the LLM
 turn that requested the tool). This is the clean `invoke_agent → chat → execute_tool` waterfall PRD #7
 Milestone 2 wants in Datadog LLM Observability.
@@ -337,7 +339,7 @@ https://adk.dev/observability/traces/)
 The two token-usage attributes are the ones Datadog maps to **token usage and (derived) cost**, and
 `gen_ai.request.model` is the **model dimension** PRD #7 Milestone 2 wants for the model-tier cost
 comparison (NOT `service.version`, per the meta-PRD decision). So the data the cost story needs is
-emitted natively — confirming the seed claim that the lowest-effort path is "enable native
+emitted natively, confirming the seed claim that the lowest-effort path is "enable native
 kagent/ADK tracing → OTLP → Datadog," not new Python instrumentation.
 
 **Caveat (carry from `research/05`):** ADK runs *inside* kagent; the doc-level guarantee is ADK's. The
@@ -351,13 +353,13 @@ live check (GenAI semconv is `Development`).
 ## Q7. Datadog-side config requirements (feature flags, org settings) to enable LLM Obs ingestion from OTel?
 
 **CONFIRMED-WITH-NUANCE.** For the **documented direct-OTLP path**, the only Datadog-side requirements
-are an **API key** and the **`dd-otlp-source=llmobs` header** — no org feature flag or special plan
+are an **API key** and the **`dd-otlp-source=llmobs` header**: no org feature flag or special plan
 toggle is mentioned. For the **Collector path this repo uses**, the routing-into-LLM-Obs detail is a
 documented gap and is the one verify-at-build item.
 
 **What the docs DO state (direct OTLP intake path):**
 - Requirement is a **Datadog API key**; "**no special org-level enablement is mentioned**." The launch
-  blog likewise lists **no org-level feature flags, plan requirements, or settings** — only "upgrade to
+  blog likewise lists **no org-level feature flags, plan requirements, or settings**, only "upgrade to
   OTel SDK/Collector v1.37 or later."
   (https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ ;
   https://www.datadoghq.com/blog/llm-otel-semantic-convention/)
@@ -373,9 +375,9 @@ documented gap and is the one verify-at-build item.
 exporter** in `otelcol-contrib 0.158.2` (→ Datadog APM intake), not via the direct-OTLP
 `dd-otlp-source=llmobs` header path. None of the reachable sources state how a `gen_ai.*` span sent
 through the **Collector's `datadog` exporter** (or through the **Datadog Agent OTLP ingest**) gets
-routed into LLM Observability — whether it is automatic on attribute detection, or whether a Collector
+routed into LLM Observability: whether it is automatic on attribute detection, or whether a Collector
 /exporter-side equivalent of `dd-otlp-source=llmobs` is required. The blog asserts the Collector path
-works but gives no config. **This is the single item I could NOT fully resolve from docs — flagged.**
+works but gives no config. **This is the single item I could NOT fully resolve from docs, and it is flagged.**
 
 **Recommended resolution (in priority order):**
 1. **Live-verify the Collector path first** (it's the shipped, portable topology): once the AI layer
@@ -386,11 +388,11 @@ works but gives no config. **This is the single item I could NOT fully resolve f
 2. **If it does NOT appear**, add the LLM-Obs routing on the Collector's `datadog` exporter (check the
    contrib `datadog` exporter version pinned in chart `0.158.2` for an LLM-Obs / `dd-otlp-source`
    option), OR add a **dedicated OTLP exporter** in the Collector pointed at Datadog's OTLP intake
-   endpoint with `dd-otlp-source=llmobs` in the headers — the documented, header-deterministic path.
+   endpoint with `dd-otlp-source=llmobs` in the headers, the documented, header-deterministic path.
    Either keeps the Datadog-additive principle (`research/23` D2): removing it leaves Prometheus +
    Tempo intact.
 3. **Keep `datadog.prometheusScrape.enabled` OFF** (PRD #7 / `research/18`): double-scrape with the
-   Collector causes duplicate metrics + billing — unrelated to LLM-Obs but a standing Datadog-side
+   Collector causes duplicate metrics + billing, unrelated to LLM-Obs but a standing Datadog-side
    config requirement for this stack.
 
 **Net:** no org feature-flag/plan gate is documented to "turn on" LLM Observability ingest beyond a
@@ -407,8 +409,8 @@ if not automatic).
   ingest is contingent on the Milestone-2 migration to OTel GenAI semconv. This spike confirms the
   *target* is sound, not that data flows now.
 - **Set on the kagent/ADK agent pod:** `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`,
-  `OTEL_SERVICE_NAME=workshop-agent` (UST `service.name`), the OTLP endpoint, and — only for the
-  re-leak beat — `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` (never `=true`).
+  `OTEL_SERVICE_NAME=workshop-agent` (UST `service.name`), the OTLP endpoint, and, only for the
+  re-leak beat, `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` (never `=true`).
 - **Verify-at-build (live trace capture), per `research/05`:** actual emitted span names + attribute
   names (semconv is `Development`); that kagent propagates the ADK `OTEL_*`/opt-in; that
   `gen_ai.request.model` and `gen_ai.usage.*` survive to Datadog; and the Collector → LLM-Obs routing
@@ -421,7 +423,7 @@ if not automatic).
 
 ## Could-not-fully-resolve (explicitly flagged)
 
-- **Q7 / Q2 — Collector→LLM-Obs routing:** No reachable doc states whether `gen_ai.*` spans sent via
+- **Q7 / Q2, Collector→LLM-Obs routing:** No reachable doc states whether `gen_ai.*` spans sent via
   the contrib **`datadog` exporter** (or Datadog Agent OTLP ingest) auto-route into LLM Observability,
   or require a Collector-side `dd-otlp-source=llmobs` equivalent. The blog asserts the Collector path
   works but provides no config; the doc only details the direct-OTLP header path. **Resolution = a live
@@ -432,20 +434,20 @@ if not automatic).
 
 ## Sources
 
-- https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ — native OTLP ingest (no SDK/Agent), v1.37+ requirement, `dd-otlp-source=llmobs` header, `gen_ai_latest_experimental` (strands-agents), OpenLLMetry 0.47+ supported / OpenInference not supported, direct-OTLP exporter config.
-- https://www.datadoghq.com/blog/llm-otel-semantic-convention/ — launch blog (2025-12-01): three ingestion paths (direct intake / Agent OTLP ingest / Collector incl. DDOT), v1.37 and up, "no code changes required," gen_ai attribute auto-mapping, "alongside existing APM traces."
-- https://docs.datadoghq.com/llm_observability/instrumentation/ — instrumentation landing; unsupported GovCloud sites for LLM Observability.
-- https://docs.datadoghq.com/llm_observability/ — **docs landing page now titled "Agent Observability"** (the rename); references the "Agent Observability SDK for Python"; "Automatically scan and redact any sensitive data in your AI applications and identify prompt injections."
-- https://www.datadoghq.com/products/ai/agent-observability/ — **Agent Observability product page** ("Ship AI agents faster, with confidence"); "Sensitive Data Scanner is included and scales with LLM usage"; "Catch hallucinations, prompt injection attempts, and PII exposure as they happen."
-- https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ — Agent Observability data security + RBAC; SDS as "an additional layer of security" alongside span processors + access controls; "integrates with Sensitive Data Scanner, which helps prevent data leakage by identifying and redacting any sensitive information."
-- https://docs.datadoghq.com/security/sensitive_data_scanner/ — SDS scans Agent Observability traces incl. LLM inputs/outputs (prompts, completions, workflow metadata); covers logs/APM/RUM/Agent-Obs traces/events/S3; requires scanning group + rules (default group auto-created on first Agent Observability Settings visit); predefined rule library (emails, credit cards, API keys, auth tokens, network/device info).
-- https://docs.datadoghq.com/opentelemetry/setup/otlp_ingest/ — Datadog OTLP intake endpoint (general OTLP ingest context).
-- https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk — ADK ≥1.17.0 built-in OTel gen_ai support; `OTEL_SERVICE_NAME` / `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` / `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY`; `=true` is an invalid config that collects no data; `call_llm` span; waterfall hierarchy.
-- https://adk.dev/observability/traces/ — ADK span names (`invoke_agent`, `invoke_workflow`, `execute_tool`, `generate_content {model.name}`), the full `gen_ai.*` attribute list incl. `gen_ai.usage.input_tokens/output_tokens` and `gen_ai.request.model`, OTel gen_ai semconv compliance, OTLP enablement.
-- https://pypi.org/project/opentelemetry-util-genai/ — `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` enum (`NO_CONTENT` default / `SPAN_ONLY` / `EVENT_ONLY` / `SPAN_AND_EVENT`); coupling with `gen_ai_latest_experimental`.
-- https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/ — gen_ai spans still `Development`; message-content attributes (`gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`) `Opt-In` + `Development`. **[2026-06-23: this URL now redirects to "moved/no longer maintained"; canonical source is https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md — facts re-confirmed there.]**
-- https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/ — agent/framework span name forms (`invoke_agent {gen_ai.agent.name}`, `execute_tool {gen_ai.tool.name}`, operation-name conventions). **[2026-06-23: moved; canonical source is https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md — facts re-confirmed there.]**
-- https://www.kagent.dev/docs/kagent/observability/tracing — kagent tracing off-by-default, enabled via `otel.tracing.enabled: true` + OTLP exporter (via `research/05`).
+- https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ : native OTLP ingest (no SDK/Agent), v1.37+ requirement, `dd-otlp-source=llmobs` header, `gen_ai_latest_experimental` (strands-agents), OpenLLMetry 0.47+ supported / OpenInference not supported, direct-OTLP exporter config.
+- https://www.datadoghq.com/blog/llm-otel-semantic-convention/ : launch blog (2025-12-01): three ingestion paths (direct intake / Agent OTLP ingest / Collector incl. DDOT), v1.37 and up, "no code changes required," gen_ai attribute auto-mapping, "alongside existing APM traces."
+- https://docs.datadoghq.com/llm_observability/instrumentation/ : instrumentation landing; unsupported GovCloud sites for LLM Observability.
+- https://docs.datadoghq.com/llm_observability/ : **docs landing page now titled "Agent Observability"** (the rename); references the "Agent Observability SDK for Python"; "Automatically scan and redact any sensitive data in your AI applications and identify prompt injections."
+- https://www.datadoghq.com/products/ai/agent-observability/ : **Agent Observability product page** ("Ship AI agents faster, with confidence"); "Sensitive Data Scanner is included and scales with LLM usage"; "Catch hallucinations, prompt injection attempts, and PII exposure as they happen."
+- https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ : Agent Observability data security + RBAC; SDS as "an additional layer of security" alongside span processors + access controls; "integrates with Sensitive Data Scanner, which helps prevent data leakage by identifying and redacting any sensitive information."
+- https://docs.datadoghq.com/security/sensitive_data_scanner/ : SDS scans Agent Observability traces incl. LLM inputs/outputs (prompts, completions, workflow metadata); covers logs/APM/RUM/Agent-Obs traces/events/S3; requires scanning group + rules (default group auto-created on first Agent Observability Settings visit); predefined rule library (emails, credit cards, API keys, auth tokens, network/device info).
+- https://docs.datadoghq.com/opentelemetry/setup/otlp_ingest/ : Datadog OTLP intake endpoint (general OTLP ingest context).
+- https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk : ADK ≥1.17.0 built-in OTel gen_ai support; `OTEL_SERVICE_NAME` / `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` / `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY`; `=true` is an invalid config that collects no data; `call_llm` span; waterfall hierarchy.
+- https://adk.dev/observability/traces/ : ADK span names (`invoke_agent`, `invoke_workflow`, `execute_tool`, `generate_content {model.name}`), the full `gen_ai.*` attribute list incl. `gen_ai.usage.input_tokens/output_tokens` and `gen_ai.request.model`, OTel gen_ai semconv compliance, OTLP enablement.
+- https://pypi.org/project/opentelemetry-util-genai/ : `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` enum (`NO_CONTENT` default / `SPAN_ONLY` / `EVENT_ONLY` / `SPAN_AND_EVENT`); coupling with `gen_ai_latest_experimental`.
+- https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/ : gen_ai spans still `Development`; message-content attributes (`gen_ai.input.messages`, `gen_ai.output.messages`, `gen_ai.system_instructions`) `Opt-In` + `Development`. **[2026-06-23: this URL now redirects to "moved/no longer maintained"; canonical source is https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md ; facts re-confirmed there.]**
+- https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-agent-spans/ : agent/framework span name forms (`invoke_agent {gen_ai.agent.name}`, `execute_tool {gen_ai.tool.name}`, operation-name conventions). **[2026-06-23: moved; canonical source is https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md ; facts re-confirmed there.]**
+- https://www.kagent.dev/docs/kagent/observability/tracing : kagent tracing off-by-default, enabled via `otel.tracing.enabled: true` + OTLP exporter (via `research/05`).
 
 ---
 
@@ -461,11 +463,11 @@ auto-created default scanning group, and the unchanged `dd-otlp-source=llmobs` h
 and they hold word-for-word; the SDS doc additionally confirms Redact/Partially-redact/Hash actions
 (Mask unavailable for Agent Observability) and that the managed scanning group cannot be deleted.
 **This re-run added two findings from Whitney's #9 product-naming update:** (a) the product is now
-**"Agent Observability"** — a surface rename only, URLs and the `dd-otlp-source=llmobs` header are
+**"Agent Observability"**, a surface rename only, URLs and the `dd-otlp-source=llmobs` header are
 unchanged, all 7 verdicts hold; (b) a **built-in Sensitive Data Scanner** for PII redaction of
 Agent-Obs traces is **CONFIRMED** (included, scans LLM inputs/outputs, configured via scanning groups,
 acts server-side after ingest). One earlier source-citation correction (stale OTel URLs) is retained
-below — no factual claim changed.
+below; no factual claim changed.
 
 | Claim | Verdict | Source checked (2026-06-23) |
 |---|---|---|
@@ -492,13 +494,13 @@ below — no factual claim changed.
 | **Product rename to "Agent Observability"** (docs landing title + product page + "Agent Observability SDK" in OTel doc) | **CONFIRMED** | https://docs.datadoghq.com/llm_observability/ ; https://www.datadoghq.com/products/ai/agent-observability/ ; https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ |
 | Rename is surface-only: `/llm_observability/` URLs + `dd-otlp-source=llmobs` header unchanged; native gen_ai OTLP ingest at v1.37+ still holds | **CONFIRMED** | OTel instrumentation doc above (header + v1.37 re-quoted verbatim this run) |
 | **Built-in Sensitive Data Scanner** included; scans Agent-Obs traces incl. LLM inputs/outputs; identifies + redacts PII/financial/proprietary | **CONFIRMED** (verbatim) | https://www.datadoghq.com/products/ai/agent-observability/ ; https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ ; https://docs.datadoghq.com/security/sensitive_data_scanner/ |
-| SDS not on by default — requires scanning group + rules (default group auto-created on first Agent-Obs Settings visit); predefined rule library; acts server-side after ingest | **CONFIRMED** | https://docs.datadoghq.com/security/sensitive_data_scanner/ |
-| Could-not-resolve: Collector (`datadog` exporter) → LLM-Obs auto-routing | **UNVERIFIED (correctly self-flagged)** — no official doc states this; the file's "verify live + `dd-otlp-source=llmobs` fallback" stance is sound | n/a (gap stands) |
+| SDS not on by default, requires scanning group + rules (default group auto-created on first Agent-Obs Settings visit); predefined rule library; acts server-side after ingest | **CONFIRMED** | https://docs.datadoghq.com/security/sensitive_data_scanner/ |
+| Could-not-resolve: Collector (`datadog` exporter) → LLM-Obs auto-routing | **UNVERIFIED (correctly self-flagged)**: no official doc states this; the file's "verify live + `dd-otlp-source=llmobs` fallback" stance is sound | n/a (gap stands) |
 
 **Source-citation correction (no fact changed).** The file cites the GenAI semconv stability/attribute
 facts to `https://opentelemetry.io/docs/specs/semconv/gen-ai/gen-ai-spans/` and
 `.../gen-ai-agent-spans/`. As of 2026-06-23 those pages return "This page has moved and is no longer
-maintained in this repository" — the GenAI semconv moved to the **`semantic-conventions-genai`** repo.
+maintained in this repository": the GenAI semconv moved to the **`semantic-conventions-genai`** repo.
 The **facts are unchanged and re-confirmed** at the new canonical location:
 - https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md (inference span `Development`; message-content attrs `Opt-In`+`Development`)
 - https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-agent-spans.md (`invoke_agent {gen_ai.agent.name}`, `execute_tool {gen_ai.tool.name}` span-name forms)
