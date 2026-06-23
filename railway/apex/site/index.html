@@ -1,31 +1,66 @@
 <!doctype html>
-<!-- ABOUTME: Static landing page served at the apex agenticburn.com by the Railway apex/router service. -->
-<!-- ABOUTME: Public-safe: no credentials, no cluster URLs, no internal detail. -->
+<!-- ABOUTME: Synopsis landing for agenticburn.com + www — what the domain is, the talk, and the links. -->
+<!-- ABOUTME: Public-safe: no credentials, no cluster internals, no internal infra detail. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Watch It Burn</title>
+  <title>Watch It Burn — agenticburn.com</title>
   <style>
-    :root { --orange:#ff6b35; }
-    html,body { height:100%; margin:0; }
-    body { background:#111; color:#eee; font-family:system-ui,-apple-system,Segoe UI,sans-serif;
-      display:flex; align-items:center; justify-content:center; text-align:center; }
-    .wrap { max-width:640px; padding:32px; }
-    h1 { color:var(--orange); font-size:2.4em; margin:0 0 6px; }
-    .sub { color:#bbb; font-size:1.05em; margin:0 0 28px; }
-    a { display:inline-block; margin-top:8px; color:var(--orange); border:1px solid var(--orange);
-      border-radius:6px; padding:10px 18px; text-decoration:none; }
-    a:hover { background:var(--orange); color:#111; }
-    .small { color:#777; font-size:.8em; margin-top:28px; }
+    :root { --orange:#ff6b35; --bg:#111; --panel:#181818; --line:#2a2a2a; }
+    html,body { margin:0; background:var(--bg); color:#e8e8e8;
+      font-family:system-ui,-apple-system,Segoe UI,sans-serif; line-height:1.55; }
+    .wrap { max-width:680px; margin:0 auto; padding:56px 24px 64px; }
+    h1 { color:var(--orange); font-size:2.4em; margin:0 0 4px; }
+    .tagline { color:#fff; font-size:1.15em; margin:0 0 6px; }
+    .meta { color:#9a9a9a; font-size:.9em; margin:0 0 28px; }
+    .synopsis { font-size:1.02em; color:#d8d8d8; }
+    h2 { color:var(--orange); font-size:1.05em; letter-spacing:.02em; text-transform:uppercase;
+      margin:34px 0 12px; }
+    .links { list-style:none; padding:0; margin:0; }
+    .links li { background:var(--panel); border:1px solid var(--line); border-radius:8px;
+      padding:14px 16px; margin:10px 0; }
+    .links a { color:var(--orange); text-decoration:none; font-weight:600; }
+    .links a:hover { text-decoration:underline; }
+    .links .d { color:#9a9a9a; font-size:.9em; display:block; margin-top:3px; }
+    footer { margin-top:40px; color:#777; font-size:.85em; border-top:1px solid var(--line); padding-top:16px; }
+    code { background:#222; padding:1px 6px; border-radius:4px; color:#cfcfcf; font-size:.9em; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>🔥 Watch It Burn</h1>
-    <p class="sub">Build a Platform, Unleash an Agent on it… and Watch it Burn!<br>AI Engineer World's Fair 2026 · Track 5</p>
-    <a href="https://walkthrough.agenticburn.com">View the workshop walkthrough →</a>
-    <p class="small">Attendees: open the personal link the facilitators gave you.</p>
+    <p class="tagline">Build a Platform, Unleash an Agent on it… and Watch it Burn!</p>
+    <p class="meta">A hands-on workshop at <strong>AI Engineer World's Fair 2026</strong> · Day 1 · Track 5 — Michael Forrester &amp; Whitney Lee</p>
+
+    <p class="synopsis">
+      You get a Kubernetes cluster running a full internal developer platform — GitOps, admission
+      policy, runtime security, observability, secrets, a portal — plus an AI agent with the keys to it.
+      The exercise: make the agent do damage, and watch what the platform stops. Most of what an agent
+      tries is already caught by tools many teams run today; the thin slice that isn't — its input, its
+      output, and the tools it can reach — is where agents change the threat model, and where the
+      workshop spends its time.
+    </p>
+
+    <h2>On this domain</h2>
+    <ul class="links">
+      <li>
+        <a href="https://walkthrough.agenticburn.com">walkthrough.agenticburn.com →</a>
+        <span class="d">The technical walkthrough — the workshop's run-of-show, in delivery order, as a slide deck.</span>
+      </li>
+      <li>
+        <a href="https://agenticburn.com">agenticburn.com</a>
+        <span class="d">This page.</span>
+      </li>
+      <li>
+        <span style="color:#cfcfcf;font-weight:600;">your-cluster.agenticburn.com</span>
+        <span class="d">During the session, each attendee gets a personal link to their own cluster console (chat to the agent + an in-browser terminal). Handed out at the door.</span>
+      </li>
+    </ul>
+
+    <footer>
+      AI Engineer World's Fair 2026 · San Francisco, Moscone West · Track 5.
+    </footer>
   </div>
 </body>
 </html>
