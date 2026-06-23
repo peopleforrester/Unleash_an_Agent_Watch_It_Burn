@@ -158,7 +158,7 @@ be locked now to avoid reworking later milestones?
 2. Run `/prd-create` for a child PRD implementing the MVP per decisions 1-4, acceptance including "AI-layer metrics + traces visible in one Datadog trial account's UI; cost counter non-zero" (`/prd-update-decisions` for the Decision Log).
 3. Add to `docs/ROADMAP.md` as `- MVP: telemetry in one Datadog account (PRD #[issue-id])`, first in build order.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Milestone 2.
+5. Instruct the user to start a new session, then run `/prd-next` for Milestone 2.
 
 **Done when:**
 - [ ] Cross-cutting decisions (collector shape, UST vocabulary incl. `service.version`, MVP account) recorded in the child PRD's Decision Log with reasoning
@@ -197,7 +197,7 @@ custom telemetry emit today, and what must change to move to OTel GenAI semconv 
 2. **What in Python needs instrumenting, and how** — for each component (kagent/ADK agent, agentgateway, guard-proxy, evil-mcp-shim): native built-in OTel, an auto-instrumentation library (OpenLLMetry — Datadog-supported; NOT OpenInference), or manual spans. Decide per component; some may need nothing (ADK is native).
 3. **Enable kagent/ADK gen_ai tracing** — `otel.tracing.enabled: true` (off by default); confirm it emits `gen_ai.*` and the `execute_tool {gen_ai.tool.name}` spans.
 4. **Migrate off `witb_*`** — decide the fate of the custom `witb_*`/`tier` counters: retire in favor of `gen_ai.usage.*` + `gen_ai.request.model`, or keep `witb_cost_usd` for the cost lesson (USD is not a standard gen_ai attribute — cost is always derived). Update the four touch-points if renaming: `agent/gateway/guard-proxy/proxy.py`, `gitops/ai-layer/proxy.py`, the Grafana dashboard, `verify/test_observability.py`.
-5. **GenAI semconv version + opt-in + Weaver** — pin a semconv version; set `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` (Datadog needs v1.37+); decide whether a Weaver registry validating `gen_ai.*` in CI `live-check` is worthwhile and, if so, build it here.
+5. **GenAI semconv version + opt-in + Weaver** — pin a semconv version; set `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` (Datadog needs v1.37+); decide whether a Weaver registry validating `gen_ai.*` in CI `live-check` is worthwhile and, if so, build it here. Implementation approach (Decision 2026-06-23): declare the OTel semconv community registry as a Weaver `dependencies:` entry — `gen_ai.*` definitions live upstream, the local registry references rather than redefines them. No vocab needs to be pre-defined in M1.
 6. **agentgateway v1.3.0 field-path verification** — repo has v1.2.1 pins; verify field paths against v1.3.0 GA.
 7. **`gen_ai.request.model` capture** — confirm the model identifier is on the spans so the model dimension is available in LLM Observability (this, not `service.version`, is what a deferred model-tier cost comparison groups by).
 
@@ -206,7 +206,7 @@ custom telemetry emit today, and what must change to move to OTel GenAI semconv 
 2. Run `/prd-create` for a child PRD per decisions 1-7, acceptance including "AI layer emits OTel GenAI semconv telemetry visible in Datadog LLM Observability" and "Michael's custom `witb_*` conventions migrated/retired per decision 4" (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Migrate to OTel GenAI semconv (PRD #[issue-id])`, after the MVP.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Milestone 3.
+5. Instruct the user to start a new session, then run `/prd-next` for Milestone 3.
 
 **Done when:**
 - [ ] Decisions 1-7 recorded with reasoning
@@ -241,7 +241,7 @@ rogue-tool beat, and what is the re-leak risk if content capture is naive?
 2. Run `/prd-create` for a child PRD per decisions 1-3, acceptance including "before/after sanitization and rogue MCP chain visible in traces" (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Security-beat traces (PRD #[issue-id])`, after Milestone 2.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Milestone 4.
+5. Instruct the user to start a new session, then run `/prd-next` for Milestone 4.
 
 **Done when:**
 - [ ] Decisions 1-3 recorded with reasoning
@@ -274,7 +274,7 @@ Falcosidekick→Datadog path actually live?
 2. Run `/prd-create` for a child PRD per decisions 1-3, acceptance including "Falco alert visible in Datadog on a live exfil attempt" (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Falco alerts in Datadog (PRD #[issue-id])`, after Milestone 3.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Milestone 5.
+5. Instruct the user to start a new session, then run `/prd-next` for Milestone 5.
 
 **Done when:**
 - [ ] Decisions 1-3 recorded with reasoning
@@ -316,7 +316,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 3. Run `/prd-create` for a child PRD per decisions 2-8, acceptance including a per-integration UI verification checklist (`/prd-update-decisions`).
 4. Add to `docs/ROADMAP.md` as `- EKS infra & named integrations (PRD #[issue-id])`, after Milestone 4.
 5. Run `/prd-update-progress` to commit + push.
-6. Clear context; run `/prd-next` for Milestone 6.
+6. Instruct the user to start a new session, then run `/prd-next` for Milestone 6.
 
 **Done when:**
 - [ ] `research/28-…` exists with a wire-or-skip decision (+ reasoning) per component
@@ -354,7 +354,7 @@ earlier milestones, given UST vocabulary was locked in Milestone 1?
 2. Run `/prd-create` for a child PRD per decisions 1-5, acceptance including "Service Map renders in the UI" and both correlation pivots working (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- UST, Service Map & correlation (PRD #[issue-id])`, after Milestone 5.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Milestone 7.
+5. Instruct the user to start a new session, then run `/prd-next` for Milestone 7.
 
 **Done when:**
 - [ ] Decisions 1-5 recorded with reasoning
@@ -390,7 +390,7 @@ data confirmed flowing?
 2. Run `/prd-create` for a child PRD implementing the chosen community-dashboard imports + any custom dashboards decided to build now (deferring the rest to dress rehearsal) per decisions 1-3 (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Dashboards: community imports + custom (PRD #[issue-id])`, after Milestone 6.
 4. Run `/prd-update-progress` to commit + push.
-5. Clear context; run `/prd-next` for Milestone 8.
+5. Instruct the user to start a new session, then run `/prd-next` for Milestone 8.
 
 **Done when:**
 - [ ] Import/skip decided per community dashboard with reasoning; chosen ones imported
@@ -483,8 +483,9 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 | 2026-06-22 | Cost-counter key live-resolved to `kagent_usage_metadata` | Live validation (kagent 0.9.9) showed `research/14` was wrong; `record_usage()` already accepts both, kagent-first. MVP verifies, does not "fix a bug" |
 | 2026-06-22 | DDOT-vs-contrib not a blank slate | `research/24` §1.1 confirmed: standalone contrib `0.158.2` as fleet collector, DDOT optional on instructor cluster only |
 | 2026-06-22 | Master credential store is a distinct Milestone 8 decision | Storing the sensitive trial-org pool (API/app keys + passwords) as a source of truth the build service reads and Whitney shares with Michael is separate from per-cluster ESO injection; org schema embedded for the implementer |
-| 2026-06-22 | Restructured from horizontal layers to MVP-first vertical milestones | Michael's build system builds each child PRD as it is written; vertical milestones are verifiable in the Datadog UI per milestone, and design order = build order. Cross-cutting decisions (collector shape, UST vocabulary, account model, Weaver) locked in Milestone 1 to bound rework |
-| 2026-06-22 | Weaver schema decision moved to Milestone 1 (MVP) | Encoding GenAI semconv for CI `live-check` is cross-cutting; if worthwhile, the registry must exist from the first traces so later milestones validate against it |
+| 2026-06-22 | Restructured from horizontal layers to MVP-first vertical milestones | Michael's build system builds each child PRD as it is written; vertical milestones are verifiable in the Datadog UI per milestone, and design order = build order. Cross-cutting decisions (collector shape, UST vocabulary, account model) locked in Milestone 1 to bound rework (Weaver removed from this list — superseded 2026-06-23, Weaver stays in M2) |
+| 2026-06-22 | ~~Weaver schema decision moved to Milestone 1 (MVP)~~ (superseded 2026-06-23 — Weaver stays in M2) | ~~Encoding GenAI semconv for CI `live-check` is cross-cutting; if worthwhile, the registry must exist from the first traces so later milestones validate against it~~ |
 | 2026-06-22 | Per-component synthesis (`research/28`) feeds the infra/integration milestone rather than standing alone | A survey alone implements nothing; in the vertical structure it is produced inside Milestone 5 and consumed in the same milestone, so its findings directly drive wire/skip decisions instead of becoming a research dead-end |
 | 2026-06-22 | Meta-PRD content was reconciled from research 14/18/23/24/25/27 + PROJECT_STATE via a read-only audit | Provenance: a reconciliation agent surfaced settled decisions and unrepresented open questions from prior docs; they were folded into the milestones. A second audit agent verified the horizontal→vertical restructure dropped no substantive item |
 | 2026-06-22 | `PROJECT_STATE.md` stale "one shared org" line corrected in Milestone 8, not now | The shared-org→per-attendee correction lands when the work lands, so the state doc changes alongside implementation rather than ahead of it |
+| 2026-06-23 | Weaver stays in Milestone 2; OTel semconv community registry is the upstream dependency (supersedes stale 2026-06-22 "Weaver schema decision moved to Milestone 1" entry) | `gen_ai.*` spans don't exist until the M2 migration, so Weaver can't validate anything in M1 — nothing to check against. The OTel community maintains a semconv registry (including all `gen_ai.*` definitions) that Weaver can pull via a `dependencies:` entry in `registry_manifest.yaml`; the local registry references upstream definitions rather than redefining them. No vocab needs to be pre-defined in M1. M2 Step 5 updated to reflect this implementation approach. |
