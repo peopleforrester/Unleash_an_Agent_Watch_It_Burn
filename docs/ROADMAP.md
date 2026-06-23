@@ -18,5 +18,5 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 4. Falco alerts in Datadog — runtime detection visible
 5. EKS infra & named integrations — Agent DaemonSet, per-component synthesis (research/28)
 6. UST, Service Map & correlation — full-fidelity tagging, Service Map view, log/trace/metric pivots
-7. Custom dashboards — DEFERRED to dress rehearsal (no child PRD); story dashboards only, no supporting-tech dashboards
+7. Dashboards — import community/Grafana dashboards (from the Milestone 5 survey) for components without an official Datadog dashboard; decide custom/story dashboards (build now / defer to dress rehearsal / skip)
 8. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets
