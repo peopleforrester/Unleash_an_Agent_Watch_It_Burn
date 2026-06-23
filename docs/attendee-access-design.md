@@ -183,23 +183,51 @@ name,region,access_key,secret_key,console_url,datadog_site,datadog_api_key,datad
 
 ---
 
-## Open decisions (need Michael + Whitney)
+## Decisions (RESOLVED 2026-06-23, Michael)
 
-1. **Exposure model** — confirm **Option B (central wildcard router)** over per-cluster Ingress/cert.
-   *(Recommended: B.)*
-2. **Web terminal** — **build `ttyd`/`wetty`** (keeps the quickstart promise, gives a real shell) **vs.
-   chat-only** (drop the terminal promise; rewrite `quickstart.md`). *(Recommended: build ttyd for C3;
-   chat-only for C1/C2.)* If chat-only, `access/quickstart.md` must be corrected so we don't promise
-   vaporware.
-3. **Datadog account model** — per-attendee trial orgs (confirmed by the observability work) and **who
-   creates them**: pre-provisioned by us (keys land in the pool) vs. attendee self-signup at the door
-   (distributor captures their keys). *(Recommended: pre-provisioned into the pool so the success page is
-   complete on first load; the observability Milestone 8 owns the mechanism.)*
-4. **Router host** — Railway (like the walkthrough) vs. netcup VPS (already a whitelisted Namecheap IP).
-   *(Recommended: netcup VPS — the DNS-01 solver needs the whitelisted IP regardless.)*
-5. **AWS credential type** — long-lived IAM access keys (current pool model) vs. short-lived STS. *(For a
-   2-hour disposable lab, long-lived per-attendee keys scoped to their cluster, deleted at teardown, are
-   acceptable; flagged for the security-conscious.)*
+1. **Exposure model — Option B, central wildcard router.** ✅
+2. **Web terminal — BUILD it, Cloud-Shell style** (KodeKloud/Katacoda feel): a split console, left pane
+   = instructions, right pane = tabs {Terminal, Agent chat}, cost counter on top. The terminal is a
+   `ttyd` pod auto-authenticated to the attendee's own cluster (scoped in-cluster ServiceAccount; shell
+   opens with `kubectl` already working, no login). `access/quickstart.md` stays true. C1/C2 stay
+   chat-only.
+3. **Datadog — pre-provisioned per-attendee trial orgs**; keys + dashboard URL land in the pool. The
+   org-provisioning mechanism is owned by the observability work (Issue #7 Milestone 8); this consumes it.
+4. **Router host — netcup VPS** (`152.53.192.39`). Decisive reason: the wildcard cert renews via
+   **DNS-01 against the Namecheap API, which only works from a whitelisted IP** — the netcup VPS is
+   whitelisted; Railway's egress IP is not. Railway keeps only the static walkthrough deck; it carries
+   **no** attendee traffic.
+5. **AWS credentials — long-lived per-attendee IAM keys**, scoped to one cluster, deleted at teardown.
+
+### Current DNS state (verified 2026-06-23)
+
+- `agenticburn.com` (apex) and `www` → Namecheap **parking page** (unused; NOT the walkthrough).
+- `walkthrough.agenticburn.com` → the Railway deck. **A specific record beats the wildcard**, so this
+  keeps working untouched when the wildcard is added.
+- `*.agenticburn.com` → **nothing yet** — adding the wildcard is a clean, single new record.
+- The router owns the **wildcard** (`a-<id>`, `burn`, `wall`, tier hosts). We do **not** need to hand it
+  "all of agenticburn.com": the apex can stay parked (or later redirect to the walkthrough) — the
+  wildcard + the existing `walkthrough` record coexist with zero conflict.
+
+### Attendee console layout (the Cloud-Shell experience)
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  🔥 Watch It Burn — your cluster        cost: $0.0000  ▲      │
+├──────────────────────────────┬──────────────────────────────┤
+│  INSTRUCTIONS (current beat)  │  [ Terminal ] [ Agent chat ]  │
+│  rendered beat.md             │  ttyd, auto-authed to YOUR    │
+│  steps, what to try           │  cluster (kubectl just works) │
+│                               │  / agent chat (A2A + cost)    │
+└──────────────────────────────┴──────────────────────────────┘
+```
+
+- **Left:** the current beat's instructions (rendered `beats/<n>/beat.md`).
+- **Right, tabbed:** **Terminal** (`ttyd`, scoped SA, kubeconfig pre-set to the in-cluster context) and
+  **Agent chat** (the existing `chat-ui`, A2A to the guard-proxy). Cost counter pinned on top.
+- **Build difficulty: medium, no unknowns.** `ttyd` is the standard tool for exactly this; the split
+  console is a small static frontend; the auto-auth is a ServiceAccount token + in-cluster KUBECONFIG.
+  Work = console UI + `ttyd` Deployment/SA/RBAC per cluster + router wiring.
 
 ---
 
