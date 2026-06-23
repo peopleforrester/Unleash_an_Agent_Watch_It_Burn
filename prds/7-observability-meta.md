@@ -54,8 +54,10 @@ Before creating any file, read sibling files in the target directory and match t
 naming, and style. Specifically:
 
 - **Research spikes:** `research/NN-topic-2026.md`, where `NN` continues the existing sequence. The
-  highest existing spike is `research/27-*`; the next new spike is `research/28-…`. Increment
-  sequentially. Research spikes always live in `research/`, never elsewhere.
+  highest existing spike is `research/27-*`; the next new spikes are `research/28-…` through
+  `research/30-…` (28 and 29 are claimed by the M2 research spikes in issues #9 and #10; the M5
+  synthesis in issue #11 will be at minimum `research/30-…`). Use the next sequential number at
+  time of execution. Research spikes always live in `research/`, never elsewhere.
 - **PRD files:** `prds/[issue-id]-[feature-name].md`, where `[issue-id]` is the real GitHub issue
   number created by `/prd-create`. Do not invent sequential slugs.
 - **GitOps manifests:** match the existing layout under `gitops/` and `agent/`. Do not introduce a
@@ -193,7 +195,10 @@ A scoping search on 2026-06-22 found (verify in the milestone's own spike):
 custom telemetry emit today, and what must change to move to OTel GenAI semconv in Datadog LLM Observability?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Run the proper `/research` spike** (the full one deferred from planning): confirm the Datadog LLM Observability OTLP ingestion path for this stack and the auto-instrumentation landscape. Save it to `research/NN-…`; include full output, do not summarize.
+1. **Run the proper `/research` spikes** (deferred from planning — two separate spikes, tracked in issues #9 and #10):
+   - **Issue #9** — Datadog LLM Observability OTLP ingestion path: confirm native `gen_ai.*` ingestion, semconv version, `OTEL_SEMCONV_STABILITY_OPT_IN`, OpenLLMetry vs. OpenInference, ADK content-capture, and any Datadog-side config requirements.
+   - **Issue #10** — Python AI layer instrumentation: per-component approach for kagent/ADK, agentgateway, guard-proxy, and evil-mcp-shim (native built-in / OpenLLMetry / manual spans); agentgateway v1.3.0 field-path verification.
+   Both spikes run in parallel. Both must be complete before the Step 2 design conversation. Each saves its full output (do not summarize) to `research/NN-…` and posts the file path as a comment on its issue.
 2. **What in Python needs instrumenting, and how** — for each component (kagent/ADK agent, agentgateway, guard-proxy, evil-mcp-shim): native built-in OTel, an auto-instrumentation library (OpenLLMetry — Datadog-supported; NOT OpenInference), or manual spans. Decide per component; some may need nothing (ADK is native).
 3. **Enable kagent/ADK gen_ai tracing** — `otel.tracing.enabled: true` (off by default); confirm it emits `gen_ai.*` and the `execute_tool {gen_ai.tool.name}` spans.
 4. **Migrate off `witb_*`** — decide the fate of the custom `witb_*`/`tier` counters: retire in favor of `gen_ai.usage.*` + `gen_ai.request.model`, or keep `witb_cost_usd` for the cost lesson (USD is not a standard gen_ai attribute — cost is always derived). Update the four touch-points if renaming: `agent/gateway/guard-proxy/proxy.py`, `gitops/ai-layer/proxy.py`, the Grafana dashboard, `verify/test_observability.py`.
@@ -299,7 +304,7 @@ named integrations are visible and correct in the Datadog UI.
 setup cost for the workshop, and what does "working" look like in the UI for each?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Per-component telemetry synthesis (research deliverable)** — produce `research/28-per-component-telemetry-synthesis-2026.md`: per IDP component (ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO, cert-manager, Backstage, kagent, agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator) — what it emits, Datadog integration status, official Datadog OOTB dashboard (yes/no), UST applicability, gotcha, and **wire-or-skip with reasoning**. Run `/research <specific question>` for any unverified component; include full output.
+1. **Per-component telemetry synthesis (research deliverable)** — tracked in issue #11. Produce `research/NN-per-component-telemetry-synthesis-2026.md` (NN = next sequential number in `research/` at time of execution; will be at minimum 30 since 28 and 29 are claimed by the M2 spikes): per IDP component (ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO, cert-manager, Backstage, kagent, agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator) — what it emits, Datadog integration status, official Datadog OOTB dashboard (yes/no), UST applicability, gotcha, and **wire-or-skip with reasoning**. Run `/research <specific question>` for any component or column cell not answered by the existing spikes (05, 06, 18, 19, 23, 24); include full output.
    - **Community-dashboard survey (the whole stack, including KubeArmor):** for every component that does NOT have an official Datadog OOTB dashboard, record whether a community/importable dashboard exists — a Datadog community/Marketplace dashboard, or a portable Grafana dashboard — and its source URL. The point is to *import* rather than hand-build. Skip this check for components that already have an official Datadog dashboard.
    - **Scope guard:** surveying what exists ≠ committing to wire it. KubeArmor remains NOT in the workshop narrative — survey its community dashboards (Whitney asked), but do not wire KubeArmor observability or build anything for it unless Whitney decides otherwise. Bias wire/skip toward OOTB integrations; do NOT hand-build custom dashboards or custom metrics for components that are never center stage. Importable community dashboards surfaced here feed the deferred dashboard decision (Milestone 7).
 2. **DDOT vs. contrib** — `research/24` §1.1 already confirmed: keep standalone contrib `0.158.2` as fleet collector; standalone Agent for infra only; DDOT optional on instructor cluster. Confirm, do not re-open without new info.
@@ -311,7 +316,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 8. **Kyverno native OTLP opt-in** (`otelConfig=grpc`) — enable to put policy-decision traces in the same span tree? (`research/18`).
 
 **Step 3 — Produce the child PRD:**
-1. Write `research/28-…` (decision 1 deliverable).
+1. The synthesis file (`research/NN-per-component-telemetry-synthesis-2026.md`) is produced as part of decision 1 (issue #11) — confirm it is complete and the file path has been posted as a comment on that issue before proceeding.
 2. Update `docs/observability-priorities.md` if priorities shifted.
 3. Run `/prd-create` for a child PRD per decisions 2-8, acceptance including a per-integration UI verification checklist (`/prd-update-decisions`).
 4. Add to `docs/ROADMAP.md` as `- EKS infra & named integrations (PRD #[issue-id])`, after Milestone 4.
@@ -319,7 +324,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 6. Instruct the user to start a new session, then run `/prd-next` for Milestone 6.
 
 **Done when:**
-- [ ] `research/28-…` exists with a wire-or-skip decision (+ reasoning) per component
+- [ ] `research/NN-per-component-telemetry-synthesis-2026.md` exists (issue #11 complete, file path posted as comment) with a wire-or-skip decision (+ reasoning) per component
 - [ ] Decisions 2-8 recorded with reasoning
 - [ ] A child PRD issue exists whose acceptance includes a per-integration UI verification checklist
 - [ ] ROADMAP updated
@@ -458,7 +463,7 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 ## Acceptance Criteria (this meta-PRD)
 
 - [ ] 8 child PRDs exist (Milestones 1-8), each issue-backed and labeled "PRD"
-- [ ] `research/28-…` per-component synthesis exists (produced in Milestone 5)
+- [ ] `research/NN-per-component-telemetry-synthesis-2026.md` exists (issue #11, produced in Milestone 5)
 - [ ] `docs/observability-priorities.md` reflects the final must-have/nice-to-have list
 - [ ] `docs/ROADMAP.md` lists all child PRDs in build order, each as `- [desc] (PRD #[issue-id])`
 - [ ] `PROGRESS.md` updated to reflect meta-PRD creation and completion
