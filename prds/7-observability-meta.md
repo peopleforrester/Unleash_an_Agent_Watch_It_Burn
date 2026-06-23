@@ -199,7 +199,7 @@ custom telemetry emit today, and what must change to move to OTel GenAI semconv 
    - **Issue #9** — Datadog LLM Observability OTLP ingestion path: confirm native `gen_ai.*` ingestion, semconv version, `OTEL_SEMCONV_STABILITY_OPT_IN`, OpenLLMetry vs. OpenInference, ADK content-capture, and any Datadog-side config requirements.
    - **Issue #10** — Python AI layer instrumentation: per-component approach for kagent/ADK, agentgateway, guard-proxy, and evil-mcp-shim (native built-in / OpenLLMetry / manual spans); agentgateway v1.3.0 field-path verification.
    Both spikes run in parallel. Both must be complete before the Step 2 design conversation. Each saves its full output (do not summarize) to `research/NN-…` and posts the file path as a comment on its issue.
-2. **What in Python needs instrumenting, and how** — for each component (kagent/ADK agent, agentgateway, guard-proxy, evil-mcp-shim): native built-in OTel, an auto-instrumentation library (OpenLLMetry — Datadog-supported; NOT OpenInference), or manual spans. Decide per component; some may need nothing (ADK is native).
+2. **Instrumentation approach per Python component** — read issue #10's research output and decide, for each of the four components, which approach produces OTel semconv-compliant spans. Do NOT select OpenInference — Datadog does not support it. The target standard is OTel semantic conventions throughout, specifically OTel GenAI semantic conventions (`gen_ai.*` attributes and span names) for AI operations. Options: native built-in OTel, an auto-instrumentation library (OpenLLMetry has historically provided OTel GenAI semconv auto-instrumentation for Python and is Datadog-supported at 0.47+, but verify its current status — it is being absorbed into the OpenTelemetry project itself), or manual Python OTel SDK spans. Note: kagent/ADK may need nothing (ADK's OTel output is native). Issue #10 must be complete before this decision is made. Record the per-component decisions in the child PRD's Decision Log.
 3. **Enable kagent/ADK gen_ai tracing** — `otel.tracing.enabled: true` (off by default); confirm it emits `gen_ai.*` and the `execute_tool {gen_ai.tool.name}` spans.
 4. **Migrate off `witb_*`** — decide the fate of the custom `witb_*`/`tier` counters: retire in favor of `gen_ai.usage.*` + `gen_ai.request.model`, or keep `witb_cost_usd` for the cost lesson (USD is not a standard gen_ai attribute — cost is always derived). Update the four touch-points if renaming: `agent/gateway/guard-proxy/proxy.py`, `gitops/ai-layer/proxy.py`, the Grafana dashboard, `verify/test_observability.py`.
 5. **GenAI semconv version + opt-in + Weaver** — pin a semconv version; set `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` (Datadog needs v1.37+); decide whether a Weaver registry validating `gen_ai.*` in CI `live-check` is worthwhile and, if so, build it here. Implementation approach (Decision 2026-06-23): declare the OTel semconv community registry as a Weaver `dependencies:` entry — `gen_ai.*` definitions live upstream, the local registry references rather than redefines them. No vocab needs to be pre-defined in M1.
@@ -237,19 +237,21 @@ visible in the UI.
 rogue-tool beat, and what is the re-leak risk if content capture is naive?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`** — where it's set; content capture is load-bearing for the re-leak trap but must be redacted symmetrically in the Collector (`research/12`). Decide the capture + redaction design.
-2. **Rogue MCP tool-call representation** — confirm the `execute_tool {gen_ai.tool.name}` span names the bad tool so Beat 3 reads as a waterfall.
-3. **Re-leak-trap trace teardown** — ensure trace data is torn down so no span store retains even the fake sentinel post-run (`research/05` re-leak control #4).
+1. **Run the research spike** (tracked in issue #12; prerequisites: issues #9 and #10 complete) — guard-proxy before/after sanitization tracing: how to capture prompt text in OTel spans for manually instrumented Python, the span structure for before/after, whether `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` applies to manual code, and how before/after appears in Datadog LLM Observability. Issue #12 must be complete before the Step 2 design conversation. The research file path is posted as a comment on that issue.
+2. **`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`** — where it's set; content capture is load-bearing for the re-leak trap but must be redacted symmetrically in the Collector (`research/12`). Decide the capture + redaction design, informed by issue #12.
+3. **Rogue MCP tool-call representation** — confirm the `execute_tool {gen_ai.tool.name}` span names the bad tool so Beat 3 reads as a waterfall.
+4. **Re-leak-trap trace teardown** — ensure trace data is torn down so no span store retains even the fake sentinel post-run (`research/05` re-leak control #4).
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD per decisions 1-3, acceptance including "before/after sanitization and rogue MCP chain visible in traces" (`/prd-update-decisions`).
+2. Run `/prd-create` for a child PRD per decisions 1-4, acceptance including "before/after sanitization and rogue MCP chain visible in traces" (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Security-beat traces (PRD #[issue-id])`, after Milestone 2.
 4. Run `/prd-update-progress` to commit + push.
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 4.
 
 **Done when:**
-- [ ] Decisions 1-3 recorded with reasoning
+- [ ] Issue #12 complete (research file path posted as comment on that issue)
+- [ ] Decisions 1-4 recorded with reasoning
 - [ ] A child PRD issue exists whose acceptance includes both security-beat views in traces
 - [ ] ROADMAP updated
 
@@ -304,9 +306,7 @@ named integrations are visible and correct in the Datadog UI.
 setup cost for the workshop, and what does "working" look like in the UI for each?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Per-component telemetry synthesis (research deliverable)** — tracked in issue #11. Produce `research/NN-per-component-telemetry-synthesis-2026.md` (NN = next sequential number in `research/` at time of execution; will be at minimum 30 since 28 and 29 are claimed by the M2 spikes): per IDP component (ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO, cert-manager, Backstage, kagent, agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator) — what it emits, Datadog integration status, official Datadog OOTB dashboard (yes/no), UST applicability, gotcha, and **wire-or-skip with reasoning**. Run `/research <specific question>` for any component or column cell not answered by the existing spikes (05, 06, 18, 19, 23, 24); include full output.
-   - **Community-dashboard survey (the whole stack, including KubeArmor):** for every component that does NOT have an official Datadog OOTB dashboard, record whether a community/importable dashboard exists — a Datadog community/Marketplace dashboard, or a portable Grafana dashboard — and its source URL. The point is to *import* rather than hand-build. Skip this check for components that already have an official Datadog dashboard.
-   - **Scope guard:** surveying what exists ≠ committing to wire it. KubeArmor remains NOT in the workshop narrative — survey its community dashboards (Whitney asked), but do not wire KubeArmor observability or build anything for it unless Whitney decides otherwise. Bias wire/skip toward OOTB integrations; do NOT hand-build custom dashboards or custom metrics for components that are never center stage. Importable community dashboards surfaced here feed the deferred dashboard decision (Milestone 7).
+1. **Per-component telemetry synthesis (research deliverable)** — tracked in issue #11. For each of the 13 stack components (ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO, cert-manager, Backstage, kagent, agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator), answer: (1) does it emit telemetry? (2) OTel, Prometheus, or both? (if OTel or both, which semantic conventions?) (3) how do we capture it in this stack? (4) official Datadog integration and/or OOTB dashboard? (5) community/importable dashboard if no official one? The four AI-layer components (kagent, agentgateway, guard-proxy, evil-mcp-shim) extract from the issue #9 and #10 research files rather than re-running those spikes. Full output saved to `research/NN-per-component-telemetry-synthesis-2026.md` (at minimum `research/30-…` since 28 and 29 are claimed by the M2 spikes). Wire-or-skip decisions are NOT part of this deliverable — they happen in decision 3 below. KubeArmor: community dashboard survey only; not in narrative. Confirm issue #11 is complete and the file path is posted as a comment before proceeding.
 2. **DDOT vs. contrib** — `research/24` §1.1 already confirmed: keep standalone contrib `0.158.2` as fleet collector; standalone Agent for infra only; DDOT optional on instructor cluster. Confirm, do not re-open without new info.
 3. **Wire-or-skip per named integration** — one component at a time. For each integration wired, define its **UI-verification checklist**: which dashboard, which metric, and which view proves it works in the Datadog UI.
 4. **Hostname alignment** — Datadog computes host as `<k8s.node.name>-<cluster name>`; `cluster.name` already upserted; confirm `k8s.node.name` on host telemetry + matching `DD_CLUSTER_NAME` on the Agent (`research/24` §1.2).
@@ -324,7 +324,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 6. Instruct the user to start a new session, then run `/prd-next` for Milestone 6.
 
 **Done when:**
-- [ ] `research/NN-per-component-telemetry-synthesis-2026.md` exists (issue #11 complete, file path posted as comment) with a wire-or-skip decision (+ reasoning) per component
+- [ ] `research/NN-per-component-telemetry-synthesis-2026.md` exists (issue #11 complete, file path posted as comment) covering all 13 components with answers to the 5 telemetry questions
 - [ ] Decisions 2-8 recorded with reasoning
 - [ ] A child PRD issue exists whose acceptance includes a per-integration UI verification checklist
 - [ ] ROADMAP updated
