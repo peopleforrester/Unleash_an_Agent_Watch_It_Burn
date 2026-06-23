@@ -178,8 +178,8 @@ tool names) flowing into **Datadog LLM Observability**, replacing Michael's cust
 conventions. The LLM call waterfall and per-model token/cost data are visible in the Datadog LLM
 Observability UI.
 
-**Preliminary research (seed only — run the full `/research` spike DURING this milestone, not before):**
-A scoping search on 2026-06-22 found (verify in the milestone's own spike):
+**Preliminary research (seed context only — the full research is pre-completed in issues #9 and #10; read those before the Step 2 design conversation):**
+A scoping search on 2026-06-22 found (the full spike in issues #9 and #10 confirms, supersedes, or corrects these):
 - **Datadog LLM Observability natively ingests OTel `gen_ai.*` spans (v1.37+) over OTLP — no dd-trace, no Datadog SDK.** Paths: direct OTLP intake, the Datadog Agent (OTLP mode), or the OTel Collector. ([Datadog OTel instrumentation docs](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/))
 - **kagent's base, Google ADK, emits gen_ai semconv natively** (`invoke_agent → chat → execute_tool`), enabled via standard `OTEL_*` env vars. ([Google Cloud: instrument ADK with OpenTelemetry](https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk))
 - **Gotchas to confirm:** Datadog supports **OpenLLMetry 0.47+** but **NOT OpenInference**; Datadog requires semconv **v1.37+** (`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` for frameworks on older specs); ADK content-capture wants `EVENT_ONLY`, and setting it to `true` under latest semconv is an **invalid config that collects no data**.
@@ -195,10 +195,10 @@ A scoping search on 2026-06-22 found (verify in the milestone's own spike):
 custom telemetry emit today, and what must change to move to OTel GenAI semconv in Datadog LLM Observability?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Run the proper `/research` spikes** (deferred from planning — two separate spikes, tracked in issues #9 and #10):
-   - **Issue #9** — Datadog LLM Observability OTLP ingestion path: confirm native `gen_ai.*` ingestion, semconv version, `OTEL_SEMCONV_STABILITY_OPT_IN`, OpenLLMetry vs. OpenInference, ADK content-capture, and any Datadog-side config requirements.
-   - **Issue #10** — Python AI layer instrumentation: per-component approach for kagent/ADK, agentgateway, guard-proxy, and evil-mcp-shim (native built-in / OpenLLMetry / manual spans); agentgateway v1.3.0 field-path verification.
-   Both spikes run in parallel. Both must be complete before the Step 2 design conversation. Each saves its full output (do not summarize) to `research/NN-…` and posts the file path as a comment on its issue.
+1. **Read the pre-completed research spikes before proceeding** — issues #9 and #10 are prerequisites that must be complete before this design conversation. Get the research file path from the comment on each issue, then read both files:
+   - **Issue #9** — Datadog LLM Observability OTLP ingestion path (native `gen_ai.*` ingestion, semconv version, `OTEL_SEMCONV_STABILITY_OPT_IN`, OpenLLMetry vs. OpenInference, ADK content-capture, Datadog-side config requirements)
+   - **Issue #10** — Python AI layer instrumentation per-component approach (kagent/ADK, agentgateway, guard-proxy, evil-mcp-shim; agentgateway v1.3.0 field-path verification)
+   If either issue is not yet complete (no file path posted as a comment), stop — this milestone cannot proceed. Do NOT run the spikes yourself; they are executed separately by Michael before this conversation begins.
 2. **Instrumentation approach per Python component** — read issue #10's research output and decide, for each of the four components, which approach produces OTel semconv-compliant spans. Do NOT select OpenInference — Datadog does not support it. The target standard is OTel semantic conventions throughout, specifically OTel GenAI semantic conventions (`gen_ai.*` attributes and span names) for AI operations. Options: native built-in OTel, an auto-instrumentation library (OpenLLMetry has historically provided OTel GenAI semconv auto-instrumentation for Python and is Datadog-supported at 0.47+, but verify its current status — it is being absorbed into the OpenTelemetry project itself), or manual Python OTel SDK spans. Note: kagent/ADK may need nothing (ADK's OTel output is native). Issue #10 must be complete before this decision is made. Record the per-component decisions in the child PRD's Decision Log.
 3. **Enable kagent/ADK gen_ai tracing** — `otel.tracing.enabled: true` (off by default); confirm it emits `gen_ai.*` and the `execute_tool {gen_ai.tool.name}` spans.
 4. **Migrate off `witb_*`** — decide the fate of the custom `witb_*`/`tier` counters: retire in favor of `gen_ai.usage.*` + `gen_ai.request.model`, or keep `witb_cost_usd` for the cost lesson (USD is not a standard gen_ai attribute — cost is always derived). Update the four touch-points if renaming: `agent/gateway/guard-proxy/proxy.py`, `gitops/ai-layer/proxy.py`, the Grafana dashboard, `verify/test_observability.py`.
@@ -208,14 +208,14 @@ custom telemetry emit today, and what must change to move to OTel GenAI semconv 
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD per decisions 1-7, acceptance including "AI layer emits OTel GenAI semconv telemetry visible in Datadog LLM Observability" and "Michael's custom `witb_*` conventions migrated/retired per decision 4" (`/prd-update-decisions`).
+2. Run `/prd-create` for a child PRD per decisions 2-7, acceptance including "AI layer emits OTel GenAI semconv telemetry visible in Datadog LLM Observability" and "Michael's custom `witb_*` conventions migrated/retired per decision 4" (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Migrate to OTel GenAI semconv (PRD #[issue-id])`, after the MVP.
 4. Run `/prd-update-progress` to commit + push.
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 3.
 
 **Done when:**
-- [ ] Decisions 1-7 recorded with reasoning
-- [ ] The full gen_ai-instrumentation/Datadog-LLM-Obs research spike exists in `research/`
+- [ ] Issues #9 and #10 research files confirmed complete (file paths posted as comments on each issue)
+- [ ] Decisions 2-7 recorded with reasoning in the child PRD's Decision Log
 - [ ] A child PRD issue exists whose acceptance includes gen_ai semconv telemetry in Datadog LLM Observability and the `witb_*` migration decision
 - [ ] ROADMAP updated
 
@@ -237,21 +237,21 @@ visible in the UI.
 rogue-tool beat, and what is the re-leak risk if content capture is naive?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Run the research spike** (tracked in issue #12; prerequisites: issues #9 and #10 complete) — guard-proxy before/after sanitization tracing: how to capture prompt text in OTel spans for manually instrumented Python, the span structure for before/after, whether `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` applies to manual code, and how before/after appears in Datadog LLM Observability. Issue #12 must be complete before the Step 2 design conversation. The research file path is posted as a comment on that issue.
+1. **Read the pre-completed research spike** (tracked in issue #12) — get the research file path from the comment on that issue, then read the file. It covers: how to capture prompt text in OTel spans for manually instrumented Python, the span structure for before/after sanitization, whether `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` applies to manual code, and how before/after appears in Datadog LLM Observability. If issue #12 is not yet complete (no file path posted as a comment), stop — this milestone cannot proceed. Do NOT run the spike yourself; it is executed separately by Michael before this conversation begins.
 2. **`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`** — where it's set; content capture is load-bearing for the re-leak trap but must be redacted symmetrically in the Collector (`research/12`). Decide the capture + redaction design, informed by issue #12.
 3. **Rogue MCP tool-call representation** — confirm the `execute_tool {gen_ai.tool.name}` span names the bad tool so Beat 3 reads as a waterfall.
 4. **Re-leak-trap trace teardown** — ensure trace data is torn down so no span store retains even the fake sentinel post-run (`research/05` re-leak control #4).
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD per decisions 1-4, acceptance including "before/after sanitization and rogue MCP chain visible in traces" (`/prd-update-decisions`).
+2. Run `/prd-create` for a child PRD per decisions 2-4, acceptance including "before/after sanitization and rogue MCP chain visible in traces" (`/prd-update-decisions`).
 3. Add to `docs/ROADMAP.md` as `- Security-beat traces (PRD #[issue-id])`, after Milestone 2.
 4. Run `/prd-update-progress` to commit + push.
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 4.
 
 **Done when:**
 - [ ] Issue #12 complete (research file path posted as comment on that issue)
-- [ ] Decisions 1-4 recorded with reasoning
+- [ ] Decisions 2-4 recorded with reasoning in the child PRD's Decision Log
 - [ ] A child PRD issue exists whose acceptance includes both security-beat views in traces
 - [ ] ROADMAP updated
 
