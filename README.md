@@ -51,7 +51,7 @@ install is required.
 - A governance map that lists each attack, the control that stops it, the layer it sits in, and
   whether existing tooling already covers it.
 - A checklist you can run against your own platform to find the gaps.
-- A walkthrough of how the session is run, as a reveal.js deck (`tech-walkthrough/`, hosted at
+- A walkthrough of how the session is run, as a reveal.js deck (`railway/walkthrough/`, hosted at
   walkthrough.agenticburn.com) — the run-of-show in delivery order, with facilitator detail in the notes.
 
 ## The stack
