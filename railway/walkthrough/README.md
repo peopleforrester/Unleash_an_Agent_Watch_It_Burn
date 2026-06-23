@@ -18,7 +18,7 @@ Source of truth: `facilitation/runbook.md`, `cold-open-script.md`, and `governan
 ## View it locally
 
 ```bash
-cd tech-walkthrough
+cd railway/walkthrough
 python3 -m http.server 8000   # then open http://localhost:8000
 ```
 
@@ -43,7 +43,7 @@ Hosted on **Railway** (the repo is private, so GitHub Pages would need a paid pl
 here serves the deck with nginx; `railway.json` builds from it. How it was deployed and wired:
 
 ```bash
-cd tech-walkthrough
+cd railway/walkthrough
 railway init --name watch-it-burn-walkthrough     # project on Michael's Railway workspace
 railway up --ci                                    # builds the Dockerfile, deploys the service
 railway variables --set PORT=80                    # REQUIRED: Railway's edge routes to $PORT; nginx
