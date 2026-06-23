@@ -119,11 +119,31 @@ The hard part is N independent clusters, each with its own EKS LoadBalancer, all
   LoadBalancer/NodePort — **no per-cluster cert, no per-cluster DNS.** One cert, one DNS record, TLS
   centralized. `burn`/`wall`/tier hosts route the same way.
 
-  - Recommended router: **Caddy** with the Namecheap DNS-01 plugin for the wildcard cert and a
-    `map`/`reverse_proxy` driven by a generated `routes.json` (`a-001 → <lb-host>`, …). Caddy reloads
-    the map without downtime as clusters come up / spares rotate.
-  - Host it the way the walkthrough is hosted (Railway) or on the netcup VPS (whitelisted Namecheap IP
-    `152.53.192.39`, which the DNS-01 solver needs anyway). One small box.
+  - **Host: Railway** (decision 4). Railway terminates the wildcard TLS at its edge (Railway-managed
+    cert via `_acme-challenge` CNAME delegation — no DNS-01 work for us, no whitelisted IP, netcup out
+    of the path). The router is a small app (Node/Go reverse proxy, or Caddy with a static map) that
+    reads the `Host` header and proxies `a-<id>` → that attendee's cluster LB, `burn`/`wall`/tiers →
+    the facilitator cluster LBs, from a generated `routes.json` the provisioner emits. It also serves a
+    landing page at the apex (`agenticburn.com`). Reloading the map (spare rotation, new clusters) is a
+    redeploy or a hot-reload, no DNS change.
+
+### Repository structure for Railway apps
+
+All Railway services live under a top-level **`railway/`** parent, one subfolder per service (matching
+the railway-cli "one linked directory per service" rule). Proposed:
+
+```
+railway/
+  walkthrough/   # the deck (moved from tech-walkthrough/) — service watch-it-burn-walkthrough,
+                 #   domain walkthrough.agenticburn.com
+  apex/          # the apex landing page + the wildcard router — service watch-it-burn-apex,
+                 #   domains agenticburn.com + *.agenticburn.com
+```
+
+Each subfolder is self-contained (Dockerfile + `railway.json` + README) and linked to its own Railway
+service from its own directory. The existing `tech-walkthrough/` would move to `railway/walkthrough/`
+(re-link required; the deployed service itself is unaffected). `walkthrough.agenticburn.com` is a
+specific record and keeps winning over the new wildcard, so the two coexist.
 
 ### Per-cluster web/chat wiring (this is "wired up for EACH cluster")
 
@@ -193,10 +213,15 @@ name,region,access_key,secret_key,console_url,datadog_site,datadog_api_key,datad
    chat-only.
 3. **Datadog — pre-provisioned per-attendee trial orgs**; keys + dashboard URL land in the pool. The
    org-provisioning mechanism is owned by the observability work (Issue #7 Milestone 8); this consumes it.
-4. **Router host — netcup VPS** (`152.53.192.39`). Decisive reason: the wildcard cert renews via
-   **DNS-01 against the Namecheap API, which only works from a whitelisted IP** — the netcup VPS is
-   whitelisted; Railway's egress IP is not. Railway keeps only the static walkthrough deck; it carries
-   **no** attendee traffic.
+4. **Router host — Railway** (NOT netcup; netcup is Michael's private box and stays out of the path
+   entirely). Railway **supports wildcard custom domains** and issues the wildcard cert via an
+   **`_acme-challenge` CNAME delegated to Railway's side** — so the Namecheap-IP-allowlist problem
+   that motivated netcup **does not apply**: Railway handles DNS-01 itself, no whitelisted IP needed.
+   Adding `*.agenticburn.com` to the router service yields two CNAMEs (wildcard + `_acme-challenge`) and
+   one ownership TXT; we set those once at Namecheap (administrative, one-time, from laptop or netcup —
+   **not** traffic). Railway is preferred for persistence; AWS would be torn down. Attendee traffic:
+   browser → Railway edge (wildcard TLS) → router app → each cluster's public LB. **netcup carries
+   nothing.** (Caveat: single-level wildcard only — `a-<id>`, `burn`, `wall`, tiers all fit.)
 5. **AWS credentials — long-lived per-attendee IAM keys**, scoped to one cluster, deleted at teardown.
 
 ### Current DNS state (verified 2026-06-23)
