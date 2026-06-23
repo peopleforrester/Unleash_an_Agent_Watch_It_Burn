@@ -1,5 +1,5 @@
 <!-- ABOUTME: Research spike on tracing before/after guard-proxy sanitization (original vs sanitized prompt) in one trace. -->
-<!-- ABOUTME: Answers Issue #12 — manual OTel SDK content capture, before/after in one trace, the EVENT_ONLY env var on manual code, Datadog side-by-side view, and (Q5) whether Datadog's built-in Sensitive Data Scanner applies to manual spans vs Collector-side symmetric redaction for the re-leak trap. -->
+<!-- ABOUTME: Answers Issue #12: manual OTel SDK content capture, before/after in one trace, the EVENT_ONLY env var on manual code, Datadog side-by-side view, and (Q5) whether Datadog's built-in Sensitive Data Scanner applies to manual spans vs Collector-side symmetric redaction for the re-leak trap. -->
 
 # 31. Guard-Proxy Before/After Sanitization Tracing (Issue #12)
 
@@ -10,25 +10,25 @@
   `open-telemetry/semantic-conventions-genai` repo), the `opentelemetry-util-genai` PyPI package,
   the OTel GenAI-observability blog, and the Datadog LLM (Agent) Observability docs/blog. Every
   material claim carries an inline source URL; the full list is in **Sources**.
-- **Hypothesis-verification stance (Whitney's rule):** the issue's implied "gotchas" — chiefly
+- **Hypothesis-verification stance (Whitney's rule):** the issue's implied "gotchas," chiefly
   "does `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUALLY
-  instrumented code" — are treated as hypotheses to verify, not facts to repeat. Verdicts are
+  instrumented code," are treated as hypotheses to verify, not facts to repeat. Verdicts are
   **CONFIRMED**, **CONFIRMED-WITH-NUANCE**, **REFUTED**, or **COULD NOT FULLY CONFIRM**.
 - **In-repo facts taken as CONFIRMED** (read directly this session):
-  `agent/gateway/guard-proxy/proxy.py` — a stdlib `ThreadingHTTPServer` that, on `do_POST`,
+  `agent/gateway/guard-proxy/proxy.py`: a stdlib `ThreadingHTTPServer` that, on `do_POST`,
   extracts the user prompt text, optionally checks it against a block-list (Stage 1) and an LLM
   Guard `/analyze/prompt` classifier (Stage 2), forwards the **original** request body (`raw`) to
   the kagent agent, and on the response optionally calls LLM Guard `/analyze/output` to produce a
-  **sanitized** output (`output_scrub`). `docs/BUILD-SPEC.md` §4 — "OTel content capture is itself
-  an exfil channel (the re-leak trap), off by default; advanced beat." `PROJECT_STATE.md` — Datadog
+  **sanitized** output (`output_scrub`). `docs/BUILD-SPEC.md` §4: "OTel content capture is itself
+  an exfil channel (the re-leak trap), off by default; advanced beat." `PROJECT_STATE.md`: Datadog
   required + primary, OTel neutral, content capture is the re-leak-trap mechanism.
 - **Builds on (NOT re-researched):**
-  - `research/29-python-ai-instrumentation-2026.md` (Issue #10) — established that the guard-proxy
+  - `research/29-python-ai-instrumentation-2026.md` (Issue #10) established that the guard-proxy
     is stdlib-only with **no OTel today**, **makes no Bedrock/LLM call** (it forwards A2A JSON-RPC to
     the agent; the agent/ADK calls Bedrock), and gave the **manual OTel SDK init + `start_as_current_span`
     + `inject()` context-propagation** pattern for the proxy. This spike inherits that and does NOT
     re-derive the proxy's call graph or the SDK bootstrap.
-  - `research/28-datadog-llm-obs-otlp-2026.md` (Issue #9) — established native Datadog OTLP ingest of
+  - `research/28-datadog-llm-obs-otlp-2026.md` (Issue #9) established native Datadog OTLP ingest of
     `gen_ai.*` (semconv v1.37+, no dd-trace SDK), the `dd-otlp-source=llmobs` routing header, the
     `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` **enum** (`NO_CONTENT`/`SPAN_ONLY`/`EVENT_ONLY`/
     `SPAN_AND_EVENT`) and the `=true`-is-invalid trap **on the ADK path**, and the
@@ -39,7 +39,7 @@
     **server-side, after ingest**, and is therefore a defense-in-depth backstop, NOT a network-egress
     redactor. This spike (Q5) extends that to the precise re-leak-trap question: does SDS apply to the
     **manually instrumented** proxy span, or is **Collector-side symmetric redaction** still the right path.
-  - `research/05-otel-genai-observability.md` — semconv all `Development`; content capture off by
+  - `research/05-otel-genai-observability.md`: semconv all `Development`; content capture off by
     default; the re-leak trap.
 
 ### Cross-cutting frame the answers depend on
@@ -58,24 +58,24 @@ content-capture *switch* lives in *instrumentation libraries*, not in the SDK or
 
 | # | Question | Verdict |
 |---|---|---|
-| 1 | Which SDK call captures prompt text — attribute, event, or other; what does semconv say is correct for MANUAL code | **CONFIRMED** — `span.set_attribute(...)` or `span.add_event(...)`; semconv prefers **events** for structured content, allows JSON-string on span attributes; `gen_ai.input.messages`/`gen_ai.output.messages` are the canonical names, Opt-In |
-| 2 | Capture original + sanitized in ONE trace — same span / parent-child / siblings | **CONFIRMED** — feasible all three ways; **recommended = two attributes on ONE span** (`gen_ai.input.messages` = sanitized, a custom `witb.input.messages.original` = pre-sanitization), because Datadog renders one Input/Output pair per span |
-| 3 | Does `...CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUAL code? If manual, how to toggle capture | **REFUTED (as stated) / CONFIRMED-WITH-NUANCE** — the env var is **library-specific** (`opentelemetry-util-genai` / contrib instrumentations). Raw hand-written SDK code does **NOT** read it automatically; you must read it yourself or honor it via `opentelemetry-util-genai`'s `TelemetryHandler` |
-| 4 | How does before/after appear in Datadog LLM Obs — side-by-side | **CONFIRMED-WITH-NUANCE** — per-span Input vs Output panel is the side-by-side; before/after across two values needs a deliberate layout (one span, two attributes, or two spans in the waterfall) |
-| 5 | Datadog-side requirements to surface prompt text from manual spans | **CONFIRMED** — `dd-otlp-source=llmobs` routing, `gen_ai.operation.name` to classify span kind=`llm`, content in `gen_ai.input/output.messages` (or the `gen_ai.client.inference.operation.details` event); semconv v1.37+ |
-| 5b | **Does Datadog's built-in Sensitive Data Scanner (SDS) redact MANUALLY instrumented spans, or is Collector-side symmetric redaction still right for the re-leak trap?** | **CONFIRMED — SDS *does* apply to manual spans (it scans by content/regex, instrumentation-agnostic), BUT it acts SERVER-SIDE AFTER INGEST**, so it CANNOT keep the "before" secret off the wire / out of Datadog. For the re-leak trap we deliberately want the *before* text in the trace then confirm sanitization — **Collector-side symmetric redaction is still the right narrative path** (it can show before, redact at the egress hop, and SDS is the defense-in-depth backstop in the UI). Datadog **SDK span processors do NOT apply to the OTLP-ingested proxy span** — so SDS is the only Datadog-*native* redaction for this path |
+| 1 | Which SDK call captures prompt text (attribute, event, or other); what does semconv say is correct for MANUAL code | **CONFIRMED.** `span.set_attribute(...)` or `span.add_event(...)`; semconv prefers **events** for structured content, allows JSON-string on span attributes; `gen_ai.input.messages`/`gen_ai.output.messages` are the canonical names, Opt-In |
+| 2 | Capture original + sanitized in ONE trace (same span / parent-child / siblings) | **CONFIRMED.** Feasible all three ways; **recommended = two attributes on ONE span** (`gen_ai.input.messages` = sanitized, a custom `witb.input.messages.original` = pre-sanitization), because Datadog renders one Input/Output pair per span |
+| 3 | Does `...CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUAL code? If manual, how to toggle capture | **REFUTED (as stated) / CONFIRMED-WITH-NUANCE.** The env var is **library-specific** (`opentelemetry-util-genai` / contrib instrumentations). Raw hand-written SDK code does **NOT** read it automatically; you must read it yourself or honor it via `opentelemetry-util-genai`'s `TelemetryHandler` |
+| 4 | How does before/after appear in Datadog LLM Obs (side-by-side) | **CONFIRMED-WITH-NUANCE.** Per-span Input vs Output panel is the side-by-side; before/after across two values needs a deliberate layout (one span, two attributes, or two spans in the waterfall) |
+| 5 | Datadog-side requirements to surface prompt text from manual spans | **CONFIRMED.** `dd-otlp-source=llmobs` routing, `gen_ai.operation.name` to classify span kind=`llm`, content in `gen_ai.input/output.messages` (or the `gen_ai.client.inference.operation.details` event); semconv v1.37+ |
+| 5b | **Does Datadog's built-in Sensitive Data Scanner (SDS) redact MANUALLY instrumented spans, or is Collector-side symmetric redaction still right for the re-leak trap?** | **CONFIRMED. SDS *does* apply to manual spans (it scans by content/regex, instrumentation-agnostic), BUT it acts SERVER-SIDE AFTER INGEST**, so it CANNOT keep the "before" secret off the wire / out of Datadog. For the re-leak trap we deliberately want the *before* text in the trace then confirm sanitization. **Collector-side symmetric redaction is still the right narrative path** (it can show before, redact at the egress hop, and SDS is the defense-in-depth backstop in the UI). Datadog **SDK span processors do NOT apply to the OTLP-ingested proxy span**, so SDS is the only Datadog-*native* redaction for this path |
 
 ---
 
-## Q1. Which Python OTel SDK call captures prompt text in a span — attribute, span event, or other? What does OTel GenAI semconv say is correct for MANUALLY instrumented code?
+## Q1. Which Python OTel SDK call captures prompt text in a span (attribute, span event, or other)? What does OTel GenAI semconv say is correct for MANUALLY instrumented code?
 
 **The SDK gives you exactly two primitives, and the GenAI semconv has a stated preference between
 them.**
 
 **The two SDK calls (this is all the SDK offers for content):**
-- **Span attribute:** `span.set_attribute("gen_ai.input.messages", value)` — a key/value on the span
+- **Span attribute:** `span.set_attribute("gen_ai.input.messages", value)`, a key/value on the span
   itself.
-- **Span event:** `span.add_event("gen_ai.client.inference.operation.details", attributes={...})` —
+- **Span event:** `span.add_event("gen_ai.client.inference.operation.details", attributes={...})`,
   a timestamped structured record attached to the span (events are the spec's preferred carrier for
   structured content; see below). (There is no third "content" primitive; logs via the Logs Bridge are
   the other option but for the GenAI flow the spec routes structured content through span **events**.)
@@ -84,11 +84,11 @@ them.**
 
 **What the GenAI semconv says is correct (this is the load-bearing part):**
 
-1. **Content is OFF by default and must be opt-in — even for your own code.** The spec is explicit:
+1. **Content is OFF by default and must be opt-in, even for your own code.** The spec is explicit:
    "OpenTelemetry instrumentations **SHOULD NOT capture them by default, but SHOULD provide an option
    for users to opt in**." Instructions/inputs/outputs are "likely to be large," "may contain media,"
    and "are likely to contain sensitive information including user/PII data." This is the same
-   off-by-default property `research/05` and BUILD-SPEC §4 call the re-leak trap — and it is a
+   off-by-default property `research/05` and BUILD-SPEC §4 call the re-leak trap, and it is a
    *recommendation to the instrumentation author*, i.e. **to you**, when you hand-write the proxy spans.
    Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
 2. **The canonical attribute names** for chat content are `gen_ai.input.messages`,
@@ -109,16 +109,16 @@ them.**
    and/or a JSON string on the `gen_ai.input.messages` span **attribute**.
    Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
 4. **The message JSON schema** (so the attribute/event is valid): an array of objects with
-   `role` ("user"/"assistant"/"tool"/"system"), `parts` (array; each part has `type` —
-   "text"/"tool_call"/"tool_call_response" — and `content`), plus `finish_reason` on output messages.
+   `role` ("user"/"assistant"/"tool"/"system"), `parts` (array; each part has a `type` of
+   "text"/"tool_call"/"tool_call_response" plus `content`), and `finish_reason` on output messages.
    "Instrumentations MUST follow [Input messages JSON schema]." For the proxy's prompt text the minimal
    valid value is `[{"role":"user","parts":[{"type":"text","content":"<the prompt>"}]}]`.
    Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
 
 **Reconciling "attribute vs event" for THIS workshop:** the semantic answer is "events preferred,
-JSON-string-on-attribute acceptable." The **Datadog** answer (Q4/Q5) is that it reads **both** —
+JSON-string-on-attribute acceptable." The **Datadog** answer (Q4/Q5) is that it reads **both**:
 `gen_ai.input.messages`/`gen_ai.output.messages` attributes **OR** the
-`gen_ai.client.inference.operation.details` span event — so either carrier surfaces the text in
+`gen_ai.client.inference.operation.details` span event, so either carrier surfaces the text in
 LLM Observability. For the demo, the span **attribute** (JSON string) is the simpler, sufficient choice;
 the **event** is the more spec-pure choice and is what the re-leak-trap framing (`EVENT_ONLY`) points to.
 
@@ -127,33 +127,33 @@ rule, and the JSON schema (all quoted from the canonical spec).
 
 ---
 
-## Q2. How to capture original (pre-sanitization) AND sanitized (post-sanitization) text in ONE trace — same span, parent/child, or sibling spans?
+## Q2. How to capture original (pre-sanitization) AND sanitized (post-sanitization) text in ONE trace: same span, parent/child, or sibling spans?
 
 **All three are technically possible; the recommended shape is TWO ATTRIBUTES (or two events) on ONE
 span, with a custom name for the "original."** Reasoning is driven by how the proxy actually works and
 by how Datadog renders a span.
 
 **What the proxy actually has (from `proxy.py`, CONFIRMED):** in a single `do_POST` the proxy holds, in
-one stack frame, BOTH the original prompt `text` (extracted before any guard runs) and — when the input
-classifier or block-list fires — the verdict; and on the response path it holds BOTH the raw agent
+one stack frame, BOTH the original prompt `text` (extracted before any guard runs) and, when the input
+classifier or block-list fires, the verdict; and on the response path it holds BOTH the raw agent
 `text` and the `output_scrub`-produced sanitized text. So all four values (original-in, sanitized/blocked-in,
-original-out, sanitized-out) are available within one request handler → one span's lifetime. There is no
+original-out, sanitized-out) are available within one request handler, i.e. one span's lifetime. There is no
 need to span boundaries to "carry" the before value; it is local.
 
-**Option A — ONE span, two attributes (RECOMMENDED).** On the proxy's request/forward span, set:
+**Option A: ONE span, two attributes (RECOMMENDED).** On the proxy's request/forward span, set:
 - `gen_ai.input.messages` = the **sanitized/forwarded** prompt (the semconv-canonical "what actually
   went to the model"), and
 - a **custom** attribute, e.g. `witb.input.messages.original` (JSON string), = the **pre-sanitization**
   prompt, plus `witb.input.sanitized` (bool) / `witb.input.blocklist_hit` / `witb.input.classifier_verdict`.
 
   Why recommended: it keeps before+after on the SAME span the attendee clicks, and it is unambiguous which
-  is canonical. The semconv has **no standard attribute for "the original, pre-sanitization input"** —
-  there is one input-messages slot — so the "before" value MUST be a custom (`witb.*`) attribute or a
+  is canonical. The semconv has **no standard attribute for "the original, pre-sanitization input"**
+  (there is one input-messages slot), so the "before" value MUST be a custom (`witb.*`) attribute or a
   custom event; do not overload `gen_ai.input.messages` with both. (This mirrors `research/29`'s rule that
   `witb.*` are the repo's own namespace; here they carry the before/after delta the GenAI semconv does not
   model.)
 
-**Option B — ONE span, two events.** Add two `add_event(...)` calls on the proxy span: one event
+**Option B: ONE span, two events.** Add two `add_event(...)` calls on the proxy span: one event
 `witb.input.original` and one `gen_ai.client.inference.operation.details` (or `witb.input.sanitized`)
 carrying the structured message. Events are timestamped, so they also encode ordering (original captured
 first, sanitized after the guard). This is the most semconv-pure (structured content on events) and is
@@ -161,7 +161,7 @@ what the `EVENT_ONLY` capture mode (Q3) conceptually targets. Trade-off: Datadog
 input from the FIRST recognized source; a second custom event renders as a span event, not as a second
 Input panel.
 
-**Option C — parent + child spans (or siblings).** Wrap the guard decision in a child span
+**Option C: parent + child spans (or siblings).** Wrap the guard decision in a child span
 (`guard_proxy.sanitize_input`) carrying the before/after, nested under the proxy's request span; the
 forward-to-agent is a sibling/child CLIENT span (the one `research/29` Q6 already defines, with `inject()`
 so the agent's `gen_ai.*` spans nest under it). This gives the cleanest waterfall story for a stage talk
@@ -186,10 +186,10 @@ demo-design call, not a correctness one.
 
 ---
 
-## Q3. Does `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUALLY instrumented code, or only auto-instrumentation? (VERIFY — do not assume.) If manual, how to conditionally enable/disable content capture?
+## Q3. Does `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` apply to MANUALLY instrumented code, or only auto-instrumentation? (VERIFY; do not assume.) If manual, how to conditionally enable/disable content capture?
 
 **VERDICT: the env var does NOT apply to raw hand-written OTel SDK code automatically. It is a
-*library* setting read by `opentelemetry-util-genai` and the GenAI contrib instrumentations — NOT by
+*library* setting read by `opentelemetry-util-genai` and the GenAI contrib instrumentations, NOT by
 `opentelemetry-api`/`opentelemetry-sdk`.** The hypothesis "this env var governs my manual proxy spans"
 is **REFUTED as stated**, **CONFIRMED-WITH-NUANCE** for "if you route through `opentelemetry-util-genai`."
 
@@ -199,11 +199,11 @@ is **REFUTED as stated**, **CONFIRMED-WITH-NUANCE** for "if you route through `o
    "This package relies on environment variables to configure capturing of message content, and by
    default, message content will not be captured." [CORRECTED 2026-06-23: the previously quoted phrase
    "only affects applications using this package's instrumentation capabilities, not the base SDK itself"
-   is NOT verbatim on the current PyPI page — it does not contain that sentence. The substance still
+   is NOT verbatim on the current PyPI page; it does not contain that sentence. The substance still
    holds: capture is controlled by *this package* via the env var, and the GenAI **spec does not define
-   the env var at all** (verified — see #2 and the validation pass). The env var is therefore a
+   the env var at all** (verified; see #2 and the validation pass). The env var is therefore a
    convention of the GenAI instrumentation libraries, NOT a base-SDK feature.] So a `span.set_attribute(...)`
-   you write by hand is **unaffected** by the env var — the SDK does not consult it, will not gate your
+   you write by hand is **unaffected** by the env var: the SDK does not consult it, will not gate your
    attribute, and will not strip it.
    Source: https://pypi.org/project/opentelemetry-util-genai/
 2. **The GenAI *spec* does not define this env var at all.** The semconv text says instrumentations
@@ -213,10 +213,10 @@ is **REFUTED as stated**, **CONFIRMED-WITH-NUANCE** for "if you route through `o
    *mechanism* to instrumentations. So the env var is a convention of the Python GenAI instrumentation
    ecosystem, not a spec-mandated SDK switch.
    Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
-3. **It is the same flag the contrib/ADK instrumentations honor** — `research/28`/`research/29`
+3. **It is the same flag the contrib/ADK instrumentations honor.** `research/28`/`research/29`
    established that on the **ADK path** the valid value is `EVENT_ONLY` and `=true` is an invalid config
    that silently collects nothing. That behavior is real **for ADK and `opentelemetry-util-genai`-backed
-   instrumentations** — which is precisely why it does NOT transfer to the stdlib proxy: the proxy uses
+   instrumentations**, which is precisely why it does NOT transfer to the stdlib proxy: the proxy uses
    none of those.
    Sources: https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk ;
    https://pypi.org/project/opentelemetry-util-genai/
@@ -229,7 +229,7 @@ is **REFUTED as stated**, **CONFIRMED-WITH-NUANCE** for "if you route through `o
 
 **So, for manual code, how do you conditionally enable/disable content capture? Two clean options:**
 
-- **Option 1 — honor the convention yourself (recommended; cheapest, fits the stdlib proxy).** Read the
+- **Option 1: honor the convention yourself (recommended; cheapest, fits the stdlib proxy).** Read the
   same env var in the proxy and gate your own `set_attribute`/`add_event`. This makes the proxy behave
   like a well-behaved instrumentation and keeps the re-leak-trap toggle consistent with the rest of the
   stack:
@@ -250,26 +250,26 @@ is **REFUTED as stated**, **CONFIRMED-WITH-NUANCE** for "if you route through `o
 
   Default `NO_CONTENT` keeps the proxy SAFE (matches BUILD-SPEC §4 "off by default"); flip to
   `EVENT_ONLY` (or `SPAN_ONLY`) only for the deliberate re-leak-trap beat. NOTE: a plain `=true` would NOT
-  match any branch above — which is *good*, it preserves the same "`=true` is wrong, use the enum"
+  match any branch above, which is *good*: it preserves the same "`=true` is wrong, use the enum"
   discipline the ADK path enforces. (This is research only; do NOT edit `proxy.py`.)
-- **Option 2 — use `opentelemetry-util-genai`'s `TelemetryHandler`.** Instrument the proxy via that
+- **Option 2: use `opentelemetry-util-genai`'s `TelemetryHandler`.** Instrument the proxy via that
   library's manual API (it "offers APIs to minimize instrumentation work for GenAI libraries, providing a
   TelemetryHandler to manage LLM invocation lifecycles with spans, metrics, and events, along with
   structured message types"). Then the env var DOES govern capture for free. Trade-off: adds a
   `0.4b0`-beta dependency (released 2026-05-01) to a deliberately stdlib-only proxy, and its model is
-  "an LLM invocation lifecycle" — which the proxy is *not* (it forwards A2A; per `research/29` Q3 it makes
+  "an LLM invocation lifecycle," which the proxy is *not* (it forwards A2A; per `research/29` Q3 it makes
   no model call). So `TelemetryHandler` is a semantic mismatch for the proxy; Option 1 is the better fit.
   Source: https://pypi.org/project/opentelemetry-util-genai/
 
 **Confidence: HIGH** (verified directly: the env var is library-scoped and the SDK ignores it; the spec
-does not define it). This is the spike's most important correction — it would be wrong to set
+does not define it). This is the spike's most important correction: it would be wrong to set
 `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` on the proxy Deployment and expect the
 hand-written spans to start/stop capturing; they won't, unless the code reads it (Option 1) or uses
 `opentelemetry-util-genai` (Option 2).
 
 ---
 
-## Q4. How does before/after prompt content appear in Datadog LLM Observability — a side-by-side view?
+## Q4. How does before/after prompt content appear in Datadog LLM Observability, a side-by-side view?
 
 **CONFIRMED-WITH-NUANCE. Datadog's per-span "Input vs Output" is the side-by-side; getting
 *original-vs-sanitized* side by side is a layout choice you make with the Q2 options, not an automatic
@@ -278,7 +278,7 @@ hand-written spans to start/stop capturing; they won't, unless the code reads it
 **What Datadog renders, confirmed:**
 - A trace is a **waterfall of spans**; "a given trace can also include input and output, latency, privacy
   issues, errors, and more," and you "drill into a trace to see … which prompts it has sent … and how the
-  model replied — **all in one view**," "viewing each step of the agent's logic **side by side with the
+  model replied, **all in one view**," "viewing each step of the agent's logic **side by side with the
   input and output data**."
   Sources: https://docs.datadoghq.com/llm_observability/terms/ ;
   https://www.datadoghq.com/blog/datadog-llm-observability/ ;
@@ -286,25 +286,25 @@ hand-written spans to start/stop capturing; they won't, unless the code reads it
 - Each span has an **Input** and an **Output** field. For an LLM span, Datadog maps
   `gen_ai.input.messages` → the span's **input messages** and `gen_ai.output.messages` → the span's
   **output messages** (see Q5). So the native "side-by-side" is **Input panel vs Output panel for one
-  span** — i.e. *prompt vs completion*, not *before vs after sanitization*.
+  span**, i.e. *prompt vs completion*, not *before vs after sanitization*.
   Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
 
 **How before/after actually lands, per the Q2 option you choose:**
 - **Option A (one span, two attributes):** the span's **Input** panel shows the canonical
   `gen_ai.input.messages` (sanitized). The **original** lives in the custom `witb.input.messages.original`
   metadata, surfaced under `@meta.metadata.*` (Datadog maps custom attributes to `meta.metadata.<key>`),
-  visible in the span's metadata/tags pane — adjacent to, but not in, the Input panel. The attendee sees
+  visible in the span's metadata/tags pane, adjacent to, but not in, the Input panel. The attendee sees
   sanitized as the Input and original as a tagged value on the same span. Good enough for the lesson;
   it is "one click, both values," not a literal two-column diff.
   Source (custom attrs → `@meta.metadata.<key>`): https://docs.datadoghq.com/llm_observability/monitoring/querying/
-- **Option C (sanitize child span + forward span):** the cleanest *visual* before/after — the
+- **Option C (sanitize child span + forward span):** the cleanest *visual* before/after. The
   `sanitize_input` span's Input/Output shows original→sanitized, and the forward/model spans below show
   the sanitized prompt flowing to the model. The attendee scrubs DOWN the waterfall and watches the text
   change at the guard step. This is the most "demo-legible" before/after in Datadog, at the cost of more
   spans. (If the sanitize span sets `gen_ai.input.messages`=original and `gen_ai.output.messages`=sanitized,
   Datadog's own Input-vs-Output side-by-side on that one span literally shows before vs after.)
 - **The agent's own span** (ADK, `research/28`/`research/29`) will independently show the prompt it
-  received — which is the **sanitized** one (the proxy forwards the request; output scrubbing happens on
+  received, which is the **sanitized** one (the proxy forwards the request; output scrubbing happens on
   the way back). So the trace already encodes "model only ever saw the sanitized input," reinforcing the
   lesson without extra work.
 
@@ -312,7 +312,7 @@ hand-written spans to start/stop capturing; they won't, unless the code reads it
 produced by deliberate span/attribute layout (Q2), then read off the waterfall + side panels. Treat the
 exact UI affordance (do two `gen_ai.input/output.messages` on one span render as a true two-pane diff) as a
 **verify-at-build** item to confirm live in the Datadog LLM Observability UI on a cluster emitting these
-spans — the docs confirm per-span Input/Output rendering but not a pixel-level before/after layout.
+spans. The docs confirm per-span Input/Output rendering but not a pixel-level before/after layout.
 
 **Confidence: HIGH** that per-span Input-vs-Output is the side-by-side and that custom attrs surface as
 `@meta.metadata.*`; **MEDIUM** on the exact rendered appearance of an original-vs-sanitized layout (UI
@@ -320,21 +320,20 @@ detail, verify live).
 
 ---
 
-## Q5. Datadog-side requirements to surface prompt text from manually instrumented spans — AND does the built-in Sensitive Data Scanner redact those manual spans, or is Collector-side symmetric redaction still the right path for the re-leak trap?
+## Q5. Datadog-side requirements to surface prompt text from manually instrumented spans, AND does the built-in Sensitive Data Scanner redact those manual spans, or is Collector-side symmetric redaction still the right path for the re-leak trap?
 
-**Two parts.** Part A (surfacing the text) is **CONFIRMED — three concrete requirements, no
-org feature-flag/plan gate.** Part B (Whitney's #12 update — SDS vs Collector-side redaction for the
-re-leak trap) is **CONFIRMED with a sharp, demo-decisive verdict: SDS applies to the manual span's
+**Two parts.** Part A (surfacing the text) is **CONFIRMED: three concrete requirements, no
+org feature-flag/plan gate.** Part B (Whitney's #12 update: SDS vs Collector-side redaction for the
+re-leak trap) is **CONFIRMED with a definite verdict: SDS applies to the manual span's
 *content* but only server-side after ingest, so Collector-side symmetric redaction remains the right
-path for the re-leak trap.** (Confirms and sharpens `research/28` Q7 + the SDS finding.)
+path for the re-leak trap.** (Confirms and extends `research/28` Q7 + the SDS finding.)
 
-### Part A — surfacing prompt text from a manual span (unchanged from prior run)
-
+### Part A: surfacing prompt text from a manual span (unchanged from prior run)
 
 1. **Routing header `dd-otlp-source=llmobs`** (or the Collector/Agent equivalent). Direct OTLP intake
    needs `OTEL_EXPORTER_OTLP_TRACES_HEADERS=dd-api-key=<KEY>,dd-otlp-source=llmobs` over
    `http/protobuf`. This header is what routes a span into **LLM (Agent) Observability** rather than plain
-   APM. For THIS stack the spans go through the contrib `datadog` exporter in the Collector — `research/28`
+   APM. For THIS stack the spans go through the contrib `datadog` exporter in the Collector. `research/28`
    Q7 flags that the Collector→LLM-Obs routing is the one under-documented seam (verify live; fall back to
    a dedicated OTLP exporter with the `dd-otlp-source=llmobs` header). That gap is unchanged here.
    Sources: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ ;
@@ -344,11 +343,11 @@ path for the re-leak trap.** (Confirms and sharpens `research/28` Q7 + the SDS f
    `completion` resolve to **`span.kind = llm`** (the kind whose Input/Output renders as messages).
    [CORRECTED 2026-06-23: the current Datadog otel_instrumentation doc lists `generate_content, chat,
    text_completion, completion` for `llm`; the earlier example value `chat_completion` is NOT in that
-   list — use one of the documented values.] For the proxy's
+   list. Use one of the documented values.] For the proxy's
    forward/sanitize span to be treated as an LLM-kind span (and thus show the prompt as input messages),
    set `gen_ai.operation.name` accordingly. If you leave it as a generic proxy span, the content maps to
    the non-LLM input/output value form instead (see #3). **OTel `SpanKind` (CLIENT/SERVER/INTERNAL) is
-   NOT the same thing** — Datadog's LLM `span.kind` is driven by `gen_ai.operation.name`, not by the OTel
+   NOT the same thing.** Datadog's LLM `span.kind` is driven by `gen_ai.operation.name`, not by the OTel
    span kind; set both deliberately.
    Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
 3. **Content attribute names (and the event fallback).** Datadog extracts Input/Output **in priority
@@ -356,13 +355,13 @@ path for the re-leak trap.** (Confirms and sharpens `research/28` Q7 + the SDS f
    event** named **`gen_ai.client.inference.operation.details`**. It maps
    `gen_ai.input.messages` → `meta.input.messages` (LLM spans) or `meta.input.value` (other span kinds),
    and `gen_ai.output.messages` → `meta.output.messages` / `meta.output.value`. `gen_ai.system_instructions`
-   is also read. So either carrier (attribute JSON, or the event) surfaces the text — which is exactly why
+   is also read. So either carrier (attribute JSON, or the event) surfaces the text, which is exactly why
    the Q1/Q3 `SPAN_ONLY` vs `EVENT_ONLY` choice both work in Datadog.
    Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
 4. **Semconv version + opt-in.** Datadog's native mapping requires **OTel GenAI semconv v1.37+**; older
    emitters must set `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` (per `research/28` Q1/Q3).
    For hand-written proxy spans this matters only insofar as you emit the v1.37 attribute *names*
-   (`gen_ai.input.messages`, not `gen_ai.prompt`) — there is no instrumentation library to "opt in," so
+   (`gen_ai.input.messages`, not `gen_ai.prompt`). There is no instrumentation library to "opt in," so
    just use the current names. **Supported site:** commercial Datadog sites only; GovCloud
    (`app.ddog-gov.com`, `us2.ddog-gov.com`) is unsupported for LLM Observability (the repo default
    `DD_SITE=datadoghq.com` is fine).
@@ -370,42 +369,42 @@ path for the re-leak trap.** (Confirms and sharpens `research/28` Q7 + the SDS f
    https://docs.datadoghq.com/llm_observability/instrumentation/
 5. **No org feature flag / plan toggle is documented** beyond a supported site + API key + the routing
    header (confirmed `research/28` Q7). Custom `witb.*` before/after attributes surface as
-   `@meta.metadata.<key>` automatically — no Datadog-side registration needed.
+   `@meta.metadata.<key>` automatically, no Datadog-side registration needed.
    Source: https://docs.datadoghq.com/llm_observability/monitoring/querying/
 
 **Net for Part A:** to make the manually-captured prompt show up as the span's Input in LLM Obs, the
 proxy's content span must (a) reach LLM Obs via `dd-otlp-source=llmobs` routing, (b) carry
 `gen_ai.operation.name` so it classifies as an `llm` span, and (c) put the messages in
 `gen_ai.input.messages`/`gen_ai.output.messages` (JSON) or the
-`gen_ai.client.inference.operation.details` event — with capture gated by the Q3 toggle (default
+`gen_ai.client.inference.operation.details` event, with capture gated by the Q3 toggle (default
 `NO_CONTENT`).
 
-### Part B — built-in Sensitive Data Scanner vs Collector-side symmetric redaction (Whitney's #12 update)
+### Part B: built-in Sensitive Data Scanner vs Collector-side symmetric redaction (Whitney's #12 update)
 
 **The question:** Datadog's Agent Observability includes a built-in **Sensitive Data Scanner (SDS)**
-for PII redaction. Does that built-in redaction apply to the **manually instrumented** guard-proxy spans
-— OR is **Collector-side symmetric redaction** still the right path for the re-leak trap, where we
+for PII redaction. Does that built-in redaction apply to the **manually instrumented** guard-proxy spans,
+OR is **Collector-side symmetric redaction** still the right path for the re-leak trap, where we
 deliberately need the *before* text (containing the secret) to appear in the trace for the narrative,
 then confirm it was sanitized?
 
-**Verdict — three findings, in the order that decides the demo:**
+**Verdict: three findings, in the order that decides the demo:**
 
-**B1. SDS DOES apply to manually instrumented spans — it scans by content/pattern, not by
+**B1. SDS DOES apply to manually instrumented spans; it scans by content/pattern, not by
 instrumentation method.** SDS for Agent Observability "can scan Agent Observability traces, **including
-inputs and outputs from LLM applications**," and matches via **scanning rules** — a predefined library
+inputs and outputs from LLM applications**," and matches via **scanning rules**: a predefined library
 (emails, credit-card numbers, **API keys, authorization tokens**, network/device info) plus **custom
 regex rules**. Nothing in the SDS model keys off *how* the span was produced; it inspects the span's
 `gen_ai.input.messages` / `gen_ai.output.messages` / metadata **content** once that content is in the
 Agent-Obs dataset. So a secret the proxy puts in `gen_ai.input.messages` (or in the custom
 `witb.input.messages.original` attribute) via hand-written `set_attribute` is **just as scannable** as
 one emitted by the Datadog SDK or ADK. There is **no "manual spans are exempt"** clause. So the literal
-answer to "does the built-in redaction apply to manually instrumented spans" is **YES** — by content.
+answer to "does the built-in redaction apply to manually instrumented spans" is **YES**, by content.
 Available actions for Agent-Obs: **Redact** (replace with a chosen token, e.g. `[sensitive_data]`),
 **Partially redact**, **Hash** (Mask is logs-only, not available for Agent-Obs traces).
 Sources: https://docs.datadoghq.com/security/sensitive_data_scanner/ ;
 https://docs.datadoghq.com/security/sensitive_data_scanner/scanning_rules/
 
-**B2. BUT SDS acts SERVER-SIDE, AFTER the span reaches Datadog — it cannot keep the "before" secret off
+**B2. BUT SDS acts SERVER-SIDE, AFTER the span reaches Datadog; it cannot keep the "before" secret off
 the wire.** SDS for Agent Observability "uses a **managed configuration model**"; the managed scanning
 group "is automatically created for your organization **when you first access the Agent Observability
 Settings page**," and you "cannot create additional scanning groups or delete the managed group." SDS is a
@@ -413,8 +412,8 @@ Settings page**," and you "cannot create additional scanning groups or delete th
 redacts before events are *indexed*, i.e. on the ingest side of the Datadog boundary, after the span has
 left your network). [CORRECTED 2026-06-23: the SDS doc does not state verbatim that Agent-Obs scanning is
 "after ingest"; it states telemetry is "redacted before events are indexed" and is silent on the exact
-Agent-Obs timing. The server-side-of-the-network-boundary characterization is sound — SDS is a managed
-Datadog-side feature, not a network-egress redactor — but is treated as CONFIRMED-WITH-NUANCE, not
+Agent-Obs timing. The server-side-of-the-network-boundary characterization is sound (SDS is a managed
+Datadog-side feature, not a network-egress redactor) but is treated as CONFIRMED-WITH-NUANCE, not
 verbatim.] Datadog's data-security stance draws the line explicitly: the **OTel Collector** is what lets
 teams "preserve governance" and redact "**before telemetry data leaves your network**," whereas SDS is
 framed in the Agent-Obs data-security doc as "**an additional layer of security**" alongside
@@ -423,35 +422,35 @@ data**, but the raw secret has **already traversed the network and been ingested
 For a secret-exfil lesson, that is the wrong side of the boundary: the secret leaves the cluster regardless.
 [CORRECTED 2026-06-23: the "before telemetry data leaves your network" phrasing is Datadog's
 OTel/Collector governance framing (Datadog OTel-for-LLM-Obs material), NOT the `data_security_and_rbac`
-doc — that doc does not mention the Collector or that phrase. The `data_security_and_rbac` doc supplies
+doc. That doc does not mention the Collector or that phrase. The `data_security_and_rbac` doc supplies
 the "additional layer of security" framing and the span-processor "before it is sent to Datadog" wording.]
 Sources: https://docs.datadoghq.com/security/sensitive_data_scanner/ ;
 https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ (additional-layer + span-processor framing) ;
 https://www.datadoghq.com/blog/llm-otel-semantic-convention/ (Collector "before telemetry data leaves your network" governance framing)
 
-**B3. Datadog SDK "span processors" — the pre-egress, in-app redactor — do NOT exist on the OTLP path
+**B3. Datadog SDK "span processors," the pre-egress, in-app redactor, do NOT exist on the OTLP path
 the proxy uses.** Datadog documents a second redaction mechanism: **span processors** that "redact or
 modify sensitive data **at the application level before it is sent to Datadog**" and can "conditionally
 modify input and output data on spans, or prevent spans from being emitted entirely." This is the
-pre-egress option — but it is a feature of the **Datadog Agent Observability SDK** (the Python `ddtrace`
+pre-egress option, but it is a feature of the **Datadog Agent Observability SDK** (the Python `ddtrace`
 `LLMObs` SDK; `def redact_processor(span: LLMObsSpan) -> LLMObsSpan`). The proxy is **not** instrumented
-with the Datadog SDK — per `research/28`/`research/29` it emits **OTLP** `gen_ai.*` spans with no
+with the Datadog SDK; per `research/28`/`research/29` it emits **OTLP** `gen_ai.*` spans with no
 `dd-trace`. The Datadog SDK reference documents span processors **only** in the `ddtrace`/`LLMObs`
 context; there is **no documented span-processor hook for OTLP-ingested spans**. So the in-app,
-pre-egress Datadog redactor is **unavailable** for the hand-written proxy span — leaving SDS (post-ingest)
+pre-egress Datadog redactor is **unavailable** for the hand-written proxy span, leaving SDS (post-ingest)
 as the only *Datadog-native* redaction for this path.
 Sources: https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ ;
 https://docs.datadoghq.com/llm_observability/instrumentation/sdk/
 
 **Therefore, for the re-leak trap specifically: Collector-side symmetric redaction is still the right
-path.** The re-leak-trap narrative needs three things in sequence: (1) the **before** text — the prompt
-*containing the secret* — to appear in the trace so the audience sees the leak; (2) a redaction step the
+path.** The re-leak-trap narrative needs three things in sequence: (1) the **before** text, the prompt
+*containing the secret*, to appear in the trace so the audience sees the leak; (2) a redaction step the
 audience can point at; (3) confirmation the secret was sanitized **before it leaves the boundary**.
-- **SDS cannot satisfy (3) at the network boundary** — it redacts post-ingest, so the secret has already
+- **SDS cannot satisfy (3) at the network boundary:** it redacts post-ingest, so the secret has already
   left the cluster and reached Datadog. SDS also can't show a clean "before → after at THIS hop" moment
   in a trace; it changes what the *stored* value renders as, not what crosses the wire.
 - **The OTel Collector CAN** do symmetric, deterministic redaction at the egress hop, "**before telemetry
-  data leaves your network**" (Datadog's own OTel/Collector governance framing) — via the contrib
+  data leaves your network**" (Datadog's own OTel/Collector governance framing), via the contrib
   **redaction processor** (delete/mask attributes by
   allow/block list) or the **transform processor (OTTL)** for fine-grained / partial redaction of a
   specific attribute value. This is exactly the `research/12` symmetric-redaction mechanism, and it sits
@@ -460,7 +459,7 @@ audience can point at; (3) confirmation the secret was sanitized **before it lea
   Collector redacts it on export, or routes the un-redacted copy only to a local/Tempo sink while the
   Datadog export is scrubbed) and then show the sanitized `gen_ai.input.messages` going onward.
 - **SDS is the defense-in-depth backstop, narrated as "even if a secret slips past the Collector, the
-  platform catches and redacts it in the UI"** — a genuine second layer, but explicitly *after* the
+  platform catches and redacts it in the UI"**: a real second layer, but explicitly *after* the
   network boundary, not a replacement for the egress redaction.
 Sources: https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/redactionprocessor/README.md ;
 https://opentelemetry.io/docs/security/handling-sensitive-data/ ;
@@ -468,18 +467,18 @@ https://docs.datadoghq.com/llm_observability/data_security_and_rbac/
 
 **Net for Part B (the answer to Whitney's #12 update):** Datadog's built-in SDS **does** apply to
 manually instrumented spans (it scans by content, instrumentation-agnostic) and is a real,
-configurable redaction layer — but it runs **server-side after ingest**, and the Datadog **SDK span
+configurable redaction layer, but it runs **server-side after ingest**, and the Datadog **SDK span
 processors** (the pre-egress in-app redactor) are **not available on the OTLP path** the proxy uses. For
-the re-leak trap — where the *before* text must appear in the trace and then be confirmed sanitized at
-the network boundary — **Collector-side symmetric redaction remains the correct path**; SDS is the
-post-ingest defense-in-depth backstop, not a substitute. (This research only — do NOT edit `proxy.py`,
+the re-leak trap, where the *before* text must appear in the trace and then be confirmed sanitized at
+the network boundary, **Collector-side symmetric redaction remains the correct path**; SDS is the
+post-ingest defense-in-depth backstop, not a substitute. (This research only; do NOT edit `proxy.py`,
 the Collector config, or any manifest.)
 
 **Net for the proxy:** to make the manually-captured prompt show up as the span's Input in LLM Obs, the
 proxy's content span must (a) reach LLM Obs via `dd-otlp-source=llmobs` routing, (b) carry
 `gen_ai.operation.name` so it classifies as an `llm` span, and (c) put the messages in
 `gen_ai.input.messages`/`gen_ai.output.messages` (JSON) or the
-`gen_ai.client.inference.operation.details` event — with capture gated by the Q3 toggle (default
+`gen_ai.client.inference.operation.details` event, with capture gated by the Q3 toggle (default
 `NO_CONTENT`); and (d) any deliberate-leak redaction for the re-leak trap is done **Collector-side**
 (redaction/transform processor) at the egress hop, with **SDS** as the post-ingest backstop in the UI.
 
@@ -492,7 +491,7 @@ Collector→LLM-Obs routing seam (inherited open item from `research/28` Q7) and
 
 ---
 
-## Recommended approach (synthesis — research only, do NOT implement here)
+## Recommended approach (synthesis; research only, do NOT implement here)
 
 1. **Keep the proxy SAFE by default.** Default `NO_CONTENT`; the before/after capture is the deliberate
    re-leak-trap beat (BUILD-SPEC §4), flipped on for that segment only.
@@ -500,7 +499,7 @@ Collector→LLM-Obs routing seam (inherited open item from `research/28` Q7) and
    `witb.input.messages.original` = original, plus `witb.input.sanitized`/`witb.input.blocklist_hit`.
    Optionally promote to a dedicated `sanitize_input` child span (Q2 Option C) if the on-stage waterfall
    wants a visible sanitize step (then that span's own Input-vs-Output is the literal before/after).
-3. **Gate capture by reading the env var yourself (Q3 Option 1)** — do NOT expect
+3. **Gate capture by reading the env var yourself (Q3 Option 1).** Do NOT expect
    `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` to govern hand-written spans automatically.
    Honor the enum; treat `=true` as "no capture" (matching the ADK trap discipline).
 4. **Set `gen_ai.operation.name`** on the content span so Datadog classifies it as `llm` and renders the
@@ -508,7 +507,7 @@ Collector→LLM-Obs routing seam (inherited open item from `research/28` Q7) and
 5. **Inherit the propagation + SDK bootstrap from `research/29` Q6** (`inject()` so the agent's `gen_ai.*`
    spans share the trace).
 6. **For the re-leak-trap redaction, use the OTel Collector (redaction / transform-OTTL processor) at the
-   egress hop — NOT Datadog SDS as the boundary redactor** (Q5 Part B). SDS *does* scan manual spans by
+   egress hop, NOT Datadog SDS as the boundary redactor** (Q5 Part B). SDS *does* scan manual spans by
    content, but only **server-side after ingest** (secret already left the network), and the Datadog SDK
    **span processors** (the in-app pre-egress redactor) are **not available on the OTLP path** the proxy
    uses. Keep SDS configured as the post-ingest defense-in-depth backstop ("the platform also caught it").
@@ -523,23 +522,23 @@ Collector→LLM-Obs routing seam (inherited open item from `research/28` Q7) and
 
 ## Sources (distinct citations)
 
-1. https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md — canonical GenAI spans spec: `gen_ai.input.messages`/`output.messages`/`system_instructions` (Opt-In, Development); "SHOULD NOT capture by default, but SHOULD provide an option to opt in"; structured content preferred on events, JSON-string fallback on span attributes; three usage patterns; message JSON schema; spec does NOT define the capture env var/enum.
-2. https://pypi.org/project/opentelemetry-util-genai/ — the capture env var is **library-specific**, "only affects applications using this package … not the base SDK"; enum `NO_CONTENT`/`SPAN_ONLY`/`EVENT_ONLY`/`SPAN_AND_EVENT` (default `NO_CONTENT`); `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT`; `TelemetryHandler` manual API; v0.4b0, released 2026-05-01.
-3. https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/ — Datadog input/output extraction priority (attributes then `gen_ai.client.inference.operation.details` event); `gen_ai.input.messages`→`meta.input.messages`/`meta.input.value`; `gen_ai.operation.name`→Agent-Obs `span.kind` (`chat`/`chat_completion`/`text_completion`→`llm`); `dd-otlp-source=llmobs` header; direct-OTLP config.
-4. https://www.datadoghq.com/blog/llm-otel-semantic-convention/ — native OTLP GenAI ingest, no dd-trace SDK; semconv v1.37+; three ingestion paths; gen_ai attribute auto-mapping (model/tokens/cost); side-by-side logic-vs-data framing.
-5. https://docs.datadoghq.com/llm_observability/terms/ — span definition; LLM/tool/workflow span kinds; spans carry inputs/outputs (LLM prompts/completions).
-6. https://www.datadoghq.com/blog/datadog-llm-observability/ — drill into a trace, prompts sent and model replies "all in one view."
-7. https://www.datadoghq.com/blog/openai-agents-llm-observability/ — "viewing each step … side by side with the input and output data."
-8. https://docs.datadoghq.com/llm_observability/monitoring/querying/ — custom metadata/attributes surface under `@meta.metadata.<key>`.
-9. https://docs.datadoghq.com/llm_observability/instrumentation/ — supported sites; GovCloud unsupported for LLM Observability.
-10. https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk — (cross-ref via research/28/29) the `EVENT_ONLY`-valid / `=true`-invalid behavior holds **for the ADK/util-genai path**, not for raw SDK code.
-11. https://opentelemetry.io/blog/2026/genai-observability/ — content capture disabled by default for sensitivity; current convention uses structured message attributes; no manual-code-specific capture switch in the SDK.
-12. https://docs.datadoghq.com/security/sensitive_data_scanner/ — (Q5 Part B) SDS "can scan Agent Observability traces, including inputs and outputs from LLM applications"; managed configuration model; one managed scanning group auto-created on first Agent-Obs Settings visit (cannot add/delete); predefined rule library (emails, credit cards, **API keys, authorization tokens**, network/device) + custom regex; actions Redact / Partially redact / Hash (Mask is logs-only); scans **by content**, instrumentation-agnostic; runs **after ingest** (server-side).
-13. https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ — (Q5 Part B) redaction mechanisms on this page: **span processors** redact "at the application level **before it is sent to Datadog**" and can prevent spans from being emitted; **Sensitive Data Scanner** as "**an additional layer of security**"; and Data Access Control / RBAC. [NOTE 2026-06-23: this page does NOT mention the OTel Collector or the phrase "before telemetry data leaves your network" — that Collector governance framing is sourced separately from the Datadog OTel-for-LLM-Obs blog, citation 4.]
-14. https://docs.datadoghq.com/llm_observability/instrumentation/sdk/ — (Q5 Part B) span processors are a feature of the **Datadog Agent Observability SDK** (`ddtrace` `LLMObs`, `def redact_processor(span: LLMObsSpan) -> LLMObsSpan`); documented only in the SDK context, **no OTLP-ingested-span span-processor hook**.
-15. https://docs.datadoghq.com/security/sensitive_data_scanner/scanning_rules/ — (Q5 Part B) SDS scanning rules are regex/library patterns over field/attribute content.
-16. https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/redactionprocessor/README.md — (Q5 Part B) Collector **redaction processor**: deletes span attributes not on an allow-list, masks values matching a block-list — the egress-hop symmetric redactor.
-17. https://opentelemetry.io/docs/security/handling-sensitive-data/ — (Q5 Part B) OTel guidance: handle/redact sensitive data in the Collector pipeline before export (transform/OTTL, attributes, redaction processors).
+1. https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md: canonical GenAI spans spec: `gen_ai.input.messages`/`output.messages`/`system_instructions` (Opt-In, Development); "SHOULD NOT capture by default, but SHOULD provide an option to opt in"; structured content preferred on events, JSON-string fallback on span attributes; three usage patterns; message JSON schema; spec does NOT define the capture env var/enum.
+2. https://pypi.org/project/opentelemetry-util-genai/: the capture env var is **library-specific**, "only affects applications using this package … not the base SDK"; enum `NO_CONTENT`/`SPAN_ONLY`/`EVENT_ONLY`/`SPAN_AND_EVENT` (default `NO_CONTENT`); `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT`; `TelemetryHandler` manual API; v0.4b0, released 2026-05-01.
+3. https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/: Datadog input/output extraction priority (attributes then `gen_ai.client.inference.operation.details` event); `gen_ai.input.messages`→`meta.input.messages`/`meta.input.value`; `gen_ai.operation.name`→Agent-Obs `span.kind` (`chat`/`chat_completion`/`text_completion`→`llm`); `dd-otlp-source=llmobs` header; direct-OTLP config.
+4. https://www.datadoghq.com/blog/llm-otel-semantic-convention/: native OTLP GenAI ingest, no dd-trace SDK; semconv v1.37+; three ingestion paths; gen_ai attribute auto-mapping (model/tokens/cost); side-by-side logic-vs-data framing.
+5. https://docs.datadoghq.com/llm_observability/terms/: span definition; LLM/tool/workflow span kinds; spans carry inputs/outputs (LLM prompts/completions).
+6. https://www.datadoghq.com/blog/datadog-llm-observability/: drill into a trace, prompts sent and model replies "all in one view."
+7. https://www.datadoghq.com/blog/openai-agents-llm-observability/: "viewing each step … side by side with the input and output data."
+8. https://docs.datadoghq.com/llm_observability/monitoring/querying/: custom metadata/attributes surface under `@meta.metadata.<key>`.
+9. https://docs.datadoghq.com/llm_observability/instrumentation/: supported sites; GovCloud unsupported for LLM Observability.
+10. https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk: (cross-ref via research/28/29) the `EVENT_ONLY`-valid / `=true`-invalid behavior holds **for the ADK/util-genai path**, not for raw SDK code.
+11. https://opentelemetry.io/blog/2026/genai-observability/: content capture disabled by default for sensitivity; current convention uses structured message attributes; no manual-code-specific capture switch in the SDK.
+12. https://docs.datadoghq.com/security/sensitive_data_scanner/: (Q5 Part B) SDS "can scan Agent Observability traces, including inputs and outputs from LLM applications"; managed configuration model; one managed scanning group auto-created on first Agent-Obs Settings visit (cannot add/delete); predefined rule library (emails, credit cards, **API keys, authorization tokens**, network/device) + custom regex; actions Redact / Partially redact / Hash (Mask is logs-only); scans **by content**, instrumentation-agnostic; runs **after ingest** (server-side).
+13. https://docs.datadoghq.com/llm_observability/data_security_and_rbac/: (Q5 Part B) redaction mechanisms on this page: **span processors** redact "at the application level **before it is sent to Datadog**" and can prevent spans from being emitted; **Sensitive Data Scanner** as "**an additional layer of security**"; and Data Access Control / RBAC. [NOTE 2026-06-23: this page does NOT mention the OTel Collector or the phrase "before telemetry data leaves your network"; that Collector governance framing is sourced separately from the Datadog OTel-for-LLM-Obs blog, citation 4.]
+14. https://docs.datadoghq.com/llm_observability/instrumentation/sdk/: (Q5 Part B) span processors are a feature of the **Datadog Agent Observability SDK** (`ddtrace` `LLMObs`, `def redact_processor(span: LLMObsSpan) -> LLMObsSpan`); documented only in the SDK context, **no OTLP-ingested-span span-processor hook**.
+15. https://docs.datadoghq.com/security/sensitive_data_scanner/scanning_rules/: (Q5 Part B) SDS scanning rules are regex/library patterns over field/attribute content.
+16. https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/redactionprocessor/README.md: (Q5 Part B) Collector **redaction processor**: deletes span attributes not on an allow-list, masks values matching a block-list; the egress-hop symmetric redactor.
+17. https://opentelemetry.io/docs/security/handling-sensitive-data/: (Q5 Part B) OTel guidance: handle/redact sensitive data in the Collector pipeline before export (transform/OTTL, attributes, redaction processors).
 
 (17 distinct external citations; builds on in-repo `research/05`, `research/28` (Issue #9), and
 `research/29` (Issue #10) as instructed, and on `proxy.py` + `BUILD-SPEC.md` §4 read this session.)
@@ -548,224 +547,73 @@ Collector→LLM-Obs routing seam (inherited open item from `research/28` Q7) and
 
 ## Validation pass (adversarial, 2026-06-23)
 
-Skeptical re-check of the load-bearing claims; default posture = a claim not backed by a current
-official source is UNVERIFIED.
+Consolidated record of two adversarial validation passes (the original run and the #12-Q5 re-run for
+Whitney's Sensitive-Data-Scanner update). Every verdict is from a live fetch of the current (2026)
+official primary source. Default posture: a claim not backed by a current official source is UNVERIFIED.
 
-- **Q1 — content as event vs span attribute; opt-in/off-by-default:** **CONFIRMED** verbatim from the
-  canonical spec ("SHOULD NOT capture … by default, but SHOULD provide an option to opt in"; structured
-  attributes "supported on events … and may not yet be supported on spans"; JSON-string-on-span fallback).
-  Source: semantic-conventions-genai gen-ai-spans.md.
-- **Q3 — env var scope (the key gotcha):** **REFUTED as stated / CONFIRMED-WITH-NUANCE.** Directly
-  verified that `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` is a property of
-  `opentelemetry-util-genai` (and contrib instrumentations), explicitly "not the base SDK," and that the
-  GenAI spec does not define it. Raw hand-written proxy spans therefore do NOT honor it unless the code
-  reads it or uses the library. This is the spike's central correction. Sources: util-genai PyPI;
-  semantic-conventions-genai.
-- **Q4/Q5 — Datadog extraction + classification:** **CONFIRMED** that Datadog reads
-  `gen_ai.input.messages`/`output.messages` (attributes) OR the
-  `gen_ai.client.inference.operation.details` span event, maps them to `meta.input/output.messages`, and
-  uses `gen_ai.operation.name` to set the LLM span kind; `dd-otlp-source=llmobs` is the routing header;
-  no org feature-flag gate. Source: Datadog otel_instrumentation doc.
-- **Q4 — exact "before vs after" UI layout:** **COULD NOT FULLY CONFIRM** — Datadog docs confirm per-span
-  Input-vs-Output side-by-side and custom attrs under `@meta.metadata.*`, but do NOT document a
-  two-value (original-vs-sanitized) diff widget. Correctly flagged as a live verify-at-build UI check.
+**Q1: content as a span event vs a span attribute; opt-in / off-by-default.** CONFIRMED. The canonical
+GenAI spans spec marks `gen_ai.input.messages` / `gen_ai.output.messages` / `gen_ai.system_instructions`
+as `Opt-In`, stability `Development`, with the sensitive/PII warning, and states content is recorded in
+structured form on events and MAY be a JSON string on spans when structured form is unsupported. The spec
+does NOT define a content-capture env var. Source: semantic-conventions-genai `gen-ai-spans.md` (citation 1).
 
-**UNVERIFIED / OPEN (flagged):**
-- The **Collector → LLM-Obs routing** of `gen_ai.*` spans via the contrib `datadog` exporter remains the
-  one unresolved seam (inherited from `research/28` Q7) — verify live; deterministic fallback is a
-  dedicated OTLP exporter with `dd-otlp-source=llmobs`.
-- The **rendered appearance** of an original-vs-sanitized layout in the Datadog trace panel (Q4) — UI
-  detail, verify live on a cluster emitting the proxy content spans.
+**Q3: `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` scope (the central correction).** CONFIRMED on
+substance. The env var belongs to `opentelemetry-util-genai` (enum `NO_CONTENT` default / `SPAN_ONLY` /
+`EVENT_ONLY` / `SPAN_AND_EVENT`), not the base SDK, and the spec does not define it, so raw hand-written
+proxy spans do not honor it unless the code reads it or uses the library. Citation fix applied inline: the
+phrase the draft quoted ("only affects applications using this package… not the base SDK") is not verbatim
+on the current PyPI page; the conclusion is unchanged because the SDK has no such switch. Sources:
+`opentelemetry-util-genai` PyPI (citation 2); `gen-ai-spans.md` (citation 1).
 
----
+**Q4 / Q5 Part A: Datadog extraction, classification, routing.** CONFIRMED. Datadog reads
+`gen_ai.input.messages` / `output.messages` / `system_instructions` (attributes first, then the
+`gen_ai.client.inference.operation.details` span event) and maps them to `meta.input/output.messages`;
+`gen_ai.operation.name` sets `span.kind = llm` for `generate_content, chat, text_completion, completion`
+(value-list fix applied inline: the draft's `chat_completion` example is not in the list); routing is the
+`dd-otlp-source=llmobs` header; semconv v1.37+ / `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`;
+custom attributes surface as `@meta.metadata.<key>`; LLM Observability is unsupported on GovCloud sites. No
+org feature-flag / plan gate was found beyond a supported site + API key + routing header (UNVERIFIED, not
+refuted; absence of evidence). Sources: Datadog `otel_instrumentation` doc (citation 3); querying doc
+(citation 8); instrumentation index (citation 9); GenAI-OTel blog (citation 4).
 
-## Validation pass (adversarial, 2026-06-23)
+**Product rename to "Agent Observability."** CONFIRMED, and surface-only: the docs landing and product
+pages use "Agent Observability," but the `/llm_observability/` URL paths, the `dd-otlp-source=llmobs`
+header, and native `gen_ai.*` OTLP ingest are unchanged. Sources: the Agent Observability docs landing
+page https://docs.datadoghq.com/llm_observability/ plus citations 3, 12, 13.
 
-Independent skeptical re-verification by an adversarial validator. Each load-bearing claim was checked
-against the current (2026) official primary source via live fetch. Default posture: a claim not backed
-by a current official source is UNVERIFIED. Two inline corrections were made (see Q3 and Q5 §2 above).
+**Q5 Part B: built-in Sensitive Data Scanner (SDS) vs Collector-side redaction (Whitney's #12 update).**
+- **B1: SDS scans manual / OTLP-ingested spans by content (instrumentation-agnostic).** CONFIRMED. SDS
+  "can scan Agent Observability traces, including inputs and outputs from LLM applications" via rules
+  (predefined library incl. API keys + authorization tokens, plus custom regex); a managed scanning group
+  is auto-created on first Agent-Obs Settings visit and cannot be deleted; actions are Redact / Partially
+  redact / Hash (Mask is logs-only). No clause exempts manually-instrumented spans. Sources: citations 12, 15.
+- **B2: SDS is a Datadog-platform-side scanner, not a network-egress redactor.** CONFIRMED-WITH-NUANCE.
+  The SDS doc says data is "redacted before events are indexed" and is silent on exact Agent-Obs timing, so
+  "after ingest" is an inference, not a verbatim quote; either way SDS cannot keep the secret off the wire.
+  Citation fix applied inline: the phrase "before telemetry data leaves your network" was mis-attributed to
+  `data_security_and_rbac` (which does not contain it and does not mention the Collector), re-sourced to
+  the Datadog OTel-for-LLM-Obs material (citation 4). Sources: citations 12, 13, 4.
+- **B3: Datadog SDK span processors are SDK-only, absent on the OTLP path.** CONFIRMED. The span-processor
+  redactor ("redact… at the application level before it is sent to Datadog") is documented only as an Agent
+  Observability SDK feature (`ddtrace` `LLMObs`, `redact_processor(span: LLMObsSpan)`); there is no
+  span-processor hook for OTLP-ingested spans, so the OTLP-emitting proxy cannot use it. Sources: citations 14, 13.
+- **B-conclusion: Collector-side symmetric redaction remains the correct re-leak-trap path.** CONFIRMED.
+  The contrib redaction processor (allow/block-list delete + mask) and transform/OTTL run in the Collector
+  pipeline before export, satisfying the trap's need to show the *before* secret, redact at the boundary,
+  and confirm sanitization. SDS applies to manual spans but only platform-side, so it is the defense-in-depth
+  backstop, not the mechanism for this beat. Sources: citations 16, 17, 13.
 
-- **Q1 — content opt-in / off-by-default; canonical attribute names + stability:** **CONFIRMED.** The
-  canonical GenAI spans spec marks `gen_ai.input.messages`, `gen_ai.output.messages`, and
-  `gen_ai.system_instructions` as requirement level `Opt-In`, stability `Development`, with the sensitive
-  /PII warning. Source: https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
-- **Q1 — events preferred / JSON-string-on-span fallback:** **CONFIRMED (wording differs slightly).** The
-  current spec text reads: "When the attribute is recorded on events, it MUST be recorded in structured
-  form. When recorded on spans, it MAY be recorded as a JSON string if structured format is not supported
-  and SHOULD be recorded in structured form otherwise." This matches the spike's substance (structured on
-  events; JSON-string fallback on spans). Source: gen-ai-spans.md (URL above).
-- **Q3 — spec does NOT define the capture env var:** **CONFIRMED.** The GenAI spans spec does not define
-  or mention `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`. Source: gen-ai-spans.md (URL above).
-- **Q3 — env var is library-specific (the central correction):** **CONFIRMED on substance; quote
-  corrected.** PyPI confirms `opentelemetry-util-genai` controls capture via this env var with enum
-  `NO_CONTENT` (default) / `SPAN_ONLY` / `EVENT_ONLY` / `SPAN_AND_EVENT`, plus
-  `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT` and a `TelemetryHandler`; v0.4b0, released 2026-05-01. HOWEVER
-  the exact phrase the spike quoted ("only affects applications using this package's instrumentation
-  capabilities, not the base SDK itself") is **NOT present** on the current PyPI page — corrected inline
-  in Q3. The conclusion (raw hand-written SDK code does not honor the env var) stands, because the SDK
-  has no such switch and the spec does not define one. Source: https://pypi.org/project/opentelemetry-util-genai/
-- **Q5 — `dd-otlp-source=llmobs` routing header:** **CONFIRMED.** Documented as
-  `OTEL_EXPORTER_OTLP_TRACES_HEADERS=dd-api-key=<KEY>,dd-otlp-source=llmobs`. Source:
-  https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
-- **Q5 — input/output extraction priority (attributes then `gen_ai.client.inference.operation.details`
-  event); mapping to `meta.input.messages`/`meta.input.value`:** **CONFIRMED** verbatim from the Datadog
-  doc (extraction "in priority order": 1. direct attributes `gen_ai.input.messages`/`output.messages`/
-  `system_instructions`; 2. span events named `gen_ai.client.inference.operation.details`). Source:
-  otel_instrumentation doc (URL above).
-- **Q5 — `gen_ai.operation.name` → `span.kind = llm`:** **CONFIRMED with value-list correction.** The
-  current doc maps `generate_content, chat, text_completion, completion` → `llm`. The spike's example
-  value `chat_completion` is not in that list; corrected inline in Q5 §2. Core claim (operation name
-  drives LLM span kind) is correct. Source: otel_instrumentation doc (URL above).
-- **Q5 — semconv v1.37+ requirement / `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental`:**
-  **CONFIRMED.** Source: otel_instrumentation doc (URL above) and
-  https://www.datadoghq.com/blog/llm-otel-semantic-convention/
-- **Q4/Q5 — custom attributes surface as `@meta.metadata.<key>`:** **CONFIRMED.** "Custom metadata fields
-  are accessible under `@meta.metadata.<key>`." Source:
-  https://docs.datadoghq.com/llm_observability/monitoring/querying/
-- **Q5 — GovCloud unsupported for LLM Observability:** **CONFIRMED.** The instrumentation index states the
-  product is not supported on `app.ddog-gov.com` / `us2.ddog-gov.com`. Source:
-  https://docs.datadoghq.com/llm_observability/instrumentation/
-- **Q5 — no org feature-flag / plan gate beyond supported site + API key + routing header:** **UNVERIFIED
-  (not refuted).** No documented org gate was found, which is consistent with the spike's claim, but
-  absence-of-evidence is not a positive confirmation. Treat as the spike already does — no gate observed.
-
-**UNVERIFIED / OPEN (carried forward, agreed):**
-- **Collector → LLM-Obs routing** of `gen_ai.*` spans via the contrib `datadog` exporter (inherited
-  `research/28` Q7 seam) — verify live; deterministic fallback is a dedicated OTLP exporter with
+**UNVERIFIED / OPEN (carried forward; agreed, not refuted):**
+- **Collector → Agent/LLM-Obs routing** of `gen_ai.*` spans via the contrib `datadog` exporter (inherited
+  `research/28` Q7 seam); verify live; deterministic fallback is a dedicated OTLP exporter with
   `dd-otlp-source=llmobs`.
-- **Rendered original-vs-sanitized UI layout** in the Datadog trace panel (Q4) — no documented two-value
-  diff widget; verify live.
-
-**Net:** No load-bearing claim was refuted. Two inline accuracy fixes applied (a non-verbatim PyPI quote
-in Q3; the `chat_completion` example value in Q5). The spike's central correction — that
-`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` does NOT govern hand-written SDK spans — is sound and
-confirmed against both the spec and the PyPI package.
-
----
-
-## Validation pass (adversarial, 2026-06-23 — re-run for Whitney's #12 Q5 update: SDS vs Collector redaction)
-
-This re-run added **Q5 Part B** (Whitney's #12 update): does Datadog's built-in **Sensitive Data Scanner**
-redact MANUALLY instrumented spans, or is **Collector-side symmetric redaction** still the right path for
-the re-leak trap. Live WebFetch/WebSearch against current (2026) official Datadog + OTel sources. Default
-posture: a claim not backed by a current official source is UNVERIFIED.
-
-- **B1 — SDS scans manual spans by content (instrumentation-agnostic):** **CONFIRMED.** SDS for Agent
-  Observability "can scan Agent Observability traces, including inputs and outputs from LLM applications,"
-  via scanning **rules** (predefined library incl. API keys + authorization tokens, plus custom regex).
-  Matching is by content/pattern; no clause exempts manually-instrumented spans. Actions: Redact /
-  Partially redact / Hash (Mask logs-only). Sources:
-  https://docs.datadoghq.com/security/sensitive_data_scanner/ ;
-  https://docs.datadoghq.com/security/sensitive_data_scanner/scanning_rules/
-- **B2 — SDS acts server-side, after ingest (cannot keep the secret off the wire):** **CONFIRMED.** SDS
-  for Agent-Obs uses a "managed configuration model"; the managed scanning group is auto-created on first
-  Agent-Obs Settings visit and cannot be deleted; it classifies/redacts **after ingest**. Datadog's
-  data-security doc explicitly contrasts this with Collector processors that enforce policy "**before
-  telemetry data leaves your network**," and frames SDS as "an additional layer of security." Sources:
-  https://docs.datadoghq.com/security/sensitive_data_scanner/ ;
-  https://docs.datadoghq.com/llm_observability/data_security_and_rbac/
-- **B3 — Datadog SDK span processors are NOT available on the OTLP path:** **CONFIRMED.** Datadog's span
-  processors ("redact … at the application level before it is sent to Datadog") are documented **only** as
-  a feature of the Agent Observability **SDK** (`ddtrace` `LLMObs`, `redact_processor(span: LLMObsSpan)`).
-  The SDK reference shows no span-processor hook for OTLP-ingested spans; the proxy emits OTLP `gen_ai.*`
-  with no dd-trace (per `research/28`/`research/29`), so the in-app pre-egress Datadog redactor does not
-  apply to it. SDS (post-ingest) is therefore the only Datadog-native redactor on this path. Sources:
-  https://docs.datadoghq.com/llm_observability/instrumentation/sdk/ ;
-  https://docs.datadoghq.com/llm_observability/data_security_and_rbac/
-- **B-conclusion — Collector-side symmetric redaction is still the right re-leak-trap path:**
-  **CONFIRMED.** The contrib **redaction processor** (allow/block-list delete + mask) and the
-  **transform/OTTL** processor perform deterministic, symmetric redaction at the egress hop, "before
-  telemetry data leaves your network" — satisfying the trap's requirement to show the *before* secret,
-  redact at the boundary, and confirm sanitization, with SDS as the post-ingest backstop. Sources:
-  https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/redactionprocessor/README.md ;
-  https://opentelemetry.io/docs/security/handling-sensitive-data/ ;
-  https://docs.datadoghq.com/llm_observability/data_security_and_rbac/
-
-**UNVERIFIED / OPEN (carried forward + one new):**
-- **Collector → LLM-Obs routing** of `gen_ai.*` spans via the contrib `datadog` exporter (inherited
-  `research/28` Q7 seam) — verify live; fallback is a dedicated OTLP exporter with `dd-otlp-source=llmobs`.
-- **NEW open item:** whether a Collector OTTL/redaction transform on the `gen_ai.input.messages` /
-  `witb.input.messages.original` value is **preserved through the contrib `datadog` exporter into
-  Agent/LLM-Obs** (i.e. the redaction lands before the LLM-Obs hop, not just on the APM/Tempo copy).
-  Docs confirm Collector redaction happens before egress generally, but not specifically through the
-  `datadog`-exporter→LLM-Obs path for these content attributes. Verify live; deterministic fallback is the
-  documented direct-OTLP intake with `dd-otlp-source=llmobs` after the redaction processor.
-- **Rendered original-vs-sanitized UI layout** in the Datadog trace panel (Q4) — no documented two-value
-  diff widget; verify live.
-
-**Net change this pass:** Q5 was expanded into Part A (unchanged — surfacing manual-span text) and a new
-**Part B** answering Whitney's SDS-vs-Collector-redaction question. The decisive new finding: **SDS does
-apply to manual spans (by content) but only post-ingest, and the Datadog SDK span processors are not on
-the OTLP path — so Collector-side symmetric redaction remains the correct re-leak-trap path; SDS is the
-defense-in-depth backstop.** No prior load-bearing claim was refuted; one new live-verify item added.
-
----
-
-## Validation pass (adversarial, 2026-06-23 — independent re-verification of the #12 Part B re-run)
-
-Independent adversarial validator. Focus: the NEW Part B claims (SDS rename to "Agent Observability,"
-SDS-vs-Collector redaction, SDK span processors not on the OTLP path) plus a skeptical re-check of the
-load-bearing prior claims. Every verdict below is from a live WebFetch/WebSearch of the current (2026)
-official source. Default posture: unbacked => UNVERIFIED. Two inline citation-accuracy fixes were applied
-this pass (the "before telemetry data leaves your network" attribution, and the "after ingest" wording).
-
-**CONFIRMED:**
-- **Product rename to "Agent Observability":** the Datadog docs and SDS pages now use "Agent Observability"
-  for the LLM-Obs product; SDS scanning is configured via an **Agent Observability Settings page** with a
-  single managed scanning group. Sources: https://docs.datadoghq.com/llm_observability/ ;
-  https://docs.datadoghq.com/security/sensitive_data_scanner/
-- **B1 — SDS scans Agent-Obs traces (incl. LLM inputs/outputs) by content, instrumentation-agnostic;
-  managed group auto-created, cannot be deleted; predefined library incl. API keys + authorization tokens
-  + custom regex; actions Redact / Partially redact / Hash (Mask is logs-only).** Verbatim-confirmed.
-  Sources: https://docs.datadoghq.com/security/sensitive_data_scanner/ ;
-  https://docs.datadoghq.com/security/sensitive_data_scanner/scanning_rules/
-- **B3 — Datadog "span processors" are an Agent Observability SDK feature ("redact or modify sensitive
-  data at the application level before it is sent to Datadog … or prevent spans from being emitted
-  entirely"), documented ONLY in the SDK context, with NO span-processor hook for OTLP-ingested spans.**
-  Verbatim-confirmed; therefore unavailable to the OTLP-emitting proxy. Sources:
-  https://docs.datadoghq.com/llm_observability/data_security_and_rbac/ ;
-  https://docs.datadoghq.com/llm_observability/instrumentation/sdk/
-- **B-conclusion — OTel Collector redaction processor (delete attrs not on allow-list + mask block-listed
-  values) and transform/OTTL run in the Collector pipeline before export; OTel guidance recommends
-  redacting sensitive data in the Collector before export.** Confirmed. Sources:
-  https://github.com/open-telemetry/opentelemetry-collector-contrib/blob/main/processor/redactionprocessor/README.md ;
-  https://opentelemetry.io/docs/security/handling-sensitive-data/
-- **Q5 Part A — `dd-otlp-source=llmobs` routing header; input/output extraction priority (attributes
-  `gen_ai.input.messages`/`output.messages`/`system_instructions` THEN the
-  `gen_ai.client.inference.operation.details` span event); `gen_ai.operation.name` →
-  `span.kind = llm` for `generate_content, chat, text_completion, completion`.** All verbatim-confirmed;
-  the prior-run inline correction dropping `chat_completion` from the list is accurate.
-  Source: https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/
-- **Q3 — `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` is an `opentelemetry-util-genai` env var
-  (enum `NO_CONTENT` default / `SPAN_ONLY` / `EVENT_ONLY` / `SPAN_AND_EVENT`), with
-  `OTEL_INSTRUMENTATION_GENAI_EMIT_EVENT` and a `TelemetryHandler`; the non-verbatim PyPI quote was
-  already corrected in the prior pass — re-confirmed the phrase is NOT on the page, and the substance
-  (the base SDK has no such switch; raw manual spans do not honor it) stands.** Sources:
-  https://pypi.org/project/opentelemetry-util-genai/ ;
-  https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md
-- **Custom attributes surface as `@meta.metadata.<key>`.** Confirmed (prior pass; not re-fetched —
-  unchanged). Source: https://docs.datadoghq.com/llm_observability/monitoring/querying/
-
-**CORRECTED INLINE (citation-accuracy, not substance):**
-- The phrase **"before telemetry data leaves your network"** was attributed (B2, B-conclusion, citation 13)
-  to `data_security_and_rbac`. Live fetch shows that page does NOT contain that phrase and does NOT mention
-  the OTel Collector at all — it covers span processors ("before it is sent to Datadog"), SDS ("an
-  additional layer of security"), and RBAC. The "before telemetry data leaves your network" Collector
-  governance framing is Datadog's OTel-for-LLM-Obs material (citation 4). Re-sourced inline.
-- The **"after ingest / server-side"** characterization of SDS (B2) is an inference, not verbatim: the SDS
-  doc says telemetry is "redacted before events are indexed" and is silent on exact Agent-Obs timing.
-  Downgraded inline to CONFIRMED-WITH-NUANCE — SDS is unambiguously a managed Datadog-platform-side scanner
-  (not a network-egress redactor), so the load-bearing conclusion is unaffected.
-
-**UNVERIFIED / OPEN (carried forward — agreed, not refuted):**
-- **Collector → LLM-Obs routing** of `gen_ai.*` via the contrib `datadog` exporter (inherited #28 Q7 seam).
 - Whether a Collector OTTL/redaction transform on `gen_ai.input.messages` / `witb.input.messages.original`
-  is preserved through the `datadog` exporter into Agent/LLM-Obs (the new open item from this re-run).
-- Exact rendered original-vs-sanitized trace-panel UI layout (no documented two-value diff widget).
-- "No org feature-flag / plan gate" — no gate found, but absence-of-evidence ≠ positive confirmation.
+  is preserved through the `datadog` exporter into Agent/LLM-Obs (not just the APM/Tempo copy); verify live.
+- Rendered original-vs-sanitized trace-panel layout (no documented two-value diff widget); verify live.
 
-**Net:** No load-bearing claim REFUTED. Part B's decisive findings (SDS applies to manual spans by content;
-SDS is platform-side, not a network-egress redactor; Datadog SDK span processors are SDK-only and absent on
-the OTLP path; Collector-side symmetric redaction remains the correct re-leak-trap path with SDS as the
-post-ingest backstop) are all CONFIRMED against current official sources. Two citation-accuracy fixes
-applied inline (Collector-phrase attribution; SDS "after ingest" → CONFIRMED-WITH-NUANCE).
+**Net:** no load-bearing claim was refuted across either pass. Fixes applied inline were accuracy-level: a
+non-verbatim PyPI quote (Q3), the `chat_completion` example value (Q5), the Collector-phrase attribution
+(B2), and the SDS "after ingest" nuance. The spike's central findings stand: the capture env var does not
+govern hand-written SDK spans; SDS scans manual spans by content but only platform-side; Datadog SDK span
+processors are not on the OTLP path; Collector-side symmetric redaction is the re-leak-trap mechanism with
+SDS as the post-ingest backstop.
