@@ -345,3 +345,111 @@ spec:
   timeout: 30s
   sseReadTimeout: 5m0s
   terminateOnClose: true
+---
+# ============================================================
+# Attendee console: web terminal (ttyd) + the split-console frontend.
+# The frontend serves console.html and path-routes /terminal/ -> ttyd, /chat/ -> chat-ui,
+# /a2a/ + /cost -> guard-proxy. It is the single attendee-facing Service (LB), fronted per-attendee
+# by the apex wildcard router (a-<id>.agenticburn.com).
+# ============================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: web-terminal
+---
+# Scoped terminal RBAC: read everything; write common workload kinds; exec/debug. NOT cluster-admin and
+# NOT RBAC/secret mutation. verify-at-build: tighten to the attendee's own namespaces if desired.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: console-terminal
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["", "apps", "batch", "networking.k8s.io"]
+    resources: ["*"]
+    verbs: ["create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/portforward", "pods/ephemeralcontainers"]
+    verbs: ["create", "get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: console-terminal
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: console-terminal }
+subjects:
+  - kind: ServiceAccount
+    name: web-terminal
+    namespace: agent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-terminal
+  labels: { app.kubernetes.io/name: web-terminal }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: web-terminal } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: web-terminal } }
+    spec:
+      serviceAccountName: web-terminal
+      automountServiceAccountToken: true # the shell's kubectl uses this token to reach the cluster API
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: ttyd
+          image: ghcr.io/peopleforrester/watch-it-burn:web-terminal # built from images/web-terminal/
+          ports: [{ name: ttyd, containerPort: 7681 }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 256Mi } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web-terminal
+spec:
+  selector: { app.kubernetes.io/name: web-terminal }
+  ports: [{ name: ttyd, port: 7681, targetPort: ttyd }]
+---
+# The console frontend: serves the split UI and reverse-proxies the three backends.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: console
+  labels: { app.kubernetes.io/name: console }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: console } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: console } }
+    spec:
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: nginx
+          image: nginxinc/nginx-unprivileged:1.27-alpine # verify-at-build: pin @sha256
+          ports: [{ name: http, containerPort: 8080 }]
+          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+          resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
+          volumeMounts:
+            - { name: web, mountPath: /usr/share/nginx/html, readOnly: true }
+            - { name: conf, mountPath: /etc/nginx/conf.d, readOnly: true }
+      volumes:
+        - name: web
+          configMap: { name: console-src }
+        - name: conf
+          configMap: { name: console-conf }
+---
+# The single attendee-facing entrypoint. LB-exposed; tagged so the ELB is ours in the shared account.
+apiVersion: v1
+kind: Service
+metadata:
+  name: console
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn"
+spec:
+  type: LoadBalancer
+  selector: { app.kubernetes.io/name: console }
+  ports: [{ name: http, port: 80, targetPort: http }]
