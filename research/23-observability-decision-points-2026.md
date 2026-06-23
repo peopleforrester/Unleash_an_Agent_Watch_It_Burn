@@ -202,52 +202,14 @@ verification cost on AL2023 nodes that must be paid before the event.
 
 ---
 
-## Decision 4: Optional TypeScript agent (spiny-orb instrumentation target)
+## Decision 4: TypeScript agent / spiny-orb — SUPERSEDED (2026-06-22)
 
-**Decision.** Keep the kagent Python agent as primary/fallback, and add an OPTIONAL TypeScript
-agent as a kagent BYO A2A backend so Whitney's `spiny-orb` (spinybacked-orbweaver) can instrument
-it. Sub-decisions: TS framework (Mastra vs Vercel AI SDK), which Weaver semconv registry, and how
-spiny-orb runs on stage (CLI / MCP / GitHub Action). Full detail in `research/16`.
-
-**Why a TS agent is a real requirement, not cosmetic.** `spiny-orb` instruments **JS/TS only**;
-it cannot instrument the Python kagent/ADK agent or the Python guard-proxy (`research/16`). So
-for Whitney to "hook spiny-orb in," there must be JS/TS code on stage for it to run against.
-
-**Options, pros/cons.**
-
-- **Framework: Mastra (recommended) vs Vercel AI SDK.**
-  - Mastra: built-in A2A (port 9000), MCP, Bedrock/Claude, and OTel instrumentation out of the
-    box (`research/16`) - the tightest fit to slot behind kagent's A2A path. Con: more
-    opinionated.
-  - Vercel AI SDK (`@ai-sdk/amazon-bedrock` + `@ai-sdk/mcp`, MCP stable in AI SDK 6): lighter,
-    broadest provider coverage, but needs a hand-written A2A adapter. Good fallback.
-- **Weaver semconv registry.** Ship a registry that includes the **OTel GenAI semantic
-  conventions** so `weaver registry live-check` validates `gen_ai.*` attributes
-  (`gen_ai.request.model`, `gen_ai.usage.input_tokens`, `gen_ai.operation.name`, etc.). NOTE
-  (`research/16`): typed-TS-attribute codegen from Weaver is NOT a confirmed Weaver target as of
-  mid-2026 (Go/Java/Markdown are); do not promise TS codegen on stage without verifying a JS
-  template. The solid, demoable Weaver fit is **CI live-check**, which is language-agnostic.
-- **How spiny-orb runs on stage.** CLI (`spiny-orb instrument src/`) is the most predictable
-  live; the MCP server (`npx spiny-orb mcp`) fits an "agent instruments an agent" framing; the
-  GitHub Action fits a GitOps/PR narrative but is slower live.
-
-**Recommendation.** Add the **optional TS agent as a `type: BYO` kagent A2A backend** using
-**Mastra** (Vercel AI SDK as fallback), keeping agentgateway + MCP allowlist + HITL + LLM Guard
-in front of it (smallest blast radius, Option B in `research/16`). Ship a `spiny-orb.yaml`, a
-GenAI-inclusive Weaver registry, and an OTel SDK init file in the TS component so
-`spiny-orb instrument` works out of the box and its generated spans flow through the existing
-Collector to Datadog (and Tempo). Run spiny-orb via **CLI** on stage; keep the MCP-server framing
-as the "look, an agent instrumenting an agent" flourish if time allows. Position Weaver as
-**CI live-check validation**, not TS codegen.
-
-Two gating live verifications before relying on this on stage (`research/16`): (1) a BYO TS agent
-does NOT emit `adk_usage_metadata`, so either it populates that key itself or the guard-proxy is
-taught the TS agent's usage key (else `witb_cost_usd` breaks); (2) confirm `requireApproval` HITL
-and the agentgateway MCP `toolNames` allowlist still apply to a `type: BYO` agent.
-
-**Reversible?** Reversible - the TS agent is additive and optional; the Python kagent agent
-remains primary/fallback. The one-way-ish risk is the cost-counter usage-key wiring, which must
-be resolved before the TS path is demoed.
+**Status: Closed — not happening.** The TypeScript rewrite of guard-proxy is not happening. All
+Python apps (guard-proxy, evil-mcp-shim, customer-stream generator) stay Python. Spiny-orb
+instruments JS/TS only and has no path into this stack. AI layer OTel instrumentation will use
+the Python OTel SDK directly, or rely on kagent's built-in OTel tracing and agentgateway's
+built-in OTel output. The Mastra/Vercel AI SDK framework analysis and spiny-orb run-mode
+options in this section are no longer relevant.
 
 ---
 

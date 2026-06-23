@@ -256,8 +256,7 @@ KubeArmor's status in the stack is tracked separately.
 
 2. **KubeArmor attack vector:** See options above.
 
-3. **TypeScript rewrite scope:** Does Michael's rewrite include `evil-mcp-shim/server.py` and
-   the customer-stream generator? If those stay Python, they need Python OTel SDK wiring or defer.
+3. **TypeScript rewrite scope — resolved (2026-06-22):** Rewrite is NOT happening. All Python apps (guard-proxy, evil-mcp-shim, customer-stream generator) stay Python. AI layer OTel instrumentation uses the Python OTel SDK directly, or relies on kagent/agentgateway built-in OTel output.
 
 4. **Attendee Datadog accounts at scale:** 60–70 per-attendee orgs at workshop scale. How do
    API keys get provisioned into per-attendee clusters automatically?

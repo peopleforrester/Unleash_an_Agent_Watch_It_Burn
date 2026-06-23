@@ -13,3 +13,6 @@ __pycache__/
 # Local scratch
 /tmp/
 *.b64
+
+# Override global gitignore — prds/ is tracked in this repo
+!prds/
