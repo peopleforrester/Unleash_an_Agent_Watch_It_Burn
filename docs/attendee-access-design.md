@@ -141,9 +141,10 @@ railway/
 ```
 
 Each subfolder is self-contained (Dockerfile + `railway.json` + README) and linked to its own Railway
-service from its own directory. The existing `tech-walkthrough/` would move to `railway/walkthrough/`
-(re-link required; the deployed service itself is unaffected). `walkthrough.agenticburn.com` is a
-specific record and keeps winning over the new wildcard, so the two coexist.
+service from its own directory. `tech-walkthrough/` has been moved to `railway/walkthrough/` and
+re-linked (the deployed service was unaffected; still serving). `railway/apex/` is the new service.
+`walkthrough.agenticburn.com` is a specific record and keeps winning over the new wildcard, so the two
+coexist.
 
 ### Per-cluster web/chat wiring (this is "wired up for EACH cluster")
 
