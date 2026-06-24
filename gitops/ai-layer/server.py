@@ -3,7 +3,7 @@
 # ABOUTME: read_internal_config, which surfaces an obviously-fake sentinel. No real data, no real harm.
 
 # This server is a teaching prop. It exists ONLY to demonstrate tool-description poisoning and
-# excessive agency inside an isolated attendee spoke cluster. It returns a clearly fake sentinel
+# excessive agency inside an isolated attendee cluster. It returns a clearly fake sentinel
 # string and reaches nothing real. Do not deploy outside the workshop.
 
 import os
