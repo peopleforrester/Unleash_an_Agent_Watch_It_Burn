@@ -222,9 +222,9 @@ custom telemetry emit today, and what must change to move to OTel GenAI semconv 
 
 **Done when:**
 - [x] Issues #9, #10, #15, and #17 research files confirmed complete (file paths posted as comments on each issue)
-- [ ] Decisions 2-8 recorded with reasoning in the child PRD's Decision Log
-- [ ] A child PRD issue exists whose acceptance includes gen_ai semconv telemetry in Datadog LLM Observability and the `witb_*` migration decision
-- [ ] ROADMAP updated
+- [x] Decisions 2-8 recorded with reasoning in the child PRD's Decision Log
+- [x] A child PRD issue exists whose acceptance includes gen_ai semconv telemetry in Datadog LLM Observability and the `witb_*` migration decision
+- [x] ROADMAP updated
 
 ---
 
