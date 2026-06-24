@@ -13,7 +13,7 @@ apiVersion: kagent.dev/v1alpha2
 kind: Agent
 metadata:
   name: workshop-agent
-  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+  namespace: ATTENDEE_NAMESPACE # attendee agent namespace (independent per-attendee cluster)
 spec:
   declarative:
     modelConfig: bedrock-claude

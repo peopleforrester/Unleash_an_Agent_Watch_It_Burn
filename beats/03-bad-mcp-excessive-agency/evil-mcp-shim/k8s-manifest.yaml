@@ -1,5 +1,5 @@
 # ABOUTME: Deployment + Service for the SYNTHETIC Beat-3 "bad" MCP server (evil-mcp-shim).
-# ABOUTME: Teaching prop only — clearly labeled synthetic; runs in the attendee's isolated spoke cluster.
+# ABOUTME: Teaching prop only — clearly labeled synthetic; runs in the attendee's isolated cluster.
 ---
 apiVersion: apps/v1
 kind: Deployment

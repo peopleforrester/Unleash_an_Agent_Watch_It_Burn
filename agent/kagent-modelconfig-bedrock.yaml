@@ -10,7 +10,7 @@ apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:
   name: bedrock-claude
-  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+  namespace: ATTENDEE_NAMESPACE # attendee agent namespace (independent per-attendee cluster)
 spec:
   provider: Bedrock
   # NON-CANONICAL copy. The source of truth is gitops/ai-layer/resources.yaml (GitOps canonical).

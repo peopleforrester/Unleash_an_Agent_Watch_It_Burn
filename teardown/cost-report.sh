@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: Queries AWS Cost Explorer for the real workshop spend across the hub + spoke EKS clusters
+# ABOUTME: Queries AWS Cost Explorer for the real workshop spend across the workshop EKS clusters
 # ABOUTME: over the run window and prints the actual dollar number - never estimated or hardcoded.
 #
 # Reports the REAL AWS cost for the workshop run for Accenture expensing (BUILD-SPEC Phase 9).
@@ -22,7 +22,7 @@ usage() {
 Usage: cost-report.sh --start YYYY-MM-DD --end YYYY-MM-DD [options]
 
 Prints the REAL AWS cost (from Cost Explorer) for the workshop run window, summed across the
-hub + spoke EKS clusters identified by a cost-allocation tag. The number is queried live, never
+workshop EKS clusters identified by a cost-allocation tag. The number is queried live, never
 estimated or hardcoded.
 
 Required:

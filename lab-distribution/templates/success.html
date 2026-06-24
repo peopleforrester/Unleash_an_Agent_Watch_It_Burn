@@ -1,8 +1,8 @@
 {% extends "_base.html" %}
 
-{% block title %}Cluster Assigned - {{ cluster_name }}{% endblock %}
-{% block page_title %}Cluster Assigned{% endblock %}
-{% block meta_description %}Your Watch It Burn workshop cluster credentials.{% endblock %}
+{% block title %}Your access - {{ cluster_name }}{% endblock %}
+{% block page_title %}Your workshop access{% endblock %}
+{% block meta_description %}Your Watch It Burn workshop console, Datadog, and cluster credentials.{% endblock %}
 
 {% block main %}
   <section class="card" style="margin-bottom:24px;">
@@ -11,56 +11,77 @@
     <div style="font-size:15px;color:var(--navy);">Region: <strong>{{ region }}</strong></div>
   </section>
 
-  <h2 style="margin-top:24px;">AWS Credentials</h2>
+  {% if console_url %}
+  <h2 style="margin-top:24px;">1 &middot; Open your console</h2>
+  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 10px;">
+    This is where the workshop happens: chat to your agent and an in-browser terminal, side by side.
+  </p>
+  <a href="{{ console_url }}" target="_blank" rel="noopener"
+     style="display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:12px 22px;border-radius:6px;">
+    Open your console &rarr;
+  </a>
+  {% endif %}
+
+  {% if datadog_dashboard_url %}
+  <h2 style="margin-top:28px;">2 &middot; Your Datadog</h2>
+  <a href="{{ datadog_dashboard_url }}" target="_blank" rel="noopener"
+     style="display:inline-block;background:var(--navy);color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:10px 18px;border-radius:6px;margin-bottom:10px;">
+    Open your Datadog dashboard &rarr;
+  </a>
+  <div class="copy-row">
+    <span class="key-label">Datadog login</span>
+    <code id="dde">{{ datadog_email }}</code>
+    <button type="button" class="copy-btn" onclick="copyText('dde', this, 'Datadog email')" aria-label="Copy Datadog email">copy</button>
+  </div>
+  <div class="copy-row">
+    <span class="key-label">Datadog password</span>
+    <code id="ddp">{{ datadog_password }}</code>
+    <button type="button" class="copy-btn" onclick="copyText('ddp', this, 'Datadog password')" aria-label="Copy Datadog password">copy</button>
+  </div>
+  <div class="copy-row">
+    <span class="key-label">API key</span>
+    <code id="ddapi">{{ datadog_api_key }}</code>
+    <button type="button" class="copy-btn" onclick="copyText('ddapi', this, 'Datadog API key')" aria-label="Copy Datadog API key">copy</button>
+  </div>
+  <div class="copy-row">
+    <span class="key-label">APP key</span>
+    <code id="ddapp">{{ datadog_app_key }}</code>
+    <button type="button" class="copy-btn" onclick="copyText('ddapp', this, 'Datadog APP key')" aria-label="Copy Datadog APP key">copy</button>
+  </div>
+  <p style="color:var(--mid-gray);font-size:13px;margin-top:6px;">Datadog site: <strong>{{ datadog_site }}</strong>. The API/APP keys are for your cluster's Datadog Agent; the login is to view your org.</p>
+  {% endif %}
+
+  <h2 style="margin-top:28px;">3 &middot; AWS keys <span style="font-weight:400;color:var(--light-gray);font-size:14px;">(only for the terminal / kubectl path)</span></h2>
   <div class="copy-row">
     <span class="key-label">Access key</span>
     <code id="ak">{{ access_key }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('ak', this, 'access key')"
-            aria-label="Copy access key">copy</button>
+    <button type="button" class="copy-btn" onclick="copyText('ak', this, 'access key')" aria-label="Copy access key">copy</button>
   </div>
   <div class="copy-row">
     <span class="key-label">Secret key</span>
     <code id="sk">{{ secret_key }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('sk', this, 'secret key')"
-            aria-label="Copy secret key">copy</button>
+    <button type="button" class="copy-btn" onclick="copyText('sk', this, 'secret key')" aria-label="Copy secret key">copy</button>
   </div>
 
-  <h2 style="margin-top:28px;">Setup commands</h2>
-  <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'setup commands')" aria-label="Copy setup commands">copy</button>aws configure                                  # paste keys above; region {{ region }}
+  <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'setup commands')" aria-label="Copy setup commands">copy</button>aws configure                                  # paste the AWS keys above; region {{ region }}
 aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }}
-kubectl get nodes                              # expect 3 Ready  (EKS)
-git clone https://github.com/peopleforrester/KCD_Texas_2026_Workshop.git
-cd KCD_Texas_2026_Workshop
-claude</pre>
+kubectl get nodes                              # confirm your cluster is up</pre>
 
   <div class="callout">
-    <strong style="font-style:normal;color:var(--navy);">When Claude starts,</strong>
-    paste the prompt at the top of <code style="font-style:normal;">spec/BUILD-SPEC.md</code>
-    (the &ldquo;How Claude executes this spec&rdquo; block). Claude creates the workshop namespaces
-    during Phase 2 &mdash; do not pre-create anything.
+    <strong style="font-style:normal;color:var(--navy);">Most of the workshop is in the console</strong>
+    &mdash; drive the agent from the chat tab and use the terminal tab for <code style="font-style:normal;">kubectl</code>.
+    The AWS keys above are only for the optional local-<code style="font-style:normal;">kubectl</code> fallback.
   </div>
 
-  <p style="color:var(--mid-gray);font-size:13px;margin-top:24px;">
-    If <code>kubectl get nodes</code> shows fewer than 3 Ready nodes, raise your hand during
-    the setup window for a spare cluster.
-  </p>
-
-  {% if other_path %}
-    <p style="margin-top:18px;font-size:13px;color:var(--light-gray);font-style:italic;">
-      You also have a {{ other_path.label }} record from {{ other_path.at }} UTC.
-      We&rsquo;ve kept both &mdash; pick whichever path you want to use.
-    </p>
-  {% endif %}
-
-  <p style="color:var(--light-gray);font-size:13px;font-style:italic;margin-top:8px;">
+  <p style="color:var(--light-gray);font-size:13px;font-style:italic;margin-top:18px;">
     Lost this page? Re-enter your email
     <a href="{{ url_for('index') }}" style="color:var(--accent);">on the home page</a>
-    to redisplay your credentials &mdash; or check the email we sent you.
+    to redisplay your access &mdash; or check the email we sent you.
   </p>
 {% endblock %}
 
 {% block footer_hint %}
-  <div class="small">Lost your credentials? Re-enter your email on the home page to redisplay them.</div>
+  <div class="small">Lost your access? Re-enter your email on the home page to redisplay it.</div>
 {% endblock %}
 
 {% block scripts %}
