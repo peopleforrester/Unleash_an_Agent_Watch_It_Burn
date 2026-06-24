@@ -3,6 +3,22 @@
 
 # 33. OTel SDK Delivery Strategy for the Full Cluster Stack (issue #15)
 
+---
+
+## ⚠ CORRECTIONS (2026-06-24) — Read before using any conclusion below
+
+The primary conclusion of this spike ("Do NOT deploy the OTel Operator") was overridden in the
+meta-PRD #7 Decision Log (2026-06-24). The spike's component-level research (which components have
+bundled OTel, which need SDK injection, the `http.server` SERVER-span limitation, grpcio image
+bloat) remains valid and is relied on in M2 and M3.
+
+| Overridden conclusion | Correct decision | Where decided |
+|---|---|---|
+| **Do NOT deploy the OTel Operator** | **Deploy the OTel Operator.** cert-manager is already in the stack, removing the spike's primary "new dependency" objection. The stack has 2-4 apps requiring Python/Node.js SDK injection (guard-proxy M3, customer-stream generator when built, Backstage/Node.js future). The alternative — baking grpcio (~20MB compiled C extension) into custom images — bloats images unacceptably (confirmed from Whitney's firsthand experience). The Operator init-container injects the SDK without touching the image. | meta-PRD #7 Decision Log 2026-06-24 |
+| **Custom app pattern: OTel SDK in custom image** | **OTel API (no-op, ~100KB) in image; Operator injects full SDK + exporter at pod startup via init-container + shared volume + PYTHONPATH; manual spans use the API; OTel semantic conventions for all attribute names.** The spike's finding that auto-instrumentation cannot produce a SERVER span for `proxy.py`'s stdlib `http.server` is still valid — the Operator handles SDK delivery, manual span code handles span creation; these are independent. | meta-PRD #7 Decision Log 2026-06-24 |
+
+---
+
 **Date:** 2026-06-23
 
 ## Verification Method
