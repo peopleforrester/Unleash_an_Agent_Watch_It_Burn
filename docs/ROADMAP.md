@@ -14,7 +14,7 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 
 1. MVP: OTel Collector + Datadog connected, UST wired on AI-layer components ([PRD #13](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/13)) — proves Datadog works; locks cross-cutting decisions (collector shape, UST vocabulary, account model)
 2. Migrate to OTel GenAI semconv — replace Michael's custom witb_*/tier conventions with gen_ai.* in Datadog LLM Observability ([PRD #20](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/20))
-3. Security-beat traces — before/after sanitization (re-leak trap) + rogue MCP tool chain
+3. Security-beat traces — before/after sanitization (re-leak trap) + rogue MCP tool chain ([PRD #22](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/22))
 4. Falco alerts in Datadog — runtime detection visible
 5. EKS infra & named integrations — Agent DaemonSet, per-component synthesis (issue #11)
 6. UST, Service Map & correlation — full-fidelity tagging, Service Map view, log/trace/metric pivots
