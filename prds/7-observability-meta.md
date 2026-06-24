@@ -188,6 +188,7 @@ A scoping search on 2026-06-22 found (the full spike in issues #9, #10, and #15 
 - The MVP child PRD + its Decision Log (Milestone 1) — **gates this milestone**
 - `research/05-otel-genai-observability.md`, `research/06-cncf-stack.md`, `research/14-verify-at-build-sweep-2026.md`, `research/23-…`
 - Codebase: `agent/gateway/guard-proxy/proxy.py` (the custom `witb_*` conventions to migrate; currently NO OTel), `agent/gateway/agentgateway.yaml`, `gitops/ai-layer/resources.yaml`, the kagent Helm values; `beats/` directories that depend on the trace waterfall
+- **Issue #18** — pre-drafted instrumentation spec for evil-mcp-shim (OTel API in Dockerfile, manual `execute_tool` spans with `gen_ai.*` attributes). The app-level code is fully specified; the M2 child PRD should include this issue as an implementation work item.
 - **Issue #17** — Datadog LLM Observability activation requirements (org flags, DatadogAgent CR keys, minimum span shape) and APM path confirmation with `spec.features.apm.enabled: false`; must be complete before this milestone proceeds
 
 **Step 1 — Problem (write 3-5 sentences):** Which demo beats need the gen_ai waterfall, what does Michael's
@@ -234,6 +235,7 @@ visible in the UI.
 - The gen_ai-semconv-migration child PRD + its Decision Log (Milestone 2) — **gates this milestone**
 - `research/05-otel-genai-observability.md` (re-leak trap design), `research/12-mechanism-verification-2026.md` (collector-side symmetric redaction), `research/04-mcp-security.md`
 - Codebase: `agent/gateway/guard-proxy/` (sanitization logic, before/after text held in memory) — **guard-proxy is custom software; proxy.py is directly modifiable**, `beats/03-bad-mcp-excessive-agency/` and its `evil-mcp-shim/server.py`
+- **Issue #19** — pre-drafted instrumentation spec for guard-proxy (try/except import guard, manual HTTP SERVER span, sanitization child span with redacted before/after). The app-level code is fully specified; the M3 child PRD should include this issue as an implementation work item.
 - **OTel SDK delivery mechanism is already decided in M2 (issue #15 research + M2 Decision 2)** — read the M2 child PRD's Decision Log for the chosen mechanism (OTel Operator vs. per-component). M3 inherits it for guard-proxy; do not re-decide.
 
 **Step 1 — Problem (write 3-5 sentences):** What must a trace show to land the re-leak trap and the
