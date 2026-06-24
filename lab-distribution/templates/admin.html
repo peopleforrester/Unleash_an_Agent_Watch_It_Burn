@@ -4,24 +4,7 @@
 {% block page_title %}Admin{% endblock %}
 
 {% block main %}
-  <h2>Combined attendance</h2>
-
-  <section class="stats">
-    <div class="stat">
-      <div class="label">Combined attendees</div>
-      <div class="value">{{ combined }}</div>
-    </div>
-    <div class="stat">
-      <div class="label">Browser share</div>
-      <div class="value" style="color:var(--navy);">{{ browser_pct }}%</div>
-    </div>
-    <div class="stat">
-      <div class="label">EKS share</div>
-      <div class="value" style="color:var(--accent);">{{ eks_pct }}%</div>
-    </div>
-  </section>
-
-  <h2 style="margin-top:24px;">EKS cluster pool</h2>
+  <h2>Cluster pool</h2>
   <section class="stats">
     <div class="stat">
       <div class="label">Total</div>
@@ -37,15 +20,7 @@
     </div>
   </section>
 
-  <h2 style="margin-top:24px;">Browser path (KodeKloud)</h2>
-  <section class="stats" style="grid-template-columns: 1fr;">
-    <div class="stat">
-      <div class="label">Browser claims</div>
-      <div class="value" style="color:var(--navy);">{{ browser_count }}</div>
-    </div>
-  </section>
-
-  <h2 style="margin-top:24px;">Last 10 EKS claims</h2>
+  <h2 style="margin-top:24px;">Last 10 claims</h2>
   {% if recent %}
     <table class="admin">
       <thead>
@@ -68,28 +43,10 @@
       </tbody>
     </table>
   {% else %}
-    <p style="color:var(--light-gray);">No EKS claims yet.</p>
+    <p style="color:var(--light-gray);">No claims yet.</p>
   {% endif %}
 
-  <h2 style="margin-top:24px;">Last 10 browser claims</h2>
-  {% if browser_recent %}
-    <table class="admin">
-      <thead>
-        <tr>
-          <th>Email</th>
-          <th>Claimed at (UTC)</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for r in browser_recent %}
-          <tr>
-            <td>{{ r["email"] }}</td>
-            <td style="color:var(--light-gray);">{{ r["claimed_at"] }}</td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    <p style="color:var(--light-gray);">No browser claims yet.</p>
-  {% endif %}
+  <p style="color:var(--light-gray);font-size:13px;margin-top:18px;">
+    Full export (incl. console URL + Datadog org): <code>/admin/export?token=…</code>
+  </p>
 {% endblock %}
