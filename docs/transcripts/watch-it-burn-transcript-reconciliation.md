@@ -10,8 +10,10 @@
 `docs/STACK-WALKTHROUGH.md`) and the built repo.
 
 **Bottom line:** most items are handled. The transcript's biggest flagged divergence (round-to-defense
-mapping) is already the canonical model. Five items remain genuinely open, and all five are ops or
-delivery calls for Michael/Whitney, not build gaps. The two source docs can be archived once those close.
+mapping) is already the canonical model. After Michael's 2026-06-24 decisions (teardown = manual trigger;
+count = 60; 1Password = done), two needed tasks remain: (1) AUTO-wire a Datadog account into provisioning
+(manual rejected) and decide its owner, and (2) build and integrate ALL run-of-show beats per the
+transcript (not confirm-only). The two source docs can be archived once those two close.
 
 ---
 
@@ -34,23 +36,34 @@ delivery calls for Michael/Whitney, not build gaps. The two source docs can be a
 | Item | Status | Evidence / resolution |
 |---|---|---|
 | **§1 Credential distribution** | **BUILT** | `lab-distribution/` v2: Railway app, email-keyed, hands each attendee console URL + Datadog + AWS creds, idempotent re-retrieve by email. Deployed live at `provisioning.agenticburn.com`. Sample keys resolved (Tara's `generate_accounts_csv.sh` + Whitney's keys; `scripts/merge_pool.py`). |
-| **§1 ~40-minute auto-teardown** | **OPEN (verify/wire)** | Cluster teardown is currently the Terraform fleet (`teardown/teardown.sh`, prefix-scoped, scripted), not a 40-minute auto-expiry tied to credential issue. Confirm whether the ~40-min auto-teardown is required for the run or whether scripted teardown at the end suffices. (Separately: the Datadog trial orgs expire ~14 days, a different clock.) |
-| **§1 attendee count 60 vs 70** | **OPEN (Michael's call)** | Fleet model supports it (EKS cluster quota 100; EC2 vCPU quota is the real limit, increase requested). Pick the exact count. |
-| **§2 one Datadog account wired into provisioning** | **OPEN (real remaining technical item)** | The install method is decided (Datadog Operator; `research/32`, `research/34`) and creds are distributed to attendees (`merge_pool.py`). What is NOT yet wired: the provisioning process auto-injecting a working Datadog API key as a per-cluster secret so the Datadog Agent reports without manual steps. This is the gating test. Manual injection into one cluster is the acceptable interim. |
+| **§1 teardown** | **SETTLED (2026-06-24): manual trigger** | No 40-minute auto-expiry timer. Teardown is `teardown/teardown.sh` (prefix-scoped, brings the fleet to $0), run manually by Michael (typically at the end of the run). The transcript's "~40 min auto-teardown" idea is dropped. Implication: leaked attendee creds live until manual teardown, so if blast-radius matters, mitigate via short IAM session lifetimes, not cluster auto-destroy. |
+| **§1 attendee count** | **SETTLED (2026-06-24): 60** | Count is indeterminate, so plan for 60. Fleet model supports it (EKS cluster quota 100; EC2 vCPU quota is the real limit, increase requested). |
+| **§2 one Datadog account auto-wired into provisioning** | **OPEN — REQUIRED, must auto-wire (manual interim REJECTED by Michael 2026-06-24)** | The install method is decided (Datadog Operator; `research/32`, `research/34`) and creds are distributed to attendees (`merge_pool.py`). NOT yet wired: the provisioning process auto-injecting a working Datadog API key as a per-cluster `datadog-secret` so the Datadog Agent reports with zero manual steps. Manual-into-one-cluster is NOT acceptable; spawning the fleet must "just work." Key design fork to resolve first: does each cluster report to (a) the attendee's own trial org from the pool row, (b) a single shared org Whitney watches for full visibility, or (c) both? Mechanism options: Terraform var -> k8s Secret in the cluster module; or ESO pulling the key from AWS Secrets Manager (matches the existing ESO + Pod Identity pattern); or the fleet driver seeding it per cluster from `pool.csv`. See "needed tasks" below. |
 | **§2 owner (Datadog-into-provisioning)** | **OPEN** | Decide Michael vs Whitney for getting the account into provisioning vs pointing Datadog. |
-| **§3 1Password sharing** | **OPEN (Michael, external)** | Not in repo. Michael to stand up the shared 1Password and notify. (Repo-side: clusters get the credential as a Secret via the ESO path.) |
+| **§3 1Password sharing** | **DONE (2026-06-24)** | Shared 1Password is set up. Repo-side, clusters get the credential as a Secret via the ESO path. |
 | **§4 Apex/Relay deploy + DNS + terminal console** | **DONE** | `agenticburn.com` apex landing live; the "Relay" = the apex Caddy wildcard router (`railway/apex/`); Namecheap DNS set; `walkthrough.agenticburn.com` and `provisioning.agenticburn.com` live (HTTP 200). Terminal console (ttyd web-terminal + `console.html`) built (`gitops/ai-layer/`, `images/web-terminal/`). |
 | **§5 research-spike orchestration** | **DONE / ongoing** | Exactly the executed process: spikes researched with multi-agent validation, written to `research/`, linked back to the issues (e.g. `research/28-34`, issues #9-17). Continues as Whitney files new spikes. |
 
 ---
 
-## Still genuinely open (all ops/delivery calls, not build gaps)
+## Needed tasks (post-2026-06-24 decisions)
 
-1. **Datadog account auto-wired into cluster provisioning** + decide the owner (§2). The one real technical item.
-2. **~40-minute auto-teardown** vs scripted end-of-run teardown: confirm requirement and wire if needed (§1).
-3. **Attendee count: 60 or 70** (§1): Michael's call.
-4. **Shared 1Password** stood up by Michael (§3).
-5. **Confirm the delivery beats** (no build needed): fork-bomb placement on C1 (E), the C1 shared-cluster abrupt-end (G), streaming in/out for the live run (F), and the **BFO** glossary term.
+Settled and removed from the open list: teardown (manual trigger), attendee count (60), 1Password (done).
+
+1. **Datadog account AUTO-wired into cluster provisioning** + decide the owner (§2). REQUIRED; manual
+   injection is explicitly NOT an acceptable interim. Resolve the org fork (attendee trial org vs shared
+   org vs both), then build the auto-injection (Terraform-var -> Secret, ESO from AWS Secrets Manager, or
+   fleet-driver seeding from `pool.csv`) so spawning the fleet wires Datadog with zero manual steps.
+2. **Build and integrate ALL run-of-show beats** (Michael 2026-06-24: not confirm-only; build them all,
+   per the transcript). Audit every beat against the runbook + slides and ensure each is built and placed:
+   - Challenge 1 customer-data exfil to S3 (NetworkPolicy default-deny egress + Istio ambient mTLS) — built; confirm both paths are demoed in the runbook.
+   - Challenge 2 malicious deploy (Kyverno Harbor-only + signing/attestation) — built; the in-Harbor bypass as the optional motivator.
+   - Challenge 3 Easter-egg secret grep — built; placed in the round.
+   - Challenge 4 fork bomb on Cluster 1 (PID-limit prevents, Falco/Talon detects) — built/validated; lock placement in the runbook.
+   - Cluster-1 shared abrupt-end ending beat — wire as the explicit C1 climax.
+   - Front-of-room streaming display (moderated, default-OFF) — built; decide on/off for the live run and wire the cue.
+   - Prompt library / interface (clickable inject, instructor-vs-attendee views, dropdown per round) — confirm built and placed.
+   - **BFO** glossary term — still unresolved; confirm what it referred to.
 
 ## Archiving
 
