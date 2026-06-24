@@ -55,19 +55,24 @@ Settled and removed from the open list: teardown (manual trigger), attendee coun
    injection stays rejected as the end state. Our half is done (`datadog-secret` consumers + ESO + Pod
    Identity substrate). Action for us: flag the seam to Whitney (her M8 ESO `ExternalSecret` should read the
    master store our fleet provisions in AWS Secrets Manager), then wait for her M8 child PRD.
-2. **Build and integrate ALL run-of-show beats** (Michael 2026-06-24: not confirm-only; build them all,
-   per the transcript). Audit every beat against the runbook + slides and ensure each is built and placed:
-   - Challenge 1 customer-data exfil to S3 (NetworkPolicy default-deny egress + Istio ambient mTLS). Built; confirm both paths are demoed in the runbook.
-   - Challenge 2 malicious deploy (Kyverno Harbor-only + signing/attestation). Built; the in-Harbor bypass as the optional motivator.
-   - Challenge 3 Easter-egg secret grep. Built; placed in the round.
-   - Challenge 4 fork bomb on Cluster 1 (PID-limit prevents, Falco/Talon detects). Built/validated; lock placement in the runbook.
-   - Cluster-1 shared abrupt-end ending beat. Wire as the explicit C1 climax.
-   - Front-of-room streaming display (moderated, default-OFF). Built; decide on/off for the live run and wire the cue.
-   - Prompt library / interface (clickable inject, instructor-vs-attendee views, dropdown per round). Confirm built and placed.
+2. **Build and integrate ALL Rounds + Challenges into the run of show** (Michael 2026-06-24: not
+   confirm-only; build them all, per the transcript). Rounds are the cluster phases; Challenges are the
+   attacks that recur across rounds with different defenses. Build/placement status:
+   - **Challenge 1 (customer-data exfil to S3):** NetworkPolicy default-deny egress + Istio ambient mTLS. Substrate built (`verify/test_egress.py`, `customer-stream` exfil target, Istio in stack). GAP: package as a Round 1/2/3 Challenge with attack prompt + defense demo.
+   - **Challenge 2 (deploy a malicious app):** Kyverno Harbor-only + signing/attestation. Built (`beats/01-cncf-wall/`). In-Harbor bypass as the optional motivator.
+   - **Challenge 3 (Easter-egg secret grep):** planted secret + agent fetch. Partial (`plant-fake-secret.yaml` exists). GAP: package as its own Challenge.
+   - **Challenge 4 (fork bomb, Round 1 kill):** PID-limit prevents + Falco/Talon detects. Defense built/validated (`verify/test_forkbomb_defense.py`). GAP: package the attack/Challenge + lock its Round 1 placement.
+   - **Round 1 abrupt-end:** wire the shared-Cluster-1 kill as the explicit climax.
+   - **Front-of-room streaming display** (moderated, default-OFF): built (`gitops/ai-layer/web/display.*`); decide on/off for the live run + wire the cue.
+   - **Prompt library / interface** (clickable inject, instructor-vs-attendee views, dropdown per round): chat-UI built (`web/index.html`, `app.js`); confirm the per-round dropdown + instructor/attendee split.
    - **BFO** glossary term: still unresolved; confirm what it referred to.
+   - **Round-1 enablement model decision (GATING):** Round 2/3 already follow same-install (`app-of-apps.yaml`) / different-enablement (Kyverno Audit->Enforce, guard-proxy INPUT/OUTPUT, mcp-authz toggles). Round 1 is the exception: a stripped `app-of-apps-burn.yaml`. Decide: keep Round 1 stripped, or move it to the full install with guardrails disabled (Michael's "same install, change what's enabled" steer). This gates how the Challenges are packaged across rounds.
+3. **Terminology realignment: `beats` -> Rounds + Challenges** (Michael 2026-06-24). Adopt "Round N, Challenge M" everywhere. Rename `beats/` and update references in `verify/`, `facilitation/`, `docs/`, and tests. Mechanical and wide; do as a tracked rename, not blind.
+4. **reveal.js Rounds + run-of-show walkthrough deck** (Michael 2026-06-24): a deck that walks the three rounds and their challenges so Michael + Whitney can align and react. Distinct from the existing delivery `railway/walkthrough/` deck; this one is for round-by-round review. Add to the deploy set.
+5. **Status comms to Whitney after each build set** (Michael 2026-06-24): when a build set completes, post a status summary so Whitney is aware of everything done (GitHub issue comment / her preferred channel).
 
 ## Archiving
 
-Both source docs carry a "CAPTURED RECONCILIATION REFERENCE" banner pointing here. When items 1-5 above
-close, move all three files to `docs/transcripts/archive/` (or mark them `[ARCHIVED]` in their banners).
+Both source docs carry a "CAPTURED RECONCILIATION REFERENCE" banner pointing here. When the needed tasks
+above close, move all three files to `docs/transcripts/archive/` (or mark them `[ARCHIVED]` in their banners).
 Until then they stay as the live reconciliation trail.
