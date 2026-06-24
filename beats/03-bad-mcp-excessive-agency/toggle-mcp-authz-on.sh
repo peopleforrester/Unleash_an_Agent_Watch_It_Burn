@@ -7,9 +7,15 @@ set -euo pipefail
 CONTEXT="${CONTEXT:?set CONTEXT to the target kube-context}"
 KCTL=(kubectl --context "${CONTEXT}")
 
-# The gateway config files (mcp-authz-on.yaml / mcp-authz-off.yaml) are authored by another agent
-# and live under agent/gateway/. This toggle only applies them. ON = CEL Deny over mcp.tool.name
-# for read_internal_config (+ targets allowlist); OFF = no tool-authz rule (the "before" state).
+# The gateway config files (mcp-authz-on.yaml / mcp-authz-off.yaml) live under agent/gateway/ and
+# overlay the agentgateway-config ConfigMap. This toggle only applies them. ON = CEL Deny over
+# mcp.tool.name for read_internal_config (+ targets allowlist); OFF = no tool-authz rule ("before").
+#
+# CANONICAL agentgateway is gitops/ai-layer/agentgateway.yaml (single fixed `agent` namespace). The
+# overlay manifests are ATTENDEE_NAMESPACE templates and rewrite the WHOLE config.yaml, so they must
+# (1) resolve ATTENDEE_NAMESPACE to the deployed namespace before apply and (2) carry the full
+# canonical config (tracing + promptGuard) or they regress those. See the RECONCILIATION headers in
+# the manifests; both reconciliations gate on the beat-3 mcpAuthorization-enforcement SPIKE.
 
 STATE="on"
 MANIFEST="agent/gateway/mcp-authz-on.yaml"
