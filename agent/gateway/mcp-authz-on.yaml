@@ -21,6 +21,16 @@
 # verify-at-build: the doc schema nests mcpAuthorization under mcp.policies.mcpAuthorization (and
 #   targets under mcp.targets[]). Re-verify the exact mcp.{targets,policies} nesting against the
 #   v1.3.0 standalone config schema at build (research/14 §2c).
+#
+# RECONCILIATION (agentgateway is now canonical in gitops/ai-layer/agentgateway.yaml):
+#   - This overlay rewrites the WHOLE agentgateway-config config.yaml. The canonical deployed config
+#     also carries a `tracing:` block (research/29) and a request promptGuard webhook (input guard).
+#     COMPLETENESS TRAP: applying this toggle as-written drops both. Before beat-3 LIVE, reconcile the
+#     config.yaml body here against gitops/ai-layer/agentgateway.yaml so the toggle carries the full
+#     canonical config (tracing + promptGuard) and only flips the mcpAuthorization rules.
+#   - Namespace: the gitops deploy model resolves to the fixed `agent` namespace (kustomization),
+#     NOT the per-attendee ATTENDEE_NAMESPACE template below. The provisioner substitutes
+#     ATTENDEE_NAMESPACE -> the live namespace (`agent` for the gitops model) before apply.
 ---
 apiVersion: v1
 kind: ConfigMap
