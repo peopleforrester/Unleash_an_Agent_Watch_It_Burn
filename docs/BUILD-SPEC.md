@@ -259,7 +259,8 @@ Existing tree stands (`platform/`, `agent/` incl. `agent/gateway/guard-proxy/`, 
 ```
   infra/burn-clusters/        # Cluster 1/2 MODEL README (same Terraform cluster module, different gitops profile)
   cost/                       # live Bedrock cost-counter service + dashboard wiring
-  agent/guard-proxy/          # the verified A2A guard proxy (input classifier + output Regex)
+  # AI layer (guard-proxy, agentgateway, kagent, llm-guard) deploys from gitops/ai-layer/ (canonical);
+  # agent/gateway/ is the synced source/spec mirror. No separate agent/guard-proxy/ tree to create.
   ui/                         # attendee chat UI + the system-prompt streaming display
 ```
 (`beats/` is recast: Cluster-3 guardrail steps = output-sanitization, input-sanitization, mcp-restriction.)
