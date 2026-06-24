@@ -1,6 +1,6 @@
-name,access_key,secret_key,region
-watch-it-burn-attendee-1,AKIAEXAMPLE000000001,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY1,us-west-2
-watch-it-burn-attendee-2,AKIAEXAMPLE000000002,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY2,us-west-2
-watch-it-burn-attendee-3,AKIAEXAMPLE000000003,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY3,us-west-2
-watch-it-burn-attendee-4,AKIAEXAMPLE000000004,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY4,us-west-2
-watch-it-burn-attendee-5,AKIAEXAMPLE000000005,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY5,us-west-2
+name,region,access_key,secret_key,console_url,datadog_org,datadog_email,datadog_password,datadog_api_key,datadog_app_key,datadog_site,datadog_dashboard_url
+watch-it-burn-attendee-1,us-west-2,AKIAEXAMPLE000000001,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY1,https://a-001.agenticburn.com,watch-it-burn-001-LMS,fake001@ddtraining.example.com,FAKE-pw-000000001,EXAMPLEddapikey00000000000000001,EXAMPLEddappkey0000000000000000000000001,datadoghq.com,https://app.datadoghq.com/dashboard/EXAMPLE-001
+watch-it-burn-attendee-2,us-west-2,AKIAEXAMPLE000000002,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY2,https://a-002.agenticburn.com,watch-it-burn-002-LMS,fake002@ddtraining.example.com,FAKE-pw-000000002,EXAMPLEddapikey00000000000000002,EXAMPLEddappkey0000000000000000000000002,datadoghq.com,https://app.datadoghq.com/dashboard/EXAMPLE-002
+watch-it-burn-attendee-3,us-west-2,AKIAEXAMPLE000000003,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY3,https://a-003.agenticburn.com,watch-it-burn-003-LMS,fake003@ddtraining.example.com,FAKE-pw-000000003,EXAMPLEddapikey00000000000000003,EXAMPLEddappkey0000000000000000000000003,datadoghq.com,https://app.datadoghq.com/dashboard/EXAMPLE-003
+watch-it-burn-attendee-4,us-west-2,AKIAEXAMPLE000000004,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY4,https://a-004.agenticburn.com,watch-it-burn-004-LMS,fake004@ddtraining.example.com,FAKE-pw-000000004,EXAMPLEddapikey00000000000000004,EXAMPLEddappkey0000000000000000000000004,datadoghq.com,https://app.datadoghq.com/dashboard/EXAMPLE-004
+watch-it-burn-attendee-5,us-west-2,AKIAEXAMPLE000000005,wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY5,https://a-005.agenticburn.com,watch-it-burn-005-LMS,fake005@ddtraining.example.com,FAKE-pw-000000005,EXAMPLEddapikey00000000000000005,EXAMPLEddappkey0000000000000000000000005,datadoghq.com,https://app.datadoghq.com/dashboard/EXAMPLE-005
