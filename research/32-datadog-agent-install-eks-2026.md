@@ -3,6 +3,21 @@
 
 # 32. Datadog Agent Install Method + Feature Flags on EKS (build spec)
 
+---
+
+## ⚠ CORRECTIONS (2026-06-24) — Read before using any conclusion below
+
+Two conclusions in this spike were overridden in the meta-PRD #7 Decision Log (2026-06-24). The
+rest of the spike's research (sizing, feature flags, IAM options, Cluster Agent, integration list)
+remains valid and is relied on in M5.
+
+| Overridden conclusion | Correct decision | Where decided |
+|---|---|---|
+| **Install method: Helm chart** (`datadog.*` keys) | **Datadog Operator** (`spec.features.*` keys — DatadogAgent CR format). The sync-wave CRD-before-CR concern is standard ArgoCD pattern; not a reason to forgo the official tool. As a Datadog employee demonstrating the stack, using the Operator is the appropriate showcase. | meta-PRD #7 Decision Log 2026-06-24 |
+| **`prometheusScrape`: OFF** | **`spec.features.prometheusScrape.enabled: true` — ON**. Several stack components are Prometheus-only (cert-manager, ESO, Falco, Falcosidekick). With it OFF those components produce zero telemetry. The OFF rationale assumed M5 wire-or-skip decisions would route all Prometheus data through the OTel Collector — that is not confirmed. Per-component deduplication strategy is M5 Decision 4 scope. **Note:** this is the Datadog Agent's Prometheus scraping feature — distinct from the OTel Collector's `datadog.prometheusScrape` exporter config (which remains OFF per the existing 2026-06-23 entry in the meta-PRD Decision Log). | meta-PRD #7 Decision Log 2026-06-24 |
+
+---
+
 Date: 2026-06-23
 
 ## Verification Method
