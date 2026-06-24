@@ -3,7 +3,7 @@
 **GitHub Issue:** [#7](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7)
 **Status:** In Progress
 **Priority:** High
-**Last updated:** 2026-06-23
+**Last updated:** 2026-06-24
 
 ---
 
@@ -176,8 +176,8 @@ tool names) flowing into **Datadog LLM Observability**, replacing Michael's cust
 conventions. The LLM call waterfall and per-model token/cost data are visible in the Datadog LLM
 Observability UI.
 
-**Preliminary research (seed context only — the full research is pre-completed in issues #9 and #10; read those before the Step 2 design conversation):**
-A scoping search on 2026-06-22 found (the full spike in issues #9 and #10 confirms, supersedes, or corrects these):
+**Preliminary research (seed context only — the full research is pre-completed in issues #9, #10, and #15; read those before the Step 2 design conversation):**
+A scoping search on 2026-06-22 found (the full spike in issues #9, #10, and #15 confirms, supersedes, or corrects these):
 - **Datadog LLM Observability natively ingests OTel `gen_ai.*` spans (v1.37+) over OTLP — no dd-trace, no Datadog SDK.** Paths: direct OTLP intake, the Datadog Agent (OTLP mode), or the OTel Collector. ([Datadog OTel instrumentation docs](https://docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation/))
 - **kagent's base, Google ADK, emits gen_ai semconv natively** (`invoke_agent → chat → execute_tool`), enabled via standard `OTEL_*` env vars. ([Google Cloud: instrument ADK with OpenTelemetry](https://docs.cloud.google.com/stackdriver/docs/instrumentation/ai-agent-adk))
 - **Gotchas to confirm:** Datadog supports **OpenLLMetry 0.47+** but **NOT OpenInference**; Datadog requires semconv **v1.37+** (`OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` for frameworks on older specs); ADK content-capture wants `EVENT_ONLY`, and setting it to `true` under latest semconv is an **invalid config that collects no data**.
@@ -325,7 +325,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 **Step 3 — Produce the child PRD:**
 1. The synthesis file (`research/NN-per-component-telemetry-synthesis-2026.md`) is produced as part of decision 2 (issue #11) — confirm it is complete and the file path has been posted as a comment on that issue before proceeding.
 2. Update `docs/observability-priorities.md` if priorities shifted.
-3. Run `/prd-create` for a child PRD per decisions 2-9, acceptance including a per-integration UI verification checklist (`/prd-update-decisions`).
+3. Run `/prd-create` for a child PRD per decisions 1-9, acceptance including a per-integration UI verification checklist (`/prd-update-decisions`).
 4. Add to `docs/ROADMAP.md` as `- EKS infra & named integrations (PRD #[issue-id])`, after Milestone 4.
 5. Run `/prd-update-progress` to commit + push.
 6. Instruct the user to start a new session, then run `/prd-next` for Milestone 6.
@@ -333,7 +333,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 **Done when:**
 - [ ] issue #14 research complete and file path posted as comment (gates Step 2 decision 1, Agent install)
 - [ ] `research/NN-per-component-telemetry-synthesis-2026.md` exists (issue #11 complete, file path posted as comment) covering all 13 components with answers to the 5 telemetry questions
-- [ ] Decisions 2-9 recorded with reasoning
+- [ ] Decisions 1-9 recorded with reasoning
 - [ ] A child PRD issue exists whose acceptance includes a per-integration UI verification checklist
 - [ ] ROADMAP updated
 
@@ -394,7 +394,7 @@ community dashboards fill gaps for components without an official Datadog dashbo
 data confirmed flowing?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Import which community dashboards?** — for each importable candidate from the `research/30` per-component synthesis (community dashboard column, whole stack, incl. KubeArmor): import it or skip? One component at a time. Importing an existing community/Grafana dashboard is allowed even for supporting tech; hand-building custom ones for never-center-stage tech is not.
+1. **Import which community dashboards?** — for each importable candidate from `research/30-per-component-telemetry-synthesis-2026.md` (community dashboard column, whole stack, incl. KubeArmor): import it or skip? One component at a time. Importing an existing community/Grafana dashboard is allowed even for supporting tech; hand-building custom ones for never-center-stage tech is not.
 2. **Custom/story dashboards** — for each candidate (Wasted Tokens Over Time, Model Tier Cost Race [group by `gen_ai.request.model`], Tool Call Heatmap, Guardrail Toggle Timeline): **build now, defer to dress rehearsal, or skip?** Confirm the data source is flowing before committing to build.
 3. **Dashboard JSON as code (committed)** vs. UI-built?
 
