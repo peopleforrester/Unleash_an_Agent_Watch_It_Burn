@@ -1,0 +1,127 @@
+# ABOUTME: agentgateway OSS v1.3.0 — the DEPLOYED (canonical) copy, fronting the kagent agent + MCP traffic.
+# ABOUTME: Ported from agent/gateway/agentgateway.yaml; namespace is set by the ai-layer kustomization (agent).
+#
+# STATUS: staged canonical, NOT yet added to kustomization.yaml resources (so it does not auto-deploy and
+# crash-loop the live clusters until the verify-at-build items below are resolved on a real cluster).
+# To enable: confirm the items below, then add "- agentgateway.yaml" to kustomization.yaml resources.
+#
+# VERIFY-AT-BUILD blockers (resolve on a live cluster against the v1.3.0 OSS standalone docs):
+#   1. Image: pin the real OSS v1.3.0 image (registry/path + @sha256). The tag below is a placeholder.
+#   2. Config schema: the listeners/routes/mcp/mcpAuthorization field paths are unconfirmed for v1.3.0
+#      (research/02 + research/14). The Apache-OSS 1.x docs, NOT the Solo Enterprise 2.x docs.
+#   3. Dependency: the request prompt-guard webhook targets `llm-guard-webhook` — a webhook wrapper that
+#      is NOT yet a deployed component. Either add it or wire the request guard differently.
+#   4. Tracing: per research/29, agentgateway v1.3.0 emits OTel via the CONFIG FILE
+#      (frontendPolicies.tracing.otlpEndpoint), NOT the OTEL_EXPORTER_OTLP_ENDPOINT env var (that env is
+#      inert). The `tracing:` block below is the config-file path; align the exact key with research/29
+#      + Whitney's observability work before enabling. OTEL_RESOURCE_ATTRIBUTES (UST) is kept (it is used).
+#   5. Beat-3 control: with agentgateway deployed, reconcile whether MCP authz is enforced here
+#      (mcpAuthorization) or via the kagent `toolNames` allowlist already in resources.yaml (the runbook's
+#      stated control). The toggle beats/03/toggle-mcp-authz-on.sh applies the mcp-authz overlay here.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentgateway
+  labels: { app.kubernetes.io/name: agentgateway, app.kubernetes.io/component: gateway }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agentgateway
+  labels:
+    app.kubernetes.io/name: agentgateway
+    app.kubernetes.io/component: gateway
+    app.kubernetes.io/version: "1.3.0"
+spec:
+  replicas: 1
+  strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
+  selector: { matchLabels: { app.kubernetes.io/name: agentgateway } }
+  template:
+    metadata:
+      labels: { app.kubernetes.io/name: agentgateway, app.kubernetes.io/component: gateway }
+    spec:
+      serviceAccountName: agentgateway
+      automountServiceAccountToken: false
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: agentgateway
+          image: ghcr.io/agentgateway/agentgateway:v1.3.0 # verify-at-build: confirm registry/path + pin @sha256 (blocker #1)
+          imagePullPolicy: IfNotPresent
+          args: ["--file", "/etc/agentgateway/config.yaml"]
+          env:
+            # UST for Datadog correlation (used by the OTel SDK). The OTLP *endpoint* is set in the config
+            # file's tracing block, not here (research/29: the env endpoint is inert on v1.3.0). blocker #4.
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=agentgateway,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
+          ports:
+            - { name: proxy, containerPort: 3000 }
+            - { name: admin, containerPort: 15000 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits: { cpu: "500m", memory: "256Mi" }
+          readinessProbe: { httpGet: { path: /healthz, port: admin }, initialDelaySeconds: 5, periodSeconds: 10 }
+          livenessProbe: { httpGet: { path: /healthz, port: admin }, initialDelaySeconds: 10, periodSeconds: 15 }
+          volumeMounts: [{ name: config, mountPath: /etc/agentgateway, readOnly: true }]
+      volumes:
+        - name: config
+          configMap: { name: agentgateway-config }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agentgateway
+  labels: { app.kubernetes.io/name: agentgateway }
+spec:
+  selector: { app.kubernetes.io/name: agentgateway }
+  ports: [{ name: proxy, port: 3000, targetPort: proxy }]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-config
+  labels: { app.kubernetes.io/name: agentgateway }
+data:
+  # verify-at-build: confirm every field path against the v1.3.0 OSS standalone docs (blocker #2).
+  config.yaml: |
+    # agentgateway OSS v1.3.0 standalone config (DEPLOYED copy; service FQDNs use the fixed `agent` ns).
+    # OTel tracing for v1.3.0 lives here, not in an env var (research/29). verify-at-build: confirm the
+    # exact tracing key against the v1.3.0 schema + Whitney's observability research (blocker #4).
+    tracing:
+      otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317
+      randomSampling: true
+    listeners:
+      - name: agent-a2a
+        protocol: HTTP
+        port: 3000
+        routes:
+          - name: to-agent
+            backends:
+              - host: workshop-agent.agent.svc.cluster.local
+                port: 8080 # verify-at-build: confirm the kagent A2A serving port
+            policies:
+              # INPUT prompt-guard, request phase. BASELINE present-but-inert; input-guard-on overlay turns it live.
+              promptGuard:
+                request:
+                  webhook:
+                    target:
+                      host: llm-guard-webhook.agent.svc.cluster.local:8001 # verify-at-build: dependency not yet deployed (blocker #3)
+      - name: agent-mcp
+        protocol: HTTP
+        port: 3001
+    # MCP traffic: targets allowlist + mcpAuthorization (allow-only CEL, implicit deny; research/14 §2).
+    mcp:
+      targets:
+        - name: workshop-mcp
+          host: workshop-mcp.agent.svc.cluster.local
+          port: 8080 # verify-at-build: confirm the MCPServer port
+      policies:
+        # BASELINE default ALLOW (beat-3 "before"); the restrictive allowlist lives in mcp-authz-on.yaml.
+        # verify-at-build: [SPIKE] does mcpAuthorization enforce on OSS v1.3.0 with a kagent agent in front (blocker #2/#5).
+        mcpAuthorization:
+          rules:
+            - 'true' # default Allow — all tools (beat-3 "before")

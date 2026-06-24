@@ -4,20 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Watch It Burn Workshop{% endblock %}</title>
-  <meta name="description" content="{% block meta_description %}Claim your Accenture-sponsored EKS cluster for Unleash an Agent, Watch it Burn workshop at Watch It Burn.{% endblock %}">
+  <meta name="description" content="{% block meta_description %}Claim your EKS cluster for the Unleash an Agent, Watch it Burn workshop. Sponsored by Datadog and Accenture.{% endblock %}">
   <meta property="og:title" content="{% block og_title %}{{ self.title() }}{% endblock %}">
   <meta property="og:description" content="{{ self.meta_description() }}">
   <meta property="og:type" content="website">
   <meta property="og:image" content="{{ url_for('static', filename='img/watch-it-burn-logo.png', _external=True) }}">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='img/favicon.ico') }}">
   <style>
+    /* Palette: a blend of Datadog purple (#632CA6) and Accenture violet (#A100FF),
+       co-sponsors of this workshop. Variable names kept from the prior navy/orange
+       scheme so only the values change; all contrasts hold WCAG AA on white. */
     :root {
-      --navy:       #1E2761;
-      --dark-navy:  #101A42;
-      --light-blue: #CADCFC;
-      --accent:     #FF6B35;
+      --navy:       #632CA6;    /* Datadog purple - header/primary (white on it = 5.9:1) */
+      --dark-navy:  #3A1A63;    /* deep purple - codeblocks */
+      --light-blue: #ECE3FB;    /* light lavender - cards/hero (the blend, tinted) */
+      --accent:     #8A00D6;    /* Datadog-to-Accenture violet - CTAs (white on it = 5.2:1) */
+      --dd-purple:  #632CA6;    /* Datadog brand */
+      --acn-violet: #A100FF;    /* Accenture brand */
       --mid-gray:   #4A4A4A;
-      --light-gray: #6B6B6B;    /* bumped from #888 to satisfy WCAG AA on white (5.1:1) */
+      --light-gray: #6B6B6B;    /* satisfies WCAG AA on white (5.1:1) */
       --white:      #FFFFFF;
       --bg-cream:   #FDF6EE;
     }
@@ -170,7 +175,7 @@
       transition: background-color 0.15s ease-in-out;
       text-decoration: none;
     }
-    .btn:hover, .btn:focus { background: #e95a26; }
+    .btn:hover, .btn:focus { background: #7400B5; }
     .btn[disabled] { opacity: 0.65; cursor: progress; }
 
     /* Cards */
@@ -260,7 +265,7 @@
       padding: 8px 12px;
       color: var(--navy);
       font-style: italic;
-      background: rgba(202,220,252,0.35);
+      background: rgba(236,227,251,0.55);
       border-radius: 0 6px 6px 0;
       margin: 20px 0;
     }
@@ -309,6 +314,36 @@
       font-style: italic;
       margin-top: 6px;
     }
+
+    /* Co-sponsor strip: Datadog + Accenture, one pill each, brand-dot colored. */
+    footer.site .sponsors {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    footer.site .sponsor {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--white);
+      border-radius: 999px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--dark-navy);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.14);
+    }
+    footer.site .sponsor .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    footer.site .sponsor.datadog .dot { background: var(--dd-purple); }
+    footer.site .sponsor.accenture .dot { background: var(--acn-violet); }
 
     /* Tables (admin) */
     table.admin {
@@ -402,6 +437,10 @@
   </main>
 
   <footer class="site">
+    <div class="sponsors">
+      <span class="sponsor datadog"><span class="dot" aria-hidden="true"></span>Sponsored by Datadog</span>
+      <span class="sponsor accenture"><span class="dot" aria-hidden="true"></span>Sponsored by Accenture</span>
+    </div>
     <div>Watch It Burn &bull; Unleash an Agent, Watch it Burn Workshop</div>
     {% block footer_hint %}{% endblock %}
   </footer>

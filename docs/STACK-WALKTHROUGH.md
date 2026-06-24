@@ -43,9 +43,9 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
 | Agent | kagent 0.9.9 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
 | Model | Bedrock Claude (Haiku 4.5 default) | the LLM | same | native `ModelConfig` provider: Bedrock |
-| AI gateway | agentgateway v1.3.0 GA | front A2A + MCP, MCP authz | `agent/gateway/` | `mcpAuthorization` CEL over `mcp.tool.name` [verify-at-build] |
+| AI gateway | agentgateway v1.3.0 GA | front A2A + MCP, MCP authz | `gitops/ai-layer/agentgateway.yaml` | `mcpAuthorization` CEL over `mcp.tool.name` [verify-at-build] |
 | Guard glue | guard-proxy (stdlib) | input/output guards, cost meter, caps | `gitops/ai-layer/proxy.py` | A2A reverse proxy; runtime `/toggle` |
-| Scanner | LLM Guard 0.3.16 | the actual scanning engine | `agent/gateway/` | `/analyze/prompt` (PromptInjection), `/analyze/output` (Regex) |
+| Scanner | LLM Guard 0.3.16 | the actual scanning engine | `gitops/ai-layer/resources.yaml` | `/analyze/prompt` (PromptInjection), `/analyze/output` (Regex) |
 | Observability | OTel + Datadog + Grafana | the narration surface | `gitops/apps/otel-collector.yaml` | OTLP in; Datadog primary, Tempo/Prom fallback |
 
 ## The request path, end to end (a prompt's journey)

@@ -1,5 +1,8 @@
-# ABOUTME: Deploys the A2A guard proxy in front of the kagent agent Service.
+# ABOUTME: Deploys the A2A guard proxy in front of the kagent agent Service (manual/spec deploy path).
 # ABOUTME: Runs proxy.py (mounted via ConfigMap) on a stock python image; toggles via env.
+# SOURCE OF TRUTH for proxy.py is gitops/ai-layer/proxy.py (the deployed app-of-apps copy). The copy
+# here is kept byte-identical for this manual path and the PRD #7 / research references; if you change
+# the guard proxy, edit gitops/ai-layer/proxy.py and re-sync this one (do not let them drift).
 # The ConfigMap guard-proxy-src is created from proxy.py at deploy time:
 #   kubectl create configmap guard-proxy-src --from-file=proxy.py=agent/gateway/guard-proxy/proxy.py
 # Toggle the guards by patching INPUT_GUARD / OUTPUT_GUARD env to "on"/"off" (see beat-2 toggles).
