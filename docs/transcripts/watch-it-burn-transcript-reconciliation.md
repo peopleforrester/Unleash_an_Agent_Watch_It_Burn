@@ -4,10 +4,12 @@
 # Watch it Burn: Transcript Reconciliation
 
 **Date:** 2026-06-24
-**Reconciles:** `watch-it-burn-runofshow-from-transcript.md` (run-of-show & challenges) and
-`watch-it-burn-infra-ops-addendum.md` (plumbing) against the canonical spec
-(`facilitation/runbook.md`, `facilitation/slides-outline.md`, `facilitation/WHITNEY-START-HERE.md`,
-`docs/STACK-WALKTHROUGH.md`) and the built repo.
+**Reconciles:** two planning-transcript reference docs (run-of-show & challenges, and the infra/ops
+plumbing) against the canonical spec (`facilitation/runbook.md`, `facilitation/slides-outline.md`,
+`facilitation/WHITNEY-START-HERE.md`, `docs/STACK-WALKTHROUGH.md`) and the built repo. The two raw
+transcript captures were removed on 2026-06-24 once their content was reconciled here and into the
+canonical spec; the verbatim source remains recoverable from git history (commit 8612086). This doc is
+now the standalone record of the decisions and open tasks.
 
 **Bottom line:** most items are handled. The transcript's biggest flagged divergence (round-to-defense
 mapping) is already the canonical model. After Michael's 2026-06-24 decisions (teardown = manual trigger;
@@ -73,6 +75,8 @@ Settled and removed from the open list: teardown (manual trigger), attendee coun
 
 ## Archiving
 
-Both source docs carry a "CAPTURED RECONCILIATION REFERENCE" banner pointing here. When the needed tasks
-above close, move all three files to `docs/transcripts/archive/` (or mark them `[ARCHIVED]` in their banners).
+The two raw transcript captures were deleted on 2026-06-24 (recoverable from git history, commit 8612086).
+When the needed tasks above close, this reconciliation doc can be archived (move to
+`docs/transcripts/archive/` or mark `[ARCHIVED]`) since the decisions will have landed in the canonical
+spec, the research files, and the Rounds & Challenges deck.
 Until then they stay as the live reconciliation trail.
