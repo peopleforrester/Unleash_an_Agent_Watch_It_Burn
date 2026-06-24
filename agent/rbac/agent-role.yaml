@@ -14,7 +14,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: workshop-agent
-  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+  namespace: ATTENDEE_NAMESPACE # attendee agent namespace (independent per-attendee cluster)
 rules:
   - apiGroups: ["apps"]
     resources: ["deployments"]
