@@ -222,7 +222,7 @@ custom telemetry emit today, and what must change to move to OTel GenAI semconv 
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 3.
 
 **Done when:**
-- [ ] Issues #9, #10, #15, and #17 research files confirmed complete (file paths posted as comments on each issue)
+- [x] Issues #9, #10, #15, and #17 research files confirmed complete (file paths posted as comments on each issue)
 - [ ] Decisions 2-8 recorded with reasoning in the child PRD's Decision Log
 - [ ] A child PRD issue exists whose acceptance includes gen_ai semconv telemetry in Datadog LLM Observability and the `witb_*` migration decision
 - [ ] ROADMAP updated
@@ -261,7 +261,7 @@ rogue-tool beat, and what is the re-leak risk if content capture is naive?
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 4.
 
 **Done when:**
-- [ ] Issue #12 complete (research file path posted as comment on that issue)
+- [x] Issue #12 complete (research file path posted as comment on that issue)
 - [ ] Decisions 2-4 recorded with reasoning in the child PRD's Decision Log
 - [ ] A child PRD issue exists whose acceptance includes both security-beat views in traces
 - [ ] ROADMAP updated
