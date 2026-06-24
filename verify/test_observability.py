@@ -64,17 +64,19 @@ check("spanmetrics wired into metrics receivers", "spanmetrics" in cfg["service"
 
 
 # Unified Service Tagging on the AI-layer pods (service.name + env via OTEL_RESOURCE_ATTRIBUTES).
-def _container_env(path):
+# Assert against the canonical deployed copies under gitops/ai-layer/ (agent/gateway/ is the synced
+# source mirror). resources.yaml holds many Deployments, so select the target Deployment by name.
+def _container_env(path, name):
     docs = [d for d in yaml.safe_load_all((REPO / path).read_text()) if d]
-    dep = next(d for d in docs if d.get("kind") == "Deployment")
+    dep = next(d for d in docs if d.get("kind") == "Deployment" and d.get("metadata", {}).get("name") == name)
     c = dep["spec"]["template"]["spec"]["containers"][0]
     return {e["name"]: e.get("value", "") for e in c.get("env", [])}
 
 
-gp_ust = _container_env("agent/gateway/guard-proxy/guard-proxy.yaml").get("OTEL_RESOURCE_ATTRIBUTES", "")
+gp_ust = _container_env("gitops/ai-layer/resources.yaml", "guard-proxy").get("OTEL_RESOURCE_ATTRIBUTES", "")
 check("guard-proxy carries UST (service.name + env) via OTEL_RESOURCE_ATTRIBUTES",
       "service.name=guard-proxy" in gp_ust and "deployment.environment.name=watch-it-burn" in gp_ust)
-ag_ust = _container_env("agent/gateway/agentgateway.yaml").get("OTEL_RESOURCE_ATTRIBUTES", "")
+ag_ust = _container_env("gitops/ai-layer/agentgateway.yaml", "agentgateway").get("OTEL_RESOURCE_ATTRIBUTES", "")
 check("agentgateway carries UST (service.name) via OTEL_RESOURCE_ATTRIBUTES",
       "service.name=agentgateway" in ag_ust)
 
