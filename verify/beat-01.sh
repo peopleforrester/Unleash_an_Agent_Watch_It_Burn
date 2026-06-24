@@ -13,7 +13,7 @@ usage() {
     cat >&2 <<'EOF'
 Usage: beat-01.sh <kube-context> <attendee-namespace>
 
-  <kube-context>         kubeconfig context for the attendee's SPOKE cluster
+  <kube-context>         kubeconfig context for the attendee's cluster
   <attendee-namespace>   namespace the scoped agent acts in (agent SA: agent-sa)
 
 Asserts Beat 1's §2 outcomes:
