@@ -3,7 +3,32 @@
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
 
-Last updated: 2026-06-23
+Last updated: 2026-06-24
+
+### AGENTGATEWAY IN + AI-LAYER CANONICAL RECONCILIATION (2026-06-24)
+
+Michael decided (AskUserQuestion): agentgateway is IN — it should be deployed. Acted on that plus the
+earlier "gitops/ai-layer/ is canonical, agent/gateway/ is the synced source mirror" decision.
+
+- **agentgateway staged canonical** (`gitops/ai-layer/agentgateway.yaml`, commit b64e7ea): ported from
+  agent/gateway/agentgateway.yaml; namespace left to the kustomization (agent), service FQDNs
+  ATTENDEE_NAMESPACE→agent, v1.3.0 OTel tracing expressed in the config file (research/29), UST env
+  kept. INTENTIONALLY NOT in kustomization.yaml resources, so it does not auto-deploy/crash-loop live
+  clusters before 5 verify-at-build blockers resolve on a real cluster (image digest, v1.3.0 config
+  schema, llm-guard-webhook dependency, tracing-key alignment, Beat-3 mcp-authz control). Header
+  documents all five. kustomize build of the ai-layer bundle confirmed clean (file correctly excluded).
+- **Reconciliation** (commit 7b7c270): added OTEL_RESOURCE_ATTRIBUTES (Datadog UST) to the gitops
+  guard-proxy Deployment so it matches kagent + agentgateway (DD Agent reads it for log tagging now;
+  OTLP endpoint env arrives with the deferred guard-proxy OTel SDK work, research/33 M3). Repointed
+  verify/test_observability.py UST asserts at the canonical gitops copies (select Deployment by name).
+  Repointed docs (STACK-WALKTHROUGH AI-gateway + LLM-Guard cells, BUILD-SPEC §7 stale create-line,
+  cost/README) to gitops. Added RECONCILIATION headers to the Beat-3 mcp-authz toggle manifests +
+  script flagging two latent traps (the overlay rewrites the whole config.yaml so it drops tracing +
+  the request promptGuard unless it carries the full canonical config; ATTENDEE_NAMESPACE must resolve
+  to `agent`); bodies left unchanged pending the existing beat-3 mcpAuthorization-enforcement SPIKE.
+- **Verification:** all 19 verify/*.py render-gate tests PASS; lab-distribution 13 tests PASS. Both
+  commits pushed staging→main (origin/main == 7b7c270). Whitney coordination still owed on the
+  agentgateway tracing config (research/29) + her PRD pointer; the 5 blockers are live-cluster items.
 
 ### WALKTHROUGH REFRAMED -> LIVE-DELIVERY RUN-OF-SHOW (2026-06-23, Michael correction)
 
