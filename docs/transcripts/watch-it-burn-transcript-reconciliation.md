@@ -38,7 +38,7 @@ transcript (not confirm-only). The two source docs can be archived once those tw
 | **§1 Credential distribution** | **BUILT** | `lab-distribution/` v2: Railway app, email-keyed, hands each attendee console URL + Datadog + AWS creds, idempotent re-retrieve by email. Deployed live at `provisioning.agenticburn.com`. Sample keys resolved (Tara's `generate_accounts_csv.sh` + Whitney's keys; `scripts/merge_pool.py`). |
 | **§1 teardown** | **SETTLED (2026-06-24): manual trigger** | No 40-minute auto-expiry timer. Teardown is `teardown/teardown.sh` (prefix-scoped, brings the fleet to $0), run manually by Michael (typically at the end of the run). The transcript's "~40 min auto-teardown" idea is dropped. Implication: leaked attendee creds live until manual teardown, so if blast-radius matters, mitigate via short IAM session lifetimes, not cluster auto-destroy. |
 | **§1 attendee count** | **SETTLED (2026-06-24): 60** | Count is indeterminate, so plan for 60. Fleet model supports it (EKS cluster quota 100; EC2 vCPU quota is the real limit, increase requested). |
-| **§2 one Datadog account auto-wired into provisioning** | **OPEN — REQUIRED, must auto-wire (manual interim REJECTED by Michael 2026-06-24)** | The install method is decided (Datadog Operator; `research/32`, `research/34`) and creds are distributed to attendees (`merge_pool.py`). NOT yet wired: the provisioning process auto-injecting a working Datadog API key as a per-cluster `datadog-secret` so the Datadog Agent reports with zero manual steps. Manual-into-one-cluster is NOT acceptable; spawning the fleet must "just work." Key design fork to resolve first: does each cluster report to (a) the attendee's own trial org from the pool row, (b) a single shared org Whitney watches for full visibility, or (c) both? Mechanism options: Terraform var -> k8s Secret in the cluster module; or ESO pulling the key from AWS Secrets Manager (matches the existing ESO + Pod Identity pattern); or the fleet driver seeding it per cluster from `pool.csv`. See "needed tasks" below. |
+| **§2 one Datadog account auto-wired into provisioning** | **OPEN: REQUIRED, must auto-wire (manual interim REJECTED by Michael 2026-06-24)** | The install method is decided (Datadog Operator; `research/32`, `research/34`) and creds are distributed to attendees (`merge_pool.py`). NOT yet wired: the provisioning process auto-injecting a working Datadog API key as a per-cluster `datadog-secret` so the Datadog Agent reports with zero manual steps. Manual-into-one-cluster is NOT acceptable; spawning the fleet must "just work." Key design fork to resolve first: does each cluster report to (a) the attendee's own trial org from the pool row, (b) a single shared org Whitney watches for full visibility, or (c) both? Mechanism options: Terraform var -> k8s Secret in the cluster module; or ESO pulling the key from AWS Secrets Manager (matches the existing ESO + Pod Identity pattern); or the fleet driver seeding it per cluster from `pool.csv`. See "needed tasks" below. |
 | **§2 owner (Datadog-into-provisioning)** | **OPEN** | Decide Michael vs Whitney for getting the account into provisioning vs pointing Datadog. |
 | **§3 1Password sharing** | **DONE (2026-06-24)** | Shared 1Password is set up. Repo-side, clusters get the credential as a Secret via the ESO path. |
 | **§4 Apex/Relay deploy + DNS + terminal console** | **DONE** | `agenticburn.com` apex landing live; the "Relay" = the apex Caddy wildcard router (`railway/apex/`); Namecheap DNS set; `walkthrough.agenticburn.com` and `provisioning.agenticburn.com` live (HTTP 200). Terminal console (ttyd web-terminal + `console.html`) built (`gitops/ai-layer/`, `images/web-terminal/`). |
@@ -56,14 +56,14 @@ Settled and removed from the open list: teardown (manual trigger), attendee coun
    fleet-driver seeding from `pool.csv`) so spawning the fleet wires Datadog with zero manual steps.
 2. **Build and integrate ALL run-of-show beats** (Michael 2026-06-24: not confirm-only; build them all,
    per the transcript). Audit every beat against the runbook + slides and ensure each is built and placed:
-   - Challenge 1 customer-data exfil to S3 (NetworkPolicy default-deny egress + Istio ambient mTLS) — built; confirm both paths are demoed in the runbook.
-   - Challenge 2 malicious deploy (Kyverno Harbor-only + signing/attestation) — built; the in-Harbor bypass as the optional motivator.
-   - Challenge 3 Easter-egg secret grep — built; placed in the round.
-   - Challenge 4 fork bomb on Cluster 1 (PID-limit prevents, Falco/Talon detects) — built/validated; lock placement in the runbook.
-   - Cluster-1 shared abrupt-end ending beat — wire as the explicit C1 climax.
-   - Front-of-room streaming display (moderated, default-OFF) — built; decide on/off for the live run and wire the cue.
-   - Prompt library / interface (clickable inject, instructor-vs-attendee views, dropdown per round) — confirm built and placed.
-   - **BFO** glossary term — still unresolved; confirm what it referred to.
+   - Challenge 1 customer-data exfil to S3 (NetworkPolicy default-deny egress + Istio ambient mTLS). Built; confirm both paths are demoed in the runbook.
+   - Challenge 2 malicious deploy (Kyverno Harbor-only + signing/attestation). Built; the in-Harbor bypass as the optional motivator.
+   - Challenge 3 Easter-egg secret grep. Built; placed in the round.
+   - Challenge 4 fork bomb on Cluster 1 (PID-limit prevents, Falco/Talon detects). Built/validated; lock placement in the runbook.
+   - Cluster-1 shared abrupt-end ending beat. Wire as the explicit C1 climax.
+   - Front-of-room streaming display (moderated, default-OFF). Built; decide on/off for the live run and wire the cue.
+   - Prompt library / interface (clickable inject, instructor-vs-attendee views, dropdown per round). Confirm built and placed.
+   - **BFO** glossary term: still unresolved; confirm what it referred to.
 
 ## Archiving
 
