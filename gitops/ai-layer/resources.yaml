@@ -210,6 +210,14 @@ spec:
             - { name: COST_CAP_USD, value: "25" }
             # Optional side-screen prompt stream; ON only once moderation is confirmed (code of conduct).
             - { name: STREAM_PROMPTS, value: "off" }
+            # Unified Service Tagging for Datadog correlation (same scheme as the kagent agent +
+            # agentgateway above). The Datadog Agent reads this to tag this pod's container logs now;
+            # once proxy.py carries manual OTel SDK spans (research/33 Milestone 3) the same tags map
+            # service.version -> version (cluster tier) and deployment.environment.name -> env. The OTLP
+            # *endpoint* env arrives with that SDK work, not here. verify-at-build: substitute
+            # CLUSTER_TIER per cluster (cluster-1 / cluster-2 / cluster-3).
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=guard-proxy,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
