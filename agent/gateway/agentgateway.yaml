@@ -19,7 +19,7 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: agentgateway
-  namespace: ATTENDEE_NAMESPACE # templated per-attendee by the ApplicationSet
+  namespace: ATTENDEE_NAMESPACE # attendee agent namespace (independent per-attendee cluster)
 ---
 apiVersion: apps/v1
 kind: Deployment

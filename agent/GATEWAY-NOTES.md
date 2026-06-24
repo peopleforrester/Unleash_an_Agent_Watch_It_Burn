@@ -2,7 +2,7 @@
 
 # Gateway & Guardrail Notes
 
-Architecture context: separate EKS spoke cluster per attendee. Everything below runs in each
+Architecture context: separate EKS cluster per attendee (independent, take-home). Everything below runs in each
 attendee's spoke. agentgateway OSS **v1.3.0** fronts the kagent agent's A2A serving endpoint and
 its MCP tool traffic. LLM Guard (Protect AI, MIT) runs in API-server mode per spoke,
 **output-`Regex`-only by default** to keep each spoke node small.
