@@ -12,6 +12,7 @@ from pathlib import Path
 
 import requests
 from flask import Flask, abort, g, redirect, render_template, request, url_for
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 EMAIL_RE = re.compile(r"^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$")
 
@@ -190,6 +191,10 @@ def _send_resend_email(api_key, to_email, subject, text_body, html_body):
 
 def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_limit=None):
     app = Flask(__name__)
+    # Served behind the apex Caddy router (provisioning.agenticburn.com), which sets X-Forwarded-*.
+    # Trust one proxy hop so request.url_root reflects provisioning.agenticburn.com (not the upstream
+    # Railway host) in the success page + email links.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
     app.config["DATABASE_PATH"] = database_path or os.environ.get("DATABASE_PATH", "./pool.db")
     app.config["POOL_CSV"] = pool_csv or os.environ.get("POOL_CSV", "./pool.csv")
     app.config["ADMIN_TOKEN"] = _resolve_admin_token()
