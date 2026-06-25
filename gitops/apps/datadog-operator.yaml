@@ -1,0 +1,38 @@
+# ABOUTME: ArgoCD Application for the Datadog Operator (PRD #26 M5). Owns the DatadogAgent CRD.
+# ABOUTME: The DatadogAgent CR itself is a separate Application (datadog-agent-cr.yaml, sync-wave 4).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: datadog-operator
+  namespace: argocd
+  annotations:
+    # Wave 3: after cert-manager/ESO (lower waves), before the DatadogAgent CR (wave 4) so the CRD exists.
+    argocd.argoproj.io/sync-wave: "3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: datadog-operator
+    repoURL: https://helm.datadoghq.com
+    # Pinned (PRD #26 M1: no "latest"). datadog-operator 2.23.2 = operator app 1.27.1 (helm search, 2026-06-25).
+    targetRevision: "2.23.2"
+    helm:
+      valuesObject:
+        replicaCount: 1
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: datadog
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
