@@ -24,7 +24,7 @@ spec:
         # the `name` label -> `cert_name` so the OOTB dashboard is readable (without it metrics are unlabeled).
         podAnnotations:
           ad.datadoghq.com/cert-manager-controller.checks: |
-            {"cert_manager":{"instances":[{"prometheus_url":"http://%%host%%:9402/metrics","rename_labels":{"name":"cert_name"}}]}}
+            {"cert_manager":{"instances":[{"openmetrics_endpoint":"http://%%host%%:9402/metrics","rename_labels":{"name":"cert_name"}}]}}
         crds:
           enabled: true
           keep: true
