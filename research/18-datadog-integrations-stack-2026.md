@@ -9,6 +9,7 @@
 | 2026-06-21 | Initial research — per-component Datadog integration + native telemetry survey |
 | 2026-06-21 | Added KubeArmor row — separate Prometheus exporter required, no native OTLP, no named Datadog integration |
 | 2026-06-21 | Added Unified Service Tagging section — OTel attribute mapping confirmed, full UI payoff needs live verification |
+| 2026-06-24 | Corrected Falco row: named Agent integration collects individual alert logs (JSON, per-alert) + aggregate Prometheus metrics — not metrics-only; does not require Falcosidekick |
 
 ## Findings
 
@@ -83,7 +84,7 @@ Source: https://docs.datadoghq.com/integrations/cert_manager/
 |---|---|---|---|---|---|
 | **ArgoCD** | Yes (Agent 7.42+) | No | No — pod annotations, 3 ports | Prometheus (8082/8083/8084) | Medium |
 | **Kyverno** | Yes (Agent 7.56+) | No | No — per-controller annotations (4 pods) | Prometheus + **OTel/OTLP opt-in** | Medium |
-| **Falco** | Yes (Agent 7.59.1+) | **Yes** | No — `falco.yaml` edits + annotations | Prometheus; Falcosidekick adds OTLP fan-out | Medium |
+| **Falco** | Yes (Agent 7.59.1+) | **Yes** | No — `falco.yaml` edits + annotations | Named integration collects: (1) **individual alert logs** (JSON per alert: rule, description, priority, output, tags) → Log Explorer; (2) **aggregate Prometheus metrics** (`falco.rules.matches.count`, `falco.scap.*`, etc.) → OOTB dashboard. Does NOT require Falcosidekick — works via `http_output` in `falco.yaml` or Agent file-tailing. Falcosidekick adds Event Stream output (Datadog Events API) and OTLP fan-out — additive, different surface. Source: https://docs.datadoghq.com/integrations/falco/ (verified 2026-06-24) | Medium |
 | **KubeArmor** | **No** | No | No | Prometheus via **separate** `kubearmor-prometheus-exporter` deploy (`kubearmor_alerts_*` counters); gRPC log stream; no native OTLP | High (extra deploy; no named DD integration; enforcement-only, not observability) |
 | **Istio ambient** | Yes (Agent 6.1+) | Unconfirmed | **Broken** — sidecar auto_conf doesn't fire in ambient | Prometheus + OTel via Telemetry API; **L4 only without waypoint** | High |
 | **ESO** | **No** | No | No | Prometheus only | High (generic openmetrics) |
