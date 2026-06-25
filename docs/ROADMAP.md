@@ -6,11 +6,7 @@ Forward-looking implementation order. Completed work lives in `PROGRESS.md`, not
 
 ## Observability Suite (Short-term — pre-workshop)
 
-Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7)), one per milestone, and built as each is written. Entries are added as each child PRD is created.
-
-- Observability meta-PRD ([PRD #7](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7)) — defines and sequences the child observability PRDs as MVP-first milestones (thin end-to-end vertical increments)
-
-**Build order (MVP-first milestones; each verifiable in the Datadog UI; child PRDs added as created):**
+**Build order (MVP-first milestones; each verifiable in the Datadog UI):**
 
 1. MVP: OTel Collector + Datadog connected, UST wired on AI-layer components ([PRD #13](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/13)) — proves Datadog works; locks cross-cutting decisions (collector shape, UST vocabulary, account model)
    - Instrumentation spec: guard-proxy HTTP SERVER span + sanitization tracing ([#19](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/19)) — sub-issue of PRD #13
