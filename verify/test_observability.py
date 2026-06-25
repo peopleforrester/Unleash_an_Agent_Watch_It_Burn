@@ -107,7 +107,9 @@ for _name, _ust, _svc, _ver in _ust_targets:
 # Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.
 fvals = yaml.safe_load((REPO / "gitops" / "apps" / "falcosidekick.yaml").read_text())["spec"]["source"]["helm"]["valuesObject"]
 check("falcosidekick has a Datadog output", "datadog" in fvals["config"])
-fenv = {e["name"]: e for e in fvals.get("extraEnv", [])}
+# falcosidekick chart 0.14.0 reads env from config.extraEnv (NOT top-level extraEnv) — see
+# PRD #23 M2 fix (commit c7f4e7b). Assert against that path.
+fenv = {e["name"]: e for e in fvals.get("config", {}).get("extraEnv", [])}
 check("falcosidekick DATADOG_APIKEY from a BYO secret (not hardcoded)",
       "secretKeyRef" in fenv.get("DATADOG_APIKEY", {}).get("valueFrom", {}))
 check("falcosidekick still feeds Talon (Datadog is additive/swappable)", "talon" in fvals["config"])
