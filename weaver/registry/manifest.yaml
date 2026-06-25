@@ -1,0 +1,16 @@
+# ABOUTME: OTel Weaver registry manifest for the watch-it-burn guard-proxy span contract (PRD #20 M6).
+# ABOUTME: Pins upstream OTel semantic conventions v1.37.0 so our custom span groups resolve their ref'd attrs.
+#
+# Weaver >= 0.22.1 changed this format (PRD #20 M6 note): the file is `manifest.yaml` (not
+# registry_manifest.yaml), and `schema_url` replaces the deprecated semconv_version/schema_base_url pair.
+# Built and validated against weaver 0.24.2.
+name: watch-it-burn
+description: >-
+  Semantic-convention registry for the Watch It Burn workshop guard-proxy. Declares the HTTP SERVER
+  and gen_ai "sanitize" spans the proxy emits (PRD #22 M1) and resolves their attributes against the
+  upstream OpenTelemetry semantic conventions, so `weaver registry check` fails in CI if the proxy
+  drifts from the agreed contract.
+schema_url: https://agenticburn.com/schemas/watch-it-burn/1.0.0/schema.yaml
+dependencies:
+  - name: otel
+    registry_path: https://github.com/open-telemetry/semantic-conventions/archive/refs/tags/v1.37.0.zip[model]

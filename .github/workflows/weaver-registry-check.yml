@@ -1,0 +1,44 @@
+# ABOUTME: CI gate for the OTel Weaver semconv registry (PRD #20 M6). Fails the build if the guard-proxy
+# ABOUTME: span contract drifts from upstream OpenTelemetry semantic conventions v1.37.0.
+name: weaver-registry-check
+
+on:
+  push:
+    branches: [staging, main]
+    paths:
+      - 'weaver/**'
+      - '.github/workflows/weaver-registry-check.yml'
+  pull_request:
+    paths:
+      - 'weaver/**'
+      - '.github/workflows/weaver-registry-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      # Pinned to match the locally-validated toolchain (PRD #20 M6 built on weaver 0.24.2). The manifest
+      # format changed at 0.22.1 (manifest.yaml + schema_url); do not downgrade below that without
+      # updating weaver/registry/manifest.yaml.
+      WEAVER_VERSION: v0.24.2
+      WEAVER_SHA256: e5508316149b01cac325bd3b2c72c83ffea4cfcb554cac2906ff80df6edafc0e
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OTel Weaver (pinned, sha-verified)
+        run: |
+          set -euo pipefail
+          url="https://github.com/open-telemetry/weaver/releases/download/${WEAVER_VERSION}/weaver-x86_64-unknown-linux-gnu.tar.xz"
+          curl -sSfL "$url" -o weaver.tar.xz
+          echo "${WEAVER_SHA256}  weaver.tar.xz" | sha256sum -c -
+          tar xf weaver.tar.xz
+          install -m 0755 weaver-x86_64-unknown-linux-gnu/weaver /usr/local/bin/weaver
+          weaver --version
+
+      - name: Check registry against OTel semconv v1.37.0
+        # Resolves every ref: in weaver/registry/guard-proxy-spans.yaml against the upstream registry
+        # pinned in manifest.yaml. A renamed/removed upstream attribute or a typo'd ref fails here.
+        run: weaver registry check --registry weaver/registry/
