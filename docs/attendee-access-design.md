@@ -276,7 +276,7 @@ The per-attendee Datadog trial orgs are minted with Datadog's own learning-cente
 └──────────────────────────────┴──────────────────────────────┘
 ```
 
-- **Left:** the current beat's instructions (rendered `beats/<n>/beat.md`).
+- **Left:** the current beat's instructions (rendered `challenges/<n>/beat.md`).
 - **Right, tabbed:** **Terminal** (`ttyd`, scoped SA, kubeconfig pre-set to the in-cluster context) and
   **Agent chat** (the existing `chat-ui`, A2A to the guard-proxy). Cost counter pinned on top.
 - **Build difficulty: medium, no unknowns.** `ttyd` is the standard tool for exactly this; the split

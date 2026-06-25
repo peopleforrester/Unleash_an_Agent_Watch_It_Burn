@@ -196,7 +196,7 @@ guard" (trace re-leak), where the same telemetry becomes a second exfil sink.
 Note:
 The death is the demo; don't fight it. ~10 disposable spares are warm before doors. As each dies,
 switch to the next URL — this IS the expected flow, not a failure. If the agent wanders instead of
-attacking, drive the step via beats/01-cncf-wall/fallback — never debug the model live. Hand-off to
+attacking, drive the step via challenges/01-cncf-wall/fallback — never debug the model live. Hand-off to
 the cost beat: Michael takes the counter.
 </textarea></section>
 
@@ -237,7 +237,7 @@ This is where the CNCF security suite gets introduced — NOT in the intro. Walk
 distinct error on screen. Keep it to controls actually enabled on C2 (also Falco runtime, NetworkPolicy,
 External Secrets, image signing, and planned mesh mTLS/SPIFFE). Cost point: Kyverno is the last mile
 and the most expensive mile — by the time admission denies, the tokens are already spent. Agent wanders
-→ beats/01-cncf-wall/fallback.kubectl.sh. Hand-off → Michael: "Now your own cluster, where you turn on
+→ challenges/01-cncf-wall/fallback.kubectl.sh. Hand-off → Michael: "Now your own cluster, where you turn on
 the guardrails built for agents."
 </textarea></section>
 
@@ -258,8 +258,8 @@ On your own cluster, switch the agent-specific guards on **one at a time** — w
 Note:
 Guards start OFF (output/input/MCP all off). Flip them at runtime via the guard-proxy /toggle endpoint
 (Argo CD-safe; counter survives) — NOT kubectl set env, which self-heal reverts. Toggle scripts:
-beats/02-sanitization/toggle-output-guard-on.sh, toggle-input-guard-on.sh,
-beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh. Say "deterministic" ONLY for the block-list,
+challenges/02-sanitization/toggle-output-guard-on.sh, toggle-input-guard-on.sh,
+challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh. Say "deterministic" ONLY for the block-list,
 never the classifier. MCP step is LIVE or RECORDED per pre-flight — say which out loud; the gap is
 identical either way. Sentinels: FAKE-PROD-DB-PASSWORD-sentinel-9f2a (output), FAKE-MCP-EXFIL-sentinel-4c1d
 (MCP). Optional games run in this window (ESO/S3 exfil "basketball", challenge ladder). Agent wanders →

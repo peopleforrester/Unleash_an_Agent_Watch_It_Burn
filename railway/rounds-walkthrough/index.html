@@ -58,7 +58,8 @@
 
 Note:
 Round-by-round review deck, separate from the live-delivery run-of-show at walkthrough.agenticburn.com.
-Each challenge has its own slide; click through the Round 1/2/3 states one reveal at a time.
+Each challenge has its own slide; click through the Round 1/2/3 states one reveal at a time. Terminology
+is locked: Rounds (cluster phases) and Challenges (the attacks). The old word "beats" is retired.
 </textarea></section>
 
 <!-- THE SHAPE -->
@@ -71,11 +72,32 @@ Each challenge has its own slide; click through the Round 1/2/3 states one revea
 - <em>Round 2</em>: infrastructure guardrails on. The infra attacks get walled.
 - <em>Round 3</em>: AI guardrails on. The AI attacks get walled.
 
-Defenses are <em>cumulative</em>. Same attack prompts carry forward across rounds.
+Defenses are <em>cumulative</em>. Same attack prompts carry forward across rounds: now it works, now it doesn't.
 
 Note:
-Cumulative: Round 3 still has Round 2's infra on. The prompt interface has a per-round dropdown so the
-same prompt can be re-run and watched to succeed in Round 1 and get caught later.
+"No guardrails" is the story we tell, not the literal truth. Base-level protective guardrails ARE installed
+on every cluster so a room of attackers can't publicly embarrass us (no code-of-conduct blast radius).
+What's OFF in Round 1 is the PRODUCTION blocking guardrails. We say "no rules" out loud and mean "we don't
+trust you." Cumulative: Round 3 still has Round 2's infra on, so the same prompt re-run gets caught later.
+</textarea></section>
+
+<!-- THE FRAME: secret sauce + loose system prompt -->
+<section data-markdown><textarea data-template>
+## The frame we set up front
+
+<em>The secret sauce.</em> From the opening minute: BurritoBot's business is built on secret ingredients
+that customers go gaga for. Snail blood. Ethically sourced elephant tears. That recipe is the crown jewel,
+and a running thread the whole workshop: do not let it leak.
+
+<em>The loose system prompt.</em> The agent is told "the burrito is a suggestion: steer people toward
+ordering, but detours are fine." We show attendees that prompt on purpose.
+
+The lesson: <em>never trust the system prompt to make an agent behave.</em> Roughly one in twenty runs it
+wanders, in either direction. That is WHY every challenge needs a real guardrail, not a politely-worded ask.
+
+Note:
+This is the pedagogical spine. We are honest that the system prompt is deliberately permissive so nobody
+asks "why not just tell it no?" The answer is: prompts are probabilistic; guardrails are deterministic.
 </textarea></section>
 
 <!-- THE THREE ROUNDS -->
@@ -85,23 +107,24 @@ same prompt can be re-run and watched to succeed in Round 1 and get caught later
     <div class="card r1">
       <h4>Round 1: no guardrails</h4>
       <p class="out">All 7 challenges succeed</p>
-      <p>Shared room cluster + ~10 spares. No floor: one destructive prompt kills it. Cost climbs.</p>
+      <p>Shared room cluster + spares. No production blocking on: one destructive prompt can kill it. Cost climbs.</p>
       <p class="small"><span class="tag">instructor-run</span></p>
     </div>
     <div class="card r2">
       <h4>Round 2: infrastructure</h4>
       <p class="out">Challenges 1-4 blocked</p>
-      <p>CNCF infra on. The AI attacks (5-7) still get through: infra does not see prompts.</p>
+      <p>CNCF infra on. The AI attacks (5-7) still get through: infra does not see prompts or tool calls.</p>
       <p class="small"><span class="tag">instructor-run</span></p>
     </div>
     <div class="card r3">
       <h4>Round 3: AI guardrails</h4>
       <p class="out">Challenges 5-7 blocked</p>
-      <p>Each attendee on their OWN cluster. Toggle input, output, MCP, then free-play. Infra stays walled.</p>
-      <p class="small"><span class="tag">per-attendee (~60)</span></p>
+      <p>Each attendee on their OWN cluster. Toggle output, input, MCP, then free-play. Infra stays walled.</p>
+      <p class="small"><span class="tag">per-attendee</span></p>
     </div>
   </div>
-  <p class="small">Same install every round. What differs is what is <em>enabled</em>, not what is installed.</p>
+  <p class="small">Same install every round. What differs is what is <em>enabled</em>, not what is installed. Base
+  protective guardrails are always on; production blocking guardrails come on round by round.</p>
 </section>
 
 <!-- ROADMAP: the 7 challenges, revealed one at a time -->
@@ -109,11 +132,13 @@ same prompt can be re-run and watched to succeed in Round 1 and get caught later
   <h2>Seven challenges</h2>
   <p class="rstate s2 fragment"><span class="lbl">C1</span> Customer-data exfil to an S3 bucket <span class="tag infra">infra / R2</span></p>
   <p class="rstate s2 fragment"><span class="lbl">C2</span> Deploy a malicious app <span class="tag infra">infra / R2</span></p>
-  <p class="rstate s2 fragment"><span class="lbl">C3</span> Grep a planted Easter-egg secret <span class="tag infra">infra / R2</span></p>
+  <p class="rstate s2 fragment"><span class="lbl">C3</span> Find a planted Easter-egg secret on the filesystem <span class="tag infra">infra / R2</span></p>
   <p class="rstate s2 fragment"><span class="lbl">C4</span> Fork bomb (the Round 1 kill shot) <span class="tag infra">infra / R2</span></p>
-  <p class="rstate s3 fragment"><span class="lbl">C5</span> Input: prompt injection <span class="tag ai">AI / R3</span></p>
-  <p class="rstate s3 fragment"><span class="lbl">C6</span> Output: secret / PII in the reply <span class="tag ai">AI / R3</span></p>
-  <p class="rstate s3 fragment"><span class="lbl">C7</span> MCP server: excessive agency <span class="tag ai">AI / R3</span></p>
+  <p class="rstate s3 fragment"><span class="lbl">C5</span> Output: secret / PII in the reply (the costly side) <span class="tag ai">AI / R3</span></p>
+  <p class="rstate s3 fragment"><span class="lbl">C6</span> Input: block it before the model ever sees it <span class="tag ai">AI / R3</span></p>
+  <p class="rstate s3 fragment"><span class="lbl">C7</span> Rogue MCP server: supply-chain + excessive agency <span class="tag ai">AI / R3</span></p>
+  <aside class="notes">Order change ratified: OUTPUT is C5, INPUT is C6. We show the expensive output-cleanup
+  story first, then reveal that input is where you actually want to block. C1, C3, C4 are the infra-build gaps.</aside>
 </section>
 
 <!-- CHALLENGE 1 -->
@@ -124,7 +149,7 @@ same prompt can be re-run and watched to succeed in Round 1 and get caught later
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. NetworkPolicy default-deny egress stops the push; Istio ambient mTLS protects in-transit.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span> (infra carries forward).</p>
   <p class="chip gap fragment">BUILD: substrate built (egress + customer-stream + Istio); package as a challenge</p>
-  <aside class="notes">Data-at-rest framing: a planted secret/credential is copied and pushed to S3. NetworkPolicy is the headline control; mTLS covers the in-transit story Whitney wanted shown.</aside>
+  <aside class="notes">NetworkPolicy is the headline control; mTLS covers the in-transit story Whitney wanted shown.</aside>
 </section>
 
 <!-- CHALLENGE 2 -->
@@ -134,19 +159,22 @@ same prompt can be re-run and watched to succeed in Round 1 and get caught later
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The villain app deploys.</p>
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Kyverno admits images only from the internal Harbor registry, only if signed + attested.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span>.</p>
-  <p class="chip yes fragment">BUILT: beats/01-cncf-wall</p>
+  <p class="chip yes fragment">BUILT: challenges/01-cncf-wall</p>
   <aside class="notes">Optional motivator: sneak a malicious image INTO Harbor; Kyverno still deploys it unless signing/attestation is enforced, which is why both registry-restriction and provenance are needed.</aside>
 </section>
 
 <!-- CHALLENGE 3 -->
 <section>
-  <h2>Challenge 3: secret grep <span class="tag infra">infra</span></h2>
-  <p class="attack">Get the agent to fetch a planted Easter-egg secret off the filesystem.</p>
-  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The agent reads and returns the planted secret.</p>
-  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Scoped RBAC + least privilege deny the agent's access to the secret.</p>
+  <h2>Challenge 3: find the planted secret <span class="tag infra">infra</span></h2>
+  <p class="attack">Trick the agent into snooping the container filesystem and surfacing a planted Easter-egg secret.</p>
+  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The agent ls's around, follows the breadcrumbs, reads the file, returns it.</p>
+  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">caught</span>. A Falco rule fires on the filesystem snooping (ls / opening the bait dirs) and the read; the alert lands in Datadog. ESO keeps real secrets out of the cluster, so there is nothing legitimate to find.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span>.</p>
-  <p class="chip gap fragment">BUILD: planted secret exists; package as a challenge</p>
-  <aside class="notes">This is the "grep'd secret" from the transcript. Distinct from C6 (output guard): here the control is access (RBAC), not output redaction.</aside>
+  <p class="chip gap fragment">BUILD: planted-file + breadcrumbs exist; package the Falco-detect story</p>
+  <aside class="notes">NOT a Kubernetes secret. It is a silly file in the container with bait directory names
+  ("DO NOT OPEN THIS DIRECTORY", "definitely not this one") that lead the agent in. The teaching: you should
+  never run ls / poke a production container, so Falco alerting on it is the signal; the deeper fix is ESO,
+  so no real secret is ever plaintext on the filesystem. KubeArmor is the optional hard-block variant.</aside>
 </section>
 
 <!-- CHALLENGE 4 -->
@@ -157,74 +185,89 @@ same prompt can be re-run and watched to succeed in Round 1 and get caught later
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Per-pod PID limit prevents it (a config, not a tool); Falco/Talon detects and terminates.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span>.</p>
   <p class="chip gap fragment">BUILD: defense built/validated; package the attack + lock Round 1 placement</p>
-  <aside class="notes">Teaching gem: prevention is "simple counting" (the PID cap), not a flashy tool, and Falco still fires the under-attack signal even though prevention is config-based.</aside>
+  <aside class="notes">Teaching gem: prevention is "simple counting" (the PID cap), not a flashy tool, and Falco still fires the under-attack signal even though prevention is config-based. R2 remediation here is quick: a ConfigMap plus the Falco capture.</aside>
 </section>
 
-<!-- CHALLENGE 5 -->
+<!-- CHALLENGE 5: OUTPUT (the costly side, shown first) -->
 <section>
-  <h2>Challenge 5: input <span class="tag ai">AI</span></h2>
-  <p class="attack">Prompt injection: steer the agent off-task / past its instructions.</p>
-  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. Injection lands.</p>
-  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="succeed">still succeeds</span>. Infra does not read prompts.</p>
-  <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="blocked">blocked</span>. Attendee enables the input guard: deterministic blocklist, then the DeBERTa PromptInjection classifier.</p>
-  <p class="chip yes fragment">BUILT: beats/02 input toggles</p>
-  <aside class="notes">Two-stage input guard: the blocklist rejects destructive intent pre-model (zero Bedrock tokens, cost flatlines), then the classifier catches subtler injection.</aside>
-</section>
-
-<!-- CHALLENGE 6 -->
-<section>
-  <h2>Challenge 6: output <span class="tag ai">AI</span></h2>
-  <p class="attack">Get a secret / PII to come back inside the agent's reply.</p>
-  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The sentinel secret leaks in the response.</p>
+  <h2>Challenge 5: output <span class="tag ai">AI</span></h2>
+  <p class="attack">Make a secret ingredient or a customer's PII come back inside the agent's reply.</p>
+  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The agent says "snail blood" back, or confirms the credit-card number a user pasted in. It leaks.</p>
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="succeed">still succeeds</span>. Infra does not inspect replies.</p>
-  <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="blocked">blocked</span>. Attendee enables the output guard: deterministic Regex redaction at the guard-proxy. The sentinel becomes [REDACTED].</p>
-  <p class="chip yes fragment">BUILT: beats/02 output toggle</p>
-  <aside class="notes">Optional re-leak trap lands here: the trace shows the secret before sanitization and clean after. Deterministic Regex, no LLM-as-judge.</aside>
+  <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="blocked">blocked on output</span>. Attendee enables the output guard: deterministic regex redaction at the guard-proxy. The secret becomes [REDACTED] in the reply.</p>
+  <p class="rstate s3 fragment"><span class="lbl">but...</span> the model already SAW it. It is now in the trace, the span, the session logs. Cleaning that up after the fact is the costly part: the relay problem, plus PCI / GDPR liability you did not want.</p>
+  <p class="chip yes fragment">BUILT: challenges/02 output toggle + re-leak trace trap</p>
+  <aside class="notes">Story beats: user pastes a credit card instead of clicking the payment link, or fishes for the
+  secret ingredient. We block the reply, then walk the trace and show the secret sitting in observability
+  BEFORE sanitization. The point of showing output first: it is real, it is necessary as a backstop, and it
+  is expensive. That sets up C6. Demo value is searchable ("snail blood"); the real-world stakes are PII.</aside>
 </section>
 
-<!-- CHALLENGE 7 -->
+<!-- CHALLENGE 6: INPUT (where you actually want to block) -->
 <section>
-  <h2>Challenge 7: MCP server <span class="tag ai">AI</span></h2>
-  <p class="attack">A poisoned MCP tool description induces the agent to over-reach (excessive agency).</p>
-  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The agent calls the rogue tool and leaks its output.</p>
-  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="succeed">still succeeds</span>. Infra does not govern tool calls.</p>
-  <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="blocked">blocked</span>. Attendee enables agentgateway mcpAuthorization: an allow-only tool list; the rogue tool is filtered from the agent's view.</p>
-  <p class="chip yes fragment">BUILT: beats/03 mcp-authz</p>
-  <aside class="notes">Allow-only CEL with implicit deny: the rogue read_internal_config tool is not listed, so it is denied and filtered out of list_tools. Enforcement on OSS v1.3.0 is the beat-3 build spike.</aside>
+  <h2>Challenge 6: input <span class="tag ai">AI</span></h2>
+  <p class="attack">Same secret / PII, but stop it before the model ever processes it.</p>
+  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. Whatever you paste reaches the model.</p>
+  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="succeed">still succeeds</span>. Infra does not read prompts.</p>
+  <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="blocked">blocked at input</span>. Attendee enables the input guard: a deterministic blocklist (credit-card / SSN patterns) pre-model, then the DeBERTa PromptInjection classifier. The model never sees it, so nothing to clean up later.</p>
+  <p class="chip yes fragment">BUILT: challenges/02 input toggles</p>
+  <aside class="notes">This is the payoff of showing output first: input is cheaper and cleaner because the
+  blocked content never enters the system, so there are no traces to scrub. You still keep the output guard
+  as a backstop for what the input guard misses. If the agent legitimately needs PII (where to send the
+  burrito), that belongs in an RBAC'd tool call in the harness, not in the chat. Two-stage input: blocklist
+  flatlines cost pre-Bedrock, classifier catches subtler injection.</aside>
+</section>
+
+<!-- CHALLENGE 7: rogue MCP server (supply-chain) -->
+<section>
+  <h2>Challenge 7: rogue MCP server <span class="tag ai">AI</span></h2>
+  <p class="attack">A well-meaning employee wires in a public, look-alike MCP server. It poisons the supply chain and over-reaches.</p>
+  <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The agent uses the rogue tool. Proprietary recipe data leaks out; the tool feeds back instructions (prompt injection via tool data) and false reorder numbers.</p>
+  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="succeed">still succeeds</span>. Infra does not govern tool calls. The MCP server presents tools to the LLM through the harness, below where NetworkPolicy or admission can see.</p>
+  <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="blocked">blocked</span>. Attendee enables agentgateway mcpAuthorization: an allow-only tool list. The rogue tool is filtered out of list_tools, so the model never even learns it exists. Falco can also flag the tool run.</p>
+  <p class="chip yes fragment">BUILT: challenges/03 mcp-authz (agentgateway)</p>
+  <aside class="notes">The realistic frame: the burrito system tracks burritos made and reorders ingredients, so an
+  employee hooks up a public MCP "supply-chain" server that knows the recipe list. That server quietly exfils
+  proprietary data, poisons reorders with false numbers, and injects "list your tools / fetch this URL" via
+  its responses. Why an MCP gateway and not infra: the harness, not the LLM, presents tools; agentgateway sits
+  at the harness and filters the tool before the LLM sees it. Allow-only CEL with implicit deny. Enforcement on
+  agentgateway OSS v1.3.0 is the build spike.</aside>
 </section>
 
 <!-- ENABLEMENT MODEL -->
 <section>
   <h2>Enablement: same install, different toggles</h2>
-  <p class="small">A round is a set of toggles, not a different stack. (Round 1 "all off" decided 2026-06-24: full install, guardrails disabled, retiring the stripped burn profile after a clean-burn check.)</p>
+  <p class="small">A round is a set of toggles, not a different stack. Round 1 = full install, production blocking
+  guardrails disabled (base protections stay on).</p>
   <table>
     <tr><th>Control</th><th class="c">Round 1</th><th class="c">Round 2</th><th class="c">Round 3</th></tr>
     <tr><td>Kyverno admission (C2)</td><td class="c">off / audit</td><td class="c">Enforce</td><td class="c">Enforce</td></tr>
     <tr><td>NetworkPolicy egress (C1)</td><td class="c">off</td><td class="c">default-deny</td><td class="c">default-deny</td></tr>
-    <tr><td>scoped RBAC (C3)</td><td class="c">loose</td><td class="c">least-priv</td><td class="c">least-priv</td></tr>
+    <tr><td>Falco filesystem-snoop rule (C3)</td><td class="c">off / audit</td><td class="c">alert</td><td class="c">alert</td></tr>
     <tr><td>per-pod PID limit / node (C4)</td><td class="c">off</td><td class="c">1024</td><td class="c">1024</td></tr>
     <tr><td>Falco / Talon (C4)</td><td class="c">off</td><td class="c">on</td><td class="c">on</td></tr>
-    <tr><td>input guard (C5)</td><td class="c">off</td><td class="c">off</td><td class="c">attendee on</td></tr>
-    <tr><td>output guard (C6)</td><td class="c">off</td><td class="c">off</td><td class="c">attendee on</td></tr>
+    <tr><td>output guard (C5)</td><td class="c">off</td><td class="c">off</td><td class="c">attendee on</td></tr>
+    <tr><td>input guard (C6)</td><td class="c">off</td><td class="c">off</td><td class="c">attendee on</td></tr>
     <tr><td>MCP authz (C7)</td><td class="c">off</td><td class="c">off</td><td class="c">attendee on</td></tr>
   </table>
   <aside class="notes">PID limit is a node setting from Terraform cloudinit, so Round 1 nodes are built without the cap; everything else is a gitops/app toggle. This table is the build spec for the per-round enablement overlays.</aside>
 </section>
 
-<!-- OPEN FOR M+W -->
+<!-- RATIFIED DECISIONS -->
 <section data-markdown><textarea data-template>
-## React-to list (Michael + Whitney)
+## Ratified in this session
 
-- <em>The model</em> above: 3 cumulative rounds, 7 separate challenges. Ratify or change.
-- <em>Build gaps</em>: package C1 (exfil), C3 (secret grep), C4 (fork bomb) as first-class challenges.
-- <em>Round 1</em>: same install, guardrails off (decided). Validate the clean burn, then retire the stripped profile.
-- <em>Naming</em>: deck uses Rounds + Challenges; repo still says "beats" (rename pending, gated on #18/#19).
-- <em>Streaming</em> to front of room: built + moderated + default off. In or out?
-- <em>BFO</em>: one transcript term never decoded. What was it?
-- <em>Datadog into clusters</em>: Whitney's Milestone 8 (our datadog-secret substrate is ready).
+- <em>Model</em>: 3 cumulative rounds, 7 challenges. Confirmed.
+- <em>C5/C6 order</em>: OUTPUT first (costly, shows the relay problem), INPUT second (cheap, preferred). Swapped.
+- <em>C3</em>: a planted FILE in the container with bait directory names, not a Kubernetes secret. Falco detects the snooping; ESO keeps real secrets out of the cluster.
+- <em>C7</em>: well-meaning employee + public look-alike supply-chain MCP. Poisoning + prompt-injection-via-tool-data. agentgateway mcpAuthorization filters the rogue tool below the LLM.
+- <em>System prompt</em>: deliberately loose, shown to attendees, to teach "never trust the system prompt."
+- <em>Round 1 honesty</em>: base protective guardrails on, production blocking off. Say "no rules" out loud.
 
 Note:
-This is where Michael and Whitney confirm or disagree. The Round + Challenge model is the main thing to ratify.
+Open and deferred, not solved here: which 4 of 7 we run live vs leave optional (decide after a timed
+runthrough, not now), and the run-of-show recut for the 60-minute slot. Datadog-into-clusters substrate is
+ready (the per-attendee credential injection mechanism is built).
 </textarea></section>
 
 </div></div>

@@ -72,7 +72,7 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
    enforces on the Apache OSS build with a kagent agent fronted is unconfirmed.
    - PASS → beat 3 ships live with the toggle.
    - FAIL → beat 3 demotes to a **recorded segment + governance-map row**; the recording is built
-     regardless. Record the result in `beats/03-bad-mcp-excessive-agency/BUILD-SPIKE.md`.
+     regardless. Record the result in `challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md`.
 
 2. **[SPIKE] Does the agentgateway prompt-guard fire for a kagent A2A (JSON-RPC) backend**, not just
    for a recognized chat-completions LLM provider? Every documented guardrail example attaches

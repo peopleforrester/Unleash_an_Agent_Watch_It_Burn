@@ -1,7 +1,7 @@
 # ABOUTME: Toggle state — INPUT prompt-injection guard OFF (beat-2 input "before"; workshop default).
 # ABOUTME: Removes the request-phase prompt-guard webhook so injections reach the agent unfiltered.
 #
-# Applied by beats/02-sanitization/toggle-input-guard-on.sh's inverse, or at provisioning to set
+# Applied by challenges/02-sanitization/toggle-input-guard-on.sh's inverse, or at provisioning to set
 # the default. This overlays agentgateway.yaml's baseline by clearing the request prompt-guard.
 #
 # verify-at-build: confirm the OSS v1.2.1 standalone way to express "no request guard" — either

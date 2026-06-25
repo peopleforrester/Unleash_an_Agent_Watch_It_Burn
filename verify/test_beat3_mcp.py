@@ -6,7 +6,7 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-BEAT = REPO / "beats" / "03-bad-mcp-excessive-agency"
+BEAT = REPO / "challenges" / "03-bad-mcp-excessive-agency"
 SERVER = (BEAT / "evil-mcp-shim" / "server.py").read_text()
 AUTHZ_ON_TEXT = (REPO / "agent" / "gateway" / "mcp-authz-on.yaml").read_text()
 CLOWN = list(yaml.safe_load_all((BEAT / "clown-file.yaml").read_text()))[0]

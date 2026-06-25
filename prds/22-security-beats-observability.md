@@ -5,7 +5,7 @@
 **Priority**: High
 **Status**: Not started
 
-> **Note on `beats/` references:** The `beats/` directory naming is being aligned with the Rounds + Challenges vocabulary adopted June 2026 (C1–C7 challenges across three cumulative rounds). When implementing, update any `beats/` path references to the current challenge/round structure as you encounter them — no separate migration task is required.
+> **Note on `challenges/` references:** The `challenges/` directory naming is being aligned with the Rounds + Challenges vocabulary adopted June 2026 (C1–C7 challenges across three cumulative rounds). When implementing, update any `challenges/` path references to the current challenge/round structure as you encounter them — no separate migration task is required.
 
 ---
 
@@ -26,7 +26,7 @@ guard-proxy currently has no OTel instrumentation. evil-mcp-shim is intentionall
 1. Instrument guard-proxy (`agent/gateway/guard-proxy/proxy.py`) with an HTTP SERVER span on `do_POST` and a `sanitize` INTERNAL child span with `gen_ai.operation.name="chat"`, `gen_ai.input.messages` (original prompt), and `gen_ai.output.messages` (sanitized prompt). Content capture is gated on `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` — the proxy reads this env var explicitly (the env var does not govern hand-written spans automatically).
 2. Add a Collector OTTL `transform` processor overlay for Act 2: replaces sentinel values on `sanitize` spans with `[DEMO-REDACTED]` before the Datadog export leg.
 3. Add guard-proxy HTTP SERVER and `sanitize` INTERNAL span groups to the M2 Weaver registry (`registry check` in CI; `live-check` as documented manual acceptance step only).
-4. Verify both beats end-to-end on a live cluster and write a demo runbook in `beats/`.
+4. Verify both beats end-to-end on a live cluster and write a demo runbook in `challenges/`.
 
 ---
 
@@ -188,7 +188,7 @@ Act 2 of the re-leak-trap beat is: the instructor applies this OTTL overlay, re-
 
 **Steps:**
 
-1. **Verify Beat 3 rogue tool-call chain.** Run the excessive-agency beat (`beats/03-bad-mcp-excessive-agency/`). Confirm in Datadog APM that the trace waterfall shows `invoke_agent → chat → execute_tool {tool_name}` where `{tool_name}` is the evil MCP tool name. If ADK emits tool results natively in `gen_ai.output.messages` on the `execute_tool` span, note it in the runbook as a bonus. If not, note "tool result not captured — caller-side tool name only" as the accepted state.
+1. **Verify Beat 3 rogue tool-call chain.** Run the excessive-agency beat (`challenges/03-bad-mcp-excessive-agency/`). Confirm in Datadog APM that the trace waterfall shows `invoke_agent → chat → execute_tool {tool_name}` where `{tool_name}` is the evil MCP tool name. If ADK emits tool results natively in `gen_ai.output.messages` on the `execute_tool` span, note it in the runbook as a bonus. If not, note "tool result not captured — caller-side tool name only" as the accepted state.
 
 2. **Verify Collector → LLM Observability routing of `sanitize` spans.** Confirm that `sanitize` spans with `gen_ai.operation.name="chat"` appear in Datadog LLM Observability (not just APM). This is the open item from `research/28` Q7. If routing fails via the contrib `datadog` exporter, fall back to a dedicated OTLP exporter with `dd-otlp-source=llmobs` header and document the fallback in this PRD's Decision Log.
 
@@ -204,7 +204,7 @@ Act 2 of the re-leak-trap beat is: the instructor applies this OTTL overlay, re-
 
 5. **Teardown.** Remove `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` from the guard-proxy Deployment (or set to `NO_CONTENT`). Confirm that subsequent spans do not carry content.
 
-6. **Write the demo runbook.** Before creating the file, read the `beats/03-bad-mcp-excessive-agency/` directory to understand what files exist and match their naming conventions. Create an `OBSERVABILITY-RUNBOOK.md` (or the closest matching existing convention) covering:
+6. **Write the demo runbook.** Before creating the file, read the `challenges/03-bad-mcp-excessive-agency/` directory to understand what files exist and match their naming conventions. Create an `OBSERVABILITY-RUNBOOK.md` (or the closest matching existing convention) covering:
    - Beat 3: what the attendee sees in Datadog APM (no instructor action required; ADK emits natively)
    - Re-leak-trap beat: Act 1 kubectl commands, expected Datadog view, Act 2 kubectl apply command, expected Datadog view, teardown commands
    - Verify-at-build findings: whether ADK captured tool results, whether Collector → LLM-Obs routing required the fallback OTLP exporter
@@ -215,7 +215,7 @@ Act 2 of the re-leak-trap beat is: the instructor applies this OTTL overlay, re-
 - [ ] Act 1 confirmed: original prompt visible in Datadog LLM Observability on the `sanitize` span
 - [ ] Act 2 confirmed: `[DEMO-REDACTED]` visible in Datadog after overlay applied
 - [ ] Teardown confirmed: `NO_CONTENT` stops content capture on subsequent spans
-- [ ] Demo runbook written and committed in `beats/03-bad-mcp-excessive-agency/`
+- [ ] Demo runbook written and committed in `challenges/03-bad-mcp-excessive-agency/`
 
 ---
 

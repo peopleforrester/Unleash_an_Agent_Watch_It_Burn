@@ -247,7 +247,7 @@ live web research against vendor primary sources + `aws bedrock list-inference-p
   the cost story. Fixed in both proxy.py copies, cost/README.md, and the two tests
   (test_cost_counter, test_proxy_guards).
 - **agentgateway v1.2.1 → v1.3.0** (GA 2026-06-17): bumped in agentgateway.yaml, mcp-authz-on/off,
-  GATEWAY-NOTES, BUILD-SPEC, beats/03 BUILD-SPIKE, VERSIONS.lock. mcpAuthorization is allow-only CEL
+  GATEWAY-NOTES, BUILD-SPEC, challenges/03 BUILD-SPIKE, VERSIONS.lock. mcpAuthorization is allow-only CEL
   with implicit deny (NO `action` field) - deleted FORM B; MCP config re-nested under
   `mcp.{targets,policies}`; tests updated.
 - **Tempo chart repointed** to `grafana-community/helm-charts` 2.2.3 / app 2.10.7 (old grafana repo
@@ -793,7 +793,7 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
   - Teardown: NO_CONTENT -> op=chat, no content attrs (trace 69565ab1...).
   - Beat 3: ADK emits `execute_tool {gen_ai.tool.name}` natively (verified `execute_tool list_pods`);
     rogue induction is probabilistic on Haiku (0/4 runs) -> fallback.curl.sh is the deterministic path.
-  - Runbook: `beats/03-bad-mcp-excessive-agency/OBSERVABILITY-RUNBOOK.md`.
+  - Runbook: `challenges/03-bad-mcp-excessive-agency/OBSERVABILITY-RUNBOOK.md`.
 - **#20 M7 build verification** (`docs/prd20-m7-build-verification.md`): 5/7 pass. gen_ai.request.model
   on call_llm/chat/generate_content; content capture on/off; weaver live-check PASSES on REAL emitted
   spans (only stability:development advisories). Found OTLP/JSON int64-as-string gotcha (documented).

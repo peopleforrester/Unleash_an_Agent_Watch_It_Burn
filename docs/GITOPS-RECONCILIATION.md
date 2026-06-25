@@ -41,7 +41,7 @@ The canonical files were corrected by porting the better content out of `platfor
 
 | File | What changed | Why |
 |---|---|---|
-| `policies/kyverno/require-resource-limits.yaml` | Replaced with the rule-level `validate.failureAction: Audit` version | The old canonical copy used the deprecated top-level `spec.validationFailureAction` and lacked the `/spec/rules/0/validate/failureAction` path that the Beat-1 toggle (`beats/01-cncf-wall/toggle-kyverno-enforce.sh`) patches. The live Audit to Enforce demo would have failed against it. |
+| `policies/kyverno/require-resource-limits.yaml` | Replaced with the rule-level `validate.failureAction: Audit` version | The old canonical copy used the deprecated top-level `spec.validationFailureAction` and lacked the `/spec/rules/0/validate/failureAction` path that the Beat-1 toggle (`challenges/01-cncf-wall/toggle-kyverno-enforce.sh`) patches. The live Audit to Enforce demo would have failed against it. |
 | `gitops/apps/falco.yaml` | Added a `workshop-agent-rules.yaml` entry to `customRules` (shell/exec in agent pod, unexpected outbound, planted FAKE- sentinel reads) | The canonical Falco app had generic + EKS rules but none of the workshop agent-pod detections that lived only in `platform/falco/rules-workshop.yaml`. |
 
 Byte-identical duplicates needed no port: `minimal-floor.yaml` and `block-argocd-drift.yaml`.
