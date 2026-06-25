@@ -234,12 +234,17 @@ same identity flows to Datadog and the OSS backends. These are wins regardless o
   with `resource_metrics_key_attributes`, which only builds the grouping hash key and does NOT
   copy attributes onto the metrics. Verify the exact field against the connector version pinned
   in the Collector chart (`0.158.2`).
-- **Falcosidekick -> Datadog / OTLP wiring.** Falcosidekick currently forwards only to Talon
+- **Falcosidekick -> Datadog / OTLP wiring.** ~~Falcosidekick currently forwards only to Talon
   (CONFIRMED at `gitops/apps/falcosidekick.yaml`) and exposes Prometheus metrics; it does NOT
-  forward security events to Datadog or OTLP. To put Falco events on the same observability
-  surface as the rest of the telemetry, enable Falcosidekick's Datadog output for the event
-  (additive) and/or its OTLP output so events also reach Tempo/Grafana - keeping the
-  Datadog-additive principle (OTLP path is the portable one).
+  forward security events to Datadog or OTLP.~~ **STALE — superseded by commit `6c6a81d`**, which
+  added the Datadog output block to `gitops/apps/falcosidekick.yaml`. The manifest now configures
+  both Talon (CRITICAL+) and Datadog output (NOTICE+). Verify-at-build: confirm `datadog-secret`
+  exists in the `security` namespace (not just `monitoring`) and `DATADOG_HOST` matches the org
+  site (US1 = `https://api.datadoghq.com`). Falcosidekick sends individual alerts to the **Datadog
+  Event Stream** (Events API) — distinct from the Agent named integration, which sends individual
+  alerts to **Log Explorer** (JSON logs) plus aggregate Prometheus metrics. Both paths are additive
+  and feed different Datadog surfaces; wire both (Falcosidekick in M4; Agent integration in M5).
+  OTLP output to Tempo/Grafana remains a separate additive option.
 - **Add the missing `connectors:` block.** Tied to spanmetrics above; this is the structural gap
   to close.
 
@@ -247,7 +252,8 @@ same identity flows to Datadog and the OSS backends. These are wins regardless o
 both Datadog and OSS backends simultaneously. Sequence: (1) `OTEL_RESOURCE_ATTRIBUTES` on
 AI-layer pods; (2) add `connectors:` + `spanmetrics` with `add_resource_attributes: true` and
 wire it into the traces->metrics pipelines; (3) enable Falcosidekick OTLP output (portable) plus
-Datadog output (additive, event-only). Verify emitted attribute names against live spans before
+Datadog output (sends to Event Stream — additive; Agent named integration separately sends to Log
+Explorer + OOTB dashboard metrics). Verify emitted attribute names against live spans before
 building dashboards (GenAI semconv is still Development, names can churn - `research/05`).
 
 **Reversible?** Fully reversible (Collector + pod config). These should become a numbered
