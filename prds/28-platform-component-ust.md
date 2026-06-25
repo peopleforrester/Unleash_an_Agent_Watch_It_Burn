@@ -142,11 +142,11 @@ Check `VERSIONS.lock` at the repo root for the component's deployed version. If 
 
 ### Milestone 2 — Kyverno UST annotations
 
-**Step 0:** Read the Kyverno Application YAML in `gitops/apps/kyverno.yaml`. Note that Kyverno uses native OTLP (M5 Decision 9) — the Agent Prometheus check is skipped for Kyverno. UST annotations here ensure the Datadog Operator can correlate Kyverno's telemetry under a named service.
+**Step 0:** Read the Kyverno Application YAML in `gitops/apps/kyverno.yaml`. Note: Kyverno now uses the Datadog Agent Autodiscovery openmetrics check (M5 D9 superseded by meta-PRD D4 2026-06-25; OTLP tracing/metrics blocks removed in commit `8ed0a0c`). The `admissionController.podAnnotations` block already exists with the Autodiscovery annotation `ad.datadoghq.com/kyverno.checks` — UST annotations must be ADDED to that existing block, not replace it.
 
 **Steps:**
 
-1. In `gitops/apps/kyverno.yaml`, add `podAnnotations` to the admission controller, background controller, and cleanup controller pod templates. Kyverno's Helm chart uses per-component keys — use the annotation path lookup from the Milestone Working Pattern to verify. Example shape:
+1. In `gitops/apps/kyverno.yaml`, add UST annotations to the existing `admissionController.podAnnotations` block (merge, do not replace the Autodiscovery annotation already there), and add `podAnnotations` to the background controller and cleanup controller pod templates. Kyverno's Helm chart uses per-component keys — use the annotation path lookup from the Milestone Working Pattern to verify. Example shape:
 
    ```yaml
    admissionController:

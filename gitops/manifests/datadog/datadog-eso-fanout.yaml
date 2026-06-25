@@ -25,10 +25,16 @@ spec:
     name: datadog-secret
     creationPolicy: Owner
   data:
+    # Two-key shape per PRD #34 locked decision (api-key + app-key), even though the Collector and
+    # falcosidekick only read api-key today — keeps datadog-secret uniform across all three namespaces.
     - secretKey: api-key
       remoteRef:
         key: watch-it-burn/datadog
         property: api-key
+    - secretKey: app-key
+      remoteRef:
+        key: watch-it-burn/datadog
+        property: app-key
 ---
 apiVersion: external-secrets.io/v1
 kind: ExternalSecret
@@ -44,7 +50,13 @@ spec:
     name: datadog-secret
     creationPolicy: Owner
   data:
+    # Two-key shape per PRD #34 locked decision (api-key + app-key), even though the Collector and
+    # falcosidekick only read api-key today — keeps datadog-secret uniform across all three namespaces.
     - secretKey: api-key
       remoteRef:
         key: watch-it-burn/datadog
         property: api-key
+    - secretKey: app-key
+      remoteRef:
+        key: watch-it-burn/datadog
+        property: app-key
