@@ -53,15 +53,12 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-f", "/etc/agentgateway/config.yaml"]
           env:
-            # UST for Datadog correlation.
+            # UST for Datadog correlation (resource attributes on agentgateway's spans).
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=agentgateway,service.version=v1.3.0,deployment.environment.name=production"
-            # Tracing via the standard OTLP env endpoint. The config-file frontendPolicies.tracing key the
-            # research suggested is REJECTED by the v1.3.0 binary ("no variant of enum SimpleLocalBackend"),
-            # so it was removed; agentgateway is Istio-derived and honors this env. Exact config-file tracing
-            # schema is a follow-up; the guard-proxy->agentgateway Service Map edge does not depend on it.
-            - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: "http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317"
+            # NOTE: tracing is configured in the config file's top-level `tracing` block (below), NOT via
+            # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emits ZERO spans on v1.3.0 (verified live: a targeted
+            # `service:agentgateway` Datadog span search returned 0). The config-file path is the working one.
           ports:
             - { name: proxy, containerPort: 3000 } # A2A reverse proxy -> workshop-agent
             - { name: mcp, containerPort: 3001 }    # MCP front -> workshop-mcp
@@ -105,10 +102,17 @@ data:
   config.yaml: |
     # yaml-language-server: $schema=https://agentgateway.dev/schema/config
     # agentgateway OSS v1.3.0 standalone config.
-    # The frontendPolicies.tracing block was REMOVED: the live v1.3.0 binary rejects
-    # {otlpEndpoint, randomSampling} there ("no variant of enum SimpleLocalBackend"). Tracing is wired via
-    # the OTEL_EXPORTER_OTLP_ENDPOINT env on the Deployment instead. The exact config-file tracing schema
-    # is a follow-up; getting the proxy hop up is what unblocks the request path.
+    #
+    # TRACING is a TOP-LEVEL `tracing` key (RawConfig.tracing), NOT under frontendPolicies. Putting it
+    # under frontendPolicies crashes the v1.3.0 binary ("frontendPolicies.tracing: no variant of enum
+    # SimpleLocalBackend") because that path expects a backend object. Verified against the pinned v1.3.0
+    # JSON schema (raw.githubusercontent.com/agentgateway/agentgateway/v1.3.0/schema/config.json):
+    # RawTracing = { otlpEndpoint, otlpProtocol (grpc|http, default grpc), path (default /v1/traces),
+    # headers, randomSampling }. Exporting OTLP/HTTP to the Collector's :4318 receiver (same path
+    # kagent and guard-proxy use). In the gitops manifest so it stands up on every reprovision.
+    tracing:
+      otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+      otlpProtocol: http
 
     binds:
       # A2A reverse proxy: guard-proxy -> agentgateway:3000 -> kagent workshop-agent:8080.
