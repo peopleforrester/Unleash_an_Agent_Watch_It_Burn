@@ -208,7 +208,7 @@ spec:
               tags: [workshop, agent, network, exfil, mitre_exfiltration]
               source: syscall
 
-            - rule: Read Of Planted Fake Secret By Workshop Agent
+            - rule: Sensitive File Access
               desc: A file whose name carries the FAKE-...-sentinel marker was opened inside the agent container.
               condition: >
                 open_read
