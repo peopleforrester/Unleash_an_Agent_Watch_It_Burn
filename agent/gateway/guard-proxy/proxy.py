@@ -14,8 +14,35 @@ import os
 import threading
 import time
 import urllib.request
+from contextlib import nullcontext
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
+
+# OTel instrumentation (PRD #22 M1 / issue #19). The stock python image carries no opentelemetry; the
+# OTel Operator injects the SDK at pod startup (PYTHONPATH). The try/except guard keeps this file runnable
+# with no OTel present (local dev, test clusters) as a no-op until the Operator's annotation is applied.
+try:
+    from opentelemetry import trace
+    from opentelemetry.trace import SpanKind
+    from opentelemetry.propagate import extract, inject
+    _OTEL_AVAILABLE = True
+    _tracer = trace.get_tracer(__name__)
+except ImportError:
+    _OTEL_AVAILABLE = False
+    _tracer = None
+
+# Content capture is gated on the OTel GenAI capture env var, read ONCE at module load. This env var is
+# specific to opentelemetry-util-genai / contrib instrumentations; it does NOT govern hand-written SDK
+# spans automatically (research/31 Q3), so this proxy reads it explicitly. Valid enum values:
+# NO_CONTENT (default), SPAN_ONLY, EVENT_ONLY, SPAN_AND_EVENT. "true" is NOT valid and must NOT enable
+# capture (it silently collects nothing on the ADK path too). Default OFF matches BUILD-SPEC s4.
+_CAPTURE_MODE = os.environ.get("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "NO_CONTENT").upper()
+_CAPTURE_CONTENT = _CAPTURE_MODE in ("SPAN_ONLY", "EVENT_ONLY", "SPAN_AND_EVENT")
+
+
+def _genai_messages(text):
+    """One OTel GenAI message envelope (user/text) as a JSON string, per the messages schema."""
+    return json.dumps([{"role": "user", "parts": [{"type": "text", "content": text}]}])
 
 AGENT_URL = os.environ.get("AGENT_URL", "http://workshop-agent.attendee-test:8080")
 LLM_GUARD_URL = os.environ.get("LLM_GUARD_URL", "http://llm-guard.attendee-test:8000")
@@ -196,6 +223,11 @@ def extract_text(parts):
 
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body_obj):
+        # Record the response code on the in-flight HTTP SERVER span (set in do_POST), if any. _send is
+        # the single response path for POST, so this captures the status at every exit (403/429/502/200).
+        _sp = getattr(self, "_server_span", None)
+        if _sp is not None:
+            _sp.set_attribute("http.response.status_code", code)
         body = json.dumps(body_obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
@@ -272,6 +304,23 @@ class Handler(BaseHTTPRequestHandler):
             self._send(502, {"error": f"agent GET failed: {exc}"})
 
     def do_POST(self):
+        # HTTP SERVER span (PRD #22 M1): joins the upstream trace from agentgateway via extracted W3C
+        # context, so the guard-proxy hop appears in the waterfall. http.response.status_code is set by
+        # _send at every exit. No-op when the OTel SDK is absent (import guard).
+        self._server_span = None
+        server_cm = (
+            _tracer.start_as_current_span(
+                f"POST {self.path}", context=extract(dict(self.headers)), kind=SpanKind.SERVER)
+            if _OTEL_AVAILABLE else nullcontext()
+        )
+        with server_cm as server_span:
+            self._server_span = server_span
+            if server_span is not None:
+                server_span.set_attribute("http.request.method", "POST")
+                server_span.set_attribute("url.path", self.path)
+            self._handle_post()
+
+    def _handle_post(self):
         raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
         try:
             payload = json.loads(raw)
@@ -285,54 +334,74 @@ class Handler(BaseHTTPRequestHandler):
             with _stream_lock:
                 _prompts.append(moderate(text))  # moderated; side-screen feed only
 
-        # Stage 1: deterministic block-list (cheapest, pre-LLM, zero tokens). Toggled independently.
-        if GUARDS["input_blocklist"] and text:
-            hit = blocklisted(text)
-            if hit:
-                self._send(403, {
-                    "jsonrpc": "2.0", "id": payload.get("id"),
-                    "error": {"code": -32600,
-                              "message": f"Request blocked by input block-list (matched '{hit}'). "
-                                         "No model tokens were spent."},
+        # The `sanitize` INTERNAL child span wraps the guard decision + the forward (PRD #22 M1).
+        # gen_ai.operation.name="chat" so Datadog classifies it as an llm-kind span and renders the
+        # before/after message panel in LLM Observability. NOTE: this proxy forwards the prompt UNCHANGED
+        # (it blocks-or-passes; it does not rewrite prompt content), so input.messages (original) and
+        # output.messages (forwarded) are equal here; the re-leak redaction is the Collector OTTL Act-2
+        # step (PRD #22 M2), not in-proxy. Content capture is gated (default OFF; "true" never enables it).
+        san_cm = (
+            _tracer.start_as_current_span("sanitize", kind=SpanKind.INTERNAL)
+            if _OTEL_AVAILABLE else nullcontext()
+        )
+        with san_cm as san_span:
+            if san_span is not None:
+                san_span.set_attribute("gen_ai.operation.name", "chat")
+                if _CAPTURE_CONTENT:
+                    san_span.set_attribute("gen_ai.input.messages", _genai_messages(text))
+                    san_span.set_attribute("gen_ai.output.messages", _genai_messages(text))
+
+            # Stage 1: deterministic block-list (cheapest, pre-LLM, zero tokens). Toggled independently.
+            if GUARDS["input_blocklist"] and text:
+                hit = blocklisted(text)
+                if hit:
+                    self._send(403, {
+                        "jsonrpc": "2.0", "id": payload.get("id"),
+                        "error": {"code": -32600,
+                                  "message": f"Request blocked by input block-list (matched '{hit}'). "
+                                             "No model tokens were spent."},
+                    })
+                    return
+            # Stage 2: model-based prompt-injection classifier (costlier gate; NOT deterministic).
+            if GUARDS["input_classifier"] and text:
+                if not input_allowed(text):
+                    self._send(403, {
+                        "jsonrpc": "2.0", "id": payload.get("id"),
+                        "error": {"code": -32600,
+                                  "message": "Request blocked by input guardrail (prompt injection detected)."},
+                    })
+                    return
+
+            # Protect the demo from itself: rate-limit + cost-cap BEFORE spending any Bedrock tokens.
+            if rate_limited():
+                self._send(429, {
+                    "jsonrpc": "2.0", "id": payload.get("id") if isinstance(payload, dict) else None,
+                    "error": {"code": -32000,
+                              "message": f"Rate limit reached ({RATE_LIMIT_RPM}/min on this cluster). "
+                                         "Slow down; the cost demo will not run away."},
                 })
                 return
-        # Stage 2: model-based prompt-injection classifier (costlier gate; NOT deterministic). Independent.
-        if GUARDS["input_classifier"] and text:
-            if not input_allowed(text):
-                self._send(403, {
-                    "jsonrpc": "2.0", "id": payload.get("id"),
-                    "error": {"code": -32600,
-                              "message": "Request blocked by input guardrail (prompt injection detected)."},
+            if cost_capped():
+                self._send(429, {
+                    "jsonrpc": "2.0", "id": payload.get("id") if isinstance(payload, dict) else None,
+                    "error": {"code": -32000,
+                              "message": f"Cost cap reached (${COST_CAP_USD:.2f} on this cluster). "
+                                         "Spend is frozen for the rest of the segment."},
                 })
                 return
 
-        # Protect the demo from itself: rate-limit + cost-cap BEFORE spending any Bedrock tokens.
-        if rate_limited():
-            self._send(429, {
-                "jsonrpc": "2.0", "id": payload.get("id") if isinstance(payload, dict) else None,
-                "error": {"code": -32000,
-                          "message": f"Rate limit reached ({RATE_LIMIT_RPM}/min on this cluster). "
-                                     "Slow down; the cost demo will not run away."},
-            })
-            return
-        if cost_capped():
-            self._send(429, {
-                "jsonrpc": "2.0", "id": payload.get("id") if isinstance(payload, dict) else None,
-                "error": {"code": -32000,
-                          "message": f"Cost cap reached (${COST_CAP_USD:.2f} on this cluster). "
-                                     "Spend is frozen for the rest of the segment."},
-            })
-            return
-
-        try:
-            req = urllib.request.Request(
-                AGENT_URL + self.path, data=raw,
-                headers={"Content-Type": "application/json"}, method="POST")
-            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-                resp = json.loads(r.read())
-        except Exception as exc:
-            self._send(502, {"error": f"agent forward failed: {exc}"})
-            return
+            # Forward to the agent, injecting W3C trace context so kagent's ADK spans join this trace.
+            fwd_headers = {"Content-Type": "application/json"}
+            if _OTEL_AVAILABLE:
+                inject(fwd_headers)
+            try:
+                req = urllib.request.Request(
+                    AGENT_URL + self.path, data=raw, headers=fwd_headers, method="POST")
+                with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                    resp = json.loads(r.read())
+            except Exception as exc:
+                self._send(502, {"error": f"agent forward failed: {exc}"})
+                return
 
         record_usage(resp)  # tally Bedrock token spend for the live cost counter
         if GUARDS["output"]:
