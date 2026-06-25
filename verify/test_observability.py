@@ -62,6 +62,13 @@ check("spanmetrics propagates resource attributes (UST) onto generated metrics",
 check("spanmetrics wired into traces exporters", "spanmetrics" in cfg["service"]["pipelines"]["traces"]["exporters"])
 check("spanmetrics wired into metrics receivers", "spanmetrics" in cfg["service"]["pipelines"]["metrics"]["receivers"])
 
+# datadog/connector (PRD #13 M2): APM trace.* metrics, required since otelcol-contrib v0.95.0.
+check("collector has a datadog/connector", "datadog/connector" in conns)
+check("datadog/connector computes stats by span kind",
+      conns.get("datadog/connector", {}).get("traces", {}).get("compute_stats_by_span_kind") is True)
+check("datadog/connector wired into traces exporters", "datadog/connector" in cfg["service"]["pipelines"]["traces"]["exporters"])
+check("datadog/connector wired into metrics receivers", "datadog/connector" in cfg["service"]["pipelines"]["metrics"]["receivers"])
+
 
 # Unified Service Tagging on the AI-layer pods (service.name + env via OTEL_RESOURCE_ATTRIBUTES).
 # Assert against the canonical deployed copies under gitops/ai-layer/ (agent/gateway/ is the synced
@@ -73,12 +80,28 @@ def _container_env(path, name):
     return {e["name"]: e.get("value", "") for e in c.get("env", [])}
 
 
-gp_ust = _container_env("gitops/ai-layer/resources.yaml", "guard-proxy").get("OTEL_RESOURCE_ATTRIBUTES", "")
-check("guard-proxy carries UST (service.name + env) via OTEL_RESOURCE_ATTRIBUTES",
-      "service.name=guard-proxy" in gp_ust and "deployment.environment.name=watch-it-burn" in gp_ust)
-ag_ust = _container_env("gitops/ai-layer/agentgateway.yaml", "agentgateway").get("OTEL_RESOURCE_ATTRIBUTES", "")
-check("agentgateway carries UST (service.name) via OTEL_RESOURCE_ATTRIBUTES",
-      "service.name=agentgateway" in ag_ust)
+# Locked UST vocabulary (PRD #13): deployment.environment.name=production (the SDLC env, NOT the project
+# name), and service.version is the component's real software version (NOT a model-tier label). The model
+# dimension for the cost race comes from gen_ai.request.model (M2), not service.version.
+def _kagent_env():
+    docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+    agent = next(d for d in docs if d.get("kind") == "Agent")
+    env = agent["spec"]["declarative"]["deployment"]["env"]
+    return {e["name"]: e.get("value", "") for e in env}
+
+
+# Deployments (containers[0] env) for three components; kagent is an Agent CRD handled separately.
+_UST = {
+    "guard-proxy": ("gitops/ai-layer/resources.yaml", "service.name=guard-proxy", "service.version=1.0.0"),
+    "evil-mcp-shim": ("gitops/ai-layer/resources.yaml", "service.name=evil-mcp-shim", "service.version=1.0.0"),
+    "agentgateway": ("gitops/ai-layer/agentgateway.yaml", "service.name=agentgateway", "service.version=v1.3.0"),
+}
+_ust_targets = [(n, _container_env(p, n).get("OTEL_RESOURCE_ATTRIBUTES", ""), s, v) for n, (p, s, v) in _UST.items()]
+_ust_targets.append(("kagent", _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", ""), "service.name=kagent", "service.version=v0.9.9"))
+for _name, _ust, _svc, _ver in _ust_targets:
+    check(f"{_name} carries locked UST (service.name + real service.version + env=production)",
+          _svc in _ust and _ver in _ust and "deployment.environment.name=production" in _ust
+          and "CLUSTER_TIER" not in _ust and "deployment.environment.name=watch-it-burn" not in _ust)
 
 # Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.
 fvals = yaml.safe_load((REPO / "gitops" / "apps" / "falcosidekick.yaml").read_text())["spec"]["source"]["helm"]["valuesObject"]

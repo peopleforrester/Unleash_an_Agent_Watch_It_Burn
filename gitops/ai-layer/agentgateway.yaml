@@ -53,7 +53,7 @@ spec:
             # UST for Datadog correlation (used by the OTel SDK). The OTLP *endpoint* is set in the config
             # file's tracing block, not here (research/29: the env endpoint is inert on v1.3.0). blocker #4.
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=agentgateway,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
+              value: "service.name=agentgateway,service.version=v1.3.0,deployment.environment.name=production"
           ports:
             - { name: proxy, containerPort: 3000 }
             - { name: admin, containerPort: 15000 }
