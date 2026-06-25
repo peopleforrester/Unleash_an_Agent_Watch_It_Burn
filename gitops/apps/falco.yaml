@@ -17,6 +17,11 @@ spec:
     targetRevision: "9.1.0"
     helm:
       valuesObject:
+        # Datadog Agent Autodiscovery: the `falco` named integration scrapes Falco's metrics endpoint
+        # (PRD #26 M2). Key uses the real container name `falco`. Port 8765 is Falco's webserver/metrics.
+        podAnnotations:
+          ad.datadoghq.com/falco.checks: |
+            {"falco":{"instances":[{"url":"http://%%host%%:8765/metrics"}]}}
         driver:
           kind: modern_ebpf
         tty: true
