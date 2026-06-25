@@ -19,8 +19,9 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 4. Falco alerts in Datadog — verify Falcosidekick→Event Stream, rename canary rule, confirm C3+C4 rules visible ([PRD #23](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/23))
 5. EKS infra & named integrations — Agent DaemonSet, per-component synthesis ([PRD #26](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/26))
 6. UST, Service Map & correlation — full-fidelity tagging, Service Map view, log/trace/metric pivots ([PRD #27](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/27))
-7. Dashboards — import Datadog community dashboards for components without an OOTB Datadog dashboard; decide custom/story dashboards (build now / defer / skip)
-8. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets
+7. Platform component UST backlog — add `tags.datadoghq.com/*` pod annotations to ArgoCD, Kyverno, Falco, cert-manager, Istio ambient to complete the Service Map ([PRD #28](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/28)) — gated on PRD #27 merging
+8. Dashboards — import Datadog community dashboards for components without an OOTB Datadog dashboard; decide custom/story dashboards (build now / defer / skip)
+9. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets
 
 **Optional enhancements (post-M5, if time allows before workshop):**
 

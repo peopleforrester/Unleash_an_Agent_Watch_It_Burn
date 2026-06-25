@@ -398,10 +398,10 @@ earlier milestones, given UST vocabulary was locked in Milestone 1?
 
 **Done when:**
 - [x] Decisions 1-5 recorded with reasoning
-- [ ] AI layer child PRD issue exists scoped to: agentgateway UST fix, guard-proxy CLIENT span + `peer.service`, OTTL fallback for third-party `peer.service`, log-trace correlation, Weaver CLIENT span group, Service Map verify
-- [ ] AI layer child PRD acceptance criteria: `verify/test_datadog_service_map.py` passes via `GET /api/v1/service_dependencies` (4 edges: guard-proxy→LLM Guard, guard-proxy→agentgateway, agentgateway→kagent, kagent→Bedrock — or 3 internal edges if Bedrock is external-only; verify-at-build) AND both log-trace pivot directions pass AND `weaver registry check` passes AND `weaver live-check` run as terminal acceptance step
-- [ ] Platform component UST PRD issue exists in backlog (milestone-per-component + API verification loop per Decision Log entry 591; not part of M6 acceptance criteria — 2026-06-25 Decision Log entry 603)
-- [ ] ROADMAP updated with both new PRDs
+- [x] AI layer child PRD issue exists scoped to: agentgateway UST fix, guard-proxy CLIENT span + `peer.service`, OTTL fallback for third-party `peer.service`, log-trace correlation, Weaver CLIENT span group, Service Map verify
+- [x] AI layer child PRD acceptance criteria: `verify/test_datadog_service_map.py` passes via `GET /api/v1/service_dependencies` (4 edges: guard-proxy→LLM Guard, guard-proxy→agentgateway, agentgateway→kagent, kagent→Bedrock — or 3 internal edges if Bedrock is external-only; verify-at-build) AND both log-trace pivot directions pass AND `weaver registry check` passes AND `weaver live-check` run as terminal acceptance step
+- [x] Platform component UST PRD issue exists in backlog (milestone-per-component + API verification loop per Decision Log entry 591; not part of M6 acceptance criteria — 2026-06-25 Decision Log entry 603)
+- [x] ROADMAP updated with both new PRDs
 
 ---
 
