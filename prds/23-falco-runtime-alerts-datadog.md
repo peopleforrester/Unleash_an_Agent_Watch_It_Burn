@@ -118,7 +118,7 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
 
 2. **Trigger Challenge C3 (grep Easter-egg secret) and observe alerts.**
 
-   Trigger C3 per the `beats/` runbook for Challenge C3. After the beat runs, navigate to Datadog → Events → Event Stream. Within 60 seconds, both of the following events should appear with the workshop cluster's pod name in the event body:
+   Trigger C3 per the `challenges/` runbook for Challenge C3. After the beat runs, navigate to Datadog → Events → Event Stream. Within 60 seconds, both of the following events should appear with the workshop cluster's pod name in the event body:
 
    - `Sensitive File Access` (NOTICE priority)
    - `Shell or Exec In Workshop Agent Pod` (WARNING priority)
@@ -127,7 +127,7 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
 
 3. **Trigger Challenge C4 (fork bomb) and observe alerts.**
 
-   Trigger C4 per the `beats/` runbook for Challenge C4. After the beat runs, navigate to Datadog Event Stream. Within 60 seconds, both of the following events should appear:
+   Trigger C4 per the `challenges/` runbook for Challenge C4. After the beat runs, navigate to Datadog Event Stream. Within 60 seconds, both of the following events should appear:
 
    - `Fork Bomb In Workload Container` (CRITICAL priority)
    - `Shell or Exec In Workshop Agent Pod` (WARNING priority)

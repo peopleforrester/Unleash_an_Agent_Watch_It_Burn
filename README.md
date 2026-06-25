@@ -80,7 +80,7 @@ Pinned versions are in [`VERSIONS.lock`](VERSIONS.lock).
 | `gitops/ai-layer/` | the agent and the AI guardrails (kagent, LLM Guard, MCP) |
 | `policies/kyverno/` | the admission policies |
 | `security/`, `observability-idp/`, `backstage/` | the platform foundation |
-| `agent/`, `beats/` | guardrail sources and the attack content |
+| `agent/`, `challenges/` | guardrail sources and the attack content |
 | `games/` | the attendee challenges (exfil basketball, the Cluster-3 games) |
 | `infra/` | cluster provisioning, bootstrap, and demo DNS (agenticburn.com) |
 | `verify/` | the verification scripts + the offline render-gate test suite |

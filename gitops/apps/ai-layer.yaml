@@ -19,7 +19,7 @@ spec:
     server: https://kubernetes.default.svc
     namespace: agent
   # Beat-2 LIVE TOGGLES: the demo flips the guard-proxy INPUT_GUARD / OUTPUT_GUARD env on/off via
-  # kubectl patch (beats/02-sanitization/toggle-*.sh). Ignore drift on the proxy container's env so
+  # kubectl patch (challenges/02-sanitization/toggle-*.sh). Ignore drift on the proxy container's env so
   # selfHeal does not revert the live toggle (same selfHeal-vs-toggle issue the gate run found for
   # beat-1). verify-at-build: re-confirm on a live cluster once the agent compiles (gated on workshop-mcp).
   ignoreDifferences:

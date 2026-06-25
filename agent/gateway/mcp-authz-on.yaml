@@ -17,7 +17,7 @@
 #
 # verify-at-build: [SPIKE] (Phase 4b, gates beat-3 LIVE) — confirm mcpAuthorization allowlist
 #   ENFORCES on Apache OSS v1.3.0 with kagent in front (docs/BUILD-SPEC.md §11.1). PASS -> beat 3
-#   live; FAIL -> recorded segment + governance-map row. Record in beats/03-.../BUILD-SPIKE.md.
+#   live; FAIL -> recorded segment + governance-map row. Record in challenges/03-.../BUILD-SPIKE.md.
 # verify-at-build: the doc schema nests mcpAuthorization under mcp.policies.mcpAuthorization (and
 #   targets under mcp.targets[]). Re-verify the exact mcp.{targets,policies} nesting against the
 #   v1.3.0 standalone config schema at build (research/14 §2c).

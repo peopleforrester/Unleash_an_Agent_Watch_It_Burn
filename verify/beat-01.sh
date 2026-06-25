@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
-readonly BEAT_DIR="${REPO_ROOT}/beats/01-cncf-wall"
+readonly BEAT_DIR="${REPO_ROOT}/challenges/01-cncf-wall"
 readonly TOGGLE="${BEAT_DIR}/toggle-kyverno-enforce.sh"
 
 usage() {

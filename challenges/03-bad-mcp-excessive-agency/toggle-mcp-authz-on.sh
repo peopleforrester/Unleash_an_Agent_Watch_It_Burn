@@ -41,4 +41,4 @@ echo "==> Manifest: ${MANIFEST_PATH}"
 "${KCTL[@]}" apply -f "${MANIFEST_PATH}"
 
 echo "==> Done. MCP authorization is now '${STATE}'."
-echo "==> Verify with: beats/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-$([[ "${STATE}" == on ]] && echo deny || echo allow)"
+echo "==> Verify with: challenges/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-$([[ "${STATE}" == on ]] && echo deny || echo allow)"

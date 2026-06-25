@@ -253,7 +253,7 @@ us-west-2); Fable retired. vCluster is removed. `VERSIONS.lock` is authoritative
 
 ## 7. Repository structure
 
-Existing tree stands (`platform/`, `agent/` incl. `agent/gateway/guard-proxy/`, `beats/`, `verify/`,
+Existing tree stands (`platform/`, `agent/` incl. `agent/gateway/guard-proxy/`, `challenges/`, `verify/`,
 `infra/` with `terraform/` (`lab-vpc/` + `cluster/` + `fleet/`) + the attendee/burn-cluster model READMEs,
 `facilitation/`, `research/`, `docs/`, `teardown/`). rev4 additions to create:
 ```
@@ -263,7 +263,7 @@ Existing tree stands (`platform/`, `agent/` incl. `agent/gateway/guard-proxy/`, 
   # agent/gateway/ is the synced source/spec mirror. No separate agent/guard-proxy/ tree to create.
   ui/                         # attendee chat UI + the system-prompt streaming display
 ```
-(`beats/` is recast: Cluster-3 guardrail steps = output-sanitization, input-sanitization, mcp-restriction.)
+(`challenges/` is recast: Cluster-3 guardrail steps = output-sanitization, input-sanitization, mcp-restriction.)
 
 ---
 
