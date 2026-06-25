@@ -96,7 +96,7 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
 
 1. Add `datadog` to the namespace list in `gitops/apps/namespaces.yaml` (match the existing entry format exactly — same indentation, same field names).
 
-2. Create `gitops/apps/datadog-operator.yaml` as an ArgoCD Application rendering the `datadog/datadog-operator` Helm chart. Set `argocd.argoproj.io/sync-wave: "3"`. Match the structure of a sibling Application file (e.g., `gitops/apps/kyverno.yaml`). Minimum Helm values: latest stable operator version; `replicaCount: 1`; resource requests appropriate for the operator (not the Agent — the Agent's resources are in the CR).
+2. Create `gitops/apps/datadog-operator.yaml` as an ArgoCD Application rendering the `datadog/datadog-operator` Helm chart. Set `argocd.argoproj.io/sync-wave: "3"`. Match the structure of a sibling Application file (e.g., `gitops/apps/kyverno.yaml`). Minimum Helm values: **pin the exact chart version at implementation time** (do not use `latest` or omit the version field — check `helm search repo datadog/datadog-operator` for the current stable version and hardcode it); `replicaCount: 1`; resource requests appropriate for the operator (not the Agent — the Agent's resources are in the CR).
 
    **Before writing this file:** Read all existing Application YAMLs in `gitops/apps/` and check their `repoURL` values. Confirm whether `https://helm.datadoghq.com` is already registered as an ArgoCD Helm repository. If no existing Application uses that URL, the Datadog Helm repo must be added to the ArgoCD repo config before this Application will sync. Do not assume the chart registry is available.
 
@@ -146,6 +146,8 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
              cpu: 200m
              memory: 256Mi
    ```
+
+   **Secret dependency:** The DatadogAgent CR references `datadog-secret`, which is created by the ExternalSecret in Step 5. Both resources land in the same ArgoCD Application (sync-wave "4"), so ArgoCD applies them simultaneously. ESO processes the ExternalSecret asynchronously — the secret may not exist at the moment the Datadog Operator runs its first reconcile. This is expected: the Operator will requeue and succeed once ESO populates the secret. Do not treat the first reconcile failure as a bug. ESO itself runs at an earlier sync-wave, so ESO will be ready before the ExternalSecret is applied.
 
    **Verify field paths before committing** — do not use training data for CRD field names. Run against a cluster with the Operator installed:
    ```bash
