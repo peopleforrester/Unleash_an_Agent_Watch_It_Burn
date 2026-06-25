@@ -440,8 +440,8 @@ custom/story dashboard decisions are made (build now, defer specific ones to dre
 - [x] Datadog community dashboard research spike ([issue #24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24)) complete and file path posted as comment (gates Step 2 Decision 1; **no Grafana imports** — Updated per 2026-06-24 Grafana decision)
 - [x] Import/skip decided per Datadog community dashboard with reasoning; chosen ones imported (Datadog community JSON format only — no Grafana)
 - [x] Build-now/defer/skip decided per custom dashboard (all four deferred to dress rehearsal — see Decision Log D2 2026-06-25)
-- [ ] A child PRD issue exists for the dashboard imports + custom builds
-- [ ] ROADMAP updated
+- [x] A child PRD issue exists for the dashboard imports + custom builds ([PRD #33](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/33))
+- [x] ROADMAP updated
 
 ---
 
