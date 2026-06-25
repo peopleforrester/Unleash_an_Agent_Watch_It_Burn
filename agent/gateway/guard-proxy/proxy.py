@@ -120,6 +120,11 @@ TIER_PRICES_PER_1K = {
 }
 # Which tier this cluster runs (set per cluster to match the kagent ModelConfig). Defaults to haiku.
 MODEL_TIER = os.environ.get("MODEL_TIER", "haiku").lower()
+# The model label on witb_cost_usd is the gen_ai.request.model identifier (PRD #20 M5: the model dimension
+# is gen_ai.request.model, NOT a tier). proxy.py does not see the model in the A2A request (kagent's
+# ModelConfig owns it), so it is supplied per cluster via MODEL_NAME to match that ModelConfig; falls back
+# to the tier name if unset. verify-at-build: set MODEL_NAME to the cluster's Bedrock model id.
+MODEL_NAME = os.environ.get("MODEL_NAME", MODEL_TIER)
 _tier_price = TIER_PRICES_PER_1K.get(MODEL_TIER, TIER_PRICES_PER_1K["haiku"])
 # Optional explicit per-1K overrides; if unset, the tier table above is authoritative.
 COST_PER_1K_IN = float(os.environ.get("COST_PER_1K_IN", str(_tier_price["in"])))
@@ -246,23 +251,18 @@ class Handler(BaseHTTPRequestHandler):
                 self._send(200, {"enabled": STREAM_ENABLED, "prompts": list(_prompts)})
             return
         if self.path == "/metrics":
-            # Prometheus text format so kube-prometheus scrapes it and Grafana graphs the climbing
-            # counter live. Block-listed requests never reach record_usage, so witb_requests_total /
-            # witb_cost_usd flatline exactly when the input guard fires (the cost lesson, on a graph).
+            # Prometheus text format so kube-prometheus scrapes it and Grafana graphs the climbing cost
+            # live. Block-listed requests never reach record_usage, so witb_cost_usd flatlines exactly when
+            # the input guard fires (the cost lesson, on a graph). PRD #20 M5: witb_tokens_total and
+            # witb_requests_total are retired (redundant with gen_ai.usage.* on the ADK spans); witb_cost_usd
+            # is kept (the pre-computed USD visual) and labeled by model (the gen_ai.request.model dimension),
+            # not tier.
             with _cost_lock:
                 c = dict(_cost)
-            tier = c["tier"]
             lines = [
                 "# HELP witb_cost_usd Estimated Bedrock spend (USD), metered from real token usage.",
                 "# TYPE witb_cost_usd counter",
-                f'witb_cost_usd{{tier="{tier}"}} {c["usd"]:.6f}',
-                "# HELP witb_tokens_total Bedrock tokens metered at the guard-proxy.",
-                "# TYPE witb_tokens_total counter",
-                f'witb_tokens_total{{tier="{tier}",kind="input"}} {c["input_tokens"]}',
-                f'witb_tokens_total{{tier="{tier}",kind="output"}} {c["output_tokens"]}',
-                "# HELP witb_requests_total Agent requests that reached the model (block-listed excluded).",
-                "# TYPE witb_requests_total counter",
-                f'witb_requests_total{{tier="{tier}"}} {c["requests"]}',
+                f'witb_cost_usd{{model="{MODEL_NAME}"}} {c["usd"]:.6f}',
                 "",
             ]
             body = "\n".join(lines).encode()
