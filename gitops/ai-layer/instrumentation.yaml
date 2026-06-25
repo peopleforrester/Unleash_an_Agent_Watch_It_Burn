@@ -26,13 +26,17 @@ metadata:
   name: watch-it-burn-python
   namespace: agent
 spec:
+  # HTTP (4318), NOT gRPC (4317): the OTel Operator's autoinstrumentation/python image ships ONLY the
+  # HTTP OTLP exporter (otlp_proto_http) to avoid the grpcio C-extension bloat. Setting protocol=grpc
+  # crashes the injected SDK at startup with "Requested component 'otlp_proto_grpc' not found"
+  # (confirmed live 2026-06-25). This CORRECTS the PRD #20 M2 locked `grpc` decision per live evidence.
   exporter:
-    endpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317
+    endpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
   propagators: [tracecontext, baggage]
   sampler:
     type: parentbased_always_on
   env:
     - name: OTEL_EXPORTER_OTLP_PROTOCOL
-      value: grpc
+      value: http/protobuf
     - name: OTEL_SEMCONV_STABILITY_OPT_IN
       value: gen_ai_latest_experimental
