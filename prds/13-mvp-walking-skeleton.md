@@ -5,6 +5,8 @@
 **Priority**: High
 **Status**: Not started
 
+> **Note on `beats/` references:** The `beats/` directory naming is being aligned with the Rounds + Challenges vocabulary adopted June 2026 (C1–C7 challenges across three cumulative rounds). When implementing, update any `beats/` path references to the current challenge/round structure as you encounter them — no separate migration task is required.
+
 ---
 
 ## Problem
