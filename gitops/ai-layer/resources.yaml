@@ -214,7 +214,10 @@ spec:
           command: ["python", "/app/proxy.py"]
           ports: [{ name: http, containerPort: 8080 }]
           env:
-            - { name: AGENT_URL, value: "http://workshop-agent.agent.svc.cluster.local:8080" }
+            # Forward through agentgateway (the A2A L7 hop), which proxies to workshop-agent:8080. This is
+            # what creates the guard-proxy -> agentgateway -> kagent Service Map chain (PRD #27). guard-proxy
+            # derives peer.service from this host, so the CLIENT span correctly names "agentgateway".
+            - { name: AGENT_URL, value: "http://agentgateway.agent.svc.cluster.local:3000" }
             - { name: LLM_GUARD_URL, value: "http://llm-guard.agent.svc.cluster.local:8000" }
             - name: LLM_GUARD_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }
