@@ -103,16 +103,17 @@ data:
     # yaml-language-server: $schema=https://agentgateway.dev/schema/config
     # agentgateway OSS v1.3.0 standalone config.
     #
-    # TRACING is a TOP-LEVEL `tracing` key (RawConfig.tracing), NOT under frontendPolicies. Putting it
-    # under frontendPolicies crashes the v1.3.0 binary ("frontendPolicies.tracing: no variant of enum
-    # SimpleLocalBackend") because that path expects a backend object. Verified against the pinned v1.3.0
-    # JSON schema (raw.githubusercontent.com/agentgateway/agentgateway/v1.3.0/schema/config.json):
-    # RawTracing = { otlpEndpoint, otlpProtocol (grpc|http, default grpc), path (default /v1/traces),
-    # headers, randomSampling }. Exporting OTLP/HTTP to the Collector's :4318 receiver (same path
-    # kagent and guard-proxy use). In the gitops manifest so it stands up on every reprovision.
-    tracing:
-      otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
-      otlpProtocol: http
+    # TRACING lives under the top-level `config` key (RawConfig == the `config:` block), NOT bare
+    # `tracing` and NOT under frontendPolicies. The live v1.3.0 binary is explicit:
+    #   - bare `tracing:`  -> "unknown field `tracing`, expected one of config, binds, frontendPolicies, ..."
+    #   - frontendPolicies.tracing -> "no variant of enum SimpleLocalBackend"
+    # So `config.tracing` is the path. Fields (v1.3.0 JSON schema RawTracing): otlpEndpoint, otlpProtocol
+    # (grpc|http, default grpc), path (default /v1/traces), headers, randomSampling. OTLP/HTTP to the
+    # Collector :4318 receiver (same path kagent/guard-proxy use). In the manifest so it survives reprovision.
+    config:
+      tracing:
+        otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+        otlpProtocol: http
 
     binds:
       # A2A reverse proxy: guard-proxy -> agentgateway:3000 -> kagent workshop-agent:8080.
