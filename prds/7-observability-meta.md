@@ -426,13 +426,15 @@ data confirmed flowing?
 
 ### Milestone 8 — Scale-out: per-attendee accounts, credential store & distribution
 
-**End-state goal:** A workable mechanism to provision 60-70 per-attendee Datadog trial orgs, store
-their sensitive credentials as a source of truth the build service reads and Whitney shares with
-Michael, surface each attendee's credentials during the workshop, and land each org's keys as
-Kubernetes secrets in that attendee's cluster.
+**End-state goal:** Auto-wire each attendee's per-cluster `datadog-secret` (Kubernetes Secret in
+`monitoring`, `security`, and `datadog` namespaces) from the pool of ~60 pre-provisioned trial orgs
+so that spawning the fleet requires zero manual credential steps.
 
-Confirmed model: **per-attendee trial orgs**. `PROJECT_STATE.md`'s "one shared org" line is
-stale/superseded — corrected as part of this milestone.
+**Status as of 2026-06-24:** Michael's half is done. The open work is Whitney's child PRD (Decision 5
+— the ESO `ExternalSecret` that reads the master store and injects per-cluster secrets). The "org
+fork" question (whose org does each cluster report to?) must be resolved first.
+
+Confirmed model: **per-attendee trial orgs** (~60 manually provisioned). Attendee count: **60**.
 
 Each trial org has this shape (sensitive — contains API key, app key, and a password; **never commit
 to the repo**):
@@ -446,35 +448,46 @@ to the repo**):
 }
 ```
 
+**What Michael has already done (substrate ready):**
+- Org provisioning: ~60 trial orgs manually provisioned; `pool.csv` is the source of truth
+- Distribution: `merge_pool.py` + `pool.csv` + provisioning success page give each attendee their Datadog creds
+- 1Password shared vault set up (Whitney/Michael sharing mechanism)
+- `datadog-secret` consumers wired: `otel-collector.yaml` and `falcosidekick.yaml` already read from it
+- ESO + EKS Pod Identity substrate exists; `datadog-secret` in `security` namespace confirmed needed (see Decision Log M4 Decision 1)
+- Teardown: manual trigger via `teardown/teardown.sh` (40-min auto-expiry idea dropped)
+
+**What remains (Whitney's child PRD):**
+
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- All prior milestone child PRDs + Decision Logs — **gate this milestone** (scale-out multiplies the single-account MVP across attendees)
-- `research/24-…` (§3 secret injection), `research/25-eks-quotas-shared-vpc-topology-2026.md`, `research/26-aiewf-2026-logistics-2026.md`, `research/27-conference-demo-resilience-2026.md`
-- Codebase: `gitops/apps/` (ESO config and existing secret patterns), `docs/BUILD-SPEC.md` (attendee experience), `PROJECT_STATE.md` (stale shared-org line to correct)
+- All prior milestone child PRDs + Decision Logs — **gate this milestone**
+- `research/24-…` (§3 secret injection), `research/25-eks-quotas-shared-vpc-topology-2026.md`
+- Codebase: `gitops/apps/` (ESO config, existing ExternalSecret patterns), `docs/BUILD-SPEC.md`
 
-**Step 1 — Problem (write 3-5 sentences):** What is unresolved about provisioning and distributing
-per-attendee Datadog access at workshop scale, and what is the blast radius if it fails on the day?
+**Step 1 — Problem (write 3-5 sentences):** What is unresolved about auto-wiring the per-cluster
+`datadog-secret` at fleet spawn time, and what is the blast radius if it fails on the day?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Provisioning (NET-NEW RESEARCH REQUIRED)** — how do 60-70 trial orgs get created? No doc addresses this; riskiest unsupported scope. Run a net-new `/research` spike before presenting options (Manual, Datadog API, Terraform, other).
-2. **Master credential store** — where the full pool (the JSON above, ×60-70) lives as source of truth, such that (a) the build service can read it to inject per-cluster and (b) Whitney can share it with Michael. Holds API keys, app keys, passwords — never committed. Candidate: AWS Secrets Manager (same source ESO reads in decision 5), one secret for the pool or one per attendee keyed by `userId`; share with Michael via IAM grant. Resolve store + access-control + sharing.
-3. **Surfacing credentials** — how attendees receive access, and what's in each bundle (org URL, API key, app key?, password, kubeconfig, chat-UI token). `research/27` §1.9 settles "pre-generate bundles + claim mechanism" but leaves mechanism/contents open.
-4. **Are app keys (`datadogAppKey`) needed at all?** — only for dashboard/monitor API automation, not ingest (`research/24` §3.2).
-5. **Keys into the cluster** — `research/24` §3.3 Option A: `datadog-secret` in `monitoring`, `security`, and (if Agent enabled) `datadog` namespaces via one ESO `ExternalSecret` per namespace from the master store. Confirm/revise. (Independent per-student clusters, no hub — `research/25`.)
-6. **Rotation/expiry** — schema carries `expiration`; no doc addresses the rotation flow.
+1. ~~**Provisioning**~~ — **DONE (2026-06-24).** Michael manually provisioned ~60 trial orgs; `pool.csv` is the source of truth. No research spike needed.
+2. ~~**Master credential store — sharing**~~ — **DONE (2026-06-24).** 1Password shared vault set up between Michael and Whitney. (How `pool.csv` entries are loaded into AWS Secrets Manager so ESO can read them is a sub-question inside Decision 5's child PRD, not a separate design conversation.)
+3. ~~**Surfacing credentials**~~ — **DONE (2026-06-24).** `merge_pool.py` + `pool.csv` + provisioning success page. Attendees receive their bundle at provisioning time.
+4. **Are app keys (`datadogAppKey`) needed in the cluster secret?** — `research/24` §3.2 states app keys are only needed for dashboard/monitor API automation, not for Agent ingest. The DatadogAgent CRD `spec.credentials` accepts both `apiKey` and `appKey`; `appKey` is optional for metrics/traces/logs ingest. **Verify-at-build:** confirm whether omitting `appKey` from `datadog-secret` causes any DatadogAgent CR validation errors on the specific Agent version in use.
+5. **Org fork — OPEN, must resolve first:** does each cluster report to (a) the attendee's own trial org from their `pool.csv` row, (b) a single shared org Whitney watches for full cross-fleet visibility, or (c) both? This determines the ExternalSecret shape. Mechanism options: ESO `ExternalSecret` per namespace reading from AWS Secrets Manager (one secret per attendee keyed by `userId`, or one pool secret with a lookup); Terraform var → k8s Secret in the cluster module; fleet driver seeding from `pool.csv` at spawn time.
+6. ~~**Rotation/expiry**~~ — **SETTLED (2026-06-24).** Manual teardown via `teardown/teardown.sh`. Trial orgs expire ~14 days after provisioning. No automated rotation; mitigate leaked-cred blast radius via short IAM session lifetimes if needed.
 
 **Step 3 — Produce the child PRD:**
-1. Update `docs/observability-priorities.md` if priorities shifted. Correct `PROJECT_STATE.md`'s stale "one shared org" line to per-attendee orgs as part of this milestone.
-2. Run `/prd-create` for a child PRD per decisions 1-6 (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- Attendee accounts & credentials (PRD #[issue-id])`, last in build order.
+1. Correct `PROJECT_STATE.md`'s stale "one shared org" line to per-attendee orgs.
+2. Run `/prd-create` for a child PRD scoped to decisions 4-5 (cluster injection only; provisioning/distribution/sharing are done).
+3. Update `docs/ROADMAP.md` ROADMAP entry 8 with the new issue number.
 4. Run `/prd-update-progress` to commit + push.
 5. Final milestone — when its child PRD exists, mark this meta-PRD complete and run `/prd-done` for issue #7.
 
 **Done when:**
-- [ ] Decisions 1-6 recorded with reasoning
-- [ ] A net-new research spike for org provisioning (decision 1) exists in `research/`
-- [ ] A child PRD issue exists for provisioning + credential store + distribution + injection
-- [ ] ROADMAP updated
+- [x] Decisions 1, 2 (sharing), 3, 6 resolved (Michael's side done 2026-06-24)
+- [ ] Decision 4 (app keys in cluster secret?) resolved with Whitney
+- [ ] Decision 5 (org fork + ExternalSecret mechanism) resolved with Whitney
+- [ ] Child PRD exists for cluster secret injection (scoped to Decision 5)
+- [ ] ROADMAP entry 8 has an issue number
 - [ ] All 8 milestones complete → this meta-PRD closed
 
 ---
@@ -545,3 +558,8 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 | 2026-06-24 | M4 Decision 3: Falco rules required in Datadog for C3 and C4 (the two execution Challenges); "any exec fires" is the detection principle | Challenge C3 (grep Easter-egg secret) and Challenge C4 (fork bomb) are the two execution Challenges in the workshop (Rounds + Challenges terminology, adopted 2026-06-24). In a hardened agent pod that should only make HTTP/LLM API calls, ANY `execve` syscall is the anomaly — the command does not need to be recognizably malicious. The Falco rule "Shell or Exec In Workshop Agent Pod" (WARNING) fires for both C3's grep and C4's fork bomb for the same structural reason. Required rules visible in Datadog: (1) "Shell or Exec In Workshop Agent Pod" (WARNING) — fires for any exec in the agent pod, C3 and C4; (2) "Sensitive File Access" (NOTICE) — fires when the sentinel credential file is read; Falco knows a sensitive path was accessed, not who read it or that it is a planted canary; the manifest currently names this rule "Read Of Planted Fake Secret By Workshop Agent" — the child PRD must rename it to "Sensitive File Access" (production-realistic name that does not betray the workshop illusion or assume attribution), C3; (3) "Fork Bomb In Workload Container" (CRITICAL) — fires for C4; routes to Talon for auto-remediation AND to Datadog. The child PRD acceptance criterion is: all three rules produce visible alerts in the Datadog Event Stream (via Falcosidekick) on a live cluster run. The "any exec fires" principle is the explicit teaching point — surface it in the child PRD's beat description. |
 | 2026-06-24 | M4 Decision 1: Falcosidekick→Datadog wiring is correct in the manifest; US1 site confirmed; verify-at-build on `datadog-secret` namespace | Commit `6c6a81d` wired Falcosidekick's Datadog output block. `DATADOG_HOST=https://api.datadoghq.com` is correct for US1 (confirmed 2026-06-24). The stale "Talon-only" observation in `research/23` predated the commit; research/23 corrected. Verify-at-build items for Michael's M4 child PRD: (1) `datadog-secret` must exist in the `security` namespace (Falcosidekick's namespace), not just `monitoring`; (2) confirm events flow on a live cluster. No manifest change needed for the Datadog host. |
 | 2026-06-24 | M4 Decision 2: Wire both Falcosidekick native output AND the Datadog Agent named integration — they are additive and feed different Datadog surfaces | The Datadog Falco Agent integration (7.59.1+) collects individual alert **logs** (JSON per alert → Log Explorer) and aggregate **Prometheus metrics** (→ OOTB dashboard). It does NOT require Falcosidekick and does not use the Datadog Events API. Falcosidekick's Datadog output sends individual alerts to the **Event Stream** (Datadog Events API) — a different surface. No duplication: logs vs. events are separate data types in separate Datadog UIs. Wire both: Falcosidekick native output in M4 (already in manifest, no Agent dependency); Agent named integration in M5 when the Agent DaemonSet is deployed. The child PRD for M4 notes M5 adds the second path. Source: https://docs.datadoghq.com/integrations/falco/ verified 2026-06-24. Prior reasoning in this document that described the integration as "metrics-only" was incorrect and has been corrected in research/18 and research/23. |
+| 2026-06-24 | M8 Decision 1 (provisioning) resolved: ~60 trial orgs manually provisioned by Michael | Michael manually provisioned the pool of ~60 Datadog trial orgs; `pool.csv` is the source of truth (never committed). No Datadog API / Terraform / scripted provisioning path was needed or built. The net-new research spike originally required for Decision 1 is no longer needed. Attendee count settled at 60 (fleet supports it; EKS quota 100). |
+| 2026-06-24 | M8 Decision 3 (surfacing credentials) resolved: distribution done by Michael | Attendees receive their Datadog credential bundle via `merge_pool.py` + `pool.csv` + a success page on the provisioning site. Mechanism and contents settled. |
+| 2026-06-24 | M8 Decision 2 (master credential store — sharing) resolved: 1Password shared vault done | 1Password shared vault is set up between Michael and Whitney as the mechanism for Whitney to access the pool. AWS Secrets Manager remains the intended ESO source for per-cluster injection; the path from `pool.csv` → AWS Secrets Manager master store needs confirmation as part of the M8 child PRD. |
+| 2026-06-24 | M8 Decision 6 (rotation/expiry) resolved: manual teardown, no automated rotation | Teardown is manual trigger via `teardown/teardown.sh` at end of run (40-minute auto-expiry idea dropped by Michael 2026-06-24). Trial orgs expire ~14 days after provisioning — a separate clock. No automated rotation plan. Blast-radius mitigation for leaked creds is short-lived IAM session lifetimes, not cluster auto-destroy. |
+| 2026-06-24 | M8 division of labor clarified: Michael's substrate done; Whitney owns Decision 5 (cluster injection) | Michael's completed: `datadog-secret` consumers wired in `otel-collector.yaml` and `falcosidekick.yaml`; ESO + EKS Pod Identity substrate ready. Whitney's remaining work: resolve Decision 4 (app keys needed in cluster secret?), resolve Decision 5 "org fork" question (attendee's own trial org vs shared org Whitney watches vs both), write the ESO `ExternalSecret` per namespace, create the M8 child PRD. |
