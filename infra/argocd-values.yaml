@@ -4,11 +4,13 @@
 # ArgoCD installs itself via Helm in the bootstrap (it is the GitOps engine; it is NOT managed by an
 # ArgoCD Application, so its own config belongs here, not in a self-referential app). The block-argocd-drift
 # kyverno policy is scoped to ArgoCD-MANAGED resources (those carry argocd.argoproj.io/tracking-id);
-# argocd-server does not, so this annotation is permitted. Container metrics port is 8083; the `argocd`
-# Datadog check is OpenMetrics-based, so the instance key is openmetrics_endpoint (not url).
+# argocd-server does not, so this annotation is permitted. Container metrics port is 8083. The `argocd`
+# Datadog check is a multi-component check keyed by named endpoint (api_server_endpoint /
+# app_controller_endpoint / repo_server_endpoint / ...), NOT a generic openmetrics_endpoint (verified
+# live 2026-06-25). argocd-server is the API server, so api_server_endpoint.
 dex:
   enabled: false
 server:
   podAnnotations:
     ad.datadoghq.com/server.checks: |
-      {"argocd":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8083/metrics"}]}}
+      {"argocd":{"instances":[{"api_server_endpoint":"http://%%host%%:8083/metrics"}]}}
