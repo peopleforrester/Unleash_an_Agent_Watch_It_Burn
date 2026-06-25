@@ -34,18 +34,20 @@ spec:
           # and Prometheus). DATADOG_HOST defaults to https://api.datadoghq.com.
           datadog:
             minimumpriority: notice
-        # verify-at-build: the datadog-secret (key api-key) must exist in the `security` namespace
-        # (falcosidekick's namespace), not only in `monitoring`; sync it with ESO or create per-ns.
-        # Set DATADOG_HOST to Whitney's site (e.g. https://api.us5.datadoghq.com, https://api.datadoghq.eu).
-        # Confirm the chart honors `extraEnv` on the pinned chart 0.14.0 (app 2.31.1).
-        extraEnv:
-          - name: DATADOG_APIKEY
-            valueFrom:
-              secretKeyRef:
-                name: datadog-secret
-                key: api-key
-          - name: DATADOG_HOST
-            value: "https://api.datadoghq.com"
+          # verify-at-build CONFIRMED live 2026-06-25: chart 0.14.0 reads extraEnv at `config.extraEnv`,
+          # NOT at the top level. Placed at the top level the chart silently DROPS it, so DATADOG_APIKEY
+          # never reaches the pod and the Datadog output stays disabled (falcosidekick forwards only to
+          # Talon). The datadog-secret (key api-key) must exist in the `security` namespace (falcosidekick's
+          # ns), not only `monitoring`. Set DATADOG_HOST to Whitney's site (https://api.us5.datadoghq.com,
+          # https://api.datadoghq.eu) if the org is not US1.
+          extraEnv:
+            - name: DATADOG_APIKEY
+              valueFrom:
+                secretKeyRef:
+                  name: datadog-secret
+                  key: api-key
+            - name: DATADOG_HOST
+              value: "https://api.datadoghq.com"
         webui:
           enabled: false
         podAnnotations:
