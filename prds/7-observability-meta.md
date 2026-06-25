@@ -297,6 +297,7 @@ dashboard or events), confirmed live.
 - [x] Child PRD includes verify-at-build tasks: `datadog-secret` in `security` namespace; events confirmed flowing on a live cluster
 - [x] Child PRD includes manifest rename task: "Read Of Planted Fake Secret By Workshop Agent" → "Sensitive File Access" in `gitops/apps/falco.yaml`
 - [x] A child PRD issue exists whose acceptance includes all three required rules visible in the Datadog Event Stream (via Falcosidekick) on a live cluster run
+- [x] C4 fork-bomb rule also verified to trigger Talon auto-remediation (covered in PRD #23 Milestone 2 Step 3)
 - [x] ROADMAP updated
 
 ---
@@ -395,7 +396,7 @@ custom/story dashboard decisions are made (build now, defer specific ones to dre
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- The Milestone 5 child PRD + `research/NN-per-component-telemetry-synthesis-2026.md` (issue #11 output) — **gates this milestone**
+- The Milestone 5 child PRD + `research/30-per-component-telemetry-synthesis-2026.md` (issue #11 output) — **gates this milestone**
 - **New prerequisite gate (Updated per 2026-06-24 Grafana decision):** A Datadog community dashboard research spike must be complete before this milestone proceeds. research/30's "community dashboard" column lists Grafana IDs — those are inapplicable (no Grafana imports; see Decision Log 2026-06-24). The new spike surveys importable Datadog community dashboard JSON files (DataDog/community-lab or similar) for components without OOTB dashboards. The spike is tracked in [issue #24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24) — it must be completed and its file path posted as a comment before Step 2 begins.
 - All prior milestone child PRDs + Decision Logs — a dashboard can't be built/imported on data that isn't flowing
 - `research/24-…`, `docs/transcripts/observability-architecture-paths.md` (candidate custom-dashboard list)
