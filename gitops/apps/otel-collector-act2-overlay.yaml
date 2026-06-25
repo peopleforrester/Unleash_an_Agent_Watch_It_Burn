@@ -1,0 +1,42 @@
+# ABOUTME: Re-leak-trap beat, Act 2 (PRD #22 M2). The OTTL transform that replaces the captured sanitize
+# ABOUTME: span content with [DEMO-REDACTED] before the Datadog export, so the leak is shown then fixed.
+#
+# THE TWO-ACT BEAT (PRD #22): Act 1 (baseline `otel-collector.yaml` only) arms guard-proxy content capture
+# (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY) so the original prompt appears on the
+# `sanitize` span's gen_ai.input.messages in Datadog LLM Observability. That is the leak: observability
+# itself became an exfil channel. Act 2 applies this redaction at the Collector boundary, re-runs the beat,
+# and Datadog now shows [DEMO-REDACTED]: the secret never reaches the observability platform.
+#
+# DEPLOYMENT RECONCILIATION (verify-at-build): the Collector is Helm-deployed via the ArgoCD Application in
+# `otel-collector.yaml` (config under spec.source.helm.valuesObject.config). It is NOT a raw Collector
+# manifest, so the instructor cannot `kubectl apply -f` a standalone config to toggle Act 2. Apply Act 2 by
+# ONE of:
+#   (a) GitOps toggle (recommended, reversible, audited): add the `transform/redact_sentinel` processor
+#       below to the otel-collector.yaml valuesObject `processors:` block, and add `transform/redact_sentinel`
+#       to the traces pipeline processors list, positioned LAST (after batch/resource, before export). Commit
+#       to flip to Act 2; revert the commit (or ArgoCD app rollback) to return to Act 1.
+#   (b) Live demo toggle: `kubectl -n monitoring edit` the rendered Collector ConfigMap to add the processor
+#       + pipeline entry, then restart the Collector. ArgoCD selfHeal reverts it (that IS the Act-1 reset).
+#
+# This file is the canonical source of the redaction config; it is intentionally NOT wired into ArgoCD (so
+# Act 2 is never the default startup state, per the PRD decision: the base config is Act 1).
+---
+# The OTTL transform processor (paste into the Collector `processors:` block for Act 2).
+processors:
+  transform/redact_sentinel:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          # Only the guard-proxy `sanitize` span carries gen_ai.operation.name=="chat" with string
+          # gen_ai.input.messages in this stack; replace (not delete) so the key stays visible as redacted.
+          - set(attributes["gen_ai.input.messages"], "[DEMO-REDACTED]") where attributes["gen_ai.operation.name"] == "chat" and IsString(attributes["gen_ai.input.messages"])
+          - set(attributes["gen_ai.output.messages"], "[DEMO-REDACTED]") where attributes["gen_ai.operation.name"] == "chat" and IsString(attributes["gen_ai.output.messages"])
+
+# The traces pipeline for Act 2 (transform/redact_sentinel added LAST, before the exporters run):
+# service:
+#   pipelines:
+#     traces:
+#       receivers: [otlp]
+#       processors: [memory_limiter, batch, resource, transform/redact_sentinel]
+#       exporters: [datadog, otlp/tempo, spanmetrics, datadog/connector, debug]
