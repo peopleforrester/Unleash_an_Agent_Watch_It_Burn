@@ -26,14 +26,19 @@ corrections from that pass are folded in below.
 | **cert-manager** | **Yes, official OOTB** (`certmanager_overview.json`, "Cert Manager Overview") | **Yes** | **Import the OOTB dashboard.** `cert_manager.*` metrics confirmed flowing. Done. |
 | **Istio ambient (ztunnel)** | Yes, official OOTB (`istio_overview.json`) **but it is legacy sidecar** | **No** (mostly empty) | **Build a small custom ztunnel dashboard.** OOTB queries L7 `istio.mesh.*`; ztunnel emits L4 (`tcp.*`/`dns.*`/`xds.*`/`active_proxy_count`). |
 | **Kyverno** | Yes, official OOTB **but built for the Agent openmetrics check** | **No** (two reasons, below) | **Fix the OTLP export first, then build custom.** OOTB expects `kyverno.*.count` Agent-check names; our OTLP path does not produce them. |
-| **ESO** | **No** (no Datadog integration; only an upstream Grafana dashboard) | n/a (no metrics flowing) | **Build custom**, and wire an Agent OpenMetrics scrape of ESO first. |
+| **ESO** | **No** (no Datadog integration exists) | n/a (no metrics flowing) | **Build custom**, and wire an Agent OpenMetrics scrape of ESO first. |
 
 **Correction to the spike's premise (caught in validation):** there is no useful *community* dashboard
 JSON for any of the four. `DataDog/community-lab` (the canonical community repo) was **archived
-2024-08-27** and only covers akamai, aws, core, gcp, k8s, network, squid, sso (plus non-component
-`_web`/`src`/`.github` dirs). But three of the four (**cert-manager, Kyverno, Istio**) have **official
-OOTB** dashboards in `DataDog/integrations-core`. So M7 is not "import community vs build"; it is
-"OOTB-and-it-works vs OOTB-but-our-wiring-doesn't-feed-it vs build from scratch."
+2024-08-27** and only covers akamai, aws, core, gcp, k8s, network, squid, sso. A second community repo,
+`DataDog/effective-dashboards`, was archived 2024-10-07. Both are read-only with no entries for any of
+these four components, and Datadog has no active replacement. But three of the four (**cert-manager,
+Kyverno, Istio**) have **official OOTB** dashboards in `DataDog/integrations-core`. So M7 is not "import
+community vs build"; it is "OOTB-and-it-works vs OOTB-but-our-wiring-doesn't-feed-it vs build from scratch."
+
+The Datadog Marketplace is a commercial ecosystem of paid integrations — not a free dashboard gallery.
+
+---
 
 ## Per-component findings
 
@@ -45,6 +50,12 @@ widget since v2.2.0). Live: the `cert_manager` check is `[OK]` and `cert_manager
 `cert_manager.certificate.ready_status`, `cert_manager.controller.sync_call.count`,
 `cert_manager.http_acme_client.*` are in Datadog now. The OOTB dashboard queries exactly these. **Import
 it. Nothing custom.**
+
+Note: the dashboard queries `cert_manager.certificate.expiration_timestamp` (no `_seconds` suffix). PRD
+#26's `rename_labels` handles this normalization from the raw Prometheus metric.
+
+Metrics covered: certificate expiration timestamps, clock time (drift detection), ready status, HTTP ACME
+client requests and durations, controller sync calls.
 
 ### Istio ambient / ztunnel: OOTB dashboard exists but is legacy sidecar; build custom
 
@@ -71,11 +82,10 @@ Two distinct problems, both confirmed live:
    the `kyverno.*` namespace (e.g. `kyverno.policy.results.count`, `kyverno.admission.requests.count`).
    The OOTB Kyverno dashboard is built for those names. **Our wiring is OTLP** (meta-PRD M5 D9:
    `--otelConfig=grpc`, no Agent Kyverno check, to avoid duplicate metrics). Kyverno's native OTLP
-   instrument names are `kyverno_policy_results`, `kyverno_admission_requests`,
-   `kyverno_admission_review_duration_seconds`, etc. (`kyverno/pkg/metrics`). Through a Collector to
-   Datadog those do not become the Agent check's remapped `kyverno.*.count` names, so the OOTB dashboard
-   would show no data even with OTLP working. (Exact arriving name is Collector/exporter-config
-   dependent; the conclusion is not.)
+   instrument names use underscores (`kyverno_policy_results`, `kyverno_admission_requests`,
+   `kyverno_admission_review_duration_seconds`, etc. from `kyverno/pkg/metrics`). The Datadog Exporter
+   does not normalize application metric names — only `system.*` and `process.*` get special treatment.
+   Underscore names arrive in Datadog unchanged and do not match the OOTB dashboard's dot-format queries.
 
 2. **The OTLP export is failing right now (a live #26 M3 bug, not lag).** Kyverno's admission controller
    logs repeat: `failed to upload metrics: exporter export timeout: rpc error: code = Unavailable desc =
@@ -91,15 +101,33 @@ Kyverno's OTLP path lands as in Datadog, then build a custom Kyverno dashboard a
 names. Do not switch Kyverno to the Agent check just to get the OOTB dashboard (M5 D9 chose OTLP on
 purpose).
 
+**Reference query names for the custom dashboard** (expected underscore format once OTLP is fixed):
+- `kyverno_policy_results` (replaces `kyverno.policy.results.count`)
+- `kyverno_policy_changes` (replaces `kyverno.policy.changes.count`)
+- `kyverno_admission_requests` (replaces `kyverno.admission.requests.count`)
+- `kyverno_admission_review_duration_seconds` (distribution, replaces `.sum`/`.count` pair)
+- `kyverno_policy_execution_duration_seconds` (distribution)
+- `kyverno_controller_requeue`, `kyverno_controller_drop`, `kyverno_controller_reconcile`
+- `kyverno_client_queries`
+- `kyverno_http_requests`
+- `kyverno_policy_rule_info`
+
+Verify actual arriving names in Datadog after fixing the OTLP export — they are Collector/exporter-config
+dependent and should be confirmed from observation, not assumed.
+
 ### ESO (External Secrets Operator): no Datadog path; build custom
 
 No official Datadog integration (`integrations-core/external_secrets` is a 404; no Agent check). ESO
-exposes Prometheus `externalsecret_*` metrics on `/metrics`; the only prebuilt dashboard upstream is a
-**Grafana** dashboard (Grafana.com ID 21640), which we will not use. (The May-2026 "AWS Secrets Manager
-managed external secrets for Datadog" announcement is unrelated; it is about rotating Datadog API keys,
-not monitoring ESO.) Live: zero `externalsecret*` metrics in Datadog (ESO is not scraped; PRD #26 wired
-four named integrations and ESO was not one). **Build a custom dashboard from `externalsecret_*`, and
-first wire an Agent OpenMetrics/Prometheus scrape of the ESO controller.**
+exposes Prometheus `externalsecret_*` metrics on `/metrics`. An upstream Grafana dashboard exists (Grafana.com
+ID 21640) but **we are not using it — this stack uses Datadog only.** Live: zero `externalsecret*` metrics
+in Datadog (ESO is not scraped; PRD #26 wired four named integrations and ESO was not one). **Build a
+custom Datadog dashboard from `externalsecret_*`, and first wire an Agent OpenMetrics scrape of the ESO
+controller.**
+
+Relevant ESO metric names: `externalsecret_sync_calls_total`, `externalsecret_status_condition`,
+`controller_runtime_reconcile_total`, `controller_runtime_reconcile_errors_total`.
+
+---
 
 ## M7 recommendation table
 
@@ -107,33 +135,30 @@ first wire an Agent OpenMetrics/Prometheus scrape of the ESO controller.**
 |---|---|---|---|
 | cert-manager | Yes (Cert Manager Overview) | No | none (metrics flowing) |
 | Istio ambient | No (legacy sidecar, mostly empty) | Yes (ztunnel L4: tcp/dns/xds/active_proxy + istiod) | none (ztunnel metrics flowing) |
-| Kyverno | No (Agent-check names; our path is OTLP) | Yes | **fix the failing OTLP export** (NetworkPolicy/endpoint), then confirm OTLP metric names in Datadog |
-| ESO | No (no integration; Grafana only) | Yes | wire an Agent OpenMetrics scrape of ESO `externalsecret_*` first |
+| Kyverno | No (Agent check names, not OTLP) | Yes (underscore metric names) | Fix OTLP export bug first |
+| ESO | No (no integration) | Yes (externalsecret_* via Agent OpenMetrics) | Wire Agent OpenMetrics scrape of ESO first |
 
-Net: only **cert-manager** is import-and-done. **Istio ambient** and **ESO** need custom dashboards
-(and ESO needs a scrape wired first). **Kyverno** needs a live bug fixed before any dashboard works,
-then a custom dashboard.
+---
 
-## Validation notes
+## Datadog community dashboard infrastructure status
 
-Triple pass: (1) initial web + live-cluster research; (2) two independent adversarial web fact-checks
-that corrected the framing (cert-manager/Kyverno/Istio all have official OOTB dashboards, not just
-cert-manager) and the Kyverno metric name (`kyverno.policy.results.count`); (3) live-cluster ground
-truth that found the Kyverno OTLP export is actively failing (not ingestion lag) and that ztunnel/
-istiod/cert_manager metrics are present while kyverno/ESO are absent.
+| Resource | Status | Notes |
+|---|---|---|
+| `DataDog/community-lab` | Archived 2024-08-27 | Was empty for all four components before archival |
+| `DataDog/effective-dashboards` | Archived 2024-10-07 | Design best practices, no component dashboards |
+| OOTB integration dashboards | Active (via integrations-core) | Auto-installs with Agent check |
+| Datadog Marketplace | Active | Commercial paid integrations only; no free dashboard gallery |
+| Dashboard Gallery / template store | Does not exist | No public browsable dashboard catalog in Datadog |
+
+---
 
 ## Sources
 
-- [DataDog/community-lab (archived 2024-08-27)](https://github.com/DataDog/community-lab)
-- [DataDog/integrations-core cert_manager dashboard](https://github.com/DataDog/integrations-core/tree/master/cert_manager/assets/dashboards)
-- [Datadog cert-manager integration](https://docs.datadoghq.com/integrations/cert-manager/)
-- [Datadog Kyverno integration (Agent openmetrics check)](https://docs.datadoghq.com/integrations/kyverno/)
-- [Kyverno OpenTelemetry / metrics docs](https://kyverno.io/docs/monitoring/opentelemetry/)
-- [kyverno/pkg/metrics/metrics.go](https://github.com/kyverno/kyverno/blob/main/pkg/metrics/metrics.go)
-- [Datadog Istio integration (ambient support)](https://docs.datadoghq.com/integrations/istio/)
-- [integrations-core Istio dashboard (istio_overview.json, sidecar/legacy)](https://github.com/DataDog/integrations-core/blob/master/istio/assets/dashboards/istio_overview.json)
-- [integrations-core Istio metrics.py (ztunnel L4 metric map)](https://github.com/DataDog/integrations-core/blob/master/istio/datadog_checks/istio/metrics.py)
-- [integrations-core #19166: ambient mode metrics for Istio (Completed 2026-06-04)](https://github.com/DataDog/integrations-core/issues/19166)
-- [External Secrets Operator metrics](https://external-secrets.io/latest/api/metrics/)
-- [External Secrets upstream Grafana dashboard (ID 21640)](https://grafana.com/grafana/dashboards/21640-external-secrets/)
-- Live cluster `watch-it-burn-attendee-001` Datadog metric inventory + kyverno OTLP export logs (2026-06-25).
+- [DataDog/integrations-core — kyverno/assets/dashboards/overview.json](https://github.com/DataDog/integrations-core/blob/master/kyverno/assets/dashboards/overview.json) — OOTB Kyverno dashboard, dot-format metric names
+- [DataDog/integrations-core — cert_manager/assets/dashboards/certmanager_overview.json](https://github.com/DataDog/integrations-core/blob/master/cert_manager/assets/dashboards/certmanager_overview.json) — OOTB cert-manager dashboard
+- [DataDog/integrations-core — istio/assets/dashboards/](https://github.com/DataDog/integrations-core/tree/master/istio/assets/dashboards) — 4 OOTB Istio dashboards
+- [DataDog/integrations-core — istio issue #19166](https://github.com/DataDog/integrations-core/issues/19166) — ambient metrics support landed 2026-06-04
+- [DataDog/community-lab GitHub](https://github.com/DataDog/community-lab) — Archived 2024-08-27
+- [DataDog/effective-dashboards GitHub](https://github.com/DataDog/effective-dashboards) — Archived 2024-10-07
+- [Datadog Marketplace blog post](https://www.datadoghq.com/blog/datadog-marketplace/) — Commercial paid integrations ecosystem
+- [Kyverno pkg/metrics/metrics.go](https://github.com/kyverno/kyverno/blob/main/pkg/metrics/metrics.go) — OTel SDK instrument name definitions confirming underscore format

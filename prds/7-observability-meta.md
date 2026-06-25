@@ -390,6 +390,8 @@ earlier milestones, given UST vocabulary was locked in Milestone 1?
 
 ### Milestone 7 — Dashboards: import community dashboards + decide custom/story dashboards
 
+**Step 0:** Read related research before starting: [Research: Datadog Community Dashboards for Observability Stack Components](../research/35-datadog-community-dashboards-2026.md)
+
 **End-state goal:** The importable community/Grafana dashboards chosen from the Milestone 5 survey are
 imported into Datadog for stack components that lack an official Datadog dashboard, and the
 custom/story dashboard decisions are made (build now, defer specific ones to dress rehearsal, or skip).
