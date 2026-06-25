@@ -76,6 +76,12 @@ spec:
             # add_resource_attributes is supported on collector-contrib 0.158.2.
             spanmetrics:
               add_resource_attributes: true
+            # datadog/connector computes APM Trace Metrics (the trace.* namespace used by SLOs/monitors).
+            # Required since otelcol-contrib v0.95.0: the Datadog exporter no longer derives these itself.
+            # compute_stats_by_span_kind so stats are computed for client/server/etc. spans (PRD #13 M2).
+            datadog/connector:
+              traces:
+                compute_stats_by_span_kind: true
           service:
             telemetry:
               logs:
@@ -87,6 +93,7 @@ spec:
                 receivers:
                   - otlp
                   - spanmetrics # RED metrics generated from spans (carry UST tags for correlation)
+                  - datadog/connector # APM trace.* metrics (compute_stats_by_span_kind); PRD #13 M2
                 processors:
                   - memory_limiter
                   - batch
@@ -106,6 +113,7 @@ spec:
                   - datadog      # primary
                   - otlp/tempo   # secondary / fallback
                   - spanmetrics  # feed the connector so it can derive metrics from these spans
+                  - datadog/connector # feed the APM-stats connector (trace.* metrics); PRD #13 M2
                   - debug
         # Datadog credentials for the primary exporter (BYO secret; not stored in this repo).
         # verify-at-build: create `datadog-secret` (key api-key) from Whitney's Datadog account and
