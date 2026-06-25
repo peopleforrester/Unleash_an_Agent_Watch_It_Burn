@@ -92,6 +92,10 @@ spec:
       Kubernetes platform so the operators can find the gaps."
     deployment:
       serviceAccountName: agent-sa
+      # OTel Operator injects the Python SDK + OTLP endpoint into the ADK agent pod (PRD #20 M2/M3); ADK
+      # (>=1.17, bundled by kagent 0.9.9) then emits gen_ai.* spans natively (invoke_agent -> chat ->
+      # execute_tool). The Agent CRD supports pod annotations (kubectl explain agent.spec.declarative.deployment).
+      annotations: { instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python" }
       # Unified Service Tagging for Datadog correlation on the kagent agent pod (same scheme as
       # guard-proxy / agentgateway). UST vocabulary locked in PRD #13: service.version is the component's
       # real software version (NOT a model-tier label); the model dimension for the cost race comes from
@@ -102,6 +106,10 @@ spec:
       env:
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "service.name=kagent,service.version=v0.9.9,deployment.environment.name=production"
+        # Capture gen_ai message content on ADK spans (the agent waterfall input/output). EVENT_ONLY, NOT
+        # "true" (invalid under gen_ai_latest_experimental, silently collects nothing). PRD #20 M3.
+        - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+          value: EVENT_ONLY
     # Committed "good" tool config: an explicit toolNames allowlist (the MCP-restriction backstop;
     # agentgateway mcpAuthorization is the live-toggled primary). requireApproval is the per-tool HITL
     # gate on the one mutating tool. verify-at-build: workshop-mcp RemoteMCPServer + these tool names
@@ -186,7 +194,12 @@ spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: guard-proxy } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: guard-proxy } }
+    metadata:
+      labels: { app.kubernetes.io/name: guard-proxy }
+      # OTel Operator injects the Python SDK (init-container + PYTHONPATH) so proxy.py's manual spans
+      # (PRD #22 M1) emit. The image carries no SDK; this annotation activates injection. References the
+      # Instrumentation CR `watch-it-burn-python` in this namespace.
+      annotations: { instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python" }
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
