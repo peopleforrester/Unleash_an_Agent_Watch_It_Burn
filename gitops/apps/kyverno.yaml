@@ -39,18 +39,21 @@ spec:
             requests:
               memory: 256Mi
               cpu: 100m
-          # Native OTLP to the in-cluster OTel Collector (PRD #26 M3, meta-PRD M5 D9): policy-decision
-          # traces + metrics go straight to the Collector (which routes to Datadog), instead of an Agent
-          # `kyverno` Prometheus check (which would duplicate metrics + add billing noise). The admission
-          # controller is where allow/deny decisions are made, so its traces are the demo-relevant ones.
-          # metering.config: grpc => OTLP gRPC metrics to metering.collector. tracing => decision spans.
-          tracing:
-            enabled: true
-            address: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local
-            port: 4317
+          # Datadog Agent Autodiscovery scrapes Kyverno's native Prometheus /metrics (:8000).
+          #
+          # REVISES meta-PRD M5 D9 (which chose native OTLP `otelConfig: grpc` to avoid an Agent check):
+          # live on the cluster, Kyverno's bundled gRPC/OTel exporter fails with `name resolver error:
+          # produced zero addresses` even against a literal ClusterIP (a gRPC-Go #7625 regression baked into
+          # the kyverno binary), so the OTLP path delivers ZERO metrics. Switched to the Datadog Agent
+          # openmetrics check, the same proven pattern as falco/cert-manager/istio. It works, and it emits
+          # the `kyverno.*` metric names the official Datadog Kyverno OOTB dashboard expects. No duplicate
+          # metrics (OTLP was producing none). The container name is `kyverno`. Verified live 2026-06-25.
           metering:
-            config: grpc
-            collector: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317
+            config: prometheus
+            port: 8000
+          podAnnotations:
+            ad.datadoghq.com/kyverno.checks: |
+              {"kyverno":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8000/metrics"}]}}
         # Background controller for policy reports
         backgroundController:
           resources:
