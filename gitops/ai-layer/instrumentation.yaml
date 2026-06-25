@@ -1,0 +1,38 @@
+# ABOUTME: Shared OTel Operator Instrumentation CR for the custom Python pods in the AI layer (PRD #20 M2).
+# ABOUTME: Sets cluster-wide OTLP endpoint/protocol + semconv opt-in; per-pod UST stays in each workload's env.
+#
+# STATUS: STAGED, NOT yet in kustomization.yaml resources. Two prerequisites must land first, or an
+# ArgoCD sync fails on an unknown kind:
+#   1. The OTel Operator must be deployed (it owns the opentelemetry.io/v1alpha1 Instrumentation CRD).
+#      No Operator ArgoCD Application exists in gitops/apps/ yet; that deployment is the rest of M2.
+#   2. The inject annotation `instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"` must
+#      be added to the kagent + agentgateway pod templates (verify-at-build for the kagent Agent CRD: confirm
+#      spec.declarative.deployment accepts pod annotations on chart 0.9.9).
+# To enable: deploy the Operator, add the annotations, resolve the endpoint below, then add this file to
+# kustomization.yaml resources.
+#
+# The OTel Operator injects the full Python SDK into any pod annotated
+# `instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"` (init-container + PYTHONPATH),
+# so app images carry only opentelemetry-api (no-op until injected). This is the locked custom-app pattern
+# (meta-PRD Decision Log 2026-06-24; overrides research/33's "No Operator").
+#
+# verify-at-build (PRD #20 M2 Step 1): resolve the ACTUAL Collector Service name + namespace on the live
+# cluster (`kubectl get svc -A | grep -i otel-collector`) and set `exporter.endpoint` to it. The value
+# below is the current-manifest candidate (research/34 + #20 flagged the monitoring-vs-observability
+# ambiguity); do NOT assume it, confirm before relying.
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: watch-it-burn-python
+  namespace: agent
+spec:
+  exporter:
+    endpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317
+  propagators: [tracecontext, baggage]
+  sampler:
+    type: parentbased_always_on
+  env:
+    - name: OTEL_EXPORTER_OTLP_PROTOCOL
+      value: grpc
+    - name: OTEL_SEMCONV_STABILITY_OPT_IN
+      value: gen_ai_latest_experimental
