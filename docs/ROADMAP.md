@@ -15,8 +15,12 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 1. MVP: OTel Collector + Datadog connected, UST wired on AI-layer components ([PRD #13](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/13)) — proves Datadog works; locks cross-cutting decisions (collector shape, UST vocabulary, account model)
 2. Migrate to OTel GenAI semconv — replace Michael's custom witb_*/tier conventions with gen_ai.* in Datadog LLM Observability ([PRD #20](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/20))
 3. Security-beat traces — before/after sanitization (re-leak trap) + rogue MCP tool chain ([PRD #22](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/22))
-4. Falco alerts in Datadog — runtime detection visible
-5. EKS infra & named integrations — Agent DaemonSet, per-component synthesis (issue #11)
+4. Falco alerts in Datadog — verify Falcosidekick→Event Stream, rename canary rule, confirm C3+C4 rules visible ([PRD #23](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/23))
+5. EKS infra & named integrations — Agent DaemonSet, per-component synthesis ([PRD #26](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/26))
 6. UST, Service Map & correlation — full-fidelity tagging, Service Map view, log/trace/metric pivots
-7. Dashboards — import community/Grafana dashboards (from the Milestone 5 survey) for components without an official Datadog dashboard; decide custom/story dashboards (build now / defer to dress rehearsal / skip)
+7. Dashboards — import Datadog community dashboards for components without an OOTB Datadog dashboard; decide custom/story dashboards (build now / defer / skip) — gated on [#24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24) (research spike: survey Datadog community dashboard JSON files for Kyverno, Istio ztunnel, ESO, cert-manager)
 8. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets
+
+**Optional enhancements (post-M5, if time allows before workshop):**
+
+- Add Istio ambient waypoint proxy for L7 mTLS in exfil challenge ([#25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25)) — blocked by M5 (Istio L4 integration active)

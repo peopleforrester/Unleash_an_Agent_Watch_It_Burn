@@ -278,26 +278,27 @@ dashboard or events), confirmed live.
 - `research/06-cncf-stack.md` (Falco/Falcosidekick), `research/18-…` (Falco integration row), `research/23-…`
 - Codebase: Falco + Falcosidekick manifests in `gitops/apps/`, `gitops/ai-layer/resources.yaml`
 
-**Step 1 — Problem (write 3-5 sentences):** Which beats need Falco alerts in Datadog, and is the
-Falcosidekick→Datadog path actually live?
+**Step 1 — Problem (write 3-5 sentences):** Which beats need Falco alerts in Datadog, and which specific rules/alerts must be visible for each beat?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Falcosidekick → Datadog (verify-at-build)** — confirm Falcosidekick forwards security events to Datadog, not only to Talon. Commit `6c6a81d` wired it but `research/23` observed Talon-only; confirm on a live cluster.
-2. **Falco integration vs. Falcosidekick native output** — decide which path surfaces alerts (named integration Agent 7.59.1+ has an OOTB dashboard; Falcosidekick has native Datadog output). Note the Agent integration depends on Milestone 5; if Milestone 5 isn't built yet, use Falcosidekick native output so this milestone stays buildable.
-3. **Which alerts/rules** must be visible for the demo.
+1. **Falcosidekick → Datadog (verify-at-build) — Pre-decided (M4 Decision 1, 2026-06-24).** Commit `6c6a81d` already wired the Datadog output block in `gitops/apps/falcosidekick.yaml`; `DATADOG_HOST=https://api.datadoghq.com` is correct for US1. The child PRD must include two verify-at-build tasks for Michael: (a) confirm `datadog-secret` exists in the `security` namespace (not just `monitoring`); (b) confirm events flow on a live cluster. No design conversation needed; record this in the child PRD's Decision Log.
+2. **Falco integration vs. Falcosidekick native output — Pre-decided: wire both (M4 Decision 2, 2026-06-24).** Falcosidekick sends individual alerts to the Datadog Event Stream; the Agent named integration sends individual alert logs to Log Explorer + aggregate metrics to the OOTB Falco dashboard. These are different Datadog surfaces — no duplication. Falcosidekick's path is wired in M4 (manifest already configured). The Agent named integration is wired in M5 when the Agent DaemonSet is deployed. Do not re-open this question.
+3. **Which alerts/rules must be visible — Pre-decided (M4 Decision 3, 2026-06-24).** Three rules: (1) "Shell or Exec In Workshop Agent Pod" (WARNING) — any exec in the agent pod, fires for both C3 and C4; (2) "Sensitive File Access" (NOTICE) — sentinel credential file read, C3; (3) "Fork Bomb In Workload Container" (CRITICAL) — C4, also routes to Talon. The child PRD must rename the manifest rule currently called "Read Of Planted Fake Secret By Workshop Agent" to "Sensitive File Access" — the current name betrays the workshop illusion and assumes attribution Falco does not have. Do not re-open this question.
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD per decisions 1-3, acceptance including "Falco alert visible in Datadog on a live exfil attempt" (`/prd-update-decisions`).
+2. Run `/prd-create` for a child PRD per decisions 1-3, acceptance including "all three required Falco rules produce visible alerts in the Datadog Event Stream (via Falcosidekick) on a live cluster run" (`/prd-update-decisions`). The child PRD must include: verify-at-build tasks (Decision 1); manifest rename of "Read Of Planted Fake Secret By Workshop Agent" → "Sensitive File Access" in `gitops/apps/falco.yaml` (Decision 3).
 3. Add to `docs/ROADMAP.md` as `- Falco alerts in Datadog (PRD #[issue-id])`, after Milestone 3.
 4. Run `/prd-update-progress` to commit + push.
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 5.
 
 **Done when:**
-- [ ] Decisions 1-3 recorded with reasoning
-- [ ] Falcosidekick→Datadog path live-verified (or the Falcosidekick-native fallback chosen)
-- [ ] A child PRD issue exists whose acceptance includes a Falco alert visible in Datadog
-- [ ] ROADMAP updated
+- [x] M4 Decisions 1, 2, and 3 recorded in the child PRD's Decision Log (pre-decided here; the child PRD records them as inherited locked decisions)
+- [x] Child PRD includes verify-at-build tasks: `datadog-secret` in `security` namespace; events confirmed flowing on a live cluster
+- [x] Child PRD includes manifest rename task: "Read Of Planted Fake Secret By Workshop Agent" → "Sensitive File Access" in `gitops/apps/falco.yaml`
+- [x] A child PRD issue exists whose acceptance includes all three required rules visible in the Datadog Event Stream (via Falcosidekick) on a live cluster run
+- [x] C4 fork-bomb rule also verified to trigger Talon auto-remediation (covered in PRD #23 Milestone 2 Step 3)
+- [x] ROADMAP updated
 
 ---
 
@@ -325,7 +326,7 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 1. **Agent install method and configuration (issues #14 and #17 prerequisites; install method and key flags pre-decided)** — Confirm issues #14 and #17 research are complete and their file paths are posted as comments. **Pre-decided (meta-PRD Decision Log 2026-06-24, overriding research/32):** (a) install mechanism = Datadog Operator; config uses DatadogAgent CR `spec.features.*` keys, not Helm `datadog.*` keys; (b) `spec.features.prometheusScrape.enabled: true` — ON, because some stack components are Prometheus-only; (c) `spec.features.apm.enabled: false` — OFF, OTel traces reach the APM UI via Collector path without this flag (confirmed by issue #17 research/34). Then resolve: (d) remaining feature flags — log collection, container monitoring, live process collection, remote configuration, autoscaling workload — cross-referenced against `research/24` §2.3 sizing and DatadogAgent CR schema; (e) IAM: IRSA vs EKS Pod Identity vs not required; (f) Cluster Agent: required or optional; (g) GitOps manifest shape: what the Operator + DatadogAgent CR ArgoCD Application(s) look like and where they live in `gitops/`, including sync-wave ordering for CRD before CR. Record as a single compound decision before proceeding.
 2. **Per-component telemetry synthesis (research deliverable)** — tracked in issue #11. For each of the 13 stack components (ArgoCD, Kyverno, Falco, KubeArmor, Istio ambient, ESO, cert-manager, Backstage, kagent, agentgateway, guard-proxy, evil-mcp-shim, customer-stream generator), answer: (1) does it emit telemetry? (2) OTel, Prometheus, or both? (if OTel or both, which semantic conventions?) (3) how do we capture it in this stack? (4) official Datadog integration and/or OOTB dashboard? (5) community/importable dashboard if no official one? The four AI-layer components (kagent, agentgateway, guard-proxy, evil-mcp-shim) extract from the issue #9 and #10 research files rather than re-running those spikes. Full output saved to `research/NN-per-component-telemetry-synthesis-2026.md` (at minimum `research/30-…` since 28 and 29 are claimed by the M2 spikes). Wire-or-skip decisions are NOT part of this deliverable — they happen in decision 4 below. KubeArmor: community dashboard survey only; not in narrative. Confirm issue #11 is complete and the file path is posted as a comment before proceeding. **Note:** UST vocabulary for the four AI-layer components is pre-locked in the M1 Decision Log — do NOT re-decide `service.name`, `service.version`, or `deployment.environment.name` values for kagent, agentgateway, guard-proxy, or evil-mcp-shim. The synthesis deliverable for these four components answers telemetry-capture questions only; UST values are already in the M1 Decision Log entries dated 2026-06-23.
 3. **DDOT vs. contrib** — `research/24` §1.1 already confirmed: keep standalone contrib `0.158.2` as fleet collector; standalone Agent for infra only; DDOT optional on instructor cluster. Confirm, do not re-open without new info.
-4. **Wire-or-skip per named integration** — one component at a time. For each integration wired, define its **UI-verification checklist**: which dashboard, which metric, and which view proves it works in the Datadog UI.
+4. **Wire-or-skip per named integration** — one component at a time. For each integration wired, define its **UI-verification checklist**: which dashboard, which metric, and which view proves it works in the Datadog UI. **Falco is pre-decided: wire the named integration (Updated per M4 Decision 2, 2026-06-24).** The Agent named integration collects individual alert logs (JSON per alert → Log Explorer) + aggregate Prometheus metrics (→ OOTB Falco dashboard). Falcosidekick's Datadog output (Event Stream) is wired in M4; this decision adds the Agent path in M5. UI verification checklist for Falco (Updated per M4 Decision 3, 2026-06-24): (1) OOTB Falco dashboard renders with rule match counts; (2) after running Challenge C3 (grep Easter-egg secret), both "Shell or Exec In Workshop Agent Pod" (WARNING) and "Sensitive File Access" (NOTICE) appear as log records in Log Explorer; (3) after running Challenge C4 (fork bomb), "Fork Bomb In Workload Container" (CRITICAL) and "Shell or Exec In Workshop Agent Pod" (WARNING) appear in Log Explorer. Do not re-open the wire-or-skip question for Falco.
 5. **Hostname alignment** — Datadog computes host as `<k8s.node.name>-<cluster name>`; `cluster.name` already upserted; confirm `k8s.node.name` on host telemetry + matching `DD_CLUSTER_NAME` on the Agent (`research/24` §1.2).
 6. **Istio ambient: L7 or L4-only?** — accept L4-only ztunnel metrics, or deploy a per-namespace waypoint for L7 (`research/23` Decision 6, `research/18`).
 7. **EKS + CloudWatch cross-account integration scope** — in scope at all, and almost certainly NOT per-attendee (`research/24` §1.4)? Facilitator-only vs. skip.
@@ -341,12 +342,12 @@ setup cost for the workshop, and what does "working" look like in the UI for eac
 6. Instruct the user to start a new session, then run `/prd-next` for Milestone 6.
 
 **Done when:**
-- [ ] issue #14 research complete and file path posted as comment (gates Step 2 decision 1, Agent install)
-- [ ] issue #17 research complete and file path posted as comment (gates Step 2 decision 1 APM confirmation, decision 4 wire-or-skip)
-- [ ] `research/NN-per-component-telemetry-synthesis-2026.md` exists (issue #11 complete, file path posted as comment) covering all 13 components with answers to the 5 telemetry questions
-- [ ] Decisions 1-9 recorded with reasoning
-- [ ] A child PRD issue exists whose acceptance includes a per-integration UI verification checklist
-- [ ] ROADMAP updated
+- [x] issue #14 research complete and file path posted as comment (gates Step 2 decision 1, Agent install)
+- [x] issue #17 research complete and file path posted as comment (gates Step 2 decision 1 APM confirmation, decision 4 wire-or-skip)
+- [x] `research/NN-per-component-telemetry-synthesis-2026.md` exists (issue #11 complete, file path posted as comment) covering all 13 components with answers to the 5 telemetry questions
+- [x] Decisions 1-9 recorded with reasoning
+- [x] A child PRD issue exists whose acceptance includes a per-integration UI verification checklist
+- [x] ROADMAP updated
 
 ---
 
@@ -360,7 +361,7 @@ component's real software version (the model dimension lives in `gen_ai.request.
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
 - Prior milestone child PRDs + Decision Logs (esp. Milestone 1's UST vocabulary, Milestone 5's Agent deploy) — **gate this milestone**
-- `research/19-datadog-otel-ust-correlation-2026.md`, `research/23-…` (Decisions 5, 8)
+- `research/19-datadog-otel-ust-correlation-2026.md`, `research/23-observability-decision-points-2026.md` (Decisions 5, 8)
 - Codebase: `gitops/ai-layer/resources.yaml`, `agent/gateway/agentgateway.yaml`, `agent/gateway/guard-proxy/` (log output format), every workload manifest in `gitops/apps/` (UST-label inventory), `gitops/apps/otel-collector.yaml`
 
 **Step 1 — Problem (write 3-5 sentences):** What correlation and Service-Map gaps remain after the
@@ -395,17 +396,16 @@ custom/story dashboard decisions are made (build now, defer specific ones to dre
 
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- The Milestone 5 child PRD + `research/NN-per-component-telemetry-synthesis-2026.md` (issue #11 output; includes the community-dashboard survey as question 5) — **gates this milestone**
+- The Milestone 5 child PRD + `research/30-per-component-telemetry-synthesis-2026.md` (issue #11 output) — **gates this milestone**
+- **New prerequisite gate (Updated per 2026-06-24 Grafana decision):** A Datadog community dashboard research spike must be complete before this milestone proceeds. research/30's "community dashboard" column lists Grafana IDs — those are inapplicable (no Grafana imports; see Decision Log 2026-06-24). The new spike surveys importable Datadog community dashboard JSON files (DataDog/community-lab or similar) for components without OOTB dashboards. The spike is tracked in [issue #24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24) — it must be completed and its file path posted as a comment before Step 2 begins.
 - All prior milestone child PRDs + Decision Logs — a dashboard can't be built/imported on data that isn't flowing
-- `research/24-…`, `docs/transcripts/observability-architecture-paths.md` (candidate custom-dashboard list)
-- Codebase: `agent/gateway/guard-proxy/` (confirm metric names `witb_cost_usd`/`witb_tokens_total`/`witb_requests_total` — or their gen_ai-semconv successors per Milestone 2), `beats/`
+- `research/24-datadog-hybrid-impl-sizing-2026.md`, `docs/transcripts/observability-architecture-paths.md` (candidate custom-dashboard list)
+- Codebase: `agent/gateway/guard-proxy/` (confirm metric names — `witb_cost_usd` retained per M2 Decision 5; `witb_tokens_total`/`witb_requests_total` retired), `beats/`
 
-**Step 1 — Problem (write 3-5 sentences):** Which dashboards tell the workshop story, which importable
-community dashboards fill gaps for components without an official Datadog dashboard, and is each one's
-data confirmed flowing?
+**Step 1 — Problem (write 3-5 sentences):** Which dashboards tell the workshop story, and which Datadog community dashboards (JSON import via Datadog UI/API/Terraform) fill gaps for components without an official Datadog OOTB dashboard?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Import which community dashboards?** — for each importable candidate from `research/30-per-component-telemetry-synthesis-2026.md` (community dashboard column, whole stack, incl. KubeArmor): import it or skip? One component at a time. Importing an existing community/Grafana dashboard is allowed even for supporting tech; hand-building custom ones for never-center-stage tech is not.
+1. **Import which Datadog community dashboards?** — for each importable candidate from the Datadog community dashboard research spike ([issue #24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24), NOT research/30's Grafana column): import it or skip? One component at a time. **No Grafana imports** (Updated per 2026-06-24 Grafana decision: Whitney works at Datadog; all dashboard imports use Datadog's own community JSON format). For Kyverno: confirm whether the community dashboard's metric names are compatible with the OTLP path (M5 D9) before committing to import.
 2. **Custom/story dashboards** — for each candidate (Wasted Tokens Over Time, Model Tier Cost Race [group by `gen_ai.request.model`], Tool Call Heatmap, Guardrail Toggle Timeline): **build now, defer to dress rehearsal, or skip?** Confirm the data source is flowing before committing to build.
 3. **Dashboard JSON as code (committed)** vs. UI-built?
 
@@ -417,7 +417,8 @@ data confirmed flowing?
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 8.
 
 **Done when:**
-- [ ] Import/skip decided per community dashboard with reasoning; chosen ones imported
+- [ ] Datadog community dashboard research spike ([issue #24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24)) complete and file path posted as comment (gates Step 2 Decision 1; **no Grafana imports** — Updated per 2026-06-24 Grafana decision)
+- [ ] Import/skip decided per Datadog community dashboard with reasoning; chosen ones imported (Datadog community JSON format only — no Grafana)
 - [ ] Build-now/defer/skip decided per custom dashboard, with data-flowing confirmed for any built now
 - [ ] A child PRD issue exists for the dashboard imports + custom builds
 - [ ] ROADMAP updated
@@ -426,13 +427,15 @@ data confirmed flowing?
 
 ### Milestone 8 — Scale-out: per-attendee accounts, credential store & distribution
 
-**End-state goal:** A workable mechanism to provision 60-70 per-attendee Datadog trial orgs, store
-their sensitive credentials as a source of truth the build service reads and Whitney shares with
-Michael, surface each attendee's credentials during the workshop, and land each org's keys as
-Kubernetes secrets in that attendee's cluster.
+**End-state goal:** Auto-wire each attendee's per-cluster `datadog-secret` (Kubernetes Secret in
+`monitoring`, `security`, and `datadog` namespaces) from the pool of ~60 pre-provisioned trial orgs
+so that spawning the fleet requires zero manual credential steps.
 
-Confirmed model: **per-attendee trial orgs**. `PROJECT_STATE.md`'s "one shared org" line is
-stale/superseded — corrected as part of this milestone.
+**Status as of 2026-06-24:** Michael's half is done. The open work is Whitney's child PRD (Decision 5
+— the ESO `ExternalSecret` that reads the master store and injects per-cluster secrets). The "org
+fork" question (whose org does each cluster report to?) must be resolved first.
+
+Confirmed model: **per-attendee trial orgs** (~60 manually provisioned). Attendee count: **60**.
 
 Each trial org has this shape (sensitive — contains API key, app key, and a password; **never commit
 to the repo**):
@@ -446,35 +449,46 @@ to the repo**):
 }
 ```
 
+**What Michael has already done (substrate ready):**
+- Org provisioning: ~60 trial orgs manually provisioned; `pool.csv` is the source of truth
+- Distribution: `merge_pool.py` + `pool.csv` + provisioning success page give each attendee their Datadog creds
+- 1Password shared vault set up (Whitney/Michael sharing mechanism)
+- `datadog-secret` consumers wired: `otel-collector.yaml` and `falcosidekick.yaml` already read from it
+- ESO + EKS Pod Identity substrate exists; `datadog-secret` in `security` namespace confirmed needed (see Decision Log M4 Decision 1)
+- Teardown: manual trigger via `teardown/teardown.sh` (40-min auto-expiry idea dropped)
+
+**What remains (Whitney's child PRD):**
+
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
-- All prior milestone child PRDs + Decision Logs — **gate this milestone** (scale-out multiplies the single-account MVP across attendees)
-- `research/24-…` (§3 secret injection), `research/25-eks-quotas-shared-vpc-topology-2026.md`, `research/26-aiewf-2026-logistics-2026.md`, `research/27-conference-demo-resilience-2026.md`
-- Codebase: `gitops/apps/` (ESO config and existing secret patterns), `docs/BUILD-SPEC.md` (attendee experience), `PROJECT_STATE.md` (stale shared-org line to correct)
+- All prior milestone child PRDs + Decision Logs — **gate this milestone**
+- `research/24-datadog-hybrid-impl-sizing-2026.md` (§3 secret injection), `research/25-eks-quotas-shared-vpc-topology-2026.md`
+- Codebase: `gitops/apps/` (ESO config, existing ExternalSecret patterns), `docs/BUILD-SPEC.md`
 
-**Step 1 — Problem (write 3-5 sentences):** What is unresolved about provisioning and distributing
-per-attendee Datadog access at workshop scale, and what is the blast radius if it fails on the day?
+**Step 1 — Problem (write 3-5 sentences):** What is unresolved about auto-wiring the per-cluster
+`datadog-secret` at fleet spawn time, and what is the blast radius if it fails on the day?
 
 **Step 2 — Resolve with Whitney (one at a time):**
-1. **Provisioning (NET-NEW RESEARCH REQUIRED)** — how do 60-70 trial orgs get created? No doc addresses this; riskiest unsupported scope. Run a net-new `/research` spike before presenting options (Manual, Datadog API, Terraform, other).
-2. **Master credential store** — where the full pool (the JSON above, ×60-70) lives as source of truth, such that (a) the build service can read it to inject per-cluster and (b) Whitney can share it with Michael. Holds API keys, app keys, passwords — never committed. Candidate: AWS Secrets Manager (same source ESO reads in decision 5), one secret for the pool or one per attendee keyed by `userId`; share with Michael via IAM grant. Resolve store + access-control + sharing.
-3. **Surfacing credentials** — how attendees receive access, and what's in each bundle (org URL, API key, app key?, password, kubeconfig, chat-UI token). `research/27` §1.9 settles "pre-generate bundles + claim mechanism" but leaves mechanism/contents open.
-4. **Are app keys (`datadogAppKey`) needed at all?** — only for dashboard/monitor API automation, not ingest (`research/24` §3.2).
-5. **Keys into the cluster** — `research/24` §3.3 Option A: `datadog-secret` in `monitoring`, `security`, and (if Agent enabled) `datadog` namespaces via one ESO `ExternalSecret` per namespace from the master store. Confirm/revise. (Independent per-student clusters, no hub — `research/25`.)
-6. **Rotation/expiry** — schema carries `expiration`; no doc addresses the rotation flow.
+1. ~~**Provisioning**~~ — **DONE (2026-06-24).** Michael manually provisioned ~60 trial orgs; `pool.csv` is the source of truth. No research spike needed.
+2. ~~**Master credential store — sharing**~~ — **DONE (2026-06-24).** 1Password shared vault set up between Michael and Whitney. (How `pool.csv` entries are loaded into AWS Secrets Manager so ESO can read them is a sub-question inside Decision 5's child PRD, not a separate design conversation.)
+3. ~~**Surfacing credentials**~~ — **DONE (2026-06-24).** `merge_pool.py` + `pool.csv` + provisioning success page. Attendees receive their bundle at provisioning time.
+4. ~~**Are app keys (`datadogAppKey`) needed in the cluster secret?**~~ — **Pre-answered by M5 Decision 1(e), 2026-06-24.** Both `api-key` and `app-key` are in `datadog-secret`. The DatadogAgent CR's `spec.global.credentials` block requires both; the app key is used by the Operator/Cluster Agent for Datadog API operations, not only for dashboard/monitor automation. The two-key secret shape is established in M5 via ESO ExternalSecret. No verify-at-build needed on this question; the M5 child PRD validates the full DatadogAgent CR on a live cluster.
+5. **Org fork — OPEN, must resolve first:** does each cluster report to (a) the attendee's own trial org from their `pool.csv` row, (b) a single shared org Whitney watches for full cross-fleet visibility, or (c) both? This determines the ExternalSecret shape. Mechanism options: ESO `ExternalSecret` per namespace reading from AWS Secrets Manager (one secret per attendee keyed by `userId`, or one pool secret with a lookup); Terraform var → k8s Secret in the cluster module; fleet driver seeding from `pool.csv` at spawn time.
+6. ~~**Rotation/expiry**~~ — **SETTLED (2026-06-24).** Manual teardown via `teardown/teardown.sh`. Trial orgs expire ~14 days after provisioning. No automated rotation; mitigate leaked-cred blast radius via short IAM session lifetimes if needed.
 
 **Step 3 — Produce the child PRD:**
-1. Update `docs/observability-priorities.md` if priorities shifted. Correct `PROJECT_STATE.md`'s stale "one shared org" line to per-attendee orgs as part of this milestone.
-2. Run `/prd-create` for a child PRD per decisions 1-6 (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- Attendee accounts & credentials (PRD #[issue-id])`, last in build order.
+1. Correct `PROJECT_STATE.md`'s stale "one shared org" line to per-attendee orgs.
+2. Run `/prd-create` for a child PRD scoped to decisions 4-5 (cluster injection only; provisioning/distribution/sharing are done).
+3. Update `docs/ROADMAP.md` ROADMAP entry 8 with the new issue number.
 4. Run `/prd-update-progress` to commit + push.
 5. Final milestone — when its child PRD exists, mark this meta-PRD complete and run `/prd-done` for issue #7.
 
 **Done when:**
-- [ ] Decisions 1-6 recorded with reasoning
-- [ ] A net-new research spike for org provisioning (decision 1) exists in `research/`
-- [ ] A child PRD issue exists for provisioning + credential store + distribution + injection
-- [ ] ROADMAP updated
+- [x] Decisions 1, 2 (sharing), 3, 6 resolved (Michael's side done 2026-06-24)
+- [ ] Decision 4 (app keys in cluster secret?) resolved with Whitney
+- [ ] Decision 5 (org fork + ExternalSecret mechanism) resolved with Whitney
+- [ ] Child PRD exists for cluster secret injection (scoped to Decision 5)
+- [ ] ROADMAP entry 8 has an issue number
 - [ ] All 8 milestones complete → this meta-PRD closed
 
 ---
@@ -542,3 +556,21 @@ per-attendee Datadog access at workshop scale, and what is the blast radius if i
 | 2026-06-24 | guard-proxy reads `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` explicitly — `true` is an invalid enum value and must NOT enable capture (M3 Decision 2, content gate) | The env var is specific to `opentelemetry-util-genai` and contrib auto-instrumentation libraries; it does NOT govern raw hand-written OTel SDK spans automatically. guard-proxy must read and honor the env var via explicit code in `proxy.py`. Valid enum values that enable capture: `SPAN_ONLY`, `EVENT_ONLY`, `SPAN_AND_EVENT`. All other values (including `NO_CONTENT`, unset, and the invalid `true`) disable capture. Default `NO_CONTENT` matches the stack's off-by-default discipline (BUILD-SPEC §4: this is an "off by default; advanced beat"). Flip to `SPAN_ONLY` to arm the re-leak-trap beat. Locked in PRD #22 Locked Decisions. |
 | 2026-06-24 | Beat 3 rogue tool-call uses ADK-native `execute_tool {gen_ai.tool.name}` spans only; evil-mcp-shim stays dark; tool result capture is verify-at-build (M3 Decision 3) | evil-mcp-shim is intentionally dark (see 2026-06-24 entry above). The kagent/ADK caller-side `execute_tool` span names the bad tool and is sufficient for the Beat 3 waterfall narrative. Adding tool result capture would require a non-semconv custom attribute with no OTel-standard home; it also introduces instrumentation risk without adding material pedagogical value. Whether ADK natively captures tool results in `gen_ai.output.messages` on the `execute_tool` span is a verify-at-build item for the M3 child PRD (PRD #22 Milestone 4). |
 | 2026-06-24 | Two-act re-leak-trap beat (Option C): Act 1 leak visible → Act 2 Collector OTTL redaction fix demonstrated (M3 Decision 4) | Option A (env var flip only) violates research/05 re-leak control #4 — the sentinel persists in Datadog after teardown. Option B (Collector redacts before Datadog export) kills the pedagogical narrative — attendees cannot see the leak if it is already redacted before reaching Datadog. Option C is the whole point: show the leak exists (Act 1: `SPAN_ONLY` env var, original prompt visible in Datadog LLM Observability), then show it is preventable at the Collector boundary (Act 2: apply OTTL `transform/redact_sentinel` processor overlay, re-run beat, Datadog shows `[DEMO-REDACTED]`). The Collector uses `transform` processor (value replacement), NOT `redactionprocessor` (which deletes the attribute — demo requires the key to remain present with the placeholder). Act 2 config lives in a separate overlay file (`otel-collector-act2-overlay.yaml`), not in the base `otel-collector.yaml`, so the stack starts in Act 1 state by default. Env var flipped to `NO_CONTENT` after Act 2. Locked in PRD #22 Locked Decisions. |
+| 2026-06-24 | M4 Decision 3: Falco rules required in Datadog for C3 and C4 (the two execution Challenges); "any exec fires" is the detection principle | Challenge C3 (grep Easter-egg secret) and Challenge C4 (fork bomb) are the two execution Challenges in the workshop (Rounds + Challenges terminology, adopted 2026-06-24). In a hardened agent pod that should only make HTTP/LLM API calls, ANY `execve` syscall is the anomaly — the command does not need to be recognizably malicious. The Falco rule "Shell or Exec In Workshop Agent Pod" (WARNING) fires for both C3's grep and C4's fork bomb for the same structural reason. Required rules visible in Datadog: (1) "Shell or Exec In Workshop Agent Pod" (WARNING) — fires for any exec in the agent pod, C3 and C4; (2) "Sensitive File Access" (NOTICE) — fires when the sentinel credential file is read; Falco knows a sensitive path was accessed, not who read it or that it is a planted canary; the manifest currently names this rule "Read Of Planted Fake Secret By Workshop Agent" — the child PRD must rename it to "Sensitive File Access" (production-realistic name that does not betray the workshop illusion or assume attribution), C3; (3) "Fork Bomb In Workload Container" (CRITICAL) — fires for C4; routes to Talon for auto-remediation AND to Datadog. The child PRD acceptance criterion is: all three rules produce visible alerts in the Datadog Event Stream (via Falcosidekick) on a live cluster run. The "any exec fires" principle is the explicit teaching point — surface it in the child PRD's beat description. |
+| 2026-06-24 | M4 Decision 1: Falcosidekick→Datadog wiring is correct in the manifest; US1 site confirmed; verify-at-build on `datadog-secret` namespace | Commit `6c6a81d` wired Falcosidekick's Datadog output block. `DATADOG_HOST=https://api.datadoghq.com` is correct for US1 (confirmed 2026-06-24). The stale "Talon-only" observation in `research/23` predated the commit; research/23 corrected. Verify-at-build items for Michael's M4 child PRD: (1) `datadog-secret` must exist in the `security` namespace (Falcosidekick's namespace), not just `monitoring`; (2) confirm events flow on a live cluster. No manifest change needed for the Datadog host. |
+| 2026-06-24 | M5 Decision 1 (compound): Datadog Agent install, feature flags, IAM, Cluster Agent, GitOps shape — all locked | (a) **Install:** Datadog Operator (pre-decided); two ArgoCD Applications: `gitops/apps/datadog-operator.yaml` (renders `datadog/datadog-operator` Helm chart, sync-wave `"3"`) and `gitops/apps/datadog-agent-cr.yaml` (points to `gitops/manifests/datadog/`, sync-wave `"4"`). `DatadogAgent` CR lives at `gitops/manifests/datadog/datadog-agent.yaml`. Add `datadog` namespace to `gitops/apps/namespaces.yaml`. (b) **Feature flags:** container logs ON (`spec.features.logCollection.enabled: true` + `spec.features.logCollection.containerCollectAll: true`); everything else at default. `prometheusScrape: true` and `apm: false` were pre-decided in prior Decision Log entries (2026-06-24). KISS principle: no research spike on `spec.features` options; add capabilities only when a specific beat or story requires them. (c) **IAM:** no AWS API access needed for the Agent's core function (node/container metrics, logs, named-integration scrapes). If ever needed, use EKS Pod Identity — the repo's established convention (agent, AWS LBC, ESO all use Pod Identity). Default for the workshop: no AWS role on the Agent. (d) **Cluster Agent:** enabled, 1 replica, 200m/256Mi resource requests (required for clean kube-state/events and Autodiscovery dispatch of named-integration pod annotations; budgeted in research/24 §2.3 LOCKED sizing). (e) **`datadog-secret` shape:** one Kubernetes Secret with two keys — `api-key` and `app-key` — not two separate secrets. Both keys are required: the DatadogAgent CR's `spec.global.credentials` block references both; the app key is used by the Operator/Cluster Agent for Datadog API operations (not just dashboard/monitor API automation). Whitney has both keys for her MVP trial org. M5 establishes this two-field secret shape via an ESO ExternalSecret; per-attendee provisioning and credential distribution is M8 scope. The single `datadog-secret` name is consistent with Falcosidekick and OTel Collector references already in the repo. **CRITICAL: never print credentials to the terminal** — the secret contents must not appear in terminal output, commits, or logs at any point during implementation. |
+| 2026-06-24 | M5 Decision 2: per-component telemetry synthesis (research/30) confirmed complete; issue #11 closed | `research/30-per-component-telemetry-synthesis-2026.md` covers all 13 stack components with all five telemetry questions answered. Issue #11 is closed with the file path posted as a comment. No further action needed on the synthesis deliverable; wire-or-skip decisions proceed in M5 Decision 4. |
+| 2026-06-24 | M5 Decision 3: DDOT vs. otelcol-contrib confirmed — no change | Standalone otelcol-contrib `0.158.2` remains the fleet Collector; Datadog Agent handles infra/logs/named integrations only; DDOT is optional on the instructor cluster only. No new information since research/24 §1.1 settled this. Not reopened. |
+| 2026-06-24 | M5 Decision 4 (compound): Wire-or-skip per named integration — all 13 components resolved | **Wire (Agent named integration):** (1) **ArgoCD** — Agent `argocd` check via pod annotations; Prometheus-only; OOTB dashboard included (2) **Kyverno** — via native OTLP only (see D9); Agent `kyverno` Prometheus check SKIPPED — would duplicate metrics; (3) **Falco** — Agent `falco` check → alert logs + Prometheus metrics → OOTB dashboard (pre-decided M4 D2); (4) **Istio ambient** — Agent `istio` check, `istio_mode: ambient`, `ztunnel_endpoint` → L4 TCP metrics; OOTB dashboards are sidecar-oriented and will render sparse for ambient; Datadog community dashboard survey needed (new research issue, M7 prerequisite — see Grafana decision below); (5) **cert-manager** — Agent `cert_manager` check; `rename_labels` mapping `name` → `cert_name` required (research/18 + research/30 gotcha); no OOTB dashboard. **Collector path (no Agent check — already handled by OTel pipeline):** (6) **kagent** — OTel GenAI semconv → Collector → Datadog Agent Observability; (7) **agentgateway** — OTel → Collector → Datadog Agent Observability; (8) **guard-proxy** — Prometheus `witb_cost_usd` scraped by Collector; OTel spans added in M3. (Verify-at-build: confirm the Collector's `prometheus/receiver` has a scrape job configured for guard-proxy's metrics endpoint; add if missing.) **Skip:** (9) **KubeArmor** — not deployed, not in narrative (decided); (10) **ESO** — no official Datadog integration, generic OpenMetrics only, background component; (11) **Backstage** — emits nothing without OTel SDK, out of M5 scope; (12) **evil-mcp-shim** — intentionally dark (decided); (13) **customer-stream generator** — emits nothing (stdlib urllib POST loop). |
+| 2026-06-24 | M5 Decision 5: Hostname alignment confirmed | `clusterName: watch-it-burn` goes in the DatadogAgent CR `spec.global.clusterName`. The `k8s.node.name` resource attribute is carried by the Agent automatically on EKS node telemetry — no additional configuration required. Datadog computes the unified host as `<k8s.node.name>-<clusterName>`. |
+| 2026-06-24 | M5 Decision 6: Istio ambient L4-only in M5; L7 mTLS exfil story deferred to optional GitHub issue | M5 deploys L4-only ztunnel telemetry (Agent `istio` check, `istio_mode: ambient`). The L7 mTLS story — showing encrypted customer traffic exfiltrated to an external destination but rendered unusable by mTLS at the destination — is a strong narrative (discussed by Whitney + Michael) but time-uncertain. Decision: created optional [issue #25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25) "Optional: Add Istio ambient waypoint proxy for L7 mTLS in exfil challenge"; it is explicitly NOT in M5 or M6 scope. If time allows before the workshop, the optional issue can be implemented as a standalone addition. |
+| 2026-06-24 | M5 Decision 7: EKS + CloudWatch cross-account integration — skip | No EKS + CloudWatch integration. Not per-attendee; no workshop narrative. |
+| 2026-06-24 | M5 Decision 8: Agent resource footprint — carry research/24 §2 LOCKED sizing | Node Agent: 200m CPU / 256Mi memory. Process Agent: 100m / 200Mi. Cluster Agent: 200m / 256Mi (locked in D1(d)). APM feature: OFF. System Probe: OFF. These numbers go directly into the DatadogAgent CR's resource request fields. No guessing or research needed; research/24 §2.3 is the authoritative source. |
+| 2026-06-24 | M5 Decision 9: Kyverno native OTLP (`otelConfig=grpc`) — enable; Agent Prometheus check — skip | Enable Kyverno's native OTLP by setting `otelConfig: grpc` and `otelCollector: <in-cluster-otel-collector-endpoint>` in the Kyverno Helm values (`gitops/apps/kyverno.yaml` `helm.valuesObject`). This sends both Prometheus-format **metrics** AND policy-decision **traces** to the Collector (→ Datadog APM + metrics backend). The Agent `kyverno` Prometheus check is skipped — enabling both would duplicate metrics and add billing noise. Rationale: Kyverno is center-stage (Audit→Enforce toggle, Beat 1); native OTLP aligns with the Datadog-additive OTel principle and gives traces that the Agent check cannot provide. The Collector → Datadog routing is already established; this is an additive sender-side config only. |
+| 2026-06-24 | No Grafana dashboard imports; Datadog community dashboards require a new research spike (M7 prerequisite) | Whitney works at Datadog. No Grafana dashboard imports at any point in the project. The research/30 "community dashboard" column lists Grafana dashboard IDs throughout — those entries are inapplicable and should not be used as M7 import candidates. Datadog community dashboards are a distinct format: GitHub JSON files (DataDog/community-lab or similar) imported via Datadog UI, API, or Terraform provider. A new research spike is needed before M7 can proceed: survey which importable Datadog community dashboard JSON files exist for stack components without OOTB dashboards (at minimum: Kyverno, Istio ztunnel, ESO, cert-manager). For Kyverno: determine whether any community dashboard's metric names are calibrated to Agent Prometheus check output or raw OTLP output — our path (D9) uses OTLP. This spike is a **M7 prerequisite gate**, not an M5 dependency. Created as [issue #24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24). M7 Step 0, Step 2 Decision 1, and "Done when" updated to reflect this. |
+| 2026-06-24 | M4 Decision 2: Wire both Falcosidekick native output AND the Datadog Agent named integration — they are additive and feed different Datadog surfaces | The Datadog Falco Agent integration (7.59.1+) collects individual alert **logs** (JSON per alert → Log Explorer) and aggregate **Prometheus metrics** (→ OOTB dashboard). It does NOT require Falcosidekick and does not use the Datadog Events API. Falcosidekick's Datadog output sends individual alerts to the **Event Stream** (Datadog Events API) — a different surface. No duplication: logs vs. events are separate data types in separate Datadog UIs. Wire both: Falcosidekick native output in M4 (already in manifest, no Agent dependency); Agent named integration in M5 when the Agent DaemonSet is deployed. The child PRD for M4 notes M5 adds the second path. Source: https://docs.datadoghq.com/integrations/falco/ verified 2026-06-24. Prior reasoning in this document that described the integration as "metrics-only" was incorrect and has been corrected in research/18 and research/23. |
+| 2026-06-24 | M8 Decision 1 (provisioning) resolved: ~60 trial orgs manually provisioned by Michael | Michael manually provisioned the pool of ~60 Datadog trial orgs; `pool.csv` is the source of truth (never committed). No Datadog API / Terraform / scripted provisioning path was needed or built. The net-new research spike originally required for Decision 1 is no longer needed. Attendee count settled at 60 (fleet supports it; EKS quota 100). |
+| 2026-06-24 | M8 Decision 3 (surfacing credentials) resolved: distribution done by Michael | Attendees receive their Datadog credential bundle via `merge_pool.py` + `pool.csv` + a success page on the provisioning site. Mechanism and contents settled. |
+| 2026-06-24 | M8 Decision 2 (master credential store — sharing) resolved: 1Password shared vault done | 1Password shared vault is set up between Michael and Whitney as the mechanism for Whitney to access the pool. AWS Secrets Manager remains the intended ESO source for per-cluster injection; the path from `pool.csv` → AWS Secrets Manager master store needs confirmation as part of the M8 child PRD. |
+| 2026-06-24 | M8 Decision 6 (rotation/expiry) resolved: manual teardown, no automated rotation | Teardown is manual trigger via `teardown/teardown.sh` at end of run (40-minute auto-expiry idea dropped by Michael 2026-06-24). Trial orgs expire ~14 days after provisioning — a separate clock. No automated rotation plan. Blast-radius mitigation for leaked creds is short-lived IAM session lifetimes, not cluster auto-destroy. |
+| 2026-06-24 | M8 division of labor clarified: Michael's substrate done; Whitney owns Decision 5 (cluster injection) | Michael's completed: `datadog-secret` consumers wired in `otel-collector.yaml` and `falcosidekick.yaml`; ESO + EKS Pod Identity substrate ready. Whitney's remaining work: resolve Decision 4 (app keys needed in cluster secret?), resolve Decision 5 "org fork" question (attendee's own trial org vs shared org Whitney watches vs both), write the ESO `ExternalSecret` per namespace, create the M8 child PRD. |
