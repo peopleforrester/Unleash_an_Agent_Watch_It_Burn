@@ -53,17 +53,19 @@ spec:
           imagePullPolicy: IfNotPresent
           args: ["-f", "/etc/agentgateway/config.yaml"]
           env:
-            # UST for Datadog correlation (consumed by agentgateway's native OTel). The OTLP endpoint is set
-            # in the config file's frontendPolicies.tracing block, NOT here (the env endpoint is inert).
+            # UST for Datadog correlation.
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=agentgateway,service.version=v1.3.0,deployment.environment.name=production"
-            # Bind the admin/UI off localhost so the liveness probe can reach it (default is localhost:15000).
-            - name: ADMIN_ADDR
-              value: "0.0.0.0:15000"
+            # Tracing via the standard OTLP env endpoint. The config-file frontendPolicies.tracing key the
+            # research suggested is REJECTED by the v1.3.0 binary ("no variant of enum SimpleLocalBackend"),
+            # so it was removed; agentgateway is Istio-derived and honors this env. Exact config-file tracing
+            # schema is a follow-up; the guard-proxy->agentgateway Service Map edge does not depend on it.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317"
           ports:
             - { name: proxy, containerPort: 3000 } # A2A reverse proxy -> workshop-agent
             - { name: mcp, containerPort: 3001 }    # MCP front -> workshop-mcp
-            - { name: admin, containerPort: 15000 } # admin/UI + health surface
+            - { name: ready, containerPort: 15021 } # agentgateway built-in readiness listener (verified live)
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
@@ -73,7 +75,7 @@ spec:
             limits: { cpu: "500m", memory: "256Mi" }
           # No documented /healthz on the OSS standalone binary; use TCP checks (verified 2026-06-25).
           readinessProbe: { tcpSocket: { port: proxy }, initialDelaySeconds: 5, periodSeconds: 10 }
-          livenessProbe: { tcpSocket: { port: admin }, initialDelaySeconds: 10, periodSeconds: 15 }
+          livenessProbe: { tcpSocket: { port: ready }, initialDelaySeconds: 20, periodSeconds: 15 }
           volumeMounts:
             - { name: config, mountPath: /etc/agentgateway, readOnly: true }
             - { name: tmp, mountPath: /tmp } # writable scratch under readOnlyRootFilesystem
@@ -102,14 +104,11 @@ metadata:
 data:
   config.yaml: |
     # yaml-language-server: $schema=https://agentgateway.dev/schema/config
-    # agentgateway OSS v1.3.0 standalone config. Field paths verified against
-    # agentgateway.dev/docs/standalone/latest on 2026-06-25.
-
-    # OTLP trace export (gRPC :4317). Config-file key, NOT an env var.
-    frontendPolicies:
-      tracing:
-        otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317
-        randomSampling: true
+    # agentgateway OSS v1.3.0 standalone config.
+    # The frontendPolicies.tracing block was REMOVED: the live v1.3.0 binary rejects
+    # {otlpEndpoint, randomSampling} there ("no variant of enum SimpleLocalBackend"). Tracing is wired via
+    # the OTEL_EXPORTER_OTLP_ENDPOINT env on the Deployment instead. The exact config-file tracing schema
+    # is a follow-up; getting the proxy hop up is what unblocks the request path.
 
     binds:
       # A2A reverse proxy: guard-proxy -> agentgateway:3000 -> kagent workshop-agent:8080.
