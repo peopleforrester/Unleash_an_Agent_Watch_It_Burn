@@ -431,8 +431,8 @@ custom/story dashboard decisions are made (build now, defer specific ones to dre
 
 **Step 3 — Produce the child PRD:**
 1. Update `docs/observability-priorities.md` if priorities shifted.
-2. Run `/prd-create` for a child PRD implementing the chosen community-dashboard imports + any custom dashboards decided to build now (deferring the rest to dress rehearsal) per decisions 1-3 (`/prd-update-decisions`).
-3. Add to `docs/ROADMAP.md` as `- Dashboards: community imports + custom (PRD #[issue-id])`, after Milestone 6.
+2. Run `/prd-create` for a child PRD with this confirmed scope (per Decision Log D2/D3/D4/D5/D6 2026-06-25): **(a)** verify the three auto-installed OOTB dashboards appeared in Datadog (cert-manager, Kyverno, ArgoCD — all three Agent checks are [OK] and data is flowing; no code work required for these); **(b)** scaffold the `infra/terraform/dashboards/` module with a `datadog_dashboard_json` resource placeholder (foundation for custom dashboards deferred to dress rehearsal); no custom dashboard builds, no OTTL rename, no Istio work. The child PRD's acceptance criteria are: the three OOTB dashboards appear in the Datadog UI, and `infra/terraform/dashboards/` exists with a valid module structure.
+3. Add to `docs/ROADMAP.md` as `- Dashboards: OOTB imports + Terraform scaffold (PRD #[issue-id])`, after Milestone 6.
 4. Run `/prd-update-progress` to commit + push.
 5. Instruct the user to start a new session, then run `/prd-next` for Milestone 8.
 
