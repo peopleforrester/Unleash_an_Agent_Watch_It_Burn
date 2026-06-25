@@ -68,6 +68,14 @@ weaver registry live-check --registry weaver/registry/ \
   --input-source spans.json --input-format json
 ```
 
+**Gotcha when sourcing spans from Tempo:** Tempo's `/api/traces/<id>` returns OTLP/JSON, which encodes
+int64 attribute values as JSON strings (e.g. `http.response.status_code` comes back as
+`{"intValue": "200"}`). If you flatten that to the JSON string `"200"` in the live-check input,
+live-check reports a spurious `Attribute 'http.response.status_code' has type 'string'. Type should be
+'int'.` violation. Coerce by the OTLP value tag when shaping the input: `intValue` to int, `doubleValue`
+to float, `boolValue` to bool. The proxy emits the correct int; the artifact is purely in the OTLP/JSON
+transport. With coercion, the real guard-proxy spans pass clean (verified 2026-06-25).
+
 Exit 0 means every span conformed; exit 1 means at least one `violation`-level finding. The report
 groups advice per span. Example output for a span that drifted (operation name set to `sanitize`
 instead of `chat`, plus a stray attribute):
