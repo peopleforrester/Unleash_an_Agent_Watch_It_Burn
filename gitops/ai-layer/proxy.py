@@ -275,6 +275,9 @@ class Handler(BaseHTTPRequestHandler):
         body = json.dumps(body_obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        # Allow the instructor index (start.agenticburn.com) to read /cost and /prompts cross-subdomain
+        # for the one-place live room view. These are read-only, already-moderated surfaces.
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
