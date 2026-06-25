@@ -20,7 +20,7 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 5. EKS infra & named integrations — Agent DaemonSet, per-component synthesis ([PRD #26](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/26))
 6. UST, Service Map & correlation — full-fidelity tagging, Service Map view, log/trace/metric pivots ([PRD #27](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/27))
 7. Platform component UST backlog — add `tags.datadoghq.com/*` pod annotations to ArgoCD, Kyverno, Falco, cert-manager, Istio ambient to complete the Service Map ([PRD #28](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/28)) — gated on PRD #27 merging
-8. Dashboards — import Datadog community dashboards for components without an OOTB Datadog dashboard; decide custom/story dashboards (build now / defer / skip)
+8. Dashboards: OOTB imports + Terraform scaffold — verify cert-manager/Kyverno/ArgoCD dashboards appear; scaffold `infra/terraform/dashboards/` for dress-rehearsal custom dashboards ([PRD #33](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/33))
 9. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets
 
 **Optional enhancements (post-M5, if time allows before workshop):**
