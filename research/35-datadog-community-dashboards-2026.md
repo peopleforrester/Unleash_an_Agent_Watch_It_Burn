@@ -32,7 +32,7 @@ corrections from that pass are folded in below.
 JSON for any of the four. `DataDog/community-lab` (the canonical community repo) was **archived
 2024-08-27** and only covers akamai, aws, core, gcp, k8s, network, squid, sso (plus non-component
 `_web`/`src`/`.github` dirs). But three of the four (**cert-manager, Kyverno, Istio**) have **official
-OOTB** dashboards in `DataDog/integrations-core`. So M7 is not "import community vs build" — it is
+OOTB** dashboards in `DataDog/integrations-core`. So M7 is not "import community vs build"; it is
 "OOTB-and-it-works vs OOTB-but-our-wiring-doesn't-feed-it vs build from scratch."
 
 ## Per-component findings
@@ -56,7 +56,7 @@ references **Mixer and Galley**, components Istio removed years ago. ztunnel is 
 to `tcp.*` / `dns.*` / `xds.*` / `active_proxy_count` (e.g. `istio_tcp_connections_opened_total` ->
 `tcp.connections_opened.total`), not `istio.mesh.*`. Live confirmation: what is in Datadog is
 `ztunnel_connected`, `istio_build`, `istio_cni_install_ready`, `istiod_managed_clusters`,
-`istiod_uptime_seconds` — control plane + ztunnel L4, none of the OOTB dashboard's L7 request metrics.
+`istiod_uptime_seconds` control plane + ztunnel L4 only), none of the OOTB dashboard's L7 request metrics.
 So the OOTB Istio dashboard renders mostly empty for our ztunnel-only ambient deployment. **Build a
 small custom dashboard on the `ztunnel_*` (tcp/dns/xds/active_proxy) + `istiod_*` metrics.** (If a
 waypoint proxy is ever added per issue #25, waypoints DO emit `istio.*`-style L7 metrics and more of the
