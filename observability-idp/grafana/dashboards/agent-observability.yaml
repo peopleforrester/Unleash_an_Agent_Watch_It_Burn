@@ -27,41 +27,19 @@ data:
         {
           "id": 1,
           "type": "stat",
-          "title": "Live cost (USD) by tier",
-          "gridPos": { "h": 6, "w": 8, "x": 0, "y": 0 },
+          "title": "Live cost (USD) by model",
+          "gridPos": { "h": 6, "w": 12, "x": 0, "y": 0 },
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 }, "overrides": [] },
           "targets": [
-            { "refId": "A", "expr": "sum by (tier) (witb_cost_usd)", "legendFormat": "{{tier}}" }
-          ]
-        },
-        {
-          "id": 2,
-          "type": "timeseries",
-          "title": "Token spend rate (tokens/sec) — flatlines when the input guard blocks pre-LLM",
-          "gridPos": { "h": 6, "w": 16, "x": 8, "y": 0 },
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
-          "targets": [
-            { "refId": "A", "expr": "sum by (kind) (rate(witb_tokens_total[1m]))", "legendFormat": "{{kind}}" }
-          ]
-        },
-        {
-          "id": 3,
-          "type": "timeseries",
-          "title": "Model-bound requests/min (block-listed requests excluded)",
-          "gridPos": { "h": 6, "w": 12, "x": 0, "y": 6 },
-          "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
-          "targets": [
-            { "refId": "A", "expr": "sum(rate(witb_requests_total[1m])) * 60", "legendFormat": "req/min" }
+            { "refId": "A", "expr": "sum by (model) (witb_cost_usd)", "legendFormat": "{{model}}" }
           ]
         },
         {
           "id": 4,
           "type": "traces",
-          "title": "Agent traces (input / output / tool-call gen_ai spans)",
-          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 6 },
+          "title": "Agent traces (input / output / tool-call gen_ai spans). Per-token counts: gen_ai.usage.* on these spans (witb_tokens_total/requests retired, PRD #20 M5)",
+          "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
           "datasource": { "type": "tempo", "uid": "tempo" },
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
