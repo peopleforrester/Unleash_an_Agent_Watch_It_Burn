@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/27
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 6 AI layer child PRD
 **Priority**: High
-**Status**: Not started
+**Status**: M1-M5 implemented and locally verified (2026-06-25); live-cluster acceptance pending (needs agentgateway deployed + a test workload). See Decision Log for the two implementation deviations.
 
 ---
 
@@ -110,9 +110,9 @@ The acceptance script (`verify/test_datadog_service_map.py`) is the final gate, 
 3. Verify: wait ~2 minutes for telemetry to flow, then query `GET /api/v1/services` or use the Datadog MCP `search_datadog_services` tool. Confirm `agentgateway` appears with `env:production` and `version:v1.3.0` tags. If the service does not appear within 5 minutes, check whether agentgateway pods have restarted and whether the Collector is forwarding spans.
 
 **Done when:**
-- [ ] `agent/gateway/agentgateway.yaml` has `service.version=v1.3.0` and `deployment.environment.name=production` in `OTEL_RESOURCE_ATTRIBUTES`
-- [ ] No other UST values changed in this PR
-- [ ] agentgateway appears in Datadog with `env:production` and `version:v1.3.0` (verified via Datadog API or MCP)
+- [x] `agent/gateway/agentgateway.yaml` has `service.version=v1.3.0` and `deployment.environment.name=production` in `OTEL_RESOURCE_ATTRIBUTES`
+- [x] No other UST values changed in this PR
+- [ ] agentgateway appears in Datadog with `env:production` and `version:v1.3.0` (verified via Datadog API or MCP). LIVE: pending agentgateway deploy
 
 ---
 
@@ -203,11 +203,11 @@ The OTel SDK is already injected at pod startup by the OTel Operator (M2 Decisio
    - Verify the logs: check the Datadog logs API or Log Explorer for `guard-proxy` service log records containing `trace_id` and `span_id` fields.
 
 **Done when:**
-- [ ] `proxy.py` contains a CLIENT span wrapping the outbound agentgateway call with `peer.service="agentgateway"`, `http.request.method`, `url.full`, `http.response.status_code`
-- [ ] `proxy.py` contains `logging` + JSON formatter that injects `trace_id`/`span_id` from the active span context
-- [ ] Four guard decision events (blocklist hit, classifier block, output scrub, forward error) emit log records
-- [ ] Datadog shows guard-proxy CLIENT spans with `peer.service=agentgateway` (verified via Datadog MCP or API)
-- [ ] Datadog shows guard-proxy log records with `trace_id` and `span_id` fields (verified via logs API or Log Explorer)
+- [x] `proxy.py` contains a CLIENT span wrapping the outbound agentgateway call with `peer.service` (derived to `agentgateway` in target topology, see Decision Log), `http.request.method`, `url.full`, `http.response.status_code`
+- [x] `proxy.py` contains `logging` + JSON formatter that injects `trace_id`/`span_id` from the active span context
+- [x] Four guard decision events (blocklist hit, classifier block, output scrub, forward error) emit log records
+- [ ] Datadog shows guard-proxy CLIENT spans with `peer.service=agentgateway` (verified via Datadog MCP or API). LIVE: pending agentgateway deploy
+- [ ] Datadog shows guard-proxy log records with `trace_id` and `span_id` fields (verified via logs API or Log Explorer). LIVE
 
 ---
 
@@ -257,11 +257,11 @@ The OTel SDK is already injected at pod startup by the OTel Operator (M2 Decisio
 4. Deploy and verify: use `search_datadog_spans` to find CLIENT spans from agentgateway and kagent and confirm `peer.service` is now set correctly on each.
 
 **Done when:**
-- [ ] OTTL rules added (or skipped with documented reason) for agentgateway→kagent and kagent→Bedrock `peer.service`
-- [ ] If rules were added, `transform/set_peer_service` is referenced in the traces pipeline
-- [ ] `otel-collector.yaml` YAML is valid
-- [ ] agentgateway CLIENT spans show `peer.service=kagent` in Datadog (verified via MCP or span attributes)
-- [ ] kagent CLIENT spans show `peer.service=Bedrock` (or `peer.service` is already correct natively)
+- [x] OTTL rules added (or skipped with documented reason) for agentgateway→kagent and kagent→Bedrock `peer.service` (agentgateway→kagent added; kagent→Bedrock deliberately deferred to Datadog auto-inference, see Decision Log)
+- [x] If rules were added, `transform/set_peer_service` is referenced in the traces pipeline
+- [x] `otel-collector.yaml` YAML is valid
+- [ ] agentgateway CLIENT spans show `peer.service=kagent` in Datadog (verified via MCP or span attributes). LIVE: pending agentgateway deploy
+- [ ] kagent CLIENT spans show `peer.service=Bedrock` (or `peer.service` is already correct natively). LIVE / verify-at-build (Bedrock expected external-only)
 
 ---
 
@@ -302,9 +302,9 @@ The OTel SDK is already injected at pod startup by the OTel Operator (M2 Decisio
    (Port-forward the Collector's OTLP HTTP receiver to localhost:4318 first.) The live-check is the final human-in-the-loop validation — it is NOT a CI gate. Run it as the last acceptance step before closing this PRD.
 
 **Done when:**
-- [ ] Weaver registry contains a group definition for guard-proxy's CLIENT span with `http.request.method`, `url.full`, `http.response.status_code`, and `peer.service`
-- [ ] `weaver registry check` passes locally with zero errors
-- [ ] `weaver live-check` run as the terminal acceptance step on a live cluster (result documented — see Acceptance Criteria)
+- [x] Weaver registry contains a group definition for guard-proxy's CLIENT span with `http.request.method`, `url.full`, `http.response.status_code`, and `peer.service` (`span.witb.guard_proxy.egress`)
+- [x] `weaver registry check` passes locally with zero errors
+- [ ] `weaver live-check` run as the terminal acceptance step on a live cluster (result documented, see Acceptance Criteria). LIVE
 
 ---
 
@@ -395,10 +395,10 @@ The `trace_id` used for assertions 2 and 3 is harvested from a recent live clust
 3. Run the script end-to-end against a live cluster. Address any assertion failures using the iterate loop from the Milestone Working Pattern.
 
 **Done when:**
-- [ ] `verify/test_datadog_service_map.py` exists with ABOUTME header
-- [ ] Script passes against the live cluster for all expected Service Map edges
-- [ ] Script passes for both log-trace pivot directions with a real `trace_id` from a live run
-- [ ] Bedrock edge decision documented (3 internal edges acceptable if Bedrock is external-only)
+- [x] `verify/test_datadog_service_map.py` exists with ABOUTME header (stdlib urllib; wiring confirmed via a dummy-key 401)
+- [ ] Script passes against the live cluster for all expected Service Map edges. LIVE
+- [ ] Script passes for both log-trace pivot directions with a real `trace_id` from a live run. LIVE
+- [x] Bedrock edge decision documented (3 internal edges acceptable if Bedrock is external-only), see Decision Log
 
 ---
 
@@ -421,3 +421,6 @@ The `trace_id` used for assertions 2 and 3 is harvested from a recent live clust
 | 2026-06-25 | JSON logging uses OTel-standard field names `trace_id`/`span_id` — no Datadog remapping config needed | Datadog natively recognizes both `dd.trace_id`/`dd.span_id` (dd-trace SDK) and `trace_id`/`span_id` (OTel-standard) in the log pipeline. Using OTel-standard names avoids the 64-bit decimal conversion required by the dd-trace SDK path. Inherited from PRD #7 M6 Decision 4 (2026-06-25) and `~/.claude/rules/datadog-log-trace-gotchas.md`. |
 | 2026-06-25 | Service Map acceptance is binary via Datadog API — no browser/Playwright automation | Datadog's Service Map renders as canvas/SVG; browser selectors are brittle and require managing session cookies. `GET /api/v1/service_dependencies` returns the topology graph programmatically, making assertions machine-verifiable. Inherited from PRD #7 M6 Decision Log 2026-06-25. |
 | 2026-06-25 | Weaver `registry check` in CI; `live-check` as manual terminal acceptance step only | `registry check` validates schema statically — no live stack needed; runs in CI. `live-check` requires a running span stream from a live cluster and is the human-in-the-loop final gate. Inherited from PRD #7 M2 Decision 6 (2026-06-24). |
+| 2026-06-25 (impl) | **Deviation:** guard-proxy CLIENT `peer.service` is **derived from `AGENT_URL`'s host** in code, not hardcoded to the literal `"agentgateway"`. | The locked decision's intent is that `peer.service` names the real downstream hop, which is `agentgateway` in the target topology. agentgateway is currently staged-not-deployed (deferred PRD #20 M4), so guard-proxy forwards straight to the kagent agent. A hardcoded `"agentgateway"` would emit a CLIENT span claiming a peer that receives no call, drawing a Service Map edge to a node with no server spans and losing the real edge. Deriving from `AGENT_URL` reduces to exactly `"agentgateway"` once `AGENT_URL` fronts agentgateway (identical to the locked value in the deployed state) and stays correct in the interim. `PEER_SERVICE` env var overrides if the host label is ever wrong. Surfaced to Michael for awareness. |
+| 2026-06-25 (impl) | kagent→Bedrock `peer.service` is **not** forced by the M3 OTTL transform; left to Datadog AWS auto-inference. | kagent reaches Bedrock via the AWS SDK; Datadog auto-infers that external dependency from the `aws-api` spans. Stamping `peer.service="bedrock"` would risk a duplicate node next to Datadog's inferred one. The PRD already permits 3 internal edges when Bedrock is external-only (M5). The transform carries the Bedrock statement commented with a verify-at-build note to enable only if live inspection shows Bedrock is NOT auto-inferred. |
+| 2026-06-25 (impl) | OTTL `transform/set_peer_service` uses `error_mode: ignore`. | A runtime statement error then becomes a harmless no-op (`peer.service` simply stays unset) instead of dropping spans from the traces pipeline, the failure mode the PRD warns about. |

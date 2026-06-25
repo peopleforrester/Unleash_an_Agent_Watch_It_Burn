@@ -68,3 +68,36 @@ groups:
         note: >-
           The forwarded prompt, emitted as a JSON string. Equal to gen_ai.input.messages because the proxy
           forwards unchanged. Same opt-in content-capture gating as the input messages.
+
+  # --- The outbound CLIENT hop. guard-proxy -> agentgateway (the next hop fronting the kagent agent). ---
+  #
+  # Emitted by proxy.py inside the forward call (PRD #27 M2). peer.service names the downstream node so the
+  # Datadog Service Map draws the guard-proxy -> agentgateway edge. peer.service is derived from AGENT_URL's
+  # host in code, so it reduces to "agentgateway" exactly when AGENT_URL fronts agentgateway (the target
+  # topology); until agentgateway is deployed it names the real next hop (the kagent agent) instead.
+  - id: span.witb.guard_proxy.egress
+    type: span
+    span_kind: client
+    stability: development
+    brief: >-
+      The guard-proxy outbound CLIENT span (`agent.forward`). Wraps the HTTP POST that forwards the guarded
+      A2A request to the next hop (agentgateway in the target topology). Creates the guard-proxy -> next-hop
+      edge in the Datadog Service Map via peer.service.
+    attributes:
+      - ref: http.request.method
+        requirement_level: required
+        note: Always "POST" for the A2A JSON-RPC forward.
+      - ref: url.full
+        requirement_level: required
+        note: The full forward URL (AGENT_URL + request path); set from the proxy's outbound request.
+      - ref: http.response.status_code
+        requirement_level: required
+        note: >-
+          The downstream response status on success; on a connection-level forward failure it is absent
+          (the span instead carries error.type and an ERROR status), so this is required-on-success.
+      - ref: peer.service
+        requirement_level: required
+        note: >-
+          The logical name of the downstream service ("agentgateway" in the target topology). This is the
+          Service Map edge signal; defined in the upstream OTel semconv registry (resolved via the
+          manifest.yaml dependency), no local definition needed.
