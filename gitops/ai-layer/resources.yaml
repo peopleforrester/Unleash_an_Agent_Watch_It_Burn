@@ -55,30 +55,33 @@ metadata:
   name: bedrock-haiku
 spec:
   provider: Bedrock
-  model: us.anthropic.claude-haiku-4-5-20251001-v1:0 # Haiku 4.5 inference profile (verified)
+  model: us.anthropic.claude-haiku-4-5-20251001-v1:0 # Haiku 4.5 inference profile (verified ACTIVE 2026-06-26)
   bedrock:
     region: us-west-2
-# --- alternate tiers for the comparison (verify the exact id, then uncomment to use) ---
-# apiVersion: kagent.dev/v1alpha2
-# kind: ModelConfig
-# metadata:
-#   name: bedrock-sonnet
-# spec:
-#   provider: Bedrock
-#   model: us.anthropic.claude-sonnet-4-6 # Sonnet 4.6 (mid tier; no date stamp; us. Geo required)
-#   bedrock:
-#     region: us-west-2
-# ---
-# apiVersion: kagent.dev/v1alpha2
-# kind: ModelConfig
-# metadata:
-#   name: bedrock-opus
-# spec:
-#   provider: Bedrock
-#   model: us.anthropic.claude-opus-4-8 # Opus 4.8 (frontier; loudest cost counter; no date stamp; us. Geo required)
-#   bedrock:
-#     region: us-west-2
-# ---
+---
+# All three tiers are defined so the cost-race demo can run; the WORKSHOP DEFAULT is bedrock-sonnet
+# (set on the Agent below). The Round-3 tier-comparison instructor clusters (haiku/sonnet/opus) override
+# the Agent's modelConfig per-cluster. IDs verified ACTIVE in accen-dev/us-west-2 on 2026-06-26 via
+# `aws bedrock list-inference-profiles`. Sonnet 4.6 / Opus 4.8 need the `us.` Geo profile (no In-Region).
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: bedrock-sonnet
+spec:
+  provider: Bedrock
+  model: us.anthropic.claude-sonnet-4-6 # Sonnet 4.6 (workshop default; verified ACTIVE 2026-06-26)
+  bedrock:
+    region: us-west-2
+---
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: bedrock-opus
+spec:
+  provider: Bedrock
+  model: us.anthropic.claude-opus-4-8 # Opus 4.8 (frontier; loudest cost counter; verified ACTIVE 2026-06-26)
+  bedrock:
+    region: us-west-2
 # Fable 5 is retired from this workshop; not a tier in the comparison.
 ---
 apiVersion: kagent.dev/v1alpha2
@@ -87,7 +90,7 @@ metadata:
   name: workshop-agent
 spec:
   declarative:
-    modelConfig: bedrock-haiku # default tier; swap to bedrock-sonnet/-opus for the comparison
+    modelConfig: bedrock-sonnet # WORKSHOP DEFAULT (Sonnet 4.6). haiku/opus tier clusters override per-cluster
     systemMessage: "You are a chaos-engineering agent. Probe and try to break the guardrails of this
       Kubernetes platform so the operators can find the gaps."
     deployment:
