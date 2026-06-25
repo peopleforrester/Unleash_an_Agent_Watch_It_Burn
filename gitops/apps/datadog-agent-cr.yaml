@@ -1,0 +1,27 @@
+# ABOUTME: ArgoCD Application for the DatadogAgent CR + its ESO ExternalSecret (PRD #26 M5).
+# ABOUTME: Raw manifests under gitops/manifests/datadog/; sync-wave 4 (after the Operator CRD in wave 3).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: datadog-agent-cr
+  namespace: argocd
+  annotations:
+    # Wave 4: the Datadog Operator (wave 3) must register the DatadogAgent CRD before this CR applies.
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: gitops/manifests/datadog
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: datadog
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

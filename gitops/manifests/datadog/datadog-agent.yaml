@@ -1,0 +1,56 @@
+# ABOUTME: DatadogAgent CR (PRD #26 M5) — the node Agent DaemonSet + Cluster Agent for "Datadog sees everything".
+# ABOUTME: Uses spec.features.* (v2alpha1), NOT Helm datadog.* keys. Credentials from the ESO-synced datadog-secret.
+#
+# Field paths verified live against the installed CRD (datadoghq.com/v2alpha1) on 2026-06-25:
+# credentials uses apiSecret + **appSecret** (NOT "appKeySecret" — that field does not exist in this CRD,
+# despite some docs/examples; `kubectl explain ...credentials` confirms apiSecret/appSecret). spec.override is a
+# map keyed by component name (nodeAgent/processAgent/clusterAgent). APM off: OTel traces reach Datadog APM via
+# the Collector path (gitops/apps/otel-collector.yaml), so the Agent's APM port is unused here.
+apiVersion: datadoghq.com/v2alpha1
+kind: DatadogAgent
+metadata:
+  name: datadog
+  namespace: datadog
+spec:
+  global:
+    clusterName: watch-it-burn
+    credentials:
+      apiSecret:
+        secretName: datadog-secret
+        keyName: api-key
+      appSecret:
+        secretName: datadog-secret
+        keyName: app-key
+  features:
+    logCollection:
+      enabled: true
+      containerCollectAll: true
+    apm:
+      enabled: false
+    prometheusScrape:
+      enabled: true
+  # v2alpha1: resource requests are per-CONTAINER (override.<component>.containers.<name>.resources),
+  # NOT directly on the component (verified live 2026-06-25 via server-dry-run: a direct .resources is
+  # rejected with "unknown field"). The process agent is a container in the nodeAgent DaemonSet, not a
+  # separate override component. Container names per the Datadog AgentContainerName set.
+  override:
+    nodeAgent:
+      containers:
+        agent:
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
+        process-agent:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+    clusterAgent:
+      replicas: 1
+      containers:
+        cluster-agent:
+          resources:
+            requests:
+              cpu: 200m
+              memory: 256Mi
