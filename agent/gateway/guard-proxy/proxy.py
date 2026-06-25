@@ -10,6 +10,7 @@
 # {"is_valid": bool, "scanners": {...}, "sanitized_prompt"|"sanitized_output": "..."}.
 import collections
 import json
+import logging
 import os
 import threading
 import time
@@ -23,13 +24,46 @@ from urllib.parse import urlparse, parse_qs
 # with no OTel present (local dev, test clusters) as a no-op until the Operator's annotation is applied.
 try:
     from opentelemetry import trace
-    from opentelemetry.trace import SpanKind
+    from opentelemetry.trace import SpanKind, Status, StatusCode
     from opentelemetry.propagate import extract, inject
     _OTEL_AVAILABLE = True
     _tracer = trace.get_tracer(__name__)
 except ImportError:
     _OTEL_AVAILABLE = False
     _tracer = None
+
+
+# Structured JSON logging with trace correlation (PRD #27 M2). Every log line is one JSON object
+# carrying the active span's trace_id/span_id, so Datadog ties guard-decision logs to the trace in
+# the waterfall. Field names are the OTel-standard `trace_id`/`span_id` (lowercase hex) which Datadog
+# auto-recognizes — NO dd.trace_id/dd.span_id 64-bit-decimal remapping (locked PRD #27 Decision Log,
+# 2026-06-25). Stdlib logging only; no SDK dependency.
+class _TraceJsonFormatter(logging.Formatter):
+    def format(self, record):
+        payload = {
+            "timestamp": self.formatTime(record),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+        event = getattr(record, "event", None)
+        if event:
+            payload["event"] = event
+        if _OTEL_AVAILABLE:
+            ctx = trace.get_current_span().get_span_context()
+            if ctx.is_valid:
+                payload["trace_id"] = format(ctx.trace_id, "032x")
+                payload["span_id"] = format(ctx.span_id, "016x")
+        return json.dumps(payload)
+
+
+log = logging.getLogger("guard-proxy")
+if not log.handlers:
+    _handler = logging.StreamHandler()
+    _handler.setFormatter(_TraceJsonFormatter())
+    log.addHandler(_handler)
+    log.setLevel(logging.INFO)
+    log.propagate = False
 
 # Content capture is gated on the OTel GenAI capture env var, read ONCE at module load. This env var is
 # specific to opentelemetry-util-genai / contrib instrumentations; it does NOT govern hand-written SDK
@@ -45,6 +79,11 @@ def _genai_messages(text):
     return json.dumps([{"role": "user", "parts": [{"type": "text", "content": text}]}])
 
 AGENT_URL = os.environ.get("AGENT_URL", "http://workshop-agent.attendee-test:8080")
+# peer.service for the outbound CLIENT span (PRD #27 M2): the downstream node the Datadog Service Map
+# draws an edge to. Derived from AGENT_URL's host so the edge always names whatever this proxy really
+# calls. Target topology: AGENT_URL fronts agentgateway (-> "agentgateway"); until agentgateway is
+# deployed it points straight at the kagent agent. PEER_SERVICE overrides if the host label is wrong.
+_PEER_SERVICE = os.environ.get("PEER_SERVICE") or (urlparse(AGENT_URL).hostname or "agentgateway").split(".")[0]
 LLM_GUARD_URL = os.environ.get("LLM_GUARD_URL", "http://llm-guard.attendee-test:8000")
 LLM_GUARD_TOKEN = os.environ.get("LLM_GUARD_TOKEN", "")
 # Guard state is RUNTIME-mutable (flipped via GET /toggle), seeded from env. This is deliberate:
@@ -355,6 +394,8 @@ class Handler(BaseHTTPRequestHandler):
             if GUARDS["input_blocklist"] and text:
                 hit = blocklisted(text)
                 if hit:
+                    log.info("input blocked by deterministic block-list (matched %r)", hit,
+                             extra={"event": "input_blocklist_hit"})
                     self._send(403, {
                         "jsonrpc": "2.0", "id": payload.get("id"),
                         "error": {"code": -32600,
@@ -365,6 +406,8 @@ class Handler(BaseHTTPRequestHandler):
             # Stage 2: model-based prompt-injection classifier (costlier gate; NOT deterministic).
             if GUARDS["input_classifier"] and text:
                 if not input_allowed(text):
+                    log.info("input blocked by prompt-injection classifier",
+                             extra={"event": "input_classifier_block"})
                     self._send(403, {
                         "jsonrpc": "2.0", "id": payload.get("id"),
                         "error": {"code": -32600,
@@ -390,18 +433,41 @@ class Handler(BaseHTTPRequestHandler):
                 })
                 return
 
-            # Forward to the agent, injecting W3C trace context so kagent's ADK spans join this trace.
-            fwd_headers = {"Content-Type": "application/json"}
-            if _OTEL_AVAILABLE:
-                inject(fwd_headers)
-            try:
-                req = urllib.request.Request(
-                    AGENT_URL + self.path, data=raw, headers=fwd_headers, method="POST")
-                with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-                    resp = json.loads(r.read())
-            except Exception as exc:
-                self._send(502, {"error": f"agent forward failed: {exc}"})
-                return
+            # Forward to the agent inside a CLIENT span (PRD #27 M2): this models the egress hop in the
+            # Datadog Service Map. peer.service names the downstream node so the map draws
+            # guard-proxy -> <next hop>; http.request.method / url.full / http.response.status_code give
+            # it http.client semantics. inject() runs INSIDE the span so the forwarded W3C context is the
+            # CLIENT span's, and kagent's ADK spans parent onto THIS hop (not the sanitize span).
+            fwd_url = AGENT_URL + self.path
+            client_cm = (
+                _tracer.start_as_current_span("agent.forward", kind=SpanKind.CLIENT)
+                if _OTEL_AVAILABLE else nullcontext()
+            )
+            with client_cm as client_span:
+                fwd_headers = {"Content-Type": "application/json"}
+                if client_span is not None:
+                    client_span.set_attribute("peer.service", _PEER_SERVICE)
+                    client_span.set_attribute("http.request.method", "POST")
+                    client_span.set_attribute("url.full", fwd_url)
+                    inject(fwd_headers)
+                try:
+                    req = urllib.request.Request(
+                        fwd_url, data=raw, headers=fwd_headers, method="POST")
+                    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                        if client_span is not None:
+                            client_span.set_attribute("http.response.status_code", r.status)
+                        resp = json.loads(r.read())
+                except Exception as exc:
+                    if client_span is not None:
+                        # HTTPError carries .code; connection-level failures do not.
+                        code = getattr(exc, "code", None)
+                        if code is not None:
+                            client_span.set_attribute("http.response.status_code", code)
+                        client_span.set_attribute("error.type", type(exc).__name__)
+                        client_span.set_status(Status(StatusCode.ERROR, str(exc)))
+                    log.error("agent forward failed: %s", exc, extra={"event": "forward_error"})
+                    self._send(502, {"error": f"agent forward failed: {exc}"})
+                    return
 
         record_usage(resp)  # tally Bedrock token spend for the live cost counter
         if GUARDS["output"]:
@@ -417,6 +483,9 @@ class Handler(BaseHTTPRequestHandler):
             for p in parts or []:
                 if isinstance(p, dict) and p.get("kind") == "text" and p.get("text"):
                     scrubbed = output_scrub(p["text"])
+                    if scrubbed != p["text"]:
+                        log.info("output guardrail modified response content",
+                                 extra={"event": "output_scrub"})
                     p["text"] = "[BLOCKED BY OUTPUT GUARDRAIL]" if scrubbed is None else scrubbed
 
         for artifact in result.get("artifacts", []) or []:
@@ -428,8 +497,11 @@ class Handler(BaseHTTPRequestHandler):
         scrub(status_msg.get("parts", []))
         return resp
 
-    def log_message(self, *args):
-        return
+    def log_message(self, fmt, *args):
+        # Route BaseHTTPRequestHandler's default access logging through the structured JSON logger
+        # (PRD #27 M2) instead of its plain-text stderr line. Debug level keeps it out of the INFO
+        # stream that carries the guard-decision events.
+        log.debug(fmt % args, extra={"event": "http_access"})
 
 
 if __name__ == "__main__":
