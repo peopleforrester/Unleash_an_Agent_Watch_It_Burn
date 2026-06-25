@@ -1,0 +1,57 @@
+# ABOUTME: Weaver span-group contract for the guard-proxy spans (PRD #20 M6 / #22 M1, M3).
+# ABOUTME: The HTTP SERVER hop and the gen_ai "sanitize" INTERNAL span, ref'd to OTel semconv v1.37.0.
+#
+# This is the source of truth for what guard-proxy/proxy.py emits. `weaver registry check` resolves every
+# ref against the pinned upstream registry (manifest.yaml -> otel v1.37.0); a typo or a renamed upstream
+# attribute fails the check in CI. `weaver live-check` (docs/weaver-live-check.md) then compares real
+# telemetry from the running proxy against this same contract. Keep these groups in lockstep with the
+# set_attribute(...) calls in proxy.py.
+groups:
+  # --- The inbound HTTP hop. agentgateway -> guard-proxy, joined to the upstream trace via W3C context. ---
+  - id: span.witb.guard_proxy.http
+    type: span
+    span_kind: server
+    stability: development
+    brief: >-
+      The guard-proxy HTTP SERVER span (`POST <path>`). Emitted by proxy.py do_POST after extracting the
+      upstream W3C context, so the guard hop appears in the agentgateway -> agent waterfall.
+    attributes:
+      - ref: http.request.method
+        requirement_level: required
+        note: Always "POST" for the A2A JSON-RPC path the proxy guards.
+      - ref: url.path
+        requirement_level: required
+        note: The request path (e.g. the A2A endpoint or "/toggle"); set from self.path.
+      - ref: http.response.status_code
+        requirement_level: required
+        note: Set by _send at every exit (200 pass, 403 block, 502 upstream failure).
+
+  # --- The guard decision + forward, modelled as a gen_ai "chat" span so Datadog renders the LLM panel. ---
+  - id: span.witb.guard_proxy.sanitize
+    type: span
+    span_kind: internal
+    stability: development
+    brief: >-
+      The guard-proxy `sanitize` INTERNAL span. Wraps the block-or-pass decision and the forward.
+      gen_ai.operation.name is fixed to "chat" so Datadog LLM Observability classifies it as an llm-kind
+      span and renders the before/after message panel. The proxy forwards the prompt UNCHANGED, so the
+      input (original) and output (forwarded) messages are equal here; the re-leak redaction is the
+      Collector OTTL Act-2 step (PRD #22 M2), not in-proxy.
+    attributes:
+      - ref: gen_ai.operation.name
+        requirement_level: required
+        note: >-
+          Fixed to the "chat" enum member. This is the classification signal Datadog uses to treat the
+          span as an LLM operation; it is NOT "sanitize" (that is the span NAME, not the operation).
+      - ref: gen_ai.input.messages
+        requirement_level: opt_in
+        note: >-
+          The original inbound prompt as a single OTel GenAI message envelope, emitted as a JSON string
+          ([{role:user, parts:[{type:text, content:...}]}]). OPT-IN: only present when content capture is
+          armed (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT in SPAN_ONLY/EVENT_ONLY/SPAN_AND_EVENT).
+          This is the attribute the Act-2 OTTL processor (PRD #22 M2) replaces with [DEMO-REDACTED].
+      - ref: gen_ai.output.messages
+        requirement_level: opt_in
+        note: >-
+          The forwarded prompt, emitted as a JSON string. Equal to gen_ai.input.messages because the proxy
+          forwards unchanged. Same opt-in content-capture gating as the input messages.
