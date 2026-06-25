@@ -242,6 +242,13 @@ module "eso_pod_identity" {
 
   name                           = "${var.name}-eso"
   attach_external_secrets_policy = true
+  # The module gates the secretsmanager:GetSecretValue/DescribeSecret statement on this ARN list being
+  # non-empty (see external_secrets.tf: for_each = length(...secrets_manager_arns) > 0). Without it the
+  # role can create an AWS client but every GetSecretValue is AccessDenied ("no identity-based policy
+  # allows the action"). Scope to the workshop secret prefix; region/account wildcarded so the same role
+  # definition is fleet-safe across all clusters. All workshop secrets use the `watch-it-burn/` prefix
+  # (e.g. watch-it-burn/grafana-admin, watch-it-burn/test-secret, watch-it-burn/datadog).
+  external_secrets_secrets_manager_arns = ["arn:aws:secretsmanager:*:*:secret:watch-it-burn/*"]
 
   associations = {
     main = {
