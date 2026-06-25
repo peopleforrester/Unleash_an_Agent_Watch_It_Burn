@@ -1,0 +1,50 @@
+# ABOUTME: Fans the Datadog api-key out to the OTHER namespaces that consume datadog-secret, so all three
+# ABOUTME: consumers are fed from the one Secrets Manager entry (watch-it-burn/datadog) the loader writes.
+#
+# datadog-eso.yaml syncs datadog-secret into the `datadog` namespace (the DatadogAgent needs api-key +
+# app-key). But two more workloads consume datadog-secret and had NO ESO sync, so they relied on a manual
+# secret per cluster:
+#   - monitoring ns: the OTel Collector (DD_API_KEY -> the PRIMARY Datadog sink for all traces/metrics).
+#   - security   ns: falcosidekick (DATADOG_APIKEY -> Falco alerts to Datadog).
+# Both only use api-key. The aws-secrets-manager ClusterSecretStore is cluster-scoped, so these
+# ExternalSecrets sync from any namespace with no per-namespace SecretStore. This closes the distribution
+# loop: distribute_datadog_keys.py writes the account's keys to Secrets Manager once, and ESO materializes
+# datadog-secret in every namespace that needs it.
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: datadog-secret
+  namespace: monitoring
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: datadog-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: api-key
+      remoteRef:
+        key: watch-it-burn/datadog
+        property: api-key
+---
+apiVersion: external-secrets.io/v1
+kind: ExternalSecret
+metadata:
+  name: datadog-secret
+  namespace: security
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: datadog-secret
+    creationPolicy: Owner
+  data:
+    - secretKey: api-key
+      remoteRef:
+        key: watch-it-burn/datadog
+        property: api-key

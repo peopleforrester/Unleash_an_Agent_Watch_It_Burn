@@ -42,6 +42,28 @@ python3 scripts/merge_pool.py --aws aws-pool.csv --datadog wib-pool-accounts.csv
     --dashboard-url-template "https://app.datadoghq.com/dashboard/lists?q={org}"
 ```
 
+## Wiring each cluster to its Datadog org (`distribute_datadog_keys.py`)
+
+Building `pool.csv` solves attendee-facing distribution (each person gets their own org login + keys).
+The other half is making each attendee's **cluster** ship telemetry to **their** org. The in-cluster chain
+is already live (ClusterSecretStore via Pod Identity to `ExternalSecret` to `datadog-secret`, consumed by
+the Collector, the Datadog Agent, and falcosidekick). The missing step is writing each row's Datadog keys
+into that row's AWS account so ESO can sync them. `distribute_datadog_keys.py` does that, per row,
+idempotently. It writes `watch-it-burn/datadog` = `{"api-key": ..., "app-key": ...}` (the exact shape
+`gitops/manifests/datadog/datadog-eso*.yaml` reads).
+
+```bash
+# Dry run first (validates each row's AWS creds + shows the target account; writes nothing):
+uv run --with boto3 python scripts/distribute_datadog_keys.py --pool pool.csv
+# Then write for real:
+uv run --with boto3 python scripts/distribute_datadog_keys.py --pool pool.csv --apply
+```
+
+It is DRY RUN by default, reads the pool read-only, never prints key values, uses each row's own AWS creds
+in an isolated session, and exits non-zero if any row fails. Run it after `pool.csv` is assembled and the
+clusters are provisioned (ESO + the ClusterSecretStore must be up). ESO then materializes `datadog-secret`
+in the `datadog`, `monitoring`, and `security` namespaces.
+
 ## What is here vs not
 
 - HERE (code): `app.py`, `scripts/merge_pool.py`, `templates/`, `static/`, `Procfile`, `railway.json`,
