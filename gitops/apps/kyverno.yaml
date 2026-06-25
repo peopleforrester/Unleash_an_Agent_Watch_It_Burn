@@ -39,6 +39,18 @@ spec:
             requests:
               memory: 256Mi
               cpu: 100m
+          # Native OTLP to the in-cluster OTel Collector (PRD #26 M3, meta-PRD M5 D9): policy-decision
+          # traces + metrics go straight to the Collector (which routes to Datadog), instead of an Agent
+          # `kyverno` Prometheus check (which would duplicate metrics + add billing noise). The admission
+          # controller is where allow/deny decisions are made, so its traces are the demo-relevant ones.
+          # metering.config: grpc => OTLP gRPC metrics to metering.collector. tracing => decision spans.
+          tracing:
+            enabled: true
+            address: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local
+            port: 4317
+          metering:
+            config: grpc
+            collector: otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317
         # Background controller for policy reports
         backgroundController:
           resources:
