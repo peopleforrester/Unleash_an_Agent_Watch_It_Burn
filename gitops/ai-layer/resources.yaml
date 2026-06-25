@@ -104,6 +104,11 @@ spec:
       # confirm the v1alpha2 Agent `deployment.env` field is honored on kagent chart 0.9.9; if not, set
       # OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template instead.
       env:
+        # OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel Operator
+        # auto-sets it from the deployment name (workshop-agent) at injection. Pin it to the locked UST
+        # service.name=kagent explicitly, or the agent reports as workshop-agent (confirmed live 2026-06-25).
+        - name: OTEL_SERVICE_NAME
+          value: kagent
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "service.name=kagent,service.version=v0.9.9,deployment.environment.name=production"
         # Capture gen_ai message content on ADK spans (the agent waterfall input/output). EVENT_ONLY, NOT
