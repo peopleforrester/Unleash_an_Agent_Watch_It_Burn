@@ -37,7 +37,7 @@ bloat) remains valid and is relied on in M2 and M3.
   `command: ["python","/app/proxy.py"]`, the evil-mcp-shim
   `command: ["sh","-c","pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]`,
   the existing `OTEL_RESOURCE_ATTRIBUTES` env on the kagent Agent),
-  `beats/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py` (FastMCP shim, poisoned tool
+  `challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py` (FastMCP shim, poisoned tool
   descriptions), `gitops/apps/otel-collector.yaml` (standalone `otelcol-contrib 0.158.2`
   DaemonSet, ArgoCD Application, OTLP receivers on 4317/4318, `datadog` + `prometheusremotewrite`
   + `otlp/tempo` exporters, `spanmetrics` connector), `gitops/apps/cert-manager.yaml` (cert-manager

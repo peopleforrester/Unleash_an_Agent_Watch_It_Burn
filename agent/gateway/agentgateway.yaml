@@ -206,7 +206,7 @@ data:
         # verify-at-build: [SPIKE] (Phase 4b) — whether the mcpAuthorization allowlist actually
         #   ENFORCES on the Apache OSS v1.3.0 build with a kagent agent in front is the single
         #   load-bearing unknown for beat 3. Gate beat-3-live on this spike; the recorded fallback
-        #   is built regardless (docs/BUILD-SPEC.md §11.1, beats/03-.../BUILD-SPIKE.md).
+        #   is built regardless (docs/BUILD-SPEC.md §11.1, challenges/03-.../BUILD-SPIKE.md).
         mcpAuthorization:
           rules:
             # Default Allow: a permissive rule so every tool is reachable in the baseline/off state.

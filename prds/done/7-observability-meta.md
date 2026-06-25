@@ -187,8 +187,8 @@ A scoping search on 2026-06-22 found (the full spike in issues #9, #10, and #15 
 - This meta-PRD's top matter and `docs/observability-priorities.md`
 - The MVP child PRD + its Decision Log (Milestone 1) — **gates this milestone**
 - `research/05-otel-genai-observability.md`, `research/06-cncf-stack.md`, `research/14-verify-at-build-sweep-2026.md`, `research/23-…`
-- Codebase: `agent/gateway/guard-proxy/proxy.py` (the custom `witb_*` conventions to migrate; currently NO OTel), `agent/gateway/agentgateway.yaml`, `gitops/ai-layer/resources.yaml`, the kagent Helm values; `beats/` directories that depend on the trace waterfall
-- **evil-mcp-shim untracked work for M2** (issue #18 closed 2026-06-24 — no tracked issue): add `apply_optimization` to `gitops/ai-layer/server.py` using the hardcoded fallback string from the `beats/` OSError branch — no relative file path (it doesn't survive ConfigMap deployment). UST env vars are handled in the MVP PRD (issue #13). **No OTel instrumentation** (shim is intentionally dark — visible as the agent's `execute_tool` spans).
+- Codebase: `agent/gateway/guard-proxy/proxy.py` (the custom `witb_*` conventions to migrate; currently NO OTel), `agent/gateway/agentgateway.yaml`, `gitops/ai-layer/resources.yaml`, the kagent Helm values; `challenges/` directories that depend on the trace waterfall
+- **evil-mcp-shim untracked work for M2** (issue #18 closed 2026-06-24 — no tracked issue): add `apply_optimization` to `gitops/ai-layer/server.py` using the hardcoded fallback string from the `challenges/` OSError branch — no relative file path (it doesn't survive ConfigMap deployment). UST env vars are handled in the MVP PRD (issue #13). **No OTel instrumentation** (shim is intentionally dark — visible as the agent's `execute_tool` spans).
 - **Issue #17** — Datadog LLM Observability activation requirements (org flags, DatadogAgent CR keys, minimum span shape) and APM path confirmation with `spec.features.apm.enabled: false`; must be complete before this milestone proceeds
 
 **Step 1 — Problem (write 3-5 sentences):** Which demo beats need the gen_ai waterfall, what does Michael's
@@ -238,7 +238,7 @@ visible in the UI.
 - This meta-PRD's top matter and `docs/observability-priorities.md`
 - The gen_ai-semconv-migration child PRD + its Decision Log (Milestone 2) — **gates this milestone**
 - `research/05-otel-genai-observability.md` (re-leak trap design), `research/12-mechanism-verification-2026.md` (collector-side symmetric redaction), `research/04-mcp-security.md`
-- Codebase: `agent/gateway/guard-proxy/` (sanitization logic, before/after text held in memory) — **guard-proxy is custom software; proxy.py is directly modifiable**, `beats/03-bad-mcp-excessive-agency/` and its `evil-mcp-shim/server.py`
+- Codebase: `agent/gateway/guard-proxy/` (sanitization logic, before/after text held in memory) — **guard-proxy is custom software; proxy.py is directly modifiable**, `challenges/03-bad-mcp-excessive-agency/` and its `evil-mcp-shim/server.py`
 - **Issue #18** — confirm this is closed (done in M2 child PRD: `apply_optimization` added to `gitops/ai-layer/server.py` using hardcoded fallback, UST env vars added to `gitops/ai-layer/resources.yaml`). **No OTel instrumentation** on the shim (decided 2026-06-24 — see issue #18 Decision Log). M3 does not re-implement anything from this issue.
 - **Issue #19** — pre-drafted instrumentation spec for guard-proxy (try/except import guard, manual HTTP SERVER span + `sanitize` INTERNAL child span). Sanitization content captured via `gen_ai.input.messages` (original text) and `gen_ai.output.messages` (sanitized text) in OTel messages schema — NOT custom attributes. App-level code fully specified; the M3 child PRD should include this issue as an implementation work item.
 - **OTel SDK delivery mechanism is already decided in M2 (issue #15 research + M2 Decision 2)** — read the M2 child PRD's Decision Log for the chosen mechanism (OTel Operator vs. per-component). M3 inherits it for guard-proxy; do not re-decide.
@@ -317,7 +317,7 @@ datadog exporter leaves the OSS stack fully functional.
 - `research/05-…`, `research/06-…`, `research/18-…`, `research/23-…`, `research/24-…`
 - `research/NN-datadog-agent-install-eks-2026.md` (issue #14 — must be complete before this milestone proceeds; confirm file path posted as a comment on that issue)
 - `research/34-…` (issue #17 — per-component OTel export config and Prometheus/OTel deduplication strategy; must be complete before this milestone proceeds; confirm file path posted as a comment on that issue)
-- Codebase: every YAML in `gitops/apps/`, `gitops/ai-layer/resources.yaml`; `beats/` (what each beat's component needs)
+- Codebase: every YAML in `gitops/apps/`, `gitops/ai-layer/resources.yaml`; `challenges/` (what each beat's component needs)
 
 **Step 1 — Problem (write 3-5 sentences):** Which infra signals and named integrations earn their
 setup cost for the workshop, and what does "working" look like in the UI for each?
@@ -420,7 +420,7 @@ custom/story dashboard decisions are made (build now, defer specific ones to dre
 - **Prerequisite gate (Updated per 2026-06-25 M7 design decisions):** No open prerequisite bugs gate M7. Issue [#31](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/31) is closing (Kyverno OTLP abandoned; Agent check confirmed working — see Decision Log D4 2026-06-25). Issue [#32](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/32) is moot (annotation existed in `infra/argocd-values.yaml` all along — see Decision Log D6 2026-06-25). Issue [#25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25) (Istio waypoint proxy) is NOT a prerequisite for M7 — Istio dashboard work lives entirely in issue #25 scope (see Decision Log D1b and D5 2026-06-25).
 - All prior milestone child PRDs + Decision Logs — a dashboard can't be built/imported on data that isn't flowing
 - `research/24-datadog-hybrid-impl-sizing-2026.md`, `docs/transcripts/observability-architecture-paths.md` (candidate custom-dashboard list)
-- Codebase: `agent/gateway/guard-proxy/` (confirm metric names — `witb_cost_usd` retained per M2 Decision 5; `witb_tokens_total`/`witb_requests_total` retired), `beats/`
+- Codebase: `agent/gateway/guard-proxy/` (confirm metric names — `witb_cost_usd` retained per M2 Decision 5; `witb_tokens_total`/`witb_requests_total` retired), `challenges/`
 
 **Step 1 — Problem (write 3-5 sentences):** Which dashboards tell the workshop story, and which Datadog community dashboards (JSON import via Datadog UI/API/Terraform) fill gaps for components without an official Datadog OOTB dashboard?
 

@@ -4,9 +4,9 @@ import pathlib, re, sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
 claude = (REPO / "CLAUDE.md").read_text()
 DEMO = [
- "beats/02-sanitization/toggle-output-guard-on.sh","beats/02-sanitization/toggle-input-guard-on.sh",
- "beats/02-sanitization/toggle-input-classifier-on.sh","beats/01-cncf-wall/toggle-kyverno-enforce.sh",
- "beats/01-cncf-wall/fallback.kubectl.sh","beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh",
+ "challenges/02-sanitization/toggle-output-guard-on.sh","challenges/02-sanitization/toggle-input-guard-on.sh",
+ "challenges/02-sanitization/toggle-input-classifier-on.sh","challenges/01-cncf-wall/toggle-kyverno-enforce.sh",
+ "challenges/01-cncf-wall/fallback.kubectl.sh","challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh",
 ]
 failures = []
 def check(n, c):

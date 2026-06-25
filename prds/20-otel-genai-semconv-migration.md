@@ -61,7 +61,7 @@ All decisions below were finalized in the Milestone 2 design conversation (2026-
 This is untracked work from issue #18 (closed 2026-06-24). The beats' OSError fallback branch relies on an `apply_optimization` function that must live directly in `gitops/ai-layer/server.py`. It cannot load the optimization string from a relative file path — ConfigMap deployment drops relative paths.
 
 **Steps:**
-1. Search for `apply_optimization` across the repository: `grep -r "apply_optimization" beats/ gitops/`. Read the file that contains the call to identify the OSError fallback branch and the exact hardcoded fallback string `apply_optimization` must return.
+1. Search for `apply_optimization` across the repository: `grep -r "apply_optimization" challenges/ gitops/`. Read the file that contains the call to identify the OSError fallback branch and the exact hardcoded fallback string `apply_optimization` must return.
 2. Read `gitops/ai-layer/server.py` and find whether `apply_optimization` exists. If absent, add it using the hardcoded fallback string from step 1.
 3. Do NOT add any OTel instrumentation to this file — the shim is intentionally dark (decided 2026-06-24, issue #18 Decision Log).
 

@@ -79,7 +79,7 @@ Total: **120 minutes**.
 - **Michael:** the damage was stopped, but the cost counter still moved. The request reached the model
   before admission rejected it. Kyverno is the last mile and the most expensive, because by then the
   tokens are already spent.
-- Agent wanders → `beats/01-cncf-wall/fallback.kubectl.sh` for that step. Do not debug live.
+- Agent wanders → `challenges/01-cncf-wall/fallback.kubectl.sh` for that step. Do not debug live.
 - **HAND-OFF → Michael:** "Now your own cluster, where you turn on the guardrails built for agents."
 
 ### 0:45–1:30, Cluster 3: your own cluster, guards on + free-play (Whitney narrates, Michael on the gaps)
@@ -89,7 +89,7 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
 
 1. **Output sanitization**, before: the agent reads the planted fake secret
    (`FAKE-PROD-DB-PASSWORD-sentinel-9f2a`) and returns it. Toggle on with
-   `beats/02-sanitization/toggle-output-guard-on.sh` (runtime `/toggle`): redacted, sentinel gone. The
+   `challenges/02-sanitization/toggle-output-guard-on.sh` (runtime `/toggle`): redacted, sentinel gone. The
    same guard blocks a dangerous tool call with a human-in-the-loop stop.
 2. **Input sanitization (two stages, enabled progressively)**, before: a destructive request reaches
    the model, cost ticks up. Stage 1, toggle on `toggle-input-guard-on.sh`: the deterministic block-list
@@ -98,7 +98,7 @@ Each attendee drives their own Cluster 3 (chat UI + terminal). An agent is alrea
    Spoken copy: say "deterministic" for the block-list only, never for the classifier.
 3. **MCP tool restriction**, the agent is wired to an untrusted MCP server whose poisoned tool
    description induces it to call a tool it should not, leaking `FAKE-MCP-EXFIL-sentinel-4c1d`. Toggle on
-   with `beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh` (the kagent `toolNames` allowlist):
+   with `challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh` (the kagent `toolNames` allowlist):
    the rogue tool is not exposed and the call cannot happen. LIVE or RECORDED per pre-flight.
 4. **Free-play**, let the room try to defeat each guard on their own cluster. Whitney narrates the
    interesting ones on the trace view.

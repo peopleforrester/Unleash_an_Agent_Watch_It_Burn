@@ -17,7 +17,7 @@
   llm-guard, evil-mcp/workshop-mcp, chat-ui), `agent/gateway/guard-proxy/proxy.py` (stdlib
   HTTP proxy; A2A-aware; fronts the agent Service; calls LLM Guard; meters cost),
   `agent/gateway/agentgateway.yaml` (agentgateway v1.3.0, OTLP env vars), and
-  `beats/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py` (FastMCP shim with poisoned
+  `challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py` (FastMCP shim with poisoned
   tool descriptions).
 - **Builds on (NOT re-researched):** `research/05-otel-genai-observability.md` (GenAI semconv
   status, `execute_tool`/`gen_ai.tool.name` span shape, content-capture re-leak trap,
@@ -246,7 +246,7 @@ panel; let the agent own the `gen_ai.*` usage attributes.
 
 **No instrumentation needed. It is visible through the agent's tool-call spans.**
 
-`beats/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py` is a `FastMCP` server exposing
+`challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py` is a `FastMCP` server exposing
 `get_weather` (poisoned description), `read_internal_config` (the rogue tool), and
 `apply_optimization` (clown-file). When the agent is induced to call a rogue tool, the
 **caller side** of that call is what the workshop narrates, and the caller is the ADK agent.

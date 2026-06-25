@@ -221,7 +221,7 @@ demo concentrates risk (an over-the-internet agent path plus 60 live clusters), 
   - Real credentials (AWS, Datadog admin) live only on facilitator machines, never on attendee paths.
     Follow the repo's env-vault discipline. UNCERTAIN that it is wired here; CONFIRMED the global rule.
   - Scope per-attendee kube access to their own namespace/cluster only (the repo already runs the
-    fallback as the scoped `agent-sa` ServiceAccount). CONFIRMED in `beats/01-cncf-wall/fallback.kubectl.sh`.
+    fallback as the scoped `agent-sa` ServiceAccount). CONFIRMED in `challenges/01-cncf-wall/fallback.kubectl.sh`.
 
 ### 1.10 Clock skew / certificate issues
 - **Likelihood: Low. Impact: Medium to High.** TLS to Bedrock, EKS, and Datadog fails if the presenter
@@ -254,13 +254,13 @@ repo's existing assets or an AWS primary source.
   (best-practice; doubleslash writeup, satirically: "a plan B is not necessary" is the wrong attitude).
 
 ### 2.2 Local / offline fallbacks already in the repo
-- `beats/01-cncf-wall/fallback.kubectl.sh` proves all three CNCF walls without the agent, running as the
+- `challenges/01-cncf-wall/fallback.kubectl.sh` proves all three CNCF walls without the agent, running as the
   scoped `agent-sa` so outcomes match the live demo. CONFIRMED in repo.
-- `beats/02-sanitization/fallback.curl.sh` drives both sanitization guards with curl, proving the
+- `challenges/02-sanitization/fallback.curl.sh` drives both sanitization guards with curl, proving the
   guardrail (not the model) is what fires, in both input and output directions. CONFIRMED in repo. Note
   the `verify-at-build` comments in that file: the gateway reject-status and the LLM Guard
   `/analyze/output` envelope must be confirmed against the live services before relying on the asserts.
-- `beats/03-bad-mcp-excessive-agency/fallback.curl.sh` covers the MCP excessive-agency beat. CONFIRMED.
+- `challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` covers the MCP excessive-agency beat. CONFIRMED.
 - These are model-independent by design, so they survive a Bedrock outage or throttle entirely. That is
   the key property: the fallbacks prove the controls without ever calling the model. CONFIRMED.
 - Observability fallback: Datadog is primary over the network; Grafana / Tempo / Loki / Prometheus /

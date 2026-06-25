@@ -5,7 +5,7 @@
 **Priority**: High
 **Status**: Not started
 
-> **Note on `beats/` references:** The `beats/` directory naming is being aligned with the Rounds + Challenges vocabulary adopted June 2026 (C1–C7 challenges across three cumulative rounds). When implementing, update any `beats/` path references to the current challenge/round structure as you encounter them — no separate migration task is required.
+> **Note on `challenges/` references:** The `challenges/` directory naming is being aligned with the Rounds + Challenges vocabulary adopted June 2026 (C1–C7 challenges across three cumulative rounds). When implementing, update any `challenges/` path references to the current challenge/round structure as you encounter them — no separate migration task is required.
 
 ---
 
@@ -136,7 +136,7 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
    - Confirm `service.name` is set to the locked value for each component
 2. Check `agent/gateway/agentgateway.yaml` for `OTEL_RESOURCE_ATTRIBUTES`. Add or correct to the locked values for `agentgateway`.
 3. Check the guard-proxy deployment manifest (in `agent/gateway/guard-proxy/` or referenced from `gitops/ai-layer/`). Add or correct `OTEL_RESOURCE_ATTRIBUTES` for `guard-proxy`.
-4. Check the evil-mcp-shim container spec in `gitops/ai-layer/resources.yaml`. Add or correct `OTEL_RESOURCE_ATTRIBUTES` for `evil-mcp-shim`. (The deployed pod is defined there, not in `beats/` — see issue #18 Decision Log.)
+4. Check the evil-mcp-shim container spec in `gitops/ai-layer/resources.yaml`. Add or correct `OTEL_RESOURCE_ATTRIBUTES` for `evil-mcp-shim`. (The deployed pod is defined there, not in `challenges/` — see issue #18 Decision Log.)
 5. If a single `OTEL_RESOURCE_ATTRIBUTES` in `resources.yaml` applies to ALL four components (and thus cannot have per-component `service.name`/`service.version`), each component needs its own env var override in its own deployment manifest. Check whether the current structure supports per-component values — if not, split them out.
 6. Commit and let ArgoCD reconcile. Confirm all four pods restart cleanly.
 

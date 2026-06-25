@@ -22,9 +22,9 @@ If the console doesn't load, tell a facilitator before trying anything else. The
 
 Each round ("beat") has its own folder in the workshop repo on your cluster:
 
-- `beats/01-cncf-wall/`, round 1: unleash the agent on the platform.
-- `beats/02-sanitization/`, round 2: what goes in, what comes out.
-- `beats/03-bad-mcp-excessive-agency/`, round 3: when the agent's tools turn on it.
+- `challenges/01-cncf-wall/`, round 1: unleash the agent on the platform.
+- `challenges/02-sanitization/`, round 2: what goes in, what comes out.
+- `challenges/03-bad-mcp-excessive-agency/`, round 3: when the agent's tools turn on it.
 
 Each beat folder has a `beat.md` with the steps for that round. The facilitators drive the toggles; you drive your agent and watch what happens on your own cluster.
 

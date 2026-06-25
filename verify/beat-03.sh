@@ -6,7 +6,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 readonly SCRIPT_DIR REPO_ROOT
-readonly BEAT_DIR="${REPO_ROOT}/beats/03-bad-mcp-excessive-agency"
+readonly BEAT_DIR="${REPO_ROOT}/challenges/03-bad-mcp-excessive-agency"
 readonly SPIKE_FILE="${BEAT_DIR}/BUILD-SPIKE.md"
 readonly FALLBACK="${BEAT_DIR}/fallback.curl.sh"
 readonly TOGGLE_MCP_AUTHZ_ON="${BEAT_DIR}/toggle-mcp-authz-on.sh"
@@ -22,7 +22,7 @@ Usage: beat-03.sh <kube-context> <attendee-namespace>
 
 Asserts Beat 3's §2 outcome. The beat is SPIKE-GATED (§2, Phase 4b):
 
-  IF beats/03-.../BUILD-SPIKE.md contains a PASS marker -> assert the LIVE path:
+  IF challenges/03-.../BUILD-SPIKE.md contains a PASS marker -> assert the LIVE path:
     mcp-authz OFF -> the rogue tool call leaks FAKE-MCP-EXFIL-sentinel-4c1d
     mcp-authz ON  -> the call is BLOCKED; the sentinel does not appear
 

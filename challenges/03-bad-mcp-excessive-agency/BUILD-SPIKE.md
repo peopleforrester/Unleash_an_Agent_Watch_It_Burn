@@ -35,17 +35,17 @@ omission from the allowlist.)
 ## Steps
 
 ### Step A, BEFORE (deny rule OFF): confirm the over-reach fires deterministically
-1. Apply the off state: `beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --off`
+1. Apply the off state: `challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --off`
 2. Run the model-independent path:
-   `beats/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-allow`
+   `challenges/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-allow`
 3. Expected: the rogue tool returns the sentinel (sentinel present, script exits 0).
 4. (Optional, model path) Run `agent-prompt.txt` against the live agent and confirm the sentinel
    appears in the reply and the gateway access log shows a `read_internal_config` tool call.
 
 ### Step B, AFTER (deny rule ON): confirm the gateway BLOCKS the call
-1. Apply the on state: `beats/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --on`
+1. Apply the on state: `challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --on`
 2. Run the model-independent path:
-   `beats/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-deny`
+   `challenges/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-deny`
 3. Expected: the call is rejected at the policy layer; sentinel ABSENT (script exits 0).
    Record HOW the denial surfaces (HTTP status / JSON-RPC error / filtered from `list_tools`).
    # verify-at-build
