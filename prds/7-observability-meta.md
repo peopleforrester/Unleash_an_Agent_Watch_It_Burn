@@ -361,7 +361,7 @@ component's real software version (the model dimension lives in `gen_ai.request.
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
 - Prior milestone child PRDs + Decision Logs (esp. Milestone 1's UST vocabulary, Milestone 5's Agent deploy) — **gate this milestone**
-- `research/19-datadog-otel-ust-correlation-2026.md`, `research/23-…` (Decisions 5, 8)
+- `research/19-datadog-otel-ust-correlation-2026.md`, `research/23-observability-decision-points-2026.md` (Decisions 5, 8)
 - Codebase: `gitops/ai-layer/resources.yaml`, `agent/gateway/agentgateway.yaml`, `agent/gateway/guard-proxy/` (log output format), every workload manifest in `gitops/apps/` (UST-label inventory), `gitops/apps/otel-collector.yaml`
 
 **Step 1 — Problem (write 3-5 sentences):** What correlation and Service-Map gaps remain after the
@@ -399,7 +399,7 @@ custom/story dashboard decisions are made (build now, defer specific ones to dre
 - The Milestone 5 child PRD + `research/30-per-component-telemetry-synthesis-2026.md` (issue #11 output) — **gates this milestone**
 - **New prerequisite gate (Updated per 2026-06-24 Grafana decision):** A Datadog community dashboard research spike must be complete before this milestone proceeds. research/30's "community dashboard" column lists Grafana IDs — those are inapplicable (no Grafana imports; see Decision Log 2026-06-24). The new spike surveys importable Datadog community dashboard JSON files (DataDog/community-lab or similar) for components without OOTB dashboards. The spike is tracked in [issue #24](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/24) — it must be completed and its file path posted as a comment before Step 2 begins.
 - All prior milestone child PRDs + Decision Logs — a dashboard can't be built/imported on data that isn't flowing
-- `research/24-…`, `docs/transcripts/observability-architecture-paths.md` (candidate custom-dashboard list)
+- `research/24-datadog-hybrid-impl-sizing-2026.md`, `docs/transcripts/observability-architecture-paths.md` (candidate custom-dashboard list)
 - Codebase: `agent/gateway/guard-proxy/` (confirm metric names — `witb_cost_usd` retained per M2 Decision 5; `witb_tokens_total`/`witb_requests_total` retired), `beats/`
 
 **Step 1 — Problem (write 3-5 sentences):** Which dashboards tell the workshop story, and which Datadog community dashboards (JSON import via Datadog UI/API/Terraform) fill gaps for components without an official Datadog OOTB dashboard?
@@ -462,7 +462,7 @@ to the repo**):
 **Step 0 — Read:**
 - This meta-PRD's top matter and `docs/observability-priorities.md`
 - All prior milestone child PRDs + Decision Logs — **gate this milestone**
-- `research/24-…` (§3 secret injection), `research/25-eks-quotas-shared-vpc-topology-2026.md`
+- `research/24-datadog-hybrid-impl-sizing-2026.md` (§3 secret injection), `research/25-eks-quotas-shared-vpc-topology-2026.md`
 - Codebase: `gitops/apps/` (ESO config, existing ExternalSecret patterns), `docs/BUILD-SPEC.md`
 
 **Step 1 — Problem (write 3-5 sentences):** What is unresolved about auto-wiring the per-cluster
