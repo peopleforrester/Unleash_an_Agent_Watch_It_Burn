@@ -1,6 +1,6 @@
 <!doctype html>
-<!-- ABOUTME: Live-delivery walkthrough of the Watch It Burn workshop - the run-of-show as actually -->
-<!-- ABOUTME: run with attendees (open cold, leap in, three clusters, land the map). Hosted at walkthrough.agenticburn.com. -->
+<!-- ABOUTME: Live-delivery walkthrough of Watch It Burn - the 60-minute run-of-show in delivery order -->
+<!-- ABOUTME: (open cold, leap in, three rounds, land the map). Hosted at walkthrough.agenticburn.com. -->
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -9,13 +9,12 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme">
   <style>
-    :root { --wib-orange:#ff6b35; --wib-blue:#6db3f2; }
+    :root { --wib-orange:#ff6b35; --wib-blue:#6db3f2; --grn:#7ccc7c; }
     .reveal h1,.reveal h2,.reveal h3 { color: var(--wib-orange); text-transform:none; }
-    .reveal section { font-size: 30px; }
+    .reveal section { font-size: 28px; }
     .reveal .small { font-size:0.7em; color:#bbb; }
     .reveal .lead { color:#eee; }
     .reveal em { color:#fff; font-style:normal; border-bottom:2px solid var(--wib-orange); }
-    /* time + owner chips for the run-of-show */
     .reveal .when { display:inline-block; background:#222; border:1px solid var(--wib-orange);
       color:var(--wib-orange); border-radius:4px; padding:2px 10px; font-size:0.5em; margin:0 4px 0 0; letter-spacing:.5px; }
     .reveal .who { display:inline-block; border-radius:4px; padding:2px 10px; font-size:0.5em; margin:0 4px; }
@@ -23,7 +22,6 @@
     .reveal .who.w { background:#102433; border:1px solid var(--wib-blue); color:var(--wib-blue); }
     .reveal .tag { display:inline-block; background:#222; border:1px solid #555; color:#ccc;
       border-radius:4px; padding:2px 8px; font-size:0.55em; margin:2px; }
-    /* three-cluster spine */
     .reveal .cols { display:flex; gap:18px; justify-content:center; align-items:stretch; margin-top:20px; }
     .reveal .card { flex:1; background:#181818; border:1px solid #333; border-radius:10px; padding:16px 14px; }
     .reveal .card .big { font-size:1.6em; }
@@ -31,61 +29,62 @@
     .reveal .card p { font-size:0.62em; color:#ccc; margin:6px 0; line-height:1.35; }
     .reveal .card .out { color:#fff; font-weight:bold; }
     .reveal .c1 { border-color:#7a2b1a; } .reveal .c2 { border-color:#2b5a7a; } .reveal .c3 { border-color:#2b7a3a; }
-    .reveal table { font-size:0.55em; }
+    .reveal table { font-size:0.52em; }
     .reveal table th { color:var(--wib-orange); }
     .reveal .yes { color:#7c7; } .reveal .gap { color:var(--wib-orange); font-weight:bold; }
     .reveal .built { color:var(--wib-blue); font-size:0.5em; letter-spacing:1px; }
+    .reveal .stack { display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-top:14px; text-align:left; }
+    .reveal .stack .box { background:#161616; border:1px solid #333; border-radius:8px; padding:10px 12px; }
+    .reveal .stack h4 { color:var(--wib-orange); margin:0 0 6px; font-size:0.62em; text-transform:uppercase; letter-spacing:1px; }
+    .reveal .stack p { font-size:0.52em; color:#ccc; margin:3px 0; line-height:1.4; }
+    .reveal .stack b { color:#fff; }
   </style>
 </head>
 <body>
 <div class="reveal"><div class="slides">
 
 <!-- ============================================================ -->
-<!-- OPEN COLD - the hook (before any introductions)              -->
+<!-- OPEN COLD - the hook                                          -->
 <!-- ============================================================ -->
 
-<!-- TITLE -->
 <section data-markdown><textarea data-template>
 # 🔥 Watch It Burn
 
 ### Build a Platform, Unleash an Agent on it... and Watch it Burn!
 
-<span class="small">AI Engineer World's Fair 2026 · Day 1 · 2:20–4:20pm · Track 5 — Michael Forrester + Whitney Lee</span>
+<span class="small">AI Engineer World's Fair 2026 · 60-minute session · Michael Forrester + Whitney Lee</span>
 
 Note:
-This is the WALKTHROUGH of how we actually run the lab — the run-of-show, in delivery order,
-the way the room experiences it. Slides are what the room sees; this notes pane (press S) holds
-the delivery detail: timing, who leads, the toggles, the hand-offs, the fallbacks. Source of
-truth: facilitation/runbook.md + cold-open-script.md + governance-map.md.
-Walk on, title up, do NOT introduce yourself yet. Let it sit one beat, then go cold into slide 2.
+This is the WALKTHROUGH: the run-of-show in delivery order. Slides are what the room sees; this notes
+pane (press S) holds the delivery detail: timing, who leads, the toggles, the hand-offs, the fallbacks.
+The slot is now 60 minutes (recut from 120), so the spine is tight: open, three rounds, land the map.
+Source of truth: facilitation/runbook.md + cold-open-script.md. Title up, do NOT introduce yourself
+yet. One beat, then go cold into the hook.
 </textarea></section>
 
-<!-- HOOK 1 -->
 <section data-markdown><textarea data-template>
 ## The night an agent deleted my cluster
 
-<span class="who m">Michael</span> <span class="small">~75 sec · open cold, no introduction</span>
+<span class="who m">Michael</span> <span class="small">~60 sec · open cold, no introduction</span>
 
 I gave an AI coding agent real access to a Kubernetes cluster. Full access.
 
 ### It deleted the cluster.
 
-<span class="small">Not a pod. Not a deployment. The whole thing. — But it was *my* sandbox: a bad afternoon and a weekend rebuild.</span>
+<span class="small">Not a pod. Not a deployment. The whole thing. But it was *my* sandbox: a bad afternoon and a weekend rebuild.</span>
 
 Note:
 Word-for-word in cold-open-script.md. The pivot line to land: "What actually stopped it from doing
-worse, and what was I only *assuming* would stop it?" Keep the story short — it's the on-ramp, not
-the point. The point is the next slide. If tight, cut "not a pod, not a deployment" — never cut the
-production-stakes list coming up.
+worse, and what was I only *assuming* would stop it?" Keep it short, it's the on-ramp. In a 60-minute
+cut this is ~60s, not 75. Never cut the production-stakes list coming next.
 </textarea></section>
 
-<!-- HOOK 2 -->
 <section data-markdown><textarea data-template>
 ## Now give it production stakes
 
-<span class="who m">Michael</span> <span class="small">~90 sec · let each stake land</span>
+<span class="who m">Michael</span> <span class="small">~75 sec</span>
 
-Same agent, same mistake — moved out of the sandbox into production:
+Same agent, same mistake, moved out of the sandbox into production:
 
 - Customer data, read and sent where it never should go
 - Revenue, lost to a 2am outage the agent caused
@@ -93,20 +92,19 @@ Same agent, same mistake — moved out of the sandbox into production:
 - A compliance violation no human approved
 - **A cloud bill running the entire time it thrashes** — hold that one
 
-<span class="lead">And it's never one cluster: a shared enterprise of hundreds of thousands of identities and their agents. You have to guard your system *against the system.*</span>
+<span class="lead">And it's never one cluster: a shared enterprise of hundreds of thousands of identities and their agents. You guard your system *against the system.*</span>
 
 Note:
-This list is the whole reason the talk matters — protect it under time pressure. The cloud-bill line
-is a deliberate setup; it pays off live at "the bill nobody mentions" (Cluster 1) and again at the map.
-After this: brief intros (Michael + Whitney), then the promise. "That is why you are here. For the
-next two hours you each get a real platform and an agent with the keys, and your job is to break it."
+This list is the whole reason the talk matters. The cloud-bill line is a deliberate setup; it pays off
+at "the bill nobody mentions" (Round 1) and again at the cost ladder. Then brief intros (Michael +
+Whitney) and the promise: "For the next hour you each get a real platform and an agent with the keys,
+and your job is to break it."
 </textarea></section>
 
 <!-- ============================================================ -->
-<!-- THE PROMISE + SETUP - leap in, no prep                       -->
+<!-- THE PROMISE + THE PLATFORM                                   -->
 <!-- ============================================================ -->
 
-<!-- PROMISE -->
 <section data-markdown><textarea data-template>
 ## We built you a platform to break
 
@@ -114,239 +112,260 @@ next two hours you each get a real platform and an agent with the keys, and your
 
 You each **already have** a cluster. An agent with the keys. A chat window and a terminal in your browser.
 
-- No setup. No install. No lab prep. It's already running and it's **wide open.**
-- Your job for the next two hours: make the agent break something. We watch what holds.
+- No setup, no install. It's running and it's **wide open.**
+- Your job for the next hour: make the agent break something. We watch what holds.
 
-<span class="small">Hand-off → Whitney: "It's wide open right now. Let's see what happens."</span>
+<span class="small">Access (chat + terminal) handed out here via a-&lt;id&gt;.agenticburn.com; provisioned before doors, never live.</span>
 
 Note:
-This is the "leap right in" moment — we do NOT walk them through provisioning or building anything.
-We tell them they have a cluster and go. Attendee access (chat UI + terminal links / QR) is handed
-out here; it was provisioned before doors, never live. The platform is a full IDP (Argo CD, Kyverno,
-Falco, Prometheus/Grafana/Tempo/Loki, cert-manager, External Secrets, Backstage) — "you didn't build
-it, and it's yours to keep." Do NOT explain the security suite now; each control gets introduced WHEN
-it turns on at Cluster 2. That reveal discipline is the whole pedagogy.
+The "leap right in" moment. We do NOT walk provisioning. Per-attendee cluster URL from the distributor
+(provisioning.agenticburn.com). Do NOT explain the security suite yet; each control gets introduced WHEN
+it turns on in Round 2. That reveal discipline is the pedagogy. Hand-off → Whitney.
 </textarea></section>
 
-<!-- THE LENS -->
+<section>
+  <h2>The platform you're breaking</h2>
+  <p class="small">A full internal developer platform plus a real agent stack. Every piece is in the repo as code.</p>
+  <div class="stack">
+    <div class="box">
+      <h4>AI layer</h4>
+      <p><b>kagent</b> (ADK) agent on <b>Amazon Bedrock</b> — Sonnet 4.6 default</p>
+      <p><b>agentgateway</b> — L7 gateway + MCP authorization</p>
+      <p><b>guard-proxy</b> + <b>LLM Guard</b> — input/output scanners</p>
+      <p><b>workshop-mcp</b> tools + the rogue look-alike MCP</p>
+    </div>
+    <div class="box">
+      <h4>Platform controls</h4>
+      <p><b>Argo CD</b> GitOps · <b>Kyverno</b> admission</p>
+      <p><b>Falco</b> + <b>Talon</b> runtime detect/respond</p>
+      <p><b>Istio</b> ambient mTLS · <b>NetworkPolicy</b> egress</p>
+      <p><b>cert-manager</b> · <b>External Secrets</b> · <b>Harbor</b>+<b>cosign</b> · RBAC · PID limits · <b>Backstage</b></p>
+    </div>
+    <div class="box">
+      <h4>Observability</h4>
+      <p><b>OpenTelemetry Collector</b> → <b>Datadog</b> (primary)</p>
+      <p>APM, Service Map, <b>LLM Observability</b>, live cost meter</p>
+      <p><b>Weaver</b> semantic-convention checks on the spans</p>
+      <p>Prometheus / Grafana / Tempo / Loki (analog fallback)</p>
+    </div>
+  </div>
+  <aside class="notes">
+    This is the "every piece of technology" slide, so the room knows the platform is real and complete.
+    Don't read it line by line; point at the three columns (the agent stack, the controls you already
+    run, the lens) and say each control gets met when it fires. Names land again in Round 2 and Round 3.
+  </aside>
+</section>
+
 <section data-markdown><textarea data-template>
 ## How we watch it happen
 
 <span class="who w">Whitney</span>
 
-One dashboard shows the agent's **input**, its **output**, and the **tools it calls.**
+One **Datadog** view shows the agent's **input**, its **output**, and the **tools it calls** — the full
+`guard-proxy → agentgateway → kagent → Bedrock` trace, one waterfall.
 
-The same view carries every attack — so the room sees exactly where each one lands or dies.
+The same lens carries every attack, so the room sees exactly where each one lands or dies.
 
-<span class="small">Observability is the lens for the whole session, not a separate topic. Datadog primary; Grafana/Tempo fallback.</span>
+<span class="small">Spans flow OTLP through the OTel Collector to Datadog (Service Map + LLM Observability). Grafana/Tempo is the analog fallback.</span>
 
 Note:
-Whitney's trace view open and on the shared screen before this. This is the instrument we narrate
-everything through. Keep it simple here — we come back to it hard at "the door you didn't think to
-guard" (trace re-leak), where the same telemetry becomes a second exfil sink.
+Whitney's trace view open on the shared screen before this. This is the instrument we narrate through.
+We come back to it hard at the trace re-leak, where the same telemetry becomes a second exfil sink.
 </textarea></section>
 
 <!-- ============================================================ -->
-<!-- THE THREE-CLUSTER SPINE                                      -->
+<!-- THE THREE ROUNDS                                              -->
 <!-- ============================================================ -->
 
-<!-- SPINE OVERVIEW -->
 <section>
-  <h2>The shape of the next 80 minutes</h2>
+  <h2>The shape of the next ~50 minutes</h2>
   <div class="cols">
     <div class="card c1">
       <div class="big">🔥</div>
-      <h4>Cluster 1 · no guardrails</h4>
+      <h4>Round 1 · no guardrails</h4>
       <p>They attack it. One destructive prompt kills it. Rotate spares as each dies.</p>
       <p class="out">It burns. The bill climbs.</p>
     </div>
     <div class="card c2">
       <div class="big">🛡️</div>
-      <h4>Cluster 2 · CNCF controls</h4>
-      <p>Same attack. The platform controls you should already run stop it — wall by wall.</p>
+      <h4>Round 2 · CNCF controls</h4>
+      <p>Same attack. The platform controls you should already run stop it, wall by wall.</p>
       <p class="out">Blocked. But you still paid.</p>
     </div>
     <div class="card c3">
       <div class="big">🎛️</div>
-      <h4>Cluster 3 · your cluster</h4>
+      <h4>Round 3 · your cluster</h4>
       <p>You switch on the agent-specific guards one at a time, then try to beat them.</p>
       <p class="out">You guard it yourself.</p>
     </div>
   </div>
-  <p class="small">Same agent and same attack across all three — only the guardrail layer changes. A controlled experiment, so outcomes are attributable to the controls.</p>
+  <p class="small">Same agent, same model (Sonnet 4.6), same attacks across all three. Only the guardrail layer changes: a controlled experiment, so outcomes are attributable to the controls.</p>
   <aside class="notes">
-    This slide is the map of the spine; you don't have to dwell. The "same agent held constant" point
-    matters: agent/model variety is deliberately kept OUT of the spine and saved for the optional
-    model-tier closing demo, so the three-cluster comparison stays clean. Timing: C1 0:10–0:25,
-    C2 0:25–0:45, C3 0:45–1:30.
+    Map of the spine. "Same agent and model held constant" matters: model variety is kept OUT of the
+    spine and saved for the optional closing cost-race. 60-min timing: R1 ~0:08-0:16, R2 ~0:16-0:30,
+    R3 ~0:30-0:50, land ~0:50-1:00. Rounds are cumulative: R2 keeps R1 off, R3 keeps R2's infra on.
   </aside>
 </section>
 
-<!-- CLUSTER 1 -->
 <section data-markdown><textarea data-template>
-## Cluster 1 · take the guardrails off
+## Round 1 · take the guardrails off
 
-<span class="when">0:10–0:25</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on cost</span> <span class="built">BUILT LIVE</span>
+<span class="when">~0:08–0:16</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on cost</span> <span class="built">BUILT LIVE</span>
 
-- Point the room at the unprotected cluster — **chat UI only, no kubectl.** Let it rip.
-- No floor, no admission: a single destructive prompt one-shots it. Several people each kill a fresh spare; rotate ~10 URLs from SSH — *"that one's gone, here's two."*
+- Point the room at the shared unprotected cluster (`burn.agenticburn.com`), **chat only, no kubectl.** Let it rip.
+- No floor, no admission: a single destructive prompt one-shots it. People kill fresh spares; rotate URLs — *"that one's gone, here's the next."*
 
-<span class="lead">It dies fast. That's the point — the spectacle is the speed of death.</span>
+<span class="lead">It dies fast. That's the point: the spectacle is the speed of death.</span>
 
 Note:
-The death is the demo; don't fight it. ~10 disposable spares are warm before doors. As each dies,
-switch to the next URL — this IS the expected flow, not a failure. If the agent wanders instead of
-attacking, drive the step via challenges/01-cncf-wall/fallback — never debug the model live. Hand-off to
-the cost beat: Michael takes the counter.
+"No guardrails" is the story; base protections are quietly on so the room can't publicly embarrass us.
+The fork bomb (no PID cap on Round-1 nodes) is the kill shot. Spares warm before doors; rotate from the
+instructor console (start.agenticburn.com). Agent wanders → challenges/01-cncf-wall/fallback, never debug
+the model live. Hand-off → Michael for the cost beat.
 </textarea></section>
 
-<!-- THE BILL -->
 <section data-markdown><textarea data-template>
 ## The bill nobody mentions
 
 <span class="who m">Michael</span>
 
-A live counter shows the cloud spend climbing the **whole time** the agent thrashes.
+A live counter (`witb_cost_usd`, metered at the guard-proxy from real Bedrock token usage) climbs the
+**whole time** the agent thrashes.
 
-### Wasted tokens are a denial-of-service problem — not just a security one.
+### Wasted tokens are a denial-of-service problem, not just a security one.
 
-<span class="small">Callback to the production-stakes list. This thread pays off again at the map: earlier controls are cheaper.</span>
-
-Note:
-The cost counter meters real Bedrock spend at the guard-proxy. It's been climbing through the entire
-Cluster 1 burn. This is the first of two cost payoffs. Hand-off → Whitney: "Same attack, on a platform
-with the controls a mature team already runs."
-</textarea></section>
-
-<!-- CLUSTER 2 -->
-<section data-markdown><textarea data-template>
-## Cluster 2 · the controls you should already have
-
-<span class="when">0:25–0:45</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on cost</span> <span class="built">BUILT LIVE</span>
-
-Same destructive attack — now each wall stops it, **and we meet each control as it fires:**
-
-- **Kyverno** admission rejects the non-compliant workload
-- **RBAC** Forbidden on the self-granted ClusterRoleBinding
-- **Argo CD** drift block + self-heal reverts the out-of-band change
-
-<span class="lead">Michael: the damage stopped — but the counter still moved. The request reached the model *before* admission could reject it.</span>
+<span class="small">Callback to the production-stakes list. Pays off again at the cost ladder: earlier controls are cheaper.</span>
 
 Note:
-This is where the CNCF security suite gets introduced — NOT in the intro. Walk each wall with its
-distinct error on screen. Keep it to controls actually enabled on C2 (also Falco runtime, NetworkPolicy,
-External Secrets, image signing, and planned mesh mTLS/SPIFFE). Cost point: Kyverno is the last mile
-and the most expensive mile — by the time admission denies, the tokens are already spent. Agent wanders
-→ challenges/01-cncf-wall/fallback.kubectl.sh. Hand-off → Michael: "Now your own cluster, where you turn on
-the guardrails built for agents."
+The counter shows on the side-screen feed (display) and in Datadog. It's been climbing through the whole
+Round-1 burn. First of two cost payoffs. Hand-off → Whitney: "Same attack, on a platform with the
+controls a mature team already runs."
 </textarea></section>
 
-<!-- CLUSTER 3 -->
-<section data-markdown><textarea data-template>
-## Cluster 3 · your cluster, your guardrails
-
-<span class="when">0:45–1:30</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on the gaps</span> <span class="built">BUILT LIVE</span>
-
-On your own cluster, switch the agent-specific guards on **one at a time** — watch behavior *and* spend change:
-
-1. **Output** — agent leaks the planted secret → toggle on → redacted, sentinel gone
-2. **Input** (two stages) — block-list flatlines the cost pre-LLM, then the classifier catches what it misses
-3. **MCP tool restriction** — a poisoned tool can't be called once the allowlist is on
-
-<span class="small">Then **free-play**: the room tries to defeat each guard. Whitney narrates the interesting ones on the trace view.</span>
-
-Note:
-Guards start OFF (output/input/MCP all off). Flip them at runtime via the guard-proxy /toggle endpoint
-(Argo CD-safe; counter survives) — NOT kubectl set env, which self-heal reverts. Toggle scripts:
-challenges/02-sanitization/toggle-output-guard-on.sh, toggle-input-guard-on.sh,
-challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh. Say "deterministic" ONLY for the block-list,
-never the classifier. MCP step is LIVE or RECORDED per pre-flight — say which out loud; the gap is
-identical either way. Sentinels: FAKE-PROD-DB-PASSWORD-sentinel-9f2a (output), FAKE-MCP-EXFIL-sentinel-4c1d
-(MCP). Optional games run in this window (ESO/S3 exfil "basketball", challenge ladder). Agent wanders →
-that beat's fallback.*.sh so the GUARDRAIL is what's proven, not the model's mood.
-</textarea></section>
-
-<!-- OPTIONAL: TRACE RE-LEAK -->
-<section data-markdown><textarea data-template>
-## The door you didn't think to guard
-
-<span class="who w">Whitney narrates</span> <span class="who m">Michael on the fix</span> <span class="tag">OPTIONAL</span> <span class="built">BUILT LIVE</span>
-
-Output guard is on — the secret is blocked from the response. Turn on trace content capture and re-run:
-
-- The response is clean... but the sentinel now sits **inside the trace span.**
-- The observability you trusted is a second, unguarded sink. The fix has to be **symmetric.**
-
-<span class="small">Apply the collector redaction processor → gone from the response *and* the span.</span>
-
-Note:
-Optional beat — runs inside the free-play window if time allows. Cut order: after the model-tier
-closing demo, before free-play; never cut the regroup. Also optional and not shown here: the model-tier
-closing demo (Haiku/Sonnet/Opus side by side, guards off, "escape your jail" — frontier model burns
-more, but capability is orthogonal to governance). Trace data is torn down at the end; no sentinel
-survives the room.
-</textarea></section>
-
-<!-- ============================================================ -->
-<!-- LAND IT - the takeaway                                       -->
-<!-- ============================================================ -->
-
-<!-- THE MAP -->
 <section>
-  <h2>The map</h2>
-  <p class="small"><span class="when">1:30–2:00</span> <span class="who m">Michael leads</span> <span class="who w">Whitney</span> — every attack, the control that stops it, and whether you already run it.</p>
+  <h2>Round 2 · the controls you should already have</h2>
+  <p class="small"><span class="when">~0:16–0:30</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on cost</span> <span class="built">BUILT LIVE</span> — same attacks, each wall stops it, and we meet each control as it fires (`wall.agenticburn.com`).</p>
   <table>
-    <thead><tr><th>What the agent tried</th><th>Control</th><th>Layer</th><th>Already have it?</th></tr></thead>
+    <thead><tr><th>The agent tries</th><th>The control that fires</th></tr></thead>
     <tbody>
-      <tr><td>Deploy a non-compliant workload</td><td>Kyverno (audit→enforce)</td><td>Admission</td><td class="yes">✅ CNCF</td></tr>
-      <tr><td>Escalate its own permissions</td><td>Scoped RBAC</td><td>RBAC</td><td class="yes">✅ CNCF</td></tr>
-      <tr><td>Change infra outside Git</td><td>Drift block + self-heal</td><td>GitOps</td><td class="yes">✅ CNCF</td></tr>
-      <tr><td>Prompt injection in</td><td>Input inspection</td><td>Input</td><td class="gap">🔥 agent-specific</td></tr>
-      <tr><td>Secret exfil out</td><td>Output inspection</td><td>Output</td><td class="gap">🔥 agent-specific</td></tr>
-      <tr><td>Poisoned MCP tool call</td><td>Tool authorization</td><td>MCP tools</td><td class="gap">🔥 agent-specific</td></tr>
-      <tr><td>Secret re-leaks into a trace</td><td>Symmetric redaction</td><td>Observability</td><td class="gap">🔥 agent-specific</td></tr>
+      <tr><td>Deploy a villain workload</td><td><b>Kyverno</b> admission rejects unsigned / non-Harbor images (<b>cosign</b> attestation)</td></tr>
+      <tr><td>Escalate its own permissions</td><td>scoped <b>RBAC</b> Forbidden on the self-granted ClusterRoleBinding</td></tr>
+      <tr><td>Change infra outside Git</td><td><b>Argo CD</b> drift block + self-heal reverts it</td></tr>
+      <tr><td>Exfil customer data to S3</td><td><b>NetworkPolicy</b> default-deny egress; <b>Istio</b> ambient mTLS in transit</td></tr>
+      <tr><td>Snoop the filesystem for a planted secret</td><td><b>Falco</b> alerts on the snooping; <b>External Secrets</b> keeps real secrets out of the cluster</td></tr>
+      <tr><td>Fork bomb to kill the node</td><td>per-pod <b>PID limit</b> (config, not a tool); <b>Falco</b>+<b>Talon</b> detect and terminate</td></tr>
     </tbody>
   </table>
+  <p class="lead" style="font-size:0.7em">Michael: the damage stopped, but the counter still moved. The request reached the model <em>before</em> admission could reject it.</p>
   <aside class="notes">
-    Protect this segment — if running long, cut the optional closing demo first, then the trace re-leak
-    trap, then free-play; NEVER cut the regroup. Walk facilitation/governance-map.md row by row, land the
-    80/20. Full attendee-facing version is in the repo.
+    The CNCF suite gets introduced HERE, not in the intro. Walk each wall with its distinct error on
+    screen; name the tech each time (this is the "every piece of tech" payoff in the live flow). cert-manager
+    underpins the mTLS/webhooks quietly. Cost point: Kyverno is the last mile and the most expensive mile,
+    by the time admission denies, tokens are spent. Agent wanders → challenges/01-cncf-wall/fallback.kubectl.sh.
+    Hand-off → Michael: "Now your own cluster, where you turn on the guardrails built for agents."
   </aside>
 </section>
 
-<!-- COST LADDER -->
+<section data-markdown><textarea data-template>
+## Round 3 · your cluster, your guardrails
+
+<span class="when">~0:30–0:50</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on the gaps</span> <span class="built">BUILT LIVE</span>
+
+On your **own** cluster (`a-<id>.agenticburn.com`), switch the agent-specific guards on **one at a time** and watch behavior *and* spend change:
+
+1. **Output** — the agent leaks a planted secret ingredient → toggle the `guard-proxy` + **LLM Guard** output scanner on → redacted. But it already hit the trace: the costly side.
+2. **Input** — block the secret/PII *before* the model sees it: the deterministic block-list flatlines the cost pre-Bedrock, then the LLM Guard classifier catches subtler injection.
+3. **MCP tools** — a poisoned look-alike supply-chain MCP can't be called once **agentgateway** `mcpAuthorization` filters the rogue tool below the LLM.
+
+<span class="small">Then **free-play**: the room tries to defeat each guard. Whitney narrates the interesting ones on the trace.</span>
+
+Note:
+Guards start OFF. Flip at runtime via the guard-proxy /toggle endpoint (Argo CD-safe; counter survives),
+NOT kubectl set env (self-heal reverts). Output BEFORE input is deliberate: show the expensive post-hoc
+trace cleanup first, then input as the cheaper place to block. Toggle scripts:
+challenges/02-sanitization/toggle-output-guard-on.sh, toggle-input-guard-on.sh,
+challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh. Say "deterministic" ONLY for the block-list,
+never the classifier. MCP step LIVE or RECORDED per pre-flight, say which. Agent wanders → that challenge's
+fallback.*.sh so the GUARDRAIL is what's proven, not the model's mood.
+</textarea></section>
+
+<section data-markdown><textarea data-template>
+## Optional · the door you didn't think to guard
+
+<span class="who w">Whitney</span> <span class="who m">Michael on the fix</span> <span class="tag">OPTIONAL</span> <span class="built">BUILT LIVE</span>
+
+Output guard is on, the secret is blocked from the response. Turn on trace content capture and re-run:
+
+- The reply is clean... but the sentinel now sits **inside the trace span.**
+- The observability you trusted is a second, unguarded sink. The fix must be **symmetric.**
+
+<span class="small">Apply the OTel Collector OTTL redaction processor → gone from the response *and* the span.</span>
+
+Note:
+Optional, runs in the free-play window if time allows. In the 60-min cut this is the FIRST thing to drop.
+Also optional: the model-tier cost-race (Haiku / Sonnet 4.6 / Opus side by side, guards off, "escape your
+jail" — the frontier model burns more; capability is orthogonal to governance) on the haiku/sonnet/opus
+instructor clusters. Trace data is torn down at the end; no sentinel survives the room.
+</textarea></section>
+
+<!-- ============================================================ -->
+<!-- LAND IT                                                      -->
+<!-- ============================================================ -->
+
+<section>
+  <h2>The map</h2>
+  <p class="small"><span class="when">~0:50–0:58</span> <span class="who m">Michael leads</span> <span class="who w">Whitney</span> — every attack, the control that stops it, and whether you already run it.</p>
+  <table>
+    <thead><tr><th>What the agent tried</th><th>Control</th><th>Layer</th><th>Already have it?</th></tr></thead>
+    <tbody>
+      <tr><td>Deploy a non-compliant workload</td><td>Kyverno + cosign/Harbor</td><td>Admission</td><td class="yes">✅ CNCF</td></tr>
+      <tr><td>Escalate its own permissions</td><td>Scoped RBAC</td><td>RBAC</td><td class="yes">✅ CNCF</td></tr>
+      <tr><td>Change infra outside Git</td><td>Argo CD drift block + self-heal</td><td>GitOps</td><td class="yes">✅ CNCF</td></tr>
+      <tr><td>Exfil data / kill the node</td><td>NetworkPolicy + Istio mTLS; PID limit + Falco/Talon</td><td>Runtime/Net</td><td class="yes">✅ CNCF</td></tr>
+      <tr><td>Prompt injection / PII in</td><td>guard-proxy + LLM Guard (input)</td><td>Input</td><td class="gap">🔥 agent-specific</td></tr>
+      <tr><td>Secret exfil out</td><td>guard-proxy + LLM Guard (output)</td><td>Output</td><td class="gap">🔥 agent-specific</td></tr>
+      <tr><td>Poisoned MCP tool call</td><td>agentgateway mcpAuthorization</td><td>MCP tools</td><td class="gap">🔥 agent-specific</td></tr>
+      <tr><td>Secret re-leaks into a trace</td><td>OTel Collector symmetric redaction</td><td>Observability</td><td class="gap">🔥 agent-specific</td></tr>
+    </tbody>
+  </table>
+  <aside class="notes">
+    Protect this segment. If long, cut the closing cost-race first, then the trace re-leak, then free-play;
+    NEVER cut the map. Walk it row by row, land the 80/20: most attacks are caught by controls you already
+    run; the thin agent-specific slice is where to invest.
+  </aside>
+</section>
+
 <section>
   <h2>And it's cheaper the earlier you catch it</h2>
-  <p class="small">The second lesson, proven by the live counter: the earlier a control sits, the fewer tokens are spent when it fires.</p>
+  <p class="small">The second lesson, proven by the live counter: the earlier a control sits, the fewer Bedrock tokens are spent when it fires.</p>
   <table>
     <thead><tr><th>Order</th><th>Control</th><th>Fires</th><th>Token cost when it blocks</th></tr></thead>
     <tbody>
       <tr><td>1 · cheapest</td><td>Input block-list (deterministic)</td><td>before the model</td><td><span class="yes">zero</span> — counter flatlines</td></tr>
-      <tr><td>2</td><td>Input classifier</td><td>before the model</td><td>near zero</td></tr>
-      <tr><td>3</td><td>Tool scoping / least privilege</td><td>config time</td><td>zero at request time</td></tr>
-      <tr><td>4</td><td>Output inspection / HITL</td><td>after output</td><td>round-trip already paid</td></tr>
+      <tr><td>2</td><td>Input classifier (LLM Guard)</td><td>before the model</td><td>near zero</td></tr>
+      <tr><td>3</td><td>MCP authz / least privilege</td><td>config time</td><td>zero at request time</td></tr>
+      <tr><td>4</td><td>Output inspection</td><td>after output</td><td>round-trip already paid</td></tr>
       <tr><td>5 · most expensive</td><td>Kyverno admission</td><td>at apply time</td><td class="gap">highest — tokens already spent</td></tr>
     </tbody>
   </table>
-  <p class="small">Kyverno is the correct last mile <em>and</em> the most expensive mile. Agent-specific guards earn their place by intercepting earlier and cheaper — not by doing something Kyverno can't.</p>
+  <p class="small">Kyverno is the correct last mile <em>and</em> the most expensive mile. Agent-specific guards earn their place by intercepting earlier and cheaper, not by doing something Kyverno can't.</p>
 </section>
 
-<!-- TAKE IT HOME -->
 <section data-markdown><textarea data-template>
 ## Take it home
 
 <span class="who m">Michael</span> <span class="who w">Whitney</span>
 
-- **Most of what an agent tries, your platform already handles** — admission, RBAC, GitOps. Turn the right control on and the attack stops.
-- The thin slice it can't see — **input, output, tools** — is where agents change the threat model. That's where to spend.
-- The repo is the whole platform as code. A **governance map** and a **self-assessment** to run against your own platform on Monday.
+- **Most of what an agent tries, your platform already handles**: admission, RBAC, GitOps, runtime, network. Turn the right control on and the attack stops.
+- The thin slice it can't see — **input, output, tools, traces** — is where agents change the threat model. That's where to spend.
+- The repo is the whole platform as code: Argo CD, Kyverno, Falco/Talon, Istio, ESO, the kagent + agentgateway + guard-proxy AI layer, and the Datadog/OTel lens. Plus a **governance map** and a **self-assessment** to run against your own platform on Monday.
 
 ### 🔥 Watch It Burn
 <span class="small">walkthrough.agenticburn.com</span>
 
 Note:
-Close: the repo is theirs; the governance map and self-assessment are the takeaways. Hard stop at 4:20pm.
-Then thanks + Q&A (repo link + contact).
+Close: the repo is theirs; the governance map and self-assessment are the takeaways. Hard stop at the
+60-minute mark. Then thanks + Q&A (repo link + contact).
 </textarea></section>
 
 </div></div>
