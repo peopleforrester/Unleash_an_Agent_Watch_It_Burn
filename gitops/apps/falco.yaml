@@ -22,6 +22,13 @@ spec:
         podAnnotations:
           ad.datadoghq.com/falco.checks: |
             {"falco":{"instances":[{"url":"http://%%host%%:8765/metrics"}]}}
+        # Enable Falco's native Prometheus metrics (PRD #26 M4 fix): without this the webserver exposes
+        # /healthz only, NOT /metrics, so the Datadog `falco` check scraping :8765/metrics gets a refused
+        # connection (verified live: check [ERROR]). The chart's metrics toggle turns on the falco.yaml
+        # metrics block AND webserver.prometheus_metrics_enabled. interval 1m keeps the demo counters fresh.
+        metrics:
+          enabled: true
+          interval: 1m
         driver:
           kind: modern_ebpf
         tty: true
