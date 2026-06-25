@@ -23,6 +23,10 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 8. Dashboards — import Datadog community dashboards for components without an OOTB Datadog dashboard; decide custom/story dashboards (build now / defer / skip)
 9. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets
 
+**Prerequisite bugs (must be resolved before dependent milestones can complete):**
+
+- Fix Kyverno OTLP export — NetworkPolicy blocks egress to OTel Collector ([#31](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/31)) — gates M7 Kyverno dashboard; once metrics arrive, M7 adds OTTL rename + OOTB dashboard import
+
 **Optional enhancements (post-M5, if time allows before workshop):**
 
-- Add Istio ambient waypoint proxy for L7 mTLS in exfil challenge ([#25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25)) — blocked by M5 (Istio L4 integration active)
+- Add Istio ambient waypoint proxy for L7 mTLS in exfil challenge ([#25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25)) — blocked by M5 (Istio L4 integration active); adding waypoint also triggers OOTB Istio dashboard import (added to #25 acceptance criteria 2026-06-25)
