@@ -9,7 +9,7 @@
 
 ## Problem
 
-The Datadog Service Map currently shows only the AI layer components (`guard-proxy`, `agentgateway`, `kagent`, `Bedrock`) once PRD #27 is implemented. The third-party platform components — ArgoCD, Kyverno, Falco, cert-manager, Istio ambient — are absent from the Service Map because they lack `tags.datadoghq.com/*` pod annotations. Without these annotations, the Datadog Agent cannot correlate their metrics and logs under a named service, and the Service Map cannot draw topology edges to or from them.
+The Datadog Service Map currently shows only the AI layer components (`guard-proxy`, `agentgateway`, `kagent`, `evil-mcp-shim`) once PRD #27 is implemented. The third-party platform components — ArgoCD, Kyverno, Falco, cert-manager, Istio ambient — are absent from the Service Map because they lack `tags.datadoghq.com/*` pod annotations. Without these annotations, the Datadog Agent cannot correlate their metrics and logs under a named service, and the Service Map cannot draw topology edges to or from them.
 
 Scope: platform components only. AI-layer components (`guard-proxy`, `agentgateway`, `kagent`, `evil-mcp-shim`) already have correct UST values from PRD #27 and earlier milestones — do NOT change them here.
 
@@ -17,7 +17,7 @@ Scope: platform components only. AI-layer components (`guard-proxy`, `agentgatew
 
 ## Solution
 
-Add `tags.datadoghq.com/service`, `tags.datadoghq.com/version`, and `tags.datadoghq.com/env` pod annotations to each platform component's Helm values in `gitops/apps/`. One milestone per component, each following the same iterate loop: implement annotations → deploy → assert component appears with expected edges via `GET /api/v1/service_dependencies` → iterate until passing.
+Add `tags.datadoghq.com/service`, `tags.datadoghq.com/version`, and `tags.datadoghq.com/env` pod annotations to each platform component's Helm values in `gitops/apps/`. One milestone per component, each following the same iterate loop: implement annotations → deploy → assert component appears in the Datadog service catalog (`GET /api/v1/services`) with `env:production` → iterate until passing.
 
 ---
 
@@ -58,7 +58,7 @@ Every milestone for every component follows this iterate loop:
 
 1. **Implement** — add `tags.datadoghq.com/*` annotations to the component's pod template in `gitops/apps/`
 2. **Deploy** — push, ArgoCD sync (or `kubectl apply`)
-3. **Check** — query `GET /api/v1/service_dependencies` and confirm the component appears with the expected edges; also check the component appears in `GET /api/v1/services` with `env:production`
+3. **Check** — query `GET /api/v1/services` and confirm the component appears with `env:production`
 4. **Diagnose** — if missing, inspect whether the Agent is picking up the annotations (`kubectl describe pod <component-pod> --context "$CONTEXT"` — check `tags.datadoghq.com/*` labels are visible); check Agent logs for autodiscovery events
 5. **Adjust and re-check** — fix the annotation placement or value and re-deploy
 
@@ -124,9 +124,13 @@ Check `VERSIONS.lock` at the repo root for the component's deployed version. If 
        """Assert ArgoCD appears in Datadog with env:production."""
        r = requests.get(f"https://api.{DD_SITE}/api/v1/services", headers=HEADERS)
        r.raise_for_status()
-       services = [s["attributes"]["service_name"] for s in r.json().get("data", [])]
-       assert "argocd" in services, "argocd not found in Datadog services"
-       print("✓ ArgoCD service present in Datadog")
+       services = r.json().get("data", [])
+       assert any(
+           s["attributes"]["service_name"] == "argocd"
+           and s["attributes"].get("env") == "production"
+           for s in services
+       ), "argocd not found in Datadog services with env:production"
+       print("✓ ArgoCD service present in Datadog with env:production")
    ```
 
 **Done when:**
@@ -257,13 +261,13 @@ Check `VERSIONS.lock` at the repo root for the component's deployed version. If 
 
    Look up the version using the version lookup procedure from the Milestone Working Pattern. Do NOT leave placeholder text in the committed YAML.
 
-2. Deploy and verify: `GET /api/v1/services` must return `istio` (or `ztunnel` — use whichever name the Agent reports) with `env:production`.
+2. Deploy and verify: `GET /api/v1/services` must return `istio` with `env:production`.
 
-3. Add an assertion to `verify/test_datadog_service_map.py` following the same shape as the ArgoCD assertion in Milestone 1. Use the actual service name returned by `GET /api/v1/services` — it may be `istio`, `ztunnel`, or `istiod` depending on how the Agent maps the annotations.
+3. Add an assertion to `verify/test_datadog_service_map.py` following the same shape as the ArgoCD assertion in Milestone 1, with `service_name == "istio"` matching the locked decision in the Locked Decisions table.
 
 **Done when:**
 - [ ] ztunnel (and istiod if present) pod templates carry UST annotations with `service=istio`, `env=production`, `version=<actual-version>`
-- [ ] `istio` (or `ztunnel`) appears in Datadog services with `env:production`
+- [ ] `istio` appears in Datadog services with `env:production`
 - [ ] `verify/test_datadog_service_map.py` assertion for Istio passes
 
 ---
