@@ -6,11 +6,7 @@ Forward-looking implementation order. Completed work lives in `PROGRESS.md`, not
 
 ## Observability Suite (Short-term — pre-workshop)
 
-Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7)), one per milestone, and built as each is written. Entries are added as each child PRD is created.
-
-- Observability meta-PRD ([PRD #7](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7)) — defines and sequences the child observability PRDs as MVP-first milestones (thin end-to-end vertical increments)
-
-**Build order (MVP-first milestones; each verifiable in the Datadog UI; child PRDs added as created):**
+**Build order (MVP-first milestones; each verifiable in the Datadog UI):**
 
 1. MVP: OTel Collector + Datadog connected, UST wired on AI-layer components ([PRD #13](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/13)) — proves Datadog works; locks cross-cutting decisions (collector shape, UST vocabulary, account model)
    - Instrumentation spec: guard-proxy HTTP SERVER span + sanitization tracing ([#19](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/19)) — sub-issue of PRD #13
@@ -20,12 +16,8 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 5. EKS infra & named integrations — Agent DaemonSet, per-component synthesis ([PRD #26](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/26))
 6. UST, Service Map & correlation — full-fidelity tagging, Service Map view, log/trace/metric pivots ([PRD #27](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/27))
 7. Platform component UST backlog — add `tags.datadoghq.com/*` pod annotations to ArgoCD, Kyverno, Falco, cert-manager, Istio ambient to complete the Service Map ([PRD #28](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/28)) — gated on PRD #27 merging
-8. Dashboards — import Datadog community dashboards for components without an OOTB Datadog dashboard; decide custom/story dashboards (build now / defer / skip)
-9. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets
-
-**Prerequisite bugs (must be resolved before dependent milestones can complete):**
-
-- Fix Kyverno OTLP export — NetworkPolicy blocks egress to OTel Collector ([#31](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/31)) — gates M7 Kyverno dashboard; once metrics arrive, M7 adds OTTL rename + OOTB dashboard import
+8. Dashboards: OOTB imports + Terraform scaffold — verify cert-manager/Kyverno/ArgoCD dashboards appear; scaffold `infra/terraform/dashboards/` for dress-rehearsal custom dashboards ([PRD #33](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/33))
+9. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets ([PRD #34](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/34))
 
 **Optional enhancements (post-M5, if time allows before workshop):**
 

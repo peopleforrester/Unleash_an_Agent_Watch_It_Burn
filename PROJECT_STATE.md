@@ -103,7 +103,7 @@ Platform is built + live-validated (all beats, Terraform provisioning, rebrand).
 - **ESO -> Pod Identity DONE** (PR #4 merged): TF association + stale IRSA annotation removed.
 - **DNS = Namecheap.** agenticburn.com is at Namecheap (use ~/.claude/rules/tools/namecheap-api.md;
   read-then-merge setHosts so existing records are never clobbered; mutations are deploy-time).
-- **Lab distribution (next):** Datadog = ONE shared org + per-cluster-filtered dashboard link (default);
+- **Lab distribution (next):** Datadog = per-attendee trial org (one trial org per attendee from `pool.csv`);
   cluster access = per-cluster IAM creds (current pool.csv model). Rework: drop the KodeKloud /browser
   path, extend pool schema with url + datadog_url, show them on the success page, Railway deploy at
   provisioning.agenticburn.com (Namecheap CNAME at deploy once Railway gives the target).
