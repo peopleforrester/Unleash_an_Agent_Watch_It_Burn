@@ -75,3 +75,10 @@ metadata:
   labels:
     app.kubernetes.io/part-of: watch-it-burn
     app.kubernetes.io/component: ai-layer
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: datadog
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
