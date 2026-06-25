@@ -13,22 +13,72 @@ readonly LOG_DIR="${SCRIPT_DIR}/logs"
 readonly NAME_PREFIX="watch-it-burn-attendee"
 MAX_PARALLEL="${MAX_PARALLEL:-8}"
 
+# --- Multi-account config (env-overridable) -----------------------------------------------------
+# Defaults keep the existing SINGLE-account attendee flow unchanged (TF_PROFILE empty -> the cluster
+# module's default profile/region). Set the per-round account profiles when the 5-account fleet exists.
+WIB_REGION="${WIB_REGION:-us-west-2}"
+# Instructor clusters spread per round across separate accounts so no one account hits an EKS/VPC quota
+# wall ("overload"): Round 1 -> account 1, Round 2 -> account 2, Round 3 -> account 3. Switchable here.
+WIB_ACCOUNT_R1="${WIB_ACCOUNT_R1:-accen-dev}"
+WIB_ACCOUNT_R2="${WIB_ACCOUNT_R2:-accen-dev}"
+WIB_ACCOUNT_R3="${WIB_ACCOUNT_R3:-accen-dev}"
+
+# --- Instructor roster: 9 fixed clusters, 3 per round. "name|round|bootstrap-profile" -----------
+# These are facilitator-run and NOT in the attendee pool. fleet.sh PROVISIONS them; deploy-full-idp.sh
+# BOOTSTRAPS them with the listed profile (burn = Round-1 no-guardrails subset; full = everything).
+#   R1 (burn): the fork bomb destroys these -> one live + two spares, router rotates burn.agenticburn.com
+#   R2 (full): infra guardrails on (wall.agenticburn.com); spares / parallel stations
+#   R3 (full): the cost-race tiers. NAMES are the Bedrock model tiers, but the MODEL is set per cluster
+#     in the gitops kagent ModelConfig, NOT here. Default workshop model is Sonnet; the tier demo is
+#     optional (see haiku/sonnet/opus). If we drop tiers, rename these to sonnet-1/2/3.
+INSTRUCTORS=(
+  "watch-it-burn-burn-1|1|burn"
+  "watch-it-burn-burn-2|1|burn"
+  "watch-it-burn-burn-3|1|burn"
+  "watch-it-burn-wall-1|2|full"
+  "watch-it-burn-wall-2|2|full"
+  "watch-it-burn-wall-3|2|full"
+  "watch-it-burn-haiku|3|full"
+  "watch-it-burn-sonnet|3|full"
+  "watch-it-burn-opus|3|full"
+)
+
+# When non-empty, up_one/down_one target this AWS profile (account). Empty = module default account.
+TF_PROFILE=""
+
+account_for_round() {
+    case "$1" in
+        1) printf '%s' "${WIB_ACCOUNT_R1}" ;;
+        2) printf '%s' "${WIB_ACCOUNT_R2}" ;;
+        3) printf '%s' "${WIB_ACCOUNT_R3}" ;;
+        *) log "bad round: $1"; exit 1 ;;
+    esac
+}
+
 log() { printf '%s\n' "$*" >&2; }
 
 usage() {
     cat >&2 <<EOF
-Usage: ${0##*/} <up|down|status> [count|names...]
+Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
 
-  up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
-  up <name...>      Provision the named clusters.
-  down <count|all>  Destroy the first <count>, or all clusters with state.
-  down <name...>    Destroy the named clusters.
-  status            List clusters that have state and their EKS status.
+  ATTENDEE clusters (numbered, pool-distributed, single account):
+    up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
+    up <name...>      Provision the named clusters.
+    down <count|all>  Destroy the first <count>, or all clusters with state.
+    down <name...>    Destroy the named clusters.
+    status            List clusters that have state and their EKS status.
 
-Reads the shared VPC from ../lab-vpc (must be applied first). Each cluster gets its own state
-file under states/, so one cluster's failure or teardown never touches another (blast radius is
-one attendee). MAX_PARALLEL (default 8) caps concurrency. Profile/region come from the cluster
-module defaults (accen-dev / us-west-2).
+  INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
+    instructors up [round]    Provision the roster (optionally just round 1|2|3).
+    instructors down [round]  Destroy the roster (optionally one round).
+    Round->account split (avoids per-account overload): R1=\${WIB_ACCOUNT_R1}, R2=\${WIB_ACCOUNT_R2},
+    R3=\${WIB_ACCOUNT_R3}. Override via those env vars. Each account needs its own lab-vpc applied to
+    states/<profile>.tfstate first (the command prints the exact apply line if missing). R1 bootstraps
+    with the 'burn' profile, R2/R3 with 'full' (deploy-full-idp.sh, printed as a hint after up).
+
+Attendee path reads the shared VPC from ../lab-vpc (must be applied first). Each cluster gets its own
+state file under states/, so one cluster's failure or teardown never touches another. MAX_PARALLEL
+(default 8) caps concurrency. Attendee profile/region come from the cluster module defaults.
 
 Requires: terraform, jq, aws.
 EOF
@@ -76,10 +126,11 @@ record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
 
 up_one() {
     local name="$1"; assert_ours "${name}"
+    local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
-        -var "private_subnet_ids=${SUBNETS_JSON}" \
+        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
     else
@@ -90,10 +141,11 @@ up_one() {
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
+    local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
-        -var "private_subnet_ids=${SUBNETS_JSON}" \
+        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
         >"${LOG_DIR}/${name}.destroy.log" 2>&1; then
         rm -f "${STATE_DIR}/${name}.tfstate"; log "  ok: ${name}"
     else
@@ -173,12 +225,67 @@ cmd_status() {
     done
 }
 
+# Read a SPECIFIC account's lab VPC outputs (per-account state). Each account has its own VPC; the
+# default single-account path uses read_vpc() instead. Fails loudly with the apply command if absent.
+read_vpc_for() {
+    local profile="$1"
+    local state="${LAB_VPC_DIR}/states/${profile}.tfstate"
+    if [[ ! -f "${state}" ]]; then
+        log "no lab VPC for account '${profile}'. Apply it first:"
+        log "  terraform -chdir=${LAB_VPC_DIR} apply -state=states/${profile}.tfstate \\"
+        log "    -var profile=${profile} -var region=${WIB_REGION}"
+        exit 1
+    fi
+    VPC_ID="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${state}" -raw vpc_id 2>/dev/null || true)"
+    SUBNETS_JSON="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${state}" -json private_subnet_ids 2>/dev/null || true)"
+    [[ -n "${VPC_ID}" && -n "${SUBNETS_JSON}" ]] || { log "could not read lab VPC outputs for ${profile}"; exit 1; }
+}
+
+# fleet.sh only provisions; remind which bootstrap profile each instructor needs (burn vs full).
+print_bootstrap_hints() {
+    local round_filter="${1:-}" entry name rr bp
+    log "next: bootstrap each (fleet.sh provisions; deploy-full-idp.sh bootstraps):"
+    for entry in "${INSTRUCTORS[@]}"; do
+        IFS='|' read -r name rr bp <<<"${entry}"
+        [[ -n "${round_filter}" && "${round_filter}" != "${rr}" ]] && continue
+        log "  ${name}: AWS_PROFILE=$(account_for_round "${rr}") KUBECONFIG=<isolated> deploy-full-idp.sh ${bp}"
+    done
+}
+
+# Provision/destroy the fixed instructor roster, grouped by round so each account's VPC is read once.
+cmd_instructors() {
+    local action="${1:-}" round_filter="${2:-}"
+    case "${action}" in up|down) ;; status) cmd_status; return ;; *) usage ;; esac
+    require_tools
+    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
+    local r acct entry name rr bp names
+    for r in 1 2 3; do
+        [[ -n "${round_filter}" && "${round_filter}" != "${r}" ]] && continue
+        names=()
+        for entry in "${INSTRUCTORS[@]}"; do
+            IFS='|' read -r name rr bp <<<"${entry}"
+            [[ "${rr}" == "${r}" ]] && names+=("${name}")
+        done
+        [[ "${#names[@]}" -gt 0 ]] || continue
+        acct="$(account_for_round "${r}")"
+        log "round ${r} instructors -> account '${acct}': ${names[*]}"
+        read_vpc_for "${acct}"
+        TF_PROFILE="${acct}"
+        if [[ "${action}" == "up" ]]; then run_pool up_one "${names[@]}"; else run_pool down_one "${names[@]}"; fi
+        TF_PROFILE=""
+    done
+    report_failures
+    [[ "${action}" == "up" ]] && print_bootstrap_hints "${round_filter}"
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
         up) cmd_up "$@" ;;
         down) cmd_down "$@" ;;
         status) cmd_status "$@" ;;
+        instructors) cmd_instructors "$@" ;;
         *) usage ;;
     esac
 }
