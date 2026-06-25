@@ -19,6 +19,12 @@ spec:
     targetRevision: "v1.20.2"
     helm:
       valuesObject:
+        # Datadog Agent Autodiscovery: the `cert_manager` named integration (PRD #26 M2). Key uses the
+        # real controller container name `cert-manager-controller`, metrics port 9402. rename_labels maps
+        # the `name` label -> `cert_name` so the OOTB dashboard is readable (without it metrics are unlabeled).
+        podAnnotations:
+          ad.datadoghq.com/cert-manager-controller.checks: |
+            {"cert_manager":{"instances":[{"prometheus_url":"http://%%host%%:9402/metrics","rename_labels":{"name":"cert_name"}}]}}
         crds:
           enabled: true
           keep: true
