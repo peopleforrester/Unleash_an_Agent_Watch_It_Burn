@@ -61,10 +61,11 @@ spec:
           args: ["--file", "/etc/agentgateway/config.yaml"]
           env:
             # Unified Service Tagging for Datadog correlation (service / version / env), same scheme as
-            # the guard-proxy. verify-at-build: substitute CLUSTER_TIER per cluster; confirm the
-            # collector Service name for the pinned chart release.
+            # the guard-proxy. Locked UST (PRD #27 M1): service.version is the real agentgateway release
+            # (v1.3.0, NOT CLUSTER_TIER) and deployment.environment.name is the SDLC env (production, NOT
+            # the project name). Matches the canonical gitops/ai-layer/agentgateway.yaml.
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=agentgateway,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
+              value: "service.name=agentgateway,service.version=v1.3.0,deployment.environment.name=production"
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               value: "http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4317"
           ports:

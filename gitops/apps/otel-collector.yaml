@@ -45,6 +45,29 @@ spec:
                 - key: cluster.name
                   value: watch-it-burn
                   action: upsert
+            # OTTL fallback (PRD #27 M3): stamp peer.service on third-party component CLIENT spans so the
+            # Datadog Service Map draws the agentgateway -> kagent edge, IF agentgateway doesn't emit it
+            # natively. guard-proxy sets its OWN peer.service in code (M2), so it is intentionally NOT
+            # matched here. error_mode: ignore so a mismatched condition is a harmless no-op (peer.service
+            # simply stays unset) and can NEVER drop spans from the traces pipeline.
+            #
+            # verify-at-build: confirm against REAL spans (search_datadog_spans) before relying on this:
+            #   (a) whether agentgateway already sets peer.service natively (if so this statement is inert);
+            #   (b) the exact resource service.name value emitted by agentgateway.
+            # The kagent -> Bedrock edge is deliberately NOT forced here: kagent reaches Bedrock via the AWS
+            # SDK, and Datadog AUTO-INFERS that external dependency from the aws-api spans. Forcing
+            # peer.service="bedrock" would risk a DUPLICATE node alongside Datadog's inferred one. PRD #27
+            # M5 permits 3 internal edges (guard-proxy->agentgateway->kagent) when Bedrock is external-only.
+            # If verify-at-build shows Bedrock is NOT inferred, add:
+            #   set(attributes["peer.service"], "bedrock") where attributes["peer.service"] == nil
+            #     and resource.attributes["service.name"] == "kagent" and kind == SPAN_KIND_CLIENT
+            #     and (IsMatch(attributes["url.full"], ".*bedrock.*") or attributes["rpc.service"] == "BedrockRuntime")
+            transform/set_peer_service:
+              error_mode: ignore
+              trace_statements:
+                - context: span
+                  statements:
+                    - set(attributes["peer.service"], "kagent") where attributes["peer.service"] == nil and resource.attributes["service.name"] == "agentgateway" and kind == SPAN_KIND_CLIENT
           exporters:
             prometheusremotewrite:
               endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
@@ -109,6 +132,7 @@ spec:
                   - memory_limiter
                   - batch
                   - resource
+                  - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
                 exporters:
                   - datadog      # primary
                   - otlp/tempo   # secondary / fallback
