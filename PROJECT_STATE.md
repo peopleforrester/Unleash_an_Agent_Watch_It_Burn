@@ -770,3 +770,44 @@ Attendee count + ceiling; access model; co-speaker split; 90 vs 120 min; host pr
 - Cluster deleted -> $0. Everything on staging.
 - REMAINING (not done): live-verify the fleet profiles on a provision; build the actual slide deck;
   speaker notes for non-hook slides (Michael has these); custom Backstage image; system-prompt streaming UI.
+
+## SESSION 2026-06-25: PRD #20 / #22 milestones + LIVE two-act verification
+
+Cluster `watch-it-burn-attendee-001` (EKS 1.35, us-west-2) was up for this session and is STILL UP
+(~$0.50/hr; teardown is manual per Michael). All apps Synced/Healthy; guard-proxy capture back to the
+NO_CONTENT default; otel-collector back to Act 1 (no redaction). Repo is clean on `staging`.
+
+Shipped to staging this session (all CI green; weaver workflow is the first repo-root GH Action):
+- **#20 M6 Weaver registry** (`weaver/registry/`): manifest.yaml (new >=0.22.1 format: manifest.yaml +
+  schema_url) pinning OTel semconv v1.37.0; guard-proxy span groups (HTTP SERVER + sanitize INTERNAL).
+  `.github/workflows/weaver-registry-check.yml` (pinned, sha-verified weaver 0.24.2). docs/weaver-live-check.md.
+  Installed weaver 0.24.2 locally (was 0.21.2, too old for the v1.37.0 schema).
+- **#22 M3**: aligned the span groups to the authored contract (url.scheme Recommended, url.path
+  Recommended, SPAN_ONLY live-check comment).
+- **#22 M4 two-act re-leak, VERIFIED LIVE** (the previously-unresolved content-capture item):
+  - Arming mechanism confirmed: `kubectl set env` SPAN_ONLY on the proxy survives selfHeal via the
+    ai-layer ignoreDifferences on `select(.name=="proxy")|.env`; the proxy re-reads it at module load.
+  - Act 1: sentinel visible in gen_ai.input/output.messages (trace 97d2eef...). THE LEAK.
+  - Act 2: Collector OTTL redact_sentinel -> [DEMO-REDACTED] (trace 20211b7a...). Must go through Git:
+    kyverno `block-argocd-drift` REJECTS live ConfigMap edits, so Act 2 is a GitOps toggle (commit/revert).
+  - Teardown: NO_CONTENT -> op=chat, no content attrs (trace 69565ab1...).
+  - Beat 3: ADK emits `execute_tool {gen_ai.tool.name}` natively (verified `execute_tool list_pods`);
+    rogue induction is probabilistic on Haiku (0/4 runs) -> fallback.curl.sh is the deterministic path.
+  - Runbook: `beats/03-bad-mcp-excessive-agency/OBSERVABILITY-RUNBOOK.md`.
+- **#20 M7 build verification** (`docs/prd20-m7-build-verification.md`): 5/7 pass. gen_ai.request.model
+  on call_llm/chat/generate_content; content capture on/off; weaver live-check PASSES on REAL emitted
+  spans (only stability:development advisories). Found OTLP/JSON int64-as-string gotcha (documented).
+
+## Open decisions / items owed (2026-06-25)
+
+- **#20 M7 item 5 (witb_cost_usd scrape) — NEEDS MICHAEL'S CALL.** The metric is shaped correctly
+  (model label, no tier) and on the proxy /metrics, but nothing scrapes it: no ServiceMonitor (kube-
+  prometheus-stack ignores pod annotations), and the Collector does not scrape the proxy. Prometheus has
+  0 series -> the Grafana cost panel is EMPTY. The PRIMARY cost visual (web console -> /cost JSON) works.
+  Decision: ServiceMonitor (-> Grafana) vs Collector prometheus scrape_config (-> Datadog). Not wired
+  either way (no fallback added without permission).
+- **#20 M4 agentgateway tracing — deferred.** agentgateway is staged (`gitops/ai-layer/agentgateway.yaml`)
+  but NOT in the kustomization (5 verify-at-build blockers); its trace leg was out of scope this run.
+- **Datadog LLM-Observability panel render** (#22 M4 / #20 M7 item 3) — facilitator UI check on Whitney's
+  org; no Datadog Application key is in-cluster for programmatic confirmation.
+- Cluster is still UP; tear down manually when done with live work.
