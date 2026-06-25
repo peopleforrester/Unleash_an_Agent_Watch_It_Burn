@@ -411,7 +411,9 @@ spec:
     spec:
       serviceAccountName: web-terminal
       automountServiceAccountToken: true # the shell's kubectl uses this token to reach the cluster API
-      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      # runAsUser 1000 = the image's `term` user. runAsNonRoot alone fails CreateContainerConfigError
+      # because the image USER is non-numeric ("term"); a numeric runAsUser is required to verify non-root.
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: ttyd
           image: ghcr.io/peopleforrester/watch-it-burn:web-terminal # built from images/web-terminal/
