@@ -25,7 +25,7 @@ corrections from that pass are folded in below.
 |---|---|---|---|
 | **cert-manager** | **Yes, official OOTB** (`certmanager_overview.json`, "Cert Manager Overview") | **Yes** | **Import the OOTB dashboard.** `cert_manager.*` metrics confirmed flowing. Done. |
 | **Istio ambient (ztunnel)** | Yes, official OOTB (`istio_overview.json`) **but it is legacy sidecar** | **No** (mostly empty) | **Build a small custom ztunnel dashboard.** OOTB queries L7 `istio.mesh.*`; ztunnel emits L4 (`tcp.*`/`dns.*`/`xds.*`/`active_proxy_count`). |
-| **Kyverno** | Yes, official OOTB **but built for the Agent openmetrics check** | **No** (two reasons, below) | **Fix the OTLP export first, then build custom.** OOTB expects `kyverno.*.count` Agent-check names; our OTLP path does not produce them. |
+| **Kyverno** | **Yes, official OOTB** | **Yes (RESOLVED 2026-06-25)** | **Import the OOTB dashboard.** Native OTLP was unfixable (gRPC-Go #7625); switched to the Agent openmetrics check, which emits the `kyverno.*` names the OOTB dashboard expects. See Kyverno section. |
 | **ESO** | **No** (no Datadog integration exists) | n/a (no metrics flowing) | **Build custom**, and wire an Agent OpenMetrics scrape of ESO first. |
 
 **Correction to the spike's premise (caught in validation):** there is no useful *community* dashboard
@@ -96,10 +96,15 @@ Two distinct problems, both confirmed live:
    resolver-format issue. Net: **zero kyverno metrics reach Datadog** (confirmed: no `kyverno*` in the
    org's 1337 metrics). This must be fixed before any Kyverno dashboard, OOTB or custom, can show data.
 
-**M7 action:** fix the OTLP export (egress NetworkPolicy / endpoint), confirm the exact metric names
-Kyverno's OTLP path lands as in Datadog, then build a custom Kyverno dashboard against those observed
-names. Do not switch Kyverno to the Agent check just to get the OOTB dashboard (M5 D9 chose OTLP on
-purpose).
+**RESOLVED 2026-06-25 (revises M5 D9 + this row):** the OTLP failure was not a NetworkPolicy. Kyverno's
+bundled gRPC/OTel exporter fails with `produced zero addresses` even against a literal ClusterIP, a
+gRPC-Go #7625 regression baked into the kyverno binary, so OTLP is unfixable here. Kyverno was switched
+to the **Datadog Agent openmetrics check** (same pattern as cert-manager/falco/istio): Kyverno serves
+Prometheus on :8000 and the Agent scrapes it via an `ad.datadoghq.com/kyverno.checks` annotation. This
+emits the `kyverno.*` names, so **the official Datadog Kyverno OOTB dashboard now works** (import it, no
+custom build). The M5 D9 "no Agent check, avoid duplicate metrics" rationale is moot because the OTLP
+path produced zero metrics. See `gitops/apps/kyverno.yaml`. So Kyverno moves to the cert-manager bucket:
+import OOTB.
 
 **Reference query names for the custom dashboard** (expected underscore format once OTLP is fixed):
 - `kyverno_policy_results` (replaces `kyverno.policy.results.count`)
@@ -135,7 +140,7 @@ Relevant ESO metric names: `externalsecret_sync_calls_total`, `externalsecret_st
 |---|---|---|---|
 | cert-manager | Yes (Cert Manager Overview) | No | none (metrics flowing) |
 | Istio ambient | No (legacy sidecar, mostly empty) | Yes (ztunnel L4: tcp/dns/xds/active_proxy + istiod) | none (ztunnel metrics flowing) |
-| Kyverno | No (Agent check names, not OTLP) | Yes (underscore metric names) | Fix OTLP export bug first |
+| Kyverno | Yes (OOTB, via the Agent openmetrics check) | No | none (RESOLVED: switched OTLP->Agent check; `kyverno.*` flowing) |
 | ESO | No (no integration) | Yes (externalsecret_* via Agent OpenMetrics) | Wire Agent OpenMetrics scrape of ESO first |
 
 ---
