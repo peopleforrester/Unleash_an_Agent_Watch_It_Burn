@@ -21,7 +21,7 @@ spec:
         # (PRD #26 M2). Key uses the real container name `falco`. Port 8765 is Falco's webserver/metrics.
         podAnnotations:
           ad.datadoghq.com/falco.checks: |
-            {"falco":{"instances":[{"url":"http://%%host%%:8765/metrics"}]}}
+            {"falco":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8765/metrics"}]}}
         # Enable Falco's native Prometheus metrics (PRD #26 M4 fix): without this the webserver exposes
         # /healthz only, NOT /metrics, so the Datadog `falco` check scraping :8765/metrics gets a refused
         # connection (verified live: check [ERROR]). The chart's metrics toggle turns on the falco.yaml
