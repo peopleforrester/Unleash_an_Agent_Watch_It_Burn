@@ -93,13 +93,15 @@ spec:
     deployment:
       serviceAccountName: agent-sa
       # Unified Service Tagging for Datadog correlation on the kagent agent pod (same scheme as
-      # guard-proxy / agentgateway). service.version carries the cluster tier so the model-tier cost
-      # race is one panel. verify-at-build: confirm the v1alpha2 Agent `deployment.env` field is honored
-      # on kagent chart 0.9.9; if not, set OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template
-      # instead. Substitute CLUSTER_TIER per cluster (cluster-1 / cluster-2 / cluster-3).
+      # guard-proxy / agentgateway). UST vocabulary locked in PRD #13: service.version is the component's
+      # real software version (NOT a model-tier label); the model dimension for the cost race comes from
+      # gen_ai.request.model (OTel GenAI semconv, captured in M2), not from service.version.
+      # deployment.environment.name is the SDLC env (production), not the project name. verify-at-build:
+      # confirm the v1alpha2 Agent `deployment.env` field is honored on kagent chart 0.9.9; if not, set
+      # OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template instead.
       env:
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "service.name=kagent,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
+          value: "service.name=kagent,service.version=v0.9.9,deployment.environment.name=production"
     # Committed "good" tool config: an explicit toolNames allowlist (the MCP-restriction backstop;
     # agentgateway mcpAuthorization is the live-toggled primary). requireApproval is the per-tool HITL
     # gate on the one mutating tool. verify-at-build: workshop-mcp RemoteMCPServer + these tool names
@@ -211,13 +213,12 @@ spec:
             # Optional side-screen prompt stream; ON only once moderation is confirmed (code of conduct).
             - { name: STREAM_PROMPTS, value: "off" }
             # Unified Service Tagging for Datadog correlation (same scheme as the kagent agent +
-            # agentgateway above). The Datadog Agent reads this to tag this pod's container logs now;
-            # once proxy.py carries manual OTel SDK spans (research/33 Milestone 3) the same tags map
-            # service.version -> version (cluster tier) and deployment.environment.name -> env. The OTLP
-            # *endpoint* env arrives with that SDK work, not here. verify-at-build: substitute
-            # CLUSTER_TIER per cluster (cluster-1 / cluster-2 / cluster-3).
+            # agentgateway). The Datadog Agent reads this to tag this pod's container logs now; once
+            # proxy.py carries manual OTel SDK spans (PRD #22 / issue #19) the same tags map service.version
+            # -> version and deployment.environment.name -> env. UST locked in PRD #13: service.version is
+            # the real software version (NOT a model tier); the model dimension is gen_ai.request.model.
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=guard-proxy,service.version=CLUSTER_TIER,deployment.environment.name=watch-it-burn"
+              value: "service.name=guard-proxy,service.version=1.0.0,deployment.environment.name=production"
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
@@ -254,7 +255,12 @@ spec:
           image: python:3.12-slim # verify-at-build: bake server.py into an image for prod
           command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]
           ports: [{ name: mcp, containerPort: 8000 }]
-          env: [{ name: FAKE_MCP_SENTINEL, value: "FAKE-MCP-EXFIL-sentinel-4c1d" }]
+          # UST so the Datadog Agent tags this pod's logs/metrics (the shim stays dark on OTel spans per
+          # issue #18; this env is for Agent-side service tagging only). Locked vocabulary, PRD #13.
+          env:
+            - { name: FAKE_MCP_SENTINEL, value: "FAKE-MCP-EXFIL-sentinel-4c1d" }
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=evil-mcp-shim,service.version=1.0.0,deployment.environment.name=production"
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
         - name: src
