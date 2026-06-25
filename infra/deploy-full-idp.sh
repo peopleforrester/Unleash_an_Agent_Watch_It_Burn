@@ -23,8 +23,10 @@ helm repo update >/dev/null
 # NOTE: do NOT use --wait here. On EKS the helm install with --wait repeatedly hangs in
 # pending-install (zero pods, no events, >15min) and times out; installing without --wait completes
 # immediately and the pods come up normally. Wait on the core components explicitly afterwards.
+# argocd-values.yaml carries dex.enabled=false + the Datadog Agent Autodiscovery annotation on
+# argocd-server (PRD #26 M2). Folded in here because ArgoCD is bootstrap-installed, not Application-managed.
 helm upgrade --install argocd argo/argo-cd --version 9.6.0 \
-  -n argocd --create-namespace --set dex.enabled=false
+  -n argocd --create-namespace --values "${SCRIPT_DIR}/argocd-values.yaml"
 log "    waiting for ArgoCD core components..."
 kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=180s
 kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=180s
