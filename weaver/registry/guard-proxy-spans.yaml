@@ -20,13 +20,26 @@ groups:
         requirement_level: required
         note: Always "POST" for the A2A JSON-RPC path the proxy guards.
       - ref: url.path
-        requirement_level: required
+        requirement_level: recommended
         note: The request path (e.g. the A2A endpoint or "/toggle"); set from self.path.
+      - ref: url.scheme
+        requirement_level: recommended
+        note: >-
+          Part of the HTTP SERVER contract (PRD #22 M3). proxy.py does not currently set it (the scheme is
+          implied http for the in-cluster A2A hop); declared Recommended so the contract stays complete and
+          a future emit conforms. Recommended-and-absent is not a live-check violation.
       - ref: http.response.status_code
         requirement_level: required
         note: Set by _send at every exit (200 pass, 403 block, 502 upstream failure).
 
   # --- The guard decision + forward, modelled as a gen_ai "chat" span so Datadog renders the LLM panel. ---
+  #
+  # LIVE-CHECK ACCEPTANCE (PRD #22 M3, manual step, NOT a CI gate): to validate that the opt-in
+  # gen_ai.input/output.messages are actually present and conform to schema on a running proxy, run a beat
+  # against a cluster with guard-proxy armed for content capture
+  # (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY), capture the sanitize span, and run
+  # `weaver registry live-check --registry weaver/registry/ --input-source <spans.json> --input-format json`.
+  # See docs/weaver-live-check.md for the exact sample-telemetry format and the pass/fail semantics.
   - id: span.witb.guard_proxy.sanitize
     type: span
     span_kind: internal
