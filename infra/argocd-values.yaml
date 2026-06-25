@@ -1,0 +1,14 @@
+# ABOUTME: Helm values for the bootstrap ArgoCD install (deploy-full-idp.sh).
+# ABOUTME: Folds the Datadog Agent Autodiscovery annotation onto argocd-server (PRD #26 M2).
+#
+# ArgoCD installs itself via Helm in the bootstrap (it is the GitOps engine; it is NOT managed by an
+# ArgoCD Application, so its own config belongs here, not in a self-referential app). The block-argocd-drift
+# kyverno policy is scoped to ArgoCD-MANAGED resources (those carry argocd.argoproj.io/tracking-id);
+# argocd-server does not, so this annotation is permitted. Container metrics port is 8083; the `argocd`
+# Datadog check is OpenMetrics-based, so the instance key is openmetrics_endpoint (not url).
+dex:
+  enabled: false
+server:
+  podAnnotations:
+    ad.datadoghq.com/server.checks: |
+      {"argocd":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8083/metrics"}]}}

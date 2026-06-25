@@ -38,6 +38,18 @@ spec:
                 matchExpressions:
                   - key: app.kubernetes.io/instance
                     operator: Exists
+      preconditions:
+        # Scope the block to resources ArgoCD ACTUALLY manages: those carry the
+        # `argocd.argoproj.io/tracking-id` annotation (ArgoCD writes it on every synced object).
+        # ArgoCD's OWN install components (argocd-server, repo-server, etc.) do NOT carry it -- they
+        # are Helm-installed by the bootstrap, not synced by an Application, so they are not "drift"
+        # and must remain configurable (e.g. the Datadog Autodiscovery annotation). Without this the
+        # broad app.kubernetes.io/instance selector wrongly treated ArgoCD's own pods as managed.
+        # Verified live 2026-06-25: managed resources carry the annotation, argocd-server does not.
+        all:
+          - key: '{{ request.object.metadata.annotations."argocd.argoproj.io/tracking-id" || request.oldObject.metadata.annotations."argocd.argoproj.io/tracking-id" || ''NOT_MANAGED'' }}'
+            operator: NotEquals
+            value: NOT_MANAGED
       exclude:
         any:
           - subjects:
