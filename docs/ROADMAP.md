@@ -25,7 +25,8 @@ Child PRDs are created via the meta-PRD ([PRD #7](https://github.com/peopleforre
 
 **Prerequisite bugs (must be resolved before dependent milestones can complete):**
 
-- Fix Kyverno OTLP export — NetworkPolicy blocks egress to OTel Collector ([#31](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/31)) — gates M7 Kyverno dashboard; once metrics arrive, M7 adds OTTL rename + OOTB dashboard import
+- Fix Kyverno OTLP export — NetworkPolicy blocks egress to OTel Collector ([#31](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/31)) — gates M7 Kyverno policy-decision traces (spans → APM); Kyverno metrics now come via Agent check (OOTB dashboard, no OTTL rename needed)
+- Fix missing ArgoCD Autodiscovery annotation — `gitops/argocd/values.yaml` is missing `server.podAnnotations` with `ad.datadoghq.com/server.checks` ([#32](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/32)) — gates M7 ArgoCD OOTB dashboard
 
 **Optional enhancements (post-M5, if time allows before workshop):**
 
