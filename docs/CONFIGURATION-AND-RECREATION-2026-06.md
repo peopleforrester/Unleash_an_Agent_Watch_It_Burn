@@ -34,7 +34,18 @@ fleet teardown leaves behind; a clean account rebuilds end to end.
 5. **Credential distribution.** `lab-distribution/` (Railway-hosted) maps each attendee to a cluster
    URL plus Datadog and AWS keys; `lab-distribution/scripts/distribute_datadog_keys.py` writes the
    per-cluster `watch-it-burn/datadog` secret that ESO fans out to the `monitoring`, `security`, and
-   `datadog` namespaces.
+   `datadog` namespaces. The attendee Datadog pool (the AI Engineer World's Fair orgs) is staged in
+   Secrets Manager as `watch-it-burn/datadog-pool` + `watch-it-burn/datadog-pool-2` (split because one
+   secret caps at 64 KB; `merge_pool.py` reads both). Whitney's two admin orgs are separate:
+   `watch-it-burn/datadog` (instructor, r1/r2/r3) and `watch-it-burn/datadog-admin-attendee` (the
+   attendee cluster, repointed on the `whitney-attendee` branch so its metrics stay separate).
+
+6. **Per-account AWS quotas (recreation prerequisite, us-west-2).** At 50-60 clusters per account these
+   bind, all adjustable: EC2 vCPU "Running On-Demand Standard" (L-1216C47) -> 800; Application Load
+   Balancers per Region (L-53DA6B97) -> 100; Network Load Balancers per Region (L-69A177A2) -> 100 (each
+   full cluster is 1 ALB + 1 NLB, default 50 each). Elastic IPs need NO increase: ALB IPs are
+   AWS-managed and don't count; only the one shared-VPC NAT counts (1 of 5). Verified 2026-06-26
+   (see `docs/DECISION-LOG.md` and `docs/GO-LIVE-CHECKLIST.md`).
 
 Teardown is `fleet.sh down <names|all>` for clusters; the shared VPC is destroyed separately with
 `terraform -chdir=infra/terraform/lab-vpc destroy`. The cluster teardown does NOT remove the
