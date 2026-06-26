@@ -21,9 +21,12 @@ Several items below have moved since this list was written. Current state, with 
   instructor + admin-attendee), the admin exception surfaces instructor/admin access, and per-cluster
   secrets fan out via ESO. Remaining: populate the full 250-attendee pool (AWS + Datadog merged) and
   Whitney's M2 acceptance verification.
+- **Attendee success page UX (#37): REQUIRED — not optional.** It is the page all 250 attendees hit
+  (misleading labels, the wrong KCD-Texas favicon, missing step-by-step AWS CLI guidance). Whitney owns
+  it; the `burrito.png` favicon asset is staged but the template edits are not done.
 
-So the genuinely-open roadmap work is #28, #33, the #27 live acceptance, and the full attendee-pool
-population. The two new pieces this push added (not in the original list): the four Whitney experiment
+So the genuinely-open roadmap work is #28, #33, the #27 live acceptance, the full attendee-pool
+population, and #37 (the required attendee-page UX). The two new pieces this push added (not in the original list): the four Whitney experiment
 clusters on their own branches (see `docs/branch-per-cluster-convention.md`) and the fleet
 auto-bootstrap in `fleet.sh`.
 
@@ -42,4 +45,5 @@ auto-bootstrap in `fleet.sh`.
 **Optional enhancements (post-M5, if time allows before workshop):**
 
 - Add Istio ambient waypoint proxy for L7 mTLS in exfil challenge ([#25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25)) — blocked by M5 (Istio L4 integration active); adding waypoint also triggers OOTB Istio dashboard import (added to #25 acceptance criteria 2026-06-25)
-- Attendee success page UX improvements ([#37](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/37)) — misleading labels, missing AWS CLI guidance, wrong favicon; attendee-facing, important before dress rehearsal
+
+(Attendee success page UX, [#37](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/37), was reclassified out of "optional" on 2026-06-26 — it is required attendee-facing work; see the status reconciliation above.)
