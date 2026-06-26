@@ -1,0 +1,18 @@
+# ABOUTME: Allow egress between pods inside the agent namespace (any port).
+# ABOUTME: The AI chain is intra-namespace: guard-proxy -> agentgateway:3000 -> kagent:8080 -> workshop-mcp:8000.
+#
+# Egress-only on purpose: the agent-egress-allowlist makes agent pods default-deny-egress, which would
+# otherwise block the in-namespace hops above (agentgateway's 3000/3001 are not in the in-VPC port set).
+# Ingress to the agent layer is left untouched so the entry path (web UI / port-forward) keeps working.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-intra-namespace
+  namespace: agent
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
