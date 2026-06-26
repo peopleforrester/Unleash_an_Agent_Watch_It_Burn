@@ -21,7 +21,14 @@ metadata:
   name: agent-egress-allowlist
   namespace: agent
 spec:
-  podSelector: {}
+  # SCOPED to the kagent agent pod (the C1 attacker that would PutObject to S3), NOT the whole namespace.
+  # The MCP-server pods (workshop-mcp, evil-mcp-shim) pip-install `mcp` from PyPI at startup; a namespace-
+  # wide egress deny blocks that and they never bind 8000 (found live 2026-06-26: agentgateway -> workshop-mcp
+  # was "connection refused" because the server never started). The agent runs a prebuilt kagent image (no
+  # runtime pip), so locking only it preserves C1 while leaving the MCP servers able to start.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: workshop-agent
   policyTypes:
     - Egress
   egress:

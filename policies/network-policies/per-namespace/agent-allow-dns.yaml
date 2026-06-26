@@ -8,7 +8,10 @@ metadata:
   labels:
     app.kubernetes.io/part-of: watch-it-burn-idp
 spec:
-  podSelector: {}
+  # Scoped to the kagent agent pod (see agent-egress-allowlist.yaml); the MCP servers are not locked down.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: workshop-agent
   policyTypes:
     - Egress
   egress:
