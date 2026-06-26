@@ -22,6 +22,12 @@ WIB_REGION="${WIB_REGION:-us-west-2}"
 WIB_ACCOUNT_R1="${WIB_ACCOUNT_R1:-accen-dev}"
 WIB_ACCOUNT_R2="${WIB_ACCOUNT_R2:-accen-dev}"
 WIB_ACCOUNT_R3="${WIB_ACCOUNT_R3:-accen-dev}"
+# Attendee fleet accounts for `up-fleet` (comma-separated AWS profiles). The 250-cluster plan is 5
+# accounts x 50 clusters; up-fleet provisions every account's slice CONCURRENTLY so the whole fleet
+# comes up in one window instead of N serial batches. Each account needs its own lab-vpc applied to
+# states/<profile>.tfstate first. Disjoint name ranges keep state files from colliding. Default is the
+# single dev account so the command is a no-op-safe smoke test until the other accounts land.
+WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-accen-dev}"
 
 # --- Instructor roster: 9 fixed clusters, 3 per round. "name|round|bootstrap-profile" -----------
 # These are facilitator-run and NOT in the attendee pool. fleet.sh PROVISIONS them; deploy-full-idp.sh
@@ -78,6 +84,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
   ATTENDEE clusters (numbered, pool-distributed, single account):
     up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
     up <name...>      Provision the named clusters.
+    up-fleet <n>      Provision <n> clusters in EACH \${WIB_ATTENDEE_ACCOUNTS} account, all concurrent
+                      (disjoint name ranges). The 250-cluster path: 5 accounts x 50 in one window.
     down <count|all>  Destroy the first <count>, or all clusters with state.
     down <name...>    Destroy the named clusters.
     status            List clusters that have state and their EKS status.
@@ -330,10 +338,47 @@ cmd_instructors() {
     [[ "${action}" == "up" && -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
 }
 
+# Provision the attendee fleet across WIB_ATTENDEE_ACCOUNTS concurrently: one per-account pool per
+# account, all running at once, with disjoint cluster-number ranges so state files never collide.
+cmd_up_fleet() {
+    local per_account="${1:-}"
+    [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: up-fleet <clusters-per-account>"; exit 2; }
+    require_tools
+    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    log "up-fleet: ${#accounts[@]} account(s) x ${per_account} clusters, all concurrent..."
+    local idx=0 acct start n names
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        start=$(( idx * per_account + 1 ))
+        idx=$(( idx + 1 ))
+        # Pre-check the account's lab VPC so a missing one is a recorded skip, not a silent subshell exit.
+        if [[ ! -f "${LAB_VPC_DIR}/states/${acct}.tfstate" ]]; then
+            log "  account '${acct}': NO lab VPC (apply states/${acct}.tfstate first); skipping its slice"
+            record_fail "account:${acct}-no-vpc"; continue
+        fi
+        names=(); for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+            names+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
+        done
+        log "  account '${acct}': ${names[0]} .. ${names[-1]}"
+        # Per-account pool in a subshell so VPC_ID/TF_PROFILE/BOOTSTRAP_PROFILE stay local; all run at once.
+        (
+            read_vpc_for "${acct}"
+            TF_PROFILE="${acct}"
+            [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || BOOTSTRAP_PROFILE="full"
+            run_pool up_one "${names[@]}"
+        ) &
+    done
+    wait
+    report_failures
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
         up) cmd_up "$@" ;;
+        up-fleet) cmd_up_fleet "$@" ;;
         down) cmd_down "$@" ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
