@@ -30,6 +30,23 @@ CRED_COLUMNS = [
     "datadog_api_key", "datadog_app_key", "datadog_site", "datadog_dashboard_url",
 ]
 
+# Admin exception: these emails get INSTRUCTOR-cluster access (all instructor clusters + the shared
+# instructor Datadog account), not an attendee pool row. Everything below the email list is sourced from
+# env so no secret lives in the repo (same pattern as RESEND_API_KEY). On the Railway service set:
+#   ADMIN_DATADOG_{ORG,EMAIL,PASSWORD,API_KEY,APP_KEY,SITE,DASHBOARD_URL}  (the one instructor DD account)
+#   ADMIN_AWS_ACCESS_KEY / ADMIN_AWS_SECRET_KEY  (an IAM key with EKS access to the instructor clusters)
+#   ADMIN_REGION (default us-west-2) and ADMIN_CLUSTERS (default = the fleet.sh INSTRUCTORS roster)
+DEFAULT_ADMIN_EMAILS = "<redacted-email>,<redacted-email>"
+DEFAULT_INSTRUCTOR_CLUSTERS = (
+    "watch-it-burn-burn-1,watch-it-burn-burn-2,watch-it-burn-burn-3,"
+    "watch-it-burn-wall-1,watch-it-burn-wall-2,watch-it-burn-wall-3,"
+    "watch-it-burn-haiku,watch-it-burn-sonnet,watch-it-burn-opus"
+)
+ADMIN_DATADOG_KEYS = [
+    "datadog_org", "datadog_email", "datadog_password",
+    "datadog_api_key", "datadog_app_key", "datadog_site", "datadog_dashboard_url",
+]
+
 
 def _resolve_admin_token() -> str:
     token = os.environ.get("ADMIN_TOKEN")
@@ -207,6 +224,24 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
     app.config["EKS_POOL_LIMIT"] = eks_pool_limit
     app.config["WORKSHOP_HOST"] = os.environ.get("WORKSHOP_HOST_NAME", "the workshop host")
 
+    # Admin allowlist + instructor-bundle config (env-sourced; see DEFAULT_ADMIN_EMAILS above).
+    app.config["ADMIN_EMAILS"] = {
+        e.strip().lower()
+        for e in os.environ.get("ADMIN_EMAILS", DEFAULT_ADMIN_EMAILS).split(",")
+        if e.strip()
+    }
+    app.config["ADMIN_REGION"] = os.environ.get("ADMIN_REGION", "us-west-2")
+    app.config["ADMIN_CLUSTERS"] = [
+        c.strip()
+        for c in os.environ.get("ADMIN_CLUSTERS", DEFAULT_INSTRUCTOR_CLUSTERS).split(",")
+        if c.strip()
+    ]
+    app.config["ADMIN_AWS_ACCESS_KEY"] = os.environ.get("ADMIN_AWS_ACCESS_KEY", "")
+    app.config["ADMIN_AWS_SECRET_KEY"] = os.environ.get("ADMIN_AWS_SECRET_KEY", "")
+    app.config["ADMIN_DATADOG"] = {
+        k: os.environ.get("ADMIN_" + k.upper(), "") for k in ADMIN_DATADOG_KEYS
+    }
+
     def get_db():
         db = getattr(g, "_db", None)
         if db is None:
@@ -302,6 +337,25 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
         email = (request.form.get("email") or "").strip().lower()
         if not email or not EMAIL_RE.match(email):
             return render_template("index.html", error="Please enter a valid email address."), 400
+
+        # Admin exception: instructor-cluster access, not an attendee pool row. Does not consume the pool.
+        if email in app.config["ADMIN_EMAILS"]:
+            region = app.config["ADMIN_REGION"]
+            clusters = app.config["ADMIN_CLUSTERS"]
+            cmds = "\n".join(
+                f"aws eks update-kubeconfig --name {c} --region {region}" for c in clusters
+            )
+            return render_template(
+                "admin_access.html",
+                email=email,
+                region=region,
+                clusters=clusters,
+                kubeconfig_commands=cmds,
+                aws_access_key=app.config["ADMIN_AWS_ACCESS_KEY"],
+                aws_secret_key=app.config["ADMIN_AWS_SECRET_KEY"],
+                root_url=request.url_root.rstrip("/"),
+                **app.config["ADMIN_DATADOG"],
+            )
 
         conn = get_db()
         cluster = None

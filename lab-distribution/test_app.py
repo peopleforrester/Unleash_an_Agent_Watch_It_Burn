@@ -165,3 +165,26 @@ def test_pool_with_blank_optional_fields_still_works(tmp_path, monkeypatch):
         body = c.post("/eks-claim", data={"email": "x@example.com"}).get_data(as_text=True)
         assert "c1" in body and "AKIA1" in body
         assert "Open your console" not in body  # console section omitted when no URL
+
+
+def test_admin_email_gets_instructor_bundle(client):
+    # An admin email returns the instructor-cluster bundle (all 9 clusters), not an attendee pool row.
+    res = client.post("/eks-claim", data={"email": "<redacted-email>"})
+    assert res.status_code == 200
+    body = res.get_data(as_text=True)
+    assert "watch-it-burn-burn-1" in body and "watch-it-burn-opus" in body
+    assert body.count("aws eks update-kubeconfig") == 9
+
+
+def test_admin_email_is_case_insensitive(client):
+    res = client.post("/eks-claim", data={"email": "MichaelRishiForrester@gmail.com"})
+    assert res.status_code == 200
+    assert "Instructor access" in res.get_data(as_text=True)
+
+
+def test_admin_email_does_not_consume_the_attendee_pool(client):
+    # Admin claim must not take a pool row: a normal attendee still gets the first seeded cluster.
+    client.post("/eks-claim", data={"email": "<redacted-email>"})
+    res = client.post("/eks-claim", data={"email": "attendee1@example.com"})
+    assert res.status_code == 200
+    assert "test-cluster-01" in res.get_data(as_text=True)
