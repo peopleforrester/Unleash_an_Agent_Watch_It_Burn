@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/33
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 7 child PRD
 **Priority**: Medium
-**Status**: Not started. M7 design decisions are locked (PROGRESS.md 2026-06-25) and prerequisites are live (PRD #26 Agent checks `[OK]`, Kyverno OOTB usable), but M1 OOTB-dashboard UI verification and M2 Terraform scaffold (`infra/terraform/dashboards/` does not yet exist) are not yet implemented.
+**Status**: M2 implemented (2026-06-27). `infra/terraform/dashboards/` scaffolded following the sibling-module convention; `terraform init` + `terraform validate` pass clean. On `main` and cherry-picked to all four whitney branches. M1 (OOTB dashboard UI verification for cert-manager / Kyverno / ArgoCD) remains a manual facilitator step on a live cluster — by this PRD's own acceptance criteria it is "manual facilitator verification, no automated test possible since the Datadog app key is not deployed in the cluster."
 
 ---
 
