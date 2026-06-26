@@ -168,12 +168,12 @@ def test_pool_with_blank_optional_fields_still_works(tmp_path, monkeypatch):
 
 
 def test_admin_email_gets_instructor_bundle(client):
-    # An admin email returns the instructor-cluster bundle (all 9 clusters), not an attendee pool row.
+    # An admin email returns the admin cluster bundle (the four whitney-* clusters), not a pool row.
     res = client.post("/eks-claim", data={"email": "<redacted-email>"})
     assert res.status_code == 200
     body = res.get_data(as_text=True)
-    assert "watch-it-burn-burn-1" in body and "watch-it-burn-opus" in body
-    assert body.count("aws eks update-kubeconfig") == 9
+    assert "watch-it-burn-whitney-r1" in body and "watch-it-burn-whitney-attendee" in body
+    assert body.count("aws eks update-kubeconfig") == 4
 
 
 def test_admin_email_is_case_insensitive(client):
