@@ -24,8 +24,14 @@ Updated 2026-06-26. Check items off here as they land; "done" detail goes to PRO
 
 ### 1. The 5-account fleet for ~250 attendee clusters
 - [ ] Confirm the other 4 AWS accounts exist and we have CLI access (a profile each).
-- [ ] EC2 vCPU quota raised on each of the 4 (>= 400, ideally 800; accen-dev already at 800). ~2-min
-      auto-approve each, but file now in case one routes to manual review.
+- [ ] Quota increases on each of the 4 accounts (us-west-2), all adjustable, file now. Proven against
+      accen-dev's live resources + AWS docs on 2026-06-26 (see DECISION-LOG):
+      - EC2 vCPU "Running On-Demand Standard Instances" (L-1216C47): 800 (accen-dev already 800; ~2-min auto-approve).
+      - **Application Load Balancers per Region (L-53DA6B97): 50 -> 100.** Each full cluster = 1 internet-facing ALB;
+        50 clusters is at the wall, 60 is over the default 50.
+      - **Network Load Balancers per Region (L-69A177A2): 50 -> 100.** Each full cluster = 1 internal NLB; same wall.
+      - Elastic IPs: NO increase needed. Internet-facing ALB IPs are AWS-managed and do not count; only the one
+        shared-VPC NAT gateway counts (1 of 5). Confirmed: 9 EIPs visible in accen-dev under a quota of 5.
 - [ ] `lab-vpc` applied once per account (5 shared VPCs total, each with the Bedrock endpoint).
 - [ ] Cross-account fan-out in `fleet.sh` (`up-fleet`): run all 5 accounts' pools concurrently so 250
       come up in one ~30-min window, not five serial batches.
@@ -34,7 +40,10 @@ Updated 2026-06-26. Check items off here as they land; "done" detail goes to PRO
 
 ### 2. The real attendee pool (the committed pool.csv is a placeholder)
 - [ ] Per-attendee AWS keys: scoped IAM users/keys for ~250 attendees (or a per-cluster-scoped scheme).
-- [ ] Merge the 20 attendee Datadog accounts with the AWS keys into the real pool (`merge_pool.py`).
+- [ ] Merge the attendee Datadog accounts with the AWS keys into the real pool (`merge_pool.py`). The new
+      AI Engineer World's Fair pool (296 attendee orgs) is staged in Secrets Manager (`watch-it-burn/datadog-pool`
+      + `watch-it-burn/datadog-pool-2`, split because one secret caps at 64 KB); `merge_pool` reads both.
+      Merge once the per-attendee AWS keys exist. (Old expired trial pool replaced 2026-06-26.)
 - [ ] Deploy the real pool to the distributor (Railway), replacing the placeholder seed.
 - [ ] Per-cluster Datadog secret wiring: each attendee cluster's ESO points at that attendee's DD
       account (`distribute_datadog_keys.py`), so metrics land in the right org.
@@ -58,8 +67,10 @@ Updated 2026-06-26. Check items off here as they land; "done" detail goes to PRO
       Mechanism is in code (ignoreDifferences + setup-instructor-cluster.sh patch), not yet validated live.
 - [ ] **C1/C3/C4 runbooks** packaged: attendee + facilitator instructions. Defenses are validated; the
       delivery wrappers (beat.md-style) and the C3 bait-file plant script do not exist yet.
-- [ ] **Per-cluster Datadog account split**: whitney-att (and the attendee fleet) report to the
-      admin-attendee / per-attendee DD account, not the instructor account.
+- [x] **whitney-att Datadog split** (done 2026-06-26): the attendee cluster reports to its own org
+      (`ai-eng-wf-062626-01-002`) via the `whitney-attendee` branch ESO -> `watch-it-burn/datadog-admin-attendee`;
+      r2/r3 stay on the instructor org (`...-01-001`). Verified live (attendee secret api-key tail `79de0a`).
+      The 250-attendee fleet's per-attendee split is `distribute_datadog_keys.py`, still pending the AWS keys.
 - [ ] **The 9 instructor clusters** for live delivery: provision + bootstrap per round
       (`fleet.sh instructors up`, now auto-bootstrapping), once the accounts are ready.
 
