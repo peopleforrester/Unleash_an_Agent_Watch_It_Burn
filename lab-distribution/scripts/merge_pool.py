@@ -8,8 +8,9 @@ Build the distributor pool.csv from two inputs, joined by row position:
              (one row per provisioned attendee cluster; from generate_attendee_aws.py / the fleet)
 
   Datadog side (pick one):
-    default      pull from Secrets Manager `watch-it-burn/datadog-pool` (the staged 22-org pool),
-                 using only role=="attendee" entries (the 2 admin orgs are excluded by default).
+    default      pull from Secrets Manager `watch-it-burn/datadog-pool` + `watch-it-burn/datadog-pool-2`
+                 (the pool is split across secrets because one caps at 64 KB), using only role=="attendee"
+                 entries (the 2 admin orgs are excluded by default).
     --datadog    a CSV from DataDog/learning-center-lambdas generate_accounts_csv.sh, with columns
                  orgName,datadogEmail,password,apiKey,appKey,...
 
@@ -28,7 +29,9 @@ import csv
 import json
 import sys
 
-DEFAULT_DD_SECRET = "watch-it-burn/datadog-pool"
+# The Datadog pool is split across several Secrets Manager entries because one secret caps at 64 KB
+# (the AI Engineer World's Fair pool is ~300 orgs / ~79 KB). Read them in order and concatenate.
+DEFAULT_DD_SECRETS = "watch-it-burn/datadog-pool,watch-it-burn/datadog-pool-2"
 
 V2_HEADER = [
     "name", "region", "access_key", "secret_key", "console_url",
@@ -53,19 +56,21 @@ def _norm_from_csv(rows):
     } for r in rows]
 
 
-def _norm_from_secret(secret_id, profile, region, include_admins):
-    # watch-it-burn/datadog-pool shape: [{role,org,email,password,api-key,app-key,site}, ...].
+def _norm_from_secret(secret_ids, profile, region, include_admins):
+    # Each secret holds [{role,org,email,password,api-key,app-key,site}, ...]. The pool is split across
+    # several Secrets Manager entries (one secret caps at 64 KB); read them in order and concatenate.
     import boto3
     sm = boto3.Session(profile_name=profile, region_name=region).client("secretsmanager")
-    pool = json.loads(sm.get_secret_value(SecretId=secret_id)["SecretString"])
     out = []
-    for a in pool:
-        if not include_admins and (a.get("role") or "").startswith("admin"):
-            continue  # exclude admin-instructor / admin-attendee from the attendee pool
-        out.append({
-            "org": a.get("org", ""), "email": a.get("email", ""), "password": a.get("password", ""),
-            "api_key": a.get("api-key", ""), "app_key": a.get("app-key", ""),
-        })
+    for sid in [s.strip() for s in secret_ids.split(",") if s.strip()]:
+        pool = json.loads(sm.get_secret_value(SecretId=sid)["SecretString"])
+        for a in pool:
+            if not include_admins and (a.get("role") or "").startswith("admin"):
+                continue  # exclude admin-instructor / admin-attendee from the attendee pool
+            out.append({
+                "org": a.get("org", ""), "email": a.get("email", ""), "password": a.get("password", ""),
+                "api_key": a.get("api-key", ""), "app_key": a.get("app-key", ""),
+            })
     return out
 
 
@@ -73,7 +78,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--aws", required=True, help="AWS-cluster pool CSV (name,region,access_key,secret_key[,console_url])")
     ap.add_argument("--datadog", help="legacy: Datadog accounts CSV. Omit to pull from Secrets Manager.")
-    ap.add_argument("--datadog-secret", default=DEFAULT_DD_SECRET, help=f"Secrets Manager id (default {DEFAULT_DD_SECRET})")
+    ap.add_argument("--datadog-secret", default=DEFAULT_DD_SECRETS,
+                    help=f"comma-separated Secrets Manager id(s), read in order (default {DEFAULT_DD_SECRETS})")
     ap.add_argument("--profile", default="accen-dev")
     ap.add_argument("--region", default="us-west-2")
     ap.add_argument("--include-admins", action="store_true",
