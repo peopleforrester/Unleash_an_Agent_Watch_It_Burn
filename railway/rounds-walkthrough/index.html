@@ -146,10 +146,10 @@ asks "why not just tell it no?" The answer is: prompts are probabilistic; guardr
   <h2>Challenge 1: exfil to S3 <span class="tag infra">infra</span></h2>
   <p class="attack">Get customer data (names, addresses) out to an attacker-controlled S3 bucket.</p>
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. Data walks out. No egress control.</p>
-  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. NetworkPolicy default-deny egress stops the push; Istio ambient mTLS protects in-transit.</p>
+  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Default-deny egress (in the <em>agent</em> namespace) stops the push; Bedrock stays reachable via an in-VPC endpoint, S3 is denied. Istio ambient adds L4 mTLS in-transit.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span> (infra carries forward).</p>
   <p class="chip gap fragment">BUILT: egress + Bedrock-VPCe defense validated live (S3 exfil denied). GAP: package the attendee runbook</p>
-  <aside class="notes">NetworkPolicy is the headline control; mTLS covers the in-transit story Whitney wanted shown.</aside>
+  <aside class="notes">NetworkPolicy egress is the headline control; the egress policies live in the <em>agent</em> namespace (an earlier version sat in <em>apps</em> and missed the AI layer, now fixed) and pair with a Bedrock VPC endpoint so legit model calls still work. Istio ambient gives L4 mTLS for the in-transit story Whitney wanted; the L7 waypoint (#25) is deferred.</aside>
 </section>
 
 <!-- CHALLENGE 2 -->
@@ -157,7 +157,7 @@ asks "why not just tell it no?" The answer is: prompts are probabilistic; guardr
   <h2>Challenge 2: malicious deploy <span class="tag infra">infra</span></h2>
   <p class="attack">Get the agent to deploy a villain workload to the cluster.</p>
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The villain app deploys.</p>
-  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Kyverno admits images only from allowed registries (Enforce). Signing + attestation is Audit-only today (Harbor not yet deployed).</p>
+  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Kyverno admits images only from allowed registries (Enforce); the public villain image matches none and is denied. Signing/attestation (cosign verifyImages, Enforce, scoped to harbor.agenticburn.com) is wired but not yet exercised: standing up the Harbor instance is the remaining live-cluster step.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span>.</p>
   <p class="chip yes fragment">BUILT: challenges/01-cncf-wall</p>
   <aside class="notes">Optional motivator: sneak a malicious image INTO Harbor; Kyverno still deploys it unless signing/attestation is enforced, which is why both registry-restriction and provenance are needed.</aside>
