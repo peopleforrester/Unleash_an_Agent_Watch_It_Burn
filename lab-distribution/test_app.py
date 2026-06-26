@@ -172,7 +172,7 @@ def test_admin_email_gets_instructor_bundle(client):
     res = client.post("/eks-claim", data={"email": "<redacted-email>"})
     assert res.status_code == 200
     body = res.get_data(as_text=True)
-    assert "watch-it-burn-whitney-r1" in body and "watch-it-burn-whitney-attendee" in body
+    assert "watch-it-burn-whitney-r1" in body and "watch-it-burn-whitney-att" in body
     assert body.count("aws eks update-kubeconfig") == 4
 
 

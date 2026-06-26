@@ -41,7 +41,7 @@ DEFAULT_ADMIN_EMAILS = "<redacted-email>,<redacted-email>"
 # (whitney-r1/r2/r3/attendee). Override with ADMIN_CLUSTERS for a different admin set.
 DEFAULT_INSTRUCTOR_CLUSTERS = (
     "watch-it-burn-whitney-r1,watch-it-burn-whitney-r2,"
-    "watch-it-burn-whitney-r3,watch-it-burn-whitney-attendee"
+    "watch-it-burn-whitney-r3,watch-it-burn-whitney-att"
 )
 ADMIN_DATADOG_KEYS = [
     "datadog_org", "datadog_email", "datadog_password",
