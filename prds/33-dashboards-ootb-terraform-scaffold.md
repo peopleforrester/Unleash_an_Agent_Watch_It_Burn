@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/33
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 7 child PRD
 **Priority**: Medium
-**Status**: M2 implemented (2026-06-27). `infra/terraform/dashboards/` scaffolded following the sibling-module convention; `terraform init` + `terraform validate` pass clean. On `main` and cherry-picked to all four whitney branches. M1 (OOTB dashboard UI verification for cert-manager / Kyverno / ArgoCD) remains a manual facilitator step on a live cluster — by this PRD's own acceptance criteria it is "manual facilitator verification, no automated test possible since the Datadog app key is not deployed in the cluster."
+**Status**: M2 implemented (2026-06-27). `infra/terraform/dashboards/` scaffolded following the sibling-module convention; `terraform init` + `terraform validate` pass clean. On `main` and cherry-picked to all four whitney branches. M1 (OOTB dashboard UI verification for cert-manager / Kyverno / ArgoCD) remains a manual facilitator look at the Datadog UI — there is no public "list catalog dashboards" API to automate it against. Note: this PRD's acceptance text says "no automated test possible since the Datadog app key is not deployed in the cluster" — that reason is inaccurate (the app key IS synced in-cluster via ESO; see PRD #28 Decision Log 2026-06-27). The genuine constraint is the lack of a public dashboard-presence API, not a missing key.
 
 ---
 
