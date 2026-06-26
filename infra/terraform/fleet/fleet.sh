@@ -52,6 +52,14 @@ TF_PROFILE=""
 # the spec calls for. R2/R3 and attendee clusters keep the 1024 cap so the cap is the working control.
 TF_PIDS_LIMIT=""
 
+# When non-empty (burn|full), up_one chains deploy-full-idp.sh right after a successful apply, so a
+# provision auto-installs the IDP (ArgoCD + the app-of-apps tracking staging) instead of a separate
+# manual bootstrap. This is what makes a fleet provision self-complete; at 250 clusters you do not
+# hand-bootstrap each one. Set WIB_NO_BOOTSTRAP=1 to provision bare clusters only. Per-branch clusters
+# (a cluster that tracks its own branch, e.g. an experiment branch) are a manual case: bootstrap from
+# that branch's checkout, since this default path points the app-of-apps at staging.
+BOOTSTRAP_PROFILE=""
+
 account_for_round() {
     case "$1" in
         1) printf '%s' "${WIB_ACCOUNT_R1}" ;;
@@ -79,8 +87,13 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     instructors down [round]  Destroy the roster (optionally one round).
     Round->account split (avoids per-account overload): R1=\${WIB_ACCOUNT_R1}, R2=\${WIB_ACCOUNT_R2},
     R3=\${WIB_ACCOUNT_R3}. Override via those env vars. Each account needs its own lab-vpc applied to
-    states/<profile>.tfstate first (the command prints the exact apply line if missing). R1 bootstraps
-    with the 'burn' profile, R2/R3 with 'full' (deploy-full-idp.sh, printed as a hint after up).
+    states/<profile>.tfstate first (the command prints the exact apply line if missing).
+
+Provisioning AUTO-BOOTSTRAPS the IDP after each cluster comes up (deploy-full-idp.sh): attendees +
+R2/R3 instructors with the 'full' profile, R1 instructors with 'burn'. The provision pool runs the
+provision and the bootstrap together, so a fleet 'up' self-completes. Set WIB_NO_BOOTSTRAP=1 to
+provision bare clusters only (then bootstrap manually; instructor hints print after a bare 'up').
+Per-branch clusters (a cluster tracking its own branch) are a manual case: bootstrap from that branch.
 
 Attendee path reads the shared VPC from ../lab-vpc (must be applied first). Each cluster gets its own
 state file under states/, so one cluster's failure or teardown never touches another. MAX_PARALLEL
@@ -130,6 +143,25 @@ assert_ours() {
 # job's exit code is otherwise lost in the pool, which would silently half-provision a 60-cluster fleet.
 record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
 
+# Install the IDP on a freshly-provisioned cluster: pull an isolated kubeconfig (never the shared
+# ~/.kube/config) and run deploy-full-idp.sh with the round's profile. Runs inside up_one, so the
+# concurrency pool provisions AND bootstraps each cluster in parallel.
+bootstrap_one() {
+    local name="$1" profile="$2"
+    local prof="${TF_PROFILE:-accen-dev}"
+    local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
+    AWS_PROFILE="${prof}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
+        --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
+    if KUBECONFIG="${kcfg}" AWS_PROFILE="${prof}" \
+        bash "${PROVISION_DIR}/deploy-full-idp.sh" "${profile}" \
+        >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+        log "  bootstrapped: ${name} (${profile})"
+    else
+        log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
+    fi
+    rm -f "${kcfg}"
+}
+
 up_one() {
     local name="$1"; assert_ours "${name}"
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
@@ -140,6 +172,8 @@ up_one() {
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
+        # Auto-bootstrap the IDP unless this provision is bare-only.
+        [[ -n "${BOOTSTRAP_PROFILE}" ]] && bootstrap_one "${name}" "${BOOTSTRAP_PROFILE}"
     else
         log "  FAILED: ${name} (see ${LOG_DIR}/${name}.apply.log)"; record_fail "${name}"
     fi
@@ -196,7 +230,10 @@ cmd_up() {
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local names; mapfile -t names < <(expand_names "$@")
     log "provisioning ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
+    # Attendee clusters bootstrap with the full profile unless WIB_NO_BOOTSTRAP=1 (bare provision).
+    [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || BOOTSTRAP_PROFILE="full"
     run_pool up_one "${names[@]}"
+    BOOTSTRAP_PROFILE=""
     report_failures
 }
 
@@ -281,11 +318,16 @@ cmd_instructors() {
         TF_PROFILE="${acct}"
         # Round 1 burn clusters provision with NO per-pod PID cap so the fork bomb lands (the burn).
         [[ "${r}" == "1" ]] && TF_PIDS_LIMIT="-1" || TF_PIDS_LIMIT=""
+        # Auto-bootstrap: Round 1 = burn (no guardrails), R2/R3 = full. Skipped if WIB_NO_BOOTSTRAP=1.
+        if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
+            BOOTSTRAP_PROFILE=$([[ "${r}" == "1" ]] && echo burn || echo full)
+        fi
         if [[ "${action}" == "up" ]]; then run_pool up_one "${names[@]}"; else run_pool down_one "${names[@]}"; fi
-        TF_PROFILE=""; TF_PIDS_LIMIT=""
+        TF_PROFILE=""; TF_PIDS_LIMIT=""; BOOTSTRAP_PROFILE=""
     done
     report_failures
-    [[ "${action}" == "up" ]] && print_bootstrap_hints "${round_filter}"
+    # Print manual-bootstrap hints only when auto-bootstrap was skipped.
+    [[ "${action}" == "up" && -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
 }
 
 main() {
