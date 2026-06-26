@@ -381,7 +381,11 @@ metadata:
 spec:
   description: "The good workshop MCP server (legit agent tools: list_pods, apply_manifest, get_secret)"
   protocol: STREAMABLE_HTTP
-  url: http://workshop-mcp.agent:8000/mcp
+  # Routed THROUGH agentgateway (3001) so agentgateway's mcpAuthorization gates the agent's tool calls
+  # for C7 (beat-3): agent -> agentgateway:3001/mcp -> workshop-mcp:8000/mcp. agentgateway's mcp backend
+  # (gitops/ai-layer/agentgateway.yaml) targets workshop-mcp. verify-at-build: confirm agentgateway
+  # serves the MCP listener at /mcp on :3001 (if it serves at root, drop the /mcp path). Validated live.
+  url: http://agentgateway.agent:3001/mcp
   timeout: 30s
   sseReadTimeout: 5m0s
   terminateOnClose: true

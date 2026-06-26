@@ -43,7 +43,7 @@ data:
           "datasource": { "type": "tempo", "uid": "tempo" },
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
-              "queryType": "traceql", "query": "{ span.gen_ai.system != \"\" }" }
+              "queryType": "traceql", "query": "{ span.gen_ai.provider.name != \"\" }" }
           ]
         }
       ]
