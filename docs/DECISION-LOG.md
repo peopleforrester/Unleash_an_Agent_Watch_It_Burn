@@ -54,5 +54,6 @@ evidence is found to be invalid even if the conclusion stood.
 | 2026-06-26 | Bedrock model IDs ACTIVE in accen-dev/us-west-2: haiku-4-5, sonnet-4-6, opus-4-8 | `aws bedrock list-inference-profiles` (all three returned ACTIVE) |
 | 2026-06-26 | Workshop default model is Sonnet 4.6 (`bedrock-sonnet`) | Live on `1002`: `agent.spec.declarative.modelConfig = bedrock-sonnet`; requests return ~981-token Sonnet replies |
 | 2026-06-26 | guard-proxy -> agentgateway hop works end-to-end | `1002`: A2A `message/send` through guard-proxy returns a real Bedrock reply; the guard-proxy `agent.forward` CLIENT span targets `http://agentgateway.agent.svc.cluster.local:3000/` (cited from the spans API) |
+| 2026-06-26 | Cost metric is `gen_ai.client.cost` (gen_ai namespace), NOT a custom `witb_cost_usd` tree. Tokens use the standard `gen_ai.client.token.usage`. | OTel GenAI metrics spec (`semantic-conventions-genai`) defines `gen_ai.client.token.usage` and NO monetary metric, so cost is a project suffix under the standard tree. `gen_ai.client.token.usage` is already in Datadog (metric search). Removed the witb_cost_usd Prometheus `/metrics` endpoint + scrape annotation; emit `gen_ai.client.cost` via OTLP (same pipeline as the spans). |
 
 Add a row for each load-bearing decision with the command or query that backs it.

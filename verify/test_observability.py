@@ -48,9 +48,10 @@ check("Tempo datasource pinned with uid 'tempo'", ds.get("Tempo", {}).get("uid")
 # Dashboard: valid JSON with the cost + token + gen_ai trace panels.
 panels = {p["title"]: p for p in dashboard["panels"]}
 exprs = " ".join(t.get("expr", "") for p in dashboard["panels"] for t in p.get("targets", []))
-check("dashboard graphs witb_cost_usd by model (PRD #20 M5)", "witb_cost_usd" in exprs and "by (model)" in exprs)
-check("retired counters gone from dashboard (witb_tokens_total / witb_requests_total)",
-      "witb_tokens_total" not in exprs and "witb_requests_total" not in exprs)
+check("dashboard graphs gen_ai cost (gen_ai namespace, derived from token usage)",
+      "gen_ai_client_cost" in exprs)
+check("no custom witb_* metrics in the dashboard (use the gen_ai semconv namespace)",
+      not any(m in exprs for m in ("witb_cost_usd", "witb_tokens_total", "witb_requests_total")))
 check("dashboard has a Tempo traces panel for gen_ai spans",
       any(p.get("type") == "traces" for p in dashboard["panels"])
       and any("gen_ai" in t.get("query", "") for p in dashboard["panels"] for t in p.get("targets", [])))

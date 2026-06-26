@@ -23,14 +23,17 @@ from urllib.parse import urlparse, parse_qs
 # OTel Operator injects the SDK at pod startup (PYTHONPATH). The try/except guard keeps this file runnable
 # with no OTel present (local dev, test clusters) as a no-op until the Operator's annotation is applied.
 try:
-    from opentelemetry import trace
+    from opentelemetry import trace, metrics
     from opentelemetry.trace import SpanKind, Status, StatusCode
+    from opentelemetry.metrics import Observation
     from opentelemetry.propagate import extract, inject
     _OTEL_AVAILABLE = True
     _tracer = trace.get_tracer(__name__)
+    _meter = metrics.get_meter(__name__)
 except ImportError:
     _OTEL_AVAILABLE = False
     _tracer = None
+    _meter = None
 
 
 # Structured JSON logging with trace correlation (PRD #27 M2). Every log line is one JSON object
@@ -159,8 +162,8 @@ TIER_PRICES_PER_1K = {
 }
 # Which tier this cluster runs (set per cluster to match the kagent ModelConfig). Defaults to haiku.
 MODEL_TIER = os.environ.get("MODEL_TIER", "haiku").lower()
-# The model label on witb_cost_usd is the gen_ai.request.model identifier (PRD #20 M5: the model dimension
-# is gen_ai.request.model, NOT a tier). proxy.py does not see the model in the A2A request (kagent's
+# The model attribute on gen_ai.client.cost is the gen_ai.request.model identifier (the standard semconv
+# attribute, NOT a tier). proxy.py does not see the model in the A2A request (kagent's
 # ModelConfig owns it), so it is supplied per cluster via MODEL_NAME to match that ModelConfig; falls back
 # to the tier name if unset. verify-at-build: set MODEL_NAME to the cluster's Bedrock model id.
 MODEL_NAME = os.environ.get("MODEL_NAME", MODEL_TIER)
@@ -171,6 +174,20 @@ COST_PER_1K_OUT = float(os.environ.get("COST_PER_1K_OUT", str(_tier_price["out"]
 _cost_lock = threading.Lock()
 _cost = {"tier": MODEL_TIER, "requests": 0, "input_tokens": 0, "output_tokens": 0,
          "total_tokens": 0, "usd": 0.0}
+
+# Export the running spend as `gen_ai.client.cost` via OTLP, the SAME pipeline as the spans and the
+# standard token metric. Tokens are the standard `gen_ai.client.token.usage` (emitted by the kagent ADK
+# agent, the actual LLM client). The OTel GenAI semconv defines NO monetary metric, so cost is a project
+# suffix UNDER the standard gen_ai namespace (NOT a custom witb_* tree). Datadog derives cost from tokens
+# in LLM Observability anyway; this metric is the pre-computed visual for the live counter. Attribute is
+# the standard gen_ai.request.model.
+if _meter is not None:
+    def _observe_cost(_options):
+        with _cost_lock:
+            yield Observation(_cost["usd"], {"gen_ai.request.model": MODEL_NAME})
+    _meter.create_observable_gauge(
+        "gen_ai.client.cost", callbacks=[_observe_cost], unit="USD",
+        description="Estimated Bedrock spend (USD) for this cluster, derived from token usage.")
 
 # Optional gamification: stream attendees' prompts to a side screen ("screen goes black, someone won").
 # Projecting attendee input on a public screen needs moderation under the code of conduct, so capture
@@ -292,28 +309,10 @@ class Handler(BaseHTTPRequestHandler):
             with _stream_lock:
                 self._send(200, {"enabled": STREAM_ENABLED, "prompts": list(_prompts)})
             return
-        if self.path == "/metrics":
-            # Prometheus text format so kube-prometheus scrapes it and Grafana graphs the climbing cost
-            # live. Block-listed requests never reach record_usage, so witb_cost_usd flatlines exactly when
-            # the input guard fires (the cost lesson, on a graph). PRD #20 M5: witb_tokens_total and
-            # witb_requests_total are retired (redundant with gen_ai.usage.* on the ADK spans); witb_cost_usd
-            # is kept (the pre-computed USD visual) and labeled by model (the gen_ai.request.model dimension),
-            # not tier.
-            with _cost_lock:
-                c = dict(_cost)
-            lines = [
-                "# HELP witb_cost_usd Estimated Bedrock spend (USD), metered from real token usage.",
-                "# TYPE witb_cost_usd counter",
-                f'witb_cost_usd{{model="{MODEL_NAME}"}} {c["usd"]:.6f}',
-                "",
-            ]
-            body = "\n".join(lines).encode()
-            self.send_response(200)
-            self.send_header("Content-Type", "text/plain; version=0.0.4")
-            self.send_header("Content-Length", str(len(body)))
-            self.end_headers()
-            self.wfile.write(body)
-            return
+        # NOTE: the old Prometheus /metrics endpoint (custom `witb_cost_usd`) is REMOVED. Cost is now the
+        # OTLP metric `gen_ai.client.cost` (registered above, under the standard gen_ai namespace), and
+        # tokens are the standard `gen_ai.client.token.usage` from the kagent ADK agent. Both flow via the
+        # OTel Collector, so there is nothing to scrape here.
         if self.path.startswith("/guards"):
             with _guard_lock:
                 self._send(200, dict(GUARDS))

@@ -32,7 +32,7 @@ data:
           "datasource": { "type": "prometheus", "uid": "prometheus" },
           "fieldConfig": { "defaults": { "unit": "currencyUSD", "decimals": 4 }, "overrides": [] },
           "targets": [
-            { "refId": "A", "expr": "sum by (model) (witb_cost_usd)", "legendFormat": "{{model}}" }
+            { "refId": "A", "expr": "sum by (gen_ai_request_model) (gen_ai_client_cost)", "legendFormat": "{{gen_ai_request_model}}" }
           ]
         },
         {
