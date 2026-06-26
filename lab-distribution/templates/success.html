@@ -24,6 +24,13 @@
 
   {% if datadog_dashboard_url %}
   <h2 style="margin-top:28px;">2 &middot; Your Datadog</h2>
+  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 10px;">
+    This is where you watch what the agent does to your cluster. Click the button to open your
+    dashboard, or log in at <a href="https://app.datadoghq.com" target="_blank" rel="noopener" style="color:var(--accent);">app.datadoghq.com</a>
+    (site <strong>{{ datadog_site or 'datadoghq.com' }}</strong>) with the email and password below.
+    You do <strong>not</strong> need to paste the API or APP keys anywhere; they are already wired into your
+    cluster's Datadog Agent. They are shown only in case you want them.
+  </p>
   <a href="{{ datadog_dashboard_url }}" target="_blank" rel="noopener"
      style="display:inline-block;background:var(--navy);color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:10px 18px;border-radius:6px;margin-bottom:10px;">
     Open your Datadog dashboard &rarr;
@@ -51,7 +58,53 @@
   <p style="color:var(--mid-gray);font-size:13px;margin-top:6px;">Datadog site: <strong>{{ datadog_site }}</strong>. The API/APP keys are for your cluster's Datadog Agent; the login is to view your org.</p>
   {% endif %}
 
-  <h2 style="margin-top:28px;">3 &middot; AWS keys <span style="font-weight:400;color:var(--light-gray);font-size:14px;">(only for the terminal / kubectl path)</span></h2>
+  <h2 style="margin-top:28px;">3 &middot; Optional: connect from your own laptop <span style="font-weight:400;color:var(--light-gray);font-size:14px;">(local kubectl)</span></h2>
+  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 14px;">
+    Skip this whole section if you are working in the in-browser console above. It already has a terminal.
+    You only need the steps below to run <code>kubectl</code> from your own machine.
+  </p>
+
+  <h3>a. Install the tools</h3>
+  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 10px;">
+    You need two command-line tools: the <strong>AWS CLI v2</strong> and <strong>kubectl</strong>. Open the tab for your OS.
+  </p>
+
+  <details class="os">
+    <summary>macOS <span class="os-hint">(Homebrew, or the official installer)</span></summary>
+    <pre class="codeblock" id="inst-mac"><button type="button" class="copy-btn" onclick="copyText('inst-mac', this, 'macOS install commands')" aria-label="Copy macOS install commands">copy</button># AWS CLI v2  (or download https://awscli.amazonaws.com/AWSCLIV2.pkg and run it)
+brew install awscli
+# kubectl
+brew install kubectl
+# verify both are installed
+aws --version
+kubectl version --client</pre>
+  </details>
+
+  <details class="os">
+    <summary>Windows <span class="os-hint">(PowerShell + winget)</span></summary>
+    <pre class="codeblock" id="inst-win"><button type="button" class="copy-btn" onclick="copyText('inst-win', this, 'Windows install commands')" aria-label="Copy Windows install commands">copy</button># AWS CLI v2  (or download https://awscli.amazonaws.com/AWSCLIV2.msi and run it)
+winget install -e --id Amazon.AWSCLI
+# kubectl
+winget install -e --id Kubernetes.kubectl
+# close and reopen PowerShell, then verify
+aws --version
+kubectl version --client</pre>
+  </details>
+
+  <details class="os">
+    <summary>Linux <span class="os-hint">(x86_64)</span></summary>
+    <pre class="codeblock" id="inst-linux"><button type="button" class="copy-btn" onclick="copyText('inst-linux', this, 'Linux install commands')" aria-label="Copy Linux install commands">copy</button># AWS CLI v2
+curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip awscliv2.zip && sudo ./aws/install
+# kubectl
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+# verify both are installed
+aws --version
+kubectl version --client</pre>
+  </details>
+
+  <h3>b. Your AWS keys</h3>
   <div class="copy-row">
     <span class="key-label">Access key</span>
     <code id="ak">{{ access_key }}</code>
@@ -63,14 +116,25 @@
     <button type="button" class="copy-btn" onclick="copyText('sk', this, 'secret key')" aria-label="Copy secret key">copy</button>
   </div>
 
-  <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'setup commands')" aria-label="Copy setup commands">copy</button>aws configure                                  # paste the AWS keys above; region {{ region }}
-aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }}
+  <h3>c. Configure the AWS CLI</h3>
+  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 8px;">
+    Run <code>aws configure</code>. It asks four questions, one at a time. Answer them like this
+    (paste the keys from step b, type the region and format exactly as shown):
+  </p>
+  <pre class="codeblock">$ aws configure
+AWS Access Key ID [None]:      &lt;paste your access key&gt;
+AWS Secret Access Key [None]:  &lt;paste your secret key&gt;
+Default region name [None]:    {{ region }}
+Default output format [None]:  json</pre>
+
+  <h3>d. Connect to your cluster</h3>
+  <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'connect commands')" aria-label="Copy connect commands">copy</button>aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }}
 kubectl get nodes                              # confirm your cluster is up</pre>
 
   <div class="callout">
-    <strong style="font-style:normal;color:var(--navy);">Most of the workshop is in the console</strong>
-    &mdash; drive the agent from the chat tab and use the terminal tab for <code style="font-style:normal;">kubectl</code>.
-    The AWS keys above are only for the optional local-<code style="font-style:normal;">kubectl</code> fallback.
+    <strong style="font-style:normal;color:var(--navy);">Most of the workshop is in the console.</strong>
+    Drive the agent from the chat tab and use the terminal tab for <code style="font-style:normal;">kubectl</code>.
+    Everything in section 3 is only for the optional local-<code style="font-style:normal;">kubectl</code> path.
   </div>
 
   <p style="color:var(--light-gray);font-size:13px;font-style:italic;margin-top:18px;">

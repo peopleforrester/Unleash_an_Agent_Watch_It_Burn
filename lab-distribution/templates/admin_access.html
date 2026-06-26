@@ -5,6 +5,7 @@
   <div class="label">Datadog login{% if dd.datadog_org %} &middot; org {{ dd.datadog_org }}{% endif %}</div>
   <pre>email:    {{ dd.datadog_email }}
 password: {{ dd.datadog_password }}</pre>
+  <div class="note">Log in at <a href="https://app.datadoghq.com" style="color:#FF6B35;text-decoration:none;">app.datadoghq.com</a> with the email and password above. The API/APP keys below are already wired into the cluster's Datadog Agent; you do not paste them anywhere, they are shown only for reference.</div>
   <div class="label">API key</div>
   <pre>{{ dd.datadog_api_key }}</pre>
   <div class="label">APP key</div>
@@ -35,6 +36,12 @@ password: {{ dd.datadog_password }}</pre>
     .btn { display:inline-block; background:#FF6B35; color:#fff; text-decoration:none; font-weight:700;
            font-size:15px; padding:12px 22px; border-radius:6px; margin-top:8px; }
     .note { margin-top:6px; font-size:13px; color:#888; }
+    details.os { border:1px solid #d9dcea; border-radius:6px; margin:6px 0 0; overflow:hidden; }
+    details.os > summary { cursor:pointer; list-style:none; padding:9px 12px; font-weight:700; color:#1E2761; font-size:13px; }
+    details.os > summary::-webkit-details-marker { display:none; }
+    details.os > summary::before { content:"\25B8"; font-size:10px; margin-right:7px; }
+    details.os[open] > summary::before { content:"\25BE"; }
+    details.os pre { margin:0; border-radius:0; }
     .foot { padding:14px 24px 22px; border-top:1px solid #e2e4ee; color:#888; font-size:12px; text-align:center; font-style:italic; }
   </style>
 </head>
@@ -48,14 +55,37 @@ password: {{ dd.datadog_password }}</pre>
       <div class="label">Instructor clusters ({{ region }})</div>
       <ul>{% for c in clusters %}<li>{{ c }}</li>{% endfor %}</ul>
 
+      <div class="label">Prerequisites: install the AWS CLI v2 and kubectl</div>
+      <details class="os"><summary>macOS</summary>
+<pre># AWS CLI v2  (or download https://awscli.amazonaws.com/AWSCLIV2.pkg)
+brew install awscli
+brew install kubectl
+aws --version &amp;&amp; kubectl version --client</pre></details>
+      <details class="os"><summary>Windows (PowerShell)</summary>
+<pre># AWS CLI v2  (or download https://awscli.amazonaws.com/AWSCLIV2.msi)
+winget install -e --id Amazon.AWSCLI
+winget install -e --id Kubernetes.kubectl
+aws --version; kubectl version --client</pre></details>
+      <details class="os"><summary>Linux (x86_64)</summary>
+<pre>curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip awscliv2.zip &amp;&amp; sudo ./aws/install
+curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+aws --version &amp;&amp; kubectl version --client</pre></details>
+
       {% if aws_access_key %}
       <div class="label">AWS access key (an IAM key with EKS access to the instructor clusters)</div>
       <pre>{{ aws_access_key }}</pre>
       <div class="label">AWS secret key</div>
       <pre>{{ aws_secret_key }}</pre>
-      <div class="label">Configure, then pull every instructor cluster's kubeconfig</div>
-      <pre>aws configure                                  # paste the keys above; region {{ region }}
-{{ kubeconfig_commands }}
+      <div class="label">Run <code>aws configure</code> and answer the four prompts</div>
+      <pre>$ aws configure
+AWS Access Key ID [None]:      &lt;paste the access key above&gt;
+AWS Secret Access Key [None]:  &lt;paste the secret key above&gt;
+Default region name [None]:    {{ region }}
+Default output format [None]:  json</pre>
+      <div class="label">Then pull every instructor cluster's kubeconfig</div>
+      <pre>{{ kubeconfig_commands }}
 kubectl config get-contexts                    # one context per instructor cluster</pre>
       {% else %}
       <div class="label">Pull every instructor cluster's kubeconfig (use your own AWS access to this account)</div>
