@@ -10,7 +10,10 @@ metadata:
   name: agent-allow-intra-namespace
   namespace: agent
 spec:
-  podSelector: {}
+  # Scoped to the kagent agent pod (see agent-egress-allowlist.yaml); the MCP servers are not locked down.
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: workshop-agent
   policyTypes:
     - Egress
   egress:
