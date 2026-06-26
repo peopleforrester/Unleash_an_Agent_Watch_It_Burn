@@ -95,6 +95,9 @@ variable "node_desired_size" {
 # (the kernel returns -EAGAIN at the cap); Falco+Talon are detect-and-respond on top. Verified
 # live on EKS: pod-cgroup pids.max=1024, a fork bomb hits "can't fork: Resource temporarily
 # unavailable" and the node stays Ready.
+# Set to -1 for NO per-pod cap (kubelet's uncapped default): the fork bomb then exhausts node PIDs
+# and takes the cluster down. fleet.sh passes -1 for Round-1 burn clusters so C4 lands as the burn;
+# R2/R3 and attendee clusters keep this 1024 default so the cap is the working defense.
 variable "pod_pids_limit" {
   type    = number
   default = 1024

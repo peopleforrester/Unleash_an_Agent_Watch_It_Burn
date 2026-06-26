@@ -279,6 +279,34 @@ mapping and matches the implementation.
 
 ## 7. Prioritized action list
 
+### Landed in the 2026-06-26 code pass (no live cluster, no multi-account)
+
+- **Console Classic ELB stopgapped.** `gitops/ai-layer/resources.yaml` console Service now carries
+  `aws-load-balancer-type: nlb`, so the in-tree provider builds an NLB instead of a Classic ELB. No
+  controller needed. The full controller install (ip-target NLB + activating the party ALB Ingresses)
+  is still open: it needs per-cluster `clusterName` wiring and a live NLB-provisions check.
+- **R1 PID cap fixed to match the spec.** `fleet.sh` now passes `pod_pids_limit=-1` for Round-1 burn
+  clusters (no cap, so the fork bomb lands), keeping 1024 for R2/R3/attendees. `cluster/main.tf`
+  documents the `-1` semantics.
+- **C7 toggle repaired.** `toggle-mcp-authz-on.sh` was applying a broken `ATTENDEE_NAMESPACE` overlay
+  with the wrong agentgateway schema. It now patches the in-path control, the kagent Agent `toolNames`
+  allowlist, and `gitops/apps/ai-layer.yaml` gained an `ignoreDifferences` on the Agent's tools so
+  selfHeal does not revert the live toggle. The gateway-enforced path (repoint through agentgateway)
+  is left documented, pending a live spike.
+- **Kyverno version comments corrected** (rule-level `validate.failureAction` since 1.13, not 1.18).
+
+### Deliberately deferred (need a live cluster or gitops restructuring)
+
+- Repointing kagent MCP through agentgateway (would break MCP entirely if the listener path is wrong;
+  needs a live spike).
+- The OTel `spanmetrics` to `span_metrics` rename (the pinned contrib image supports the current key;
+  the rename only matters when bumping the image, and renaming blind risks the collector).
+- Per-instructor-cluster ModelConfig override (a runtime patch is reverted by ArgoCD selfHeal; needs a
+  kustomize overlay per tier, and the tier demo is optional anyway).
+- The AWS Load Balancer Controller install, the Kyverno field migration, and the live re-validations.
+
+### Full list
+
 | # | Priority | Action | Where |
 |---|---|---|---|
 | 1 | P0 | Install AWS Load Balancer Controller; annotate `console` for NLB | new `gitops/apps/aws-load-balancer-controller.yaml`, `gitops/ai-layer/resources.yaml` |
