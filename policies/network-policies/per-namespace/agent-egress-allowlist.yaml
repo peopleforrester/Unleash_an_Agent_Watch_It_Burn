@@ -39,3 +39,12 @@ spec:
             cidr: 10.0.0.0/16
       ports:
         - { protocol: TCP, port: 443 }
+    # EKS Pod Identity credentials endpoint (link-local, AWS_CONTAINER_CREDENTIALS_FULL_URI =
+    # http://169.254.170.23/v1/credentials). The agent fetches its AWS creds here to call Bedrock; without
+    # this allow the Bedrock call fails "Error retrieving credentials from container-role" (found live
+    # 2026-06-26). Link-local node-local endpoint, not an internet path, so C1 still holds.
+    - to:
+        - ipBlock:
+            cidr: 169.254.170.23/32
+      ports:
+        - { protocol: TCP, port: 80 }
