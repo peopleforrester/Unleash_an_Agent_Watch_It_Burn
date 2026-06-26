@@ -20,6 +20,11 @@ spec:
         # Datadog Agent Autodiscovery: the `falco` named integration scrapes Falco's metrics endpoint
         # (PRD #26 M2). Key uses the real container name `falco`. Port 8765 is Falco's webserver/metrics.
         podAnnotations:
+          # Datadog Unified Service Tagging (PRD #28): puts Falco on the service catalog / map as a
+          # first-class platform component. env locked to production; version = deployed Falco appVersion.
+          tags.datadoghq.com/service: falco
+          tags.datadoghq.com/env: production
+          tags.datadoghq.com/version: "0.44.1"
           ad.datadoghq.com/falco.checks: |
             {"falco":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8765/metrics"}]}}
         # Enable Falco's native Prometheus metrics (PRD #26 M4 fix): without this the webserver exposes
