@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/23
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 4 child PRD
 **Priority**: High
-**Status**: Not started
+**Status**: Complete. M1-M2 executed and live-verified on watch-it-burn-attendee-001 (PROGRESS.md 2026-06-25): C3 and C4 rules fire and Falcosidekick forwards to Datadog (HTTP 202). The facilitator's manual Datadog Event Stream UI check is the only outstanding item.
 
 ---
 

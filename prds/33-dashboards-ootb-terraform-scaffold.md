@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/33
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 7 child PRD
 **Priority**: Medium
-**Status**: Not started
+**Status**: Not started. M7 design decisions are locked (PROGRESS.md 2026-06-25) and prerequisites are live (PRD #26 Agent checks `[OK]`, Kyverno OOTB usable), but M1 OOTB-dashboard UI verification and M2 Terraform scaffold (`infra/terraform/dashboards/` does not yet exist) are not yet implemented.
 
 ---
 
