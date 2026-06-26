@@ -22,7 +22,7 @@ spec:
               namespaces:
                 - apps
       validate:
-        failureAction: Enforce # Kyverno 1.18 rule-level (spec.validationFailureAction is deprecated)
+        failureAction: Enforce # rule-level since Kyverno 1.13 (spec.validationFailureAction deprecated); on 1.18.1
         message: >-
           Images must come from allowed registries:
           the internal Harbor, ghcr.io, docker.io/library, registry.k8s.io, or ECR.

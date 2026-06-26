@@ -1,7 +1,7 @@
 # ABOUTME: Beat-1 target policy. Requires CPU+memory limits on pods.
 # ABOUTME: Starts in Audit (admits + reports); the beat-1 toggle flips it to Enforce.
 # verify-at-build: confirmed against Kyverno v1.18.1 (research/06-cncf-stack.md).
-# In 1.18 the action is RULE-LEVEL `validate.failureAction` (the old top-level
+# The action is RULE-LEVEL `validate.failureAction` (rule-level since Kyverno 1.13; the old top-level
 # spec.validationFailureAction is deprecated). The beat-1 toggle patches the path
 # /spec/rules/0/validate/failureAction from Audit to Enforce.
 apiVersion: kyverno.io/v1

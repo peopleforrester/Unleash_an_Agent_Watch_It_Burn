@@ -1,44 +1,62 @@
 #!/usr/bin/env bash
-# ABOUTME: Beat-3 live toggle — applies the agentgateway mcpAuthorization CEL deny rule (mcp-authz-on).
-# ABOUTME: Idempotent (kubectl apply). Use --off to apply mcp-authz-off.yaml and remove the deny rule.
+# ABOUTME: Beat-3 live toggle — flips the kagent Agent's MCP tool allowlist (toolNames) on workshop-agent.
+# ABOUTME: ON = restrictive (rogue tools excluded, the "after"); --off = permissive (rogue tools reachable).
 set -euo pipefail
 
 # Kube-context safety (see CLAUDE.md): target an explicit context; never the global current-context.
 CONTEXT="${CONTEXT:?set CONTEXT to the target kube-context}"
-KCTL=(kubectl --context "${CONTEXT}")
+NS="${NS:-agent}"
+AGENT="${AGENT:-workshop-agent}"
+KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 
-# The gateway config files (mcp-authz-on.yaml / mcp-authz-off.yaml) live under agent/gateway/ and
-# overlay the agentgateway-config ConfigMap. This toggle only applies them. ON = CEL Deny over
-# mcp.tool.name for read_internal_config (+ targets allowlist); OFF = no tool-authz rule ("before").
+# WHY this toggles toolNames and not the agentgateway config:
+#   The kagent Agent's RemoteMCPServer points DIRECT at workshop-mcp (gitops/ai-layer/resources.yaml),
+#   so the agent's tool calls do NOT traverse agentgateway. Flipping agentgateway's mcpAuthorization
+#   therefore would not gate the agent's tools. The in-path, deployed, deterministic control is the
+#   kagent toolNames allowlist on the Agent CRD, which kagent enforces when it renders the agent's
+#   tool set. This toggle patches that.
 #
-# CANONICAL agentgateway is gitops/ai-layer/agentgateway.yaml (single fixed `agent` namespace). The
-# overlay manifests are ATTENDEE_NAMESPACE templates and rewrite the WHOLE config.yaml, so they must
-# (1) resolve ATTENDEE_NAMESPACE to the deployed namespace before apply and (2) carry the full
-# canonical config (tracing + promptGuard) or they regress those. See the RECONCILIATION headers in
-# the manifests; both reconciliations gate on the beat-3 mcpAuthorization-enforcement SPIKE.
+#   The gateway-enforced alternative (route the agent through agentgateway:3001/mcp and flip the
+#   route's mcpAuthorization CEL rules) is the "the gateway blocks it" story. It needs the
+#   RemoteMCPServer repointed at agentgateway AND a live spike to confirm the MCP listener path, so it
+#   is NOT wired here (the agent/gateway/mcp-authz-{on,off}.yaml overlays are that path, pending the
+#   Phase-4b SPIKE in challenges/03-.../BUILD-SPIKE.md). Until then, toolNames is the real control.
+#
+# Rogue tools (induced by the poisoned MCP description; read_internal_config leaks
+# FAKE-MCP-EXFIL-sentinel-4c1d): read_internal_config, apply_optimization.
+# Legit tools the good agent needs: list_pods, apply_manifest, get_secret.
 
 STATE="on"
-MANIFEST="agent/gateway/mcp-authz-on.yaml"
 case "${1:-}" in
-  --off) STATE="off"; MANIFEST="agent/gateway/mcp-authz-off.yaml" ;;
-  --on|"") STATE="on"; MANIFEST="agent/gateway/mcp-authz-on.yaml" ;;
-  -h|--help) echo "Usage: toggle-mcp-authz-on.sh [--on|--off]"; exit 0 ;;
-  *) echo "Unknown argument: $1" >&2; echo "Usage: toggle-mcp-authz-on.sh [--on|--off]" >&2; exit 2 ;;
+  --off) STATE="off" ;;
+  --on|"") STATE="on" ;;
+  -h|--help) echo "Usage: ${0##*/} [--on|--off]   (CONTEXT=<kube-context> required; NS=agent AGENT=workshop-agent)"; exit 0 ;;
+  *) echo "Unknown argument: $1" >&2; echo "Usage: ${0##*/} [--on|--off]" >&2; exit 2 ;;
 esac
 
-# Resolve the manifest relative to the repo root regardless of where the script is invoked from.
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-MANIFEST_PATH="${REPO_ROOT}/${MANIFEST}"
-
-if [[ ! -f "${MANIFEST_PATH}" ]]; then
-  echo "==> ERROR: gateway manifest not found: ${MANIFEST_PATH}" >&2
-  echo "==> Expected the gateway author to provide it under agent/gateway/." >&2
-  exit 1
+if [[ "${STATE}" == "on" ]]; then
+  # Defended ("after"): only the legitimate tools are reachable; rogue tools excluded.
+  TOOL_NAMES='["list_pods","apply_manifest","get_secret"]'
+else
+  # Vulnerable ("before"): the rogue tools are reachable, so beat-3's attack lands.
+  TOOL_NAMES='["list_pods","apply_manifest","get_secret","read_internal_config","apply_optimization"]'
 fi
 
-echo "==> Applying MCP tool authorization state: ${STATE}"
-echo "==> Manifest: ${MANIFEST_PATH}"
-"${KCTL[@]}" apply -f "${MANIFEST_PATH}"
+# Merge-patch the whole tools array (JSON merge patch replaces arrays wholesale, so the full entry is
+# provided, preserving the McpServer discriminator, the RemoteMCPServer ref, and requireApproval).
+PATCH=$(cat <<JSON
+{"spec":{"declarative":{"tools":[
+  {"type":"McpServer","mcpServer":{
+    "kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp",
+    "toolNames":${TOOL_NAMES},
+    "requireApproval":["apply_manifest"]
+  }}
+]}}}
+JSON
+)
 
-echo "==> Done. MCP authorization is now '${STATE}'."
+echo "==> Setting MCP tool authorization: ${STATE} (toolNames=${TOOL_NAMES})"
+"${KCTL[@]}" patch agent "${AGENT}" --type=merge -p "${PATCH}"
+
+echo "==> Done. kagent reconciles the Agent; the rogue tools are $([[ "${STATE}" == on ]] && echo 'now excluded' || echo 'reachable again')."
 echo "==> Verify with: challenges/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-$([[ "${STATE}" == on ]] && echo deny || echo allow)"

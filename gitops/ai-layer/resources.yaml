@@ -118,10 +118,14 @@ spec:
         # "true" (invalid under gen_ai_latest_experimental, silently collects nothing). PRD #20 M3.
         - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
           value: EVENT_ONLY
-    # Committed "good" tool config: an explicit toolNames allowlist (the MCP-restriction backstop;
-    # agentgateway mcpAuthorization is the live-toggled primary). requireApproval is the per-tool HITL
-    # gate on the one mutating tool. verify-at-build: workshop-mcp RemoteMCPServer + these tool names
-    # must exist on a live cluster; requireApproval runtime enforcement is [SPIKE] (Phase 3).
+    # Committed "good" tool config: an explicit toolNames allowlist. This is the C7 (beat-3) control
+    # that is actually IN PATH: the agent dials workshop-mcp directly (below), so agentgateway's
+    # mcpAuthorization does not gate these calls; kagent's toolNames does. The beat-3 live toggle
+    # (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh) patches this list: ON excludes
+    # the rogue tools (read_internal_config, apply_optimization), --off lets them back in. The
+    # agentgateway-enforced path is the "gateway blocks it" alternative, pending the RemoteMCPServer
+    # repoint at agentgateway:3001 and a live spike. requireApproval is the per-tool HITL gate on the
+    # one mutating tool. verify-at-build: requireApproval runtime enforcement is [SPIKE] (Phase 3).
     tools:
       - type: McpServer            # discriminator REQUIRED (schema rejects mcpServer without it)
         mcpServer:
@@ -480,12 +484,20 @@ spec:
         - name: conf
           configMap: { name: console-conf }
 ---
-# The single attendee-facing entrypoint. LB-exposed; tagged so the ELB is ours in the shared account.
+# The single attendee-facing entrypoint. LB-exposed; tagged so the LB is ours in the shared account.
+# `aws-load-balancer-type: nlb` makes the in-tree cloud provider build an NLB (instance target), NOT a
+# Classic ELB. A bare type: LoadBalancer with no type annotation defaults to a Classic ELB (legacy,
+# one orphan per cluster), which is what leaked on teardown. This stopgap needs NO controller. The
+# fuller fix (an ip-target NLB + activating the party-app ALB Ingresses) is to install the AWS Load
+# Balancer Controller, whose IAM Pod Identity role already exists in infra/terraform/cluster/main.tf,
+# then switch this annotation to `external` + `nlb-target-type: ip`. That install needs per-cluster
+# clusterName wiring and a live NLB-provisions check, so it is deferred to the next provision.
 apiVersion: v1
 kind: Service
 metadata:
   name: console
   annotations:
+    service.beta.kubernetes.io/aws-load-balancer-type: nlb
     service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn"
 spec:
   type: LoadBalancer

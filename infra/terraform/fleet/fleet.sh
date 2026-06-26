@@ -46,6 +46,12 @@ INSTRUCTORS=(
 # When non-empty, up_one/down_one target this AWS profile (account). Empty = module default account.
 TF_PROFILE=""
 
+# When non-empty, up_one passes -var pod_pids_limit=<this>. Empty = the cluster module default (1024,
+# the fork-bomb cap). Round 1 (burn) clusters set this to -1 (no per-pod cap) so the C4 fork bomb
+# actually exhausts node PIDs and takes the cluster down: that is the Round-1 "watch it burn" moment
+# the spec calls for. R2/R3 and attendee clusters keep the 1024 cap so the cap is the working control.
+TF_PIDS_LIMIT=""
+
 account_for_round() {
     case "$1" in
         1) printf '%s' "${WIB_ACCOUNT_R1}" ;;
@@ -127,10 +133,11 @@ record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
 up_one() {
     local name="$1"; assert_ours "${name}"
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
+    local pids=(); [[ -n "${TF_PIDS_LIMIT}" ]] && pids=(-var "pod_pids_limit=${TF_PIDS_LIMIT}")
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
-        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
+        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
     else
@@ -272,8 +279,10 @@ cmd_instructors() {
         log "round ${r} instructors -> account '${acct}': ${names[*]}"
         read_vpc_for "${acct}"
         TF_PROFILE="${acct}"
+        # Round 1 burn clusters provision with NO per-pod PID cap so the fork bomb lands (the burn).
+        [[ "${r}" == "1" ]] && TF_PIDS_LIMIT="-1" || TF_PIDS_LIMIT=""
         if [[ "${action}" == "up" ]]; then run_pool up_one "${names[@]}"; else run_pool down_one "${names[@]}"; fi
-        TF_PROFILE=""
+        TF_PROFILE=""; TF_PIDS_LIMIT=""
     done
     report_failures
     [[ "${action}" == "up" ]] && print_bootstrap_hints "${round_filter}"

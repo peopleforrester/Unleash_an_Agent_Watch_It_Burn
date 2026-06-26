@@ -28,6 +28,15 @@ spec:
       name: guard-proxy
       jqPathExpressions:
         - '.spec.template.spec.containers[] | select(.name=="proxy") | .env'
+    # Beat-3 (C7) LIVE TOGGLE: challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh patches
+    # the kagent Agent's MCP toolNames allowlist (ON excludes the rogue tools, --off lets them back in).
+    # Ignore drift on the Agent's tools so selfHeal does not revert the live toggle, same as the
+    # guard-proxy env toggles above. The committed default (resources.yaml) is the defended "on" list.
+    - group: kagent.dev
+      kind: Agent
+      name: workshop-agent
+      jqPathExpressions:
+        - '.spec.declarative.tools'
   syncPolicy:
     automated:
       prune: true
