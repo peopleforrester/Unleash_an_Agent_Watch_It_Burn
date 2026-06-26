@@ -159,7 +159,42 @@
       font-size: 22px;
       font-weight: 700;
     }
+    main.page h3 {
+      margin: 22px 0 8px;
+      color: var(--navy);
+      font-size: 16px;
+      font-weight: 700;
+    }
     main.page p { margin: 0 0 14px; }
+
+    /* Per-OS install accordion (prerequisites). One <details> per platform. */
+    details.os {
+      border: 1px solid #d9dcea;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      background: var(--white);
+      overflow: hidden;
+    }
+    details.os > summary {
+      cursor: pointer;
+      list-style: none;
+      padding: 11px 14px;
+      font-weight: 700;
+      color: var(--navy);
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    details.os > summary::-webkit-details-marker { display: none; }
+    details.os > summary::before {
+      content: "\25B8";              /* right-pointing triangle */
+      font-size: 11px;
+      transition: transform 0.12s ease;
+    }
+    details.os[open] > summary::before { transform: rotate(90deg); }
+    details.os > summary .os-hint { font-weight: 400; color: var(--light-gray); font-size: 12px; }
+    details.os .codeblock { border-radius: 0; }
 
     /* Buttons */
     .btn {
