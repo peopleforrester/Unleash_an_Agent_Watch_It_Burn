@@ -60,6 +60,26 @@ stringData:
   enableOCI: "true"
 EOF
 
+if [[ "${PROFILE}" == "full" ]]; then
+  log "[3.5] AWS Load Balancer Controller (NLB for the console Service, ALB for the party Ingresses)"
+  # IAM is an EKS Pod Identity association created by Terraform for kube-system/aws-load-balancer-controller
+  # (infra/terraform/cluster/main.tf). The controller auto-discovers region + vpcId from IMDS (the shared
+  # lab VPC). clusterName is the one input it needs; derive it from the cluster ARN in the active context
+  # (aws eks update-kubeconfig sets the context to the cluster ARN). Override with CLUSTER_NAME if needed.
+  # chart 1.14.x = controller v2.13.x (the AWS-documented Service+Ingress line; the v3.x chart is Gateway
+  # API, which this workshop does not use). Pinned so a fleet reprovision is reproducible.
+  CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cluster/##')}"
+  [[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "could not derive cluster name from context (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
+  helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
+  helm repo update >/dev/null
+  helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller --version 1.14.0 \
+    -n kube-system \
+    --set clusterName="${CLUSTER_NAME}" \
+    --set serviceAccount.create=true \
+    --set serviceAccount.name=aws-load-balancer-controller
+  kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s
+fi
+
 log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging), ArgoCD deploys the components"
 kubectl apply -f "${REPO}/${ROOT_APP}"
 

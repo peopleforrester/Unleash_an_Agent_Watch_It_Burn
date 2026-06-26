@@ -37,6 +37,10 @@ spec:
       name: workshop-agent
       jqPathExpressions:
         - '.spec.declarative.tools'
+        # Per-cluster model tier (cost-race demo): setup-instructor-cluster.sh patches modelConfig to
+        # bedrock-haiku/sonnet/opus on the matching R3 instructor cluster. Ignore drift so selfHeal keeps
+        # the per-cluster tier instead of reverting to the committed default (bedrock-sonnet).
+        - '.spec.declarative.modelConfig'
   syncPolicy:
     automated:
       prune: true

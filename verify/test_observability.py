@@ -57,12 +57,13 @@ check("dashboard has a Tempo traces panel for gen_ai spans",
       and any("gen_ai" in t.get("query", "") for p in dashboard["panels"] for t in p.get("targets", [])))
 
 # Span metrics connector: generated metrics must carry UST resource attributes for DD correlation.
+# Key is `span_metrics` (current semconv name; `spanmetrics` is the deprecated alias).
 conns = cfg.get("connectors", {})
-check("collector has a spanmetrics connector", "spanmetrics" in conns)
-check("spanmetrics propagates resource attributes (UST) onto generated metrics",
-      conns.get("spanmetrics", {}).get("add_resource_attributes") is True)
-check("spanmetrics wired into traces exporters", "spanmetrics" in cfg["service"]["pipelines"]["traces"]["exporters"])
-check("spanmetrics wired into metrics receivers", "spanmetrics" in cfg["service"]["pipelines"]["metrics"]["receivers"])
+check("collector has a span_metrics connector", "span_metrics" in conns)
+check("span_metrics propagates resource attributes (UST) onto generated metrics",
+      conns.get("span_metrics", {}).get("add_resource_attributes") is True)
+check("span_metrics wired into traces exporters", "span_metrics" in cfg["service"]["pipelines"]["traces"]["exporters"])
+check("span_metrics wired into metrics receivers", "span_metrics" in cfg["service"]["pipelines"]["metrics"]["receivers"])
 
 # datadog/connector (PRD #13 M2): APM trace.* metrics, required since otelcol-contrib v0.95.0.
 check("collector has a datadog/connector", "datadog/connector" in conns)
