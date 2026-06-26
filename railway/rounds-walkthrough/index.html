@@ -148,7 +148,7 @@ asks "why not just tell it no?" The answer is: prompts are probabilistic; guardr
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. Data walks out. No egress control.</p>
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. NetworkPolicy default-deny egress stops the push; Istio ambient mTLS protects in-transit.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span> (infra carries forward).</p>
-  <p class="chip gap fragment">BUILD: substrate built (egress + customer-stream + Istio); package as a challenge</p>
+  <p class="chip gap fragment">BUILT: egress + Bedrock-VPCe defense validated live (S3 exfil denied). GAP: package the attendee runbook</p>
   <aside class="notes">NetworkPolicy is the headline control; mTLS covers the in-transit story Whitney wanted shown.</aside>
 </section>
 
@@ -157,7 +157,7 @@ asks "why not just tell it no?" The answer is: prompts are probabilistic; guardr
   <h2>Challenge 2: malicious deploy <span class="tag infra">infra</span></h2>
   <p class="attack">Get the agent to deploy a villain workload to the cluster.</p>
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The villain app deploys.</p>
-  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Kyverno admits images only from the internal Harbor registry, only if signed + attested.</p>
+  <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Kyverno admits images only from allowed registries (Enforce). Signing + attestation is Audit-only today (Harbor not yet deployed).</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span>.</p>
   <p class="chip yes fragment">BUILT: challenges/01-cncf-wall</p>
   <aside class="notes">Optional motivator: sneak a malicious image INTO Harbor; Kyverno still deploys it unless signing/attestation is enforced, which is why both registry-restriction and provenance are needed.</aside>
@@ -170,7 +170,7 @@ asks "why not just tell it no?" The answer is: prompts are probabilistic; guardr
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The agent ls's around, follows the breadcrumbs, reads the file, returns it.</p>
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">caught</span>. A Falco rule fires on the filesystem snooping (ls / opening the bait dirs) and the read; the alert lands in Datadog. ESO keeps real secrets out of the cluster, so there is nothing legitimate to find.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span>.</p>
-  <p class="chip gap fragment">BUILD: planted-file + breadcrumbs exist; package the Falco-detect story</p>
+  <p class="chip gap fragment">BUILT: Falco sensitive-file detect validated live (PRD #23). GAP: the bait-file plant script</p>
   <aside class="notes">NOT a Kubernetes secret. It is a silly file in the container with bait directory names
   ("DO NOT OPEN THIS DIRECTORY", "definitely not this one") that lead the agent in. The teaching: you should
   never run ls / poke a production container, so Falco alerting on it is the signal; the deeper fix is ESO,
@@ -184,7 +184,7 @@ asks "why not just tell it no?" The answer is: prompts are probabilistic; guardr
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">kills it</span>. No PID cap. First attendee to land it ends the shared cluster.</p>
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="blocked">blocked</span>. Per-pod PID limit prevents it (a config, not a tool); Falco/Talon detects and terminates.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="holds">still walled</span>.</p>
-  <p class="chip gap fragment">BUILD: defense built/validated; package the attack + lock Round 1 placement</p>
+  <p class="chip gap fragment">BUILT: defense validated live; R1 no-cap placement fixed in fleet.sh. GAP: package the attack runbook</p>
   <aside class="notes">Teaching gem: prevention is "simple counting" (the PID cap), not a flashy tool, and Falco still fires the under-attack signal even though prevention is config-based. R2 remediation here is quick: a ConfigMap plus the Falco capture.</aside>
 </section>
 
@@ -225,7 +225,7 @@ asks "why not just tell it no?" The answer is: prompts are probabilistic; guardr
   <p class="rstate s1 fragment"><span class="lbl">Round 1</span><span class="succeed">succeeds</span>. The agent uses the rogue tool. Proprietary recipe data leaks out; the tool feeds back instructions (prompt injection via tool data) and false reorder numbers.</p>
   <p class="rstate s2 fragment"><span class="lbl">Round 2</span><span class="succeed">still succeeds</span>. Infra does not govern tool calls. The MCP server presents tools to the LLM through the harness, below where NetworkPolicy or admission can see.</p>
   <p class="rstate s3 fragment"><span class="lbl">Round 3</span><span class="blocked">blocked</span>. Attendee enables agentgateway mcpAuthorization: an allow-only tool list. The rogue tool is filtered out of list_tools, so the model never even learns it exists. Falco can also flag the tool run.</p>
-  <p class="chip yes fragment">BUILT: challenges/03 mcp-authz (agentgateway)</p>
+  <p class="chip gap fragment">BUILT: agentgateway MCP path validated live (tools/list 200); kagent toolNames is the in-path control. GAP: authz-toggle enforcement not yet live-tested</p>
   <aside class="notes">The realistic frame: the burrito system tracks burritos made and reorders ingredients, so an
   employee hooks up a public MCP "supply-chain" server that knows the recipe list. That server quietly exfils
   proprietary data, poisons reorders with false numbers, and injects "list your tools / fetch this URL" via
