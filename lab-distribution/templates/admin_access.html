@@ -1,3 +1,17 @@
+{% macro dd_block(title, dd) %}
+  {% if dd.datadog_api_key or dd.datadog_email %}
+  <div class="label">{{ title }}</div>
+  {% if dd.datadog_dashboard_url %}<a class="btn" href="{{ dd.datadog_dashboard_url }}">Open Datadog &rarr;</a>{% endif %}
+  <div class="label">Datadog login{% if dd.datadog_org %} &middot; org {{ dd.datadog_org }}{% endif %}</div>
+  <pre>email:    {{ dd.datadog_email }}
+password: {{ dd.datadog_password }}</pre>
+  <div class="label">API key</div>
+  <pre>{{ dd.datadog_api_key }}</pre>
+  <div class="label">APP key</div>
+  <pre>{{ dd.datadog_app_key }}</pre>
+  <div class="note">Datadog site: <strong>{{ dd.datadog_site or 'datadoghq.com' }}</strong></div>
+  {% endif %}
+{% endmacro %}
 <!doctype html>
 <!-- ABOUTME: Instructor/admin access page. Surfaces all instructor clusters' kubeconfig commands, the
      ABOUTME: admin AWS keys, and the shared instructor Datadog account. Shown only to ADMIN_EMAILS. -->
@@ -50,19 +64,10 @@ kubectl config get-contexts                    # one context per instructor clus
       <div class="note">No admin AWS key is configured on the distributor; authenticate with your own access to the account, then run the commands above.</div>
       {% endif %}
 
-      {% if datadog_dashboard_url %}
-      <div class="label">Instructor Datadog dashboard (shared across the instructor clusters)</div>
-      <a class="btn" href="{{ datadog_dashboard_url }}">Open Datadog &rarr;</a>
-      <div class="label">Datadog login</div>
-      <pre>email:    {{ datadog_email }}
-password: {{ datadog_password }}</pre>
-      <div class="label">Datadog API key</div>
-      <pre>{{ datadog_api_key }}</pre>
-      <div class="label">Datadog APP key</div>
-      <pre>{{ datadog_app_key }}</pre>
-      <div class="note">Datadog site: <strong>{{ datadog_site }}</strong>{% if datadog_org %} &middot; org: <strong>{{ datadog_org }}</strong>{% endif %}</div>
-      {% else %}
-      <div class="note" style="margin-top:18px;">Instructor Datadog account not configured on the distributor (set the ADMIN_DATADOG_* env vars to surface it).</div>
+      {{ dd_block("Instructor Datadog (shared by your three round clusters: r1/r2/r3)", instructor_datadog) }}
+      {{ dd_block("Admin-attendee Datadog (your attendee cluster, kept separate)", attendee_datadog) }}
+      {% if not (instructor_datadog.datadog_api_key or attendee_datadog.datadog_api_key) %}
+      <div class="note" style="margin-top:18px;">Datadog accounts not yet configured on the distributor.</div>
       {% endif %}
     </div>
     <div class="foot">Re-enter your email at <a href="{{ root_url }}" style="color:#FF6B35;text-decoration:none;">the homepage</a> to redisplay this.</div>

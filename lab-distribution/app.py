@@ -242,6 +242,11 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
     app.config["ADMIN_DATADOG"] = {
         k: os.environ.get("ADMIN_" + k.upper(), "") for k in ADMIN_DATADOG_KEYS
     }
+    # Second, dedicated Datadog account for the attendee-type cluster (so its metrics do not mix into
+    # the instructor account). Surfaced alongside the instructor account in the admin bundle.
+    app.config["ADMIN_ATTENDEE_DATADOG"] = {
+        k: os.environ.get("ADMIN_ATTENDEE_" + k.upper(), "") for k in ADMIN_DATADOG_KEYS
+    }
 
     def get_db():
         db = getattr(g, "_db", None)
@@ -355,7 +360,8 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
                 aws_access_key=app.config["ADMIN_AWS_ACCESS_KEY"],
                 aws_secret_key=app.config["ADMIN_AWS_SECRET_KEY"],
                 root_url=request.url_root.rstrip("/"),
-                **app.config["ADMIN_DATADOG"],
+                instructor_datadog=app.config["ADMIN_DATADOG"],
+                attendee_datadog=app.config["ADMIN_ATTENDEE_DATADOG"],
             )
 
         conn = get_db()
