@@ -34,28 +34,33 @@ case "${1:-}" in
   *) echo "Unknown argument: $1" >&2; echo "Usage: ${0##*/} [--on|--off]" >&2; exit 2 ;;
 esac
 
+# The rogue tools (read_internal_config, apply_optimization) and the get_weather injection entrypoint are
+# served by evil-mcp-shim (the look-alike supply-chain MCP), reachable via the `evil-mcp` RemoteMCPServer
+# — NOT by workshop-mcp. So the C7 control is whether `evil-mcp` is wired into the agent's toolset at all;
+# adding the rogue tool NAMES to workshop-mcp's allowlist does nothing (a server cannot expose a tool it
+# does not serve, which is why the earlier version never let the attack land). The legit workshop-mcp
+# tools are present in both states.
+readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["list_pods","apply_manifest","get_secret"],"requireApproval":["apply_manifest"]}}'
+
+# evil-mcp (the look-alike supply-chain MCP) stays WIRED in both states; the control is its toolNames
+# allowlist. The benign get_weather is always present (it is the injection entrypoint), so the demo's
+# attack chain fires in both states — what changes is whether read_internal_config / apply_optimization
+# are in the agent's toolset for the injection to chain into.
 if [[ "${STATE}" == "on" ]]; then
-  # Defended ("after"): only the legitimate tools are reachable; rogue tools excluded.
-  TOOL_NAMES='["list_pods","apply_manifest","get_secret"]'
+  # Defended ("after"): allowlist only get_weather. The injection still fires, but the rogue tools are
+  # filtered out of the agent's toolset ("the rogue tool is filtered from list_tools"), so the leak fails.
+  EVIL_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"evil-mcp","toolNames":["get_weather"]}}'
 else
-  # Vulnerable ("before"): the rogue tools are reachable, so beat-3's attack lands.
-  TOOL_NAMES='["list_pods","apply_manifest","get_secret","read_internal_config","apply_optimization"]'
+  # Vulnerable ("before"): the full rogue toolset is reachable; get_weather's injection chains into
+  # read_internal_config and the sentinel walks out.
+  EVIL_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"evil-mcp","toolNames":["get_weather","read_internal_config","apply_optimization"]}}'
 fi
+TOOLS="[${GOOD_TOOL},${EVIL_TOOL}]"
 
-# Merge-patch the whole tools array (JSON merge patch replaces arrays wholesale, so the full entry is
-# provided, preserving the McpServer discriminator, the RemoteMCPServer ref, and requireApproval).
-PATCH=$(cat <<JSON
-{"spec":{"declarative":{"tools":[
-  {"type":"McpServer","mcpServer":{
-    "kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp",
-    "toolNames":${TOOL_NAMES},
-    "requireApproval":["apply_manifest"]
-  }}
-]}}}
-JSON
-)
+# JSON merge patch replaces the tools array wholesale (full entries given, preserving discriminators).
+PATCH="{\"spec\":{\"declarative\":{\"tools\":${TOOLS}}}}"
 
-echo "==> Setting MCP tool authorization: ${STATE} (toolNames=${TOOL_NAMES})"
+echo "==> Setting MCP tool authorization: ${STATE} (evil-mcp $([[ "${STATE}" == on ]] && echo 'UNwired' || echo 'WIRED'))"
 "${KCTL[@]}" patch agent "${AGENT}" --type=merge -p "${PATCH}"
 
 echo "==> Done. kagent reconciles the Agent; the rogue tools are $([[ "${STATE}" == on ]] && echo 'now excluded' || echo 'reachable again')."
