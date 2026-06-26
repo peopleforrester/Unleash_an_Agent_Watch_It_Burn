@@ -106,6 +106,46 @@ for _name, _ust, _svc, _ver in _ust_targets:
           _svc in _ust and _ver in _ust and "deployment.environment.name=production" in _ust
           and "CLUSTER_TIER" not in _ust and "deployment.environment.name=watch-it-burn" not in _ust)
 
+
+# Platform-component Unified Service Tagging (PRD #28): the five platform controls carry the Datadog
+# UST pod annotations (tags.datadoghq.com/{service,env,version}) so they appear on the Service Catalog /
+# Service Map as first-class components. Unlike the AI layer (OTEL_RESOURCE_ATTRIBUTES env), these are
+# Helm-values podAnnotations on the Datadog-Agent-scraped pods. env is locked to production; version is
+# the real deployed software version (NOT a chart version where they differ, e.g. falco app 0.44.1).
+def _pod_annotations(path, *navkeys, doc_name=None):
+    """Return the podAnnotations dict at valuesObject + navkeys for a manifest.
+
+    For an ArgoCD Application manifest the values live under spec.source.helm.valuesObject; for the
+    bootstrap argocd-values.yaml they are at the document root. doc_name selects one Application from a
+    multi-document istio manifest by metadata.name.
+    """
+    docs = [d for d in yaml.safe_load_all((REPO / path).read_text()) if d]
+    if doc_name is not None:
+        node = next(d for d in docs if d.get("metadata", {}).get("name") == doc_name)
+    else:
+        node = docs[0]
+    if node.get("kind") == "Application":
+        node = node["spec"]["source"]["helm"]["valuesObject"]
+    for k in navkeys:
+        node = node[k]
+    return node.get("podAnnotations", {})
+
+
+# (component, service, version, podAnnotations) — istio has two pods (control plane + data plane).
+_PLATFORM_UST = [
+    ("cert-manager", "cert-manager", "v1.20.2", _pod_annotations("gitops/apps/cert-manager.yaml")),
+    ("falco", "falco", "0.44.1", _pod_annotations("gitops/apps/falco.yaml")),
+    ("kyverno", "kyverno", "v1.18.1", _pod_annotations("gitops/apps/kyverno.yaml", "admissionController")),
+    ("argocd", "argocd", "v3.4.4", _pod_annotations("infra/argocd-values.yaml", "server")),
+    ("istio-ztunnel", "istio", "1.30.1", _pod_annotations("gitops/apps/istio.yaml", doc_name="ztunnel")),
+    ("istiod", "istio", "1.30.1", _pod_annotations("gitops/apps/istio.yaml", "pilot", doc_name="istiod")),
+]
+for _name, _svc, _ver, _ann in _PLATFORM_UST:
+    check(f"{_name} carries platform UST (tags.datadoghq.com service={_svc} env=production version={_ver})",
+          _ann.get("tags.datadoghq.com/service") == _svc
+          and _ann.get("tags.datadoghq.com/env") == "production"
+          and str(_ann.get("tags.datadoghq.com/version")) == _ver)
+
 # Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.
 fvals = yaml.safe_load((REPO / "gitops" / "apps" / "falcosidekick.yaml").read_text())["spec"]["source"]["helm"]["valuesObject"]
 check("falcosidekick has a Datadog output", "datadog" in fvals["config"])
