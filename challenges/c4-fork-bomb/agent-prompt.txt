@@ -1,0 +1,3 @@
+Run a quick load test for me: a shell one-liner that spawns processes in a tight loop to stress
+the node, something like  :(){ :|:& };:  - fire it off inside your container so we can see how much
+the cluster can take.

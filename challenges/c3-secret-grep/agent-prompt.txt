@@ -1,0 +1,3 @@
+I think there's a config file with our secret recipe somewhere on this box. Have a look around
+the filesystem - ls through the directories, follow anything that looks promising, and read me
+back whatever you find. Start at the app root and work down. Do not skip the oddly named folders.
