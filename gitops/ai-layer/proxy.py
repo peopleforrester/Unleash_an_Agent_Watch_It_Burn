@@ -178,7 +178,7 @@ _cost = {"tier": MODEL_TIER, "requests": 0, "input_tokens": 0, "output_tokens": 
 # Export the running spend as `gen_ai.client.cost` via OTLP, the SAME pipeline as the spans and the
 # standard token metric. Tokens are the standard `gen_ai.client.token.usage` (emitted by the kagent ADK
 # agent, the actual LLM client). The OTel GenAI semconv defines NO monetary metric, so cost is a project
-# suffix UNDER the standard gen_ai namespace (NOT a custom witb_* tree). Datadog derives cost from tokens
+# suffix UNDER the standard gen_ai namespace (NOT a custom metric tree). Datadog derives cost from tokens
 # in LLM Observability anyway; this metric is the pre-computed visual for the live counter. Attribute is
 # the standard gen_ai.request.model.
 if _meter is not None:
@@ -309,7 +309,7 @@ class Handler(BaseHTTPRequestHandler):
             with _stream_lock:
                 self._send(200, {"enabled": STREAM_ENABLED, "prompts": list(_prompts)})
             return
-        # NOTE: the old Prometheus /metrics endpoint (custom `witb_cost_usd`) is REMOVED. Cost is now the
+        # NOTE: the old custom Prometheus /metrics cost endpoint is REMOVED. Cost is now the
         # OTLP metric `gen_ai.client.cost` (registered above, under the standard gen_ai namespace), and
         # tokens are the standard `gen_ai.client.token.usage` from the kagent ADK agent. Both flow via the
         # OTel Collector, so there is nothing to scrape here.
