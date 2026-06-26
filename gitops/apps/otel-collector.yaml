@@ -95,9 +95,9 @@ spec:
             # attributes (deployment.environment.name -> env, service.version) onto the generated
             # metrics; it defaults to false, and without it Datadog "View related logs" from a
             # span-derived metric silently finds nothing (research/19, research/23).
-            # verify-at-build: confirm the connector key is `spanmetrics` and that
-            # add_resource_attributes is supported on collector-contrib 0.158.2.
-            spanmetrics:
+            # Connector key is `span_metrics` (the current OTel semconv name; `spanmetrics` is the
+            # deprecated alias slated for removal). add_resource_attributes is supported on contrib 0.158.2.
+            span_metrics:
               add_resource_attributes: true
             # datadog/connector computes APM Trace Metrics (the trace.* namespace used by SLOs/monitors).
             # Required since otelcol-contrib v0.95.0: the Datadog exporter no longer derives these itself.
@@ -115,7 +115,7 @@ spec:
               metrics:
                 receivers:
                   - otlp
-                  - spanmetrics # RED metrics generated from spans (carry UST tags for correlation)
+                  - span_metrics # RED metrics generated from spans (carry UST tags for correlation)
                   - datadog/connector # APM trace.* metrics (compute_stats_by_span_kind); PRD #13 M2
                 processors:
                   - memory_limiter
@@ -136,7 +136,7 @@ spec:
                 exporters:
                   - datadog      # primary
                   - otlp/tempo   # secondary / fallback
-                  - spanmetrics  # feed the connector so it can derive metrics from these spans
+                  - span_metrics  # feed the connector so it can derive metrics from these spans
                   - datadog/connector # feed the APM-stats connector (trace.* metrics); PRD #13 M2
                   - debug
         # Datadog credentials for the primary exporter (BYO secret; not stored in this repo).
