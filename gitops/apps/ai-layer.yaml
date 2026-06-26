@@ -6,7 +6,13 @@ metadata:
   name: ai-layer
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    # Wave 3 (AFTER the OTel Operator + collector at wave 2). The Operator's mutating webhook injects the
+    # OTel SDK into guard-proxy/workshop-agent at pod-create; if this layer deploys in the SAME wave as the
+    # Operator (it was wave 2), the app pods are admitted before the webhook is ready and get NO
+    # instrumentation, so they export ZERO telemetry (the 2026-06-26 "Datadog is empty" root cause).
+    # Deploying after the Operator is Healthy lets the webhook instrument the pods. Safety net for any
+    # residual webhook-cert race: infra/reinstrument-app-pods.sh.
+    argocd.argoproj.io/sync-wave: "3"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
