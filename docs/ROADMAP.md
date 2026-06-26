@@ -42,3 +42,4 @@ auto-bootstrap in `fleet.sh`.
 **Optional enhancements (post-M5, if time allows before workshop):**
 
 - Add Istio ambient waypoint proxy for L7 mTLS in exfil challenge ([#25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25)) — blocked by M5 (Istio L4 integration active); adding waypoint also triggers OOTB Istio dashboard import (added to #25 acceptance criteria 2026-06-25)
+- Attendee success page UX improvements ([#37](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/37)) — misleading labels, missing AWS CLI guidance, wrong favicon; attendee-facing, important before dress rehearsal
