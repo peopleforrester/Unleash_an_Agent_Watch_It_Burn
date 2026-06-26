@@ -63,21 +63,28 @@ EOF
 if [[ "${PROFILE}" == "full" ]]; then
   log "[3.5] AWS Load Balancer Controller (NLB for the console Service, ALB for the party Ingresses)"
   # IAM is an EKS Pod Identity association created by Terraform for kube-system/aws-load-balancer-controller
-  # (infra/terraform/cluster/main.tf). The controller auto-discovers region + vpcId from IMDS (the shared
-  # lab VPC). clusterName is the one input it needs; derive it from the cluster ARN in the active context
-  # (aws eks update-kubeconfig sets the context to the cluster ARN). Override with CLUSTER_NAME if needed.
-  # chart 1.14.x = controller v2.13.x (the AWS-documented Service+Ingress line; the v3.x chart is Gateway
-  # API, which this workshop does not use). Pinned so a fleet reprovision is reproducible.
+  # (infra/terraform/cluster/main.tf); Pod Identity supplies the AWS creds (no IMDS needed for auth).
+  # clusterName/region/vpcId are passed EXPLICITLY: the controller otherwise auto-discovers vpcId from
+  # IMDS, which the pod cannot reach on these nodes (IMDS hop limit), so it CrashLoops with "failed to
+  # fetch VPC ID from instance metadata" (found live 2026-06-26). Deriving them via the EKS API avoids
+  # IMDS entirely. chart 1.14.0 = controller v2.14.x (the Service+Ingress line; v3.x is Gateway API).
+  REGION="${REGION:-us-west-2}"
   CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cluster/##')}"
   [[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "could not derive cluster name from context (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
+  VPC_ID="$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${REGION}" --query 'cluster.resourcesVpcConfig.vpcId' --output text)"
+  [[ "${VPC_ID}" == vpc-* ]] || { echo "could not derive vpcId for ${CLUSTER_NAME} (got '${VPC_ID}')" >&2; exit 1; }
   helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
   helm repo update >/dev/null
   helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller --version 1.14.0 \
     -n kube-system \
     --set clusterName="${CLUSTER_NAME}" \
+    --set region="${REGION}" \
+    --set vpcId="${VPC_ID}" \
     --set serviceAccount.create=true \
     --set serviceAccount.name=aws-load-balancer-controller
-  kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s
+  # Non-fatal: the controller reconciles Ingresses whenever it is ready; it must NOT gate the app-of-apps.
+  kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
+    || log "WARN: LB controller not ready yet; continuing. Ingresses reconcile once it is up."
 fi
 
 log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging), ArgoCD deploys the components"
