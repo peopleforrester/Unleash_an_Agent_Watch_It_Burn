@@ -19,6 +19,7 @@ CONTEXT="${CONTEXT:?set CONTEXT to the target kube-context}"
 KCTL=(kubectl --context "${CONTEXT}")
 
 echo "==> output guard -> ${STATE} (runtime, via guard-proxy.${NS}:8080/toggle)" >&2
-"${KCTL[@]}" run "guardtoggle-out-${RANDOM}" --rm -i --restart=Never -n "${NS}" \
-  --image=curlimages/curl:8.10.1 --command -- \
-  curl -s "http://guard-proxy.${NS}:8080/toggle?output=${STATE}"
+# exec the guard-proxy to hit its OWN /toggle (localhost): spawns no new pod, so Kyverno
+# require-resource-limits (Enforce in R2/R3) cannot reject it. python3 ships in the image.
+"${KCTL[@]}" -n "${NS}" exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/toggle?output=${STATE}', timeout=10).read().decode())"
