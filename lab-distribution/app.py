@@ -37,10 +37,11 @@ CRED_COLUMNS = [
 #   ADMIN_AWS_ACCESS_KEY / ADMIN_AWS_SECRET_KEY  (an IAM key with EKS access to the instructor clusters)
 #   ADMIN_REGION (default us-west-2) and ADMIN_CLUSTERS (default = the fleet.sh INSTRUCTORS roster)
 DEFAULT_ADMIN_EMAILS = "michaelrishiforrester@gmail.com,wiggitywhitney@gmail.com"
+# The admin's own clusters (one per round + an attendee-type), each on its own Whitney-controlled branch
+# (whitney-r1/r2/r3/attendee). Override with ADMIN_CLUSTERS for a different admin set.
 DEFAULT_INSTRUCTOR_CLUSTERS = (
-    "watch-it-burn-burn-1,watch-it-burn-burn-2,watch-it-burn-burn-3,"
-    "watch-it-burn-wall-1,watch-it-burn-wall-2,watch-it-burn-wall-3,"
-    "watch-it-burn-haiku,watch-it-burn-sonnet,watch-it-burn-opus"
+    "watch-it-burn-whitney-r1,watch-it-burn-whitney-r2,"
+    "watch-it-burn-whitney-r3,watch-it-burn-whitney-attendee"
 )
 ADMIN_DATADOG_KEYS = [
     "datadog_org", "datadog_email", "datadog_password",
