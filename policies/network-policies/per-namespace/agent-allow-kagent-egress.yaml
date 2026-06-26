@@ -1,0 +1,24 @@
+# ABOUTME: Allow the kagent agent to reach its control plane in the kagent namespace.
+# ABOUTME: The ADK agent calls kagent-controller:8083 (KAGENT_URL) and kagent-postgresql:5432 at runtime.
+#
+# Without this, the C1 agent egress allowlist (in-VPC 443 only) cut the agent off from kagent-controller
+# and the resumable-session postgres, so message/send hung before any Bedrock call (found live
+# 2026-06-26: agent reachable to Bedrock via the VPCe, but blocked to kagent-postgresql:5432 and
+# kagent-controller:8083, both timing out). The kagent namespace is in-VPC and is not an internet exfil
+# path, so allowing it does not weaken C1 (the agent's S3 PutObject to the public internet stays denied).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-kagent-egress
+  namespace: agent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: workshop-agent
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kagent
