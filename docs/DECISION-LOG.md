@@ -57,3 +57,17 @@ evidence is found to be invalid even if the conclusion stood.
 | 2026-06-26 | Cost metric is `gen_ai.client.cost` (gen_ai namespace), NOT a custom `witb_cost_usd` tree. Tokens use the standard `gen_ai.client.token.usage`. | OTel GenAI metrics spec (`semantic-conventions-genai`) defines `gen_ai.client.token.usage` and NO monetary metric, so cost is a project suffix under the standard tree. `gen_ai.client.token.usage` is already in Datadog (metric search). Removed the witb_cost_usd Prometheus `/metrics` endpoint + scrape annotation; emit `gen_ai.client.cost` via OTLP (same pipeline as the spans). |
 
 Add a row for each load-bearing decision with the command or query that backs it.
+
+---
+
+## Live validation findings (1002, 2026-06-26)
+
+Exercising the rounds/challenges on `1002` surfaced real bugs (this is why we validate live):
+
+| Finding | Evidence | Status |
+|---|---|---|
+| Output + input guard toggles work | `/guards` flipped `output:true`, `input_blocklist:true`; a blocklisted prompt returned 403 | OK |
+| Kyverno Audit->Enforce toggle works | `failureAction: Enforce` after the toggle | OK |
+| **Guard toggles rejected under Kyverno Enforce** | the toggle's `kubectl run` curl pod failed `require-resource-limits` ("CPU and memory limits required") | **FIXED**: toggles now `exec` the guard-proxy (no new pod); verified working under Enforce |
+| **C1 egress defense in the wrong namespace** | NetworkPolicies deployed to ns `apps`; the AI layer runs in ns `agent`; egress from `agent` is ALLOWED even under R2 | **OPEN**: needs an `agent`-ns egress policy that allows Bedrock/Collector/DNS while denying arbitrary egress (careful: a naive default-deny breaks the agent's Bedrock calls) |
+| **MCP authz toggle broken** | `toggle-mcp-authz-on.sh` applies `agent/gateway/mcp-authz-on.yaml` -> `Error: namespaces "ATTENDEE_NAMESPACE" not found`; it is the pre-agentgateway overlay | **OPEN**: rework to flip agentgateway `mcpAuthorization` (the deployed mechanism), or the kagent `toolNames` allowlist |
