@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/22
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 3 child PRD
 **Priority**: High
-**Status**: Not started
+**Status**: In progress. M1 (guard-proxy HTTP SERVER plus sanitize INTERNAL spans, issue #19) live-verified in Datadog APM on attendee-001 (PROGRESS.md 2026-06-25). M2-M4 (Collector OTTL Act 2 overlay, Weaver span groups, two-act demo runbook) pending.
 
 > **Note on `challenges/` references:** The `challenges/` directory naming is being aligned with the Rounds + Challenges vocabulary adopted June 2026 (C1–C7 challenges across three cumulative rounds). When implementing, update any `challenges/` path references to the current challenge/round structure as you encounter them — no separate migration task is required.
 
