@@ -38,7 +38,7 @@ data:
         {
           "id": 4,
           "type": "traces",
-          "title": "Agent traces (input / output / tool-call gen_ai spans). Per-token counts: gen_ai.usage.* on these spans (witb_tokens_total/requests retired, PRD #20 M5)",
+          "title": "Agent traces (input / output / tool-call gen_ai spans). Per-token counts: gen_ai.usage.* on these spans",
           "gridPos": { "h": 10, "w": 12, "x": 12, "y": 0 },
           "datasource": { "type": "tempo", "uid": "tempo" },
           "targets": [

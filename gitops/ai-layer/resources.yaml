@@ -254,7 +254,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: guard-proxy
-  # No prometheus.io/scrape: the custom witb_cost_usd /metrics endpoint is removed. Cost is the OTLP
+  # No prometheus.io/scrape: the old custom /metrics cost endpoint is removed. Cost is the OTLP
   # metric gen_ai.client.cost and tokens are the standard gen_ai.client.token.usage (kagent), both via
   # the OTel Collector. Nothing to scrape here.
 spec:
