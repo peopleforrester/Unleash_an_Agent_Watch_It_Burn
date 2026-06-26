@@ -52,6 +52,11 @@ spec:
             config: prometheus
             port: 8000
           podAnnotations:
+            # Datadog Unified Service Tagging (PRD #28): puts the Kyverno admission controller on the
+            # service catalog / map. env locked to production; version = deployed Kyverno appVersion.
+            tags.datadoghq.com/service: kyverno
+            tags.datadoghq.com/env: production
+            tags.datadoghq.com/version: "v1.18.1"
             ad.datadoghq.com/kyverno.checks: |
               {"kyverno":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8000/metrics"}]}}
         # Background controller for policy reports

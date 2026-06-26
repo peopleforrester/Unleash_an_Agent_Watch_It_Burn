@@ -12,5 +12,10 @@ dex:
   enabled: false
 server:
   podAnnotations:
+    # Datadog Unified Service Tagging (PRD #28): puts argocd-server on the service catalog / map as a
+    # first-class platform component. env locked to production; version = deployed ArgoCD appVersion.
+    tags.datadoghq.com/service: argocd
+    tags.datadoghq.com/env: production
+    tags.datadoghq.com/version: "v3.4.4"
     ad.datadoghq.com/server.checks: |
       {"argocd":{"instances":[{"api_server_endpoint":"http://%%host%%:8083/metrics"}]}}
