@@ -61,9 +61,12 @@ def _resolve_admin_token() -> str:
 def _commands_block(cluster_name, region):
     # The attendee drives the agent from the browser console (chat tab); the terminal/kubectl path
     # below is only needed for the optional shell. No repo clone, no local Claude Code.
+    # Use a named profile (watch-it-burn) so attendees who already have AWS configured do not have their
+    # default credentials overwritten; attendees with no AWS setup just get this one profile. The profile
+    # is baked into the kubeconfig by update-kubeconfig --profile, so kubectl uses it automatically.
     return (
-        f"aws configure                                  # paste the AWS keys above; region {region}\n"
-        f"aws eks update-kubeconfig --name {cluster_name} --region {region}\n"
+        f"aws configure --profile watch-it-burn         # paste the AWS keys above; region {region}\n"
+        f"aws eks update-kubeconfig --name {cluster_name} --region {region} --profile watch-it-burn\n"
         "kubectl get nodes                              # confirm your cluster is up"
     )
 
@@ -349,7 +352,8 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
             region = app.config["ADMIN_REGION"]
             clusters = app.config["ADMIN_CLUSTERS"]
             cmds = "\n".join(
-                f"aws eks update-kubeconfig --name {c} --region {region}" for c in clusters
+                f"aws eks update-kubeconfig --name {c} --region {region} --profile watch-it-burn"
+                for c in clusters
             )
             return render_template(
                 "admin_access.html",
