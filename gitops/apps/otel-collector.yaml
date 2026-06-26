@@ -68,6 +68,21 @@ spec:
                 - context: span
                   statements:
                     - set(attributes["peer.service"], "kagent") where attributes["peer.service"] == nil and resource.attributes["service.name"] == "agentgateway" and kind == SPAN_KIND_CLIENT
+            # The kagent ADK token metric and the guard-proxy cost metric ship gen_ai.provider.name
+            # unset / "N/A" (Datadog renders it as the literal tag value N/A). The model is a Bedrock model
+            # (us.anthropic.claude-*), so per the OTel GenAI semconv the provider MUST be aws.bedrock
+            # (https://opentelemetry.io/docs/specs/semconv/gen-ai/aws-bedrock/). Stamp it where missing,
+            # on both metric datapoints and spans (LLM Observability + the Grafana provider filter).
+            transform/set_genai_provider:
+              error_mode: ignore
+              metric_statements:
+                - context: datapoint
+                  statements:
+                    - set(attributes["gen_ai.provider.name"], "aws.bedrock") where attributes["gen_ai.provider.name"] == nil or attributes["gen_ai.provider.name"] == "N/A"
+              trace_statements:
+                - context: span
+                  statements:
+                    - set(attributes["gen_ai.provider.name"], "aws.bedrock") where attributes["gen_ai.provider.name"] == nil or attributes["gen_ai.provider.name"] == "N/A"
           exporters:
             prometheusremotewrite:
               endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
@@ -121,6 +136,7 @@ spec:
                   - memory_limiter
                   - batch
                   - resource
+                  - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock where N/A
                 exporters:
                   - datadog               # primary
                   - prometheusremotewrite # secondary / fallback
@@ -133,6 +149,7 @@ spec:
                   - batch
                   - resource
                   - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
+                  - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock on spans where N/A
                 exporters:
                   - datadog      # primary
                   - otlp/tempo   # secondary / fallback
