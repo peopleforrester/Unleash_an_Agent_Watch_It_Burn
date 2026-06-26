@@ -184,7 +184,11 @@ _cost = {"tier": MODEL_TIER, "requests": 0, "input_tokens": 0, "output_tokens": 
 if _meter is not None:
     def _observe_cost(_options):
         with _cost_lock:
-            yield Observation(_cost["usd"], {"gen_ai.request.model": MODEL_NAME})
+            # gen_ai.provider.name MUST be aws.bedrock for a Bedrock model (OTel GenAI semconv); without
+            # it Datadog tags the cost metric provider as "N/A". The Collector also stamps this as a safety
+            # net, but set it at the source too.
+            yield Observation(_cost["usd"], {"gen_ai.request.model": MODEL_NAME,
+                                             "gen_ai.provider.name": "aws.bedrock"})
     _meter.create_observable_gauge(
         "gen_ai.client.cost", callbacks=[_observe_cost], unit="USD",
         description="Estimated Bedrock spend (USD) for this cluster, derived from token usage.")
