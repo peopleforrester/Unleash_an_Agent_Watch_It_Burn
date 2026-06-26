@@ -1,5 +1,5 @@
-# ABOUTME: Live Datadog acceptance for PRD #27 — asserts AI-layer Service Map edges and both
-# ABOUTME: log<->trace pivot directions via the Datadog API (terminal step, NOT a static CI gate).
+# ABOUTME: Live Datadog acceptance for PRD #27 + #28 — asserts AI-layer Service Map edges, platform
+# ABOUTME: component UST, and both log<->trace pivot directions via the Datadog API (NOT a static CI gate).
 #
 # Unlike verify/test_observability.py (which statically validates the YAML manifests), this script
 # talks to the LIVE Datadog API and therefore requires DD_API_KEY + DD_APP_KEY in the environment and
@@ -9,7 +9,7 @@
 #
 # Usage:
 #   DD_API_KEY=... DD_APP_KEY=... python3 verify/test_datadog_service_map.py [<trace_id>]
-#   - With no trace_id: runs the Service Map edge assertion only.
+#   - With no trace_id: runs the Service Map edge + platform-component UST assertions.
 #   - With a trace_id:  also runs both log<->trace pivot assertions.
 import json
 import os
@@ -88,6 +88,57 @@ def test_service_map_edges():
         check(f"Service Map edge {caller} -> {callee}", callee in _downstreams(deps, caller))
 
 
+# Platform components that carry Unified Service Tagging (PRD #28). Service-tag values match the
+# tags.datadoghq.com/service annotations on their pods (gitops/apps/*, infra/argocd-values.yaml).
+PLATFORM_COMPONENTS = ["argocd", "kyverno", "falco", "cert-manager", "istio"]
+
+
+def _metrics_for_service(service):
+    """Metric names actively reporting under service:<service> (GET /api/v2/metrics).
+
+    Name-agnostic on purpose: it discovers which metrics a component emits rather than hard-coding a
+    per-integration metric name (which drifts and is the classic source of a false-red UST check).
+    """
+    resp = _request(
+        "GET",
+        f"https://api.{DD_SITE}/api/v2/metrics",
+        params={
+            "filter[tags]": f"service:{service}",
+            "filter[queried][window][seconds]": 3600,
+            "page[size]": 100,
+        },
+    )
+    return [d["id"] for d in resp.get("data", [])]
+
+
+def _series_has_points(metric, service):
+    """True if <metric> has live points scoped to service:<service> AND env:<DD_ENV> (GET /api/v1/query)."""
+    now = int(time.time())
+    resp = _request(
+        "GET",
+        f"https://api.{DD_SITE}/api/v1/query",
+        params={"from": now - 3600, "to": now,
+                "query": f"avg:{metric}{{service:{service},env:{DD_ENV}}}"},
+    )
+    return any(s.get("pointlist") for s in resp.get("series", []))
+
+
+def test_platform_component_ust():
+    """PRD #28: each platform component reports metrics tagged service:<name> AND env:production.
+
+    Two assertions per component: (1) at least one metric is actively reporting under service:<name>
+    (discovered via /api/v2/metrics, so no integration metric name is hard-coded); (2) live data for one
+    of those metrics is present when scoped to service:<name> + env=production, proving the full UST set
+    landed on real telemetry. This is the live counterpart to the static manifest gate in
+    verify/test_observability.py. Catalog/Service-Map UI rendering remains a manual facilitator look.
+    """
+    for svc in PLATFORM_COMPONENTS:
+        metrics = _metrics_for_service(svc)
+        check(f"{svc}: >=1 metric reports with service:{svc} (found {len(metrics)})", bool(metrics))
+        confirmed = any(_series_has_points(m, svc) for m in metrics[:5])
+        check(f"{svc}: live metric data carries service:{svc} + env:{DD_ENV}", confirmed)
+
+
 def test_log_trace_forward_pivot(trace_id):
     """Forward pivot: querying logs by trace_id returns >=1 record (POST /api/v2/logs/events/search)."""
     resp = _request(
@@ -110,6 +161,7 @@ def test_log_trace_reverse_pivot(trace_id):
 
 if __name__ == "__main__":
     test_service_map_edges()
+    test_platform_component_ust()
     if len(sys.argv) > 1:
         tid = sys.argv[1]
         test_log_trace_forward_pivot(tid)
