@@ -4,6 +4,31 @@ Forward-looking implementation order. Completed work lives in `PROGRESS.md`, not
 
 ---
 
+## Status reconciliation (2026-06-26)
+
+Several items below have moved since this list was written. Current state, with evidence:
+
+- **M1 OTel GenAI semconv (#20): largely DONE.** `witb_*` retired; `gen_ai.client.token.usage` +
+  `gen_ai.client.cost` emitted, `gen_ai.provider.name` in the dashboard. Live on a fresh cluster.
+  Remaining: a final verify pass.
+- **M2 UST / Service Map / correlation (#27): IN PROGRESS.** M1-M5 implemented and locally verified;
+  live-cluster acceptance pending.
+- **M3 Platform component UST (#28): PENDING**, still gated on #27 merging.
+- **M4 Dashboards OOTB + Terraform scaffold (#33): PENDING.** Design locked; `infra/terraform/dashboards/`
+  not yet scaffolded.
+- **M5 Attendee accounts & credentials (#34): MECHANISM DONE.** The distributor is live
+  (provisioning.agenticburn.com), the Datadog pool is staged (Secrets Manager, 2 accounts pulled out as
+  instructor + admin-attendee), the admin exception surfaces instructor/admin access, and per-cluster
+  secrets fan out via ESO. Remaining: populate the full 250-attendee pool (AWS + Datadog merged) and
+  Whitney's M2 acceptance verification.
+
+So the genuinely-open roadmap work is #28, #33, the #27 live acceptance, and the full attendee-pool
+population. The two new pieces this push added (not in the original list): the four Whitney experiment
+clusters on their own branches (see `docs/branch-per-cluster-convention.md`) and the fleet
+auto-bootstrap in `fleet.sh`.
+
+---
+
 ## Observability Suite (Short-term — pre-workshop)
 
 **Build order (MVP-first milestones; each verifiable in the Datadog UI):**
