@@ -84,6 +84,55 @@ module "vpc" {
   }
 }
 
+# Bedrock VPC endpoint (PrivateLink) — the load-bearing half of the Attack-1 (exfil) control.
+# The agent reaches Bedrock through this in-VPC ENI (an address in the VPC CIDR), so the
+# agent-namespace egress allowlist (policies/network-policies/per-namespace/agent-egress-allowlist.yaml,
+# in-VPC 10.0.0.0/16 only) permits Bedrock while denying S3 PutObject, which has no endpoint and so
+# egresses to the public internet, where there is no allow. private_dns_enabled makes the public
+# hostname bedrock-runtime.<region>.amazonaws.com resolve to this ENI from inside the VPC.
+#
+# Intentionally NO S3 endpoint. An S3 GATEWAY endpoint would route S3 via the VPC route table to an
+# AWS-managed prefix list — that traffic looks in-VPC at L3 and the CIDR allow could not distinguish
+# it, defeating the control. The terraform-aws-modules/vpc module above creates no endpoints, so the
+# only endpoint in this VPC is the Bedrock one below. Keep it that way.
+resource "aws_security_group" "bedrock_vpce" {
+  name        = "watch-it-burn-bedrock-vpce"
+  description = "Allow 443 from the lab VPC to the Bedrock interface endpoint"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    description = "HTTPS from anywhere in the lab VPC (attendee/instructor clusters)"
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = [module.vpc.vpc_cidr_block]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = { Name = "watch-it-burn-bedrock-vpce" }
+}
+
+resource "aws_vpc_endpoint" "bedrock_runtime" {
+  vpc_id              = module.vpc.vpc_id
+  service_name        = "com.amazonaws.${var.region}.bedrock-runtime"
+  vpc_endpoint_type   = "Interface"
+  subnet_ids          = module.vpc.private_subnets
+  security_group_ids  = [aws_security_group.bedrock_vpce.id]
+  private_dns_enabled = true
+
+  tags = { Name = "watch-it-burn-bedrock-runtime" }
+}
+
+output "bedrock_vpce_id" {
+  value = aws_vpc_endpoint.bedrock_runtime.id
+}
+
 output "vpc_id" {
   value = module.vpc.vpc_id
 }

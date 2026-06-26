@@ -1,0 +1,23 @@
+# ABOUTME: Allow DNS resolution from the agent namespace to kube-dns.
+# ABOUTME: Required so the agent can resolve Bedrock, the collector, and in-cluster service names.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-dns
+  namespace: agent
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
