@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/20
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 2 child PRD
 **Priority**: High
-**Status**: Not started
+**Status**: In progress. M1-M5 implemented (M2/M3 SDK injection live-verified on attendee-001 2026-06-25; M4 agentgateway tracing resolved; M5 retired the custom `witb_*` counters for standard `gen_ai.client.cost`, commit f963550), per PROGRESS.md 2026-06-25. M6 Weaver registry in place; M7 build verification pending.
 
 ---
 

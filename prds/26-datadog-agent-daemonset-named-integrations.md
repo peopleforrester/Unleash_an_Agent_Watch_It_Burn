@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/26
 **Meta-PRD**: [#7 Observability Suite Meta-PRD](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/7) — this is the Milestone 5 child PRD
 **Priority**: High
-**Status**: Not started
+**Status**: Complete. M1-M4 deployed and live-verified on watch-it-burn-attendee-001 (PROGRESS.md 2026-06-25): all five named-integration checks `[OK]`, EKS/k8s metrics and Falco logs confirmed via the Datadog API. ArgoCD named integration is a documented gap (bootstrap-installed; the Kyverno policy blocks the live patch).
 
 ---
 
