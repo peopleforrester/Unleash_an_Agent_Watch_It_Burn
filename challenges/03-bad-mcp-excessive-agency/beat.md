@@ -18,22 +18,23 @@ poisoned tool description steered it into calling a second tool you never asked 
 (`FAKE-MCP-EXFIL-sentinel-4c1d`) lands right in the agent's reply. The agent did
 something it was never asked to do, because a tool told it to.
 
-## Step 2, Switch on tool authorization
+## Step 2, Tighten the agent's tool allow-list
 
-The facilitator applies one rule at the gateway: a deny on that tool by name. The
-gateway now sits between the agent and the tool server and decides which tool calls
-are allowed to reach it.
+The facilitator narrows the agent's tool allow-list so the rogue tool is no longer
+one of the tools the agent is permitted to call. The benign tool you asked about
+stays; `read_internal_config` is filtered out of the agent's own toolset entirely.
 
 Ask the exact same question again. The poisoned description still tries its trick,
-but the call to `read_internal_config` never reaches the server. The sentinel does
-not appear. The agent answers only what you actually asked.
+but `read_internal_config` is no longer in the agent's toolset, so there is nothing
+for it to call. The sentinel does not appear. The agent answers only what you asked.
 
 ## What to take away
 
 Nothing in the cluster control plane saw this attack. It rode in on a tool
 description and a tool call, natural language and a function name. The control that
-caught it is tool-level authorization at the gateway: an allow/deny list over which
-tools the agent may actually call, independent of what any tool *claims* it should do.
+caught it is tool-level authorization: an allow-list over which tools the agent may
+actually call, enforced on the agent itself, independent of what any tool *claims* it
+should do. The rogue tool is filtered before the model ever learns it exists.
 
 See `governance-map.md` for the layer this control lives in, and `BUILD-SPIKE.md` for
 how this beat was verified before the event.
