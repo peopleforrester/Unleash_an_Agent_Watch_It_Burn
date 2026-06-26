@@ -116,19 +116,32 @@ kubectl version --client</pre>
     <button type="button" class="copy-btn" onclick="copyText('sk', this, 'secret key')" aria-label="Copy secret key">copy</button>
   </div>
 
-  <h3>c. Configure the AWS CLI</h3>
+  <h3>c. Configure the AWS CLI (saved as its own profile)</h3>
   <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 8px;">
-    Run <code>aws configure</code>. It asks four questions, one at a time. Answer them like this
-    (paste the keys from step b, type the region and format exactly as shown):
+    Run the command below. It saves these workshop keys under a profile named <code>watch-it-burn</code>,
+    so it will <strong>not</strong> touch or overwrite any AWS credentials you may already have. It asks
+    four questions, one at a time, answer them exactly like this (paste the keys from step b):
   </p>
-  <pre class="codeblock">$ aws configure
+  <pre class="codeblock">$ aws configure --profile watch-it-burn
 AWS Access Key ID [None]:      &lt;paste your access key&gt;
 AWS Secret Access Key [None]:  &lt;paste your secret key&gt;
 Default region name [None]:    {{ region }}
 Default output format [None]:  json</pre>
+  <div class="callout">
+    <strong style="font-style:normal;color:var(--navy);">Used AWS before?</strong>
+    The <code style="font-style:normal;">--profile watch-it-burn</code> keeps these workshop keys in their
+    own profile; your existing <code style="font-style:normal;">default</code> credentials stay untouched.
+    <strong style="font-style:normal;color:var(--navy);">New to AWS?</strong>
+    The same command just creates that one profile. Either way, run it exactly as shown, including
+    <code style="font-style:normal;">--profile watch-it-burn</code>.
+  </div>
 
   <h3>d. Connect to your cluster</h3>
-  <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'connect commands')" aria-label="Copy connect commands">copy</button>aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }}
+  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 8px;">
+    The <code>--profile watch-it-burn</code> below is baked into your kubeconfig, so <code>kubectl</code>
+    automatically uses the workshop profile from here on. You do not pass it again.
+  </p>
+  <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'connect commands')" aria-label="Copy connect commands">copy</button>aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }} --profile watch-it-burn
 kubectl get nodes                              # confirm your cluster is up</pre>
 
   <div class="callout">

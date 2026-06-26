@@ -78,12 +78,13 @@ aws --version &amp;&amp; kubectl version --client</pre></details>
       <pre>{{ aws_access_key }}</pre>
       <div class="label">AWS secret key</div>
       <pre>{{ aws_secret_key }}</pre>
-      <div class="label">Run <code>aws configure</code> and answer the four prompts</div>
-      <pre>$ aws configure
+      <div class="label">Configure the AWS CLI as its own profile (does not touch your default creds)</div>
+      <pre>$ aws configure --profile watch-it-burn
 AWS Access Key ID [None]:      &lt;paste the access key above&gt;
 AWS Secret Access Key [None]:  &lt;paste the secret key above&gt;
 Default region name [None]:    {{ region }}
 Default output format [None]:  json</pre>
+      <div class="note">The <code>--profile watch-it-burn</code> keeps these keys separate from any existing AWS credentials; if you have none, it just creates the profile. The commands below already include <code>--profile watch-it-burn</code>, so kubectl uses it automatically.</div>
       <div class="label">Then pull every instructor cluster's kubeconfig</div>
       <pre>{{ kubeconfig_commands }}
 kubectl config get-contexts                    # one context per instructor cluster</pre>
