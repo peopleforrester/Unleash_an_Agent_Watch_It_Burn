@@ -25,9 +25,11 @@ WIB_ACCOUNT_R3="${WIB_ACCOUNT_R3:-accen-dev}"
 # Attendee fleet accounts for `up-fleet` (comma-separated AWS profiles). The 250-cluster plan is 5
 # accounts x 50 clusters; up-fleet provisions every account's slice CONCURRENTLY so the whole fleet
 # comes up in one window instead of N serial batches. Each account needs its own lab-vpc applied to
-# states/<profile>.tfstate first. Disjoint name ranges keep state files from colliding. Default is the
-# single dev account so the command is a no-op-safe smoke test until the other accounts land.
-WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-accen-dev}"
+# states/<profile>.tfstate first. Disjoint name ranges keep state files from colliding. All five
+# accounts are stood up (lab-vpc applied 2026-06-27); profiles live in ~/.aws (us-west-2). Per-account
+# ALB/NLB->100 + vCPU->800 quota increases submitted 2026-06-27 and must be APPROVED before a full
+# 50/account run (each cluster = 1 ALB + 1 NLB; default cap is 50).
+WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-accen-dev,aws1-student31,aws1-student32,aws1-student33,aws1-student34}"
 
 # --- Instructor roster: 9 fixed clusters, 3 per round. "name|round|bootstrap-profile" -----------
 # These are facilitator-run and NOT in the attendee pool. fleet.sh PROVISIONS them; deploy-full-idp.sh
