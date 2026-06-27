@@ -60,6 +60,32 @@ stringData:
   enableOCI: "true"
 EOF
 
+log "[3.6] per-cluster secrets, created DIRECTLY in the cluster (no ESO / no Secrets Manager from the"
+log "      cluster, no cross-account). The secret exists BEFORE the app-of-apps, so consumers never"
+log "      crash-loop waiting on it. Datadog keys are passed in by the caller (fleet reads the pool on the"
+log "      provisioning box); a manual run falls back to the local Secrets Manager if this account can read it."
+DD_API_KEY="${WITB_DD_API_KEY:-}"
+DD_APP_KEY="${WITB_DD_APP_KEY:-}"
+if [[ -z "${DD_API_KEY}" || -z "${DD_APP_KEY}" ]]; then
+  _dd="$(aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog \
+    --region "${REGION:-us-west-2}" --query SecretString --output text 2>/dev/null || true)"
+  if [[ -n "${_dd}" ]]; then
+    DD_API_KEY="$(jq -r '."api-key" // empty' <<<"${_dd}")"
+    DD_APP_KEY="$(jq -r '."app-key" // empty' <<<"${_dd}")"
+  fi
+fi
+if [[ -n "${DD_API_KEY}" && -n "${DD_APP_KEY}" ]]; then
+  for ns in datadog monitoring security; do
+    kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+    kubectl -n "${ns}" create secret generic datadog-secret \
+      --from-literal=api-key="${DD_API_KEY}" --from-literal=app-key="${DD_APP_KEY}" \
+      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+  done
+  log "    datadog-secret created in datadog/monitoring/security (datadog agent + falcosidekick read it)"
+else
+  log "    WARN: no Datadog keys (WITB_DD_API_KEY/_APP_KEY unset, no readable local pool secret) — datadog-secret NOT created"
+fi
+
 if [[ "${PROFILE}" == "full" ]]; then
   log "[3.5] AWS Load Balancer Controller (NLB for the console Service, ALB for the party Ingresses)"
   # IAM is an EKS Pod Identity association created by Terraform for kube-system/aws-load-balancer-controller

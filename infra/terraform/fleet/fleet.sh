@@ -174,11 +174,21 @@ record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
 # concurrency pool provisions AND bootstraps each cluster in parallel.
 bootstrap_one() {
     local name="$1" profile="$2"
-    local prof="${TF_PROFILE:-accen-dev}"
+    local prof="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
     AWS_PROFILE="${prof}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
         --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
+    # Read this cluster's Datadog keys from the central pool on the PROVISIONING box (default account),
+    # then deploy-full-idp injects them into the cluster as a plain K8s Secret. The cluster's own account
+    # never touches Secrets Manager, no cross-account. (TODO: index the per-student pool slot for distinct
+    # orgs; for now the shared workshop org from watch-it-burn/datadog.)
+    local _dd api app
+    _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
+        --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
+    api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
+    app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${prof}" \
+        WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
         bash "${IDP_SCRIPT}" "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
