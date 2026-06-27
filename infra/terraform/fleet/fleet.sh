@@ -13,6 +13,8 @@ REPO_ROOT="$(cd "${INFRA_DIR}/.." && pwd)"
 readonly SCRIPT_DIR PROVISION_DIR INFRA_DIR REPO_ROOT
 readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
 readonly HARVEST_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/harvest_cluster_access.sh"
+readonly GEN_AWS_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/generate_attendee_aws.py"
+readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
 readonly CLUSTER_DIR="${PROVISION_DIR}/cluster"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/lab-vpc"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
@@ -110,6 +112,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
     harvest <n>      Harvest student-facing access info (console NLB / grafana / ...) of an up-fleet run
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
+    aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
+                      + offset). DRY-RUN unless WIB_APPLY=1; WIB_ACCESS_ENTRIES=1 maps users into clusters.
     status            List clusters that have state and their EKS status.
 
   INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
@@ -535,6 +539,42 @@ cmd_harvest() {
     report_failures >&2 || true
 }
 
+# Generate the per-attendee AWS half of the pool across the fleet: one scoped IAM user + access key per
+# cluster, in the cluster's OWN account (mirrors up-fleet's account/range scheme). DRY-RUN by default;
+# set WIB_APPLY=1 to actually create. WIB_ACCESS_ENTRIES=1 also maps each user into its cluster (needs
+# the cluster to exist). Per-account CSVs land in aws-pool/ (gitignored, live keys). Feed them to
+# merge_pool.py. This is the 250-key go-live step (issue: per-attendee AWS creds / B14).
+cmd_aws_keys() {
+    local per_account="${1:-}"
+    [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: aws-keys <clusters-per-account>"; exit 2; }
+    [[ -f "${GEN_AWS_SCRIPT}" ]] || { log "missing generator: ${GEN_AWS_SCRIPT}"; exit 1; }
+    command -v uv >/dev/null 2>&1 || { log "need uv (the generator runs 'uv run --with boto3')"; exit 1; }
+    mkdir -p "${AWS_POOL_DIR}"
+    local apply=() entries=()
+    [[ -n "${WIB_APPLY:-}" ]] && apply=(--apply) || log "DRY-RUN (set WIB_APPLY=1 to actually create IAM users/keys)"
+    [[ -n "${WIB_ACCESS_ENTRIES:-}" ]] && entries=(--access-entries)
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    log "aws-keys: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET})"
+    local idx=0 acct start n names
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
+        idx=$(( idx + 1 ))
+        names=""
+        for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+            names+="$(printf '%s-%03d' "${NAME_PREFIX}" "${n}"),"
+        done
+        names="${names%,}"
+        log "  account '${acct}': $(printf '%s-%03d' "${NAME_PREFIX}" "${start}") .. $(printf '%s-%03d' "${NAME_PREFIX}" $(( start + per_account - 1 )))"
+        uv run --with boto3 python "${GEN_AWS_SCRIPT}" \
+            --clusters "${names}" --profile "${acct}" --region "${WIB_REGION}" \
+            --out "${AWS_POOL_DIR}/${acct}.csv" "${apply[@]}" "${entries[@]}" \
+            || { record_fail "aws-keys:${acct}"; log "  ${acct}: aws-keys FAILED"; }
+    done
+    [[ -n "${WIB_APPLY:-}" ]] && log "per-account CSVs in ${AWS_POOL_DIR}/ (live keys, gitignored) — feed to merge_pool.py"
+    report_failures >&2 || true
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
@@ -544,6 +584,7 @@ main() {
         down-fleet) cmd_down_fleet "$@" ;;
         health) cmd_health "$@" ;;
         harvest) cmd_harvest "$@" ;;
+        aws-keys) cmd_aws_keys "$@" ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
         *) usage ;;
