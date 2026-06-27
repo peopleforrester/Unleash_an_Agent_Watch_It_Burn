@@ -1,0 +1,153 @@
+<!-- ABOUTME: BurritBot customer chat frontend (issue #38 / B1). Real chat: POST {prompt} -> /chat, renders
+     ABOUTME: {reply,guarded,tokens}. Backend-agnostic (Vertex or Bedrock). Round dropdown repoints the backend. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>BurritBot — agenticburn</title>
+<link rel="icon" type="image/png" href="/burrito.png" />
+<style>
+  :root{
+    --dd:#632CA6;--acn:#A100FF;--accent:#8A00D6;--cream:#FDF6EE;--lav:#ECE3FB;--ink:#2b2230;--mid:#4A4A4A;--line:#e4d8f5;
+    --r1:#d23b3b;--r2:#2e9e5b;--r3:#7a3ff2;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);display:flex;flex-direction:column;min-height:100vh}
+  header{background:var(--dd);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px}
+  header .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+  header .brand .em{font-size:22px}
+  header .spacer{flex:1}
+  .round-pick{display:flex;align-items:center;gap:8px;font-size:13px}
+  .round-pick label{opacity:.85}
+  select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
+  .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
+  .banner{padding:9px 18px;color:#fff;font-weight:800;letter-spacing:.3px;display:flex;align-items:center;gap:10px;font-size:14px}
+  .banner .dot{width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+  .banner.r1{background:var(--r1)}.banner.r2{background:var(--r2)}.banner.r3{background:var(--r3)}
+  .banner small{font-weight:600;opacity:.92}
+  .wrap{flex:1;display:flex;min-height:0;max-width:1180px;width:100%;margin:0 auto;padding:18px;gap:18px}
+  .chatcol{flex:1;display:flex;flex-direction:column;min-width:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 6px 22px rgba(99,44,166,.08)}
+  .chathead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  .chathead .avatar{width:34px;height:34px;border-radius:50%;background:var(--lav);display:grid;place-items:center;font-size:18px}
+  .chathead h2{margin:0;font-size:15px}
+  .chathead .sub{font-size:12px;color:var(--mid)}
+  .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer}
+  .stream{flex:1;overflow:auto;padding:18px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#fff,#fdfaff)}
+  .msg{max-width:78%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+  .bot{align-self:flex-start;background:var(--lav);border-bottom-left-radius:4px}
+  .me{align-self:flex-end;background:var(--dd);color:#fff;border-bottom-right-radius:4px}
+  .sys{align-self:center;font-size:12px;color:var(--mid);background:#f5eefc;border:1px solid var(--line);padding:5px 10px;border-radius:999px}
+  .typing{align-self:flex-start;color:var(--mid);font-size:13px;font-style:italic}
+  .composer{border-top:1px solid var(--line);padding:12px;display:flex;gap:10px;background:#fff}
+  .composer input{flex:1;font:inherit;padding:11px 13px;border:1px solid var(--line);border-radius:10px}
+  .composer button{font:inherit;font-weight:800;background:var(--accent);color:#fff;border:0;padding:0 18px;border-radius:10px;cursor:pointer}
+  .composer button:disabled{opacity:.5;cursor:default}
+  .rail{width:270px;flex:0 0 270px;display:flex;flex-direction:column;gap:10px}
+  .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px}
+  .card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
+  .saved{display:flex;flex-direction:column;gap:7px}
+  .saved button{text-align:left;font:inherit;font-size:12.5px;border:1px solid var(--line);background:#faf6ff;color:var(--ink);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hint{font-size:12px;color:var(--mid)}
+  #noburritos{position:fixed;inset:0;background:#000;color:#fff;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:50}
+  #noburritos b{font-size:min(9vw,72px);font-weight:800;letter-spacing:.5px}
+  #noburritos span{margin-top:10px;color:#666;font-size:13px}
+  footer{padding:10px 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--mid);display:flex;gap:14px;align-items:center}
+  footer .sp{flex:1}
+  @media(max-width:760px){.rail{display:none}}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="em">🌯🧹</span> BurritBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
+    <div class="spacer"></div>
+    <div class="cost" id="cost" title="tokens this session">⛁ 0 tok</div>
+    <div class="round-pick">
+      <label for="round">Round</label>
+      <select id="round" onchange="setRound(this.value)">
+        <option value="r1">Round 1 — No guardrails</option>
+        <option value="r2">Round 2 — Some guardrails</option>
+        <option value="r3">Round 3 — Your cluster</option>
+      </select>
+    </div>
+  </header>
+
+  <div id="banner" class="banner r1">
+    <span class="dot"></span><span id="bannertext">NO GUARDRAILS</span>
+    <small id="bannersub">— you're talking straight to the model. Nothing is watching. (round-1 cluster)</small>
+  </div>
+
+  <div class="wrap">
+    <div class="chatcol">
+      <div class="chathead">
+        <div class="avatar">🧹</div>
+        <div><h2>BurritBot</h2><div class="sub">The friendliest burrito witch on the mesh. Now taking orders.</div></div>
+        <button class="reset" onclick="resetChat()">↺ Reset</button>
+      </div>
+      <div class="stream" id="stream"></div>
+      <div class="composer">
+        <input id="inp" placeholder="Tell BurritBot what you'd like…" onkeydown="if(event.key==='Enter')send()" autocomplete="off" />
+        <button id="sendbtn" onclick="send()">Send</button>
+      </div>
+    </div>
+    <aside class="rail">
+      <div class="card">
+        <h3>Your saved prompts</h3>
+        <div class="saved" id="saved"><div class="hint">Prompts you send are saved here for this session, reuse them in the next round.</div></div>
+      </div>
+    </aside>
+  </div>
+
+  <footer>
+    <span>🔥 Watch It Burn</span><span class="sp"></span>
+    <span>Co-sponsored by <strong style="color:var(--dd)">Datadog</strong> &amp; <strong style="color:var(--acn)">Accenture</strong></span>
+  </footer>
+
+  <div id="noburritos"><b>NO BURRITOS FOR YOU</b><span id="nbsub">(no cluster connected)</span></div>
+
+<script>
+  // Round -> backend /chat endpoint. Same-origin /chat by default (round 3 served from the attendee's
+  // cluster). Rounds 1/2 point at the shared demo clusters; override these at deploy time.
+  const ROUND_ENDPOINTS = window.BURRITBOT_ENDPOINTS || {
+    r1: (window.BURRITBOT_R1 || "https://round1.agenticburn.com") + "/chat",
+    r2: (window.BURRITBOT_R2 || "https://round2.agenticburn.com") + "/chat",
+    r3: "/chat"
+  };
+  const ROUNDS={
+    r1:{cls:'r1',t:'NO GUARDRAILS',s:"— you're talking straight to the model. Nothing is watching. (round-1 cluster)"},
+    r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra + AI guardrails are on. Try the same prompts and watch them get blocked. (round-2 cluster)'},
+    r3:{cls:'r3',t:'YOUR CLUSTER',s:"— this is yours. Turn guardrails on yourself in the terminal. (your round-3 cluster)"}
+  };
+  let round='r1', tokens=0, busy=false;
+  function setRound(r){round=r;const b=document.getElementById('banner');b.className='banner '+ROUNDS[r].cls;
+    document.getElementById('bannertext').textContent=ROUNDS[r].t;document.getElementById('bannersub').textContent=ROUNDS[r].s;
+    sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritBot, different cluster.');}
+  function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
+  function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
+  function save(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);}
+  function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
+  function resetChat(){document.getElementById('stream').innerHTML='';greet();}
+  function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
+
+  async function send(){
+    if(busy)return;const i=document.getElementById('inp');const v=i.value.trim();if(!v)return;
+    bubble(v,'me');save(v);i.value='';busy=true;document.getElementById('sendbtn').disabled=true;
+    const t=document.createElement('div');t.className='typing';t.textContent='BurritBot is thinking…';
+    const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
+    try{
+      const res=await fetch(ROUND_ENDPOINTS[round],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v})});
+      t.remove();
+      if(!res.ok){ if(res.status===0||res.status>=500){noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');} bubble("Hmm, the kitchen isn't answering ("+res.status+"). Try again in a moment.",'bot'); return; }
+      const data=await res.json();
+      bubble(data.reply || "…", 'bot');
+      const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot;
+      document.getElementById('cost').textContent='⛁ '+tokens+' tok'+(data.guarded?' · guarded':'');
+    }catch(e){
+      t.remove(); noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');
+    }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
+  }
+  greet();
+</script>
+</body>
+</html>
