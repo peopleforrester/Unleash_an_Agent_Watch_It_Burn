@@ -5,160 +5,160 @@
 {% block meta_description %}Your Watch It Burn workshop console, Datadog, and cluster credentials.{% endblock %}
 
 {% block main %}
-  <section class="card" style="margin-bottom:24px;">
-    <div class="label">Your cluster</div>
-    <h1 style="margin:6px 0 4px;font-size:28px;color:var(--navy);">{{ cluster_name }}</h1>
-    <div style="font-size:15px;color:var(--navy);">Region: <strong>{{ region }}</strong></div>
-  </section>
+<style>
+  /* B4 gated step flow (issue #37 / run-of-show 2026-06-27). Reuses _base.html copy-row/callout/codeblock. */
+  .cluster-card{background:var(--light-blue);border:1px solid #d9c9f3;border-radius:14px;padding:16px 18px;margin-bottom:16px;}
+  .cluster-card .label{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--light-gray);}
+  .cluster-card h1{margin:4px 0 2px;font-size:24px;color:var(--navy);}
+  .progress{font-size:14px;color:var(--mid-gray);margin:0 0 16px;}
+  .progress b{color:#2e9e5b;}
+  .step{background:#fff;border:1px solid #e4d8f5;border-radius:14px;margin-bottom:14px;overflow:hidden;transition:opacity .2s;}
+  .step.locked{opacity:.45;pointer-events:none;filter:grayscale(.3);}
+  .step.done{border-color:#2e9e5b;}
+  .step .shead{display:flex;align-items:center;gap:12px;padding:15px 18px;cursor:pointer;}
+  .step .num{width:30px;height:30px;flex:0 0 30px;border-radius:50%;background:var(--light-blue);color:var(--accent);font-weight:800;display:grid;place-items:center;}
+  .step.done .num{background:#2e9e5b;color:#fff;}
+  .step .stitle{font-weight:800;font-size:16px;color:var(--navy);}
+  .step .ssub{font-size:12.5px;color:var(--mid-gray);}
+  .step .chev{margin-left:auto;color:var(--light-gray);transition:transform .2s;}
+  .step.open .chev{transform:rotate(90deg);}
+  .step .sbody{display:none;padding:4px 18px 18px;}
+  .step.open .sbody{display:block;}
+  .stepbtn{display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:800;padding:10px 18px;border-radius:10px;border:0;cursor:pointer;font-size:14px;margin:8px 0;}
+  .stepbtn.navy{background:var(--navy);}
+  .check{display:flex;align-items:center;gap:9px;margin-top:12px;padding:11px 13px;background:#f3fbf6;border:1px solid #cdeede;border-radius:10px;font-weight:700;font-size:14px;cursor:pointer;}
+  .check input{width:18px;height:18px;accent-color:#2e9e5b;}
+  .done-banner{display:none;margin:8px 0 4px;background:linear-gradient(90deg,var(--acn-violet),var(--accent));color:#fff;border-radius:14px;padding:18px;text-align:center;font-weight:800;font-size:17px;}
+  .optional{margin-top:18px;border:1px dashed #d9c9f3;border-radius:12px;background:#fff;}
+  .optional > summary{cursor:pointer;padding:14px 16px;font-weight:700;color:var(--mid-gray);font-size:14px;list-style:none;}
+  .optional > summary::-webkit-details-marker{display:none;}
+  .optional .obody{padding:0 16px 16px;}
+</style>
 
-  {% if console_url %}
-  <h2 style="margin-top:24px;">1 &middot; Open your console</h2>
-  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 10px;">
-    This is where the workshop happens: chat to your agent and an in-browser terminal, side by side.
-  </p>
-  <a href="{{ console_url }}" target="_blank" rel="noopener"
-     style="display:inline-block;background:var(--accent);color:#fff;text-decoration:none;font-weight:700;font-size:16px;padding:12px 22px;border-radius:6px;">
-    Open your console &rarr;
-  </a>
-  {% endif %}
+<section class="cluster-card">
+  <div class="label">Your cluster</div>
+  <h1>{{ cluster_name }}</h1>
+  <div style="font-size:13px;color:var(--mid-gray);">Region <strong>{{ region }}</strong> &middot; assigned to <strong>{{ email }}</strong>. Keep this email, it is how you get back to this page.</div>
+</section>
 
-  {% if datadog_dashboard_url %}
-  <h2 style="margin-top:28px;">2 &middot; Your Datadog</h2>
-  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 10px;">
-    This is where you watch what the agent does to your cluster. Click the button to open your
-    dashboard, or log in at <a href="https://app.datadoghq.com" target="_blank" rel="noopener" style="color:var(--accent);">app.datadoghq.com</a>
-    (site <strong>{{ datadog_site or 'datadoghq.com' }}</strong>) with the email and password below.
-    You do <strong>not</strong> need to paste the API or APP keys anywhere; they are already wired into your
-    cluster's Datadog Agent. They are shown only in case you want them.
-  </p>
-  <a href="{{ datadog_dashboard_url }}" target="_blank" rel="noopener"
-     style="display:inline-block;background:var(--navy);color:#fff;text-decoration:none;font-weight:700;font-size:15px;padding:10px 18px;border-radius:6px;margin-bottom:10px;">
-    Open your Datadog dashboard &rarr;
-  </a>
-  <div class="copy-row">
-    <span class="key-label">Datadog login</span>
-    <code id="dde">{{ datadog_email }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('dde', this, 'Datadog email')" aria-label="Copy Datadog email">copy</button>
+<p class="progress"><b id="ndone">0</b> of 3 done. Work top to bottom, each step unlocks the next.</p>
+
+<!-- STEP 1 - Datadog -->
+{% if datadog_dashboard_url %}
+<section class="step open" id="s1">
+  <div class="shead" onclick="toggleStep('s1')">
+    <div class="num">1</div>
+    <div><div class="stitle">Log into Datadog</div><div class="ssub">Where you watch what the agent does to your cluster.</div></div>
+    <div class="chev">&#9656;</div>
   </div>
-  <div class="copy-row">
-    <span class="key-label">Datadog password</span>
-    <code id="ddp">{{ datadog_password }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('ddp', this, 'Datadog password')" aria-label="Copy Datadog password">copy</button>
+  <div class="sbody">
+    <a class="stepbtn navy" href="{{ datadog_dashboard_url }}" target="_blank" rel="noopener">Open Datadog &rarr;</a>
+    <div class="copy-row"><span class="key-label">Login</span><code id="dde">{{ datadog_email }}</code><button type="button" class="copy-btn" onclick="copyText('dde', this, 'Datadog login')">copy</button></div>
+    <div class="copy-row"><span class="key-label">Password</span><code id="ddp">{{ datadog_password }}</code><button type="button" class="copy-btn" onclick="copyText('ddp', this, 'Datadog password')">copy</button></div>
+    <div class="copy-row"><span class="key-label">Site</span><code id="dds">{{ datadog_site or 'datadoghq.com' }}</code><button type="button" class="copy-btn" onclick="copyText('dds', this, 'Datadog site')">copy</button></div>
+    <p style="font-size:12px;color:var(--light-gray);margin:6px 0 0;">The API/APP keys are already wired into your cluster's agent; you only need the login above.</p>
+    <label class="check"><input type="checkbox" onchange="markStep('s1',this.checked)"> I'm logged into Datadog</label>
   </div>
-  <div class="copy-row">
-    <span class="key-label">API key</span>
-    <code id="ddapi">{{ datadog_api_key }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('ddapi', this, 'Datadog API key')" aria-label="Copy Datadog API key">copy</button>
+</section>
+{% endif %}
+
+<!-- STEP 2 - Terminal + instructions -->
+{% if console_url %}
+<section class="step locked" id="s2">
+  <div class="shead" onclick="toggleStep('s2')">
+    <div class="num">2</div>
+    <div><div class="stitle">Open your terminal &amp; instructions</div><div class="ssub">An in-browser shell, already wired to your cluster. The whole workshop runs here.</div></div>
+    <div class="chev">&#9656;</div>
   </div>
-  <div class="copy-row">
-    <span class="key-label">APP key</span>
-    <code id="ddapp">{{ datadog_app_key }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('ddapp', this, 'Datadog APP key')" aria-label="Copy Datadog APP key">copy</button>
+  <div class="sbody">
+    <a class="stepbtn" href="{{ console_url }}" target="_blank" rel="noopener">Open your terminal &rarr;</a>
+    <p style="font-size:13.5px;color:var(--mid-gray);margin:6px 0 0;">No setup. Your <code>kubectl</code> is preconfigured and the guardrail on/off scripts are already loaded; the step-by-step instructions are in the left pane.</p>
+    <label class="check"><input type="checkbox" onchange="markStep('s2',this.checked)"> My terminal opened and <code style="font-style:normal;">kubectl get pods</code> works</label>
   </div>
-  <p style="color:var(--mid-gray);font-size:13px;margin-top:6px;">Datadog site: <strong>{{ datadog_site }}</strong>. The API/APP keys are for your cluster's Datadog Agent; the login is to view your org.</p>
-  {% endif %}
+</section>
+{% endif %}
 
-  <h2 style="margin-top:28px;">3 &middot; Optional: connect from your own laptop <span style="font-weight:400;color:var(--light-gray);font-size:14px;">(local kubectl)</span></h2>
-  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 14px;">
-    Skip this whole section if you are working in the in-browser console above. It already has a terminal.
-    You only need the steps below to run <code>kubectl</code> from your own machine.
-  </p>
+<!-- STEP 3 - BurritBot -->
+<section class="step locked" id="s3">
+  <div class="shead" onclick="toggleStep('s3')">
+    <div class="num">3</div>
+    <div><div class="stitle">Open your BurritBot</div><div class="ssub">Your own cluster's BurritBot, the one you watched in rounds 1 &amp; 2.</div></div>
+    <div class="chev">&#9656;</div>
+  </div>
+  <div class="sbody">
+    <a class="stepbtn" href="{{ burritbot_url or console_url or '#' }}" target="_blank" rel="noopener">Open your BurritBot &rarr;</a>
+    {% if burritbot_url %}<div class="copy-row"><span class="key-label">Your URL</span><code id="bb">{{ burritbot_url }}</code><button type="button" class="copy-btn" onclick="copyText('bb', this, 'BurritBot URL')">copy</button></div>{% endif %}
+    <div class="callout" style="margin-top:10px;">
+      <strong style="font-style:normal;color:var(--navy);">A word of caution.</strong>
+      You also have ArgoCD, Grafana and more (see the optional section below). Poke around, but if you change
+      services and break things we probably can't fix it for you mid-workshop. Just know the risk.
+    </div>
+    <label class="check"><input type="checkbox" onchange="markStep('s3',this.checked)"> BurritBot loaded for my cluster</label>
+  </div>
+</section>
 
-  <h3>a. Install the tools</h3>
-  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 10px;">
-    You need two command-line tools: the <strong>AWS CLI v2</strong> and <strong>kubectl</strong>. Open the tab for your OS.
-  </p>
+<div class="done-banner" id="doneb">&#128302; You're all set. Head to your terminal, the instructions take it from here.</div>
 
-  <details class="os">
-    <summary>macOS <span class="os-hint">(Homebrew, or the official installer)</span></summary>
-    <pre class="codeblock" id="inst-mac"><button type="button" class="copy-btn" onclick="copyText('inst-mac', this, 'macOS install commands')" aria-label="Copy macOS install commands">copy</button># AWS CLI v2  (or download https://awscli.amazonaws.com/AWSCLIV2.pkg and run it)
-brew install awscli
-# kubectl
+<!-- OPTIONAL: own-machine access + extra service logins (one friction-gate away) -->
+<details class="optional">
+  <summary>&#9656; Optional: connect from your own machine, and other service logins</summary>
+  <div class="obody">
+    <p style="color:var(--mid-gray);font-size:14px;">
+      You don't need any of this, the in-browser terminal already has everything. But if you'd rather use your
+      own machine, or log into ArgoCD/Grafana directly, it's all here. You own whatever you change on your own setup.
+    </p>
+
+    <h3>Other service logins</h3>
+    {% if argocd_url %}<div class="copy-row"><span class="key-label">ArgoCD</span><code id="ag">{{ argocd_url }} &middot; admin / {{ argocd_password }}</code><button type="button" class="copy-btn" onclick="copyText('ag', this, 'ArgoCD')">copy</button></div>{% endif %}
+    {% if grafana_url %}<div class="copy-row"><span class="key-label">Grafana</span><code id="gf">{{ grafana_url }} &middot; admin / {{ grafana_password or 'watchitburn-admin' }}</code><button type="button" class="copy-btn" onclick="copyText('gf', this, 'Grafana')">copy</button></div>{% endif %}
+    {% if datadog_api_key %}
+    <p style="font-size:12.5px;color:var(--light-gray);margin:10px 0 4px;">Your Datadog keys are already wired into your cluster's agent; shown only in case you want them.</p>
+    <div class="copy-row"><span class="key-label">DD API key</span><code id="ddapi">{{ datadog_api_key }}</code><button type="button" class="copy-btn" onclick="copyText('ddapi', this, 'Datadog API key')">copy</button></div>
+    <div class="copy-row"><span class="key-label">DD APP key</span><code id="ddapp">{{ datadog_app_key }}</code><button type="button" class="copy-btn" onclick="copyText('ddapp', this, 'Datadog APP key')">copy</button></div>
+    {% endif %}
+
+    <h3>a. Install the CLI tools</h3>
+    <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 10px;">You need the <strong>AWS CLI v2</strong> and <strong>kubectl</strong>. Open the tab for your OS.</p>
+    <details class="os"><summary>macOS</summary>
+      <pre class="codeblock" id="inst-mac"><button type="button" class="copy-btn" onclick="copyText('inst-mac', this, 'macOS install')">copy</button>brew install awscli
 brew install kubectl
-# verify both are installed
 aws --version
-kubectl version --client</pre>
-  </details>
-
-  <details class="os">
-    <summary>Windows <span class="os-hint">(PowerShell + winget)</span></summary>
-    <pre class="codeblock" id="inst-win"><button type="button" class="copy-btn" onclick="copyText('inst-win', this, 'Windows install commands')" aria-label="Copy Windows install commands">copy</button># AWS CLI v2  (or download https://awscli.amazonaws.com/AWSCLIV2.msi and run it)
-winget install -e --id Amazon.AWSCLI
-# kubectl
+kubectl version --client</pre></details>
+    <details class="os"><summary>Windows (PowerShell)</summary>
+      <pre class="codeblock" id="inst-win"><button type="button" class="copy-btn" onclick="copyText('inst-win', this, 'Windows install')">copy</button>winget install -e --id Amazon.AWSCLI
 winget install -e --id Kubernetes.kubectl
-# close and reopen PowerShell, then verify
 aws --version
-kubectl version --client</pre>
-  </details>
-
-  <details class="os">
-    <summary>Linux <span class="os-hint">(x86_64)</span></summary>
-    <pre class="codeblock" id="inst-linux"><button type="button" class="copy-btn" onclick="copyText('inst-linux', this, 'Linux install commands')" aria-label="Copy Linux install commands">copy</button># AWS CLI v2
-curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
-unzip awscliv2.zip && sudo ./aws/install
-# kubectl
+kubectl version --client</pre></details>
+    <details class="os"><summary>Linux (x86_64)</summary>
+      <pre class="codeblock" id="inst-linux"><button type="button" class="copy-btn" onclick="copyText('inst-linux', this, 'Linux install')">copy</button>curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
+unzip awscliv2.zip &amp;&amp; sudo ./aws/install
 curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-# verify both are installed
-aws --version
-kubectl version --client</pre>
-  </details>
+sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl</pre></details>
 
-  <h3>b. Your AWS keys</h3>
-  <div class="copy-row">
-    <span class="key-label">Access key</span>
-    <code id="ak">{{ access_key }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('ak', this, 'access key')" aria-label="Copy access key">copy</button>
-  </div>
-  <div class="copy-row">
-    <span class="key-label">Secret key</span>
-    <code id="sk">{{ secret_key }}</code>
-    <button type="button" class="copy-btn" onclick="copyText('sk', this, 'secret key')" aria-label="Copy secret key">copy</button>
-  </div>
+    <h3>b. Your AWS keys</h3>
+    <div class="copy-row"><span class="key-label">Access key</span><code id="ak">{{ access_key }}</code><button type="button" class="copy-btn" onclick="copyText('ak', this, 'access key')">copy</button></div>
+    <div class="copy-row"><span class="key-label">Secret key</span><code id="sk">{{ secret_key }}</code><button type="button" class="copy-btn" onclick="copyText('sk', this, 'secret key')">copy</button></div>
 
-  <h3>c. Configure the AWS CLI (saved as its own profile)</h3>
-  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 8px;">
-    Run the command below. It saves these workshop keys under a profile named <code>watch-it-burn</code>,
-    so it will <strong>not</strong> touch or overwrite any AWS credentials you may already have. It asks
-    four questions, one at a time, answer them exactly like this (paste the keys from step b):
-  </p>
-  <pre class="codeblock">$ aws configure --profile watch-it-burn
+    <h3>c. Configure the AWS CLI (its own profile, won't touch your existing creds)</h3>
+    <pre class="codeblock">$ aws configure --profile watch-it-burn
 AWS Access Key ID [None]:      &lt;paste your access key&gt;
 AWS Secret Access Key [None]:  &lt;paste your secret key&gt;
 Default region name [None]:    {{ region }}
 Default output format [None]:  json</pre>
-  <div class="callout">
-    <strong style="font-style:normal;color:var(--navy);">Used AWS before?</strong>
-    The <code style="font-style:normal;">--profile watch-it-burn</code> keeps these workshop keys in their
-    own profile; your existing <code style="font-style:normal;">default</code> credentials stay untouched.
-    <strong style="font-style:normal;color:var(--navy);">New to AWS?</strong>
-    The same command just creates that one profile. Either way, run it exactly as shown, including
-    <code style="font-style:normal;">--profile watch-it-burn</code>.
+
+    <h3>d. Connect to your cluster</h3>
+    <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'connect commands')">copy</button>aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }} --profile watch-it-burn
+kubectl get nodes</pre>
   </div>
+</details>
 
-  <h3>d. Connect to your cluster</h3>
-  <p style="color:var(--mid-gray);font-size:14px;margin:4px 0 8px;">
-    The <code>--profile watch-it-burn</code> below is baked into your kubeconfig, so <code>kubectl</code>
-    automatically uses the workshop profile from here on. You do not pass it again.
-  </p>
-  <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'connect commands')" aria-label="Copy connect commands">copy</button>aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }} --profile watch-it-burn
-kubectl get nodes                              # confirm your cluster is up</pre>
-
-  <div class="callout">
-    <strong style="font-style:normal;color:var(--navy);">Most of the workshop is in the console.</strong>
-    Drive the agent from the chat tab and use the terminal tab for <code style="font-style:normal;">kubectl</code>.
-    Everything in section 3 is only for the optional local-<code style="font-style:normal;">kubectl</code> path.
-  </div>
-
-  <p style="color:var(--light-gray);font-size:13px;font-style:italic;margin-top:18px;">
-    Lost this page? Re-enter your email
-    <a href="{{ url_for('index') }}" style="color:var(--accent);">on the home page</a>
-    to redisplay your access &mdash; or check the email we sent you.
-  </p>
+<p style="color:var(--light-gray);font-size:13px;font-style:italic;margin-top:18px;">
+  Lost this page? Re-enter your email <a href="{{ url_for('index') }}" style="color:var(--accent);">on the home page</a> to redisplay your access.
+</p>
 {% endblock %}
 
 {% block footer_hint %}
-  <div class="small">Lost your access? Re-enter your email on the home page to redisplay it.</div>
+  <div class="small">Lost your access? Re-enter your email on the home page to redisplay it. We don't send or keep your email beyond this workshop.</div>
 {% endblock %}
 
 {% block scripts %}
@@ -166,31 +166,28 @@ kubectl get nodes                              # confirm your cluster is up</pre
   function copyText(id, btn, friendlyName) {
     var el = document.getElementById(id);
     var text = (el.innerText || el.textContent).replace(/^\s*copy\s*/, '');
-    function announce(msg) {
-      var live = document.getElementById('copy-status');
-      if (live) { live.textContent = ''; setTimeout(function () { live.textContent = msg; }, 50); }
-    }
-    function done() {
-      var orig = btn.textContent;
-      btn.textContent = 'copied';
-      announce((friendlyName || 'value') + ' copied to clipboard');
-      setTimeout(function () { btn.textContent = orig; }, 1200);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(done, function () { fallback(text); done(); });
-    } else {
-      fallback(text); done();
-    }
-    function fallback(t) {
-      var ta = document.createElement('textarea');
-      ta.value = t;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
-      try { document.execCommand('copy'); } catch (e) {}
-      document.body.removeChild(ta);
-    }
+    function done(){ var orig = btn.textContent; btn.textContent = 'copied';
+      var live = document.getElementById('copy-status'); if (live){ live.textContent=''; setTimeout(function(){live.textContent=(friendlyName||'value')+' copied';},50);}
+      setTimeout(function(){ btn.textContent = orig; }, 1200); }
+    if (navigator.clipboard && navigator.clipboard.writeText) { navigator.clipboard.writeText(text).then(done, function(){ fallback(text); done(); }); }
+    else { fallback(text); done(); }
+    function fallback(t){ var ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0'; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy');}catch(e){} document.body.removeChild(ta); }
+  }
+  // gated step flow
+  var ORDER = ['s1','s2','s3'].filter(function(id){ return document.getElementById(id); });
+  var state = {};
+  // first present step starts unlocked + open
+  if (ORDER.length){ document.getElementById(ORDER[0]).classList.add('open'); document.getElementById(ORDER[0]).classList.remove('locked'); }
+  function toggleStep(id){ document.getElementById(id).classList.toggle('open'); }
+  function markStep(id, v){
+    state[id]=v; var el=document.getElementById(id); el.classList.toggle('done', v);
+    var i=ORDER.indexOf(id), nxt=ORDER[i+1];
+    if (nxt){ var n=document.getElementById(nxt);
+      if (v){ n.classList.remove('locked'); n.classList.add('open'); el.classList.remove('open'); }
+      else { n.classList.add('locked'); } }
+    var done = ORDER.filter(function(s){ return state[s]; }).length;
+    document.getElementById('ndone').textContent = done;
+    document.getElementById('doneb').style.display = (done===ORDER.length && ORDER.length>0) ? 'block' : 'none';
   }
 </script>
 {% endblock %}
