@@ -184,9 +184,9 @@ record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
 # concurrency pool provisions AND bootstraps each cluster in parallel.
 bootstrap_one() {
     local name="$1" profile="$2"
-    local prof="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
-    AWS_PROFILE="${prof}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
+    AWS_PROFILE="${acct_profile}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
         --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
     # Read this cluster's Datadog keys from the central pool on the PROVISIONING box (default account),
     # then deploy-full-idp injects them into the cluster as a plain K8s Secret. The cluster's own account
@@ -197,7 +197,7 @@ bootstrap_one() {
         --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
     api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
     app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
-    if KUBECONFIG="${kcfg}" AWS_PROFILE="${prof}" \
+    if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
         bash "${IDP_SCRIPT}" "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
@@ -456,9 +456,9 @@ cmd_down_fleet() {
 # sanity backstop (no Pending/Failed pods). If all apps are Healthy the workloads they manage are up.
 health_one() {
     local name="$1"; assert_ours "${name}"
-    local prof="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
-    if ! AWS_PROFILE="${prof}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
+    if ! AWS_PROFILE="${acct_profile}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
             --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1; then
         log "  ${name}: UNREACHABLE (no kubeconfig)"; record_fail "${name}:unreachable"; rm -f "${kcfg}"; return
     fi
@@ -510,8 +510,8 @@ cmd_health() {
 # Harvest one cluster's student-facing access info (console NLB / grafana / etc.) as a pool CSV row.
 harvest_one() {
     local name="$1"; assert_ours "${name}"
-    local prof="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
-    AWS_PROFILE="${prof}" bash "${HARVEST_SCRIPT}" "${name}" "${WIB_REGION}" 2>>"${LOG_DIR}/${name}.harvest.log" \
+    local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    AWS_PROFILE="${acct_profile}" bash "${HARVEST_SCRIPT}" "${name}" "${WIB_REGION}" 2>>"${LOG_DIR}/${name}.harvest.log" \
         || { record_fail "${name}:harvest"; log "  ${name}: harvest FAILED (see ${LOG_DIR}/${name}.harvest.log)"; }
 }
 
