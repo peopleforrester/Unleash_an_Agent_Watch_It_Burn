@@ -5,7 +5,12 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROVISION_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-readonly SCRIPT_DIR PROVISION_DIR
+# The IDP bootstrap script lives in infra/ (the parent of the terraform provisioning dir), NOT under
+# infra/terraform/. bootstrap_one runs this; an earlier ${PROVISION_DIR}/deploy-full-idp.sh reference
+# pointed at infra/terraform/ and silently failed every fleet bootstrap (found 2026-06-27).
+INFRA_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
+readonly SCRIPT_DIR PROVISION_DIR INFRA_DIR
+readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
 readonly CLUSTER_DIR="${PROVISION_DIR}/cluster"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/lab-vpc"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
@@ -174,7 +179,7 @@ bootstrap_one() {
     AWS_PROFILE="${prof}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
         --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${prof}" \
-        bash "${PROVISION_DIR}/deploy-full-idp.sh" "${profile}" \
+        bash "${IDP_SCRIPT}" "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
     else
