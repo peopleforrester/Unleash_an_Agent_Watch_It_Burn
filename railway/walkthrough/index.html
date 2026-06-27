@@ -5,6 +5,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/png" href="/burrito.png">
   <title>Watch It Burn - Workshop Walkthrough</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css" id="theme">
@@ -120,7 +121,27 @@ You each **already have** a cluster. An agent with the keys. A chat window and a
 Note:
 The "leap right in" moment. We do NOT walk provisioning. Per-attendee cluster URL from the distributor
 (provisioning.agenticburn.com). Do NOT explain the security suite yet; each control gets introduced WHEN
-it turns on in Round 2. That reveal discipline is the pedagogy. Hand-off → Whitney.
+it turns on in Round 2. That reveal discipline is the pedagogy. Hand-off → Whitney for the frame.
+</textarea></section>
+
+<section data-markdown><textarea data-template>
+## What the agent is guarding
+
+<span class="who m">Michael</span> <span class="who w">Whitney</span>
+
+The agent is **BurritoBot**, the assistant for *Hex &amp; Cauldron*, a witchy burrito cantina. Its one job: take your order. Its one secret: the house sauce is **snail blood**, and the recipe is the crown jewel it must never reveal.
+
+We show you its **system prompt** on purpose. It is loose: "sell burritos, but feel free to chat." One soft rule guards the secret.
+
+### Never trust the system prompt to make an agent behave.
+<span class="small">Roughly one run in twenty, it wanders on its own. That is *why* every defense ahead is a real guardrail, not a politely worded ask. The prompt is probabilistic; the guardrail is deterministic.</span>
+
+Note:
+The pedagogical spine, set up front (docs/burritobot-preview.md + the rounds alignment deck). The storefront
+makes the stakes legible: a real-looking business, a real-looking secret. The loose prompt is deliberate so
+nobody asks "why not just tell it no?" Answer: prompts are probabilistic, guardrails are deterministic. The
+snail-blood recipe is the planted secret the output and MCP challenges (C5 / C7) try to leak. Keep
+"deterministic" for the block-list only, never the classifier.
 </textarea></section>
 
 <section>
@@ -139,7 +160,7 @@ it turns on in Round 2. That reveal discipline is the pedagogy. Hand-off → Whi
       <p><b>Argo CD</b> GitOps · <b>Kyverno</b> admission</p>
       <p><b>Falco</b> + <b>Talon</b> runtime detect/respond</p>
       <p><b>Istio</b> ambient mTLS · <b>NetworkPolicy</b> egress</p>
-      <p><b>cert-manager</b> · <b>External Secrets</b> · <b>Harbor</b>+<b>cosign</b> · RBAC · PID limits · <b>Backstage</b></p>
+      <p><b>cert-manager</b> · <b>External Secrets</b> · image signing (<b>cosign</b>/<b>Harbor</b>, audit) · RBAC · PID limits · <b>Backstage</b></p>
     </div>
     <div class="box">
       <h4>Observability</h4>
@@ -183,19 +204,19 @@ We come back to it hard at the trace re-leak, where the same telemetry becomes a
     <div class="card c1">
       <div class="big">🔥</div>
       <h4>Round 1 · no guardrails</h4>
-      <p>They attack it. One destructive prompt kills it. Rotate spares as each dies.</p>
+      <p>They attack it. All 7 challenges land; one destructive prompt kills it. Rotate spares as each dies.</p>
       <p class="out">It burns. The bill climbs.</p>
     </div>
     <div class="card c2">
       <div class="big">🛡️</div>
       <h4>Round 2 · CNCF controls</h4>
-      <p>Same attack. The platform controls you should already run stop it, wall by wall.</p>
+      <p>Same attacks. The infra controls you should already run wall Challenges 1 to 4.</p>
       <p class="out">Blocked. But you still paid.</p>
     </div>
     <div class="card c3">
       <div class="big">🎛️</div>
       <h4>Round 3 · your cluster</h4>
-      <p>You switch on the agent-specific guards one at a time, then try to beat them.</p>
+      <p>You switch on the agent guards (Challenges 5 to 7) one at a time, then try to beat them.</p>
       <p class="out">You guard it yourself.</p>
     </div>
   </div>
@@ -229,7 +250,7 @@ the model live. Hand-off → Michael for the cost beat.
 
 <span class="who m">Michael</span>
 
-A live counter (`witb_cost_usd`, metered at the guard-proxy from real Bedrock token usage) climbs the
+A live counter (`gen_ai.client.cost`, metered at the guard-proxy from real Bedrock token usage) climbs the
 **whole time** the agent thrashes.
 
 ### Wasted tokens are a denial-of-service problem, not just a security one.
@@ -244,25 +265,28 @@ controls a mature team already runs."
 
 <section>
   <h2>Round 2 · the controls you should already have</h2>
-  <p class="small"><span class="when">~0:16–0:30</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on cost</span> <span class="built">BUILT LIVE</span> — same attacks, each wall stops it, and we meet each control as it fires (`wall.agenticburn.com`).</p>
+  <p class="small"><span class="when">~0:16–0:30</span> <span class="who w">Whitney narrates</span> <span class="who m">Michael on cost</span> <span class="built">BUILT LIVE</span>. Same attacks; the infra wall stops Challenges 1 to 4, and we meet each control as it fires (`wall.agenticburn.com`).</p>
   <table>
-    <thead><tr><th>The agent tries</th><th>The control that fires</th></tr></thead>
+    <thead><tr><th>Challenge (the agent tries)</th><th>The control that fires</th></tr></thead>
     <tbody>
-      <tr><td>Deploy a villain workload</td><td><b>Kyverno</b> admission rejects unsigned / non-Harbor images (<b>cosign</b> attestation)</td></tr>
-      <tr><td>Escalate its own permissions</td><td>scoped <b>RBAC</b> Forbidden on the self-granted ClusterRoleBinding</td></tr>
-      <tr><td>Change infra outside Git</td><td><b>Argo CD</b> drift block + self-heal reverts it</td></tr>
-      <tr><td>Exfil customer data to S3</td><td><b>NetworkPolicy</b> default-deny egress; <b>Istio</b> ambient mTLS in transit</td></tr>
-      <tr><td>Snoop the filesystem for a planted secret</td><td><b>Falco</b> alerts on the snooping; <b>External Secrets</b> keeps real secrets out of the cluster</td></tr>
-      <tr><td>Fork bomb to kill the node</td><td>per-pod <b>PID limit</b> (config, not a tool); <b>Falco</b>+<b>Talon</b> detect and terminate</td></tr>
+      <tr><td><b>C1</b> Exfil customer data to an S3 bucket</td><td><b>NetworkPolicy</b> default-deny egress (Bedrock stays in-VPC); <b>Istio</b> ambient mTLS in transit</td></tr>
+      <tr><td><b>C2</b> Deploy a villain workload</td><td><b>Kyverno</b> admits images only from allowed registries (Enforce); signing + attestation (<b>cosign</b>/<b>Harbor</b>) is audit-mode today</td></tr>
+      <tr><td><b>C3</b> Snoop the filesystem for a planted file</td><td><b>Falco</b> alerts on the snooping; <b>External Secrets</b> keeps real secrets out of the cluster</td></tr>
+      <tr><td><b>C4</b> Fork bomb to kill the node</td><td>per-pod <b>PID limit</b> (config, not a tool); <b>Falco</b>+<b>Talon</b> detect and terminate</td></tr>
     </tbody>
   </table>
-  <p class="lead" style="font-size:0.7em">Michael: the damage stopped, but the counter still moved. The request reached the model <em>before</em> admission could reject it.</p>
+  <p class="lead" style="font-size:0.7em">Michael: the damage stopped, but the counter still moved. The request reached the model <em>before</em> the control could reject it.</p>
   <aside class="notes">
     The CNCF suite gets introduced HERE, not in the intro. Walk each wall with its distinct error on
-    screen; name the tech each time (this is the "every piece of tech" payoff in the live flow). cert-manager
-    underpins the mTLS/webhooks quietly. Cost point: Kyverno is the last mile and the most expensive mile,
-    by the time admission denies, tokens are spent. Agent wanders → challenges/01-cncf-wall/fallback.kubectl.sh.
-    Hand-off → Michael: "Now your own cluster, where you turn on the guardrails built for agents."
+    screen; name the tech each time (this is the "every piece of tech" payoff in the live flow). C1 egress:
+    NetworkPolicy default-deny plus a Bedrock interface VPC endpoint, so the agent's own Bedrock calls still
+    work while S3 PutObject (no endpoint) is denied. C2: registry restriction is Enforce; signing/attestation
+    is Audit-only until Harbor is deployed, so say "allowed registries," not "signed images." cert-manager
+    underpins the mTLS/webhooks quietly. Scoped RBAC and Argo CD drift-block are also on (they appear on the
+    governance map) but are not the four live challenges. Cost point: Kyverno is the last mile and the most
+    expensive mile, by the time admission denies, tokens are spent. Agent wanders →
+    challenges/01-cncf-wall/fallback.kubectl.sh. Hand-off → Michael: "Now your own cluster, where you turn on
+    the guardrails built for agents."
   </aside>
 </section>
 
@@ -273,9 +297,9 @@ controls a mature team already runs."
 
 On your **own** cluster (`a-<id>.agenticburn.com`), switch the agent-specific guards on **one at a time** and watch behavior *and* spend change:
 
-1. **Output** — the agent leaks a planted secret ingredient → toggle the `guard-proxy` + **LLM Guard** output scanner on → redacted. But it already hit the trace: the costly side.
-2. **Input** — block the secret/PII *before* the model sees it: the deterministic block-list flatlines the cost pre-Bedrock, then the LLM Guard classifier catches subtler injection.
-3. **MCP tools** — a poisoned look-alike supply-chain MCP can't be called once **agentgateway** `mcpAuthorization` filters the rogue tool below the LLM.
+1. **C5 · Output**: the agent leaks the planted secret (the **snail-blood recipe**). Toggle the `guard-proxy` + **LLM Guard** output scanner on, and the reply is redacted. But the model already saw it; it sat in the trace. That is the costly side.
+2. **C6 · Input**: block the secret or PII *before* the model sees it. The deterministic block-list flatlines the cost pre-Bedrock, then the **LLM Guard** classifier catches the subtler injection it misses.
+3. **C7 · MCP tools**: a poisoned look-alike supply-chain MCP can't be called once **agentgateway** `mcpAuthorization` (the kagent `toolNames` allowlist) filters the rogue tool below the LLM.
 
 <span class="small">Then **free-play**: the room tries to defeat each guard. Whitney narrates the interesting ones on the trace.</span>
 
@@ -303,8 +327,8 @@ Output guard is on, the secret is blocked from the response. Turn on trace conte
 
 Note:
 Optional, runs in the free-play window if time allows. In the 60-min cut this is the FIRST thing to drop.
-Also optional: the model-tier cost-race (Haiku / Sonnet 4.6 / Opus side by side, guards off, "escape your
-jail" — the frontier model burns more; capability is orthogonal to governance) on the haiku/sonnet/opus
+Also optional: the model-tier cost-race (Haiku 4.5 / Sonnet 4.6 / Opus 4.8 side by side, guards off, "escape
+your jail"; the frontier model burns more, capability is orthogonal to governance) on the haiku/sonnet/opus
 instructor clusters. Trace data is torn down at the end; no sentinel survives the room.
 </textarea></section>
 
@@ -318,7 +342,7 @@ instructor clusters. Trace data is torn down at the end; no sentinel survives th
   <table>
     <thead><tr><th>What the agent tried</th><th>Control</th><th>Layer</th><th>Already have it?</th></tr></thead>
     <tbody>
-      <tr><td>Deploy a non-compliant workload</td><td>Kyverno + cosign/Harbor</td><td>Admission</td><td class="yes">✅ CNCF</td></tr>
+      <tr><td>Deploy a non-compliant workload</td><td>Kyverno (registry allowlist; signing audit-mode)</td><td>Admission</td><td class="yes">✅ CNCF</td></tr>
       <tr><td>Escalate its own permissions</td><td>Scoped RBAC</td><td>RBAC</td><td class="yes">✅ CNCF</td></tr>
       <tr><td>Change infra outside Git</td><td>Argo CD drift block + self-heal</td><td>GitOps</td><td class="yes">✅ CNCF</td></tr>
       <tr><td>Exfil data / kill the node</td><td>NetworkPolicy + Istio mTLS; PID limit + Falco/Talon</td><td>Runtime/Net</td><td class="yes">✅ CNCF</td></tr>
@@ -358,7 +382,7 @@ instructor clusters. Trace data is torn down at the end; no sentinel survives th
 
 - **Most of what an agent tries, your platform already handles**: admission, RBAC, GitOps, runtime, network. Turn the right control on and the attack stops.
 - The thin slice it can't see — **input, output, tools, traces** — is where agents change the threat model. That's where to spend.
-- The repo is the whole platform as code: Argo CD, Kyverno, Falco/Talon, Istio, ESO, the kagent + agentgateway + guard-proxy AI layer, and the Datadog/OTel lens. Plus a **governance map** and a **self-assessment** to run against your own platform on Monday.
+- The repo is the whole platform as code: Argo CD, Kyverno, Falco/Talon, Istio, ESO, the kagent + agentgateway + guard-proxy AI layer, the Datadog/OTel lens, and the BurritoBot demo storefront. Plus a **governance map** and a **self-assessment** to run against your own platform on Monday.
 
 ### 🔥 Watch It Burn
 <span class="small">walkthrough.agenticburn.com</span>

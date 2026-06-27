@@ -1,5 +1,5 @@
-<!-- ABOUTME: The walkthrough.agenticburn.com technical walkthrough: a self-contained reveal.js deck of the -->
-<!-- ABOUTME: whole Watch It Burn stack, foundation to AI layer. How to view it and how to host it. -->
+<!-- ABOUTME: The walkthrough.agenticburn.com deck: the live-delivery run-of-show for Watch It Burn -->
+<!-- ABOUTME: (open cold, the BurritoBot frame, three rounds, land the governance map). View + host. -->
 
 # Workshop walkthrough (walkthrough.agenticburn.com)
 
@@ -28,10 +28,12 @@ imports (reveal + mermaid). Press `S` for speaker view, `Esc` for the slide over
 ## What it covers
 
 The session in delivery order: open cold (the agent-deleted-my-cluster hook → production stakes) →
-the promise + "you already have a cluster, leap in" → how we watch (the trace dashboard) → the
-three-cluster spine (Cluster 1 burns + the cost counter → Cluster 2 CNCF controls block it but the
-bill still moved → Cluster 3 your own cluster, toggle output/input/MCP guards + free-play) → the
-optional trace re-leak trap → the governance map + cost ladder → take it home.
+the promise + "you already have a cluster, leap in" → the BurritoBot frame (a witchy burrito
+storefront, the snail-blood secret, and the deliberately loose system prompt: never trust it to make
+the agent behave) → how we watch (the trace dashboard) → the three rounds (Round 1 burns + the cost
+counter → Round 2 CNCF controls block Challenges 1–4 but the bill still moved → Round 3 your own
+cluster, toggle the output/input/MCP guards for Challenges 5–7 + free-play) → the optional trace
+re-leak trap → the governance map + cost ladder → take it home.
 
 Component detail (what Kyverno / Pod Identity / kagent actually are) lives in the **speaker notes**,
 surfacing only where the flow hits each control — never as an opening lecture, mirroring the runbook's
