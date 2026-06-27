@@ -121,9 +121,17 @@ Do a full dress-rehearsal run before the real one regardless, so the ~3 to 4 hou
 
 `fleet.sh down-fleet 50` (students) + `instructors down` + `down watch-it-burn-attendee-michael watch-it-burn-attendee-whitney`, then the orphan sweep across all accounts (LBs/TGs/EBS/EIPs the in-cluster controllers leave), then `terraform destroy` the 5 lab VPCs (revoke + delete the orphaned EKS security groups first, they block the VPC delete). Target: every account at zero. See the 2026-06-27 teardown entry in `docs/DECISION-LOG.md`.
 
-## 7. Decisions to lock before the run
+## 7. Decisions (LOCKED 2026-06-28)
 
-1. **Instructor placement:** spread R1/R2/R3 to student31/32/33 (recommended, in this plan), or keep all 9 in accen-dev (simpler, 61 clusters in one account, still under quota).
-2. **Michael/Whitney clusters:** confirm one personal R3 cluster each (this plan), names `watch-it-burn-attendee-michael` / `-whitney`, in accen-dev. Or a different placement/count.
-3. **Timing:** provision Jun 28 evening + hold overnight (recommended), or Jun 29 morning.
-4. **P0 must-haves:** which of B1/B5/B11/B2 must be done before the run vs deferred. These gate the attendee experience, not provisioning.
+1. **Instructor placement: spread.** `WIB_ACCOUNT_R1=aws1-student31 WIB_ACCOUNT_R2=aws1-student32 WIB_ACCOUNT_R3=aws1-student33`. No account exceeds 53 clusters; the R1 burn clusters sit off the central account.
+2. **Michael/Whitney clusters: one R3 each in accen-dev**, `watch-it-burn-attendee-michael` and `-whitney`, full profile, own Datadog org; both also get the admin instructor bundle via the provisioning app.
+3. **Timing: dress-rehearsal run first, then decide.** Do one timed rehearsal to measure real convergence time and catch issues, then choose Jun-28-evening vs Jun-29-morning for the real run based on that.
+4. **P0 must-haves: all four** (B1 BurritoBot frontend served, B5 web terminal, B11 round-cluster setup, B2 BurritoBot system prompt + order flow) must land on `staging` before the REAL run. They gate the attendee experience, not provisioning, so they can be built in parallel with the rehearsal.
+
+## 8. Immediate next actions (two tracks, parallel)
+
+**Track A: dress rehearsal (infra timing, de-risk the provision).** Re-apply the 5 lab VPCs, then provision a representative slice (recommended: 10/account = 50 students + the 9 instructors + the 2 personal clusters), measure per-cluster provision + bootstrap + convergence time and the credential-pool + access path end to end, extrapolate to 250, then tear it down. This locks the timing decision (#3) without the full 261-cluster cost. The earlier 200-cluster and 50-cluster bare runs already proved the provision scales clean; this rehearsal validates the FULL bootstrapped path on current `staging` plus the distribution path.
+
+**Track B: the four P0 builds (gate the real run).** B1 (wire `burritbot.html` into the ai-layer bundle behind an nginx Service + the round selector), B5 (the in-browser web terminal Deployment/Service + pre-wired kubeconfig + toggle scripts), B11 (the R1/R2/R3 round-cluster guardrail states + clean repoint), B2 (the BurritoBot system prompt + 5-step order flow + secret-recipe guard). All land on `staging` so the rehearsal's clusters (and the real run's) bootstrap with them.
+
+The real full run (section 4) happens after Track B lands on `staging` and the rehearsal locks the timing.
