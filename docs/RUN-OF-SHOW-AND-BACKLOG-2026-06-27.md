@@ -214,9 +214,12 @@ visual pages.
 
 ## Part 10 — Research spikes (I do these)
 
-- **R1 (B5/B6)** In-browser shell for Kubernetes labs: options for a per-cluster web terminal pre-wired
-  with kubeconfig (ttyd / wetty / Eclipse Che / cloud-shell-style), and the Katacoda-style
-  instructions-beside-terminal pattern. What's deployable per-cluster cheaply for a 2-day-out demo.
+- **R1 (B5/B6) — DONE 2026-06-27 (partial-build found):** the in-browser shell **already exists in the
+  repo** and should be resumed, not rebuilt: `images/web-terminal/` (container image + `entrypoint.sh`),
+  `gitops/ai-layer/web/console.html` (the chat + terminal console page), the console NLB Service in
+  `gitops/ai-layer/resources.yaml` (the `console_url` front door), and a design doc at
+  `docs/attendee-access-design.md`. B5 work = verify it provisions per-cluster with the kubeconfig/env +
+  the pre-loaded toggle scripts, and wire B6 (instructions folded in). Re-scope B5 from "build" to "resume".
 - **R2 (B9)** Datadog dashboards-as-code + deep-linking: confirm dashboards can be baked via Agent
   config so every org gets them, and the exact deep-link URL form to a specific dashboard/view.
 - **R3 (B10)** Service map + UST: what renders for the AI layer (agentgateway / guard-proxy / kagent)
