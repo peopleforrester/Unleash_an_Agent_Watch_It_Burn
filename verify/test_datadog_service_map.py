@@ -102,9 +102,11 @@ def _metrics_for_service(service):
     resp = _request(
         "GET",
         f"https://api.{DD_SITE}/api/v2/metrics",
+        # filter[tags] returns metrics carrying the tag; window[seconds] bounds it to recently-active
+        # metrics. (Do NOT use filter[queried][window][seconds] without filter[queried] — the API 400s.)
         params={
             "filter[tags]": f"service:{service}",
-            "filter[queried][window][seconds]": 3600,
+            "window[seconds]": 3600,
             "page[size]": 100,
         },
     )
