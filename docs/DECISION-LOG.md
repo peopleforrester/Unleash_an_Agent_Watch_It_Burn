@@ -139,3 +139,25 @@ After pushing the fixes to `staging` and letting ArgoCD sync 501:
   self-censors) and is `[REDACTED]` with it on. Operational note: the llm-guard pod reads `scanners.yml`
   at startup, so an already-running cluster needs a llm-guard pod-restart to pick up a scanners change
   (fresh bootstraps load it at boot). Pod-delete is used (respects block-argocd-drift).
+
+---
+
+## Full fleet teardown to zero (2026-06-27)
+
+After the validation pass, on request, the entire fleet was destroyed across all 5 accounts (accen-dev +
+aws1-student31..34, us-west-2):
+
+1. **Clusters**: `WIB_NAME_OFFSET=500 fleet.sh down-fleet 1` terraform-destroyed attendee-501..505, each
+   in its own account. All succeeded; per-cluster state files removed.
+2. **Orphan sweep** (all 5 accounts): deleted every ELBv2 LB (18 total) + target groups, detached EBS
+   volumes (61 total, incl. accen-dev's 37 pre-existing orphans), and released the NLB EIPs freed by LB
+   deletion. accen-dev's long-standing leak (10 LBs / 39 TGs / 37 vols) is gone; it now matches the others.
+3. **Lab VPCs**: `terraform destroy` per account. First pass deleted NAT/EIP/subnets/Bedrock-endpoint/IGW
+   but failed on the VPC itself (`DependencyViolation`) because EKS-created security groups (15 on
+   accen-dev, 3 each elsewhere) orphan outside terraform state. Revoked their rules, deleted them, re-ran
+   terraform destroy: all 5 VPCs deleted, state reconciled.
+
+Final state: every account at eks=0 ec2=0 LB=0 vols=0 NAT=0 EIP=0 labVPC=0. Near-zero spend. To bring it
+back: `terraform apply` the lab VPC per account, then `fleet.sh up-fleet`. All of today's fixes are on
+`staging`, so fresh clusters bootstrap with them (corrected block-argocd-drift, recipe-sentinel beat-2,
+argocd-managed-app drift target, fleet.sh prof fix).
