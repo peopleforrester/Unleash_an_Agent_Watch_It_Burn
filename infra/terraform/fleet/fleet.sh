@@ -23,14 +23,16 @@ WIB_ACCOUNT_R1="${WIB_ACCOUNT_R1:-accen-dev}"
 WIB_ACCOUNT_R2="${WIB_ACCOUNT_R2:-accen-dev}"
 WIB_ACCOUNT_R3="${WIB_ACCOUNT_R3:-accen-dev}"
 # Attendee fleet accounts for `up-fleet` (comma-separated AWS profiles). up-fleet provisions every
-# account's slice CONCURRENTLY so the whole fleet comes up in one window. Each account needs its own
-# lab-vpc applied to states/<profile>.tfstate first. The four student accounts are dedicated attendee
-# capacity (lab-vpc applied 2026-06-27, fresh empty VPCs). accen-dev is intentionally NOT here: its
-# lab-vpc is in the DEFAULT terraform.tfstate (not states/accen-dev.tfstate) and it already hosts the
-# instructor/whitney clusters, so it runs via the single-account path (cmd_up / instructors), not
-# up-fleet. Per-account ALB/NLB->100 + vCPU->800 quota increases submitted 2026-06-27 must be APPROVED
-# before a full 50/account WITH-bootstrap run (each bootstrapped cluster = 1 ALB + 1 NLB; default cap 50).
-WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-aws1-student31,aws1-student32,aws1-student33,aws1-student34}"
+# account's slice CONCURRENTLY so the whole fleet comes up in one window. All FIVE accounts carry the
+# attendee fleet (250-cluster plan = 5 x 50). The four student accounts have a per-account lab-vpc in
+# states/<profile>.tfstate; accen-dev's lab VPC lives in the DEFAULT terraform.tfstate, and read_vpc_for
+# falls back to it (see WIB_DEFAULT_ACCOUNT) so accen-dev joins the fleet without a duplicate state.
+# Per-account ALB/NLB->100 + vCPU->800 quota increases submitted 2026-06-27 must be APPROVED before a full
+# 50/account WITH-bootstrap run (each bootstrapped cluster = 1 ALB + 1 NLB; default cap 50).
+WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-accen-dev,aws1-student31,aws1-student32,aws1-student33,aws1-student34}"
+# The account whose lab VPC is in the DEFAULT lab-vpc state (terraform.tfstate), not states/<acct>.tfstate.
+# read_vpc_for + the up-fleet/down-fleet/health pre-checks treat it as having a VPC via that default state.
+WIB_DEFAULT_ACCOUNT="${WIB_DEFAULT_ACCOUNT:-accen-dev}"
 # Name-number offset so a fleet run can avoid colliding with existing clusters (state is keyed by name
 # globally). Cluster n in account-index i is numbered (WIB_NAME_OFFSET + i*per_account + n). Existing
 # clusters: accen-dev attendee-001; set the offset above any existing number for a clean test run.
@@ -97,6 +99,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       destroyed in its own account). Skips names with no state, so partial fleets are safe.
     down <count|all>  Destroy the first <count>, or all clusters with state.
     down <name...>    Destroy the named clusters.
+    health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
+                      assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
     status            List clusters that have state and their EKS status.
 
   INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
@@ -291,6 +295,12 @@ cmd_status() {
 read_vpc_for() {
     local profile="$1"
     local state="${LAB_VPC_DIR}/states/${profile}.tfstate"
+    # The default account (accen-dev) keeps its lab VPC in the DEFAULT lab-vpc state (terraform.tfstate),
+    # not a per-account states/<acct>.tfstate (it was applied before the multi-account split). Fall back to
+    # read_vpc() for it so it joins up-fleet/down-fleet/health like any other account, no duplicate state.
+    if [[ ! -f "${state}" && "${profile}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
+        read_vpc; return
+    fi
     if [[ ! -f "${state}" ]]; then
         log "no lab VPC for account '${profile}'. Apply it first:"
         log "  terraform -chdir=${LAB_VPC_DIR} apply -state=states/${profile}.tfstate \\"
@@ -363,7 +373,8 @@ cmd_up_fleet() {
         start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
         idx=$(( idx + 1 ))
         # Pre-check the account's lab VPC so a missing one is a recorded skip, not a silent subshell exit.
-        if [[ ! -f "${LAB_VPC_DIR}/states/${acct}.tfstate" ]]; then
+        # The default account uses the default lab-vpc state, so it has no per-account state file (allowed).
+        if [[ ! -f "${LAB_VPC_DIR}/states/${acct}.tfstate" && "${acct}" != "${WIB_DEFAULT_ACCOUNT}" ]]; then
             log "  account '${acct}': NO lab VPC (apply states/${acct}.tfstate first); skipping its slice"
             record_fail "account:${acct}-no-vpc"; continue
         fi
@@ -399,7 +410,7 @@ cmd_down_fleet() {
         acct="${acct// /}"; [[ -n "${acct}" ]] || continue
         start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
         idx=$(( idx + 1 ))
-        [[ -f "${LAB_VPC_DIR}/states/${acct}.tfstate" ]] || { log "  account '${acct}': no lab VPC state, skipping"; continue; }
+        [[ -f "${LAB_VPC_DIR}/states/${acct}.tfstate" || "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]] || { log "  account '${acct}': no lab VPC state, skipping"; continue; }
         names=(); for n in $(seq "${start}" $(( start + per_account - 1 ))); do
             names+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
         done
@@ -414,6 +425,63 @@ cmd_down_fleet() {
     report_failures
 }
 
+# Per-cluster IDP health: the REAL "is the platform up" gate (cmd_status only reports EKS control-plane
+# state). Pulls an ISOLATED kubeconfig per cluster (never ~/.kube/config) with the account's profile, then
+# asserts the ArgoCD app-of-apps is fully converged (every Application Synced AND Healthy) plus a pod
+# sanity backstop (no Pending/Failed pods). If all apps are Healthy the workloads they manage are up.
+health_one() {
+    local name="$1"; assert_ours "${name}"
+    local prof="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
+    if ! AWS_PROFILE="${prof}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
+            --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1; then
+        log "  ${name}: UNREACHABLE (no kubeconfig)"; record_fail "${name}:unreachable"; rm -f "${kcfg}"; return
+    fi
+    local apps total healthy pending failed
+    apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)"
+    if [[ -z "${apps}" || "$(jq '.items | length' <<<"${apps}" 2>/dev/null)" == "0" ]]; then
+        log "  ${name}: NO ArgoCD applications (bootstrap not applied / ArgoCD down)"
+        record_fail "${name}:no-argocd"; rm -f "${kcfg}"; return
+    fi
+    total="$(jq '.items | length' <<<"${apps}")"
+    healthy="$(jq '[.items[] | select(.status.sync.status=="Synced" and .status.health.status=="Healthy")] | length' <<<"${apps}")"
+    pending="$(KUBECONFIG="${kcfg}" kubectl get pods -A --field-selector=status.phase==Pending -o name 2>/dev/null | wc -l | tr -d ' ')"
+    failed="$(KUBECONFIG="${kcfg}" kubectl get pods -A --field-selector=status.phase==Failed -o name 2>/dev/null | wc -l | tr -d ' ')"
+    rm -f "${kcfg}"
+    if [[ "${healthy}" == "${total}" && "${pending}" == "0" && "${failed}" == "0" ]]; then
+        log "  ${name}: HEALTHY (apps ${healthy}/${total} Synced+Healthy, no broken pods)"
+    else
+        log "  ${name}: DEGRADED (apps ${healthy}/${total} Synced+Healthy, ${pending} pending, ${failed} failed pod(s))"
+        # Name the unhealthy apps so the failure line is actionable.
+        local bad; bad="$(jq -r '[.items[] | select((.status.sync.status!="Synced") or (.status.health.status!="Healthy")) | .metadata.name] | join(",")' <<<"${apps}")"
+        record_fail "${name}:degraded apps=${healthy}/${total} unhealthy=[${bad}] pending=${pending} failed=${failed}"
+    fi
+}
+
+# Sweep IDP health across the fleet: mirror of up-fleet/down-fleet (same accounts, per_account, offset).
+# Pass the SAME <per_account> used for up-fleet. Exits non-zero unless every cluster is HEALTHY.
+cmd_health() {
+    local per_account="${1:-}"
+    [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: health <clusters-per-account>"; exit 2; }
+    command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
+    require_tools
+    mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    log "health: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET})..."
+    local idx=0 acct start n names
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
+        idx=$(( idx + 1 ))
+        names=(); for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+            names+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
+        done
+        ( TF_PROFILE="${acct}"; run_pool health_one "${names[@]}" ) &
+    done
+    wait
+    if report_failures; then log "ALL CLUSTERS HEALTHY"; fi
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
@@ -421,6 +489,7 @@ main() {
         up-fleet) cmd_up_fleet "$@" ;;
         down) cmd_down "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
+        health) cmd_health "$@" ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
         *) usage ;;
