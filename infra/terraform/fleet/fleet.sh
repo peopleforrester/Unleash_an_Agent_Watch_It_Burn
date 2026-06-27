@@ -9,8 +9,10 @@ PROVISION_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # infra/terraform/. bootstrap_one runs this; an earlier ${PROVISION_DIR}/deploy-full-idp.sh reference
 # pointed at infra/terraform/ and silently failed every fleet bootstrap (found 2026-06-27).
 INFRA_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-readonly SCRIPT_DIR PROVISION_DIR INFRA_DIR
+REPO_ROOT="$(cd "${INFRA_DIR}/.." && pwd)"
+readonly SCRIPT_DIR PROVISION_DIR INFRA_DIR REPO_ROOT
 readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
+readonly HARVEST_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/harvest_cluster_access.sh"
 readonly CLUSTER_DIR="${PROVISION_DIR}/cluster"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/lab-vpc"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
@@ -106,6 +108,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     down <name...>    Destroy the named clusters.
     health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
+    harvest <n>      Harvest student-facing access info (console NLB / grafana / ...) of an up-fleet run
+                      (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
     status            List clusters that have state and their EKS status.
 
   INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
@@ -497,6 +501,40 @@ cmd_health() {
     if report_failures; then log "ALL CLUSTERS HEALTHY"; fi
 }
 
+# Harvest one cluster's student-facing access info (console NLB / grafana / etc.) as a pool CSV row.
+harvest_one() {
+    local name="$1"; assert_ours "${name}"
+    local prof="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    AWS_PROFILE="${prof}" bash "${HARVEST_SCRIPT}" "${name}" "${WIB_REGION}" 2>>"${LOG_DIR}/${name}.harvest.log" \
+        || { record_fail "${name}:harvest"; log "  ${name}: harvest FAILED (see ${LOG_DIR}/${name}.harvest.log)"; }
+}
+
+# Harvest access info across the fleet into ONE CSV (the aws-pool merge_pool.py ingests). Mirror of
+# up-fleet/health (same accounts, per_account, offset). Run AFTER clusters have converged (the NLB needs
+# to be provisioned). Header + one row per cluster on stdout: redirect to a file then feed merge_pool.py.
+cmd_harvest() {
+    local per_account="${1:-}"
+    [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: harvest <clusters-per-account>"; exit 2; }
+    require_tools
+    [[ -x "${HARVEST_SCRIPT}" ]] || { log "missing harvester: ${HARVEST_SCRIPT}"; exit 1; }
+    mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    log "harvest: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET}) -> stdout CSV"
+    # header (matches harvest_cluster_access.sh row order)
+    printf 'name,region,console_url,burritbot_url,grafana_url,grafana_password,argocd_url,argocd_password\n'
+    local idx=0 acct start n names
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
+        idx=$(( idx + 1 ))
+        for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+            name="$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")"
+            TF_PROFILE="${acct}" harvest_one "${name}"
+        done
+    done
+    report_failures >&2 || true
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
@@ -505,6 +543,7 @@ main() {
         down) cmd_down "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
         health) cmd_health "$@" ;;
+        harvest) cmd_harvest "$@" ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
         *) usage ;;
