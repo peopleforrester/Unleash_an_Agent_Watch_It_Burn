@@ -421,6 +421,13 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
             datadog_api_key=cred.get("datadog_api_key") or "",
             datadog_app_key=cred.get("datadog_app_key") or "",
             datadog_site=cred.get("datadog_site") or "",
+            # Optional per-cluster service URLs/logins, populated by the fleet access-info harvester
+            # (issue #37/#15). The template renders gracefully when these are absent.
+            burritbot_url=cred.get("burritbot_url") or "",
+            argocd_url=cred.get("argocd_url") or "",
+            argocd_password=cred.get("argocd_password") or "",
+            grafana_url=cred.get("grafana_url") or "",
+            grafana_password=cred.get("grafana_password") or "",
             root_url=request.url_root.rstrip("/"),
         )
 
