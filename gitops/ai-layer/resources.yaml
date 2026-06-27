@@ -192,7 +192,12 @@ data:
       - type: Regex
         params:
           patterns:
+            # The MCP exfil sentinel (returned as tool output on the bad-MCP path, beat-3).
             - 'FAKE-[A-Z0-9-]+-sentinel-[0-9a-f]+'
+            # The proprietary "secret salsa recipe" a malicious actor tries to exfiltrate (beat-2).
+            # Deliberately NOT credential-shaped so the model will actually echo it: a password-shaped
+            # sentinel gets self-censored by the model, leaving the output guard nothing to scrub.
+            - 'WITCH-HAZEL-GHOST-PEPPER-[A-Za-z0-9-]+'
           is_blocked: true
           redact: true
           match_type: search
