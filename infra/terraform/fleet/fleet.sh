@@ -114,6 +114,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
     aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
                       + offset). DRY-RUN unless WIB_APPLY=1; WIB_ACCESS_ENTRIES=1 maps users into clusters.
+    reap --keep <f>   Cost reaper: destroy attendee clusters NOT in the keep-list <f> (claimed clusters),
+                      across all accounts. DRY-RUN unless WIB_APPLY=1.
     status            List clusters that have state and their EKS status.
 
   INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
@@ -575,6 +577,40 @@ cmd_aws_keys() {
     report_failures >&2 || true
 }
 
+# Lifecycle reaper (cost control): tear down attendee clusters NOT in the claimed keep-list, across all
+# accounts. The keep-list is the claimed clusters (e.g. the provisioning app's /admin/export, one
+# watch-it-burn-* name per line). Queries each account's LIVE EKS clusters (authoritative), reaps any
+# attendee cluster not kept and that has fleet state. DRY-RUN unless WIB_APPLY=1.
+cmd_reap() {
+    local keep_file=""
+    while [[ $# -gt 0 ]]; do case "$1" in --keep) keep_file="${2:-}"; shift 2 ;; *) shift ;; esac; done
+    [[ -n "${keep_file}" && -f "${keep_file}" ]] || { log "usage: reap --keep <file of cluster names to PRESERVE>  (WIB_APPLY=1 to destroy)"; exit 2; }
+    require_tools
+    mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    declare -A keep=()
+    local line
+    while IFS= read -r line; do line="${line//[$' \t\r']/}"; [[ "${line}" == watch-it-burn-* ]] && keep["${line}"]=1; done <"${keep_file}"
+    log "reap: keeping ${#keep[@]} claimed cluster(s); scanning ${WIB_ATTENDEE_ACCOUNTS}"
+    [[ -n "${WIB_APPLY:-}" ]] || log "DRY-RUN (set WIB_APPLY=1 to actually destroy)"
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    local acct live c
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        live="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" --query 'clusters[]' --output text 2>/dev/null | tr '\t' '\n' | grep -E '^watch-it-burn-attendee-' || true)"
+        [[ -n "${live}" ]] || { log "  account '${acct}': no attendee clusters"; continue; }
+        (
+            read_vpc_for "${acct}"; TF_PROFILE="${acct}"
+            for c in ${live}; do
+                if [[ -n "${keep[${c}]:-}" ]]; then continue; fi
+                if [[ -n "${WIB_APPLY:-}" ]]; then log "  reaping ${c} (${acct})"; down_one "${c}"
+                else log "  would reap ${c} (${acct})"; fi
+            done
+        ) &
+    done
+    wait
+    report_failures >&2 || true
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
@@ -585,6 +621,7 @@ main() {
         health) cmd_health "$@" ;;
         harvest) cmd_harvest "$@" ;;
         aws-keys) cmd_aws_keys "$@" ;;
+        reap) cmd_reap "$@" ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
         *) usage ;;
