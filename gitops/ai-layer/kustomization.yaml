@@ -9,6 +9,7 @@ resources:
   - resources.yaml
   - instrumentation.yaml # OTel Operator Instrumentation CR (needs the otel-operator app's CRD; ArgoCD retries until present)
   - agentgateway.yaml # OSS v1.3.0 L7 gateway: guard-proxy -> agentgateway -> workshop-agent (A2A) + MCP front
+  - argocd-managed-app.yaml # Beat-1 wall-3 drift target (ArgoCD-managed; admission denies agent drift, self-heal reverts)
 
 configMapGenerator:
   - name: guard-proxy-src

@@ -34,10 +34,13 @@ spec:
               operations:
                 - UPDATE
                 - DELETE
-              selector:
-                matchExpressions:
-                  - key: app.kubernetes.io/instance
-                    operator: Exists
+              # NO label selector here. An earlier `app.kubernetes.io/instance Exists` selector made this
+              # policy INERT on these clusters: ArgoCD here uses ANNOTATION tracking
+              # (argocd.argoproj.io/tracking-id), not label tracking, so managed resources never carry
+              # that label and the match never fired -- the agent could freely drift guard-proxy etc.
+              # (caught live 2026-06-27 via a server dry-run patch as agent-sa, which was ADMITTED). The
+              # PRECONDITION below is the correct, author-intended scoping: it gates on the tracking-id
+              # annotation ArgoCD actually writes on every synced object.
       preconditions:
         # Scope the block to resources ArgoCD ACTUALLY manages: those carry the
         # `argocd.argoproj.io/tracking-id` annotation (ArgoCD writes it on every synced object).
