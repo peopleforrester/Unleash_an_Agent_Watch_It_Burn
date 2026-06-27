@@ -3,9 +3,6 @@
 # ABOUTME: Asserts §2: a model-bound request MOVES the cost counter; a block-listed request FLATLINES it.
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly SCRIPT_DIR
-
 usage() {
     cat >&2 <<'EOF'
 Usage: beat-cost.sh <kube-context> <attendee-namespace>
