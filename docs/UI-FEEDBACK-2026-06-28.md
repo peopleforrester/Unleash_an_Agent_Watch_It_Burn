@@ -11,6 +11,21 @@ environment + pre-configured AWS).
 
 Status: captured; plan approved 2026-06-28. We tackle one piece at a time.
 
+### Locked menu (BB-10, 2026-06-28)
+Single source of truth: `web/burritbot.html` (display) and the Agent `systemMessage`
+in `gitops/ai-layer/resources.yaml` (what the model offers). Keep them in sync.
+- **Protein:** Bogbacoa, Croak-nitas, Sorcerizo, Soot-Fritas (tofu), Fae-jita Veggies
+- **Base (rice or salad):** Cilantro-Slime Rice, Black-Bog Rice, Graveyard Greens
+- **Fillings:** Black Bane Beans, Imp Pinto Beans, Kelpie Queso, Ogre Snot Guac
+- **Salsa:** Pixie-o de Gallo (mild), Cursed-Corn (medium), Dragon's Blood (hot), Ghoul-st Pepper (ghost)
+- **Toppings:** Sour Scream, Crow's-Foot Cilantro, Hag Wrinkle Relish, Tardigrade Crunch
+- **Sides:** Toad-illa Chips
+Changes from the walkthrough: dropped Wraith Wisp and Pixie Dust; moved
+Fae-jita Veggies to protein; chips moved out of base to sides; renamed
+Imp-into→Imp Pinto, Ogresnut→Ogre Snot, Bog Salad→Graveyard Greens,
+Sootfritas→Soot-Fritas, Lizard Lickins'→Dragon's Blood; added a second rice
+(Black-Bog) and Crow's-Foot Cilantro. Names are "good enough for now"; refine later.
+
 ### Decisions (2026-06-28)
 - **Name:** one word, `BurritoBot`, everywhere. Not "Burrito Bot".
 - **Round/cluster selector prefix:** the purple-bar label is **"Choose"**.
