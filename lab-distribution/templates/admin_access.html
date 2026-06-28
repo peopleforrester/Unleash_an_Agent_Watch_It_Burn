@@ -69,23 +69,8 @@ password: {{ dd.datadog_password }}</pre>
       <div class="t">Admin access for {{ email }}</div>
     </div>
     <div class="body">
-      <div class="label">Quick launch</div>
-      <div class="launch">
-        <div class="lcard">
-          <div class="lh">Instructor cluster</div>
-          <div class="lsub">Your demo cluster. The BurritoBot round dropdown switches R1 / R2 / R3 from here.</div>
-          <a class="btn" href="{{ instructor_console_url }}/" target="_blank" rel="noopener">&#127791; Instructor BurritoBot &rarr;</a>
-          <a class="btn ghost" href="{{ instructor_console_url }}/lab?role=instructor" target="_blank" rel="noopener">&#9000; Instructor terminal (VTT) &rarr;</a>
-        </div>
-        <div class="lcard">
-          <div class="lh">Student preview</div>
-          <div class="lsub">Exactly what an attendee sees on their own round-3 cluster.</div>
-          <a class="btn" href="{{ student_console_url }}/" target="_blank" rel="noopener">&#127791; Student BurritoBot &rarr;</a>
-          <a class="btn ghost" href="{{ student_console_url }}/lab?role=student" target="_blank" rel="noopener">&#9000; Student terminal (VTT) &rarr;</a>
-        </div>
-      </div>
-
-      <div class="label">Instructor clusters ({{ region }})</div>
+      <div class="label">Your instructor clusters ({{ region }})</div>
+      <div class="note" style="margin-top:2px;">Open each round's BurritoBot or in-browser terminal directly. BurritoBot also carries a round dropdown to switch R1 / R2 / R3 from a single window.</div>
       <div class="clist">
         {% for c in clusters %}
         <div class="crow">
@@ -98,6 +83,16 @@ password: {{ dd.datadog_password }}</pre>
           {% endif %}
         </div>
         {% endfor %}
+      </div>
+
+      <div class="label">Preview the student experience</div>
+      <div class="launch">
+        <div class="lcard">
+          <div class="lh">Student preview</div>
+          <div class="lsub">Exactly what an attendee sees on their own round-3 cluster.</div>
+          <a class="btn" href="{{ student_console_url }}/?role=student" target="_blank" rel="noopener">&#127791; Student BurritoBot &rarr;</a>
+          <a class="btn ghost" href="{{ student_console_url }}/lab?role=student" target="_blank" rel="noopener">&#9000; Student terminal (VTT) &rarr;</a>
+        </div>
       </div>
 
       <div class="label">Prerequisites: install the AWS CLI v2 and kubectl</div>
