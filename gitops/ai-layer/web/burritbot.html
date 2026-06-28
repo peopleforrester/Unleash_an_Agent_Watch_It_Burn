@@ -18,6 +18,8 @@
   header{background:var(--dd);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px}
   header .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
   header .brand .em{font-size:22px}
+  .brand .logo{width:26px;height:26px;display:inline-block;vertical-align:middle}
+  .avatar .logo{width:22px;height:22px;display:block}
   header .spacer{flex:1}
   .round-pick{display:flex;align-items:center;gap:8px;font-size:13px}
   .round-pick label{opacity:.85}
@@ -89,8 +91,23 @@
 </style>
 </head>
 <body>
+  <!-- BB-2: burrito-in-a-cauldron mark, defined once and reused in the header + chat avatar. -->
+  <svg style="display:none" aria-hidden="true"><symbol id="cauldron" viewBox="0 0 32 32">
+    <path d="M9 26 l-2 3" stroke="#2b2230" stroke-width="2" stroke-linecap="round"/>
+    <path d="M23 26 l2 3" stroke="#2b2230" stroke-width="2" stroke-linecap="round"/>
+    <path d="M5 16 a11 10 0 0 0 22 0 z" fill="#2b2230"/>
+    <ellipse cx="16" cy="16" rx="12" ry="3.2" fill="#3a2f47"/>
+    <ellipse cx="16" cy="16" rx="9.5" ry="2.2" fill="#8A00D6"/>
+    <circle cx="11" cy="15.4" r="1.1" fill="#c08bff"/>
+    <circle cx="20" cy="15.7" r="0.9" fill="#c08bff"/>
+    <g transform="rotate(-22 16 11)">
+      <rect x="12" y="2.5" width="8" height="13" rx="4" fill="#E8C99B" stroke="#C9A36B" stroke-width="1"/>
+      <path d="M13.6 5.5 h4.8 M13.6 8.5 h4.8" stroke="#C9A36B" stroke-width="0.8" stroke-linecap="round" opacity="0.7"/>
+    </g>
+    <path d="M25.5 6 l0.7 1.9 l1.9 0.7 l-1.9 0.7 l-0.7 1.9 l-0.7 -1.9 l-1.9 -0.7 l1.9 -0.7 z" fill="#FFD86B"/>
+  </symbol></svg>
   <header>
-    <div class="brand"><span class="em">🌯</span> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
+    <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
     <div class="spacer"></div>
   </header>
 
@@ -137,7 +154,7 @@
     </aside>
     <div class="chatcol">
       <div class="chathead">
-        <div class="avatar">🌯</div>
+        <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
         <div><h2>BurritoBot</h2><div class="sub">The friendliest burrito witch on the mesh. Now taking orders.</div></div>
         <button class="reset" onclick="resetChat()">↺ Reset</button>
       </div>
