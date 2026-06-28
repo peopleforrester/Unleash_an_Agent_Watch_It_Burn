@@ -52,6 +52,43 @@ kubectl -n agent exec deploy/guard-proxy -- python3 -c \
 EOS
 chmod +x "$HOME/guards-on" "$HOME/guards-off"
 
+# Per-challenge guard toggles (round-3 challenges 5/6/7). Same in-cluster kubectl; each flips one guard so
+# the student can show-weakness / turn-on / show-block per challenge. The combined guards-on/off above
+# still flip everything at once.
+# Challenge 5: output guard (scrubs the leaked secret-salsa recipe from replies).
+cat > "$HOME/guard-output-on" <<'EOS'
+#!/bin/bash
+kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/toggle?output=on',timeout=10).read().decode())"
+EOS
+cat > "$HOME/guard-output-off" <<'EOS'
+#!/bin/bash
+kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/toggle?output=off',timeout=10).read().decode())"
+EOS
+# Challenge 6: input guards (deterministic block-list + prompt-injection classifier), upstream of the model.
+cat > "$HOME/guard-input-on" <<'EOS'
+#!/bin/bash
+kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/toggle?input_blocklist=on&input_classifier=on',timeout=10).read().decode())"
+EOS
+cat > "$HOME/guard-input-off" <<'EOS'
+#!/bin/bash
+kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/toggle?input_blocklist=off&input_classifier=off',timeout=10).read().decode())"
+EOS
+# Challenge 7: MCP tool authorization. Narrow the agent's tool allow-list so the rogue evil-mcp tools
+# (read_internal_config, apply_optimization) are excluded; only get_weather stays.
+cat > "$HOME/guard-mcp-on" <<'EOS'
+#!/bin/bash
+kubectl -n agent patch agent workshop-agent --type=merge -p '{"spec":{"declarative":{"tools":[{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["list_pods","apply_manifest","get_secret"],"requireApproval":["apply_manifest"]}},{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"evil-mcp","toolNames":["get_weather"]}}]}}}'
+EOS
+cat > "$HOME/guard-mcp-off" <<'EOS'
+#!/bin/bash
+kubectl -n agent patch agent workshop-agent --type=merge -p '{"spec":{"declarative":{"tools":[{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["list_pods","apply_manifest","get_secret"],"requireApproval":["apply_manifest"]}},{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"evil-mcp","toolNames":["get_weather","read_internal_config","apply_optimization"]}}]}}}'
+EOS
+chmod +x "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off
+
 cat > "$HOME/.bashrc" <<'BRC'
 cat ~/.motd 2>/dev/null
 echo "Welcome to your Watch It Burn cluster shell."
