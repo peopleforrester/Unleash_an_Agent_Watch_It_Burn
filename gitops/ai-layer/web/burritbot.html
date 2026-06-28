@@ -197,6 +197,10 @@
     r3:{cls:'r3',t:'YOUR CLUSTER',s:"— this is yours. Turn guardrails on yourself in the terminal. (your round-3 cluster)"}
   };
   let round='r1', tokens=0, costUsd=0, busy=false;
+  // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
+  // 5-step order across turns. Reset starts a fresh order (new id).
+  function newSession(){var s='sess-'+Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('wib-sess',s);return s;}
+  function getSession(){return sessionStorage.getItem('wib-sess')||newSession();}
   function setRound(r){round=r;const b=document.getElementById('banner');b.className='ibanner '+ROUNDS[r].cls;
     document.getElementById('bannertext').textContent=ROUNDS[r].t;document.getElementById('bannersub').textContent=ROUNDS[r].s;
     sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
@@ -205,7 +209,7 @@
   function renderSaved(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);}
   function save(t){renderSaved(t);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(t);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
-  function resetChat(){document.getElementById('stream').innerHTML='';greet();}
+  function resetChat(){document.getElementById('stream').innerHTML='';newSession();greet();}
   function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritoBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
   // Easter egg (#36): when BurritoBot rings up a completed five-step order it says "Free burritos for life";
   // that surfaces a ring-me-up button in chat, and clicking it sets off a silly celebration.
@@ -233,7 +237,7 @@
     const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
     const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
     try{
-      const res=await fetch(ROUND_ENDPOINTS[round],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v})});
+      const res=await fetch(ROUND_ENDPOINTS[round],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v,session:getSession()})});
       t.remove();
       if(!res.ok){ if(res.status===0||res.status>=500){noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');} bubble("Hmm, the kitchen isn't answering ("+res.status+"). Try again in a moment.",'bot'); return; }
       const data=await res.json();

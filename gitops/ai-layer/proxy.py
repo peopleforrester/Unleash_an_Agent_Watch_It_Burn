@@ -547,9 +547,12 @@ class Handler(BaseHTTPRequestHandler):
         guard TOGGLES apply identically, so the round-2/round-3 guardrail demo affects BurritoBot too."""
         raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
         try:
-            prompt = (json.loads(raw) or {}).get("prompt", "")
+            body = json.loads(raw) or {}
+            prompt = body.get("prompt", "")
+            session = body.get("session", "")  # per-browser-session id -> A2A contextId for conversation memory
         except Exception:
             prompt = ""
+            session = ""
         if not isinstance(prompt, str) or not prompt.strip():
             self._send(400, {"reply": "Tell BurritoBot what you'd like.", "guarded": False,
                              "input_tokens": 0, "output_tokens": 0})
@@ -583,9 +586,12 @@ class Handler(BaseHTTPRequestHandler):
         # Forward as A2A message/send to the agent root, inside a CLIENT span (the Service Map egress hop).
         global _chat_seq
         _chat_seq += 1
-        a2a = {"jsonrpc": "2.0", "id": "chat", "method": "message/send",
-               "params": {"message": {"role": "user", "messageId": f"chat-{_chat_seq}",
-                                      "parts": [{"kind": "text", "text": prompt}]}}}
+        msg = {"role": "user", "messageId": f"chat-{_chat_seq}",
+               "parts": [{"kind": "text", "text": prompt}]}
+        if session:
+            # Carry the browser session as the A2A contextId so kagent threads the order across turns.
+            msg["contextId"] = session
+        a2a = {"jsonrpc": "2.0", "id": "chat", "method": "message/send", "params": {"message": msg}}
         fwd_headers = {"Content-Type": "application/json"}
         client_cm = (_tracer.start_as_current_span("agent.forward", kind=SpanKind.CLIENT)
                      if _OTEL_AVAILABLE else nullcontext())
