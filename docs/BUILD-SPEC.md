@@ -1,5 +1,8 @@
 # BUILD-SPEC.md, "Build a Platform, Unleash an Agent on it.... and Watch it Burn!"
 
+> **Amended 2026-06-28** by [docs/UI-FEEDBACK-2026-06-28.md](UI-FEEDBACK-2026-06-28.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
+
+
 AI Engineer World's Fair 2026, San Francisco, Moscone West, Jun 29-Jul 2.
 Workshop, 2 hours, confirmed slot: Day 1 (Workshop Day), 2:20–4:20pm, Track 5.
 Speakers: Michael Forrester (Accenture) with Whitney Lee (public schedule lists Michael solo; organizers emailed to add Whitney).

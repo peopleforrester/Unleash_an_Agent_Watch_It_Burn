@@ -1,5 +1,8 @@
 # Watch It Burn, Design Decisions & Reconciliation
 
+> **Amended 2026-06-28** by [docs/UI-FEEDBACK-2026-06-28.md](UI-FEEDBACK-2026-06-28.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
+
+
 Source of truth for the *evolved* design captured in the Michael + Whitney planning
 transcript (`docs/transcripts/watch-it-burn-planning.md`), reconciled against what was
 already built and live-verified (`BUILD-SPEC.md` rev3, `PROJECT_STATE.md`).

@@ -1,4 +1,7 @@
 <!-- ABOUTME: Design spec for attendee access + credential distribution — how every attendee reaches a -->
+
+> **Amended 2026-06-28** by [docs/UI-FEEDBACK-2026-06-28.md](UI-FEEDBACK-2026-06-28.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
+
 <!-- ABOUTME: web/chat interface for Clusters 1/2/3 and gets AWS + Datadog credentials keyed off email. -->
 
 # Design Spec — Attendee Access & Credential Distribution
