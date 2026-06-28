@@ -273,8 +273,21 @@ Sootfritas→Soot-Fritas, Lizard Lickins'→Dragon's Blood; added a second rice
   `--once` and no client cap), so each `<iframe src="/terminal/">` is its own
   independent terminal. The "+" tab adds an iframe; tabs show/hide panes. No tmux,
   no second ttyd, no xterm.js rebuild needed.
-- **SP-2.** Datadog: deep-linking to a specific dashboard, login pre-fill /
-  pre-submit feasibility, and how Datadog's own labs surface credentials.
+- **SP-2. RESEARCHED (2026-06-28).**
+  - **Login pre-submit: NOT possible.** Datadog has no URL parameter to pre-fill
+    email or submit credentials at the login form. SSO only auto-signs-in when the
+    IdP already holds a session, which does not apply to per-student email/password
+    trial orgs. Michael's guess was right: students log in manually with the
+    email/password shown on the page (this is how Datadog's own labs do it). Do not
+    promise auto-login; keep the creds visible on the VTT/provisioning page.
+  - **Dashboard deep-links: yes.** Format
+    `https://app.datadoghq.com/dashboard/<ID>/<name>?from_ts=<ms>&to_ts=<ms>&live=true&tpl_var_<var>=<value>`.
+    Per-challenge deep-links (scoped to the student's service/namespace and a time
+    window) are wirable once the dashboard IDs and the per-student scope variable
+    exist. That depends on Whitney's dashboards (#11/#13/#14) and the live per-student
+    Datadog org (the test pool rows have blank Datadog fields), so the actual links
+    wait on that work.
+    Sources: docs.datadoghq.com/dashboards/guide/context-links, /dashboards/template_variables.
 - **SP-3.** Whitney's Datadog GenAI semantic-convention standards for prompt
   capture (overlaps tasks #13/#14/#27/#20).
 - **SP-4. DECIDED (2026-06-28): mounted secret, not Pod Identity.** The student's
