@@ -20,9 +20,25 @@ else
   echo "WARNING: no in-cluster ServiceAccount token found; kubectl is not auto-configured." > "$HOME/.motd"
 fi
 
+# Round-3 self-serve guardrail toggles (B5/B11): one command to flip the AI guards on the attendee's own
+# cluster. They hit the guard-proxy /toggle via exec (no new pod, ArgoCD-safe, the cost counter survives).
+cat > "$HOME/guards-on" <<'EOS'
+#!/bin/bash
+kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/toggle?input=on&output=on',timeout=10).read().decode())"
+EOS
+cat > "$HOME/guards-off" <<'EOS'
+#!/bin/bash
+kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/toggle?input=off&output=off',timeout=10).read().decode())"
+EOS
+chmod +x "$HOME/guards-on" "$HOME/guards-off"
+
 cat > "$HOME/.bashrc" <<'BRC'
 cat ~/.motd 2>/dev/null
 echo "Welcome to your Watch It Burn cluster shell. Try: kubectl get pods -A"
+echo "Round 3: flip your AI guardrails with  guards-on  and  guards-off"
+export PATH="$HOME:$PATH"
 export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '
 BRC
 
