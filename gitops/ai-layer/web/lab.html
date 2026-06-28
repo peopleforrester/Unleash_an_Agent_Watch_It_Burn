@@ -46,6 +46,23 @@
   .warn{background:#fff6f6;border:1px solid #f3d2d2;border-radius:10px;padding:10px 12px;font-size:13px;color:#7a2e2e;margin:8px 0}
   code.inl{background:var(--lav);border-radius:5px;padding:1px 6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px}
   .guide .foot{color:var(--mid);font-size:12px;margin-top:14px}
+  /* collapsible steps (Whitney's reveal: closed until clicked, state persists per step) */
+  .step .h{cursor:pointer}
+  .step .chev{margin-left:auto;color:var(--mid);font-size:12px}
+  .step .b{display:none}
+  .step.open .b{display:block}
+  /* multi-terminal tabs: each pane is an independent ttyd session */
+  .termcol{display:flex;flex-direction:column}
+  .termtabs{flex:0 0 auto;display:flex;align-items:center;gap:3px;background:#0a0c12;padding:6px 6px 0}
+  .ttab{font:inherit;font-size:12px;font-weight:700;color:#aeb4c8;background:#1a1e2b;border:0;border-radius:7px 7px 0 0;padding:6px 13px;cursor:pointer;display:flex;align-items:center;gap:7px}
+  .ttab.active{background:var(--term);color:#fff}
+  .ttab .x{opacity:.55;font-size:11px}
+  .ttab .x:hover{opacity:1}
+  .tadd{font:inherit;font-size:16px;font-weight:800;color:#aeb4c8;background:transparent;border:0;cursor:pointer;padding:2px 10px}
+  .tadd:hover{color:#fff}
+  .termpanes{flex:1;min-height:0;position:relative}
+  .tpane{position:absolute;inset:0;width:100%;height:100%;border:0;display:none}
+  .tpane.active{display:block}
   #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
   #toast.show{opacity:1}
   .mobnote{display:none}
@@ -125,7 +142,13 @@
     </section>
 
     <section class="termcol">
-      <iframe src="/terminal/" title="Your cluster shell"></iframe>
+      <div class="termtabs" id="termtabs">
+        <button class="ttab active" data-i="0" onclick="showTerm(0)">Terminal 1</button>
+        <button class="tadd" onclick="addTerm()" title="New terminal">+</button>
+      </div>
+      <div class="termpanes" id="termpanes">
+        <iframe class="tpane active" data-i="0" src="/terminal/" title="Terminal 1"></iframe>
+      </div>
     </section>
   </div>
 
@@ -157,6 +180,42 @@
     if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(done,function(){fb(txt);done();});}
     else{fb(txt);done();}
     function fb(t){var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');}catch(e){}document.body.removeChild(ta);}
+  }
+  // Collapsible steps: closed by default, click the header to reveal, state persists per step.
+  document.querySelectorAll('.guide .step').forEach(function(step, idx){
+    var h=step.querySelector('.h');
+    var chev=document.createElement('div'); chev.className='chev'; h.appendChild(chev);
+    var open=localStorage.getItem('wib-step-'+idx)==='1';
+    step.classList.toggle('open', open); chev.textContent=open?'▾':'▸';
+    h.addEventListener('click', function(){
+      var o=step.classList.toggle('open');
+      localStorage.setItem('wib-step-'+idx, o?'1':'0');
+      chev.textContent=o?'▾':'▸';
+    });
+  });
+  // Multi-terminal tabs (Katacoda/KodeKloud style). Each pane is its own ttyd session: a fresh bash per
+  // iframe connection, so "+" just adds another iframe to /terminal/.
+  var termN=1;
+  function showTerm(i){
+    document.querySelectorAll('.tpane').forEach(function(p){p.classList.toggle('active', +p.dataset.i===i);});
+    document.querySelectorAll('.ttab').forEach(function(t){t.classList.toggle('active', +t.dataset.i===i);});
+  }
+  function addTerm(){
+    var i=termN++;
+    var f=document.createElement('iframe'); f.className='tpane'; f.dataset.i=i; f.src='/terminal/'; f.title='Terminal '+(i+1);
+    document.getElementById('termpanes').appendChild(f);
+    var b=document.createElement('button'); b.className='ttab'; b.dataset.i=i;
+    b.innerHTML='Terminal '+(i+1)+' <span class="x">✕</span>';
+    b.addEventListener('click', function(){ showTerm(i); });
+    b.querySelector('.x').addEventListener('click', function(ev){ ev.stopPropagation(); closeTerm(i); });
+    var tabs=document.getElementById('termtabs');
+    tabs.insertBefore(b, tabs.querySelector('.tadd'));
+    showTerm(i);
+  }
+  function closeTerm(i){
+    var p=document.querySelector('.tpane[data-i="'+i+'"]'); if(p)p.remove();
+    var t=document.querySelector('.ttab[data-i="'+i+'"]'); if(t)t.remove();
+    var first=document.querySelector('.ttab'); if(first)showTerm(+first.dataset.i);
   }
 </script>
 </body>
