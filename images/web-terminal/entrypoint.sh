@@ -1,11 +1,11 @@
 #!/bin/bash
-# ABOUTME: Builds a kubeconfig from the pod's in-cluster ServiceAccount so kubectl "just works" in the
-# ABOUTME: browser terminal, then launches ttyd. The shell opens already scoped to the attendee's cluster.
+# ABOUTME: Wires the student VTT: kubectl from the in-cluster ServiceAccount, the AWS CLI from the
+# ABOUTME: student's own keys (optional secret), guardrail toggles, then launches ttyd in /home/student.
 set -euo pipefail
 
 SA=/var/run/secrets/kubernetes.io/serviceaccount
-export HOME=/home/term
-mkdir -p "$HOME/.kube"
+export HOME=/home/student
+mkdir -p "$HOME/.kube" "$HOME/.aws"
 
 if [ -f "$SA/token" ]; then
   kubectl config set-cluster this \
@@ -18,6 +18,24 @@ if [ -f "$SA/token" ]; then
   echo "kubectl is configured for THIS cluster (namespace: $(cat "$SA/namespace"))." > "$HOME/.motd"
 else
   echo "WARNING: no in-cluster ServiceAccount token found; kubectl is not auto-configured." > "$HOME/.motd"
+fi
+
+# Pre-configure the AWS CLI with the student's OWN keys (mounted as the optional `student-aws-creds`
+# secret -> env). Written as the DEFAULT profile so `aws` works with no --profile inside the VTT. On a
+# cluster without the secret, aws is installed but unconfigured; kubectl still works via the SA above.
+if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+  cat > "$HOME/.aws/credentials" <<CREDS
+[default]
+aws_access_key_id = ${AWS_ACCESS_KEY_ID}
+aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+CREDS
+  cat > "$HOME/.aws/config" <<CFG
+[default]
+region = ${AWS_DEFAULT_REGION:-us-west-2}
+output = json
+CFG
+  chmod 600 "$HOME/.aws/credentials"
+  printf 'aws is configured with your keys (default profile, region %s).\n' "${AWS_DEFAULT_REGION:-us-west-2}" >> "$HOME/.motd"
 fi
 
 # Round-3 self-serve guardrail toggles (B5/B11): one command to flip the AI guards on the attendee's own
@@ -36,8 +54,11 @@ chmod +x "$HOME/guards-on" "$HOME/guards-off"
 
 cat > "$HOME/.bashrc" <<'BRC'
 cat ~/.motd 2>/dev/null
-echo "Welcome to your Watch It Burn cluster shell. Try: kubectl get pods -A"
-echo "Round 3: flip your AI guardrails with  guards-on  and  guards-off"
+echo "Welcome to your Watch It Burn cluster shell."
+echo "  kubectl is wired to your cluster   (try: kubectl get pods -A)"
+echo "  aws is ready with your keys        (try: aws sts get-caller-identity)"
+echo "  flip your AI guardrails with       guards-on   guards-off"
+cd "$HOME"
 export PATH="$HOME:$PATH"
 export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '
 BRC

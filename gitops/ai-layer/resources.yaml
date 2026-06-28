@@ -481,9 +481,14 @@ spec:
       containers:
         - name: ttyd
           image: ghcr.io/peopleforrester/watch-it-burn:web-terminal # built from images/web-terminal/
+          imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
           ports: [{ name: ttyd, containerPort: 7681 }]
+          # The student's own AWS keys, mounted as the DEFAULT profile inside the VTT so `aws` works with
+          # no flags. Created per-cluster by the bootstrap (outside git); optional so clusters without it run.
+          envFrom:
+            - secretRef: { name: student-aws-creds, optional: true }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
-          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 256Mi } }
+          resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { cpu: 500m, memory: 512Mi } }
 ---
 apiVersion: v1
 kind: Service

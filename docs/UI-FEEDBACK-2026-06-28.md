@@ -260,8 +260,14 @@ Status: captured; plan approved 2026-06-28. We tackle one piece at a time.
   pre-submit feasibility, and how Datadog's own labs surface credentials.
 - **SP-3.** Whitney's Datadog GenAI semantic-convention standards for prompt
   capture (overlaps tasks #13/#14/#27/#20).
-- **SP-4.** Per-student AWS credentials inside the VTT: EKS Pod Identity vs a
-  mounted secret, and how to set them as the default profile.
+- **SP-4. DECIDED (2026-06-28): mounted secret, not Pod Identity.** The student's
+  own access/secret keys (the ones on their provisioning page) land in the VTT pod
+  as an optional Secret `student-aws-creds`; the entrypoint writes them as the
+  **default** AWS profile (`~/.aws/credentials` + region), so `aws` works with no
+  flags. Pod Identity was rejected because it grants a role, not the student's
+  keys, so the VTT would not match the provisioning page. The per-cluster Secret
+  is created by the cluster bootstrap (the same imperative step that mints the
+  IAM user), outside git, since gitops manifests are shared across all clusters.
 - **SP-5.** Katacoda/KodeKloud reveal + multi-terminal interaction patterns
   (extends the prior DNS/entry-point spike work).
 - **SP-6.** AI-generated Hex & Cauldron cornucopia Easter-egg image asset.
