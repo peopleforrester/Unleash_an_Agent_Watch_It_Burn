@@ -9,8 +9,14 @@ task list. Most of this is cosmetic, with three larger structural items
 (BurritoBot left/right split, VTT instruction reveals + multi-terminal, VTT
 environment + pre-configured AWS).
 
-Status: captured. Nothing implemented yet. We tackle one piece at a time after
-plan approval.
+Status: captured; plan approved 2026-06-28. We tackle one piece at a time.
+
+### Decisions (2026-06-28)
+- **Name:** one word, `BurritoBot`, everywhere. Not "Burrito Bot".
+- **Round/cluster selector prefix:** the purple-bar label is **"Choose"**.
+- **Datadog viewing:** **inline per challenge** for now. Michael and Whitney
+  will judge ingest lag on a later walkthrough and move it to the end only if
+  needed. Not a concern to design around now.
 
 ---
 
