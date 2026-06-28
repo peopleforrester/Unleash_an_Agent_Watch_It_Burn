@@ -494,6 +494,45 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
                          f"{r['datadog_org']},{r['claimed_at']},{r['email_sent']}")
         return "\n".join(lines) + "\n", 200, {"Content-Type": "text/csv; charset=utf-8"}
 
+    @app.post("/admin/import")
+    def admin_import():
+        # Live pool ingestion: the fleet POSTs freshly-harvested cluster rows here so 250 clusters reach the
+        # provisioning pool with no rebuild/redeploy. Upsert by name; never overwrite a cluster's claim state.
+        token = request.headers.get("X-Admin-Token", "") or request.args.get("token", "")
+        if not token or not secrets.compare_digest(token, app.config["ADMIN_TOKEN"]):
+            abort(403)
+        payload = request.get_json(silent=True) or {}
+        rows = payload.get("clusters") if isinstance(payload, dict) else payload
+        if not isinstance(rows, list):
+            return {"error": "expected a JSON list of rows, or {\"clusters\": [...]}"}, 400
+        conn = get_db()
+        cols = ["name", "access_key", "secret_key", "region", *CRED_COLUMNS]
+        set_clause = ", ".join(f"{c}=excluded.{c}" for c in cols if c != "name")
+        inserted = updated = skipped = 0
+        for r in rows:
+            if not isinstance(r, dict):
+                skipped += 1
+                continue
+            ak = (r.get("access_key") or "").strip()
+            nm = (r.get("name") or "").strip()
+            # Same placeholder guard as the CSV seed: never ingest a fake/empty credential.
+            if (not nm) or (not ak) or ak.startswith(("AKIAEXAMPLE", "TESTKEY", "EXAMPLE")) or nm.startswith("EXAMPLE-"):
+                skipped += 1
+                continue
+            exists = conn.execute("SELECT 1 FROM clusters WHERE name = ?", (nm,)).fetchone()
+            vals = [(r.get(c) or "").strip() for c in cols]
+            conn.execute(
+                f"INSERT INTO clusters ({','.join(cols)}) VALUES ({','.join('?' * len(cols))}) "
+                f"ON CONFLICT(name) DO UPDATE SET {set_clause}",
+                vals,
+            )
+            if exists:
+                updated += 1
+            else:
+                inserted += 1
+        conn.commit()
+        return {"inserted": inserted, "updated": updated, "skipped": skipped}, 200
+
     @app.get("/admin")
     def admin():
         token = request.args.get("token", "")
