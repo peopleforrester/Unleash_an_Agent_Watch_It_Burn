@@ -27,7 +27,7 @@
   .banner .dot{width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
   .banner.r1{background:var(--r1)}.banner.r2{background:var(--r2)}.banner.r3{background:var(--r3)}
   .banner small{font-weight:600;opacity:.92}
-  .wrap{flex:1;display:flex;min-height:0;max-width:1180px;width:100%;margin:0 auto;padding:18px;gap:18px}
+  .wrap{flex:1;display:flex;min-height:0;max-width:1340px;width:100%;margin:0 auto;padding:18px;gap:18px}
   .chatcol{flex:1;display:flex;flex-direction:column;min-width:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 6px 22px rgba(99,44,166,.08)}
   .chathead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
   .chathead .avatar{width:34px;height:34px;border-radius:50%;background:var(--lav);display:grid;place-items:center;font-size:18px}
@@ -50,12 +50,28 @@
   .saved{display:flex;flex-direction:column;gap:7px}
   .saved button{text-align:left;font:inherit;font-size:12.5px;border:1px solid var(--line);background:#faf6ff;color:var(--ink);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .hint{font-size:12px;color:var(--mid)}
+  /* B-storefront: build-your-burrito menu board (left rail). Tap an item -> sends that order step. */
+  .menu{width:300px;flex:0 0 300px;display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 22px rgba(99,44,166,.08)}
+  .menu .mhead{background:linear-gradient(135deg,var(--dd),var(--accent));color:#fff;padding:13px 15px}
+  .menu .mhead h2{margin:0;font-size:16px;font-weight:800;letter-spacing:.2px}
+  .menu .mhead .sub{font-size:11.5px;opacity:.92;margin-top:2px}
+  .menu .mscroll{overflow:auto;padding:12px 13px;flex:1}
+  .msec{margin-bottom:13px}
+  .msec .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800;margin:0 0 7px;display:flex;align-items:center;gap:6px}
+  .msec .lbl .n{width:17px;height:17px;border-radius:50%;background:var(--lav);color:var(--accent);font-size:10px;display:grid;place-items:center}
+  .chips{display:flex;flex-wrap:wrap;gap:6px}
+  .chip{font:inherit;font-size:12px;font-weight:600;border:1px solid var(--line);background:#faf6ff;color:var(--ink);padding:6px 10px;border-radius:999px;cursor:pointer;line-height:1.2}
+  .chip:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .menu .ring{padding:11px 13px;border-top:1px solid var(--line)}
+  .ringbtn{width:100%;font:inherit;font-weight:800;font-size:13px;background:var(--ink);color:#fff;border:0;padding:11px;border-radius:10px;cursor:pointer}
+  .ringbtn:hover{background:var(--accent)}
   #noburritos{position:fixed;inset:0;background:#000;color:#fff;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:50}
   #noburritos b{font-size:min(9vw,72px);font-weight:800;letter-spacing:.5px}
   #noburritos span{margin-top:10px;color:#666;font-size:13px}
   footer{padding:10px 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--mid);display:flex;gap:14px;align-items:center}
   footer .sp{flex:1}
-  @media(max-width:760px){.rail{display:none}}
+  @media(max-width:980px){.rail{display:none}}
+  @media(max-width:760px){.menu{display:none}}
 </style>
 </head>
 <body>
@@ -79,6 +95,43 @@
   </div>
 
   <div class="wrap">
+    <aside class="menu">
+      <div class="mhead"><h2>🧹 Hex &amp; Cauldron</h2><div class="sub">Build your burrito. Tap to order, the witch takes it from there.</div></div>
+      <div class="mscroll">
+        <div class="msec"><p class="lbl"><span class="n">1</span> Protein</p><div class="chips">
+          <button class="chip" onclick="pick('Bogbacoa','barbacoa')">Bogbacoa</button>
+          <button class="chip" onclick="pick('Croak-nitas','carnitas')">Croak-nitas</button>
+          <button class="chip" onclick="pick('Sorcerizo','chorizo')">Sorcerizo</button>
+          <button class="chip" onclick="pick('Wraith Wisp','steak')">Wraith Wisp</button>
+          <button class="chip" onclick="pick('Sootfritas','sofritas, the veggie one')">Sootfritas 🌱</button>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">2</span> Base</p><div class="chips">
+          <button class="chip" onclick="pick('Cilantro-Slime Rice','rice')">Cilantro-Slime Rice</button>
+          <button class="chip" onclick="pick('Bog Salad','salad')">Bog Salad</button>
+          <button class="chip" onclick="pick('Toad-illa Chips','chips')">Toad-illa Chips</button>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">3</span> Fillings</p><div class="chips">
+          <button class="chip" onclick="pick('Black Bane Beans','black beans')">Black Bane Beans</button>
+          <button class="chip" onclick="pick('Imp-into Beans','pinto beans')">Imp-into Beans</button>
+          <button class="chip" onclick="pick('Kelpie Queso','cheese')">Kelpie Queso</button>
+          <button class="chip" onclick="pick('Ogresnut Guac','guacamole')">Ogresnut Guac</button>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">4</span> Salsa</p><div class="chips">
+          <button class="chip" onclick="pick('Pixie-o de Gallo','mild salsa')">Pixie-o de Gallo</button>
+          <button class="chip" onclick="pick('Cursed-Corn Salsa','medium corn salsa')">Cursed-Corn</button>
+          <button class="chip" onclick="pick('Lizard Lickins','hot salsa')">Lizard Lickins'</button>
+          <button class="chip" onclick="pick('Ghoul-st Pepper','ghost salsa')">Ghoul-st Pepper 👻</button>
+        </div></div>
+        <div class="msec"><p class="lbl"><span class="n">5</span> Toppings</p><div class="chips">
+          <button class="chip" onclick="pick('Sour Scream','sour cream')">Sour Scream</button>
+          <button class="chip" onclick="pick('Fae-jita Veggies','fajita veggies')">Fae-jita Veggies</button>
+          <button class="chip" onclick="pick('Hag Wrinkle Relish','relish')">Hag Wrinkle Relish</button>
+          <button class="chip" onclick="pick('Pixie Dust','pixie dust')">Pixie Dust ✨</button>
+          <button class="chip" onclick="pick('Tardigrade Crunch','tardigrade crunch')">Tardigrade Crunch</button>
+        </div></div>
+      </div>
+      <div class="ring"><button class="ringbtn" onclick="ring()">🔔 That's my order, ring me up</button></div>
+    </aside>
     <div class="chatcol">
       <div class="chathead">
         <div class="avatar">🧹</div>
@@ -147,6 +200,10 @@
       t.remove(); noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');
     }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
   }
+  // Menu board (storefront): tapping an item sends that order step to BurritBot. The witchy display
+  // name plus the plain term in parentheses so the model always understands the choice.
+  function pick(name,plain){const i=document.getElementById('inp');i.value="I'll have the "+name+" ("+plain+").";send();}
+  function ring(){const i=document.getElementById('inp');i.value="That's my whole order, ring me up please.";send();}
   greet();
 </script>
 </body>
