@@ -335,7 +335,9 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
 
     @app.get("/")
     def index():
-        return render_template("index.html")
+        # `?as=student` lets an admin (Michael/Whitney) preview the real STUDENT flow; threaded into the
+        # claim form as a hidden field so the POST carries it.
+        return render_template("index.html", as_param=(request.args.get("as") or ""))
 
     @app.get("/eks")
     def eks_form():
@@ -348,7 +350,9 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
             return render_template("index.html", error="Please enter a valid email address."), 400
 
         # Admin exception: instructor-cluster access, not an attendee pool row. Does not consume the pool.
-        if email in app.config["ADMIN_EMAILS"]:
+        # `?as=student` overrides this so an admin can walk the actual STUDENT onboarding (claims a pool row).
+        as_student = (request.form.get("as") or request.args.get("as") or "").strip().lower() == "student"
+        if email in app.config["ADMIN_EMAILS"] and not as_student:
             region = app.config["ADMIN_REGION"]
             clusters = app.config["ADMIN_CLUSTERS"]
             cmds = "\n".join(
