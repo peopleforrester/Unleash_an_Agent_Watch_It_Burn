@@ -53,6 +53,13 @@ password: {{ dd.datadog_password }}</pre>
     .copy { position:absolute; top:7px; right:7px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
             font-size:11px; font-weight:700; background:#FF6B35; color:#fff; border:0; border-radius:5px; padding:3px 8px; cursor:pointer; }
     .copy.done { background:#2e9e5b; }
+    .clist { margin:6px 0 0; }
+    .crow { display:flex; align-items:center; gap:10px; flex-wrap:wrap; padding:8px 0; border-bottom:1px solid #eef0f6; }
+    .crow:last-child { border-bottom:0; }
+    .cname { font-family:Consolas,Menlo,monospace; font-size:13px; color:#1E2761; font-weight:600; }
+    .clinks { display:flex; gap:8px; margin-left:auto; }
+    .clink { font-size:12px; font-weight:700; text-decoration:none; background:#FF6B35; color:#fff; padding:5px 11px; border-radius:6px; }
+    .clink.ghost { background:#fff; color:#1E2761; border:1px solid #1E2761; }
   </style>
 </head>
 <body>
@@ -79,7 +86,19 @@ password: {{ dd.datadog_password }}</pre>
       </div>
 
       <div class="label">Instructor clusters ({{ region }})</div>
-      <ul>{% for c in clusters %}<li>{{ c }}</li>{% endfor %}</ul>
+      <div class="clist">
+        {% for c in clusters %}
+        <div class="crow">
+          <span class="cname">{{ c.name }}</span>
+          {% if c.url %}
+          <span class="clinks">
+            <a class="clink" href="{{ c.url }}/" target="_blank" rel="noopener">&#127791; BurritoBot</a>
+            <a class="clink ghost" href="{{ c.url }}/lab" target="_blank" rel="noopener">&#9000; VTT</a>
+          </span>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
 
       <div class="label">Prerequisites: install the AWS CLI v2 and kubectl</div>
       <details class="os"><summary>macOS</summary>
@@ -104,20 +123,27 @@ aws --version &amp;&amp; kubectl version --client</pre></details>
       <pre>{{ aws_access_key }}</pre>
       <div class="label">AWS secret key</div>
       <pre>{{ aws_secret_key }}</pre>
-      <div class="label">Configure the AWS CLI as its own profile (does not touch your default creds)</div>
-      <pre>$ aws configure --profile watch-it-burn
+      <div class="note" style="margin-top:14px;">You only need the AWS CLI to reach the clusters from your <strong>own laptop</strong>. Inside the in-browser terminals (the VTT buttons above) kubectl is already wired to the cluster, no profile, no setup.</div>
+      <div class="label">Configure the AWS CLI once, under a short profile (does not touch your default creds)</div>
+      <pre>$ aws configure --profile burn
 AWS Access Key ID [None]:      &lt;paste the access key above&gt;
 AWS Secret Access Key [None]:  &lt;paste the secret key above&gt;
 Default region name [None]:    {{ region }}
 Default output format [None]:  json</pre>
-      <div class="note">The <code>--profile watch-it-burn</code> keeps these keys separate from any existing AWS credentials; if you have none, it just creates the profile. The commands below already include <code>--profile watch-it-burn</code>, so kubectl uses it automatically.</div>
+      <div class="note">One profile (<code>burn</code>) for all four clusters. update-kubeconfig bakes it into each context, so kubectl never needs <code>--profile</code>.</div>
       <div class="label">Then pull every instructor cluster's kubeconfig</div>
       <pre>{{ kubeconfig_commands }}
-kubectl config get-contexts                    # one context per instructor cluster</pre>
+
+# switch clusters by short name, then run kubectl with no extra flags:
+kubectl config use-context round1              # round1 / round2 / round3 / student
+kubectl get pods -A</pre>
       {% else %}
       <div class="label">Pull every instructor cluster's kubeconfig (use your own AWS access to this account)</div>
       <pre>{{ kubeconfig_commands }}
-kubectl config get-contexts                    # one context per instructor cluster</pre>
+
+# switch clusters by short name, then run kubectl with no extra flags:
+kubectl config use-context round1              # round1 / round2 / round3 / student
+kubectl get pods -A</pre>
       <div class="note">No admin AWS key is configured on the distributor; authenticate with your own access to the account, then run the commands above.</div>
       {% endif %}
 
