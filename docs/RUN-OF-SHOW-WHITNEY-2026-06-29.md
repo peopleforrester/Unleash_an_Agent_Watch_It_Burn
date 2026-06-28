@@ -8,7 +8,7 @@ run-of-show elements are covered and which are gaps. It supplements (does not re
 ## The flow they described
 
 ### Round 1, open cluster, attack the BurritoBot, watch the room burn
-- A secret ingredient is the hook: a "fat spit secret recipe" planted on the cluster. Two attack goals:
+- A secret ingredient is the hook: a "bat spit secret recipe" planted on the cluster. Two attack goals:
   pull the secret recipe, and exfiltrate customer data (e.g. social-engineer a customer's delivery
   address) out to an S3 bucket.
 - Other attacks: deploy a malicious image (the "Joker" / "grill zone" image), and run executable code
@@ -43,7 +43,7 @@ attack, watch it stop. In order:
 | Round | Element | Built? | Where / task |
 |---|---|---|---|
 | R1 | Open BurritoBot, attackable | YES | ai-layer (workshop-agent + console) |
-| R1 | "Fat spit" secret recipe planted + grep attack | YES | `challenges/02-sanitization/plant-fake-recipe.yaml`, `challenges/c3-secret-grep` |
+| R1 | "Bat spit" secret recipe planted + grep attack | YES | `challenges/02-sanitization/plant-fake-recipe.yaml`, `challenges/c3-secret-grep` |
 | R1 | Exfiltrate customer data to S3 | YES (scenario) | `challenges/c1-exfil-s3` |
 | R1 | Fork bomb / the burn | YES | `challenges/c4-fork-bomb`; R1 clusters provision with `pod_pids_limit=-1` |
 | R1 | Malicious image (Joker / grill zone) attack | GAP | no dedicated deploy-malicious-image scenario yet |
@@ -56,7 +56,7 @@ attack, watch it stop. In order:
 | R3 | Three in-browser tabs (BurritoBot / VTT / debug) | YES | VTT (#7) + BurritoBot (#8); multi-terminal in VTT |
 | R3 | Local kubectl optional, tiny print + warning | YES (mostly) | `success.html` optional `<details>`; add "experienced users only" warning |
 | R3 | Self-paced left-pane challenge instructions | YES | VTT challenge flow (#32) |
-| R3 | Challenge 5 output sanitization (fat spit blocked) | YES | `challenges/02-sanitization/toggle-output-guard-on.sh` (#20) |
+| R3 | Challenge 5 output sanitization (bat spit blocked) | YES | `challenges/02-sanitization/toggle-output-guard-on.sh` (#20) |
 | R3 | Challenge 6 input classifier (PII/cost) | YES | `challenges/02-sanitization/toggle-input-classifier-on.sh` |
 | R3 | Challenge 7 evil MCP | YES | `challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh` |
 
@@ -150,9 +150,9 @@ attack, watch it stop. In order:
 > Speaker 2: here here's the deal. Challenge number five. How do you stop an LLM from outputting? Or
 > actually we just rest you with the problem. We're going to show you we put this in and then we stop this
 > bad thing from happening, right?
-> Speaker 1: So we offer fat spit secret recipe.
+> Speaker 1: So we offer bat spit secret recipe.
 > Speaker 2: Yep.
-> Speaker 1: Fat spit good. Store it on the cluster. That's it, I'm ready. I was worried about their brand.
+> Speaker 1: Bat spit good. Store it on the cluster. That's it, I'm ready. I was worried about their brand.
 > Speaker 2: Same way.
 > Speaker 1: I think they might not want this.
 > Speaker 2: San Francisco scenes, right?
