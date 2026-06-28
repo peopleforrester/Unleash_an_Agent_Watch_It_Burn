@@ -1,3 +1,2 @@
 name,region,access_key,secret_key,console_url,datadog_org,datadog_email,datadog_password,datadog_api_key,datadog_app_key,datadog_site,datadog_dashboard_url
-watch-it-burn-attendee-michael,us-west-2,TESTKEYMICHAEL,TESTSECRETMICHAEL,http://k8s-agent-console-fce44b3107-5785d94a662415af.elb.us-west-2.amazonaws.com,,,,,,,
-watch-it-burn-attendee-whitney,us-west-2,TESTKEYWHITNEY,TESTSECRETWHITNEY,http://k8s-agent-console-fce44b3107-5785d94a662415af.elb.us-west-2.amazonaws.com,,,,,,,
+EXAMPLE-schema-row-do-not-ship,us-west-2,AKIAEXAMPLE,EXAMPLESECRET,https://example.invalid,ai-eng-wf-EXAMPLE,example@learner.datadoghq.com,FAKE-pw,EXAMPLEDDAPIKEY,EXAMPLEDDAPPKEY,datadoghq.com,https://example.invalid/dashboard
