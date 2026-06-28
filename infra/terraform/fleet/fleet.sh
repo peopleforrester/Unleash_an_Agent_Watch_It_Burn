@@ -287,9 +287,34 @@ up_one() {
     fi
 }
 
+# Delete LB-backed Services + Ingresses BEFORE terraform destroy so the AWS LB Controller removes the
+# NLBs/ALBs it created (terraform doesn't manage them). Skipping this orphans ~2 LBs per cluster, whose
+# ENIs then block VPC/subnet deletion and cost money (observed: 100 orphaned LBs/account after a fleet
+# teardown). Best-effort: if the cluster is already gone/unreachable, just proceed to destroy. `--wait`
+# on a LoadBalancer Service blocks on the controller's finalizer, i.e. until the AWS LB is actually gone.
+drain_cluster_lbs() {
+    local name="$1" acct="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    local kc; kc="$(mktemp -t "${name}.drain.XXXX")"
+    if AWS_PROFILE="${acct}" aws eks update-kubeconfig --kubeconfig "${kc}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1 \
+       && KUBECONFIG="${kc}" kubectl get ns >/dev/null 2>&1; then
+        local lbsvcs
+        lbsvcs="$(KUBECONFIG="${kc}" kubectl get svc -A -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}' 2>/dev/null)"
+        if [[ -n "${lbsvcs}" ]]; then
+            log "  ${name}: draining $(printf '%s\n' "${lbsvcs}" | grep -c /) LB service(s) + ingresses before destroy"
+            while IFS=/ read -r ns svc; do
+                [[ -n "${svc}" ]] || continue
+                KUBECONFIG="${kc}" kubectl delete svc -n "${ns}" "${svc}" --wait=true --timeout=150s >/dev/null 2>&1 || true
+            done <<<"${lbsvcs}"
+        fi
+        KUBECONFIG="${kc}" kubectl delete ingress -A --all --wait=true --timeout=150s >/dev/null 2>&1 || true
+    fi
+    rm -f "${kc}"
+}
+
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
+    drain_cluster_lbs "${name}"
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
