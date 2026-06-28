@@ -730,12 +730,29 @@ cmd_ingest() {
     report_failures
 }
 
+# Account-aware selective teardown: destroy the named clusters in ONE specific account. Reuses the
+# tested read_vpc_for + down_one path so it works for the student accounts (whose VPC/profile the plain
+# 'down' does not resolve). Use to tear down most of a fleet while keeping a few (e.g. the 2 admin
+# attendee clusters): down-acct accen-dev <names...>  /  down-acct aws1-student31 <names...>.
+cmd_down_acct() {
+    local profile="${1:-}"; shift || true
+    [[ -n "${profile}" && $# -ge 1 ]] || { log "usage: down-acct <profile> <cluster-name...>"; exit 2; }
+    require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
+    read_vpc_for "${profile}"
+    TF_PROFILE="${profile}"
+    log "down-acct ${profile}: destroying $# clusters (max ${MAX_PARALLEL} parallel)..."
+    run_pool down_one "$@"
+    report_failures
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
         up) cmd_up "$@" ;;
         up-fleet) cmd_up_fleet "$@" ;;
         down) cmd_down "$@" ;;
+        down-acct) cmd_down_acct "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
         health) cmd_health "$@" ;;
         harvest) cmd_harvest "$@" ;;
