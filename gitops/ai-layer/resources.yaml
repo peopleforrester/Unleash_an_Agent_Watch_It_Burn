@@ -270,8 +270,9 @@ spec:
             - { name: INPUT_CLASSIFIER, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
             - { name: PROXY_FAIL_CLOSED, value: "true" }
-            # Per-cluster tier for the cost counter price; set to sonnet/opus on those tier clusters.
-            - { name: MODEL_TIER, value: "haiku" }
+            # Cost-counter price tier. The whole fleet runs the workshop default (Sonnet 4.6), so this
+            # is sonnet everywhere; the old per-cluster haiku/opus tiers were dropped.
+            - { name: MODEL_TIER, value: "sonnet" }
             # Protect the demo from itself (0 = disabled). verify-at-build: set to room size + budget.
             - { name: RATE_LIMIT_RPM, value: "120" }
             - { name: COST_CAP_USD, value: "25" }
