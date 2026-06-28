@@ -38,9 +38,10 @@
 
   <h1>Claim your workshop cluster</h1>
   <p id="form-help">
-    Enter your email to receive AWS credentials and the six setup commands for a
-    pre-provisioned EKS cluster. We&rsquo;ll email you a backup copy. Re-enter the same
-    email any time to redisplay your credentials.
+    Enter your email to claim a pre-provisioned EKS cluster. The next page walks you
+    through it: log into Datadog, open your in-browser terminal, then open your BurritoBot.
+    Email can be real or fake, just remember it. Nothing is sent to it; re-enter the same
+    email any time to get back to your cluster.
   </p>
 
   {% if error %}
@@ -62,8 +63,8 @@
 
 {% block scripts %}
 <script>
-  // Disable the button + swap label so users don't double-click the form while
-  // Resend is doing its ~1s round-trip.
+  // Disable the button + swap label so users don't double-click the form during
+  // the claim round-trip (atomic pool claim on the server).
   document.getElementById('claim-form').addEventListener('submit', function () {
     var b = document.getElementById('claim-submit');
     if (b.disabled) return;
