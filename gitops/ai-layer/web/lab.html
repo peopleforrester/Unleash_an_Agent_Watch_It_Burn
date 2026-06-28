@@ -21,6 +21,11 @@
   header .spacer{flex:1}
   header .pill{background:var(--r3);font-size:12px;font-weight:800;letter-spacing:.3px;padding:5px 11px;border-radius:999px}
   header a.bb{color:#fff;text-decoration:none;font-weight:800;font-size:13px;background:rgba(255,255,255,.16);padding:7px 13px;border-radius:8px}
+  header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap}
+  header a.hb:hover{background:rgba(255,255,255,.28)}
+  .crumb{flex:0 0 auto;background:#101A42;color:#dfe3f5;font-size:12.5px;padding:7px 16px;display:flex;gap:8px;align-items:center;border-bottom:1px solid rgba(255,255,255,.08)}
+  .crumb b{color:#fff;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .crumb .role{font-weight:800;text-transform:uppercase;letter-spacing:.4px;font-size:11px;background:var(--r3);color:#fff;padding:2px 8px;border-radius:999px}
   .split{flex:1;display:flex;min-height:0}
   .guide{width:40%;max-width:560px;min-width:340px;overflow:auto;padding:20px 22px;background:#fff;border-right:1px solid var(--line)}
   .termcol{flex:1;min-width:0;background:var(--term);position:relative}
@@ -55,11 +60,15 @@
 </head>
 <body>
   <header>
-    <div class="brand"><span class="em">🔥</span> Watch It Burn <small style="font-weight:600;opacity:.8;font-size:12px">· your cluster</small></div>
-    <span class="pill">ROUND 3 · HANDS-ON</span>
+    <div class="brand"><span class="em">🔥</span> Watch It Burn</div>
+    <span class="pill" id="rolepill">HANDS-ON</span>
     <div class="spacer"></div>
-    <a class="bb" href="/" target="_blank" rel="noopener">🌯 Open BurritoBot →</a>
+    <a class="hb" id="provbtn" href="https://provisioning.agenticburn.com" target="_blank" rel="noopener">&#8617; Provisioning</a>
+    <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener">&#128202; Datadog</a>
+    <a class="hb" href="/" target="_blank" rel="noopener">&#127791; BurritoBot</a>
   </header>
+
+  <div class="crumb"><span class="role" id="rolechip">STUDENT</span> Cluster <b id="cl">(loading&hellip;)</b> <span id="who"></span></div>
 
   <div class="split">
     <section class="guide">
@@ -123,6 +132,23 @@
   <div id="toast">copied</div>
 
 <script>
+  // Cluster identity comes from the link the provisioning app built (it knows the student's cluster + email).
+  // Breadcrumbs so the room can be troubleshot live and so an instructor emulating a student stays oriented.
+  (function initCrumb(){
+    var q=new URLSearchParams(location.search);
+    var cluster=q.get('cluster')||'(cluster not specified)';
+    var user=q.get('user')||'';
+    var role=(q.get('role')||'student').toLowerCase();
+    var dd=q.get('dd'), prov=q.get('prov');
+    var instr=role==='instructor';
+    document.getElementById('cl').textContent=cluster;
+    document.getElementById('who').textContent=user?('· assigned to '+user):'';
+    document.getElementById('rolechip').textContent=instr?'INSTRUCTOR':'STUDENT';
+    document.getElementById('rolepill').textContent=instr?'INSTRUCTOR':'HANDS-ON';
+    if(dd) document.getElementById('ddbtn').href=dd;
+    if(prov) document.getElementById('provbtn').href=prov;
+    document.title=(instr?'Instructor':'Student')+' VTT — '+cluster;
+  })();
   function toast(t){var e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(function(){e.classList.remove('show');},1300);}
   function cp(el){
     // pull the command text (everything except the button label)
