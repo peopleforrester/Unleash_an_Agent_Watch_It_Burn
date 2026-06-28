@@ -327,7 +327,15 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
         rows_to_seed = rows[:limit] if limit else rows
         fields = ["name", "access_key", "secret_key", "region", *CRED_COLUMNS]
         inserted = 0
+        skipped_placeholder = 0
         for r in rows_to_seed:
+            # Refuse to seed placeholder/schema/empty rows so a deploy that forgot to drop in the real
+            # assembled pool serves "exhausted" rather than handing an attendee a fake credential.
+            ak = (r.get("access_key") or "").strip()
+            nm = (r.get("name") or "").strip()
+            if (not ak) or ak.startswith(("AKIAEXAMPLE", "TESTKEY", "EXAMPLE")) or nm.startswith("EXAMPLE-"):
+                skipped_placeholder += 1
+                continue
             vals = [(r.get(f) or "").strip() for f in fields]
             try:
                 conn.execute(
