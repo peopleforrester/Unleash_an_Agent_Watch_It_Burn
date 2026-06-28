@@ -13,7 +13,7 @@ A rev4 of BUILD-SPEC should fold these in.
 
 ## What changed vs the build (headline)
 
-- **Slot is 2 hours (120 min)**, confirmed on the AI Engineer schedule: Day 1, 2:20–4:20pm, Track 5. Compress to ~1–2 of the CNCF "80%" + 2–4 AI-specific guardrails.
+- **Content is 60 minutes** (cut from 120 on 2026-06-25). The booked room is a 2-hour window (Day 1, 2:20–4:20pm, Track 5). Compress to ~1–2 of the CNCF "80%" + 2–4 AI-specific guardrails.
 - **Structure is a three-cluster spectacle**, not one aggregate beat.
 - **Cost / wasted-token DoS is now a central theme**, brand new vs rev3.
 - **Observability (input + output + tool calls on a live dashboard) is the headline payoff**, not just a lens, "even with no guardrails, seeing the prompts and tool calls melts their brains."
