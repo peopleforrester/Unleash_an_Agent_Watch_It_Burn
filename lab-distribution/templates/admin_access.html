@@ -75,13 +75,13 @@ password: {{ dd.datadog_password }}</pre>
           <div class="lh">Instructor cluster</div>
           <div class="lsub">Your demo cluster. The BurritoBot round dropdown switches R1 / R2 / R3 from here.</div>
           <a class="btn" href="{{ instructor_console_url }}/" target="_blank" rel="noopener">&#127791; Instructor BurritoBot &rarr;</a>
-          <a class="btn ghost" href="{{ instructor_console_url }}/lab" target="_blank" rel="noopener">&#9000; Instructor terminal (VTT) &rarr;</a>
+          <a class="btn ghost" href="{{ instructor_console_url }}/lab?role=instructor" target="_blank" rel="noopener">&#9000; Instructor terminal (VTT) &rarr;</a>
         </div>
         <div class="lcard">
           <div class="lh">Student preview</div>
           <div class="lsub">Exactly what an attendee sees on their own round-3 cluster.</div>
           <a class="btn" href="{{ student_console_url }}/" target="_blank" rel="noopener">&#127791; Student BurritoBot &rarr;</a>
-          <a class="btn ghost" href="{{ student_console_url }}/lab" target="_blank" rel="noopener">&#9000; Student terminal (VTT) &rarr;</a>
+          <a class="btn ghost" href="{{ student_console_url }}/lab?role=student" target="_blank" rel="noopener">&#9000; Student terminal (VTT) &rarr;</a>
         </div>
       </div>
 
@@ -93,7 +93,7 @@ password: {{ dd.datadog_password }}</pre>
           {% if c.url %}
           <span class="clinks">
             <a class="clink" href="{{ c.url }}/" target="_blank" rel="noopener">&#127791; BurritoBot</a>
-            <a class="clink ghost" href="{{ c.url }}/lab" target="_blank" rel="noopener">&#9000; VTT</a>
+            <a class="clink ghost" href="{{ c.url }}/lab?cluster={{ c.name|urlencode }}&amp;role=instructor" target="_blank" rel="noopener">&#9000; VTT</a>
           </span>
           {% endif %}
         </div>
