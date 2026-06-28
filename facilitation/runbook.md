@@ -1,4 +1,4 @@
-*Facilitator-facing minute-by-minute runbook: the 2-hour three-cluster run-of-show, with a compressed 60-minute fallback. Names the toggles, fallbacks, and hand-offs. Not attendee copy.*
+*Facilitator-facing minute-by-minute runbook. The canonical run is **60 minutes** (3 rounds: R1 burn, R2 CNCF, R3 student cluster), per the 2026-06-25 format cut. The booked room is a 2-hour slot; the 2-hour table below is the extended variant only if the slot holds. Names the toggles, fallbacks, and hand-offs. Not attendee copy.*
 
 # Runbook, "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 
@@ -31,7 +31,7 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 
 ---
 
-## 2-hour run, total = 120 minutes (PRIMARY)
+## Extended 2-hour run, total = 120 minutes (ONLY if the full slot holds; not the plan)
 
 | Time | Min | Owner | Segment | Toggle / artifact |
 |------|-----|-------|---------|-------------------|
@@ -169,7 +169,7 @@ reinforces it.
 
 ---
 
-## Compressed 60-minute fallback (if the slot shrinks or you run very long)
+## 60-minute run, total = 60 minutes (PRIMARY, the canonical plan per the 2026-06-25 cut)
 
 | Time | Min | Owner | Segment |
 |------|-----|-------|---------|

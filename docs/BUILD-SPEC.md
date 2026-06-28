@@ -4,7 +4,7 @@
 
 
 AI Engineer World's Fair 2026, San Francisco, Moscone West, Jun 29-Jul 2.
-Workshop, 2 hours, confirmed slot: Day 1 (Workshop Day), 2:20–4:20pm, Track 5.
+Workshop content is designed for **60 minutes** (3 rounds: R1 burn, R2 CNCF, R3 student cluster; format cut 2026-06-25). Booked room slot: Day 1 (Workshop Day), 2:20–4:20pm, Track 5 (a 2-hour window). Canonical minute-by-minute is the 60-minute table in `facilitation/runbook.md`.
 Speakers: Michael Forrester (Accenture) with Whitney Lee (public schedule lists Michael solo; organizers emailed to add Whitney).
 
 Spec rev4, 2026-06-17. Supersedes rev3. Single source of truth for Claude Code. If the live
@@ -12,8 +12,9 @@ abstract (`docs/ABSTRACT.md`) and this file disagree on behavior, the abstract w
 is updated to match. The evolved design and decision log behind rev4 is `docs/DESIGN-DECISIONS.md`
 (from the Michael+Whitney planning transcript). Live-verification status is in `PROJECT_STATE.md`.
 
-> **rev4 CHANGE vs rev3:** the workshop is now a **2-hour (120-minute), three-cluster spectacle** with
-> **cost / wasted-token DoS** as a central theme, not a single aggregate beat in a 90-minute slot.
+> **rev4 CHANGE vs rev3:** the workshop is a **three-cluster (three-round) spectacle** with
+> **cost / wasted-token DoS** as a central theme, not a single aggregate beat. (The 120-minute framing in
+> this rev is superseded: content was cut to **60 minutes** on 2026-06-25.)
 > rev3's components are all live-verified on EKS and carried forward; the *structure* is new.
 
 ---
@@ -72,7 +73,7 @@ Thesis augments (2026-06-20, from Whitney's feedback):
 
 ---
 
-## 2. The talk this builds, 2-hour run-of-show (120 min; authoritative minute-by-minute in facilitation/runbook.md)
+## 2. The talk this builds, 60-minute run-of-show (authoritative minute-by-minute = the 60-min table in facilitation/runbook.md)
 
 Abstract-true mapping: the abstract's four attacker objectives, deploy a non-compliant workload,
 escalate privileges, modify infra outside Git, exfiltrate via the agent's response, are realized as:
