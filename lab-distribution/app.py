@@ -533,6 +533,27 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
         conn.commit()
         return {"inserted": inserted, "updated": updated, "skipped": skipped}, 200
 
+    @app.post("/admin/delete")
+    def admin_delete():
+        # Lifecycle: when a cluster is torn down (reaper or manual), its pool row must go so no one
+        # claims a dead cluster. Delete by name; reports how many rows were removed.
+        token = request.headers.get("X-Admin-Token", "") or request.args.get("token", "")
+        if not token or not secrets.compare_digest(token, app.config["ADMIN_TOKEN"]):
+            abort(403)
+        payload = request.get_json(silent=True) or {}
+        names = payload.get("names") if isinstance(payload, dict) else payload
+        if not isinstance(names, list):
+            return {"error": "expected a JSON list of names, or {\"names\": [...]}"}, 400
+        conn = get_db()
+        deleted = 0
+        for nm in names:
+            if not isinstance(nm, str) or not nm.strip():
+                continue
+            cur = conn.execute("DELETE FROM clusters WHERE name = ?", (nm.strip(),))
+            deleted += cur.rowcount
+        conn.commit()
+        return {"deleted": deleted}, 200
+
     @app.get("/admin")
     def admin():
         token = request.args.get("token", "")
