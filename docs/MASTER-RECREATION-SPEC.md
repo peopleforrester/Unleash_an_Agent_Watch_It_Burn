@@ -1,6 +1,9 @@
 <!-- ABOUTME: Single authoritative recreate-from-scratch specification for the entire "Watch It Burn" workshop.
      ABOUTME: Reverse-engineered from 399 commits + the decision log + 9 PRDs + 10 research spikes, 2026-06-27. -->
 
+> **Amended 2026-06-28** by [docs/UI-FEEDBACK-2026-06-28.md](UI-FEEDBACK-2026-06-28.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
+
+
 # Watch It Burn: Master Recreation Specification
 
 **Title:** Build a Platform, Unleash an Agent on it... and Watch it Burn!
