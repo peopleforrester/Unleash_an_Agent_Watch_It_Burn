@@ -21,7 +21,12 @@ readonly LAB_VPC_DIR="${PROVISION_DIR}/lab-vpc"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
 readonly LOG_DIR="${SCRIPT_DIR}/logs"
 readonly NAME_PREFIX="watch-it-burn-attendee"
-MAX_PARALLEL="${MAX_PARALLEL:-8}"
+# Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
+# 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
+# EKS control-plane create (near-zero local cost), so the binding local limit is RAM during the bootstrap
+# spike: ~600MB per build tree on this 62GB box, ~45GB at 75-wide, leaves headroom. Raise via env for a
+# bigger box; the irreducible floor is the EKS control-plane create (~10-15 min, AWS-side, per cluster).
+MAX_PARALLEL="${MAX_PARALLEL:-15}"
 
 # --- Multi-account config (env-overridable) -----------------------------------------------------
 # Defaults keep the existing SINGLE-account attendee flow unchanged (TF_PROFILE empty -> the cluster
