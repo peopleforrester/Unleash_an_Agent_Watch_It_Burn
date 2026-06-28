@@ -74,6 +74,8 @@
   #noburritos span{margin-top:10px;color:#666;font-size:13px}
   footer{padding:10px 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--mid);display:flex;gap:14px;align-items:center}
   footer .sp{flex:1}
+  .clusterfoot{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--mid);font-size:11.5px}
+  .clusterid{margin-top:auto;padding-top:9px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--mid);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all}
   @media(max-width:980px){.wrap{flex-direction:column}.infra{width:100%;flex:0 0 auto;border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px}}
   @media(max-width:760px){.menu{display:none}}
 </style>
@@ -157,13 +159,16 @@
       </div>
       <div class="card">
         <h3>Your saved prompts</h3>
-        <div class="saved" id="saved"><div class="hint">Prompts you send are saved here for this session, reuse them in the next round.</div></div>
+        <div class="saved" id="saved"><div class="hint">Every prompt you send is saved here, reuse it in the next round.</div></div>
       </div>
+      <div class="clusterid" id="clusterid"></div>
     </aside>
   </div>
 
   <footer>
-    <span>🔥 Watch It Burn</span><span class="sp"></span>
+    <span>🔥 Watch It Burn</span>
+    <span class="clusterfoot" id="clusterfoot"></span>
+    <span class="sp"></span>
     <span>Co-sponsored by <strong style="color:var(--dd)">Datadog</strong> &amp; <strong style="color:var(--acn)">Accenture</strong></span>
   </footer>
 
@@ -188,7 +193,8 @@
     sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
   function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
-  function save(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);}
+  function renderSaved(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);}
+  function save(t){renderSaved(t);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(t);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
   function resetChat(){document.getElementById('stream').innerHTML='';greet();}
   function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritoBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
@@ -212,6 +218,15 @@
     }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
   }
   // The left menu is a static reference of what BurritoBot can make; ordering happens in chat.
+  // Cluster identity comes from the link the provisioning app built (it knows the student's cluster + email).
+  (function init(){
+    var q=new URLSearchParams(location.search);
+    var cluster=q.get('cluster'), user=q.get('user');
+    if(cluster){var txt='Cluster '+cluster+(user?(' · '+user):'');
+      var ci=document.getElementById('clusterid'); if(ci) ci.textContent=txt;
+      var cf=document.getElementById('clusterfoot'); if(cf) cf.textContent=txt;}
+    try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
+  })();
   greet();
 </script>
 </body>
