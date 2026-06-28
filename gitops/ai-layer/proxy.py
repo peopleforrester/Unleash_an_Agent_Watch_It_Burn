@@ -286,6 +286,33 @@ def extract_text(parts):
     )
 
 
+# Monotonic id for /chat A2A messageIds (kagent requires a messageId; avoids a time-format dependency).
+_chat_seq = 0
+
+
+def chat_reply_text(resp):
+    """Concatenate the AGENT's reply text from an A2A response (artifacts + agent-role history + status)."""
+    result = resp.get("result") if isinstance(resp, dict) else None
+    if not isinstance(result, dict):
+        return ""
+    out = [extract_text(a.get("parts")) for a in (result.get("artifacts") or [])]
+    out += [extract_text(h.get("parts")) for h in (result.get("history") or []) if h.get("role") == "agent"]
+    out.append(extract_text(result.get("status", {}).get("message", {}).get("parts")))
+    return " ".join(s for s in out if s).strip()
+
+
+def chat_usage_tokens(resp):
+    """(input_tokens, output_tokens) for one A2A response from kagent_usage_metadata (adk fallback)."""
+    result = resp.get("result", {}) if isinstance(resp, dict) else {}
+
+    def _u(m):
+        m = m or {}
+        return m.get("kagent_usage_metadata") or m.get("adk_usage_metadata")
+
+    u = _u(result.get("metadata")) or _u(result.get("status", {}).get("message", {}).get("metadata")) or {}
+    return int(u.get("promptTokenCount", 0) or 0), int(u.get("candidatesTokenCount", 0) or 0)
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, code, body_obj):
         # Record the response code on the in-flight HTTP SERVER span (set in do_POST), if any. _send is
@@ -363,7 +390,11 @@ class Handler(BaseHTTPRequestHandler):
             if server_span is not None:
                 server_span.set_attribute("http.request.method", "POST")
                 server_span.set_attribute("url.path", self.path)
-            self._handle_post()
+            # /chat is the BurritoBot storefront contract (B1); everything else is the A2A passthrough.
+            if self.path.rstrip("/") == "/chat":
+                self._handle_chat()
+            else:
+                self._handle_post()
 
     def _handle_post(self):
         raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
@@ -502,6 +533,83 @@ class Handler(BaseHTTPRequestHandler):
         status_msg = result.get("status", {}).get("message", {})
         scrub(status_msg.get("parts", []))
         return resp
+
+    def _handle_chat(self):
+        """BurritoBot storefront contract (B1): POST {prompt} -> {reply, guarded, input_tokens,
+        output_tokens}. Wraps the prompt as an A2A message/send and runs the SAME input/output guards,
+        rate/cost cap, cost metering, and agent forward as the A2A root, then reshapes the response. The
+        guard TOGGLES apply identically, so the round-2/round-3 guardrail demo affects BurritoBot too."""
+        raw = self.rfile.read(int(self.headers.get("Content-Length", "0")))
+        try:
+            prompt = (json.loads(raw) or {}).get("prompt", "")
+        except Exception:
+            prompt = ""
+        if not isinstance(prompt, str) or not prompt.strip():
+            self._send(400, {"reply": "Tell BurritoBot what you'd like.", "guarded": False,
+                             "input_tokens": 0, "output_tokens": 0})
+            return
+        if STREAM_ENABLED:
+            with _stream_lock:
+                _prompts.append(moderate(prompt))
+        # Input guards (same toggles as the A2A path), then rate/cost cap. A blocked request spends 0 tokens.
+        if GUARDS["input_blocklist"]:
+            hit = blocklisted(prompt)
+            if hit:
+                log.info("chat input blocked by block-list (matched %r)", hit,
+                         extra={"event": "input_blocklist_hit"})
+                self._send(200, {"reply": f"BurritoBot can't help with that (blocked: '{hit}'). "
+                                          "No model tokens were spent.",
+                                 "guarded": True, "input_tokens": 0, "output_tokens": 0})
+                return
+        if GUARDS["input_classifier"] and not input_allowed(prompt):
+            log.info("chat input blocked by classifier", extra={"event": "input_classifier_block"})
+            self._send(200, {"reply": "BurritoBot can't help with that (blocked by the input guardrail).",
+                             "guarded": True, "input_tokens": 0, "output_tokens": 0})
+            return
+        if rate_limited():
+            self._send(200, {"reply": f"Slow down, hungry traveler. ({RATE_LIMIT_RPM}/min cap on this cluster.)",
+                             "guarded": True, "input_tokens": 0, "output_tokens": 0})
+            return
+        if cost_capped():
+            self._send(200, {"reply": f"The kitchen tab is frozen (cost cap ${COST_CAP_USD:.2f}).",
+                             "guarded": True, "input_tokens": 0, "output_tokens": 0})
+            return
+        # Forward as A2A message/send to the agent root, inside a CLIENT span (the Service Map egress hop).
+        global _chat_seq
+        _chat_seq += 1
+        a2a = {"jsonrpc": "2.0", "id": "chat", "method": "message/send",
+               "params": {"message": {"role": "user", "messageId": f"chat-{_chat_seq}",
+                                      "parts": [{"kind": "text", "text": prompt}]}}}
+        fwd_headers = {"Content-Type": "application/json"}
+        client_cm = (_tracer.start_as_current_span("agent.forward", kind=SpanKind.CLIENT)
+                     if _OTEL_AVAILABLE else nullcontext())
+        with client_cm as client_span:
+            if client_span is not None:
+                client_span.set_attribute("peer.service", _PEER_SERVICE)
+                client_span.set_attribute("http.request.method", "POST")
+                inject(fwd_headers)
+            try:
+                req = urllib.request.Request(AGENT_URL + "/", data=json.dumps(a2a).encode(),
+                                             headers=fwd_headers, method="POST")
+                with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                    resp = json.loads(r.read())
+            except Exception as exc:
+                log.error("chat forward failed: %s", exc, extra={"event": "forward_error"})
+                self._send(502, {"reply": "BurritoBot's kitchen isn't answering. Try again in a moment.",
+                                 "guarded": False, "input_tokens": 0, "output_tokens": 0})
+                return
+        record_usage(resp)  # feed the live cost counter (same path as A2A)
+        pin, pout = chat_usage_tokens(resp)
+        reply = chat_reply_text(resp)
+        guarded = False
+        if GUARDS["output"] and reply:
+            scrubbed = output_scrub(reply)
+            if scrubbed is None:
+                reply, guarded = "[blocked by the output guardrail]", True
+            elif scrubbed != reply:
+                reply, guarded = scrubbed, True
+        self._send(200, {"reply": reply or "...", "guarded": guarded,
+                         "input_tokens": pin, "output_tokens": pout})
 
     def log_message(self, fmt, *args):
         # Route BaseHTTPRequestHandler's default access logging through the structured JSON logger
