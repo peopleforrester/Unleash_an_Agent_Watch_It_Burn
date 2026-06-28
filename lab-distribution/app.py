@@ -59,15 +59,14 @@ def _resolve_admin_token() -> str:
 
 
 def _commands_block(cluster_name, region):
-    # The attendee drives the agent from the browser console (chat tab); the terminal/kubectl path
-    # below is only needed for the optional shell. No repo clone, no local Claude Code.
-    # Use a named profile (watch-it-burn) so attendees who already have AWS configured do not have their
-    # default credentials overwritten; attendees with no AWS setup just get this one profile. The profile
-    # is baked into the kubeconfig by update-kubeconfig --profile, so kubectl uses it automatically.
+    # Only needed if the attendee leaves the in-browser shell and connects from their own laptop. Inside
+    # the VTT, kubectl is already wired to this cluster (in-cluster ServiceAccount), so none of this is
+    # needed there. `student` is a short, dedicated profile + context alias: named so it never clobbers an
+    # existing default, and update-kubeconfig --profile bakes it in so kubectl needs no extra flag.
     return (
-        f"aws configure --profile watch-it-burn         # paste the AWS keys above; region {region}\n"
-        f"aws eks update-kubeconfig --name {cluster_name} --region {region} --profile watch-it-burn\n"
-        "kubectl get nodes                              # confirm your cluster is up"
+        f"aws configure --profile student              # paste the AWS keys above; region {region}\n"
+        f"aws eks update-kubeconfig --name {cluster_name} --region {region} --profile student --alias student\n"
+        "kubectl get nodes                             # 'student' is now your active cluster"
     )
 
 
@@ -235,8 +234,27 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
         if e.strip()
     }
     app.config["ADMIN_REGION"] = os.environ.get("ADMIN_REGION", "us-west-2")
+    # Each entry is "name" or "name=console_url". When a URL is present the instructor view renders a
+    # BurritoBot (/) and VTT (/lab) link beside that cluster; the URL comes from the per-cluster harvest.
+    # `alias` is the short kubeconfig context name (round1/round2/round3/student) derived from the cluster
+    # name so the instructor switches clusters with `kubectl config use-context round1`, not a long ARN.
+    def _alias_for(name):
+        low = name.lower()
+        for suffix, alias in (
+            ("-r1", "round1"), ("-r2", "round2"), ("-r3", "round3"),
+            ("-att", "student"), ("-attendee", "student"), ("-student", "student"),
+        ):
+            if low.endswith(suffix):
+                return alias
+        return name.split("-")[-1] or name
+
+    def _parse_cluster(entry):
+        name, _, url = entry.strip().partition("=")
+        name = name.strip()
+        return {"name": name, "url": url.strip().rstrip("/"), "alias": _alias_for(name)}
+
     app.config["ADMIN_CLUSTERS"] = [
-        c.strip()
+        _parse_cluster(c)
         for c in os.environ.get("ADMIN_CLUSTERS", DEFAULT_INSTRUCTOR_CLUSTERS).split(",")
         if c.strip()
     ]
@@ -366,7 +384,8 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
             region = app.config["ADMIN_REGION"]
             clusters = app.config["ADMIN_CLUSTERS"]
             cmds = "\n".join(
-                f"aws eks update-kubeconfig --name {c} --region {region} --profile watch-it-burn"
+                f"aws eks update-kubeconfig --name {c['name']} --region {region} "
+                f"--profile burn --alias {c['alias']}"
                 for c in clusters
             )
             return render_template(
