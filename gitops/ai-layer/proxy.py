@@ -291,14 +291,20 @@ _chat_seq = 0
 
 
 def chat_reply_text(resp):
-    """Concatenate the AGENT's reply text from an A2A response (artifacts + agent-role history + status)."""
+    """The AGENT's reply text from an A2A response. kagent echoes the SAME text into artifacts AND the
+    agent-role history, so take ONE source (artifacts first, then agent history, then status) rather than
+    concatenating all three, or the storefront reply comes back doubled."""
     result = resp.get("result") if isinstance(resp, dict) else None
     if not isinstance(result, dict):
         return ""
-    out = [extract_text(a.get("parts")) for a in (result.get("artifacts") or [])]
-    out += [extract_text(h.get("parts")) for h in (result.get("history") or []) if h.get("role") == "agent"]
-    out.append(extract_text(result.get("status", {}).get("message", {}).get("parts")))
-    return " ".join(s for s in out if s).strip()
+    art = " ".join(extract_text(a.get("parts")) for a in (result.get("artifacts") or [])).strip()
+    if art:
+        return art
+    hist = " ".join(extract_text(h.get("parts")) for h in (result.get("history") or [])
+                    if h.get("role") == "agent").strip()
+    if hist:
+        return hist
+    return extract_text(result.get("status", {}).get("message", {}).get("parts")).strip()
 
 
 def chat_usage_tokens(resp):
