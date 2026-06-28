@@ -114,6 +114,10 @@ data:
       tracing:
         otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
         otlpProtocol: http
+        # THE missing piece: agentgateway defaults to 0% sampling and exports NOTHING. randomSampling: true
+        # emits a span for every request (per agentgateway OTel docs). This is what makes the
+        # guard-proxy -> agentgateway -> kagent Service Map edge render (#27) and M4 spans land (#20).
+        randomSampling: true
 
     binds:
       # A2A reverse proxy: guard-proxy -> agentgateway:3000 -> kagent workshop-agent:8080.
