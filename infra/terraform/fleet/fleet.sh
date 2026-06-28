@@ -14,6 +14,7 @@ readonly SCRIPT_DIR PROVISION_DIR INFRA_DIR REPO_ROOT
 readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
 readonly HARVEST_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/harvest_cluster_access.sh"
 readonly GEN_AWS_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/generate_attendee_aws.py"
+readonly PUSH_VTT_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
 readonly CLUSTER_DIR="${PROVISION_DIR}/cluster"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/lab-vpc"
@@ -188,24 +189,76 @@ bootstrap_one() {
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
     AWS_PROFILE="${acct_profile}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
         --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
-    # Read this cluster's Datadog keys from the central pool on the PROVISIONING box (default account),
-    # then deploy-full-idp injects them into the cluster as a plain K8s Secret. The cluster's own account
-    # never touches Secrets Manager, no cross-account. (TODO: index the per-student pool slot for distinct
-    # orgs; for now the shared workshop org from watch-it-burn/datadog.)
-    local _dd api app
-    _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
-        --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
-    api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
-    app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
+    # Datadog keys, read from the central pool on the PROVISIONING box (default account); deploy-full-idp
+    # injects them as a plain K8s Secret (the cluster's own account never touches Secrets Manager).
+    # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
+    # merge_pool.py's row-position join over attendee-only orgs, so the in-cluster org is the SAME one the
+    # provisioning page shows the student. Non-attendee (instructor) clusters use the shared workshop org.
+    local api app slot
+    slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
+    if [[ -n "${slot}" ]]; then
+        local pool1 pool2
+        pool1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        pool2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        read -r api app < <(jq -rn --argjson a "${pool1}" --argjson b "${pool2}" --argjson i "$(( slot - 1 ))" \
+            '([$a[], $b[]] | map(select((.role // "") | startswith("admin") | not)))[$i] | "\(.["api-key"] // "") \(.["app-key"] // "")"' 2>/dev/null)
+        if [[ -z "${api}" || -z "${app}" ]]; then
+            log "  BOOTSTRAP FAILED: ${name} could not resolve its per-student Datadog org (slot ${slot}); refusing to fall back to the shared org"
+            record_fail "${name}"; rm -f "${kcfg}"; return
+        fi
+        log "  ${name}: per-student Datadog org (attendee slot ${slot})"
+    else
+        local _dd
+        _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
+            --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
+        api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
+        app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
+    fi
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
         bash "${IDP_SCRIPT}" "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
+        bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
     fi
     rm -f "${kcfg}"
+}
+
+# Mint this cluster's scoped IAM key and inject it as the `student-aws-creds` secret so the VTT's aws CLI
+# is pre-configured at boot, with NO per-cluster manual step. generate_attendee_aws is idempotent: if the
+# user already has a key it skips (the secret was created on the first boot), so re-runs are safe.
+bootstrap_student_aws() {
+    local name="$1" acct_profile="$2" kcfg="$3"
+    command -v uv >/dev/null 2>&1 || { log "  WARN: uv missing; cannot mint student AWS creds for ${name}"; return; }
+    local awscsv; awscsv="$(mktemp -t "${name}.aws.XXXX")"
+    if uv run --with boto3 python "${GEN_AWS_SCRIPT}" \
+        --clusters "${name}" --apply --access-entries \
+        --profile "${acct_profile}" --region "${WIB_REGION}" \
+        --out "${awscsv}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+        local ak sk
+        ak="$(tail -n +2 "${awscsv}" 2>/dev/null | head -1 | cut -d, -f3)"
+        sk="$(tail -n +2 "${awscsv}" 2>/dev/null | head -1 | cut -d, -f4)"
+        if [[ -n "${ak}" && -n "${sk}" ]]; then
+            local ctx i; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
+            for i in $(seq 1 40); do  # wait for the agent namespace (ArgoCD creates it async)
+                KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get ns agent >/dev/null 2>&1 && break; sleep 6
+            done
+            if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" bash "${PUSH_VTT_SCRIPT}" \
+                --context "${ctx}" --access-key "${ak}" --secret-key "${sk}" --region "${WIB_REGION}" \
+                >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+                log "  student-aws-creds injected: ${name}"
+            else
+                log "  WARN: student-aws-creds inject failed: ${name}"
+            fi
+        else
+            log "  ${name}: AWS key already existed (idempotent); student-aws-creds left as-is"
+        fi
+    else
+        log "  WARN: AWS key mint failed for ${name}; the VTT aws CLI will be unconfigured"
+    fi
+    rm -f "${awscsv}"
 }
 
 up_one() {
