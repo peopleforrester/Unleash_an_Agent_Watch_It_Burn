@@ -1,6 +1,9 @@
 <!-- ABOUTME: Run-of-show + build backlog captured from the 2026-06-27 Michael x Wendy design session.
      ABOUTME: Source of truth for the 3-round attendee/instructor experience and the work to build it. -->
 
+> **Amended 2026-06-28** by [docs/UI-FEEDBACK-2026-06-28.md](UI-FEEDBACK-2026-06-28.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
+
+
 # Watch It Burn: Run-of-Show & Build Backlog
 
 Captured 2026-06-27 from the Michael x Wendy design session. This is the source of truth for the
