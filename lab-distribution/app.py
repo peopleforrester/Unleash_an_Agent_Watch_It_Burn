@@ -250,6 +250,16 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
     app.config["ADMIN_ATTENDEE_DATADOG"] = {
         k: os.environ.get("ADMIN_ATTENDEE_" + k.upper(), "") for k in ADMIN_DATADOG_KEYS
     }
+    # Quick-launch consoles for the instructor view: the instructor's own demo cluster (the BurritoBot
+    # round dropdown switches r1/r2/r3 from here) and a sample student cluster to preview the student
+    # experience. Each console serves BurritoBot at / and the lab/terminal at /lab. Override per the live
+    # fleet/DNS; defaults are the stable round/attendee hostnames.
+    app.config["INSTRUCTOR_CONSOLE_URL"] = os.environ.get(
+        "INSTRUCTOR_CONSOLE_URL", "https://round1.agenticburn.com"
+    ).rstrip("/")
+    app.config["STUDENT_PREVIEW_CONSOLE_URL"] = os.environ.get(
+        "STUDENT_PREVIEW_CONSOLE_URL", "https://a-001.agenticburn.com"
+    ).rstrip("/")
 
     def get_db():
         db = getattr(g, "_db", None)
@@ -370,6 +380,8 @@ def create_app(database_path=None, pool_csv=None, resend_api_key=None, eks_pool_
                 root_url=request.url_root.rstrip("/"),
                 instructor_datadog=app.config["ADMIN_DATADOG"],
                 attendee_datadog=app.config["ADMIN_ATTENDEE_DATADOG"],
+                instructor_console_url=app.config["INSTRUCTOR_CONSOLE_URL"],
+                student_console_url=app.config["STUDENT_PREVIEW_CONSOLE_URL"],
             )
 
         conn = get_db()
