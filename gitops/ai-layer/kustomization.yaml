@@ -32,6 +32,7 @@ configMapGenerator:
       - web/console.html
       - web/console.js
       - web/burritbot.html # B1: the BurritoBot storefront, served by the console nginx as the front door
+      - web/lab.html # B5/B12: round-3 student lab page (instructions left + ttyd terminal embedded right)
   - name: console-conf
     files:
       - default.conf=console.conf # nginx conf.d entry
