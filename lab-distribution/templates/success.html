@@ -139,15 +139,15 @@ sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl</pre></detai
     <div class="copy-row"><span class="key-label">Access key</span><code id="ak">{{ access_key }}</code><button type="button" class="copy-btn" onclick="copyText('ak', this, 'access key')">copy</button></div>
     <div class="copy-row"><span class="key-label">Secret key</span><code id="sk">{{ secret_key }}</code><button type="button" class="copy-btn" onclick="copyText('sk', this, 'secret key')">copy</button></div>
 
-    <h3>c. Configure the AWS CLI (its own profile, won't touch your existing creds)</h3>
-    <pre class="codeblock">$ aws configure --profile watch-it-burn
+    <h3>c. Configure the AWS CLI (a short <code>student</code> profile, won't touch your existing creds)</h3>
+    <pre class="codeblock">$ aws configure --profile student
 AWS Access Key ID [None]:      &lt;paste your access key&gt;
 AWS Secret Access Key [None]:  &lt;paste your secret key&gt;
 Default region name [None]:    {{ region }}
 Default output format [None]:  json</pre>
 
     <h3>d. Connect to your cluster</h3>
-    <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'connect commands')">copy</button>aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }} --profile watch-it-burn
+    <pre class="codeblock" id="cmds"><button type="button" class="copy-btn" onclick="copyText('cmds', this, 'connect commands')">copy</button>aws eks update-kubeconfig --name {{ cluster_name }} --region {{ region }} --profile student --alias student
 kubectl get nodes</pre>
   </div>
 </details>
