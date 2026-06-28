@@ -522,20 +522,23 @@ spec:
         - name: conf
           configMap: { name: console-conf }
 ---
-# The single attendee-facing entrypoint. LB-exposed; tagged so the LB is ours in the shared account.
-# `aws-load-balancer-type: nlb` makes the in-tree cloud provider build an NLB (instance target), NOT a
-# Classic ELB. A bare type: LoadBalancer with no type annotation defaults to a Classic ELB (legacy,
-# one orphan per cluster), which is what leaked on teardown. This stopgap needs NO controller. The
-# fuller fix (an ip-target NLB + activating the party-app ALB Ingresses) is to install the AWS Load
-# Balancer Controller, whose IAM Pod Identity role already exists in infra/terraform/cluster/main.tf,
-# then switch this annotation to `external` + `nlb-target-type: ip`. That install needs per-cluster
-# clusterName wiring and a live NLB-provisions check, so it is deferred to the next provision.
+# The single attendee-facing entrypoint, exposed INTERNET-FACING by the AWS Load Balancer Controller
+# (installed by deploy-full-idp.sh, IAM Pod Identity role in infra/terraform/cluster/main.tf).
+# CRITICAL: `aws-load-balancer-type: external` + `nlb-target-type: ip` routes through the LB Controller,
+# which discovers the PUBLIC subnets by the `kubernetes.io/role/elb` tag (no per-cluster subnet tag
+# needed) and builds an INTERNET-FACING, ip-target NLB the attendee's browser and the Railway router can
+# reach. The OLD `aws-load-balancer-type: nlb` (in-tree provider) could NOT associate the public subnets
+# on this shared, untagged-per-cluster VPC, so it placed the NLB in the PRIVATE subnets = internal =
+# unreachable (found live 2026-06-28). `scheme: internet-facing` is explicit; ip targets reach pods over
+# the shared VPC. `target-node-labels` not needed for ip targets.
 apiVersion: v1
 kind: Service
 metadata:
   name: console
   annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: nlb
+    service.beta.kubernetes.io/aws-load-balancer-type: external
+    service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: ip
+    service.beta.kubernetes.io/aws-load-balancer-scheme: internet-facing
     service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn"
 spec:
   type: LoadBalancer
