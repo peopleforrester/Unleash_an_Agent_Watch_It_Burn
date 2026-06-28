@@ -54,23 +54,24 @@ WIB_DEFAULT_ACCOUNT="${WIB_DEFAULT_ACCOUNT:-accen-dev}"
 WIB_NAME_OFFSET="${WIB_NAME_OFFSET:-0}"
 
 # --- Instructor roster: 9 fixed clusters, 3 per round. "name|round|bootstrap-profile" -----------
-# These are facilitator-run and NOT in the attendee pool. fleet.sh PROVISIONS them; deploy-full-idp.sh
-# BOOTSTRAPS them with the listed profile (burn = Round-1 no-guardrails subset; full = everything).
-#   R1 (burn): the fork bomb destroys these -> one live + two spares, router rotates burn.agenticburn.com
-#   R2 (full): infra guardrails on (wall.agenticburn.com); spares / parallel stations
-#   R3 (full): the cost-race tiers. NAMES are the Bedrock model tiers, but the MODEL is set per cluster
-#     in the gitops kagent ModelConfig, NOT here. Default workshop model is Sonnet; the tier demo is
-#     optional (see haiku/sonnet/opus). If we drop tiers, rename these to sonnet-1/2/3.
+# Facilitator-run, NOT in the attendee pool. ALL NINE ARE THE IDENTICAL FULL Sonnet-4.6 BUILD (same as
+# the attendee clusters): same app-of-apps, same ai-layer, same model. The 3-per-round are interchangeable
+# hot spares (if one dies mid-talk, fall back to another). The ROUND BEHAVIOUR (R1 wide open, R2 some
+# guards, R3 full + student-toggled) is a RUNTIME state flipped by the guard-toggle scripts + round
+# selector, NOT a different build. The ONE provision-time difference is R1's PID cap: cmd_instructors
+# sets pod_pids_limit=-1 on round 1 so the C4 fork bomb actually exhausts node PIDs ("watch it burn");
+# R2/R3 keep the 1024 cap. (History: R1 used to be a stripped "burn" profile and R3 ran per-model tiers
+# haiku/opus; both dropped, all Sonnet, all full.)
 INSTRUCTORS=(
-  "watch-it-burn-burn-1|1|burn"
-  "watch-it-burn-burn-2|1|burn"
-  "watch-it-burn-burn-3|1|burn"
-  "watch-it-burn-wall-1|2|full"
-  "watch-it-burn-wall-2|2|full"
-  "watch-it-burn-wall-3|2|full"
-  "watch-it-burn-haiku|3|full"
-  "watch-it-burn-sonnet|3|full"
-  "watch-it-burn-opus|3|full"
+  "watch-it-burn-r1-1|1|full"
+  "watch-it-burn-r1-2|1|full"
+  "watch-it-burn-r1-3|1|full"
+  "watch-it-burn-r2-1|2|full"
+  "watch-it-burn-r2-2|2|full"
+  "watch-it-burn-r2-3|2|full"
+  "watch-it-burn-r3-1|3|full"
+  "watch-it-burn-r3-2|3|full"
+  "watch-it-burn-r3-3|3|full"
 )
 
 # When non-empty, up_one/down_one target this AWS profile (account). Empty = module default account.
@@ -429,11 +430,13 @@ cmd_instructors() {
         log "round ${r} instructors -> account '${acct}': ${names[*]}"
         read_vpc_for "${acct}"
         TF_PROFILE="${acct}"
-        # Round 1 burn clusters provision with NO per-pod PID cap so the fork bomb lands (the burn).
+        # Round 1 clusters provision with NO per-pod PID cap so the fork bomb lands (the burn). This is
+        # the ONLY per-round provision difference; R2/R3 keep the module-default 1024 cap.
         [[ "${r}" == "1" ]] && TF_PIDS_LIMIT="-1" || TF_PIDS_LIMIT=""
-        # Auto-bootstrap: Round 1 = burn (no guardrails), R2/R3 = full. Skipped if WIB_NO_BOOTSTRAP=1.
+        # Auto-bootstrap: ALL rounds get the identical FULL build (R1 is no longer a stripped "burn"
+        # profile; its open/guardrails-off state is a runtime toggle). Skipped if WIB_NO_BOOTSTRAP=1.
         if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
-            BOOTSTRAP_PROFILE=$([[ "${r}" == "1" ]] && echo burn || echo full)
+            BOOTSTRAP_PROFILE="full"
         fi
         if [[ "${action}" == "up" ]]; then run_pool up_one "${names[@]}"; else run_pool down_one "${names[@]}"; fi
         TF_PROFILE=""; TF_PIDS_LIMIT=""; BOOTSTRAP_PROFILE=""
