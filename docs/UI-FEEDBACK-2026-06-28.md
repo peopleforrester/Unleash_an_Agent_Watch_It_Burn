@@ -253,9 +253,11 @@ Status: captured; plan approved 2026-06-28. We tackle one piece at a time.
 
 ## E. Research spikes
 
-- **SP-1.** ttyd multi-terminal / "+" tab: does ttyd support multiple terminals
-  or tabs, or do we need tmux windows, a second ttyd, or a JS terminal manager
-  (xterm.js + a tab bar)? Match the Katacoda/KodeKloud pattern.
+- **SP-1. DECIDED (2026-06-28): multiple iframes, no ttyd change.** ttyd spawns a
+  fresh bash per client connection (the entrypoint runs `ttyd ... bash` with no
+  `--once` and no client cap), so each `<iframe src="/terminal/">` is its own
+  independent terminal. The "+" tab adds an iframe; tabs show/hide panes. No tmux,
+  no second ttyd, no xterm.js rebuild needed.
 - **SP-2.** Datadog: deep-linking to a specific dashboard, login pre-fill /
   pre-submit feasibility, and how Datadog's own labs surface credentials.
 - **SP-3.** Whitney's Datadog GenAI semantic-convention standards for prompt
