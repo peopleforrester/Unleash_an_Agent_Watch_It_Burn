@@ -86,7 +86,7 @@
     <div class="chev">&#9656;</div>
   </div>
   <div class="sbody">
-    <a class="stepbtn" href="{{ burritbot_url or console_url or '#' }}" target="_blank" rel="noopener">Open your BurritoBot &rarr;</a>
+    <a class="stepbtn" href="{{ burritbot_url or console_url or '#' }}?cluster={{ cluster_name|urlencode }}&amp;user={{ email|urlencode }}" target="_blank" rel="noopener">Open your BurritoBot &rarr;</a>
     {% if burritbot_url %}<div class="copy-row"><span class="key-label">Your URL</span><code id="bb">{{ burritbot_url }}</code><button type="button" class="copy-btn" onclick="copyText('bb', this, 'BurritoBot URL')">copy</button></div>{% endif %}
     <div class="callout" style="margin-top:10px;">
       <strong style="font-style:normal;color:var(--navy);">A word of caution.</strong>

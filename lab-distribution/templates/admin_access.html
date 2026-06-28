@@ -92,7 +92,7 @@ password: {{ dd.datadog_password }}</pre>
           <span class="cname">{{ c.name }}</span>
           {% if c.url %}
           <span class="clinks">
-            <a class="clink" href="{{ c.url }}/" target="_blank" rel="noopener">&#127791; BurritoBot</a>
+            <a class="clink" href="{{ c.url }}/?cluster={{ c.name|urlencode }}&amp;role=instructor" target="_blank" rel="noopener">&#127791; BurritoBot</a>
             <a class="clink ghost" href="{{ c.url }}/lab?cluster={{ c.name|urlencode }}&amp;role=instructor" target="_blank" rel="noopener">&#9000; VTT</a>
           </span>
           {% endif %}
