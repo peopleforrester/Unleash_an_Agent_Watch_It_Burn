@@ -1,0 +1,6 @@
+# The provisioning Railway service builds only lab-distribution/ (its configured
+# rootDirectory). railway up tars the whole CWD, so exclude every top-level entry
+# except lab-distribution/ to keep the upload small. The lab-distribution/ path
+# prefix is preserved, which is what rootDirectory resolves against.
+/*
+!/lab-distribution/
