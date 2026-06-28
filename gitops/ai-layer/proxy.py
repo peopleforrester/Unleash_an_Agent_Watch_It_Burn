@@ -614,8 +614,10 @@ class Handler(BaseHTTPRequestHandler):
                 reply, guarded = "[blocked by the output guardrail]", True
             elif scrubbed != reply:
                 reply, guarded = scrubbed, True
+        # Per-call cost so the storefront can show a live dollar counter without hardcoding rates client-side.
+        cost_usd = (pin / 1000.0) * COST_PER_1K_IN + (pout / 1000.0) * COST_PER_1K_OUT
         self._send(200, {"reply": reply or "...", "guarded": guarded,
-                         "input_tokens": pin, "output_tokens": pout})
+                         "input_tokens": pin, "output_tokens": pout, "cost_usd": cost_usd})
 
     def log_message(self, fmt, *args):
         # Route BaseHTTPRequestHandler's default access logging through the structured JSON logger

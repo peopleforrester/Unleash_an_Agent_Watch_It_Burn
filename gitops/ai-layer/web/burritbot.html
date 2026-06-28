@@ -49,7 +49,9 @@
   .infra{width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:12px;padding-left:18px;border-left:2px solid var(--line)}
   .ipick{display:flex;flex-direction:column;gap:6px}
   .ipick label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
-  .imetric{font-variant-numeric:tabular-nums;font-weight:800;font-size:15px;color:var(--ink)}
+  .imrow{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0}
+  .imlbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
+  .imval{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px;color:var(--ink)}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px}
   .card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
   .saved{display:flex;flex-direction:column;gap:7px}
@@ -146,7 +148,10 @@
         <span class="dot"></span><span id="bannertext">NO GUARDRAILS</span>
         <div id="bannersub" class="ibsub">— you're talking straight to the model. Nothing is watching. (round-1 cluster)</div>
       </div>
-      <div class="card"><div class="imetric" id="cost">0 tokens</div></div>
+      <div class="card">
+        <div class="imrow"><span class="imlbl">Tokens</span><b class="imval" id="tokens">0</b></div>
+        <div class="imrow"><span class="imlbl">Cost</span><b class="imval" id="costusd">$0.0000</b></div>
+      </div>
       <div class="card">
         <h3>Your saved prompts</h3>
         <div class="saved" id="saved"><div class="hint">Prompts you send are saved here for this session, reuse them in the next round.</div></div>
@@ -174,7 +179,7 @@
     r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra + AI guardrails are on. Try the same prompts and watch them get blocked. (round-2 cluster)'},
     r3:{cls:'r3',t:'YOUR CLUSTER',s:"— this is yours. Turn guardrails on yourself in the terminal. (your round-3 cluster)"}
   };
-  let round='r1', tokens=0, busy=false;
+  let round='r1', tokens=0, costUsd=0, busy=false;
   function setRound(r){round=r;const b=document.getElementById('banner');b.className='ibanner '+ROUNDS[r].cls;
     document.getElementById('bannertext').textContent=ROUNDS[r].t;document.getElementById('bannersub').textContent=ROUNDS[r].s;
     sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
@@ -196,8 +201,9 @@
       if(!res.ok){ if(res.status===0||res.status>=500){noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');} bubble("Hmm, the kitchen isn't answering ("+res.status+"). Try again in a moment.",'bot'); return; }
       const data=await res.json();
       bubble(data.reply || "…", 'bot');
-      const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot;
-      document.getElementById('cost').textContent=tokens+' tokens'+(data.guarded?' · guarded':'');
+      const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot; costUsd+=data.cost_usd||0;
+      document.getElementById('tokens').textContent=tokens.toLocaleString();
+      document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
     }catch(e){
       t.remove(); noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');
     }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
