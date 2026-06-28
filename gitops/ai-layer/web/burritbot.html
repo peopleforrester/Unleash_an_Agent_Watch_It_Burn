@@ -23,10 +23,11 @@
   .round-pick label{opacity:.85}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
   .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
-  .banner{padding:9px 18px;color:#fff;font-weight:800;letter-spacing:.3px;display:flex;align-items:center;gap:10px;font-size:14px}
-  .banner .dot{width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
-  .banner.r1{background:var(--r1)}.banner.r2{background:var(--r2)}.banner.r3{background:var(--r3)}
-  .banner small{font-weight:600;opacity:.92}
+  /* condensed round/cluster banner, lives in the right infra band */
+  .ibanner{padding:11px 13px;color:#fff;font-weight:800;letter-spacing:.3px;border-radius:12px;font-size:13px}
+  .ibanner .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35);margin-right:7px}
+  .ibanner.r1{background:var(--r1)}.ibanner.r2{background:var(--r2)}.ibanner.r3{background:var(--r3)}
+  .ibanner .ibsub{font-weight:600;opacity:.95;font-size:11.5px;margin-top:6px;line-height:1.35}
   .wrap{flex:1;display:flex;min-height:0;max-width:1340px;width:100%;margin:0 auto;padding:18px;gap:18px}
   .chatcol{flex:1;display:flex;flex-direction:column;min-width:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 6px 22px rgba(99,44,166,.08)}
   .chathead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
@@ -44,7 +45,11 @@
   .composer input{flex:1;font:inherit;padding:11px 13px;border:1px solid var(--line);border-radius:10px}
   .composer button{font:inherit;font-weight:800;background:var(--accent);color:#fff;border:0;padding:0 18px;border-radius:10px;cursor:pointer}
   .composer button:disabled{opacity:.5;cursor:default}
-  .rail{width:270px;flex:0 0 270px;display:flex;flex-direction:column;gap:10px}
+  .store{flex:1;display:flex;min-width:0;gap:18px}
+  .infra{width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:12px;padding-left:18px;border-left:2px solid var(--line)}
+  .ipick{display:flex;flex-direction:column;gap:6px}
+  .ipick label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
+  .imetric{font-variant-numeric:tabular-nums;font-weight:800;font-size:15px;color:var(--ink)}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px}
   .card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
   .saved{display:flex;flex-direction:column;gap:7px}
@@ -67,7 +72,7 @@
   #noburritos span{margin-top:10px;color:#666;font-size:13px}
   footer{padding:10px 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--mid);display:flex;gap:14px;align-items:center}
   footer .sp{flex:1}
-  @media(max-width:980px){.rail{display:none}}
+  @media(max-width:980px){.wrap{flex-direction:column}.infra{width:100%;flex:0 0 auto;border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px}}
   @media(max-width:760px){.menu{display:none}}
 </style>
 </head>
@@ -75,23 +80,10 @@
   <header>
     <div class="brand"><span class="em">🌯</span> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
     <div class="spacer"></div>
-    <div class="cost" id="cost" title="tokens this session">0 tokens</div>
-    <div class="round-pick">
-      <label for="round">Choose</label>
-      <select id="round" onchange="setRound(this.value)">
-        <option value="r1">Round 1 — No guardrails</option>
-        <option value="r2">Round 2 — Some guardrails</option>
-        <option value="r3">Round 3 — Your cluster</option>
-      </select>
-    </div>
   </header>
 
-  <div id="banner" class="banner r1">
-    <span class="dot"></span><span id="bannertext">NO GUARDRAILS</span>
-    <small id="bannersub">— you're talking straight to the model. Nothing is watching. (round-1 cluster)</small>
-  </div>
-
   <div class="wrap">
+    <div class="store"><!-- left: the storefront product (menu + chat) -->
     <aside class="menu">
       <div class="mhead"><h2>Hex &amp; Cauldron</h2><div class="sub">Build your burrito. The BurritoBot will take your order.</div></div>
       <div class="mscroll">
@@ -140,7 +132,21 @@
         <button id="sendbtn" onclick="send()">Send</button>
       </div>
     </div>
-    <aside class="rail">
+    </div><!-- /.store -->
+    <aside class="infra"><!-- right: all the infra/info, sequestered from the storefront -->
+      <div class="ipick">
+        <label for="round">Choose</label>
+        <select id="round" onchange="setRound(this.value)">
+          <option value="r1">Round 1 — No guardrails</option>
+          <option value="r2">Round 2 — Some guardrails</option>
+          <option value="r3">Round 3 — Your cluster</option>
+        </select>
+      </div>
+      <div id="banner" class="ibanner r1">
+        <span class="dot"></span><span id="bannertext">NO GUARDRAILS</span>
+        <div id="bannersub" class="ibsub">— you're talking straight to the model. Nothing is watching. (round-1 cluster)</div>
+      </div>
+      <div class="card"><div class="imetric" id="cost">0 tokens</div></div>
       <div class="card">
         <h3>Your saved prompts</h3>
         <div class="saved" id="saved"><div class="hint">Prompts you send are saved here for this session, reuse them in the next round.</div></div>
@@ -169,7 +175,7 @@
     r3:{cls:'r3',t:'YOUR CLUSTER',s:"— this is yours. Turn guardrails on yourself in the terminal. (your round-3 cluster)"}
   };
   let round='r1', tokens=0, busy=false;
-  function setRound(r){round=r;const b=document.getElementById('banner');b.className='banner '+ROUNDS[r].cls;
+  function setRound(r){round=r;const b=document.getElementById('banner');b.className='ibanner '+ROUNDS[r].cls;
     document.getElementById('bannertext').textContent=ROUNDS[r].t;document.getElementById('bannersub').textContent=ROUNDS[r].s;
     sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
