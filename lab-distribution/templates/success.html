@@ -78,22 +78,22 @@
 </section>
 {% endif %}
 
-<!-- STEP 3 - BurritBot -->
+<!-- STEP 3 - BurritoBot -->
 <section class="step locked" id="s3">
   <div class="shead" onclick="toggleStep('s3')">
     <div class="num">3</div>
-    <div><div class="stitle">Open your BurritBot</div><div class="ssub">Your own cluster's BurritBot, the one you watched in rounds 1 &amp; 2.</div></div>
+    <div><div class="stitle">Open your BurritoBot</div><div class="ssub">Your own cluster's BurritoBot, the one you watched in rounds 1 &amp; 2.</div></div>
     <div class="chev">&#9656;</div>
   </div>
   <div class="sbody">
-    <a class="stepbtn" href="{{ burritbot_url or console_url or '#' }}" target="_blank" rel="noopener">Open your BurritBot &rarr;</a>
-    {% if burritbot_url %}<div class="copy-row"><span class="key-label">Your URL</span><code id="bb">{{ burritbot_url }}</code><button type="button" class="copy-btn" onclick="copyText('bb', this, 'BurritBot URL')">copy</button></div>{% endif %}
+    <a class="stepbtn" href="{{ burritbot_url or console_url or '#' }}" target="_blank" rel="noopener">Open your BurritoBot &rarr;</a>
+    {% if burritbot_url %}<div class="copy-row"><span class="key-label">Your URL</span><code id="bb">{{ burritbot_url }}</code><button type="button" class="copy-btn" onclick="copyText('bb', this, 'BurritoBot URL')">copy</button></div>{% endif %}
     <div class="callout" style="margin-top:10px;">
       <strong style="font-style:normal;color:var(--navy);">A word of caution.</strong>
       You also have ArgoCD, Grafana and more (see the optional section below). Poke around, but if you change
       services and break things we probably can't fix it for you mid-workshop. Just know the risk.
     </div>
-    <label class="check"><input type="checkbox" onchange="markStep('s3',this.checked)"> BurritBot loaded for my cluster</label>
+    <label class="check"><input type="checkbox" onchange="markStep('s3',this.checked)"> BurritoBot loaded for my cluster</label>
   </div>
 </section>
 

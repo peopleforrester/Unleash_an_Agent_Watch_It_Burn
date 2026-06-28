@@ -1,16 +1,16 @@
-<!-- ABOUTME: BurritBot customer chat frontend (issue #38 / B1). Real chat: POST {prompt} -> /chat, renders
+<!-- ABOUTME: BurritoBot customer chat frontend (issue #38 / B1). Real chat: POST {prompt} -> /chat, renders
      ABOUTME: {reply,guarded,tokens}. Backend-agnostic (Vertex or Bedrock). Round dropdown repoints the backend. -->
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>BurritBot — agenticburn</title>
+<title>BurritoBot — agenticburn</title>
 <link rel="icon" type="image/png" href="/burrito.png" />
 <style>
   :root{
     --dd:#632CA6;--acn:#A100FF;--accent:#8A00D6;--cream:#FDF6EE;--lav:#ECE3FB;--ink:#2b2230;--mid:#4A4A4A;--line:#e4d8f5;
-    --r1:#d23b3b;--r2:#2e9e5b;--r3:#7a3ff2;
+    --r1:#d23b3b;--r2:#2f6fed;--r3:#1f9d57; /* R1 red (no guardrails), R2 blue (+AI), R3 green (your cluster) */
   }
   *,*::before,*::after{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -60,11 +60,8 @@
   .msec .lbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800;margin:0 0 7px;display:flex;align-items:center;gap:6px}
   .msec .lbl .n{width:17px;height:17px;border-radius:50%;background:var(--lav);color:var(--accent);font-size:10px;display:grid;place-items:center}
   .chips{display:flex;flex-wrap:wrap;gap:6px}
-  .chip{font:inherit;font-size:12px;font-weight:600;border:1px solid var(--line);background:#faf6ff;color:var(--ink);padding:6px 10px;border-radius:999px;cursor:pointer;line-height:1.2}
-  .chip:hover{background:var(--accent);color:#fff;border-color:var(--accent)}
-  .menu .ring{padding:11px 13px;border-top:1px solid var(--line)}
-  .ringbtn{width:100%;font:inherit;font-weight:800;font-size:13px;background:var(--ink);color:#fff;border:0;padding:11px;border-radius:10px;cursor:pointer}
-  .ringbtn:hover{background:var(--accent)}
+  /* The menu is a static reference of what BurritoBot can make; not clickable. */
+  .chip{font:inherit;font-size:12px;font-weight:600;border:1px solid var(--line);background:#faf6ff;color:var(--ink);padding:6px 10px;border-radius:999px;line-height:1.2}
   #noburritos{position:fixed;inset:0;background:#000;color:#fff;display:none;align-items:center;justify-content:center;flex-direction:column;z-index:50}
   #noburritos b{font-size:min(9vw,72px);font-weight:800;letter-spacing:.5px}
   #noburritos span{margin-top:10px;color:#666;font-size:13px}
@@ -76,11 +73,11 @@
 </head>
 <body>
   <header>
-    <div class="brand"><span class="em">🌯🧹</span> BurritBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
+    <div class="brand"><span class="em">🌯</span> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
     <div class="spacer"></div>
-    <div class="cost" id="cost" title="tokens this session">⛁ 0 tok</div>
+    <div class="cost" id="cost" title="tokens this session">0 tokens</div>
     <div class="round-pick">
-      <label for="round">Round</label>
+      <label for="round">Choose</label>
       <select id="round" onchange="setRound(this.value)">
         <option value="r1">Round 1 — No guardrails</option>
         <option value="r2">Round 2 — Some guardrails</option>
@@ -96,51 +93,50 @@
 
   <div class="wrap">
     <aside class="menu">
-      <div class="mhead"><h2>🧹 Hex &amp; Cauldron</h2><div class="sub">Build your burrito. Tap to order, the witch takes it from there.</div></div>
+      <div class="mhead"><h2>Hex &amp; Cauldron</h2><div class="sub">Build your burrito. The BurritoBot will take your order.</div></div>
       <div class="mscroll">
         <div class="msec"><p class="lbl"><span class="n">1</span> Protein</p><div class="chips">
-          <button class="chip" onclick="pick('Bogbacoa','barbacoa')">Bogbacoa</button>
-          <button class="chip" onclick="pick('Croak-nitas','carnitas')">Croak-nitas</button>
-          <button class="chip" onclick="pick('Sorcerizo','chorizo')">Sorcerizo</button>
-          <button class="chip" onclick="pick('Wraith Wisp','steak')">Wraith Wisp</button>
-          <button class="chip" onclick="pick('Sootfritas','sofritas, the veggie one')">Sootfritas 🌱</button>
+          <span class="chip">Bogbacoa</span>
+          <span class="chip">Croak-nitas</span>
+          <span class="chip">Sorcerizo</span>
+          <span class="chip">Wraith Wisp</span>
+          <span class="chip">Sootfritas</span>
         </div></div>
         <div class="msec"><p class="lbl"><span class="n">2</span> Base</p><div class="chips">
-          <button class="chip" onclick="pick('Cilantro-Slime Rice','rice')">Cilantro-Slime Rice</button>
-          <button class="chip" onclick="pick('Bog Salad','salad')">Bog Salad</button>
-          <button class="chip" onclick="pick('Toad-illa Chips','chips')">Toad-illa Chips</button>
+          <span class="chip">Cilantro-Slime Rice</span>
+          <span class="chip">Bog Salad</span>
+          <span class="chip">Toad-illa Chips</span>
         </div></div>
         <div class="msec"><p class="lbl"><span class="n">3</span> Fillings</p><div class="chips">
-          <button class="chip" onclick="pick('Black Bane Beans','black beans')">Black Bane Beans</button>
-          <button class="chip" onclick="pick('Imp-into Beans','pinto beans')">Imp-into Beans</button>
-          <button class="chip" onclick="pick('Kelpie Queso','cheese')">Kelpie Queso</button>
-          <button class="chip" onclick="pick('Ogresnut Guac','guacamole')">Ogresnut Guac</button>
+          <span class="chip">Black Bane Beans</span>
+          <span class="chip">Imp-into Beans</span>
+          <span class="chip">Kelpie Queso</span>
+          <span class="chip">Ogresnut Guac</span>
         </div></div>
         <div class="msec"><p class="lbl"><span class="n">4</span> Salsa</p><div class="chips">
-          <button class="chip" onclick="pick('Pixie-o de Gallo','mild salsa')">Pixie-o de Gallo</button>
-          <button class="chip" onclick="pick('Cursed-Corn Salsa','medium corn salsa')">Cursed-Corn</button>
-          <button class="chip" onclick="pick('Lizard Lickins','hot salsa')">Lizard Lickins'</button>
-          <button class="chip" onclick="pick('Ghoul-st Pepper','ghost salsa')">Ghoul-st Pepper 👻</button>
+          <span class="chip">Pixie-o de Gallo</span>
+          <span class="chip">Cursed-Corn</span>
+          <span class="chip">Lizard Lickins'</span>
+          <span class="chip">Ghoul-st Pepper</span>
         </div></div>
         <div class="msec"><p class="lbl"><span class="n">5</span> Toppings</p><div class="chips">
-          <button class="chip" onclick="pick('Sour Scream','sour cream')">Sour Scream</button>
-          <button class="chip" onclick="pick('Fae-jita Veggies','fajita veggies')">Fae-jita Veggies</button>
-          <button class="chip" onclick="pick('Hag Wrinkle Relish','relish')">Hag Wrinkle Relish</button>
-          <button class="chip" onclick="pick('Pixie Dust','pixie dust')">Pixie Dust ✨</button>
-          <button class="chip" onclick="pick('Tardigrade Crunch','tardigrade crunch')">Tardigrade Crunch</button>
+          <span class="chip">Sour Scream</span>
+          <span class="chip">Fae-jita Veggies</span>
+          <span class="chip">Hag Wrinkle Relish</span>
+          <span class="chip">Pixie Dust</span>
+          <span class="chip">Tardigrade Crunch</span>
         </div></div>
       </div>
-      <div class="ring"><button class="ringbtn" onclick="ring()">🔔 That's my order, ring me up</button></div>
     </aside>
     <div class="chatcol">
       <div class="chathead">
-        <div class="avatar">🧹</div>
-        <div><h2>BurritBot</h2><div class="sub">The friendliest burrito witch on the mesh. Now taking orders.</div></div>
+        <div class="avatar">🌯</div>
+        <div><h2>BurritoBot</h2><div class="sub">The friendliest burrito witch on the mesh. Now taking orders.</div></div>
         <button class="reset" onclick="resetChat()">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
       <div class="composer">
-        <input id="inp" placeholder="Tell BurritBot what you'd like…" onkeydown="if(event.key==='Enter')send()" autocomplete="off" />
+        <input id="inp" placeholder="Tell BurritoBot what you'd like…" onkeydown="if(event.key==='Enter')send()" autocomplete="off" />
         <button id="sendbtn" onclick="send()">Send</button>
       </div>
     </div>
@@ -175,18 +171,18 @@
   let round='r1', tokens=0, busy=false;
   function setRound(r){round=r;const b=document.getElementById('banner');b.className='banner '+ROUNDS[r].cls;
     document.getElementById('bannertext').textContent=ROUNDS[r].t;document.getElementById('bannersub').textContent=ROUNDS[r].s;
-    sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritBot, different cluster.');}
+    sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
   function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
   function save(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
   function resetChat(){document.getElementById('stream').innerHTML='';greet();}
-  function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
+  function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritoBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
 
   async function send(){
     if(busy)return;const i=document.getElementById('inp');const v=i.value.trim();if(!v)return;
     bubble(v,'me');save(v);i.value='';busy=true;document.getElementById('sendbtn').disabled=true;
-    const t=document.createElement('div');t.className='typing';t.textContent='BurritBot is thinking…';
+    const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
     const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
     try{
       const res=await fetch(ROUND_ENDPOINTS[round],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v})});
@@ -195,15 +191,12 @@
       const data=await res.json();
       bubble(data.reply || "…", 'bot');
       const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot;
-      document.getElementById('cost').textContent='⛁ '+tokens+' tok'+(data.guarded?' · guarded':'');
+      document.getElementById('cost').textContent=tokens+' tokens'+(data.guarded?' · guarded':'');
     }catch(e){
       t.remove(); noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');
     }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
   }
-  // Menu board (storefront): tapping an item sends that order step to BurritBot. The witchy display
-  // name plus the plain term in parentheses so the model always understands the choice.
-  function pick(name,plain){const i=document.getElementById('inp');i.value="I'll have the "+name+" ("+plain+").";send();}
-  function ring(){const i=document.getElementById('inp');i.value="That's my whole order, ring me up please.";send();}
+  // The left menu is a static reference of what BurritoBot can make; ordering happens in chat.
   greet();
 </script>
 </body>
