@@ -63,26 +63,9 @@ CONTEXT="${CONTEXT}" KUBECONFIG="${KCFG}" AWS_PROFILE="${PROFILE}" \
 if [[ "${ROUND}" == "2" ]]; then
     log "Round 2 ready: ${NAME} has infra guardrails enforcing. Same attacks now get walled."
 else
-    # R3 cost-race tier: pin this cluster's Bedrock model to its tier, derived from the cluster name.
-    # selfHeal ignores modelConfig drift (gitops/apps/ai-layer.yaml ignoreDifferences), so the patch
-    # sticks. watch-it-burn-sonnet matches the committed default; the patch is idempotent there.
-    TIER=""
-    case "${NAME}" in
-        *-haiku) TIER=bedrock-haiku ;;
-        *-sonnet) TIER=bedrock-sonnet ;;
-        *-opus) TIER=bedrock-opus ;;
-    esac
-    if [[ -n "${TIER}" ]]; then
-        log "[4] pin model tier ${TIER} for the cost-race cluster ${NAME} (wait for the Agent to sync)"
-        for i in $(seq 1 40); do
-            if KUBECONFIG="${KCFG}" AWS_PROFILE="${PROFILE}" kubectl --context "${CONTEXT}" \
-                -n agent get agent workshop-agent >/dev/null 2>&1; then break; fi
-            [[ "${i}" -eq 40 ]] && { echo "timed out waiting for the kagent Agent to sync" >&2; exit 1; }
-            sleep 15
-        done
-        KUBECONFIG="${KCFG}" AWS_PROFILE="${PROFILE}" kubectl --context "${CONTEXT}" -n agent \
-            patch agent workshop-agent --type=merge -p "{\"spec\":{\"declarative\":{\"modelConfig\":\"${TIER}\"}}}"
-    fi
+    # All clusters run the workshop-default model (Sonnet 4.6, set in gitops/ai-layer/resources.yaml).
+    # The old per-cluster Bedrock model-tier pin (haiku/opus on the cost-race clusters) was dropped when
+    # the fleet standardized on Sonnet; every R3 cluster is now the identical full build, no model patch.
     log "Round 3 ready: ${NAME} has infra on; AI guards are deployed but OFF. Flip them live with:"
     log "  CONTEXT=${CONTEXT} challenges/02-sanitization/toggle-output-guard-on.sh   (output first)"
     log "  CONTEXT=${CONTEXT} challenges/02-sanitization/toggle-input-guard-on.sh     (then input)"
