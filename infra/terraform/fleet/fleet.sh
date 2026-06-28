@@ -241,6 +241,9 @@ bootstrap_student_aws() {
         ak="$(tail -n +2 "${awscsv}" 2>/dev/null | head -1 | cut -d, -f3)"
         sk="$(tail -n +2 "${awscsv}" 2>/dev/null | head -1 | cut -d, -f4)"
         if [[ -n "${ak}" && -n "${sk}" ]]; then
+            # Persist this cluster's creds so `fleet.sh ingest` can push the full pool row later (the mint
+            # only returns the secret once). Re-runs skip minting, so the first-boot file survives.
+            mkdir -p "${AWS_POOL_DIR}"; cp "${awscsv}" "${AWS_POOL_DIR}/${name}.csv"
             local ctx i; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
             for i in $(seq 1 40); do  # wait for the agent namespace (ArgoCD creates it async)
                 KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get ns agent >/dev/null 2>&1 && break; sleep 6
@@ -664,6 +667,61 @@ cmd_reap() {
     report_failures >&2 || true
 }
 
+# Push one converged cluster's full row into the live provisioning pool via /admin/import: harvest the
+# console NLB, read the boot-persisted AWS creds, look up the per-student Datadog org by slot (same index
+# as bootstrap + merge_pool). No CSV rebuild, no redeploy. POOL1/POOL2 are preloaded by cmd_ingest.
+ingest_one() {
+    local name="$1" acct_profile="$2"
+    local kcfg; kcfg="$(mktemp -t "${name}.ing.XXXX")"
+    AWS_PROFILE="${acct_profile}" aws eks update-kubeconfig --kubeconfig "${kcfg}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
+    local console_host; console_host="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
+    rm -f "${kcfg}"
+    [[ -n "${console_host}" ]] || { log "  ingest ${name}: console NLB not ready; skip"; record_fail "ingest:${name}"; return; }
+    local ak sk
+    ak="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f3)"
+    sk="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f4)"
+    [[ -n "${ak}" && -n "${sk}" ]] || { log "  ingest ${name}: no persisted AWS creds (${AWS_POOL_DIR}/${name}.csv); skip"; record_fail "ingest:${name}"; return; }
+    local slot; slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
+    local dd="{}"
+    [[ -n "${slot}" ]] && dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" --argjson i "$(( slot - 1 ))" \
+        '(([$a[],$b[]]|map(select((.role//"")|startswith("admin")|not)))[$i]) // {} | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
+    local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "http://${console_host}" --argjson dd "${dd:-{}}" \
+        '{name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:($dd.site//"datadoghq.com"),datadog_dashboard_url:""}')"
+    if curl -s -X POST "${WIB_PROVISIONING_URL%/}/admin/import" -H "X-Admin-Token: ${WIB_ADMIN_TOKEN}" \
+        -H "Content-Type: application/json" --data "{\"clusters\":[${row}]}" --max-time 25 -o /dev/null -w '%{http_code}' | grep -q '^200$'; then
+        log "  ingested: ${name}"
+    else
+        log "  ingest POST failed: ${name}"; record_fail "ingest:${name}"
+    fi
+}
+
+# Harvest + push the fleet (or explicit names) into the live provisioning pool. Numeric arg = per-account
+# count form (honors WIB_NAME_OFFSET + WIB_ATTENDEE_ACCOUNTS); otherwise explicit cluster names (default account).
+cmd_ingest() {
+    [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest <cluster-name...>"; exit 2; }
+    : "${WIB_PROVISIONING_URL:?set WIB_PROVISIONING_URL (e.g. https://provisioning.agenticburn.com)}"
+    : "${WIB_ADMIN_TOKEN:?set WIB_ADMIN_TOKEN (the provisioning app ADMIN_TOKEN)}"
+    require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+    POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+    log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+    if [[ "$1" =~ ^[0-9]+$ ]]; then
+        local per_account="$1" accounts idx=0 acct start n name
+        IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+        for acct in "${accounts[@]}"; do
+            acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+            start=$(( WIB_NAME_OFFSET + idx * per_account + 1 )); idx=$(( idx + 1 ))
+            for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+                ingest_one "$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")" "${acct}"
+            done
+        done
+    else
+        local name
+        for name in "$@"; do ingest_one "${name}" "${WIB_DEFAULT_ACCOUNT}"; done
+    fi
+    report_failures
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     case "${cmd}" in
@@ -673,6 +731,7 @@ main() {
         down-fleet) cmd_down_fleet "$@" ;;
         health) cmd_health "$@" ;;
         harvest) cmd_harvest "$@" ;;
+        ingest) cmd_ingest "$@" ;;
         aws-keys) cmd_aws_keys "$@" ;;
         reap) cmd_reap "$@" ;;
         status) cmd_status "$@" ;;
