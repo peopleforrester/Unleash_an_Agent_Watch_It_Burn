@@ -179,7 +179,9 @@ locals {
     EOT
   }
 
-  cloudinit_parts = var.dockerhub_auth_b64 == "" ? [local.nodeadm_part] : [local.nodeadm_part, local.dockerhub_part]
+  # nonsensitive() on the condition too: a ternary whose CONDITION derives from a sensitive value yields
+  # a sensitive result, which would re-taint cloudinit_parts -> the node-group map -> the module for_each.
+  cloudinit_parts = nonsensitive(var.dockerhub_auth_b64) == "" ? [local.nodeadm_part] : [local.nodeadm_part, local.dockerhub_part]
 }
 
 module "eks" {
