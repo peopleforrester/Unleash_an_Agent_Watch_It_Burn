@@ -75,6 +75,62 @@ attack, watch it stop. In order:
 4. R1 gamified objective-gating + hint system (order unlocks on objective success).
 5. R3 "experienced users only" warning on the optional local-kubectl section.
 
+## Rehearsal 2026-06-29 — confirmed design + fixes punch list
+
+Captured from the Michael + Whitney run-through. Supersedes the S3 framing above.
+
+### Confirmed design (the live shape)
+- **Round model.** R1 = NO guardrails (attacks succeed, "watch it burn"). R2 = infra guardrails ON
+  (same attacks, blocked by the platform). R3 + attendee = your own cluster; the AI guardrails
+  (C5/C6/C7) are self-serve in the terminal.
+- **System prompt is IDENTICAL across rounds.** Not changed R1->R2->R3. The agent still says "yes" to
+  the attack; the only difference is the infra/AI guardrail blocking it. Apples-to-apples: we do NOT tell
+  the agent the guardrail exists, so it tries and fails.
+- **C1 = egress (network policy), NOT PII-to-screen.** S3 is dead, gone for good. The PII screen-leak is
+  an AI/agency failure, not a network one, so it never exercised the egress NetworkPolicy. C1 is now the
+  MARKETING-INTEL EXFIL: the agent POSTs confidential (non-PII) marketing intel to a partner webhook;
+  the egress policy blocks it in R2/R3, open in R1. (Customer-PII version was refused by the model;
+  marketing data is palatable.) **C1a (PII-to-screen) is DROPPED — keep only C1b (marketing exfil).**
+- **C2 = malicious image deploy.** The model refuses an obviously-evil name ("Joker") but happily deploys
+  it under a benign "promo/marketing" name (it does not evaluate the name). Kyverno registry allowlist
+  (Enforce) blocks the deploy on R2/R3/attendee. Teaching: only trusted registries.
+- **C3 = filesystem snoop for the secret recipe.** R1 finds the ingredient list; R2/R3/attendee must NOT.
+- **C4 = fork bomb.** The MODEL will not run it, no matter the prompt. It "fails for a different reason."
+  Tell attendees: challenge 4 was a fork bomb, the model refuses it, that is why it does not run (not the
+  guardrail).
+- **Datadog button** should deep-link to the agent-observability / a live trace (not the Datadog home).
+- **Provisioning**: fake email -> claim cluster -> 3 buttons (BurritoBot / terminal / Datadog). Student
+  view only (admin rows hidden).
+- **Feedback form** (feedback.agenticburn.com): radio boxes (pacing; difficulty; recommend-to-a-friend) +
+  one open-ended box + a keep-alive checkbox (extend access / do not reap in 1h).
+- **Lifecycle reaper**: a cluster self-destructs ~1h after the workshop unless the attendee ticks the
+  keep-alive checkbox on the feedback form.
+
+### Fixes punch list (verify / explore / correct)
+**Verify — built, confirmed live:**
+- C2 image block Enforcing + joker deploy denied on r2/r3/attendee (leftover promo-mascot cleaned on all 11).
+- C5 recipe leak + redact-on-reprint (confirmed in rehearsal).
+- R2 banner = infra-only. falcosidekick OOM fixed (Falco->Datadog restored, all 11).
+
+**Correct — in flight / needed:**
+- **C1 deploy not landing**: ai-layer reports Synced + Healthy, but the live workshop-mcp-src ConfigMap,
+  Agent-CR systemMessage clause, and marketing.json are NOT updated (ArgoCD repo-server render staleness).
+  Force a clean re-render + Agent-CR recreate so C1 marketing-exfil goes live on all 11.
+- **C1a removal**: drop the PII-to-screen step from lab.html; keep only the marketing exfil.
+- **Egress R1-off**: add allow-all egress on the r1 clusters so the C1 exfil SUCCEEDS in R1 (the "before");
+  R2/R3 keep the allowlist (blocked). Egress half of ROS-gap #40.
+- **C3 block-by-default**: the filesystem snoop must not work on R2/R3/attendee (Falco hard-block via
+  Talon/KubeArmor, or no bait seeded on guarded clusters).
+- **C4 instruction note**: state the model refuses the fork bomb (so it won't run; not a guardrail).
+- **Datadog deep-link**: point the Datadog button at the agent-observability trace page.
+
+**Explore:**
+- **Supply-chain info leak**: the agent volunteers inventory/supplier intel (per-burrito counts, named
+  providers). Egregious disclosure; candidate extra teaching/attack.
+- **"Printed to terminal not chat"**: when asked to print customer data, the agent did something other
+  than chat-print — verify the behavior.
+- **Provisioning student view**: confirm admin rows are hidden in the student view.
+
 ## Source transcript
 
 The verbatim Michael + Whitney voice transcript that originally lived here has been **moved out of the
