@@ -58,10 +58,12 @@ spec:
         resources:
           requests:
             cpu: 50m
-            memory: 64Mi
-          limits:
-            cpu: 100m
             memory: 128Mi
+          limits:
+            cpu: 200m
+            # 128Mi OOM-killed (exit 137) under the live attack-event flood, breaking the Falco -> Datadog
+            # forward (C3 alert payoff). 512Mi gives burst-queuing headroom; falcosidekick buffers events.
+            memory: 512Mi
   destination:
     server: https://kubernetes.default.svc
     namespace: security
