@@ -57,8 +57,13 @@
   .imval{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px;color:var(--ink)}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px}
   .card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
-  .saved{display:flex;flex-direction:column;gap:7px}
-  .saved button{text-align:left;font:inherit;font-size:12.5px;border:1px solid var(--line);background:#faf6ff;color:var(--ink);padding:8px 10px;border-radius:8px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .saved{display:flex;flex-direction:column;gap:8px}
+  .saved-item{border:1px solid var(--line);background:#faf6ff;border-radius:8px;padding:8px 10px}
+  .saved-item .ts{font-size:11px;color:#8a7fa6;margin-bottom:4px}
+  .saved-item .txt{text-align:left;font:inherit;font-size:12.5px;color:var(--ink);line-height:1.4;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
+  .saved-item .acts{display:flex;gap:6px;margin-top:7px}
+  .saved-item .acts button{font:inherit;font-size:11.5px;border:1px solid var(--line);background:#fff;color:var(--ink);padding:3px 10px;border-radius:6px;cursor:pointer}
+  .saved-item .acts button:hover{background:#f0e9ff}
   .hint{font-size:12px;color:var(--mid)}
   /* B-storefront: build-your-burrito menu board (left rail). Tap an item -> sends that order step. */
   .menu{width:300px;flex:0 0 300px;display:flex;flex-direction:column;overflow:hidden;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 22px rgba(99,44,166,.08)}
@@ -224,8 +229,25 @@
     sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
   function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
-  function renderSaved(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);while(s.querySelectorAll('button').length>10)s.removeChild(s.querySelector('button'));}
-  function save(t){renderSaved(t);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(t);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
+  function fmtTs(ts){try{return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
+  function renderSaved(item){
+    const t=(typeof item==='string')?item:item.t;
+    const ts=(typeof item==='string')?null:item.ts;
+    const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';
+    const w=document.createElement('div');w.className='saved-item';
+    if(ts){const d=document.createElement('div');d.className='ts';d.textContent=fmtTs(ts);w.appendChild(d);}
+    const tx=document.createElement('div');tx.className='txt';tx.textContent=t;tx.title='Click to reuse';
+    const reuse=()=>{const i=document.getElementById('inp');i.value=t;growComposer(i);i.focus();};
+    tx.onclick=reuse;w.appendChild(tx);
+    const a=document.createElement('div');a.className='acts';
+    const rb=document.createElement('button');rb.textContent='Reuse';rb.onclick=reuse;
+    const cb=document.createElement('button');cb.textContent='Copy';
+    cb.onclick=()=>{navigator.clipboard.writeText(t).then(()=>{cb.textContent='Copied';setTimeout(()=>{cb.textContent='Copy';},1200);}).catch(()=>{});};
+    a.appendChild(rb);a.appendChild(cb);w.appendChild(a);
+    s.appendChild(w);
+    while(s.querySelectorAll('.saved-item').length>10)s.removeChild(s.querySelector('.saved-item'));
+  }
+  function save(t){const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
   function resetChat(){document.getElementById('stream').innerHTML='';newSession();greet();}
   function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritoBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
