@@ -289,6 +289,23 @@ def extract_text(parts):
 # Monotonic id for /chat A2A messageIds (kagent requires a messageId; avoids a time-format dependency).
 _chat_seq = 0
 
+# Per-session contextId generation. kagent threads the conversation by A2A contextId; if a turn leaves a
+# tool_use without its tool_result (a kagent/ADK multi-turn-with-tools quirk seen live), Bedrock then
+# rejects EVERY later message in that contextId with a ValidationException. We self-heal by bumping the
+# session's generation (a fresh contextId) on that error, abandoning the poisoned history and retrying.
+_ctx_gen = {}
+
+
+def _effective_ctx(session):
+    """The A2A contextId to use for a browser session, including its self-heal generation suffix."""
+    g = _ctx_gen.get(session, 0)
+    return session if g == 0 else f"{session}-g{g}"
+
+
+def _is_dangling_tooluse(reply):
+    """True when a reply is the Bedrock 'tool_use without tool_result' error (poisoned session history)."""
+    return bool(reply) and "tool_use" in reply and "tool_result" in reply and "ValidationException" in reply
+
 
 def chat_reply_text(resp):
     """The AGENT's reply text from an A2A response. kagent echoes the SAME text into artifacts AND the
@@ -585,31 +602,51 @@ class Handler(BaseHTTPRequestHandler):
             return
         # Forward as A2A message/send to the agent root, inside a CLIENT span (the Service Map egress hop).
         global _chat_seq
-        _chat_seq += 1
-        msg = {"role": "user", "messageId": f"chat-{_chat_seq}",
-               "parts": [{"kind": "text", "text": prompt}]}
-        if session:
-            # Carry the browser session as the A2A contextId so kagent threads the order across turns.
-            msg["contextId"] = session
-        a2a = {"jsonrpc": "2.0", "id": "chat", "method": "message/send", "params": {"message": msg}}
-        fwd_headers = {"Content-Type": "application/json"}
-        client_cm = (_tracer.start_as_current_span("agent.forward", kind=SpanKind.CLIENT)
-                     if _OTEL_AVAILABLE else nullcontext())
-        with client_cm as client_span:
-            if client_span is not None:
-                client_span.set_attribute("peer.service", _PEER_SERVICE)
-                client_span.set_attribute("http.request.method", "POST")
-                inject(fwd_headers)
-            try:
-                req = urllib.request.Request(AGENT_URL + "/", data=json.dumps(a2a).encode(),
-                                             headers=fwd_headers, method="POST")
-                with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-                    resp = json.loads(r.read())
-            except Exception as exc:
-                log.error("chat forward failed: %s", exc, extra={"event": "forward_error"})
-                self._send(502, {"reply": "BurritoBot's kitchen isn't answering. Try again in a moment.",
-                                 "guarded": False, "input_tokens": 0, "output_tokens": 0})
+
+        def _forward(ctx):
+            """Send the prompt to the agent under contextId ctx. Returns the A2A resp, or None on a
+            transport error (in which case a 502 has already been sent)."""
+            global _chat_seq
+            _chat_seq += 1
+            m = {"role": "user", "messageId": f"chat-{_chat_seq}",
+                 "parts": [{"kind": "text", "text": prompt}]}
+            if ctx:
+                # Carry the (self-heal-generationed) browser session as the A2A contextId so kagent
+                # threads the order across turns.
+                m["contextId"] = ctx
+            a2a = {"jsonrpc": "2.0", "id": "chat", "method": "message/send", "params": {"message": m}}
+            fwd_headers = {"Content-Type": "application/json"}
+            client_cm = (_tracer.start_as_current_span("agent.forward", kind=SpanKind.CLIENT)
+                         if _OTEL_AVAILABLE else nullcontext())
+            with client_cm as client_span:
+                if client_span is not None:
+                    client_span.set_attribute("peer.service", _PEER_SERVICE)
+                    client_span.set_attribute("http.request.method", "POST")
+                    inject(fwd_headers)
+                try:
+                    req = urllib.request.Request(AGENT_URL + "/", data=json.dumps(a2a).encode(),
+                                                 headers=fwd_headers, method="POST")
+                    with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                        return json.loads(r.read())
+                except Exception as exc:
+                    log.error("chat forward failed: %s", exc, extra={"event": "forward_error"})
+                    self._send(502, {"reply": "BurritoBot's kitchen isn't answering. Try again in a moment.",
+                                     "guarded": False, "input_tokens": 0, "output_tokens": 0})
+                    return None
+
+        resp = _forward(_effective_ctx(session))
+        if resp is None:
+            return
+        # Self-heal: if kagent left a dangling tool_use in this session's history, Bedrock rejects every
+        # later turn. Rotate to a fresh contextId (drop the poisoned history) and retry the prompt once.
+        if session and _is_dangling_tooluse(chat_reply_text(resp)):
+            _ctx_gen[session] = _ctx_gen.get(session, 0) + 1
+            log.info("chat session poisoned by dangling tool_use; rotated contextId to gen %d",
+                     _ctx_gen[session], extra={"event": "ctx_rotate"})
+            retry = _forward(_effective_ctx(session))
+            if retry is None:
                 return
+            resp = retry
         record_usage(resp)  # feed the live cost counter (same path as A2A)
         pin, pout = chat_usage_tokens(resp)
         reply = chat_reply_text(resp)
