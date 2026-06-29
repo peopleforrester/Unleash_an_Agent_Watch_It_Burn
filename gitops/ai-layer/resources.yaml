@@ -285,6 +285,10 @@ spec:
             # the real software version (NOT a model tier); the model dimension is gen_ai.request.model.
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=guard-proxy,service.version=1.0.0,deployment.environment.name=production"
+            # EVENT_ONLY captures gen_ai message content as OTel span events (GenAI semconv v1.37+).
+            # "true" is a silent no-op under gen_ai_latest_experimental; must be EVENT_ONLY.
+            - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+              value: EVENT_ONLY
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
