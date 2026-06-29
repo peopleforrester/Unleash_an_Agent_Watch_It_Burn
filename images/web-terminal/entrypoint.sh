@@ -55,7 +55,7 @@ chmod +x "$HOME/guards-on" "$HOME/guards-off"
 # Per-challenge guard toggles (round-3 challenges 5/6/7). Same in-cluster kubectl; each flips one guard so
 # the student can show-weakness / turn-on / show-block per challenge. The combined guards-on/off above
 # still flip everything at once.
-# Challenge 5: output guard (scrubs the leaked secret-salsa recipe from replies).
+# Challenge 5: output guard (scrubs the leaked bat spit hot sauce from replies).
 cat > "$HOME/guard-output-on" <<'EOS'
 #!/bin/bash
 kubectl -n agent exec deploy/guard-proxy -- python3 -c \
