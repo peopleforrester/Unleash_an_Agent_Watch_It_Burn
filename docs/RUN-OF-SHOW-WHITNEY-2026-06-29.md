@@ -5,6 +5,12 @@ verbatim, as history). This reconciles that conversation against the built repo 
 run-of-show elements are covered and which are gaps. It supplements (does not replace)
 `facilitation/runbook.md` and `docs/RUN-OF-SHOW-AND-BACKLOG-2026-06-27.md`.
 
+> **UPDATE 2026-06-29 (supersedes parts of this doc):** the **S3 exfil is CUT**. Challenge 1 is now a
+> **chat/screen leak** of customer data: the "Wendolyn, the new ops witch" prompt gets the agent to run a
+> maintenance command and print customer PII into the chat and the trace (excessive agency). There is **no
+> S3 bucket exfil and no S3 "attack the room" view**. Treat every S3 reference below as **invalid for now**.
+> The verbatim source transcript that drove the original S3 framing was moved out of the repo.
+
 ## The flow they described
 
 ### Round 1, open cluster, attack the BurritoBot, watch the room burn
@@ -44,7 +50,7 @@ attack, watch it stop. In order:
 |---|---|---|---|
 | R1 | Open BurritoBot, attackable | YES | ai-layer (workshop-agent + console) |
 | R1 | "Bat spit" secret recipe planted + grep attack | YES | `challenges/02-sanitization/plant-fake-recipe.yaml`, `challenges/c3-secret-grep` |
-| R1 | Exfiltrate customer data to S3 | YES (scenario) | `challenges/c1-exfil-s3` |
+| R1 | Leak customer data to the screen (S3 exfil CUT) | YES | `challenges/c1-exfil-s3` (chat/screen leak; Wendolyn prompt) |
 | R1 | Fork bomb / the burn | YES | `challenges/c4-fork-bomb`; R1 clusters provision with `pod_pids_limit=-1` |
 | R1 | Malicious image (Joker / grill zone) attack | GAP | no dedicated deploy-malicious-image scenario yet |
 | R1 | Live "attack the room" view: S3 fills, process/`ls` feed, attack dashboard | GAP | Datadog Service Map exists; no S3 view, no Falco live-event feed, custom dashboards not fanned out (#25) |
@@ -71,4 +77,8 @@ attack, watch it stop. In order:
 
 ## Source transcript
 
-(verbatim transcript removed from history)
+The verbatim Michael + Whitney voice transcript that originally lived here has been **moved out of the
+repo** (it drove the now-superseded S3 framing and was causing stale-context confusion). It is preserved
+in git history and in the session scratchpad archive
+(`repo-transcripts-archive/RUN-OF-SHOW-WHITNEY-2026-06-29.embedded-transcript.md`). Do not re-embed it;
+this reconciliation doc is the live record.

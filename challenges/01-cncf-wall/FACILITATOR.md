@@ -26,7 +26,12 @@ CONTEXT="$CONTEXT" challenges/01-cncf-wall/toggle-kyverno-enforce.sh --audit   #
 Idempotent. Before Enforce the no-limits deploy is admitted (Audit only logs); after, admission rejects
 it with a policy message naming `require-resource-limits`.
 
-## The egress wall (C1, exfil to S3) — verified live
+## The egress wall (the network control that would block an S3 push) — verified live
+
+> Note (2026-06-29): the live Challenge 1 is now a **chat/screen leak** of customer data, not an S3 push
+> (S3 exfil was CUT). The egress wall below is still a real, deployed control and the verify still holds;
+> it just no longer has a matching S3-push attack in the live run. Keep it as the "could not have pushed
+> it out" network story.
 
 In R2/R3 the agent namespace runs default-deny egress plus an allow-list scoped to the `workshop-agent`
 pod: in-VPC `10.0.0.0/16:443` (which reaches Bedrock via its **PrivateLink VPC endpoint**), DNS, the OTel
