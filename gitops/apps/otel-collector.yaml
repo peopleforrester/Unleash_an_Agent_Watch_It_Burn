@@ -82,7 +82,7 @@ spec:
               trace_statements:
                 - context: span
                   statements:
-                    - set(attributes["gen_ai.provider.name"], "aws.bedrock") where attributes["gen_ai.provider.name"] == nil or attributes["gen_ai.provider.name"] == "N/A"
+                    - set(attributes["gen_ai.provider.name"], "aws.bedrock") where (attributes["gen_ai.provider.name"] == nil or attributes["gen_ai.provider.name"] == "N/A") and attributes["gen_ai.operation.name"] != nil
           exporters:
             prometheusremotewrite:
               endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
