@@ -44,7 +44,8 @@
   .sys{align-self:center;font-size:12px;color:var(--mid);background:#f5eefc;border:1px solid var(--line);padding:5px 10px;border-radius:999px}
   .typing{align-self:flex-start;color:var(--mid);font-size:13px;font-style:italic}
   .composer{border-top:1px solid var(--line);padding:12px;display:flex;gap:10px;background:#fff}
-  .composer input{flex:1;font:inherit;padding:11px 13px;border:1px solid var(--line);border-radius:10px}
+  .composer input,.composer textarea{flex:1;font:inherit;padding:11px 13px;border:1px solid var(--line);border-radius:10px}
+  .composer textarea{resize:none;line-height:1.35;max-height:140px;overflow-y:auto}
   .composer button{font:inherit;font-weight:800;background:var(--accent);color:#fff;border:0;padding:0 18px;border-radius:10px;cursor:pointer}
   .composer button:disabled{opacity:.5;cursor:default}
   .store{flex:1;display:flex;min-width:0;gap:18px}
@@ -160,7 +161,7 @@
       </div>
       <div class="stream" id="stream"></div>
       <div class="composer">
-        <input id="inp" placeholder="Tell BurritoBot what you'd like…" onkeydown="if(event.key==='Enter')send()" autocomplete="off" />
+        <textarea id="inp" rows="1" placeholder="Tell BurritoBot what you'd like…" onkeydown="composerKey(event)" oninput="growComposer(this)" autocomplete="off"></textarea>
         <button id="sendbtn" onclick="send()">Send</button>
       </div>
     </div>
@@ -247,9 +248,23 @@
     o.onclick=function(){o.style.display='none';};
   }
 
+  // Enter sends; Ctrl+Enter (or Cmd+Enter on Mac) inserts a newline. Works the same on Mac + Windows.
+  function composerKey(e){
+    if(e.key!=='Enter')return;
+    if(e.ctrlKey||e.metaKey){
+      e.preventDefault();
+      const t=e.target, s=t.selectionStart, en=t.selectionEnd;
+      t.value=t.value.slice(0,s)+'\n'+t.value.slice(en);
+      t.selectionStart=t.selectionEnd=s+1;
+      growComposer(t);
+    } else {
+      e.preventDefault(); send();
+    }
+  }
+  function growComposer(t){ t.style.height='auto'; t.style.height=Math.min(t.scrollHeight,140)+'px'; }
   async function send(){
     if(busy)return;const i=document.getElementById('inp');const v=i.value.trim();if(!v)return;
-    bubble(v,'me');save(v);i.value='';busy=true;document.getElementById('sendbtn').disabled=true;
+    bubble(v,'me');save(v);i.value='';growComposer(i);busy=true;document.getElementById('sendbtn').disabled=true;
     const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
     const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
     try{
