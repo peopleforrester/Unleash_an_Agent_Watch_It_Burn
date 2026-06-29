@@ -27,6 +27,13 @@ spec:
       name: require-resource-limits
       jsonPointers:
         - /spec/rules/0/validate/failureAction
+    # Same live-toggle pattern for the R2 registry restriction (C2 villain image): default Audit in the
+    # manifest so R1 deploys, flipped to Enforce on R2/R3 via toggle-kyverno-enforce.sh.
+    - group: kyverno.io
+      kind: ClusterPolicy
+      name: restrict-image-registries
+      jsonPointers:
+        - /spec/rules/0/validate/failureAction
   syncPolicy:
     automated:
       prune: true
