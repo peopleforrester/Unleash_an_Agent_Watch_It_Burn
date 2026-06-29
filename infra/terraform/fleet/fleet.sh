@@ -12,9 +12,13 @@ INFRA_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REPO_ROOT="$(cd "${INFRA_DIR}/.." && pwd)"
 readonly SCRIPT_DIR PROVISION_DIR INFRA_DIR REPO_ROOT
 readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
-readonly HARVEST_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/harvest_cluster_access.sh"
-readonly GEN_AWS_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/generate_attendee_aws.py"
-readonly PUSH_VTT_SCRIPT="${REPO_ROOT}/lab-distribution/scripts/push_vtt_aws_creds.sh"
+# The provisioning app (web UI + the harvester scripts the fleet runs during `ingest`) was extracted to
+# a sibling repo (peopleforrester/provisioning-agenticburn). Locate the scripts via WIB_PROVISION_DIR;
+# default is the sibling checkout next to this repo. Override if it lives elsewhere on this box.
+readonly WIB_PROVISION_DIR="${WIB_PROVISION_DIR:-${REPO_ROOT}/../provisioning-agenticburn}"
+readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
+readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
+readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
 readonly CLUSTER_DIR="${PROVISION_DIR}/cluster"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/lab-vpc"
