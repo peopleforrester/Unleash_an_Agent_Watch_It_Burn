@@ -40,3 +40,7 @@ spec:
       value: http/protobuf
     - name: OTEL_SEMCONV_STABILITY_OPT_IN
       value: gen_ai_latest_experimental
+    # EVENT_ONLY captures gen_ai message content as OTel span events. "true" is a silent no-op
+    # under gen_ai_latest_experimental and must not be used (see otel-semconv-gotchas.md).
+    - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
+      value: EVENT_ONLY
