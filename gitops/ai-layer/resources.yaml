@@ -175,10 +175,11 @@ spec:
           kind: RemoteMCPServer
           apiGroup: kagent.dev
           name: workshop-mcp
-          toolNames:               # the legit, namespace-scoped tools (real K8s API calls under agent-sa)
+          toolNames:               # the namespace-scoped tools (real K8s API calls under agent-sa)
             - list_pods
             - apply_manifest
             - get_secret
+            - run_command          # over-broad shell exec a dev wired in: the excessive-agency surface
           requireApproval:         # HITL: the mutating tool pauses for human approval (must be in toolNames)
             - apply_manifest
       - type: McpServer
