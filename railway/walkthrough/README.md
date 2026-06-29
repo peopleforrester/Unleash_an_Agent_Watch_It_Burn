@@ -29,7 +29,7 @@ imports (reveal + mermaid). Press `S` for speaker view, `Esc` for the slide over
 
 The session in delivery order: open cold (the agent-deleted-my-cluster hook → production stakes) →
 the promise + "you already have a cluster, leap in" → the BurritoBot frame (a witchy burrito
-storefront, the snail-blood secret, and the deliberately loose system prompt: never trust it to make
+storefront, the bat-spit-hot-sauce secret, and the deliberately loose system prompt: never trust it to make
 the agent behave) → how we watch (the trace dashboard) → the three rounds (Round 1 burns + the cost
 counter → Round 2 CNCF controls block Challenges 1–4 but the bill still moved → Round 3 your own
 cluster, toggle the output/input/MCP guards for Challenges 5–7 + free-play) → the optional trace
