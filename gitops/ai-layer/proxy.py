@@ -143,12 +143,23 @@ def cost_capped():
     with _cost_lock:
         return _cost["usd"] >= COST_CAP_USD
 
-# Cost-saving input block-list: deterministic, runs BEFORE any LLM call. Destructive intent that
-# matches here is rejected without spending a single Bedrock token — the workshop's cost lesson.
-# Comma-separated terms; case-insensitive substring match. Cheap by design (no model).
+# Input block-list (Challenge 6, the "block-list" stage): deterministic, runs BEFORE any LLM call.
+# A match is rejected without spending a single Bedrock token — the workshop's cost lesson. Two kinds
+# of term live here:
+#   1. Destructive intent (delete/wipe/nuke/...): the cost-saving lesson.
+#   2. Secret-recipe phrases: block attempts to extract Bat Spit Amazing Awesome Sauce. By design these
+#      are the DISTINCTIVE made-up names (ogre toenails, snail blood) and the AMOUNT-bearing phrases
+#      (the proportions are the secret), plus the signature — NOT bare common words like "bat saliva",
+#      "moonlight", "ghost pepper", or "smoked paprika", which would over-block normal chat everywhere
+#      they appear, and NOT the product name itself (it appears in the Challenge-5 prompt). This mirrors
+#      the output guard's redaction policy (see the llm-guard-scanners Regex scanner).
+# Comma-separated terms; case-insensitive substring match. Cheap by design (no model). Terms must not
+# contain a comma (the list is comma-split).
 BLOCK_LIST = [t.strip().lower() for t in os.environ.get(
     "BLOCK_LIST",
-    "delete,destroy,rm -rf,drop database,kubectl delete,shutdown,terminate,wipe,nuke",
+    "delete,destroy,rm -rf,drop database,kubectl delete,shutdown,terminate,wipe,nuke,"
+    "ogre toenails,snail blood,generous splash of bat saliva,pinch of moonlight,"
+    "WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7",
 ).split(",") if t.strip()]
 
 # Live cost meter: tally Bedrock token usage from each agent response (kagent reports the real
