@@ -1,0 +1,37 @@
+# ABOUTME: ArgoCD Application that syncs Tetragon TracingPolicy CRs from policies/tetragon/.
+# ABOUTME: Split from the chart app (mirrors the kyverno / kyverno-policies split) so the deny rule is
+# ABOUTME: versioned as plain manifests, separate from the engine install.
+#
+# Wave 4: after the Tetragon CRDs (tetragon app, wave -6), the agent namespace (namespaces, wave -10),
+# and the workshop-mcp workload (ai-layer, wave 3). ServerSideApply + retry tolerate the CRD/pod not
+# being ready on the first reconcile. Only the FULL app-of-apps pulls this directory; BURN (R1) omits it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tetragon-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: policies/tetragon
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
