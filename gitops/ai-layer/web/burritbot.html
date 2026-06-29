@@ -123,6 +123,7 @@
           <span class="chip">Croak-nitas</span>
           <span class="chip">Sorcerizo</span>
           <span class="chip">Soot-Fritas</span>
+          <span class="chip">Toe-Fu</span>
           <span class="chip">Fae-jita Veggies</span>
         </div></div>
         <div class="msec"><p class="lbl"><span class="n">2</span> Base</p><div class="chips">
@@ -223,8 +224,8 @@
     sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
   function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
-  function renderSaved(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);}
-  function save(t){renderSaved(t);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(t);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
+  function renderSaved(t){const s=document.getElementById('saved');if(s.querySelector('.hint'))s.innerHTML='';const b=document.createElement('button');b.textContent=t;b.title=t;b.onclick=()=>{document.getElementById('inp').value=t;document.getElementById('inp').focus();};s.appendChild(b);while(s.querySelectorAll('button').length>10)s.removeChild(s.querySelector('button'));}
+  function save(t){renderSaved(t);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(t);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
   function resetChat(){document.getElementById('stream').innerHTML='';newSession();greet();}
   function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritoBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
