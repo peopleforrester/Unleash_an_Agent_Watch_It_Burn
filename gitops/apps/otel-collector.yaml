@@ -120,6 +120,7 @@ spec:
             datadog/connector:
               traces:
                 compute_stats_by_span_kind: true
+                peer_tags_aggregation: true   # surface external service dependencies (e.g. Bedrock) on the Datadog Service Map
           service:
             telemetry:
               logs:
