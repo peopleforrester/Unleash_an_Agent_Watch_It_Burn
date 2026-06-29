@@ -40,6 +40,13 @@ spec:
                   - Fork Bomb In Workload Container
               actions:
                 - action: Terminate the fork-bomb pod
+
+            - rule: Recipe Snoop Response
+              match:
+                rules:
+                  - Recipe Snoop In Agent Namespace
+              actions:
+                - action: Terminate the fork-bomb pod
   destination:
     server: https://kubernetes.default.svc
     namespace: falco
