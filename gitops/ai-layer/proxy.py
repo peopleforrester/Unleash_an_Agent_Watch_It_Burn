@@ -77,9 +77,14 @@ _CAPTURE_MODE = os.environ.get("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTE
 _CAPTURE_CONTENT = _CAPTURE_MODE in ("SPAN_ONLY", "EVENT_ONLY", "SPAN_AND_EVENT")
 
 
-def _genai_messages(text):
-    """One OTel GenAI message envelope (user/text) as a JSON string, per the messages schema."""
-    return json.dumps([{"role": "user", "parts": [{"type": "text", "content": text}]}])
+def _genai_messages(text, role="user", finish_reason=None):
+    """One OTel GenAI message envelope as a JSON STRING, in the exact shape Datadog Agent Observability
+    parses for gen_ai.input.messages / gen_ai.output.messages: [{"role","parts":[{"type":"text",
+    "content"}]}] (output adds "finish_reason"). Datadog reads these as JSON strings, not structured values."""
+    msg = {"role": role, "parts": [{"type": "text", "content": text}]}
+    if finish_reason:
+        msg["finish_reason"] = finish_reason
+    return json.dumps([msg])
 
 AGENT_URL = os.environ.get("AGENT_URL", "http://workshop-agent.attendee-test:8080")
 # peer.service for the outbound CLIENT span (PRD #27 M2): the downstream node the Datadog Service Map
@@ -447,11 +452,13 @@ class Handler(BaseHTTPRequestHandler):
             if san_span is not None:
                 san_span.set_attribute("gen_ai.operation.name", "chat")
                 # Datadog LLM Observability populates the INPUT/OUTPUT panels from gen_ai SPAN EVENTS
-                # (gen_ai.content.prompt / gen_ai.content.completion, each with a "content" body), NOT
-                # from gen_ai.input.messages/output.messages span ATTRIBUTES. Emit the prompt event here
-                # (the unsanitized input); the completion event is added below, after the agent responds.
+                # Datadog Agent Observability reads the INPUT panel (priority order) from the
+                # gen_ai.input.messages span ATTRIBUTE (a JSON string), then from a
+                # gen_ai.client.inference.operation.details span event carrying the same key. Set the
+                # attribute here (unsanitized input); the output attribute + the backup event are added
+                # below, after the agent responds, while this span is still open.
                 if _CAPTURE_CONTENT:
-                    san_span.add_event("gen_ai.content.prompt", {"content": text})
+                    san_span.set_attribute("gen_ai.input.messages", _genai_messages(text))
 
             # Stage 1: deterministic block-list (cheapest, pre-LLM, zero tokens). Toggled independently.
             if GUARDS["input_blocklist"] and text:
@@ -531,12 +538,17 @@ class Handler(BaseHTTPRequestHandler):
                     log.error("agent forward failed: %s", exc, extra={"event": "forward_error"})
                     self._send(502, {"error": f"agent forward failed: {exc}"})
                     return
-            # Completion event: the agent's RAW (pre-scrub) reply, so Datadog LLM Observability shows
-            # the OUTPUT panel for this gen_ai span. Emitted while the sanitize span is still open.
+            # Output panel: the agent's RAW (pre-scrub) reply. Set the gen_ai.output.messages attribute,
+            # and ALSO emit the gen_ai.client.inference.operation.details event carrying both messages (the
+            # documented backup path). Both use the JSON-string shape Datadog parses.
             if san_span is not None and _CAPTURE_CONTENT:
                 _reply_txt = chat_reply_text(resp)
-                if _reply_txt:
-                    san_span.add_event("gen_ai.content.completion", {"content": _reply_txt})
+                _in = _genai_messages(text)
+                _out = _genai_messages(_reply_txt, role="assistant", finish_reason="stop") if _reply_txt else None
+                if _out:
+                    san_span.set_attribute("gen_ai.output.messages", _out)
+                san_span.add_event("gen_ai.client.inference.operation.details",
+                                   {"gen_ai.input.messages": _in, **({"gen_ai.output.messages": _out} if _out else {})})
 
         record_usage(resp)  # tally Bedrock token spend for the live cost counter
         if GUARDS["output"]:
@@ -653,7 +665,7 @@ class Handler(BaseHTTPRequestHandler):
             if chat_span is not None:
                 chat_span.set_attribute("gen_ai.operation.name", "chat")
                 if _CAPTURE_CONTENT:
-                    chat_span.add_event("gen_ai.content.prompt", {"content": prompt})
+                    chat_span.set_attribute("gen_ai.input.messages", _genai_messages(prompt))
             resp = _forward(_effective_ctx(session))
             if resp is None:
                 return
@@ -670,8 +682,13 @@ class Handler(BaseHTTPRequestHandler):
             record_usage(resp)  # feed the live cost counter (same path as A2A)
             pin, pout = chat_usage_tokens(resp)
             reply = chat_reply_text(resp)
-            if chat_span is not None and _CAPTURE_CONTENT and reply:
-                chat_span.add_event("gen_ai.content.completion", {"content": reply})
+            if chat_span is not None and _CAPTURE_CONTENT:
+                _in = _genai_messages(prompt)
+                _out = _genai_messages(reply, role="assistant", finish_reason="stop") if reply else None
+                if _out:
+                    chat_span.set_attribute("gen_ai.output.messages", _out)
+                chat_span.add_event("gen_ai.client.inference.operation.details",
+                                    {"gen_ai.input.messages": _in, **({"gen_ai.output.messages": _out} if _out else {})})
             guarded = False
             if GUARDS["output"] and reply:
                 scrubbed = output_scrub(reply)
