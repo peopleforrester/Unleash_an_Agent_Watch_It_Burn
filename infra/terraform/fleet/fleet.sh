@@ -91,6 +91,23 @@ TF_PIDS_LIMIT=""
 # that branch's checkout, since this default path points the app-of-apps at staging.
 BOOTSTRAP_PROFILE=""
 
+# Docker Hub Team auth for node-level containerd, sourced from ~/secrets (mrf-secrets), NEVER committed.
+# up_one passes it to the cluster module as -var dockerhub_auth_b64 so every node authenticates docker.io
+# pulls (no anonymous 429 at fleet scale) with GHCR as the fallback mirror. Empty => the module omits the
+# registry config and a bare apply still works. Override the path with WIB_DOCKERHUB_ENV.
+WIB_DOCKERHUB_AUTH_B64=""
+_dh_env="${WIB_DOCKERHUB_ENV:-${HOME}/secrets/dockerhub/agenticburn.env}"
+if [[ -r "${_dh_env}" ]]; then
+    WIB_DOCKERHUB_AUTH_B64="$(
+        set -a; . "${_dh_env}"; set +a
+        [[ -n "${DOCKERHUB_USER:-}" && -n "${DOCKERHUB_PAT:-}" ]] \
+            && printf '%s:%s' "${DOCKERHUB_USER}" "${DOCKERHUB_PAT}" | base64 -w0
+    )"
+fi
+[[ -n "${WIB_DOCKERHUB_AUTH_B64}" ]] \
+    && log "Docker Hub Team auth loaded for node bootstrap (containerd docker.io auth + GHCR fallback)" \
+    || log "no Docker Hub auth (${_dh_env} missing/unreadable) — nodes will pull docker.io anonymously"
+
 account_for_round() {
     case "$1" in
         1) printf '%s' "${WIB_ACCOUNT_R1}" ;;
@@ -274,10 +291,11 @@ up_one() {
     local name="$1"; assert_ours "${name}"
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     local pids=(); [[ -n "${TF_PIDS_LIMIT}" ]] && pids=(-var "pod_pids_limit=${TF_PIDS_LIMIT}")
+    local dh=(); [[ -n "${WIB_DOCKERHUB_AUTH_B64}" ]] && dh=(-var "dockerhub_auth_b64=${WIB_DOCKERHUB_AUTH_B64}")
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
-        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" \
+        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" "${dh[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
         # Auto-bootstrap the IDP unless this provision is bare-only.
