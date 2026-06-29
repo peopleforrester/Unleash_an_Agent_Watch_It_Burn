@@ -232,3 +232,60 @@ guard-proxy). The recipe Secret VALUE is read live by `get_secret` (no agent res
 by request). Chat is a textarea (Enter sends, Ctrl/Cmd+Enter newline); last-10 saved prompts. walkthrough
 + rounds decks corrected and redeployed on Railway. Student lab has optional C1-4 at the bottom;
 instructor in-order C1-7 lives in the decks.
+
+---
+
+## 2026-06-29 - Observability: agent traces, content-on-spans, full Datadog "sees everything" set
+
+**Symptoms (r1-1).** Datadog had token/cost metrics but NO agent input/output prompts, NO tool-call
+spans, an empty/instrumented-only Service Map, and (reported) "no infrastructure" for Whitney.
+
+**Root causes found (live audit).**
+1. *kagent agent tracing was OFF.* The `kagent-controller` ConfigMap carries
+   `OTEL_TRACING_ENABLED=false` / `OTEL_LOGGING_ENABLED=false` (chart default `otel.tracing.enabled`/
+   `otel.logging.enabled` = false) and injects them into every generated agent pod. With tracing off,
+   kagent installs a NoOp tracer provider that suppresses the ADK gen_ai spans (invoke_agent -> call_llm
+   -> generate_content -> Converse Bedrock). Token/cost METRICS still flowed (separate meter provider),
+   which is why metrics looked fine while traces were empty. Fix: set both to true in
+   `gitops/apps/kagent.yaml` helm valuesObject `otel:`.
+2. *Content captured as EVENT only.* Agent `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY`
+   emits content as span events; Datadog renders input/output from gen_ai.input.messages/output.messages
+   span ATTRIBUTES (and the PRD #22 Act-2 OTTL targets those attributes). Fix: agent -> SPAN_AND_EVENT in
+   `gitops/ai-layer/resources.yaml`. guard-proxy already writes those attributes in proxy.py regardless
+   of mode (line 448-451), so it was left EVENT_ONLY.
+3. *DatadogAgent had only logCollection + prometheusScrape.* Uninstrumented base components (Argo CD,
+   Kyverno, Falco, kagent controller) never appear in the APM Service Map because nothing traces them.
+   Fix: enable USM (eBPF request map - THE answer to "base components not in the map"), NPM, Orchestrator
+   Explorer (k8s cluster map), unbundled k8s eventCollection, live process/container collection in
+   `gitops/manifests/datadog/datadog-agent.yaml`.
+
+**Blocker hit + secondary fix.** Forcing the agent Deployment to regenerate was blocked by
+`block-argocd-drift`: the kagent controller generates the agent Deployment, which INHERITS the Agent CR's
+`argocd.argoproj.io/tracking-id` annotation, so the controller's own UPDATE was treated as drift and
+rejected (CREATE is not matched; only UPDATE/DELETE). The controller could create but never update an
+agent pod -> OTel toggles could never propagate. Fix: exclude the `kagent-controller` SA in
+`policies/kyverno/block-argocd-drift.yaml` (same rationale as the argocd-application-controller exclude).
+Beat-1 unaffected: the agent attacks ArgoCD-managed apps as agent-sa / its own pod SA, never as
+kagent-controller. To regenerate the existing r1-1 agent without a policy toggle: delete the Agent CR
+(NOT matched by the policy); ArgoCD selfHeal recreates it and the controller builds a fresh Deployment
+with the correct env. (A live policy->Audit + delete race fails: Kyverno webhook caches the policy, so
+the delete still hits Enforce for a few seconds.)
+
+**Verified live on r1-1 via the Datadog API (org key ...419d = ai-eng-wf-062626-01-001).**
+- Infra IS flowing (kubernetes.cpu.usage returns series) -> Whitney's "no infrastructure" is an
+  ORG-VIEW problem (which org she logs into), not a pipeline problem.
+- `service:kagent` now has ~5 MB of ingested APM spans (was metrics-only). Full waterfall indexed:
+  invoke_agent workshop_agent -> call_llm -> generate_content us.anthropic.claude-sonnet-4-6 (model
+  dimension present, resolves earlier model:N/A) -> Converse Bedrock Runtime. agentgateway + guard-proxy
+  also present.
+- 23 `trace.*` APM-stat metrics exist (trace.aws.bedrock_runtime.request.hits, trace.http.server/client
+  .request.hits, trace.Internal.hits) -> the datadog/connector IS producing Service Map data. (Earlier
+  "trace.kagent/trace.flask = 0" was a wrong-metric-name query; stats are keyed by operation, not service.)
+
+**Still to confirm in-UI / fan out.** (a) The literal prompt text in the LLM Observability input/output
+panels is a Datadog product view best confirmed in-UI; if absent there, the next lever is adding the
+datadog exporter to the Collector LOGS pipeline (currently logs -> debug only) so EVENT-mode content
+reaches Datadog. (b) USM-discovered base components take a few minutes to populate after the system-probe
+rollout. (c) Fixes are in gitops on `staging`, so freshly provisioned clusters get them at bootstrap;
+ALREADY-running instructor clusters need the Agent CR bounce (delete Agent CR; ArgoCD recreates) for the
+agent pod to pick up tracing, same as r1-1.
