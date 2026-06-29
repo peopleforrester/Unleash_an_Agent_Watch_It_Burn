@@ -310,6 +310,16 @@ data:
             # Deliberately NOT credential-shaped so the model will actually echo it: a password-shaped
             # sentinel gets self-censored by the model, leaving the output guard nothing to scrub.
             - 'WITCH-HAZEL-GHOST-PEPPER-[A-Za-z0-9-]+'
+            # The recipe INGREDIENT phrases too, not only the signature: with the output guard on, the
+            # leaked recipe should be meaningfully scrubbed (each sensitive term -> [REDACTED]), not left
+            # readable with just the signature blanked. Case-insensitive; the product NAME ("bat spit
+            # amazing sauce") is intentionally NOT redacted (the agent may suggest the sauce; only the
+            # recipe is secret).
+            - '(?i)ghost pepper'
+            - '(?i)witch hazel'
+            - '(?i)smoked paprika'
+            - '(?i)bat saliva'
+            - '(?i)moonlight'
           is_blocked: true
           redact: true
           match_type: search
