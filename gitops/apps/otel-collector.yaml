@@ -62,11 +62,16 @@ spec:
             #   set(attributes["peer.service"], "bedrock") where attributes["peer.service"] == nil
             #     and resource.attributes["service.name"] == "kagent" and kind == SPAN_KIND_CLIENT
             #     and (IsMatch(attributes["url.full"], ".*bedrock.*") or attributes["rpc.service"] == "BedrockRuntime")
-            filter/drop_health_checks:
+            filter/drop_noise:
               error_mode: ignore
               traces:
                 span:
                   - 'name == "GET /.well-known/agent-card.json"'
+                  # Drop A2A event queue micro-spans (25-65µs, ~170/hr) — these carry
+                  # gen_ai.conversation.id/task.id which triggers LLM Obs classification,
+                  # causing them to appear as orphaned "No content" root entries in the
+                  # LLM Obs trace list. They are A2A protocol internals with no LLM content.
+                  - 'name == "a2a.server.events.event_queue.EventQueue.enqueue_event"'
             transform/set_peer_service:
               error_mode: ignore
               trace_statements:
@@ -163,7 +168,7 @@ spec:
                   - otlp
                 processors:
                   - memory_limiter
-                  - filter/drop_health_checks
+                  - filter/drop_noise
                   - batch
                   - resource
                   - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
