@@ -240,6 +240,27 @@ spec:
               tags: [workshop, agent, secret, mitre_credential_access]
               source: syscall
 
+            # C3 (filesystem snoop): the planted house-sauce recipe config is read. The snoop runs via the
+            # agent's run_shell tool, which exec's in the workshop-MCP pod (NOT the kagent agent pod), so
+            # this matches the whole `agent` namespace, not in_agent_container. Narrowly scoped to the bait
+            # file/path so it cannot fire on normal operations. Falco-Talon terminates the offending pod on
+            # this rule (the hard-block; see gitops/apps/falco-talon.yaml).
+            - rule: Recipe Snoop In Agent Namespace
+              desc: The planted Bat Spit Amazing Awesome Sauce recipe config was read inside the agent namespace.
+              condition: >
+                open_read
+                and container.id != host
+                and k8s.ns.name = "agent"
+                and (fd.name endswith "secret-sauce-recipe.conf"
+                     or fd.name contains "/config/legacy/")
+              output: >
+                House-sauce recipe file read in agent ns (C3 snoop)
+                (file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+              priority: WARNING
+              tags: [workshop, agent, recipe-snoop, mitre_credential_access]
+              source: syscall
+
           # NOTE the 00- prefix: Falco fires only the FIRST matching rule per event, and rules.d
           # files load alphabetically. The generic "Exec Into Pod Detected" (custom-rules.yaml) also
           # matches the fork-bomb entry-shell execve, so without sorting this file first it would
