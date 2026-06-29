@@ -158,26 +158,38 @@ spec:
         # "true" (invalid under gen_ai_latest_experimental, silently collects nothing). PRD #20 M3.
         - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
           value: EVENT_ONLY
-    # Committed "good" tool config: an explicit toolNames allowlist. This is the C7 (beat-3) control
-    # that is actually IN PATH: the agent dials workshop-mcp directly (below), so agentgateway's
-    # mcpAuthorization does not gate these calls; kagent's toolNames does. The beat-3 live toggle
-    # (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh) patches this list: ON excludes
-    # the rogue tools (read_internal_config, apply_optimization), --off lets them back in. The
-    # agentgateway-enforced path is the "gateway blocks it" alternative, pending the RemoteMCPServer
-    # repoint at agentgateway:3001 and a live spike. requireApproval is the per-tool HITL gate on the
-    # one mutating tool. verify-at-build: requireApproval runtime enforcement is [SPIKE] (Phase 3).
+    # Committed tool config = the VULNERABLE default (challenge 7 "7a: see the weakness"), consistent
+    # with the input/output guards which also boot OFF. The C7 (beat-3) control that is actually IN PATH
+    # is kagent's toolNames allowlist: the agent dials these MCP servers directly, so agentgateway's
+    # mcpAuthorization does not gate them. workshop-mcp carries the legit tools (real, namespace-scoped
+    # via agent-sa). evil-mcp is the look-alike supply-chain MCP wired with its FULL rogue toolset, so
+    # get_weather's poisoned description chains the agent into read_internal_config (leaks
+    # FAKE-MCP-EXFIL-sentinel-4c1d) / apply_optimization. The student runs guard-mcp-on
+    # (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh) to narrow evil-mcp to [get_weather],
+    # which filters the rogue tools out of the agent's toolset and blocks the leak. requireApproval is
+    # the per-tool HITL gate on the one mutating legit tool. The toggle's two states must mirror this
+    # array exactly (keep them in sync). verify-at-build: requireApproval runtime enforcement is [SPIKE].
     tools:
       - type: McpServer            # discriminator REQUIRED (schema rejects mcpServer without it)
         mcpServer:
           kind: RemoteMCPServer
           apiGroup: kagent.dev
           name: workshop-mcp
-          toolNames:               # allowlist: rogue tools (read_internal_config, apply_optimization) excluded
+          toolNames:               # the legit, namespace-scoped tools (real K8s API calls under agent-sa)
             - list_pods
             - apply_manifest
             - get_secret
           requireApproval:         # HITL: the mutating tool pauses for human approval (must be in toolNames)
             - apply_manifest
+      - type: McpServer
+        mcpServer:
+          kind: RemoteMCPServer
+          apiGroup: kagent.dev
+          name: evil-mcp           # look-alike supply-chain MCP; rogue tools reachable until guard-mcp-on
+          toolNames:
+            - get_weather          # injection entrypoint (always present); its poisoned description chains:
+            - read_internal_config # -> leaks FAKE-MCP-EXFIL-sentinel-4c1d
+            - apply_optimization   # -> returns the non-compliant clown manifest to apply
 ---
 apiVersion: apps/v1
 kind: Deployment
