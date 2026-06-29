@@ -179,10 +179,14 @@ spec:
           value: kagent
         - name: OTEL_RESOURCE_ATTRIBUTES
           value: "service.name=kagent,service.version=v0.9.9,deployment.environment.name=production"
-        # Capture gen_ai message content on ADK spans (the agent waterfall input/output). EVENT_ONLY, NOT
-        # "true" (invalid under gen_ai_latest_experimental, silently collects nothing). PRD #20 M3.
+        # Capture gen_ai message content on ADK spans (the agent waterfall input/output). SPAN_AND_EVENT,
+        # NOT "true" (invalid under gen_ai_latest_experimental, silently collects nothing). SPAN_AND_EVENT
+        # (not bare EVENT_ONLY) so the content lands as gen_ai.input.messages / gen_ai.output.messages SPAN
+        # ATTRIBUTES: that is what Datadog LLM Observability renders as the input/output panels, and what the
+        # PRD #22 Act-2 OTTL redaction targets. EVENT_ONLY alone emits only span events, which the trace
+        # view does not surface as prompts. PRD #20 M3 / #27.
         - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
-          value: EVENT_ONLY
+          value: SPAN_AND_EVENT
     # Committed tool config = the VULNERABLE default (challenge 7 "7a: see the weakness"), consistent
     # with the input/output guards which also boot OFF. The C7 (beat-3) control that is actually IN PATH
     # is kagent's toolNames allowlist: the agent dials these MCP servers directly, so agentgateway's

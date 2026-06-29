@@ -29,6 +29,33 @@ spec:
       enabled: false
     prometheusScrape:
       enabled: true
+    # Universal Service Monitoring (eBPF, no instrumentation): this is what populates the Datadog Service
+    # Map for UNINSTRUMENTED workloads (Argo CD, Kyverno, Falco, kagent controller, etc.). Without it the
+    # map shows only the OTel-traced services (kagent agent, guard-proxy, agentgateway, the MCP shims).
+    # Requires system-probe, which the node Agent already runs.
+    usm:
+      enabled: true
+    # Network Performance Monitoring: pod-to-pod flow map (complements USM's request map). eBPF.
+    npm:
+      enabled: true
+    # Orchestrator Explorer: the Kubernetes resource/cluster map (every Deployment, Pod, ReplicaSet,
+    # CRD instance). This is the "Datadog sees every base component" view, distinct from the APM map.
+    orchestratorExplorer:
+      enabled: true
+    # Kubernetes events into Datadog (Kyverno denials, OOMKills, Argo CD syncs, scheduling failures).
+    # unbundleEvents emits one Datadog event per k8s event so the attack/guardrail beats are individually
+    # visible on the events stream rather than rolled up.
+    eventCollection:
+      collectKubernetesEvents: true
+      unbundleEvents: true
+    # Process + container visibility (the fork-bomb / runaway-process attack story shows here, and it
+    # enriches the service map nodes with the processes behind them).
+    liveProcessCollection:
+      enabled: true
+    liveContainerCollection:
+      enabled: true
+    processDiscovery:
+      enabled: true
   # v2alpha1: resource requests are per-CONTAINER (override.<component>.containers.<name>.resources),
   # NOT directly on the component (verified live 2026-06-25 via server-dry-run: a direct .resources is
   # rejected with "unknown field"). The process agent is a container in the nodeAgent DaemonSet, not a
