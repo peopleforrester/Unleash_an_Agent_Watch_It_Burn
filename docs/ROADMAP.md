@@ -45,6 +45,7 @@ auto-bootstrap in `fleet.sh`.
 **Observability fixes (standalone, no PRD dependency):**
 
 - Add `peer_tags_aggregation: true` to datadog/connector so external services appear on Service Map ([#46](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/46)) — single-line OTel Collector config change; required for Bedrock and other inferred services to appear
+- Set `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` so LLM Obs shows prompt/completion content ([#47](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/47)) — missing from guard-proxy env and instrumentation.yaml; kagent Agent CR already set correctly
 
 **Optional enhancements (post-M5, if time allows before workshop):**
 
