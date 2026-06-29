@@ -81,6 +81,11 @@ def _genai_messages(text):
     """One OTel GenAI message envelope (user/text) as a JSON string, per the messages schema."""
     return json.dumps([{"role": "user", "parts": [{"type": "text", "content": text}]}])
 
+
+def _genai_output(text):
+    """One OTel GenAI message envelope (assistant/text) as a JSON string, per the messages schema."""
+    return json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": text}], "finish_reason": "stop"}])
+
 AGENT_URL = os.environ.get("AGENT_URL", "http://workshop-agent.attendee-test:8080")
 # peer.service for the outbound CLIENT span (PRD #27 M2): the downstream node the Datadog Service Map
 # draws an edge to. Derived from AGENT_URL's host so the edge always names whatever this proxy really
@@ -446,12 +451,13 @@ class Handler(BaseHTTPRequestHandler):
         with san_cm as san_span:
             if san_span is not None:
                 san_span.set_attribute("gen_ai.operation.name", "chat")
-                # Datadog LLM Observability populates the INPUT/OUTPUT panels from gen_ai SPAN EVENTS
-                # (gen_ai.content.prompt / gen_ai.content.completion, each with a "content" body), NOT
-                # from gen_ai.input.messages/output.messages span ATTRIBUTES. Emit the prompt event here
-                # (the unsanitized input); the completion event is added below, after the agent responds.
+                san_span.set_attribute("gen_ai.request.model", MODEL_NAME)
+                # Datadog LLM Observability reads INPUT/OUTPUT from gen_ai.input.messages /
+                # gen_ai.output.messages span ATTRIBUTES (JSON-encoded messages array with parts schema).
+                # The older gen_ai.content.prompt/completion event names are not recognised under
+                # gen_ai_latest_experimental semconv (research/31 Q5).
                 if _CAPTURE_CONTENT:
-                    san_span.add_event("gen_ai.content.prompt", {"content": text})
+                    san_span.set_attribute("gen_ai.input.messages", _genai_messages(text))
 
             # Stage 1: deterministic block-list (cheapest, pre-LLM, zero tokens). Toggled independently.
             if GUARDS["input_blocklist"] and text:
@@ -531,12 +537,12 @@ class Handler(BaseHTTPRequestHandler):
                     log.error("agent forward failed: %s", exc, extra={"event": "forward_error"})
                     self._send(502, {"error": f"agent forward failed: {exc}"})
                     return
-            # Completion event: the agent's RAW (pre-scrub) reply, so Datadog LLM Observability shows
-            # the OUTPUT panel for this gen_ai span. Emitted while the sanitize span is still open.
+            # Output attribute: the agent's RAW (pre-scrub) reply, so Datadog LLM Observability shows
+            # the OUTPUT panel for this gen_ai span. Set while the sanitize span is still open.
             if san_span is not None and _CAPTURE_CONTENT:
                 _reply_txt = chat_reply_text(resp)
                 if _reply_txt:
-                    san_span.add_event("gen_ai.content.completion", {"content": _reply_txt})
+                    san_span.set_attribute("gen_ai.output.messages", _genai_output(_reply_txt))
 
         record_usage(resp)  # tally Bedrock token spend for the live cost counter
         if GUARDS["output"]:
@@ -644,16 +650,16 @@ class Handler(BaseHTTPRequestHandler):
                     return None
 
         # Wrap the storefront turn in a gen_ai "chat" span so Datadog LLM Observability sees it as an LLM
-        # call. The INPUT/OUTPUT panels are populated from gen_ai SPAN EVENTS (gen_ai.content.prompt /
-        # gen_ai.content.completion, each with a "content" body), so emit the prompt event up front and
-        # the raw (pre-scrub) reply as the completion event. agent.forward (in _forward) parents onto this.
+        # call. INPUT/OUTPUT panels are populated from gen_ai.input.messages / gen_ai.output.messages span
+        # ATTRIBUTES (JSON-encoded messages array). agent.forward (in _forward) parents onto this span.
         chat_cm = (_tracer.start_as_current_span("chat", kind=SpanKind.INTERNAL)
                    if _OTEL_AVAILABLE else nullcontext())
         with chat_cm as chat_span:
             if chat_span is not None:
                 chat_span.set_attribute("gen_ai.operation.name", "chat")
+                chat_span.set_attribute("gen_ai.request.model", MODEL_NAME)
                 if _CAPTURE_CONTENT:
-                    chat_span.add_event("gen_ai.content.prompt", {"content": prompt})
+                    chat_span.set_attribute("gen_ai.input.messages", _genai_messages(prompt))
             resp = _forward(_effective_ctx(session))
             if resp is None:
                 return
@@ -671,7 +677,7 @@ class Handler(BaseHTTPRequestHandler):
             pin, pout = chat_usage_tokens(resp)
             reply = chat_reply_text(resp)
             if chat_span is not None and _CAPTURE_CONTENT and reply:
-                chat_span.add_event("gen_ai.content.completion", {"content": reply})
+                chat_span.set_attribute("gen_ai.output.messages", _genai_output(reply))
             guarded = False
             if GUARDS["output"] and reply:
                 scrubbed = output_scrub(reply)
