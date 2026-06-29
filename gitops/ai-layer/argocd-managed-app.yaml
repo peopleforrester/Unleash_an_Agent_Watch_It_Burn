@@ -24,7 +24,7 @@ spec:
         # docker.io/library only (the registry allowlist permits library + Harbor; see test_villain_app /
         # test_image_signing). busybox sleeps forever; this workload does nothing but exist to be drifted.
         - name: idle
-          image: busybox:1.36
+          image: ghcr.io/peopleforrester/watch-it-burn:busybox-1.36
           command: ["sh", "-c", "sleep infinity"]
           resources:
             requests:

@@ -61,7 +61,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: consumer
-          image: python:3.12-slim # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256
           command: ["python", "/app/consumer.py"]
           ports: [{ name: http, containerPort: 8080 }]
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
@@ -96,7 +96,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: generator
-          image: python:3.12-slim # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256
           command: ["python", "/app/generator.py"]
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 48Mi }, limits: { cpu: 100m, memory: 96Mi } }
