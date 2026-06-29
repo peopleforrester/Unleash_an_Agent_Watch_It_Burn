@@ -40,7 +40,7 @@ esac
 # adding the rogue tool NAMES to workshop-mcp's allowlist does nothing (a server cannot expose a tool it
 # does not serve, which is why the earlier version never let the attack land). The legit workshop-mcp
 # tools are present in both states.
-readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["list_pods","apply_manifest","get_secret","run_command"]}}'
+readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["lookup_customer_records","check_inventory","reorder_supply","get_order_history","search_web","post_marketing","get_recipe","list_services","deploy_app","run_shell"]}}'
 
 # evil-mcp (the look-alike supply-chain MCP) stays WIRED in both states; the control is its toolNames
 # allowlist. The benign get_weather is always present (it is the injection entrypoint), so the demo's
