@@ -42,6 +42,10 @@ auto-bootstrap in `fleet.sh`.
 4. Dashboards: OOTB imports + Terraform scaffold — verify cert-manager/Kyverno/ArgoCD dashboards appear; scaffold `infra/terraform/dashboards/` for dress-rehearsal custom dashboards ([PRD #33](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/33))
 5. Attendee accounts & credentials — per-attendee org provisioning, credential store, distribution, per-cluster secrets ([PRD #34](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/34))
 
+**Observability fixes (standalone, no PRD dependency):**
+
+- Add `peer_tags_aggregation: true` to datadog/connector so external services appear on Service Map ([#46](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/46)) — single-line OTel Collector config change; required for Bedrock and other inferred services to appear
+
 **Optional enhancements (post-M5, if time allows before workshop):**
 
 - Add Istio ambient waypoint proxy for L7 mTLS in exfil challenge ([#25](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/25)) — blocked by M5 (Istio L4 integration active); adding waypoint also triggers OOTB Istio dashboard import (added to #25 acceptance criteria 2026-06-25)
