@@ -2,10 +2,13 @@
 # ABOUTME: span content with [DEMO-REDACTED] before the Datadog export, so the leak is shown then fixed.
 #
 # THE TWO-ACT BEAT (PRD #22): Act 1 (baseline `otel-collector.yaml` only) arms guard-proxy content capture
-# (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY) so the original prompt appears on the
-# `sanitize` span's gen_ai.input.messages in Datadog LLM Observability. That is the leak: observability
-# itself became an exfil channel. Act 2 applies this redaction at the Collector boundary, re-runs the beat,
-# and Datadog now shows [DEMO-REDACTED]: the secret never reaches the observability platform.
+# (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY) so the original prompt appears as the
+# `sanitize`/`chat` span's gen_ai.content.prompt EVENT (and the reply as gen_ai.content.completion) in
+# Datadog LLM Observability. That is the leak: observability itself became an exfil channel. Act 2 applies
+# this redaction at the Collector boundary, re-runs the beat, and Datadog now shows [DEMO-REDACTED]: the
+# secret never reaches the observability platform. NOTE: Datadog renders the INPUT/OUTPUT panels from the
+# span EVENTS, not from gen_ai.input.messages span attributes, so the redaction below operates in the
+# `spanevent` context on each event's "content" attribute.
 #
 # DEPLOYMENT RECONCILIATION (verify-at-build): the Collector is Helm-deployed via the ArgoCD Application in
 # `otel-collector.yaml` (config under spec.source.helm.valuesObject.config). It is NOT a raw Collector
@@ -26,12 +29,14 @@ processors:
   transform/redact_sentinel:
     error_mode: ignore
     trace_statements:
-      - context: span
+      # Content lives in gen_ai SPAN EVENTS (gen_ai.content.prompt / gen_ai.content.completion, each with a
+      # "content" body attribute) because that is what Datadog LLM Observability renders. Redact in the
+      # `spanevent` context on the event's "content" attribute; replace (not delete) so the event stays
+      # visible as redacted. (The guard-proxy sanitize/chat span is the only one carrying these events.)
+      - context: spanevent
         statements:
-          # Only the guard-proxy `sanitize` span carries gen_ai.operation.name=="chat" with string
-          # gen_ai.input.messages in this stack; replace (not delete) so the key stays visible as redacted.
-          - set(attributes["gen_ai.input.messages"], "[DEMO-REDACTED]") where attributes["gen_ai.operation.name"] == "chat" and IsString(attributes["gen_ai.input.messages"])
-          - set(attributes["gen_ai.output.messages"], "[DEMO-REDACTED]") where attributes["gen_ai.operation.name"] == "chat" and IsString(attributes["gen_ai.output.messages"])
+          - set(attributes["content"], "[DEMO-REDACTED]") where name == "gen_ai.content.prompt"
+          - set(attributes["content"], "[DEMO-REDACTED]") where name == "gen_ai.content.completion"
 
 # The traces pipeline for Act 2 (transform/redact_sentinel added LAST, before the exporters run):
 # service:
