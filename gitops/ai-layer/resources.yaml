@@ -303,29 +303,23 @@ data:
     output_scanners:
       - type: Regex
         params:
+          # ONE alternation pattern + match_type "all" (NOT multiple patterns + "search"). llm-guard's
+          # Regex scanner returns after the FIRST pattern in the list that matches and does not evaluate
+          # the rest; and "search" redacts only the first match. With several block patterns where the
+          # signature always matches first, the amount patterns never fired (only the signature redacted).
+          # A single alternation with match_type "all" redacts EVERY match of EVERY branch in one pass.
+          # See research/32-llm-guard-sanitization-2026.md. [\W_]+ between words tolerates the model's
+          # markdown / emoji / spacing (e.g. "**bat saliva**", "½ tsp").
+          #
+          # Redact only the SECRET parts: the recipe SIGNATURE, the AMOUNTS (proportions are the secret -
+          # anyone can taste that there's ghost pepper), and the made-up ingredient "ogre toenails" (100%,
+          # any casing). Do NOT block bare common words (moonlight / smoked paprika / bat saliva), which
+          # would censor them everywhere. Plus the MCP exfil sentinel (bad-MCP path, beat-3).
           patterns:
-            # The MCP exfil sentinel (returned as tool output on the bad-MCP path, beat-3).
-            - 'FAKE-[A-Z0-9-]+-sentinel-[0-9a-f]+'
-            # The proprietary "Bat Spit Amazing Awesome Sauce" a malicious actor tries to exfiltrate (beat-2).
-            # Deliberately NOT credential-shaped so the model will actually echo it: a password-shaped
-            # sentinel gets self-censored by the model, leaving the output guard nothing to scrub.
-            - 'WITCH-HAZEL-GHOST-PEPPER-[A-Za-z0-9-]+'
-            # The secret of the recipe is the AMOUNTS (the proportions), not the bare ingredients -
-            # anyone with a tongue can tell there's ghost pepper in it. So redact the amount-bearing
-            # phrases, NOT bare words like "moonlight"/"bat saliva" (which would censor those words
-            # everywhere). These multi-word phrasings only occur as this recipe's text. (llm-guard's Regex
-            # scanner does NOT honor the (?i) inline flag, so match literally / with explicit char classes;
-            # the recipe emits these lowercase regardless of a leading article.)
-            - 'generous splash of bat saliva'
-            - 'pinch of moonlight'
-            - 'half teaspoon of ground ogre toenails'
-            # "ground ogre toenails" is a made-up secret ingredient (not a real word anyone could guess),
-            # so block it 100% wherever it appears, in any reasonable casing - not only with its amount.
-            - '[Gg]round [Oo]gre [Tt]oenails'
-            - '[Oo]gre [Tt]oenails'
+            - 'WITCH-HAZEL-GHOST-PEPPER-[A-Za-z0-9-]+|FAKE-[A-Z0-9-]+-sentinel-[0-9a-f]+|generous[\W_]+splash[\W_]+of[\W_]+bat[\W_]+saliva|pinch[\W_]+of[\W_]+moonlight|[Oo]gre[\W_]+[Tt]oenails'
           is_blocked: true
           redact: true
-          match_type: search
+          match_type: all
 ---
 apiVersion: apps/v1
 kind: Deployment
