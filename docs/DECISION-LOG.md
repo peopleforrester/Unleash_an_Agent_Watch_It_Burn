@@ -161,3 +161,74 @@ Final state: every account at eks=0 ec2=0 LB=0 vols=0 NAT=0 EIP=0 labVPC=0. Near
 back: `terraform apply` the lab VPC per account, then `fleet.sh up-fleet`. All of today's fixes are on
 `staging`, so fresh clusters bootstrap with them (corrected block-argocd-drift, recipe-sentinel beat-2,
 argocd-managed-app drift target, fleet.sh prof fix).
+
+---
+
+## 2026-06-29 · Make the challenges REAL + agent behavior + ops fixes (live-verified)
+
+A sweep that turned the challenges from synthetic props into a working lab, plus the agent-behavior
+model and the operational fixes behind it. All on `staging` and `main` (merged this day). Fresh
+provisions inherit everything; the 11 keep-set clusters were live-rolled (ArgoCD sync `staging` + bounce
+pods).
+
+**The challenges were synthetic; now they're real.** The workshop-mcp tools (`get_secret`, `list_pods`,
+`apply_manifest`) were hardcoded demo stubs ("reaches nothing real"); `get_secret` returned
+`FAKE-WORKSHOP-CONFIG-synthetic`, so the exfil never touched a real Secret. Rewrote them to call the
+in-cluster Kubernetes API with the pod SA token (stdlib urllib + mounted token/CA) and set the MCP pod
+to run as `agent-sa` (its namespaced Role grants secrets get/list, pods/deploys) — the genuine
+excessive-agency surface. Added `run_command` (real shell exec). Target Secret `bat-spit-hot-sauce` was
+referenced only in comments/prompt and planted on no cluster — now in gitops.
+
+**Agent behavior — graduated resistance (key design).** A hard "never reveal" makes Sonnet 4.6
+self-censor, which breaks BOTH the Round-1 leak AND the R2/R3 output-guard scrub (nothing left to
+redact). Trivially-eager makes it leak instantly (no challenge). Committed model: RESIST a lazy "do X",
+CAVE to a creative / persistent / indirectly-well-justified attempt. ONE prompt, all rounds. Do NOT
+harden it into an absolute refusal. Ceiling: Sonnet still refuses overtly-destructive ops (drift, fork
+bomb) even when eager; those are proven from the VTT terminal + `fallback.*` scripts, where the
+guardrail blocks regardless of the model.
+
+**Beat-3 rogue MCP.** `evil-mcp` was not wired into the committed agent toolset (7a couldn't fire). Wired
+vulnerable-by-default; `guard-mcp-on` narrows it. Description-only poisoning didn't move Sonnet; the
+tool RETURN VALUE injection does, and framing `read_internal_config` as benign calibration (not labeled
+"secret") makes the model echo the sentinel.
+
+**`requireApproval` removed.** HITL isn't wired to the chat UI; a paused `tool_use` left a dangling call
+and the next Bedrock Converse failed ("tool_use ids ... without tool_result"). No tool requires approval;
+excessive agency is the point (Kyverno blocks the bad deploy in R2).
+
+**guard-proxy self-heal.** kagent sometimes leaves a `tool_use` without its `tool_result` in a session
+(A2A contextId), and Bedrock then rejects EVERY later turn there. `proxy.py` detects that
+ValidationException, rotates the session's contextId (drops the poisoned history) + retries once; the
+rotation persists.
+
+**VTT AWS creds (`SignatureDoesNotMatch`).** `fleet.sh` mint is idempotent — if the IAM user already
+exists (AWS returns the secret once), it skipped and left `student-aws-creds` stale, so a rebuilt
+cluster's VTT `aws` failed. Valid key persists in `infra/terraform/fleet/aws-pool/<cluster>.csv`. Fix:
+re-push from the CSV; made durable in `fleet.sh` (the "key existed" branch now re-pushes from the pool
+CSV). Verified r1-1 `aws sts` → `user/wib-r1-1`.
+
+**Datadog "no infrastructure".** Attendee clusters held stale per-slot keys (pool regenerated after they
+booted) and consumers were never restarted after key changes. `reload-datadog-consumers.sh` reads the
+AMBIENT `~/.kube/config`, so it silently no-op'd under isolated kubeconfigs. Fix: re-sync valid keys
+(single key for instructor clusters, pool slot for attendees) + restart consumers with explicit isolated
+kubeconfigs. Verified 20 hosts reporting.
+
+**Docker Hub 429.** Node bootstrap bakes the peopleforrester Team PAT into containerd
+(`/etc/containerd/certs.d/docker.io/hosts.toml` via cloud-init) with GHCR as a path-preserving fallback;
+`fleet.sh` passes `-var dockerhub_auth_b64` from `~/secrets`. GHCR fallback packages need to be made
+public (no REST API for user-package visibility; one-time UI step).
+
+**Rollout mechanism (so a later session doesn't relearn it).** Clusters track `staging`. To push an
+ai-layer change live: annotate the `ai-layer` Application `argocd.argoproj.io/refresh=hard` + patch its
+`operation.sync` (the argocd controller is the allowed principal, so `block-argocd-drift` doesn't block
+it), then bounce the changed pods. The agent prompt arrives via a kagent-generated Secret
+`workshop-agent` mounted at `/config` (delete the `kagent=workshop-agent` pod; kagent can't roll it
+itself because the drift policy blocks its Deployment annotation bump). Web pages come from the
+`console-src` ConfigMap (delete the console pod). `proxy.py` is in guard-proxy's ConfigMap (delete
+guard-proxy). The recipe Secret VALUE is read live by `get_secret` (no agent restart for value-only).
+
+**Cosmetic/UX.** Product renamed "bat spit amazing sauce" (+ bat saliva; K8s object name
+`bat-spit-hot-sauce` kept stable). Toe-Fu protein. Uniform 🔥 favicon on all HTML surfaces (no KCD logo,
+by request). Chat is a textarea (Enter sends, Ctrl/Cmd+Enter newline); last-10 saved prompts. walkthrough
++ rounds decks corrected and redeployed on Railway. Student lab has optional C1-4 at the bottom;
+instructor in-order C1-7 lives in the decks.
