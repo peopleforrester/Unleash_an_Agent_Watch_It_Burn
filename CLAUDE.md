@@ -32,6 +32,10 @@ global kube state. Be explicit about the target cluster on every single command.
 If you are unsure which cluster a command will hit, stop and make the context explicit first. This
 mirrors the global rule `~/.claude/rules/infra/kubernetes.md` (Cluster Context Safety).
 
+## Branch target: staging, not main
+
+All changes must be pushed to the `staging` branch, not `main`. Create feature branches off `staging` and open PRs targeting `staging`. Never open a PR targeting `main` directly.
+
 ## Change cadence and demo guardrails (NO deferral, NO production framing)
 
 This is a disposable workshop demo, not a production system. Clusters are rebuilt on demand and torn
