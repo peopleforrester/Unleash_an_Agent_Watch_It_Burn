@@ -167,11 +167,15 @@ TIER_PRICES_PER_1K = {
 }
 # Which tier this cluster runs (set per cluster to match the kagent ModelConfig). Defaults to haiku.
 MODEL_TIER = os.environ.get("MODEL_TIER", "haiku").lower()
-# The model attribute on gen_ai.client.cost is the gen_ai.request.model identifier (the standard semconv
-# attribute, NOT a tier). proxy.py does not see the model in the A2A request (kagent's
-# ModelConfig owns it), so it is supplied per cluster via MODEL_NAME to match that ModelConfig; falls back
-# to the tier name if unset. verify-at-build: set MODEL_NAME to the cluster's Bedrock model id.
-MODEL_NAME = os.environ.get("MODEL_NAME", MODEL_TIER)
+# Full Bedrock model ID per tier — used as gen_ai.request.model when MODEL_NAME is not explicitly set.
+# IDs verified ACTIVE 2026-06-26; update when kagent ModelConfigs are bumped.
+_TIER_TO_MODEL_ID = {
+    "haiku":  "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "sonnet": "us.anthropic.claude-sonnet-4-6",
+    "opus":   "us.anthropic.claude-opus-4-8",
+}
+# MODEL_NAME: explicit override via env var, then tier→model-ID mapping, then tier name as fallback.
+MODEL_NAME = os.environ.get("MODEL_NAME") or _TIER_TO_MODEL_ID.get(MODEL_TIER, MODEL_TIER)
 _tier_price = TIER_PRICES_PER_1K.get(MODEL_TIER, TIER_PRICES_PER_1K["haiku"])
 # Optional explicit per-1K overrides; if unset, the tier table above is authoritative.
 COST_PER_1K_IN = float(os.environ.get("COST_PER_1K_IN", str(_tier_price["in"])))
@@ -649,6 +653,17 @@ class Handler(BaseHTTPRequestHandler):
                                      "guarded": False, "input_tokens": 0, "output_tokens": 0})
                     return None
 
+        # Annotate the outer HTTP span (the APM trace root created by OTel auto-instrumentation)
+        # with gen_ai attributes so Datadog LLM Obs trace list preview shows content. The chat child
+        # span below carries the same attributes for span-level drill-down.
+        if _OTEL_AVAILABLE:
+            _root_span = trace.get_current_span()
+            if _root_span.is_recording():
+                _root_span.set_attribute("gen_ai.operation.name", "chat")
+                _root_span.set_attribute("gen_ai.request.model", MODEL_NAME)
+                if _CAPTURE_CONTENT:
+                    _root_span.set_attribute("gen_ai.input.messages", _genai_messages(prompt))
+
         # Wrap the storefront turn in a gen_ai "chat" span so Datadog LLM Observability sees it as an LLM
         # call. INPUT/OUTPUT panels are populated from gen_ai.input.messages / gen_ai.output.messages span
         # ATTRIBUTES (JSON-encoded messages array). agent.forward (in _forward) parents onto this span.
@@ -689,6 +704,11 @@ class Handler(BaseHTTPRequestHandler):
             cost_usd = (pin / 1000.0) * COST_PER_1K_IN + (pout / 1000.0) * COST_PER_1K_OUT
             self._send(200, {"reply": reply or "...", "guarded": guarded,
                              "input_tokens": pin, "output_tokens": pout, "cost_usd": cost_usd})
+        # Set output on the outer HTTP span after reply is known (reply is in scope after the with block).
+        if _OTEL_AVAILABLE and _CAPTURE_CONTENT and reply:
+            _root_span = trace.get_current_span()
+            if _root_span.is_recording():
+                _root_span.set_attribute("gen_ai.output.messages", _genai_output(reply))
 
     def log_message(self, fmt, *args):
         # Route BaseHTTPRequestHandler's default access logging through the structured JSON logger
