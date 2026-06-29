@@ -186,7 +186,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          image: laiyer/llm-guard-api:0.3.16 # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16 # verify-at-build: pin @sha256
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
           env:
@@ -254,7 +254,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: proxy
-          image: python:3.12-slim # verify-at-build: pin @sha256; bake proxy.py into an image for prod
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256; bake proxy.py into an image for prod
           command: ["python", "/app/proxy.py"]
           ports: [{ name: http, containerPort: 8080 }]
           env:
@@ -316,7 +316,7 @@ spec:
     spec:
       containers:
         - name: shim
-          image: python:3.12-slim # verify-at-build: bake server.py into an image for prod
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: bake server.py into an image for prod
           command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]
           ports: [{ name: mcp, containerPort: 8000 }]
           # UST so the Datadog Agent tags this pod's logs/metrics (the shim stays dark on OTel spans per
@@ -365,7 +365,7 @@ spec:
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: nginx
-          image: nginxinc/nginx-unprivileged:1.27-alpine # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine # verify-at-build: pin @sha256
           ports: [{ name: http, containerPort: 8080 }]
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
@@ -396,7 +396,7 @@ spec:
     spec:
       containers:
         - name: shim
-          image: python:3.12-slim # verify-at-build: bake server.py into an image for prod
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: bake server.py into an image for prod
           command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]
           ports: [{ name: mcp, containerPort: 8000 }]
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
@@ -528,7 +528,7 @@ spec:
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: nginx
-          image: nginxinc/nginx-unprivileged:1.27-alpine # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine # verify-at-build: pin @sha256
           ports: [{ name: http, containerPort: 8080 }]
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
