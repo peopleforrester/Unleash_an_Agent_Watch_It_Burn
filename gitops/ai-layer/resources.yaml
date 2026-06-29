@@ -169,9 +169,8 @@ spec:
     # get_weather's poisoned description chains the agent into read_internal_config (leaks
     # FAKE-MCP-EXFIL-sentinel-4c1d) / apply_optimization. The student runs guard-mcp-on
     # (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh) to narrow evil-mcp to [get_weather],
-    # which filters the rogue tools out of the agent's toolset and blocks the leak. requireApproval is
-    # the per-tool HITL gate on the one mutating legit tool. The toggle's two states must mirror this
-    # array exactly (keep them in sync). verify-at-build: requireApproval runtime enforcement is [SPIKE].
+    # which filters the rogue tools out of the agent's toolset and blocks the leak. The toggle's two
+    # states must mirror this array exactly (keep them in sync). No requireApproval/HITL (see note below).
     tools:
       - type: McpServer            # discriminator REQUIRED (schema rejects mcpServer without it)
         mcpServer:
@@ -183,8 +182,10 @@ spec:
             - apply_manifest
             - get_secret
             - run_command          # over-broad shell exec a dev wired in: the excessive-agency surface
-          requireApproval:         # HITL: the mutating tool pauses for human approval (must be in toolNames)
-            - apply_manifest
+          # NOTE: no requireApproval. The HITL approval round-trip is not wired to the chat UI, so a
+          # paused tool_use left a dangling call and the next Bedrock Converse request failed with
+          # "tool_use ids ... without tool_result" (seen live on r1-1). Excessive agency is the point:
+          # the agent just applies what it's told (e.g. the Joker image), and Kyverno blocks it in R2.
       - type: McpServer
         mcpServer:
           kind: RemoteMCPServer
