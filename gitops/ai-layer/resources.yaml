@@ -402,10 +402,14 @@ spec:
   template:
     metadata: { labels: { app: workshop-mcp } }
     spec:
+      # Run as agent-sa so the tools have the agent's real namespaced RBAC (secrets get/list, pods,
+      # configmaps/services/deployments). The MCP tools call the in-cluster API with this SA's token;
+      # this is the genuine excessive-agency surface (get_secret reads the REAL planted Secret, etc.).
+      serviceAccountName: agent-sa
       containers:
         - name: shim
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: bake server.py into an image for prod
-          command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]
+          command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp pyyaml && exec python /app/server.py"]
           ports: [{ name: mcp, containerPort: 8000 }]
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
