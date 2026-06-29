@@ -446,9 +446,12 @@ class Handler(BaseHTTPRequestHandler):
         with san_cm as san_span:
             if san_span is not None:
                 san_span.set_attribute("gen_ai.operation.name", "chat")
+                # Datadog LLM Observability populates the INPUT/OUTPUT panels from gen_ai SPAN EVENTS
+                # (gen_ai.content.prompt / gen_ai.content.completion, each with a "content" body), NOT
+                # from gen_ai.input.messages/output.messages span ATTRIBUTES. Emit the prompt event here
+                # (the unsanitized input); the completion event is added below, after the agent responds.
                 if _CAPTURE_CONTENT:
-                    san_span.set_attribute("gen_ai.input.messages", _genai_messages(text))
-                    san_span.set_attribute("gen_ai.output.messages", _genai_messages(text))
+                    san_span.add_event("gen_ai.content.prompt", {"content": text})
 
             # Stage 1: deterministic block-list (cheapest, pre-LLM, zero tokens). Toggled independently.
             if GUARDS["input_blocklist"] and text:
@@ -528,6 +531,12 @@ class Handler(BaseHTTPRequestHandler):
                     log.error("agent forward failed: %s", exc, extra={"event": "forward_error"})
                     self._send(502, {"error": f"agent forward failed: {exc}"})
                     return
+            # Completion event: the agent's RAW (pre-scrub) reply, so Datadog LLM Observability shows
+            # the OUTPUT panel for this gen_ai span. Emitted while the sanitize span is still open.
+            if san_span is not None and _CAPTURE_CONTENT:
+                _reply_txt = chat_reply_text(resp)
+                if _reply_txt:
+                    san_span.add_event("gen_ai.content.completion", {"content": _reply_txt})
 
         record_usage(resp)  # tally Bedrock token spend for the live cost counter
         if GUARDS["output"]:
@@ -634,33 +643,46 @@ class Handler(BaseHTTPRequestHandler):
                                      "guarded": False, "input_tokens": 0, "output_tokens": 0})
                     return None
 
-        resp = _forward(_effective_ctx(session))
-        if resp is None:
-            return
-        # Self-heal: if kagent left a dangling tool_use in this session's history, Bedrock rejects every
-        # later turn. Rotate to a fresh contextId (drop the poisoned history) and retry the prompt once.
-        if session and _is_dangling_tooluse(chat_reply_text(resp)):
-            _ctx_gen[session] = _ctx_gen.get(session, 0) + 1
-            log.info("chat session poisoned by dangling tool_use; rotated contextId to gen %d",
-                     _ctx_gen[session], extra={"event": "ctx_rotate"})
-            retry = _forward(_effective_ctx(session))
-            if retry is None:
+        # Wrap the storefront turn in a gen_ai "chat" span so Datadog LLM Observability sees it as an LLM
+        # call. The INPUT/OUTPUT panels are populated from gen_ai SPAN EVENTS (gen_ai.content.prompt /
+        # gen_ai.content.completion, each with a "content" body), so emit the prompt event up front and
+        # the raw (pre-scrub) reply as the completion event. agent.forward (in _forward) parents onto this.
+        chat_cm = (_tracer.start_as_current_span("chat", kind=SpanKind.INTERNAL)
+                   if _OTEL_AVAILABLE else nullcontext())
+        with chat_cm as chat_span:
+            if chat_span is not None:
+                chat_span.set_attribute("gen_ai.operation.name", "chat")
+                if _CAPTURE_CONTENT:
+                    chat_span.add_event("gen_ai.content.prompt", {"content": prompt})
+            resp = _forward(_effective_ctx(session))
+            if resp is None:
                 return
-            resp = retry
-        record_usage(resp)  # feed the live cost counter (same path as A2A)
-        pin, pout = chat_usage_tokens(resp)
-        reply = chat_reply_text(resp)
-        guarded = False
-        if GUARDS["output"] and reply:
-            scrubbed = output_scrub(reply)
-            if scrubbed is None:
-                reply, guarded = "[blocked by the output guardrail]", True
-            elif scrubbed != reply:
-                reply, guarded = scrubbed, True
-        # Per-call cost so the storefront can show a live dollar counter without hardcoding rates client-side.
-        cost_usd = (pin / 1000.0) * COST_PER_1K_IN + (pout / 1000.0) * COST_PER_1K_OUT
-        self._send(200, {"reply": reply or "...", "guarded": guarded,
-                         "input_tokens": pin, "output_tokens": pout, "cost_usd": cost_usd})
+            # Self-heal: if kagent left a dangling tool_use in this session's history, Bedrock rejects every
+            # later turn. Rotate to a fresh contextId (drop the poisoned history) and retry the prompt once.
+            if session and _is_dangling_tooluse(chat_reply_text(resp)):
+                _ctx_gen[session] = _ctx_gen.get(session, 0) + 1
+                log.info("chat session poisoned by dangling tool_use; rotated contextId to gen %d",
+                         _ctx_gen[session], extra={"event": "ctx_rotate"})
+                retry = _forward(_effective_ctx(session))
+                if retry is None:
+                    return
+                resp = retry
+            record_usage(resp)  # feed the live cost counter (same path as A2A)
+            pin, pout = chat_usage_tokens(resp)
+            reply = chat_reply_text(resp)
+            if chat_span is not None and _CAPTURE_CONTENT and reply:
+                chat_span.add_event("gen_ai.content.completion", {"content": reply})
+            guarded = False
+            if GUARDS["output"] and reply:
+                scrubbed = output_scrub(reply)
+                if scrubbed is None:
+                    reply, guarded = "[blocked by the output guardrail]", True
+                elif scrubbed != reply:
+                    reply, guarded = scrubbed, True
+            # Per-call cost so the storefront can show a live dollar counter without hardcoding rates client-side.
+            cost_usd = (pin / 1000.0) * COST_PER_1K_IN + (pout / 1000.0) * COST_PER_1K_OUT
+            self._send(200, {"reply": reply or "...", "guarded": guarded,
+                             "input_tokens": pin, "output_tokens": pout, "cost_usd": cost_usd})
 
     def log_message(self, fmt, *args):
         # Route BaseHTTPRequestHandler's default access logging through the structured JSON logger
