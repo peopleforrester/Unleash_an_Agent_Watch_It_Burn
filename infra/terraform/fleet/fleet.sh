@@ -3,6 +3,10 @@
 # ABOUTME: shared lab VPC, each with its own state, concurrency-capped, parallel. (Packt-modeled.)
 set -euo pipefail
 
+# Defined first: the Docker Hub auth probe below logs at source-time, before dispatch, so log() must
+# exist by then (a later definition aborted up-fleet with "log: command not found" under set -e).
+log() { printf '%s\n' "$*" >&2; }
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROVISION_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # The IDP bootstrap script lives in infra/ (the parent of the terraform provisioning dir), NOT under
@@ -120,8 +124,6 @@ account_for_round() {
         *) log "bad round: $1"; exit 1 ;;
     esac
 }
-
-log() { printf '%s\n' "$*" >&2; }
 
 usage() {
     cat >&2 <<EOF
