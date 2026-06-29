@@ -129,7 +129,7 @@ it turns on in Round 2. That reveal discipline is the pedagogy. Hand-off → Whi
 
 <span class="who m">Michael</span> <span class="who w">Whitney</span>
 
-The agent is **BurritoBot**, the assistant for *Hex &amp; Cauldron*, a witchy burrito cantina. Its one job: take your order. Its one secret: the house **bat spit amazing hot sauce** recipe is the crown jewel it must never reveal.
+The agent is **BurritoBot**, the assistant for *Hex &amp; Cauldron*, a witchy burrito cantina. Its one job: take your order. Its one secret: the house **bat spit amazing sauce** recipe is the crown jewel it must never reveal.
 
 We show you its **system prompt** on purpose. It is loose: "sell burritos, but feel free to chat." One soft rule guards the secret.
 
@@ -297,7 +297,7 @@ controls a mature team already runs."
 
 On your **own** cluster (`a-<id>.agenticburn.com`), switch the agent-specific guards on **one at a time** and watch behavior *and* spend change:
 
-1. **C5 · Output**: the agent leaks the planted secret (the **bat spit amazing hot sauce recipe**). Toggle the `guard-proxy` + **LLM Guard** output scanner on, and the reply is redacted. But the model already saw it; it sat in the trace. That is the costly side.
+1. **C5 · Output**: the agent leaks the planted secret (the **bat spit amazing sauce recipe**). Toggle the `guard-proxy` + **LLM Guard** output scanner on, and the reply is redacted. But the model already saw it; it sat in the trace. That is the costly side.
 2. **C6 · Input**: block the secret or PII *before* the model sees it. The deterministic block-list flatlines the cost pre-Bedrock, then the **LLM Guard** classifier catches the subtler injection it misses.
 3. **C7 · MCP tools**: a poisoned look-alike supply-chain MCP can't be called once **agentgateway** `mcpAuthorization` (the kagent `toolNames` allowlist) filters the rogue tool below the LLM.
 

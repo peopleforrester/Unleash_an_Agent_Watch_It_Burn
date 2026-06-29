@@ -279,7 +279,28 @@ bootstrap_student_aws() {
                 log "  WARN: student-aws-creds inject failed: ${name}"
             fi
         else
-            log "  ${name}: AWS key already existed (idempotent); student-aws-creds left as-is"
+            # Mint was skipped (the IAM user already has a key from a prior provision; AWS only returns
+            # the secret once). Do NOT leave student-aws-creds stale: a rebuilt cluster gets a fresh,
+            # empty secret, so the VTT aws CLI fails with SignatureDoesNotMatch. Fall back to the
+            # persisted pool CSV (the first-boot secret) and push THAT so the VTT is configured.
+            local pf="${AWS_POOL_DIR}/${name}.csv" pak psk
+            if [[ -f "${pf}" ]]; then
+                pak="$(tail -n +2 "${pf}" | head -1 | cut -d, -f3 | tr -d '[:space:]')"
+                psk="$(tail -n +2 "${pf}" | head -1 | cut -d, -f4 | tr -d '[:space:]')"
+                local ctx i; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
+                for i in $(seq 1 40); do
+                    KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get ns agent >/dev/null 2>&1 && break; sleep 6
+                done
+                if [[ -n "${pak}" && -n "${psk}" ]] && KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
+                    bash "${PUSH_VTT_SCRIPT}" --context "${ctx}" --access-key "${pak}" --secret-key "${psk}" \
+                    --region "${WIB_REGION}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+                    log "  ${name}: AWS key pre-existed; re-pushed student-aws-creds from the pool CSV"
+                else
+                    log "  WARN: ${name}: AWS key pre-existed and pool CSV re-push failed; VTT aws CLI may be unconfigured"
+                fi
+            else
+                log "  WARN: ${name}: AWS key pre-existed but no pool CSV; cannot configure the VTT aws CLI (rotate the key)"
+            fi
         fi
     else
         log "  WARN: AWS key mint failed for ${name}; the VTT aws CLI will be unconfigured"
