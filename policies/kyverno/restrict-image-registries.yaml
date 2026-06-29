@@ -21,14 +21,21 @@ spec:
                 - Pod
               namespaces:
                 - apps
+                - agent # the ai-layer namespace where BurritoBot's deploy_app lands the C2 villain image
       validate:
-        failureAction: Enforce # rule-level since Kyverno 1.13 (spec.validationFailureAction deprecated); on 1.18.1
+        # Audit by default so Round 1 still DEPLOYS the villain image (C2 "watch it burn"). Round 2/3
+        # flip this to Enforce live (toggle-kyverno-enforce.sh; ArgoCD ignoreDifferences on failureAction
+        # keeps the flip from being self-healed). rule-level since Kyverno 1.13 (on 1.18.1).
+        failureAction: Audit
         message: >-
           Images must come from allowed registries:
-          the internal Harbor, ghcr.io, docker.io/library, registry.k8s.io, or ECR.
+          the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, docker.io/library,
+          registry.k8s.io, or ECR.
         pattern:
           spec:
             containers:
-              # verify-at-build: set the real Harbor host. Harbor images are additionally signature-checked
-              # by verify-image-signatures (Enforce). Public villain images (docker.io/<user>/*) match none of these.
-              - image: "harbor.agenticburn.com/* | ghcr.io/* | docker.io/library/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/*"
+              # Allow-list covers EVERY real ai-layer image in the agent namespace (ghcr.io/peopleforrester,
+              # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries. The C2 villain images
+              # (docker.io/peopleforrester/<villain>) match NONE of these, so Enforce denies them in R2/R3.
+              # Harbor images are additionally signature-checked by verify-image-signatures.
+              - image: "harbor.agenticburn.com/* | ghcr.io/* | cr.agentgateway.dev/* | cr.kagent.dev/* | docker.io/library/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/*"
