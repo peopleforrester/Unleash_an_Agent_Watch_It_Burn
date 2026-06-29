@@ -1,0 +1,69 @@
+# ABOUTME: ArgoCD Application for Tetragon (Cilium eBPF runtime enforcement DaemonSet).
+# ABOUTME: Installs early (wave -6) so the kernel-level deny rule for C3 is one of the first things up.
+#
+# WHY TETRAGON (not KubeArmor): KubeArmor v1.7.x cannot resolve container namespaces against EKS AL2023's
+# containerd 2.2.4 (its enforcer reports mntns=0 / "task not found"), so its BPF-LSM block never engages.
+# Tetragon reads container identity from BPF/cgroups directly, works on containerd 2.x with no node
+# reconfiguration, and its Override action returns EPERM in-kernel (blocks the read WITHOUT killing the
+# pod). The actual deny rule is the TracingPolicyNamespaced shipped by the tetragon-policies app.
+#
+# ROUND GATING is automatic: this file lives in gitops/apps, which the FULL app-of-apps (R2/R3/attendee)
+# syncs wholesale, while the BURN app-of-apps (R1) uses an explicit include: list that omits it. So R1
+# keeps NO guardrails (the C3 snoop succeeds) and R2/R3/attendee get the block. No per-round toggle needed.
+#
+# crds.installMethod: helm renders the Tetragon CRDs as chart templates so ArgoCD applies them at THIS
+# app's sync-wave (-6), guaranteeing the CRD exists before tetragon-policies (wave 4) applies the CR.
+# kube-system is deliberate: the three Kyverno policies (disallow-privileged, restrict-image-registries,
+# require-resource-limits) match only the apps/agent namespaces, so the privileged enforcer DaemonSet
+# here is never blocked by admission.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: tetragon
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: tetragon
+    repoURL: https://helm.cilium.io
+    targetRevision: "1.7.0"
+    helm:
+      valuesObject:
+        crds:
+          # Install CRDs with the chart (rendered as templates) so ArgoCD applies them synchronously at
+          # this wave, removing the operator-installs-CRDs-at-runtime race with the policy app.
+          installMethod: "helm"
+        tetragon:
+          # Required for TracingPolicyNamespaced podSelector / namespace filtering (default True; explicit).
+          enablePolicyFilter: true
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+        export:
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { cpu: 100m, memory: 128Mi }
+        tetragonOperator:
+          resources:
+            requests: { cpu: 10m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 128Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
