@@ -33,6 +33,18 @@ spec:
         kgateway-agent: { enabled: false }
         observability-agent: { enabled: false }
         promql-agent: { enabled: false }
+        # Agent tracing/logging. DEFAULT IS false: the controller writes OTEL_TRACING_ENABLED=false /
+        # OTEL_LOGGING_ENABLED=false into the kagent-controller ConfigMap, which it then injects into every
+        # generated agent pod. With tracing off, kagent installs a NoOp tracer provider that suppresses the
+        # ADK gen_ai spans (invoke_agent -> chat -> execute_tool) — so the agent's input/output prompts AND
+        # tool calls never reach Datadog, and the agent never appears in the Service Map. (gen_ai METRICS
+        # still flow because they use a separate meter provider the flag does not touch — that is why token
+        # usage / cost were present while traces were empty.) Turn both on; the agent then exports its spans
+        # through the OTel-Operator-injected OTLP endpoint (otel-collector ...:4318) that already carries the
+        # metrics, into the Collector traces pipeline -> Datadog. PRD #20 / #27 (live Service Map + GenAI).
+        otel:
+          tracing: { enabled: true }
+          logging: { enabled: true }
   destination:
     server: https://kubernetes.default.svc
     namespace: kagent
