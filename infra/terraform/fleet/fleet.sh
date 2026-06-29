@@ -825,7 +825,9 @@ cmd_routes() {
     fi
     # Commit + push so the apex service (watches railway/apex/** on main) redeploys with the new map.
     git -C "${REPO_ROOT}" add "${out}"
-    git -C "${REPO_ROOT}" commit -q -m "routes: regenerate agenticburn.com router map from live fleet (${lines} hosts) [skip ci]" || true
+    # NOTE: no [skip ci] in this message — Railway's GitHub deploy honors it and would NOT redeploy the
+    # apex, leaving routes.map stale. Let the push trigger the apex rebuild.
+    git -C "${REPO_ROOT}" commit -q -m "routes: regenerate agenticburn.com router map from live fleet (${lines} hosts)" || true
     git -C "${REPO_ROOT}" push origin HEAD 2>&1 | tail -1 || log "routes: push to current branch failed"
     # The apex router (agenticburn.com wildcard) deploys from MAIN; promote routes.map so it redeploys.
     git -C "${REPO_ROOT}" push origin HEAD:main 2>&1 | tail -1 || log "routes: could not ff main; run 'git push origin <branch>:main' so the apex picks up routes.map"
