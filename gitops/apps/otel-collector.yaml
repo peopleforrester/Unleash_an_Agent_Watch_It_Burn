@@ -88,6 +88,17 @@ spec:
                 - context: span
                   statements:
                     - set(attributes["gen_ai.provider.name"], "aws.bedrock") where (attributes["gen_ai.provider.name"] == nil or attributes["gen_ai.provider.name"] == "N/A") and attributes["gen_ai.operation.name"] != nil
+            # Promote kagent's call_llm span to LLM Obs workflow level so the LLM Obs trace detail
+            # shows a clean invoke_agent → generate_content hierarchy instead of the full 85-span
+            # HTTP trace. Without this, ml_app is derived from the guard-proxy root span and LLM Obs
+            # shows all infrastructure spans (A2A protocol, tool call POSTs, DELETEs) as noise.
+            # gen_ai.operation.name=invoke_agent maps to the "workflow" kind in Datadog LLM Obs.
+            transform/set_llmobs_workflow:
+              error_mode: ignore
+              trace_statements:
+                - context: span
+                  statements:
+                    - set(attributes["gen_ai.operation.name"], "invoke_agent") where name == "call_llm" and resource.attributes["service.name"] == "kagent"
           exporters:
             prometheusremotewrite:
               endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
@@ -157,6 +168,7 @@ spec:
                   - resource
                   - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
                   - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock on spans where N/A
+                  - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
                 exporters:
                   - datadog      # primary
                   - otlp/tempo   # secondary / fallback
