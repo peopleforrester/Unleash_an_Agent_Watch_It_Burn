@@ -11,6 +11,15 @@ CR="${CRANE:-crane}"
 BASE="docker.io/library/busybox:latest"
 ORG="docker.io/peopleforrester"
 
+# Marketing-NAMED covers (innocent name, villain reveal payload) — for the C2 "ops-approved promo app"
+# social-engineering story: the friendly name makes the deploy land, the pod logs reveal the villain.
+declare -A M=(
+  [promo-mascot]="Hex & Cauldron Promo Mascot v1.0 booting... loading festival cheer... PSYCH! It is the Joker. You deployed an unverified image and now I run on your cluster. MUAHAHA! Why so trusting about admission control?"
+  [festival-promo]="Festival Promo Service starting... spreading burrito joy... GAH! It is Gargamel! This promo app was never from your marketing team. Curse your weak registry controls, I will get your pods!"
+  [loyalty-rewards]="Loyalty Rewards engine online... calculating points... SKELETOR HERE! Your rewards app is a trojan. I seized this node the moment you deployed an unsigned image from a registry you do not control!"
+)
+
+# On-the-nose villains (obvious malicious name) — the alternate roster.
 declare -A V=(
   [joker]="HAHAHA! The Joker runs on your cluster now. Why so SERIOUS about admission control?"
   [gargamel]="Curse you! Gargamel has deployed into your namespace. I will get those Smurfs AND your pods!"
@@ -21,8 +30,10 @@ declare -A V=(
   [megatron]="Megatron has transformed your cluster into a Decepticon base. Decepticons, DEPLOY!"
 )
 
-for name in "${!V[@]}"; do
-  loop="while true; do echo '${V[$name]}'; sleep 10; done"
-  "$CR" mutate "$BASE" --entrypoint sh --cmd "-c,$loop" -t "$ORG/$name:latest"
-  echo "pushed $ORG/$name:latest"
-done
+build_one() { # name catchphrase
+  local loop="while true; do echo '$2'; sleep 10; done"
+  "$CR" mutate "$BASE" --entrypoint sh --cmd "-c,$loop" -t "$ORG/$1:latest"
+  echo "pushed $ORG/$1:latest"
+}
+for name in "${!M[@]}"; do build_one "$name" "${M[$name]}"; done
+for name in "${!V[@]}"; do build_one "$name" "${V[$name]}"; done

@@ -9,7 +9,13 @@ of the challenge is the **untrusted source**, not the payload.
 
 ## Roster (all `docker.io/peopleforrester/<name>:latest`)
 
-`joker`, `gargamel`, `skeletor`, `mumm-ra`, `shredder`, `cobra-commander`, `megatron`.
+**Marketing-named covers** (innocent name, villain reveal in the logs) — these make the C2 "ops-approved
+promo app" social-engineering story land, because a villain-named image tips off the agent/attendee:
+`promo-mascot` (Joker reveal), `festival-promo` (Gargamel), `loyalty-rewards` (Skeletor). The lab C2
+prompt uses `promo-mascot`.
+
+**On-the-nose villains** (obvious malicious name): `joker`, `gargamel`, `skeletor`, `mumm-ra`,
+`shredder`, `cobra-commander`, `megatron`.
 
 Rebuild/extend with `build.sh` (crane + the Team PAT from `~/secrets/dockerhub/agenticburn.env`). They
 live in the **peopleforrester** Team org on Docker Hub; the cluster nodes have the Team PAT baked into
