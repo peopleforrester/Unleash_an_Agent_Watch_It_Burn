@@ -213,7 +213,7 @@
     r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra + AI guardrails are on. Try the same prompts and watch them get blocked. (round-2 cluster)'},
     r3:{cls:'r3',t:'YOUR CLUSTER',s:"— this is yours. Turn guardrails on yourself in the terminal. (your round-3 cluster)"}
   };
-  let round='r1', tokens=0, costUsd=0, busy=false;
+  let round='r1', tokens=0, costUsd=0, busy=false, unreachable=0;
   // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
   // 5-step order across turns. Reset starts a fresh order (new id).
   function newSession(){var s='sess-'+Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('wib-sess',s);return s;}
@@ -256,7 +256,10 @@
     try{
       const res=await fetch(ROUND_ENDPOINTS[round],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v,session:getSession()})});
       t.remove();
-      if(!res.ok){ if(res.status===0||res.status>=500){noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');} bubble("Hmm, the kitchen isn't answering ("+res.status+"). Try again in a moment.",'bot'); return; }
+      // The cluster RESPONDED (even an error status means it is alive) — never show the cluster-dead
+      // screen here; that is reserved for a genuinely unreachable cluster (the catch below).
+      unreachable=0; noBurritos(false);
+      if(!res.ok){ bubble("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again.",'bot'); return; }
       const data=await res.json();
       bubble(data.reply || "…", 'bot');
       if((data.reply||'').toLowerCase().includes('free burritos for life')) winBubble();
@@ -264,7 +267,11 @@
       document.getElementById('tokens').textContent=tokens.toLocaleString();
       document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
     }catch(e){
-      t.remove(); noBurritos(true,'(no cluster connected — round '+round.slice(1)+')');
+      // Could not reach the cluster at all (network error). One blip is transient; only treat the
+      // cluster as actually down after two in a row, then show the real cluster-dead screen.
+      t.remove(); unreachable++;
+      if(unreachable>=2){ noBurritos(true,'(no cluster connected — round '+round.slice(1)+')'); }
+      else { bubble("Couldn't reach the kitchen just now, give it a moment and send that again.",'bot'); }
     }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
   }
   // The left menu is a static reference of what BurritoBot can make; ordering happens in chat.
