@@ -81,7 +81,7 @@ Pinned versions are in [`VERSIONS.lock`](VERSIONS.lock).
 | `policies/kyverno/` | the admission policies |
 | `security/`, `observability-idp/`, `backstage/` | the platform foundation |
 | `agent/`, `challenges/` | guardrail sources and the attack content |
-| `games/` | the attendee challenges (exfil basketball, the Cluster-3 games) |
+| `games/` | the attendee challenges (Cluster-3 games; the S3 "exfil basketball" game is CUT, see `games/eso-s3-exfil/CUT.md`) |
 | `infra/` | cluster provisioning, bootstrap, and demo DNS (agenticburn.com) |
 | `verify/` | the verification scripts + the offline render-gate test suite |
 | `facilitation/` | run-of-show, governance map, self-assessment, the question tracker |
