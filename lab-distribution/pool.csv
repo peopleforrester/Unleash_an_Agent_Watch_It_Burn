@@ -1,2 +1,0 @@
-name,region,access_key,secret_key,console_url,datadog_org,datadog_email,datadog_password,datadog_api_key,datadog_app_key,datadog_site,datadog_dashboard_url
-EXAMPLE-schema-row-do-not-ship,us-west-2,AKIAEXAMPLE,EXAMPLESECRET,https://example.invalid,ai-eng-wf-EXAMPLE,example@learner.datadoghq.com,FAKE-pw,EXAMPLEDDAPIKEY,EXAMPLEDDAPPKEY,datadoghq.com,https://example.invalid/dashboard
