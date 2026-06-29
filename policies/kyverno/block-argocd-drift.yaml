@@ -60,6 +60,16 @@ spec:
               - kind: ServiceAccount
                 namespace: argocd
                 name: argocd-application-controller
+              # The kagent controller owns the agent Deployments it generates from Agent CRs and must be
+              # able to reconcile their pod spec (env, image). Those generated Deployments INHERIT the
+              # Agent CR's argocd.argoproj.io/tracking-id annotation, so without this exclude the
+              # controller's own UPDATE is wrongly treated as drift and blocked - which froze agent OTel
+              # config (tracing/logging/content-capture could never propagate). Same rationale as the
+              # ArgoCD controller exclusion above. The Beat-1 drift scenario is unaffected: the agent
+              # attacks ArgoCD-managed apps as agent-sa / its own pod SA, never as kagent-controller.
+              - kind: ServiceAccount
+                namespace: kagent
+                name: kagent-controller
               # Built-in controllers and kubelet must keep the managed object healthy.
               - kind: Group
                 name: system:serviceaccounts:kube-system
