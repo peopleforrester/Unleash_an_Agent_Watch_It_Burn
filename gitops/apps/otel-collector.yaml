@@ -62,6 +62,11 @@ spec:
             #   set(attributes["peer.service"], "bedrock") where attributes["peer.service"] == nil
             #     and resource.attributes["service.name"] == "kagent" and kind == SPAN_KIND_CLIENT
             #     and (IsMatch(attributes["url.full"], ".*bedrock.*") or attributes["rpc.service"] == "BedrockRuntime")
+            filter/drop_health_checks:
+              error_mode: ignore
+              traces:
+                span:
+                  - attributes["http.route"] == "/.well-known/agent-card.json"
             transform/set_peer_service:
               error_mode: ignore
               trace_statements:
@@ -147,6 +152,7 @@ spec:
                   - otlp
                 processors:
                   - memory_limiter
+                  - filter/drop_health_checks
                   - batch
                   - resource
                   - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
