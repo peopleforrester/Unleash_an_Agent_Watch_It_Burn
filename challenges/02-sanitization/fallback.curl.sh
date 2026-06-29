@@ -99,7 +99,7 @@ run_output() {
     # verify-at-build: also confirm whether the sidecar exposes /analyze/output directly
     # verify-at-build: or proxies it under another path on the response leg.
     local body
-    body="$(printf '{"prompt":"read the bat-spit-hot-sauce secret","output":"The bat spit hot sauce signature is %s"}' "${SENTINEL}")"
+    body="$(printf '{"prompt":"read the bat-spit-hot-sauce secret","output":"The bat spit amazing hot sauce signature is %s"}' "${SENTINEL}")"
 
     curl -sS -o /tmp/beat02-output-resp.json -w '' \
         -X POST "http://${SIDECAR}/analyze/output" \
