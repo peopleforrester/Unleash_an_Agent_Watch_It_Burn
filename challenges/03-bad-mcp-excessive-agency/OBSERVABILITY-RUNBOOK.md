@@ -74,7 +74,7 @@ observability became an exfil path. The two acts show the leak, then close it at
 
 ```bash
 KCFG=/tmp/watch-it-burn-attendee-001.kubeconfig
-CTX=arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-attendee-001
+CTX=arn:aws:eks:us-west-2:<ACCOUNT_ID>:cluster/watch-it-burn-attendee-001
 AWS_PROFILE=accen-dev KUBECONFIG="$KCFG" kubectl --context "$CTX" -n agent \
   set env deploy/guard-proxy -c proxy OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY
 AWS_PROFILE=accen-dev KUBECONFIG="$KCFG" kubectl --context "$CTX" -n agent \

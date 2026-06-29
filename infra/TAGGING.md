@@ -1,10 +1,9 @@
 <!-- ABOUTME: The single tagging + naming convention for Watch It Burn AWS resources. Exists because the -->
-<!-- ABOUTME: accen-dev account is shared with a separate Packt project; this keeps our resources distinct. -->
+<!-- ABOUTME: the primary account is shared with a separate project; this keeps our resources distinct. -->
 
 # Tagging and naming convention (collision avoidance)
 
-The `accen-dev` AWS account (`515966504359`) is **shared with a separate Packt
-project** that runs its own clusters. We never share resources with it. Every
+The primary AWS account is **shared with a separate project** that runs its own clusters. We never share resources with it. Every
 resource we create is labeled so it is unambiguously ours, and every scoping or
 teardown action filters on that label so it can only ever touch our resources.
 

@@ -43,8 +43,8 @@ Cross-references to this repo's own prior spikes:
 
 1. The demo agent calls AWS Bedrock (Claude) over the internet. Any network failure breaks the live
    agent path, not just the slides or the UI. This is the single most exposed dependency.
-2. Roughly 60 independent EKS clusters in a shared VPC, one AWS account (accen-dev, 515966504359),
-   region us-west-2, for a 2-hour intermittent lab.
+2. Roughly 60 independent EKS clusters in a shared VPC, one AWS account, region us-west-2,
+   for a 2-hour intermittent lab.
 3. Observability flows to Datadog (primary) over the network, with Grafana / Tempo local fallback.
 4. Attendees self-drive their own cluster via a chat UI and kubectl, with per-student Datadog orgs
    (about 60).
