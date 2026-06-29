@@ -149,13 +149,18 @@ locals {
   #      Hub errors (429/outage). Mirror copies are maintained by the fleet mirror step (crane).
   # Only emitted when dockerhub_auth_b64 is set; a bare apply omits the part. b64-encode the file content so the
   # embedded auth header survives cloud-config YAML untouched.
+  # nonsensitive() on the auth ref is REQUIRED: dockerhub_auth_b64 is a sensitive variable, and it flows
+  # through here into cloudinit_pre_nodeadm -> eks_managed_node_groups. The terraform-aws-eks module does
+  # for_each over that map, and for_each rejects a sensitive-derived map ("Invalid for_each argument:
+  # Sensitive values ... cannot be used as for_each arguments"), which failed every fleet apply. The auth
+  # lands in node user-data on the instance regardless, so stripping the sensitivity marker here is moot.
   dockerhub_hosts_toml = <<-EOT
     server = "https://registry-1.docker.io"
 
     [host."https://registry-1.docker.io"]
       capabilities = ["pull", "resolve"]
       [host."https://registry-1.docker.io".header]
-        authorization = "Basic ${var.dockerhub_auth_b64}"
+        authorization = "Basic ${nonsensitive(var.dockerhub_auth_b64)}"
 
     [host."https://ghcr.io/v2/peopleforrester/dockerhub"]
       capabilities = ["pull", "resolve"]
