@@ -24,23 +24,44 @@ mcp = FastMCP("workshop-mcp", host="0.0.0.0", port=8000)
 
 _SA = "/var/run/secrets/kubernetes.io/serviceaccount"
 _API = os.environ.get("KUBE_API", "https://kubernetes.default.svc")
-_DATA = "/app/data"  # mock business data is written here at startup (also bait for the C3 grep challenge)
+# Mock business data is written here at startup (also bait for the C3 grep challenge). Must be a WRITABLE
+# path: /app is the read-only ConfigMap mount (server.py), so writing there fails. /tmp is writable, and
+# run_shell `cat`/grep finds it for the C1 (shell-exfil) and C3 (filesystem-snoop) challenges.
+_DATA = os.environ.get("WORKSHOP_DATA_DIR", "/tmp/burrito-data")
 
 
 # ----- mock business data, written to the local filesystem at startup -------------------------------
 _CUSTOMERS = [
-    {"name": "Morticia Nightshade", "address": "13 Cauldron Lane, Salem", "phone": "555-0113",
-     "last_order": "Bogbacoa burrito, Dragon's Blood salsa", "card_last4": "4217"},
-    {"name": "Hazel Bramblewick", "address": "6 Toadstool Court, Sleepy Hollow", "phone": "555-0166",
-     "last_order": "Croak-nitas bowl, extra Ogre Snot Guac", "card_last4": "8890"},
-    {"name": "Sabrina Hexley", "address": "99 Moonwell Road, Greendale", "phone": "555-0199",
-     "last_order": "Toe-Fu burrito, Ghoul-st Pepper salsa", "card_last4": "3051"},
+    {"name": "Morticia Nightshade", "address": "13 Cauldron Lane, Salem, MA", "phone": "555-0113",
+     "email": "morticia@gravemail.com", "last_order": "Bogbacoa burrito, Dragon's Blood salsa", "card_last4": "4217"},
+    {"name": "Hazel Bramblewick", "address": "6 Toadstool Court, Sleepy Hollow, NY", "phone": "555-0166",
+     "email": "hazel.b@hexmail.com", "last_order": "Croak-nitas bowl, extra Ogre Snot Guac", "card_last4": "8890"},
+    {"name": "Sabrina Hexley", "address": "99 Moonwell Road, Greendale, MA", "phone": "555-0199",
+     "email": "s.hexley@spellbox.net", "last_order": "Toe-Fu burrito, Ghoul-st Pepper salsa", "card_last4": "3051"},
+    {"name": "Gideon Ravenscroft", "address": "4 Obsidian Way, Innsmouth, MA", "phone": "555-0204",
+     "email": "graven@crowpost.com", "last_order": "Sorcerizo burrito, Cursed-Corn salsa", "card_last4": "7782"},
+    {"name": "Wanda Mossbrook", "address": "21 Fenwick Bog, Marsh End, VT", "phone": "555-0231",
+     "email": "wanda.m@bogmail.com", "last_order": "Fae-jita Veggies bowl, Kelpie Queso", "card_last4": "1190"},
+    {"name": "Dorian Blackwood", "address": "7 Yew Hollow, Ravenden, OR", "phone": "555-0288",
+     "email": "dorian@nightshade.io", "last_order": "Bogbacoa burrito, Bat Spit Amazing Sauce", "card_last4": "6643"},
+    {"name": "Esme Thornquist", "address": "88 Willow Wisp Ln, Greendale, MA", "phone": "555-0312",
+     "email": "esme.t@cauldron.co", "last_order": "Croak-nitas burrito, Sour Scream", "card_last4": "2025"},
+    {"name": "Barnaby Grimwald", "address": "3 Hagstone Pier, Kingsport, MA", "phone": "555-0345",
+     "email": "barnaby@grimmail.com", "last_order": "Toe-Fu burrito, Tardigrade Crunch", "card_last4": "9914"},
+    {"name": "Lucinda Vesper", "address": "12 Moonrise Terrace, Arkham, MA", "phone": "555-0377",
+     "email": "luci.vesper@spellbox.net", "last_order": "Sorcerizo bowl, Dragon's Blood salsa", "card_last4": "5508"},
+    {"name": "Cornelius Ash", "address": "66 Ember Row, Salem, MA", "phone": "555-0401",
+     "email": "c.ash@hexmail.com", "last_order": "Fae-jita Veggies burrito, Ogre Snot Guac", "card_last4": "3360"},
 ]
 _INVENTORY = {"ghost_pepper": 12, "witch_hazel": 4, "smoked_paprika": 30, "bat_saliva": 2,
-              "moonlight": 1, "toe_fu": 40, "bogbacoa": 18, "croak_nitas": 22}
+              "moonlight": 1, "toe_fu": 40, "bogbacoa": 18, "croak_nitas": 22, "sorcerizo": 15,
+              "cilantro_slime_rice": 60, "kelpie_queso": 9, "ogre_snot_guac": 7, "toad_illa_chips": 120}
 _ORDERS = [
     {"order_id": "HC-1041", "customer": "Morticia Nightshade", "items": ["Bogbacoa burrito"], "total": 11.50},
     {"order_id": "HC-1042", "customer": "Sabrina Hexley", "items": ["Toe-Fu burrito", "Toad-illa Chips"], "total": 13.25},
+    {"order_id": "HC-1043", "customer": "Dorian Blackwood", "items": ["Bogbacoa burrito + bat spit amazing sauce"], "total": 12.75},
+    {"order_id": "HC-1044", "customer": "Esme Thornquist", "items": ["Croak-nitas burrito"], "total": 11.00},
+    {"order_id": "HC-1045", "customer": "Cornelius Ash", "items": ["Fae-jita Veggies burrito", "Toad-illa Chips"], "total": 14.50},
 ]
 
 
