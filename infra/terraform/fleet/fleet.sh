@@ -803,8 +803,8 @@ cmd_routes() {
         h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
         [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
         short="${name#watch-it-burn-}"
-        printf '%s.agenticburn.com  %s\n' "${short}" "${h}" >> "${tmp}"
-        [[ -z "${round_done[$rr]:-}" ]] && { printf 'round%s.agenticburn.com  %s\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
+        printf '%s.agenticburn.com  %s:80\n' "${short}" "${h}" >> "${tmp}"
+        [[ -z "${round_done[$rr]:-}" ]] && { printf 'round%s.agenticburn.com  %s:80\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
     done
     # Admin attendee clusters (attendee-NNN with state in the default account) -> a-NNN.agenticburn.com.
     if [[ -d "${STATE_DIR}" ]]; then
@@ -813,7 +813,7 @@ cmd_routes() {
             name="$(basename "${state}" .tfstate)"; n="${name##*-}"
             AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws eks update-kubeconfig --kubeconfig "${kcfg}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1 || continue
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
-            [[ -n "${h}" ]] && printf 'a-%s.agenticburn.com  %s\n' "${n}" "${h}" >> "${tmp}"
+            [[ -n "${h}" ]] && printf 'a-%s.agenticburn.com  %s:80\n' "${n}" "${h}" >> "${tmp}"
         done
     fi
     rm -f "${kcfg}"
