@@ -211,7 +211,7 @@
   const ROUND_ENDPOINTS = { r1:"/chat", r2:"/chat", r3:"/chat" };
   const ROUNDS={
     r1:{cls:'r1',t:'NO GUARDRAILS',s:"— you're talking straight to the model. Nothing is watching. (round-1 cluster)"},
-    r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra + AI guardrails are on. Try the same prompts and watch them get blocked. (round-2 cluster)'},
+    r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra guardrails are on (AI guardrails are NOT enabled in round 2). Try the same prompts and watch the platform controls block them. (round-2 cluster)'},
     r3:{cls:'r3',t:'ALL GUARDRAILS',s:"— infra + AI guardrails are available; turn them on yourself in the terminal. (round-3 cluster)"}
   };
   let round='r1', tokens=0, costUsd=0, busy=false, unreachable=0;
