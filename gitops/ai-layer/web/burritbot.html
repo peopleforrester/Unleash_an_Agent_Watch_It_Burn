@@ -201,17 +201,16 @@
   <div id="celebrate"><div class="winmsg"><h2>🌯 Free burritos for life! 🌯</h2><p>You made it through the whole order at Hex &amp; Cauldron. Click anywhere to close.</p></div></div>
 
 <script>
-  // Round -> backend /chat endpoint. Same-origin /chat by default (round 3 served from the attendee's
-  // cluster). Rounds 1/2 point at the shared demo clusters; override these at deploy time.
-  const ROUND_ENDPOINTS = window.BURRITBOT_ENDPOINTS || {
-    r1: (window.BURRITBOT_R1 || "https://round1.agenticburn.com") + "/chat",
-    r2: (window.BURRITBOT_R2 || "https://round2.agenticburn.com") + "/chat",
-    r3: "/chat"
-  };
+  // Every cluster's BurritoBot talks to its OWN same-origin /chat. The agenticburn.com router proxies the
+  // whole host+path (e.g. r2-1.agenticburn.com/chat) to that cluster's console, so same-origin reaches the
+  // right backend with NO cross-origin call (a cross-origin POST triggers a CORS preflight the backend
+  // returns 501 on -> the browser blocks it -> "couldn't reach the kitchen"). The round is for DISPLAY
+  // (the banner); the backend is always this cluster.
+  const ROUND_ENDPOINTS = { r1:"/chat", r2:"/chat", r3:"/chat" };
   const ROUNDS={
     r1:{cls:'r1',t:'NO GUARDRAILS',s:"— you're talking straight to the model. Nothing is watching. (round-1 cluster)"},
     r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra + AI guardrails are on. Try the same prompts and watch them get blocked. (round-2 cluster)'},
-    r3:{cls:'r3',t:'YOUR CLUSTER',s:"— this is yours. Turn guardrails on yourself in the terminal. (your round-3 cluster)"}
+    r3:{cls:'r3',t:'ALL GUARDRAILS',s:"— infra + AI guardrails are available; turn them on yourself in the terminal. (round-3 cluster)"}
   };
   let round='r1', tokens=0, costUsd=0, busy=false, unreachable=0;
   // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
@@ -276,13 +275,37 @@
   }
   // The left menu is a static reference of what BurritoBot can make; ordering happens in chat.
   // Cluster identity comes from the link the provisioning app built (it knows the student's cluster + email).
+  // Enable/disable the chat based on whether THIS cluster's backend answers. Never let the user type into
+  // a chat whose backend is down (Michael's note): if the kitchen is closed, say so and disable input.
+  function setBackendUp(up){
+    var inp=document.getElementById('inp'), btn=document.getElementById('sendbtn');
+    if(inp){ inp.disabled=!up; inp.placeholder = up ? "Tell BurritoBot what you'd like…" : "BurritoBot backend is starting up — give it a moment…"; }
+    if(btn) btn.disabled=!up;
+  }
+  async function checkBackend(){
+    try{ const r=await fetch('/guards',{method:'GET',cache:'no-store'}); if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false); return; } }catch(e){}
+    setBackendUp(false);
+  }
+  // Set the banner (round) from the cluster name so each cluster shows the right guardrail state.
+  function applyRoundFromCluster(cluster){
+    // Derive the round from the cluster name OR the hostname (r2-1.agenticburn.com / a-001.agenticburn.com).
+    var src=(cluster||'')+' '+location.hostname;
+    var r = (/(?:^|[-.])(r[123])(?:[-.]|$)/.test(src) ? RegExp.$1 : (/(?:^|[-.])(?:a-\d|attendee)/.test(src) ? 'r3' : 'r1'));
+    round=r;
+    var sel=document.getElementById('round'); if(sel) sel.value=r;
+    var b=document.getElementById('banner'); if(b) b.className='ibanner '+ROUNDS[r].cls;
+    document.getElementById('bannertext').textContent=ROUNDS[r].t;
+    document.getElementById('bannersub').textContent=ROUNDS[r].s;
+  }
   (function init(){
     var q=new URLSearchParams(location.search);
     var cluster=q.get('cluster'), user=q.get('user');
     if(cluster){var txt='Cluster '+cluster+(user?(' · '+user):'');
       var ci=document.getElementById('clusterid'); if(ci) ci.textContent=txt;
       var cf=document.getElementById('clusterfoot'); if(cf) cf.textContent=txt;}
+    applyRoundFromCluster(cluster);
     try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
+    setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
   })();
   greet();
 </script>
