@@ -738,11 +738,15 @@ cmd_reap() {
         [[ -n "${live}" ]] || { log "  account '${acct}': no attendee clusters"; continue; }
         (
             read_vpc_for "${acct}"; TF_PROFILE="${acct}"
+            local -a doomed=()
             for c in ${live}; do
                 if [[ -n "${keep[${c}]:-}" ]]; then continue; fi
-                if [[ -n "${WIB_APPLY:-}" ]]; then log "  reaping ${c} (${acct})"; down_one "${c}"
-                else log "  would reap ${c} (${acct})"; fi
+                if [[ -n "${WIB_APPLY:-}" ]]; then doomed+=("${c}"); else log "  would reap ${c} (${acct})"; fi
             done
+            if [[ -n "${WIB_APPLY:-}" && "${#doomed[@]}" -gt 0 ]]; then
+                log "  account '${acct}': reaping ${#doomed[@]} cluster(s) at ${MAX_PARALLEL}-way parallelism"
+                run_pool down_one "${doomed[@]}"
+            fi
         ) &
     done
     wait
