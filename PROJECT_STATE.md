@@ -376,9 +376,9 @@ Vercel AI SDK, wrapped as a kagent `type: BYO` A2A backend so it keeps agentgate
 LLM Guard), shipping a `spiny-orb.yaml` + Weaver registry + OTel SDK init so spiny-orb runs out of
 the box -> Datadog. Research: research/16 (corrected; the earlier Spiny=Pixie guess is void).
 BUILD IS GATED on Whitney's answers (framework, Weaver registry, how she runs spiny-orb on stage).
-Proposal Google Doc created + shared with Whitney (notified) + comment tagging her:
-<redacted-doc-link>
-(folder "Watch it Burn" 1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU; Whitney = <redacted-email>).
+Proposal Google Doc created + shared with co-presenter (notified) + comment tagging her
+(in the shared "Watch it Burn" Drive folder; doc + folder IDs and co-presenter email held
+out of the repo).
 
 KubeArmor research spike (2026-06-21): DONE -> research/17-kubearmor-forkbomb-2026.md. Verdict:
 KubeArmor v1.7.3 CANNOT prevent a fork bomb the way podPidsLimit does - its KubeArmorPolicy has NO
@@ -391,8 +391,7 @@ contains `bpf`, `karmor probe`, live Block test). DECISION: keep podPidsLimit as
 fork-bomb block + Falco/Talon as detect+respond; do NOT add KubeArmor to the fork-bomb story. KubeArmor
 is a candidate DIFFERENT-attack station (CNCF-native inline prevention: default-deny exec, block
 secret-file reads, block egress) - still an OPEN option, not folded in. No repo defense changed.
-Findings Google Doc (silently shared with Whitney):
-<redacted-doc-link>
+Findings Google Doc shared with the co-presenter (doc ID held out of the repo).
 
 Runtime-enforcement + observability spikes (2026-06-21): research/20-23.
 - research/20 (Tetragon): does NOT replace the PID cap for fork bombs - Sigkill is kill-on-detect
@@ -440,8 +439,8 @@ Do not re-raise Fable; Michael will say if it comes back.
   `BUILD-SPEC.md`, which is false positives (the talk-title word "Unleash",
   three "test harness" references, and "lets" misread as "let's") and was left
   as-is. Verification method: `check-ai-isms/check.py` repo scan.
-- **Whitney handoff:** the six handoff files were uploaded to the shared Drive
-  folder (`1_Y4Qrnz6x80AcGWgiRAZrObAvdVdMpfU`, account <redacted-email>)
+- **Co-presenter handoff:** the six handoff files were uploaded to the shared Drive
+  folder (folder ID and Drive account held out of the repo)
   and converted to native Google Docs: START HERE, Abstract, Run of Show (the
   demo flow), Slide Outline, Cold Open Script, Build Spec (technical reference).
 - **Cost / teardown:** full AWS sweep of the workshop AWS account (us-west-2 +
@@ -670,7 +669,7 @@ Provisioned watch-it-burn-test on K8s 1.35 (chosen over 1.36 for certainty), ran
   must be an ArgoCD-safe runtime mechanism (proxy /toggle endpoint or a watched ConfigMap outside the
   synced spec), not a deployment env edit. Had to pause selfHeal on the ai-layer app to test, then restored.
 - Reds remaining (NOT interop): *-party + backstage + templated-test-svc = ImagePullBackOff from
-  KubeAuto's PRIVATE ECR (acct <ACCOUNT_ID>), repoint to public/our ECR; ESO secrets Degraded (no
+  KubeAuto's PRIVATE ECR (account ID held out of the repo), repoint to public/our ECR; ESO secrets Degraded (no
   AWS Secrets Manager entries -> Grafana admin secret missing -> grafana config error); kagent default
   agent fleet recreated as noise (disable via kagent chart values); cert-manager-issuers Degraded (no real issuer).
 - SPEND: Cost Explorer ~$6.75 through partial Jun 18; ~$7-9 total project once ingested.

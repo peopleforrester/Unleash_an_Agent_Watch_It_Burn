@@ -4,8 +4,8 @@
 # 60 Independent EKS Clusters: Quotas, Shared-VPC Design, and Topology
 
 Research spike for "Unleash an Agent, Watch It Burn." Target: 60 attendees, each with their OWN
-independent EKS cluster (Kubernetes up, take-home), in a SHARED VPC, account accen-dev
-(<ACCOUNT_ID>), region us-west-2. This supersedes the hub-and-spoke model in the current BUILD-SPEC
+independent EKS cluster (Kubernetes up, take-home), in a SHARED VPC, primary account,
+region us-west-2. This supersedes the hub-and-spoke model in the current BUILD-SPEC
 as the thing under reconsideration.
 
 ## Verification Method

@@ -15,8 +15,8 @@ throwaway copy named "ZZ-THROWAWAY WIB doc1 comment-test DELETE ME"
 of the test (Drive returned HTTP 204 on delete). The OAuth access token used for
 the test was exported to a temp file and deleted afterward.
 
-Live access used the `gog` CLI account `<redacted-email>`, which
-owns both target docs. The token carried both the `documents` and `drive`
+Live access used the `gog` CLI account that owns both target docs (account email
+held out of the repo). The token carried both the `documents` and `drive`
 scopes (confirmed via the OAuth2 tokeninfo endpoint).
 
 API version strings, as published by Google at the time of writing:
