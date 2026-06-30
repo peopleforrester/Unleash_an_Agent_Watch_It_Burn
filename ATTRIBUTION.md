@@ -1,8 +1,9 @@
 # Attribution
 
 This workshop and repository stand on the work of many open-source projects and
-their communities. This file credits them. It carries attribution only; it does
-not grant or state a license for this repository.
+their communities. This file credits them. The repository itself is licensed
+under the MIT License (see [`LICENSE`](LICENSE)), which permits reuse provided
+the copyright and license notice are kept.
 
 ## Workshop
 
