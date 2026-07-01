@@ -289,3 +289,75 @@ reaches Datadog. (b) USM-discovered base components take a few minutes to popula
 rollout. (c) Fixes are in gitops on `staging`, so freshly provisioned clusters get them at bootstrap;
 ALREADY-running instructor clusters need the Agent CR bounce (delete Agent CR; ArgoCD recreates) for the
 agent pod to pick up tracing, same as r1-1.
+
+---
+
+## 2026-07-01 · Decision · PRD 35 local target uses kagent's keyless Ollama provider (verified at source)
+
+**Context.** PRD 35 (multi-cloud refactor) adds a `local` target (kind or k3d + Ollama) as the
+offline dev and validation substrate. The plan asserted keyless, offline model access via kagent's
+Ollama provider but had a placeholder pending a source-level verification spike. This entry records
+the verification that hardened PRD §3.6.
+
+**Verified against the kagent source**, `main` at commit `20b19c72`, release tag `v0.10.0-beta2`:
+
+- **Provider enum.** `go/api/v1alpha2/modelconfig_types.go` defines `ModelProvider` with a kubebuilder
+  enum of nine values: `Anthropic;OpenAI;AzureOpenAI;Ollama;Gemini;GeminiVertexAI;AnthropicVertexAI;Bedrock;SAPAICore`.
+  `Ollama` is first-class, not a shim.
+- **Config struct.** `OllamaConfig` (same file) has exactly two fields, both optional: `Host`
+  (`json:"host,omitempty"`) and `Options` (`json:"options,omitempty"`, `map[string]string`). It is
+  wired into the ModelConfig spec as `ollama *OllamaConfig`. The model NAME is not in this struct; it
+  is the shared top-level required `spec.model` field.
+- **No secret.** The translator path in
+  `go/core/internal/controller/translator/agent/adk_api_translator.go` for the Ollama provider never
+  reads `apiKeySecret` / `apiKeySecretKey` (both optional). It injects one env var, `OLLAMA_API_BASE`
+  = the host (auto-prefixing `http://` when the host carries no scheme), and creates no SecretKeyRef,
+  volume, or credential. Keyless and offline-capable is confirmed at the source; the
+  OpenAI-compatible-endpoint workaround is not needed.
+
+**Decision.** The `local` overlay ships a minimal `ModelConfig` (provider `Ollama`, `spec.model` set
+to the Ollama tag, `ollama.host` pointing at the in-cluster Ollama Service, no secret). Recorded in
+PRD §3.6 with the concrete YAML.
+
+**Method note.** This is a positive finding cited to the exact files and enum, per the methodology
+rule at the top of this log. The claim is "Ollama is a keyless first-class provider" backed by the
+enum + struct + translator, not by absence of a counter-example.
+
+---
+
+## 2026-07-01 · Decision · PRD 35 defers Oracle Cloud (OKE) as a fourth cloud
+
+**Context.** PRD 35 evaluated whether to add Oracle Cloud (OKE + OCI Generative AI) as a fourth
+attendee cloud alongside AWS, Azure, and GCP. Two independent verification spikes (OCI GenAI catalog;
+kagent OCI support) both recommend defer. This entry records the evidence behind PRD §7.
+
+**Three findings, each cited:**
+
+1. **No native kagent OCI provider.** The `ModelProvider` enum (verified above, commit `20b19c72`) has
+   nine values, none Oracle or OCI. The only integration path is kagent's OpenAI provider with a custom
+   `BaseURL` set to OCI's OpenAI-compatible endpoint
+   (`https://inference.generativeai.${region}.oci.oraclecloud.com/openai/v1`). Source: Oracle docs
+   `oci-openai-compatible-api` (Generative AI, "OpenAI Compatible API"). That endpoint exists, but its
+   auth is OCI IAM request-signing or OCI GenAI bearer "API keys" introduced 2026-01-21 (Oracle docs
+   `oci-genai-api-keys`), not the OpenAI-style keys kagent's OpenAI provider expects. A bolt-on, not an
+   integration.
+2. **No Anthropic Claude on OCI GenAI.** Oracle's pretrained-models catalog (Oracle docs
+   `oci-genai-pretrained-models`, checked 2026-07-01) lists Cohere Command A, Google Gemini 2.5, Meta
+   Llama 4 / 3.3, OpenAI gpt-oss, and xAI Grok. Claude is not in the chat-model catalog. (The
+   "Anthropic Adapter" seen in search belongs to Oracle Integration / OIC, a separate SaaS connector,
+   not the OCI Generative AI service.) A fourth cloud would run the lesson against Grok/Llama/Gemini and
+   break Claude parity with the other three clouds.
+3. **Auth model does not fit secret-zero.** OKE Workload Identity (enhanced clusters only; Oracle docs
+   `oke-workload-identity` / "Granting Workloads Access to OCI Resources") is the native keyless path,
+   but kagent has no OCI request-signer, so a kagent pod would fall back to a static per-cluster OCI
+   GenAI API-key Secret. That is the opposite of the keyless property AWS (Pod Identity + Bedrock) and
+   GCP (Workload Identity + Vertex) give for free.
+
+**Decision.** Defer Oracle. Net cost is a bespoke auth shim multiplied across a 250-cluster fleet plus
+abandoning Claude, for one additional logo. Revisit only if kagent ships a first-class OCI provider, or
+Anthropic Claude lands on the OCI GenAI model list, or a specific venue/account requires Oracle.
+Recorded in PRD §7 (Out of scope).
+
+**Method note.** The negatives here ("no kagent OCI provider", "no Claude on OCI") are each tied to a
+cited source (the kagent enum; the Oracle pretrained-models catalog page), not to a truncated or broad
+query, per the methodology rule.
