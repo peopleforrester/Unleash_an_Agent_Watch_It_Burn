@@ -541,3 +541,17 @@ opens `fleet.sh` for the provider seam, so it is refactored once, not twice.
 
 Michael requested the amendment 2026-07-03. Re-approval (a fresh `Approved-by` + sha seal) is the next
 gate before Phase 2 M1 begins.
+
+---
+
+## 2026-07-03T19:59:22Z · 1.3 · PRD 35 RE-APPROVED (post-amendment seal)
+
+Michael re-approved the amended PRD 35. Re-sealed: `Approved-by: Michael@2026-07-03T19:59:22Z`,
+sha256 `5e110e425e70` of the amended body (commit `79ee2c4`, the version carrying §4.6 + the M1 scope
+extension). The prior seal `a1a6025ae7bd` is superseded. The plan is read-only again; further changes
+need `/prd-amend`.
+
+Phase 2 entry is unchanged: mandatory `/init-state` PROJECT_STATE migration (PRD §8), then M1 — now
+scoped to also parameterize fleet cluster shape (§4.6) alongside the provider seam + AWS root
+relocation + IMDS `metadata_options` pin. GCP VPC-SC (§6 risk 1 / PRD 36 §8 Q1) still open, blocks M3
+design only. No project-source mutation before the `/init-state` migration.

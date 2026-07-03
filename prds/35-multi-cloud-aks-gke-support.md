@@ -1,10 +1,10 @@
 # PRD 35: Multi-cloud support (Azure AKS + GCP GKE)
 
-Status: AMENDED 2026-07-03 (added §4.6 + M1 scope). AWAITING RE-APPROVAL; prior seal superseded.
+Status: APPROVED (Phase 1.3 re-sealed after amendment). Read-only; changes require /prd-amend + re-approval.
 Author: Michael Forrester
 Created: 2026-06-30
-Approved-by: Michael@2026-07-03T04:28:15Z (sha256:a1a6025ae7bd, body at commit d94c5cb) — superseded by amendment
-Amendment: 2026-07-03 · fleet.sh cluster-shape parameterization folded into M1 (§4.6). Re-approval pending.
+Approved-by: Michael@2026-07-03T19:59:22Z (sha256:5e110e425e70, amended body at commit 79ee2c4)
+Amendment: 2026-07-03 · fleet.sh cluster-shape parameterization folded into M1 (§4.6). Re-approved (prior seal a1a6025ae7bd superseded).
 Branch target: staging
 
 ## 1. Goal
