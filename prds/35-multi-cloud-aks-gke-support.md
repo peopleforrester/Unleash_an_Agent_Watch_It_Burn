@@ -1,9 +1,10 @@
 # PRD 35: Multi-cloud support (Azure AKS + GCP GKE)
 
-Status: APPROVED (Phase 1.3 sealed). Read-only; changes require /prd-amend + re-approval.
+Status: AMENDED 2026-07-03 (added §4.6 + M1 scope). AWAITING RE-APPROVAL; prior seal superseded.
 Author: Michael Forrester
 Created: 2026-06-30
-Approved-by: Michael@2026-07-03T04:28:15Z (sha256:a1a6025ae7bd, approved body at commit d94c5cb)
+Approved-by: Michael@2026-07-03T04:28:15Z (sha256:a1a6025ae7bd, body at commit d94c5cb) — superseded by amendment
+Amendment: 2026-07-03 · fleet.sh cluster-shape parameterization folded into M1 (§4.6). Re-approval pending.
 Branch target: staging
 
 ## 1. Goal
@@ -387,6 +388,39 @@ AWS coupling. Per cloud:
 - `ATTRIBUTION.md`: add Azure OpenAI, Vertex AI, AKS, GKE, the Azure/Google
   Terraform providers and the GKE module; keep Bedrock and EKS.
 
+### 4.6 fleet.sh cluster-shape parameterization (config, not edits)
+
+Added by the 2026-07-03 amendment. The rerun that session exposed that changing
+WHAT the fleet provisions requires editing `fleet.sh`: the instructor roster is a
+hardcoded array (trimmed by hand to run one cluster per round), cross-round
+concurrency was a code change, and node type/size are locked to the `cluster`
+module defaults because `fleet.sh` never forwards them. Model tier per cluster is
+worse, requiring a live `kubectl patch` of the ModelConfig that fights ArgoCD
+selfHeal. That is configuration-by-editing, and it belongs in M1 because M1
+already opens `fleet.sh` for the provider seam.
+
+Parameterize four axes, keeping the existing bash + `|`-delimited style (no new
+yaml/yq dependency; the roster file is read with `while IFS='|' read`):
+
+1. **Roster as data.** Move the `INSTRUCTORS` array to an env-overridable
+   `|`-delimited profiles file with columns `name | round | tier | instance_type
+   | pids | bootstrap`. Subset selection via env (`WIB_ROUNDS`, `WIB_PER_ROUND`)
+   instead of trimming the array.
+2. **Size/type passthrough.** `fleet.sh` forwards `WIB_INSTANCE_TYPES`,
+   `WIB_NODE_SIZE`, `WIB_DISK` to `up_one` as `-var`, the same way it already
+   forwards `pod_pids_limit` and `dockerhub_auth_b64`. Empty falls back to the
+   module defaults, so unset means no behavior change.
+3. **Cross-round concurrency by default.** The per-round subshell fan-out proven
+   in the rerun (isolated per-cluster `-state`, single shared `init`) becomes the
+   default; a flag forces serial if ever needed.
+4. **Model tier at provision time.** Select the per-cluster ModelConfig via the
+   bootstrap/overlay, not a live patch, so the cost-race tiers (haiku/sonnet/opus)
+   are a config axis rather than a runtime fight with selfHeal.
+
+AWS-only in this pass, but the seam is provider-neutral, so the Azure/GCP shims
+(4.2) inherit it. This does not expand the code-only validation scope: the gates
+stay `terraform validate`/`plan` and the offline suite.
+
 ## 5. Milestones
 
 Each milestone is independently mergeable to staging and ends green on the
@@ -402,10 +436,14 @@ tests, lint).
   `metadata_options` (`http_tokens=required`, `http_put_response_hop_limit=1`) per
   3.7-A to close the pod-to-IMDS node-cred SSRF; this is the one behavior change
   worth making to live AWS code before the next rerun (verify-at-build that Pod
-  Identity still resolves).** Gate: `terraform validate` clean at the new AWS paths;
+  Identity still resolves).** **Also parameterizes fleet cluster shape per 4.6:
+  roster as an env-overridable profiles file, instance-type/size/disk passthrough,
+  cross-round concurrency by default, and provision-time model tier, replacing
+  configuration-by-editing.** Gate: `terraform validate` clean at the new AWS paths;
   offline verify suite green; `grep` sweep for stale
   `terraform/lab-vpc`/`terraform/cluster` refs returns zero outside log history;
-  shims `terraform fmt` clean.
+  shims `terraform fmt` clean; **a roster subset and a non-default instance_type/size
+  are selectable via env with no `fleet.sh` edit** (the anti-regression check for 4.6).
 - **M2 Azure Terraform.** `infra/terraform/azure/{network,cluster}` with AKS,
   OIDC + workload identity enabled, `network_policy = "cilium"` (3.7-B, or the
   egress lesson no-ops), IMDS metadata restriction confirmed (3.7-A), Azure OpenAI

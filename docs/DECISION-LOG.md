@@ -515,3 +515,29 @@ This confirms the reframe/fallback guidance is now load-bearing, not optional: d
 via the deterministic fallback (VTT/`fallback.*`) so the guardrail demos regardless of tier, and use
 the model path for the recipe. The character-break lecture on Sonnet's PII/exfil refusals is the one
 new item worth a persona fix attempt (though the model already overrides that clause).
+
+---
+
+## 2026-07-03 · amend · PRD 35 amended — fleet.sh cluster-shape parameterization folded into M1
+
+`/prd-amend` on PRD 35 (was sealed Approved @2026-07-03T04:28:15Z, sha `a1a6025ae7bd`). The seal is
+superseded; the amended body is sha `5e110e425e70`, and the plan is AWAITING RE-APPROVAL before it
+governs Phase 2 again.
+
+**What changed.** Added §4.6 (fleet.sh cluster-shape parameterization) and extended M1's scope + gate.
+No other section changed; §1-§3.7, §4.1-§4.5, M2-M8, §6-§8 are untouched.
+
+**Why.** The 2026-07-03 rerun made the smell concrete: changing what the fleet provisions required
+editing `fleet.sh` by hand (trimmed the hardcoded `INSTRUCTORS` array to one cluster per round,
+rewrote the round loop to parallelize), and node type/size are not even editable there (locked to the
+`cluster` module defaults because `fleet.sh` never forwards them); model tier per cluster needed a live
+ArgoCD-fighting `kubectl patch`. §4.6 parameterizes four axes (roster-as-data with `WIB_ROUNDS`/
+`WIB_PER_ROUND`; `WIB_INSTANCE_TYPES`/`WIB_NODE_SIZE`/`WIB_DISK` passthrough; cross-round concurrency
+by default; provision-time model tier), no new yaml/yq dependency. Folded into M1 because M1 already
+opens `fleet.sh` for the provider seam, so it is refactored once, not twice.
+
+**Scope guard.** Does not expand the code-only validation scope; gates stay `terraform validate`/`plan`
++ the offline suite. AWS-only this pass; the seam is provider-neutral so Azure/GCP shims inherit it.
+
+Michael requested the amendment 2026-07-03. Re-approval (a fresh `Approved-by` + sha seal) is the next
+gate before Phase 2 M1 begins.
