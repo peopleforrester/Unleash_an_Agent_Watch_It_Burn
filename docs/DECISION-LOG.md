@@ -408,3 +408,25 @@ Class-B beat, drive the fallback as the primary, not the model.
 
 **Do NOT "fix" this by hardening or by fighting the refusal.** The refusal is the model behaving
 correctly. Fix by reframe or by fallback. Recorded so the rerun is confirmation, not rediscovery.
+
+---
+
+## 2026-07-03T04:28:15Z · 1.3 · PRD 35 (multi-cloud AKS + GKE) approved
+
+Michael approved PRD 35 at the Phase 1.3 gate. Contract sealed:
+`Approved-by: Michael@2026-07-03T04:28:15Z`, sha256 `a1a6025ae7bd` of the approved body
+(commit `d94c5cb`, the version including the §3.7 cross-cloud hardening parity criteria and the
+M1/M2/M3 IMDS + CNI amendments). The plan is now read-only; any change needs `/prd-amend` and
+re-approval.
+
+Scope as approved: pluggable one-cloud-per-run (AWS/Azure/GCP + a `local` dev substrate);
+native model backend per cloud (Bedrock/Claude, Azure OpenAI/GPT, Vertex/Gemini+Claude, Ollama
+local); code-only validation this pass (no live Azure/GCP provisioning); symmetric
+`infra/terraform/{aws,azure,gcp}/{network,cluster}` layout; Oracle deferred.
+
+Still OPEN (does not block approval, blocks M3 design): §6 risk 1 / PRD 36 §8 Q1, whether GCP
+gets org-level VPC-SC or a per-cluster SNI proxy for the Vertex-yes/GCS-no egress separation.
+
+Next gate: Phase 2 begins with the mandatory `/init-state` PROJECT_STATE migration (PRD §8),
+then M1 (provider seam + AWS root relocation + the AWS IMDS `metadata_options` pin). No
+project-source mutation before that migration.

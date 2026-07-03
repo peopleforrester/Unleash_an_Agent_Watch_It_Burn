@@ -1,8 +1,9 @@
 # PRD 35: Multi-cloud support (Azure AKS + GCP GKE)
 
-Status: DRAFT, awaiting approval (Phase 1.3 gate)
+Status: APPROVED (Phase 1.3 sealed). Read-only; changes require /prd-amend + re-approval.
 Author: Michael Forrester
 Created: 2026-06-30
+Approved-by: Michael@2026-07-03T04:28:15Z (sha256:a1a6025ae7bd, approved body at commit d94c5cb)
 Branch target: staging
 
 ## 1. Goal
