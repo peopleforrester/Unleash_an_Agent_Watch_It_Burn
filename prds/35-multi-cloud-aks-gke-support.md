@@ -238,6 +238,47 @@ runs offline. The local target is for iterating the GitOps and guardrail surface
 not for reproducing the cloud IAM, private endpoints, or the cloud exfil target,
 which have no local equivalent.
 
+### 3.7 Cross-cloud hardening parity: node-metadata SSRF and NetworkPolicy enforcement
+
+Two controls must hold on every cloud or a downstream assumption breaks. Both were
+surfaced in the 2026-07-03 cluster-setup review (evidence in `docs/DECISION-LOG.md`)
+and are recorded here as per-cloud acceptance criteria so the Terraform roots and
+overlays carry them from the first apply, not after a live failure.
+
+**A. Node-metadata SSRF closes the keyless baseline.** The agent runs
+`run_shell` / `curl` by design. If its pod can reach the node metadata service it
+can steal the node role or identity, which is broader than the pod's model-scoped
+identity, and PRD 36's "AWS keyless, nothing to steal" baseline becomes false. The
+current AWS `cluster/main.tf` sets no `metadata_options`, so it inherits the module
+default. This is the one item recommended for the live AWS code before the next
+rerun.
+
+| Cloud | Control | Status |
+|---|---|---|
+| AWS | node group `metadata_options`: `http_tokens=required`, `http_put_response_hop_limit=1` (blocks pod to IMDS; Pod Identity is unaffected, it uses the `169.254.170.23` container-creds endpoint, not IMDS). verify-at-build that Pod Identity still resolves | **MISSING** in `cluster/main.tf`; add in M1 |
+| Azure | pods can reach IMDS `169.254.169.254` to the kubelet managed identity; the agent egress allowlist already denies it (the agent talks only to the private endpoint, 3.2), but pin it and confirm no metadata hole | add in M2 |
+| GCP | `workload_metadata_config { mode = GKE_METADATA }` makes the metadata server conceal the node SA from pods automatically; already in the 3.4 design | covered (keep) |
+
+**B. NetworkPolicy is inert unless the CNI enforces it.** The exfil lesson IS
+NetworkPolicy. This was already learned live on AWS (VPC-CNI `enableNetworkPolicy`)
+and on `local` (3.6). The same requirement must be explicit for Azure and GCP or the
+egress default-deny silently no-ops, which is worse than not running it.
+
+| Cloud | Enforcing CNI | Status |
+|---|---|---|
+| AWS | VPC-CNI `enableNetworkPolicy=true` | done (`cluster/main.tf`) |
+| Azure | `network_policy = "cilium"` (Azure CNI Powered by Cilium); kubenet/default does NOT enforce | add to M2 |
+| GCP | Dataplane V2 (`datapath_provider = "ADVANCED_DATAPATH"`); Standard clusters lack it by default | add to M3 |
+| local | Calico or Cilium (kindnet/flannel ignore NetworkPolicy) | covered (3.6, M8) |
+
+**C. Egress-control mechanism is not portable, restated as an infra fact.** AWS
+separates the allowed model endpoint from the denied exfil target at L3 (Bedrock
+PrivateLink present, S3 endpoint deliberately absent). Azure can do the same because
+Azure OpenAI Private Endpoint is per-resource. GCP cannot, because Vertex and GCS
+share the `restricted.googleapis.com` VIP (3.3), which is exactly why the GCP lesson
+needs VPC-SC or an SNI proxy (§6 risk 1). No new work here; this row exists so the
+three egress overlays are never assumed symmetric.
+
 ## 4. Architecture
 
 The refactor introduces a cloud-provider seam at four layers. The design keeps a
@@ -356,18 +397,24 @@ tests, lint).
   update the teardown scripts (backup first), `verify/test_forkbomb_defense.py`,
   and the doc references per 4.1. `fleet.sh` PROVIDER dispatch + empty
   `providers/{azure,gcp}.sh` shims with the AWS shim extracted from current code.
-  No behavior change for AWS beyond the path move. Gate: `terraform validate`
-  clean at the new AWS paths; offline verify suite green; `grep` sweep for stale
+  No behavior change for AWS beyond the path move. **Also pins the node-group
+  `metadata_options` (`http_tokens=required`, `http_put_response_hop_limit=1`) per
+  3.7-A to close the pod-to-IMDS node-cred SSRF; this is the one behavior change
+  worth making to live AWS code before the next rerun (verify-at-build that Pod
+  Identity still resolves).** Gate: `terraform validate` clean at the new AWS paths;
+  offline verify suite green; `grep` sweep for stale
   `terraform/lab-vpc`/`terraform/cluster` refs returns zero outside log history;
   shims `terraform fmt` clean.
 - **M2 Azure Terraform.** `infra/terraform/azure/{network,cluster}` with AKS,
-  OIDC + workload identity enabled, Azure OpenAI private endpoint + DNS zone, UAMI
-  + federated credential. Gate: `terraform validate` + `plan` against a real
-  subscription read (plan only, no apply).
+  OIDC + workload identity enabled, `network_policy = "cilium"` (3.7-B, or the
+  egress lesson no-ops), IMDS metadata restriction confirmed (3.7-A), Azure OpenAI
+  private endpoint + DNS zone, UAMI + federated credential. Gate: `terraform
+  validate` + `plan` against a real subscription read (plan only, no apply).
 - **M3 GCP Terraform.** `infra/terraform/gcp/{network,cluster}` with GKE,
-  workload pool, GKE_METADATA node pool, restricted.googleapis.com routing, **and
-  the VPC-SC perimeter + accessible-services allowlist** (3.3). Gate: `terraform
-  validate` + `plan`.
+  workload pool, GKE_METADATA node pool, **Dataplane V2
+  (`datapath_provider = "ADVANCED_DATAPATH"`) so NetworkPolicy enforces (3.7-B)**,
+  restricted.googleapis.com routing, **and the VPC-SC perimeter +
+  accessible-services allowlist** (3.3). Gate: `terraform validate` + `plan`.
 - **M4 GitOps overlays.** `overlays/{azure,gcp}` patching the five seams,
   including the **Azure-only** ESO ExternalSecret + ModelConfig Secret wiring (3.1);
   AWS and GCP overlays carry a keyless ModelConfig with no model Secret. Gate:
