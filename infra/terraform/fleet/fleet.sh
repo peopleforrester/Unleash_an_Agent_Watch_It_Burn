@@ -61,26 +61,30 @@ WIB_DEFAULT_ACCOUNT="${WIB_DEFAULT_ACCOUNT:-accen-dev}"
 # clusters: accen-dev attendee-001; set the offset above any existing number for a clean test run.
 WIB_NAME_OFFSET="${WIB_NAME_OFFSET:-0}"
 
-# --- Instructor roster: 9 fixed clusters, 3 per round. "name|round|bootstrap-profile" -----------
-# Facilitator-run, NOT in the attendee pool. ALL NINE ARE THE IDENTICAL FULL Sonnet-4.6 BUILD (same as
-# the attendee clusters): same app-of-apps, same ai-layer, same model. The 3-per-round are interchangeable
-# hot spares (if one dies mid-talk, fall back to another). The ROUND BEHAVIOUR (R1 wide open, R2 some
-# guards, R3 full + student-toggled) is a RUNTIME state flipped by the guard-toggle scripts + round
-# selector, NOT a different build. The ONE provision-time difference is R1's PID cap: cmd_instructors
-# sets pod_pids_limit=-1 on round 1 so the C4 fork bomb actually exhausts node PIDs ("watch it burn");
-# R2/R3 keep the 1024 cap. (History: R1 used to be a stripped "burn" profile and R3 ran per-model tiers
-# haiku/opus; both dropped, all Sonnet, all full.)
-INSTRUCTORS=(
-  "watch-it-burn-r1-1|1|full"
-  "watch-it-burn-r1-2|1|full"
-  "watch-it-burn-r1-3|1|full"
-  "watch-it-burn-r2-1|2|full"
-  "watch-it-burn-r2-2|2|full"
-  "watch-it-burn-r2-3|2|full"
-  "watch-it-burn-r3-1|3|full"
-  "watch-it-burn-r3-2|3|full"
-  "watch-it-burn-r3-3|3|full"
-)
+# --- Instructor roster (§4.6): DATA, not a hardcoded array ---------------------------------------
+# The roster lives in roster.tsv as "name|round|tier|instance_type|pids|bootstrap" rows, so changing
+# WHAT the fleet provisions (which clusters, which model tier, node type, PID cap) is config, not a
+# script edit. load_roster reads WIB_ROSTER_FILE; a built-in default keeps a bare checkout working.
+# Round behaviour (R1 wide open, R2 some guards, R3 full) stays a RUNTIME toggle; the roster's pids
+# column carries the one provision-time difference (R1 pids=-1 so the C4 fork bomb burns the node).
+# All clusters run the identical FULL build; the model default is Nova (gitops), tier column overrides.
+INSTRUCTORS=()
+load_roster() {
+    INSTRUCTORS=()
+    if [[ -r "${WIB_ROSTER_FILE}" ]]; then
+        local line
+        while IFS= read -r line; do
+            line="${line//[[:space:]]/}"
+            [[ -z "${line}" || "${line}" == \#* ]] && continue
+            INSTRUCTORS+=("${line}")
+        done < "${WIB_ROSTER_FILE}"
+    fi
+    [[ "${#INSTRUCTORS[@]}" -gt 0 ]] || INSTRUCTORS=(
+        "watch-it-burn-r1-1|1|||-1|full" "watch-it-burn-r1-2|1|||-1|full" "watch-it-burn-r1-3|1|||-1|full"
+        "watch-it-burn-r2-1|2||||full"   "watch-it-burn-r2-2|2||||full"   "watch-it-burn-r2-3|2||||full"
+        "watch-it-burn-r3-1|3||||full"   "watch-it-burn-r3-2|3||||full"   "watch-it-burn-r3-3|3||||full"
+    )
+}
 
 # When non-empty, up_one/down_one target this AWS profile (account). Empty = module default account.
 TF_PROFILE=""
@@ -115,6 +119,29 @@ fi
 [[ -n "${WIB_DOCKERHUB_AUTH_B64}" ]] \
     && log "Docker Hub Team auth loaded for node bootstrap (containerd docker.io auth + GHCR fallback)" \
     || log "no Docker Hub auth (${_dh_env} missing/unreadable) — nodes will pull docker.io anonymously"
+
+# --- §4.6 cluster-shape parameterization (PRD 35): shape / roster / concurrency as config, not edits ---
+# Fleet-wide overrides. Empty = the cluster module default, so UNSET means no behavior change vs today.
+# Per-cluster roster columns take precedence over these fleet-wide values.
+WIB_INSTANCE_TYPES="${WIB_INSTANCE_TYPES:-}"     # comma list, e.g. "m5.2xlarge" or "m5.xlarge,m5.2xlarge"
+WIB_NODE_SIZE="${WIB_NODE_SIZE:-}"               # node count -> min/max/desired
+WIB_DISK="${WIB_DISK:-}"                          # root disk GiB -> node_disk_size
+# Roster selection: the instructor roster is DATA (roster.tsv), not a hardcoded array. Override the file
+# path, or subset by round / per-round count, all without editing this script.
+WIB_ROSTER_FILE="${WIB_ROSTER_FILE:-${SCRIPT_DIR}/roster.tsv}"
+WIB_ROUNDS="${WIB_ROUNDS:-}"                      # comma list of rounds to include, e.g. "2,3" (empty = all)
+WIB_PER_ROUND="${WIB_PER_ROUND:-}"               # max clusters per round (empty = all)
+# Rounds run CONCURRENTLY by default (each round its own subshell so per-round vars cannot clash; the
+# single shared terraform init + isolated per-cluster -state make it safe, same as run_pool within a
+# round). Set WIB_SERIAL=1 to force the old serial round loop.
+WIB_SERIAL="${WIB_SERIAL:-}"
+# Dry run: print the terraform apply each cluster WOULD run (and skip bootstrap) instead of provisioning.
+# Lets the roster / subset / var-building / concurrency logic be validated offline with no cloud spend.
+WIB_DRY_RUN="${WIB_DRY_RUN:-}"
+# Per-cluster overrides, set from the roster row before each up_one (siblings of TF_PIDS_LIMIT). Empty =
+# fall back to the fleet-wide WIB_* value, then the module default.
+TF_INSTANCE_TYPES=""
+TF_TIER=""
 
 account_for_round() {
     case "$1" in
@@ -319,10 +346,21 @@ up_one() {
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     local pids=(); [[ -n "${TF_PIDS_LIMIT}" ]] && pids=(-var "pod_pids_limit=${TF_PIDS_LIMIT}")
     local dh=(); [[ -n "${WIB_DOCKERHUB_AUTH_B64}" ]] && dh=(-var "dockerhub_auth_b64=${WIB_DOCKERHUB_AUTH_B64}")
+    # §4.6 shape passthrough. Per-cluster TF_INSTANCE_TYPES (roster) wins over fleet-wide WIB_INSTANCE_TYPES.
+    local it=(); local _itypes="${TF_INSTANCE_TYPES:-${WIB_INSTANCE_TYPES}}"
+    if [[ -n "${_itypes}" ]]; then
+        local _j; _j="$(printf '"%s",' ${_itypes//,/ })"; it=(-var "instance_types=[${_j%,}]")
+    fi
+    local ns=(); [[ -n "${WIB_NODE_SIZE}" ]] && ns=(-var "node_min_size=${WIB_NODE_SIZE}" -var "node_max_size=${WIB_NODE_SIZE}" -var "node_desired_size=${WIB_NODE_SIZE}")
+    local dk=(); [[ -n "${WIB_DISK}" ]] && dk=(-var "node_disk_size=${WIB_DISK}")
+    if [[ -n "${WIB_DRY_RUN}" ]]; then
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        return 0
+    fi
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
-        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" "${dh[@]}" \
+        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
         # Auto-bootstrap the IDP unless this provision is bare-only.
@@ -403,7 +441,7 @@ cmd_up() {
     require_tools
     mkdir -p "${STATE_DIR}" "${LOG_DIR}"
     rm -f "${LOG_DIR}/.failures"
-    read_vpc
+    if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc; fi
     log "init cluster module..."
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local names; mapfile -t names < <(expand_names "$@")
@@ -471,46 +509,64 @@ read_vpc_for() {
 
 # fleet.sh only provisions; remind which bootstrap profile each instructor needs (burn vs full).
 print_bootstrap_hints() {
-    local round_filter="${1:-}" entry name rr bp
+    local round_filter="${1:-}" entry name rr tier itype pidscol bp
     log "next: bootstrap each (fleet.sh provisions; deploy-full-idp.sh bootstraps):"
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rr bp <<<"${entry}"
+        IFS='|' read -r name rr tier itype pidscol bp <<<"${entry}"
         [[ -n "${round_filter}" && "${round_filter}" != "${rr}" ]] && continue
         log "  ${name}: AWS_PROFILE=$(account_for_round "${rr}") KUBECONFIG=<isolated> deploy-full-idp.sh ${bp}"
     done
 }
 
-# Provision/destroy the fixed instructor roster, grouped by round so each account's VPC is read once.
+# up_one wrapper (§4.6): look up this cluster's roster row and set the per-cluster TF_* overrides (pids /
+# instance_type / tier) before provisioning. Runs inside run_pool's per-cluster subshell, so the globals
+# are process-local and cannot clash across concurrent clusters.
+_up_from_roster() {
+    local name="$1" entry _n rr tier itype pidscol bp
+    for entry in "${INSTRUCTORS[@]}"; do
+        IFS='|' read -r _n rr tier itype pidscol bp <<<"${entry}"
+        [[ "${_n}" == "${name}" ]] && { TF_PIDS_LIMIT="${pidscol}"; TF_INSTANCE_TYPES="${itype}"; TF_TIER="${tier}"; break; }
+    done
+    up_one "${name}"
+}
+
+# One round in its own subshell (§4.6): per-round TF_PROFILE / VPC globals stay isolated from other
+# concurrent rounds. Reads the round's clusters from the roster (capped by WIB_PER_ROUND) and provisions
+# or destroys them via the concurrency pool.
+_run_round() {
+    local action="$1" r="$2" entry name rr tier itype pidscol bp names=() n=0
+    for entry in "${INSTRUCTORS[@]}"; do
+        IFS='|' read -r name rr tier itype pidscol bp <<<"${entry}"
+        [[ "${rr}" == "${r}" ]] || continue
+        [[ -n "${WIB_PER_ROUND}" && "${n}" -ge "${WIB_PER_ROUND}" ]] && break
+        names+=("${name}"); n=$((n + 1))
+    done
+    [[ "${#names[@]}" -gt 0 ]] || return 0
+    local acct; acct="$(account_for_round "${r}")"
+    log "round ${r} instructors -> account '${acct}': ${names[*]}"
+    if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc_for "${acct}"; fi
+    TF_PROFILE="${acct}"
+    [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]] && BOOTSTRAP_PROFILE="full"
+    if [[ "${action}" == "up" ]]; then run_pool _up_from_roster "${names[@]}"; else run_pool down_one "${names[@]}"; fi
+}
+
+# Provision/destroy the instructor roster. Rounds run CONCURRENTLY by default (§4.6), each in its own
+# subshell; WIB_SERIAL=1 forces the old serial loop. Round selection: 2nd arg > WIB_ROUNDS env > all.
 cmd_instructors() {
     local action="${1:-}" round_filter="${2:-}"
     case "${action}" in up|down) ;; status) cmd_status; return ;; *) usage ;; esac
     require_tools
     mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    load_roster
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
-    local r acct entry name rr bp names
-    for r in 1 2 3; do
-        [[ -n "${round_filter}" && "${round_filter}" != "${r}" ]] && continue
-        names=()
-        for entry in "${INSTRUCTORS[@]}"; do
-            IFS='|' read -r name rr bp <<<"${entry}"
-            [[ "${rr}" == "${r}" ]] && names+=("${name}")
-        done
-        [[ "${#names[@]}" -gt 0 ]] || continue
-        acct="$(account_for_round "${r}")"
-        log "round ${r} instructors -> account '${acct}': ${names[*]}"
-        read_vpc_for "${acct}"
-        TF_PROFILE="${acct}"
-        # Round 1 clusters provision with NO per-pod PID cap so the fork bomb lands (the burn). This is
-        # the ONLY per-round provision difference; R2/R3 keep the module-default 1024 cap.
-        [[ "${r}" == "1" ]] && TF_PIDS_LIMIT="-1" || TF_PIDS_LIMIT=""
-        # Auto-bootstrap: ALL rounds get the identical FULL build (R1 is no longer a stripped "burn"
-        # profile; its open/guardrails-off state is a runtime toggle). Skipped if WIB_NO_BOOTSTRAP=1.
-        if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
-            BOOTSTRAP_PROFILE="full"
-        fi
-        if [[ "${action}" == "up" ]]; then run_pool up_one "${names[@]}"; else run_pool down_one "${names[@]}"; fi
-        TF_PROFILE=""; TF_PIDS_LIMIT=""; BOOTSTRAP_PROFILE=""
+    local rounds=(1 2 3) r
+    [[ -n "${WIB_ROUNDS}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROUNDS}"
+    [[ -n "${round_filter}" ]] && rounds=("${round_filter}")
+    for r in "${rounds[@]}"; do
+        _run_round "${action}" "${r}" &
+        [[ -n "${WIB_SERIAL}" ]] && wait   # serial: finish each round before starting the next
     done
+    wait || true
     report_failures
     # Auto-regenerate the agenticburn.com router map so instructor friendly URLs resolve (no manual step).
     [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]] && { cmd_routes || log "routes: run 'fleet.sh routes' manually once LBs are up"; }
