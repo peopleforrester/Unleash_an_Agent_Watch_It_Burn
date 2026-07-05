@@ -23,7 +23,12 @@ Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-ap
 Active, Michael-prioritized 2026-07-05:
 1. DONE (offline-verified; live-validate next cluster). Adopted Amazon Nova as the WORKSHOP DEFAULT (Michael: "Nova everywhere"). `bedrock-nova` ModelConfig (`us.amazon.nova-pro-v1:0`) added; Agent default flipped sonnet -> nova. Claude/haiku/opus tiers kept for an optional cost-race. Nova complies AND executes where Claude refuses and Llama/Mistral leak tool-calls-as-text.
 2. DONE (offline-verified; live-validate next cluster). curl fixture (PRD 37): workshop-mcp startup command now `apt-get install -y curl` alongside the existing pip step, so run_shell can POST to the beacon.
-4. NEXT. PRD 35 M1: provider seam + AWS root relocation + IMDS `metadata_options` pin + §4.6 cluster-shape parameterization.
+4. IN PROGRESS. PRD 35 M1, sub-steps:
+   - [x] IMDS `metadata_options` pin (§3.7-A) in cluster/main.tf — IMDSv2 required, hop_limit=1. terraform validate + fmt green.
+   - [ ] §4.6 fleet.sh cluster-shape parameterization (roster-as-data, size passthrough, cross-round concurrency default, provision-time tier).
+   - [ ] AWS root relocation infra/terraform/{lab-vpc,cluster} -> aws/{network,cluster} + update all path refs (teardown scripts, verify/test_forkbomb_defense.py, fleet.sh, ~10 docs).
+   - [ ] fleet.sh PROVIDER dispatch + providers/{aws,azure,gcp}.sh shims.
+   The relocation is path-critical; validate M1 on a live cluster before promoting main.
 Parked: 3. open-weights/Llama via an OpenAI-compat proxy (needs a real build).
 Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design only.
 

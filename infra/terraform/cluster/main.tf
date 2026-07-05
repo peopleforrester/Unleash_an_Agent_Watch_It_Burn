@@ -241,6 +241,16 @@ module "eks" {
       # are disposable, so force the update rather than respecting PDBs during a node roll. (Fresh
       # provisions never roll, so the event path is unaffected; this only matters for config changes.)
       force_update_version = true
+      # IMDS hardening (PRD 35 3.7-A): the agent runs run_shell by design, so a pod that can reach node
+      # IMDS could steal the node instance-role creds (broader than the pod's Bedrock-scoped Pod Identity),
+      # which would falsify PRD 36's "AWS keyless, nothing to steal" baseline. Require IMDSv2 and set
+      # hop_limit=1 so pods cannot reach node IMDS. Pod Identity is unaffected: it uses the container-creds
+      # endpoint 169.254.170.23, not IMDS. verify-at-build: confirm Pod Identity still resolves at hop=1.
+      metadata_options = {
+        http_endpoint               = "enabled"
+        http_tokens                 = "required"
+        http_put_response_hop_limit = 1
+      }
       # Root volume via block_device_mappings, NOT disk_size: cloudinit_pre_nodeadm forces a custom
       # launch template, under which the module ignores disk_size (node would fall back to AL2023's
       # 20 GiB default and hit DiskPressure). See the node_disk_size variable for the why.
