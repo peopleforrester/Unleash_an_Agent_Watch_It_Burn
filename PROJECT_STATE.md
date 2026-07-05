@@ -1,4 +1,46 @@
-# PROJECT_STATE.md
+# Project State: Unleash_an_Agent_Watch_It_Burn
+
+Phase: 1.3 Approve (PRD 35 sealed; entering Phase 2 M1)
+Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
+
+## Lifecycle
+- [x] 1.1 Research
+- [x] 1.2 Plan
+- [x] 1.3 Approve  ← PRD 35 sealed; entering Phase 2
+- [ ] 2.1 Test
+- [ ] 2.2 Implement
+- [ ] 2.3 Verify
+- [ ] 3.1 Stage
+- [ ] 3.2 Confirm CI
+- [ ] 3.3 Promote
+
+## Contracts
+- 2026-07-03T19:59:22Z · sha256:5e110e425e70 · PRD 35 multi-cloud (AKS + GKE) incl. §3.7 hardening parity + §4.6 cluster-shape parameterization. APPROVED, read-only; changes need /prd-amend.
+- PRD 36 · multi-cloud attack -> control -> signal matrix (reference/acceptance spine; sibling of 35, no separate gate).
+- PRD 37 · curl/wget missing from workshop-mcp image (open NOTE, small fixture fix).
+
+## Current Plan
+Active, Michael-prioritized 2026-07-05:
+1. Adopt Amazon Nova as the attacker-model tier (`bedrock-nova` ModelConfig). Proven live 2026-07-05: Nova complies AND executes tools (real PII, recipe-sentinel, MCP-injection sentinel) where Sonnet refuses and Llama/Mistral leak tool-calls-as-text.
+2. Fix the curl/wget fixture in the workshop-mcp image (PRD 37) so the webhook-exfil beat can POST.
+4. PRD 35 M1: provider seam + AWS root relocation + IMDS `metadata_options` pin + §4.6 cluster-shape parameterization.
+Parked: 3. open-weights/Llama via an OpenAI-compat proxy (needs a real build).
+Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design only.
+
+## Branch & Tests
+- Branch: staging
+- Working tree: clean
+- Last CI: n/a (docs-only commits); sha 9309394
+
+## Phase History
+- 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
+
+## Audit log pointer
+The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.
+
+---
+
+# PROJECT_STATE.md (pre-lifecycle body, preserved)
 
 Workshop: "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 AI Engineer World's Fair 2026, San Francisco, Moscone West. Speakers: Michael Forrester (Accenture) + Whitney Lee.
