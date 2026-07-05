@@ -21,9 +21,9 @@ Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-ap
 
 ## Current Plan
 Active, Michael-prioritized 2026-07-05:
-1. Adopt Amazon Nova as the attacker-model tier (`bedrock-nova` ModelConfig). Proven live 2026-07-05: Nova complies AND executes tools (real PII, recipe-sentinel, MCP-injection sentinel) where Sonnet refuses and Llama/Mistral leak tool-calls-as-text.
-2. Fix the curl/wget fixture in the workshop-mcp image (PRD 37) so the webhook-exfil beat can POST.
-4. PRD 35 M1: provider seam + AWS root relocation + IMDS `metadata_options` pin + §4.6 cluster-shape parameterization.
+1. DONE (offline-verified; live-validate next cluster). Adopted Amazon Nova as the WORKSHOP DEFAULT (Michael: "Nova everywhere"). `bedrock-nova` ModelConfig (`us.amazon.nova-pro-v1:0`) added; Agent default flipped sonnet -> nova. Claude/haiku/opus tiers kept for an optional cost-race. Nova complies AND executes where Claude refuses and Llama/Mistral leak tool-calls-as-text.
+2. DONE (offline-verified; live-validate next cluster). curl fixture (PRD 37): workshop-mcp startup command now `apt-get install -y curl` alongside the existing pip step, so run_shell can POST to the beacon.
+4. NEXT. PRD 35 M1: provider seam + AWS root relocation + IMDS `metadata_options` pin + §4.6 cluster-shape parameterization.
 Parked: 3. open-weights/Llama via an OpenAI-compat proxy (needs a real build).
 Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design only.
 
@@ -34,6 +34,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 
 ## Phase History
 - 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
+- 2026-07-05 2.2/2.3 items 1+2 implemented + offline-verified (Nova default + curl fixture); YAML + kustomize green; live-validation deferred to next cluster.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.
