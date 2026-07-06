@@ -15,6 +15,14 @@ PROVISION_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 INFRA_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 REPO_ROOT="$(cd "${INFRA_DIR}/.." && pwd)"
 readonly SCRIPT_DIR PROVISION_DIR INFRA_DIR REPO_ROOT
+# §4.2 provider dispatch: pick the cloud (aws|azure|gcp|local) and source its shim, which supplies
+# the terraform network/cluster subpaths + the kubeconfig contract. Default aws (the only provider fully
+# implemented this pass; azure/gcp/local are stubs — PRD 35 M2/M3/M8).
+PROVIDER="${PROVIDER:-aws}"
+[[ -r "${SCRIPT_DIR}/providers/${PROVIDER}.sh" ]] || { printf 'unknown PROVIDER=%s (expected aws|azure|gcp|local)\n' "${PROVIDER}" >&2; exit 2; }
+# shellcheck source=/dev/null
+. "${SCRIPT_DIR}/providers/${PROVIDER}.sh"
+readonly PROVIDER
 readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
 # The provisioning app (web UI + the harvester scripts the fleet runs during `ingest`) was extracted to
 # a sibling repo (peopleforrester/provisioning-agenticburn). Locate the scripts via WIB_PROVISION_DIR;
@@ -24,8 +32,8 @@ readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
 readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
-readonly CLUSTER_DIR="${PROVISION_DIR}/aws/cluster"
-readonly LAB_VPC_DIR="${PROVISION_DIR}/aws/network"
+readonly CLUSTER_DIR="${PROVISION_DIR}/${PROVIDER_CLUSTER_SUBDIR}"
+readonly LAB_VPC_DIR="${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
 readonly LOG_DIR="${SCRIPT_DIR}/logs"
 readonly NAME_PREFIX="watch-it-burn-attendee"
@@ -243,8 +251,7 @@ bootstrap_one() {
     local name="$1" profile="$2"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
-    AWS_PROFILE="${acct_profile}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
-        --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
+    provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
     # Datadog keys, read from the central pool on the PROVISIONING box (default account); deploy-full-idp
     # injects them as a plain K8s Secret (the cluster's own account never touches Secrets Manager).
     # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
@@ -378,7 +385,7 @@ up_one() {
 drain_cluster_lbs() {
     local name="$1" acct="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kc; kc="$(mktemp -t "${name}.drain.XXXX")"
-    if AWS_PROFILE="${acct}" aws eks update-kubeconfig --kubeconfig "${kc}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1 \
+    if provider_write_kubeconfig "${name}" "${kc}" "${acct}" \
        && KUBECONFIG="${kc}" kubectl get ns >/dev/null 2>&1; then
         local lbsvcs
         lbsvcs="$(KUBECONFIG="${kc}" kubectl get svc -A -o jsonpath='{range .items[?(@.spec.type=="LoadBalancer")]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}' 2>/dev/null)"
@@ -652,8 +659,7 @@ health_one() {
     local name="$1"; assert_ours "${name}"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
-    if ! AWS_PROFILE="${acct_profile}" aws eks update-kubeconfig --kubeconfig "${kcfg}" \
-            --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1; then
+    if ! provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"; then
         log "  ${name}: UNREACHABLE (no kubeconfig)"; record_fail "${name}:unreachable"; rm -f "${kcfg}"; return
     fi
     local apps total healthy pending failed
@@ -815,7 +821,7 @@ cmd_reap() {
 ingest_one() {
     local name="$1" acct_profile="$2"
     local kcfg; kcfg="$(mktemp -t "${name}.ing.XXXX")"
-    AWS_PROFILE="${acct_profile}" aws eks update-kubeconfig --kubeconfig "${kcfg}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1
+    provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
     local console_host; console_host="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
     rm -f "${kcfg}"
     [[ -n "${console_host}" ]] || { log "  ingest ${name}: console NLB not ready; skip"; record_fail "ingest:${name}"; return; }
@@ -902,9 +908,9 @@ cmd_routes() {
     local entry name rr bp acct h short n state
     local -A round_done=()
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rr bp <<<"${entry}"
+        IFS='|' read -r name rr _tier _it _pid bp <<<"${entry}"
         acct="$(account_for_round "${rr}")"
-        AWS_PROFILE="${acct}" aws eks update-kubeconfig --kubeconfig "${kcfg}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1 || continue
+        provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
         h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
         [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
         short="${name#watch-it-burn-}"
@@ -916,7 +922,7 @@ cmd_routes() {
         for state in "${STATE_DIR}"/${NAME_PREFIX}-*.tfstate; do
             [[ -e "${state}" ]] || continue
             name="$(basename "${state}" .tfstate)"; n="${name##*-}"
-            AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws eks update-kubeconfig --kubeconfig "${kcfg}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1 || continue
+            provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
             [[ -n "${h}" ]] && printf 'a-%s.agenticburn.com  %s:80\n' "${n}" "${h}" >> "${tmp}"
         done
