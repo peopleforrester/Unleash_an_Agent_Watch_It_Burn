@@ -13,7 +13,7 @@ asciinema              TODO (install before Phase 9 recordings)
 ## Cloud / cluster
 aws-account            (bring your own; not pinned in a public repo)
 region                 us-west-2
-provisioning           Terraform — infra/terraform/ (lab-vpc + cluster + fleet/fleet.sh)
+provisioning           Terraform — infra/terraform/ (aws/network + aws/cluster + fleet/fleet.sh)
 terraform-modules      EKS ~> 21.0 · VPC ~> 5.0 · eks-pod-identity ~> 1.0 · aws provider ~> 6.0
 
 ## Component versions (research-grounded; RE-PINNED to current GA 2026-06-20, research/11 + research/14)

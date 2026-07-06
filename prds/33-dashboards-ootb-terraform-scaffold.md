@@ -112,7 +112,7 @@ Fix whatever configuration gap exists, redeploy, and re-verify.
 
 ### Milestone 2 — Scaffold `infra/terraform/dashboards/` module
 
-**Step 0**: Read `infra/terraform/README.md` and skim `infra/terraform/cluster/main.tf` to
+**Step 0**: Read `infra/terraform/README.md` and skim `infra/terraform/aws/cluster/main.tf` to
 understand the sibling-module convention before writing any code. The `dashboards/` module must
 follow the same structural patterns.
 

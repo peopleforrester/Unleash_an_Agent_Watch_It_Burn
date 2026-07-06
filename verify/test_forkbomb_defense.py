@@ -6,7 +6,7 @@ sidekick = yaml.safe_load((REPO/"gitops/apps/falcosidekick.yaml").read_text())
 talon = yaml.safe_load((REPO/"gitops/apps/falco-talon.yaml").read_text())
 # Provisioning is Terraform: the PID cap is delivered by the per-attendee cluster module's node
 # cloudinit_pre_nodeadm NodeConfig (eksctl delivered it via overrideBootstrapCommand previously).
-cluster_tf = (REPO/"infra/terraform/cluster/main.tf").read_text()
+cluster_tf = (REPO/"infra/terraform/aws/cluster/main.tf").read_text()
 cr = falco["spec"]["source"]["helm"]["valuesObject"]["customRules"]
 # 00- prefix so the fork-bomb rule loads first in rules.d and is not shadowed by the generic
 # "Exec Into Pod Detected" rule (Falco fires only the first matching rule per event).

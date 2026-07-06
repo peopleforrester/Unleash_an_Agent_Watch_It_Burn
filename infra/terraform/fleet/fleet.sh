@@ -24,8 +24,8 @@ readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
 readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
-readonly CLUSTER_DIR="${PROVISION_DIR}/cluster"
-readonly LAB_VPC_DIR="${PROVISION_DIR}/lab-vpc"
+readonly CLUSTER_DIR="${PROVISION_DIR}/aws/cluster"
+readonly LAB_VPC_DIR="${PROVISION_DIR}/aws/network"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
 readonly LOG_DIR="${SCRIPT_DIR}/logs"
 readonly NAME_PREFIX="watch-it-burn-attendee"
@@ -188,7 +188,7 @@ provision and the bootstrap together, so a fleet 'up' self-completes. Set WIB_NO
 provision bare clusters only (then bootstrap manually; instructor hints print after a bare 'up').
 Per-branch clusters (a cluster tracking its own branch) are a manual case: bootstrap from that branch.
 
-Attendee path reads the shared VPC from ../lab-vpc (must be applied first). Each cluster gets its own
+Attendee path reads the shared VPC from ../aws/network (must be applied first). Each cluster gets its own
 state file under states/, so one cluster's failure or teardown never touches another. MAX_PARALLEL
 (default 8) caps concurrency. Attendee profile/region come from the cluster module defaults.
 

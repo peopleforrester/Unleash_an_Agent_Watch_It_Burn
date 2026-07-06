@@ -40,7 +40,7 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
 ## Where the tags are applied
 
 - **EKS clusters + all AWS resources** - Terraform `provider "aws" { default_tags { ... } }` in
-  `infra/terraform/lab-vpc/main.tf` and `infra/terraform/cluster/main.tf`. default_tags applies
+  `infra/terraform/aws/network/main.tf` and `infra/terraform/aws/cluster/main.tf`. default_tags applies
   `project=watch-it-burn` to every resource the provider creates (VPC, cluster, node group, IRSA /
   Pod Identity roles, EBS), so the whole stack inherits it. The per-attendee cluster also gets
   `attendee=<name>`. (Provisioning is Terraform, not eksctl.)

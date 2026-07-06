@@ -14,7 +14,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 - ✅ Default model **Sonnet 4.6** (`bedrock-sonnet`), verified live; Haiku/Opus defined for the optional tier demo.
 
 ## 2. Provisioning & fleet
-- ✅ Cluster provisioning is Terraform (`infra/terraform/cluster`), driven by `fleet.sh` (per-cluster state, parallel).
+- ✅ Cluster provisioning is Terraform (`infra/terraform/aws/cluster`), driven by `fleet.sh` (per-cluster state, parallel).
 - ✅ `fleet.sh instructors up|down [round]` encodes the 9 instructor clusters + round→account split.
 - ✅ Bootstrap: `deploy-full-idp.sh full|burn` (ArgoCD app-of-apps; `full` and `burn` profiles both exist).
 - ⬜ **Per-account `lab-vpc`** apply for the 5-account model (each account needs its own VPC; `fleet.sh` prints the apply line but it is not automated).

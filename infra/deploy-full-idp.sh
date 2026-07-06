@@ -89,7 +89,7 @@ fi
 if [[ "${PROFILE}" == "full" ]]; then
   log "[3.5] AWS Load Balancer Controller (NLB for the console Service, ALB for the party Ingresses)"
   # IAM is an EKS Pod Identity association created by Terraform for kube-system/aws-load-balancer-controller
-  # (infra/terraform/cluster/main.tf); Pod Identity supplies the AWS creds (no IMDS needed for auth).
+  # (infra/terraform/aws/cluster/main.tf); Pod Identity supplies the AWS creds (no IMDS needed for auth).
   # clusterName/region/vpcId are passed EXPLICITLY: the controller otherwise auto-discovers vpcId from
   # IMDS, which the pod cannot reach on these nodes (IMDS hop limit), so it CrashLoops with "failed to
   # fetch VPC ID from instance metadata" (found live 2026-06-26). Deriving them via the EKS API avoids
@@ -117,6 +117,6 @@ log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging)
 kubectl apply -f "${REPO}/${ROOT_APP}"
 
 log "Deploy issued. Watch sync with: kubectl get applications -n argocd"
-log "NOTE: agent Bedrock access is provisioned by Terraform (infra/terraform/cluster) as an EKS Pod"
+log "NOTE: agent Bedrock access is provisioned by Terraform (infra/terraform/aws/cluster) as an EKS Pod"
 log "  Identity association for agent:agent-sa, no SA annotation or kubectl step needed. The"
 log "  eks-pod-identity-agent addon injects creds via the AWS SDK chain kagent already uses."

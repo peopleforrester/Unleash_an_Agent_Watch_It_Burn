@@ -26,12 +26,12 @@ network isolation, and 60 VPCs would burn the VPC-per-region quota for no benefi
 
 ## Provisioning (Terraform)
 
-This is now implemented as Terraform in `infra/terraform/lab-vpc/` (the shape this doc describes).
+This is now implemented as Terraform in `infra/terraform/aws/network/` (the shape this doc describes).
 The per-attendee cluster module reads the VPC id + private subnet ids straight from the lab-vpc
 state, no manual id substitution.
 
 1. Provision the shared VPC + subnets + NAT ONCE, up front, before any cluster:
-   `cd infra/terraform/lab-vpc && terraform init && terraform apply`.
+   `cd infra/terraform/aws/network && terraform init && terraform apply`.
 2. The fleet driver (`infra/terraform/fleet/fleet.sh`) reads `vpc_id` and `private_subnet_ids` from
    the lab-vpc outputs and passes them to each attendee cluster as `-var`. Nothing to copy by hand.
 3. The cluster module creates only the cluster INTO the shared VPC; it does not create a VPC, NAT,

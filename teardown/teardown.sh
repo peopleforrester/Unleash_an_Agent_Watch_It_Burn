@@ -30,7 +30,7 @@ Destroys all Watch It Burn attendee clusters (Terraform fleet, per-attendee stat
 orphaned EKS log groups. Scoped to the ${CLUSTER_PREFIX} cluster-name prefix; it cannot touch the
 co-tenant Packt clusters (the fleet refuses any non-watch-it-burn name).
 
-  --vpc    Also destroy the shared lab VPC after every cluster is gone (infra/terraform/lab-vpc).
+  --vpc    Also destroy the shared lab VPC after every cluster is gone (infra/terraform/aws/network).
   -h       Show this help.
 EOF
   exit 2
@@ -54,7 +54,7 @@ log "==> sweeping orphaned EKS control-plane log groups (ours only)"
 
 if [[ "${DESTROY_VPC}" == "true" ]]; then
   log "==> destroying the shared lab VPC (last)"
-  terraform -chdir="${TF_DIR}/lab-vpc" destroy -auto-approve
+  terraform -chdir="${TF_DIR}/aws/network" destroy -auto-approve
 else
   log "==> shared lab VPC left intact; re-run with --vpc to remove it when the event is over."
 fi

@@ -17,12 +17,12 @@ Scope of the AWS account at verification time: profile `accen-dev`, region `us-w
 The platform rebuilds from code in this order. Nothing below depends on any AWS resource that the
 fleet teardown leaves behind; a clean account rebuilds end to end.
 
-1. **Shared lab VPC.** `infra/terraform/lab-vpc/` (`terraform init && terraform apply`). One VPC
+1. **Shared lab VPC.** `infra/terraform/aws/network/` (`terraform init && terraform apply`). One VPC
    (10.0.0.0/16), two /18 private subnets, a single shared NAT, and the Bedrock interface VPC
    endpoint (added 2026-06-26, see §5). Outputs `vpc_id`, `private_subnet_ids`, `bedrock_vpce_id`.
 2. **Clusters.** `infra/terraform/fleet/fleet.sh up <N>` for attendee clusters or
    `fleet.sh instructors up <round>` for the nine instructor clusters. Each attaches to the shared
-   VPC subnets. Cluster terraform is `infra/terraform/cluster/main.tf` (EKS 1.35, managed addons,
+   VPC subnets. Cluster terraform is `infra/terraform/aws/cluster/main.tf` (EKS 1.35, managed addons,
    EKS Pod Identity for agent/ESO/LB-controller, IRSA only for the EBS CSI driver).
 3. **IDP bootstrap.** `infra/setup-instructor-cluster.sh <cluster> <round>` (or `deploy-full-idp.sh`
    directly). `burn` profile selects `gitops/bootstrap/app-of-apps-burn.yaml` (R1: agent + cost proxy
@@ -48,7 +48,7 @@ fleet teardown leaves behind; a clean account rebuilds end to end.
    (see `docs/DECISION-LOG.md` and `docs/GO-LIVE-CHECKLIST.md`).
 
 Teardown is `fleet.sh down <names|all>` for clusters; the shared VPC is destroyed separately with
-`terraform -chdir=infra/terraform/lab-vpc destroy`. The cluster teardown does NOT remove the
+`terraform -chdir=infra/terraform/aws/network destroy`. The cluster teardown does NOT remove the
 `console` Classic ELB or its security group (see §5); those leak and must be cleaned by hand until the
 load-balancer fix lands.
 
@@ -60,8 +60,8 @@ Every distinct technology and the file that configures it. Versions are the repo
 
 | Layer | Technology | Version (pinned) | Config file |
 |---|---|---|---|
-| Cloud | EKS | 1.35 | `infra/terraform/cluster/main.tf` |
-| Cloud | Terraform | >= 1.10 (run 1.15.x) | `infra/terraform/{lab-vpc,cluster,fleet}/` |
+| Cloud | EKS | 1.35 | `infra/terraform/aws/cluster/main.tf` |
+| Cloud | Terraform | >= 1.10 (run 1.15.x) | `infra/terraform/{aws/network,aws/cluster,fleet}/` |
 | Network | VPC-CNI (native NetworkPolicy) | EKS addon, `enableNetworkPolicy=true` | `cluster/main.tf` |
 | Identity | EKS Pod Identity | agent + ESO + LB-controller roles | `cluster/main.tf` (eks-pod-identity module) |
 | Identity | IRSA | EBS CSI driver only | EKS addon |
@@ -214,7 +214,7 @@ already wired and the party apps need ALBs, install the controller.
 
 Recorded here because it spans terraform and gitops and must be recreated as a unit.
 
-- **`infra/terraform/lab-vpc/main.tf`**: a Bedrock interface VPC endpoint (`aws_vpc_endpoint`
+- **`infra/terraform/aws/network/main.tf`**: a Bedrock interface VPC endpoint (`aws_vpc_endpoint`
   `bedrock_runtime`, private DNS on) plus a security group allowing 443 from the VPC CIDR. The agent
   now reaches Bedrock by an in-VPC ENI. There is deliberately NO S3 endpoint, so S3 stays public.
 - **`policies/network-policies/per-namespace/agent-*.yaml`**: four egress-only NetworkPolicies on the
@@ -322,13 +322,13 @@ mapping and matches the implementation.
 |---|---|---|---|
 | 1 | P0 | Install AWS Load Balancer Controller; annotate `console` for NLB | new `gitops/apps/aws-load-balancer-controller.yaml`, `gitops/ai-layer/resources.yaml` |
 | 2 | P0 | Update stale PRD status headers to match PROGRESS.md | `prds/*.md` |
-| 3 | P1 | Decide and fix the R1 PID-cap divergence | `infra/terraform/cluster/main.tf`, `fleet/fleet.sh` |
+| 3 | P1 | Decide and fix the R1 PID-cap divergence | `infra/terraform/aws/cluster/main.tf`, `fleet/fleet.sh` |
 | 4 | P1 | Commit per-instructor-cluster ModelConfig overrides (Sonnet/Opus); set workshop default to Sonnet | `gitops/ai-layer/resources.yaml` |
 | 5 | P1 | Repoint kagent RemoteMCPServer through agentgateway, or ratify toolNames as the mechanism; rewrite the C7 toggle | `gitops/ai-layer/resources.yaml`, `challenges/03-bad-mcp-excessive-agency/` |
 | 6 | P2 | Package C1/C3/C4 runbooks + the C3 bait-file setup script | `challenges/c1-exfil-s3/`, `c3-secret-grep/`, `c4-fork-bomb/` |
 | 7 | P2 | Rename OTel connector `spanmetrics` to `span_metrics` | `gitops/apps/otel-collector.yaml` |
 | 8 | P2 | Standardize Kyverno on rule-level `validate.failureAction`; fix the 1.18 to 1.13 comment | `policies/kyverno/` |
-| 9 | P2 | Pin vpc-cni >= v1.21.0 and the other managed addons | `infra/terraform/cluster/main.tf` |
+| 9 | P2 | Pin vpc-cni >= v1.21.0 and the other managed addons | `infra/terraform/aws/cluster/main.tf` |
 | 10 | P3 | Patch bumps: agentgateway 1.3.1, kagent 0.9.10, OTel chart 0.159.0, Argo CD v3.4.4 | respective files |
 | 11 | P3 | Rename `gen_ai.system` to `gen_ai.provider.name` where emitted | BUILD-SPEC, ADK auto-instr |
 | 12 | P3 | Add spec entries for the implemented-but-unspecced items | `prds/`, `docs/BUILD-SPEC.md` |

@@ -51,10 +51,10 @@ All commands run from the repo root with explicit `AWS_PROFILE`/`KUBECONFIG` per
 ### 4.1 Re-apply the 5 lab VPCs (foundation; ~5 to 10 min)
 
 ```bash
-terraform -chdir=infra/terraform/lab-vpc init
-terraform -chdir=infra/terraform/lab-vpc apply -auto-approve -var profile=accen-dev -var region=us-west-2
+terraform -chdir=infra/terraform/aws/network init
+terraform -chdir=infra/terraform/aws/network apply -auto-approve -var profile=accen-dev -var region=us-west-2
 for a in aws1-student31 aws1-student32 aws1-student33 aws1-student34; do
-  terraform -chdir=infra/terraform/lab-vpc apply -auto-approve \
+  terraform -chdir=infra/terraform/aws/network apply -auto-approve \
     -state=states/$a.tfstate -var profile=$a -var region=us-west-2
 done
 ```

@@ -28,7 +28,7 @@ credentials come from your own environment (profile, SSO, or instance role); no 
 credential is stored in this repo. Region is yours to choose; the Terraform defaults to
 **us-west-2** (newest Claude models on Bedrock tend to land there first), which you can override.
 
-Everything is reproducible from the repo: `cd infra/terraform/lab-vpc && terraform apply`, then
+Everything is reproducible from the repo: `cd infra/terraform/aws/network && terraform apply`, then
 `cd ../fleet && ./fleet.sh up <N>`, then the deploy + verified steps in `PROJECT_STATE.md`. Idempotency rule: every step is safe to
 re-run (`helm upgrade --install`, `kubectl apply`, ArgoCD sync). Build-spike rule: facts confirmed
 against docs but not yet on a live cluster are tagged **[SPIKE]**; nothing live ships on an unproven

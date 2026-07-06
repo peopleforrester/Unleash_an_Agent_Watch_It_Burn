@@ -19,7 +19,7 @@ hardcodes a count; `fleet.sh up <N>` generates `watch-it-burn-attendee-001 .. -<
 
 ## Shared VPC (provisioned once, first)
 
-All attendee clusters share ONE VPC (`infra/terraform/lab-vpc/`), not one each. Apply it once; the
+All attendee clusters share ONE VPC (`infra/terraform/aws/network/`), not one each. Apply it once; the
 `cluster/` module reads its `vpc_id` + private subnet ids straight from the lab-vpc state, so there is
 no manual id substitution. See `infra/shared-vpc/README.md`.
 
@@ -27,14 +27,14 @@ no manual id substitution. See `infra/shared-vpc/README.md`.
 
 **1× t3.2xlarge** per cluster, 100 GiB root, prefix delegation + `maxPods: 110`. Measured live: the
 full IDP runs at ~38% CPU / 19% memory on one node, so one t3.2xlarge holds it with headroom. Defaults
-live in `infra/terraform/cluster/main.tf` (`instance_types`, `node_disk_size`); scale only if a real
+live in `infra/terraform/aws/cluster/main.tf` (`instance_types`, `node_disk_size`); scale only if a real
 run chokes. See `../SIZING.md`.
 
 ## Provision the fleet
 
 ```bash
 # 1. Shared VPC, once.
-cd infra/terraform/lab-vpc && terraform init && terraform apply
+cd infra/terraform/aws/network && terraform init && terraform apply
 
 # 2. N attendee clusters (parallel, per-attendee isolated state).
 cd ../fleet && ./fleet.sh up 60          # or: ./fleet.sh up watch-it-burn-attendee-007

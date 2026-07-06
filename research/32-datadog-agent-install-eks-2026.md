@@ -48,7 +48,7 @@ Date: 2026-06-23
   - ESO is present (`gitops/apps/external-secrets.yaml`, `platform` ns, chart `2.6.0`) and reads AWS
     Secrets Manager via **EKS Pod Identity** (per PROJECT_STATE 2026-06-22, PR #4: ESO moved IRSA ->
     Pod Identity). The agent and AWS Load Balancer Controller also use Pod Identity; **IRSA is
-    retained only for the EBS CSI driver** (PROJECT_STATE + `infra/terraform/cluster/main.tf`).
+    retained only for the EBS CSI driver** (PROJECT_STATE + `infra/terraform/aws/cluster/main.tf`).
   - Namespaces are declared in `gitops/namespaces/namespaces.yaml`; there is currently **no
     `datadog` namespace** (one must be added).
 - **Items needing a live cluster** are marked UNCERTAIN and pushed to the verify-at-build checklist.
@@ -231,7 +231,7 @@ repo convention; the standard Agent EKS install needs no AWS credentials at all.
 ### DECISION (Q3): **No AWS API access required for the Agent's core function. If ever needed, use EKS Pod Identity (NOT IRSA).**
 
 Rationale: the repo's convention is already **Pod Identity for agent / AWS LBC / ESO**, with IRSA
-retained only for the EBS CSI driver (PROJECT_STATE 2026-06-22; `infra/terraform/cluster/main.tf`).
+retained only for the EBS CSI driver (PROJECT_STATE 2026-06-22; `infra/terraform/aws/cluster/main.tf`).
 Pod Identity is also the fleet-friendly choice: a Terraform pod-identity *association* per cluster,
 no per-cluster OIDC trust to stamp 60-70 times and no SA annotation in GitOps (the exact reason the
 agent's Bedrock access was moved to Pod Identity). So if an Agent-side AWS role is ever added, it

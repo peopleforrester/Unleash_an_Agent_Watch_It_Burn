@@ -19,7 +19,7 @@ prompt uses `promo-mascot`.
 
 Rebuild/extend with `build.sh` (crane + the Team PAT from `~/secrets/dockerhub/agenticburn.env`). They
 live in the **peopleforrester** Team org on Docker Hub; the cluster nodes have the Team PAT baked into
-containerd (see `infra/terraform/cluster/main.tf`), so they pull on R1.
+containerd (see `infra/terraform/aws/cluster/main.tf`), so they pull on R1.
 
 ## How the rounds treat them
 

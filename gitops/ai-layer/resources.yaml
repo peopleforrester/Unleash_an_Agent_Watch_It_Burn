@@ -686,7 +686,7 @@ spec:
           configMap: { name: console-conf }
 ---
 # The single attendee-facing entrypoint, exposed INTERNET-FACING by the AWS Load Balancer Controller
-# (installed by deploy-full-idp.sh, IAM Pod Identity role in infra/terraform/cluster/main.tf).
+# (installed by deploy-full-idp.sh, IAM Pod Identity role in infra/terraform/aws/cluster/main.tf).
 # CRITICAL: `aws-load-balancer-type: external` + `nlb-target-type: ip` routes through the LB Controller,
 # which discovers the PUBLIC subnets by the `kubernetes.io/role/elb` tag (no per-cluster subnet tag
 # needed) and builds an INTERNET-FACING, ip-target NLB the attendee's browser and the Railway router can

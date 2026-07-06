@@ -7,7 +7,7 @@
 # policies left agent egress wide open even under Round 2 — that was the C1 gap. Selecting agent pods
 # with an Egress policy makes them default-deny-egress; the rules below are the only permitted egress.
 #
-# Bedrock reachability depends on the interface endpoint in infra/terraform/lab-vpc/main.tf
+# Bedrock reachability depends on the interface endpoint in infra/terraform/aws/network/main.tf
 # (aws_vpc_endpoint.bedrock_runtime, private DNS on): the agent resolves
 # bedrock-runtime.<region>.amazonaws.com to an in-VPC ENI (10.0.0.0/16), matched below on 443.
 # CAVEAT: this control holds only while there is NO S3 gateway/interface endpoint in this VPC
