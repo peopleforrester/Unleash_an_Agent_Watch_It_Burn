@@ -1,18 +1,19 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 1.3 Approve (PRD 35 sealed; entering Phase 2 M1)
+Phase: 3.3 Promote — PRD 35 M1 shipped to main (4/5; §4.6-d deferred). M2-M8 (Azure/GCP/local) are future code-only cycles.
 Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
 
 ## Lifecycle
+(reflects the PRD 35 **M1** unit of work, now shipped. M2-M8 each start a fresh cycle when begun.)
 - [x] 1.1 Research
 - [x] 1.2 Plan
-- [x] 1.3 Approve  ← PRD 35 sealed; entering Phase 2
-- [ ] 2.1 Test
-- [ ] 2.2 Implement
-- [ ] 2.3 Verify
-- [ ] 3.1 Stage
-- [ ] 3.2 Confirm CI
-- [ ] 3.3 Promote
+- [x] 1.3 Approve  ← PRD 35 sealed
+- [x] 2.1 Test  (offline gates + live-provision validation as the test surface)
+- [x] 2.2 Implement  (IMDS pin, §4.6 core, relocation, provider dispatch)
+- [x] 2.3 Verify  (terraform validate, dry-run, forkbomb test, kustomize, grep-gate; live provisions)
+- [x] 3.1 Stage
+- [x] 3.2 Confirm CI  (offline gates green; no repo CI, validated manually + live)
+- [x] 3.3 Promote  (all four M1 pieces fast-forwarded to main; §4.6-d deferred)
 
 ## Contracts
 - 2026-07-03T19:59:22Z · sha256:5e110e425e70 · PRD 35 multi-cloud (AKS + GKE) incl. §3.7 hardening parity + §4.6 cluster-shape parameterization. APPROVED, read-only; changes need /prd-amend.
@@ -23,11 +24,12 @@ Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-ap
 Active, Michael-prioritized 2026-07-05:
 1. DONE (offline-verified; live-validate next cluster). Adopted Amazon Nova as the WORKSHOP DEFAULT (Michael: "Nova everywhere"). `bedrock-nova` ModelConfig (`us.amazon.nova-pro-v1:0`) added; Agent default flipped sonnet -> nova. Claude/haiku/opus tiers kept for an optional cost-race. Nova complies AND executes where Claude refuses and Llama/Mistral leak tool-calls-as-text.
 2. DONE (offline-verified; live-validate next cluster). curl fixture (PRD 37): workshop-mcp startup command now `apt-get install -y curl` alongside the existing pip step, so run_shell can POST to the beacon.
-4. IN PROGRESS. PRD 35 M1, sub-steps:
+4. M1 DONE (4/5 shipped to main; 1 deferred). PRD 35 M1 sub-steps:
    - [x] IMDS `metadata_options` pin (§3.7-A) in cluster/main.tf — IMDSv2 required, hop_limit=1. terraform validate + fmt green. ON MAIN (f65c17d).
    - [x] §4.6 fleet.sh cluster-shape parameterization: size/type/disk passthrough, roster-as-data (roster.tsv + WIB_ROSTER_FILE/WIB_ROUNDS/WIB_PER_ROUND), cross-round concurrency default (WIB_SERIAL), WIB_DRY_RUN. LIVE-VALIDATED 2026-07-06 on watch-it-burn-r2-1: subset -> only r2-1, node came up m5.2xlarge (WIB_INSTANCE_TYPES -var list parsed), IMDS http_tokens=required/hop=1, and the Nova agent reached Bedrock at hop=1 (Pod Identity survives the pin). PROMOTED TO MAIN. §4.6-d (per-cluster tier -> Agent modelConfig patch) DEFERRED: tier column plumbed but not applied; Nova gitops default runs everywhere.
    - [~] AWS root relocation: infra/terraform/{lab-vpc,cluster} -> aws/{network,cluster} (git renames). All refs repointed: fleet.sh CLUSTER_DIR/LAB_VPC_DIR, verify/test_forkbomb_defense.py, teardown/teardown.sh, deploy-full-idp.sh, 3 external /tmp/witb-teardown scripts (+ canonical copies now in infra/terraform/aws/teardown/), .gitignore (path-neutral **/states/), and 15 doc/config files. Offline-verified: terraform validate at both new paths, fleet.sh dry-run finds the roots, forkbomb test passes, kustomize OK, M1 grep-gate returns zero stale refs outside history. LIVE-VALIDATED 2026-07-06: VPC applied from aws/network, watch-it-burn-r2-1 provisioned from aws/cluster via fleet.sh, IDP converged, Nova agent made a live Bedrock call. PROMOTED TO MAIN.
-   - [~] fleet.sh PROVIDER dispatch + providers/{aws,azure,gcp,local}.sh shims (§4.2). PROVIDER var (default aws) sources providers/${PROVIDER}.sh, which supplies the terraform network/cluster subpaths + a provider_write_kubeconfig contract; all 6 aws-eks-update-kubeconfig sites routed through it. aws.sh implemented (verbatim wrap of the current logic); azure/gcp/local are stubs. Offline-verified: shellcheck clean, aws dry-run byte-identical to before, bad-PROVIDER guard exits 2, PROVIDER=azure dispatches to azure/cluster (fails cleanly on the not-yet-built terraform). ON STAGING. It is a verbatim wrap of already-live-validated code (the relocation cluster exercised these exact kubeconfig calls), so live re-validation is optional; pending Michael's promote-vs-validate call.
+   - [x] fleet.sh PROVIDER dispatch + providers/{aws,azure,gcp,local}.sh shims (§4.2). PROVIDER var (default aws) sources providers/${PROVIDER}.sh (terraform subpaths + provider_write_kubeconfig contract; all 6 kubeconfig sites routed). aws.sh verbatim-wraps current logic; azure/gcp/local stub. Offline-verified (shellcheck clean, aws dry-run byte-identical, guards work). PROMOTED TO MAIN (c7666b1) on the verbatim-wrap-of-live-validated-code basis (no separate cluster).
+   - [DEFERRED] §4.6-d per-cluster tier -> Agent modelConfig patch. Michael deferred 2026-07-07. Rationale: "Nova everywhere" is the default, so per-cluster tier is only for the OPTIONAL cost-race demo; and BOTH implementation routes (live-patch-with-selfHeal-suspend, or ArgoCD-Application kustomize.patches) wrangle ArgoCD reconciliation, so it adds complexity for little current value. The tier column stays plumbed (dry-run shows it); it is inert until this lands. Revisit only if the cost-race demo is wanted. See decisions.md.
    §4.6 + the relocation are path-critical; validate on a live cluster before promoting main.
 Parked: 3. open-weights/Llama via an OpenAI-compat proxy (needs a real build).
 Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design only.
@@ -41,6 +43,8 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
 - 2026-07-05 2.2/2.3 items 1+2 implemented + offline-verified (Nova default + curl fixture); YAML + kustomize green; live-validation deferred to next cluster.
 - 2026-07-06 2.2/2.3 M1 IMDS pin done (on main); §4.6 core (size passthrough + roster-as-data + concurrency default + dry-run) implemented + offline-verified (6 dry-run scenarios), on STAGING, held from main pending live provision. §4.6-d (tier patch) deferred.
+- 2026-07-06 §4.6 + relocation live-validated (watch-it-burn-r2-1: m5.2xlarge node, IMDS hop=1, Nova at Bedrock) and promoted to main.
+- 2026-07-07 3.3 M1 COMPLETE: provider dispatch promoted to main (c7666b1); §4.6-d deferred (Michael). Four of five M1 pieces shipped; M2-M8 remain as future code-only cycles.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.
