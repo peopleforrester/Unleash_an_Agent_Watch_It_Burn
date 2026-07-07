@@ -28,6 +28,9 @@ readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
 # a sibling repo (peopleforrester/provisioning-agenticburn). Locate the scripts via WIB_PROVISION_DIR;
 # default is the sibling checkout next to this repo. Override if it lives elsewhere on this box.
 readonly WIB_PROVISION_DIR="${WIB_PROVISION_DIR:-${REPO_ROOT}/../provisioning-agenticburn}"
+# The apex wildcard router (agenticburn.com) was extracted to its own repo (peopleforrester/
+# apex-agenticburn); routes.map lives there and Railway deploys it from that repo's MAIN.
+readonly WIB_APEX_DIR="${WIB_APEX_DIR:-${REPO_ROOT}/../apex-agenticburn}"
 readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
 readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
@@ -899,7 +902,7 @@ cmd_down_acct() {
 # reach their cluster via the raw console NLB the provisioning app hands out, so they need no router line.
 cmd_routes() {
     require_tools
-    local out="${REPO_ROOT}/railway/apex/routes.map"
+    local out="${WIB_APEX_DIR}/routes.map"
     local kcfg tmp; kcfg="$(mktemp -t routes.XXXX)"; tmp="$(mktemp -t routesmap.XXXX)"
     {
         echo "# ABOUTME: Host -> cluster LB routing for the agenticburn.com wildcard router."
@@ -930,22 +933,21 @@ cmd_routes() {
     rm -f "${kcfg}"
     mv "${tmp}" "${out}"
     local lines; lines="$(grep -c agenticburn.com "${out}")"
-    log "routes: wrote ${lines} host(s) to ${out#${REPO_ROOT}/}"
-    if git -C "${REPO_ROOT}" diff --quiet -- "${out}"; then
+    log "routes: wrote ${lines} host(s) to ${out##*/} (apex repo)"
+    if git -C "${WIB_APEX_DIR}" diff --quiet -- "${out}"; then
         log "routes: no change"; return 0
     fi
-    # Commit + push so the apex service (watches railway/apex/** on main) redeploys with the new map.
-    git -C "${REPO_ROOT}" add "${out}"
-    # NOTE: no [skip ci] in this message — Railway's GitHub deploy honors it and would NOT redeploy the
-    # apex, leaving routes.map stale. Let the push trigger the apex rebuild.
-    git -C "${REPO_ROOT}" commit -q -m "routes: regenerate agenticburn.com router map from live fleet (${lines} hosts)" || true
-    git -C "${REPO_ROOT}" push origin HEAD 2>&1 | tail -1 || log "routes: push to current branch failed"
-    # The apex router (agenticburn.com wildcard) deploys from MAIN; promote routes.map so it redeploys.
-    git -C "${REPO_ROOT}" push origin HEAD:main 2>&1 | tail -1 || log "routes: could not ff main; run 'git push origin <branch>:main' so the apex picks up routes.map"
+    # Commit in the apex repo + promote to its MAIN (Railway deploys apex from main via the GitHub
+    # integration). No [skip ci]: it would suppress the redeploy and leave routes.map stale.
+    git -C "${WIB_APEX_DIR}" add "${out}"
+    git -C "${WIB_APEX_DIR}" commit -q -m "routes: regenerate agenticburn.com router map from live fleet (${lines} hosts)" || true
+    git -C "${WIB_APEX_DIR}" push origin HEAD 2>&1 | tail -1 || log "routes: apex push to current branch failed"
+    git -C "${WIB_APEX_DIR}" push origin HEAD:main 2>&1 | tail -1 || log "routes: could not ff apex main; run 'git -C ${WIB_APEX_DIR} push origin <branch>:main'"
 }
 
 main() {
     local cmd="${1:-}"; shift || true
+    load_roster   # populate INSTRUCTORS for every command (routes/reap/hints), not just cmd_instructors
     case "${cmd}" in
         up) cmd_up "$@" ;;
         routes) cmd_routes "$@" ;;
