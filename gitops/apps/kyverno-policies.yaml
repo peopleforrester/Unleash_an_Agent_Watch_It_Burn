@@ -35,6 +35,12 @@ spec:
       jsonPointers:
         - /spec/rules/0/validate/failureAction
   syncPolicy:
+    syncOptions:
+      # RespectIgnoreDifferences: honor the failureAction ignoreDifferences on SYNC too, not just on diff.
+      # Without it, any sync of this app re-applies the manifest's Audit and reverts the live
+      # Audit->Enforce toggle (found 2026-07-10: R2 armed to Enforce then silently reverted to Audit during
+      # ArgoCD's initial-sync churn, so admission stopped blocking and R2 "deployed freely").
+      - RespectIgnoreDifferences=true
     automated:
       prune: true
       selfHeal: true

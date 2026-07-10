@@ -266,6 +266,13 @@ arm_infra_guardrails() {
         [[ "${i}" -eq 40 ]] && { log "  ${name}: TIMED OUT waiting for Kyverno sync; guardrails NOT armed"; return 1; }
         sleep 15
     done
+    # Wait for the kyverno-policies ArgoCD app to settle (Synced) so the initial-sync churn is over
+    # before we flip; RespectIgnoreDifferences then keeps the flip from being reverted by later syncs.
+    for i in $(seq 1 20); do
+        [[ "$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
+            get application kyverno-policies -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null)" == "Synced" ]] && break
+        sleep 10
+    done
     if CONTEXT="${ctx}" KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" \
         bash "${REPO_ROOT}/challenges/01-cncf-wall/toggle-kyverno-enforce.sh" >"${LOG_DIR}/${name}.arm.log" 2>&1; then
         log "  ${name}: infra guardrails ENFORCING (Kyverno)"
