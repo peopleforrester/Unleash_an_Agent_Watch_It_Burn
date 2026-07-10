@@ -54,3 +54,8 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      # RespectIgnoreDifferences: honor the ignoreDifferences (guard-proxy env, Agent tools, modelConfig)
+      # on SYNC too, not just on diff. Without it a sync re-applies the committed spec and can revert a
+      # live toggle (found 2026-07-10 for kyverno-policies; C7 MCP-authz toggle patches the Agent CR tools
+      # and has the same exposure — held in the stable window but a forced/initial-churn sync could revert).
+      - RespectIgnoreDifferences=true
