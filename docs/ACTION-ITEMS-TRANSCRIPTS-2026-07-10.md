@@ -97,9 +97,10 @@ blocks BurritoBot's external curl. Cluster torn down after.
 - **Caveats:** (1) the C5/C6 runtime toggles reset on a guard-proxy pod restart (in-memory); (2) ai-layer
   has `ignoreDifferences` on the Agent tools + guard-proxy env but NO `RespectIgnoreDifferences` (only
   CreateNamespace + ServerSideApply). C7 held in the stable 60s window, but a forced/initial-churn sync
-  could revert it (same nuance Kyverno had). RECOMMEND adding `RespectIgnoreDifferences=true` to the
-  ai-layer app to bulletproof C7 against a mid-demo sync, mirroring the kyverno-policies fix. r3-1 torn
-  down after.
+  could revert it (same nuance Kyverno had). Added `RespectIgnoreDifferences=true` to the ai-layer app
+  (commit 4558168) and LIVE-VALIDATED 2026-07-11 on a fresh r3-1: C7 `--off`/`--on` toggles both HELD
+  through a FORCED ArgoCD sync (before the fix a sync reverted the toggle). C5/C6 re-confirmed clean
+  (OFF leaks/processes, ON blocks). All R3 guards defend and now survive a sync. r3-1 torn down after.
 - **P1-2 Stand up a collector URL for the C1 egress target** (on apex `agenticburn.com` or
   elsewhere) so the health-check curl reads as a legitimate poll that egress then blocks.
   [apex/routing + infra] (T5)
