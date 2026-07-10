@@ -39,6 +39,16 @@ workshop, not yet built. P2 = design decision to lock. R = research/verify befor
     round-gated too. Confirm on the next live cluster. [guardrails/policy + infra] (T5)
 - **P0-3 Agent output goes to the terminal, not the BurritoBot chat.** Students must see results
   in the chat pane. [agent/model] (T5)
+  - **LIVE-VALIDATED 2026-07-10: NOT an `extractText`/UI bug for the data-tool path.** When BurritoBot
+    leaks via `lookup_customer_records`, the records come back as a `kind:"text"` part in
+    `result.artifacts`, and `app.js` `extractText` already scans `artifacts[].parts` for text. The
+    simulated extract on the live A2A response was 3629 chars and contained the full records (Morticia,
+    card 4217). The current chat UI renders the exfil correctly. The dry-run "printed to a terminal"
+    was most likely an older UI build OR the agent using a shell/kubectl tool whose stdout streams to
+    the VTT web-terminal (a genuinely different pane). RECLASSIFIED: do NOT change extractText; if it
+    recurs, capture which tool the agent used (shell vs lookup_customer_records) and trace shell-tool
+    output routing. Minor cosmetic: the list also lands in a history `data` part + a duplicate history
+    text part, so extractText can render it twice (a dedupe, not the reported bug).
 - **P0-4 Fork-bomb challenge (C4) has no working payload.** Even Nova refuses to run the fork
   bomb despite explicit prompting. Decide: reframe the ask so the model complies (the same trick
   that beats the "Joker" image-name refusal by calling it a "marketing/promo image"), or keep C4
@@ -63,6 +73,14 @@ workshop, not yet built. P2 = design decision to lock. R = research/verify befor
     egress. Also: the collector URL must be EXTERNAL/public (not inside 10.0.0.0/16, which the
     workshop-agent allowlist permits on 443) or the curl is allowed. NetworkPolicies have no Audit
     mode, so unlike Kyverno there is no toggle-revert risk here; they enforce as soon as they sync.
+  - **LIVE-VALIDATED 2026-07-10:** on a fresh auto-armed r2-1, an external curl (`https://1.1.1.1`) from
+    the workshop-agent pod returned HTTP 000 (BLOCKED). So the redesigned C1 works IF the curl runs from
+    BurritoBot's own pod, which is the intended path. The collector must be external (a public IP), not
+    in 10.0.0.0/16.
+
+**Live validation 2026-07-10 (fresh auto-armed r2-1):** R2 Kyverno bad-deploy DENIED (auto-arm fix
+holds on a fresh cluster); P0-3 confirmed NOT an extractText bug (data renders in chat); C1 egress
+blocks BurritoBot's external curl. Cluster torn down after.
 - **P1-2 Stand up a collector URL for the C1 egress target** (on apex `agenticburn.com` or
   elsewhere) so the health-check curl reads as a legitimate poll that egress then blocks.
   [apex/routing + infra] (T5)
