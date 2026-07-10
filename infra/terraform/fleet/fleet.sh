@@ -250,8 +250,32 @@ record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
 # Install the IDP on a freshly-provisioned cluster: pull an isolated kubeconfig (never the shared
 # ~/.kube/config) and run deploy-full-idp.sh with the round's profile. Runs inside up_one, so the
 # concurrency pool provisions AND bootstraps each cluster in parallel.
+# Flip a round-2/3 cluster's infra guardrails to enforcing after bootstrap. Kyverno ships in Audit
+# (kyverno-policies.yaml), so wait for the ClusterPolicy to sync then run the Audit->Enforce toggle.
+# NetworkPolicy egress, Falco, and the PID cap come up enforcing from the full app-of-apps and need no
+# flip; R1 (burn profile) has no guardrails and never calls this. Mirrors the tail of
+# infra/setup-instructor-cluster.sh so a fleet 'up' self-arms (found 2026-07-10: provisioning deployed the
+# IDP but never armed the round, leaving Kyverno in Audit so R2 admission never blocked).
+arm_infra_guardrails() {
+    local name="$1" kcfg="$2" acct="$3" ctx i
+    ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
+    log "  ${name}: waiting for Kyverno policy sync, then flipping Audit->Enforce"
+    for i in $(seq 1 40); do
+        KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
+            get clusterpolicy require-resource-limits >/dev/null 2>&1 && break
+        [[ "${i}" -eq 40 ]] && { log "  ${name}: TIMED OUT waiting for Kyverno sync; guardrails NOT armed"; return 1; }
+        sleep 15
+    done
+    if CONTEXT="${ctx}" KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" \
+        bash "${REPO_ROOT}/challenges/01-cncf-wall/toggle-kyverno-enforce.sh" >"${LOG_DIR}/${name}.arm.log" 2>&1; then
+        log "  ${name}: infra guardrails ENFORCING (Kyverno)"
+    else
+        log "  ${name}: FAILED to flip Kyverno to Enforce (see ${LOG_DIR}/${name}.arm.log)"; return 1
+    fi
+}
+
 bootstrap_one() {
-    local name="$1" profile="$2"
+    local name="$1" profile="$2" round="${3:-}"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
     provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
@@ -286,6 +310,7 @@ bootstrap_one() {
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
         bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
+        [[ "${round}" == "2" || "${round}" == "3" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
     fi
@@ -374,7 +399,7 @@ up_one() {
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
         # Auto-bootstrap the IDP unless this provision is bare-only.
-        [[ -n "${BOOTSTRAP_PROFILE}" ]] && bootstrap_one "${name}" "${BOOTSTRAP_PROFILE}"
+        [[ -n "${BOOTSTRAP_PROFILE}" ]] && bootstrap_one "${name}" "${BOOTSTRAP_PROFILE}" "${BOOTSTRAP_ROUND:-}"
     else
         log "  FAILED: ${name} (see ${LOG_DIR}/${name}.apply.log)"; record_fail "${name}"
     fi
@@ -556,7 +581,14 @@ _run_round() {
     log "round ${r} instructors -> account '${acct}': ${names[*]}"
     if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc_for "${acct}"; fi
     TF_PROFILE="${acct}"
-    [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]] && BOOTSTRAP_PROFILE="full"
+    if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
+        # R1 = burn profile (BurritoBot + scenario apps, NO enforcing guardrails, the spectacle cluster);
+        # R2/R3 = full profile (adds kyverno/network-policies/falco), armed to Enforce by bootstrap_one.
+        # Derived from the round, not the roster bp column (which _run_round previously ignored, hardcoding
+        # "full" so every cluster came up unarmed with Kyverno stuck in Audit -- found 2026-07-10).
+        [[ "${r}" == "1" ]] && BOOTSTRAP_PROFILE="burn" || BOOTSTRAP_PROFILE="full"
+        BOOTSTRAP_ROUND="${r}"
+    fi
     if [[ "${action}" == "up" ]]; then run_pool _up_from_roster "${names[@]}"; else run_pool down_one "${names[@]}"; fi
 }
 

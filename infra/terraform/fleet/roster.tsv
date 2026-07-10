@@ -6,9 +6,9 @@
 # tier here takes effect once §4.6-d (bootstrap patches the Agent modelConfig) lands.
 # Change what the fleet provisions here (or point WIB_ROSTER_FILE elsewhere); no fleet.sh edit needed.
 # Subset a run without editing this file: WIB_ROUNDS=2,3 and/or WIB_PER_ROUND=1.
-watch-it-burn-r1-1|1|||-1|full
-watch-it-burn-r1-2|1|||-1|full
-watch-it-burn-r1-3|1|||-1|full
+watch-it-burn-r1-1|1|||-1|burn
+watch-it-burn-r1-2|1|||-1|burn
+watch-it-burn-r1-3|1|||-1|burn
 watch-it-burn-r2-1|2||||full
 watch-it-burn-r2-2|2||||full
 watch-it-burn-r2-3|2||||full
