@@ -51,6 +51,18 @@ workshop, not yet built. P2 = design decision to lock. R = research/verify befor
   not get the model to write to S3 without manual setup). Replace with an innocuous outbound call
   the model will happily make (a health-check/uptime curl to a status URL) so the egress policy is
   what blocks it, decoupled from PII/social-engineering. [guardrails/policy] (T5, T4)
+  - **EGRESS-CONTROL GAP (found 2026-07-10, code review):** there is NO namespace-wide egress
+    default-deny for the `agent` namespace (the `apps` namespace has `default-deny-all`, agent does
+    not). Only the `workshop-agent` (BurritoBot) pod is egress-restricted, via allowlists
+    (`agent-egress-allowlist` -> 10.0.0.0/16:443 + Pod Identity 169.254.170.23:80; plus DNS, kagent,
+    otel, intra-ns). Every OTHER pod in the agent namespace has open egress. So C1 only blocks if the
+    curl runs FROM the workshop-agent pod; a curl from a spawned pod or the VTT/console is NOT blocked.
+    Two options: (a) verify the C1 outbound call executes in the workshop-agent pod (then it works as
+    is), or (b) add an agent-namespace egress default-deny mirroring apps/ — but that must be
+    live-validated so it does not break the console/web-terminal/guard-proxy pods, which need their own
+    egress. Also: the collector URL must be EXTERNAL/public (not inside 10.0.0.0/16, which the
+    workshop-agent allowlist permits on 443) or the curl is allowed. NetworkPolicies have no Audit
+    mode, so unlike Kyverno there is no toggle-revert risk here; they enforce as soon as they sync.
 - **P1-2 Stand up a collector URL for the C1 egress target** (on apex `agenticburn.com` or
   elsewhere) so the health-check curl reads as a legitimate poll that egress then blocks.
   [apex/routing + infra] (T5)
