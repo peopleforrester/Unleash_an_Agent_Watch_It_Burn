@@ -217,31 +217,30 @@ RE-CONFIRM the 07-10 items; several of their open worries are now closed by this
   hidden note, feedback form + auto-destruct/extend, multi-cloud M2/M3.
 
 ## Genuinely NEW from 07-11
-- **Slopsquatting / hallucinated-dependency attack beat** (Yegge). The agent asks for a plausible
-  package (his example "graphy123"), an attacker pre-registered a malicious package under that
-  hallucinated name; it builds, tests pass, ships a backdoor. Candidate NEW challenge/beat; the current
-  rounds do not cover dependency/supply-chain poisoning of the agent's own code. Worth scoping.
-- **"Be scared -> here are the tools" narrative arc** (Yegge). Alarm the room (break BurritoBot), then
-  show the guardrails that would have stopped it. Matches "Watch It Burn"; good opening/closing frame.
-- **Runtime exec-blocker installed-but-not-enabled** (design A11/Q4). A runtime enforcer (Falco-Talon /
-  the block half of C3) is "installed but not enabled by default." This session validated Kyverno
-  admission + egress NetworkPolicy, but NOT the runtime exec-block (cat/ls). VERIFY it actually blocks +
-  Falco alerts, same playbook as the R2/R3 checks. Open.
-- **Menu brand/trademark review** (design A18/Q5). A menu item referencing San Francisco scenes "they
-  might not want." The witchy expansion added no SF item, but review the full menu for a real-brand
-  reference before the run.
+- **Slopsquatting / supply-chain challenge -> registry allowlist** (Yegge idea; Michael's defense 2026-07-12).
+  The agent hallucinates a package name an attacker pre-registered with a backdoor; it builds + tests pass +
+  ships. DEFENSE: block access to any registry except ones we control - container, package, AND artifact
+  registries - allow only whitelisted. We currently lean on GHCR; could run our own Harbor (container) so the
+  attack has a controlled target, and extend the allowlist to package/artifact registries. Note: the C2
+  Kyverno `restrict-image-registries` already allowlists CONTAINER images; the new work is package/artifact
+  registries (likely an egress policy to only the allowed registry hosts) + Harbor stand-up. Candidate new
+  challenge or a C2/C7 extension.
+- **Runtime exec/file block (C3) - the one unverified guardrail layer.** Investigated 2026-07-12: the C3
+  block is a TETRAGON policy (`block-recipe-snoop.yaml`, `Override` on `security_file_open`) that is already
+  PREEMPTIVE (fails the open before it succeeds) and works on AL2023 without LSM changes. Michael prefers
+  KubeArmor (frontend/LSM block) + keep Falco-Talon (respond) + likely drop Tetragon. Research gotcha:
+  KubeArmor enforcement needs BPF-LSM ACTIVE in the node `lsm=` list; on stock EKS AL2023 that is UNVERIFIED
+  (may be observe-only = a regression from the working Tetragon block). PLAN: (1) live-confirm the Tetragon
+  block actually blocks; (2) if adopting KubeArmor, first check `cat /sys/kernel/security/lsm | grep bpf` on
+  an AL2023 node, else enable bpf-lsm via node bootstrap or use Bottlerocket. Keep Falco+Talon regardless.
+  See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+- **Menu brand/trademark review - DONE 2026-07-12, CLEAN.** Full-menu pass: all menu items are witchy (no
+  real brands, no SF item); supplier/marketing data is fictional too ("Coven Provisions Co.", not a real
+  vendor). The transcript's "Cisco" was BurritoBot hallucinating a real brand (model behavior, not a repo
+  issue); the "San Francisco scenes" concern is likely a SLIDE/image asset, not the menu/data. No menu
+  change needed; check the slide deck separately if it has an SF image.
 - **Supply-chain over-sharing as an intentional talking point** (exfil Q10). BurritoBot volunteers
   supplier names ("Cisco") and per-burrito quantities ("47 corn per burrito") = reconnaissance data an
   attacker chains. Surface deliberately, bounded to stay in-theme (no real leak). Ties to the
   marketing-intel / C7 story.
 
-## Yegge quotable framing (SOURCING CAVEAT: raw talk diarization; verify any figure before a slide)
-- "If everyone ships 10x faster and the per-line defect rate merely stays the same, absolute vuln
-  volume scales with output, and with AI writing the code the rate gets worse." (bank chief security
-  architect, via Yegge.)
-- "Security bugs have no half-life" -> surface them at authoring/admission time, not at review. Justifies
-  enforce-mode admission over post-hoc audit.
-- "241 vulnerabilities" found by a Snyk scan of his codebase AFTER an AI "security hardening pass"
-  reported clean; the agent also wrote an XSS vuln in a short session. Counters "just use a smart model."
-- "Security should be its own pass, first and last" + the "rule of five" (4-5 review passes before
-  ship). Supports layering the demo's controls as distinct enforcement points.
