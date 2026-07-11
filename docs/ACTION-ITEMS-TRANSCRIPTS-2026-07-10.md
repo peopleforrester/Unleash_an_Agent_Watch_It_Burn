@@ -189,3 +189,59 @@ wrappers: the cold-open wording (P2-5 brand safety) and the secret-sauce framing
 - **Nova-everywhere** is validated, but P0-4 shows Nova still refuses the fork bomb — a model-refusal
   case the reframe rule (DECISION-LOG.md) should cover.
 - **§4.6-d (per-cluster model tier)** remains deferred; nothing in the transcripts revives it.
+
+---
+
+# 2026-07-11 addendum (3 more transcripts)
+
+Three 2026-07-11 transcripts processed: two workshop working sessions (guardrails/exfil, workshop
+design) + a Steve Yegge Snyk-sponsored talk on agentic security. The two workshop transcripts largely
+RE-CONFIRM the 07-10 items; several of their open worries are now closed by this session's work.
+
+## Now DONE / RESOLVED since 07-10 (answers open questions in these transcripts)
+- **R2 guardrails auto-on** (their Q6/A15 "did I need to turn R2 on manually? it deployed with no
+  block"): FIXED. Provisioning now arms Kyverno at bootstrap + `RespectIgnoreDifferences`; validated a
+  bad deploy is DENIED on a fresh cluster. On main.
+- **R3 AI guards defend when toggled** (C5 output, C6 input, C7 MCP authz): validated live, survive a
+  forced sync. On main.
+- **Cilium confusion** (their A9/Q1 "is Cilium the CNI, is it consistent?"): RESOLVED. It is native
+  VPC-CNI with `enableNetworkPolicy=true`, not Cilium. Egress blocks BurritoBot's external curl (verified).
+- **Admin view vs student view** (their D3/A7 "don't show students admin; clean up the admin page"):
+  admin-page parity DONE (one server/round + carrots, Datadog moved up, own-machine access under an
+  Optional carrot). On main (provisioning repo).
+- **Menu expansion** (their A1-design "play up an ingredient"): 6 missing Chipotle proteins + salsa +
+  cheese added as witchy items with icons. On main. The **secret-recipe cluster Secret** they want
+  (their A17) already exists (`bat-spit-amazing-awesome-sauce`, value `FAKE-...`; it is the C5 target).
+- Still-open 07-10 items they repeat (no change): C1 curl-beacon redesign + collector URL (control
+  validated, content pending), provisioning email-claim broken (P0-1), Datadog deep-link, fork-bomb
+  hidden note, feedback form + auto-destruct/extend, multi-cloud M2/M3.
+
+## Genuinely NEW from 07-11
+- **Slopsquatting / hallucinated-dependency attack beat** (Yegge). The agent asks for a plausible
+  package (his example "graphy123"), an attacker pre-registered a malicious package under that
+  hallucinated name; it builds, tests pass, ships a backdoor. Candidate NEW challenge/beat; the current
+  rounds do not cover dependency/supply-chain poisoning of the agent's own code. Worth scoping.
+- **"Be scared -> here are the tools" narrative arc** (Yegge). Alarm the room (break BurritoBot), then
+  show the guardrails that would have stopped it. Matches "Watch It Burn"; good opening/closing frame.
+- **Runtime exec-blocker installed-but-not-enabled** (design A11/Q4). A runtime enforcer (Falco-Talon /
+  the block half of C3) is "installed but not enabled by default." This session validated Kyverno
+  admission + egress NetworkPolicy, but NOT the runtime exec-block (cat/ls). VERIFY it actually blocks +
+  Falco alerts, same playbook as the R2/R3 checks. Open.
+- **Menu brand/trademark review** (design A18/Q5). A menu item referencing San Francisco scenes "they
+  might not want." The witchy expansion added no SF item, but review the full menu for a real-brand
+  reference before the run.
+- **Supply-chain over-sharing as an intentional talking point** (exfil Q10). BurritoBot volunteers
+  supplier names ("Cisco") and per-burrito quantities ("47 corn per burrito") = reconnaissance data an
+  attacker chains. Surface deliberately, bounded to stay in-theme (no real leak). Ties to the
+  marketing-intel / C7 story.
+
+## Yegge quotable framing (SOURCING CAVEAT: raw talk diarization; verify any figure before a slide)
+- "If everyone ships 10x faster and the per-line defect rate merely stays the same, absolute vuln
+  volume scales with output, and with AI writing the code the rate gets worse." (bank chief security
+  architect, via Yegge.)
+- "Security bugs have no half-life" -> surface them at authoring/admission time, not at review. Justifies
+  enforce-mode admission over post-hoc audit.
+- "241 vulnerabilities" found by a Snyk scan of his codebase AFTER an AI "security hardening pass"
+  reported clean; the agent also wrote an XSS vuln in a short session. Counters "just use a smart model."
+- "Security should be its own pass, first and last" + the "rule of five" (4-5 review passes before
+  ship). Supports layering the demo's controls as distinct enforcement points.
