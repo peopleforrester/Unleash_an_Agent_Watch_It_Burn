@@ -225,15 +225,15 @@ RE-CONFIRM the 07-10 items; several of their open worries are now closed by this
   Kyverno `restrict-image-registries` already allowlists CONTAINER images; the new work is package/artifact
   registries (likely an egress policy to only the allowed registry hosts) + Harbor stand-up. Candidate new
   challenge or a C2/C7 extension.
-- **Runtime exec/file block (C3) - the one unverified guardrail layer.** Investigated 2026-07-12: the C3
-  block is a TETRAGON policy (`block-recipe-snoop.yaml`, `Override` on `security_file_open`) that is already
-  PREEMPTIVE (fails the open before it succeeds) and works on AL2023 without LSM changes. Michael prefers
-  KubeArmor (frontend/LSM block) + keep Falco-Talon (respond) + likely drop Tetragon. Research gotcha:
-  KubeArmor enforcement needs BPF-LSM ACTIVE in the node `lsm=` list; on stock EKS AL2023 that is UNVERIFIED
-  (may be observe-only = a regression from the working Tetragon block). PLAN: (1) live-confirm the Tetragon
-  block actually blocks; (2) if adopting KubeArmor, first check `cat /sys/kernel/security/lsm | grep bpf` on
-  an AL2023 node, else enable bpf-lsm via node bootstrap or use Bottlerocket. Keep Falco+Talon regardless.
-  See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+- **Runtime exec/file block (C3): swap Tetragon -> KubeArmor, VIABLE on AL2023.** Investigated 2026-07-12:
+  the C3 block is a TETRAGON policy (`block-recipe-snoop.yaml`, `Override` on `security_file_open`, already
+  preemptive). Michael needs KubeArmor (CNCF Sandbox project) for the CNCF-guardrails story; the past
+  "KubeArmor unusable on EKS" was the OLD AL2 (kernel 5.4, no BPF-LSM). Our nodes are now AL2023 (kernel
+  6.1) where BPF-LSM is enabled BY DEFAULT (per KubeArmor/AWS docs) -> KubeArmor enforcement should work out
+  of the box, so the swap is viable. FOLD INTO NEXT R3 PROVISION: (1) `cat /sys/kernel/security/lsm` on a
+  node, confirm `bpf`; (2) confirm the Tetragon block actually blocks (baseline); (3) if bpf confirmed,
+  deploy KubeArmor + a policy equivalent to block-recipe-snoop, verify it blocks, then retire Tetragon.
+  Keep Falco+Talon (detect+respond) regardless. See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
 - **Menu brand/trademark review - DONE 2026-07-12, CLEAN.** Full-menu pass: all menu items are witchy (no
   real brands, no SF item); supplier/marketing data is fictional too ("Coven Provisions Co.", not a real
   vendor). The transcript's "Cisco" was BurritoBot hallucinating a real brand (model behavior, not a repo

@@ -863,3 +863,9 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
 - **Datadog LLM-Observability panel render** (#22 M4 / #20 M7 item 3) — facilitator UI check on Whitney's
   org; no Datadog Application key is in-cluster for programmatic confirmation.
 - Cluster is still UP; tear down manually when done with live work.
+
+## Pending checks (fold into the next provision)
+- NEXT R3 PROVISION: KubeArmor/Tetragon runtime-block check. (1) `cat /sys/kernel/security/lsm` on an
+  AL2023 node, confirm `bpf` present; (2) confirm the current Tetragon `block-recipe-snoop` actually
+  blocks a read under /tmp/burrito-data/config/legacy/; (3) if bpf confirmed, plan the Tetragon->KubeArmor
+  swap. See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.

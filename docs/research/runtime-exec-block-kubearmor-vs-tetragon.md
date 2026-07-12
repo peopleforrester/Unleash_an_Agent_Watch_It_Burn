@@ -17,29 +17,30 @@ Containers blog "Secure Bottlerocket deployments on Amazon EKS with KubeArmor", 
   doing the "catch it on the frontend" that the KubeArmor swap was meant to add. Tetragon's kprobe+override
   enforcement does NOT depend on the kernel's active LSM list, so it works on AL2023 as-is.
 
-## The KubeArmor catch (why the swap is not a clean win)
-- **KubeArmor's block is LSM-based:** it enforces via BPF-LSM (or AppArmor). BPF-LSM needs kernel >= 5.7
-  AND `bpf` present in the kernel's active `lsm=` list. AWS's own blog: "BPF-LSM ... introduced in newer
-  kernels (> 5.7)"; default Amazon Linux 2 (kernel 5.4) "cannot be used" for enforcement; **Bottlerocket**
-  is the OS AWS documents for KubeArmor enforcement on EKS.
-- **AL2023 (kernel 6.1) is new enough** for BPF-LSM, but whether `bpf` is in the ACTIVE `lsm=` boot
-  parameter on the stock EKS AL2023 AMI is UNVERIFIED. Standard EKS AMIs have historically not included
-  `bpf` in `lsm=`. If it is absent, KubeArmor on these nodes is **observability-only (cannot block)** — a
-  regression from the working Tetragon block.
+## KubeArmor on AL2023: viable now (the past blocker was AL2, not AL2023)
+- **KubeArmor's block is LSM-based:** enforces via BPF-LSM (or AppArmor). BPF-LSM needs kernel >= 5.7 with
+  CONFIG_BPF_LSM and `bpf` in the active `lsm=` list.
+- **The past "KubeArmor unusable on EKS" was almost certainly AL2 (kernel 5.4):** AWS confirms default
+  AL2 "cannot be used" for BPF-LSM enforcement. That is the AMI they had when they switched to Tetragon.
+- **AL2023 changes the answer: BPF-LSM is enabled and activated BY DEFAULT on Amazon Linux 2023** (per
+  KubeArmor/AWS docs, retrieved 2026-07-12). Our node group is `AL2023_x86_64_STANDARD` (kernel 6.1), so
+  **KubeArmor enforcement should work out of the box** — no Bottlerocket, no bootstrap change needed. The
+  old blocker is gone. KubeArmor is a CNCF Sandbox project (why Michael wants it for the CNCF-guardrails
+  story); Tetragon is CNCF-Graduated (via Cilium), so both are CNCF, but KubeArmor is the featured name.
+- **Still verify live** (recency discipline): the "enabled by default" claim is from docs; confirm on an
+  actual node.
 
 ## Recommendation
-1. **Do NOT drop Tetragon blindly.** The deployed Tetragon Override IS the preemptive frontend block; it
-   works on AL2023 without LSM changes.
-2. **First, confirm the block actually blocks** (this is the unverified guardrail layer): on a live cluster,
-   trigger the C3 file read and confirm Tetragon returns the error. This is the core "does it block" check.
-3. **If we still want KubeArmor**, verify BPF-LSM is active first: `cat /sys/kernel/security/lsm` on an
-   AL2023 node and look for `bpf`. If present, KubeArmor can enforce and we can A/B it against Tetragon. If
-   absent, options are (a) enable bpf-lsm via the node bootstrap (`lsm=...,bpf` in the kernel cmdline /
-   nodeadm), or (b) switch the node group to Bottlerocket (AWS-documented KubeArmor enforcement) — both are
-   bigger changes than the policy swap.
-4. **Keep Falco + Falco-Talon** (detect + respond, e.g. fork bomb) regardless. They are complementary to the
-   preemptive block, not a replacement.
+1. **Fold the check into the next R3 provision** (Michael, 2026-07-12): on a live AL2023 node,
+   `cat /sys/kernel/security/lsm` and confirm `bpf` is in the list. If yes -> KubeArmor can enforce here.
+2. **Confirm the current Tetragon block actually blocks** (the unverified layer): trigger the C3 file read
+   (path under `/tmp/burrito-data/config/legacy/`) and confirm the open is denied. Keep this as the baseline.
+3. **If BPF-LSM confirmed active:** proceed to swap in KubeArmor for the C3 preemptive block -- deploy the
+   KubeArmor gitops app + a KubeArmor policy equivalent to `block-recipe-snoop` (block file open under the
+   legacy path for the workshop-mcp pod), verify it BLOCKS, then retire Tetragon (+ tetragon-policies). If
+   the live check unexpectedly shows no bpf, fall back: keep Tetragon, or add `lsm=...,bpf` via node
+   bootstrap, or Bottlerocket.
+4. **Keep Falco + Falco-Talon** (detect + respond, e.g. fork bomb) regardless -- complementary to the block.
 
-Net: the "one unconfirmed guardrail layer" is real and worth a live block-test, but the fix is likely to
-CONFIRM Tetragon (already preemptive) rather than replace it, unless a live check shows AL2023 has BPF-LSM
-active for KubeArmor. Verify on the next cluster.
+Net: KubeArmor is very likely viable on AL2023 now (past failure was AL2). Plan is to confirm BPF-LSM +
+the Tetragon baseline on the next provision, then swap Tetragon -> KubeArmor if confirmed. Not blind.
