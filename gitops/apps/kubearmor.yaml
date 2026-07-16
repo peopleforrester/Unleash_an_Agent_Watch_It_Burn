@@ -1,0 +1,57 @@
+# ABOUTME: ArgoCD Application for KubeArmor (CNCF Sandbox LSM-based runtime enforcement) via the
+# ABOUTME: kubearmor-operator Helm chart. Candidate C3 prevention engine under evaluation vs Tetragon.
+#
+# WHY THIS IS A CANDIDATE, NOT YET THE BLOCK: KubeArmor enforces inline at LSM hooks (BPF-LSM preferred).
+# BPF-LSM is confirmed active on our AL2023 nodes (2026-07-16: /sys/kernel/security/lsm contains bpf on
+# kernel 6.12). That is necessary but NOT sufficient: the reason we run Tetragon for the C3 block is that
+# KubeArmor v1.7.x historically could not resolve container namespaces against EKS AL2023's containerd 2.x
+# (enforcer reports mntns=0 / "task not found"), so its block never engaged even with bpf present. This
+# app exists to TEST whether KubeArmor v1.7.4 now resolves containers on our current containerd and its
+# KubeArmorPolicy actually BLOCKS. Until that is proven live, Tetragon remains the enforcing C3 block and
+# is NOT removed. See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+#
+# autoDeploy=true has the operator create the default KubeArmorConfig, which brings up the enforcement
+# DaemonSet + relay with no second manifest. Default posture is audit/allow until a KubeArmorPolicy names
+# a target, so the engine alone enforces nothing: the actual C3 deny is the KubeArmorPolicy shipped by the
+# kubearmor-policies app (policies/kubearmor/). That split mirrors tetragon / tetragon-policies.
+#
+# ROUND GATING: the FULL app-of-apps (R2/R3/attendee) syncs gitops/apps wholesale, so it gets this engine.
+# The BURN app-of-apps (R1) uses an explicit include: list; adding 'kubearmor' there (engine only, NOT
+# kubearmor-policies) keeps the engine present on all three builds while R1 stays enforcement-free and
+# still burns. Wave -6 matches tetragon so the engine is up before its policy (wave 4).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubearmor
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: kubearmor-operator
+    repoURL: https://kubearmor.github.io/charts
+    targetRevision: "1.7.4"
+    helm:
+      releaseName: kubearmor-operator
+      valuesObject:
+        # Operator auto-creates the default KubeArmorConfig -> deploys the enforcement DaemonSet + relay.
+        autoDeploy: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kubearmor
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

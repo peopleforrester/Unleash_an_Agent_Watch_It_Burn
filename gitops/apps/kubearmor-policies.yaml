@@ -1,0 +1,42 @@
+# ABOUTME: ArgoCD Application that syncs KubeArmorPolicy CRs from policies/kubearmor/. Split from the
+# ABOUTME: engine app (mirrors kyverno / kyverno-policies and tetragon / tetragon-policies) so the deny
+# ABOUTME: rule is versioned as plain manifests, separate from the operator install.
+#
+# Wave 4: after the KubeArmor operator + CRDs (kubearmor app, wave -6), the agent namespace (namespaces,
+# wave -10), and the workshop-mcp workload (ai-layer, wave 3). ServerSideApply + retry tolerate the CRD/pod
+# not being ready on the first reconcile. Only the FULL app-of-apps pulls this directory; BURN (R1) omits
+# it, so R1 gets no C3 enforcement even if the KubeArmor engine is present.
+#
+# Runs concurrently with tetragon-policies during evaluation (both target the same legacy dir on the same
+# pod). Redundant blocking is harmless (the read fails either way); the point is to confirm KubeArmor's
+# enforcer engages. Retire whichever loses the bake-off; do NOT remove Tetragon until KubeArmor is proven.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubearmor-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: policies/kubearmor
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+    retry:
+      limit: 10
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

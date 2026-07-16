@@ -21,7 +21,10 @@ spec:
       recurse: false
       # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
       # observability/cert-manager/eso/backstage. Just the agent + ai-layer (cost meter) + burn targets.
-      include: '{namespaces,kagent-crds,kagent,ai-layer,customer-stream,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
+      # kubearmor (ENGINE only, NOT kubearmor-policies) is included so the runtime-enforcement engine is
+      # present on all three builds per the uniform-build goal; with no KubeArmorPolicy it enforces nothing,
+      # so R1 stays guardrail-free and the C3 snoop still succeeds. Tetragon stays OMITTED here.
+      include: '{namespaces,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

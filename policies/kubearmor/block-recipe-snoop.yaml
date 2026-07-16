@@ -1,0 +1,31 @@
+# ABOUTME: C3 hard-block, KubeArmor equivalent of policies/tetragon/block-recipe-snoop.yaml. Denies any
+# ABOUTME: file access under the legacy recipe-config dir from the workshop-mcp pod (Block = returns EPERM).
+#
+# This is the KubeArmor candidate for the enforcing half of C3, shipped alongside (not replacing) the
+# Tetragon rule during evaluation. The bait file (/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf)
+# is seeded by workshop-mcp-server.py. When KubeArmor's enforcer resolves the container and BPF-LSM engages,
+# a read under the legacy dir returns "Permission denied" and KubeArmor emits a block alert (kArmor logs /
+# Datadog). Scope matches the Tetragon rule exactly: namespace agent, selector app=workshop-mcp, so only the
+# burrito agent's tool pod is constrained; customers.json and the rest of /tmp/burrito-data stay readable.
+#
+# VALIDATION GATE: on the next provision, apply this and confirm `cat` of the bait file is denied AND that
+# KubeArmor (not Tetragon) recorded the block. If the read succeeds despite this policy, the containerd 2.x
+# namespace-resolution bug still reproduces on AL2023 -> KubeArmor is not viable here and the fix is a
+# Bottlerocket node group (AWS's supported KubeArmor-on-EKS substrate), not an AL2023 change.
+#
+# This app (kubearmor-policies) is included ONLY by the FULL app-of-apps (R2/R3/attendee). R1 (burn) omits
+# it, so R1 has no C3 enforcement regardless of whether the KubeArmor engine is present.
+apiVersion: security.kubearmor.com/v1
+kind: KubeArmorPolicy
+metadata:
+  name: block-recipe-snoop
+  namespace: agent
+spec:
+  selector:
+    matchLabels:
+      app: workshop-mcp
+  file:
+    matchDirectories:
+      - dir: /tmp/burrito-data/config/legacy/
+        recursive: true
+  action: Block

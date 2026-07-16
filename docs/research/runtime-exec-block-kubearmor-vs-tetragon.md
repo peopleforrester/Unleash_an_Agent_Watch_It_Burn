@@ -17,36 +17,51 @@ Containers blog "Secure Bottlerocket deployments on Amazon EKS with KubeArmor", 
   doing the "catch it on the frontend" that the KubeArmor swap was meant to add. Tetragon's kprobe+override
   enforcement does NOT depend on the kernel's active LSM list, so it works on AL2023 as-is.
 
-## KubeArmor on AL2023: viable now (the past blocker was AL2, not AL2023)
-- **KubeArmor's block is LSM-based:** enforces via BPF-LSM (or AppArmor). BPF-LSM needs kernel >= 5.7 with
-  CONFIG_BPF_LSM and `bpf` in the active `lsm=` list.
-- **The past "KubeArmor unusable on EKS" was almost certainly AL2 (kernel 5.4):** AWS confirms default
-  AL2 "cannot be used" for BPF-LSM enforcement. That is the AMI they had when they switched to Tetragon.
-- **AL2023 changes the answer: BPF-LSM is enabled and activated BY DEFAULT on Amazon Linux 2023** (per
-  KubeArmor/AWS docs, retrieved 2026-07-12). Our node group is `AL2023_x86_64_STANDARD` (kernel 6.1), so
-  **KubeArmor enforcement should work out of the box** — no Bottlerocket, no bootstrap change needed. The
-  old blocker is gone. KubeArmor is a CNCF Sandbox project (why Michael wants it for the CNCF-guardrails
-  story); Tetragon is CNCF-Graduated (via Cilium), so both are CNCF, but KubeArmor is the featured name.
-- **Live-confirmed 2026-07-16 (no longer a docs claim):** a bare single-node `watch-it-burn-attendee-001`
-  (AL2023) was provisioned and `/sys/kernel/security/lsm` read from a privileged pod on the node:
-  - `KERNEL = 6.12.90-120.164.amzn2023.x86_64` (AL2023 has moved past 6.1 to 6.12)
-  - `LSM_LIST = lockdown,capability,landlock,yama,safesetid,selinux,bpf,ima`
-  - `bpf` IS in the active list (and `selinux` too), so **KubeArmor's BPF-LSM enforcement works on our
-    current nodes with zero infra change** — no AMI swap, no Bottlerocket, no bootstrap `lsm=` edit. The
-    cluster was torn down immediately after (trap EXIT), fleet back to zero. This retires the "verify live"
-    caveat: the KubeArmor blocker is gone on AL2023.
+## CORRECTION 2026-07-16: the real blocker is containerd namespace resolution, NOT the kernel LSM
+An earlier draft of this spike said the KubeArmor blocker was AL2 (kernel 5.4) lacking BPF-LSM, and that
+moving to AL2023 fixes it "with zero infra change." **That root cause was wrong.** The authoritative
+reason lives in our own `gitops/apps/tetragon.yaml` comment, written when the switch was made:
 
-## Recommendation
-1. **Fold the check into the next R3 provision** (Michael, 2026-07-12): on a live AL2023 node,
-   `cat /sys/kernel/security/lsm` and confirm `bpf` is in the list. If yes -> KubeArmor can enforce here.
-2. **Confirm the current Tetragon block actually blocks** (the unverified layer): trigger the C3 file read
-   (path under `/tmp/burrito-data/config/legacy/`) and confirm the open is denied. Keep this as the baseline.
-3. **If BPF-LSM confirmed active:** proceed to swap in KubeArmor for the C3 preemptive block -- deploy the
-   KubeArmor gitops app + a KubeArmor policy equivalent to `block-recipe-snoop` (block file open under the
-   legacy path for the workshop-mcp pod), verify it BLOCKS, then retire Tetragon (+ tetragon-policies). If
-   the live check unexpectedly shows no bpf, fall back: keep Tetragon, or add `lsm=...,bpf` via node
-   bootstrap, or Bottlerocket.
-4. **Keep Falco + Falco-Talon** (detect + respond, e.g. fork bomb) regardless -- complementary to the block.
+> "KubeArmor v1.7.x cannot resolve container namespaces against EKS AL2023's containerd 2.2.4 (its
+> enforcer reports mntns=0 / 'task not found'), so its BPF-LSM block never engages. Tetragon reads
+> container identity from BPF/cgroups directly, works on containerd 2.x with no node reconfiguration."
 
-Net: KubeArmor is very likely viable on AL2023 now (past failure was AL2). Plan is to confirm BPF-LSM +
-the Tetragon baseline on the next provision, then swap Tetragon -> KubeArmor if confirmed. Not blind.
+So the blocker is a **KubeArmor-to-containerd-2.x container-identity bug on AL2023**, not a missing kernel
+LSM. BPF-LSM being present is necessary but NOT sufficient: with `bpf` active and the enforcer unable to
+map the container, the block still never fires.
+
+### What IS confirmed vs what is NOT
+- **CONFIRMED live 2026-07-16:** BPF-LSM is active on our AL2023 nodes. A bare single-node cluster was
+  provisioned and `/sys/kernel/security/lsm` read from a privileged pod:
+  - `KERNEL = 6.12.90-120.164.amzn2023.x86_64`
+  - `LSM_LIST = lockdown,capability,landlock,yama,safesetid,selinux,bpf,ima` (`bpf` and `selinux` present)
+  - Cluster torn down immediately (trap EXIT); fleet back to zero. This clears the LSM prerequisite ONLY.
+- **NOT confirmed:** that KubeArmor's enforcer resolves containers on our current containerd (2.1.x on
+  AL2023) so a KubeArmorPolicy actually BLOCKS. This is the real gate and it is still open.
+
+### Upstream status (retrieved 2026-07-16, per recency discipline)
+- Latest KubeArmor: **v1.7.4 (2026-07-03)**; v1.7.5-rc1 (2026-07-13). Recent releases touch containerd
+  event handling ("use TaskExit type to unmarshal containerd exit events", bump to the containerd v1.8 Go
+  module), so the area is active, but **no release note states "AL2023 containerd 2.x enforcement fixed."**
+- AWS's own supported KubeArmor-on-EKS reference (Containers blog, 2025-10-21) runs on **EKS Auto Mode =
+  Bottlerocket nodes**, not self-managed AL2023 + containerd. Bottlerocket is the AWS-blessed substrate.
+- Sources: github.com/kubearmor/KubeArmor/releases; aws.amazon.com/blogs/containers/enhancing-container-
+  security-in-amazon-eks-auto-mode-with-kubearmor; artifacthub.io kubearmor-operator 1.7.4.
+
+## Recommendation (revised)
+1. **Build the KubeArmor test rig (DONE 2026-07-16):** `gitops/apps/kubearmor.yaml` (operator 1.7.4,
+   autoDeploy), `gitops/apps/kubearmor-policies.yaml`, `policies/kubearmor/block-recipe-snoop.yaml`
+   (KubeArmorPolicy Block on the legacy dir for app=workshop-mcp). Engine added to the R1 burn include-glob
+   (engine only, no policy) so it is present on all three builds while R1 stays enforcement-free.
+2. **Validate on the next R2/R3 provision (THE real gate):** apply the KubeArmorPolicy and confirm `cat` of
+   `/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf` is DENIED and that KubeArmor (kArmor logs),
+   not Tetragon, recorded the block. Also confirm the Tetragon baseline still blocks.
+3. **If KubeArmor blocks:** retire Tetragon (+ tetragon-policies); KubeArmor becomes the featured CNCF
+   prevention engine. If it does NOT block (containerd bug reproduces): the fix is a **Bottlerocket node
+   group** (an AMI change, AWS's supported KubeArmor substrate), or stay on Tetragon. Do NOT remove Tetragon
+   until KubeArmor is proven.
+4. **Keep Falco + Falco-Talon** (detect + respond, e.g. fork bomb) regardless.
+
+Net: BPF-LSM is confirmed active, but that was never the blocker. The open question is KubeArmor's
+container resolution on AL2023 containerd 2.x. Test rig is built; the next provision decides swap vs
+Bottlerocket vs stay-on-Tetragon. Not green-lit yet.

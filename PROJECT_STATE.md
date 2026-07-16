@@ -865,12 +865,17 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
 - Cluster is still UP; tear down manually when done with live work.
 
 ## Pending checks (fold into the next provision)
-- [DONE 2026-07-16] BPF-LSM check: live-confirmed on a bare single-node AL2023 cluster.
-  `KERNEL=6.12.90-120.164.amzn2023.x86_64`,
-  `LSM_LIST=lockdown,capability,landlock,yama,safesetid,selinux,bpf,ima` — `bpf` (and `selinux`) active.
-  KubeArmor can enforce with zero infra change (no AMI swap, no Bottlerocket, no bootstrap lsm= edit).
-  Cluster torn down immediately (fleet at zero). See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
-- NEXT R3 PROVISION (remaining): (1) confirm the current Tetragon `block-recipe-snoop` actually blocks a
-  read under /tmp/burrito-data/config/legacy/ (baseline); (2) with bpf now confirmed, execute the
-  Tetragon->KubeArmor swap — deploy KubeArmor gitops app + a KubeArmorPolicy equivalent to
-  block-recipe-snoop, verify it BLOCKS, retire Tetragon. Keep Falco+Talon (detect+respond).
+- [DONE 2026-07-16] BPF-LSM check: live-confirmed active on a bare single-node AL2023 cluster
+  (`KERNEL=6.12.90-120.164.amzn2023.x86_64`, `LSM_LIST=...,selinux,bpf,ima`). Cluster torn down (fleet at
+  zero). CAVEAT: bpf active was a prerequisite, NOT the blocker. The real reason we run Tetragon (per
+  gitops/apps/tetragon.yaml) is KubeArmor's container-namespace resolution failing on AL2023 containerd 2.x
+  (mntns=0 / task-not-found), which this check does NOT clear. Earlier "KubeArmor green-lit, no AMI change"
+  was WRONG; spike doc corrected. See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+- [DONE 2026-07-16] KubeArmor test rig BUILT (not yet validated): gitops/apps/kubearmor.yaml (operator
+  1.7.4, autoDeploy), gitops/apps/kubearmor-policies.yaml, policies/kubearmor/block-recipe-snoop.yaml
+  (KubeArmorPolicy Block). Engine added to R1 burn include-glob (engine only, no policy) so present on all
+  three builds; R1 stays enforcement-free. Tetragon left in place (dual-run) until KubeArmor is proven.
+- NEXT R2/R3 PROVISION (THE gate): apply the KubeArmorPolicy and confirm `cat` of
+  /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf is DENIED and KubeArmor (kArmor logs, not
+  Tetragon) recorded the block. If it blocks -> retire Tetragon. If the read succeeds (containerd bug
+  reproduces) -> move node group to Bottlerocket (AMI change) or stay on Tetragon. Keep Falco+Talon.
