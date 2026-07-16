@@ -27,8 +27,14 @@ Containers blog "Secure Bottlerocket deployments on Amazon EKS with KubeArmor", 
   **KubeArmor enforcement should work out of the box** — no Bottlerocket, no bootstrap change needed. The
   old blocker is gone. KubeArmor is a CNCF Sandbox project (why Michael wants it for the CNCF-guardrails
   story); Tetragon is CNCF-Graduated (via Cilium), so both are CNCF, but KubeArmor is the featured name.
-- **Still verify live** (recency discipline): the "enabled by default" claim is from docs; confirm on an
-  actual node.
+- **Live-confirmed 2026-07-16 (no longer a docs claim):** a bare single-node `watch-it-burn-attendee-001`
+  (AL2023) was provisioned and `/sys/kernel/security/lsm` read from a privileged pod on the node:
+  - `KERNEL = 6.12.90-120.164.amzn2023.x86_64` (AL2023 has moved past 6.1 to 6.12)
+  - `LSM_LIST = lockdown,capability,landlock,yama,safesetid,selinux,bpf,ima`
+  - `bpf` IS in the active list (and `selinux` too), so **KubeArmor's BPF-LSM enforcement works on our
+    current nodes with zero infra change** — no AMI swap, no Bottlerocket, no bootstrap `lsm=` edit. The
+    cluster was torn down immediately after (trap EXIT), fleet back to zero. This retires the "verify live"
+    caveat: the KubeArmor blocker is gone on AL2023.
 
 ## Recommendation
 1. **Fold the check into the next R3 provision** (Michael, 2026-07-12): on a live AL2023 node,

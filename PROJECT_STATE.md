@@ -865,7 +865,12 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
 - Cluster is still UP; tear down manually when done with live work.
 
 ## Pending checks (fold into the next provision)
-- NEXT R3 PROVISION: KubeArmor/Tetragon runtime-block check. (1) `cat /sys/kernel/security/lsm` on an
-  AL2023 node, confirm `bpf` present; (2) confirm the current Tetragon `block-recipe-snoop` actually
-  blocks a read under /tmp/burrito-data/config/legacy/; (3) if bpf confirmed, plan the Tetragon->KubeArmor
-  swap. See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+- [DONE 2026-07-16] BPF-LSM check: live-confirmed on a bare single-node AL2023 cluster.
+  `KERNEL=6.12.90-120.164.amzn2023.x86_64`,
+  `LSM_LIST=lockdown,capability,landlock,yama,safesetid,selinux,bpf,ima` — `bpf` (and `selinux`) active.
+  KubeArmor can enforce with zero infra change (no AMI swap, no Bottlerocket, no bootstrap lsm= edit).
+  Cluster torn down immediately (fleet at zero). See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+- NEXT R3 PROVISION (remaining): (1) confirm the current Tetragon `block-recipe-snoop` actually blocks a
+  read under /tmp/burrito-data/config/legacy/ (baseline); (2) with bpf now confirmed, execute the
+  Tetragon->KubeArmor swap — deploy KubeArmor gitops app + a KubeArmorPolicy equivalent to
+  block-recipe-snoop, verify it BLOCKS, retire Tetragon. Keep Falco+Talon (detect+respond).
