@@ -3,8 +3,8 @@
 #
 # Modeled on the Packt sister repo's cluster/ module (proven shape on the same shared account):
 # takes vpc_id + private_subnet_ids as inputs (no VPC of its own), VPC-CNI prefix delegation +
-# maxPods=110, EBS CSI via IRSA, Pod Identity for the AWS LB controller, and
-# create_cloudwatch_log_group=false so reprovision is idempotent.
+# maxPods=110, and create_cloudwatch_log_group=false so reprovision is idempotent. Diverges from Packt:
+# EBS CSI + LB controller + ESO + agent are ALL on Pod Identity (no IRSA/OIDC provider on the cluster).
 #
 # THREE Watch-It-Burn deltas vs Packt (our controls; Packt does not have these):
 #   1. podPidsLimit=1024 in the node NodeConfig  -> the fork-bomb cap (verified live on EKS).
@@ -193,7 +193,10 @@ module "eks" {
 
   endpoint_public_access                   = true
   enable_cluster_creator_admin_permissions = true
-  enable_irsa                              = true
+  # No IRSA/OIDC provider: every IAM-needing workload (LB controller, ESO, EBS CSI, agent) is on Pod
+  # Identity now, so nothing is left to trust an OIDC provider. Dropping it removes the per-cluster OIDC
+  # endpoint entirely, fleet-consistent with the "no per-cluster OIDC trust" pattern used below.
+  enable_irsa = false
 
   # EKS auto-creates the control-plane log group and it survives destroy; let EKS own it so a
   # reused name never collides with "already exists" on reprovision. (Orphans are swept by
@@ -223,9 +226,9 @@ module "eks" {
     }
     coredns                = {}
     eks-pod-identity-agent = {}
-    aws-ebs-csi-driver = {
-      service_account_role_arn = module.ebs_csi_irsa.iam_role_arn
-    }
+    # EBS CSI creds via Pod Identity (module.ebs_csi_pod_identity binds kube-system:ebs-csi-controller-sa).
+    # No service_account_role_arn -> the driver SA gets creds from the pod-identity-agent, not IRSA/OIDC.
+    aws-ebs-csi-driver = {}
   }
 
   eks_managed_node_groups = {
@@ -276,17 +279,22 @@ module "eks" {
   }
 }
 
-module "ebs_csi_irsa" {
-  source  = "terraform-aws-modules/iam/aws//modules/iam-role-for-service-accounts-eks"
-  version = "~> 5.0"
+# EBS CSI on Pod Identity (rolled over from IRSA 2026-07-18). Same fleet-safe pattern as the LB/ESO/agent
+# roles: a per-cluster role + association, no SA annotation, no OIDC trust. attach_aws_ebs_csi_policy grants
+# the standard EBS volume-management permissions (AWS-managed EBS CSI policy equivalent); the workshop gp3
+# volumes use the default aws/ebs KMS key, which that policy covers, so no aws_ebs_csi_kms_arns is needed.
+module "ebs_csi_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 1.0"
 
-  role_name             = "${var.name}-ebs-csi"
-  attach_ebs_csi_policy = true
+  name                      = "${var.name}-ebs-csi"
+  attach_aws_ebs_csi_policy = true
 
-  oidc_providers = {
+  associations = {
     main = {
-      provider_arn               = module.eks.oidc_provider_arn
-      namespace_service_accounts = ["kube-system:ebs-csi-controller-sa"]
+      cluster_name    = module.eks.cluster_name
+      namespace       = "kube-system"
+      service_account = "ebs-csi-controller-sa"
     }
   }
 }
