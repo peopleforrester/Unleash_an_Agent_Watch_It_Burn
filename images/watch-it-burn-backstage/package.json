@@ -59,7 +59,8 @@
     "@octokit/request": "8.4.1",
     "@octokit/plugin-paginate-rest": "9.2.2",
     "js-yaml": "4.2.0",
-    "file-type": "21.3.2"
+    "file-type": "21.3.2",
+    "adm-zip": "0.6.0"
   },
   "prettier": "@backstage/cli/config/prettier",
   "lint-staged": {
