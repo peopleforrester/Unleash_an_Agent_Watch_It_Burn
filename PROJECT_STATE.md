@@ -875,7 +875,18 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
   1.7.4, autoDeploy), gitops/apps/kubearmor-policies.yaml, policies/kubearmor/block-recipe-snoop.yaml
   (KubeArmorPolicy Block). Engine added to R1 burn include-glob (engine only, no policy) so present on all
   three builds; R1 stays enforcement-free. Tetragon left in place (dual-run) until KubeArmor is proven.
-- NEXT R2/R3 PROVISION (THE gate): apply the KubeArmorPolicy and confirm `cat` of
-  /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf is DENIED and KubeArmor (kArmor logs, not
-  Tetragon) recorded the block. If it blocks -> retire Tetragon. If the read succeeds (containerd bug
-  reproduces) -> move node group to Bottlerocket (AMI change) or stay on Tetragon. Keep Falco+Talon.
+- [DONE 2026-07-18] KubeArmor block VALIDATED live on watch-it-burn-r3-1 (torn down after). Both a
+  Tetragon-independent sentinel probe AND the real block-recipe-snoop policy (Tetragon removed) returned
+  "Permission denied"; KubeArmor logged "Initialized BPF-LSM Enforcer" + "Detected a Pod (agent/workshop-mcp)".
+  The mntns/containerd bug does NOT reproduce. NO Bottlerocket needed. The real prerequisite is admission
+  ordering: KubeArmor only enforces on pods admitted AFTER its controller webhook is up.
+- REMAINING for the Tetragon->KubeArmor cutover (viability is settled; this is the ordering fix): gate
+  ai-layer (wave 3) behind the KubeArmor DaemonSet+controller being Ready (the operator reports Healthy
+  before its webhook exists, so workshop-mcp races ahead un-annotated). A manual `kubectl rollout restart`
+  is blocked by Kyverno block-argocd-drift on armed clusters, so it must be a sync-wave/health gate. THEN
+  retire Tetragon. Until then, KubeArmor ships dual-run alongside Tetragon (safe: it just doesn't enforce on
+  the un-annotated workshop-mcp yet; Tetragon still does C3). Keep Falco+Talon.
+- [DONE 2026-07-18] EBS CSI rolled IRSA->Pod Identity VALIDATED on the same run: all IDP PVCs Bound (gp3/gp2),
+  ebs-csi-controller-sa Pod Identity association present, ZERO IAM OIDC providers for the cluster
+  (enable_irsa=false worked). OIDC provider dependency dropped. (The test script's "PVC_NOT_ALL_BOUND" line
+  was a false negative from an awk column bug: checked field 4, STATUS is field 3; raw listing showed all Bound.)

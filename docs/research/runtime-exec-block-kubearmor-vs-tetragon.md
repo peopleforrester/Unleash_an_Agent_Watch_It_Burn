@@ -65,3 +65,32 @@ map the container, the block still never fires.
 Net: BPF-LSM is confirmed active, but that was never the blocker. The open question is KubeArmor's
 container resolution on AL2023 containerd 2.x. Test rig is built; the next provision decides swap vs
 Bottlerocket vs stay-on-Tetragon. Not green-lit yet.
+
+## RESULT 2026-07-18: KubeArmor ENFORCES on AL2023/containerd. Swap is VIABLE.
+Live-validated on a full-profile `watch-it-burn-r3-1` (operator 1.7.4, autoDeploy), then torn down:
+- **Container resolution works.** KubeArmor logged `Initialized BPF-LSM Enforcer`, `Detected a Security
+  Policy (added/agent/block-recipe-snoop)`, and `Detected a Pod (added/agent/workshop-mcp-...)`. The old
+  `mntns=0 / task-not-found` failure does NOT reproduce on the current containerd. That documented reason
+  for choosing Tetragon is obsolete.
+- **Enforcement confirmed two ways.** A Tetragon-independent sentinel probe (`Block` on a file only
+  KubeArmor covered) returned `Permission denied`; and the real `block-recipe-snoop` KubeArmorPolicy, with
+  the Tetragon rule removed first, also returned `Permission denied` on the bait file. So KubeArmor is
+  doing the block, not Tetragon.
+- **The real prerequisite is admission ordering, not the kernel or containerd.** KubeArmor enforces only on
+  pods admitted AFTER its controller webhook is up (it annotates `kubearmor-policy: enabled` at admission;
+  pre-existing pods get visibility only). In the test, workshop-mcp came up before the operator finished
+  deploying the controller, so it had to be re-admitted to gain enforcement.
+
+## Remaining work for the actual Tetragon -> KubeArmor cutover (NOT a viability question)
+1. **Fix ordering** so workshop-mcp is admitted after the KubeArmor controller. The kubearmor app is
+   sync-wave -6 and ai-layer is wave 3, but the OPERATOR reports Healthy once the operator pod is up, not
+   when the controller/daemonset/webhook is ready, so ai-layer races ahead. Add a sync-wave gate or a
+   health check (e.g. a PreSync/wave hook that waits for the kubearmor DaemonSet + controller Ready) so the
+   workload lands after enforcement is armed. A manual `kubectl rollout restart` is NOT the answer on a live
+   cluster: the Kyverno `block-argocd-drift` policy denies hand-mutation of the ArgoCD-managed deployment.
+2. **Then retire Tetragon** (+ tetragon-policies) and make KubeArmor the featured CNCF prevention engine.
+   Until step 1 lands, keep Tetragon as the working C3 block; the KubeArmor engine can ship alongside
+   (dual-run) safely since it simply does not enforce on the un-annotated workshop-mcp yet.
+3. **Keep Falco + Falco-Talon** (detect + respond) regardless.
+
+No Bottlerocket needed: enforcement works on our AL2023 nodes as-is.
