@@ -1,0 +1,187 @@
+# ABOUTME: ArgoCD PreSync hook that blocks ai-layer (workshop-mcp) from deploying until the KubeArmor
+# ABOUTME: daemonset + controller webhook are Ready, so the workshop-mcp pod is admitted AFTER the webhook
+# ABOUTME: and gets the kubearmor-policy=enabled annotation (validated 2026-07-18: enforcement needs this).
+#
+# WHY: KubeArmor annotates pods for ENFORCEMENT at admission via its controller's mutating webhook.
+# gitops/apps/kubearmor.yaml is sync-wave -6, but the operator (autoDeploy) creates the daemonset +
+# controller ASYNC after its Application reports Healthy, so ai-layer (wave 3) otherwise races ahead and
+# workshop-mcp comes up un-annotated -> KubeArmor observes but does not block (proven live). A manual
+# `kubectl rollout restart` is NOT an option on armed clusters: Kyverno block-argocd-drift denies it.
+# This gate is the GitOps-native fix: ai-layer's PreSync waits for KubeArmor readiness, then the workload
+# is admitted through the live webhook.
+#
+# SOFT-FAIL BY DESIGN: the gate always exits 0 (proceed) after at most ~7 min. If KubeArmor is ready it
+# proceeds immediately (normal path). If KubeArmor is genuinely broken it proceeds anyway rather than wedge
+# the whole BurritoBot demo; Tetragon still covers C3 in that degraded case (dual-run). Do NOT retire
+# Tetragon until this gate is proven reliable across provisions.
+#
+# All resources are PreSync hooks: RBAC + script at hook wave 0, the Job at hook wave 1. kustomize's
+# `namespace: agent` lands the namespaced pieces in agent; the ClusterRole/Binding are cluster-scoped.
+# Image is the workshop's own ghcr.io image (allowed by restrict-image-registries; has python). The gate
+# talks to the API with its ServiceAccount token (read-only on the KubeArmor resources it checks).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubearmor-gate-script
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  gate.py: |
+    # ABOUTME: Poll the k8s API for KubeArmor readiness (daemonset + controller + webhook), then exit 0.
+    # ABOUTME: Always exits 0 (soft-fail) so a KubeArmor problem delays but never wedges ai-layer.
+    import json, os, ssl, sys, time, urllib.request, urllib.error
+    SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+    TOKEN = open(f"{SA}/token").read().strip()
+    CTX = ssl.create_default_context(cafile=f"{SA}/ca.crt")
+    BASE = f"https://{os.environ['KUBERNETES_SERVICE_HOST']}:{os.environ['KUBERNETES_SERVICE_PORT']}"
+
+    def api(path):
+        req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {TOKEN}"})
+        with urllib.request.urlopen(req, context=CTX, timeout=10) as r:
+            return json.load(r)
+
+    def exists(path):
+        try:
+            api(path); return True
+        except urllib.error.HTTPError as e:
+            if e.code == 404: return False
+            raise
+
+    def ka_ns():
+        return exists("/api/v1/namespaces/kubearmor")
+
+    def ds_ready():
+        try:
+            d = api("/apis/apps/v1/namespaces/kubearmor/daemonsets")
+        except urllib.error.HTTPError:
+            return False
+        items = [i for i in d.get("items", [])
+                 if "kubearmor" in i["metadata"]["name"] and "operator" not in i["metadata"]["name"]]
+        if not items:
+            return False
+        return all(i.get("status", {}).get("numberReady", 0) > 0
+                   and i["status"].get("numberReady") == i["status"].get("desiredNumberScheduled")
+                   for i in items)
+
+    def ctrl_ready():
+        try:
+            d = api("/apis/apps/v1/namespaces/kubearmor/deployments/kubearmor-controller")
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                return False
+            raise
+        return d.get("status", {}).get("readyReplicas", 0) >= 1
+
+    def webhook():
+        return exists("/apis/admissionregistration.k8s.io/v1/mutatingwebhookconfigurations/"
+                      "kubearmor-controller-mutating-webhook-configuration")
+
+    # If KubeArmor is not in this profile at all, do not block (proceed after a short look).
+    t0 = time.time()
+    while not ka_ns():
+        if time.time() - t0 > 90:
+            print("[gate] kubearmor namespace absent after 90s; assuming KubeArmor not in this profile; proceeding.")
+            sys.exit(0)
+        time.sleep(5)
+
+    deadline = time.time() + 420  # ~7 min budget for the operator to bring up daemonset + controller + webhook
+    while time.time() < deadline:
+        try:
+            if ds_ready() and ctrl_ready() and webhook():
+                print("[gate] KubeArmor ready (daemonset + controller + webhook). "
+                      "Proceeding; workshop-mcp will be admitted with the enforcement annotation.")
+                sys.exit(0)
+        except Exception as e:  # transient API blips: keep polling
+            print(f"[gate] transient check error: {e}")
+        time.sleep(10)
+
+    print("[gate] KubeArmor not fully ready before deadline; proceeding anyway "
+          "(Tetragon still covers C3; KubeArmor will enforce on the next pod admission).")
+    sys.exit(0)
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kubearmor-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: kubearmor-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get"]
+  - apiGroups: ["apps"]
+    resources: ["daemonsets", "deployments"]
+    verbs: ["get", "list"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["mutatingwebhookconfigurations"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kubearmor-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: kubearmor-gate
+subjects:
+  - kind: ServiceAccount
+    name: kubearmor-gate
+    namespace: agent
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kubearmor-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 120
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: kubearmor-gate
+      restartPolicy: Never
+      containers:
+        - name: gate
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim
+          command: ["python3", "/gate/gate.py"]
+          volumeMounts:
+            - name: script
+              mountPath: /gate
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "200m", memory: "128Mi" }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: script
+          configMap: { name: kubearmor-gate-script }
