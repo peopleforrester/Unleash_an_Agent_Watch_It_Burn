@@ -3,6 +3,14 @@
 
 > **Amended 2026-06-28** by [docs/UI-FEEDBACK-2026-06-28.md](UI-FEEDBACK-2026-06-28.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
 
+> **Corrected 2026-07-25** against the manifests. This spec had drifted from the code on two points
+> that would have produced a wrong rebuild. **Identity:** it described `enable_irsa=true` and IRSA for
+> the EBS CSI driver and the agent. The cluster sets `enable_irsa = false` and everything uses EKS Pod
+> Identity (`infra/terraform/aws/cluster/main.tf:199,229-231`). **Default model:** it named
+> `bedrock-sonnet` as the default. The manifest sets `bedrock-nova`, Nova Pro
+> (`gitops/ai-layer/resources.yaml:96-99,109`), because the Claude tiers refuse the exfil beats the
+> workshop depends on. Both are fixed in place below.
+
 
 # Watch It Burn: Master Recreation Specification
 
@@ -117,7 +125,7 @@ This subsystem provisions the AWS substrate: a disposable, multi-account EKS fle
 
 **t3.2xlarge single node per cluster, prefix delegation to fit the whole IDP on one node.** Default nodegroup 1x `t3.2xlarge` (min=max=desired=1), AMI `AL2023_x86_64_STANDARD`. `ENABLE_PREFIX_DELEGATION=true`, `WARM_PREFIX_TARGET=1`, and `maxPods=110` set explicitly in the nodeadm NodeConfig (AL2023 nodeadm ignores prefix delegation when computing max-pods). Guidance: scale up only if pods stay Pending.
 
-**EKS Pod Identity for agent/ESO/LB-controller; IRSA only for the EBS CSI driver.** Pod Identity is a reusable role plus a per-cluster association, with NO ServiceAccount annotation in gitops and NO per-cluster OIDC trust policy, so the gitops manifests are identical across all ~60 clusters. ESO migrated IRSA → Pod Identity (commit `f5afd51`). EBS CSI stays on IRSA (predates the convention, works).
+**EKS Pod Identity for everything. IRSA is not used anywhere, and OIDC is disabled at the cluster.** Pod Identity is a reusable role plus a per-cluster association, with NO ServiceAccount annotation in gitops and NO per-cluster OIDC trust policy, so the gitops manifests are identical across all ~60 clusters. ESO migrated IRSA to Pod Identity (commit `f5afd51`). **EBS CSI is also on Pod Identity**, bound by `module.ebs_csi_pod_identity` to `kube-system:ebs-csi-controller-sa`; the addon carries no `service_account_role_arn`, so its SA gets credentials from the pod-identity-agent rather than from IRSA or OIDC (`infra/terraform/aws/cluster/main.tf:229-231`).
 
 **Bedrock interface VPC endpoint with private DNS; deliberately NO S3 endpoint.** The load-bearing half of the data-exfil control. The agent reaches Bedrock through an in-VPC ENI; `private_dns_enabled = true` makes `bedrock-runtime.us-west-2.amazonaws.com` resolve to that ENI inside the VPC. The `agent`-namespace egress allowlist permits only in-VPC `10.0.0.0/16:443`, so Bedrock works while S3 PutObject (no endpoint) egresses to the public internet where there is no allow, and is denied. An S3 gateway endpoint is intentionally forbidden: it would make S3 look in-VPC at L3 and defeat the CIDR control. The endpoint and the four `agent`-namespace egress policies must land together (commit `a7ba625`).
 
@@ -136,7 +144,7 @@ This subsystem provisions the AWS substrate: a disposable, multi-account EKS fle
 All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~> 6.0`.
 
 - **lab-vpc root** (`infra/terraform/aws/network/main.tf`): module `terraform-aws-modules/vpc/aws ~> 5.0`. `watch-it-burn-lab-vpc`, CIDR `10.0.0.0/16`, 2 AZs. `private_subnets=["10.0.0.0/18","10.0.64.0/18"]`, `public_subnets=["10.0.128.0/24","10.0.129.0/24"]`, `enable_nat_gateway=true`, `single_nat_gateway=true`. Subnet role tags only (`kubernetes.io/role/elb=1`, `.../internal-elb=1`); no per-cluster cluster tag. `aws_vpc_endpoint.bedrock_runtime`: `com.amazonaws.us-west-2.bedrock-runtime`, Interface, private subnets, `private_dns_enabled=true`, SG tcp/443 from `vpc_cidr_block`. Outputs `vpc_id`, `private_subnet_ids`, `bedrock_vpce_id`, `region`. Default tags `project=watch-it-burn`, `event=ai-engineer-worldsfair-2026`.
-- **cluster root** (`infra/terraform/aws/cluster/main.tf`): module `terraform-aws-modules/eks/aws ~> 21.0`, `kubernetes_version="1.35"`, `endpoint_public_access=true`, `enable_cluster_creator_admin_permissions=true`, `enable_irsa=true`, `create_cloudwatch_log_group=false`. Vars: `name` (required), `instance_types=["t3.2xlarge"]`, node min/max/desired `1`, `pod_pids_limit=1024`, `node_disk_size=100`, `region=us-west-2`, `profile=accen-dev`. Addons `vpc-cni` (before_compute, `enableNetworkPolicy="true"`, prefix delegation), `kube-proxy`, `coredns`, `eks-pod-identity-agent`, `aws-ebs-csi-driver` (IRSA). Managed nodegroup `default`: AL2023_x86_64_STANDARD, `force_update_version=true`, gp3 100 GiB encrypted root via `block_device_mappings.xvda`, `cloudinit_pre_nodeadm` NodeConfig with `maxPods:110` + `podPidsLimit:${pod_pids_limit}`. Pod-identity modules (`terraform-aws-modules/eks-pod-identity/aws ~> 1.0`) x3: LB controller (`kube-system:aws-load-balancer-controller`), ESO (`platform:external-secrets`, scoped `arn:aws:secretsmanager:*:*:secret:watch-it-burn/*`), agent Bedrock (`agent:agent-sa`, `bedrock:InvokeModel*`/`Converse*`). Module name capped at 38 chars (hence `${name}-bedrock`). Outputs `cluster_name`, `agent_bedrock_role_arn`, `kubeconfig_command`.
+- **cluster root** (`infra/terraform/aws/cluster/main.tf`): module `terraform-aws-modules/eks/aws ~> 21.0`, `kubernetes_version="1.35"`, `endpoint_public_access=true`, `enable_cluster_creator_admin_permissions=true`, **`enable_irsa=false`** (`main.tf:199`, which removes the per-cluster OIDC endpoint entirely), `create_cloudwatch_log_group=false`. Vars: `name` (required), `instance_types=["t3.2xlarge"]`, node min/max/desired `1`, `pod_pids_limit=1024`, `node_disk_size=100`, `region=us-west-2`, `profile=accen-dev`. Addons `vpc-cni` (before_compute, `enableNetworkPolicy="true"`, prefix delegation), `kube-proxy`, `coredns`, `eks-pod-identity-agent`, `aws-ebs-csi-driver` (**Pod Identity**, `main.tf:229-231`). Managed nodegroup `default`: AL2023_x86_64_STANDARD, `force_update_version=true`, gp3 100 GiB encrypted root via `block_device_mappings.xvda`, `cloudinit_pre_nodeadm` NodeConfig with `maxPods:110` + `podPidsLimit:${pod_pids_limit}`. Pod-identity modules (`terraform-aws-modules/eks-pod-identity/aws ~> 1.0`) x3: LB controller (`kube-system:aws-load-balancer-controller`), ESO (`platform:external-secrets`, scoped `arn:aws:secretsmanager:*:*:secret:watch-it-burn/*`), agent Bedrock (`agent:agent-sa`, `bedrock:InvokeModel*`/`Converse*`). Module name capped at 38 chars (hence `${name}-bedrock`). Outputs `cluster_name`, `agent_bedrock_role_arn`, `kubeconfig_command`.
 - **dashboards root** (`infra/terraform/dashboards/main.tf`): provider `DataDog/datadog ~> 3.0`; a stub (OOTB dashboards auto-install via Agent checks; 4 custom dashboards are commented placeholders pending live telemetry).
 - **IDP bootstrap** (`infra/deploy-full-idp.sh`): ArgoCD chart `9.6.0` (app v3.4.x) installed WITHOUT `--wait` (hangs on EKS), then explicit rollout waits on the three core components; registers the private repo (token from `gh auth token`) + ghcr OCI helm for kagent. Full profile also installs AWS Load Balancer Controller chart `1.14.0` (controller v2.14.x) with `clusterName`/`region`/`vpcId` passed explicitly (the controller cannot reach IMDS). Applies `gitops/bootstrap/app-of-apps.yaml` (full) or `app-of-apps-burn.yaml` (burn), both `targetRevision: staging`.
 - **5-account roster** (profiles in `~/.aws`, region us-west-2; account IDs and creds in `~/secrets/aws/watch-it-burn-fleet-accounts.csv`, never the repo): `accen-dev` (primary/provisioning, default lab-vpc state), `aws1-student31`, `aws1-student32`, `aws1-student33`, `aws1-student34`. Plan 50 clusters/account = 250.
@@ -231,7 +239,7 @@ Kyverno ClusterPolicies (`policies/kyverno/`): `block-argocd-drift` (cluster-wid
 3. Install ArgoCD in-cluster (Helm; `gitops/argocd/values.yaml`). This and the secret pre-seed are the only imperative steps.
 4. `kubectl apply -f gitops/bootstrap/app-of-apps.yaml` (full) OR `app-of-apps-burn.yaml` (the bare burn subset).
 5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/RBAC/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel/customer-stream → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
-6. The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh` (need IRSA + a concrete namespace); materializing them into GitOps is the open follow-up.
+6. The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh` (need a Pod Identity association and a concrete namespace); materializing them into GitOps is the open follow-up.
 7. Enable the OTel Instrumentation CR (`gitops/ai-layer/instrumentation.yaml`) once the Operator is Healthy: confirm the live Collector endpoint (`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, HTTP/4318), add the `inject-python` annotation, add the file to kustomize resources.
 
 ### Gotchas & Verification
@@ -265,7 +273,7 @@ agentgateway (OSS v1.3.0, :3000 A2A reverse proxy)   <- plain L7 hop; draws the 
    |  host: workshop-agent.agent.svc.cluster.local:8080
    v
 kagent workshop-agent (A2A serving, :8080; ADK >=1.17)
-   |  ModelConfig -> native Bedrock provider (IRSA, us-west-2)
+   |  ModelConfig -> native Bedrock provider (Pod Identity, us-west-2)
    v
 AWS Bedrock (Claude: haiku / sonnet[default] / opus)
 
@@ -302,7 +310,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 | chat-ui / console | `nginxinc/nginx-unprivileged:1.27-alpine` | 8080→80 | static UI from ConfigMap |
 | web-terminal | `ghcr.io/peopleforrester/watch-it-burn:web-terminal` (ttyd) | 7681 | `runAsUser: 1000` (image USER `term`) |
 
-Bedrock ModelConfigs (`kagent.dev/v1alpha2`, native Bedrock, us-west-2, IRSA via `agent-sa`): `bedrock-haiku` = `us.anthropic.claude-haiku-4-5-20251001-v1:0`; `bedrock-sonnet` = `us.anthropic.claude-sonnet-4-6` (default); `bedrock-opus` = `us.anthropic.claude-opus-4-8`. Sonnet/Opus require the `us.` Geo inference profile in us-west-2. proxy.py per-1K USD: haiku $0.001/$0.005, sonnet $0.003/$0.015, opus $0.005/$0.025.
+Bedrock ModelConfigs (`kagent.dev/v1alpha2`, native Bedrock, us-west-2, **Pod Identity** via `agent-sa`): `bedrock-nova` = `us.amazon.nova-pro-v1:0` (**the workshop default**, `resources.yaml:96-99` and `:109`); `bedrock-haiku` = `us.anthropic.claude-haiku-4-5-20251001-v1:0`; `bedrock-sonnet` = `us.anthropic.claude-sonnet-4-6`; `bedrock-opus` = `us.anthropic.claude-opus-4-8`. The three Claude tiers stay defined for an optional cost race but are not the default: they refuse the exfil beats, while Nova complies and executes the tools. Claude tiers require the `us.` Geo inference profile in us-west-2. proxy.py per-1K USD: haiku $0.001/$0.005, sonnet $0.003/$0.015, opus $0.005/$0.025. **Note the defect: there is no Nova row in that table, and `MODEL_TIER=sonnet` is set fleet-wide (`resources.yaml:410-412`), so Nova traffic is billed at Sonnet rates and reported as the wrong model.**
 
 `/chat` contract (BurritoBot): `POST /chat {prompt}` → `{reply, guarded, input_tokens, output_tokens}`. Round selector: `r1`→`https://round1.agenticburn.com/chat`, `r2`→`https://round2.agenticburn.com/chat`, `r3`→ same-origin `/chat`; override via `window.BURRITBOT_R1/R2/ENDPOINTS`. Unreachable cluster (status 0 or >=500) shows the "NO BURRITOS FOR YOU" black screen.
 
@@ -314,7 +322,7 @@ BurritoBot persona: a witchy burrito cantina ("Hex and Cauldron"), warm and a li
 
 ### Recreation Steps
 
-1. Create namespace `agent` + `agent-sa`; bootstrap adds the IRSA annotation for Bedrock (IAM is not GitOps-able). Enable Bedrock model access + the Anthropic use-case form per tier.
+1. Create namespace `agent` + `agent-sa`. Bedrock access comes from a **Pod Identity association** created in Terraform, not from a ServiceAccount annotation; that is the whole point of the convention, since it keeps the gitops manifests identical across all clusters. Enable Bedrock model access + the Anthropic use-case form per tier.
 2. Install kagent (CRDs + controller) and the OTel Operator + collector as earlier sync waves; apply the Instrumentation CR `watch-it-burn-python`.
 3. Apply the kustomize bundle `gitops/ai-layer/` (namespace `agent`, `disableNameSuffixHash: true`): `resources.yaml`, `instrumentation.yaml`, `agentgateway.yaml`, `argocd-managed-app.yaml`. The `configMapGenerator` mounts `proxy.py`, `server.py` (evil), `workshop-mcp-server.py` (keyed `server.py`), and the web assets; `secretGenerator` creates `llm-guard-auth`.
 4. Register `gitops/apps/ai-layer.yaml` at sync-wave 3 with selfHeal/prune/ServerSideApply and the three `ignoreDifferences`.
@@ -620,7 +628,7 @@ The decisions that span subsystems, with the one-line why. Full detail in each P
 ### Open items (from the B1 to B15 backlog and READINESS gaps)
 
 - **No single "set round state" script** (`infra/setup-instructor-cluster.sh <name> <round>` is intended). Bootstrap + toggles are separate manual steps.
-- **The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh`,** not GitOps (need IRSA + a concrete namespace). Materializing them into the app-of-apps is the open follow-up.
+- **The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh`,** not GitOps (need a Pod Identity association and a concrete namespace). Materializing them into the app-of-apps is the open follow-up.
 - **agentgateway `mcpAuthorization` CEL path is unproven on the OSS build** (`BUILD-SPIKE.md` ships TODO); the deployed beat-3 control is the kagent `toolNames` allowlist. beat-03 stays on the recorded-fallback gate until the spike passes.
 - **The AWS Load Balancer Controller install** (the Pod Identity role exists) would replace the Classic ELB on `console` with an ip-target NLB and activate the inert party-app ALB Ingresses.
 - **The four custom story dashboards** (Wasted Tokens, Model Tier Cost Race, Tool Call Heatmap, Guardrail Toggle Timeline) are Terraform `datadog_dashboard_json` scaffolds, deferred to dress rehearsal.
