@@ -1,7 +1,7 @@
 <!-- ABOUTME: Attendee split-console: left = beat instructions, right = tabs {Terminal (ttyd), Agent chat}. -->
 <!-- ABOUTME: Cloud-Shell style. Cost counter polls the guard-proxy /cost. Served by the console frontend nginx. -->
 <!doctype html>
-<html lang="en">
+<html lang="en" data-vtt-page="console">
 <head>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%94%A5</text></svg>">
   <meta charset="utf-8" />
@@ -28,10 +28,14 @@
     .ins-body code { background:#11141c; padding:1px 5px; border-radius:4px; }
     .hidden { display:none; }
   </style>
+  <!-- VTT skin layer (see web/SKINS.md). Switch skins in active-skin.js. -->
+  <script src="skins.js"></script>
+  <script src="active-skin.js"></script>
+  <script src="skin.js"></script>
 </head>
 <body>
   <header>
-    <h1>🔥 Watch It Burn — your cluster</h1>
+    <h1 data-brand="h1console">🔥 Watch It Burn — your cluster</h1>
     <div>cost: <span id="cost">$0.0000</span></div>
   </header>
   <div class="body">
