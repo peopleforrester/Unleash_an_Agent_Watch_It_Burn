@@ -1,7 +1,22 @@
-# Build a Platform, Unleash an Agent on it... and Watch it Burn!
+# Build a Platform, Unleash an Agent on it... and Watch it Burn! 🔥
 
-A hands-on workshop at AI Engineer World's Fair 2026 (San Francisco, Moscone West).
-Presented by Michael Forrester (Accenture) with Whitney Lee.
+![Watch It Burn: a Kubernetes cluster ablaze while a smug AI agent calmly roasts a marshmallow over the fire](docs/assets/watch-it-burn-hero.png)
+
+> **Give an AI agent the keys to a real Kubernetes platform, dare it to do damage, and watch which guardrails actually stop it, and which ones just watch it burn.**
+
+[![AI Engineer World's Fair 2026](https://img.shields.io/badge/AI%20Engineer%20World%27s%20Fair-2026-A100FF)](https://www.ai.engineer/)
+[![Kubernetes on EKS](https://img.shields.io/badge/Kubernetes-EKS-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![GitOps: Argo CD](https://img.shields.io/badge/GitOps-Argo%20CD-EF7B4D?logo=argo&logoColor=white)](https://argoproj.github.io/cd/)
+[![Guardrails: CNCF](https://img.shields.io/badge/guardrails-CNCF-3ECF8E)](#the-stack)
+[![License: MIT](https://img.shields.io/badge/License-MIT-A100FF)](LICENSE)
+
+A hands-on workshop at **AI Engineer World's Fair 2026** (San Francisco, Moscone West).
+Presented by **Michael Forrester** (Accenture) with **Whitney Lee**.
+
+**TL;DR:** three rounds, one lesson. Round 1 has no guardrails and the agent burns the cluster down.
+Round 2 turns on the CNCF controls most platform teams already run, and the same attacks die at the
+door. Round 3 is your own cluster, where you flip on the guardrails that are specific to *agents*, the
+input, the output, and the tools they can reach, because that is the part existing tooling cannot see.
 
 ## What this is
 
