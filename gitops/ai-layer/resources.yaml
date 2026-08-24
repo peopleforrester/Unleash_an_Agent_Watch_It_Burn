@@ -647,6 +647,8 @@ spec:
           imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
           ports:
             - { name: ttyd, containerPort: 7681 }
+            - { name: tutor, containerPort: 7682 }    # tutor ttyd, proxied at /tutor/
+            - { name: nudge, containerPort: 7683 }    # nudge file server, proxied at /api/tutor-nudge
             - { name: ide, containerPort: 8443 }      # code-server, proxied at /ide/
             - { name: jupyter, containerPort: 8888 }  # JupyterLab, proxied at /jupyter/
           # The student's own AWS keys, mounted as the DEFAULT profile inside the VTT so `aws` works with
@@ -679,6 +681,8 @@ spec:
   # because this cluster deliberately runs hostile workloads that sit on the same pod network.
   ports:
     - { name: ttyd, port: 7681, targetPort: ttyd }
+    - { name: tutor, port: 7682, targetPort: tutor }
+    - { name: nudge, port: 7683, targetPort: nudge }
     - { name: ide, port: 8443, targetPort: ide }
     - { name: jupyter, port: 8888, targetPort: jupyter }
 ---

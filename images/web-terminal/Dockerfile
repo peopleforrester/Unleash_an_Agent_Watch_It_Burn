@@ -3,6 +3,10 @@
 FROM debian:bookworm-slim
 
 # Base utilities the lab leans on. glibc base so AWS CLI v2 installs cleanly (it is not built for musl).
+# script(1), which captures the terminal transcript the tutor reads, needs no package here: on this base
+# it comes from bsdutils, which is Essential. Verified in the image on 2026-08-24 (dpkg -S /usr/bin/script
+# reports bsdutils; util-linux 2.38.1; -q -f -a -c all behave). The sister repo installs bsdextrautils
+# for this, which is not what owns it on debian:bookworm-slim; do not add that package on this hint.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget unzip git jq less vim-tiny gnupg bash procps \
  && rm -rf /var/lib/apt/lists/*
@@ -83,6 +87,23 @@ RUN set -eux; \
       boto3; \
     /opt/jupyter/bin/jupyter --version
 
+# --- Workshop tutor -------------------------------------------------------------------------------
+#
+# The tutor is the SAME agent CLI, run in a read-only posture on a second ttyd, rather than a separate
+# service. It reaches Bedrock through EKS Pod Identity, so no key exists in this image. Requires Node
+# >= 22, which is installed above.
+#
+# Version pinned and verified against the npm registry on 2026-08-24. Pinned rather than floating
+# because an image that silently changes the tutor's behaviour between rehearsal and delivery is the
+# kind of surprise this workshop cannot absorb on the day.
+ARG CLAUDE_CLI_VERSION=2.1.241
+RUN set -eux; \
+    npm install -g "@anthropic-ai/claude-code@${CLAUDE_CLI_VERSION}"; \
+    claude --version
+
+COPY tutor/ /opt/tutor/
+RUN chmod +x /opt/tutor/*.sh
+
 # The scoped student user. Numeric uid 1000 so the pod securityContext can verify runAsNonRoot.
 RUN useradd -m -u 1000 -s /bin/bash student \
  && mkdir -p /home/student/.kube /home/student/.aws /home/student/work \
@@ -93,7 +114,8 @@ RUN chmod +x /entrypoint.sh
 
 USER student
 WORKDIR /home/student
-# ttyd 7681 (/terminal/), code-server 8443 (/ide/), JupyterLab 8888 (/jupyter/). Only nginx is exposed
+# ttyd 7681 (/terminal/), tutor ttyd 7682 (/tutor/), code-server 8443 (/ide/), Jupyter 8888
+# (/jupyter/). Only nginx is exposed
 # at the Service; these are all loopback from the console frontend's point of view.
-EXPOSE 7681 8443 8888
+EXPOSE 7681 7682 8443 8888
 ENTRYPOINT ["/entrypoint.sh"]

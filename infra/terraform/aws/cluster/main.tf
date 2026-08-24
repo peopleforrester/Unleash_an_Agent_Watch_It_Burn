@@ -385,6 +385,70 @@ module "agent_bedrock_pod_identity" {
   }
 }
 
+# --- Workshop tutor -----------------------------------------------------------------------------
+#
+# The in-workbench tutor runs inside the web-terminal pod and reaches Bedrock through Pod Identity, so
+# there is no key in an image, in a Secret, or in a student-controlled cluster: nothing to rotate and
+# nothing to leak. The grant exists the moment the cluster exists, because it is created by the same
+# terraform that creates the cluster, which is what makes the tutor part of the lab rather than a
+# separate service somebody has to stand up.
+#
+# Scoped deliberately tighter than the agent's own Bedrock policy above, which is Resource = "*". This
+# one is read-only inference on ONE model family. A cluster-admin's reach is the union of every Pod
+# Identity role on the cluster, so a broad grant here would widen what the workshop's own hostile
+# workloads can do, and this cluster runs those on purpose.
+data "aws_caller_identity" "current" {}
+
+resource "aws_iam_policy" "tutor_bedrock_invoke" {
+  name        = "${var.name}-tutor-bedrock"
+  description = "Bedrock inference for the in-workbench workshop tutor on ${var.name}. Sonnet only."
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Action = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:Converse",
+        "bedrock:ConverseStream",
+      ]
+      # Both halves are required for a cross-region inference profile: the profile itself, and the
+      # foundation models in whichever region it routes to (hence the wildcard region on the second).
+      Resource = [
+        "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.tutor_model}",
+        "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-*",
+      ]
+    }]
+  })
+}
+
+variable "tutor_model" {
+  description = "Bedrock inference profile the workshop tutor uses. Verified ACTIVE in us-west-2 on 2026-08-24."
+  type        = string
+  default     = "us.anthropic.claude-sonnet-5"
+}
+
+module "tutor_bedrock_pod_identity" {
+  source  = "terraform-aws-modules/eks-pod-identity/aws"
+  version = "~> 1.0"
+
+  # Short name for the same 38-char name_prefix cap that forced "<cluster>-bedrock-" above.
+  name                   = "${var.name}-tutor"
+  additional_policy_arns = { tutor_bedrock = aws_iam_policy.tutor_bedrock_invoke.arn }
+
+  associations = {
+    main = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "agent"
+      service_account = "web-terminal"
+    }
+  }
+}
+
+output "tutor_bedrock_role_arn" {
+  value = module.tutor_bedrock_pod_identity.iam_role_arn
+}
+
 output "cluster_name" {
   value = module.eks.cluster_name
 }

@@ -154,6 +154,36 @@ check("the terminal-auth Secret is mounted into the terminal",
 check("the fleet bootstrap creates a terminal credential per cluster",
       "bootstrap_terminal_auth" in (REPO / "infra" / "terraform" / "fleet" / "fleet.sh").read_text())
 
+# --- The tutor stays keyless, read-only, and must not publish the transcript --------------------
+tutor_launch = (REPO / "images" / "web-terminal" / "tutor" / "launch.sh").read_text()
+tutor_watch = (REPO / "images" / "web-terminal" / "tutor" / "watch.sh").read_text()
+tf = (REPO / "infra" / "terraform" / "aws" / "cluster" / "main.tf").read_text()
+
+check("tutor authenticates to Bedrock keylessly (Pod Identity, no key in the image)",
+      "CLAUDE_CODE_USE_BEDROCK" in tutor_launch
+      and not re.search(r"AWS_SECRET_ACCESS_KEY|aws_secret_access_key", tutor_launch))
+check("tutor runs in plan mode so it advises and cannot mutate the cluster",
+      "--permission-mode plan" in tutor_launch)
+check("tutor first-run state is pre-seeded so a stuck attendee is not shown an onboarding prompt",
+      all(k in tutor_launch for k in ("theme", "hasCompletedOnboarding", "hasTrustDialogAccepted")))
+check("the tutor Bedrock grant is scoped to a model, not Resource '*'",
+      "tutor_bedrock_invoke" in tf and "inference-profile/${var.tutor_model}" in tf)
+check("the tutor Pod Identity role binds the web-terminal ServiceAccount",
+      "tutor_bedrock_pod_identity" in tf and 'service_account = "web-terminal"' in tf)
+
+# The nudge is served over HTTP because nginx is in another pod. The directory served must contain the
+# nudge and NOTHING else: pointing it at ~/.session would publish the terminal transcript, and with it
+# anything the attendee ever pasted into their shell, onto the pod network.
+check("the nudge watcher writes outside the session/transcript directory",
+      ".nudge/nudge" in tutor_watch and "/.session/nudge" not in tutor_watch)
+check("the nudge file server does not serve the session directory",
+      re.search(r"http\.server .*--directory \"\$HOME/\.nudge\"", entry) is not None
+      and not re.search(r"http\.server .*--directory \"\$HOME/\.session\"", entry))
+check("the nudge file is world-readable (a 0600 file yields a silent 403 and no banner)",
+      "umask 022" in tutor_watch and "chmod 0644" in tutor_watch)
+check("the nudge requires the same failure twice so mid-build churn does not nag",
+      'if [[ "${now}" == "${prev}" ]]' in tutor_watch)
+
 # --- The terminal memory limit must stay above the level that OOM-killed one --------------------
 # The sister fleet OOM-killed a student terminal at 2Gi. Anything at or below that is a regression.
 # Parsed from YAML, not matched with a regex: "name: ttyd" also appears as a PORT name and as a Service
