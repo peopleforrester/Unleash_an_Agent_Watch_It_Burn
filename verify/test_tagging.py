@@ -8,12 +8,13 @@ failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
 
-lab_vpc = (TF / "lab-vpc" / "main.tf").read_text()
-cluster = (TF / "cluster" / "main.tf").read_text()
+# AWS root relocated (PRD 35 M1): infra/terraform/{lab-vpc,cluster} -> aws/{network,cluster}.
+lab_vpc = (TF / "aws" / "network" / "main.tf").read_text()
+cluster = (TF / "aws" / "cluster" / "main.tf").read_text()
 fleet = (TF / "fleet" / "fleet.sh").read_text()
 
 # Every Terraform root tags all resources project=watch-it-burn via provider default_tags.
-for name, txt in [("lab-vpc", lab_vpc), ("cluster", cluster)]:
+for name, txt in [("network", lab_vpc), ("cluster", cluster)]:
     check(f"{name}/main.tf default_tags set project=watch-it-burn",
           "default_tags" in txt and 'project   = "watch-it-burn"' in txt)
 # The per-attendee cluster also carries an attendee=<name> tag (propagates to its EC2/EBS).

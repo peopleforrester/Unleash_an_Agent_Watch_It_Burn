@@ -178,6 +178,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     down <name...>    Destroy the named clusters.
     health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
+    converge <n>      Re-check an up-fleet run (SAME <n> + WIB_NAME_OFFSET) and REPAIR what is actually
+                      broken: hard-refresh unhealthy ArgoCD apps, and wait out LB assignment and DNS
+                      resolution on separate budgets. Loops up to \${WIB_CONVERGE_ROUNDS} (default 3).
+                      Run this after 'up-fleet'. Without it a run reports a success rate that is wrong:
+                      on the sister Packt fleet 27 of 250 clusters were healthy but had an NLB whose
+                      hostname had not propagated yet, so the run scored 89% and 27 clusters were fine.
     harvest <n>      Harvest student-facing access info (console NLB / grafana / ...) of an up-fleet run
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
     aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
@@ -773,6 +779,146 @@ health_one() {
 
 # Sweep IDP health across the fleet: mirror of up-fleet/down-fleet (same accounts, per_account, offset).
 # Pass the SAME <per_account> used for up-fleet. Exits non-zero unless every cluster is HEALTHY.
+# --- converge -----------------------------------------------------------------------------------
+#
+# Why this verb exists. On a 250-cluster run of the sister Packt fleet, 27 clusters (11%) were fully
+# built and healthy but had a freshly created NLB whose hostname was not yet resolvable inside the
+# health-check window. Without a second pass the run reports 89% success and hands back two dozen
+# clusters that are actually fine. The natural response, re-running provisioning for the failures, is
+# both slow and wrong: it rebuilds working infrastructure to fix a DNS propagation delay.
+#
+# So converge re-checks the already-provisioned set and acts only on what is genuinely unhealthy, and
+# it is a loop rather than a report. `health` appends names to a dotfile a human then reads; at fleet
+# scale a 5% failure rate is a dozen reruns discovered by reading a file.
+#
+# Two wait budgets, deliberately separate. A load balancer being ASSIGNED a hostname and that hostname
+# RESOLVING fail differently and on different timescales, and one timeout covering both cannot tell you
+# which happened.
+readonly CONVERGE_LB_WAIT="${WIB_CONVERGE_LB_WAIT:-180}"    # seconds for the LB Controller to assign a hostname
+readonly CONVERGE_DNS_WAIT="${WIB_CONVERGE_DNS_WAIT:-300}"  # seconds for that hostname to resolve publicly
+readonly CONVERGE_ROUNDS="${WIB_CONVERGE_ROUNDS:-3}"
+
+# Does this cluster's attendee entrypoint actually work? Healthy Argo apps do not imply a reachable
+# console, and the console NLB is the thing the attendee is handed.
+converge_endpoint() {
+    local name="$1" kcfg="$2" host="" waited=0
+    while [[ "${waited}" -lt "${CONVERGE_LB_WAIT}" ]]; do
+        host="$(KUBECONFIG="${kcfg}" kubectl get svc -n agent console \
+            -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+        [[ -n "${host}" ]] && break
+        sleep 10; waited=$(( waited + 10 ))
+    done
+    if [[ -z "${host}" ]]; then
+        echo "no-lb-hostname"; return 1
+    fi
+    waited=0
+    while [[ "${waited}" -lt "${CONVERGE_DNS_WAIT}" ]]; do
+        if getent hosts "${host}" >/dev/null 2>&1; then echo "${host}"; return 0; fi
+        sleep 10; waited=$(( waited + 10 ))
+    done
+    echo "lb-assigned-but-dns-unresolved:${host}"; return 1
+}
+
+# Nudge a degraded cluster instead of rebuilding it. A hard refresh is what clears the common case (an
+# Application that gave up on a transient sync), and it is safe to run against a healthy cluster.
+converge_one() {
+    local name="$1"; assert_ours "${name}"
+    local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    local kcfg; kcfg="$(mktemp -t "${name}.conv.XXXX")"
+    if ! provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"; then
+        log "  ${name}: UNREACHABLE (no kubeconfig)"; record_fail "${name}:unreachable"; rm -f "${kcfg}"; return
+    fi
+    local apps total healthy bad a
+    apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)"
+    if [[ -z "${apps}" || "$(jq '.items | length' <<<"${apps}" 2>/dev/null)" == "0" ]]; then
+        log "  ${name}: NO ArgoCD applications; converge cannot help, this needs a bootstrap"
+        record_fail "${name}:no-argocd"; rm -f "${kcfg}"; return
+    fi
+    total="$(jq '.items | length' <<<"${apps}")"
+    healthy="$(jq '[.items[] | select(.status.sync.status=="Synced" and .status.health.status=="Healthy")] | length' <<<"${apps}")"
+    if [[ "${healthy}" != "${total}" ]]; then
+        bad="$(jq -r '.items[] | select((.status.sync.status!="Synced") or (.status.health.status!="Healthy")) | .metadata.name' <<<"${apps}")"
+        log "  ${name}: refreshing $(printf '%s\n' "${bad}" | grep -c .) unhealthy app(s)"
+        while read -r a; do
+            [[ -n "${a}" ]] || continue
+            KUBECONFIG="${kcfg}" kubectl -n argocd annotate application "${a}" \
+                argocd.argoproj.io/refresh=hard --overwrite >/dev/null 2>&1 || true
+        done <<<"${bad}"
+    fi
+    local ep; ep="$(converge_endpoint "${name}" "${kcfg}")"
+    local ok=$?
+    rm -f "${kcfg}"
+    if [[ "${healthy}" == "${total}" && "${ok}" -eq 0 ]]; then
+        log "  ${name}: CONVERGED (apps ${total}/${total}, console ${ep})"
+        return 0
+    fi
+    record_fail "${name}:apps=${healthy}/${total} endpoint=${ep}"
+}
+
+# Re-check the provisioned set and repair, up to CONVERGE_ROUNDS times. Takes <clusters-per-account>,
+# the same argument shape as `health`, because this is a fleet-scale problem. Each round narrows to
+# whatever is still failing, so a converged cluster is never touched twice.
+#
+# The account a name belongs to is derived from its index, exactly as cmd_health lays them out, so a
+# later round can re-check a straggler in the right account without re-deriving the whole plan.
+_account_for_name() {
+    local name="$1" per_account="$2" num idx
+    num="${name##*-}"; num="$(( 10#${num} ))"
+    idx=$(( (num - WIB_NAME_OFFSET - 1) / per_account ))
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    local a="${accounts[${idx}]:-}"; echo "${a// /}"
+}
+
+cmd_converge() {
+    local per_account="${1:-}"
+    [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: converge <clusters-per-account>"; exit 2; }
+    command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
+    require_tools
+    mkdir -p "${LOG_DIR}"
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+
+    # The full set this run is responsible for.
+    local all=() idx=0 acct start n
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        start=$(( WIB_NAME_OFFSET + idx * per_account + 1 )); idx=$(( idx + 1 ))
+        for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+            all+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
+        done
+    done
+
+    local total="${#all[@]}" round=1 remaining=("${all[@]}") still name a
+    while [[ "${round}" -le "${CONVERGE_ROUNDS}" && "${#remaining[@]}" -gt 0 ]]; do
+        log "converge round ${round}/${CONVERGE_ROUNDS}: ${#remaining[@]} of ${total} cluster(s)"
+        rm -f "${LOG_DIR}/.failures"
+        # Group this round's names by account so each pool runs under the right profile.
+        for acct in "${accounts[@]}"; do
+            acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+            local batch=()
+            for name in "${remaining[@]}"; do
+                a="$(_account_for_name "${name}" "${per_account}")"
+                [[ "${a}" == "${acct}" ]] && batch+=("${name}")
+            done
+            [[ "${#batch[@]}" -gt 0 ]] || continue
+            ( TF_PROFILE="${acct}"; run_pool converge_one "${batch[@]}" ) &
+        done
+        wait
+        [[ -f "${LOG_DIR}/.failures" ]] || { remaining=(); break; }
+        mapfile -t still < <(cut -d: -f1 "${LOG_DIR}/.failures" | sort -u)
+        remaining=("${still[@]}")
+        round=$(( round + 1 ))
+        [[ "${#remaining[@]}" -gt 0 && "${round}" -le "${CONVERGE_ROUNDS}" ]] && sleep 30
+    done
+
+    if [[ "${#remaining[@]}" -eq 0 ]]; then
+        log "CONVERGED: ${total}/${total} clusters healthy with a resolvable console endpoint"
+        rm -f "${LOG_DIR}/.failures"; return 0
+    fi
+    log "${#remaining[@]}/${total} cluster(s) did NOT converge after ${CONVERGE_ROUNDS} rounds:"
+    sed 's/^/    - /' "${LOG_DIR}/.failures" >&2
+    return 1
+}
+
 cmd_health() {
     local per_account="${1:-}"
     [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: health <clusters-per-account>"; exit 2; }
@@ -1041,6 +1187,7 @@ main() {
         down-acct) cmd_down_acct "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
         health) cmd_health "$@" ;;
+        converge) cmd_converge "$@" ;;
         harvest) cmd_harvest "$@" ;;
         ingest) cmd_ingest "$@" ;;
         aws-keys) cmd_aws_keys "$@" ;;
