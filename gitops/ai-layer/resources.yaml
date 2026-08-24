@@ -659,10 +659,11 @@ spec:
           # Memory limit sized for the worst realistic shell, not the idle one. The 512Mi this used to
           # carry is below what k9s alone takes on a busy cluster, and the failure mode is a silent OOM
           # kill that drops the attendee's shell mid-exercise. The sister Packt run OOM-killed a student
-          # terminal at 2Gi live on 2026-07-23, which is four times this cap. The node is a t3.2xlarge
-          # (~31Gi) running one attendee, so a high limit costs nothing; the request stays low so pod
-          # packing is unaffected. Raise the limit, never the request.
-          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: "2", memory: 4Gi } }
+          # terminal at 2Gi live on 2026-07-23; the limit was then raised to 4Gi here and 8Gi on Packt.
+          # Aligning to 8Gi: EKS >= 1.33 in-place resize applied the Packt fix to running pods mid-workshop
+          # with zero session loss. The node is a t3.2xlarge (~31Gi) running one attendee, so the high
+          # limit costs nothing; the request stays low so pod packing is unaffected.
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: "2", memory: 8Gi } }
 ---
 apiVersion: v1
 kind: Service
