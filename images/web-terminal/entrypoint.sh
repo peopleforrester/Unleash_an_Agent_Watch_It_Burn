@@ -157,6 +157,64 @@ export PATH="$HOME:$PATH"
 export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '
 BRC
 
+# --- Browser IDE and notebook -------------------------------------------------------------------
+#
+# Both run as background processes beside ttyd, sharing /home/student, so a file written in any surface
+# appears in the others immediately. Each gets a restart loop: a crashed IDE must not cost the attendee
+# their shell, and a silently dead tab is worse than a restarting one because it reads as a broken lab.
+run_service() {
+  local name="$1"; shift
+  (
+    while true; do
+      "$@" >>"$HOME/.session/${name}.log" 2>&1
+      echo "[$(date -Is)] ${name} exited ($?), restarting in 3s" >>"$HOME/.session/${name}.log"
+      sleep 3
+    done
+  ) &
+}
+mkdir -p "$HOME/.session" "$HOME/work"
+
+# The console nginx runs in a SEPARATE pod here (it proxies to web-terminal:7681), unlike the sister
+# repo where it was a sidecar sharing loopback. So these two have to bind 0.0.0.0 and are reachable
+# from anywhere on the pod network, which means "bind to loopback, only nginx can reach it" is NOT
+# available as an argument and neither surface may run unauthenticated.
+#
+# That matters more here than almost anywhere: this cluster deliberately runs hostile workloads. The
+# whole exercise is an over-permissioned agent with shell and apply, plus villain images. An IDE with
+# --auth none on that pod network is a root shell handed to the thing the workshop is about. So both
+# reuse the terminal credential rather than inventing a second one; a credential that has to be
+# distributed twice drifts, and one the attendee has already been handed costs nothing extra.
+CRED_PASS="${TTYD_CREDENTIAL#*:}"
+
+if [[ -n "${CRED_PASS}" ]]; then
+  PASSWORD="${CRED_PASS}" run_service ide /opt/code-server/bin/code-server \
+    --bind-addr 0.0.0.0:8443 \
+    --auth password \
+    --disable-telemetry \
+    --disable-update-check \
+    "$HOME/work"
+else
+  echo "WARNING: no TTYD_CREDENTIAL; starting code-server with auth DISABLED on the pod network." >&2
+  run_service ide /opt/code-server/bin/code-server \
+    --bind-addr 0.0.0.0:8443 --auth none \
+    --disable-telemetry --disable-update-check "$HOME/work"
+fi
+
+# JupyterLab. base_url matches the nginx location EXACTLY, because the prefix is KEPT on that route
+# (see console.conf); getting it backwards yields a blank tab that still returns HTTP 200. The token is
+# the same shared credential. disable_check_xsrf is required because the lab page frames this on a
+# different path, and allow_origin is scoped to the console rather than left open.
+run_service jupyter /opt/jupyter/bin/jupyter lab \
+  --no-browser \
+  --ip=0.0.0.0 --port=8888 \
+  --ServerApp.base_url=/jupyter \
+  --ServerApp.token="${CRED_PASS:-}" \
+  --ServerApp.password= \
+  --ServerApp.disable_check_xsrf=True \
+  --ServerApp.allow_remote_access=True \
+  --ServerApp.tornado_settings="{'headers': {'Content-Security-Policy': \"frame-ancestors 'self'\"}}" \
+  --ServerApp.root_dir="$HOME/work"
+
 # -W writable (interactive); -b serves under /terminal so the console frontend can proxy it on a subpath.
 #
 # AUTHENTICATION. This used to read "auth/exposure are handled upstream by the per-attendee router".

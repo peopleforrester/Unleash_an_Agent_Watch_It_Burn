@@ -645,7 +645,10 @@ spec:
         - name: ttyd
           image: ghcr.io/peopleforrester/watch-it-burn:web-terminal # built from images/web-terminal/
           imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
-          ports: [{ name: ttyd, containerPort: 7681 }]
+          ports:
+            - { name: ttyd, containerPort: 7681 }
+            - { name: ide, containerPort: 8443 }      # code-server, proxied at /ide/
+            - { name: jupyter, containerPort: 8888 }  # JupyterLab, proxied at /jupyter/
           # The student's own AWS keys, mounted as the DEFAULT profile inside the VTT so `aws` works with
           # no flags. Created per-cluster by the bootstrap (outside git); optional so clusters without it run.
           envFrom:
@@ -671,7 +674,13 @@ metadata:
   name: web-terminal
 spec:
   selector: { app.kubernetes.io/name: web-terminal }
-  ports: [{ name: ttyd, port: 7681, targetPort: ttyd }]
+  # ClusterIP only. The attendee reaches all three through the console frontend; nothing here is
+  # exposed by a load balancer. Both extra surfaces authenticate with the shared terminal credential,
+  # because this cluster deliberately runs hostile workloads that sit on the same pod network.
+  ports:
+    - { name: ttyd, port: 7681, targetPort: ttyd }
+    - { name: ide, port: 8443, targetPort: ide }
+    - { name: jupyter, port: 8888, targetPort: jupyter }
 ---
 # The console frontend: serves the split UI and reverse-proxies the three backends.
 apiVersion: apps/v1
