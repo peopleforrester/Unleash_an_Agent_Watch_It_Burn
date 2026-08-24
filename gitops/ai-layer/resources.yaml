@@ -637,8 +637,9 @@ spec:
     spec:
       serviceAccountName: web-terminal
       automountServiceAccountToken: true # the shell's kubectl uses this token to reach the cluster API
-      # runAsUser 1000 = the image's `term` user. runAsNonRoot alone fails CreateContainerConfigError
-      # because the image USER is non-numeric ("term"); a numeric runAsUser is required to verify non-root.
+      # runAsUser 1000 = the image's `student` user (images/web-terminal/Dockerfile). runAsNonRoot alone
+      # fails CreateContainerConfigError because the image USER is non-numeric ("student"); a numeric
+      # runAsUser is required for the kubelet to verify non-root before the container starts.
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: ttyd
@@ -649,8 +650,19 @@ spec:
           # no flags. Created per-cluster by the bootstrap (outside git); optional so clusters without it run.
           envFrom:
             - secretRef: { name: student-aws-creds, optional: true }
+            # TTYD_CREDENTIAL ("user:password"). Created per-cluster by the provisioning bootstrap with a
+            # random password; ttyd enforces it itself. Optional so a cluster without the Secret still
+            # runs, but the entrypoint logs a loud warning when it is absent, because the terminal is
+            # then an open shell on an internet-facing NLB. See images/web-terminal/entrypoint.sh.
+            - secretRef: { name: terminal-auth, optional: true }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
-          resources: { requests: { cpu: 50m, memory: 96Mi }, limits: { cpu: 500m, memory: 512Mi } }
+          # Memory limit sized for the worst realistic shell, not the idle one. The 512Mi this used to
+          # carry is below what k9s alone takes on a busy cluster, and the failure mode is a silent OOM
+          # kill that drops the attendee's shell mid-exercise. The sister Packt run OOM-killed a student
+          # terminal at 2Gi live on 2026-07-23, which is four times this cap. The node is a t3.2xlarge
+          # (~31Gi) running one attendee, so a high limit costs nothing; the request stays low so pod
+          # packing is unaffected. Raise the limit, never the request.
+          resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: "2", memory: 4Gi } }
 ---
 apiVersion: v1
 kind: Service

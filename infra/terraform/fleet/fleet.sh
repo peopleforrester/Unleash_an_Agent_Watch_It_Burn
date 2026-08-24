@@ -317,11 +317,57 @@ bootstrap_one() {
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
         bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
+        bootstrap_terminal_auth "${name}" "${acct_profile}" "${kcfg}"
         [[ "${round}" == "2" || "${round}" == "3" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
     fi
     rm -f "${kcfg}"
+}
+
+# Give this cluster's terminal its own password, so the shell is not open to anyone who can reach the
+# load balancer. The credential is enforced by ttyd itself (images/web-terminal/entrypoint.sh), because
+# that is the only place upstream reachability cannot route around: the NLB answers on its bare IP, so
+# neither a router in front of it nor an unguessable hostname is a control. Measured on the sister Packt
+# fleet 2026-07-25, after an attendee reached the instructor's cluster on 2026-07-23.
+#
+# Idempotent: an existing secret is left alone, so re-running a bootstrap never changes a password an
+# attendee has already been handed. The password is persisted next to the AWS pool CSV so `ingest` can
+# publish it with the rest of the cluster's access info.
+bootstrap_terminal_auth() {
+    local name="$1" acct_profile="$2" kcfg="$3"
+    local pwfile="${AWS_POOL_DIR}/${name}.terminal" pw i
+
+    for i in $(seq 1 40); do  # the agent namespace is created asynchronously by ArgoCD
+        KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get ns agent >/dev/null 2>&1 && break; sleep 6
+    done
+
+    # Already provisioned? Keep whatever the cluster is currently enforcing, and make sure the local
+    # copy matches it, so a lost pwfile does not silently desync from the live password.
+    local live
+    live="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get secret terminal-auth -n agent \
+        -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+    if [[ -n "${live}" ]]; then
+        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${live#student:}" >"${pwfile}"; chmod 600 "${pwfile}"
+        log "  terminal-auth already set: ${name}"
+        return
+    fi
+
+    # 24 hex chars from the kernel CSPRNG. Alphanumeric only: the credential rides in a URL and a
+    # hand-out, and punctuation invites quoting bugs in both.
+    pw="$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl create secret generic terminal-auth \
+        -n agent --from-literal="TTYD_CREDENTIAL=student:${pw}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${pw}" >"${pwfile}"; chmod 600 "${pwfile}"
+        # ttyd reads the credential once at startup, so an already-running terminal keeps serving
+        # unauthenticated until it restarts. Roll it now rather than leaving the gap open.
+        KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl rollout restart deploy/web-terminal \
+            -n agent >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1 || true
+        log "  terminal-auth created: ${name}"
+    else
+        log "  WARN: terminal-auth NOT created for ${name}; its terminal is UNAUTHENTICATED"
+        record_fail "${name}:terminal-auth"
+    fi
 }
 
 # Mint this cluster's scoped IAM key and inject it as the `student-aws-creds` secret so the VTT's aws CLI

@@ -158,5 +158,25 @@ export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '
 BRC
 
 # -W writable (interactive); -b serves under /terminal so the console frontend can proxy it on a subpath.
-# Auth/exposure are handled upstream by the per-attendee router; this is the attendee's own cluster.
+#
+# AUTHENTICATION. This used to read "auth/exposure are handled upstream by the per-attendee router".
+# That was wrong, and it was measured wrong on the sister Packt fleet on 2026-07-25: the cluster NLB
+# answers on its BARE IP with no Host header, so anything the router enforces is bypassed by dialling
+# the load balancer directly. A router in front of a publicly-reachable upstream is not a control, and
+# a non-guessable hostname is not a credential. On 2026-07-23 an attendee reached the instructor's
+# cluster through its terminal URL because of exactly this gap.
+#
+# So the credential is enforced HERE, at ttyd, which is the only place upstream reachability cannot
+# route around. TTYD_CREDENTIAL ("user:password") arrives from the optional `terminal-auth` Secret,
+# created per-cluster by the provisioning bootstrap with a random password.
+if [[ -n "${TTYD_CREDENTIAL:-}" ]]; then
+  printf 'This terminal requires the username and password from your cluster hand-out.\n' >> "$HOME/.motd"
+  exec ttyd -p 7681 -W -b /terminal -c "${TTYD_CREDENTIAL}" \
+    -t fontSize=14 -t 'theme={"background":"#0f1117"}' bash --rcfile "$HOME/.bashrc"
+fi
+
+# No credential supplied. Run open so an existing cluster does not break on rollout, but say so loudly
+# in the pod log: an unauthenticated terminal on an internet-facing NLB is a shell anyone can open.
+echo "WARNING: no TTYD_CREDENTIAL set. This terminal is UNAUTHENTICATED and reachable by anyone who" >&2
+echo "WARNING: can reach the load balancer. Create the 'terminal-auth' Secret to close it." >&2
 exec ttyd -p 7681 -W -b /terminal -t fontSize=14 -t 'theme={"background":"#0f1117"}' bash --rcfile "$HOME/.bashrc"
