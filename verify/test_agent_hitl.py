@@ -26,7 +26,14 @@ def check(name, cond):
 check("Agent declares an McpServer tool with a toolNames allowlist", bool(allow))
 check("rogue exfil tool NOT in allowlist (read_internal_config)", "read_internal_config" not in allow)
 check("rogue clown tool NOT in allowlist (apply_optimization)", "apply_optimization" not in allow)
-check("mutating tool requires HITL approval (apply_manifest)", "apply_manifest" in approve)
+# requireApproval is DELIBERATELY absent. The HITL approval round-trip is not wired to the chat UI, so
+# a paused tool_use left a dangling call and the next Bedrock Converse request failed with "tool_use ids
+# ... without tool_result" (seen live on r1-1). Excessive agency is also the point of the exercise: the
+# agent applies what it is told and Kyverno blocks it in R2. Asserting approval here contradicted the
+# manifest for as long as the suite has been red. The invariant that still matters is the one below:
+# whatever IS in requireApproval must be a subset of toolNames, or kagent's CEL constraint rejects it.
+check("requireApproval stays deliberately empty (documented: breaks the Bedrock tool_use round-trip)",
+      not approve)
 check("kagent CEL constraint holds: requireApproval is a subset of toolNames", approve <= allow)
 check("McpServer item carries the required type discriminator",
       all(t.get("type") for t in tools))
