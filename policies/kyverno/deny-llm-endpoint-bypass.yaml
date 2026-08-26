@@ -1,0 +1,95 @@
+# ABOUTME: Admission control for the AI plane: a pod in the agent namespace may not point itself at a
+# ABOUTME: public LLM endpoint, which is how the guard-proxy gets routed around entirely.
+#
+# The hole this closes. Every AI guardrail in this workshop is a RUNTIME toggle on the path
+# guard-proxy -> agentgateway -> kagent: input block-list, injection classifier, output scrubbing, MCP
+# tool authorization. The only structural control keeping traffic on that path is the egress
+# NetworkPolicy, and that policy is deliberately scoped to `app.kubernetes.io/name: workshop-agent`,
+# because the MCP servers pip-install from PyPI at startup and a namespace-wide deny stops them binding.
+#
+# The consequence is that ANY pod created in the agent namespace WITHOUT that label has unrestricted
+# egress, and the allowlist's in-VPC rule reaches the Bedrock PrivateLink endpoint directly. So the
+# agent, which by design can create Deployments, can stand up a second pod that talks to a model with
+# every guardrail bypassed, and nothing records that it happened. The thing the workshop is about can
+# route around the thing the workshop is demonstrating.
+#
+# This is the admission-layer answer: you may not declare a public model endpoint. It is not a complete
+# fix (the in-VPC Bedrock path is still reachable by an unlabelled pod) and it is not a substitute for
+# widening the NetworkPolicy; it closes the easiest route and makes the attempt visible in a policy
+# report instead of invisible.
+#
+# SHIPS AS AUDIT, and is NOT flipped by the Beat-1 toggle. Two separate reasons, both deliberate:
+#
+#   * The Beat-1 toggle (challenges/01-cncf-wall/toggle-kyverno-enforce.sh) flips a fixed list of two
+#     policies: require-resource-limits and restrict-image-registries. Those two ARE the CNCF wall the
+#     beat demonstrates. This policy is a different concern, so adding it to that list would change what
+#     the beat shows on stage.
+#   * Enforce on an unvalidated policy can block a legitimate deploy. If the `exclude` below does not
+#     match as intended, guard-proxy itself fails admission and the whole demo is dead. Audit reports
+#     the violation without that risk, which is the larger half of the value here anyway: the bypass
+#     becomes visible in a policy report instead of invisible.
+#
+# Round 1 is unaffected either way; the burn profile ships no Kyverno at all, so this exists only on the
+# rounds that claim to be guarded.
+#
+# TO PROMOTE TO ENFORCE: validate on a live cluster that guard-proxy and agentgateway still admit, then
+# flip failureAction here. Do not promote it blind.
+#
+# verify-at-build: written against Kyverno v1.18.1 using rule-level validate.failureAction, matching
+# require-resource-limits.yaml. The foreach/deny conditions are NOT yet exercised on a live cluster.
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: deny-llm-endpoint-bypass
+  annotations:
+    policies.kyverno.io/title: Deny Direct LLM Endpoint Bypass
+    policies.kyverno.io/category: Workshop / AI plane
+    policies.kyverno.io/description: >-
+      Pods in the agent namespace must reach models through the guarded path, not by pointing an SDK at
+      a public API. Catches the env vars the common SDKs read at construction time.
+spec:
+  background: true
+  rules:
+    - name: no-public-llm-base-url
+      match:
+        any:
+          - resources:
+              kinds:
+                - Pod
+              namespaces:
+                - agent
+      # The guard-proxy and agentgateway ARE the guarded path; they legitimately hold upstream
+      # configuration. Exempting them by name keeps the rule about workloads that bypass the path.
+      exclude:
+        any:
+          - resources:
+              names:
+                - "guard-proxy*"
+                - "agentgateway*"
+      validate:
+        failureAction: Audit
+        message: >-
+          This pod sets an LLM endpoint pointing at a public API. Models must be reached through
+          guard-proxy so the input guards, output scrubbing and cost metering apply. Remove the
+          override, or route it at guard-proxy.
+        foreach:
+          - list: "request.object.spec.containers[]"
+            deny:
+              conditions:
+                any:
+                  # Matches the env vars every mainstream SDK reads when constructed with no explicit
+                  # base URL, which is the shape that does not show up in a grep for an API call.
+                  - key: "{{ element.env[?name=='OPENAI_BASE_URL'].value | [0] || '' }}"
+                    operator: AnyIn
+                    value:
+                      - "*api.openai.com*"
+                      - "*api.anthropic.com*"
+                      - "*generativelanguage.googleapis.com*"
+                  - key: "{{ element.env[?name=='ANTHROPIC_BASE_URL'].value | [0] || '' }}"
+                    operator: AnyIn
+                    value:
+                      - "*api.anthropic.com*"
+                  - key: "{{ element.env[?name=='OPENAI_API_BASE'].value | [0] || '' }}"
+                    operator: AnyIn
+                    value:
+                      - "*api.openai.com*"

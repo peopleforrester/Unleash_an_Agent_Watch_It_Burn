@@ -1,0 +1,131 @@
+# Gotchas: fleet operations and live delivery
+
+Things that have actually gone wrong, on this fleet or the sister `packt-agentic-devops` fleet, written
+down because each one was expensive to learn and none is obvious from reading the code.
+
+The shape most of these share: **the run reports success and the damage is invisible at the moment it
+happens.** That is what makes them worth a document rather than a comment.
+
+Recorded 2026-08-26 from a comparison sweep of the Packt lineage. Where a number is quoted it is a
+measurement, not an estimate, and the source is named.
+
+---
+
+## Teardown and cost
+
+### A converge pass is expected, not exceptional
+
+On a 250-cluster run, **27 clusters (11%)** were fully built and healthy but had a freshly created NLB
+whose hostname had not yet propagated inside the health-check window. Without a second pass the run
+reports **89% success** and hands back two dozen clusters that are fine.
+
+The natural response, re-running provisioning for the failures, is both slow and wrong: it rebuilds
+working infrastructure to fix a DNS delay. Run `fleet.sh converge` after any `up-fleet`. It is what
+makes the success number true.
+
+### Never sweep an account that still has live clusters
+
+A dry-run sweep against a populated account listed the `eks-cluster-sg-*` security groups of **five
+running clusters** as orphans to revoke and delete. A sweep identifies orphans structurally; nothing in
+it knows whether teardown has happened yet.
+
+Running it at the wrong moment severs every node's networking and deletes live load balancers across a
+whole account. The guard must be in the script, not in the operator's head: *operator discipline is not
+a control.* See issue #90 for the state of ours.
+
+### `printf '%s' "$(...)"` into `while read` silently drops the last element
+
+Command substitution strips the trailing newline, and `while read` on a final line without one **sets
+the variable but returns non-zero**, so the loop body never runs for it. On the sister fleet every list
+in the sweep skipped its last load balancer, target group, volume and security group.
+
+With exactly one of something, that is all of them, and the account reports clean while the resource
+keeps billing. Worth grepping any teardown script for this shape. We do not currently have it; the
+scripts are actively edited, which is why it is written down.
+
+### Mass `DeleteLoadBalancer` gets throttled
+
+At fleet scale the AWS API rate-limits deletions and the CLI's default of two retries is not enough.
+The sweep then reports success having silently skipped the throttled ones, and you find out on the
+invoice. Use `AWS_RETRY_MODE=adaptive` with a raised `AWS_MAX_ATTEMPTS`, not the default.
+
+### Order matters in teardown, and each step earns its place
+
+1. Delete `type: LoadBalancer` Services and Ingresses **with `--wait=true`**, so the controller removes
+   the real AWS load balancers. Skipping this orphans about two per cluster, and their ENIs then block
+   the VPC delete.
+2. Delete PVCs **before** `terraform destroy`, while the EBS CSI controller still exists to reclaim the
+   volumes. Destroy first and they orphan as `available` and bill indefinitely.
+3. Only then destroy, and remove the state file **only on success**, so a failure stays retryable.
+4. KMS keys landing in `PendingDeletion` are expected, not an orphan.
+
+Teardown at 200+ clusters took the sister fleet about **1h49m**. It is not a five-minute afterthought.
+
+---
+
+## Tests that lie
+
+These are worse than a missing test, because a green result actively misleads.
+
+### Pin HTTP/1.1 for any websocket check
+
+curl negotiates HTTP/2 via ALPN, where the `Upgrade` header is not valid. A perfectly working terminal
+then reports 404 or 400 and reads as broken, which is the most expensive possible false alarm in the
+window before doors.
+
+### Never write `|| echo 000` after a `%{http_code}` format
+
+curl already emits `000` on failure, so the fallback produces `000000`, which matches no comparison and
+silently skips the check.
+
+### A command substitution failing under `set -euo pipefail` aborts a test silently
+
+The test dies mid-run with no error and the gate scores it a failure, sending you to debug the system
+instead of the test.
+
+### Grepping a page for a bare number passes for the wrong reason
+
+A pool-size check that greps the whole admin HTML for `5` passes on any page containing a 5. *A check
+that can pass accidentally is not a check.* Assert a parsed field, not a substring.
+
+---
+
+## Delivery
+
+### A nursed rehearsal proves nothing
+
+The sister fleet's filming build had its foundation Applications suspended and hand-patched, which
+masked three permanently-Degraded Applications. The only faithful test is **a clean cluster syncing
+from an untouched repo**, which is exactly what an attendee walks. Every run before the event should
+include one, and the acceptance cluster must carry no hand-patches.
+
+This is not theoretical here. Both Round-1 defects found on 2026-08-26 (the AI layer never syncing, and
+the load balancer controller never installing) were invisible on any nursed cluster and surfaced within
+minutes of building one cold.
+
+### A secret URL is not a credential
+
+Measured on the sister fleet 2026-07-25: the cluster NLB answers on its **bare IP** with no server-name
+matching. So neither an unguessable hostname nor anything the router enforces is a control, because the
+upstream is directly reachable. On 2026-07-23 an attendee reached the instructor's cluster through its
+terminal URL for exactly this reason.
+
+Two options were tried and both fail: IP allow-listing at the NLB cannot allow-list students, because
+the only source address it sees is the router's; and router-level auth is bypassed by dialling the load
+balancer. **Enforcement has to be at the terminal itself**, which is why `ttyd -c` and the
+`terminal-auth` Secret exist. Do not replace them with a random-token URL.
+
+### `Cannot find module <path>` is usually ownership, not a missing build
+
+When the path demonstrably contains the module, the fault is a directory the container cannot traverse.
+On the sister fleet the mode was wrong on the **top directory only**, everything beneath it already
+correct, which is why the bundle looked present and correct throughout.
+
+---
+
+## Cross-references
+
+- Issue #91: the full sweep, including items not yet done
+- Issue #90: the destructive-sweep safety gaps
+- `verify/test_fleet_contract.py`: the properties above that are statically decidable
+- `infra/terraform/fleet/preflight.sh` and `check-tls.sh`: the pre-run and pre-doors gates
