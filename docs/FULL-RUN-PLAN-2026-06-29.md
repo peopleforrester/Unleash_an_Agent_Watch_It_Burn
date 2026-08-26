@@ -59,6 +59,17 @@ for a in aws1-student31 aws1-student32 aws1-student33 aws1-student34; do
 done
 ```
 
+### 4.1b Preflight (MANDATORY, ~1 min, do not skip)
+
+```bash
+infra/terraform/fleet/fleet.sh preflight 50     # exits non-zero if anything would block the run
+```
+
+Read-only. Asserts every profile resolves to its **expected 12-digit account id** and that vCPU / NLB /
+EKS / VPC / EIP quotas have headroom for 50 clusters each. Both halves have teeth: a mis-resolved
+profile provisions into an account whose teardown will never look for those clusters, and a quota
+rejection found 40 minutes into a 3-hour build costs the window.
+
 ### 4.2 Provision the 250 students (longest pole; ~3 to 4 hr, all accounts concurrent)
 
 ```bash
@@ -85,9 +96,19 @@ infra/terraform/fleet/fleet.sh up watch-it-burn-attendee-michael watch-it-burn-a
 ### 4.5 Converge + verify health
 
 ```bash
+infra/terraform/fleet/fleet.sh converge 50       # REPAIR what is actually broken, then report
 infra/terraform/fleet/fleet.sh health 50         # the 250 students: every ArgoCD app Synced+Healthy, no broken pods
 # instructor + personal health: run the same per-cluster check against their names
 ```
+
+**Run `converge` before `health`, always.** On a 250-cluster run the sister fleet had 27 clusters (11%)
+fully built and healthy but with a freshly created NLB whose hostname had not propagated inside the
+health window. Without the converge pass the run scores 89% and hands you two dozen clusters that are
+fine. Re-running provisioning for those is both slow and wrong: it rebuilds working infrastructure to
+fix a DNS delay.
+
+`up` is now idempotent by health, so re-running it skips clusters that already pass rather than
+re-entering the whole bootstrap chain for them.
 
 If Datadog is empty on any cluster, run `infra/reinstrument-app-pods.sh` / `infra/reload-datadog-consumers.sh` (pod-delete, respects block-argocd-drift). ai-layer is already sync-wave 3, so this should be rare.
 
@@ -117,9 +138,33 @@ A full run from zero to converged is ~3 to 4 hours (the 250-student provision + 
 
 Do a full dress-rehearsal run before the real one regardless, so the ~3 to 4 hour timing and the convergence rate are measured, not estimated.
 
+**The rehearsal cluster must be untouched.** A build whose Applications were suspended or hand-patched
+proves nothing about the path an attendee walks: on the sister fleet that masked three permanently
+Degraded Applications, and on this one it hid both Round-1 defects found on 2026-08-26. The only
+faithful test is a clean cluster syncing from an untouched repo. No hand-patches on the acceptance
+cluster.
+
+Before doors, check the attendee-facing hostnames actually work over HTTPS:
+
+```bash
+infra/terraform/fleet/check-tls.sh round1.agenticburn.com round2.agenticburn.com round3.agenticburn.com
+```
+
+Cert chain, SAN coverage, expiry margin, http->https, and the websocket upgrade the terminal depends
+on. This is the check most likely to catch a room-wide failure.
+
 ## 6. Teardown after the workshop
 
-`fleet.sh down-fleet 50` (students) + `instructors down` + `down watch-it-burn-attendee-michael watch-it-burn-attendee-whitney`, then the orphan sweep across all accounts (LBs/TGs/EBS/EIPs the in-cluster controllers leave), then `terraform destroy` the 5 lab VPCs (revoke + delete the orphaned EKS security groups first, they block the VPC delete). Target: every account at zero. See the 2026-06-27 teardown entry in `docs/DECISION-LOG.md`.
+**The destructive verbs are dry-run by default; add `WIB_APPLY=1` when you mean it.** Run them once
+without it first and read the preview: `down-fleet` prints the first and last cluster name it would
+destroy per account, which is what catches a wrong `WIB_NAME_OFFSET` before rather than after.
+
+**Run the tag audit before the sweep**, while the resources still exist to be tagged
+(`teardown/teardown.sh` now does this for you). Anything a sweep selects by tag is invisible to it if
+untagged, and untagged resources keep billing: an audit of one 50-cluster account on the sister fleet
+found 451 of them. `--fix` only ever adds tags.
+
+`WIB_APPLY=1 fleet.sh down-fleet 50` (students) + `instructors down` + `down watch-it-burn-attendee-michael watch-it-burn-attendee-whitney`, then the orphan sweep across all accounts (LBs/TGs/EBS/EIPs the in-cluster controllers leave), then `terraform destroy` the 5 lab VPCs (revoke + delete the orphaned EKS security groups first, they block the VPC delete). Target: every account at zero. See the 2026-06-27 teardown entry in `docs/DECISION-LOG.md`.
 
 ## 7. Decisions (LOCKED 2026-06-28)
 
