@@ -500,6 +500,8 @@ up_one() {
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
+        # Record which account this cluster was actually built in, so teardown never has to guess.
+        record_membership "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
         # Auto-bootstrap the IDP unless this provision is bare-only.
         [[ -n "${BOOTSTRAP_PROFILE}" ]] && bootstrap_one "${name}" "${BOOTSTRAP_PROFILE}" "${BOOTSTRAP_ROUND:-}"
     else
@@ -541,6 +543,7 @@ drain_cluster_lbs() {
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
+    assert_membership_matches "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" || return 0
     drain_cluster_lbs "${name}"
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
@@ -548,7 +551,7 @@ down_one() {
         -var "name=${name}" -var "vpc_id=${VPC_ID}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
         >"${LOG_DIR}/${name}.destroy.log" 2>&1; then
-        rm -f "${STATE_DIR}/${name}.tfstate"; log "  ok: ${name}"
+        rm -f "${STATE_DIR}/${name}.tfstate" "$(membership_file "${name}")"; log "  ok: ${name}"
     else
         log "  FAILED: ${name} (see ${LOG_DIR}/${name}.destroy.log)"; record_fail "${name}"
     fi
@@ -611,8 +614,35 @@ cmd_down() {
     [[ "${#names[@]}" -gt 0 ]] || { log "no clusters to destroy"; return 0; }
     require_apply "down" "${names[@]}" || return 0
     rm -f "${LOG_DIR}/.failures"
-    log "destroying ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
-    run_pool down_one "${names[@]}"
+
+    # Group by the account each cluster was BUILT in, and destroy each group through that account.
+    # Previously this ran every cluster through the default account's profile and VPC, so on a
+    # multi-account fleet it destroyed the default account's slice and silently skipped the rest, while
+    # still exiting 0. teardown.sh calls exactly this path, so that was the whole fleet teardown.
+    local -A by_acct=()
+    local n acct
+    for n in "${names[@]}"; do
+        acct="$(read_membership "${n}")"
+        [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"
+        by_acct["${acct}"]+="${n} "
+    done
+
+    if [[ "${#by_acct[@]}" -le 1 ]]; then
+        log "destroying ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
+        run_pool down_one "${names[@]}"
+    else
+        log "destroying ${#names[@]} clusters across ${#by_acct[@]} account(s)..."
+        for acct in "${!by_acct[@]}"; do
+            local group; read -ra group <<<"${by_acct[${acct}]}"
+            log "  account '${acct}': ${#group[@]} cluster(s)"
+            (
+                read_vpc_for "${acct}"
+                TF_PROFILE="${acct}"
+                run_pool down_one "${group[@]}"
+            ) &
+        done
+        wait
+    fi
     report_failures
 }
 
@@ -946,10 +976,56 @@ converge_one() {
 # later round can re-check a straggler in the right account without re-deriving the whole plan.
 _account_for_name() {
     local name="$1" per_account="$2" num idx
+    # Prefer the account this cluster was ACTUALLY built in, recorded at apply time. The arithmetic
+    # below reconstructs it from WIB_NAME_OFFSET and per_account, which is only correct if both match
+    # the up-fleet that created the cluster. When they do not, the reconstruction points at a different
+    # account, the state lookup finds nothing, and a destroy reports success having destroyed nothing.
+    local recorded; recorded="$(read_membership "${name}")"
+    [[ -n "${recorded}" ]] && { echo "${recorded}"; return 0; }
     num="${name##*-}"; num="$(( 10#${num} ))"
     idx=$(( (num - WIB_NAME_OFFSET - 1) / per_account ))
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
     local a="${accounts[${idx}]:-}"; echo "${a// /}"
+}
+
+# Cluster-to-account membership, persisted beside the state file at apply time.
+#
+# The account a cluster lives in is a FACT established when it was created, not something to recompute
+# later from whatever arguments happen to be in the current invocation. Recomputing it is how a fleet
+# gets orphaned: `down-fleet 50` run with a different offset than the `up-fleet 50` that built it looks
+# in the wrong account, finds no state, skips every name, and exits 0. The teardown reads as clean while
+# the clusters keep running and billing in an account nobody is looking at any more.
+membership_file() { printf '%s/%s.account' "${STATE_DIR}" "$1"; }
+
+record_membership() {
+    local name="$1" acct="$2"
+    [[ -n "${acct}" ]] || return 0
+    mkdir -p "${STATE_DIR}"
+    printf '%s\n' "${acct}" >"$(membership_file "${name}")"
+}
+
+read_membership() {
+    local f; f="$(membership_file "$1")"
+    [[ -r "${f}" ]] && head -1 "${f}" | tr -d '[:space:]'
+}
+
+# Refuse to destroy through a profile that disagrees with the recorded one. Without the record we
+# cannot check, so an unrecorded cluster (built before this landed) is allowed through with a warning
+# rather than blocked, which would make every pre-existing cluster undestroyable.
+assert_membership_matches() {
+    local name="$1" acct="$2" recorded
+    recorded="$(read_membership "${name}")"
+    if [[ -z "${recorded}" ]]; then
+        log "  ${name}: no recorded account (pre-dates membership tracking); proceeding with '${acct}'"
+        return 0
+    fi
+    if [[ "${recorded}" != "${acct}" ]]; then
+        log "  REFUSING ${name}: built in account '${recorded}' but this run targets '${acct}'."
+        log "    Destroying through the wrong account silently does nothing and leaves the cluster billing."
+        record_fail "${name}:account-mismatch recorded=${recorded} attempted=${acct}"
+        return 1
+    fi
+    return 0
 }
 
 cmd_converge() {
