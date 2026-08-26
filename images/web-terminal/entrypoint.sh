@@ -184,6 +184,13 @@ mkdir -p "$HOME/.session" "$HOME/work"
 # --auth none on that pod network is a root shell handed to the thing the workshop is about. So both
 # reuse the terminal credential rather than inventing a second one; a credential that has to be
 # distributed twice drifts, and one the attendee has already been handed costs nothing extra.
+# The `:-` is load-bearing. This script runs under `set -u`, where ${VAR#pattern} on an UNSET variable
+# is a hard error, not an empty expansion. Without the default, a cluster whose terminal-auth Secret is
+# missing died right here with "TTYD_CREDENTIAL: unbound variable", which crash-looped the pod and made
+# every no-credential branch below unreachable, including the warnings written for exactly that case.
+# The Secret is declared optional in gitops/ai-layer/resources.yaml, so that path is reachable in
+# practice: bootstrap_terminal_auth can fail and log "terminal-auth NOT created".
+TTYD_CREDENTIAL="${TTYD_CREDENTIAL:-}"
 CRED_PASS="${TTYD_CREDENTIAL#*:}"
 
 if [[ -n "${CRED_PASS}" ]]; then
