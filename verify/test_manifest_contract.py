@@ -166,35 +166,29 @@ check("the terminal-auth Secret is mounted into the terminal",
 check("the fleet bootstrap creates a terminal credential per cluster",
       "bootstrap_terminal_auth" in (REPO / "infra" / "terraform" / "fleet" / "fleet.sh").read_text())
 
-# --- The tutor stays keyless, read-only, and must not publish the transcript --------------------
-tutor_launch = (REPO / "images" / "web-terminal" / "tutor" / "launch.sh").read_text()
-tutor_watch = (REPO / "images" / "web-terminal" / "tutor" / "watch.sh").read_text()
-tf = (REPO / "infra" / "terraform" / "aws" / "cluster" / "main.tf").read_text()
+# --- No coding-agent CLI may be exposed to an attendee ------------------------------------------
+#
+# These assertions replace a block that checked the in-workbench tutor was keyless, read-only, and did
+# not publish the terminal transcript. All of that was true and it did not matter: clicking the tab put
+# Claude Code's "Trust this folder?" prompt in front of an attendee. Suppressing that relies on
+# undocumented per-project keys inside the CLI's own config, so a release can bring it back and it
+# would appear live, in the room. The surface was removed rather than patched (issue #89), and these
+# guard the removal, because the pieces are individually reasonable and easy to reintroduce.
+entry = (REPO / "images" / "web-terminal" / "entrypoint.sh").read_text()
+dockerfile = (REPO / "images" / "web-terminal" / "Dockerfile").read_text()
+console_conf = (REPO / "gitops" / "ai-layer" / "console.conf").read_text()
+lab_html = (REPO / "gitops" / "ai-layer" / "web" / "lab.html").read_text()
 
-check("tutor authenticates to Bedrock keylessly (Pod Identity, no key in the image)",
-      "CLAUDE_CODE_USE_BEDROCK" in tutor_launch
-      and not re.search(r"AWS_SECRET_ACCESS_KEY|aws_secret_access_key", tutor_launch))
-check("tutor runs in plan mode so it advises and cannot mutate the cluster",
-      "--permission-mode plan" in tutor_launch)
-check("tutor first-run state is pre-seeded so a stuck attendee is not shown an onboarding prompt",
-      all(k in tutor_launch for k in ("theme", "hasCompletedOnboarding", "hasTrustDialogAccepted")))
-check("the tutor Bedrock grant is scoped to a model, not Resource '*'",
-      "tutor_bedrock_invoke" in tf and "inference-profile/${var.tutor_model}" in tf)
-check("the tutor Pod Identity role binds the web-terminal ServiceAccount",
-      "tutor_bedrock_pod_identity" in tf and 'service_account = "web-terminal"' in tf)
-
-# The nudge is served over HTTP because nginx is in another pod. The directory served must contain the
-# nudge and NOTHING else: pointing it at ~/.session would publish the terminal transcript, and with it
-# anything the attendee ever pasted into their shell, onto the pod network.
-check("the nudge watcher writes outside the session/transcript directory",
-      ".nudge/nudge" in tutor_watch and "/.session/nudge" not in tutor_watch)
-check("the nudge file server does not serve the session directory",
-      re.search(r"http\.server .*--directory \"\$HOME/\.nudge\"", entry) is not None
-      and not re.search(r"http\.server .*--directory \"\$HOME/\.session\"", entry))
-check("the nudge file is world-readable (a 0600 file yields a silent 403 and no banner)",
-      "umask 022" in tutor_watch and "chmod 0644" in tutor_watch)
-check("the nudge requires the same failure twice so mid-build churn does not nag",
-      'if [[ "${now}" == "${prev}" ]]' in tutor_watch)
+check("no agent CLI is installed in the workbench image",
+      "@anthropic-ai/claude-code" not in dockerfile)
+check("the entrypoint starts no tutor service",
+      not re.search(r"run_service\s+tutor", entry))
+check("nginx exposes no /tutor/ route", "location /tutor/" not in console_conf)
+check("the lab page has no tutor tab", 'data-i="tutor"' not in lab_html)
+# The transcript existed only so the tutor could read what the attendee typed. With no reader, a
+# verbatim keystroke log of every session is a liability, not a feature.
+check("the shell is not wrapped in a transcript recorder",
+      "/.session/transcript" not in entry)
 
 # --- The terminal memory limit must stay above the level that OOM-killed one --------------------
 # The sister fleet OOM-killed a student terminal at 2Gi. Anything at or below that is a regression.

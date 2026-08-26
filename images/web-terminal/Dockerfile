@@ -3,10 +3,6 @@
 FROM debian:bookworm-slim
 
 # Base utilities the lab leans on. glibc base so AWS CLI v2 installs cleanly (it is not built for musl).
-# script(1), which captures the terminal transcript the tutor reads, needs no package here: on this base
-# it comes from bsdutils, which is Essential. Verified in the image on 2026-08-24 (dpkg -S /usr/bin/script
-# reports bsdutils; util-linux 2.38.1; -q -f -a -c all behave). The sister repo installs bsdextrautils
-# for this, which is not what owns it on debian:bookworm-slim; do not add that package on this hint.
 RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget unzip git jq less vim-tiny gnupg bash procps \
  && rm -rf /var/lib/apt/lists/*
@@ -63,7 +59,7 @@ RUN set -eux; \
 # packages a generation behind. Verified by resolving both sets: 4.5.10 forces collaboration 4.4.2;
 # 4.6.3 takes 5.0.1 with every extension below resolving cleanly. Re-check before changing either pin.
 #
-# Node 22 is here for the notebook's JS extensions and for the tutor's ACP bridge (see tutor/).
+# Node 22 is here for the notebook's JS extensions.
 ARG CODE_SERVER_VERSION=4.133.0
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
@@ -94,22 +90,15 @@ RUN set -eux; \
       boto3; \
     /opt/jupyter/bin/jupyter --version
 
-# --- Workshop tutor -------------------------------------------------------------------------------
+# --- No workshop tutor -----------------------------------------------------------------------------
 #
-# The tutor is the SAME agent CLI, run in a read-only posture on a second ttyd, rather than a separate
-# service. It reaches Bedrock through EKS Pod Identity, so no key exists in this image. Requires Node
-# >= 22, which is installed above.
+# This image used to install the Claude Code CLI and a tutor/ directory to run it as an in-workbench
+# helper on a second ttyd. Both are gone: clicking that tab showed an attendee the CLI's
+# "Trust this folder?" first-run prompt, and suppressing it depends on undocumented per-project keys in
+# the CLI's own config, so a release can reintroduce it live. See issue #89.
 #
-# Version pinned and verified against the npm registry on 2026-08-24. Pinned rather than floating
-# because an image that silently changes the tutor's behaviour between rehearsal and delivery is the
-# kind of surprise this workshop cannot absorb on the day.
-ARG CLAUDE_CLI_VERSION=2.1.241
-RUN set -eux; \
-    npm install -g "@anthropic-ai/claude-code@${CLAUDE_CLI_VERSION}"; \
-    claude --version
-
-COPY tutor/ /opt/tutor/
-RUN chmod +x /opt/tutor/*.sh
+# Removing it also drops a globally-installed npm CLI from an image that runs on a cluster the workshop
+# deliberately attacks, which is a smaller attack surface for free.
 
 # The scoped student user. Numeric uid 1000 so the pod securityContext can verify runAsNonRoot.
 RUN useradd -m -u 1000 -s /bin/bash student \
@@ -121,8 +110,7 @@ RUN chmod +x /entrypoint.sh
 
 USER student
 WORKDIR /home/student
-# ttyd 7681 (/terminal/), tutor ttyd 7682 (/tutor/), code-server 8443 (/ide/), Jupyter 8888
-# (/jupyter/). Only nginx is exposed
-# at the Service; these are all loopback from the console frontend's point of view.
-EXPOSE 7681 7682 8443 8888
+# ttyd 7681 (/terminal/), code-server 8443 (/ide/), Jupyter 8888 (/jupyter/). Only nginx is exposed at
+# the Service; these are all loopback from the console frontend's point of view.
+EXPOSE 7681 8443 8888
 ENTRYPOINT ["/entrypoint.sh"]

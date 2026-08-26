@@ -222,36 +222,26 @@ run_service jupyter /opt/jupyter/bin/jupyter lab \
   --ServerApp.tornado_settings="{'headers': {'Content-Security-Policy': \"frame-ancestors 'self'\"}}" \
   --ServerApp.root_dir="$HOME/work"
 
-# --- Workshop tutor -------------------------------------------------------------------------------
+# --- No workshop tutor, deliberately -----------------------------------------------------------
 #
-# A second ttyd on 7682 running the tutor instead of a plain shell. Same CLI the attendee uses, in a
-# read-only posture. Keyless: Pod Identity supplies Bedrock credentials through the normal SDK chain.
+# A second ttyd on 7682 used to run the Claude Code CLI as an in-workbench tutor, with a nudge watcher
+# and a small HTTP server on 7683 feeding a banner on the lab page.
 #
-# Auth: the tutor talks to the attendee's own cluster and can read their files, so it gets the same
-# credential as everything else here. It is not a lesser surface just because it only advises.
-if [[ -n "${CRED_PASS}" ]]; then
-  run_service tutor ttyd -p 7682 -W -b /tutor -c "${TTYD_CREDENTIAL}" \
-    -t fontSize=14 -t 'theme={"background":"#12141d"}' /opt/tutor/launch.sh
-else
-  run_service tutor ttyd -p 7682 -W -b /tutor \
-    -t fontSize=14 -t 'theme={"background":"#12141d"}' /opt/tutor/launch.sh
-fi
-
-# The proactive watcher. It only ever writes a file; the lab page decides whether to show anything, and
-# the tutor is never opened on the attendee's behalf.
-run_service tutor-watch /opt/tutor/watch.sh
-
-# Serve the nudge for the lab page to poll. The console nginx is in a SEPARATE pod here, so it cannot
-# read this filesystem and an nginx `alias` would 404 forever; it has to come over HTTP.
+# It is gone because clicking it showed an attendee Claude Code's "Trust this folder?" prompt. The
+# suppression it relied on is undocumented per-project config internal to that CLI, so even when
+# corrected a future release can bring the prompt back, and it would appear live in front of the room.
+# No attendee-facing surface may run a coding-agent CLI or show its UI.
 #
-# The directory served contains ONLY the nudge. Pointing this at ~/.session would publish the terminal
-# transcript, and therefore anything the attendee ever pasted into their shell, to the pod network.
-mkdir -p "$HOME/.nudge"
-run_service nudge python3 -m http.server 7683 --bind 0.0.0.0 --directory "$HOME/.nudge"
+# The problem it addressed is real and unsolved: one instructor cannot hand-diagnose a room working at
+# its own pace. A replacement must be purpose-built, taking a question and rendering a server-side
+# answer, with no terminal and nothing that can raise a dialog. See issue #89.
 
 # -W writable (interactive); -b serves under /terminal so the console frontend can proxy it on a subpath.
-# The shell is wrapped in script(1) (-f flushes per write, -a appends) so the tutor can read what the
-# attendee actually typed instead of asking them to retype it. script comes from bsdutils (Essential).
+#
+# The shell is NO LONGER wrapped in script(1). That transcript existed solely so the tutor could read
+# what the attendee had typed; with the tutor gone (issue #89) nothing consumes it, and it was recording
+# every keystroke of every session, including anything pasted into the shell, to a file on the pod.
+# Keeping a verbatim record of what people type, for no reader, is a liability rather than a feature.
 #
 # AUTHENTICATION. This used to read "auth/exposure are handled upstream by the per-attendee router".
 # That was wrong, and it was measured wrong on the sister Packt fleet on 2026-07-25: the cluster NLB
@@ -267,7 +257,7 @@ if [[ -n "${TTYD_CREDENTIAL:-}" ]]; then
   printf 'This terminal requires the username and password from your cluster hand-out.\n' >> "$HOME/.motd"
   exec ttyd -p 7681 -W -b /terminal -c "${TTYD_CREDENTIAL}" \
     -t fontSize=14 -t 'theme={"background":"#0f1117"}' \
-    script -q -f -a -c "bash --rcfile $HOME/.bashrc" "$HOME/.session/transcript"
+    bash --rcfile "$HOME/.bashrc"
 fi
 
 # No credential supplied. Run open so an existing cluster does not break on rollout, but say so loudly
@@ -275,4 +265,4 @@ fi
 echo "WARNING: no TTYD_CREDENTIAL set. This terminal is UNAUTHENTICATED and reachable by anyone who" >&2
 echo "WARNING: can reach the load balancer. Create the 'terminal-auth' Secret to close it." >&2
 exec ttyd -p 7681 -W -b /terminal -t fontSize=14 -t 'theme={"background":"#0f1117"}' \
-  script -q -f -a -c "bash --rcfile $HOME/.bashrc" "$HOME/.session/transcript"
+  bash --rcfile "$HOME/.bashrc"

@@ -647,10 +647,24 @@ spec:
           imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
           ports:
             - { name: ttyd, containerPort: 7681 }
-            - { name: tutor, containerPort: 7682 }    # tutor ttyd, proxied at /tutor/
-            - { name: nudge, containerPort: 7683 }    # nudge file server, proxied at /api/tutor-nudge
             - { name: ide, containerPort: 8443 }      # code-server, proxied at /ide/
             - { name: jupyter, containerPort: 8888 }  # JupyterLab, proxied at /jupyter/
+          # Probe ttyd, because the terminal is the surface the attendee actually depends on. Without a
+          # liveness probe a wedged ttyd is never restarted and the NLB keeps routing to it, so the
+          # attendee sees a dead tab with no recovery short of finding a facilitator. tcpSocket rather
+          # than httpGet: ttyd serves under a base path and answers 401 once a credential is set, which
+          # an httpGet probe would read as failure and restart-loop a perfectly healthy terminal.
+          readinessProbe:
+            tcpSocket: { port: ttyd }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket: { port: ttyd }
+            # Generous: the shell shares a container with code-server and JupyterLab, and an attendee
+            # deliberately loading the node (the fork bomb is an exercise) must not trip a restart.
+            initialDelaySeconds: 30
+            periodSeconds: 20
+            failureThreshold: 3
           # The student's own AWS keys, mounted as the DEFAULT profile inside the VTT so `aws` works with
           # no flags. Created per-cluster by the bootstrap (outside git); optional so clusters without it run.
           envFrom:
