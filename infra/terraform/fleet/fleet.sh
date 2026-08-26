@@ -199,6 +199,14 @@ usage() {
     cat >&2 <<EOF
 Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
 
+  preflight <n>       BEFORE any run: assert every account resolves to its EXPECTED account id and has
+                      vCPU/NLB/EKS/VPC/EIP headroom for <n> clusters each. Read-only; exits non-zero on
+                      anything that would block. A quota rejection found mid-build costs the window.
+
+  check-tls <host...> BEFORE doors: per hostname assert https 200, a validating chain whose SAN covers
+                      it, at least 7 days of cert life, an http->https redirect, and that the websocket
+                      upgrade the terminal needs is accepted. Pass --no-ws for hosts with no terminal.
+
   ATTENDEE clusters (numbered, pool-distributed, single account):
     up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
     up <name...>      Provision the named clusters.
@@ -925,11 +933,25 @@ converge_endpoint() {
         echo "no-lb-hostname"; return 1
     fi
     waited=0
+    local resolved=""
     while [[ "${waited}" -lt "${CONVERGE_DNS_WAIT}" ]]; do
-        if getent hosts "${host}" >/dev/null 2>&1; then echo "${host}"; return 0; fi
+        if getent hosts "${host}" >/dev/null 2>&1; then resolved=1; break; fi
         sleep 10; waited=$(( waited + 10 ))
     done
-    echo "lb-assigned-but-dns-unresolved:${host}"; return 1
+    [[ -n "${resolved}" ]] || { echo "lb-assigned-but-dns-unresolved:${host}"; return 1; }
+
+    # DNS resolving is not the same as the attendee's page working. The NLB answers as soon as its
+    # hostname exists, but its target group can still be failing health checks, and the console pod can
+    # be Running without the app serving. Both states resolve happily and hand the attendee a 502.
+    # The definition of done is the surface they actually open, so assert a real 200. Kept on the same
+    # DNS budget rather than a third one: at this point the only thing still settling is registration.
+    local code=""
+    while [[ "${waited}" -lt "${CONVERGE_DNS_WAIT}" ]]; do
+        code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "http://${host}/" 2>/dev/null || true)"
+        [[ "${code}" == "200" ]] && { echo "${host}"; return 0; }
+        sleep 10; waited=$(( waited + 10 ))
+    done
+    echo "dns-ok-but-http-${code:-none}:${host}"; return 1
 }
 
 # Nudge a degraded cluster instead of rebuilding it. A hard refresh is what clears the common case (an
@@ -1382,6 +1404,8 @@ main() {
     case "${cmd}" in
         up) cmd_up "$@" ;;
         routes) cmd_routes "$@" ;;
+        preflight) exec "${SCRIPT_DIR}/preflight.sh" "$@" ;;
+        check-tls) exec "${SCRIPT_DIR}/check-tls.sh" "$@" ;;
         up-fleet) cmd_up_fleet "$@" ;;
         down) cmd_down "$@" ;;
         down-acct) cmd_down_acct "$@" ;;
