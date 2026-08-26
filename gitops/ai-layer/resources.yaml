@@ -750,6 +750,19 @@ spec:
         - name: nginx
           image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine # verify-at-build: pin @sha256
           ports: [{ name: http, containerPort: 8080 }]
+          # /healthz is served by nginx itself, so it reports whether the front door is alive rather
+          # than whether the platform behind it is. That distinction is the point: this Service is the
+          # single attendee-facing entrypoint, and a probe depending on upstreams would restart it every
+          # time a backend restarted, taking the whole console down with it.
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 20
+            failureThreshold: 3
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
           volumeMounts:

@@ -45,7 +45,15 @@ readonly NAME_PREFIX="watch-it-burn-attendee"
 # EKS control-plane create (near-zero local cost), so the binding local limit is RAM during the bootstrap
 # spike: ~600MB per build tree on this 62GB box, ~45GB at 75-wide, leaves headroom. Raise via env for a
 # bigger box; the irreducible floor is the EKS control-plane create (~10-15 min, AWS-side, per cluster).
-MAX_PARALLEL="${MAX_PARALLEL:-15}"
+# Per-account pool width. The run plan documents 8 per account across 5 accounts; this defaulted to 15,
+# so following the documented command without setting it gave 75 concurrent builds instead of 40.
+#
+# The number that matters is the TOTAL across accounts, not the per-account one, and the cost is
+# concentrated in the bootstrap phase (helm, kubectl, aws eks get-token per call) rather than the
+# ~10-minute control-plane wait. Oversubscribing does not merely slow the run: it risks tripping the
+# fixed timeouts inside bootstrap (helm --wait --timeout 10m, kubectl rollout status --timeout=180s)
+# and turning host contention into spurious cluster failures that look like real ones.
+MAX_PARALLEL="${MAX_PARALLEL:-8}"
 
 # --- Multi-account config (env-overridable) -----------------------------------------------------
 # Defaults keep the existing SINGLE-account attendee flow unchanged (TF_PROFILE empty -> the cluster
@@ -176,6 +184,29 @@ account_for_round() {
 # pool (watch-it-burn-attendee-NNN). Several verbs need to tell them apart, because the attendee path
 # derives a pool slot from the trailing number and that is meaningless for the roster.
 is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
+
+# A QUIET health probe: true only if every ArgoCD Application is Synced+Healthy and no pod is broken.
+#
+# Deliberately separate from health_one rather than reusing it. health_one is a reporting verb: it logs
+# a line per cluster and calls record_fail, and every path ends in a bare `return`, so it always exits
+# 0. Using it as a predicate would therefore be wrong twice over: it would treat a DEGRADED cluster as
+# healthy and skip provisioning it, and it would write failures for clusters that are merely about to
+# be built. A predicate has to be side-effect free and has to actually return a status.
+is_cluster_healthy() {
+    local name="$1" acct="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    local kcfg; kcfg="$(mktemp -t "${name}.probe.XXXX")"
+    provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" >/dev/null 2>&1 || { rm -f "${kcfg}"; return 1; }
+    local apps total healthy broken
+    apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)"
+    if [[ -z "${apps}" ]]; then rm -f "${kcfg}"; return 1; fi
+    total="$(jq '.items | length' <<<"${apps}" 2>/dev/null || echo 0)"
+    [[ "${total}" -gt 0 ]] || { rm -f "${kcfg}"; return 1; }
+    healthy="$(jq '[.items[] | select(.status.sync.status=="Synced" and .status.health.status=="Healthy")] | length' <<<"${apps}" 2>/dev/null || echo 0)"
+    broken="$(KUBECONFIG="${kcfg}" kubectl get pods -A \
+        --field-selector=status.phase!=Running,status.phase!=Succeeded -o name 2>/dev/null | grep -c . || true)"
+    rm -f "${kcfg}"
+    [[ "${healthy}" == "${total}" && "${broken}" -eq 0 ]]
+}
 
 # Gate for the destructive verbs. `reap` and `aws-keys` were already dry-run by default; `down`,
 # `down-fleet` and `down-acct` were not, so a mistyped count or a stale state file destroyed clusters
@@ -488,6 +519,19 @@ bootstrap_student_aws() {
 
 up_one() {
     local name="$1"; assert_ours "${name}"
+    # Skip a cluster that already exists AND already passes health. Without this, re-running `up` to
+    # grow a fleet or to retry a partial run re-entered the full bootstrap chain for every healthy
+    # cluster: helm-install ArgoCD, re-register the repo, re-apply the app-of-apps, re-mint credentials.
+    # Bootstrap is the expensive phase and the one with fixed internal timeouts, so doing it fleet-wide
+    # and unnecessarily is how host contention turns into spurious failures. This is what makes `up`
+    # safe to re-run, so growing 5 -> 50 -> 250 is the same verb rather than three different ones.
+    # WIB_FORCE_UP=1 re-applies regardless, for when the intent really is to re-provision.
+    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_FORCE_UP:-}" && -f "${STATE_DIR}/${name}.tfstate" ]]; then
+        if is_cluster_healthy "${name}"; then
+            log "  ${name}: already healthy, skipping"
+            return 0
+        fi
+    fi
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     local pids=(); [[ -n "${TF_PIDS_LIMIT}" ]] && pids=(-var "pod_pids_limit=${TF_PIDS_LIMIT}")
     local dh=(); [[ -n "${WIB_DOCKERHUB_AUTH_B64}" ]] && dh=(-var "dockerhub_auth_b64=${WIB_DOCKERHUB_AUTH_B64}")
