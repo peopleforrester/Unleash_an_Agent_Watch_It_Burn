@@ -354,12 +354,50 @@ arm_infra_guardrails() {
             get application kyverno-policies -n argocd -o jsonpath='{.status.sync.status}' 2>/dev/null)" == "Synced" ]] && break
         sleep 10
     done
-    if CONTEXT="${ctx}" KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" \
-        bash "${REPO_ROOT}/challenges/01-cncf-wall/toggle-kyverno-enforce.sh" >"${LOG_DIR}/${name}.arm.log" 2>&1; then
-        log "  ${name}: infra guardrails ENFORCING (Kyverno)"
-    else
-        log "  ${name}: FAILED to flip Kyverno to Enforce (see ${LOG_DIR}/${name}.arm.log)"; return 1
-    fi
+
+    # Wait for Kyverno's admission webhook to have ENDPOINTS. Patching a ClusterPolicy goes THROUGH that
+    # webhook, so while the kyverno pods are still starting every patch fails with
+    #   Internal error occurred: failed calling webhook "mutate-policy.kyverno.svc": no endpoints
+    #   available for service "kyverno-svc"
+    # The policy existing and the app reading Synced are both true well before this is, which is why
+    # neither of the waits above caught it. Observed on watch-it-burn-r3-2, 2026-08-26.
+    for i in $(seq 1 30); do
+        [[ -n "$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
+            -n kyverno get endpoints kyverno-svc -o jsonpath='{.subsets[0].addresses[0].ip}' 2>/dev/null)" ]] && break
+        [[ "${i}" -eq 30 ]] && log "  ${name}: kyverno webhook still has no endpoints; flipping anyway"
+        sleep 10
+    done
+
+    # Flip, then VERIFY, and re-flip if it drifted back.
+    #
+    # The old version reported ENFORCING purely on the toggle's exit code. That is not the same claim:
+    # on watch-it-burn-r2-1 (2026-08-26) the toggle patched both policies and read them back as Enforce,
+    # the run logged ENFORCING, and require-resource-limits was Audit again minutes later. ArgoCD had
+    # reverted it despite ignoreDifferences and RespectIgnoreDifferences being set for that exact path.
+    # A half-armed Round 2 that reports success is worse than an honest failure, because the demo then
+    # fails in front of the room with nothing having warned anyone.
+    #
+    # So: confirm the live value AFTER a settling pause, and retry the flip if selfHeal won the race.
+    local attempt rl ri
+    for attempt in 1 2 3; do
+        CONTEXT="${ctx}" KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" \
+            bash "${REPO_ROOT}/challenges/01-cncf-wall/toggle-kyverno-enforce.sh" \
+            >>"${LOG_DIR}/${name}.arm.log" 2>&1 || true
+        sleep 20   # let any selfHeal reconciliation land before believing the result
+        rl="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
+            get clusterpolicy require-resource-limits -o jsonpath='{.spec.rules[0].validate.failureAction}' 2>/dev/null)"
+        ri="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
+            get clusterpolicy restrict-image-registries -o jsonpath='{.spec.rules[0].validate.failureAction}' 2>/dev/null)"
+        if [[ "${rl}" == "Enforce" && "${ri}" == "Enforce" ]]; then
+            log "  ${name}: infra guardrails ENFORCING (Kyverno, verified)"
+            return 0
+        fi
+        log "  ${name}: after attempt ${attempt}, require-resource-limits=${rl:-?} restrict-image-registries=${ri:-?}; retrying"
+    done
+    log "  ${name}: FAILED to arm Kyverno; live state require-resource-limits=${rl:-?} restrict-image-registries=${ri:-?}"
+    log "        (see ${LOG_DIR}/${name}.arm.log). This round will NOT block admission."
+    record_fail "${name}:kyverno-not-armed rl=${rl:-?} ri=${ri:-?}"
+    return 1
 }
 
 bootstrap_one() {
@@ -1428,18 +1466,71 @@ cmd_routes() {
         done
     fi
     rm -f "${kcfg}"
+
+    # NEVER SHRINK THE TABLE SILENTLY. This regenerates from whatever roster is loaded and from whichever
+    # consoles happen to have an LB right now, so a scoped run, or a run made while LBs are still coming
+    # up, produces a SMALLER table than the one already published. Publishing that takes every host it
+    # omits to a 404. It has happened: a subset run on 2026-08-26 rewrote the table from three clusters
+    # and took two live round URLs down. The published table is the thing to compare against, not the
+    # working copy, because the working copy may already be a bad render from a previous attempt.
+    local new_count old_count
+    new_count="$(grep -c agenticburn.com "${tmp}" || true)"
+    old_count="$(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null | grep -c agenticburn.com || true)"
+    if [[ -z "${WIB_ROUTES_ALLOW_SHRINK:-}" && "${new_count}" -lt "${old_count}" ]]; then
+        log "routes: REFUSING to publish ${new_count} host(s), down from ${old_count} already published."
+        log "        Hosts that would be dropped:"
+        comm -13 <(grep -o '^[^ ]*\.agenticburn\.com' "${tmp}" | sort) \
+                 <(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null | grep -o '^[^ ]*\.agenticburn\.com' | sort) \
+            | sed 's/^/          - /' >&2
+        log "        Every one of those becomes a 404. If the shrink is intended (a teardown), re-run"
+        log "        with WIB_ROUTES_ALLOW_SHRINK=1. Otherwise wait for the missing consoles and retry."
+        rm -f "${tmp}"
+        return 1
+    fi
+
     mv "${tmp}" "${out}"
-    local lines; lines="$(grep -c agenticburn.com "${out}")"
+    local lines; lines="${new_count}"
     log "routes: wrote ${lines} host(s) to ${out##*/} (apex repo)"
     if git -C "${WIB_APEX_DIR}" diff --quiet -- "${out}"; then
-        log "routes: no change"; return 0
+        log "routes: no change to the table"
+    else
+        # Commit and push for the RECORD ONLY. This does not apply anything, which is the whole point
+        # of the next step.
+        git -C "${WIB_APEX_DIR}" add "${out}"
+        git -C "${WIB_APEX_DIR}" commit -q -m "routes: regenerate agenticburn.com router map from live fleet (${lines} hosts)" || true
+        git -C "${WIB_APEX_DIR}" push origin HEAD 2>&1 | tail -1 || log "routes: apex push to current branch failed"
+        git -C "${WIB_APEX_DIR}" push origin HEAD:main 2>&1 | tail -1 || log "routes: could not ff apex main; run 'git -C ${WIB_APEX_DIR} push origin <branch>:main'"
     fi
-    # Commit in the apex repo + promote to its MAIN (Railway deploys apex from main via the GitHub
-    # integration). No [skip ci]: it would suppress the redeploy and leave routes.map stale.
-    git -C "${WIB_APEX_DIR}" add "${out}"
-    git -C "${WIB_APEX_DIR}" commit -q -m "routes: regenerate agenticburn.com router map from live fleet (${lines} hosts)" || true
-    git -C "${WIB_APEX_DIR}" push origin HEAD 2>&1 | tail -1 || log "routes: apex push to current branch failed"
-    git -C "${WIB_APEX_DIR}" push origin HEAD:main 2>&1 | tail -1 || log "routes: could not ff apex main; run 'git -C ${WIB_APEX_DIR} push origin <branch>:main'"
+
+    # APPLY the table. Pushing is not applying, and assuming otherwise cost a live outage.
+    #
+    # The apex router keeps its routing table on a persistent volume so a route change can land as a
+    # Caddy reload rather than a redeploy that restarts the router every attendee is being proxied
+    # through. Its entrypoint therefore keeps the volume's existing table and DELIBERATELY IGNORES the
+    # one baked into a new image; it prints a warning saying exactly that. So a commit-and-push leaves
+    # the live router serving whatever it was serving before.
+    #
+    # Observed 2026-08-26: routes.map was correct and pushed to the branch Railway deploys from, and all
+    # nine attendee URLs still returned 404 until the table was reloaded by hand.
+    #
+    # Failure here is loud but non-fatal: an unapplied table is recoverable in one command, whereas
+    # aborting a provision because the router is unreachable is not what anyone wants mid-run. If the
+    # reload is rejected the router keeps serving the previous table, which is the property that makes
+    # this safe to call automatically.
+    local reload="${WIB_APEX_DIR}/scripts/reload-routes.sh"
+    if [[ -x "${reload}" ]]; then
+        log "routes: applying the table to the live router (reload, no redeploy)"
+        if bash "${reload}" "${out}" 2>&1 | sed 's/^/    /' >&2; then
+            log "routes: applied"
+        else
+            log "routes: RELOAD FAILED. The table is committed but NOT live; the router is still serving"
+            log "        the previous one. Apply it with: bash ${reload}"
+            record_fail "routes:reload-failed"
+        fi
+    else
+        log "routes: WARNING no reload script at ${reload}, so the table is NOT live."
+        log "        Pushing alone does not apply routes: the router keeps the table on its volume."
+    fi
 }
 
 main() {
