@@ -164,6 +164,11 @@ WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD:-sprouts}"
 # provisioning until someone noticed and re-ran ingest by hand.
 WIB_PROVISIONING_URL="${WIB_PROVISIONING_URL:-https://provisioning.agenticburn.com}"
 
+# Whose cluster the bare roundN.agenticburn.com alias points at. That alias is shared (the run-of-show
+# and the BurritoBot round selector both use it), so it has to resolve to one owner's cluster; binding
+# it explicitly keeps it stable instead of following whichever roster entry happened to render first.
+WIB_PRIMARY_OWNER="${WIB_PRIMARY_OWNER:-michael}"
+
 # Railway coordinates for that app, used to resolve its ADMIN_TOKEN automatically (see resolve_admin_token).
 readonly WIB_PROVISIONING_RW_PROJECT="859f9db0-bbda-4d3c-8026-767d0b9047a9"
 readonly WIB_PROVISIONING_RW_ENV="ddb7d7e6-9643-4b55-8dd6-3618a0b6cce4"
@@ -819,7 +824,7 @@ print_bootstrap_hints() {
     local round_filter="${1:-}" entry name rr tier itype pidscol bp
     log "next: bootstrap each (fleet.sh provisions; deploy-full-idp.sh bootstraps):"
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rr tier itype pidscol bp <<<"${entry}"
+        IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
         [[ -n "${round_filter}" && "${round_filter}" != "${rr}" ]] && continue
         log "  ${name}: AWS_PROFILE=$(account_for_round "${rr}") KUBECONFIG=<isolated> deploy-full-idp.sh ${bp}"
     done
@@ -831,7 +836,7 @@ print_bootstrap_hints() {
 _up_from_roster() {
     local name="$1" entry _n rr tier itype pidscol bp
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r _n rr tier itype pidscol bp <<<"${entry}"
+        IFS='|' read -r _n rr tier itype pidscol bp owner <<<"${entry}"
         [[ "${_n}" == "${name}" ]] && { TF_PIDS_LIMIT="${pidscol}"; TF_INSTANCE_TYPES="${itype}"; TF_TIER="${tier}"; break; }
     done
     up_one "${name}"
@@ -843,7 +848,7 @@ _up_from_roster() {
 _run_round() {
     local action="$1" r="$2" entry name rr tier itype pidscol bp names=() n=0
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rr tier itype pidscol bp <<<"${entry}"
+        IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
         [[ "${rr}" == "${r}" ]] || continue
         [[ -n "${WIB_PER_ROUND}" && "${n}" -ge "${WIB_PER_ROUND}" ]] && break
         names+=("${name}"); n=$((n + 1))
@@ -1482,7 +1487,7 @@ cmd_ingest_instructors() {
     local round_filter="${1:-}" entry name rnd
     load_roster
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rnd _tier _it _pid _bp <<<"${entry}"
+        IFS='|' read -r name rnd _tier _it _pid _bp _owner <<<"${entry}"
         [[ -n "${round_filter}" && "${rnd}" != "${round_filter}" ]] && continue
         ingest_one "${name}" "$(account_for_round "${rnd}")"
     done
@@ -1524,14 +1529,26 @@ cmd_routes() {
     local entry name rr bp acct h short n state
     local -A round_done=()
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rr _tier _it _pid bp <<<"${entry}"
+        IFS='|' read -r name rr _tier _it _pid bp owner <<<"${entry}"
         acct="$(account_for_round "${rr}")"
         provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
         h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
         [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
+        # The name a presenter actually reads: <owner>-round<N>.agenticburn.com. The r1-1 form is a
+        # provisioning artefact, not a name anyone can hold in their head mid-demo, and it says nothing
+        # about whose cluster it is.
+        #
+        # Single label, deliberately. The certificate is *.agenticburn.com, which covers exactly one
+        # level, so michael-round1.agenticburn.com validates and roundone.michael.agenticburn.com does
+        # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27.
+        [[ -n "${owner}" ]] && printf '%s-round%s.agenticburn.com  %s:80\n' "${owner}" "${rr}" "${h}" >> "${tmp}"
+        # The raw name is kept as an alias so anything already pointing at it keeps working.
         short="${name#watch-it-burn-}"
         printf '%s.agenticburn.com  %s:80\n' "${short}" "${h}" >> "${tmp}"
-        [[ -z "${round_done[$rr]:-}" ]] && { printf 'round%s.agenticburn.com  %s:80\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
+        # roundN is the shared, owner-less alias the run-of-show and the BurritoBot round selector use.
+        # Bind it to the FIRST owner's cluster so it is stable rather than whichever entry sorted first.
+        [[ -z "${round_done[$rr]:-}" && "${owner}" == "${WIB_PRIMARY_OWNER}" ]] && {
+            printf 'round%s.agenticburn.com  %s:80\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
     done
     # Admin attendee clusters (attendee-NNN with state in the default account) -> a-NNN.agenticburn.com.
     if [[ -d "${STATE_DIR}" ]]; then
@@ -1540,7 +1557,16 @@ cmd_routes() {
             name="$(basename "${state}" .tfstate)"; n="${name##*-}"
             provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
-            [[ -n "${h}" ]] && printf 'a-%s.agenticburn.com  %s:80\n' "${n}" "${h}" >> "${tmp}"
+            [[ -n "${h}" ]] || continue
+            printf 'a-%s.agenticburn.com  %s:80\n' "${n}" "${h}" >> "${tmp}"
+            # The presenters' own student clusters get a readable alias too, for the same reason their
+            # round clusters do: "a-001" tells you nothing about whose it is. Mapped by slot because
+            # these two are fixed by convention (001 and 002 are the presenter seats, per the roster
+            # keep-set), unlike the 250 pool attendees which stay a-NNN.
+            case "${name}" in
+                *-attendee-001) printf 'michael-student.agenticburn.com  %s:80\n' "${h}" >> "${tmp}" ;;
+                *-attendee-002) printf 'whitney-student.agenticburn.com  %s:80\n' "${h}" >> "${tmp}" ;;
+            esac
         done
     fi
     rm -f "${kcfg}"

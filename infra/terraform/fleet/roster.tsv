@@ -1,17 +1,27 @@
-# Instructor roster (PRD 35 §4.6). Pipe-delimited: name|round|tier|instance_type|pids|bootstrap
+# Instructor roster (PRD 35 §4.6). Pipe-delimited:
+#   name|round|tier|instance_type|pids|bootstrap|owner
+#
+# OWNER is what splits the roster into per-presenter sets. Each presenter gets their own round 1, 2 and
+# 3, and provisioning shows a presenter only their own clusters rather than all nine. It is an explicit
+# column, not a convention, because "the -1 suffix means Michael" is exactly the kind of rule that lives
+# in one person's head and is wrong six weeks later. An empty owner means shared/unassigned.
+#
+# The owner also drives the friendly hostname: owner + round -> michael-round1.agenticburn.com. Note the
+# single label. The TLS certificate is *.agenticburn.com, which covers ONE level, so a nested name like
+# roundone.michael.agenticburn.com does not validate and fails to connect at all (verified 2026-08-27).
+#
 # Empty column = default: tier -> gitops default (Nova); instance_type -> cluster module default;
 # pids -> module default (1024). R1 sets pids=-1 so the C4 fork bomb burns the uncapped node.
 # NOTE: the tier column is parsed + passed through, but the per-cluster model patch (§4.6-d) is NOT yet
-# wired, so every cluster currently runs the gitops default model (Nova) regardless of tier. Setting a
-# tier here takes effect once §4.6-d (bootstrap patches the Agent modelConfig) lands.
+# wired, so every cluster currently runs the gitops default model (Nova) regardless of tier.
 # Change what the fleet provisions here (or point WIB_ROSTER_FILE elsewhere); no fleet.sh edit needed.
 # Subset a run without editing this file: WIB_ROUNDS=2,3 and/or WIB_PER_ROUND=1.
-watch-it-burn-r1-1|1|||-1|burn
-watch-it-burn-r1-2|1|||-1|burn
-watch-it-burn-r1-3|1|||-1|burn
-watch-it-burn-r2-1|2||||full
-watch-it-burn-r2-2|2||||full
-watch-it-burn-r2-3|2||||full
-watch-it-burn-r3-1|3||||full
-watch-it-burn-r3-2|3||||full
-watch-it-burn-r3-3|3||||full
+watch-it-burn-r1-1|1|||-1|burn|michael
+watch-it-burn-r1-2|1|||-1|burn|whitney
+watch-it-burn-r1-3|1|||-1|burn|
+watch-it-burn-r2-1|2||||full|michael
+watch-it-burn-r2-2|2||||full|whitney
+watch-it-burn-r2-3|2||||full|
+watch-it-burn-r3-1|3||||full|michael
+watch-it-burn-r3-2|3||||full|whitney
+watch-it-burn-r3-3|3||||full|
