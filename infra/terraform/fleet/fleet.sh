@@ -140,6 +140,11 @@ WIB_DISK="${WIB_DISK:-}"                          # root disk GiB -> node_disk_s
 # Roster selection: the instructor roster is DATA (roster.tsv), not a hardcoded array. Override the file
 # path, or subset by round / per-round count, all without editing this script.
 WIB_ROSTER_FILE="${WIB_ROSTER_FILE:-${SCRIPT_DIR}/roster.tsv}"
+# The web-terminal login, shared across every cluster in a run. Deliberately short and speakable: it
+# gets said out loud and typed by a room. See bootstrap_terminal_auth for why a shared credential is
+# the right call for single-use workshop clusters.
+WIB_TERMINAL_USER="${WIB_TERMINAL_USER:-sprouts}"
+WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD:-sprouts}"
 WIB_ROUNDS="${WIB_ROUNDS:-}"                      # comma list of rounds to include, e.g. "2,3" (empty = all)
 WIB_PER_ROUND="${WIB_PER_ROUND:-}"               # max clusters per round (empty = all)
 # Rounds run CONCURRENTLY by default (each round its own subshell so per-round vars cannot clash; the
@@ -369,16 +374,23 @@ bootstrap_terminal_auth() {
     live="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get secret terminal-auth -n agent \
         -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null | base64 -d 2>/dev/null || true)"
     if [[ -n "${live}" ]]; then
-        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${live#student:}" >"${pwfile}"; chmod 600 "${pwfile}"
+        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${live#*:}" >"${pwfile}"; chmod 600 "${pwfile}"
         log "  terminal-auth already set: ${name}"
         return
     fi
 
-    # 24 hex chars from the kernel CSPRNG. Alphanumeric only: the credential rides in a URL and a
-    # hand-out, and punctuation invites quoting bugs in both.
-    pw="$(head -c 12 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    # A SHARED, SPEAKABLE credential, not a per-cluster random one. The presenters have to be able to
+    # say it out loud and have a room of people type it, and a 24-hex-char string cannot survive that.
+    # Set WIB_TERMINAL_USER / WIB_TERMINAL_PASSWORD to change it for a run.
+    #
+    # This is a deliberate trade, decided 2026-08-26. These are single-use clusters that live for the
+    # length of one workshop and are destroyed after; the URLs are not published; and the shell behind
+    # the credential is an unprivileged user with a scoped ClusterRole, not cluster-admin. The purpose
+    # of the credential is to stop a stranger wandering into somebody else's terminal, which it does.
+    # It is not protecting anything that outlives the session.
+    pw="${WIB_TERMINAL_PASSWORD}"
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl create secret generic terminal-auth \
-        -n agent --from-literal="TTYD_CREDENTIAL=student:${pw}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+        -n agent --from-literal="TTYD_CREDENTIAL=${WIB_TERMINAL_USER}:${pw}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${pw}" >"${pwfile}"; chmod 600 "${pwfile}"
         # ttyd reads the credential once at startup, so an already-running terminal keeps serving
         # unauthenticated until it restarts. Roll it now rather than leaving the gap open.
@@ -1116,7 +1128,7 @@ ingest_one() {
     # persists the password beside the AWS creds; send it. The provisioning app already accepts
     # terminal_user/terminal_password (scripts/merge_pool.py in provisioning-agenticburn) and shows a
     # visible degradation when the password is absent, so an empty value is reported rather than silent.
-    local term_user="student" term_pw
+    local term_user="${WIB_TERMINAL_USER}" term_pw
     term_pw="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null | tr -d '[:space:]')"
     term_pw="${term_pw##*:}"   # tolerate either a bare password or a "user:password" pair
     [[ -n "${term_pw}" ]] || log "  ingest ${name}: WARN no terminal password (${AWS_POOL_DIR}/${name}.terminal); the terminal will prompt and the student cannot log in"
