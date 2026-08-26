@@ -2,22 +2,83 @@
 # ABOUTME: component UST, and both log<->trace pivot directions via the Datadog API (NOT a static CI gate).
 #
 # Unlike verify/test_observability.py (which statically validates the YAML manifests), this script
-# talks to the LIVE Datadog API and therefore requires DD_API_KEY + DD_APP_KEY in the environment and
-# a real trace_id harvested from a recent guard-proxy request on a running cluster. Run it as the final
-# acceptance step after the AI-layer stack is deployed and a test workload has driven traffic through
+# talks to the LIVE Datadog API and therefore requires DD_API_KEY + DD_APP_KEY and a real trace_id
+# harvested from a recent guard-proxy request on a running cluster. Run it as the final acceptance
+# step after the AI-layer stack is deployed and a test workload has driven traffic through
 # guard-proxy -> agentgateway -> kagent. Stdlib only (urllib), matching the rest of verify/.
 #
+# Credentials are read from a FILE, not from the ambient environment, and the file overrides whatever
+# happens to be exported (issue #84). See load_credentials() below for the search order.
+#
 # Usage:
-#   DD_API_KEY=... DD_APP_KEY=... python3 verify/test_datadog_service_map.py [<trace_id>]
+#   python3 verify/test_datadog_service_map.py [<trace_id>]        # .env or ~/secrets/datadog
+#   WITB_ENV_FILE=/path/to/creds.env python3 verify/... [<trace_id>]
 #   - With no trace_id: runs the Service Map edge + platform-component UST assertions.
 #   - With a trace_id:  also runs both log<->trace pivot assertions.
 import json
 import os
+import pathlib
 import sys
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+
+def _parse_env_file(path):
+    """Yield (key, value) pairs from a KEY=VALUE file, skipping blanks and comments."""
+    for raw in path.read_text().splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        line = line[7:].lstrip() if line.startswith("export ") else line
+        key, sep, value = line.partition("=")
+        if not sep:
+            continue
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ("'", '"'):
+            value = value[1:-1]
+        yield key.strip(), value
+
+
+def load_credentials():
+    """Load Datadog credentials from a file, letting the file WIN over the ambient environment.
+
+    Overriding is the entire point (issue #84). `~/.bashrc` used to source every file in `~/.keys/`
+    with a wildcard, exporting credentials into every interactive shell; a dead key exported that way
+    shadowed a live one for months, which reads as a billing failure and is not one. A loader that
+    politely leaves an already-set variable alone reproduces exactly that bug, so this one does not.
+
+    Search order, first file that exists wins: an explicit WITB_ENV_FILE, this repo's .env (walking
+    up from the working directory), then the canonical store in ~/secrets. Stdlib only, matching the
+    rest of verify/; python-dotenv is deliberately not a dependency here.
+    """
+    candidates = []
+    explicit = os.environ.get("WITB_ENV_FILE")
+    if explicit:
+        candidates.append(pathlib.Path(explicit).expanduser())
+    here = pathlib.Path(__file__).resolve()
+    candidates.extend(parent / ".env" for parent in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents])
+    candidates.extend(parent / ".env" for parent in here.parents)
+    candidates.append(pathlib.Path.home() / "secrets" / "datadog" / "datadog.env")
+    for path in candidates:
+        if not path.is_file():
+            continue
+        for key, value in _parse_env_file(path):
+            os.environ[key] = value  # override: the file is the source of truth
+        return path
+    return None
+
+
+_ENV_SOURCE = load_credentials()
+_missing = [k for k in ("DD_API_KEY", "DD_APP_KEY") if not os.environ.get(k)]
+if _missing:
+    sys.exit(
+        f"missing {', '.join(_missing)}.\n"
+        f"  credential file searched: {_ENV_SOURCE or 'none found'}\n"
+        "  put them in this repo's .env (gitignored), in ~/secrets/datadog/datadog.env, or point\n"
+        "  WITB_ENV_FILE at a file that defines them. Values live in peopleforrester/mrf-secrets."
+    )
 
 DD_API_KEY = os.environ["DD_API_KEY"]
 DD_APP_KEY = os.environ["DD_APP_KEY"]
