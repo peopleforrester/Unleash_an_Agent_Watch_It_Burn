@@ -157,6 +157,48 @@ WIB_ROSTER_FILE="${WIB_ROSTER_FILE:-${SCRIPT_DIR}/roster.tsv}"
 # the right call for single-use workshop clusters.
 WIB_TERMINAL_USER="${WIB_TERMINAL_USER:-sprouts}"
 WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD:-sprouts}"
+
+# The provisioning app the fleet registers clusters with. This is a fixed, known address, so it is a
+# default rather than something an operator has to remember to export. It used to have no default, which
+# meant a normal `instructors up` silently skipped registration and the clusters were invisible in
+# provisioning until someone noticed and re-ran ingest by hand.
+WIB_PROVISIONING_URL="${WIB_PROVISIONING_URL:-https://provisioning.agenticburn.com}"
+
+# Railway coordinates for that app, used to resolve its ADMIN_TOKEN automatically (see resolve_admin_token).
+readonly WIB_PROVISIONING_RW_PROJECT="859f9db0-bbda-4d3c-8026-767d0b9047a9"
+readonly WIB_PROVISIONING_RW_ENV="ddb7d7e6-9643-4b55-8dd6-3618a0b6cce4"
+readonly WIB_PROVISIONING_RW_SERVICE="watch-it-burn-provisioning"
+
+# Resolve the provisioning app's admin token WITHOUT the operator having to know it exists.
+#
+# Registration is not optional work: a cluster nobody can look up is not finished. But it was gated on
+# two environment variables, so the default outcome of running the tool normally was that it silently
+# did not happen, and the failure surfaced later as a presenter finding a blank password. A step that
+# only runs when someone remembers to set two variables is not automated, it is documented.
+#
+# Order: an explicit env var wins (for a one-off or a different environment), then the token is read
+# from the live Railway service, then from the local secret store. Cached for the run so a fleet
+# provision makes one Railway call rather than one per cluster.
+WIB_ADMIN_TOKEN_CACHE=""
+resolve_admin_token() {
+    [[ -n "${WIB_ADMIN_TOKEN:-}" ]] && { printf '%s' "${WIB_ADMIN_TOKEN}"; return 0; }
+    [[ -n "${WIB_ADMIN_TOKEN_CACHE}" ]] && { printf '%s' "${WIB_ADMIN_TOKEN_CACHE}"; return 0; }
+    local tok=""
+    if command -v railway >/dev/null 2>&1; then
+        tok="$(railway variables --json \
+                -p "${WIB_PROVISIONING_RW_PROJECT}" \
+                -e "${WIB_PROVISIONING_RW_ENV}" \
+                -s "${WIB_PROVISIONING_RW_SERVICE}" 2>/dev/null \
+              | jq -r '.ADMIN_TOKEN // empty' 2>/dev/null)"
+    fi
+    # Fallback for a machine with no Railway login: the same value kept in the private secret store.
+    if [[ -z "${tok}" && -r "${HOME}/secrets/projects/watch-it-burn-provisioning.env" ]]; then
+        tok="$(sed -n 's/^ADMIN_TOKEN=//p' "${HOME}/secrets/projects/watch-it-burn-provisioning.env" | tr -d '"'"'"'[:space:]' | head -1)"
+    fi
+    [[ -n "${tok}" ]] || return 1
+    WIB_ADMIN_TOKEN_CACHE="${tok}"
+    printf '%s' "${tok}"
+}
 WIB_ROUNDS="${WIB_ROUNDS:-}"                      # comma list of rounds to include, e.g. "2,3" (empty = all)
 WIB_PER_ROUND="${WIB_PER_ROUND:-}"               # max clusters per round (empty = all)
 # Rounds run CONCURRENTLY by default (each round its own subshell so per-round vars cannot clash; the
@@ -846,17 +888,26 @@ cmd_instructors() {
     # cluster nobody can look up is not finished. Previously this was a separate manual `ingest` that
     # nothing invoked, so instructor clusters were routable but absent from provisioning, and the only
     # way to find a presenter's Datadog org or terminal password was to read files on the build box.
-    # Best-effort and non-fatal: an unreachable provisioning app must never fail a provision, and it is
-    # skipped entirely when the credentials for it are not configured.
+    # It configures ITSELF. The URL is a known default and the token is resolved from the live Railway
+    # service, so this needs nothing exported. It used to require two environment variables, which meant
+    # the default outcome of running the tool normally was that registration silently did not happen;
+    # that surfaced days later as a presenter opening provisioning to a blank terminal password. A step
+    # that only runs when someone remembers to set two variables is documented, not automated.
+    #
+    # Non-fatal by design: an unreachable provisioning app must never fail a provision. But it is now
+    # LOUD when it cannot run, because a quiet skip is what made this invisible in the first place.
     if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]]; then
-        if [[ -n "${WIB_PROVISIONING_URL:-}" && -n "${WIB_ADMIN_TOKEN:-}" ]]; then
+        if resolve_admin_token >/dev/null 2>&1; then
             POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
             POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
             log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
             cmd_ingest_instructors "${round_filter}" || log "ingest: re-run 'fleet.sh ingest-instructors' once the consoles are up"
         else
-            log "ingest: SKIPPED (set WIB_PROVISIONING_URL + WIB_ADMIN_TOKEN to register the roster);"
-            log "        the clusters are routable but will NOT appear in provisioning until you do."
+            log "ingest: CANNOT RESOLVE the provisioning admin token, so the roster was NOT registered."
+            log "        The clusters are routable, but provisioning will show them with a BLANK terminal"
+            log "        password and no Datadog org. Fix by logging in to Railway (railway login), or"
+            log "        export WIB_ADMIN_TOKEN, then run: fleet.sh ingest-instructors"
+            record_fail "ingest:no-admin-token"
         fi
     fi
     # Print manual-bootstrap hints only when auto-bootstrap was skipped.
@@ -1317,11 +1368,28 @@ cmd_reap() {
 # as bootstrap + merge_pool). No CSV rebuild, no redeploy. POOL1/POOL2 are preloaded by cmd_ingest.
 ingest_one() {
     local name="$1" acct_profile="$2"
+    # A roster entry with no state file was never provisioned, so there is no console to wait for and
+    # nothing to register. Say so and move on: without this, `ingest-instructors` over the full nine-entry
+    # roster spends the whole LB wait budget on each of the clusters that do not exist.
+    if [[ ! -f "${STATE_DIR}/${name}.tfstate" ]]; then
+        log "  ingest ${name}: not provisioned, nothing to register"
+        return 0
+    fi
     local kcfg; kcfg="$(mktemp -t "${name}.ing.XXXX")"
     provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
-    local console_host; console_host="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
+    # WAIT for the console NLB rather than skipping on the first look. Ingest runs immediately after a
+    # provision, which is exactly when a freshly created load balancer has no hostname yet, so a single
+    # check meant the clusters most likely to need registering were the ones most likely to be skipped.
+    # A cluster that genuinely does not exist falls through after the budget and is reported, which is
+    # the correct outcome for a roster entry that was never provisioned.
+    local console_host="" waited=0
+    while [[ "${waited}" -lt "${WIB_INGEST_LB_WAIT:-120}" ]]; do
+        console_host="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
+        [[ -n "${console_host}" ]] && break
+        sleep 10; waited=$(( waited + 10 ))
+    done
     rm -f "${kcfg}"
-    [[ -n "${console_host}" ]] || { log "  ingest ${name}: console NLB not ready; skip"; record_fail "ingest:${name}"; return; }
+    [[ -n "${console_host}" ]] || { log "  ingest ${name}: console NLB not ready after ${waited}s; skip"; record_fail "ingest:${name}"; return; }
     local ak sk
     ak="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f3)"
     sk="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f4)"
@@ -1355,11 +1423,22 @@ ingest_one() {
         '($dd.site // "datadoghq.com") as $site
          | ($site | if . == "datadoghq.com" or . == "datadoghq.eu" then "https://app." + . else "https://" + . end) as $ddurl
          | {name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,terminal_user:$tu,terminal_password:$tp,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:$site,datadog_dashboard_url:$ddurl}')"
-    if curl -s -X POST "${WIB_PROVISIONING_URL%/}/admin/import" -H "X-Admin-Token: ${WIB_ADMIN_TOKEN}" \
-        -H "Content-Type: application/json" --data "{\"clusters\":[${row}]}" --max-time 25 -o /dev/null -w '%{http_code}' | grep -q '^200$'; then
+    # Retry the POST. A single transient failure used to leave one cluster unregistered and everything
+    # else looking fine, which is how watch-it-burn-r3-1 ended up missing from provisioning on
+    # 2026-08-26 while the other five succeeded. One HTTP blip should not require a human to notice.
+    local tok attempt code=""
+    tok="$(resolve_admin_token || true)"
+    for attempt in 1 2 3; do
+        code="$(curl -s -X POST "${WIB_PROVISIONING_URL%/}/admin/import" -H "X-Admin-Token: ${tok}" \
+            -H "Content-Type: application/json" --data "{\"clusters\":[${row}]}" \
+            --max-time 25 -o /dev/null -w '%{http_code}' 2>/dev/null)"
+        [[ "${code}" == "200" ]] && break
+        [[ "${attempt}" -lt 3 ]] && sleep $(( attempt * 5 ))
+    done
+    if [[ "${code}" == "200" ]]; then
         log "  ingested: ${name}"
     else
-        log "  ingest POST failed: ${name}"; record_fail "ingest:${name}"
+        log "  ingest POST failed: ${name} (last status ${code:-none} after 3 attempts)"; record_fail "ingest:${name}"
     fi
 }
 
@@ -1367,8 +1446,7 @@ ingest_one() {
 # count form (honors WIB_NAME_OFFSET + WIB_ATTENDEE_ACCOUNTS); otherwise explicit cluster names (default account).
 cmd_ingest() {
     [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest <cluster-name...>"; exit 2; }
-    : "${WIB_PROVISIONING_URL:?set WIB_PROVISIONING_URL (e.g. https://provisioning.agenticburn.com)}"
-    : "${WIB_ADMIN_TOKEN:?set WIB_ADMIN_TOKEN (the provisioning app ADMIN_TOKEN)}"
+    resolve_admin_token >/dev/null 2>&1 || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
     require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
     POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
     POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
@@ -1550,8 +1628,7 @@ main() {
         harvest) cmd_harvest "$@" ;;
         ingest) cmd_ingest "$@" ;;
         ingest-instructors)
-            : "${WIB_PROVISIONING_URL:?set WIB_PROVISIONING_URL (e.g. https://provisioning.agenticburn.com)}"
-            : "${WIB_ADMIN_TOKEN:?set WIB_ADMIN_TOKEN (the provisioning app ADMIN_TOKEN)}"
+            resolve_admin_token >/dev/null 2>&1 || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
             require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
             POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
             POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
