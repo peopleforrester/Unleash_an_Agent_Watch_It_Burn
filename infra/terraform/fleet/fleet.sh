@@ -163,6 +163,17 @@ account_for_round() {
     esac
 }
 
+# An instructor/roster cluster is watch-it-burn-r<round>-<n>, as distinct from the numbered attendee
+# pool (watch-it-burn-attendee-NNN). Several verbs need to tell them apart, because the attendee path
+# derives a pool slot from the trailing number and that is meaningless for the roster.
+is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
+
+# The round a roster cluster belongs to, from its own name. Lets a verb resolve the right account
+# without the caller having to thread the roster through.
+round_of_instructor_name() {
+    [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]] && printf '%s' "${BASH_REMATCH[1]}"
+}
+
 usage() {
     cat >&2 <<EOF
 Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
@@ -193,8 +204,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     status            List clusters that have state and their EKS status.
 
   INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
-    instructors up [round]    Provision the roster (optionally just round 1|2|3).
+    instructors up [round]    Provision the roster (optionally just round 1|2|3). Regenerates routes AND
+                              registers the roster with the provisioning app (set WIB_PROVISIONING_URL +
+                              WIB_ADMIN_TOKEN; WIB_NO_INGEST=1 opts out).
     instructors down [round]  Destroy the roster (optionally one round).
+    ingest-instructors [round]  Register the roster with the provisioning app on its own (the same step
+                              'instructors up' runs). Use after a console NLB was not ready in time.
     Round->account split (avoids per-account overload): R1=\${WIB_ACCOUNT_R1}, R2=\${WIB_ACCOUNT_R2},
     R3=\${WIB_ACCOUNT_R3}. Override via those env vars. Each account needs its own lab-vpc applied to
     states/<profile>.tfstate first (the command prints the exact apply line if missing).
@@ -671,6 +686,23 @@ cmd_instructors() {
     report_failures
     # Auto-regenerate the agenticburn.com router map so instructor friendly URLs resolve (no manual step).
     [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]] && { cmd_routes || log "routes: run 'fleet.sh routes' manually once LBs are up"; }
+    # Auto-register the roster with the provisioning app, for the same reason routes is automatic: a
+    # cluster nobody can look up is not finished. Previously this was a separate manual `ingest` that
+    # nothing invoked, so instructor clusters were routable but absent from provisioning, and the only
+    # way to find a presenter's Datadog org or terminal password was to read files on the build box.
+    # Best-effort and non-fatal: an unreachable provisioning app must never fail a provision, and it is
+    # skipped entirely when the credentials for it are not configured.
+    if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]]; then
+        if [[ -n "${WIB_PROVISIONING_URL:-}" && -n "${WIB_ADMIN_TOKEN:-}" ]]; then
+            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+            cmd_ingest_instructors "${round_filter}" || log "ingest: re-run 'fleet.sh ingest-instructors' once the consoles are up"
+        else
+            log "ingest: SKIPPED (set WIB_PROVISIONING_URL + WIB_ADMIN_TOKEN to register the roster);"
+            log "        the clusters are routable but will NOT appear in provisioning until you do."
+        fi
+    fi
     # Print manual-bootstrap hints only when auto-bootstrap was skipped.
     [[ "${action}" == "up" && -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
 }
@@ -1063,15 +1095,35 @@ ingest_one() {
     ak="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f3)"
     sk="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f4)"
     [[ -n "${ak}" && -n "${sk}" ]] || { log "  ingest ${name}: no persisted AWS creds (${AWS_POOL_DIR}/${name}.csv); skip"; record_fail "ingest:${name}"; return; }
-    local slot; slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
-    local dd="{}"
-    [[ -n "${slot}" ]] && dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" --argjson i "$(( slot - 1 ))" \
-        '(([$a[],$b[]]|map(select((.role//"")|startswith("admin")|not)))[$i]) // {} | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
+    # Datadog org resolution differs by cluster KIND, and getting this wrong is why instructor clusters
+    # could not be ingested at all. An attendee cluster resolves by slot: watch-it-burn-attendee-007
+    # takes the 7th NON-admin pool entry, matching bootstrap + merge_pool. An instructor cluster
+    # (watch-it-burn-r<round>-<n>) has no slot number in that sequence, so the sed below produced an
+    # empty slot, the lookup was skipped, and the row went out with every Datadog field blank.
+    # Instructor clusters all share the single admin-instructor org, so select it by ROLE, not index.
+    local slot dd="{}"
+    slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
+    if [[ -n "${slot}" ]]; then
+        dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" --argjson i "$(( slot - 1 ))" \
+            '(([$a[],$b[]]|map(select((.role//"")|startswith("admin")|not)))[$i]) // {} | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
+    elif is_instructor_name "${name}"; then
+        dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" \
+            '(([$a[],$b[]]|map(select((.role//"")=="admin-instructor"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
+    fi
     [[ -n "${dd}" ]] || dd='{}'   # never let an empty resolver result reach --argjson
-    local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "http://${console_host}" --argjson dd "${dd}" \
+    # ttyd now REFUSES anonymous access (terminal-auth secret), so a row without the terminal password
+    # hands the student a console URL and a login box they cannot satisfy. bootstrap_terminal_auth
+    # persists the password beside the AWS creds; send it. The provisioning app already accepts
+    # terminal_user/terminal_password (scripts/merge_pool.py in provisioning-agenticburn) and shows a
+    # visible degradation when the password is absent, so an empty value is reported rather than silent.
+    local term_user="student" term_pw
+    term_pw="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null | tr -d '[:space:]')"
+    term_pw="${term_pw##*:}"   # tolerate either a bare password or a "user:password" pair
+    [[ -n "${term_pw}" ]] || log "  ingest ${name}: WARN no terminal password (${AWS_POOL_DIR}/${name}.terminal); the terminal will prompt and the student cannot log in"
+    local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "http://${console_host}" --arg tu "${term_user}" --arg tp "${term_pw}" --argjson dd "${dd}" \
         '($dd.site // "datadoghq.com") as $site
          | ($site | if . == "datadoghq.com" or . == "datadoghq.eu" then "https://app." + . else "https://" + . end) as $ddurl
-         | {name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:$site,datadog_dashboard_url:$ddurl}')"
+         | {name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,terminal_user:$tu,terminal_password:$tp,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:$site,datadog_dashboard_url:$ddurl}')"
     if curl -s -X POST "${WIB_PROVISIONING_URL%/}/admin/import" -H "X-Admin-Token: ${WIB_ADMIN_TOKEN}" \
         -H "Content-Type: application/json" --data "{\"clusters\":[${row}]}" --max-time 25 -o /dev/null -w '%{http_code}' | grep -q '^200$'; then
         log "  ingested: ${name}"
@@ -1101,10 +1153,30 @@ cmd_ingest() {
             done
         done
     else
-        local name
-        for name in "$@"; do ingest_one "${name}" "${WIB_DEFAULT_ACCOUNT}"; done
+        # Named clusters. A roster cluster lives in its round's account, which is NOT necessarily the
+        # default one; passing WIB_DEFAULT_ACCOUNT for everything made `ingest watch-it-burn-r2-1` look
+        # up the wrong account and fail to find the cluster whenever the R1/R2/R3 split is in use.
+        local name rnd acct
+        for name in "$@"; do
+            rnd="$(round_of_instructor_name "${name}")"
+            if [[ -n "${rnd}" ]]; then acct="$(account_for_round "${rnd}")"; else acct="${WIB_DEFAULT_ACCOUNT}"; fi
+            ingest_one "${name}" "${acct}"
+        done
     fi
     report_failures
+}
+
+# Every roster cluster in one call, mirroring `instructors up`. Without this the only way to register
+# the instructor set was to type six names, so in practice it never happened and the presenters' own
+# clusters were missing from provisioning entirely.
+cmd_ingest_instructors() {
+    local round_filter="${1:-}" entry name rnd
+    load_roster
+    for entry in "${INSTRUCTORS[@]}"; do
+        IFS='|' read -r name rnd _tier _it _pid _bp <<<"${entry}"
+        [[ -n "${round_filter}" && "${rnd}" != "${round_filter}" ]] && continue
+        ingest_one "${name}" "$(account_for_round "${rnd}")"
+    done
 }
 
 # Account-aware selective teardown: destroy the named clusters in ONE specific account. Reuses the
@@ -1190,6 +1262,14 @@ main() {
         converge) cmd_converge "$@" ;;
         harvest) cmd_harvest "$@" ;;
         ingest) cmd_ingest "$@" ;;
+        ingest-instructors)
+            : "${WIB_PROVISIONING_URL:?set WIB_PROVISIONING_URL (e.g. https://provisioning.agenticburn.com)}"
+            : "${WIB_ADMIN_TOKEN:?set WIB_ADMIN_TOKEN (the provisioning app ADMIN_TOKEN)}"
+            require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+            cmd_ingest_instructors "$@"; report_failures ;;
         aws-keys) cmd_aws_keys "$@" ;;
         reap) cmd_reap "$@" ;;
         status) cmd_status "$@" ;;
