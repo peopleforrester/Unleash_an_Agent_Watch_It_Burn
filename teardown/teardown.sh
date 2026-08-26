@@ -16,6 +16,7 @@ TF_DIR="$(cd "${SCRIPT_DIR}/../infra/terraform" && pwd)"
 readonly TF_DIR
 readonly FLEET="${TF_DIR}/fleet/fleet.sh"
 readonly CLEANUP_LOGS="${TF_DIR}/fleet/cleanup-log-groups.sh"
+readonly TAG_AUDIT="${TF_DIR}/aws/teardown/tag-audit.sh"
 # Name-prefix safety boundary: we only ever operate on watch-it-burn-* (never the co-tenant Packt).
 readonly CLUSTER_PREFIX="watch-it-burn-"
 DESTROY_VPC=false
@@ -47,14 +48,31 @@ command -v terraform >/dev/null 2>&1 || { log "terraform not found"; exit 1; }
 [[ -x "${FLEET}" ]] || { log "fleet driver not found at ${FLEET}"; exit 1; }
 
 log "==> destroying all attendee clusters via the Terraform fleet (prefix ${CLUSTER_PREFIX})"
-"${FLEET}" down all
+# WIB_APPLY=1 is explicit because `fleet.sh down` is now dry-run by default. This script exists to
+# destroy, and the user already said so by running it, so the confirmation belongs at THIS boundary
+# rather than being demanded twice. Run `fleet.sh down all` directly for a preview.
+WIB_APPLY=1 "${FLEET}" down all
+
+# The tag audit runs BEFORE the sweep, while the resources still exist to be tagged. Anything the
+# teardown identifies by tag is invisible to it if untagged, and untagged resources keep billing after
+# the event: an audit of one 50-cluster account on the sister fleet found 451 of them. --fix only ever
+# ADDS tags, never deletes, so it is safe to run unattended here.
+if [[ -x "${TAG_AUDIT}" ]]; then
+  log "==> tag audit (repairing untagged resources so the sweep can see them)"
+  "${TAG_AUDIT}" all --fix || log "  (tag audit reported findings or failed; continuing to teardown)"
+else
+  log "  (tag-audit.sh not executable; skipping — untagged resources may survive this teardown)"
+fi
 
 log "==> sweeping orphaned EKS control-plane log groups (ours only)"
 [[ -x "${CLEANUP_LOGS}" ]] && "${CLEANUP_LOGS}" --delete || log "  (cleanup-log-groups.sh not executable; skipping)"
 
 if [[ "${DESTROY_VPC}" == "true" ]]; then
   log "==> destroying the shared lab VPC (last)"
-  terraform -chdir="${TF_DIR}/aws/network" destroy -auto-approve
+  # profile/region are passed explicitly: the network root no longer defaults `profile`, because an
+  # implicit account is how a destroy can point at the wrong one. Override with WIB_DEFAULT_ACCOUNT.
+  terraform -chdir="${TF_DIR}/aws/network" destroy -auto-approve \
+    -var "profile=${WIB_DEFAULT_ACCOUNT:-accen-dev}" -var "region=${WIB_REGION:-us-west-2}"
 else
   log "==> shared lab VPC left intact; re-run with --vpc to remove it when the event is over."
 fi

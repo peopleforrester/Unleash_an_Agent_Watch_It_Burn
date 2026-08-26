@@ -40,8 +40,12 @@ variable "region" {
 }
 
 variable "profile" {
-  type    = string
-  default = "accen-dev"
+  type = string
+  # NO DEFAULT, on purpose. One lab VPC is applied per account across five accounts, each into its own
+  # states/<profile>.tfstate. An implicit profile silently points a second account's apply at the first
+  # account's VPC and writes that result into the second account's state file, which is both wrong and
+  # very hard to notice afterwards.
+  description = "AWS profile that owns this lab VPC. Required; every caller passes it explicitly."
 }
 
 data "aws_availability_zones" "available" {

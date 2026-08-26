@@ -26,13 +26,23 @@ provider "aws" {
   region  = var.region
   profile = var.profile
   default_tags {
-    tags = {
-      project   = "watch-it-burn"
-      event     = "ai-engineer-worldsfair-2026"
-      Purpose   = "attendee-cluster"
-      ManagedBy = "terraform"
-      attendee  = var.name
-    }
+    tags = local.fleet_tags
+  }
+}
+
+# The same tag set the provider applies by default, named so it can ALSO be attached by the mechanisms
+# default_tags does not reach. That gap is not theoretical: an audit of one 50-cluster account on the
+# sister fleet found 451 resources carrying no project tag at all, most of them node volumes, CNI
+# network interfaces and CSI-provisioned PVC volumes. Anything a teardown sweep selects by tag misses
+# those, so they keep billing after the event, and a sweep that widens its selector to compensate is
+# how a shared account loses a co-tenant's resources.
+locals {
+  fleet_tags = {
+    project   = "watch-it-burn"
+    event     = "ai-engineer-worldsfair-2026"
+    Purpose   = "attendee-cluster"
+    ManagedBy = "terraform"
+    attendee  = var.name
   }
 }
 
@@ -42,8 +52,12 @@ variable "region" {
 }
 
 variable "profile" {
-  type    = string
-  default = "accen-dev"
+  type = string
+  # NO DEFAULT, on purpose. Clusters are applied across five accounts, and accen-dev is SHARED with the
+  # co-tenant Packt project. A default means any code path that forgets -var profile= silently applies
+  # into that account instead of failing, where the clusters are then invisible to the intended
+  # account's teardown and keep billing. Failing loudly is the cheaper outcome.
+  description = "AWS profile that owns this cluster. Required; the fleet driver always passes it."
 }
 
 variable "name" {
@@ -218,6 +232,11 @@ module "eks" {
         env = {
           ENABLE_PREFIX_DELEGATION = "true"
           WARM_PREFIX_TARGET       = "1"
+          # The CNI creates the pod ENIs itself, so provider default_tags never touch them. Prefix
+          # delegation means MORE of them, not fewer: the sister fleet measured ~200 untagged network
+          # interfaces per 50-cluster account before setting this. Untagged ENIs are the ones that pin
+          # a subnet and make DeleteVpc fail at teardown, while being invisible to a tag-driven sweep.
+          ADDITIONAL_ENI_TAGS = jsonencode(local.fleet_tags)
         }
       })
     }
@@ -244,6 +263,12 @@ module "eks" {
       # are disposable, so force the update rather than respecting PDBs during a node roll. (Fresh
       # provisions never roll, so the event path is unaffected; this only matters for config changes.)
       force_update_version = true
+      # Managed node groups do NOT propagate the provider's default_tags to the EC2 instances or to
+      # their root volumes: launch-template tag_specifications are DATA INSIDE the template, not
+      # resources the provider tags. Without both of these the node and its 100 GiB root disk carry no
+      # project tag, so a tag-scoped sweep cannot see them and they bill on after teardown.
+      launch_template_tags = local.fleet_tags
+      tag_specifications   = ["instance", "volume", "network-interface"]
       # IMDS hardening (PRD 35 3.7-A): the agent runs run_shell by design, so a pod that can reach node
       # IMDS could steal the node instance-role creds (broader than the pod's Bedrock-scoped Pod Identity),
       # which would falsify PRD 36's "AWS keyless, nothing to steal" baseline. Require IMDSv2 and set

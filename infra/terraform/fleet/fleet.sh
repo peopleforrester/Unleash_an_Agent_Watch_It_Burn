@@ -97,8 +97,12 @@ load_roster() {
     )
 }
 
-# When non-empty, up_one/down_one target this AWS profile (account). Empty = module default account.
-TF_PROFILE=""
+# The AWS profile (account) up_one/down_one target. Per-account code paths overwrite it in a subshell.
+# It now defaults to WIB_DEFAULT_ACCOUNT rather than "" because the cluster module's `profile` variable
+# no longer has a default: relying on an implicit account is what let a forgotten -var silently apply
+# into the shared co-tenant account. The resolved value is identical to the old module default, so
+# behaviour is unchanged; the difference is that the account is now always stated rather than assumed.
+TF_PROFILE="${WIB_DEFAULT_ACCOUNT}"
 
 # When non-empty, up_one passes -var pod_pids_limit=<this>. Empty = the cluster module default (1024,
 # the fork-bomb cap). Round 1 (burn) clusters set this to -1 (no per-pod cap) so the C4 fork bomb
@@ -172,6 +176,18 @@ account_for_round() {
 # pool (watch-it-burn-attendee-NNN). Several verbs need to tell them apart, because the attendee path
 # derives a pool slot from the trailing number and that is meaningless for the roster.
 is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
+
+# Gate for the destructive verbs. `reap` and `aws-keys` were already dry-run by default; `down`,
+# `down-fleet` and `down-acct` were not, so a mistyped count or a stale state file destroyed clusters
+# with no preview and no confirmation. Destroying is the one action with no undo, so it is the one that
+# should require saying so. Prints exactly what it WOULD destroy, then exits 0.
+require_apply() {
+    local verb="$1"; shift
+    [[ -n "${WIB_APPLY:-}" ]] && return 0
+    log "DRY-RUN: ${verb} would destroy ${#} cluster(s). Set WIB_APPLY=1 to actually destroy."
+    local n; for n in "$@"; do log "    - ${n}"; done
+    return 1
+}
 
 # The round a roster cluster belongs to, from its own name. Lets a verb resolve the right account
 # without the caller having to thread the roster through.
@@ -511,6 +527,13 @@ drain_cluster_lbs() {
             done <<<"${lbsvcs}"
         fi
         KUBECONFIG="${kc}" kubectl delete ingress -A --all --wait=true --timeout=150s >/dev/null 2>&1 || true
+        # PVCs must go while the EBS CSI controller still exists to reclaim their volumes. Destroy the
+        # cluster first and the controller goes with it, so every dynamically-provisioned volume orphans
+        # as 'available' and bills indefinitely. --wait=false because a PVC whose consumer pod is still
+        # terminating blocks on its finalizer, and the short sleep below is enough for the controller to
+        # observe the deletions; we are about to destroy the cluster either way.
+        KUBECONFIG="${kc}" kubectl delete pvc -A --all --wait=false --timeout=60s >/dev/null 2>&1 || true
+        sleep 10
     fi
     rm -f "${kc}"
 }
@@ -586,6 +609,7 @@ cmd_down() {
         mapfile -t names < <(expand_names "$@")
     fi
     [[ "${#names[@]}" -gt 0 ]] || { log "no clusters to destroy"; return 0; }
+    require_apply "down" "${names[@]}" || return 0
     rm -f "${LOG_DIR}/.failures"
     log "destroying ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
     run_pool down_one "${names[@]}"
@@ -769,6 +793,21 @@ cmd_down_fleet() {
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
     log "down-fleet: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET})..."
+    # Preview the WHOLE cross-account set before destroying any of it. The name range is derived from
+    # per_account + WIB_NAME_OFFSET, so a wrong value here silently targets a different span of clusters
+    # than the up-fleet that created them; seeing the actual first and last name per account is what
+    # catches that before it happens rather than after.
+    if [[ -z "${WIB_APPLY:-}" ]]; then
+        local _i=0 _a _s
+        log "DRY-RUN: down-fleet would destroy ${per_account} cluster(s) in each of ${#accounts[@]} account(s):"
+        for _a in "${accounts[@]}"; do
+            _a="${_a// /}"; [[ -n "${_a}" ]] || continue
+            _s=$(( WIB_NAME_OFFSET + _i * per_account + 1 )); _i=$(( _i + 1 ))
+            log "    ${_a}: $(printf '%s-%03d' "${NAME_PREFIX}" "${_s}") .. $(printf '%s-%03d' "${NAME_PREFIX}" $(( _s + per_account - 1 )))"
+        done
+        log "Set WIB_APPLY=1 to actually destroy."
+        return 0
+    fi
     local idx=0 acct start n names
     for acct in "${accounts[@]}"; do
         acct="${acct// /}"; [[ -n "${acct}" ]] || continue
@@ -1202,6 +1241,7 @@ cmd_down_acct() {
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     read_vpc_for "${profile}"
     TF_PROFILE="${profile}"
+    require_apply "down-acct ${profile}" "$@" || return 0
     log "down-acct ${profile}: destroying $# clusters (max ${MAX_PARALLEL} parallel)..."
     run_pool down_one "$@"
     report_failures

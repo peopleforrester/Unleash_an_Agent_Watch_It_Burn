@@ -11,3 +11,11 @@ volumeBindingMode: WaitForFirstConsumer
 allowVolumeExpansion: true
 parameters:
   type: gp3
+  # The EBS CSI driver creates PVC volumes itself, so nothing in Terraform tags them. It writes only
+  # kubernetes.io/* tags by default, which is why a sweep filtering on a project tag finds zero and
+  # (before this) fell through to deleting every unattached volume in a SHARED account. The sister
+  # fleet measured 100 of 150 volumes carrying no workshop tag at all. tagSpecification_N is the
+  # driver's own mechanism; the numbering is positional and must start at 1 with no gaps.
+  tagSpecification_1: "project=watch-it-burn"
+  tagSpecification_2: "event=ai-engineer-worldsfair-2026"
+  tagSpecification_3: "ManagedBy=ebs-csi-driver"
