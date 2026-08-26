@@ -1,0 +1,27 @@
+# ABOUTME: Kustomize bundle carrying ONLY the OTel Operator Instrumentation CR for the AI layer.
+# ABOUTME: Split out of gitops/ai-layer so the burn (Round 1) profile can deploy the AI layer without it.
+#
+# WHY THIS IS A SEPARATE BUNDLE. The Instrumentation CR is an opentelemetry.io kind, so it can only be
+# applied where the OTel Operator has installed that CRD. The Operator (gitops/apps/otel-operator.yaml,
+# wave 2) in turn needs cert-manager (wave 1) for its admission webhook cert. The burn profile
+# deliberately ships neither, so on a Round 1 cluster the CRD never arrives.
+#
+# While this CR lived in the ai-layer bundle, that made the ENTIRE ai-layer app unsyncable on burn:
+# ArgoCD rejects the whole sync when one resource fails, so Round 1 clusters got no console, no
+# BurritoBot, no guard-proxy and no reachable URL at all. Observed on watch-it-burn-r1-1 (2026-08-26):
+#
+#   Instrumentation/watch-it-burn-python: SyncFailed
+#   The Kubernetes API could not find opentelemetry.io/Instrumentation for requested resource
+#   agent/watch-it-burn-python. Make sure the "Instrumentation" CRD is installed on the destination
+#   cluster.
+#
+# Adding otel-operator to the burn include list would have dragged cert-manager in behind it and
+# undone the "deliberately bare" property Round 1 exists to demonstrate. Splitting the CR keeps the
+# full profile identical and lets burn drop exactly the one resource it cannot satisfy.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agent
+
+resources:
+  - instrumentation.yaml

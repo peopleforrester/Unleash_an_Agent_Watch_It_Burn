@@ -7,7 +7,10 @@ namespace: agent
 
 resources:
   - resources.yaml
-  - instrumentation.yaml # OTel Operator Instrumentation CR (needs the otel-operator app's CRD; ArgoCD retries until present)
+  # The OTel Instrumentation CR is NOT here. It lives in gitops/ai-layer-otel as its own Application,
+  # because its CRD only exists where the OTel Operator (and behind it cert-manager) is installed. The
+  # burn profile ships neither, and one unsatisfiable resource fails the WHOLE app, which left Round 1
+  # clusters with no console at all. Do not move it back into this bundle.
   - agentgateway.yaml # OSS v1.3.0 L7 gateway: guard-proxy -> agentgateway -> workshop-agent (A2A) + MCP front
   - argocd-managed-app.yaml # Beat-1 wall-3 drift target (ArgoCD-managed; admission denies agent drift, self-heal reverts)
   - kubearmor-ordering-gate.yaml # PreSync hook: wait for KubeArmor webhook Ready so workshop-mcp is admitted+annotated for enforcement

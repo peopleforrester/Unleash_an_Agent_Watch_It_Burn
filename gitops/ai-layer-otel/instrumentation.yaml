@@ -1,15 +1,16 @@
 # ABOUTME: Shared OTel Operator Instrumentation CR for the custom Python pods in the AI layer (PRD #20 M2).
 # ABOUTME: Sets cluster-wide OTLP endpoint/protocol + semconv opt-in; per-pod UST stays in each workload's env.
 #
-# STATUS: STAGED, NOT yet in kustomization.yaml resources. Two prerequisites must land first, or an
-# ArgoCD sync fails on an unknown kind:
-#   1. The OTel Operator must be deployed (it owns the opentelemetry.io/v1alpha1 Instrumentation CRD).
-#      No Operator ArgoCD Application exists in gitops/apps/ yet; that deployment is the rest of M2.
-#   2. The inject annotation `instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"` must
-#      be added to the kagent + agentgateway pod templates (verify-at-build for the kagent Agent CRD: confirm
-#      spec.declarative.deployment accepts pod annotations on chart 0.9.9).
-# To enable: deploy the Operator, add the annotations, resolve the endpoint below, then add this file to
-# kustomization.yaml resources.
+# STATUS: LIVE on the full profile, via its own Application (gitops/apps/ai-layer-otel.yaml, wave 2).
+# Both original prerequisites have landed: the OTel Operator is deployed (gitops/apps/otel-operator.yaml,
+# which owns the opentelemetry.io/v1alpha1 Instrumentation CRD), and the inject-python annotation is on
+# the pod templates.
+#
+# This file is deliberately NOT part of the gitops/ai-layer bundle. Its CRD exists only where the OTel
+# Operator is installed, and the Operator needs cert-manager; the burn (Round 1) profile ships neither.
+# Because ArgoCD fails an entire sync when one resource is invalid, keeping it in that bundle made the
+# whole AI layer unsyncable on Round 1 clusters, so they came up with no console and no reachable URL.
+# See gitops/ai-layer-otel/kustomization.yaml for the full write-up. Do not fold it back in.
 #
 # The OTel Operator injects the full Python SDK into any pod annotated
 # `instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"` (init-container + PYTHONPATH),

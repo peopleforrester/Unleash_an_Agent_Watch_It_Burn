@@ -1,0 +1,41 @@
+# ABOUTME: ArgoCD Application for the AI layer's OTel Instrumentation CR (gitops/ai-layer-otel).
+# ABOUTME: Full profile only; the burn (Round 1) app-of-apps omits it by not listing it in its include.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-layer-otel
+  namespace: argocd
+  annotations:
+    # Wave 2, the SAME wave as otel-operator, which owns the opentelemetry.io/Instrumentation CRD.
+    # Sharing the wave is deliberate and safe: within a wave the CRD may not exist on the first
+    # attempt, and the retry below covers that. What matters is that wave 3 does not begin until
+    # every wave-2 app is Healthy, which means the Instrumentation CR is guaranteed to exist before
+    # ai-layer (wave 3) creates the guard-proxy and workshop-agent pods. That ordering is what lets
+    # the Operator's mutating webhook actually inject the SDK; pods admitted before the CR exists get
+    # no instrumentation and export zero telemetry (the 2026-06-26 "Datadog is empty" root cause).
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: gitops/ai-layer-otel
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      # Covers the intra-wave race with otel-operator installing the CRD.
+      limit: 8
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m

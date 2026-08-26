@@ -8,7 +8,9 @@ metadata:
   annotations:
     # Wave 2: cert-manager (wave 1) must be up first; the Operator's admission webhook uses a
     # cert-manager-issued cert by default. The Operator installs the Instrumentation + OpenTelemetryCollector
-    # CRDs that gitops/ai-layer/instrumentation.yaml depends on.
+    # CRDs that gitops/ai-layer-otel/instrumentation.yaml depends on. That CR is its own Application
+    # (ai-layer-otel) in this same wave, and is omitted from the burn profile precisely because this
+    # Operator and its cert-manager dependency are.
     argocd.argoproj.io/sync-wave: "2"
   finalizers:
     - resources-finalizer.argocd.argoproj.io

@@ -240,7 +240,7 @@ Kyverno ClusterPolicies (`policies/kyverno/`): `block-argocd-drift` (cluster-wid
 4. `kubectl apply -f gitops/bootstrap/app-of-apps.yaml` (full) OR `app-of-apps-burn.yaml` (the bare burn subset).
 5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/RBAC/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel/customer-stream → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
 6. The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh` (need a Pod Identity association and a concrete namespace); materializing them into GitOps is the open follow-up.
-7. Enable the OTel Instrumentation CR (`gitops/ai-layer/instrumentation.yaml`) once the Operator is Healthy: confirm the live Collector endpoint (`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, HTTP/4318), add the `inject-python` annotation, add the file to kustomize resources.
+7. The OTel Instrumentation CR (`gitops/ai-layer-otel/instrumentation.yaml`) deploys itself as the `ai-layer-otel` Application in wave 2, so no manual enable step remains. Confirm the live Collector endpoint (`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, HTTP/4318) still matches. Note it is intentionally absent on the burn profile: its CRD comes from the OTel Operator, which needs cert-manager, and Round 1 ships neither. Folding it back into the `ai-layer` bundle makes the whole AI layer unsyncable on Round 1.
 
 ### Gotchas & Verification
 
