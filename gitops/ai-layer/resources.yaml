@@ -631,6 +631,11 @@ metadata:
   labels: { app.kubernetes.io/name: web-terminal }
 spec:
   replicas: 1
+  # Recreate, not the default RollingUpdate. The working-tree PVC is ReadWriteOnce, so a rolling update
+  # would start the replacement pod while the old one still holds the volume, and the new pod would sit
+  # in ContainerCreating on a multi-attach error until the rollout timed out. Recreate costs a few
+  # seconds of terminal downtime on an image change and always completes.
+  strategy: { type: Recreate }
   selector: { matchLabels: { app.kubernetes.io/name: web-terminal } }
   template:
     metadata: { labels: { app.kubernetes.io/name: web-terminal } }
@@ -640,7 +645,9 @@ spec:
       # runAsUser 1000 = the image's `student` user (images/web-terminal/Dockerfile). runAsNonRoot alone
       # fails CreateContainerConfigError because the image USER is non-numeric ("student"); a numeric
       # runAsUser is required for the kubelet to verify non-root before the container starts.
-      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+      # fsGroup so the mounted volume is group-writable by uid 1000; without it the student user cannot
+      # write into its own working directory and the IDE and notebook both fail to save.
+      securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: ttyd
           image: ghcr.io/peopleforrester/watch-it-burn:web-terminal # built from images/web-terminal/
@@ -683,6 +690,33 @@ spec:
           # with zero session loss. The node is a t3.2xlarge (~31Gi) running one attendee, so the high
           # limit costs nothing; the request stays low so pod packing is unaffected.
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: "2", memory: 8Gi } }
+          volumeMounts:
+            - { name: work, mountPath: /home/student/work }
+      volumes:
+        - name: work
+          persistentVolumeClaim: { claimName: student-work }
+---
+# The attendee's working tree, kept across a pod restart.
+#
+# This workshop's premise is that attendees deliberately break their own cluster, up to and including a
+# fork bomb whose whole point is node pressure. That is exactly the workload profile where a pod gets
+# evicted or OOM-killed, and until now everything under /home/student/work went with it: the files they
+# had edited in the IDE, and the notebooks they had run. Restarting from nothing mid-exercise is close
+# to unrecoverable for an attendee's momentum, and it reads to them as the workshop being broken rather
+# than as the lesson.
+#
+# Only the working tree is persisted. The shell config and the guardrail toggle scripts are regenerated
+# by the entrypoint on every start, so persisting them would just let a stale copy outlive an image
+# rebuild. 1Gi is ample for text; the notebooks are small and nothing here stores data sets.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: student-work
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi
 ---
 apiVersion: v1
 kind: Service
@@ -695,8 +729,6 @@ spec:
   # because this cluster deliberately runs hostile workloads that sit on the same pod network.
   ports:
     - { name: ttyd, port: 7681, targetPort: ttyd }
-    - { name: tutor, port: 7682, targetPort: tutor }
-    - { name: nudge, port: 7683, targetPort: nudge }
     - { name: ide, port: 8443, targetPort: ide }
     - { name: jupyter, port: 8888, targetPort: jupyter }
 ---
