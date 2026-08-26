@@ -16,7 +16,19 @@ def check(n, c):
         failures.append(n)
 
 # Manifests that ArgoCD applies, plus the images they refer to.
-MANIFEST_DIRS = [REPO / "gitops", REPO / "policies", REPO / "observability-idp"]
+#
+# challenges/, games/ and security/ are in scope even though ArgoCD does not own them: they are applied
+# BY HAND during the live run, which makes them the manifests a defect hurts most. An unsubstituted
+# placeholder or an unpullable image in a challenge fixture fails on stage, in front of the room, with
+# no chance to fix it quietly.
+MANIFEST_DIRS = [
+    REPO / "gitops",
+    REPO / "policies",
+    REPO / "observability-idp",
+    REPO / "challenges",
+    REPO / "games",
+    REPO / "security",
+]
 manifests = sorted(
     p for d in MANIFEST_DIRS if d.is_dir()
     for p in d.rglob("*.yaml")

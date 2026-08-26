@@ -11,8 +11,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       ca-certificates curl wget unzip git jq less vim-tiny gnupg bash procps \
  && rm -rf /var/lib/apt/lists/*
 
-# ttyd (static binary), kubectl (pinned to the cluster minor 1.35), AWS CLI v2, helm, eksctl, k9s, yq.
+# ttyd (static binary), kubectl, AWS CLI v2, helm, eksctl, k9s, yq.
 # Arch-aware so the image builds on amd64 (the t3.2xlarge nodes) or arm64.
+#
+# kubectl is pinned to an EXACT version, not resolved from stable-1.35.txt at build time. A floating
+# pin means the rehearsal build and the delivery build can ship different binaries with nothing to
+# indicate it changed, which is the one class of surprise a live workshop cannot absorb. Bump this
+# deliberately, keeping it within one minor of the cluster (var.kubernetes_version).
+# Resolved from https://dl.k8s.io/release/stable-1.35.txt on 2026-08-26.
+ARG KUBECTL_VERSION=v1.35.8
 RUN set -eux; \
     arch="$(dpkg --print-architecture)"; \
     case "$arch" in \
@@ -22,7 +29,7 @@ RUN set -eux; \
     esac; \
     curl -fsSL -o /usr/local/bin/ttyd "https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.${TTYD}"; \
     chmod +x /usr/local/bin/ttyd; \
-    KVER="$(curl -fsSL https://dl.k8s.io/release/stable-1.35.txt)"; \
+    KVER="${KUBECTL_VERSION}"; \
     curl -fsSL -o /usr/local/bin/kubectl "https://dl.k8s.io/release/${KVER}/bin/linux/${GOARCH}/kubectl"; \
     chmod +x /usr/local/bin/kubectl; \
     curl -fsSL -o /tmp/awscli.zip "https://awscli.amazonaws.com/awscli-exe-linux-${AWS}.zip"; \
