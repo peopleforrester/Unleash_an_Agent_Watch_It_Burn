@@ -86,32 +86,41 @@ else
   log "    WARN: no Datadog keys (WITB_DD_API_KEY/_APP_KEY unset, no readable local pool secret) — datadog-secret NOT created"
 fi
 
-if [[ "${PROFILE}" == "full" ]]; then
-  log "[3.5] AWS Load Balancer Controller (NLB for the console Service, ALB for the party Ingresses)"
-  # IAM is an EKS Pod Identity association created by Terraform for kube-system/aws-load-balancer-controller
-  # (infra/terraform/aws/cluster/main.tf); Pod Identity supplies the AWS creds (no IMDS needed for auth).
-  # clusterName/region/vpcId are passed EXPLICITLY: the controller otherwise auto-discovers vpcId from
-  # IMDS, which the pod cannot reach on these nodes (IMDS hop limit), so it CrashLoops with "failed to
-  # fetch VPC ID from instance metadata" (found live 2026-06-26). Deriving them via the EKS API avoids
-  # IMDS entirely. chart 1.14.0 = controller v2.14.x (the Service+Ingress line; v3.x is Gateway API).
-  REGION="${REGION:-us-west-2}"
-  CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cluster/##')}"
-  [[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "could not derive cluster name from context (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
-  VPC_ID="$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${REGION}" --query 'cluster.resourcesVpcConfig.vpcId' --output text)"
-  [[ "${VPC_ID}" == vpc-* ]] || { echo "could not derive vpcId for ${CLUSTER_NAME} (got '${VPC_ID}')" >&2; exit 1; }
-  helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
-  helm repo update >/dev/null
-  helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller --version 1.14.0 \
-    -n kube-system \
-    --set clusterName="${CLUSTER_NAME}" \
-    --set region="${REGION}" \
-    --set vpcId="${VPC_ID}" \
-    --set serviceAccount.create=true \
-    --set serviceAccount.name=aws-load-balancer-controller
-  # Non-fatal: the controller reconciles Ingresses whenever it is ready; it must NOT gate the app-of-apps.
-  kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
-    || log "WARN: LB controller not ready yet; continuing. Ingresses reconcile once it is up."
-fi
+# Installed on BOTH profiles, burn included. A load balancer controller is plumbing, not a guardrail:
+# Round 1's premise is that nothing STOPS the agent, not that the cluster has no way to expose a
+# Service. While this was gated on "full", the burn console Service sat in <pending> forever, because
+# the in-tree service-controller picked it up instead and cannot associate the public subnets on this
+# shared, untagged-per-cluster VPC (the same root cause documented on the console Service in
+# gitops/ai-layer/resources.yaml). The visible effect was that round1.agenticburn.com never had an
+# upstream to route to, so Round 1 had no reachable console, BurritoBot or terminal at all.
+# Observed on watch-it-burn-r1-1, 2026-08-26: `EnsuringLoadBalancer` from service-controller and no
+# hostname after 11 minutes, against seconds on the full-profile clusters.
+# The IAM side already supported this: the Pod Identity association for
+# kube-system/aws-load-balancer-controller is created by Terraform for EVERY cluster
+# (infra/terraform/aws/cluster/main.tf), so only the Helm install was missing.
+log "[3.5] AWS Load Balancer Controller (NLB for the console Service, ALB for the party Ingresses)"
+# Pod Identity supplies the AWS creds (no IMDS needed for auth).
+# clusterName/region/vpcId are passed EXPLICITLY: the controller otherwise auto-discovers vpcId from
+# IMDS, which the pod cannot reach on these nodes (IMDS hop limit), so it CrashLoops with "failed to
+# fetch VPC ID from instance metadata" (found live 2026-06-26). Deriving them via the EKS API avoids
+# IMDS entirely. chart 1.14.0 = controller v2.14.x (the Service+Ingress line; v3.x is Gateway API).
+REGION="${REGION:-us-west-2}"
+CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cluster/##')}"
+[[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "could not derive cluster name from context (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
+VPC_ID="$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${REGION}" --query 'cluster.resourcesVpcConfig.vpcId' --output text)"
+[[ "${VPC_ID}" == vpc-* ]] || { echo "could not derive vpcId for ${CLUSTER_NAME} (got '${VPC_ID}')" >&2; exit 1; }
+helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
+helm repo update >/dev/null
+helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller --version 1.14.0 \
+  -n kube-system \
+  --set clusterName="${CLUSTER_NAME}" \
+  --set region="${REGION}" \
+  --set vpcId="${VPC_ID}" \
+  --set serviceAccount.create=true \
+  --set serviceAccount.name=aws-load-balancer-controller
+# Non-fatal: the controller reconciles Ingresses whenever it is ready; it must NOT gate the app-of-apps.
+kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
+  || log "WARN: LB controller not ready yet; continuing. Ingresses reconcile once it is up."
 
 log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging), ArgoCD deploys the components"
 kubectl apply -f "${REPO}/${ROOT_APP}"
