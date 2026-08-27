@@ -269,8 +269,13 @@ require_apply() {
 
 # The round a roster cluster belongs to, from its own name. Lets a verb resolve the right account
 # without the caller having to thread the roster through.
+# Returns the round, or nothing. ALWAYS exits 0: "this is not a roster cluster" is a normal answer,
+# not a failure. Under `set -e` a helper that returns non-zero kills the caller at the assignment
+# `rnd="$(round_of_instructor_name ...)"`, with no message, which is exactly how `ingest <attendee-name>`
+# silently did nothing at all.
 round_of_instructor_name() {
-    [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]] && printf '%s' "${BASH_REMATCH[1]}"
+    if [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; then printf '%s' "${BASH_REMATCH[1]}"; fi
+    return 0
 }
 
 usage() {
@@ -1166,7 +1171,8 @@ record_membership() {
 
 read_membership() {
     local f; f="$(membership_file "$1")"
-    [[ -r "${f}" ]] && head -1 "${f}" | tr -d '[:space:]'
+    if [[ -r "${f}" ]]; then head -1 "${f}" | tr -d '[:space:]'; fi
+    return 0   # an unrecorded cluster is a normal answer; see round_of_instructor_name
 }
 
 # Refuse to destroy through a profile that disagrees with the recorded one. Without the record we
