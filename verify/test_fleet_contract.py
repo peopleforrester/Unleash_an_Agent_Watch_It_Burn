@@ -126,6 +126,32 @@ check("jupyter-collaboration pinned to 5.x (a bare pin resolves it backwards)",
       bool(re.search(r"jupyter-collaboration==5\.", DOCKERFILE)))
 check("code-server pinned to an exact version", bool(re.search(r"CODE_SERVER_VERSION=\d+\.\d+\.\d+", DOCKERFILE)))
 
+print("== our own manifests must survive our own enforced policies ==")
+# Round 2 flips require-resource-limits and restrict-image-registries to Enforce. Any container we ship
+# without limits is therefore denied admission ON THE GUARDED ROUNDS ONLY, which is the worst possible
+# place for it: Round 1 looks fine, and the rounds that exist to demonstrate guardrails working are the
+# ones where the platform quietly loses pods. Found live 2026-08-27, when both MCP servers were absent
+# from r2-1 and r3-1 and the agent had no tools at all on those clusters.
+import yaml
+_missing = []
+for _p in (REPO / "gitops").rglob("*.yaml"):
+    if "__pycache__" in _p.parts:
+        continue
+    try:
+        _docs = list(yaml.safe_load_all(_p.read_text()))
+    except Exception:
+        continue
+    for _d in _docs:
+        if not isinstance(_d, dict) or _d.get("kind") not in ("Deployment", "StatefulSet", "DaemonSet"):
+            continue
+        for _c in (_d.get("spec", {}).get("template", {}).get("spec", {}).get("containers") or []):
+            _r = _c.get("resources") or {}
+            if not (_r.get("limits", {}).get("cpu") and _r.get("limits", {}).get("memory")):
+                _missing.append(f"{_d['metadata']['name']}/{_c.get('name')} in {_p.relative_to(REPO)}")
+check(f"every shipped container declares cpu+memory limits ({len(_missing)} without)", not _missing)
+for _x in _missing[:10]:
+    print(f"        {_x}")
+
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
     for f in failures:

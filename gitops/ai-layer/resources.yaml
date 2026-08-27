@@ -465,6 +465,13 @@ spec:
           # load its tools, so BurritoBot replied with an empty message and every attack beat was dead.
           # Move to mcp 2.x deliberately, by porting server.py to MCPServer, not by removing this pin.
           command: ["sh", "-c", "pip install --quiet --no-cache-dir 'mcp<2' && exec python /app/server.py"]
+          # Resource limits are REQUIRED, not optional tidiness: require-resource-limits is one of the
+          # policies Round 2 flips to Enforce, and without these the admission webhook denies this very
+          # Deployment. Found live 2026-08-27 on r2-1 and r3-1, where the MCP servers were absent
+          # entirely (not CrashLooping, never admitted) and the agent therefore had no tools on exactly
+          # the rounds that exist to show guardrails working. The workshop's own guardrail was deleting
+          # the workshop. Sized for a pip install plus a small asyncio server.
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
           ports: [{ name: mcp, containerPort: 8000 }]
           # UST so the Datadog Agent tags this pod's logs/metrics (the shim stays dark on OTel spans per
           # issue #18; this env is for Agent-side service tagging only). Locked vocabulary, PRD #13.
@@ -553,6 +560,13 @@ spec:
           # pip step; startup egress already reaches PyPI, so it reaches the Debian repos too.
           # PIN mcp<2 (see the evil-mcp-shim note above; same break, same cause).
           command: ["sh", "-c", "apt-get update -qq && apt-get install -y -qq --no-install-recommends curl && pip install --quiet --no-cache-dir 'mcp<2' pyyaml && exec python /app/server.py"]
+          # Resource limits are REQUIRED, not optional tidiness: require-resource-limits is one of the
+          # policies Round 2 flips to Enforce, and without these the admission webhook denies this very
+          # Deployment. Found live 2026-08-27 on r2-1 and r3-1, where the MCP servers were absent
+          # entirely (not CrashLooping, never admitted) and the agent therefore had no tools on exactly
+          # the rounds that exist to show guardrails working. The workshop's own guardrail was deleting
+          # the workshop. Sized for a pip install plus a small asyncio server.
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
           ports: [{ name: mcp, containerPort: 8000 }]
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
