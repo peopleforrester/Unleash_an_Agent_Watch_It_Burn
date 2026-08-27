@@ -334,9 +334,25 @@
   }
   // Set the banner (round) from the cluster name so each cluster shows the right guardrail state.
   function applyRoundFromCluster(cluster){
-    // Derive the round from the cluster name OR the hostname (r2-1.agenticburn.com / a-001.agenticburn.com).
-    var src=(cluster||'')+' '+location.hostname;
-    var r = (/(?:^|[-.])(r[123])(?:[-.]|$)/.test(src) ? RegExp.$1 : (/(?:^|[-.])(?:a-\d|attendee)/.test(src) ? 'r3' : 'r1'));
+    // Derive the round from the cluster name if we have one, otherwise from the hostname.
+    //
+    // These are checked SEPARATELY and in this order. Concatenating them into one string and running a
+    // single regex silently failed whenever there was no ?cluster= parameter: the hostname then sat
+    // behind a space, which is neither a start-of-string nor a [-.], so nothing matched and every host
+    // fell through to the r1 default. Typing round2.agenticburn.com straight into a browser therefore
+    // showed the "no guardrails" banner on the guarded cluster, which inverts the one thing the banner
+    // exists to say. That is the path attendees actually use to attack rounds 1 and 2 from a single URL.
+    //
+    // Hostname forms that must work: michael-round2, whitney-round2, round2 (shared alias), r2-1
+    // (legacy), and the attendee/student forms which are round-3 shaped.
+    function roundOf(s){
+      s = (s || '').toLowerCase();
+      var m = s.match(/(?:^|[-.])r(?:ound)?([123])(?:[-.]|$)/);
+      if (m) return 'r' + m[1];
+      if (/(?:^|[-.])(?:a-\d|attendee|student)/.test(s)) return 'r3';
+      return '';
+    }
+    var r = roundOf(cluster) || roundOf(location.hostname) || 'r1';
     round=r;
     var sel=document.getElementById('round'); if(sel) sel.value=r;
     var b=document.getElementById('banner'); if(b) b.className='ibanner '+ROUNDS[r].cls;
