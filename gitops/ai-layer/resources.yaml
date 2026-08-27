@@ -458,7 +458,13 @@ spec:
       containers:
         - name: shim
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: bake server.py into an image for prod
-          command: ["sh", "-c", "pip install --quiet --no-cache-dir mcp && exec python /app/server.py"]
+          # PIN mcp<2. Unpinned, this installs whatever PyPI serves at pod start, and mcp 2.0 renamed
+          # FastMCP to MCPServer. server.py does `from mcp.server.fastmcp import FastMCP`, so the import
+          # raises ModuleNotFoundError and the pod CrashLoops. Nothing in this repo changed; upstream did.
+          # Found live 2026-08-27 with 228 restarts on a cluster built the same day: the agent could not
+          # load its tools, so BurritoBot replied with an empty message and every attack beat was dead.
+          # Move to mcp 2.x deliberately, by porting server.py to MCPServer, not by removing this pin.
+          command: ["sh", "-c", "pip install --quiet --no-cache-dir 'mcp<2' && exec python /app/server.py"]
           ports: [{ name: mcp, containerPort: 8000 }]
           # UST so the Datadog Agent tags this pod's logs/metrics (the shim stays dark on OTel spans per
           # issue #18; this env is for Agent-side service tagging only). Locked vocabulary, PRD #13.
@@ -545,7 +551,8 @@ spec:
           # curl is needed for the C1 webhook-exfil beat: run_shell issues `curl -X POST` to the beacon,
           # and python-3.12-slim ships without it (PRD 37). Installed at startup alongside the existing
           # pip step; startup egress already reaches PyPI, so it reaches the Debian repos too.
-          command: ["sh", "-c", "apt-get update -qq && apt-get install -y -qq --no-install-recommends curl && pip install --quiet --no-cache-dir mcp pyyaml && exec python /app/server.py"]
+          # PIN mcp<2 (see the evil-mcp-shim note above; same break, same cause).
+          command: ["sh", "-c", "apt-get update -qq && apt-get install -y -qq --no-install-recommends curl && pip install --quiet --no-cache-dir 'mcp<2' pyyaml && exec python /app/server.py"]
           ports: [{ name: mcp, containerPort: 8000 }]
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
