@@ -48,6 +48,22 @@ spec:
             cidr: 10.0.0.0/16
       ports:
         - { protocol: TCP, port: 443 }
+    # The in-cluster Kubernetes API, reached on the SERVICE CIDR (kubernetes.default = 172.20.0.1 on
+    # EKS), not the VPC CIDR. Easy to miss because "the apiserver is in the VPC" is true of the ENI and
+    # false of the ClusterIP the pods actually dial.
+    #
+    # Required once this policy went namespace-wide: the ai-layer PreSync hook (kubearmor-gate) runs in
+    # this namespace and calls the API to wait for the KubeArmor webhook. Without this allow it times
+    # out, the hook fails, and ai-layer never syncs at all, so widening the deny silently froze the
+    # whole layer rather than just blocking exfil. Caught on watch-it-burn-r2-1 2026-08-28.
+    #
+    # This does NOT reopen Challenge 1: the exfil target is a public host, and the service CIDR is
+    # cluster-internal. It is the same in-cluster access the pods already have via their ServiceAccount.
+    - to:
+        - ipBlock:
+            cidr: 172.20.0.0/16
+      ports:
+        - { protocol: TCP, port: 443 }
     # EKS Pod Identity credentials endpoint (link-local, AWS_CONTAINER_CREDENTIALS_FULL_URI =
     # http://169.254.170.23/v1/credentials). The agent fetches its AWS creds here to call Bedrock; without
     # this allow the Bedrock call fails "Error retrieving credentials from container-role" (found live
