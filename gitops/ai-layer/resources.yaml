@@ -457,14 +457,13 @@ spec:
     spec:
       containers:
         - name: shim
-          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: bake server.py into an image for prod
-          # PIN mcp<2. Unpinned, this installs whatever PyPI serves at pod start, and mcp 2.0 renamed
-          # FastMCP to MCPServer. server.py does `from mcp.server.fastmcp import FastMCP`, so the import
-          # raises ModuleNotFoundError and the pod CrashLoops. Nothing in this repo changed; upstream did.
-          # Found live 2026-08-27 with 228 restarts on a cluster built the same day: the agent could not
-          # load its tools, so BurritoBot replied with an empty message and every attack beat was dead.
-          # Move to mcp 2.x deliberately, by porting server.py to MCPServer, not by removing this pin.
-          command: ["sh", "-c", "pip install --quiet --no-cache-dir 'mcp<2' && exec python /app/server.py"]
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
+          # NO runtime pip install. Dependencies are baked into the image (images/workshop-mcp), which is
+          # what allows this pod to run behind the default-deny egress policy: installing at startup
+          # required public-internet access, and that requirement is the hole Challenge 1's exfil escaped
+          # through on rounds 2 and 3 (issue #108). It also removes the resolve-at-pod-start fragility
+          # that CrashLooped both servers when upstream shipped mcp 2.x.
+          command: ["python", "/app/server.py"]
           # Resource limits are REQUIRED, not optional tidiness: require-resource-limits is one of the
           # policies Round 2 flips to Enforce, and without these the admission webhook denies this very
           # Deployment. Found live 2026-08-27 on r2-1 and r3-1, where the MCP servers were absent
@@ -554,12 +553,14 @@ spec:
       serviceAccountName: agent-sa
       containers:
         - name: shim
-          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: bake server.py + curl into an image for prod
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
           # curl is needed for the C1 webhook-exfil beat: run_shell issues `curl -X POST` to the beacon,
           # and python-3.12-slim ships without it (PRD 37). Installed at startup alongside the existing
           # pip step; startup egress already reaches PyPI, so it reaches the Debian repos too.
-          # PIN mcp<2 (see the evil-mcp-shim note above; same break, same cause).
-          command: ["sh", "-c", "apt-get update -qq && apt-get install -y -qq --no-install-recommends curl && pip install --quiet --no-cache-dir 'mcp<2' pyyaml && exec python /app/server.py"]
+          # NO runtime install: deps AND curl are baked in (see the evil-mcp-shim note above). curl
+          # matters here because run_shell uses it for the Challenge 1 exfil, and the beat is that the
+          # egress POLICY blocks the POST, not that the binary is missing.
+          command: ["python", "/app/server.py"]
           # Resource limits are REQUIRED, not optional tidiness: require-resource-limits is one of the
           # policies Round 2 flips to Enforce, and without these the admission webhook denies this very
           # Deployment. Found live 2026-08-27 on r2-1 and r3-1, where the MCP servers were absent

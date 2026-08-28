@@ -12,9 +12,12 @@ metadata:
   name: agent-allow-kagent-egress
   namespace: agent
 spec:
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: workshop-agent
+  # Namespace-wide, matching agent-egress-allowlist. Once ANY Egress policy selects a pod, that pod is
+  # default-deny-egress, so widening the allowlist to the namespace (issue #108) means every pod in it
+  # needs these baseline allows too. Leaving this scoped to workshop-agent would have cut DNS and
+  # intra-namespace traffic for the MCP servers the moment the deny widened, turning a security fix into
+  # an outage.
+  podSelector: {}
   policyTypes:
     - Egress
   egress:

@@ -21,14 +21,23 @@ metadata:
   name: agent-egress-allowlist
   namespace: agent
 spec:
-  # SCOPED to the kagent agent pod (the C1 attacker that would PutObject to S3), NOT the whole namespace.
-  # The MCP-server pods (workshop-mcp, evil-mcp-shim) pip-install `mcp` from PyPI at startup; a namespace-
-  # wide egress deny blocks that and they never bind 8000 (found live 2026-06-26: agentgateway -> workshop-mcp
-  # was "connection refused" because the server never started). The agent runs a prebuilt kagent image (no
-  # runtime pip), so locking only it preserves C1 while leaving the MCP servers able to start.
-  podSelector:
-    matchLabels:
-      app.kubernetes.io/name: workshop-agent
+  # COVERS THE WHOLE NAMESPACE, and that change is the point of issue #108.
+  #
+  # This used to select only `app.kubernetes.io/name: workshop-agent`, because the MCP servers installed
+  # their SDK from PyPI at pod start and a namespace-wide deny stopped them binding (found live
+  # 2026-06-26: agentgateway -> workshop-mcp "connection refused"). That narrowing quietly voided the
+  # control it exists to provide.
+  #
+  # Challenge 1's exfil is NOT performed by the agent. The agent asks a tool, and the tool lives in
+  # workshop-mcp, which is labelled `app=workshop-mcp` and matched none of these policies. Measured on
+  # watch-it-burn-r2-1 2026-08-27: the beacon count moved 5 -> 6 on a GUARDED cluster, and from inside
+  # the cluster the agent pod was blocked (curl exit 28) while the MCP pod reached the internet (200).
+  # The control was real, enforced, and aimed at the wrong pod, so "same attack, now blocked" was false.
+  #
+  # An empty podSelector selects every pod in the namespace, which is now safe because the MCP servers
+  # no longer need egress to start: their dependencies are baked into images/workshop-mcp. Removing the
+  # runtime install is what made closing this possible, so do not reintroduce one.
+  podSelector: {}
   policyTypes:
     - Egress
   egress:
