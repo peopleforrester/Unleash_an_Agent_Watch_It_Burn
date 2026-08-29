@@ -3,6 +3,9 @@
 
 # Run of Show, "Unleash an Agent, Watch It Burn"
 
+**DevOpsDays Portland 2026.** Monday, September 8, 13:00, 2 hours, Room 327. Smith Memorial Student
+Union, 1825 SW Broadway, Portland OR.
+
 Michael Forrester (Accenture) + Whitney Lee. Three rounds. This is what you say and do, in order,
 with the exact URLs and prompts. Everything below was tested live on 2026-08-29 and is marked with
 its status.
