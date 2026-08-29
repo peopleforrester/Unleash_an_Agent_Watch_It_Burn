@@ -57,15 +57,16 @@ EOS
 cat > "$HOME/guards-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-_px "output=on" && _px "input_blocklist=on&input_classifier=on"
+_px "output=on" && _px "input_blocklist=on&input_classifier=on" && _px "budget=on"
 _evil '["get_weather"]'
-echo "🛡️  ALL AI guards ON: output scrubbing (C5), input block-list + injection classifier (C6), and MCP"
-echo "    tool restriction (C7) are active. Re-run any challenge prompt to watch it get blocked or redacted."
+echo "🛡️  ALL AI guards ON: output scrubbing (C5), input block-list + injection classifier (C6), MCP tool"
+echo "    restriction (C7), and the spend budget (C4). Re-run any challenge to watch it get blocked, redacted,"
+echo "    or frozen on cost."
 EOS
 cat > "$HOME/guards-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-_px "output=off" && _px "input_blocklist=off&input_classifier=off"
+_px "output=off" && _px "input_blocklist=off&input_classifier=off" && _px "budget=off"
 _evil '["get_weather","read_internal_config","apply_optimization"]'
 echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
 EOS
@@ -142,9 +143,35 @@ else
   echo "⚠️  Could not patch the agent. Wait a moment and try 'guard-mcp-off' again."
 fi
 EOS
+# Challenge 4 — DENIAL-OF-WALLET. The agent does not have to crash your cluster to hurt you; it can just
+# run up the bill. On Round 1 there is no cap and the cost counter on BurritoBot climbs with no ceiling.
+# The control is a per-agent budget at the gateway: once this cluster's spend crosses its cap, further
+# requests are refused BEFORE the model is called, so a blocked request costs nothing.
+cat > "$HOME/guard-budget-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+if _px "budget=on"; then
+  echo "🛡️  Challenge 4 — BUDGET guard ON. This cluster now has a spend cap at the gateway. Keep chatting;"
+  echo "    once the tab crosses the cap, BurritoBot refuses further requests BEFORE calling the model, so"
+  echo "    the cost counter stops dead and a blocked request costs \$0. The agent is not down; the bill is"
+  echo "    capped. That is denial-of-wallet stopped at the platform, not in the app."
+else
+  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-on' again."
+fi
+EOS
+cat > "$HOME/guard-budget-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+if _px "budget=off"; then
+  echo "🔓 Challenge 4 — BUDGET guard OFF. No spend ceiling. Hammer BurritoBot and watch the cost counter"
+  echo "    climb with nothing to stop it. That is the denial-of-wallet: your service is fine, your bill is not."
+else
+  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-off' again."
+fi
+EOS
 chmod +x "$HOME/guards-on" "$HOME/guards-off" \
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
-  "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off
+  "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off
 
 cat > "$HOME/.bashrc" <<'BRC'
 cat ~/.motd 2>/dev/null

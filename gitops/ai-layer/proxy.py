@@ -108,6 +108,9 @@ GUARDS = {
     "input_blocklist": _input_legacy or os.environ.get("INPUT_BLOCKLIST", "off").lower() == "on",
     "input_classifier": _input_legacy or os.environ.get("INPUT_CLASSIFIER", "off").lower() == "on",
     "output": os.environ.get("OUTPUT_GUARD", "off").lower() == "on",
+    # The denial-of-wallet control (C4). Off = Round 1, the bill runs away. On = the per-agent budget
+    # cap enforces at the gateway. Toggled live like the others.
+    "budget": os.environ.get("BUDGET_GUARD", "off").lower() == "on",
 }
 # Fail closed: if LLM Guard is unreachable, block rather than silently leak (no-silent-fallback rule).
 FAIL_CLOSED = os.environ.get("PROXY_FAIL_CLOSED", "true").lower() == "true"
@@ -118,6 +121,14 @@ TIMEOUT = float(os.environ.get("PROXY_TIMEOUT", "150"))
 # proxy fronts one cluster) and env-tunable; 0 disables. verify-at-build: set caps to the room size.
 COST_CAP_USD = float(os.environ.get("COST_CAP_USD", "0") or "0")     # reject once this cluster's tally hits it
 RATE_LIMIT_RPM = int(os.environ.get("RATE_LIMIT_RPM", "0") or "0")   # max model-bound requests per 60s
+
+# Denial-of-wallet control (Challenge 4, replacing the fork bomb). Token spend is its own DoS vector:
+# a room, or an agent talked into a loop, runs the Bedrock bill up while nothing crashes. The counter on
+# BurritoBot climbs and nothing stops it. The gateway budget cap IS the control: once a cluster's metered
+# spend crosses BUDGET_CAP_USD, further requests are refused BEFORE the model is called, so a blocked
+# request costs zero. It is a RUNTIME toggle (like the input/output guards) so the demo flips it live on
+# Round 2 rather than through a pod-restarting env change; DEFAULT OFF so Round 1 burns freely.
+BUDGET_CAP_USD = float(os.environ.get("BUDGET_CAP_USD", "0.10") or "0.10")
 _rate_lock = threading.Lock()
 _req_times = collections.deque()  # timestamps of recent forwarded POSTs (sliding 60s window)
 
@@ -137,11 +148,17 @@ def rate_limited():
 
 
 def cost_capped():
-    """True if this cluster's metered spend has reached the cap."""
-    if COST_CAP_USD <= 0:
-        return False
+    """True if this cluster's metered spend has reached the cap. The infra safety cap (COST_CAP_USD,
+    env, always on when set) protects the real Bedrock bill from a runaway room. Separately, the C4
+    denial-of-wallet CONTROL is the runtime-toggled budget guard: when GUARDS['budget'] is on, the
+    same tally is enforced against BUDGET_CAP_USD, which the demo flips live on Round 2."""
     with _cost_lock:
-        return _cost["usd"] >= COST_CAP_USD
+        spend = _cost["usd"]
+    if COST_CAP_USD > 0 and spend >= COST_CAP_USD:
+        return True
+    if GUARDS.get("budget") and BUDGET_CAP_USD > 0 and spend >= BUDGET_CAP_USD:
+        return True
+    return False
 
 # Input block-list (Challenge 6, the "block-list" stage): deterministic, runs BEFORE any LLM call.
 # A match is rejected without spending a single Bedrock token — the workshop's cost lesson. Two kinds
@@ -400,7 +417,7 @@ class Handler(BaseHTTPRequestHandler):
                     on = q["input"][0].lower() == "on"
                     GUARDS["input_blocklist"] = on
                     GUARDS["input_classifier"] = on
-                for k in ("input_blocklist", "input_classifier", "output"):
+                for k in ("input_blocklist", "input_classifier", "output", "budget"):
                     if k in q:
                         GUARDS[k] = q[k][0].lower() == "on"
                 self._send(200, dict(GUARDS))
@@ -509,11 +526,12 @@ class Handler(BaseHTTPRequestHandler):
                 })
                 return
             if cost_capped():
+                _cap = BUDGET_CAP_USD if GUARDS.get("budget") else COST_CAP_USD
                 self._send(429, {
                     "jsonrpc": "2.0", "id": payload.get("id") if isinstance(payload, dict) else None,
                     "error": {"code": -32000,
-                              "message": f"Cost cap reached (${COST_CAP_USD:.2f} on this cluster). "
-                                         "Spend is frozen for the rest of the segment."},
+                              "message": f"Budget cap reached (${_cap:.2f} on this cluster). Spend is "
+                                         "frozen; a blocked request costs nothing."},
                 })
                 return
 
@@ -627,7 +645,10 @@ class Handler(BaseHTTPRequestHandler):
                              "guarded": True, "input_tokens": 0, "output_tokens": 0})
             return
         if cost_capped():
-            self._send(200, {"reply": f"The kitchen tab is frozen (cost cap ${COST_CAP_USD:.2f}).",
+            _cap = BUDGET_CAP_USD if GUARDS.get("budget") else COST_CAP_USD
+            self._send(200, {"reply": f"The kitchen tab is frozen. This cluster hit its ${_cap:.2f} spend "
+                                      f"budget, so I'm not sending anything else to the model. A blocked "
+                                      f"request costs nothing. Turn the budget guard off to keep going.",
                              "guarded": True, "input_tokens": 0, "output_tokens": 0})
             return
         # Forward as A2A message/send to the agent root, inside a CLIENT span (the Service Map egress hop).
