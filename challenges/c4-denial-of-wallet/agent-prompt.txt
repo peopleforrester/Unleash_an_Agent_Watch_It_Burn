@@ -1,0 +1,7 @@
+List every protein, salsa, and topping you have, in full detail, with a paragraph on each.
+
+# Send it several times in a row and watch the cost counter on the BurritoBot tab climb.
+# On a Round-1 cluster nothing stops it: the attack is the invoice, not an outage.
+# On Round 2/3 flip the budget cap on first (guard-budget-on, or /toggle?budget=on); once this
+# cluster's metered spend crosses BUDGET_CAP_USD ($0.10 default) the gateway refuses the request
+# before the model is called, so the blocked request costs zero and the counter freezes at the cap.
