@@ -129,3 +129,26 @@ correct, which is why the bundle looked present and correct throughout.
 - Issue #90: the destructive-sweep safety gaps
 - `verify/test_fleet_contract.py`: the properties above that are statically decidable
 - `infra/terraform/fleet/preflight.sh` and `check-tls.sh`: the pre-run and pre-doors gates
+
+## The terminal `kubectl` dies ~1h into a fresh cluster (fixed in code 2026-08-29)
+
+**Symptom:** in the lab terminal, `kubectl` and every guard toggle (`guard-output-on`,
+`guard-input-on`, `guard-mcp-on`, `guard-budget-on`) fail with
+`You must be logged in to the server (the server has asked for the client to provide credentials)`
+/ `Could not reach the guard-proxy`. Not a guard-proxy problem: the proxy is healthy and reachable
+from an admin kubeconfig; only the terminal's own kubectl is unauthenticated.
+
+**Cause:** the web-terminal entrypoint baked a one-time snapshot of the projected ServiceAccount token
+into the kubeconfig (`set-credentials me --token="$(cat .../token)"`). EKS projected SA tokens are
+~1h-lived and the kubelet rotates the file in place, so the snapshot expired ~1h after pod start. A
+fresh cluster works during setup and rehearsal, then breaks ~1h in, i.e. mid-workshop. This is the
+worst failure shape: invisible until the room is live.
+
+**Fix (shipped):** the kubeconfig points at `users.me.tokenFile` so client-go re-reads the rotated
+token on every call. Baked into `images/web-terminal/entrypoint.sh`; regression-guarded by
+`verify/test_terminal_kubeconfig.py` (fails the build if a `--token=` snapshot returns).
+
+**Delivery-day check:** any freshly-provisioned cluster pulls the corrected `:web-terminal` image, so it
+is correct from the start. If you ever see this on an OLD pod predating the fix, the live bridge is:
+`kubectl -n agent exec deploy/web-terminal -- bash -c 'export HOME=/home/student; kubectl config unset users.me.token; kubectl config set users.me.tokenFile /var/run/secrets/kubernetes.io/serviceaccount/token'`
+then re-run the toggle. But the code fix means fresh clusters never need it.
