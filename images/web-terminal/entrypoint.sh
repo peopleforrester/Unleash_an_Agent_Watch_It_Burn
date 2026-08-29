@@ -11,7 +11,16 @@ if [ -f "$SA/token" ]; then
   kubectl config set-cluster this \
     --server="https://kubernetes.default.svc" \
     --certificate-authority="$SA/ca.crt" --embed-certs=true >/dev/null
-  kubectl config set-credentials me --token="$(cat "$SA/token")" >/dev/null
+  # tokenFile, NOT a baked --token value. EKS mounts a PROJECTED ServiceAccount token: it is short-lived
+  # (~1h) and the kubelet rotates the file in place. Copying the token VALUE into the kubeconfig freezes a
+  # snapshot that expires ~1h after pod start, after which every kubectl in this terminal fails with
+  # "You must be logged in to the server (the server has asked for the client to provide credentials)" and
+  # the guard toggles (which shell out to `kubectl exec deploy/guard-proxy`) all report "Could not reach
+  # the guard-proxy". A 3-day-old cluster was hours past expiry; a fresh cluster would break ~1h into the
+  # workshop. Pointing at tokenFile makes client-go re-read the rotated token on every call, so it never
+  # expires while the pod runs. Regression-guarded by verify/test_terminal_kubeconfig.py.
+  kubectl config set-credentials me >/dev/null
+  kubectl config set "users.me.tokenFile" "$SA/token" >/dev/null
   kubectl config set-context this --cluster=this --user=me \
     --namespace="$(cat "$SA/namespace")" >/dev/null
   kubectl config use-context this >/dev/null
