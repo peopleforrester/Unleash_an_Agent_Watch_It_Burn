@@ -11,8 +11,13 @@ hand them a governance map for their own platform.
 
 ## Confirmed slot
 
-Day 1 (Workshop Day), 2:20 to 4:20pm, Track 5. Two hours. Co-speakers: Michael Forrester and you.
-Note: the public schedule currently lists Michael solo; Michael has emailed the organizers to add you.
+**DevOpsDays Portland 2026**, Monday September 8, **1:00 to 3:00 PM Pacific**, Room 327, Smith Memorial
+Student Union, 1825 SW Broadway, Portland OR. **Two hours.** Co-speakers: Michael Forrester and you.
+(Slot verified against the pretalx schedule 2026-08-23. The public abstract lists 1.5 hours, which
+conflicts; the 2-hour slot is authoritative.)
+
+> This doc previously described the June AI Engineer World's Fair slot (Day 1, 2:20 to 4:20pm, Track 5,
+> Moscone West). That event is done; Portland is the live delivery.
 
 ## The repo
 
