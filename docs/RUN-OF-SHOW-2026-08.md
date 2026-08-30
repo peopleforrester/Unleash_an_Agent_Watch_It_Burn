@@ -3,7 +3,7 @@
 
 # Run of Show, "Unleash an Agent, Watch It Burn"
 
-**DevOpsDays Portland 2026.** Monday, September 8, 1:00 PM, **2 hours**, Room 327. Smith Memorial
+**DevOpsDays Portland 2026.** Tuesday, September 8, 1:00 PM, **2 hours**, Room 327. Smith Memorial
 Student Union, 1825 SW Broadway, Portland OR. (Slot verified against the pretalx schedule 2026-08-23.
 The public abstract lists a 1.5-hour duration, which conflicts; the 2-hour slot is authoritative.)
 
@@ -27,11 +27,12 @@ with their hands on their own cluster. Budget:
 
 | Block | Time | Who drives | What happens |
 |---|---|---|---|
+| **Cold open** | 3 min | Michael, alone | The hook, before any introductions. `facilitation/cold-open-script.md` |
 | **Onboarding + cluster tour** | 15 min | Whitney drives, Michael floats | Claim a cluster, get in, and see what they were just handed |
 | **Rounds 1 & 2, instructor-led** | 20 min | Michael sends, Whitney runs retries | The same attacks, unguarded then guarded, **with the room attacking our box too** |
 | **Round 3, hands-on** | 60 min | The room; both of us floating | They run the attacks and turn the controls on themselves |
 | **Wrap + feedback** | 15 min | Michael closes | What holds, what does not, and collect feedback |
-| **Slack** | 10 min | | Overrun, questions, a cluster that needs rescuing |
+| **Slack** | 7 min | | Overrun, questions, a cluster that needs rescuing |
 
 **Nobody installs anything.** The full platform is already deployed on every cluster (43 ArgoCD apps, one
 bash script). The hands-on hour is about **manipulating** what is there, not building it.
@@ -90,6 +91,25 @@ the agent answers with the menu, not an empty reply. **If it answers empty, the 
 # from a Round 3 terminal
 guards-off
 ```
+
+---
+
+## COLD OPEN (3 min)
+
+**Owner: Michael, alone. Whitney holds.**
+
+Deliver `facilitation/cold-open-script.md` word for word: the two-tier hook on slides 2 and 3. Walk on,
+let the title sit one beat, and start cold on "the night an agent deleted my cluster". **No introductions
+first.** The hook earns the room, then you introduce yourselves.
+
+Doing this before onboarding is deliberate. The room is still settling and laptops are still opening; a
+story lands in that moment and an instruction does not. Onboarding immediately afterwards gives the
+stragglers a reason to open the laptop they just took out.
+
+> If the slot is running late before you even start, this is the first thing to cut. Fold the story into
+> the Rounds 1 and 2 open instead, beside the Hugging Face breach, where the personal incident and the
+> public one reinforce each other. The 3 minutes comes out of the 10-minute slack, so cutting it hands
+> the time straight back.
 
 ---
 

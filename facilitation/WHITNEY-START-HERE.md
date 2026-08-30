@@ -11,7 +11,7 @@ hand them a governance map for their own platform.
 
 ## Confirmed slot
 
-**DevOpsDays Portland 2026**, Monday September 8, **1:00 to 3:00 PM Pacific**, Room 327, Smith Memorial
+**DevOpsDays Portland 2026**, Tuesday September 8, **1:00 to 3:00 PM Pacific**, Room 327, Smith Memorial
 Student Union, 1825 SW Broadway, Portland OR. **Two hours.** Co-speakers: Michael Forrester and you.
 (Slot verified against the pretalx schedule 2026-08-23. The public abstract lists 1.5 hours, which
 conflicts; the 2-hour slot is authoritative.)

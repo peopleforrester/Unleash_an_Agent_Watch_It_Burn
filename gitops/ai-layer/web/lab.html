@@ -131,26 +131,39 @@
     <div class="guideopen" id="guideopen" onclick="toggleGuide()" title="Show the steps">&#10095; Steps</div>
     <section class="guide" style="position:relative">
       <button class="guidetoggle" onclick="toggleGuide()" title="Hide the steps and use the full width">&#10094; Hide</button>
-      <h1>This cluster is yours. 🧙</h1>
-      <p class="lede">This cluster is yours. You will work across three <b>browser tabs</b>: this <b>lab page</b> (your home base, with the terminal on the right), your <b>BurritoBot</b>, and <b>Datadog</b>. The buttons at the top open BurritoBot and Datadog. Open both now, glance around, then come back here. Tap any command or prompt to copy it.</p>
+      <h1>You are in. 🧙</h1>
+      <p class="lede">This is your lab and you will spend the workshop here: instructions on the left, your
+      terminal on the right, and buttons along the top for everything else. <b>You do not need to go back to
+      the page you came from.</b> Tap any command or prompt to copy it.</p>
 
       <div class="tip"><b>Where you are:</b> this is <b>your own cluster</b>, the hands-on part of the workshop (<b>Round 3</b> in the run of show). The infrastructure guardrails are already on; in the numbered challenges below you turn the <b>AI guardrails</b> on yourself and watch them work. The Round 1 &amp; 2 attacks the instructors demoed are an <b>optional</b> replay at the bottom of this page.</div>
 
-      <div class="tip">Keep two things straight: the three <b>browser tabs</b> above (lab page, BurritoBot, Datadog), and your <b>terminal</b> on the right of this page (with a Reconnect button if it ever wedges). The challenges live in the browser tabs and the terminal.</div>
+      <div class="tip">Everything is a button at the top: <b>VTT</b> (this page), <b>BurritoBot</b>, <b>Datadog</b>,
+      <b>Platform</b> (every service on your cluster and its login) and <b>Feedback</b>. Your terminal is on the
+      right of this page, with a Reconnect button if it ever wedges.</div>
 
       <div class="tip">All of this is instrumented with OpenTelemetry. Datadog is the backend we are using here; any OTLP-conformant backend would work the same way.</div>
 
       <div class="step">
-        <div class="h"><div class="num">1</div><div class="t">Look around, open your browser tabs</div></div>
+        <div class="h"><div class="num">1</div><div class="t">Check that everything works, before we start</div></div>
         <div class="b">
-          <p>Your <code class="inl">kubectl</code> is already pointed at this cluster and <code class="inl">aws</code> is configured with your keys. See what is running:</p>
+          <p>Two minutes now saves losing a round later. Confirm all three surfaces work while there is
+          still someone free to help you.</p>
+          <p><b>1a. Your terminal.</b> It is on the right of this page. Run this; you should get a list of pods:</p>
           <div class="cmd" onclick="cp(this)">kubectl get pods -A<button class="cp">copy</button></div>
-          <p>Now open <b>BurritoBot</b> and <b>Datadog</b> from the buttons up top. Keep all three browser tabs open; you will switch between them through the challenges.</p>
+          <p><b>1b. BurritoBot.</b> Open it from the button up top and send it anything, for example
+          <i>"what proteins do you have?"</i>. You should get a menu back, not an empty reply. This is the
+          application you will be attacking.</p>
+          <p><b>1c. Datadog.</b> Open it from the button up top and log in with the credentials below. This is
+          where you watch what the agent actually did. <b>If the login does not work, raise your hand now</b>,
+          because every challenge asks you to look at a trace.</p>
           <!-- Datadog login rendered HERE, in-console, from the query string the provisioning app puts on
                the lab link (#131). Before this, the credentials only existed on the provisioning page, so a
                student had to leave the lab and come back just to log in ("now I'm gone again" - Whitney,
                2026-08-29). Hidden entirely when the params are absent, so a hand-typed /lab URL degrades to
                the old wording rather than showing empty boxes. -->
+          <div class="tip">All three working? Then you are set. Nothing else in this guide depends on the
+          page you came from.</div>
           <div id="ddcreds" style="display:none">
             <p><b>Your Datadog login</b> (also on the Provisioning page if you need it again):</p>
             <div class="cmd" onclick="cp(this)"><span id="ddu"></span><button class="cp">copy</button></div>

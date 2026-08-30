@@ -1,4 +1,4 @@
-*Facilitator-facing minute-by-minute runbook. The canonical run is **60 minutes** (3 rounds: R1 burn, R2 CNCF, R3 student cluster), per the 2026-06-25 format cut. The booked room is a 2-hour slot; the 2-hour table below is the extended variant only if the slot holds. Names the toggles, fallbacks, and hand-offs. Not attendee copy.*
+*Facilitator-facing minute-by-minute runbook. **The primary run-of-show is `docs/RUN-OF-SHOW-2026-08.md`** (2 hours: 15 onboarding + tour, 20 instructor R1/R2, 60 hands-on, 15 wrap, 10 slack). This file is a supporting reference for toggles, fallbacks and hand-offs; where it disagrees with the primary run-of-show, the primary wins. Not attendee copy.*
 
 # Runbook, "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 
@@ -31,7 +31,11 @@ a hand-off marker. Keep the deterministic-guardrail point out of spoken copy; it
 
 ---
 
-## Extended 2-hour run, total = 120 minutes (ONLY if the full slot holds; not the plan)
+## 2-hour run, total = 120 minutes
+
+> SUPERSEDED IN DETAIL by `docs/RUN-OF-SHOW-2026-08.md`, which is the primary and carries the current
+> block structure. The timings below predate the hands-on rebuild (#123) and are kept only for the
+> toggle and fallback notes attached to each beat.
 
 | Time | Min | Owner | Segment | Toggle / artifact |
 |------|-----|-------|---------|-------------------|
@@ -169,7 +173,10 @@ reinforces it.
 
 ---
 
-## 60-minute run, total = 60 minutes (PRIMARY, the canonical plan per the 2026-06-25 cut)
+## 60-minute run, total = 60 minutes (NOT the plan: kept only as a cut-down for a shortened slot)
+
+> The Portland slot is **2 hours**, verified against pretalx 2026-08-23. This 60-minute variant is a
+> contingency for a slot that gets cut, not the canonical run.
 
 | Time | Min | Owner | Segment |
 |------|-----|-------|---------|
