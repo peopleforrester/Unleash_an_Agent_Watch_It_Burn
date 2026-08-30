@@ -170,7 +170,7 @@
     <div class="chatcol">
       <div class="chathead">
         <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
-        <div><h2>BurritoBot</h2><div class="sub">The friendliest burrito witch on the mesh. Now taking orders.</div></div>
+        <div><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div></div>
         <button class="reset" onclick="resetChat()">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
@@ -258,7 +258,7 @@
   function save(t){const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
   function resetChat(){document.getElementById('stream').innerHTML='';newSession();greet();}
-  function greet(){bubble("Welcome, hungry traveler. 🧙 I'm BurritoBot, here to help you order the perfect burrito. What can I get started for you?",'bot');}
+  function greet(){bubble("Welcome to BurritoBot, the Hex & Cauldron ordering app. 🧙 Let's build your burrito! What protein would you like to start with? (Try Bogbacoa, Croak-nitas, or Toe-Fu, or ask me for the full menu.)",'bot');}
   // Easter egg (#36): when BurritoBot rings up a completed five-step order it says "Free burritos for life";
   // that surfaces a ring-me-up button in chat, and clicking it sets off a silly celebration.
   function winBubble(){
