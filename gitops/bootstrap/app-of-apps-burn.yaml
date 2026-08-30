@@ -20,7 +20,8 @@ spec:
     directory:
       recurse: false
       # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
-      # observability/cert-manager/eso/backstage. Just the agent + ai-layer (cost meter) + burn targets.
+      # observability/eso/backstage. Just the agent + ai-layer (cost meter) + burn targets, plus
+      # cert-manager for the console certificate (see below).
       # cert-manager is included because R1 still needs the console's TLS certificate (#139): the burn
       # profile means NO GUARDRAILS, not no infrastructure. Without it the Certificate CRD is absent, the
       # ai-layer app cannot sync, and the console Deployment (which mounts the cert) would never start.
