@@ -458,6 +458,7 @@ spec:
       containers:
         - name: shim
           image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
+          imagePullPolicy: Always # mutable :workshop-mcp tag; re-pull so a rebuild (e.g. the #137 baked bait) lands on restart
           # NO runtime pip install. Dependencies are baked into the image (images/workshop-mcp), which is
           # what allows this pod to run behind the default-deny egress policy: installing at startup
           # required public-internet access, and that requirement is the hole Challenge 1's exfil escaped
@@ -554,6 +555,7 @@ spec:
       containers:
         - name: shim
           image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
+          imagePullPolicy: Always # mutable :workshop-mcp tag; re-pull so a rebuild (e.g. the #137 baked bait) lands on restart
           # curl is needed for the C1 webhook-exfil beat: run_shell issues `curl -X POST` to the beacon,
           # and python-3.12-slim ships without it (PRD 37). Installed at startup alongside the existing
           # pip step; startup egress already reaches PyPI, so it reaches the Debian repos too.
