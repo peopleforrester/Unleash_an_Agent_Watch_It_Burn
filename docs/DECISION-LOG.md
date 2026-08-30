@@ -624,3 +624,22 @@ a `bedrock-nova` ModelConfig tier (the §4.6 provision-time tier knob selects it
 
 Method note: pii "realPII: True" is the actual reply containing customer records; sentinels are the
 exact planted strings; curl-missing verified by `command -v curl` in the workshop-mcp pod.
+
+## 2026-08-30 · runtime-security stack · retire Tetragon, KubeArmor is the prevention engine
+
+Decision (Michael): keep three axes but one tool each. **Falco + Talon** stay as detect-then-respond.
+**KubeArmor** becomes the inline-prevention engine (BPF-LSM block, read returns EPERM and never
+completes) — the axis Falco+Talon structurally cannot cover (they react after the action completes).
+**Tetragon is retired**: it does the identical C3 block to KubeArmor (kprobe+override vs BPF-LSM), so
+it is a redundant second prevention engine.
+
+Viability was the open question and is closed: spike `docs/research/runtime-exec-block-kubearmor-vs-tetragon.md`
+(result 2026-07-18) live-validated KubeArmor enforcing on our AL2023/containerd nodes on r3-1
+(`Permission denied` on the bait file with the Tetragon rule removed). No Bottlerocket node group needed;
+the old containerd namespace-resolution blocker is obsolete.
+
+Gate before Tetragon is removed: KubeArmor only enforces on pods admitted after its controller/webhook is
+Ready, and ArgoCD sync ordering currently races ai-layer ahead of the KubeArmor operator, so workshop-mcp
+comes up un-enforced. Fix the sync-wave/health ordering and verify the block on a fresh provision FIRST;
+keep Tetragon as the working C3 block until then. Tracked in #127. Supersedes the "KubeArmor/Tetragon
+parked" note in docs/TECH-STATUS.md (which predates the 2026-07-18 result).
