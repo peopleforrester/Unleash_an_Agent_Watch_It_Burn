@@ -72,7 +72,10 @@ b(){ printf '\n\033[1;35m%s\033[0m\n' "$1"; }
 row(){ printf '  \033[1m%-22s\033[0m %s\n' "$1" "$2"; }
 sec(){ kubectl -n "$1" get secret "$2" -o jsonpath="{.data.$3}" 2>/dev/null | base64 -d 2>/dev/null; }
 
-echo "Everything installed on $(kubectl config current-context 2>/dev/null | sed 's|.*/||')."
+# The in-pod context is literally named "this" (set by this entrypoint), so derive the real cluster name
+# from the kubeconfig cluster entry instead of the context name.
+_cn="$(kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null | sed 's|.*/||')"
+echo "Everything installed on ${_cn:-your cluster}."
 echo "Only the console is published; the rest are ClusterIP, so each one shows its port-forward."
 
 b "OPEN IN YOUR BROWSER NOW"
