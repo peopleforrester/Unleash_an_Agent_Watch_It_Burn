@@ -9,7 +9,7 @@
 # Because agentgateway auto-filters disallowed tools from list_tools, the agent should no longer
 # even SEE read_internal_config; an explicit call to it is rejected.
 #
-# CONFIRMED mechanism (research/02-agentgateway.md §4, research/14 §2b): the OSS standalone
+# CONFIRMED mechanism (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §4, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2b): the OSS standalone
 # mcpAuthorization model is ALLOW-ONLY CEL with implicit deny. There is NO `action` field on rules.
 # A request is allowed if any rule matches; anything not matched is denied and filtered out of
 # list_tools. So the DENY is expressed as an allowlist naming ONLY the permitted tools —
@@ -20,11 +20,11 @@
 #   live; FAIL -> recorded segment + governance-map row. Record in challenges/03-.../BUILD-SPIKE.md.
 # verify-at-build: the doc schema nests mcpAuthorization under mcp.policies.mcpAuthorization (and
 #   targets under mcp.targets[]). Re-verify the exact mcp.{targets,policies} nesting against the
-#   v1.3.0 standalone config schema at build (research/14 §2c).
+#   v1.3.0 standalone config schema at build (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2c).
 #
 # RECONCILIATION (agentgateway is now canonical in gitops/ai-layer/agentgateway.yaml):
 #   - This overlay rewrites the WHOLE agentgateway-config config.yaml. The canonical deployed config
-#     also carries a `tracing:` block (research/29) and a request promptGuard webhook (input guard).
+#     also carries a `tracing:` block (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)) and a request promptGuard webhook (input guard).
 #     COMPLETENESS TRAP: applying this toggle as-written drops both. Before beat-3 LIVE, reconcile the
 #     config.yaml body here against gitops/ai-layer/agentgateway.yaml so the toggle carries the full
 #     canonical config (tracing + promptGuard) and only flips the mcpAuthorization rules.
@@ -54,7 +54,7 @@ data:
       - name: agent-mcp
         protocol: HTTP
         port: 3001
-    # MCP config nests under `mcp.` (research/14 §2c): targets allowlist + mcpAuthorization policy.
+    # MCP config nests under `mcp.` (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2c): targets allowlist + mcpAuthorization policy.
     mcp:
       targets:
         # targets allowlist is structural: only this MCP server is reachable for tool calls.

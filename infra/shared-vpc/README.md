@@ -1,11 +1,11 @@
 <!-- ABOUTME: One shared VPC for all Watch It Burn clusters. Provisioned once up front; every cluster -->
-<!-- ABOUTME: config references its id + subnet ids. Replaces per-cluster VPCs (research/25). -->
+<!-- ABOUTME: config references its id + subnet ids. Replaces per-cluster VPCs (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`)). -->
 
 # Shared VPC (provision once, all clusters share it)
 
 Every Watch It Burn cluster (attendee, presenter, and the demo burn clusters) is created INTO one
 shared VPC. We do NOT create one VPC per attendee. A fake-data 2-hour lab does not need per-tenant
-network isolation, and 60 VPCs would burn the VPC-per-region quota for no benefit (research/25).
+network isolation, and 60 VPCs would burn the VPC-per-region quota for no benefit (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`)).
 
 ## Layout
 
@@ -17,7 +17,7 @@ network isolation, and 60 VPCs would burn the VPC-per-region quota for no benefi
 
 ## Why this and not per-cluster VPCs
 
-- IP math fits comfortably in one /16 (research/25).
+- IP math fits comfortably in one /16 (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`)).
 - Shared VPC means the VPC-per-region (default 5), Elastic IP, and NAT quotas are all moot; the only
   deliberate quota increase needed at 60 clusters is EC2 On-Demand Standard vCPU (L-1216C47A, target
   ~1,000 vCPU for an all-t3.xlarge fleet). EKS clusters-per-region default is 100, so 60 fits.

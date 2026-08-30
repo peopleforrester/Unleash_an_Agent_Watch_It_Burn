@@ -13,7 +13,7 @@ This PRD assumes all M1–M6 child PRDs are merged. In particular:
 
 - **PRD #26** (Datadog Agent DaemonSet) must be complete — the cert-manager, Kyverno, and ArgoCD Agent checks must be `[OK]` on the live cluster before this PRD's Milestone 1 can pass.
 - **PRD #27** (UST + Service Map) must be complete — all AI-layer UST is in place.
-- Read `research/35-datadog-community-dashboards-2026.md` — the dashboard survey that confirmed which OOTB dashboards are importable and which are not.
+- Read `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` — the dashboard survey that confirmed which OOTB dashboards are importable and which are not.
 - Read the meta-PRD #7 Milestone 7 Decision Log entries (D1a–D6, all dated 2026-06-25) — every import/skip and code decision is locked there. Do not re-open these decisions.
 
 ---

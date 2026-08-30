@@ -8,7 +8,7 @@
 #   omit promptGuard.request entirely (as below) or set an explicit disabled flag. Read the live
 #   docs; do not assume. The toggle must be idempotent (kubectl apply re-runnable).
 # verify-at-build: the input guard's hard-reject is the CONFIRMED request-phase RejectAction path
-#   (research/02-agentgateway.md §3); the only [SPIKE] is whether the request webhook fires for an
+#   (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §3); the only [SPIKE] is whether the request webhook fires for an
 #   A2A backend at all (same backend-type question flagged in agentgateway.yaml).
 ---
 apiVersion: v1

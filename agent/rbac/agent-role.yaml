@@ -2,7 +2,7 @@
 # ABOUTME: Grants exactly what the beats need; withholds the verbs that would let
 # ABOUTME: privilege-escalation succeed. (Two ABOUTME lines required; this third is intent.)
 #
-# Design notes (see docs/BUILD-SPEC.md Phase 3, research/06-cncf-stack.md):
+# Design notes (see docs/BUILD-SPEC.md Phase 3, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)):
 #  - create/get/list/patch workloads in the attendee namespace  -> beat 1 step 1, beat 2/3 workloads
 #  - get/list secrets                                           -> read the planted FAKE- secrets
 #  - patch on argocd-managed kinds is INTENTIONALLY granted so beat-1 step 3 reaches

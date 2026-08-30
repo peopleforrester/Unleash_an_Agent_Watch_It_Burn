@@ -34,7 +34,7 @@ All decisions below were finalized in the Milestone 2 design conversation (2026-
 
 | Decision | Value |
 |---|---|
-| OTel Operator | Deployed (pre-decided 2026-06-24; overrides research/33 "No Operator" conclusion) |
+| OTel Operator | Deployed (pre-decided 2026-06-24; overrides the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) "No Operator" conclusion) |
 | Custom app instrumentation pattern | OTel API no-op in image; Operator injects full SDK at pod startup; manual spans at runtime |
 | Instrumentation CRD scope | Single shared CRD for all custom Python apps; per-pod env vars carry UST. Use one per app only if a concrete per-app need arises. |
 | Instrumentation CRD env | `OTEL_EXPORTER_OTLP_PROTOCOL=grpc`; `OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental` |
@@ -228,7 +228,7 @@ Confirm the full observability chain is working on the live cluster before this 
 **Checklist (run each item against the live cluster):**
 1. **Collector endpoint**: agentgateway and kagent traces arrive at the Collector (proves the Service name resolved in Milestone 2 is correct).
 2. **kagent/ADK gen_ai waterfall**: run a beat that triggers the agent; confirm `invoke_agent → call_llm → execute_tool {gen_ai.tool.name}` spans appear in Datadog APM traces with `gen_ai.request.model` populated.
-3. **Datadog LLM Observability routing**: confirm the waterfall appears in the Datadog **Agent Observability** (LLM Observability) traces page — not just plain APM. If absent, add a dedicated OTLP exporter in the Collector with `dd-otlp-source=llmobs` in the headers as the deterministic fallback (see meta-PRD #7 Decision Log, research/28 Q7 for the fallback spec).
+3. **Datadog LLM Observability routing**: confirm the waterfall appears in the Datadog **Agent Observability** (LLM Observability) traces page — not just plain APM. If absent, add a dedicated OTLP exporter in the Collector with `dd-otlp-source=llmobs` in the headers as the deterministic fallback (see meta-PRD #7 Decision Log, the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) Q7 for the fallback spec).
 4. **`gen_ai.request.model` on spans**: confirm the model identifier (e.g. `claude-sonnet-4-6`) appears on live `call_llm` spans.
 5. **`witb_cost_usd{model=...}`**: confirm the counter appears in Datadog metrics with the `model` label populated and the `tier` label absent.
 6. **Content capture**: run a beat with prompt content; confirm `gen_ai.input.messages` / `gen_ai.output.messages` appear on spans (proves `EVENT_ONLY` is working, not silently misconfigured).
@@ -246,7 +246,7 @@ Confirm the full observability chain is working on the live cluster before this 
 |---|---|---|
 | 2026-06-24 | Single shared Instrumentation CRD | Per-component CRDs add complexity without benefit. Per-pod env vars handle UST differentiation. Escalate only if a concrete per-app need arises. |
 | 2026-06-24 | Config-only native OTel for kagent/ADK and agentgateway | Both components have built-in OTel emitting GenAI semconv natively. No extra libraries needed for M2. |
-| 2026-06-24 | `EVENT_ONLY` for content capture | `true` is invalid under `gen_ai_latest_experimental` semconv and silently collects nothing. `EVENT_ONLY` is the correct value per research/28. |
+| 2026-06-24 | `EVENT_ONLY` for content capture | `true` is invalid under `gen_ai_latest_experimental` semconv and silently collects nothing. `EVENT_ONLY` is the correct value per the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) |
 | 2026-06-24 | Keep `witb_cost_usd`; retire `witb_tokens_total`/`witb_requests_total` | USD cost is not a standard gen_ai attribute. The pre-computed counter provides the demo's real-time cost-accumulation visual. Token counts are superseded by `gen_ai.usage.*`. |
 | 2026-06-24 | Replace `tier` label with `model` on `witb_cost_usd` | `tier` was the old model-dimension label. `gen_ai.request.model` is the standard. The `model` label enables cost-by-model grouping. |
 | 2026-06-24 | Keep `witb_` namespace | Appropriate for a project-specific custom metric in a workshop demo. Service identity comes from the Prometheus scrape target. Renaming adds churn without benefit. |

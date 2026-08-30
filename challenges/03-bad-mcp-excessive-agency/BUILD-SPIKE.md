@@ -7,8 +7,8 @@
 demotes to a pre-recorded segment plus a governance-map row (see Fallback). The recorded segment is
 built regardless (BUILD-SPEC §3, §11).
 
-**Single load-bearing unknown** (from `research/04-mcp-security.md`, `research/02-agentgateway.md`,
-`research/14-verify-at-build-sweep-2026.md` §2): whether agentgateway's `mcpAuthorization` allowlist
+**Single load-bearing unknown** (from `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`, `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`,
+`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §2): whether agentgateway's `mcpAuthorization` allowlist
 over `mcp.tool.name` actually enforces on the **Apache OSS build (`v1.3.0`)** with a **kagent agent in
 front**, as opposed to being an Enterprise-only (`EnterpriseAgentgatewayPolicy`) capability, or simply
 not firing when the caller is a kagent agent consuming the MCP server through the gateway. (The OSS

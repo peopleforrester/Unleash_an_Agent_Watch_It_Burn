@@ -1,7 +1,7 @@
 # ABOUTME: The scoped workshop agent (kagent v1alpha2), bound to the tight SA.
 # ABOUTME: MCP tools are attached with an EXPLICIT toolNames allowlist — never omit it.
 #
-# verify-at-build: confirmed against kagent 0.9.7 / kagent.dev/v1alpha2 (research/01-kagent.md).
+# verify-at-build: confirmed against kagent 0.9.7 / kagent.dev/v1alpha2 (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)).
 #  - spec.declarative.modelConfig is a string reference to the ModelConfig name.
 #  - spec.declarative.deployment.serviceAccountName binds the agent pod to our scoped SA.
 #  - spec.declarative.tools[].mcpServer.toolNames is the per-agent allowlist. Omitting it

@@ -40,7 +40,7 @@ These were finalized in the M5 design conversation (2026-06-24). Read the meta-P
 
 | Decision | Value |
 |---|---|
-| Install method | Datadog Operator (overrides research/32 Helm recommendation) |
+| Install method | Datadog Operator (overrides the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) Helm recommendation) |
 | ArgoCD Application — Operator | `gitops/apps/datadog-operator.yaml`, sync-wave `"3"`, renders `datadog/datadog-operator` Helm chart |
 | ArgoCD Application — CR | `gitops/apps/datadog-agent-cr.yaml`, sync-wave `"4"`, points to `gitops/manifests/datadog/` |
 | DatadogAgent CR path | `gitops/manifests/datadog/datadog-agent.yaml` |
@@ -61,7 +61,7 @@ These were finalized in the M5 design conversation (2026-06-24). Read the meta-P
 | Wire: Kyverno | Native OTLP only (`otelConfig: grpc`); Agent `kyverno` Prometheus check SKIPPED (would duplicate metrics) |
 | Wire: Falco | Agent `falco` check → alert logs (JSON per alert → Log Explorer) + aggregate Prometheus metrics → OOTB Falco dashboard; pre-decided M4 D2 |
 | Wire: Istio ambient | Agent `istio` check, `istio_mode: ambient`, `ztunnel_endpoint` → L4 TCP metrics; L7/waypoint is optional issue #25 only |
-| Wire: cert-manager | Agent `cert_manager` check + `rename_labels` mapping `name` → `cert_name` (research/18 + research/30 gotcha) |
+| Wire: cert-manager | Agent `cert_manager` check + `rename_labels` mapping `name` → `cert_name` (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) + the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) gotcha) |
 | Collector path (no Agent check) | kagent, agentgateway, guard-proxy — already handled by OTel pipeline |
 | Skip | KubeArmor (not deployed), ESO (generic OpenMetrics only), Backstage (no SDK), evil-mcp-shim (intentionally dark), customer-stream generator (emits nothing) |
 | EKS + CloudWatch | Skip — no workshop narrative |
@@ -76,9 +76,9 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
 1. **Meta-PRD #7 M5 Decision Log entries (D1–D9, 2026-06-24)** (`prds/7-observability-meta.md`) — full reasoning behind every locked decision above.
 2. **`gitops/apps/`** — read all existing YAML files to understand naming conventions, sync-wave patterns, and Helm chart shapes before creating any new Application files. Existing patterns: `otel-collector.yaml`, `falcosidekick.yaml`, `kyverno.yaml`.
 3. **`gitops/apps/namespaces.yaml`** — understand the existing namespace list before adding `datadog`.
-4. **`research/24-datadog-agent-install-eks-2026.md`** — Agent sizing (§2) and EKS-specific install considerations.
-5. **`research/30-per-component-telemetry-synthesis-2026.md`** — per-component telemetry questions for all 13 stack components; informs Autodiscovery annotation content.
-6. **`research/18-datadog-integrations-stack-2026.md`** — named integration rows for ArgoCD, Falco, Istio ambient, cert-manager; verify current gotchas (especially `rename_labels` for cert-manager).
+4. **`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`** — Agent sizing (§2) and EKS-specific install considerations.
+5. **`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`** — per-component telemetry questions for all 13 stack components; informs Autodiscovery annotation content.
+6. **`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`** — named integration rows for ArgoCD, Falco, Istio ambient, cert-manager; verify current gotchas (especially `rename_labels` for cert-manager).
 7. **`prds/23-falco-runtime-alerts-datadog.md`** — M4 Falco work already done; this PRD adds the Agent path only.
 8. **`docs/BUILD-SPEC.md`** — the demo beats that depend on M5 data flowing.
 
@@ -171,7 +171,7 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
 
 ### Milestone 2 — Named integration annotations: ArgoCD, Falco, cert-manager, Istio ambient
 
-**Step 0:** Read `research/30-per-component-telemetry-synthesis-2026.md` (all rows for ArgoCD, Falco, Istio ambient, cert-manager). Read `research/18-datadog-integrations-stack-2026.md` (named integration rows). Then read each target component's existing manifest in `gitops/apps/` before adding annotations.
+**Step 0:** Read `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` (all rows for ArgoCD, Falco, Istio ambient, cert-manager). Read `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` (named integration rows). Then read each target component's existing manifest in `gitops/apps/` before adding annotations.
 
 **Context:** Agent Autodiscovery wires named integrations via pod annotations on the component's Deployment or DaemonSet. The annotations go on the pod template (`spec.template.metadata.annotations`), not on the top-level resource. The annotation key format is `ad.datadoghq.com/<container-name>.checks`.
 

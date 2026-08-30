@@ -19,7 +19,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 - [x] Falco Talon (terminate pod on fork bomb); [x] chart 0.4.1 (app v0.3.0)
 - [x] NetworkPolicy default-deny + egress allowlist (no internet -> S3 blocked); [~] VPC CIDR + Bedrock endpoint
 - [x] PID limit nodeadm config (podPidsLimit); [x] delivery via Terraform cloudinit_pre_nodeadm NodeConfig on AL2023
-  (the only true inline fork-bomb block; Tetragon/KubeArmor confirmed NOT to replace it, research/20-22)
+  (the only true inline fork-bomb block; Tetragon/KubeArmor confirmed NOT to replace it, the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`))
 - [x] Istio ambient + STRICT mTLS (= SPIFFE identity); [~] ztunnel footprint on t3.large
 - [x] External Secrets Operator, cert-manager, Backstage; [~] ESO store backing, certs live
 - [~] **Harbor** registry (cosign sign-and-push + verify-image-signatures Enforce are wired and scoped
@@ -28,7 +28,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 ## Agent + AI guardrails
 
 - [x] kagent 0.9.9 Agent + Bedrock ModelConfig (**Nova Pro default** since the model swap; Haiku/Sonnet/Opus tiers remain for the cost race, us. Geo profile);
-  [~] Bedrock model access live + A2A usage key (cost counter parses adk_usage_metadata, fixed research/14)
+  [~] Bedrock model access live + A2A usage key (cost counter parses adk_usage_metadata, fixed the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`))
 - [x] guard-proxy: input block-list + classifier (progressive), output Regex, cost meter, rate-limit/cost-cap, prompt-stream
 - [x] LLM Guard wiring; [~] verdict envelope on the live image
 - [x] agentgateway MCP authz config; [~] enforcement on OSS v1.3.0 with kagent
@@ -47,7 +47,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 - [x] Datadog path SETTLED = HYBRID: OTel Collector stays the neutral primary (already wired); add a
   Datadog Agent DaemonSet for EKS infra auto-discovery + named integrations. Datadog stays swappable.
   Whitney owns the Datadog account/keys/Agent install/dashboards; we own the OTel side + manifest
-  annotations + the datadog-secret consumption. [~] service-map live verify; impl spec in research/24
+  annotations + the datadog-secret consumption. [~] service-map live verify; impl spec in the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`)
 
 ## Demo, games, access
 
@@ -89,4 +89,4 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 - Tetragon: RETIRED 2026-08-30 (Michael's ruling, docs/DECISION-LOG.md). It did the identical C3 block to
   KubeArmor, so it was the redundant second prevention engine. KubeArmor is now the sole C3 inline-block.
 - Fork bomb: still the PID cap + Falco/Talon pair. KubeArmor/Tetragon were confirmed NOT to replace the PID
-  cap for the fork bomb specifically (research/20-22); that is a separate challenge from the C3 file block.
+  cap for the fork bomb specifically (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`)); that is a separate challenge from the C3 file block.

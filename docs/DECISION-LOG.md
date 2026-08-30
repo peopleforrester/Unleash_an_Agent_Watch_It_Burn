@@ -633,7 +633,7 @@ completes) — the axis Falco+Talon structurally cannot cover (they react after 
 **Tetragon is retired**: it does the identical C3 block to KubeArmor (kprobe+override vs BPF-LSM), so
 it is a redundant second prevention engine.
 
-Viability was the open question and is closed: spike `docs/research/runtime-exec-block-kubearmor-vs-tetragon.md`
+Viability was the open question and is closed: spike `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`
 (result 2026-07-18) live-validated KubeArmor enforcing on our AL2023/containerd nodes on r3-1
 (`Permission denied` on the bait file with the Tetragon rule removed). No Bottlerocket node group needed;
 the old containerd namespace-resolution blocker is obsolete.

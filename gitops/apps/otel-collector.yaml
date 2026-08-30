@@ -130,7 +130,7 @@ spec:
             # Generates RED metrics from spans. add_resource_attributes propagates the UST resource
             # attributes (deployment.environment.name -> env, service.version) onto the generated
             # metrics; it defaults to false, and without it Datadog "View related logs" from a
-            # span-derived metric silently finds nothing (research/19, research/23).
+            # span-derived metric silently finds nothing (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`), the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`)).
             # Connector key is `span_metrics` (the current OTel semconv name; `spanmetrics` is the
             # deprecated alias slated for removal). add_resource_attributes is supported on contrib 0.158.2.
             span_metrics:

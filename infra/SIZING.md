@@ -20,7 +20,7 @@ One VPC (`10.0.0.0/16`) is provisioned **once** for the whole fleet, before any 
 - Small public `/24`s for NAT / ingress.
 - Cluster configs reference the **existing** VPC id + subnet ids; they do not each create a VPC.
 
-IP math: about 9,000 pod IPs at 60 clusters in a `/16` is roughly 14 percent utilization, so VPC-CNI prefix delegation is not needed. Independent VPCs are only warranted for hard isolation or compliance, which a fake-data lab does not need. Source: `research/25-eks-quotas-shared-vpc-topology-2026.md`.
+IP math: about 9,000 pod IPs at 60 clusters in a `/16` is roughly 14 percent utilization, so VPC-CNI prefix delegation is not needed. Independent VPCs are only warranted for hard isolation or compliance, which a fake-data lab does not need. Source: `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`.
 
 ## Per-cluster resource budget (one student cluster)
 
@@ -41,7 +41,7 @@ Cost delta to weigh (one node times 60 clusters times 3 hours, compute only):
 - `m6i.xlarge` plus 15 percent.
 - `2xlarge` plus 100 to 131 percent.
 
-M-series is a **measured fallback only, never the starting point.** Source: `research/24-datadog-hybrid-impl-sizing-2026.md`.
+M-series is a **measured fallback only, never the starting point.** Source: `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`.
 
 Pin the exact per-cluster CPU/RAM requests into the cluster Helm values at build, after measuring a real cluster in Phase 2. Until measured, size conservatively and treat the numbers as estimates.
 
@@ -81,7 +81,7 @@ N managed EKS clusters means N× a few AWS resources, and the right quota will b
 - **EC2 On-Demand Standard vCPU** (quota code **L-1216C47A**): this is the real quota to request. Target about **1,000 vCPU** for an all-`t3.xlarge` fleet.
 - With a **shared VPC**, the VPC-per-region, Elastic IP, and NAT quotas are moot (one VPC, shared subnets).
 
-File quota-increase requests **well ahead of the event**; AWS approval is not instant. Treat the EC2 vCPU quota as the first thing to confirm once the ceiling is set. Source: `research/25-eks-quotas-shared-vpc-topology-2026.md`.
+File quota-increase requests **well ahead of the event**; AWS approval is not instant. Treat the EC2 vCPU quota as the first thing to confirm once the ceiling is set. Source: `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`.
 
 ## Open items
 

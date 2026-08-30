@@ -203,7 +203,7 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
   the existing VPC id + subnet ids. Not one VPC per student. Rationale: take-home portability (a
   hub-managed cluster goes inert when detached from its hub), blast-radius isolation (correct for a chaos
   lab), and avoiding ArgoCD sharding past the ~20-30 clusters-per-instance guidance for a 2-hour event.
-  See `infra/SIZING.md` and `research/25-eks-quotas-shared-vpc-topology-2026.md`.
+  See `infra/SIZING.md` and `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`.
 - Delivery: each cluster's **in-cluster ArgoCD** runs the app-of-apps with **sync-waves** ordering
   components by dependency. **Crossplane was tried and removed**; **Terraform** provisions, ArgoCD takes over.
 

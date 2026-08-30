@@ -1,7 +1,7 @@
 # ABOUTME: Beat-1 control. Blocks out-of-band mutation of ArgoCD-managed resources.
 # ABOUTME: Enforce from the start (no toggle); ArgoCD self-heal is defense in depth.
 # verify-at-build: confirmed approach against Kyverno v1.18.1 + Argo CD v3.4.3
-# (research/06-cncf-stack.md). background MUST be false for userInfo-based excludes.
+# (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)). background MUST be false for userInfo-based excludes.
 #
 # The exclude block is load-bearing: denying every non-ArgoCD principal on UPDATE/DELETE
 # would also block the built-in controllers (deployment/replicaset/garbage-collector) and

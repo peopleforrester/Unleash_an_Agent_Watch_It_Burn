@@ -13,7 +13,7 @@
 # GUARDING STAYS ON guard-proxy: agentgateway prompt-guards are documented ONLY for llm.models[] LLM-provider
 # backends and are confirmed NOT to attach to a plain HTTP/A2A (JSON-RPC) backend (verified 2026-06-25). The
 # workshop-agent is an A2A endpoint, so agentgateway fronts it as a plain L7 hop; the input/output guard
-# decisions remain in guard-proxy (the LLM-Guard reverse proxy, research/02 recommended primary).
+# decisions remain in guard-proxy (the LLM-Guard reverse proxy, the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) recommended primary).
 #
 # verify-at-build (live cluster, does NOT block the A2A hop):
 #   - MCP target path: workshop-mcp serves streamable-http at :8000/mcp (RemoteMCPServer url in resources.yaml).

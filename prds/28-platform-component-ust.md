@@ -30,7 +30,7 @@ Add `tags.datadoghq.com/service`, `tags.datadoghq.com/version`, and `tags.datado
 | `service` value per component | Component's natural lowercase name (e.g., `argocd`, `kyverno`, `falco`, `cert-manager`, `istio`) |
 | `version` value per component | Component's actual deployed software version from `VERSIONS.lock` or Helm chart values |
 | Annotation placement | Pod template (`spec.template.metadata.annotations`) in each Helm values file — NOT top-level resource metadata |
-| Component list | ArgoCD, Kyverno, Falco, cert-manager, Istio ambient; add any others identified in `research/30-per-component-telemetry-synthesis-2026.md` |
+| Component list | ArgoCD, Kyverno, Falco, cert-manager, Istio ambient; add any others identified in `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` |
 | AI-layer components | Do NOT modify — already correct from PRD #27 and earlier milestones |
 | Acceptance method | `GET /api/v1/service_dependencies` (Datadog API) — no browser automation |
 | Verification script | Extend `verify/test_datadog_service_map.py` (from PRD #27) per component |
@@ -44,7 +44,7 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
 
 1. **PRD #7 M6 Decision Log entries (2026-06-25)** (`prds/7-observability-meta.md`) — Decision Log entries 591, 598, 599, 603 explain the scope, milestone-per-component pattern, and why this PRD is separate from PRD #27.
 2. **PRD #27** (`prds/27-ai-layer-ust-service-map-correlation.md`) — must be merged to main before this PRD starts. Read its Decision Log for the UST locked values that also apply here (`deployment.environment.name=production`, `service.name` naming convention).
-3. **`research/30-per-component-telemetry-synthesis-2026.md`** — the per-component telemetry synthesis for all 13 stack components. Read the rows for ArgoCD, Kyverno, Falco, cert-manager, and Istio ambient to understand what telemetry each emits and what Helm values files to modify.
+3. **`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`** — the per-component telemetry synthesis for all 13 stack components. Read the rows for ArgoCD, Kyverno, Falco, cert-manager, and Istio ambient to understand what telemetry each emits and what Helm values files to modify.
 4. **`gitops/apps/`** — read all existing Application YAML files before modifying any. Note how each component's Helm values are specified (`helm.valuesObject` vs. `helm.parameters` vs. a `values.yaml` file reference). Match the existing pattern for each component.
 5. **`verify/test_datadog_service_map.py`** (from PRD #27) — the script to extend per component. Read it in full before adding new assertions.
 
@@ -94,11 +94,11 @@ Check `VERSIONS.lock` at the repo root for the component's deployed version. If 
 
 ## Milestones
 
-> **Order:** ArgoCD first (lowest complexity, no instrumentation gaps), then Kyverno (OTLP-only, confirm edge via Collector path), then Falco, cert-manager, Istio ambient. Skip any component that `research/30` identifies as not emitting service-identifiable telemetry.
+> **Order:** ArgoCD first (lowest complexity, no instrumentation gaps), then Kyverno (OTLP-only, confirm edge via Collector path), then Falco, cert-manager, Istio ambient. Skip any component that `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` identifies as not emitting service-identifiable telemetry.
 
 ### Milestone 1 — ArgoCD UST annotations
 
-**Step 0:** Read `gitops/apps/` for the ArgoCD Application YAML. Read `research/30-per-component-telemetry-synthesis-2026.md` for the ArgoCD row.
+**Step 0:** Read `gitops/apps/` for the ArgoCD Application YAML. Read `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` for the ArgoCD row.
 
 **Steps:**
 
@@ -181,7 +181,7 @@ Check `VERSIONS.lock` at the repo root for the component's deployed version. If 
 
 ### Milestone 3 — Falco UST annotations
 
-**Step 0:** Read `gitops/apps/falco.yaml`. Falco runs as a DaemonSet — annotations go on the DaemonSet pod template. Read the Falco row in `research/30-per-component-telemetry-synthesis-2026.md` for the exact annotation path in the Falco Helm chart.
+**Step 0:** Read `gitops/apps/falco.yaml`. Falco runs as a DaemonSet — annotations go on the DaemonSet pod template. Read the Falco row in `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` for the exact annotation path in the Falco Helm chart.
 
 **Steps:**
 

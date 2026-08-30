@@ -84,14 +84,14 @@ earlier "gitops/ai-layer/ is canonical, agent/gateway/ is the synced source mirr
 
 - **agentgateway staged canonical** (`gitops/ai-layer/agentgateway.yaml`, commit b64e7ea): ported from
   agent/gateway/agentgateway.yaml; namespace left to the kustomization (agent), service FQDNs
-  ATTENDEE_NAMESPACE→agent, v1.3.0 OTel tracing expressed in the config file (research/29), UST env
+  ATTENDEE_NAMESPACE→agent, v1.3.0 OTel tracing expressed in the config file (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)), UST env
   kept. INTENTIONALLY NOT in kustomization.yaml resources, so it does not auto-deploy/crash-loop live
   clusters before 5 verify-at-build blockers resolve on a real cluster (image digest, v1.3.0 config
   schema, llm-guard-webhook dependency, tracing-key alignment, Beat-3 mcp-authz control). Header
   documents all five. kustomize build of the ai-layer bundle confirmed clean (file correctly excluded).
 - **Reconciliation** (commit 7b7c270): added OTEL_RESOURCE_ATTRIBUTES (Datadog UST) to the gitops
   guard-proxy Deployment so it matches kagent + agentgateway (DD Agent reads it for log tagging now;
-  OTLP endpoint env arrives with the deferred guard-proxy OTel SDK work, research/33 M3). Repointed
+  OTLP endpoint env arrives with the deferred guard-proxy OTel SDK work, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) M3). Repointed
   verify/test_observability.py UST asserts at the canonical gitops copies (select Deployment by name).
   Repointed docs (STACK-WALKTHROUGH AI-gateway + LLM-Guard cells, BUILD-SPEC §7 stale create-line,
   cost/README) to gitops. Added RECONCILIATION headers to the Beat-3 mcp-authz toggle manifests +
@@ -100,7 +100,7 @@ earlier "gitops/ai-layer/ is canonical, agent/gateway/ is the synced source mirr
   to `agent`); bodies left unchanged pending the existing beat-3 mcpAuthorization-enforcement SPIKE.
 - **Verification:** all 19 verify/*.py render-gate tests PASS; lab-distribution 13 tests PASS. Both
   commits pushed staging→main (origin/main == 7b7c270). Whitney coordination still owed on the
-  agentgateway tracing config (research/29) + her PRD pointer; the 5 blockers are live-cluster items.
+  agentgateway tracing config (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)) + her PRD pointer; the 5 blockers are live-cluster items.
 
 ### WALKTHROUGH REFRAMED -> LIVE-DELIVERY RUN-OF-SHOW (2026-06-23, Michael correction)
 
@@ -309,12 +309,12 @@ real bugs; all on staging+main with render-gate guards. Offline suite now 172 ch
 
 ### Doc-accuracy spike corrections applied (2026-06-20)
 
-Four multi-agent doc-accuracy spikes landed (research/11 version re-pin, research/12 mechanism
-verification, research/13 model cards + Bedrock IDs, research/14 verify-at-build sweep). All
+Four multi-agent doc-accuracy spikes landed (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) version re-pin, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) mechanism
+verification, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) model cards + Bedrock IDs, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) verify-at-build sweep). All
 corrections applied and the full offline suite is green (136 checks, 18 files). Verification method:
 live web research against vendor primary sources + `aws bedrock list-inference-profiles`.
 
-- **Cost-counter key bug (CRITICAL, research/14 §3a):** kagent emits Google ADK metadata under
+- **Cost-counter key bug (CRITICAL, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §3a):** kagent emits Google ADK metadata under
   `adk_usage_metadata`, NOT `kagent_usage_metadata`. The old key would tally ZERO tokens and break
   the cost story. Fixed in both proxy.py copies, cost/README.md, and the two tests
   (test_cost_counter, test_proxy_guards).
@@ -324,7 +324,7 @@ live web research against vendor primary sources + `aws bedrock list-inference-p
   `mcp.{targets,policies}`; tests updated.
 - **Tempo chart repointed** to `grafana-community/helm-charts` 2.2.3 / app 2.10.7 (old grafana repo
   path is a dead stub after the 2026-01-30 migration). loki/alloy correctly stay at grafana/helm-charts.
-- **Bedrock model IDs (research/13):** Sonnet `us.anthropic.claude-sonnet-4-6`, Opus
+- **Bedrock model IDs (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)):** Sonnet `us.anthropic.claude-sonnet-4-6`, Opus
   `us.anthropic.claude-opus-4-8` (NO date stamp - the `<DATE>` placeholders were wrong), Fable
   `us.anthropic.claude-fable-5` (now live on Bedrock). Sonnet/Opus require the `us.` Geo profile
   (no In-Region in us-west-2). Applied in resources.yaml, VERSIONS.lock, BUILD-SPEC.
@@ -336,7 +336,7 @@ live web research against vendor primary sources + `aws bedrock list-inference-p
 - **Harbor/cosign Enforce upgrade:** verify-image-signatures flipped Audit→Enforce, scoped to
   `harbor.agenticburn.com/*` so public demo images are unaffected.
 
-Docs 3/6 reconciliation (2026-06-21): DONE, comment-safe. Research spike research/15 established that
+Docs 3/6 reconciliation (2026-06-21): DONE, comment-safe. Research spike the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) established that
 comment THREADS survive any update at the data layer (even media-PATCH); only the editor's visual
 anchor orphans. Method used: surgical Docs API `documents.batchUpdate` `replaceAllText` on the same
 file ID, with each comment's `quotedFileContent` treated as a no-edit zone, gated on
@@ -349,7 +349,7 @@ spans verbatim). Exported OAuth tokens deleted after use.
 Google Drive reorganized (2026-06-21): top level trimmed to the core 7 (1 START HERE ... 7 Walkthrough)
 plus 3 subfolders. "Decisions" (8 Challenges, 9 Control rationale, 10 Tech status, TS-agent proposal,
 KubeArmor/Falco doc, Readiness Checklist). "Research Spikes" (Whitney's 4 spike docs + a new index doc
-pointing to repo research/11-27). "Archive" (Comment Archive backup + older versions). Docs 3/6/7 updated in place to the new architecture, comment-safe (banners removed after):
+pointing to repo the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)). "Archive" (Comment Archive backup + older versions). Docs 3/6/7 updated in place to the new architecture, comment-safe (banners removed after):
 Doc 7 (0 comments) full-rewritten from repo docs/STACK-WALKTHROUGH.md via media-PATCH; Doc 6 (2 comments)
 surgically edited via Docs API replaceAllText on its 4 real stale lines (ApplicationSet/cluster-generator
 -> in-cluster ArgoCD app-of-apps; deleted-tree + hub-cluster/spoke-cluster refs -> attendee-cluster/
@@ -388,7 +388,7 @@ kubeconfig /tmp/watch-it-burn-test.kubeconfig). Full IDP deployed via app-of-app
   that times out ("timed out waiting for the condition") on this cluster -> beat-cost/02/03 can't
   complete. Agent + wiring confirmed correct (AGENT_URL -> workshop-agent.agent:8080). Needs a harness
   fix (helper-pod path) to run the agent gates.
-AGENT GATES VALIDATED LIVE (2026-06-21, post-fixes): beat-cost PASS - benign request moved the cost counter 0.0->$0.001588 (1164 tokens) and a block-listed destructive request flatlined it (pre-LLM, 0 tokens). Confirms #8 (live kagent 0.9.9 key is result.metadata.kagent_usage_metadata, NOT adk_; research/14 was wrong - record_usage now accepts both, kagent first) and #7 (A2A message/send needs params.message.messageId). Agent compiles, answers via Bedrock Haiku, calls the workshop-mcp list_pods tool. #6 (harness ephemeral curl-pod times out) still OPEN - validations done via kubectl port-forward; harness needs a port-forward refactor. beat-02 output-redaction + beat-03 mcp-authz (needs agentgateway) = remaining live items.
+AGENT GATES VALIDATED LIVE (2026-06-21, post-fixes): beat-cost PASS - benign request moved the cost counter 0.0->$0.001588 (1164 tokens) and a block-listed destructive request flatlined it (pre-LLM, 0 tokens). Confirms #8 (live kagent 0.9.9 key is result.metadata.kagent_usage_metadata, NOT adk_; the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) was wrong - record_usage now accepts both, kagent first) and #7 (A2A message/send needs params.message.messageId). Agent compiles, answers via Bedrock Haiku, calls the workshop-mcp list_pods tool. #6 (harness ephemeral curl-pod times out) still OPEN - validations done via kubectl port-forward; harness needs a port-forward refactor. beat-02 output-redaction + beat-03 mcp-authz (needs agentgateway) = remaining live items.
 
 GATES PASS: Kyverno Audit->Enforce toggle (beat-1, post-#4), RBAC escalation FORBIDDEN, image-registry
 villain block (Enforce), require-probes/labels/limits admission. NOT TESTABLE here: PID-limit fork bomb
@@ -409,7 +409,7 @@ infra/spoke-cluster -> infra/attendee-cluster; cluster name watch-it-burn-spoke-
 added vpc.id/subnets refs + infra/shared-vpc/README.md; rewrote teardown.sh (prefix-scoped, no hub, no
 Tempo-wipe); rewrote attendee README + bootstrap.sh wording; prose docs (BUILD-SPEC/STACK-WALKTHROUGH/
 TECH-STATUS/SIZING/README) updated by a scoped subagent; GITOPS-RECONCILIATION marked resolved; tests
-updated (163 green). Quotas (research/25): EKS clusters default 100 (60 fits); the ask is EC2 vCPU
+updated (163 green). Quotas (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)): EKS clusters default 100 (60 fits); the ask is EC2 vCPU
 L-1216C47A ~1000. STILL OWED (separate pass): the platform/ duplicate tree (observability, kyverno) is
 partly referenced (falco rules) and needs its own reconciliation; Google Docs 1/3/6/7/10 still describe
 hub-and-spoke and need the comment-safe update.
@@ -419,7 +419,7 @@ add a Datadog Agent DaemonSet for EKS infra auto-discovery + named integrations.
 (drop the Agent + the collector's datadog exporter to run OSS-only). DIVISION OF LABOR: Whitney owns the
 Datadog account, API keys, Agent install, and dashboards (we do NOT have keys yet, and that is her piece);
 we own the OTel-side wiring (done), the manifest annotations for named integrations, and consuming the
-datadog-secret. Next-level implementation + node sizing in research/24.
+datadog-secret. Next-level implementation + node sizing in the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`).
 
 Observability wiring DONE (2026-06-21, path-independent): (1) OTel Collector spanmetrics connector with
 add_resource_attributes:true wired into traces-exporters + metrics-receivers (so span metrics carry UST
@@ -446,13 +446,13 @@ ONLY, so for Whitney to use it on our code there must be TS code. Decision (Mich
 kagent Python agent as primary/fallback; ADD an OPTIONAL TS agent (recommended shape: Mastra or
 Vercel AI SDK, wrapped as a kagent `type: BYO` A2A backend so it keeps agentgateway + MCP + HITL +
 LLM Guard), shipping a `spiny-orb.yaml` + Weaver registry + OTel SDK init so spiny-orb runs out of
-the box -> Datadog. Research: research/16 (corrected; the earlier Spiny=Pixie guess is void).
+the box -> Datadog. Research: the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) (corrected; the earlier Spiny=Pixie guess is void).
 BUILD IS GATED on Whitney's answers (framework, Weaver registry, how she runs spiny-orb on stage).
 Proposal Google Doc created + shared with co-presenter (notified) + comment tagging her
 (in the shared "Watch it Burn" Drive folder; doc + folder IDs and co-presenter email held
 out of the repo).
 
-KubeArmor research spike (2026-06-21): DONE -> research/17-kubearmor-forkbomb-2026.md. Verdict:
+KubeArmor research spike (2026-06-21): DONE -> the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`). Verdict:
 KubeArmor v1.7.3 CANNOT prevent a fork bomb the way podPidsLimit does - its KubeArmorPolicy has NO
 process-count/thread-count/fork-rate/PID field (verified vs the shipped spec); it only allow/denies
 named binary exec, file, network, capabilities (syscalls are audit-only regardless of action). The
@@ -465,20 +465,20 @@ is a candidate DIFFERENT-attack station (CNCF-native inline prevention: default-
 secret-file reads, block egress) - still an OPEN option, not folded in. No repo defense changed.
 Findings Google Doc shared with the co-presenter (doc ID held out of the repo).
 
-Runtime-enforcement + observability spikes (2026-06-21): research/20-23.
-- research/20 (Tetragon): does NOT replace the PID cap for fork bombs - Sigkill is kill-on-detect
+Runtime-enforcement + observability spikes (2026-06-21): the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`).
+- the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) (Tetragon): does NOT replace the PID cap for fork bombs - Sigkill is kill-on-detect
   (outrunnable), Override is all-or-nothing (zero forks, not a ceiling of N), --cgroup-rate is a
   telemetry throttle. Standalone w/o Cilium CNI CONFIRMED (v1.7.0, VPC-CNI ok). Value = different-role
   (process lineage + inline Override of OTHER agent misbehavior). AL2023 Override needs
   CONFIG_BPF_KPROBE_OVERRIDE + non-confidentiality lockdown - verify at build.
-- research/21 (KubeArmor claims, cited): research/17 CONFIRMED adversarially - no count/rate/PID field,
+- the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) (KubeArmor claims, cited): the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) CONFIRMED adversarially - no count/rate/PID field,
   syscalls audit-only; captured AL2023 node artifact shows bpf live in /sys/kernel/security/lsm. Safe
   to hand Whitney.
-- research/22 (4-way comparison, cited): only podPidsLimit prevents a fork bomb inline (cgroup PIDs
+- the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) (4-way comparison, cited): only podPidsLimit prevents a fork bomb inline (cgroup PIDs
   controller returns -EAGAIN at fork). Falco+Talon/Tetragon = detect+kill (outrunnable); KubeArmor =
   nothing as a count cap. Framing: PID cap = wall, Falco = alarm, Tetragon-or-KubeArmor = locked door
   (pick at most one for inline prevention of OTHER attacks).
-- research/23 (decision points for Whitney): 8 decisions w/ pros/cons; design principle = Datadog
+- the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) (decision points for Whitney): 8 decisions w/ pros/cons; design principle = Datadog
   REQUIRED+primary for this event, OTel neutral layer, OSS (Prom/Grafana/Tempo) swappable fallback,
   Datadog additive via OTEL_RESOURCE_ATTRIBUTES (not DD_*). Verified live: OTel Collector has NO
   connectors: block; Falcosidekick forwards only to Talon (DD/OTLP wiring is net-new). NOTE: Decision 4
@@ -501,7 +501,7 @@ annotation requirement noted; full per-cluster automation is deferred provisioni
 
 Fable 5: RETIRED from this workshop (Michael, 2026-06-21). Not a tier in the comparison. The Fable
 additions made during the doc-accuracy pass were reverted (resources.yaml, VERSIONS.lock, BUILD-SPEC);
-research/13 still records that it went live on Bedrock as a dated finding, but it is out of scope here.
+the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) still records that it went live on Bedrock as a dated finding, but it is out of scope here.
 Do not re-raise Fable; Michael will say if it comes back.
 
 ### Session-close note (2026-06-19)
@@ -596,7 +596,7 @@ full section-by-section reconciliation of the spec is still pending.
 
 - [x] Initialize repo, write BUILD-SPEC rev1 to docs/, create GitHub repo (private).
 - [x] Research spike (6 parallel) grounding every beat against June 2026 reality →
-      research/01..06. Verification method: web research vs official docs, dated 2026-06-15.
+      the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)..06. Verification method: web research vs official docs, dated 2026-06-15.
 - [x] Write BUILD-SPEC rev2, scope reframe + all research corrections applied
       (docs/BUILD-SPEC.md). Bad-MCP beat planned LIVE, gated on Phase 4b build-spike.
 - [x] **Declarative build wave complete (on `staging`, commit 6d31e5c).** Every
@@ -806,16 +806,16 @@ current docs, not against a running build.
 
 1. **agentgateway `mcpAuthorization` CEL tool-deny actually enforces on the Apache OSS
    build with a kagent A2A agent in front.** If it doesn't, the bad-MCP beat ships as a
-   recorded segment + governance-map row, not a live toggle. (research/04)
+   recorded segment + governance-map row, not a live toggle. (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`))
 2. **agentgateway native response webhook fires for a kagent A2A endpoint**, moot if
-   sidecar is primary, but verify before relying on the gateway path. (research/02)
+   sidecar is primary, but verify before relying on the gateway path. (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`))
 3. **kagent emits `gen_ai.*` / `execute_tool` spans and the content-capture flag name** , 
-   the trace narration depends on it. (research/05)
+   the trace narration depends on it. (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`))
 4. **ArgoCD application-controller SA identity INSIDE the vCluster** for the drift-policy
-   exclude; wrong exclude either deadlocks self-heal or lets attack 3 through. (research/06)
-5. **kagent `requireApproval` runtime enforcement** through the serving path. (research/01)
+   exclude; wrong exclude either deadlocks self-heal or lets attack 3 through. (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`))
+5. **kagent `requireApproval` runtime enforcement** through the serving path. (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`))
 6. RAM: `Sensitive` NER model per-vCluster likely breaks the 1.5–2.5 GB/vCluster budget , 
-   use a shared LLM Guard service or output-`Regex`-only. (research/03)
+   use a shared LLM Guard service or output-`Regex`-only. (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`))
 
 ## Branch / repo status
 
@@ -889,7 +889,7 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
   zero). CAVEAT: bpf active was a prerequisite, NOT the blocker. The real reason we run Tetragon (per
   gitops/apps/tetragon.yaml) is KubeArmor's container-namespace resolution failing on AL2023 containerd 2.x
   (mntns=0 / task-not-found), which this check does NOT clear. Earlier "KubeArmor green-lit, no AMI change"
-  was WRONG; spike doc corrected. See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+  was WRONG; spike doc corrected. See the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`).
 - [DONE 2026-07-16] KubeArmor test rig BUILT (not yet validated): gitops/apps/kubearmor.yaml (operator
   1.7.4, autoDeploy), gitops/apps/kubearmor-policies.yaml, policies/kubearmor/block-recipe-snoop.yaml
   (KubeArmorPolicy Block). Engine added to R1 burn include-glob (engine only, no policy) so present on all

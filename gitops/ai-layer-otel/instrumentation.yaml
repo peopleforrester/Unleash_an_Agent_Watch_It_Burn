@@ -15,11 +15,11 @@
 # The OTel Operator injects the full Python SDK into any pod annotated
 # `instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"` (init-container + PYTHONPATH),
 # so app images carry only opentelemetry-api (no-op until injected). This is the locked custom-app pattern
-# (meta-PRD Decision Log 2026-06-24; overrides research/33's "No Operator").
+# (meta-PRD Decision Log 2026-06-24; overrides the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) "No Operator").
 #
 # verify-at-build (PRD #20 M2 Step 1): resolve the ACTUAL Collector Service name + namespace on the live
 # cluster (`kubectl get svc -A | grep -i otel-collector`) and set `exporter.endpoint` to it. The value
-# below is the current-manifest candidate (research/34 + #20 flagged the monitoring-vs-observability
+# below is the current-manifest candidate (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) + #20 flagged the monitoring-vs-observability
 # ambiguity); do NOT assume it, confirm before relying.
 apiVersion: opentelemetry.io/v1alpha1
 kind: Instrumentation

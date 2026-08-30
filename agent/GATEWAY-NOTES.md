@@ -1,4 +1,4 @@
-*Purpose: the confirmed gateway/guardrail mechanisms for the workshop, input guard, output sidecar, MCP authz, plus the [SPIKE]s and the fallback decisions, grounded in `research/02-agentgateway.md` and `research/03-llm-guard.md`.*
+*Purpose: the confirmed gateway/guardrail mechanisms for the workshop, input guard, output sidecar, MCP authz, plus the [SPIKE]s and the fallback decisions, grounded in `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` and `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`.*
 
 # Gateway & Guardrail Notes
 
@@ -34,32 +34,32 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   agent response, calls LLM Guard **`POST /analyze/output`**, and acts on the verdict:
   - `is_valid == false` → **BLOCK** (hard error; raw body never leaves)
   - `is_valid == true` → forward **`sanitized_output`** (redacted) → **REDACT**
-  (`research/03-llm-guard.md` §Verdict semantics.)
+  (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §Verdict semantics.)
 - **LLM Guard side:** output **`Regex`** scanner ONLY by default, the provably **model-free**
   control, matching the sentinel formats (`FAKE-PROD-DB-PASSWORD-sentinel-9f2a`,
   `FAKE-MCP-EXFIL-sentinel-4c1d`). There is **no `Secrets` OUTPUT scanner**, `Secrets` is
-  input-only; the rev1 spec naming was wrong (`research/03-llm-guard.md` §Risks.1).
+  input-only; the rev1 spec naming was wrong (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §Risks.1).
 - **Why sidecar is PRIMARY (not the native agentgateway response webhook):** the native response
   webhook can only **Mask, not Reject**, and is documented only for recognized LLM-provider backends
   returning OpenAI chat-completion bodies, **unverified** against a kagent A2A endpoint. The sidecar
   removes both unknowns and gives the hard block the "blocked" copy needs.
-  (`research/02-agentgateway.md` §2/§5.)
+  (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §2/§5.)
 - **Files:** `gateway/llm-guard-sidecar.yaml` (authoritative sidecar spec);
   toggles `gateway/output-guard-off.yaml` (default) / `gateway/output-guard-on.yaml`.
 - **Fail-closed:** `PROXY_FAIL_CLOSED=true`, if LLM Guard is unreachable the sidecar blocks, never
-  passes the raw response (Michael's no-silent-fallback rule; `research/02-agentgateway.md` §Risks.4).
+  passes the raw response (Michael's no-silent-fallback rule; `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §Risks.4).
 
 ### 3. MCP authorization, agentgateway `mcpAuthorization` CEL rules + `targets` allowlist
 - **What:** CEL rules over `mcp.tool.name` (and `mcp.tool.target`, `jwt.*`), evaluated per MCP method
   (`list_tools`, `call_tool`). Rules OR together; any match grants access. Disallowed tools are
   **auto-filtered out of `list_tools`**, so the agent never sees a tool it cannot call. Server
-  allowlisting is structural via the `targets` list. (`research/02-agentgateway.md` §4.)
+  allowlisting is structural via the `targets` list. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §4.)
 - **Beat-3 control:** baseline = **default Allow** (`mcp-authz-off.yaml`, the "before") so the rogue
   tool **`read_internal_config`** is reachable and leaks `FAKE-MCP-EXFIL-sentinel-4c1d`. The "after"
   (`mcp-authz-on.yaml`) denies the rogue tool (allow-only-with-implicit-deny, or explicit
   `action: Deny`) and confines authz to the `workshop-mcp` target.
 - **No native human-in-the-loop.** MCP policy is allow/deny/filter via CEL only, do NOT promise HITL;
-  narrate it as a gap if the talk needs it. (`research/02-agentgateway.md` §"Unverified".)
+  narrate it as a gap if the talk needs it. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §"Unverified".)
 - **Files:** baseline in `gateway/agentgateway.yaml`; toggles
   `gateway/mcp-authz-off.yaml` (default) / `gateway/mcp-authz-on.yaml`.
 
@@ -79,18 +79,18 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
    `guardrails` under `llm.models[]` with a recognized provider and assumes OpenAI-format bodies.
    - Affects the **input** request-phase webhook (whether it triggers at all) and is the reason the
      **output** guard uses the sidecar instead of the native response webhook. Test the input path
-     early; the output path already sidesteps it. (`research/02-agentgateway.md` §"Unverified".)
+     early; the output path already sidesteps it. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §"Unverified".)
 
 3. **[SPIKE] (documented alternative) native output response-phase webhook.** Kept as the *documented
    alternative* to the sidecar, NOT primary. Two known limits: it can only **Mask, not Reject**, and
    it is unverified against an A2A backend. Re-test once the A2A-backend question (#2) is resolved; if
    it fires, it is the more elegant "the gateway itself sees the response" story, but frame the
-   beat-2 "after" as **redact**, reserve "block" for the sidecar. (`research/02-agentgateway.md` §5.)
+   beat-2 "after" as **redact**, reserve "block" for the sidecar. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §5.)
 
 4. **[SPIKE] webhook fail-open vs fail-closed.** OSS webhook failure-mode behavior (what happens when
    the LLM Guard wrapper is down) was not confirmed from docs. A silent fail-open re-leaks the secret
    and violates the no-silent-fallback rule. Confirm agentgateway fails closed, or wrap so it does.
-   The sidecar enforces this with `PROXY_FAIL_CLOSED=true`. (`research/02-agentgateway.md` §Risks.4.)
+   The sidecar enforces this with `PROXY_FAIL_CLOSED=true`. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §Risks.4.)
 
 ---
 
@@ -100,7 +100,7 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   response webhook is the documented ALTERNATIVE and is [SPIKE]'d (#3 above), it can Mask not Reject.
 - **LLM Guard output scanners:** `Regex`-only by default (model-free, matches the sentinels).
   `Sensitive` (NER + regex PII) is **opt-in / OFF by default**, enabling it loads the NER model and
-  breaks the per-spoke RAM budget (>=16 GB docs default at full load; `research/03-llm-guard.md`
+  breaks the per-spoke RAM budget (>=16 GB docs default at full load; `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`
   §Risks.5). Decision recorded against `infra/SIZING.md`.
 - **LLM Guard image namespace:** `laiyer/llm-guard-api` is authoritative, `protectai/llm-guard-api`
   does NOT exist on Docker Hub (404 confirmed 2026-06-16). `laiyer/` is somewhat stale (latest tag
@@ -112,7 +112,7 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   `VERSIONS.lock`. Build strictly from the OSS standalone docs (the Enterprise 2.x docs drift).
   Re-verify the guardrail/MCP field paths against the v1.3.0 standalone docs (they may have moved
   between 1.2.1 and 1.3.0); MCP config nests under `mcp.{targets,policies}` and mcpAuthorization is
-  allow-only CEL with implicit deny (no `action` field) — research/14 §2.
+  allow-only CEL with implicit deny (no `action` field) — the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2.
 - **Egress-proxy sidecar image:** a real thin reverse proxy (NOT a mock) calling `/analyze/output`.
   It is a `PLACEHOLDER_EGRESS_PROXY_IMAGE` until built and pinned, ship no placeholder to the event.
 - **Default toggle states at workshop start:** input-guard OFF, output-guard OFF, mcp-authz OFF

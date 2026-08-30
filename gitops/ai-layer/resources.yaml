@@ -44,7 +44,7 @@ subjects:
 # `modelConfig` reference (commit + resync, or run a different tier on each instructor
 # Cluster 3 in parallel). Do NOT kubectl-patch it live: ArgoCD selfHeal reverts the change.
 # Per-model gating (provisioning project): each model needs Bedrock model access enabled plus
-# the Anthropic use-case form. The inference-profile ids are verified below (research/13, confirmed
+# the Anthropic use-case form. The inference-profile ids are verified below (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`), confirmed
 # ACTIVE/SYSTEM_DEFINED via `aws bedrock list-inference-profiles` in us-west-2). Only Haiku is a
 # live CR here so the sync stays valid; uncomment a tier to make it selectable.
 # NOTE: Sonnet 4.6 and Opus 4.8 do NOT support In-Region in us-west-2 - the `us.` Geo inference
@@ -358,7 +358,7 @@ data:
           # the rest; and "search" redacts only the first match. With several block patterns where the
           # signature always matches first, the amount patterns never fired (only the signature redacted).
           # A single alternation with match_type "all" redacts EVERY match of EVERY branch in one pass.
-          # See research/32-llm-guard-sanitization-2026.md. [\W_]+ between words tolerates the model's
+          # See the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`). [\W_]+ between words tolerates the model's
           # markdown / emoji / spacing (e.g. "**bat saliva**", "½ tsp").
           #
           # Redact only the SECRET parts: the recipe SIGNATURE, the AMOUNTS (proportions are the secret -

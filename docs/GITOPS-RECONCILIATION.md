@@ -9,7 +9,7 @@ The hub-and-spoke delivery (Model B) is GONE. `platform/argocd/` (the `appset-at
 ApplicationSet cluster generator, `appproject-workshop`, and the duplicate `apps/` content tree) was
 deleted along with the hub cluster. The architecture is now independent per-attendee clusters, each
 running its OWN in-cluster ArgoCD that reconciles itself from the canonical `gitops/` app-of-apps
-(destination `https://kubernetes.default.svc`). There is no central control plane. See research/25 and
+(destination `https://kubernetes.default.svc`). There is no central control plane. See the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) and
 the revised BUILD-SPEC / SIZING. The rest of this doc is retained as the record of how it got here.
 
 ## Decision

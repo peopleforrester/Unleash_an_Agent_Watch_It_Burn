@@ -4,13 +4,13 @@
 # verify-at-build: build STRICTLY from the OSS standalone docs
 #   (agentgateway.dev/docs/standalone/latest), NOT the Solo Enterprise 2.x docs
 #   (docs.solo.io/agentgateway/2.x). The OSS binary is on the 1.x line; Enterprise is 2.x and
-#   the field names drift between them (research/02-agentgateway.md §1).
+#   the field names drift between them (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §1).
 # verify-at-build: OSS standalone install is a TWO-CHART OCI Helm install — agentgateway-crds
 #   then agentgateway from oci://cr.agentgateway.dev/charts/ — pin --version v1.3.0 and record
 #   the resolved chart version + image digest in VERSIONS.lock.
 # verify-at-build: v1.3.0 went GA on 2026-06-17. The guardrail/MCP config field paths may have
 #   moved between 1.2.1 and 1.3.0 — re-verify every flagged field path against the v1.3.0
-#   standalone docs at build (research/14-verify-at-build-sweep-2026.md §2d).
+#   standalone docs at build (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2d).
 #
 # This file is the BASELINE config. The toggle files (input-guard-*, output-guard-*, mcp-authz-*)
 # are overlay states applied on top of it; at workshop start the baseline + the *-off states are live.
@@ -139,7 +139,7 @@ data:
     #   1. the kagent agent's A2A serving endpoint (the agent the attendee talks to)
     #   2. the agent's MCP tool traffic (the MCPServer the agent calls tools through)
     #
-    # INPUT GUARD (CONFIRMED mechanism, research/02-agentgateway.md §3):
+    # INPUT GUARD (CONFIRMED mechanism, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §3):
     #   request-phase prompt-guard with a `webhook` action. The request phase supports
     #   RejectAction (hard block + chosen status_code), so prompt injection is rejected
     #   BEFORE it reaches the agent. The webhook target is the LLM-Guard-backed wrapper that
@@ -154,7 +154,7 @@ data:
     #   with a recognized provider. The agent here is a kagent A2A endpoint, not a chat-completions
     #   LLM provider — the request-phase webhook is the supported hard-reject path, but confirm it
     #   fires for an A2A backend at build (this is the same backend-type question the OUTPUT guard
-    #   sidesteps by using the sidecar — research/02-agentgateway.md §"Unverified").
+    #   sidesteps by using the sidecar — the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §"Unverified").
 
     listeners:
       - name: agent-a2a
@@ -185,7 +185,7 @@ data:
         port: 3001
 
     # MCP traffic: agentgateway fronts the MCPServer the agent calls tools through. MCP config
-    # nests under `mcp.` (research/14 §2c): the targets allowlist and the mcpAuthorization policy.
+    # nests under `mcp.` (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2c): the targets allowlist and the mcpAuthorization policy.
     # verify-at-build: confirm the mcp.{targets,policies} nesting against the v1.3.0 standalone schema.
     mcp:
       targets:
@@ -194,7 +194,7 @@ data:
           host: workshop-mcp.ATTENDEE_NAMESPACE.svc.cluster.local
           port: 8080 # verify-at-build: confirm the MCPServer port
       policies:
-        # MCP AUTHORIZATION (CONFIRMED mechanism, research/02-agentgateway.md §4; research/14 §2b).
+        # MCP AUTHORIZATION (CONFIRMED mechanism, the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §4; the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2b).
         # Allow-only CEL over mcp.tool.name / mcp.tool.target / jwt claims, evaluated per MCP method
         # (list_tools, call_tool). Rules OR together; any match grants access; anything unmatched is
         # implicitly DENIED and filtered out of list_tools. There is NO `action` field on rules.

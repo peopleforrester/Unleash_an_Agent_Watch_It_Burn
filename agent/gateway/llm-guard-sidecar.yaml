@@ -2,7 +2,7 @@
 # ABOUTME: Intercepts the agent's response, calls LLM Guard /analyze/output, blocks or redacts the sentinel.
 #
 # WHY THIS IS PRIMARY (not the agentgateway native response webhook):
-# research/02-agentgateway.md §2/§5 and spec §5 establish two hard limits on the native path:
+# the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2/§5 and spec §5 establish two hard limits on the native path:
 #   1. agentgateway's response-phase prompt-guard can only Pass or MASK — it CANNOT Reject.
 #      The "blocked" half of the beat-2 exfil claim is not natively achievable on the response.
 #   2. agentgateway response guardrails are documented only for recognized LLM-provider backends
@@ -17,14 +17,14 @@
 # LLM Guard POST /analyze/output, and acted on per the verdict:
 #   is_valid == false  -> BLOCK (return an error status, the raw response never leaves)
 #   is_valid == true   -> forward sanitized_output (redacted text) instead of the raw body -> REDACT
-# research/03-llm-guard.md §Verdict semantics. /analyze/output returns is_valid + sanitized_output + scores.
+# the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §Verdict semantics. /analyze/output returns is_valid + sanitized_output + scores.
 #
 # verify-at-build: read the live http://llm-guard:8000/swagger.json to confirm the exact
 #   /analyze/output JSON envelope before pinning the proxy logic. Field names are confirmed by
 #   docs (is_valid / sanitized_output / scores) but the top-level shape must be read off swagger.
 # verify-at-build: confirm fail-CLOSED behavior — if LLM Guard is unreachable, the sidecar MUST
 #   block, never pass the raw response through (Michael's no-silent-fallback rule;
-#   research/02-agentgateway.md §Risks.4). The PROXY_FAIL_CLOSED env below enforces this.
+#   the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §Risks.4). The PROXY_FAIL_CLOSED env below enforces this.
 #
 # This file is delivered as a strategic-merge PATCH against the kagent agent Deployment, applied
 # by output-guard-on.yaml. output-guard-off.yaml removes the sidecar. At workshop start the agent

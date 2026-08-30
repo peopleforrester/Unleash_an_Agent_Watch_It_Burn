@@ -8,7 +8,7 @@
 # blocks. Proven live 2026-07-18 (r3-1, Tetragon rule removed, bait read denied by KubeArmor) and again
 # 2026-08-30 (r3-2, Tetragon policy deleted, the annotated pod still could not create the legacy dir).
 # Tetragon was retired 2026-08-30 as the redundant second prevention engine (Michael's ruling, see
-# docs/DECISION-LOG.md). See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+# docs/DECISION-LOG.md). See the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`).
 #
 # autoDeploy=true has the operator create the default KubeArmorConfig, which brings up the enforcement
 # DaemonSet + relay with no second manifest. Default posture is audit/allow until a KubeArmorPolicy names

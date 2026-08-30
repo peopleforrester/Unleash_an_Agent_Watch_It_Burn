@@ -57,7 +57,7 @@ run_input() {
     # and may return RejectAction on /request — a hard block. The gateway surfaces that
     # rejection to the caller. We assert the request does NOT pass through.
     # verify-at-build: the gateway client-facing path/body shape for a kagent A2A
-    # verify-at-build: endpoint is unconfirmed (research/02-agentgateway.md: response
+    # verify-at-build: endpoint is unconfirmed (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`): response
     # verify-at-build: guardrails documented only for recognized LLM-provider backends).
     # verify-at-build: confirm the rejected-request HTTP status the gateway returns
     # verify-at-build: (RejectAction status_code) before asserting on it here.
@@ -95,7 +95,7 @@ run_output() {
     # verify-at-build: the exact /analyze/output JSON envelope (top-level field names
     # verify-at-build: is_valid / sanitized_output / scores) must be read off the live
     # verify-at-build: http://<sidecar>/swagger.json before trusting the jq paths below
-    # verify-at-build: (research/03-llm-guard.md flagged the envelope unconfirmed).
+    # verify-at-build: (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) flagged the envelope unconfirmed).
     # verify-at-build: also confirm whether the sidecar exposes /analyze/output directly
     # verify-at-build: or proxies it under another path on the response leg.
     local body

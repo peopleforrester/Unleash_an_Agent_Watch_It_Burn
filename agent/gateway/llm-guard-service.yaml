@@ -5,13 +5,13 @@
 #   (Laiyer = the company Protect AI acquired). `protectai/llm-guard-api` does NOT exist on
 #   Docker Hub (404 confirmed 2026-06-16), so `laiyer/` is the authoritative published image.
 #   It is stale-ish (latest tag 0.3.16, pushed ~1 year ago) but it is the only one published.
-#   Pin a DIGEST, not :latest (no GitHub releases exist; research/03-llm-guard.md §Unverified).
+#   Pin a DIGEST, not :latest (no GitHub releases exist; the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §Unverified).
 # verify-at-build: also pin the PyPI `llm-guard` version into VERSIONS.lock
 #   (`pip index versions llm-guard`); the live PyPI version was NOT confirmed in the spike.
 # verify-at-build: config mount path is /home/user/app/config/scanners.yml (from the official
 #   deployment doc). Confirm against the live image before relying on it.
 #
-# RAM FOOTPRINT (research/03-llm-guard.md §Run, §Risks.5): the docs recommend >=16 GB for the
+# RAM FOOTPRINT (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §Run, §Risks.5): the docs recommend >=16 GB for the
 # Docker image at default settings because model-backed scanners (the NER in Sensitive, and the
 # DeBERTa PromptInjection classifier) load into memory. To keep each per-cluster node small:
 #   - OUTPUT path is Regex-ONLY by default (pure pattern matching, model-free) - see scanners.yml.
@@ -31,11 +31,11 @@ metadata:
     app.kubernetes.io/name: llm-guard
 data:
   # verify-at-build: scanners.yml shape - top-level input_scanners / output_scanners, each entry
-  #   is `type:` + `params:`. Confirmed structure from the repo config (research/03-llm-guard.md).
+  #   is `type:` + `params:`. Confirmed structure from the repo config (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)).
   #   Read the live http://<host>:8000/swagger.json at build to confirm the verdict envelope
   #   (is_valid / sanitized_output / scanners) before wiring the gateway + sidecar filters.
   #   The per-scanner field is `scanners` (Dict[str, float] of risk scores), not `scores`
-  #   (research/14 §4, confirmed against llm_guard_api/app/schemas.py).
+  #   (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §4, confirmed against llm_guard_api/app/schemas.py).
   scanners.yml: |
     # LLM Guard API-server scanner config.
     #
@@ -61,7 +61,7 @@ data:
       # OUTPUT guard, Regex-ONLY by default - the provably model-free control that is
       # demonstrated live (spec §3). It matches the planted sentinel formats. There is NO
       # "Secrets" output scanner - Secrets is INPUT-only (rev1 spec error corrected;
-      # research/03-llm-guard.md §Risks.1).
+      # the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §Risks.1).
       - type: Regex
         params:
           # verify-at-build: confirm the Regex output-scanner param names on the pinned version

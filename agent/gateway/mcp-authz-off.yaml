@@ -5,7 +5,7 @@
 # every tool on workshop-mcp is callable — including read_internal_config, the rogue tool whose
 # poisoned description induces the agent to leak FAKE-MCP-EXFIL-sentinel-4c1d (beat-3 "before").
 #
-# CONFIRMED mechanism (research/02-agentgateway.md §4): mcpAuthorization rules are CEL expressions
+# CONFIRMED mechanism (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §4): mcpAuthorization rules are CEL expressions
 # over mcp.tool.name etc., evaluated per MCP method (list_tools, call_tool); rules OR together,
 # any match grants access; disallowed tools are auto-filtered from list_tools.
 #
@@ -14,11 +14,11 @@
 #   load-bearing unknown for beat 3. If the spike FAILS, beat 3 demotes to a recorded segment +
 #   governance-map row; the recording is built regardless (docs/BUILD-SPEC.md §11.1).
 # verify-at-build: confirm CEL rule syntax + the mcp.{targets,policies} nesting on OSS v1.3.0
-#   standalone (research/14 §2c).
+#   standalone (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2c).
 #
 # RECONCILIATION (agentgateway is now canonical in gitops/ai-layer/agentgateway.yaml):
 #   - This overlay rewrites the WHOLE agentgateway-config config.yaml. The canonical deployed config
-#     also carries a `tracing:` block (research/29) and a request promptGuard webhook (input guard).
+#     also carries a `tracing:` block (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)) and a request promptGuard webhook (input guard).
 #     COMPLETENESS TRAP: applying this toggle as-written drops both. Before beat-3 LIVE, reconcile the
 #     config.yaml body here against gitops/ai-layer/agentgateway.yaml so the toggle carries the full
 #     canonical config (tracing + promptGuard) and only flips the mcpAuthorization rules.
@@ -49,7 +49,7 @@ data:
       - name: agent-mcp
         protocol: HTTP
         port: 3001
-    # MCP config nests under `mcp.` (research/14 §2c): targets allowlist + mcpAuthorization policy.
+    # MCP config nests under `mcp.` (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2c): targets allowlist + mcpAuthorization policy.
     mcp:
       targets:
         - name: workshop-mcp

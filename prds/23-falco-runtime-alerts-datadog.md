@@ -48,8 +48,8 @@ This PRD is executed by a fresh AI instance with no memory of the design convers
 1. **Meta-PRD #7 Decision Log, M4 entries** (`prds/7-observability-meta.md`) — M4 Decisions 1, 2, and 3 with full reasoning. All decisions in this PRD are inherited from there.
 2. **`gitops/apps/falco.yaml`** — Read in full before editing. Understand the five custom rule files, the `00-` file-sort prefix and why it exists (comment at line 226), and the current rule names. The rule to rename is at line 211.
 3. **`gitops/apps/falcosidekick.yaml`** — Read the Datadog output block to understand the current config before verifying it.
-4. **`research/06-cncf-stack.md`** — Falco/Falcosidekick architecture overview.
-5. **`research/18-datadog-integrations-stack-2026.md`** — Falco row: named Agent integration collects individual alert logs + aggregate metrics (M5 scope); Falcosidekick adds Event Stream output (this PRD's scope). Read the corrected Falco row.
+4. **`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`** — Falco/Falcosidekick architecture overview.
+5. **`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)`** — Falco row: named Agent integration collects individual alert logs + aggregate metrics (M5 scope); Falcosidekick adds Event Stream output (this PRD's scope). Read the corrected Falco row.
 6. **`docs/BUILD-SPEC.md`** — Challenge C3 and C4 beat descriptions.
 
 ---

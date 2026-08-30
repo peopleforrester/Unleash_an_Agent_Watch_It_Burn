@@ -70,7 +70,7 @@ if not log.handlers:
 
 # Content capture is gated on the OTel GenAI capture env var, read ONCE at module load. This env var is
 # specific to opentelemetry-util-genai / contrib instrumentations; it does NOT govern hand-written SDK
-# spans automatically (research/31 Q3), so this proxy reads it explicitly. Valid enum values:
+# spans automatically (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) Q3), so this proxy reads it explicitly. Valid enum values:
 # NO_CONTENT (default), SPAN_ONLY, EVENT_ONLY, SPAN_AND_EVENT. "true" is NOT valid and must NOT enable
 # capture (it silently collects nothing on the ADK path too). Default OFF matches BUILD-SPEC s4.
 _CAPTURE_MODE = os.environ.get("OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT", "NO_CONTENT").upper()
@@ -217,7 +217,7 @@ def record_usage(resp):
     result = resp.get("result", {}) if isinstance(resp, dict) else {}
 
     # Live kagent 0.9.9 emits the token usage at result.metadata.kagent_usage_metadata (confirmed on a
-    # real A2A response on watch-it-burn-test, 2026-06-21). research/14 read the published docs as
+    # real A2A response on watch-it-burn-test, 2026-06-21). the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) read the published docs as
     # `adk_usage_metadata`, but the running controller uses `kagent_usage_metadata`; the live cluster is
     # ground truth. Accept both keys (kagent first) so a future re-key does not silently zero the counter.
     def _usage(metadata):

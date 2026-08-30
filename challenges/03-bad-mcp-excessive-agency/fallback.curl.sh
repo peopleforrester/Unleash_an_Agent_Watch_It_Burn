@@ -10,7 +10,7 @@ set -euo pipefail
 #
 # verify-at-build: confirm the exact gateway MCP path, the JSON-RPC method/shape agentgateway's OSS
 #   v1.2.1 MCP front expects for a tool call, and how a policy denial is surfaced (HTTP status vs
-#   JSON-RPC error). See BUILD-SPIKE.md / research/02-agentgateway.md. The endpoint and parsing below
+#   JSON-RPC error). See BUILD-SPIKE.md / the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`). The endpoint and parsing below
 #   are the documented shape and MUST be reconciled against the live gateway during the spike. [SPIKE]
 
 usage() {
