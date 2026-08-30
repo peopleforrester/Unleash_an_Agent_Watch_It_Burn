@@ -62,6 +62,33 @@ _evil() { kubectl -n agent patch agent workshop-agent --type=json \
   -p "[{\"op\":\"replace\",\"path\":\"/spec/declarative/tools/1/mcpServer/toolNames\",\"value\":$1}]" >/dev/null 2>&1; }
 EOS
 
+# Read-only: which AI guards are currently on. The platform tour on the lab page points at this, and a
+# student who has flipped several toggles needs a way to see where they actually are without guessing.
+cat > "$HOME/guards-status" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+raw="$(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/guards',timeout=10).read().decode())" 2>/dev/null | tail -1)"
+if [ -z "$raw" ]; then
+  echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guards-status' again."
+  exit 1
+fi
+echo "Your AI guardrails right now:"
+printf '%s' "$raw" | python3 -c '
+import json,sys
+g=json.load(sys.stdin)
+label={"output":"C5 output guard (scrubs secrets on the way out)",
+       "input_blocklist":"C6 input block-list (cheap, pre-model)",
+       "input_classifier":"C6 injection classifier (model-based)",
+       "budget":"C4 spend budget (freezes cost at the cap)"}
+for k in ("output","input_blocklist","input_classifier","budget"):
+    on=g.get(k)
+    print(("  ON   " if on else "  off  ")+label.get(k,k))
+'
+echo
+echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  (or guards-on / guards-off)"
+EOS
+
 # Combined: flip EVERY AI guard at once (the "reset and explore" convenience).
 cat > "$HOME/guards-on" <<'EOS'
 #!/bin/bash
@@ -178,7 +205,7 @@ else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-off' again."
 fi
 EOS
-chmod +x "$HOME/guards-on" "$HOME/guards-off" \
+chmod +x "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
   "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off
 
@@ -188,6 +215,7 @@ echo "Welcome to your Watch It Burn cluster shell."
 echo "  kubectl is wired to your cluster   (try: kubectl get pods -A)"
 echo "  aws is ready with your keys        (try: aws sts get-caller-identity)"
 echo "  flip your AI guardrails with       guards-on   guards-off"
+echo "  see which guards are on           guards-status"
 cd "$HOME"
 export PATH="$HOME:$PATH"
 export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '

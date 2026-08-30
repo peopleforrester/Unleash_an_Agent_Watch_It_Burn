@@ -153,6 +153,44 @@
       </div>
 
       <div class="step">
+        <div class="h"><div class="num">2</div><div class="t">What you were just handed (and how to poke it)</div></div>
+        <div class="b">
+          <p>This is not a toy cluster. It is a full internal developer platform, and it built itself from one script. Have a look at what is running before you start breaking it:</p>
+          <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
+          <p class="small">That is the whole platform, GitOps-managed. Every one of those is a component someone would otherwise have installed by hand.</p>
+          <p><b>Who owns what.</b> The agent is the <i>developer's</i> piece. Everything else belongs to the platform team, and that is the argument this workshop is making: the platform controls are what actually stop an agent, not asking it nicely.</p>
+          <p>Each of these is running right now. Look at any of them, and change the ones you want:</p>
+
+          <p><b>Argo CD &mdash; GitOps, and a guardrail in its own right.</b> Try deleting a security control and watch the platform put it back:</p>
+          <div class="cmd" onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist; kubectl -n agent get networkpolicy -w<button class="cp">copy</button></div>
+          <p class="small">It returns in about five seconds. You have cluster-admin here and you still could not keep it deleted. Press Ctrl+C to stop watching.</p>
+
+          <p><b>Kyverno &mdash; admission control.</b> These are the rules that refuse a workload before it ever runs:</p>
+          <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy<button class="cp">copy</button></div>
+          <p class="small">The registry allow-list here is what blocks the villain image in Challenge 2.</p>
+
+          <p><b>NetworkPolicy &mdash; where the agent is allowed to talk.</b> This is why the exfil in Challenge 1 cannot leave:</p>
+          <div class="cmd" onclick="cp(this)">kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml<button class="cp">copy</button></div>
+
+          <p><b>KubeArmor &mdash; inline runtime blocking.</b> The rule that makes the recipe file unreadable:</p>
+          <div class="cmd" onclick="cp(this)">kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml<button class="cp">copy</button></div>
+          <p class="small">Then try to read the file it protects, and watch it refuse:</p>
+          <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/workshop-mcp -- cat /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf<button class="cp">copy</button></div>
+
+          <p><b>Falco and Falco-Talon &mdash; detect, then respond.</b> KubeArmor stops it; Falco notices it and Talon reacts:</p>
+          <div class="cmd" onclick="cp(this)">kubectl get pods -n falco<button class="cp">copy</button></div>
+
+          <p><b>kagent &mdash; the agent itself.</b> Its tools, its model, and its permissions are all declarative:</p>
+          <div class="cmd" onclick="cp(this)">kubectl -n agent get agent workshop-agent -o yaml<button class="cp">copy</button></div>
+          <p class="small">Look for <code class="inl">modelConfig</code> (which Bedrock model it runs) and the tool list (what it is allowed to call). Challenge 7 changes that tool list.</p>
+
+          <p><b>Your AI guardrails.</b> See which are currently on:</p>
+          <div class="cmd" onclick="cp(this)">guards-status<button class="cp">copy</button></div>
+          <div class="tip">Nothing here needs installing. Everything is already deployed; the challenges below are about <b>turning controls on and off and watching what changes</b>. Break whatever you like: this cluster is yours and it is torn down after the workshop.</div>
+        </div>
+      </div>
+
+      <div class="step">
         <div class="h"><div class="num">5</div><div class="t">Challenge 5: the agent leaks a secret (output guard)</div></div>
         <div class="b">
           <p><b>5a. See the weakness.</b> Try this one yourself first.</p>
