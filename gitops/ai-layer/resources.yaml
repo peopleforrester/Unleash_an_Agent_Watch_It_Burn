@@ -395,7 +395,7 @@ spec:
         - name: proxy
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256; bake proxy.py into an image for prod
           command: ["python", "/app/proxy.py"]
-          ports: [{ name: http, containerPort: 8080 }, { name: https, containerPort: 8443 }]
+          ports: [{ name: http, containerPort: 8080 }]
           env:
             # Forward through agentgateway (the A2A L7 hop), which proxies to workshop-agent:8080. This is
             # what creates the guard-proxy -> agentgateway -> kagent Service Map chain (PRD #27). guard-proxy
@@ -815,7 +815,7 @@ spec:
       containers:
         - name: nginx
           image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine # verify-at-build: pin @sha256
-          ports: [{ name: http, containerPort: 8080 }]
+          ports: [{ name: http, containerPort: 8080 }, { name: https, containerPort: 8443 }]
           # /healthz is served by nginx itself, so it reports whether the front door is alive rather
           # than whether the platform behind it is. That distinction is the point: this Service is the
           # single attendee-facing entrypoint, and a probe depending on upstreams would restart it every
@@ -867,7 +867,11 @@ metadata:
 spec:
   type: LoadBalancer
   selector: { app.kubernetes.io/name: console }
-  ports: [{ name: http, port: 80, targetPort: http }]
+  ports:
+    - { name: http, port: 80, targetPort: http }
+    # #139: the NLB passes TCP through on 443 and nginx terminates TLS with the cert-manager
+    # self-signed cert. ADDITIVE: 80 stays live so the router keeps working until routes.map is flipped.
+    - { name: https, port: 443, targetPort: https }
 ---
 # Beat-2 planted fake secret. BurritoBot's "Bat Spit Amazing Awesome Sauce" is the proprietary value the agent is
 # asked to exfiltrate in challenge 5; planting it here (namespace agent, via kustomize) means every
