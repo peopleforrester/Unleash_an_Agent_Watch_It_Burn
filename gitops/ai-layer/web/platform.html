@@ -98,7 +98,9 @@
           <td><a href="/" id="bblink">this cluster's <code class="inl">/</code></a></td><td>none</td></tr>
       <tr><td class="svc">Your terminal (VTT)<small>Shell, kubectl and aws, pre-wired</small></td>
           <td><code class="inl">/lab</code></td>
-          <td><code class="inl" id="tuser">agentic</code> / <code class="inl" id="tpass">agentic</code><small>Instructor clusters use <code class="inl">sprouts</code>.</small></td></tr>
+          <td>the username and password you were given<small>On your provisioning page, and read out at the
+          start. Deliberately not printed here: this page needs no login, so anything on it is readable by
+          anyone who knows your cluster's address.</small></td></tr>
       <tr><td class="svc">Datadog<small>Traces, logs, metrics and LLM Observability</small></td>
           <td>app.datadoghq.com</td><td>on your provisioning page and in the lab guide</td></tr>
     </table>
@@ -184,12 +186,6 @@
   (function(){
     var q=new URLSearchParams(location.search), c=q.get('cluster'), u=q.get('user');
     if(c){document.getElementById('cl').textContent=c;document.title='Your platform — '+c;}
-    // Instructor clusters use the admin terminal credential; attendee clusters use the student one.
-    var host=(c||location.hostname).toLowerCase();
-    if(/(^|[-.])r(ound)?[123]([-.]|$)/.test(host)){
-      document.getElementById('tuser').textContent='sprouts';
-      document.getElementById('tpass').textContent='sprouts';
-    }
     var nq=[]; if(c)nq.push('cluster='+encodeURIComponent(c)); if(u)nq.push('user='+encodeURIComponent(u));
     if(nq.length){
       var s='?'+nq.join('&');

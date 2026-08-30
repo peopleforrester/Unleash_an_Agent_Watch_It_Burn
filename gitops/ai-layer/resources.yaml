@@ -395,7 +395,7 @@ spec:
         - name: proxy
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256; bake proxy.py into an image for prod
           command: ["python", "/app/proxy.py"]
-          ports: [{ name: http, containerPort: 8080 }]
+          ports: [{ name: http, containerPort: 8080 }, { name: https, containerPort: 8443 }]
           env:
             # Forward through agentgateway (the A2A L7 hop), which proxies to workshop-agent:8080. This is
             # what creates the guard-proxy -> agentgateway -> kagent Service Map chain (PRD #27). guard-proxy
@@ -530,6 +530,11 @@ spec:
           resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
           volumeMounts: [{ name: web, mountPath: /usr/share/nginx/html, readOnly: true }]
       volumes:
+        - name: tls
+          # NOT optional. nginx references the cert files unconditionally, so a missing secret would
+          # crash-loop the console rather than degrade it. Required means the pod stays Pending until
+          # cert-manager issues, which is visible and recoverable instead of a restart storm.
+          secret: { secretName: console-tls }
         - name: web
           configMap: { name: chat-ui-src }
 ---
@@ -539,7 +544,9 @@ metadata:
   name: chat-ui
 spec:
   selector: { app.kubernetes.io/name: chat-ui }
-  ports: [{ name: http, port: 80, targetPort: http }]
+  ports:
+    - { name: http, port: 80, targetPort: http }
+    - { name: https, port: 443, targetPort: https }   # #139: TCP passthrough, nginx terminates
 ---
 # The GOOD workshop MCP: the legit tools the scoped agent is allowed to use. Counterpart to evil-mcp-shim.
 apiVersion: apps/v1
@@ -761,6 +768,41 @@ spec:
     - { name: ide, port: 8443, targetPort: ide }
     - { name: jupyter, port: 8888, targetPort: jupyter }
 ---
+# TLS on the console, so the Railway-to-AWS hop is not cleartext (#139, option 4).
+#
+# The finding: the browser-to-router leg is HTTPS on Railway's wildcard cert, but the router-to-cluster
+# leg crossed the public internet on :80 with no encryption, carrying every attendee prompt and the
+# terminal I/O. The load balancers had no TLS listener at all.
+#
+# SELF-SIGNED, deliberately. A public ACM certificate would also authenticate the upstream, but it is
+# per-account (5 fleet accounts, 5 certs, 5 DNS validations). The threat here is someone reading traffic
+# on a shared conference network, not someone impersonating our NLB, and the router is the only client.
+# So: cert-manager issues a self-signed cert, nginx terminates TLS, the NLB passes TCP through, and Caddy
+# connects with tls_insecure_skip_verify. Encrypted, not authenticated, and honest about which.
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: console-selfsigned
+  namespace: agent
+spec:
+  selfSigned: {}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: console-tls
+  namespace: agent
+spec:
+  secretName: console-tls
+  issuerRef: { name: console-selfsigned, kind: Issuer }
+  # The router does not verify this, so the names are for completeness rather than validation.
+  commonName: console.agent.svc.cluster.local
+  dnsNames:
+    - console.agent.svc.cluster.local
+    - "*.agenticburn.com"
+  duration: 2160h    # 90d, comfortably past any workshop
+  renewBefore: 360h
+---
 # The console frontend: serves the split UI and reverse-proxies the three backends.
 apiVersion: apps/v1
 kind: Deployment
@@ -797,6 +839,7 @@ spec:
           volumeMounts:
             - { name: web, mountPath: /usr/share/nginx/html, readOnly: true }
             - { name: conf, mountPath: /etc/nginx/conf.d, readOnly: true }
+            - { name: tls, mountPath: /etc/nginx/tls, readOnly: true }
       volumes:
         - name: web
           configMap: { name: console-src }
