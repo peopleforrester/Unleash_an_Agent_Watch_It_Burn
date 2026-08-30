@@ -45,6 +45,16 @@ infra/terraform/fleet/check-tls.sh michael-round1.agenticburn.com michael-round2
       re-run, and if it declines twice use the ranked fallbacks in `challenges/PROMPT-CATALOG.md`.
 - [ ] Guards left **off** on the Round 3 / attendee clusters so students see the weakness first.
 
+```bash
+# d) are the Datadog orgs still alive? (trial orgs expire in ~14 days)
+AWS_PROFILE=accen-dev verify/datadog-pool-check.sh
+```
+
+- [ ] Every cluster reports `api=200 org_read=200`.
+- [ ] **Whitney opens her Datadog org in a browser before doors.** The check above proves the KEYS work;
+      it cannot prove a human can log in, and a Datadog trial can end for the web UI while keys still
+      validate. That is the exact shape of her 2026-08-29 report on a fleet whose keys were all fine.
+
 ### 1. The 5-account fleet for ~250 attendee clusters
 - [ ] Confirm the other 4 AWS accounts exist and we have CLI access (a profile each).
 - [ ] Quota increases on each of the 4 accounts (us-west-2), all adjustable, file now. Proven against
