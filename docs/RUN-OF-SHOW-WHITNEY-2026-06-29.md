@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-08-30).** The primary run-of-show is `docs/RUN-OF-SHOW-2026-08.md` (the
+> 2-hour DevOpsDays Portland 2026 delivery). This file is kept as history from the June AI Engineer
+> World's Fair design sessions; do not deliver from it.
+
 # Run-of-Show Reaffirmation, Michael + Whitney, 2026-06-29
 
 Captured from a Michael + Whitney working conversation (voice transcript at the end of this file,

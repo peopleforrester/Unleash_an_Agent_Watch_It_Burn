@@ -1,3 +1,7 @@
+> **SUPERSEDED (2026-08-30).** The primary run-of-show is `docs/RUN-OF-SHOW-2026-08.md` (the
+> 2-hour DevOpsDays Portland 2026 delivery). This file is kept as history from the June AI Engineer
+> World's Fair design sessions; do not deliver from it.
+
 <!-- ABOUTME: Run-of-show + build backlog captured from the 2026-06-27 Michael x Wendy design session.
      ABOUTME: Source of truth for the 3-round attendee/instructor experience and the work to build it. -->
 
