@@ -152,11 +152,18 @@ WIB_DISK="${WIB_DISK:-}"                          # root disk GiB -> node_disk_s
 # Roster selection: the instructor roster is DATA (roster.tsv), not a hardcoded array. Override the file
 # path, or subset by round / per-round count, all without editing this script.
 WIB_ROSTER_FILE="${WIB_ROSTER_FILE:-${SCRIPT_DIR}/roster.tsv}"
-# The web-terminal login, shared across every cluster in a run. Deliberately short and speakable: it
-# gets said out loud and typed by a room. See bootstrap_terminal_auth for why a shared credential is
-# the right call for single-use workshop clusters.
-WIB_TERMINAL_USER="${WIB_TERMINAL_USER:-sprouts}"
+# The web-terminal login. Deliberately short and speakable: it gets said out loud and typed by a room.
+# See bootstrap_terminal_auth for why a shared credential is the right call for single-use clusters.
+#
+# SPLIT BY ROLE (Michael's ruling 2026-08-30, issue #109). The instructor/presenter clusters and the
+# student clusters do NOT share a login: `sprouts` is the ADMIN credential for Michael and Whitney, and
+# handing it to a room would also hand the room the presenter consoles. Students get `agentic`.
+# Which credential a cluster gets is decided by is_instructor_name (roster cluster = instructor), see
+# terminal_creds_for. Override either pair per run with the env vars.
+WIB_TERMINAL_USER="${WIB_TERMINAL_USER:-sprouts}"          # instructor / admin clusters
 WIB_TERMINAL_PASSWORD="${WIB_TERMINAL_PASSWORD:-sprouts}"
+WIB_STUDENT_USER="${WIB_STUDENT_USER:-agentic}"            # attendee / student clusters
+WIB_STUDENT_PASSWORD="${WIB_STUDENT_PASSWORD:-agentic}"
 
 # The provisioning app the fleet registers clusters with. This is a fixed, known address, so it is a
 # default rather than something an operator has to remember to export. It used to have no default, which
@@ -231,6 +238,20 @@ account_for_round() {
 # pool (watch-it-burn-attendee-NNN). Several verbs need to tell them apart, because the attendee path
 # derives a pool slot from the trailing number and that is meaningless for the roster.
 is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
+
+# The terminal login for a cluster, as "user:password", chosen by role (#109). Instructor/roster
+# clusters get the admin credential (sprouts); the attendee pool gets the student one (agentic). Keeping
+# this in ONE function means the bootstrap that creates the Secret and the bundle that tells the student
+# what to type can never disagree, which is the failure mode that hands a room a password that does not
+# work. ALWAYS exits 0.
+terminal_creds_for() {
+    if is_instructor_name "$1"; then
+        printf '%s:%s\n' "${WIB_TERMINAL_USER}" "${WIB_TERMINAL_PASSWORD}"
+    else
+        printf '%s:%s\n' "${WIB_STUDENT_USER}" "${WIB_STUDENT_PASSWORD}"
+    fi
+    return 0
+}
 
 # A QUIET health probe: true only if every ArgoCD Application is Synced+Healthy and no pod is broken.
 #
@@ -533,9 +554,11 @@ bootstrap_terminal_auth() {
     # the credential is an unprivileged user with a scoped ClusterRole, not cluster-admin. The purpose
     # of the credential is to stop a stranger wandering into somebody else's terminal, which it does.
     # It is not protecting anything that outlives the session.
-    pw="${WIB_TERMINAL_PASSWORD}"
+    # Role-split (#109): instructor clusters get sprouts, the attendee pool gets agentic.
+    local cred; cred="$(terminal_creds_for "${name}")"
+    pw="${cred#*:}"
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl create secret generic terminal-auth \
-        -n agent --from-literal="TTYD_CREDENTIAL=${WIB_TERMINAL_USER}:${pw}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+        -n agent --from-literal="TTYD_CREDENTIAL=${cred}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${pw}" >"${pwfile}"; chmod 600 "${pwfile}"
         # ttyd reads the credential once at startup, so an already-running terminal keeps serving
         # unauthenticated until it restarts. Roll it now rather than leaving the gap open.
@@ -1426,7 +1449,11 @@ ingest_one() {
     # persists the password beside the AWS creds; send it. The provisioning app already accepts
     # terminal_user/terminal_password (scripts/merge_pool.py in provisioning-agenticburn) and shows a
     # visible degradation when the password is absent, so an empty value is reported rather than silent.
-    local term_user="${WIB_TERMINAL_USER}" term_pw
+    # Username comes from the SAME role split the bootstrap used (#109), never a fleet-wide constant:
+    # reporting `sprouts` for an attendee cluster whose Secret says `agentic` hands the student a login
+    # that cannot work.
+    local term_user term_pw
+    term_user="$(terminal_creds_for "${name}")"; term_user="${term_user%%:*}"
     term_pw="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null | tr -d '[:space:]')"
     term_pw="${term_pw##*:}"   # tolerate either a bare password or a "user:password" pair
     [[ -n "${term_pw}" ]] || log "  ingest ${name}: WARN no terminal password (${AWS_POOL_DIR}/${name}.terminal); the terminal will prompt and the student cannot log in"
