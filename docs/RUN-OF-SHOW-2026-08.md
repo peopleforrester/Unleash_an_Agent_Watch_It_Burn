@@ -187,6 +187,24 @@ keys. Their list of controls that failed reads like this workshop's table of con
 that partially held was network isolation. "We are going to do a smaller version of that, live, and then
 turn on the controls that would have stopped it." (Do not attribute the model; sources conflict.)
 
+**Then widen it from one breach to the industry position** (this is in the deck, so keep the two in step).
+On **Thursday 2026-08-27** OpenAI organised **"A call for collective action on cyber defense"**
+(`openai.com/collective-cyberdefense/`), signed by more than 100 organisations: the major model vendors,
+Google, Microsoft, Amazon, Cisco, Oracle, Cloudflare, CrowdStrike, Palo Alto Networks, and well outside
+tech, Mastercard, Visa, Capital One, General Motors, Shopify.
+
+> "In the coming months, AI-enabled cyberattacks will become far more widespread as models around the
+> world become increasingly capable."
+
+> "We have a limited window to strengthen cyber defenses."
+
+They call for a **defensive surge**, ask organisations to make cyber defense an **immediate leadership
+priority** and fix the weaknesses in their own software, and say status-quo practices will not be enough.
+
+The line to land: "That was four days ago, and it is signed by the people who build the models and the
+people who run the payment rails. The next two hours are what a defensive surge actually looks like on
+one cluster." It also pre-answers the question the room is holding: this is not a hypothetical.
+
 ### The beats, in order
 
 Send these in BurritoBot chat. Each is a copy chip on `/lab` too.
