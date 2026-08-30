@@ -8,7 +8,7 @@ the copyright and license notice are kept.
 ## Workshop
 
 **Build a Platform, Unleash an Agent on it... and Watch it Burn!**
-A hands-on workshop at AI Engineer World's Fair 2026 (San Francisco, Moscone West).
+A hands-on workshop at DevOpsDays Portland 2026 (Smith Memorial Student Union, Room 327).
 
 Presented by:
 

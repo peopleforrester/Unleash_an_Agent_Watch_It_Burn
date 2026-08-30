@@ -4,13 +4,13 @@
 
 > **Give an AI agent the keys to a real Kubernetes platform, dare it to do damage, and watch which guardrails actually stop it, and which ones just watch it burn.**
 
-[![AI Engineer World's Fair 2026](https://img.shields.io/badge/AI%20Engineer%20World%27s%20Fair-2026-A100FF)](https://www.ai.engineer/)
+[![DevOpsDays Portland 2026](https://img.shields.io/badge/DevOpsDays%20Portland-2026-1f9bcf)](https://devopsdays.org/events/2026-portland/)
 [![Kubernetes on EKS](https://img.shields.io/badge/Kubernetes-EKS-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
 [![GitOps: Argo CD](https://img.shields.io/badge/GitOps-Argo%20CD-EF7B4D?logo=argo&logoColor=white)](https://argoproj.github.io/cd/)
 [![Guardrails: CNCF](https://img.shields.io/badge/guardrails-CNCF-3ECF8E)](#the-stack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-A100FF)](LICENSE)
 
-A hands-on workshop at **AI Engineer World's Fair 2026** (San Francisco, Moscone West).
+A hands-on workshop at **DevOpsDays Portland 2026** (Smith Memorial Student Union, Room 327).
 Presented by **Michael Forrester** (Accenture) with **Whitney Lee**.
 
 **TL;DR:** three rounds, one lesson. Round 1 has no guardrails and the agent burns the cluster down.
@@ -42,13 +42,13 @@ problem, and you will see which guardrail stops the spend rather than paying for
 
 ## How the session runs
 
-The workshop runs two hours (Day 1, 2:20–4:20pm, Track 5) across three clusters.
+The workshop runs two hours (Tue Sept 8, 2026, 1:00 to 3:00 PM Pacific, Room 327) across three clusters.
 
 Clusters 1 and 2 run the same three attacks: exfiltrate customer data, deploy a villain app, and
-fork-bomb the cluster.
+run up the cloud bill (a denial-of-wallet loop).
 
-1. **No guardrails.** All three attacks succeed. A counter on screen shows the cloud bill rising, and
-   the fork bomb takes the cluster down. We keep spares, because these do not survive.
+1. **No guardrails.** All three attacks succeed. A counter on screen shows the cloud bill climbing with
+   nothing to stop it.
 2. **CNCF guardrails.** The same three attacks run against a cluster with the platform controls in
    place. Each is blocked by a different control, NetworkPolicy egress, a Kyverno registry allowlist,
    and a per-pod PID limit, but the bill still moved, because the request reached the model first.

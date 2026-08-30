@@ -2,7 +2,7 @@
 
 # Runbook, "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 
-AI Engineer World's Fair 2026, Moscone West. Michael Forrester (Accenture) with Whitney Lee.
+DevOpsDays Portland 2026, Smith Memorial Student Union, Room 327. Michael Forrester (Accenture) with Whitney Lee.
 
 **Confirmed slot:** Day 1 (Workshop Day), **2:20–4:20pm**, **Track 5**, **2 hours**.
 (Public schedule lists Michael solo; Whitney is co-speaker per the accepted abstract, the organizers have been emailed to add her.)

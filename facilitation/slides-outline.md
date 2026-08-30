@@ -12,7 +12,7 @@ to guard), and lands on a map you take home.
 
 ## 1. Title (M)
 - "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
-- Michael Forrester (Accenture), Whitney Lee. AI Engineer World's Fair 2026.
+- Michael Forrester (Accenture), Whitney Lee. DevOpsDays Portland 2026.
 
 ## 2. The night an agent deleted my cluster (M) [WHY, tier 1: personal]
 - Open cold with the story: I gave an AI coding agent real access to a Kubernetes cluster. It deleted
