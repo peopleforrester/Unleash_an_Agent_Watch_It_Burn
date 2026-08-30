@@ -12,8 +12,10 @@
 #
 # SOFT-FAIL BY DESIGN: the gate always exits 0 (proceed) after at most ~7 min. If KubeArmor is ready it
 # proceeds immediately (normal path). If KubeArmor is genuinely broken it proceeds anyway rather than wedge
-# the whole BurritoBot demo; Tetragon still covers C3 in that degraded case (dual-run). Do NOT retire
-# Tetragon until this gate is proven reliable across provisions.
+# the whole BurritoBot demo. NOTE since the Tetragon retirement (2026-08-30, gate proven reliable across
+# all six full-profile provisions: annotation=enabled everywhere): KubeArmor is now the SOLE C3 enforcer,
+# so a soft-fail means C3 runs UNENFORCED, not dual-run. That is the deliberate trade: one un-blocked
+# challenge beats wedging the entire demo. The gate has been reliable in practice, so this is a last resort.
 #
 # All resources are PreSync hooks: RBAC + script at hook wave 0, the Job at hook wave 1. kustomize's
 # `namespace: agent` lands the namespaced pieces in agent; the ClusterRole/Binding are cluster-scoped.
@@ -99,7 +101,7 @@ data:
         time.sleep(10)
 
     print("[gate] KubeArmor not fully ready before deadline; proceeding anyway "
-          "(Tetragon still covers C3; KubeArmor will enforce on the next pod admission).")
+          "(C3 runs unenforced this sync; KubeArmor will enforce on the next pod admission once ready).")
     sys.exit(0)
 ---
 apiVersion: v1

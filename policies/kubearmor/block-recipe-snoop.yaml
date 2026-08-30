@@ -1,8 +1,8 @@
 # ABOUTME: C3 hard-block, KubeArmor equivalent of policies/tetragon/block-recipe-snoop.yaml. Denies any
 # ABOUTME: file access under the legacy recipe-config dir from the workshop-mcp pod (Block = returns EPERM).
 #
-# This is the KubeArmor candidate for the enforcing half of C3, shipped alongside (not replacing) the
-# Tetragon rule during evaluation. The bait file (/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf)
+# This is THE enforcing half of C3 (Tetragon retired 2026-08-30; KubeArmor proven to block alone live on
+# r3-1 2026-07-18 and r3-2 2026-08-30). The bait file (/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf)
 # is seeded by workshop-mcp-server.py. When KubeArmor's enforcer resolves the container and BPF-LSM engages,
 # a read under the legacy dir returns "Permission denied" and KubeArmor emits a block alert (kArmor logs /
 # Datadog). Scope matches the Tetragon rule exactly: namespace agent, selector app=workshop-mcp, so only the

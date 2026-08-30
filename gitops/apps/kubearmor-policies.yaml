@@ -1,15 +1,16 @@
 # ABOUTME: ArgoCD Application that syncs KubeArmorPolicy CRs from policies/kubearmor/. Split from the
-# ABOUTME: engine app (mirrors kyverno / kyverno-policies and tetragon / tetragon-policies) so the deny
-# ABOUTME: rule is versioned as plain manifests, separate from the operator install.
+# ABOUTME: engine app (mirrors kyverno / kyverno-policies) so the deny rule is versioned as plain
+# ABOUTME: manifests, separate from the operator install.
 #
 # Wave 4: after the KubeArmor operator + CRDs (kubearmor app, wave -6), the agent namespace (namespaces,
 # wave -10), and the workshop-mcp workload (ai-layer, wave 3). ServerSideApply + retry tolerate the CRD/pod
 # not being ready on the first reconcile. Only the FULL app-of-apps pulls this directory; BURN (R1) omits
 # it, so R1 gets no C3 enforcement even if the KubeArmor engine is present.
 #
-# Runs concurrently with tetragon-policies during evaluation (both target the same legacy dir on the same
-# pod). Redundant blocking is harmless (the read fails either way); the point is to confirm KubeArmor's
-# enforcer engages. Retire whichever loses the bake-off; do NOT remove Tetragon until KubeArmor is proven.
+# This is the SOLE C3 inline-prevention block since Tetragon was retired 2026-08-30. KubeArmor's enforcer
+# was proven to engage on our AL2023/containerd nodes (2026-07-18 and 2026-08-30, both live). Enforcement
+# depends on workshop-mcp being admitted after the KubeArmor webhook is up: the ai-layer PreSync gate
+# (gitops/ai-layer/kubearmor-ordering-gate.yaml) guarantees that ordering.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

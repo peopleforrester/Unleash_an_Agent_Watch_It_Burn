@@ -86,5 +86,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 ## Parked / deferred (decided, not in the build)
 
 - TypeScript agent + spiny-orb hookup: deferred until the demo is finished (kagent stays).
-- KubeArmor and Tetragon: parked. PID cap + Falco/Talon is the fork-bomb pair. Either is only a
-  candidate later as a CNCF-native inline-prevention station for OTHER attacks (research/20-22).
+- Tetragon: RETIRED 2026-08-30 (Michael's ruling, docs/DECISION-LOG.md). It did the identical C3 block to
+  KubeArmor, so it was the redundant second prevention engine. KubeArmor is now the sole C3 inline-block.
+- Fork bomb: still the PID cap + Falco/Talon pair. KubeArmor/Tetragon were confirmed NOT to replace the PID
+  cap for the fork bomb specifically (research/20-22); that is a separate challenge from the C3 file block.

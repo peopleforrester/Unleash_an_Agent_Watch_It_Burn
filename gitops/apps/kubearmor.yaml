@@ -1,24 +1,24 @@
 # ABOUTME: ArgoCD Application for KubeArmor (CNCF Sandbox LSM-based runtime enforcement) via the
-# ABOUTME: kubearmor-operator Helm chart. Candidate C3 prevention engine under evaluation vs Tetragon.
+# ABOUTME: kubearmor-operator Helm chart. This is THE C3 inline-prevention engine (Tetragon retired).
 #
-# WHY THIS IS A CANDIDATE, NOT YET THE BLOCK: KubeArmor enforces inline at LSM hooks (BPF-LSM preferred).
-# BPF-LSM is confirmed active on our AL2023 nodes (2026-07-16: /sys/kernel/security/lsm contains bpf on
-# kernel 6.12). That is necessary but NOT sufficient: the reason we run Tetragon for the C3 block is that
-# KubeArmor v1.7.x historically could not resolve container namespaces against EKS AL2023's containerd 2.x
-# (enforcer reports mntns=0 / "task not found"), so its block never engaged even with bpf present. This
-# app exists to TEST whether KubeArmor v1.7.4 now resolves containers on our current containerd and its
-# KubeArmorPolicy actually BLOCKS. Until that is proven live, Tetragon remains the enforcing C3 block and
-# is NOT removed. See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
+# KubeArmor enforces inline at LSM hooks (BPF-LSM preferred). BPF-LSM is active on our AL2023 nodes
+# (2026-07-16: /sys/kernel/security/lsm contains bpf on kernel 6.12). The historical blocker (KubeArmor
+# v1.7.x could not resolve container namespaces against EKS AL2023 containerd 2.x, enforcer reported
+# mntns=0 / "task not found") is OBSOLETE on our current containerd: KubeArmor resolves containers and
+# blocks. Proven live 2026-07-18 (r3-1, Tetragon rule removed, bait read denied by KubeArmor) and again
+# 2026-08-30 (r3-2, Tetragon policy deleted, the annotated pod still could not create the legacy dir).
+# Tetragon was retired 2026-08-30 as the redundant second prevention engine (Michael's ruling, see
+# docs/DECISION-LOG.md). See docs/research/runtime-exec-block-kubearmor-vs-tetragon.md.
 #
 # autoDeploy=true has the operator create the default KubeArmorConfig, which brings up the enforcement
 # DaemonSet + relay with no second manifest. Default posture is audit/allow until a KubeArmorPolicy names
 # a target, so the engine alone enforces nothing: the actual C3 deny is the KubeArmorPolicy shipped by the
-# kubearmor-policies app (policies/kubearmor/). That split mirrors tetragon / tetragon-policies.
+# kubearmor-policies app (policies/kubearmor/). Engine/policy split mirrors kyverno / kyverno-policies.
 #
 # ROUND GATING: the FULL app-of-apps (R2/R3/attendee) syncs gitops/apps wholesale, so it gets this engine.
 # The BURN app-of-apps (R1) uses an explicit include: list; adding 'kubearmor' there (engine only, NOT
 # kubearmor-policies) keeps the engine present on all three builds while R1 stays enforcement-free and
-# still burns. Wave -6 matches tetragon so the engine is up before its policy (wave 4).
+# still burns. Wave -6 puts the engine up well before its policy (kubearmor-policies, wave 4).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
