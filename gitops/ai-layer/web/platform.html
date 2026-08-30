@@ -1,0 +1,205 @@
+<!-- ABOUTME: The platform catalogue: every service installed on this cluster, which layer it belongs to,
+     ABOUTME: how to reach it, and its login. So nobody has to dump a ConfigMap to find a URL. -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Your platform — Watch It Burn</title>
+<!--
+  WHY THIS PAGE EXISTS (Michael, asked three times before it got built):
+  the attendee is handed a full IDP and then has to run `kubectl get svc -A` and dump Secrets to find
+  out what is on it, where it lives, and how to log in. The Packt workshop had a tab that listed every
+  service, its URL and its credentials, plus what was installed at which phase. This is that.
+
+  HONEST ABOUT REACHABILITY. Only the console (this page, BurritoBot, the terminal) is exposed through a
+  LoadBalancer. Grafana, Argo CD, Prometheus, Loki and Tempo are all ClusterIP: there is no browser URL
+  that reaches them from outside the cluster, so this page does NOT print one. Instead each row carries
+  the exact port-forward that makes it reachable, and the exact command that prints its password. Both
+  were run on a live attendee cluster before being written here.
+-->
+<style>
+  :root{--bg:#f7f5fb;--card:#fff;--ink:#1b1230;--mut:#6b6a80;--line:#e6dff5;--accent:#8A00D6;--dd:#632CA6;--ok:#2e9e5b}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:clamp(14px,1vw,17px);line-height:1.5}
+  header{background:var(--dd);color:#fff;padding:11px clamp(12px,2vw,22px);display:flex;align-items:center;gap:12px;flex-wrap:wrap;position:sticky;top:0;z-index:5}
+  header .brand{font-weight:800;display:flex;align-items:center;gap:9px}
+  header .spacer{flex:1}
+  header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap;margin-left:7px}
+  header a.hb:hover{background:rgba(255,255,255,.28)}
+  main{max-width:min(96vw,1500px);margin:0 auto;padding:clamp(12px,1.6vw,30px)}
+  .lede{color:var(--mut);margin:0 0 18px}
+  /* The phase diagram: what got installed, in the order it was installed. */
+  .phases{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 24px}
+  .ph{flex:1 1 190px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:11px 13px;border-top:4px solid var(--accent)}
+  .ph h3{margin:0 0 3px;font-size:13px;text-transform:uppercase;letter-spacing:.5px}
+  .ph p{margin:0;font-size:12.5px;color:var(--mut)}
+  .ph .w{font-size:11px;font-weight:800;color:var(--accent)}
+  section.layer{margin-bottom:26px}
+  section.layer > h2{font-size:clamp(16px,1.3vw,21px);margin:0 0 3px}
+  section.layer > .sub{color:var(--mut);font-size:13.5px;margin:0 0 12px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top;font-size:13.5px}
+  th{background:#f3eefc;font-size:12px;text-transform:uppercase;letter-spacing:.4px;color:var(--mut)}
+  tr:last-child td{border-bottom:0}
+  td.svc{font-weight:800;white-space:nowrap}
+  td.svc small{display:block;font-weight:500;color:var(--mut);white-space:normal}
+  code.inl{background:#f3eefc;border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-size:12.5px}
+  .cmd{position:relative;background:#171a24;color:#e6e1f0;border-radius:8px;padding:8px 40px 8px 11px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12.5px;margin:5px 0;cursor:pointer;white-space:pre-wrap;word-break:break-all}
+  .cmd:hover{outline:2px solid var(--accent)}
+  .cmd .cp{position:absolute;top:5px;right:5px;background:var(--accent);color:#fff;border:0;border-radius:5px;font-size:10.5px;font-weight:800;padding:2px 7px;cursor:pointer}
+  .note{background:#fff8e8;border:1px solid #f0dca8;border-left:4px solid #d9a319;border-radius:10px;padding:11px 13px;font-size:13.5px;margin:0 0 20px}
+  .open{background:#eefaf2;border:1px solid #cdeede;border-left:4px solid var(--ok);border-radius:10px;padding:11px 13px;font-size:13.5px;margin:0 0 20px}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--accent);color:#fff;font-weight:800;padding:9px 17px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
+  #toast.show{opacity:1}
+  footer{color:var(--mut);font-size:12.5px;padding:6px clamp(12px,2vw,22px) 30px;max-width:min(96vw,1500px);margin:0 auto}
+  @media(min-width:2560px){body{font-size:19px}}
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">🔥 Your platform</div>
+  <span class="spacer"></span>
+  <a class="hb" id="vttbtn" href="/lab">&#9000; VTT</a>
+  <a class="hb" id="bbbtn" href="/">&#127791; BurritoBot</a>
+  <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener">&#128202; Datadog</a>
+  <a class="hb" id="fbbtn" href="https://feedback.agenticburn.com" target="_blank" rel="noopener">&#128172; Feedback</a>
+</header>
+
+<main>
+  <p class="lede">Everything below is already running on <b id="cl">your cluster</b>. Nothing here needs installing.
+  This page exists so you never have to dump a ConfigMap or read a Service list to find out where something is.</p>
+
+  <div class="open"><b>Fastest way to see all of it with live values:</b> run <code class="inl">platform</code> in your
+  terminal. It prints this same table with the passwords already filled in, read from the cluster.
+  <div class="cmd" onclick="cp(this)">platform<button class="cp">copy</button></div></div>
+
+  <h2 style="font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin:0 0 9px">What was installed, and when</h2>
+  <div class="phases">
+    <div class="ph"><div class="w">Wave 1</div><h3>Foundation</h3><p>Namespaces, RBAC, cert-manager, External Secrets, resource quotas.</p></div>
+    <div class="ph"><div class="w">Wave 2</div><h3>Platform controls</h3><p>Kyverno admission, NetworkPolicy, Istio ambient mesh, KubeArmor, Falco + Talon.</p></div>
+    <div class="ph"><div class="w">Wave 3</div><h3>Observability</h3><p>OpenTelemetry Collector, Prometheus, Grafana, Loki, Tempo, the Datadog Agent.</p></div>
+    <div class="ph"><div class="w">Wave 4</div><h3>The AI layer</h3><p>kagent on Bedrock, MCP tool servers, guard-proxy + LLM Guard, BurritoBot, your terminal.</p></div>
+    <div class="ph"><div class="w">Always</div><h3>Delivery</h3><p>Argo CD holds all of it to what Git says. Delete something and it comes back.</p></div>
+  </div>
+
+  <div class="note"><b>Why there are no clickable links for most of these.</b> Only the console you are reading
+  now (this page, BurritoBot and your terminal) is published through a load balancer. Grafana, Argo CD,
+  Prometheus, Loki and Tempo are <b>ClusterIP</b>: they have no address reachable from your browser. Rather than
+  print a URL that cannot work, each row gives you the <b>port-forward</b> that makes it reachable and the
+  <b>exact command</b> for its password. Run the port-forward in your terminal, then open the localhost URL.</div>
+
+  <section class="layer">
+    <h2>Consoles you can open right now</h2>
+    <p class="sub">Published through this cluster's load balancer. No port-forward needed.</p>
+    <table>
+      <tr><th>Service</th><th>Where</th><th>Login</th></tr>
+      <tr><td class="svc">BurritoBot<small>The customer-facing app under attack</small></td>
+          <td><a href="/" id="bblink">this cluster's <code class="inl">/</code></a></td><td>none</td></tr>
+      <tr><td class="svc">Your terminal (VTT)<small>Shell, kubectl and aws, pre-wired</small></td>
+          <td><code class="inl">/lab</code></td>
+          <td><code class="inl" id="tuser">agentic</code> / <code class="inl" id="tpass">agentic</code><small>Instructor clusters use <code class="inl">sprouts</code>.</small></td></tr>
+      <tr><td class="svc">Datadog<small>Traces, logs, metrics and LLM Observability</small></td>
+          <td>app.datadoghq.com</td><td>on your provisioning page and in the lab guide</td></tr>
+    </table>
+  </section>
+
+  <section class="layer">
+    <h2>Observability, in-cluster</h2>
+    <p class="sub">The open-source half of the stack. Datadog is the primary lens for the workshop; these are here because a real platform has them and you should be able to look.</p>
+    <table>
+      <tr><th>Service</th><th>Reach it</th><th>Login</th></tr>
+      <tr><td class="svc">Grafana<small>Dashboards over Prometheus, Loki and Tempo</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80<button class="cp">copy</button></div>then open <code class="inl">http://localhost:3000</code></td>
+          <td>user <code class="inl">admin</code><div class="cmd" onclick="cp(this)">kubectl -n monitoring get secret prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo<button class="cp">copy</button></div></td></tr>
+      <tr><td class="svc">Prometheus<small>Metrics and alert rules</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090<button class="cp">copy</button></div>then <code class="inl">http://localhost:9090</code></td><td>none</td></tr>
+      <tr><td class="svc">Loki<small>Log store behind Grafana</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/loki 3100:3100<button class="cp">copy</button></div></td><td>none</td></tr>
+      <tr><td class="svc">Tempo<small>Trace store behind Grafana</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/tempo 3200:3200<button class="cp">copy</button></div></td><td>none</td></tr>
+      <tr><td class="svc">OTel Collector<small>Where every trace and metric is routed</small></td>
+          <td>in-cluster only, <code class="inl">otel-collector-opentelemetry-collector:4317</code></td><td>none</td></tr>
+    </table>
+  </section>
+
+  <section class="layer">
+    <h2>Delivery and admission</h2>
+    <table>
+      <tr><th>Service</th><th>Reach it</th><th>Login</th></tr>
+      <tr><td class="svc">Argo CD<small>Holds the cluster to what Git says. This is what restores anything you delete.</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n argocd port-forward svc/argocd-server 8081:80<button class="cp">copy</button></div>then <code class="inl">http://localhost:8081</code></td>
+          <td>user <code class="inl">admin</code><div class="cmd" onclick="cp(this)">kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo<button class="cp">copy</button></div></td></tr>
+      <tr><td class="svc">Kyverno<small>Admission control: refuses a workload before it runs</small></td>
+          <td>no UI. <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy<button class="cp">copy</button></div></td><td>n/a</td></tr>
+    </table>
+  </section>
+
+  <section class="layer">
+    <h2>Runtime security</h2>
+    <table>
+      <tr><th>Service</th><th>Reach it</th><th>What it does</th></tr>
+      <tr><td class="svc">KubeArmor<small>Inline prevention (BPF-LSM)</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n agent get kubearmorpolicy -o yaml<button class="cp">copy</button></div></td>
+          <td>Blocks the action before it completes. This is what makes the recipe file unreadable.</td></tr>
+      <tr><td class="svc">Falco + Falco-Talon<small>Detect, then respond</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n falco logs -l app.kubernetes.io/name=falco --tail=40<button class="cp">copy</button></div></td>
+          <td>Falco sees it and Talon reacts. Detection after the fact, not prevention.</td></tr>
+      <tr><td class="svc">NetworkPolicy / Istio<small>Default-deny egress, ambient mesh</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n agent get networkpolicy<button class="cp">copy</button></div></td>
+          <td>Why the exfil in Challenge 1 cannot leave the cluster.</td></tr>
+    </table>
+  </section>
+
+  <section class="layer">
+    <h2>The AI layer</h2>
+    <table>
+      <tr><th>Service</th><th>Reach it</th><th>What it does</th></tr>
+      <tr><td class="svc">kagent<small>The agent runtime, on Amazon Bedrock</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n agent get agent workshop-agent -o yaml<button class="cp">copy</button></div></td>
+          <td>Its model binding and its tool allow-list are both declarative. Challenge 7 changes the tool list.</td></tr>
+      <tr><td class="svc">guard-proxy<small>Your AI guardrails, and the cost meter</small></td>
+          <td><div class="cmd" onclick="cp(this)">guards-status<button class="cp">copy</button></div></td>
+          <td>Input guard, output guard, tool authorization and the spend cap all live here.</td></tr>
+      <tr><td class="svc">LLM Guard<small>The scanners guard-proxy calls</small></td>
+          <td>in-cluster only, <code class="inl">llm-guard:8000</code></td>
+          <td>Prompt-injection scanning on the way in, sensitive-data scanning on the way out.</td></tr>
+      <tr><td class="svc">MCP servers<small>workshop-mcp and evil-mcp-shim</small></td>
+          <td><div class="cmd" onclick="cp(this)">kubectl -n agent get pods -l app=workshop-mcp<button class="cp">copy</button></div></td>
+          <td>The agent's tools. One of them carries a poisoned description on purpose.</td></tr>
+    </table>
+  </section>
+</main>
+
+<footer>Everything here is yours and it is destroyed after the workshop. Break it freely; Argo CD will put most of it back.</footer>
+<div id="toast"></div>
+<script>
+  function toast(t){var e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(window._t);window._t=setTimeout(function(){e.classList.remove('show');},1200);}
+  function cp(el){
+    var txt=el.textContent.replace(/\s*copy\s*$/,'').trim();
+    if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(txt).then(function(){toast('Copied');},function(){fb(txt);});}
+    else fb(txt);
+    function fb(t){var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();try{document.execCommand('copy');toast('Copied');}catch(e){}document.body.removeChild(ta);}
+  }
+  (function(){
+    var q=new URLSearchParams(location.search), c=q.get('cluster'), u=q.get('user');
+    if(c){document.getElementById('cl').textContent=c;document.title='Your platform — '+c;}
+    // Instructor clusters use the admin terminal credential; attendee clusters use the student one.
+    var host=(c||location.hostname).toLowerCase();
+    if(/(^|[-.])r(ound)?[123]([-.]|$)/.test(host)){
+      document.getElementById('tuser').textContent='sprouts';
+      document.getElementById('tpass').textContent='sprouts';
+    }
+    var nq=[]; if(c)nq.push('cluster='+encodeURIComponent(c)); if(u)nq.push('user='+encodeURIComponent(u));
+    if(nq.length){
+      var s='?'+nq.join('&');
+      ['vttbtn','bbbtn','fbbtn'].forEach(function(id){
+        var el=document.getElementById(id); if(!el) return;
+        el.href = el.href.indexOf('?')>-1 ? el.href+'&'+nq.join('&') : el.href+s;
+      });
+      var bl=document.getElementById('bblink'); if(bl) bl.href='/'+s;
+    }
+  })();
+</script>
+</body>
+</html>

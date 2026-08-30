@@ -38,6 +38,7 @@ configMapGenerator:
       - web/burritbot.html # B1: the BurritoBot storefront, served by the console nginx as the front door
       - web/lab.html # B5/B12: round-3 student lab page (instructions left + ttyd terminal embedded right)
       - web/brief.html # instructor brief for R1/R2: prompts VISIBLE, separate page from the student lab (#122)
+      - web/platform.html # the platform catalogue: every service, its URL and its login
       - web/skins.js # VTT skin layer: skin definitions (BurritoBot default + Accenture); see web/SKINS.md
       - web/active-skin.js # the one-line skin knob (switch skins here)
       - web/skin.js # applier: sets palette vars + brand text/title/favicon from the active skin

@@ -62,6 +62,52 @@ _evil() { kubectl -n agent patch agent workshop-agent --type=json \
   -p "[{\"op\":\"replace\",\"path\":\"/spec/declarative/tools/1/mcpServer/toolNames\",\"value\":$1}]" >/dev/null 2>&1; }
 EOS
 
+# The platform catalogue, with LIVE values (Michael asked for this three times before it existed).
+# Prints every service, where it is, and its actual password read from the cluster, so nobody has to dump
+# a ConfigMap or grep a Service list to find their own Grafana. Mirrors gitops/ai-layer/web/platform.html.
+cat > "$HOME/platform" <<'EOS'
+#!/bin/bash
+# ABOUTME: print every installed service, how to reach it, and its live credentials.
+b(){ printf '\n\033[1;35m%s\033[0m\n' "$1"; }
+row(){ printf '  \033[1m%-22s\033[0m %s\n' "$1" "$2"; }
+sec(){ kubectl -n "$1" get secret "$2" -o jsonpath="{.data.$3}" 2>/dev/null | base64 -d 2>/dev/null; }
+
+echo "Everything installed on $(kubectl config current-context 2>/dev/null | sed 's|.*/||')."
+echo "Only the console is published; the rest are ClusterIP, so each one shows its port-forward."
+
+b "OPEN IN YOUR BROWSER NOW"
+row "BurritoBot"  "this cluster's /  (the app under attack)"
+row "Your terminal" "/lab   login: ${TTYD_CREDENTIAL%%:*} / ${TTYD_CREDENTIAL#*:}"
+row "Platform page" "/platform  (this list, in the browser)"
+
+b "OBSERVABILITY (port-forward, then open localhost)"
+gp="$(sec monitoring prometheus-grafana admin-password)"
+row "Grafana" "kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80  -> http://localhost:3000"
+row ""        "login: admin / ${gp:-<could not read secret>}"
+row "Prometheus" "kubectl -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090"
+row "Loki"       "kubectl -n monitoring port-forward svc/loki 3100:3100   (no login)"
+row "Tempo"      "kubectl -n monitoring port-forward svc/tempo 3200:3200  (no login)"
+
+b "DELIVERY"
+ap="$(sec argocd argocd-initial-admin-secret password)"
+row "Argo CD" "kubectl -n argocd port-forward svc/argocd-server 8081:80  -> http://localhost:8081"
+row ""        "login: admin / ${ap:-<could not read secret>}"
+row "Kyverno" "no UI:  kubectl get clusterpolicy"
+
+b "RUNTIME SECURITY"
+row "KubeArmor" "kubectl -n agent get kubearmorpolicy -o yaml     (inline block)"
+row "Falco/Talon" "kubectl -n falco logs -l app.kubernetes.io/name=falco --tail=40"
+row "NetworkPolicy" "kubectl -n agent get networkpolicy"
+
+b "THE AI LAYER"
+row "kagent"      "kubectl -n agent get agent workshop-agent -o yaml"
+row "guard-proxy" "guards-status        (your AI guardrails + spend cap)"
+row "LLM Guard"   "in-cluster: llm-guard:8000"
+row "MCP servers" "kubectl -n agent get pods -l app=workshop-mcp"
+echo
+echo "Full list with descriptions: open /platform in your browser."
+EOS
+
 # Read-only: which AI guards are currently on. The platform tour on the lab page points at this, and a
 # student who has flipped several toggles needs a way to see where they actually are without guessing.
 cat > "$HOME/guards-status" <<'EOS'
@@ -205,7 +251,7 @@ else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-off' again."
 fi
 EOS
-chmod +x "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
+chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
   "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off
 
@@ -216,6 +262,7 @@ echo "  kubectl is wired to your cluster   (try: kubectl get pods -A)"
 echo "  aws is ready with your keys        (try: aws sts get-caller-identity)"
 echo "  flip your AI guardrails with       guards-on   guards-off"
 echo "  see which guards are on           guards-status"
+echo "  every service, URL and password    platform"
 cd "$HOME"
 export PATH="$HOME:$PATH"
 export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '
