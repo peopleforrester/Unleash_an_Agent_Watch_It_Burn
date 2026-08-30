@@ -98,19 +98,35 @@
 </head>
 <body>
   <!-- BB-2: burrito-in-a-cauldron mark, defined once and reused in the header + chat avatar. -->
+  <!-- Redesigned 2026-08-30 (#134). The old mark read as "a potato on a grill" at its rendered size
+       (~22px): the cauldron was near-black on a dark header with a thin low-contrast rim, and the burrito
+       was a plain rounded rect. This version is built for legibility SMALL, not for detail: chunky shapes,
+       no hairlines, the glyph fills the viewBox, a BRIGHT rim so the cauldron reads as a vessel, and a
+       burrito with a visible spiral tuck + wrap folds so it reads as a rolled tortilla. -->
   <svg style="display:none" aria-hidden="true"><symbol id="cauldron" viewBox="0 0 32 32">
-    <path d="M9 26 l-2 3" stroke="#2b2230" stroke-width="2" stroke-linecap="round"/>
-    <path d="M23 26 l2 3" stroke="#2b2230" stroke-width="2" stroke-linecap="round"/>
-    <path d="M5 16 a11 10 0 0 0 22 0 z" fill="#2b2230"/>
-    <ellipse cx="16" cy="16" rx="12" ry="3.2" fill="#3a2f47"/>
-    <ellipse cx="16" cy="16" rx="9.5" ry="2.2" fill="#8A00D6"/>
-    <circle cx="11" cy="15.4" r="1.1" fill="#c08bff"/>
-    <circle cx="20" cy="15.7" r="0.9" fill="#c08bff"/>
-    <g transform="rotate(-22 16 11)">
-      <rect x="12" y="2.5" width="8" height="13" rx="4" fill="#E8C99B" stroke="#C9A36B" stroke-width="1"/>
-      <path d="M13.6 5.5 h4.8 M13.6 8.5 h4.8" stroke="#C9A36B" stroke-width="0.8" stroke-linecap="round" opacity="0.7"/>
+    <!-- legs: short and thick so they survive downscaling -->
+    <path d="M10 27.5 l-2.2 3" stroke="#120d18" stroke-width="2.6" stroke-linecap="round"/>
+    <path d="M22 27.5 l2.2 3" stroke="#120d18" stroke-width="2.6" stroke-linecap="round"/>
+    <!-- body: wide, deep, near-black for maximum contrast against the bright rim and the pale burrito -->
+    <path d="M3.6 17 a12.4 11.5 0 0 0 24.8 0 z" fill="#120d18"/>
+    <!-- rim: the brightest ring in the mark. This is what makes it read as a cauldron at 22px. -->
+    <ellipse cx="16" cy="17" rx="13.2" ry="3.6" fill="#C77DFF"/>
+    <ellipse cx="16" cy="17" rx="13.2" ry="3.6" fill="none" stroke="#120d18" stroke-width="1.1"/>
+    <!-- brew: hot magenta so the burrito sits on colour, not on black -->
+    <ellipse cx="16" cy="17.1" rx="10.2" ry="2.3" fill="#E040FB"/>
+    <circle cx="10.6" cy="16.6" r="1.25" fill="#FBD3FF"/>
+    <circle cx="21" cy="16.9" r="1" fill="#FBD3FF"/>
+    <!-- the burrito, rising out of the pot and filling the upper half -->
+    <g transform="rotate(-20 16 9)">
+      <!-- body with a dark outline so it holds against both the dark header and a light card -->
+      <rect x="11" y="0.8" width="10" height="15.5" rx="5" fill="#F5CE8B" stroke="#7A4A16" stroke-width="1.3"/>
+      <!-- folded tuck at the top: the detail that says "rolled tortilla", not "potato" -->
+      <path d="M11.6 4.4 a5 3.4 0 0 1 8.8 0 z" fill="#E0B36A" stroke="#7A4A16" stroke-width="1.1" stroke-linejoin="round"/>
+      <!-- wrap folds: thick enough to survive downscaling -->
+      <path d="M12.2 8.6 h7.6 M12.4 11.8 h7.2" stroke="#C0863C" stroke-width="1.5" stroke-linecap="round"/>
     </g>
-    <path d="M25.5 6 l0.7 1.9 l1.9 0.7 l-1.9 0.7 l-0.7 1.9 l-0.7 -1.9 l-1.9 -0.7 l1.9 -0.7 z" fill="#FFD86B"/>
+    <!-- spark: the witchy accent, kept clear of the glyph so it never muddies the silhouette -->
+    <path d="M26.6 4.6 l0.85 2.2 l2.2 0.85 l-2.2 0.85 l-0.85 2.2 l-0.85 -2.2 l-2.2 -0.85 l2.2 -0.85 z" fill="#FFD86B"/>
   </symbol></svg>
   <header>
     <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
