@@ -112,16 +112,18 @@
     <section class="guide" style="position:relative">
       <button class="guidetoggle" onclick="toggleGuide()" title="Hide the steps and use the full width">&#10094; Hide</button>
       <h1>This cluster is yours. 🧙</h1>
-      <p class="lede">This cluster is yours. You will live in three tabs: this <b>Terminal</b> (your home base), your <b>BurritoBot</b>, and <b>Datadog</b>. The buttons at the top open BurritoBot and Datadog. Open both now, glance around, then come back here. Tap any command or prompt to copy it.</p>
+      <p class="lede">This cluster is yours. You will work across three <b>browser tabs</b>: this <b>lab page</b> (your home base, with the terminal on the right), your <b>BurritoBot</b>, and <b>Datadog</b>. The buttons at the top open BurritoBot and Datadog. Open both now, glance around, then come back here. Tap any command or prompt to copy it.</p>
+
+      <div class="tip">Two different things are called "tabs" here, so keep them straight: the three <b>browser tabs</b> above (lab page, BurritoBot, Datadog), and the <b>workbench tabs</b> on the right of this page (Terminal, VS Code, Notebook). The challenges live in the browser tabs.</div>
 
       <div class="tip">All of this is instrumented with OpenTelemetry. Datadog is the backend we are using here; any OTLP-conformant backend would work the same way.</div>
 
       <div class="step">
-        <div class="h"><div class="num">1</div><div class="t">Look around, open your three tabs</div></div>
+        <div class="h"><div class="num">1</div><div class="t">Look around, open your browser tabs</div></div>
         <div class="b">
           <p>Your <code class="inl">kubectl</code> is already pointed at this cluster and <code class="inl">aws</code> is configured with your keys. See what is running:</p>
           <div class="cmd" onclick="cp(this)">kubectl get pods -A<button class="cp">copy</button></div>
-          <p>Now open <b>BurritoBot</b> and <b>Datadog</b> from the buttons up top (your Datadog login is on the Provisioning page). Keep all three tabs open; you will switch between them through the challenges.</p>
+          <p>Now open <b>BurritoBot</b> and <b>Datadog</b> from the buttons up top (your Datadog login is on the Provisioning page). Keep all three browser tabs open; you will switch between them through the challenges.</p>
         </div>
       </div>
 
