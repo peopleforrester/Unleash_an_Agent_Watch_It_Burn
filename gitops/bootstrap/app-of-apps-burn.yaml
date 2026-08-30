@@ -21,11 +21,15 @@ spec:
       recurse: false
       # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
       # observability/cert-manager/eso/backstage. Just the agent + ai-layer (cost meter) + burn targets.
+      # cert-manager is included because R1 still needs the console's TLS certificate (#139): the burn
+      # profile means NO GUARDRAILS, not no infrastructure. Without it the Certificate CRD is absent, the
+      # ai-layer app cannot sync, and the console Deployment (which mounts the cert) would never start.
+      # It issues a self-signed cert and enforces nothing, so it does not soften the burn.
       # kubearmor (ENGINE only, NOT kubearmor-policies) is included so the runtime-enforcement engine is
       # present on all three builds per the uniform-build goal; with no KubeArmorPolicy it enforces nothing,
       # so R1 stays guardrail-free and the C3 snoop still succeeds. kubearmor-policies is OMITTED here
       # (the KubeArmorPolicy lives only in the full profile); Tetragon was retired 2026-08-30.
-      include: '{namespaces,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
+      include: '{namespaces,cert-manager,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
