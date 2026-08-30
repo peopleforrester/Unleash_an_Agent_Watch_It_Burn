@@ -188,7 +188,15 @@ BLOCK_LIST = [t.strip().lower() for t in os.environ.get(
 #   Haiku 4.5 $1/$5, Sonnet 4.6 $3/$15, Opus 4.8 $5/$25 per 1M tokens.
 # verify-at-build: confirm the Bedrock list price for the deployed region. Anthropic API list prices
 #   (used here) historically match Bedrock for these models, but confirm before quoting a number.
+#
+# `nova` added 2026-08-30: the workshop agent is bound to the bedrock-nova ModelConfig
+# (us.amazon.nova-pro-v1:0), but MODEL_TIER was still "sonnet", so the on-screen counter was pricing Nova
+# tokens at Sonnet rates (roughly 4x over). The counter is a headline visual for C4, so a wrong multiplier
+# is a wrong lesson. Nova Pro list price $0.0008/1K in, $0.0032/1K out ($0.80/$3.20 per 1M), per the AWS
+# pricing pages as of 2026-08-30. verify-at-build: the Bedrock pricing table is JS-rendered and could not
+# be scraped, so re-confirm this pair against aws.amazon.com/bedrock/pricing before quoting it on a slide.
 TIER_PRICES_PER_1K = {
+    "nova":   {"in": 0.0008, "out": 0.0032},
     "haiku":  {"in": 0.001, "out": 0.005},
     "sonnet": {"in": 0.003, "out": 0.015},
     "opus":   {"in": 0.005, "out": 0.025},
@@ -198,6 +206,7 @@ MODEL_TIER = os.environ.get("MODEL_TIER", "haiku").lower()
 # Full Bedrock model ID per tier — used as gen_ai.request.model when MODEL_NAME is not explicitly set.
 # IDs verified ACTIVE 2026-06-26; update when kagent ModelConfigs are bumped.
 _TIER_TO_MODEL_ID = {
+    "nova":   "us.amazon.nova-pro-v1:0",
     "haiku":  "us.anthropic.claude-haiku-4-5-20251001-v1:0",
     "sonnet": "us.anthropic.claude-sonnet-4-6",
     "opus":   "us.anthropic.claude-opus-4-8",

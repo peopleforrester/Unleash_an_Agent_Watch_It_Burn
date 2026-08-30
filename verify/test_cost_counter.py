@@ -44,7 +44,13 @@ proxy.record_usage({"result": {}})  # a response with no usage must not move the
 check("counter flatlines when no token usage is present", proxy._cost["usd"] == flat_before["usd"])
 
 # 3. Per-tier price table is real and ordered (escalation drives the closing-demo cost contrast).
-check("tier table has haiku/sonnet/opus", set(proxy.TIER_PRICES_PER_1K) == {"haiku", "sonnet", "opus"})
+# Superset, not equality: the table gained "nova" on 2026-08-30 when the workshop default moved to
+# Nova Pro (the agent's bound ModelConfig). Pinning the exact set made adding the model the fleet actually
+# runs a test failure, which is backwards. The three Claude tiers must stay for the cost-race demo.
+check("tier table has the haiku/sonnet/opus cost-race tiers",
+      {"haiku", "sonnet", "opus"} <= set(proxy.TIER_PRICES_PER_1K))
+check("every priced tier has both an input and an output rate",
+      all({"in", "out"} <= set(v) for v in proxy.TIER_PRICES_PER_1K.values()))
 check("opus output price > sonnet > haiku",
       proxy.TIER_PRICES_PER_1K["opus"]["out"] > proxy.TIER_PRICES_PER_1K["sonnet"]["out"]
       > proxy.TIER_PRICES_PER_1K["haiku"]["out"])
