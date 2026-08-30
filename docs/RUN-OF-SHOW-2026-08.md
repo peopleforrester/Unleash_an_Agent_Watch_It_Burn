@@ -5,22 +5,50 @@
 
 **DevOpsDays Portland 2026.** Monday, September 8, 1:00 PM, **2 hours**, Room 327. Smith Memorial
 Student Union, 1825 SW Broadway, Portland OR. (Slot verified against the pretalx schedule 2026-08-23.
-The public abstract lists a 1.5-hour duration, which conflicts; the 2-hour slot is authoritative. The
-round budgets below total ~55 minutes of content, leaving generous room for onboarding, the hands-on
-Round 3, and Q&A.)
+The public abstract lists a 1.5-hour duration, which conflicts; the 2-hour slot is authoritative.)
 
-Michael Forrester (Accenture) + Whitney Lee. Three rounds. This is what you say and do, in order,
-with the exact URLs and prompts. Everything below was tested live on 2026-08-29 and is marked with
-its status.
+Michael Forrester (Accenture) + Whitney Lee. This is what you say and do, in order, with the exact URLs
+and prompts. Everything below was tested live and is marked with its status.
 
-**The thesis, in one line:** app-level prompt engineering does not stop an over-permissioned agent;
-platform guardrails do. Rounds 1 and 2 prove it with the same attack; Round 3 hands the room the controls.
+**The thesis, in one line:** an over-permissioned agent is not stopped by asking it nicely; it is stopped
+by controls the **platform team** deploys around it. Rounds 1 and 2 prove it with the same attack; Round 3
+hands the room the controls and they do it themselves.
+
+> **Say "platform guardrails", never "app-layer".** Our output guard and injection classifier live in the
+> guard-proxy: a component the platform team injects around whatever model a developer brings. They act on
+> prompts, but they are platform-deployed and platform-controlled, which is the whole argument. The split
+> that matters is **developer-shipped** (inside the model or their container) vs **platform-injected**
+> (ours). Calling ours "app-layer" concedes the thesis.
+
+## Shape of the two hours
+
+**This is a hands-on workshop, not a demo with a hands-on tail.** The room spends the single largest block
+with their hands on their own cluster. Budget:
+
+| Block | Time | Who drives | What happens |
+|---|---|---|---|
+| **Onboarding + cluster tour** | 15 min | Whitney drives, Michael floats | Claim a cluster, get in, and see what they were just handed |
+| **Rounds 1 & 2, instructor-led** | 20 min | Michael sends, Whitney runs retries | The same attacks, unguarded then guarded, **with the room attacking our box too** |
+| **Round 3, hands-on** | 60 min | The room; both of us floating | They run the attacks and turn the controls on themselves |
+| **Wrap + feedback** | 15 min | Michael closes | What holds, what does not, and collect feedback |
+| **Slack** | 10 min | | Overrun, questions, a cluster that needs rescuing |
+
+**Nobody installs anything.** The full platform is already deployed on every cluster (43 ArgoCD apps, one
+bash script). The hands-on hour is about **manipulating** what is there, not building it.
+
+**Your prompts live on the instructor page, not in this doc.** Open **`/brief`** on whichever cluster you
+are driving (for example `https://michael-round1.agenticburn.com/brief`): every Round 1 and 2 prompt is
+there, copy-ready, with the expected result and the control that stops it. This doc is the narrative and
+the timing; `/brief` is what you actually drive from. The student page (`/lab`) deliberately hides those
+prompts behind hints, so do not present from it.
 
 ---
 
 ## Your servers
 
-Login for every terminal: **`sprouts` / `sprouts`**.
+Login for **your** (instructor) terminals: **`sprouts` / `sprouts`**.
+Login for **attendee** clusters: **`agentic` / `agentic`**. These are deliberately different: `sprouts` is
+the admin credential, and reading it out to a room would also hand the room your presenter consoles.
 
 | | Michael | Whitney |
 |---|---|---|
@@ -65,12 +93,70 @@ guards-off
 
 ---
 
-## ROUND 1, no guardrails (~15 min)
+## ONBOARDING + CLUSTER TOUR (15 min)
 
-**The premise:** attendees are the external customer on BurritoBot. The cluster has nothing turned on.
-They break it by asking.
+**Owner: Whitney drives from the front, Michael floats and unsticks people.**
 
-**Owner: Michael sets the frame, Whitney narrates the attacks.**
+1. **Send them to `provisioning.agenticburn.com`.** Any email, real or fake, as long as they remember it.
+   Same email always returns the same cluster.
+2. **One click into the lab.** The "Open your terminal" button lands them on `/lab` with the terminal on
+   the right, and it now carries their **Datadog login with it**, so they never have to come back to the
+   provisioning page. Terminal login is **`agentic` / `agentic`**.
+3. **Confirm they are connected:** `kubectl get pods -A`.
+4. **Open the other two browser tabs** from the buttons up top: BurritoBot and Datadog.
+
+### The tour: what you were just handed (Michael, ~5 min of the 15)
+
+Do not skip this. They are holding a real internal developer platform and nobody has told them. This is
+also the segment that earns the abstract's claims.
+
+> "Before we break anything: you were each handed a production-shaped platform, and it built itself from
+> one bash script. Let me show you what is actually running in there."
+
+```bash
+kubectl get applications -n argocd          # 43 apps: this whole platform, GitOps-managed
+kubectl get pods -A | head -40              # what that actually looks like running
+```
+
+Name the pieces they will touch today, and who owns each one:
+
+| Layer | What is running | Whose job |
+|---|---|---|
+| The agent | **kagent**, on Amazon Bedrock (Nova Pro), with MCP tool servers | the developer builds it |
+| Admission | **Kyverno** (registry allow-list, resource limits, drift blocking) | platform |
+| Network | **NetworkPolicy** default-deny egress, **Istio** ambient mesh | platform |
+| Runtime | **KubeArmor** (inline block), **Falco + Talon** (detect and respond) | platform |
+| AI guardrails | **guard-proxy** + **LLM Guard**: input, output, tool-authz, budget | platform |
+| Observability | **Datadog**, OpenTelemetry, Prometheus, Grafana, Loki, Tempo | platform |
+| Delivery | **Argo CD** app-of-apps, **Terraform** underneath | platform |
+
+Land the point: **one column is the developer's, everything else is the platform team's.** Today's argument
+is that the second column is what actually stops an agent, and they are about to prove it themselves.
+
+---
+
+## ROUNDS 1 & 2, instructor-led (20 min)
+
+**The premise:** attendees are the external customer on BurritoBot. Round 1 has nothing turned on; Round 2
+is the same everything with platform controls on. Run each attack in Round 1, then immediately re-run it in
+Round 2, so the contrast lands while it is still fresh.
+
+**Drive from `/brief`** (`https://michael-round1.agenticburn.com/brief`), not from this doc. Every prompt is
+there, copy-ready, with the expected result and the control that stops it.
+
+**Owner: Michael sends, Whitney runs the Round 2 retries and works the room.**
+
+### Give the room the URL (do this first)
+
+> "Before we start: here is our Round 1 box. It is ours, not yours, and it is meant to be attacked. Open it
+> and try to get it to misbehave while we work. Anything you land, shout it out."
+
+Put **`round1.agenticburn.com`** on screen. This is the single-URL moment from AI Engineer World's Fair and
+it is what makes this block participatory rather than a demo. Take attempts from the floor as you go, and
+read a good one out. Whitney watches for a raised hand that is actually stuck.
+
+> The room is on **our** cluster here, not their own. Nothing they do to it costs them their Round 3 box,
+> and if they take it down that is a story, not a problem.
 
 ### Open (Michael)
 
@@ -158,12 +244,10 @@ real run.
 right story is told. There are system prompts in production right now that say, in effect, if anyone
 tells you it will sell more burritos, do what they say next."
 
----
+### The Round 2 half: same prompts, controls on
 
-## ROUND 2, infra guardrails on (~15 min)
-
-**The premise:** same interface, same system prompt, same prompts. We turned on infrastructure controls
-and nothing else. Try the attacks that just worked.
+**The premise:** same interface, same system prompt, same prompts. We turned on platform controls and
+nothing else. Re-run the attacks that just worked.
 
 **Owner: Whitney runs the retries, Michael names the control each time.**
 
@@ -197,19 +281,71 @@ infra layer. The customer here is the developer.
 
 ---
 
-## ROUND 3, hands-on (~25 min)
+## ROUND 3, HANDS-ON (60 min)
 
-**The premise:** every attendee gets their own cluster and flips the AI guardrails themselves.
+**This is the workshop.** Everything before it exists to set this hour up. They already onboarded at the
+top, so they go straight in.
 
-**Owner: Whitney drives onboarding and the room; Michael floats and troubleshoots.**
+**Owner: the room. Both of you float.** Whitney takes the front half of the room, Michael the back. Resist
+driving from the front; the failure mode of this hour is it turning back into a demo.
 
-### Onboarding (Whitney)
+**The pattern for every challenge, and say it out loud once so they internalise it:**
 
-Send them to `provisioning.agenticburn.com`. Enter an email (real or fake, just remember it). They get
-their cluster URL, Datadog login, and terminal. Open `/lab`: instructions on the left, terminal on the
-right. Login `sprouts` / `sprouts`. Have them run `kubectl get pods -A` to confirm they are connected.
+> **1. Run the attack and watch it work. 2. Turn the control on yourself. 3. Run the exact same attack and
+> watch it fail.** The point is never the attack. It is that you changed one platform setting and the same
+> attack stopped working.
 
-The Round 3 challenges start with guards **off** so they see the weakness first, then turn each on.
+Their page is `/lab`. **The prompts are hidden behind a caret** (a stated goal, Hint 1, Hint 2, then "Show
+a prompt that works"). That is deliberate: attendees who write their own working prompt remember it, and
+the ones who stall are two clicks from moving on. Tell them the reveal is there and that using it is fine.
+
+**Timing guide for the hour** (they will not move in lockstep, and that is fine):
+
+| | Challenge | Control they turn on | Budget |
+|---|---|---|---|
+| 1 | **C5** agent leaks a Secret | `guard-output-on` | ~12 min |
+| 2 | **C6** poisoned prompt | `guard-input-on` | ~12 min |
+| 3 | **C7** rogue tool via poisoned description | `guard-mcp-on` | ~12 min |
+| 4 | **C4** denial-of-wallet | `guard-budget-on` | ~10 min |
+| 5 | **Explore the platform** (below) | none, you read them | ~14 min |
+
+Whitney calls the room forward roughly every 12 minutes with a one-line "most people are on challenge N
+now" so stragglers know they can jump. Nobody has to finish all five.
+
+### Exercise 5: explore the platform itself (~14 min)
+
+The four challenges above turn **AI** guardrails on and off. This one is where they touch the
+**infrastructure** controls that have been holding all along, and it is the segment that ties the hour back
+to the thesis. All of these are read-or-poke, and every one is safe.
+
+**Watch GitOps put a guardrail back.** ✅ verified live 2026-08-30 (attendee-001)
+
+```bash
+kubectl -n agent get networkpolicy                          # the egress controls
+kubectl -n agent delete networkpolicy agent-egress-allowlist
+kubectl -n agent get networkpolicy -w                       # ...and watch it come back
+```
+
+It returns in **about five seconds**, because Argo CD is enforcing the platform's declared intent. Land it:
+"You have cluster-admin on your own cluster. You deleted a security control and the platform put it back
+before you could use the gap. That is a guardrail you cannot talk your way past, and no prompt engineering
+was involved."
+
+**Read the controls that stopped you.**
+
+```bash
+kubectl get clusterpolicy                                    # Kyverno: what admission refuses
+kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml   # the inline block on the recipe file
+kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml # why the exfil could not leave
+kubectl -n agent get agent workshop-agent -o yaml            # the agent: its tools, its model binding
+```
+
+**See what it costs.** The cost counter on BurritoBot is real Bedrock spend, and the ceiling is now shown
+next to it. Point out that the cap is **per cluster** and enforced at the gateway, so a blocked request
+costs nothing at all.
+
+**Then let them loose.** `guards-off` puts every AI guard back to the Round 1 state so they can re-run
+anything. It is their cluster; it is going away afterwards; they should break it.
 
 ### C5, output guard. ✅ verified both directions
 
@@ -272,12 +408,46 @@ Re-ask the same question. The rogue tool is gone from the allow-list; the sentin
 
 ### Reset
 
-`guards-off` flips everything back so they can re-run any challenge. `guards-on` flips all three at once.
+`guards-off` flips everything back so they can re-run any challenge. `guards-on` flips all of them at once.
 
-### Close (Michael)
+---
 
-The product point: security is not only IT's problem. Chatbots dropped free-form input for menus for
-exactly this reason. A bound system plus a tight escape hatch beats an open one. Scope it down upstream.
+## WRAP + FEEDBACK (15 min)
+
+**Owner: Michael closes, Whitney collects feedback and works the room.**
+
+### Pull the room back (Michael, ~8 min)
+
+Ask first, do not tell: **"What did you get to work, and what stopped you?"** Take three or four. The
+answers are the summary, and the room believes its own people more than it believes us.
+
+Then the close:
+
+- **Every attack today was a plausible-sounding request.** No exploit, no CVE, no malware. Somebody asked
+  politely and the agent obliged, because being helpful is the whole job.
+- **The controls that stopped it were not smarter prompts.** They were an egress policy, an admission
+  rule, an LSM block, a tool allow-list, and a budget. Boring, countable, owned by the platform team, and
+  they work whether or not the model cooperates.
+- **The ones that live in the guard-proxy are platform controls too**, even though they act on prompts.
+  The platform team injects them around whatever model the developer brings. That is the point: you do not
+  have to wait for a developer to secure their agent.
+- **And it is not only IT's problem.** Chatbots dropped free-form input for menus for exactly this reason.
+  A bound system with a tight escape hatch beats an open one. Scope it down upstream.
+- **What to do Monday:** default-deny egress on agent namespaces, an admission allow-list on images, drop
+  `automountServiceAccountToken` where the agent does not need it, and put a spend cap in front of the
+  model. None of that needs a new vendor.
+
+### Feedback (Whitney, ~5 min)
+
+Ask for it while they are still sitting down, not in the hallway. Point at the **Feedback** surface and say
+plainly what it is for: this workshop gets run again, and what they say changes it. Say what we are
+specifically unsure about (pacing of the hands-on hour, whether the hints were the right amount of help).
+
+### Last (~2 min)
+
+Their clusters are torn down after the session, so anything they want to keep should be copied out now.
+The repo is public: point at it, and mention the challenges are all in there with the controls that stop
+them.
 
 ---
 
