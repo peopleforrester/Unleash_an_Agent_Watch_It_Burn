@@ -76,7 +76,9 @@ kagent controller into a running Deployment. The whole agent is declarative, in
 `gitops/ai-layer/resources.yaml`:
 
 - **`spec.declarative.modelConfig`** points at a `ModelConfig` (provider Bedrock, Claude). Swapping the
-  reference swaps the model tier (Haiku default; Sonnet/Opus for the side-by-side comparison).
+  reference swaps the model tier (**Nova Pro** is the workshop default; Haiku/Sonnet/Opus for the
+  side-by-side cost comparison). Keep the guard-proxy's `MODEL_TIER` in step with it or the cost counter
+  prices the wrong model.
 - **`spec.declarative.systemMessage`** is the agent's brief. For the burn it is a chaos prompt ("probe
   and try to break the guardrails"). The cost-saver variant additionally tells the agent which
   guardrails exist so it does not waste tokens on already-blocked actions.

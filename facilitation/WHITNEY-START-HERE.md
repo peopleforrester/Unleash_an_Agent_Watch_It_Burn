@@ -25,13 +25,27 @@ Michael your GitHub username and he will add you.
 ## The shape of the 2 hours (three clusters, three canonical attacks)
 
 Clusters 1 and 2 run the same three attacks (your structure): (1) exfiltrate customer data, (2) deploy
-a villain app, (3) fork-bomb the cluster.
+a villain app, (3) run the bill up (denial-of-wallet).
 
-1. Cluster 1, no guardrails: all three succeed; the live cost counter climbs; the fork bomb kills it.
+1. Cluster 1, no guardrails: all three succeed, and the live cost counter climbs with nothing stopping it.
 2. Cluster 2, the CNCF controls a mature team runs: the same three are blocked, each by a DIFFERENT
-   control (NetworkPolicy egress, Kyverno registry-allowlist, a per-pod PID limit), but the bill still moved.
-3. Cluster 3, each attendee's own: they switch on the agent-specific guardrails (input/output/MCP) and
-   play the AI-layer games (beat-the-bouncer, tower-defense, trace re-leak hunt, poisoned MCP). Then the map.
+   control (NetworkPolicy egress, Kyverno registry-allowlist, a gateway budget cap).
+3. Cluster 3, each attendee's own: they switch on the agent-specific guardrails (input/output/MCP/budget)
+   themselves and re-run the attacks. Then the map.
+
+> **The fork bomb was retired as a beat** (issue #114, 2026-08-29). Nova refuses it in chat, so it never
+> fired through the agent, and it killed a node that then needed a spare cluster. Its replacement is
+> **denial-of-wallet**: the agent runs the Bedrock bill up, nothing crashes, and the gateway budget cap
+> freezes spend at the cap in Round 2. The PID-cap defence is still deployed and can still be shown from a
+> terminal; it is just no longer one of the three headline attacks.
+
+**Timing (2 hours):** 15 onboarding + platform tour, 20 instructor Rounds 1 and 2 (with the room attacking
+our box too), **60 hands-on** on their own cluster, 15 wrap and feedback, 10 slack. The full beat-by-beat
+is `docs/RUN-OF-SHOW-2026-08.md`, and the prompts you drive from are on **`/brief`** on each cluster.
+
+**Terminal logins:** yours and Michael's instructor clusters are `sprouts` / `sprouts`; attendee clusters
+are `agentic` / `agentic`. Deliberately different, so reading the student one aloud does not hand the room
+your presenter consoles.
 
 Telemetry is Datadog-primary (you drive it; each attendee gets their own); Grafana/Tempo is the fallback.
 Demo cluster URLs live on agenticburn.com. The full attack-to-control mapping is in "Control rationale" (doc 9).

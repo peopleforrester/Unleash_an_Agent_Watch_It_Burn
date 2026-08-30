@@ -1,7 +1,26 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 3.3 Promote — PRD 35 M1 shipped to main (4/5; §4.6-d deferred). M2-M8 (Azure/GCP/local) are future code-only cycles.
+Phase: 3.3 Promote — Portland delivery hardening shipped to main: runtime-security cutover (#127/#137), denial-of-wallet C4 (#114), role-split instructions + instructor brief (#122), 2-hour hands-on run-of-show (#123), platform tour + manipulation commands (#124/#126), agent-probe harness + prompt catalog (#136), and the Whitney onboarding set (#131/#132/#133/#134).
 Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
+
+## Current cycle (2026-08-30)
+
+23 issues closed and deployed to all 8 live clusters, verified by `verify/fleet-drift-audit.sh`
+(19 checks per cluster, zero drift). Highlights and the things a future session must not re-derive:
+
+- **Tetragon retired**; KubeArmor is the sole C3 inline-prevention engine, Falco+Talon stay for
+  detect-and-respond. The C3 bait is now baked into the workshop-mcp image so the block is EPERM, not
+  ENOENT.
+- **C4 is denial-of-wallet**, not the fork bomb. Fork bomb retired: Nova refuses it in chat.
+- **Terminal credential is split**: `sprouts` for instructor/roster clusters, `agentic` for the attendee
+  pool.
+- **Model is Nova Pro**, and `MODEL_TIER` must match the bound ModelConfig (guarded by a build test).
+- **guard-proxy env never arrives via git** (Argo CD ignoreDifferences); it needs a live patch behind a
+  Kyverno flip. See docs/GOTCHAS-FLEET-AND-DELIVERY.md.
+- **Say "platform guardrails", never "app-layer"** about our own guard-proxy controls (Michael's ruling).
+
+Highest open risk: **#95**, Whitney's Datadog org/trial. If it is expired on the day the observability
+half of every challenge goes dark.
 
 ## Lifecycle
 (reflects the PRD 35 **M1** unit of work, now shipped. M2-M8 each start a fresh cycle when begun.)

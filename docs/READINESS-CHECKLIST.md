@@ -9,9 +9,14 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 ---
 
 ## 1. Workshop logistics
-- 🔄 Slot cut to **60 minutes** (was 120). Walkthrough deck recut; run-of-show fits 60 min.
+- ✅ Slot is **120 minutes** (DevOpsDays Portland, verified against pretalx 2026-08-23). The run-of-show is
+  rebuilt around it: 15 onboarding + tour, 20 instructor R1/R2, **60 hands-on**, 15 wrap, 10 slack (#123).
 - 🔄 **250 attendees** (was 50), planned as **5 AWS accounts × ~50 clusters**. Pending: Michael acquiring the 4 extra accounts.
-- ✅ Default model **Sonnet 4.6** (`bedrock-sonnet`), verified live; Haiku/Opus defined for the optional tier demo.
+- ✅ Default model **Amazon Nova Pro** (`bedrock-nova`, `us.amazon.nova-pro-v1:0`): the model that complies
+  AND executes the attack beats. Haiku/Sonnet/Opus remain defined for the optional cost-race tier demo.
+  The guard-proxy's `MODEL_TIER` must match the bound ModelConfig or the cost counter prices the wrong
+  model (caught live 2026-08-30, ~4x over); `verify/test_cost_tier_matches_model.py` now fails the build
+  on a mismatch.
 
 ## 2. Provisioning & fleet
 - ✅ Cluster provisioning is Terraform (`infra/terraform/aws/cluster`), driven by `fleet.sh` (per-cluster state, parallel).
@@ -35,7 +40,8 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 | C1 | Exfil to S3 | ⬜ | substrate built (egress, customer-stream, Istio); ⬜ NetworkPolicy enable toggle | ⬜ | ⬜ **not packaged** |
 | C2 | Malicious deploy | ✅ `challenges/01-cncf-wall/agent-prompt.txt` | ✅ `toggle-kyverno-enforce.sh` | ✅ `fallback.kubectl.sh` | ✅ |
 | C3 | Planted-secret grep | ⬜ (breadcrumb files exist) | planted-file exists; ⬜ Falco filesystem-snoop rule + enable toggle | ⬜ | ⬜ **not packaged** |
-| C4 | Fork bomb | ⬜ | PID-limit defense built/validated; ⬜ packaged attack + Round-1 placement | ⬜ | ⬜ **not packaged** |
+| C4 | Denial-of-wallet | ✅ `challenges/c4-denial-of-wallet/agent-prompt.txt` | ✅ gateway budget cap, runtime `guard-budget-on` toggle | ✅ verified live 2026-08-29 (froze at the cap, zero-cost block) | ✅ |
+| ~~C4 old~~ | ~~Fork bomb~~ | retired as a beat (#114): Nova refuses it in chat. PID-cap defence still deployed, terminal-only | | | n/a |
 | C5 | Output guard | ✅ `challenges/02-sanitization/agent-prompt-exfil.txt` | ✅ `toggle-output-guard-on.sh` | ✅ `fallback.curl.sh` | ✅ |
 | C6 | Input guard | ✅ `agent-prompt-injection.txt` | ✅ `toggle-input-guard-on.sh` + `toggle-input-classifier-on.sh` | ✅ | ✅ |
 | C7 | Rogue MCP | ✅ `challenges/03-bad-mcp-excessive-agency/agent-prompt.txt` | ✅ `toggle-mcp-authz-on.sh` (agentgateway) + `evil-mcp-shim/` | ✅ `fallback.curl.sh` | ✅ ([SPIKE] enforcement on OSS v1.3.0) |

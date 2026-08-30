@@ -27,7 +27,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 
 ## Agent + AI guardrails
 
-- [x] kagent 0.9.9 Agent + Bedrock ModelConfig (Haiku default; Sonnet/Opus tiers, us. Geo profile);
+- [x] kagent 0.9.9 Agent + Bedrock ModelConfig (**Nova Pro default** since the model swap; Haiku/Sonnet/Opus tiers remain for the cost race, us. Geo profile);
   [~] Bedrock model access live + A2A usage key (cost counter parses adk_usage_metadata, fixed research/14)
 - [x] guard-proxy: input block-list + classifier (progressive), output Regex, cost meter, rate-limit/cost-cap, prompt-stream
 - [x] LLM Guard wiring; [~] verdict envelope on the live image

@@ -22,6 +22,29 @@ Updated 2026-06-26. Check items off here as they land; "done" detail goes to PRO
 
 ## P0 — the workshop cannot run without these
 
+### 0. Morning-of verification (run these three, read the output)
+
+These exist because "Argo CD says Synced" does not mean a cluster carries every fix: ConfigMap content
+arrives via Argo CD, guard-proxy env only via a live patch, images only when a pod is cycled, and the
+terminal credential is a bootstrap Secret.
+
+```bash
+# a) every cluster carries every shipped fix (19 checks, one line per cluster)
+for c in $(aws eks list-clusters --region us-west-2 --profile accen-dev --query 'clusters[]' --output text); do
+    verify/fleet-drift-audit.sh "$c"; done
+
+# b) the prompts still land on the live model (green/yellow/red per beat)
+python3 verify/agent_probe.py michael-round3.agenticburn.com --context <ctx> --profile accen-dev
+
+# c) hostnames, TLS and websockets
+infra/terraform/fleet/check-tls.sh michael-round1.agenticburn.com michael-round2.agenticburn.com
+```
+
+- [ ] Drift audit clean on every cluster (expected values are documented in the script header).
+- [ ] Probe reports no **red** beats. Yellow on C5 or C7 is Nova being inconsistent, not a broken cluster:
+      re-run, and if it declines twice use the ranked fallbacks in `challenges/PROMPT-CATALOG.md`.
+- [ ] Guards left **off** on the Round 3 / attendee clusters so students see the weakness first.
+
 ### 1. The 5-account fleet for ~250 attendee clusters
 - [ ] Confirm the other 4 AWS accounts exist and we have CLI access (a profile each).
 - [ ] Quota increases on each of the 4 accounts (us-west-2), all adjustable, file now. Proven against
@@ -57,13 +80,17 @@ Updated 2026-06-26. Check items off here as they land; "done" detail goes to PRO
 
 ## P1 — demo correctness (the rounds and challenges must land)
 
-- [ ] **R1 true burn**: R1 (burn) clusters with `podPidsLimit=-1`, and validate the fork bomb actually
-      kills the node. Code default is already -1 for burn; the running whitney-r1 needs the on-the-fly
-      change (privileged pod; SSM is off on the node). IN PROGRESS.
-- [ ] **C7 MCP authorization enforcement**: the MCP path through agentgateway is validated; still need to
-      live-test the deny toggle (rogue tool filtered from list_tools), or ratify the kagent `toolNames`
-      allowlist as the mechanism and finish that toggle.
+- [x] **R1 true burn**: R1 (burn) clusters run `podPidsLimit=-1`. The fork-bomb validation this line used
+      to demand is **no longer a delivery gate**: the fork bomb was retired as a beat (#114) because Nova
+      refuses it in chat. C4 is now denial-of-wallet, verified live 2026-08-29 (spend froze at the cap, the
+      blocked request cost zero). The PID cap is still deployed and still demonstrable from a terminal.
+- [x] **C7 MCP authorization enforcement**: the kagent `toolNames` allow-list is the ratified mechanism and
+      the `guard-mcp-on` toggle is live. Measured on Nova 2026-08-30: the sentinel leaks 4/5 with the guard
+      off and never appears with it on (`challenges/PROMPT-CATALOG.md`).
 - [ ] **Model-tier override** live-validate on the haiku/sonnet/opus instructor clusters (the cost race).
+      NOTE: the workshop default is now **Nova Pro**, and `MODEL_TIER` on the guard-proxy must match the
+      bound ModelConfig or the counter prices the wrong model. Argo CD `ignoreDifferences` excludes that env
+      block, so it is a live `kubectl set env` behind a Kyverno flip; see docs/GOTCHAS-FLEET-AND-DELIVERY.md.
       Mechanism is in code (ignoreDifferences + setup-instructor-cluster.sh patch), not yet validated live.
 - [ ] **C1/C3/C4 runbooks** packaged: attendee + facilitator instructions. Defenses are validated; the
       delivery wrappers (beat.md-style) and the C3 bait-file plant script do not exist yet.
