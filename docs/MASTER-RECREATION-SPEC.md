@@ -1,7 +1,7 @@
 <!-- ABOUTME: Single authoritative recreate-from-scratch specification for the entire "Watch It Burn" workshop.
      ABOUTME: Reverse-engineered from 399 commits + the decision log + 9 PRDs + 10 research spikes, 2026-06-27. -->
 
-> **Amended 2026-06-28** by [docs/UI-FEEDBACK-2026-06-28.md](UI-FEEDBACK-2026-06-28.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
+> **Amended 2026-06-28** by [`docs/DESIGN-DECISIONS.md`](DESIGN-DECISIONS.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
 
 > **Corrected 2026-07-25** against the manifests. This spec had drifted from the code on two points
 > that would have produced a wrong rebuild. **Identity:** it described `enable_irsa=true` and IRSA for
@@ -28,7 +28,7 @@ This is the one file to rebuild the whole workshop from nothing. It is organized
 - **Part XI** is the single ordered recreation sequence that ties the subsystems together.
 - **Part XII** is the cross-cutting decision index. **Part XIII** is the known-gaps and cost/teardown register.
 
-When this spec and a specific PRD or `docs/DECISION-LOG.md` entry disagree, the decision log wins (it is append-only and dated). When the build and `docs/ABSTRACT.md` disagree on attendee-visible behavior, the abstract wins ("abstract truth"). Source artifacts that remain authoritative on their own topics: `docs/DECISION-LOG.md` (the dated decision and correction log), `docs/ABSTRACT.md` (the accepted talk), `docs/RUN-OF-SHOW-AND-BACKLOG-2026-06-27.md` (the presenter script and B1 to B15 backlog), `docs/CONFIGURATION-AND-RECREATION-2026-06.md` (the version-pinned stack), the nine `prds/`, and the ten `research/` spikes.
+When this spec and a specific PRD or `docs/DECISION-LOG.md` entry disagree, the decision log wins (it is append-only and dated). When the build and `docs/ABSTRACT.md` disagree on attendee-visible behavior, the abstract wins ("abstract truth"). Source artifacts that remain authoritative on their own topics: `docs/DECISION-LOG.md` (the dated decision and correction log), `docs/ABSTRACT.md` (the accepted talk), `docs/RUN-OF-SHOW-2026-08.md` (the presenter script and B1 to B15 backlog), `docs/MASTER-RECREATION-SPEC.md` (the version-pinned stack), the nine `prds/`, and the ten `research/` spikes.
 
 ---
 
@@ -57,7 +57,7 @@ The accepted abstract ("everything is instrumented, everything is enforced") rea
 
 ## Part II. The Three-Round Narrative and Run-of-Show
 
-The full presenter script (cold open, the grandma-exfil social-engineering bit, Webster's fork-bomb, the Phoenix Project framing, the menu-driven reveal, the why-gateway-not-langgraph aside, the FedEx anecdote, and the cost and feedback close) is `docs/RUN-OF-SHOW-AND-BACKLOG-2026-06-27.md` Part 0. The structural spine:
+The full presenter script (cold open, the grandma-exfil social-engineering bit, Webster's fork-bomb, the Phoenix Project framing, the menu-driven reveal, the why-gateway-not-langgraph aside, the FedEx anecdote, and the cost and feedback close) is `docs/RUN-OF-SHOW-2026-08.md` Part 0. The structural spine:
 
 | Round | Cluster | Profile | Guardrails | What it proves |
 |---|---|---|---|---|
@@ -346,7 +346,7 @@ BurritoBot persona: a witchy burrito cantina ("Hex and Cauldron"), warm and a li
 
 ### Purpose
 
-The demonstrable payload: agent attack scenarios paired with the platform/AI guardrails that catch them, plus a two-tier verification harness that proves every before/after claim is actually true on a cluster before it is shown live. The rule throughout: the lesson is the GUARDRAIL, never the model. Every beat has a deterministic fallback path (curl/kubectl) that proves the control fires whether or not the model takes the bait, because LLM induction (especially on Haiku) is probabilistic and cannot be trusted on stage. Two vocabularies coexist: `challenges/01-cncf-wall`/`02-sanitization`/`03-bad-mcp-excessive-agency` are the three live beats; `challenges/c1-exfil-s3`/`c3-secret-grep`/`c4-fork-bomb` are the round-driven infra challenges; `games/` holds two scored variants. The directory was renamed `beats/` → `challenges/` (`5fe448a`).
+The demonstrable payload: agent attack scenarios paired with the platform/AI guardrails that catch them, plus a two-tier verification harness that proves every before/after claim is actually true on a cluster before it is shown live. The rule throughout: the lesson is the GUARDRAIL, never the model. Every beat has a deterministic fallback path (curl/kubectl) that proves the control fires whether or not the model takes the bait, because LLM induction (especially on Haiku) is probabilistic and cannot be trusted on stage. Two vocabularies coexist: `challenges/01-cncf-wall`/`02-sanitization`/`03-bad-mcp-excessive-agency` are the three live beats; `challenges/c1-exfil-s3`/`c3-secret-grep`/`c4-denial-of-wallet` are the round-driven infra challenges; `games/` holds two scored variants. The directory was renamed `beats/` → `challenges/` (`5fe448a`).
 
 ### The Three Rounds
 

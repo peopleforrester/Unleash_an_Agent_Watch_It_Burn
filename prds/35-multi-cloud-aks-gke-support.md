@@ -322,8 +322,8 @@ never left dangling:
    `infra/terraform/cluster/main.tf` → repoint to `infra/terraform/aws/cluster/main.tf`.
 3. **`fleet.sh`** and `deploy-full-idp.sh` internal path assumptions → routed
    through the provider shim (4.2), which owns the per-cloud root path.
-4. **Docs** (~10 files: `MASTER-RECREATION-SPEC.md`, `FULL-RUN-PLAN-2026-06-29.md`,
-   `CONFIGURATION-AND-RECREATION-2026-06.md`, `STACK-WALKTHROUGH.md`,
+4. **Docs** (~10 files: `MASTER-RECREATION-SPEC.md`, `RUN-OF-SHOW-2026-08.md`,
+   `MASTER-RECREATION-SPEC.md`, `STACK-WALKTHROUGH.md`,
    `BUILD-SPEC.md`, `DECISION-LOG.md`, `TAGGING.md`, `READINESS-CHECKLIST.md`,
    `GO-LIVE-CHECKLIST.md`, `PROJECT_STATE.md`) reference the old paths. Accuracy
    only, not load-bearing; swept in M1's doc pass.

@@ -78,7 +78,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 ---
 
 ## Must fix before ready (the gaps)
-1. ✅ **C1, C3, C4 packaged as challenges** — `challenges/c1-exfil-s3/`, `challenges/c3-secret-grep/`, `challenges/c4-fork-bomb/` (attack prompt + README + fallback against the existing defenses).
+1. ✅ **C1, C3, C4 packaged as challenges** — `challenges/c1-exfil-s3/`, `challenges/c3-secret-grep/`, `challenges/c4-denial-of-wallet/` (attack prompt + README + fallback against the existing defenses).
 2. ✅ **Per-round instructor setup script** — `infra/setup-instructor-cluster.sh <name> <round>`: bootstrap (`burn`/`full`) + set the round toggle state (R1 none, R2 Kyverno Enforce, R3 infra-on + AI-off with the flip commands printed).
 3. ✅ **Per-round toggles**: the only runtime toggle is Kyverno Audit→Enforce; C1 egress / C3 Falco / C4 PID are profile-based (on in `full`, absent in `burn`), documented in each challenge README. Not a gap.
 4. 🔄 **Multi-account fleet** (skipped by request): per-account VPC, attendee account targeting, `aws-pool.csv` emit, per-cluster Datadog secret naming, `routes.map` auto-population. Pending the 4 accounts.
