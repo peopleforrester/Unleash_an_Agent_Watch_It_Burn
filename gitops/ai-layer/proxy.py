@@ -401,8 +401,18 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/cost":
+            # Expose the ACTIVE ceiling alongside the spend so the UI can say "$x of $y" instead of a bare
+            # number. A cap nobody can see reads as "unlimited" right up until it stops working, which is
+            # the worst moment to learn about it (Michael, 2026-08-30). Two different ceilings can apply:
+            # the always-on infra safety cap (COST_CAP_USD) and, when the C4 budget guard is toggled on,
+            # the demo cap (BUDGET_CAP_USD). Report whichever would actually bite first.
             with _cost_lock:
-                self._send(200, dict(_cost))
+                payload = dict(_cost)
+            caps = [c for c in (COST_CAP_USD,
+                                BUDGET_CAP_USD if GUARDS.get("budget") else 0) if c and c > 0]
+            payload["cap_usd"] = min(caps) if caps else 0
+            payload["budget_guard"] = bool(GUARDS.get("budget"))
+            self._send(200, payload)
             return
         if self.path == "/prompts":
             # Side-screen feed: MODERATED prompts only, and only if capture is enabled.

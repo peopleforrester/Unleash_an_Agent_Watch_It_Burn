@@ -212,6 +212,9 @@
       <div class="card">
         <div class="imrow"><span class="imlbl">Tokens</span><b class="imval" id="tokens">0</b></div>
         <div class="imrow"><span class="imlbl">Cost</span><b class="imval" id="costusd">$0.0000</b></div>
+        <!-- The spend ceiling, shown as soon as the backend reports one (#138). A cap nobody can see reads
+             as "unlimited" until it stops working. Hidden when the backend reports no cap. -->
+        <div class="imrow" id="caprow" style="display:none"><span class="imlbl">Spend cap</span><b class="imval" id="capusd"></b></div>
       </div>
       <div class="card">
         <h3>Your saved prompts</h3>
@@ -345,8 +348,29 @@
     if(btn) btn.disabled=!up;
   }
   async function checkBackend(){
+    refreshCap();
     try{ const r=await fetch('/guards',{method:'GET',cache:'no-store'}); if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false); return; } }catch(e){}
     setBackendUp(false);
+  }
+  // Show the ACTIVE spend ceiling next to the counter (#138). The backend reports whichever cap would bite
+  // first: the always-on infra cap, or the tighter C4 budget cap once that guard is toggled on. Polled with
+  // the backend check so flipping the budget guard live updates the number without a reload. Server-side
+  // spend is authoritative here (it survives a page reload; the local counter does not), so use it when it
+  // is ahead of what this tab has accumulated.
+  async function refreshCap(){
+    try{
+      const r=await fetch('/cost',{cache:'no-store'}); if(!r.ok) return;
+      const d=await r.json();
+      const row=document.getElementById('caprow'), el=document.getElementById('capusd');
+      if(!row||!el) return;
+      if(d.cap_usd>0){
+        el.textContent='$'+Number(d.cap_usd).toFixed(2)+(d.budget_guard?' (budget guard on)':'');
+        row.style.display='';
+      } else { row.style.display='none'; }
+      if(typeof d.usd==='number' && d.usd>costUsd){
+        costUsd=d.usd; document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
+      }
+    }catch(e){}
   }
   // Set the banner (round) from the cluster name so each cluster shows the right guardrail state.
   function applyRoundFromCluster(cluster){
