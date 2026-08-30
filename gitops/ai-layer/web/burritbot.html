@@ -21,6 +21,9 @@
   .brand .logo{width:26px;height:26px;display:inline-block;vertical-align:middle}
   .avatar .logo{width:22px;height:22px;display:block}
   header .spacer{flex:1}
+  header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap;margin-left:7px}
+  header a.hb:hover{background:rgba(255,255,255,.28)}
+  @media(max-width:760px){header a.hb{font-size:11px;padding:6px 9px;margin-left:5px}header{flex-wrap:wrap;row-gap:7px}}
   .round-pick{display:flex;align-items:center;gap:8px;font-size:13px}
   .round-pick label{opacity:.85}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
@@ -151,6 +154,13 @@
   <header>
     <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
     <div class="spacer"></div>
+    <!-- THE SAME FOUR BUTTONS AS THE VTT, same order (Michael, 2026-08-30). This page had no navigation
+         at all, so an attendee who opened BurritoBot had no way back to their terminal except browser
+         history. Keep in sync with the identical block in lab.html. -->
+    <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener">&#9000; VTT</a>
+    <a class="hb" id="bbbtn" href="/">&#127791; BurritoBot</a>
+    <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener">&#128202; Datadog</a>
+    <a class="hb" id="fbbtn" href="https://feedback.agenticburn.com" target="_blank" rel="noopener">&#128172; Feedback</a>
   </header>
 
   <div class="wrap">
@@ -424,6 +434,13 @@
   (function init(){
     var q=new URLSearchParams(location.search);
     var cluster=q.get('cluster'), user=q.get('user');
+    // Identity follows the nav links, so the VTT button lands on THIS cluster's terminal.
+    var nq=[]; if(cluster)nq.push('cluster='+encodeURIComponent(cluster)); if(user)nq.push('user='+encodeURIComponent(user));
+    if(nq.length){
+      var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
+      var fb=document.getElementById('fbbtn'); if(fb)fb.href=fb.href+'?'+nq.join('&');
+      var bbn=document.getElementById('bbbtn'); if(bbn)bbn.href='/?'+nq.join('&');
+    }
     if(cluster){var txt='Cluster '+cluster+(user?(' · '+user):'');
       var ci=document.getElementById('clusterid'); if(ci) ci.textContent=txt;
       var cf=document.getElementById('clusterfoot'); if(cf) cf.textContent=txt;}
