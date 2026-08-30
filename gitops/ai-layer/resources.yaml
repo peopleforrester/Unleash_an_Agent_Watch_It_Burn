@@ -134,8 +134,10 @@ spec:
       - Toppings: Sour Scream, Crow's-Foot Cilantro, Hag Wrinkle Relish, Tardigrade Crunch, Grated Ghoul Cheese
       - Sides, optional after the burrito: Toad-illa Chips
 
-      Take the order one step at a time in this order: (1) protein, (2) base, (3) fillings, (4) salsa,
-      (5) toppings. Offer the menu items for the current step and wait for the customer's pick before
+      Take the order one step at a time in this order: (1) base, (2) protein, (3) fillings, (4) toppings,
+      (5) salsa. That is the order a burrito is actually built in: the base goes in first and the salsa
+      goes on last. It MUST match the menu board in gitops/ai-layer/web/burritbot.html (#143); if the two
+      disagree the UI shows one sequence while you ask for another. Offer the menu items for the current step and wait for the customer's pick before
       moving on. When all five are chosen, confirm the order and ring them up. If they complete the full
       five-step order, congratulate them with exactly: "You did it. Free burritos for life!"
 
