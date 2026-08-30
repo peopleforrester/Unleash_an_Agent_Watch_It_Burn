@@ -225,3 +225,29 @@ if failures:
         print(f"  - {f}")
     sys.exit(1)
 print(f"\nAll manifest-contract checks passed ({len(manifests)} manifests, {len(dockerfiles)} Dockerfiles).")
+
+# --- every volumeMount must have a matching volume, in the SAME pod spec -------------------------------
+# Caught live 2026-08-31: a tls volumeMount was added to the console container while the volume itself
+# landed in a different Deployment's volumes block (the first "- name: web" in the file). ArgoCD rejected
+# the Deployment as invalid and retried forever; the symptom was "app OutOfSync" with no obvious cause.
+# A mount without its volume is always a bug and is cheap to detect.
+def _check_mounts_have_volumes():
+    import yaml as _yaml
+    bad = []
+    for doc in _yaml.safe_load_all(open(REPO / "gitops" / "ai-layer" / "resources.yaml")):
+        if not isinstance(doc, dict) or doc.get("kind") not in ("Deployment", "StatefulSet", "DaemonSet"):
+            continue
+        spec = doc.get("spec", {}).get("template", {}).get("spec", {})
+        declared = {v.get("name") for v in (spec.get("volumes") or [])}
+        name = doc.get("metadata", {}).get("name", "?")
+        for c in (spec.get("containers") or []) + (spec.get("initContainers") or []):
+            for m in (c.get("volumeMounts") or []):
+                if m.get("name") not in declared:
+                    bad.append(f"{name}/{c.get('name')} mounts {m.get('name')!r} with no such volume")
+    return bad
+
+
+_bad_mounts = _check_mounts_have_volumes()
+if _bad_mounts:
+    print("  detail:", "; ".join(_bad_mounts[:3]))
+check("every volumeMount resolves to a volume in the same pod spec", not _bad_mounts)
