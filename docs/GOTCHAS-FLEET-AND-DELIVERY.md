@@ -181,3 +181,28 @@ channel for anything in that env block**. Synced does not mean applied, for that
 
 Always verify after: `kubectl -n agent exec deploy/guard-proxy -- sh -c 'echo $MODEL_TIER'` and confirm
 the drift guard is back on `Enforce`.
+
+## Editing app-of-apps-burn.yaml in git does nothing to a live cluster
+
+**Symptom:** you change the `directory.include` list in `gitops/bootstrap/app-of-apps-burn.yaml`, push,
+promote, hard-refresh the app, and the live Application's include list is unchanged. Argo CD even reports
+`app-of-apps-burn` as **Synced at your new commit**, which makes it look like the change landed.
+
+**Cause:** the `app-of-apps-burn` Application is a **bootstrap artifact**. It is applied once by the
+install script and is not itself managed by any Argo CD app, so nothing reconciles the file into the
+live resource. What "Synced" means there is that the apps it *generates* match git, not that the
+Application's own spec does.
+
+**Fix:** patch the live Application directly. It is safe precisely because nothing will revert it:
+
+```bash
+kubectl -n argocd patch app app-of-apps-burn --type merge \
+  -p '{"spec":{"source":{"directory":{"include":"{namespaces,cert-manager,...}.yaml"}}}}'
+```
+
+Then update the file in git too, so a rebuilt cluster gets it from bootstrap.
+
+**Caught 2026-08-31** adding cert-manager to the burn profile for the console TLS certificate (#139). The
+full-profile clusters were unaffected: `app-of-apps.yaml` syncs `gitops/apps` wholesale with no include
+list, so a new app file is picked up automatically. Only the burn profile has this hazard, because only it
+uses an explicit include.
