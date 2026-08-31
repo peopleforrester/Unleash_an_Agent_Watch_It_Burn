@@ -206,3 +206,32 @@ Then update the file in git too, so a rebuilt cluster gets it from bootstrap.
 full-profile clusters were unaffected: `app-of-apps.yaml` syncs `gitops/apps` wholesale with no include
 list, so a new app file is picked up automatically. Only the burn profile has this hazard, because only it
 uses an explicit include.
+
+## Flipping the router hop to TLS: the two sides move together, and no scheme in routes.map
+
+Changing the cluster upstreams from `:80` to `:443` (#139) is a **coordinated** change across two repos,
+and getting it wrong 502s every attendee URL while the router itself keeps looking healthy.
+
+**Two rules, both learned by breaking it live on 2026-08-31:**
+
+1. **Never put a scheme in `routes.map`.** Emitting `https://<lb>:443` made every cluster route 502.
+   Caddy cannot parse a scheme out of a **placeholder** upstream (`reverse_proxy {upstream}`) at request
+   time. The table carries `<lb>:443`; TLS is declared statically in the Caddyfile transport.
+2. **The table and the transport must change together.** The transport's `tls` forces TLS, so a table
+   still saying `:80` 502s just as hard as a scheme in the table. There is no order that is safe on its
+   own: reload the `:443` table and ship the Caddyfile in the same window.
+
+**How to tell this apart from a real outage in seconds.** The symptom is every cluster host returning 502
+while everything else is fine:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://provisioning.agenticburn.com/   # 200 = router is healthy
+curl -sk -o /dev/null -w '%{http_code}\n' https://<cluster-lb>/                  # 200 = upstream is healthy
+curl -s  -o /dev/null -w '%{http_code}\n' https://michael-round1.agenticburn.com/ # 502 = the hop config
+```
+
+Router healthy plus upstream healthy plus routed host 502 means the proxy config, not the fleet.
+
+**Recovery is fast, which is the saving grace.** `routes.map` is applied by reload, so correcting the table
+and running `apex-agenticburn/scripts/reload-routes.sh` restores service in seconds with no redeploy. Keep
+a copy of the working table before flipping.
