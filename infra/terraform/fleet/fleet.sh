@@ -239,6 +239,57 @@ account_for_round() {
 # derives a pool slot from the trailing number and that is meaningless for the roster.
 is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
 
+# --- Memorable attendee hostnames (#142) ---------------------------------------------------------
+# An attendee used to be handed a raw load-balancer hostname
+# (k8s-agent-console-afa5f8550a-702bee5329c72c51.elb.us-west-2.amazonaws.com). That cannot be read to a
+# room, cannot be typed from memory, and cannot be recovered by someone who closed the tab. This gives
+# every attendee cluster an Ubuntu-style adjective-animal name instead: brave-badger.agenticburn.com.
+#
+# DETERMINISTIC AND COLLISION-FREE BY CONSTRUCTION, not by hashing. The name is derived from the slot
+# number the cluster already carries (watch-it-burn-attendee-042 -> slot 42), indexed into the grid
+# below. A hash would need global knowledge to resolve collisions, and `routes` and `ingest` compute the
+# name independently: they MUST agree, or the router publishes one name and provisioning hands out
+# another. Indexing by slot means both arrive at the same answer with no shared state.
+#
+# 24 adjectives x 16 animals = 384 unique names, comfortably past the ~250-attendee ceiling. Adding to
+# either list RENAMES existing slots, so only ever append, and never between events.
+#
+# This is usability, NOT access control. The consoles are unauthenticated: anyone who has a URL can talk
+# to that cluster's agent. A non-sequential name raises the cost of guessing and nothing more. If
+# enumeration ever matters, the answer is a credential on the console, not a cleverer name.
+readonly WIB_ADJECTIVES=(brave bright clever cosmic crimson daring eager fearless gentle golden
+                         happy jolly lucky mighty noble plucky quiet rapid rustic silver
+                         sunny trusty vivid witty)
+readonly WIB_ANIMALS=(badger beetle cheetah dolphin falcon gecko heron ibex jackal koala
+                      lemur marmot narwhal otter panda quokka)
+friendly_attendee_name() {
+    local n="${1#0}"; n="${n#0}"            # strip zero padding: 042 -> 42
+    [[ "${n}" =~ ^[0-9]+$ ]] || { printf 'attendee-%s' "$1"; return 0; }
+    local i=$(( n - 1 ))
+    local a=$(( (i / ${#WIB_ANIMALS[@]}) % ${#WIB_ADJECTIVES[@]} ))
+    local b=$(( i % ${#WIB_ANIMALS[@]} ))
+    printf '%s-%s' "${WIB_ADJECTIVES[$a]}" "${WIB_ANIMALS[$b]}"
+    return 0
+}
+
+# The public hostname a cluster should be reached on, without the scheme. Roster clusters use their
+# owner-and-round name; attendee clusters use their memorable name. One function so `routes` (which
+# publishes the name) and `ingest` (which tells provisioning what to hand the student) cannot disagree.
+public_host_for() {
+    local name="$1" owner="${2:-}"
+    if is_instructor_name "${name}"; then
+        local rr; rr="$(round_of_instructor_name "${name}")"
+        [[ -n "${owner}" && -n "${rr}" ]] && { printf '%s-round%s.agenticburn.com' "${owner}" "${rr}"; return 0; }
+        printf '%s.agenticburn.com' "${name#watch-it-burn-}"; return 0
+    fi
+    case "${name}" in
+        *-attendee-001) printf 'michael-student.agenticburn.com'; return 0 ;;
+        *-attendee-002) printf 'whitney-student.agenticburn.com'; return 0 ;;
+    esac
+    printf '%s.agenticburn.com' "$(friendly_attendee_name "${name##*-}")"
+    return 0
+}
+
 # The terminal login for a cluster, as "user:password", chosen by role (#109). Instructor/roster
 # clusters get the admin credential (sprouts); the attendee pool gets the student one (agentic). Keeping
 # this in ONE function means the bootstrap that creates the Secret and the bundle that tells the student
@@ -1457,7 +1508,18 @@ ingest_one() {
     term_pw="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null | tr -d '[:space:]')"
     term_pw="${term_pw##*:}"   # tolerate either a bare password or a "user:password" pair
     [[ -n "${term_pw}" ]] || log "  ingest ${name}: WARN no terminal password (${AWS_POOL_DIR}/${name}.terminal); the terminal will prompt and the student cannot log in"
-    local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "http://${console_host}" --arg tu "${term_user}" --arg tp "${term_pw}" --argjson dd "${dd}" \
+    # The URL the student is actually handed. Two changes from the raw "http://<elb-hostname>" this used
+    # to send (#142, #139):
+    #   * the MEMORABLE hostname, computed by the same public_host_for() the routes table uses, so the
+    #     router publishes and provisioning hands out the same name rather than two different answers;
+    #   * https, because the console now terminates TLS. Handing out an http:// link would have quietly
+    #     undone the encrypted hop for anyone who followed it.
+    # Falls back to the raw console host if no public name resolves, so a cluster still reaches its
+    # student rather than being unreachable because a name lookup failed.
+    local pub_host; pub_host="$(public_host_for "${name}" "${owner:-}")"
+    local console_url="https://${pub_host}"
+    [[ -n "${pub_host}" ]] || console_url="https://${console_host}"
+    local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "${console_url}" --arg tu "${term_user}" --arg tp "${term_pw}" --argjson dd "${dd}" \
         '($dd.site // "datadoghq.com") as $site
          | ($site | if . == "datadoghq.com" or . == "datadoghq.eu" then "https://app." + . else "https://" + . end) as $ddurl
          | {name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,terminal_user:$tu,terminal_password:$tp,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:$site,datadog_dashboard_url:$ddurl}')"
@@ -1583,9 +1645,10 @@ cmd_routes() {
         # level, so michael-round1.agenticburn.com validates and roundone.michael.agenticburn.com does
         # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27.
         [[ -n "${owner}" ]] && printf '%s-round%s.agenticburn.com  %s:443\n' "${owner}" "${rr}" "${h}" >> "${tmp}"
-        # The raw name is kept as an alias so anything already pointing at it keeps working.
-        short="${name#watch-it-burn-}"
-        printf '%s.agenticburn.com  %s:443\n' "${short}" "${h}" >> "${tmp}"
+        # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
+        # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
+        # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one
+        # regex, so dropping the form it no longer sees breaks nothing.
         # roundN is the shared, owner-less alias the run-of-show and the BurritoBot round selector use.
         # Bind it to the FIRST owner's cluster so it is stable rather than whichever entry sorted first.
         [[ -z "${round_done[$rr]:-}" && "${owner}" == "${WIB_PRIMARY_OWNER}" ]] && {
@@ -1599,15 +1662,12 @@ cmd_routes() {
             provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
             [[ -n "${h}" ]] || continue
+            # Memorable name first: this is the one the student is given (#142). "brave-badger" survives
+            # being read to a room and typed from memory; "a-042" and a raw ELB hostname do not.
+            printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
+            # a-NNN stays as an ALIAS only, so a link handed out before the rename still resolves. It is
+            # not what anyone is told any more.
             printf 'a-%s.agenticburn.com  %s:443\n' "${n}" "${h}" >> "${tmp}"
-            # The presenters' own student clusters get a readable alias too, for the same reason their
-            # round clusters do: "a-001" tells you nothing about whose it is. Mapped by slot because
-            # these two are fixed by convention (001 and 002 are the presenter seats, per the roster
-            # keep-set), unlike the 250 pool attendees which stay a-NNN.
-            case "${name}" in
-                *-attendee-001) printf 'michael-student.agenticburn.com  %s:443\n' "${h}" >> "${tmp}" ;;
-                *-attendee-002) printf 'whitney-student.agenticburn.com  %s:443\n' "${h}" >> "${tmp}" ;;
-            esac
         done
     fi
     rm -f "${kcfg}"
