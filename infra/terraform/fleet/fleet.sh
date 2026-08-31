@@ -1571,17 +1571,23 @@ cmd_routes() {
         # provisioning artefact, not a name anyone can hold in their head mid-demo, and it says nothing
         # about whose cluster it is.
         #
+        # Upstreams are :443 (#139). The cluster console terminates TLS with a cert-manager self-signed
+        # certificate and the router connects with tls_insecure_skip_verify, so the Railway-to-AWS hop is
+        # encrypted. It carries every attendee prompt and the terminal I/O, and used to cross the public
+        # internet in the clear. The SCHEME is emitted here rather than hardcoded in the Caddyfile, so an
+        # older table still saying "<lb>:80" keeps speaking plain HTTP and the two repos can be updated
+        # in either order. The console still serves :80 as well.
         # Single label, deliberately. The certificate is *.agenticburn.com, which covers exactly one
         # level, so michael-round1.agenticburn.com validates and roundone.michael.agenticburn.com does
         # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27.
-        [[ -n "${owner}" ]] && printf '%s-round%s.agenticburn.com  %s:80\n' "${owner}" "${rr}" "${h}" >> "${tmp}"
+        [[ -n "${owner}" ]] && printf '%s-round%s.agenticburn.com  https://%s:443\n' "${owner}" "${rr}" "${h}" >> "${tmp}"
         # The raw name is kept as an alias so anything already pointing at it keeps working.
         short="${name#watch-it-burn-}"
-        printf '%s.agenticburn.com  %s:80\n' "${short}" "${h}" >> "${tmp}"
+        printf '%s.agenticburn.com  https://%s:443\n' "${short}" "${h}" >> "${tmp}"
         # roundN is the shared, owner-less alias the run-of-show and the BurritoBot round selector use.
         # Bind it to the FIRST owner's cluster so it is stable rather than whichever entry sorted first.
         [[ -z "${round_done[$rr]:-}" && "${owner}" == "${WIB_PRIMARY_OWNER}" ]] && {
-            printf 'round%s.agenticburn.com  %s:80\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
+            printf 'round%s.agenticburn.com  https://%s:443\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
     done
     # Admin attendee clusters (attendee-NNN with state in the default account) -> a-NNN.agenticburn.com.
     if [[ -d "${STATE_DIR}" ]]; then
@@ -1591,14 +1597,14 @@ cmd_routes() {
             provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
             [[ -n "${h}" ]] || continue
-            printf 'a-%s.agenticburn.com  %s:80\n' "${n}" "${h}" >> "${tmp}"
+            printf 'a-%s.agenticburn.com  https://%s:443\n' "${n}" "${h}" >> "${tmp}"
             # The presenters' own student clusters get a readable alias too, for the same reason their
             # round clusters do: "a-001" tells you nothing about whose it is. Mapped by slot because
             # these two are fixed by convention (001 and 002 are the presenter seats, per the roster
             # keep-set), unlike the 250 pool attendees which stay a-NNN.
             case "${name}" in
-                *-attendee-001) printf 'michael-student.agenticburn.com  %s:80\n' "${h}" >> "${tmp}" ;;
-                *-attendee-002) printf 'whitney-student.agenticburn.com  %s:80\n' "${h}" >> "${tmp}" ;;
+                *-attendee-001) printf 'michael-student.agenticburn.com  https://%s:443\n' "${h}" >> "${tmp}" ;;
+                *-attendee-002) printf 'whitney-student.agenticburn.com  https://%s:443\n' "${h}" >> "${tmp}" ;;
             esac
         done
     fi
