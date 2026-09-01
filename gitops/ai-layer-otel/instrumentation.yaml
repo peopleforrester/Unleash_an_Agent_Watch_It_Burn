@@ -33,6 +33,17 @@ spec:
   # (confirmed live 2026-06-25). This CORRECTS the PRD #20 M2 locked `grpc` decision per live evidence.
   exporter:
     endpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+  # PIN the auto-instrumentation image. Do NOT leave this to the Operator to default.
+  #
+  # Found live 2026-09-01 on attendee-003: if this CR is created before the Operator's defaulting webhook
+  # is ready, spec.python.image comes out EMPTY and stays empty forever. Argo CD reports the CR Synced and
+  # Healthy, because the manifest never asked for an image, so nothing ever repairs it. Every pod admitted
+  # afterwards then gets an initContainer with no image and is rejected as invalid
+  # ("spec.initContainers[0].image: Required value"). That removed guard-proxy entirely, so BurritoBot had
+  # no /chat backend, on a cluster whose pages all still returned 200 and whose Argo apps looked fine.
+  # Pinning removes the race and the silent-failure mode together. Bump deliberately, with the Operator.
+  python:
+    image: ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1
   propagators: [tracecontext, baggage]
   sampler:
     type: parentbased_always_on
