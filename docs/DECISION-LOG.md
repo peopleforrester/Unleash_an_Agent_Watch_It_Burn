@@ -643,3 +643,30 @@ Ready, and ArgoCD sync ordering currently races ai-layer ahead of the KubeArmor 
 comes up un-enforced. Fix the sync-wave/health ordering and verify the block on a fresh provision FIRST;
 keep Tetragon as the working C3 block until then. Tracked in #127. Supersedes the "KubeArmor/Tetragon
 parked" note in docs/TECH-STATUS.md (which predates the 2026-07-18 result).
+
+
+## 2026-09-01 · 2.2 · AI coding CLIs return to the workbench image, without a launcher
+
+Decision (Michael): ship the AI coding CLIs in the web-terminal image again, refreshed on every deploy,
+so a student can run them. Explicitly no button: he wants them invoked from the command line, not
+launched for him.
+
+Installed: the Anthropic, Google, OpenAI and opencode CLIs as npm globals, plus `aider-chat` in its own
+venv so a dependency conflict cannot break JupyterLab.
+
+**This partially reverses #89/#99, and the split matters.** Those issues removed the in-workbench Tutor
+tab because clicking it put a first-run "Trust this folder?" prompt in front of an attendee and left them
+with no way back. The failure was the **surface that auto-started a CLI**, never the binary being on disk.
+A binary on PATH is invisible until someone types it, and the lab already offers extra terminals via the
+"+" tab, so a student can run one beside their work.
+
+`verify/test_manifest_contract.py` previously asserted no CLI was installed at all. It now asserts the
+half that actually protects an attendee: no CLI auto-started by the entrypoint, and no CLI given a tab or
+launcher in the lab page. The no-tutor-service, no-`/tutor/`-route and no-transcript-recorder guards are
+unchanged.
+
+`@latest` is deliberate, and is the opposite of the `mcp==1.29.1` pin in the same Dockerfile. The MCP
+servers are load-bearing and were being resolved at RUNTIME, so a bad upstream publish CrashLooped the
+agent on a cluster that had passed every gate. These CLIs are optional student tools resolved at BUILD
+time, and no challenge depends on them, so a regression costs a student one tool rather than costing the
+room the workshop. If one ever becomes load-bearing, pin it.

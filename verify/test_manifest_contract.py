@@ -179,8 +179,18 @@ dockerfile = (REPO / "images" / "web-terminal" / "Dockerfile").read_text()
 console_conf = (REPO / "gitops" / "ai-layer" / "console.conf").read_text()
 lab_html = (REPO / "gitops" / "ai-layer" / "web" / "lab.html").read_text()
 
-check("no agent CLI is installed in the workbench image",
-      "@anthropic-ai/claude-code" not in dockerfile)
+# REVERSED 2026-09-01 for the BINARY only, on Michael's explicit instruction: the AI coding CLIs are now
+# installed on purpose so a student can invoke them. What stranded an attendee was never the binary being
+# on disk, it was the BUTTON that started one unasked (the comment above says as much). So the guard now
+# asserts the dangerous half and nothing else: the CLIs must be reachable only by someone typing a
+# command, never auto-started and never given a surface.
+check("the AI CLIs are installed for the student to invoke",
+      "@anthropic-ai/claude-code@latest" in dockerfile)
+check("no CLI is auto-started by the entrypoint",
+      not re.search(r"(run_service|exec|nohup|&\s*$).*\b(claude|gemini|codex|opencode|aider)\b", entry, re.M))
+check("no CLI is given a tab or a launcher in the lab page",
+      not re.search(r'data-i="(tutor|claude|gemini|codex|opencode|aider)"', lab_html)
+      and not re.search(r'onclick="[^"]*(showTutor|launch(Claude|Gemini|Codex|Agent))', lab_html))
 check("the entrypoint starts no tutor service",
       not re.search(r"run_service\s+tutor", entry))
 check("nginx exposes no /tutor/ route", "location /tutor/" not in console_conf)
