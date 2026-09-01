@@ -14,12 +14,14 @@
     #stream { padding: 16px 24px; font-size: 22px; line-height: 1.5; }
     .p { padding: 8px 0; border-bottom: 1px solid #161616; white-space: pre-wrap; }
     #off { padding: 40px; color: #777; font-size: 18px; }
-  </style>
+    .spons{font-size:clamp(13px,1.5vw,22px);color:#b9b3cc;display:inline-flex;gap:8px;align-items:center;white-space:nowrap}
+</style>
 </head>
 <body>
   <h1>Live attack stream (moderated)</h1>
   <div id="off" hidden>Prompt streaming is disabled (STREAM_PROMPTS=off).</div>
   <div id="stream"></div>
   <script src="display.js"></script>
+  <div style="text-align:center;padding:18px 0 26px"><span class="spons">Co-sponsored by <strong style="color:#632CA6">Datadog</strong> &amp; <strong style="color:#A100FF">Accenture</strong></span></div>
 </body>
 </html>

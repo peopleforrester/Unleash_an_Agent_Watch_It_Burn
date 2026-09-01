@@ -25,7 +25,10 @@
     #prompt { flex: 1; padding: 10px; border-radius: 6px; border: 1px solid #2b3242; background: #0f1117; color: #e6e6e6; }
     button { padding: 10px 16px; border: 0; border-radius: 6px; background: #ffb454; color: #15151a; font-weight: 700; cursor: pointer; }
     button:disabled { opacity: 0.5; cursor: default; }
-  </style>
+    /* Sponsor line, on every surface an attendee, instructor or the ROOM sees. Literal brand colours
+     rather than var() so it renders correctly on pages carrying their own palette. */
+  .spons{font-size:12px;color:#6b6a80;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
+</style>
 </head>
 <body>
   <header>
@@ -34,6 +37,7 @@
   </header>
   <div id="log"></div>
   <footer>
+  <span class="spons">Co-sponsored by <strong style="color:#632CA6">Datadog</strong> &amp; <strong style="color:#A100FF">Accenture</strong></span>
     <div class="row">
       <input id="prompt" placeholder="Tell your agent what to do…" autocomplete="off" />
       <button id="send">Send</button>

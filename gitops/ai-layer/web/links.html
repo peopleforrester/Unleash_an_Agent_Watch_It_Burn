@@ -10,8 +10,9 @@
 <title>Endpoints — Watch It Burn</title>
 <style>
   :root{
-    --accent:#FA7040;--accent-d:#E85F2E;--ink:#191919;--cream:#F5F5F4;--panel:#ffffff;--lav:#FEF1EA;
-    --mid:#4A4A4A;--line:#e7e2dc;--ok:#2e9e5b;--term:#0f1117;--future:#c9c3bb;
+    --dd:#632CA6;--acn:#A100FF;
+    --accent:#8A00D6;--accent-d:#632CA6;--ink:#1B1230;--cream:#F7F5FB;--panel:#ffffff;--lav:#F3EEFC;
+    --mid:#4A4A4A;--line:#e6dff5;--ok:#2e9e5b;--term:#0f1117;--future:#c3bcd6;
   }
   *,*::before,*::after{box-sizing:border-box}
   html,body{margin:0;height:100%}
@@ -50,6 +51,9 @@
   .card .authnote{font-style:italic}
   #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
   #toast.show{opacity:1}
+  /* Sponsor line, on every surface an attendee or instructor sees. Brand colours are literal here
+     rather than var() so the line renders correctly even on pages with their own palette. */
+  .spons{font-size:12px;color:#6b6a80;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -181,5 +185,6 @@
   if (qp !== null && !isNaN(+qp)) cur = Math.max(0, Math.min(8, +qp));
   render();
 </script>
+  <div style="text-align:center;padding:10px 0 18px"><span class="spons">Co-sponsored by <strong style="color:#632CA6">Datadog</strong> &amp; <strong style="color:#A100FF">Accenture</strong></span></div>
 </body>
 </html>

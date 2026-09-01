@@ -54,6 +54,9 @@
   #toast.show{opacity:1}
   footer{color:var(--mut);font-size:12.5px;padding:6px clamp(12px,2vw,22px) 30px;max-width:min(96vw,1500px);margin:0 auto}
   @media(min-width:2560px){body{font-size:19px}}
+  /* Sponsor line, on every surface an attendee or instructor sees. Brand colours are literal here
+     rather than var() so the line renders correctly even on pages with their own palette. */
+  .spons{font-size:12px;color:#6b6a80;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -173,7 +176,8 @@
   </section>
 </main>
 
-<footer>Everything here is yours and it is destroyed after the workshop. Break it freely; Argo CD will put most of it back.</footer>
+<footer>
+  <span class="spons">Co-sponsored by <strong style="color:#632CA6">Datadog</strong> &amp; <strong style="color:#A100FF">Accenture</strong></span>Everything here is yours and it is destroyed after the workshop. Break it freely; Argo CD will put most of it back.</footer>
 <div id="toast"></div>
 <script>
   function toast(t){var e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(window._t);window._t=setTimeout(function(){e.classList.remove('show');},1200);}

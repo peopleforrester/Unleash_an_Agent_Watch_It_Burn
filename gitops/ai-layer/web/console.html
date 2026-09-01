@@ -27,7 +27,10 @@
     .ins-body h2 { color:var(--orange); font-size:15px; }
     .ins-body code { background:#11141c; padding:1px 5px; border-radius:4px; }
     .hidden { display:none; }
-  </style>
+    /* Sponsor line, on every surface an attendee, instructor or the ROOM sees. Literal brand colours
+     rather than var() so it renders correctly on pages carrying their own palette. */
+  .spons{font-size:12px;color:#6b6a80;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
+</style>
   <!-- VTT skin layer (see web/SKINS.md). Switch skins in active-skin.js. -->
   <script src="skins.js"></script>
   <script src="active-skin.js"></script>
@@ -71,5 +74,6 @@
     </div>
   </div>
   <script src="console.js"></script>
+  <div style="text-align:center;padding:14px 0 22px"><span class="spons">Co-sponsored by <strong style="color:#632CA6">Datadog</strong> &amp; <strong style="color:#A100FF">Accenture</strong></span></div>
 </body>
 </html>
