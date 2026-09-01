@@ -51,7 +51,7 @@
   footer{color:var(--mut);font-size:13px;padding:8px 22px 30px;max-width:1000px;margin:0 auto}
   /* Sponsor line, on every surface an attendee or instructor sees. Brand colours are literal here
      rather than var() so the line renders correctly even on pages with their own palette. */
-  .spons{font-size:12px;color:#6b6a80;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
+  .spons{/* lightened brand pair: the print values fail AA on this dark ground */font-size:12px;color:#6b6a80;display:inline-flex;gap:5px;align-items:center;white-space:nowrap}
 </style>
 </head>
 <body>
@@ -163,7 +163,7 @@
 </main>
 
 <footer>
-  <span class="spons">Co-sponsored by <strong style="color:#632CA6">Datadog</strong> &amp; <strong style="color:#A100FF">Accenture</strong></span>Guard toggles (terminal): <code>guards-on</code> / <code>guards-off</code> flip everything;
+  <span class="spons">Co-sponsored by <strong style="color:#B98CFF">Datadog</strong> &amp; <strong style="color:#D08BFF">Accenture</strong></span>Guard toggles (terminal): <code>guards-on</code> / <code>guards-off</code> flip everything;
 <code>guard-output-on</code>, <code>guard-input-on</code>, <code>guard-mcp-on</code>, <code>guard-budget-on</code> individually.
 Terminal login for instructor clusters is <code>sprouts</code> / <code>sprouts</code>; student clusters use <code>agentic</code>.</footer>
 
