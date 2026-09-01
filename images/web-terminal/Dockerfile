@@ -90,6 +90,41 @@ RUN set -eux; \
       boto3; \
     /opt/jupyter/bin/jupyter --version
 
+# --- AI coding CLIs, for the student to invoke themselves ------------------------------------------
+#
+# Michael, 2026-09-01: "all the binaries that we think someone who wants to use AI in these environments
+# might want", installed fresh on every deploy. NO launcher button and NO tab: that is what #89/#99
+# removed, because a button that auto-started a CLI put a "Trust this folder?" prompt in front of an
+# attendee who never asked for one and stranded them. A binary on PATH that a student chooses to type is
+# the opposite: invisible until wanted, and the lab already offers extra terminals via the "+" tab.
+#
+# @latest ON PURPOSE, which is the exact opposite of the mcp pin above, so the difference matters:
+# the MCP servers are LOAD-BEARING (a bad version CrashLoops the agent and the workshop stops), and they
+# were being resolved at RUNTIME, so a bad publish broke a cluster that had passed every gate. These CLIs
+# are optional student tools resolved at BUILD time. Nothing in any challenge depends on them, so a
+# regression costs a student one tool rather than costing the room the workshop. If one of them ever does
+# become load-bearing, pin it.
+#
+# Versions at the time of writing (2026-09-01): claude-code 2.1.257, gemini-cli 0.57.0, codex 0.152.0,
+# opencode-ai 1.18.25, aider-chat 0.86.2. Each rebuild takes whatever is current.
+RUN set -eux; \
+    npm install -g --no-fund --no-audit \
+      @anthropic-ai/claude-code@latest \
+      @google/gemini-cli@latest \
+      @openai/codex@latest \
+      opencode-ai@latest; \
+    npm cache clean --force; \
+    claude --version || true; gemini --version || true; codex --version || true; opencode --version || true
+
+# aider is Python, and gets its OWN venv rather than sharing the notebook's: a dependency conflict between
+# aider and JupyterLab would otherwise break the notebook, which IS part of the lab.
+RUN set -eux; \
+    python3 -m venv /opt/aider; \
+    /opt/aider/bin/pip install --no-cache-dir --upgrade pip; \
+    /opt/aider/bin/pip install --no-cache-dir aider-chat; \
+    ln -s /opt/aider/bin/aider /usr/local/bin/aider; \
+    aider --version || true
+
 # --- No workshop tutor -----------------------------------------------------------------------------
 #
 # This image used to install the Claude Code CLI and a tutor/ directory to run it as an in-workbench

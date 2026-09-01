@@ -266,6 +266,11 @@ echo "  aws is ready with your keys        (try: aws sts get-caller-identity)"
 echo "  flip your AI guardrails with       guards-on   guards-off"
 echo "  see which guards are on           guards-status"
 echo "  every service, URL and password    platform"
+# Named, not launched. A student who wants an AI CLI types one; a student who does not never sees it.
+# The "+" tab opens another terminal if they want one running beside their work.
+echo ""
+echo "  AI coding CLIs are installed:      claude   gemini   codex   opencode   aider"
+echo "  (each needs its own auth/API key; the workshop does not sign you in)"
 cd "$HOME"
 export PATH="$HOME:$PATH"
 export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '
