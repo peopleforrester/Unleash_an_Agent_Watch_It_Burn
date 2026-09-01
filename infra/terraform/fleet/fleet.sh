@@ -745,6 +745,18 @@ drain_cluster_lbs() {
             done <<<"${lbsvcs}"
         fi
         KUBECONFIG="${kc}" kubectl delete ingress -A --all --wait=true --timeout=150s >/dev/null 2>&1 || true
+        # PVCs TOO, and for the same reason as the load balancers: the controller that cleans them up
+        # lives IN the cluster. Destroy the cluster first and the EBS CSI controller goes with it, so every
+        # volume it provisioned strands as `available` and bills forever. Measured 2026-09-01: tearing down
+        # five attendee clusters left 20 orphaned volumes, 60 GiB, four per cluster, each still tagged
+        # kubernetes.io/cluster/<the deleted cluster>. At 250 attendees that is ~1000 volumes of pure waste.
+        # Deleting the PVCs first lets the CSI controller release the volumes while it still exists.
+        local pvcs
+        pvcs="$(KUBECONFIG="${kc}" kubectl get pvc -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}{"\n"}{end}' 2>/dev/null)"
+        if [[ -n "${pvcs}" ]]; then
+            log "  ${name}: releasing $(printf '%s\n' "${pvcs}" | grep -c /) PVC(s) before destroy"
+            KUBECONFIG="${kc}" kubectl delete pvc -A --all --wait=true --timeout=180s >/dev/null 2>&1 || true
+        fi
         # PVCs must go while the EBS CSI controller still exists to reclaim their volumes. Destroy the
         # cluster first and the controller goes with it, so every dynamically-provisioned volume orphans
         # as 'available' and bills indefinitely. --wait=false because a PVC whose consumer pod is still
