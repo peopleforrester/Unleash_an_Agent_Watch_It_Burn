@@ -39,6 +39,8 @@ configMapGenerator:
       - web/lab.html # B5/B12: round-3 student lab page (instructions left + ttyd terminal embedded right)
       - web/brief.html # instructor brief for R1/R2: prompts VISIBLE, separate page from the student lab (#122)
       - web/platform.html # the platform catalogue: every service, its URL and its login
+      - web/diagram.html # VTT Blueprint tab: what was installed at which wave (ported from Packt, #153)
+      - web/links.html # VTT Endpoints tab: every component, its address and its login (ported from Packt, #153)
       - web/skins.js # VTT skin layer: skin definitions (BurritoBot default + Accenture); see web/SKINS.md
       - web/active-skin.js # the one-line skin knob (switch skins here)
       - web/skin.js # applier: sets palette vars + brand text/title/favicon from the active skin

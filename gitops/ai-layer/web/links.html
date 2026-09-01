@@ -1,0 +1,185 @@
+<!-- ABOUTME: Component endpoint directory for the workshop. A phase-revealed catalog of the platform UIs
+     ABOUTME: and endpoints; tapping a card prints that component's address on the student's own cluster into
+     ABOUTME: the terminal. Self-contained; served at /links and embedded as a lab tab. -->
+<!doctype html>
+<html lang="en">
+<head>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%94%97</text></svg>">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Endpoints — Watch It Burn</title>
+<style>
+  :root{
+    --accent:#FA7040;--accent-d:#E85F2E;--ink:#191919;--cream:#F5F5F4;--panel:#ffffff;--lav:#FEF1EA;
+    --mid:#4A4A4A;--line:#e7e2dc;--ok:#2e9e5b;--term:#0f1117;--future:#c9c3bb;
+  }
+  *,*::before,*::after{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);display:flex;flex-direction:column;height:100vh;overflow:hidden}
+  header{background:var(--ink);color:#fff;padding:9px 16px;display:flex;align-items:center;gap:12px;flex:0 0 auto;border-bottom:3px solid var(--accent)}
+  header .brand{display:flex;align-items:center;gap:9px;font-weight:800;font-size:15px}
+  header .brand .em{font-size:18px}
+  header .spacer{flex:1}
+  .note{flex:0 0 auto;background:var(--lav);border-bottom:1px solid var(--line);padding:9px 16px;font-size:13px;color:var(--ink)}
+  .note b{color:var(--accent)}
+  .controls{flex:0 0 auto;background:#fff;border-bottom:1px solid var(--line);padding:9px 16px;display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .controls .lbl{font-size:12px;font-weight:700;color:var(--mid)}
+  .pips{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
+  .pip{width:28px;height:28px;border-radius:8px;border:1px solid var(--line);background:#fff;color:var(--mid);font:inherit;font-size:12px;font-weight:800;cursor:pointer;display:grid;place-items:center}
+  .pip.done{background:var(--lav);color:var(--accent);border-color:var(--lav)}
+  .pip.cur{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 0 0 3px rgba(250,112,64,.25)}
+
+  .grid{flex:1;min-height:0;overflow:auto;padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-content:start}
+  .card{border:1.5px solid var(--line);border-radius:12px;background:#fff;padding:13px 14px;display:flex;flex-direction:column;gap:8px;transition:all .35s ease}
+  .card.future{opacity:.45;border-style:dashed}
+  .card .top{display:flex;align-items:center;gap:8px}
+  .card .nm{font-weight:800;font-size:15px}
+  .card .ph{margin-left:auto;font-size:10.5px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--accent);background:var(--lav);border-radius:999px;padding:2px 8px;white-space:nowrap}
+  .card.future .ph{color:var(--mid);background:#f0eeea}
+  .card .desc{font-size:13px;color:var(--mid);line-height:1.45;margin:0}
+  .card .ns{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--ink)}
+  .card .act{margin-top:auto;display:flex;gap:7px;align-items:center}
+  .card .go{font:inherit;font-size:12.5px;font-weight:700;border:0;border-radius:8px;padding:7px 12px;cursor:pointer;background:var(--accent);color:#fff}
+  .card .go:hover{background:var(--accent-d)}
+  .card.future .go{background:#d8d2c9;cursor:default}
+  .card .cmd{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--mid);word-break:break-all}
+  .card .login{display:flex;flex-wrap:wrap;gap:7px;align-items:center;font-size:12.5px;color:var(--mid);border-top:1px dashed var(--line);padding-top:9px}
+  .card .login .user{color:var(--ink)} .card .login .user b{font-family:ui-monospace,Menlo,Consolas,monospace}
+  .card .pw{font:inherit;font-size:12px;font-weight:700;border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:7px;padding:5px 10px;cursor:pointer}
+  .card .pw:hover{background:var(--lav)}
+  .card .authnote{font-style:italic}
+  #toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;padding:9px 16px;border-radius:999px;font-size:13px;font-weight:700;opacity:0;transition:opacity .2s;pointer-events:none;z-index:30}
+  #toast.show{opacity:1}
+</style>
+</head>
+<body>
+  <header>
+    <div class="brand"><span class="em">🔗</span> Endpoints</div>
+    <div class="spacer"></div>
+    <div style="font-size:12px;opacity:.8" id="count"></div>
+  </header>
+  <div class="note">You are in a browser terminal <b>on your cluster</b>. Reach each UI at the address your agent exposes for it. Tap a card to print that address in your terminal. Components appear here as you build them.</div>
+  <div class="controls">
+    <span class="lbl">Show up to phase:</span>
+    <div class="pips" id="pips"></div>
+  </div>
+  <div class="grid" id="grid"></div>
+  <div id="toast">copied</div>
+
+<script>
+  // Each endpoint: name, purpose, namespace, the phase it comes online, and a discovery command that
+  // prints its address on THIS cluster. port-forward is intentionally avoided: it binds the pod's
+  // localhost, not the student's browser, so it does not give browser access from a VTT.
+  // cmd  = prints the component's address on this cluster.
+  // user = the login username, when the UI has one.
+  // pw   = prints the real password from the cluster secret (the student has read access via the SA).
+  // auth = a note when there is no username/password (open, OAuth, or an API endpoint).
+  var EP = [
+    // WAVE 1 - foundation
+    {nm:'cert-manager', p:1, ns:'cert-manager', desc:'Issues the certificate your console serves TLS with, so the hop from the router is encrypted.',
+     cmd:'kubectl -n agent get certificate console-tls', auth:'No UI. Certificates are CRDs.'},
+    {nm:'External Secrets', p:1, ns:'external-secrets', desc:'Pulls your Datadog keys out of AWS Secrets Manager into the cluster.',
+     cmd:'kubectl -n datadog get externalsecret,secret datadog-secret', auth:'No UI.'},
+
+    // WAVE 2 - the platform controls this workshop is about
+    {nm:'Argo CD', p:2, ns:'argocd', desc:'GitOps, and a guardrail in its own right. Delete a NetworkPolicy and watch it come back in about five seconds.',
+     cmd:'kubectl -n argocd port-forward svc/argocd-server 8081:80   # then http://localhost:8081',
+     user:'admin', pw:"kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo"},
+    {nm:'Kyverno', p:2, ns:'kyverno', desc:'Admission control. Refuses a workload before it runs: this is what denies the villain image in Challenge 2.',
+     cmd:'kubectl get clusterpolicy', auth:'No UI. Policies are CRDs.'},
+    {nm:'NetworkPolicy', p:2, ns:'agent', desc:'Default-deny egress. This is why the exfil in Challenge 1 cannot leave the cluster.',
+     cmd:'kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml', auth:'No UI.'},
+    {nm:'KubeArmor', p:2, ns:'kubearmor', desc:'Inline runtime prevention (BPF-LSM). Blocks the action before it completes: it is what makes the recipe file unreadable.',
+     cmd:'kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml', auth:'No UI.'},
+    {nm:'Falco + Talon', p:2, ns:'falco', desc:'Detect, then respond. Falco sees it and Talon reacts. Detection after the fact, not prevention.',
+     cmd:'kubectl -n falco logs -l app.kubernetes.io/name=falco --tail=40', auth:'No UI.'},
+    {nm:'Istio (ambient)', p:2, ns:'istio-system', desc:'Ambient mesh: ztunnel and the CNI, carrying the in-cluster traffic.',
+     cmd:'kubectl -n istio-system get pods', auth:'No UI.'},
+
+    // WAVE 3 - observability
+    {nm:'Grafana', p:3, ns:'monitoring', desc:'Dashboards over Prometheus, Loki and Tempo.',
+     cmd:'kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80   # then http://localhost:3000',
+     user:'admin', pw:"kubectl -n monitoring get secret prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo"},
+    {nm:'Prometheus', p:3, ns:'monitoring', desc:'Metrics store and query UI.',
+     cmd:'kubectl -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090   # then http://localhost:9090', auth:'No login.'},
+    {nm:'Loki', p:3, ns:'monitoring', desc:'Log store behind Grafana.',
+     cmd:'kubectl -n monitoring port-forward svc/loki 3100:3100', auth:'No login.'},
+    {nm:'Tempo', p:3, ns:'monitoring', desc:'Trace store behind Grafana.',
+     cmd:'kubectl -n monitoring port-forward svc/tempo 3200:3200', auth:'No login.'},
+    {nm:'OTel Collector', p:3, ns:'monitoring', desc:'Where every trace and metric is routed on its way to Datadog.',
+     cmd:'kubectl -n monitoring get svc otel-collector-opentelemetry-collector', auth:'Pipeline, not a UI.'},
+    {nm:'Datadog Agent', p:3, ns:'datadog', desc:'Ships traces, logs, metrics and LLM Observability. Your login is on the lab page.',
+     cmd:'kubectl -n datadog get pods', auth:'Log in at app.datadoghq.com with the credentials in your lab guide.'},
+
+    // WAVE 4 - the AI layer
+    {nm:'kagent', p:4, ns:'agent', desc:'The agent runtime, on Amazon Bedrock. Its model binding and tool allow-list are both declarative.',
+     cmd:'kubectl -n agent get agent workshop-agent -o yaml', auth:'Managed by CRDs, no login.'},
+    {nm:'guard-proxy', p:4, ns:'agent', desc:'Your AI guardrails and the cost meter: input guard, output guard, tool authorization and the spend cap.',
+     cmd:'guards-status', auth:'Flip with guard-output-on / guard-input-on / guard-mcp-on / guard-budget-on.'},
+    {nm:'LLM Guard', p:4, ns:'agent', desc:'The scanners guard-proxy calls: prompt-injection on the way in, sensitive data on the way out.',
+     cmd:'kubectl -n agent get svc llm-guard', auth:'API, not a UI.'},
+    {nm:'MCP servers', p:4, ns:'agent', desc:'The agent tools. One of them carries a poisoned description on purpose (Challenge 7).',
+     cmd:'kubectl -n agent get pods -l app=workshop-mcp', auth:'Tool servers, not a UI.'},
+    {nm:'BurritoBot', p:4, ns:'agent', desc:'The customer-facing app under attack. Open it from the button at the top of your lab.',
+     cmd:'kubectl -n agent get svc console', auth:'No login (that is part of the lesson).'}
+  ];
+
+  var cur = 8;
+  var gridEl = document.getElementById('grid');
+  document.getElementById('count').textContent = EP.length + ' components';
+
+  function toast(t){var e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(function(){e.classList.remove('show');},1300);}
+  // Run a command: if embedded in the lab, hand it to the parent to paste into the terminal; standalone,
+  // copy to the clipboard as a fallback.
+  function run(cmd){
+    if (window.parent && window.parent !== window){
+      try { window.parent.postMessage({type:'vtt-run', text:cmd}, '*'); toast('Sent to your terminal'); return; } catch(e){}
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(cmd); }
+    toast('Copied: ' + cmd);
+  }
+
+  function render(){
+    gridEl.innerHTML = '';
+    EP.slice().sort(function(a,b){return a.p-b.p;}).forEach(function(e){
+      var live = e.p <= cur;
+      var card = document.createElement('div'); card.className = 'card' + (live?'':' future');
+      card.innerHTML =
+        '<div class="top"><span class="nm">'+e.nm+'</span><span class="ph">Phase '+e.p+'</span></div>'+
+        '<p class="desc">'+e.desc+'</p>'+
+        '<div class="ns">ns: '+e.ns+'</div>'+
+        '<div class="act"></div>'+
+        '<div class="login"></div>';
+      var act = card.querySelector('.act');
+      var login = card.querySelector('.login');
+      if (live){
+        var btn = document.createElement('button'); btn.className='go'; btn.textContent='Show address ▸';
+        btn.onclick = function(){ run(e.cmd); };
+        act.appendChild(btn);
+        if (e.user){
+          var u = document.createElement('span'); u.className='user'; u.innerHTML='User: <b>'+e.user+'</b>';
+          var pw = document.createElement('button'); pw.className='pw'; pw.textContent='Show password ▸';
+          pw.onclick = function(){ run(e.pw); };
+          login.appendChild(u); login.appendChild(pw);
+        } else if (e.auth){
+          var n = document.createElement('span'); n.className='authnote'; n.textContent=e.auth;
+          login.appendChild(n);
+        }
+      } else {
+        var s = document.createElement('span'); s.className='cmd'; s.textContent='available at phase '+e.p;
+        act.appendChild(s);
+        login.remove();
+      }
+      gridEl.appendChild(card);
+    });
+    document.querySelectorAll('.pip').forEach(function(p,i){ p.classList.toggle('cur', i===cur); p.classList.toggle('done', i<cur); });
+  }
+
+  var pipsEl = document.getElementById('pips');
+  for (var i=0;i<=8;i++){ (function(n){ var b=document.createElement('button'); b.className='pip'; b.textContent=n; b.onclick=function(){ cur=n; render(); }; pipsEl.appendChild(b); })(i); }
+  var qp = new URLSearchParams(location.search).get('phase');
+  if (qp !== null && !isNaN(+qp)) cur = Math.max(0, Math.min(8, +qp));
+  render();
+</script>
+</body>
+</html>
