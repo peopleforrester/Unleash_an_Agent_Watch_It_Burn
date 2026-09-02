@@ -131,6 +131,33 @@ check("consecutive slots vary the FIRST word too (not 24 in a row of one)",
 check("every hostname label is DNS-safe and within 63 chars",
       all(re.fullmatch(r"[a-z][a-z-]{0,61}[a-z]", n) for n in _names))
 
+print("== a torn-down cluster does not leave its load balancers billing ==")
+# drain_cluster_lbs deletes the Services and Ingresses so the AWS Load Balancer Controller can clean up
+# while it is still alive. That is the right order and it is also best-effort in every direction: it skips
+# the whole block when the cluster API is unreachable, every kubectl is `|| true`, and the deletes time
+# out at 150s. Any of those and the destroy proceeds, the controller dies with the cluster, and the load
+# balancer bills forever with nothing left looking for it. Measured 2026-09-01 (#157): five torn-down
+# clusters left five NLBs and five ALBs active, each still holding two target groups. At 250 attendees a
+# per-cluster leak is ~100 orphaned load balancers, and they hold ENIs in the shared VPC, so a big enough
+# pile fails NEW provisioning with subnet IP exhaustion rather than merely costing money.
+_down = FLEET_SH[FLEET_SH.index("down_one() {"):]
+_down = _down[:_down.index("\n}\n") + 3]
+check("teardown sweeps the AWS side after destroy, not only the Kubernetes side",
+      "sweep_orphan_lbs" in _down)
+_after_fi = _down[_down.rindex("    fi"):]
+check("the sweep runs on a FAILED destroy too (that is when leaks happen)",
+      "sweep_orphan_lbs" in _after_fi)
+check("the sweep matches on the controller's cluster tag, not a name pattern or an age",
+      "elbv2.k8s.aws/cluster" in FLEET_SH)
+check("a leak is recorded as a failure rather than swept silently",
+      'record_fail "lb-leak:' in FLEET_SH)
+check("an unreachable cluster API is reported, not skipped in silence",
+      "cluster API unreachable, NOTHING drained" in FLEET_SH)
+check("a fleet-wide orphan reaper exists and is dry-run by default",
+      "cmd_reap_lbs" in FLEET_SH and "reap-lbs)" in FLEET_SH and "reap-lbs: DRY-RUN" in FLEET_SH)
+check("the reaper also sweeps orphaned EBS volumes (same cause: the CSI controller dies too)",
+      "kubernetes.io/cluster/" in FLEET_SH and "delete-volume" in FLEET_SH)
+
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the
 # AWS load balancers, and the PVCs while the EBS CSI controller can still reclaim their volumes.

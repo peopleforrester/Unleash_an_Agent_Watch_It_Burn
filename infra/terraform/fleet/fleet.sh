@@ -412,6 +412,10 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
     aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
                       + offset). DRY-RUN unless WIB_APPLY=1; WIB_ACCESS_ENTRIES=1 maps users into clusters.
+    reap-lbs          Find load balancers, target groups and volumes tagged for a cluster that no longer
+                      exists, in every account, and delete them. The standing net for #157: a teardown
+                      that could not reach the cluster API strands them and nothing else looks for them.
+                      DRY-RUN unless WIB_APPLY=1.
     reap --keep <f>   Cost reaper: destroy attendee clusters NOT in the keep-list <f> (claimed clusters),
                       across all accounts. DRY-RUN unless WIB_APPLY=1.
     status            List clusters that have state and their EKS status.
@@ -793,8 +797,64 @@ drain_cluster_lbs() {
         # observe the deletions; we are about to destroy the cluster either way.
         KUBECONFIG="${kc}" kubectl delete pvc -A --all --wait=false --timeout=60s >/dev/null 2>&1 || true
         sleep 10
+    else
+        # The cluster API was unreachable, so NOTHING was drained and the controller will die with the
+        # cluster. Previously this branch did not exist and the skip was silent, which is how five
+        # clusters' load balancers survived teardown unnoticed (#157). sweep_orphan_lbs will catch the
+        # AWS-side result; this line makes the cause visible in the run log rather than only the symptom.
+        log "  ${name}: cluster API unreachable, NOTHING drained. Load balancers and volumes will be"
+        log "           swept from the AWS side after destroy; expect a lb-leak entry."
     fi
     rm -f "${kc}"
+}
+
+# Delete any AWS load balancer still tagged for a cluster, plus the target groups that hang off it.
+#
+# WHY THIS EXISTS ON TOP OF drain_cluster_lbs. That function deletes the Services and Ingresses so the
+# AWS Load Balancer Controller can clean up while it is still alive, which is the correct order and the
+# fast path. It is also best-effort in every direction: if the cluster API is unreachable it skips the
+# whole block, every kubectl is `|| true`, and the deletes are capped at 150s. Any of those and the
+# destroy proceeds anyway, the controller dies with the cluster, and the load balancer bills forever with
+# nothing left looking for it. Measured 2026-09-01 (#157): five torn-down clusters left five NLBs and
+# five ALBs active, each still holding two target groups.
+#
+# So this runs AFTER terraform destroy and asserts the AWS-side result rather than trusting the
+# Kubernetes-side attempt. At 250 clusters a per-cluster leak is ~100 orphaned load balancers, and the
+# cost is not only the ~$16/month each: every one holds ENIs in the shared VPC, so a large enough pile
+# starts failing NEW cluster provisioning with subnet IP exhaustion.
+sweep_orphan_lbs() {
+    local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" found=0
+    local arns arn tagged
+    arns="$(AWS_PROFILE="${acct}" aws elbv2 describe-load-balancers --region "${WIB_REGION}" \
+            --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true)"
+    [[ -n "${arns}" ]] || return 0
+    for arn in ${arns}; do
+        tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${arn}" \
+                  --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
+        [[ "${tagged}" == "${name}" ]] || continue
+        found=$(( found + 1 ))
+        log "  ${name}: LEAKED load balancer survived teardown, deleting ${arn##*/}"
+        AWS_PROFILE="${acct}" aws elbv2 delete-load-balancer --region "${WIB_REGION}" \
+            --load-balancer-arn "${arn}" >/dev/null 2>&1 || log "  ${name}: could not delete ${arn##*/}"
+    done
+    # Target groups outlive their load balancer and are billed at zero, but they count against a per-region
+    # quota that a 250-cluster fleet will reach, so they are swept on the same tag.
+    local tgs tg
+    tgs="$(AWS_PROFILE="${acct}" aws elbv2 describe-target-groups --region "${WIB_REGION}" \
+           --query 'TargetGroups[].TargetGroupArn' --output text 2>/dev/null || true)"
+    for tg in ${tgs}; do
+        tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${tg}" \
+                  --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
+        [[ "${tagged}" == "${name}" ]] || continue
+        AWS_PROFILE="${acct}" aws elbv2 delete-target-group --region "${WIB_REGION}" \
+            --target-group-arn "${tg}" >/dev/null 2>&1 || true
+    done
+    if [[ "${found}" -gt 0 ]]; then
+        log "  ${name}: swept ${found} leaked load balancer(s). The in-cluster drain did not complete;"
+        log "           this is the #157 failure mode and the sweep is the backstop, not the fix."
+        record_fail "lb-leak:${name}"
+    fi
+    return 0
 }
 
 down_one() {
@@ -812,6 +872,9 @@ down_one() {
     else
         log "  FAILED: ${name} (see ${LOG_DIR}/${name}.destroy.log)"; record_fail "${name}"
     fi
+    # AFTER destroy, in BOTH branches. A failed destroy is precisely when a load balancer is most likely
+    # to be stranded, so skipping the sweep on failure would skip it exactly when it is needed.
+    sweep_orphan_lbs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
 }
 
 # Print any recorded failures and return non-zero if there were any. Call after a pool run.
@@ -1485,6 +1548,77 @@ cmd_aws_keys() {
 # accounts. The keep-list is the claimed clusters (e.g. the provisioning app's /admin/export, one
 # watch-it-burn-* name per line). Queries each account's LIVE EKS clusters (authoritative), reaps any
 # attendee cluster not kept and that has fleet state. DRY-RUN unless WIB_APPLY=1.
+# Find and delete load balancers, target groups and EBS volumes whose cluster no longer exists, across
+# every account. This is the standing safety net for #157: sweep_orphan_lbs catches a leak at the moment
+# of teardown, and this catches everything that leaked before it existed, or through a teardown that
+# never ran at all (a killed run, a cluster deleted from the console).
+#
+# The orphan test is deliberately "tagged for a cluster that is not in eks list-clusters", not an age or
+# a name pattern. Age is wrong because a legitimately long-lived instructor cluster looks old, and names
+# are wrong because the tag is the only thing that survives the cluster it belonged to.
+#
+# DRY-RUN by default, like every other destructive verb here. WIB_APPLY=1 to actually delete.
+cmd_reap_lbs() {
+    # Deliberately NOT require_apply: that helper wants a list of cluster names up front, and this verb
+    # has to survey every account before it knows what it would touch. The dry-run guard is the WIB_APPLY
+    # check on each delete below, and the summary states which mode ran.
+    [[ -n "${WIB_APPLY:-}" ]] || log "reap-lbs: DRY-RUN (set WIB_APPLY=1 to delete). Surveying ${WIB_ATTENDEE_ACCOUNTS}"
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    local acct live arns arn tagged tgs tg vols vol total=0 swept=0
+    for acct in "${accounts[@]}"; do
+        live="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" \
+                --query 'clusters[]' --output text 2>/dev/null | tr '\t' '\n' || true)"
+        arns="$(AWS_PROFILE="${acct}" aws elbv2 describe-load-balancers --region "${WIB_REGION}" \
+                --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true)"
+        for arn in ${arns}; do
+            tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${arn}" \
+                      --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
+            [[ -n "${tagged}" && "${tagged}" != "None" ]] || continue
+            printf '%s\n' "${live}" | grep -qx "${tagged}" && continue
+            total=$(( total + 1 ))
+            log "  ORPHAN lb  ${acct}  ${arn##*/}  (cluster ${tagged} no longer exists)"
+            if [[ -n "${WIB_APPLY:-}" ]]; then
+                AWS_PROFILE="${acct}" aws elbv2 delete-load-balancer --region "${WIB_REGION}" \
+                    --load-balancer-arn "${arn}" >/dev/null 2>&1 && swept=$(( swept + 1 ))
+            fi
+        done
+        tgs="$(AWS_PROFILE="${acct}" aws elbv2 describe-target-groups --region "${WIB_REGION}" \
+               --query 'TargetGroups[].TargetGroupArn' --output text 2>/dev/null || true)"
+        for tg in ${tgs}; do
+            tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${tg}" \
+                      --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
+            [[ -n "${tagged}" && "${tagged}" != "None" ]] || continue
+            printf '%s\n' "${live}" | grep -qx "${tagged}" && continue
+            total=$(( total + 1 ))
+            log "  ORPHAN tg  ${acct}  ${tg##*/}  (cluster ${tagged} no longer exists)"
+            [[ -n "${WIB_APPLY:-}" ]] && AWS_PROFILE="${acct}" aws elbv2 delete-target-group \
+                --region "${WIB_REGION}" --target-group-arn "${tg}" >/dev/null 2>&1
+        done
+        # Volumes strand for the same reason: the EBS CSI controller dies with the cluster. These are
+        # 'available' (detached) and tagged with the cluster that provisioned them.
+        vols="$(AWS_PROFILE="${acct}" aws ec2 describe-volumes --region "${WIB_REGION}" \
+                --filters Name=status,Values=available \
+                --query 'Volumes[].[VolumeId,Tags[?starts_with(Key, `kubernetes.io/cluster/`)].Key|[0]]' \
+                --output text 2>/dev/null || true)"
+        while read -r vol key; do
+            [[ -n "${vol}" && -n "${key}" && "${key}" != "None" ]] || continue
+            printf '%s\n' "${live}" | grep -qx "${key#kubernetes.io/cluster/}" && continue
+            total=$(( total + 1 ))
+            log "  ORPHAN vol ${acct}  ${vol}  (cluster ${key#kubernetes.io/cluster/} no longer exists)"
+            [[ -n "${WIB_APPLY:-}" ]] && AWS_PROFILE="${acct}" aws ec2 delete-volume \
+                --region "${WIB_REGION}" --volume-id "${vol}" >/dev/null 2>&1
+        done <<<"${vols}"
+    done
+    if [[ "${total}" -eq 0 ]]; then
+        log "reap-lbs: no orphans across ${WIB_ATTENDEE_ACCOUNTS}"
+    elif [[ -n "${WIB_APPLY:-}" ]]; then
+        log "reap-lbs: found ${total} orphan(s), deleted ${swept} load balancer(s) + their target groups/volumes"
+    else
+        log "reap-lbs: found ${total} orphan(s). DRY-RUN; set WIB_APPLY=1 to delete."
+    fi
+    return 0
+}
+
 cmd_reap() {
     local keep_file=""
     while [[ $# -gt 0 ]]; do case "$1" in --keep) keep_file="${2:-}"; shift 2 ;; *) shift ;; esac; done
@@ -1833,6 +1967,7 @@ main() {
             log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
             cmd_ingest_instructors "$@"; report_failures ;;
         aws-keys) cmd_aws_keys "$@" ;;
+        reap-lbs) cmd_reap_lbs ;;
         reap) cmd_reap "$@" ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
