@@ -137,7 +137,7 @@ This subsystem provisions the AWS substrate: a disposable, multi-account EKS fle
 
 **Per-cluster Datadog secret injected directly at bootstrap (no ESO/Secrets-Manager-from-cluster, no cross-account).** The fleet reads the Datadog keys from the central pool on the provisioning box (default account's Secrets Manager) and passes them into `deploy-full-idp.sh`, which creates a plain `datadog-secret` K8s Secret in `datadog`, `monitoring`, and `security` BEFORE the app-of-apps. The cluster's own (student) account never touches Secrets Manager (commit `a811323`).
 
-**The provisioning wall at 50 to 60 clusters/account is ELB-per-Region, not Elastic IPs.** Each full cluster provisions 1 internet-facing ALB + 1 internal NLB; both `Application Load Balancers per Region` (L-53DA6B97) and `Network Load Balancers per Region` (L-69A177A2) default to 50. Required increases per account (all adjustable): ALB→100, NLB→100, EC2 vCPU "Running On-Demand Standard" (L-1216C47)→800. No EIP increase (verified 2026-06-26/27).
+**The provisioning wall at 50 to 60 clusters/account is ELB-per-Region, not Elastic IPs.** Each full cluster provisions 1 internet-facing ALB + 1 internal NLB; both `Application Load Balancers per Region` (L-53DA6B97) and `Network Load Balancers per Region` (L-69A177A2) default to 50. Required increases per account (all adjustable): ALB→100, NLB→100, EC2 vCPU "Running On-Demand Standard" (L-1216C47A)→800. No EIP increase (verified 2026-06-26/27).
 
 ### Components & Versions
 
@@ -151,7 +151,7 @@ All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~
 
 ### Recreation Steps
 
-1. **Per-account AWS quota increases (file first, lead-time gate).** Each account, us-west-2: EC2 vCPU L-1216C47→800, ALB L-53DA6B97→100, NLB L-69A177A2→100. No EIP increase.
+1. **Per-account AWS quota increases (file first, lead-time gate).** Each account, us-west-2: EC2 vCPU L-1216C47A→800, ALB L-53DA6B97→100, NLB L-69A177A2→100. No EIP increase.
 2. **Apply the shared lab VPC per account** (accen-dev uses the default state; students use per-account state files):
    ```bash
    terraform -chdir=infra/terraform/aws/network init

@@ -16,7 +16,13 @@
 #      fits at 1 cluster is rejected at 50. Finding out 40 minutes in, after the control planes exist,
 #      costs the build window and leaves a half fleet to reconcile.
 #
-# Everything here is a read: sts, service-quotas, and a file existence test. It never mutates.
+#   3. A lab VPC that is not there. The fleet attaches every cluster to one shared VPC per account,
+#      so a missing one stops all 50 of that account's clusters at the first apply. This used to be
+#      checked by testing that the state FILE existed, which a `terraform destroy` leaves behind, so
+#      the check passed on four empty states for two months. It now reads the state's vpc_id output
+#      and confirms that VPC still exists in the account.
+#
+# Everything here is a read: sts, service-quotas, terraform output, and ec2 describe-vpcs. It never mutates.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -63,7 +69,8 @@ Usage: ${0##*/} <clusters-per-account>
 Read-only preflight for a fleet run. Verifies, per account:
   * the profile resolves to the EXPECTED account id (hard failure on mismatch)
   * vCPU / NLB / EKS / VPC / EIP quota headroom for <clusters-per-account>
-  * a lab VPC state exists (or is the default account's default state)
+  * the shared lab VPC exists: its id is read from the tfstate output AND confirmed live in the
+    account (a file-existence test passes on a destroyed state, which once hid four missing VPCs)
 and, once, that the local tooling is present.
 
 Exits non-zero if anything would block the run. Mutates nothing.
@@ -142,12 +149,31 @@ for acct in "${accounts[@]}"; do
         --quota-code "${Q_CLB}" --region "${WIB_REGION}" --query 'Quota.Value' --output text 2>/dev/null || true)"
     [[ -n "${clb}" && "${clb}" != "None" ]] && note "Classic LB quota ${clb%.*} (nothing should create one; a rise here means the NLB annotations regressed)"
 
-    if [[ -f "${LAB_VPC_DIR}/states/${acct}.tfstate" ]]; then
-        ok "lab VPC state present"
-    elif [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" && -f "${LAB_VPC_DIR}/terraform.tfstate" ]]; then
-        ok "lab VPC state present (default state)"
-    else
+    # The lab VPC check reads the state's OUTPUT and then confirms the VPC still exists in the
+    # account. A file-existence test is not enough and was actively misleading: `terraform destroy`
+    # leaves the state file in place with resources=0 and no outputs, so the four student accounts
+    # sat with 183-byte empty states from the 2026-06-27 teardown while this script printed
+    # PREFLIGHT GREEN. fleet.sh reads the output and fails loudly, so nothing half-built, but the
+    # gate that exists to answer "are we ready" answered yes for two months while the answer was no.
+    #
+    # The live describe closes the other direction too: a state can carry a vpc_id for a VPC deleted
+    # out of band (console, a co-tenant's cleanup sweep), which is just as silent and just as fatal.
+    vpc_state="${LAB_VPC_DIR}/states/${acct}.tfstate"
+    if [[ ! -f "${vpc_state}" && "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
+        vpc_state="${LAB_VPC_DIR}/terraform.tfstate"
+    fi
+    if [[ ! -f "${vpc_state}" ]]; then
         bad "no lab VPC state — apply it first: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+    else
+        lab_vpc_id="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${vpc_state}" -raw vpc_id 2>/dev/null || true)"
+        if [[ -z "${lab_vpc_id}" || "${lab_vpc_id}" == "null" ]]; then
+            bad "lab VPC state is EMPTY (destroyed, never applied, or outputs missing) — apply it: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+        elif ! AWS_PROFILE="${acct}" aws ec2 describe-vpcs --vpc-ids "${lab_vpc_id}" \
+                --region "${WIB_REGION}" --query 'Vpcs[0].VpcId' --output text >/dev/null 2>&1; then
+            bad "lab VPC ${lab_vpc_id} is in the state but DOES NOT EXIST in ${acct}/${WIB_REGION} — re-apply: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+        else
+            ok "lab VPC ${lab_vpc_id} present and live"
+        fi
     fi
 done
 

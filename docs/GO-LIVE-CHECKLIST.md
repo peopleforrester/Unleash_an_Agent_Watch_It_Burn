@@ -1,9 +1,13 @@
 # Go-Live Checklist
 
-ABOUTME: The complete remaining work to run the workshop, grouped by priority. Workshop is ~4 days out.
+ABOUTME: The complete remaining work to run the workshop, grouped by priority.
 ABOUTME: P0 = the workshop cannot run without it; P1 = the demo will not land right; P2 = polish.
 
-Updated 2026-06-26. Check items off here as they land; "done" detail goes to PROGRESS.md.
+**Delivery: DevOpsDays Portland 2026, Tuesday September 8, 1:00 to 3:00 PM Pacific, Room 327.**
+
+Updated 2026-09-02. Check items off here as they land; "done" detail goes to PROGRESS.md.
+The header used to read "~4 days out" against the June AI Engineer World's Fair date, which is done;
+countdowns rot, so this file names the delivery date instead of a distance from it.
 
 ## Already done (so we don't re-litigate)
 
@@ -56,16 +60,28 @@ AWS_PROFILE=accen-dev verify/datadog-pool-check.sh
       validate. That is the exact shape of her 2026-08-29 report on a fleet whose keys were all fine.
 
 ### 1. The 5-account fleet for ~250 attendee clusters
-- [ ] Confirm the other 4 AWS accounts exist and we have CLI access (a profile each).
-- [ ] Quota increases on each of the 4 accounts (us-west-2), all adjustable, file now. Proven against
+- [x] Confirm the other 4 AWS accounts exist and we have CLI access (a profile each). Verified
+      2026-09-02: all 5 profiles resolve to their pinned account ids via `preflight.sh`.
+- [x] Quota increases on each of the 4 accounts (us-west-2), all adjustable, file now. **Granted and
+      verified live 2026-09-02 on all 5 accounts: vCPU 800, ALB 100, NLB 100, EKS 100.** Proven against
       accen-dev's live resources + AWS docs on 2026-06-26 (see DECISION-LOG):
-      - EC2 vCPU "Running On-Demand Standard Instances" (L-1216C47): 800 (accen-dev already 800; ~2-min auto-approve).
+      - EC2 vCPU "Running On-Demand Standard Instances" (L-1216C47A): 800 (accen-dev already 800; ~2-min auto-approve).
+        The code is `L-1216C47A`; this file carried `L-1216C47` until 2026-09-02, which returns
+        `NoSuchResourceException` from `service-quotas` and reads as "no such quota" rather than a typo.
       - **Application Load Balancers per Region (L-53DA6B97): 50 -> 100.** Each full cluster = 1 internet-facing ALB;
         50 clusters is at the wall, 60 is over the default 50.
       - **Network Load Balancers per Region (L-69A177A2): 50 -> 100.** Each full cluster = 1 internal NLB; same wall.
       - Elastic IPs: NO increase needed. Internet-facing ALB IPs are AWS-managed and do not count; only the one
         shared-VPC NAT gateway counts (1 of 5). Confirmed: 9 EIPs visible in accen-dev under a quota of 5.
-- [ ] `lab-vpc` applied once per account (5 shared VPCs total, each with the Bedrock endpoint).
+- [x] `lab-vpc` applied once per account (5 shared VPCs total, each with the Bedrock endpoint).
+      Re-applied to the 4 student accounts 2026-09-02: the 2026-06-27 teardown-to-zero destroyed them
+      and they were never rebuilt. Pre-seeded rather than built on the day, because the VPC is the one
+      fleet dependency with no in-cluster fallback and it costs ~$1.56/account/day to leave standing
+      (one NAT gateway + the Bedrock endpoint's two ENIs).
+      **Verify with `preflight.sh`, not by looking for the state file.** `terraform destroy` leaves the
+      state file behind with `resources=0` and no outputs, so the old file-existence check reported
+      PREFLIGHT GREEN across four accounts that had no VPC at all. The check now reads the `vpc_id`
+      output and confirms that VPC still exists in the account.
 - [ ] Cross-account fan-out in `fleet.sh` (`up-fleet`): run all 5 accounts' pools concurrently so 250
       come up in one ~30-min window, not five serial batches.
 - [ ] A real dry-run before the day: at minimum 50 in one account end-to-end, ideally a 10-cluster

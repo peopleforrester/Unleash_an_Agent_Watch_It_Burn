@@ -66,7 +66,7 @@ evidence is found to be invalid even if the conclusion stood.
 | 2026-06-26 | Attendee cluster reports to its OWN Datadog org, separate from instructor | `whitney-attendee` branch: the 3 datadog ESO ExternalSecrets pull `watch-it-burn/datadog-admin-attendee` (org `...-01-002`); r2/r3 keep `watch-it-burn/datadog` (org `...-01-001`). Verified live: attendee `datadog-secret` api-key tail `79de0a`. An ArgoCD hard-refresh was required because selfHeal reverted the live patch until the cluster synced the branch commit |
 | 2026-06-26 | The ~300-org Datadog pool is split across Secrets Manager secrets | A single secret caps at 64 KB; the 298-org pool is 79 KB. Split into `watch-it-burn/datadog-pool` (149) + `/datadog-pool-2` (149); `merge_pool.py` now reads a comma-separated list and concatenates. Validated 296 attendee + 2 admins excluded, no leaks/blanks. Authoritative copies in `~/secrets/datadog/` |
 | 2026-06-26 | Railway provisioning auto-deploy fixed (Railpack, not Nixpacks) | The recurring "Deploy failed" was a stale 389 KB GitHub-source snapshot, not config. Settings are correct: root `lab-distribution`, branch `main`, watch path `/lab-distribution/**`, builder Railpack (Nixpacks is deprecated, global rule added). A fresh source rebuild at the same sha (`afc2e44`) succeeded and is the live deploy |
-| 2026-06-26 | At 50-60 clusters/account the provisioning wall is ELB-per-Region (50), NOT Elastic IPs | EIPs are not a blocker: internet-facing ALB IPs are AWS-managed (the ALB `LoadBalancerAddresses` is empty), so only the one shared-VPC NAT gateway counts (1 of 5) — proven by 9 EIPs existing in accen-dev under a quota of 5. The real wall: each full cluster = 1 internet-facing ALB + 1 internal NLB (measured 4 + 4 for 4 clusters). `Application Load Balancers per Region` (L-53DA6B97) and `Network Load Balancers per Region` (L-69A177A2) both default to 50 and are adjustable (AWS ELB quota docs, verified 2026-06-26). 60 clusters/account = 60 of each -> over the limit. Request 100 each per account, plus EC2 vCPU 800 (L-1216C47); no EIP increase |
+| 2026-06-26 | At 50-60 clusters/account the provisioning wall is ELB-per-Region (50), NOT Elastic IPs | EIPs are not a blocker: internet-facing ALB IPs are AWS-managed (the ALB `LoadBalancerAddresses` is empty), so only the one shared-VPC NAT gateway counts (1 of 5) — proven by 9 EIPs existing in accen-dev under a quota of 5. The real wall: each full cluster = 1 internet-facing ALB + 1 internal NLB (measured 4 + 4 for 4 clusters). `Application Load Balancers per Region` (L-53DA6B97) and `Network Load Balancers per Region` (L-69A177A2) both default to 50 and are adjustable (AWS ELB quota docs, verified 2026-06-26). 60 clusters/account = 60 of each -> over the limit. Request 100 each per account, plus EC2 vCPU 800 (L-1216C47A); no EIP increase |
 | 2026-06-26 | Datadog key rotation does NOT restart the in-cluster consumers, so they silently keep the dead key | The OTel Collector (the PRIMARY trace/metric sink), the Datadog Agent, and falcosidekick read the key as an env var from `datadog-secret` (ESO-synced), fixed at pod start. After the 2026-06-26 rotation the Collector ran ~6h on the EXPIRED key, dropping ALL telemetry to org 01-001 — which is exactly why the #20/#27 live acceptance first showed zero in Datadog (found by doing the live acceptance). Fix committed in config: `infra/reload-datadog-consumers.sh` force-syncs the ESO secret and DELETES the consumer pods (collector / datadog-agent / cluster-agent / falcosidekick) so they recreate with the fresh key. It deletes pods rather than `rollout restart` because the workshop's own `block-argocd-drift` Kyverno policy rejects direct spec mutation of ArgoCD-managed workloads (a restart patches the spec; deleting a child pod does not, and the controller recreates it). A declarative in-cluster auto-reloader (Stakater Reloader) is NOT viable here for the same reason — it would itself be a non-ArgoCD principal mutating managed workloads, which the guardrail forbids. Applied live to r2/r3/att (r1 = burn, no Datadog). Run after every `watch-it-burn/datadog*` rotation, per affected cluster |
 | 2026-06-26 | C7 (rogue MCP) attack could not land: the toggle wired rogue tool NAMES into workshop-mcp's allowlist, but those tools live on evil-mcp-shim, which was never wired to the agent | The rogue tools (read_internal_config, apply_optimization) + the get_weather injection entrypoint are served by evil-mcp-shim, reached via the `evil-mcp` RemoteMCPServer. The agent's committed tools wired ONLY workshop-mcp, so adding rogue names to workshop-mcp's toolNames was a no-op (a server cannot expose tools it does not serve) -- verified live: the agent reported "no tool read_internal_config" in BOTH toggle states. Fixed `challenges/03-.../toggle-mcp-authz-on.sh` to wire the evil-mcp server: --off allowlists [get_weather, read_internal_config, apply_optimization] (attack lands), --on allowlists [get_weather] only (injection fires but the rogue tool is filtered). Verified live on r3: --off leaks FAKE-MCP-EXFIL-sentinel-4c1d via the get_weather->read_internal_config chain; --on blocks it. kagent restarts the agent on a toolNames change (~30-60s); the patch is not blocked by block-argocd-drift (the Agent has ArgoCD ignoreDifferences for .spec.declarative.tools) |
 | 2026-06-26 | App pods shipped UN-INSTRUMENTED because the AI layer raced the OTel Operator webhook (the real "Datadog is empty" cause, beneath the stale-key one) | guard-proxy + workshop-agent carry `instrumentation.opentelemetry.io/inject-python`; the OTel Operator's mutating webhook injects the SDK + `OTEL_EXPORTER_OTLP_ENDPOINT` at pod-create. But `gitops/apps/ai-layer.yaml` was sync-wave **2**, the SAME wave as `otel-operator.yaml`, so ArgoCD admitted the app pods before the webhook was ready: NO init container, NO OTLP endpoint, ZERO telemetry exported. Proven by recreating guard-proxy (it then got the `opentelemetry-auto-instrumentation-python` init container + the endpoint, and `gen_ai.client.cost` + `gen_ai.client.token.usage` immediately appeared in Datadog org 01-001). Declarative fix: ai-layer -> sync-wave **3** so it deploys only after the Operator is Healthy. Runtime safety net committed: `infra/reinstrument-app-pods.sh` (recreates annotated-but-not-injected pods; pod-DELETE, so it respects `block-argocd-drift`). Applied live to r2/r3/att. Follow-up for Whitney's #20: `gen_ai.provider.name` arrives valued `N/A` (attribute present post-rename, value not populated by the ADK) |
@@ -670,3 +670,51 @@ servers are load-bearing and were being resolved at RUNTIME, so a bad upstream p
 agent on a cluster that had passed every gate. These CLIs are optional student tools resolved at BUILD
 time, and no challenge depends on them, so a regression costs a student one tool rather than costing the
 room the workshop. If one ever becomes load-bearing, pin it.
+
+---
+
+## 2026-09-02 · preflight.sh reported GREEN on four accounts with no lab VPC
+
+**Verification correction.** `infra/terraform/fleet/preflight.sh` printed
+`PREFLIGHT GREEN: 5 accounts ready for 50 clusters each` while four of the five accounts had no
+`watch-it-burn-lab-vpc` at all. Nothing about the output hinted at it.
+
+**Mechanism.** The lab-VPC check was `[[ -f states/<acct>.tfstate ]]`. `terraform destroy` does not
+remove the state file; it rewrites it in place with `resources=0` and no outputs. The 2026-06-27
+teardown-to-zero (logged above) left four 183-byte states behind:
+
+```
+aws1-student31: resources=0 outputs=0 serial=138    (the real state is ~2.2 KB)
+aws1-student32: resources=0 outputs=0 serial=139
+aws1-student33: resources=0 outputs=0 serial=139
+aws1-student34: resources=0 outputs=0 serial=141
+terraform output -state=states/aws1-student31.tfstate -raw vpc_id  ->  (empty)
+```
+
+A file-existence test cannot distinguish "applied" from "destroyed", so the gate whose whole purpose
+is answering *are we ready* answered yes for two months while the answer was no.
+
+**What did not break.** `fleet.sh read_vpc_for()` reads the `vpc_id` output and exits when it is
+empty, so no run ever half-built into a VPC-less account. The damage was confined to false
+confidence, which is why this is filed as a verification correction and not an incident.
+
+**How it surfaced.** A direct `describe-vpcs` sweep disagreed with preflight. Rather than picking the
+more convincing source, both were tested; the tie-break was reading the state bytes. This is the same
+discipline as the narrow-query rule at the top of this file, applied to a script's output instead of
+a query's.
+
+**Fix.** The check now reads `terraform output -raw vpc_id` and then confirms that VPC still exists
+with `ec2 describe-vpcs`. The second half closes the opposite failure, a state carrying a `vpc_id`
+for a VPC deleted out of band, which is equally silent and equally fatal.
+
+**Decision: pre-seed the four VPCs now rather than build them on the day.** Applied 2026-09-02.
+The shared VPC is the one fleet dependency with no in-cluster fallback and no fast rebuild path, and
+it is cheap to leave standing: ~$1.56/account/day (one NAT gateway at $1.08 plus the Bedrock
+interface endpoint's two ENIs at $0.48), so ~$6.25/day across four accounts. Not free, and the
+"as long as it costs nothing" framing that prompted it is worth correcting for the record, but the
+cost is small enough against a 250-attendee delivery that leaving them standing is the right trade.
+
+**Related correction, same sweep.** The EC2 vCPU quota code is `L-1216C47A`. `GO-LIVE-CHECKLIST.md`,
+`MASTER-RECREATION-SPEC.md`, `PROGRESS.md` and this file all carried `L-1216C47`, which returns
+`NoSuchResourceException` and reads as "that quota does not exist" rather than as a typo. Corrected
+everywhere 2026-09-02.

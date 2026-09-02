@@ -17,6 +17,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 CLUSTER_TF = (REPO / "infra/terraform/aws/cluster/main.tf").read_text()
 NETWORK_TF = (REPO / "infra/terraform/aws/network/main.tf").read_text()
 FLEET_SH = (REPO / "infra/terraform/fleet/fleet.sh").read_text()
+PREFLIGHT_SH = (REPO / "infra/terraform/fleet/preflight.sh").read_text()
 TEARDOWN_SH = (REPO / "teardown/teardown.sh").read_text()
 STORAGECLASS = (REPO / "infra/gp3-storageclass.yaml").read_text()
 
@@ -72,6 +73,29 @@ check(
     "teardown refuses to destroy through a mismatched account",
     "assert_membership_matches" in FLEET_SH,
 )
+
+print("== preflight actually measures the lab VPC ==")
+# The shared lab VPC is the one fleet dependency with no in-cluster fallback: without it, all 50 of
+# that account's clusters fail at the first apply. preflight.sh is the gate that answers "are we
+# ready", and from the 2026-06-27 teardown until 2026-09-02 it answered yes for four accounts that
+# had no VPC at all. The check was `[[ -f states/<acct>.tfstate ]]`, and `terraform destroy` leaves
+# the state file in place with resources=0 and no outputs, so a destroyed account is indistinguishable
+# from a provisioned one. Two months of PREFLIGHT GREEN over an empty fleet, and nothing in the
+# output hinted at it. These assertions exist so the file-existence shortcut cannot come back.
+check(
+    "preflight reads the vpc_id OUTPUT (a destroyed state still has its file)",
+    "output" in PREFLIGHT_SH and "-raw vpc_id" in PREFLIGHT_SH,
+)
+check(
+    "preflight confirms the VPC is live (a state can name a VPC deleted out of band)",
+    "describe-vpcs" in PREFLIGHT_SH and "--vpc-ids" in PREFLIGHT_SH,
+)
+# The specific regression: a bare -f test on the state whose only consequence is a pass.
+_file_only = re.search(
+    r'if\s+\[\[\s+-f\s+"\$\{LAB_VPC_DIR\}/states/\$\{acct\}\.tfstate"\s+\]\];\s*then\s*\n\s*ok\s',
+    PREFLIGHT_SH,
+)
+check("preflight does NOT pass the lab-VPC check on file existence alone", not _file_only)
 
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the
