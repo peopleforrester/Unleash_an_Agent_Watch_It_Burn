@@ -1,10 +1,10 @@
-# ABOUTME: Ingress for the Hedgehog Party demo app via shared ALB.
-# ABOUTME: Exposes hedgehog.agenticburn.com over HTTP (lab; no TLS).
+# ABOUTME: Ingress for the Unicorn Party demo app via shared ALB.
+# ABOUTME: Exposes unicorn.agenticburn.com over HTTP (lab; no TLS).
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: hedgehog-party
+  name: demo-app-unicorn
   namespace: apps
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
@@ -16,13 +16,13 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: hedgehog.agenticburn.com
+    - host: unicorn.agenticburn.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: hedgehog-party
+                name: demo-app-unicorn
                 port:
                   number: 80

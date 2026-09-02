@@ -1,10 +1,10 @@
-# ABOUTME: Ingress for the Wombat Party demo app via shared ALB.
-# ABOUTME: Exposes wombat.agenticburn.com over HTTP (lab; no TLS).
+# ABOUTME: Ingress for the Spider Party demo app via shared ALB.
+# ABOUTME: Exposes spider.agenticburn.com over HTTP (lab; no TLS).
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: wombat-party
+  name: demo-app-spider
   namespace: apps
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
@@ -16,13 +16,13 @@ metadata:
 spec:
   ingressClassName: alb
   rules:
-    - host: wombat.agenticburn.com
+    - host: spider.agenticburn.com
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: wombat-party
+                name: demo-app-spider
                 port:
                   number: 80

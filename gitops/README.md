@@ -30,7 +30,7 @@ apps/                    # 26 ArgoCD Application manifests
   cert-manager.yaml      # TLS certificate management
   cert-manager-issuers.yaml # Let's Encrypt ClusterIssuers
   resource-quotas.yaml   # ResourceQuota + PDBs
-  unicorn-party.yaml     # Demo app (interactive)
+  demo-app-unicorn.yaml     # Demo app (interactive)
   ecom-frontend.yaml     # Demo app (e-commerce)
   ecom-api.yaml          # Demo app (e-commerce API)
   ecom-worker.yaml       # Demo app (e-commerce worker)
@@ -40,7 +40,7 @@ argocd/
   values.yaml            # ArgoCD Helm chart values
 
 manifests/               # Raw Kubernetes manifests for demo apps
-  unicorn-party/         # Deployment, Service, Ingress
+  demo-app-unicorn/         # Deployment, Service, Ingress
   ecom-frontend/         # Deployment, Service, Ingress
   ecom-api/              # Deployment, Service
   ecom-worker/           # Deployment, Service

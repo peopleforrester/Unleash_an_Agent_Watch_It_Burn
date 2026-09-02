@@ -30,7 +30,7 @@ spec:
       # present on all three builds per the uniform-build goal; with no KubeArmorPolicy it enforces nothing,
       # so R1 stays guardrail-free and the C3 snoop still succeeds. kubearmor-policies is OMITTED here
       # (the KubeArmorPolicy lives only in the full profile); Tetragon was retired 2026-08-30.
-      include: '{namespaces,cert-manager,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,unicorn-party,hedgehog-party,spider-party,wombat-party,mantis-shrimp-party}.yaml'
+      include: '{namespaces,cert-manager,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,demo-app-unicorn,demo-app-hedgehog,demo-app-spider,demo-app-wombat,demo-app-mantis-shrimp}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

@@ -1,17 +1,17 @@
-# ABOUTME: Service for the hedgehog-party demo application.
+# ABOUTME: Service for the demo-app-spider demo application.
 # ABOUTME: ClusterIP service exposing port 80 targeting container port 8080.
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: hedgehog-party
+  name: demo-app-spider
   namespace: apps
   labels:
-    app: hedgehog-party
+    app: demo-app-spider
 spec:
   type: ClusterIP
   selector:
-    app: hedgehog-party
+    app: demo-app-spider
   ports:
     - name: http
       port: 80

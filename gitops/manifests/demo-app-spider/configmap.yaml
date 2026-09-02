@@ -1,12 +1,12 @@
-# ABOUTME: ConfigMap containing themed HTML5 Canvas animation for spider-party.
+# ABOUTME: ConfigMap containing themed HTML5 Canvas animation for demo-app-spider.
 # ABOUTME: Mounted into nginx container to replace default index.html.
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: spider-party-html
+  name: demo-app-spider-html
   namespace: apps
   labels:
-    app: spider-party
+    app: demo-app-spider
 data:
   index.html: |
     <!DOCTYPE html>
