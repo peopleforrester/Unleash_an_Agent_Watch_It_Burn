@@ -825,6 +825,36 @@ cmd_up() {
     [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || BOOTSTRAP_PROFILE="full"
     run_pool up_one "${names[@]}"
     BOOTSTRAP_PROFILE=""
+    # Regenerate the router map. Same reason as ingest below, and the same instructor-only omission: a
+    # freshly provisioned attendee cluster has a friendly hostname that DNS resolves (wildcard -> the apex
+    # router) but that the router has no route for, so it answers 404. Observed live 2026-09-02: a student
+    # claimed a cluster, was handed brave-dolphin.agenticburn.com, and got a 404 from a cluster that was
+    # healthy. Claiming and reaching are two steps, and both have to be automatic.
+    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
+        cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
+    fi
+    # Register with the provisioning app, for exactly the reason the instructor path already does it
+    # (see cmd_instructors): a cluster nobody can look up is not finished. This was instructor-only, so
+    # `up` and `up-fleet` left attendee clusters provisioned, routable, healthy, and INVISIBLE to the
+    # thing that hands them out. Observed live 2026-09-02: five clusters were up and a student claiming
+    # one was told there were none, because provisioning had never heard of them. At 250 clusters that
+    # is the whole room, and the only symptom is an empty pool.
+    #
+    # Non-fatal by design, and LOUD when it cannot run: a quiet skip is what made this invisible.
+    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]]; then
+        if resolve_admin_token >/dev/null 2>&1; then
+            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+            for _n in "${names[@]}"; do ingest_one "${_n}" "${WIB_DEFAULT_ACCOUNT}"; done
+        else
+            log "ingest: CANNOT RESOLVE the provisioning admin token, so these clusters were NOT registered."
+            log "        They are up and routable, but a student claiming one will be told there are none."
+            log "        Fix by logging in to Railway (railway login), or export WIB_ADMIN_TOKEN, then run:"
+            log "            fleet.sh ingest ${names[*]}"
+            record_fail "ingest:no-admin-token"
+        fi
+    fi
     report_failures
 }
 

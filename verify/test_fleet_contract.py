@@ -97,6 +97,19 @@ _file_only = re.search(
 )
 check("preflight does NOT pass the lab-VPC check on file existence alone", not _file_only)
 
+print("== a provisioned attendee cluster is also REACHABLE and CLAIMABLE ==")
+# Provisioning was only ever half the job, and the other half was instructor-only. `up` built attendee
+# clusters that were healthy, routable by DNS, and invisible to both the router and the provisioning app:
+# a student claiming one was told there were no clusters, and once that was fixed by hand, the URL they
+# were handed 404'd. Observed live 2026-09-02 during a rehearsal, twice, on the same five clusters. At 250
+# clusters that is the entire room, and neither failure looks like a provisioning bug from the outside.
+_up = FLEET_SH[FLEET_SH.index("cmd_up()"):]
+_up = _up[:_up.index("\ncmd_", 1)] if "\ncmd_" in _up[1:] else _up
+check("cmd_up regenerates the router map (else the friendly hostname 404s)", "cmd_routes" in _up)
+check("cmd_up registers with the provisioning app (else the pool reads empty)", "ingest_one" in _up)
+check("cmd_up is LOUD when it cannot register (a quiet skip is what hid this)",
+      "were NOT registered" in _up and "record_fail" in _up)
+
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the
 # AWS load balancers, and the PVCs while the EBS CSI controller can still reclaim their volumes.
