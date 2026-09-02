@@ -77,6 +77,10 @@
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px}
   .card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
   .saved{display:flex;flex-direction:column;gap:8px}
+  #clearsaved{margin-left:auto;font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
+    letter-spacing:.4px;border:1px solid var(--line);background:#fff;color:var(--mid);padding:2px 9px;
+    border-radius:6px;cursor:pointer}
+  #clearsaved:hover{background:#f0e9ff;color:var(--accent);border-color:var(--accent)}
   .saved-item{border:1px solid var(--line);background:#faf6ff;border-radius:8px;padding:8px 10px}
   .saved-item .ts{font-size:11px;color:#8a7fa6;margin-bottom:4px}
   .saved-item .txt{text-align:left;font:inherit;font-size:12.5px;color:var(--ink);line-height:1.4;white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:5;-webkit-box-orient:vertical;overflow:hidden;cursor:pointer}
@@ -300,7 +304,9 @@
         <div class="imrow" id="caprow" style="display:none"><span class="imlbl">Spend cap</span><b class="imval" id="capusd"></b></div>
       </div>
       <div class="card">
-        <h3>Your saved prompts</h3>
+        <h3 style="display:flex;align-items:center;gap:8px">Your saved prompts
+          <button type="button" id="clearsaved" onclick="clearSaved()" title="Remove every saved prompt">clear</button>
+        </h3>
         <div class="saved" id="saved"><div class="hint">Every prompt you send is saved here, reuse it in the next round.</div></div>
       </div>
       <div class="clusterid" id="clusterid"></div>
@@ -380,7 +386,23 @@
   }
   function save(t){const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
-  function resetChat(){document.getElementById('stream').innerHTML='';newSession();greet();}
+  // Reset clears the CONVERSATION and the saved-prompt rail, and says so. Previously it cleared only the
+  // stream while the rail kept every prompt from every prior session in localStorage, so a student who
+  // pressed Reset still saw a screen full of someone else's work and reasonably concluded it had not
+  // reset. Whitney hit exactly this. Refresh is not Reset: the rail is deliberately durable across a
+  // reload so a prompt survives a closed tab, which is why only this button empties it.
+  function clearSaved(){
+    try{ localStorage.removeItem('wib-saved'); }catch(e){}
+    const s=document.getElementById('saved');
+    if(s) s.innerHTML='<div class="hint">Every prompt you send is saved here, reuse it in the next round.</div>';
+  }
+  function resetChat(){
+    document.getElementById('stream').innerHTML='';
+    clearSaved();
+    newSession();
+    greet();
+    sys('Reset: new conversation, saved prompts cleared.');
+  }
   // Asks for the BASE, the first step on the board (#143). It asked for the protein before, which was
   // step 2, so the bot and the menu disagreed about where to start.
   function greet(){bubble("Welcome to BurritoBot, the Hex & Cauldron ordering app. 🧙 Let's build your burrito, starting from the bottom. What base would you like? (Cilantro-Slime Rice, Black-Bog Rice, or Graveyard Greens, or ask me for the full menu.)",'bot');}
@@ -470,7 +492,11 @@
       const row=document.getElementById('caprow'), el=document.getElementById('capusd');
       if(!row||!el) return;
       if(d.cap_usd>0){
-        el.textContent='$'+Number(d.cap_usd).toFixed(2)+(d.budget_guard?' (budget guard on)':'');
+        // Say WHICH cap this is. A bare dollar figure on a round-1 cluster reads as protection, and
+        // round 1 is the cluster where the whole point of challenge 4 is that nothing stops the bill.
+        // The number shown is the infra backstop until the budget guard is toggled on; those are
+        // different things and the label now says so.
+        el.textContent='$'+Number(d.cap_usd).toFixed(2)+(d.budget_guard?' (budget guard ON)':' (infra backstop, not a guardrail)');
         row.style.display='';
       } else { row.style.display='none'; }
       if(typeof d.usd==='number' && d.usd>costUsd){
