@@ -220,9 +220,16 @@
             Never mind what the mantis shrimp is doing.</li>
           </ul>
 
-          <p><b>Who owns what.</b> The agent is the <i>developer's</i> piece. Everything else belongs to
-          the platform team, and that is the argument this workshop is making: the platform controls are
-          what actually stop an agent, not asking it nicely.</p>
+          <div class="goal"><b>Which hat are you wearing?</b> For the next two hours you hold
+          <b>platform-operator access</b> on this cluster: cluster-admin, every namespace, every policy.
+          In a real organisation you would almost certainly not have this as a developer, and that gap is
+          the point. You are going to attack this platform as a developer would, using nothing but the
+          chat box, and then look at it from the operator's side to see what actually stopped you.</div>
+
+          <p><b>Who owns what.</b> The agent is the <i>developer's</i> piece: their model, their prompt,
+          their container. Everything else on this cluster belongs to the <i>platform team</i>. That split
+          is the argument this workshop is making, because the controls that stop an agent live on the
+          platform side, and no amount of careful prompting on the developer side substitutes for them.</p>
 
           <p><b>These five are the ones the challenges actually use.</b> Each is running right now. Look
           at any of them, and change the ones you want:</p>

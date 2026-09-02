@@ -101,19 +101,22 @@
      cmd:'kubectl -n istio-system get pods', auth:'No UI.'},
 
     // WAVE 3 - observability
-    {nm:'Grafana', p:3, ns:'monitoring', desc:'Dashboards over Prometheus, Loki and Tempo.',
+    // Datadog FIRST. It is the telemetry story of this workshop and every challenge asks the student to
+    // look at a trace in it. The Grafana/Prometheus/Loki/Tempo stack is real and running, and is here for
+    // completeness rather than to compete for attention, so it sits below and says so.
+    {nm:'Datadog', p:3, ns:'datadog', desc:'Where you watch what the agent actually did. Traces, logs, metrics and LLM Observability. This is the one to use.',
+     cmd:'kubectl -n datadog get pods', auth:'Log in at app.datadoghq.com with the credentials on your lab page.'},
+    {nm:'OTel Collector', p:3, ns:'monitoring', desc:'Where every trace and metric is routed on its way to Datadog. Vendor-neutral: any OTLP backend would receive the same data.',
+     cmd:'kubectl -n monitoring get svc otel-collector-opentelemetry-collector', auth:'Pipeline, not a UI.'},
+    {nm:'Grafana', p:3, ns:'monitoring', desc:'The local fallback stack, here for completeness. The workshop uses Datadog; you do not need this.',
      cmd:'kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80   # then http://localhost:3000',
      user:'admin', pw:"kubectl -n monitoring get secret prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo"},
-    {nm:'Prometheus', p:3, ns:'monitoring', desc:'Metrics store and query UI.',
+    {nm:'Prometheus', p:3, ns:'monitoring', desc:'Metrics store behind Grafana. Fallback only.',
      cmd:'kubectl -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090   # then http://localhost:9090', auth:'No login.'},
-    {nm:'Loki', p:3, ns:'monitoring', desc:'Log store behind Grafana.',
+    {nm:'Loki', p:3, ns:'monitoring', desc:'Log store behind Grafana. Fallback only.',
      cmd:'kubectl -n monitoring port-forward svc/loki 3100:3100', auth:'No login.'},
-    {nm:'Tempo', p:3, ns:'monitoring', desc:'Trace store behind Grafana.',
+    {nm:'Tempo', p:3, ns:'monitoring', desc:'Trace store behind Grafana. Fallback only.',
      cmd:'kubectl -n monitoring port-forward svc/tempo 3200:3200', auth:'No login.'},
-    {nm:'OTel Collector', p:3, ns:'monitoring', desc:'Where every trace and metric is routed on its way to Datadog.',
-     cmd:'kubectl -n monitoring get svc otel-collector-opentelemetry-collector', auth:'Pipeline, not a UI.'},
-    {nm:'Datadog Agent', p:3, ns:'datadog', desc:'Ships traces, logs, metrics and LLM Observability. Your login is on the lab page.',
-     cmd:'kubectl -n datadog get pods', auth:'Log in at app.datadoghq.com with the credentials in your lab guide.'},
 
     // WAVE 4 - the AI layer
     {nm:'kagent', p:4, ns:'agent', desc:'The agent runtime, on Amazon Bedrock. Its model binding and tool allow-list are both declarative.',
