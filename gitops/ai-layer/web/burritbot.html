@@ -518,9 +518,14 @@
       var fb=document.getElementById('fbbtn'); if(fb)fb.href=fb.href+'?'+nq.join('&');
       var bbn=document.getElementById('bbbtn'); if(bbn)bbn.href='/?'+nq.join('&');
     }
-    if(cluster){var txt='Cluster '+cluster+(user?(' · '+user):'');
-      var ci=document.getElementById('clusterid'); if(ci) ci.textContent=txt;
-      var cf=document.getElementById('clusterfoot'); if(cf) cf.textContent=txt;}
+    // Same as lab.html: show the name the student was GIVEN (the hostname they are on), not the
+    // internal watch-it-burn-attendee-NNN slot id, which is not what is on their claim page and is not
+    // something anyone can act on. Internal id stays in the tooltip.
+    var _host=(location.hostname||'').split('.')[0];
+    var _pretty=(_host && _host!=='localhost') ? _host : cluster;
+    if(_pretty){var txt='Cluster '+_pretty+(user?(' \u00b7 '+user):'');
+      var ci=document.getElementById('clusterid'); if(ci){ci.textContent=txt; ci.title=cluster||'';}
+      var cf=document.getElementById('clusterfoot'); if(cf){cf.textContent=txt; cf.title=cluster||'';}}
     applyRoundFromCluster(cluster);
     try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
     setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
