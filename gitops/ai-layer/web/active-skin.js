@@ -4,4 +4,4 @@
 // Fresh clusters pick up whatever is set here at provision. On an already-running cluster, the console
 // ConfigMap has a fixed name (no content hash), so bounce the pod to apply:
 //   kubectl -n agent delete pod -l app.kubernetes.io/name=console
-window.WITB_ACTIVE_SKIN = "accenture";
+window.WITB_ACTIVE_SKIN = "burritobot";

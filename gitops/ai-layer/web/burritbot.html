@@ -13,7 +13,10 @@
     --r1:#d23b3b;--r2:#2f6fed;--r3:#1f9d57; /* R1 red (no guardrails), R2 blue (+AI), R3 green (your cluster) */
   }
   *,*::before,*::after{box-sizing:border-box}
-  html,body{margin:0;height:100%}
+  /* min-height, NOT height. A fixed height:100% on html caps the document at the viewport, so once the
+     stacked <980px layout is taller than the screen the overflow is clipped instead of scrollable and the
+     footer becomes unreachable. Reported live 2026-09-02 as "the banner is blocking scrolling". */
+  html,body{margin:0;min-height:100%}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);display:flex;flex-direction:column;min-height:100vh}
   header{background:var(--dd);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px}
   header .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
@@ -101,8 +104,18 @@
   #celebrate .winmsg p{margin:0;color:var(--mid);font-size:13px}
   .confetti{position:fixed;top:-40px;font-size:26px;pointer-events:none;z-index:61;animation:fall linear forwards}
   @keyframes fall{to{transform:translateY(110vh) rotate(360deg)}}
-  footer{padding:10px 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--mid);display:flex;gap:14px;align-items:center}
-  footer .sp{flex:1}
+  /* flex-wrap so the sponsor line drops to its own row on a narrow viewport instead of forcing the page
+     wider than the screen. flex-shrink:0 keeps it from being squeezed out of the column layout. */
+  footer{padding:10px 18px;background:#fff;border-top:1px solid var(--line);font-size:12px;color:var(--mid);display:flex;gap:6px 14px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+  footer .sp{flex:1;min-width:0}
+  .think{margin-top:8px;border-top:1px dashed var(--line);padding-top:6px}
+  .think>summary{cursor:pointer;font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;
+    color:var(--mid);opacity:.7;list-style:none}
+  .think>summary::-webkit-details-marker{display:none}
+  .think>summary::before{content:"\25B8 ";font-size:9px}
+  .think[open]>summary::before{content:"\25BE "}
+  .thinkbody{margin-top:6px;font-size:12px;color:var(--mid);white-space:pre-wrap;opacity:.85}
+  @media(max-width:560px){footer .sp{flex-basis:100%;height:0}}
   .clusterfoot{font-family:ui-monospace,Menlo,Consolas,monospace;color:var(--mid);font-size:11.5px}
   .clusterid{margin-top:auto;padding-top:9px;border-top:1px dashed var(--line);font-size:11.5px;color:var(--mid);font-family:ui-monospace,Menlo,Consolas,monospace;word-break:break-all}
   @media(max-width:980px){.wrap{flex-direction:column}.infra{width:100%;flex:0 0 auto;border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px}}
@@ -157,9 +170,8 @@
     <!-- THE SAME FOUR BUTTONS AS THE VTT, same order (Michael, 2026-08-30). This page had no navigation
          at all, so an attendee who opened BurritoBot had no way back to their terminal except browser
          history. Keep in sync with the identical block in lab.html. -->
-    <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener">&#9000; VTT</a>
+    <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener">&#9000; Terminal</a>
     <a class="hb" id="bbbtn" href="/">&#127791; BurritoBot</a>
-    <a class="hb" id="platbtn" href="/platform">&#129513; Platform</a>
     <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener">&#128202; Datadog</a>
     <a class="hb" id="fbbtn" href="https://feedback.agenticburn.com" target="_blank" rel="noopener">&#128172; Feedback</a>
   </header>
@@ -286,6 +298,27 @@
     document.getElementById('bannertext').textContent=ROUNDS[r].t;document.getElementById('bannersub').textContent=ROUNDS[r].s;
     sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
+  // Nova emits its scratchpad wrapped in <thinking>...</thinking> and the raw tags were rendering into the
+  // customer chat (seen live on round1, 2026-09-02). It is FOLDED, never dropped: a workshop about what
+  // leaks out of an agent cannot quietly delete part of the model's output, and challenge 5's secret can
+  // land inside the scratchpad. The customer sees a clean reply; one click shows what the model thought.
+  const THINK_RE=/<thinking>([\s\S]*?)<\/thinking>/gi;
+  function botReply(t){
+    t=String(t==null?'':t);
+    const thoughts=[]; let m;
+    THINK_RE.lastIndex=0;
+    while((m=THINK_RE.exec(t))!==null){ if(m[1].trim()) thoughts.push(m[1].trim()); }
+    const visible=t.replace(THINK_RE,'\n').replace(/\n{3,}/g,'\n\n').trim();
+    const d=bubble(visible||'…','bot');
+    thoughts.forEach(function(th){
+      const det=document.createElement('details'); det.className='think';
+      const sum=document.createElement('summary'); sum.textContent='model reasoning';
+      const body=document.createElement('div'); body.className='thinkbody'; body.textContent=th;
+      det.appendChild(sum); det.appendChild(body); d.appendChild(det);
+    });
+    const s=document.getElementById('stream'); s.scrollTop=s.scrollHeight;
+    return d;
+  }
   function sys(t){const d=document.createElement('div');d.className='sys';d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;}
   function fmtTs(ts){try{return new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});}catch(e){return '';}}
   function renderSaved(item){
@@ -358,7 +391,7 @@
       unreachable=0; noBurritos(false);
       if(!res.ok){ bubble("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again.",'bot'); return; }
       const data=await res.json();
-      bubble(data.reply || "…", 'bot');
+      botReply(data.reply);
       if((data.reply||'').toLowerCase().includes('free burritos for life')) winBubble();
       const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot; costUsd+=data.cost_usd||0;
       document.getElementById('tokens').textContent=tokens.toLocaleString();
