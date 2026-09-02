@@ -57,6 +57,8 @@
   .goal{background:#f6f2ff;border:1px solid #ddd0f5;border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;font-size:13.5px;margin:8px 0}
   /* Step 0 carries two halves (check the lab works, then tour the cluster). This divides them without
      spending a step number, because step N must stay equal to challenge N. */
+  .doclink{font-size:11.5px;font-weight:700;text-decoration:none;color:var(--accent);opacity:.8;white-space:nowrap}
+  .doclink:hover{opacity:1;text-decoration:underline}
   .sub{margin:22px 0 6px;font-size:14.5px;color:var(--ink);border-top:1px solid var(--line);padding-top:14px}
   /* "The control that stops this" (#170). guards-on / guards-off are convenient but they abstract away
      the exact thing this workshop is about, so every challenge also shows the real object: the
@@ -191,32 +193,60 @@
           </div>
 
           <h3 class="sub">What you were just handed (and how to poke it)</h3>
-          <p>This is not a toy cluster. It is a full internal developer platform, and it built itself from one script. Have a look at what is running before you start breaking it:</p>
+          <p>This is not a toy cluster. It is a full internal developer platform. Have a look at what is
+          running before you start breaking it:</p>
           <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
-          <p class="small">That is the whole platform, GitOps-managed. Every one of those is a component someone would otherwise have installed by hand.</p>
-          <p><b>Who owns what.</b> The agent is the <i>developer's</i> piece. Everything else belongs to the platform team, and that is the argument this workshop is making: the platform controls are what actually stop an agent, not asking it nicely.</p>
-          <p>Each of these is running right now. Look at any of them, and change the ones you want:</p>
 
-          <p><b>Argo CD &mdash; GitOps, and a guardrail in its own right.</b> Try deleting a security control and watch the platform put it back:</p>
+          <div class="tip"><b>That is a lot, and you are not expected to know what all of it is.</b>
+          Roughly forty components, all GitOps-managed, each one something a team would otherwise install
+          by hand. We only touch a handful today, and those are called out below. Everything else is
+          scenery: real, running, and safe to ignore. If a name is unfamiliar, that is fine and it is not
+          the point of the lab.</div>
+
+          <p><b>A few worth noticing on the way past</b>, none of which the challenges use:</p>
+          <ul class="small">
+            <li><a href="https://cert-manager.io/docs/" target="_blank" rel="noopener">cert-manager</a>
+            issues the certificates between services, so the traffic inside the cluster is encrypted
+            without anyone requesting a certificate.</li>
+            <li><a href="https://istio.io/latest/docs/ambient/overview/" target="_blank" rel="noopener">Istio ambient mesh</a>
+            gives every pod mTLS identity with no sidecar to inject.</li>
+            <li><a href="https://opentelemetry.io/docs/" target="_blank" rel="noopener">OpenTelemetry</a>
+            instruments all of it. Datadog is the backend we happen to use; any OTLP-conformant backend
+            would receive the same data.</li>
+            <li><a href="https://external-secrets.io/latest/" target="_blank" rel="noopener">External Secrets</a>
+            pulls your Datadog keys out of AWS Secrets Manager, so no credential is committed anywhere.</li>
+            <li>The <code class="inl">*-party</code> workloads (hedgehog, wombat, unicorn, spider,
+            mantis-shrimp) are deliberate filler: ordinary apps so the cluster is not suspiciously empty.
+            Never mind what the mantis shrimp is doing.</li>
+          </ul>
+
+          <p><b>Who owns what.</b> The agent is the <i>developer's</i> piece. Everything else belongs to
+          the platform team, and that is the argument this workshop is making: the platform controls are
+          what actually stop an agent, not asking it nicely.</p>
+
+          <p><b>These five are the ones the challenges actually use.</b> Each is running right now. Look
+          at any of them, and change the ones you want:</p>
+
+          <p><b>Argo CD &mdash; GitOps, and a guardrail in its own right.</b> <a class="doclink" href="https://argo-cd.readthedocs.io/en/stable/" target="_blank" rel="noopener">docs &#8599;</a> Try deleting a security control and watch the platform put it back:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist; kubectl -n agent get networkpolicy -w<button class="cp">copy</button></div>
           <p class="small">It returns in about five seconds. You have cluster-admin here and you still could not keep it deleted. Press Ctrl+C to stop watching.</p>
 
-          <p><b>Kyverno &mdash; admission control.</b> These are the rules that refuse a workload before it ever runs:</p>
+          <p><b>Kyverno &mdash; admission control.</b> <a class="doclink" href="https://kyverno.io/docs/" target="_blank" rel="noopener">docs &#8599;</a> These are the rules that refuse a workload before it ever runs:</p>
           <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy<button class="cp">copy</button></div>
           <p class="small">The registry allow-list here is what blocks the villain image in Challenge 2.</p>
 
-          <p><b>NetworkPolicy &mdash; where the agent is allowed to talk.</b> This is why the exfil in Challenge 1 cannot leave:</p>
+          <p><b>NetworkPolicy &mdash; where the agent is allowed to talk.</b> <a class="doclink" href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener">docs &#8599;</a> This is why the exfil in Challenge 1 cannot leave:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml<button class="cp">copy</button></div>
 
-          <p><b>KubeArmor &mdash; inline runtime blocking.</b> The rule that makes the recipe file unreadable:</p>
+          <p><b>KubeArmor &mdash; inline runtime blocking.</b> <a class="doclink" href="https://docs.kubearmor.io/kubearmor/" target="_blank" rel="noopener">docs &#8599;</a> The rule that makes the recipe file unreadable:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml<button class="cp">copy</button></div>
           <p class="small">Then try to read the file it protects, and watch it refuse:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/workshop-mcp -- cat /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf<button class="cp">copy</button></div>
 
-          <p><b>Falco and Falco-Talon &mdash; detect, then respond.</b> KubeArmor stops it; Falco notices it and Talon reacts:</p>
+          <p><b>Falco and Falco-Talon &mdash; detect, then respond.</b> <a class="doclink" href="https://falco.org/docs/" target="_blank" rel="noopener">docs &#8599;</a> KubeArmor stops it; Falco notices it and Talon reacts:</p>
           <div class="cmd" onclick="cp(this)">kubectl get pods -n falco<button class="cp">copy</button></div>
 
-          <p><b>kagent &mdash; the agent itself.</b> Its tools, its model, and its permissions are all declarative:</p>
+          <p><b>kagent &mdash; the agent itself.</b> <a class="doclink" href="https://kagent.dev/docs" target="_blank" rel="noopener">docs &#8599;</a> Its tools, its model, and its permissions are all declarative:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent get agent workshop-agent -o yaml<button class="cp">copy</button></div>
           <p class="small">Look for <code class="inl">modelConfig</code> (which Bedrock model it runs) and the tool list (what it is allowed to call). Challenge 7 changes that tool list.</p>
 
