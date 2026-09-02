@@ -110,6 +110,27 @@ check("cmd_up registers with the provisioning app (else the pool reads empty)", 
 check("cmd_up is LOUD when it cannot register (a quiet skip is what hid this)",
       "were NOT registered" in _up and "record_fail" in _up)
 
+print("== attendee hostnames are unique and actually varied ==")
+# Two students handed the same hostname is unrecoverable mid-workshop, and the failure is silent: both
+# URLs resolve, both consoles work, and they are the same cluster. The generator is a multiplicative
+# stride over the word grid, which is collision-free ONLY while the stride is coprime with the grid size.
+# Appending a word changes the grid size, so that property has to be asserted rather than assumed.
+import math as _math
+_A = re.search(r"readonly WIB_ADJECTIVES=\((.*?)\)", FLEET_SH, re.S).group(1).split()
+_N = re.search(r"readonly WIB_ANIMALS=\((.*?)\)", FLEET_SH, re.S).group(1).split()
+_K = int(re.search(r"readonly WIB_NAME_STRIDE=(\d+)", FLEET_SH).group(1))
+_T = len(_A) * len(_N)
+_names = [f"{_A[((i-1)*_K % _T)//len(_N)]}-{_N[((i-1)*_K % _T) % len(_N)]}" for i in range(1, 251)]
+check(f"name stride {_K} is coprime with the {len(_A)}x{len(_N)}={_T} grid (else hostnames repeat)",
+      _math.gcd(_K, _T) == 1)
+check(f"grid holds at least 250 names ({_T} available)", _T >= 250)
+check("no duplicate hostname across 250 slots", len(set(_names)) == len(_names))
+# The scatter is the point: grid order gave the first 24 attendees the same first word.
+check("consecutive slots vary the FIRST word too (not 24 in a row of one)",
+      len({n.split("-")[0] for n in _names[:12]}) >= 10)
+check("every hostname label is DNS-safe and within 63 chars",
+      all(re.fullmatch(r"[a-z][a-z-]{0,61}[a-z]", n) for n in _names))
+
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the
 # AWS load balancers, and the PVCs while the EBS CSI controller can still reclaim their volumes.

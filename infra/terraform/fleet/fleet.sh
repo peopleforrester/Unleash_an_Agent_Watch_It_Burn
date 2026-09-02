@@ -243,7 +243,7 @@ is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
 # An attendee used to be handed a raw load-balancer hostname
 # (k8s-agent-console-afa5f8550a-702bee5329c72c51.elb.us-west-2.amazonaws.com). That cannot be read to a
 # room, cannot be typed from memory, and cannot be recovered by someone who closed the tab. This gives
-# every attendee cluster an Ubuntu-style adjective-animal name instead: brave-badger.agenticburn.com.
+# every attendee cluster a themed two-word name instead: soot-sabrina.agenticburn.com.
 #
 # DETERMINISTIC AND COLLISION-FREE BY CONSTRUCTION, not by hashing. The name is derived from the slot
 # number the cluster already carries (watch-it-burn-attendee-042 -> slot 42), indexed into the grid
@@ -251,23 +251,52 @@ is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
 # name independently: they MUST agree, or the router publishes one name and provisioning hands out
 # another. Indexing by slot means both arrive at the same answer with no shared state.
 #
-# 24 adjectives x 16 animals = 384 unique names, comfortably past the ~250-attendee ceiling. Adding to
-# either list RENAMES existing slots, so only ever append, and never between events.
+# The words are the workshop's own: a Hex & Cauldron menu item, then a witch or wizard the room will
+# recognise (Michael, 2026-09-02). soot-sabrina reads as part of the story rather than as infrastructure,
+# and it is still an adjective-noun shape that survives being read aloud and typed from memory.
+#
+# 30 menu words x 24 names = 720 unique names, comfortably past the ~250-attendee ceiling. Changing or
+# reordering either list RENAMES existing slots, so only ever append, and never between events. The
+# 2026-09-02 swap from the Ubuntu-style adjective-animal grid was a deliberate rename of everything, done
+# before the event, and it required regenerating routes and re-ingesting so the router and provisioning
+# agreed on the new names.
 #
 # This is usability, NOT access control. The consoles are unauthenticated: anyone who has a URL can talk
 # to that cluster's agent. A non-sequential name raises the cost of guessing and nothing more. If
 # enumeration ever matters, the answer is a credential on the console, not a cleverer name.
-readonly WIB_ADJECTIVES=(brave bright clever cosmic crimson daring eager fearless gentle golden
-                         happy jolly lucky mighty noble plucky quiet rapid rustic silver
-                         sunny trusty vivid witty)
-readonly WIB_ANIMALS=(badger beetle cheetah dolphin falcon gecko heron ibex jackal koala
-                      lemur marmot narwhal otter panda quokka)
+# Menu words, from the Hex & Cauldron menu in gitops/ai-layer/resources.yaml. Hyphens are stripped
+# because the hyphen is the separator between the two halves of the hostname.
+readonly WIB_ADJECTIVES=(bane bogbacoa bonfire blackbog cluck croak crowsfoot cursedcorn dragon faejita
+                         ghastor ghoul goblin graveyard hagwrinkle hexhen imp kelpie ogre pixie
+                         scream slime soot sorcerizo stake tardigrade toadilla toefu werewolf witchhat)
+# Witches and wizards the room will recognise, mostly television of the last thirty years.
+readonly WIB_ANIMALS=(sabrina willow wanda agatha hermione luna morgana merlin elphaba glinda
+                      melisandre yennefer eda luz zelda hilda ambrose bonnie piper phoebe
+                      prue rowena mildred potter)
+# Slots are walked in a SCATTERED order, not in grid order. Grid order held the first word fixed while
+# the second cycled, so the first 24 clusters handed out were all bane-something and the whole point of
+# having thirty menu words was lost on the people actually receiving names.
+#
+# The scatter is a multiplicative stride, which keeps every property that matters: it is pure arithmetic
+# on the slot number, so `routes` and `ingest` still compute the same answer with no shared state, and
+# because the stride is COPRIME with the grid size it is a bijection, so it is still collision-free by
+# construction rather than by hoping. 187 = 11 x 17 shares no factor with 720 = 2^4 x 3^2 x 5, and it
+# also lands coprime with 24, which is what makes the second word move as fast as the first. Measured
+# over the first twelve slots: twelve distinct menu words and twelve distinct names.
+#
+# CHANGING EITHER WORD LIST CHANGES THE GRID SIZE, and a stride that is not coprime with the new size
+# collapses the range and produces duplicate hostnames. test_fleet_contract.py asserts the coprimality
+# and a collision-free sweep of 250 slots, so that failure is caught in CI rather than by two students
+# being handed the same URL.
+readonly WIB_NAME_STRIDE=187
 friendly_attendee_name() {
     local n="${1#0}"; n="${n#0}"            # strip zero padding: 042 -> 42
     [[ "${n}" =~ ^[0-9]+$ ]] || { printf 'attendee-%s' "$1"; return 0; }
     local i=$(( n - 1 ))
-    local a=$(( (i / ${#WIB_ANIMALS[@]}) % ${#WIB_ADJECTIVES[@]} ))
-    local b=$(( i % ${#WIB_ANIMALS[@]} ))
+    local total=$(( ${#WIB_ADJECTIVES[@]} * ${#WIB_ANIMALS[@]} ))
+    local j=$(( (i * WIB_NAME_STRIDE) % total ))
+    local a=$(( j / ${#WIB_ANIMALS[@]} ))
+    local b=$(( j % ${#WIB_ANIMALS[@]} ))
     printf '%s-%s' "${WIB_ADJECTIVES[$a]}" "${WIB_ANIMALS[$b]}"
     return 0
 }
