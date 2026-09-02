@@ -138,12 +138,9 @@
      pinned to the bottom of a visible box rather than being pushed down the page.
      640px and under: the menu collapses to a disclosure, because at that width a fixed rail leaves no
      usable room for the conversation. */
-  @media(max-width:1200px){
-    .infra{width:100%;flex:0 0 auto;border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px;overflow:visible}
-    .wrap{flex-direction:column;overflow-y:auto;min-height:0}
-    .store{flex:1 1 auto;min-height:min(58dvh,520px)}
-  }
   @media(max-width:980px){
+    .wrap{flex-direction:column;overflow-y:auto;min-height:0}
+    .infra{width:100%;flex:0 0 auto;border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px;overflow:visible}
     .store{flex-direction:column;min-height:0}
     .menu{width:100%;flex:0 0 auto;max-height:34dvh}
     .chatcol{flex:0 0 auto;height:min(66dvh,620px)}
