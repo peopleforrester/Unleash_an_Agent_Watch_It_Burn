@@ -12,8 +12,21 @@ set -euo pipefail
 # --- defaults (override via flags) ---
 START=""                                   # run-window start, YYYY-MM-DD (inclusive)
 END=""                                     # run-window end,   YYYY-MM-DD (exclusive, CE convention)
-TAG_KEY="${COST_TAG_KEY:-workshop}"        # cost-allocation tag key on hub+spoke resources  # verify-at-build
-TAG_VALUE="${COST_TAG_VALUE:-watch-it-burn}"  # tag value identifying this workshop run     # verify-at-build
+# The tag our resources ACTUALLY carry is project=watch-it-burn, stamped by the provider default_tags in
+# both terraform roots. The default here was `workshop`, which nothing sets, so every run of this script
+# returned "TOTAL: 0.00 USD" and read as a free workshop rather than as a filter that matched nothing.
+# Measured 2026-09-03 against the AI Engineer World's Fair window.
+TAG_KEY="${COST_TAG_KEY:-project}"            # cost-allocation tag key on hub+spoke resources
+TAG_VALUE="${COST_TAG_VALUE:-watch-it-burn}"  # tag value identifying this workshop run
+
+# WHY A TAG-FILTERED NUMBER MAY STILL COME BACK ZERO, AND IT IS NOT THIS SCRIPT.
+# accen-dev is a LINKED account in an AWS Organization. Cost-allocation tags are activated on the PAYER
+# account only, and a linked account cannot even list them:
+#   AccessDeniedException: Linked account doesn't have access to cost allocation tags
+# Until `project` is activated by whoever owns the payer account, Cost Explorer cannot group or filter by
+# it and a tag-filtered query is structurally empty. The unfiltered fallback below is the honest answer
+# available from here: it is the WHOLE account, so on a co-tenant account it is an upper bound that
+# includes the other project, never a workshop-only figure.
 GRANULARITY="DAILY"                        # DAILY | MONTHLY
 GROUP_BY_SERVICE=false                     # --by-service to break the total down per AWS service
 
@@ -129,3 +142,18 @@ echo "  REAL workshop AWS cost (${TAG_KEY}=${TAG_VALUE})"
 echo "  Window: ${START} .. ${END}"
 echo "  TOTAL:  ${TOTAL_SUM} ${CURRENCY}"
 echo "==========================================================="
+
+# A zero here is almost always the linked-account limitation above, not a free workshop. Say so, and show
+# the unfiltered account total for the same window so the run has a number rather than a silence.
+if [[ -z "${TOTAL_SUM:-}" ]] || awk -v v="${TOTAL_SUM:-0}" 'BEGIN{exit !(v+0==0)}'; then
+  echo
+  echo ">> Tag-filtered total is 0.00, which on this account almost certainly means the"
+  echo "   '${TAG_KEY}' cost-allocation tag is not activated on the PAYER account rather than"
+  echo "   that nothing was spent. A linked account cannot activate it."
+  echo ">> Unfiltered total for the same window (WHOLE ACCOUNT, includes any co-tenant project):"
+  aws ce get-cost-and-usage --region us-east-1 \
+      --time-period "Start=${START},End=${END}" --granularity MONTHLY --metrics UnblendedCost \
+      --query 'ResultsByTime[].Total.UnblendedCost.[Amount,Unit]' --output text 2>/dev/null \
+    | awk '{printf "     %.2f %s\n", $1, $2}'
+  echo "   Treat that as an upper bound, never as the workshop's cost."
+fi
