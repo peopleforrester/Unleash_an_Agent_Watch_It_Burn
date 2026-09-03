@@ -68,6 +68,22 @@ WIB_PROBE_EMAIL=<an address that already holds a claim> verify/fleet-hygiene.sh
       is always dry-run; deleting is a separate deliberate act.
 
 - [ ] Every cluster reports `api=200 org_read=200`.
+
+```bash
+# f) THE ONE THAT MATTERS MOST: drive a real browser against every cluster
+uv run --with playwright python verify/browser-smoke.py
+uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-glinda   # student clusters
+```
+
+- [ ] `BROWSER SMOKE CLEAN` on every cluster. **Run this before any demo, and after any web change.**
+      On 2026-09-03 two workshop-breaking bugs reached a live demo and neither was visible to curl: an
+      Origin check that 403'd every browser (curl sends no Origin, so every probe passed), and a round
+      banner telling students on fully-guarded clusters "NO GUARDRAILS, nothing is watching" (the DOM was
+      wrong while the HTTP response was perfect). Both live in what the browser does with the response.
+      The smoke test sends a real prompt through the page's own fetch, reads the rendered banner, checks
+      an actual answer arrived outside `<thinking>`, and confirms Send is on screen.
+- [ ] **Hard-refresh before trusting a manual check** (Cmd-Shift-R). A cached page against a fixed
+      cluster looks identical to a broken one; this cost a wrong diagnosis on 2026-09-03.
 - [ ] **Whitney opens her Datadog org in a browser before doors.** The check above proves the KEYS work;
       it cannot prove a human can log in, and a Datadog trial can end for the web UI while keys still
       validate. That is the exact shape of her 2026-08-29 report on a fleet whose keys were all fine.
