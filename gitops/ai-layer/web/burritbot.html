@@ -304,9 +304,12 @@
           <option value="r3">Round 3 — Your cluster</option>
         </select>
       </div>
-      <div id="banner" class="ibanner r1">
-        <span class="dot"></span><span id="bannertext">NO GUARDRAILS</span>
-        <div id="bannersub" class="ibsub">— you're talking straight to the model. Nothing is watching. (round-1 cluster)</div>
+      <!-- Neutral until /guards answers (first poll runs in init). The markup used to assert
+           "NO GUARDRAILS" before anything had been measured, which is a claim about a security control
+           made before asking the cluster. applyGuardState fills this in. -->
+      <div id="banner" class="ibanner">
+        <span class="dot"></span><span id="bannertext">CHECKING GUARDRAILS…</span>
+        <div id="bannersub" class="ibsub">— asking your cluster which guardrails are on.</div>
       </div>
       <div class="card">
         <div class="imrow"><span class="imlbl">Tokens</span><b class="imval" id="tokens">0</b></div>
@@ -347,14 +350,42 @@
     r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra guardrails are on (AI guardrails are NOT enabled in round 2). Try the same prompts and watch the platform controls block them. (round-2 cluster)'},
     r3:{cls:'r3',t:'ALL GUARDRAILS',s:"— infra + AI guardrails are available; turn them on yourself in the terminal. (round-3 cluster)"}
   };
+  // THE BANNER REPORTS MEASURED STATE, NOT A GUESS FROM THE HOSTNAME.
+  //
+  // It used to be derived from the cluster name, and that inverted twice in one day. First it defaulted
+  // to r1, so a themed attendee host (hexhen-zelda) matched no round pattern and read "NO GUARDRAILS".
+  // The default was flipped to r3, and then every student cluster read "ALL GUARDRAILS" while the live
+  // /guards endpoint reported all four guards false, which is what a student cluster ships as so the
+  // attacks land. Whitney hit that in a walkthrough on 2026-09-03: the banner told her everything was
+  // on, the model's own refusals read as guardrails, and she had no way to tell the two apart.
+  //
+  // A hostname cannot answer this question. /guards can, it is authoritative, and checkBackend already
+  // polls it every 12s. Driving the banner from it also makes the toggle visible: run guards-on in the
+  // terminal and the banner flips within a poll, which is a better demo than a static label.
+  const GUARD_KEYS = ['input_blocklist','input_classifier','output','budget'];
+  const GUARD_VIEW = {
+    none:{cls:'r1',t:'NO GUARDRAILS',s:"— the AI guardrails on this cluster are off, so you are talking straight to the model. Anything that pushes back here is the model's own judgement, not a control."},
+    some:{cls:'r2',t:'SOME GUARDRAILS',s:'— some AI guardrails are on and some are off. Run guards-status in your terminal to see which.'},
+    all:{cls:'r3',t:'ALL GUARDRAILS',s:"— every AI guardrail on this cluster is on. Turn them off from your terminal and send the same prompt again to see the difference."}
+  };
+  function applyGuardState(g){
+    var on=GUARD_KEYS.filter(function(k){return g&&g[k]===true;}).length;
+    var v = on===0 ? GUARD_VIEW.none : (on===GUARD_KEYS.length ? GUARD_VIEW.all : GUARD_VIEW.some);
+    var b=document.getElementById('banner'); if(b) b.className='ibanner '+v.cls;
+    var t=document.getElementById('bannertext'); if(t) t.textContent=v.t;
+    var s=document.getElementById('bannersub'); if(s) s.textContent=v.s;
+  }
   let round='r1', tokens=0, costUsd=0, busy=false, unreachable=0;
   // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
   // 5-step order across turns. Reset starts a fresh order (new id).
   function newSession(){var s='sess-'+Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('wib-sess',s);return s;}
   function getSession(){return sessionStorage.getItem('wib-sess')||newSession();}
-  function setRound(r){round=r;const b=document.getElementById('banner');b.className='ibanner '+ROUNDS[r].cls;
-    document.getElementById('bannertext').textContent=ROUNDS[r].t;document.getElementById('bannersub').textContent=ROUNDS[r].s;
-    sys('Switched to '+ROUNDS[r].t.toLowerCase()+'. Same BurritoBot, different cluster.');}
+  // Selecting a round does NOT relabel the banner. ROUND_ENDPOINTS is all "/chat" (see the note above
+  // it): the backend is always this cluster, so the selector changes nothing about what is guarding the
+  // next message. Writing ROUNDS[r] into the banner here would overwrite the measured state with a
+  // label, which is the same inversion applyGuardState exists to end.
+  function setRound(r){round=r;
+    sys('Round set to '+ROUNDS[r].t.toLowerCase()+' for reference. The guardrail banner shows what is actually on for THIS cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
   // Nova emits its scratchpad wrapped in <thinking>...</thinking> and the raw tags were rendering into the
   // customer chat (seen live on round1, 2026-09-02). It is FOLDED, never dropped: a workshop about what
@@ -492,7 +523,12 @@
   }
   async function checkBackend(){
     refreshCap();
-    try{ const r=await fetch('/guards',{method:'GET',cache:'no-store'}); if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false); return; } }catch(e){}
+    try{ const r=await fetch('/guards',{method:'GET',cache:'no-store'});
+         if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false);
+                   // Same response already being fetched for the liveness check; the body was previously
+                   // discarded. It is the only authoritative answer to "what is actually guarding me".
+                   try{ applyGuardState(await r.json()); }catch(e){}
+                   return; } }catch(e){}
     setBackendUp(false);
   }
   // Show the ACTIVE spend ceiling next to the counter (#138). The backend reports whichever cap would bite
@@ -554,9 +590,9 @@
     var r = roundOf(cluster) || roundOf(location.hostname) || 'r3';
     round=r;
     var sel=document.getElementById('round'); if(sel) sel.value=r;
-    var b=document.getElementById('banner'); if(b) b.className='ibanner '+ROUNDS[r].cls;
-    document.getElementById('bannertext').textContent=ROUNDS[r].t;
-    document.getElementById('bannersub').textContent=ROUNDS[r].s;
+    // DELIBERATELY DOES NOT TOUCH THE BANNER. This function only knows a hostname, and a hostname does
+    // not know which guards are on. applyGuardState owns the banner and is driven by /guards; see the
+    // note on GUARD_VIEW for the two inversions that came from guessing it here.
   }
   (function init(){
     var q=new URLSearchParams(location.search);
