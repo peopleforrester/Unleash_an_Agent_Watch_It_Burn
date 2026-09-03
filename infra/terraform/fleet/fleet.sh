@@ -908,6 +908,40 @@ run_pool() {
     log "  done: ${total}/${total}"
 }
 
+# The provisioning-registration envelope, shared by attendee `up` and `instructors up` (#162). Both used
+# to inline the same token-resolve, pool-load, and loud-on-failure block, and those two copies drifted:
+# `instructors up` grew the envelope while `up` had none, which is why a provisioned attendee fleet was
+# invisible to the pool (#161). One helper means one behaviour. What differs between the two callers is
+# only WHICH clusters to register, so that is the argument: pass the ingest action as the remaining args
+# and this wraps it with everything that must be identical.
+#
+# register_with_provisioning <human-label> <ingest-fn> [ingest-args...]
+# Non-fatal by design (an unreachable provisioning app must never fail a provision) and LOUD when it
+# cannot run, because a quiet skip is what made the drift invisible.
+register_with_provisioning() {
+    local label="$1" ingest_fn="$2"; shift 2
+    [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]] || return 0
+    if resolve_admin_token >/dev/null 2>&1; then
+        POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+        "${ingest_fn}" "$@" || log "ingest: re-run the matching 'fleet.sh ingest' once the consoles are up"
+    else
+        log "ingest: CANNOT RESOLVE the provisioning admin token, so ${label} was NOT registered."
+        log "        The clusters are up and routable, but a student claiming one will be told there are"
+        log "        none, and a presenter will see a blank terminal password. Fix by logging in to"
+        log "        Railway (railway login), or export WIB_ADMIN_TOKEN, then re-run the ingest by hand."
+        record_fail "ingest:no-admin-token"
+    fi
+}
+
+# A small adapter so the attendee path can pass its name list to the shared helper, which expects one
+# ingest function. Registers each provisioned attendee cluster in the default account.
+_ingest_attendee_names() {
+    local _n
+    for _n in "$@"; do ingest_one "${_n}" "${WIB_DEFAULT_ACCOUNT}"; done
+}
+
 cmd_up() {
     [[ $# -ge 1 ]] || usage
     require_tools
@@ -938,20 +972,7 @@ cmd_up() {
     # is the whole room, and the only symptom is an empty pool.
     #
     # Non-fatal by design, and LOUD when it cannot run: a quiet skip is what made this invisible.
-    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]]; then
-        if resolve_admin_token >/dev/null 2>&1; then
-            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-            log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
-            for _n in "${names[@]}"; do ingest_one "${_n}" "${WIB_DEFAULT_ACCOUNT}"; done
-        else
-            log "ingest: CANNOT RESOLVE the provisioning admin token, so these clusters were NOT registered."
-            log "        They are up and routable, but a student claiming one will be told there are none."
-            log "        Fix by logging in to Railway (railway login), or export WIB_ADMIN_TOKEN, then run:"
-            log "            fleet.sh ingest ${names[*]}"
-            record_fail "ingest:no-admin-token"
-        fi
-    fi
+    register_with_provisioning "these clusters" _ingest_attendee_names "${names[@]}"
     report_failures
 }
 
@@ -1119,20 +1140,7 @@ cmd_instructors() {
     #
     # Non-fatal by design: an unreachable provisioning app must never fail a provision. But it is now
     # LOUD when it cannot run, because a quiet skip is what made this invisible in the first place.
-    if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]]; then
-        if resolve_admin_token >/dev/null 2>&1; then
-            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-            log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
-            cmd_ingest_instructors "${round_filter}" || log "ingest: re-run 'fleet.sh ingest-instructors' once the consoles are up"
-        else
-            log "ingest: CANNOT RESOLVE the provisioning admin token, so the roster was NOT registered."
-            log "        The clusters are routable, but provisioning will show them with a BLANK terminal"
-            log "        password and no Datadog org. Fix by logging in to Railway (railway login), or"
-            log "        export WIB_ADMIN_TOKEN, then run: fleet.sh ingest-instructors"
-            record_fail "ingest:no-admin-token"
-        fi
-    fi
+    [[ "${action}" == "up" ]] && register_with_provisioning "the roster" cmd_ingest_instructors "${round_filter}"
     # Print manual-bootstrap hints only when auto-bootstrap was skipped.
     [[ "${action}" == "up" && -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
 }

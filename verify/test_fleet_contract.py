@@ -106,9 +106,19 @@ print("== a provisioned attendee cluster is also REACHABLE and CLAIMABLE ==")
 _up = FLEET_SH[FLEET_SH.index("cmd_up()"):]
 _up = _up[:_up.index("\ncmd_", 1)] if "\ncmd_" in _up[1:] else _up
 check("cmd_up regenerates the router map (else the friendly hostname 404s)", "cmd_routes" in _up)
-check("cmd_up registers with the provisioning app (else the pool reads empty)", "ingest_one" in _up)
-check("cmd_up is LOUD when it cannot register (a quiet skip is what hid this)",
-      "were NOT registered" in _up and "record_fail" in _up)
+check("cmd_up registers with the provisioning app (else the pool reads empty)",
+      "register_with_provisioning" in _up)
+# The register/ingest envelope is shared with cmd_instructors now (#162), so the loud-on-failure
+# behaviour lives in the helper. Assert it there, and that the helper is the ONLY copy: the whole point
+# of extracting it was that two inline copies drifted (#161).
+_reg = FLEET_SH[FLEET_SH.index("register_with_provisioning() {"):]
+_reg = _reg[:_reg.index("\n}\n") + 2]
+check("the shared registration helper is loud when it cannot register",
+      "was NOT registered" in _reg and "record_fail" in _reg)
+check("only ONE copy of the token-resolve-then-ingest envelope exists",
+      FLEET_SH.count("resolve_admin_token >/dev/null 2>&1; then") == 1)
+check("cmd_instructors uses the same shared helper, not its own copy",
+      "register_with_provisioning" in FLEET_SH[FLEET_SH.index("cmd_instructors() {"):][:4000])
 
 print("== attendee hostnames are unique and actually varied ==")
 # Two students handed the same hostname is unrecoverable mid-workshop, and the failure is silent: both
