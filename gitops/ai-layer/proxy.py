@@ -515,12 +515,21 @@ class Handler(BaseHTTPRequestHandler):
             if server_span is not None:
                 server_span.set_attribute("http.request.method", "POST")
                 server_span.set_attribute("url.path", self.path)
-            # Reject a cross-origin browser POST before either handler runs (#151). Both doors are
-            # externally reachable: nginx routes /chat and /a2a/ to this proxy, and both drove the
-            # agent from a hostile origin before this.
-            if not _origin_allowed(self):
-                self._send(403, {"error": "cross-origin request rejected"})
-                return
+            # ORIGIN ENFORCEMENT REMOVED. It compared the browser's Origin against this request's Host
+            # header, and behind the apex router Host is the LOAD BALANCER name, not the public hostname:
+            # the proxy sees k8s-agent-console-<hash>.elb.us-west-2.amazonaws.com on every cluster. So a
+            # real browser sending Origin: https://michael-student.agenticburn.com never matched and got
+            # 403 "cross-origin request rejected", which BurritoBot renders as "the kitchen isn't
+            # answering right now (403)". It broke chat on EVERY cluster and did so in front of a room.
+            #
+            # curl probes passed because curl sends no Origin header, and _origin_allowed returns True
+            # when Origin is absent. A check that only fires for browsers cannot be validated without a
+            # browser, and it was not.
+            #
+            # This is the same Host-rewriting trap that already forced the /brief gate out of nginx and
+            # into the router earlier the same day. Any origin enforcement has to live at the apex router,
+            # which is the only hop that knows the public hostname; #151 is closed as accepted risk in any
+            # case, so nothing here needs to enforce it.
             # /chat is the BurritoBot storefront contract (B1); everything else is the A2A passthrough.
             if self.path.rstrip("/") == "/chat":
                 self._handle_chat()
