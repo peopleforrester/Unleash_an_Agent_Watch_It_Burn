@@ -229,6 +229,19 @@ if term_limit:
     check(f"web-terminal memory limit exceeds the 2Gi that OOM-killed a shell (is {term_limit})",
           _mib(term_limit) > 2048)
 
+print("== the OTel Instrumentation CR pins its injected images ==")
+# An unpinned autoinstrumentation image defaulted to EMPTY, which the Operator rejected with
+# "spec.initContainers[0].image: Required value" and which SILENTLY REMOVED guard-proxy: BurritoBot lost
+# its /chat backend on a cluster whose pages all still returned 200 and whose Argo apps looked healthy
+# (#154). The pin removes the race and the silent-failure mode together, and this asserts it stays pinned.
+_instr = (REPO / "gitops/ai-layer-otel/instrumentation.yaml").read_text(encoding="utf-8")
+import re as _re
+_img = _re.search(r"python:\s*\n\s*image:\s*(\S+)", _instr)
+check("the python autoinstrumentation image is set at all", bool(_img))
+check("...and pinned to an explicit version, not a floating tag",
+      bool(_img) and ":" in _img.group(1).rsplit("/", 1)[-1]
+      and not _img.group(1).endswith((":latest", ":main")))
+
 if failures:
     print(f"\nFAILED: {len(failures)}")
     for f in failures:

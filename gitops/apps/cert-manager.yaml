@@ -16,7 +16,18 @@ spec:
   source:
     repoURL: https://charts.jetstack.io
     chart: cert-manager
-    targetRevision: "v1.20.2"
+    # v1.20.3 (2026-09-03): patches GHSA-8rvj-mm4h-c258, HIGH. The default cert-manager-edit aggregate
+    # ClusterRole granted namespace users create on ACME Challenge and Order, so a user who could create a
+    # Challenge referencing a ClusterIssuer could supply attacker-controlled solver config while
+    # cert-manager loaded credentials from the ClusterIssuer's namespace. Also pulls Go 1.26.4 for
+    # CVE-2026-27145, CVE-2026-42504 and CVE-2026-42507.
+    #
+    # Its one breaking change does not reach us: the release removes Challenge create and Order
+    # create/patch/update from that aggregate role, which only breaks workflows that create those objects
+    # directly. Verified on a live cluster before bumping: zero Challenge and zero Order objects exist,
+    # the console certificate is issued by the self-signed `console-selfsigned` Issuer, and the two
+    # letsencrypt ClusterIssuers are unconfigured placeholders sitting at Ready=False.
+    targetRevision: "v1.20.3"
     helm:
       valuesObject:
         # Datadog Agent Autodiscovery: the `cert_manager` named integration (PRD #26 M2). Key uses the
