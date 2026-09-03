@@ -539,6 +539,18 @@ them.
 
 ---
 
+## If the room asks about the abstract's promises
+
+The published copy markets things this build does not fully have. None of them are attendee tasks, so
+none is a stage risk, but a technical room reads the abstract and someone will ask. Answer straight.
+
+| They ask about | The honest answer |
+|---|---|
+| "ask it to give itself more permissions" | Not a scripted beat in this version. The agent holds real RBAC, and privilege escalation is on the roadmap as its own challenge; today the closest live beat is C7, where a tool talks it into an action its allow-list should have stopped. (#118) |
+| "change infrastructure without going through Git" | This one IS live. It is in step 0 of the lab: ask the agent to delete the egress NetworkPolicy and watch Kyverno refuse it at admission, with Argo CD self-heal behind that. (#119) |
+| "model triage" | Real but partial. The cluster can run Nova, Haiku, Sonnet or Opus and the cost counter prices whichever is bound, which is the cost-race demo. There is no automatic routing by task difficulty. (#120) |
+| "sandboxing (as an option)" | Deliberately deferred, and the reason is interesting: isolating the agent first would swallow the attack beats before any guardrail could fire. It belongs as a capstone after the controls have been shown, not as the frame around them. (#120) |
+
 ## Failure playbook
 
 | Symptom | Cause | Fix |
@@ -563,5 +575,9 @@ never watches unrehearsed troubleshooting.
 - **C3 filesystem snoop (Falco)** and the **S3 fill** were not re-verified in the 2026-08 pass. Test
   before relying on them on stage.
 - The challenge set itself is under a currency review (issue #110). The dated fork bomb has been retired
-  in favour of denial-of-wallet (#114, done); two controls remain app-layer and there are stronger 2026
-  beats to add. None of that changes what works today; it is the roadmap for the next version.
+  in favour of denial-of-wallet (#114, done), and there are stronger 2026 beats to add. None of that
+  changes what works today; it is the roadmap for the next version.
+  (This bullet used to say "two controls remain app-layer", which contradicts the ruling at the top of
+  this file. C5's output guard and C6's injection classifier run in the guard-proxy: a component the
+  platform team injects around whatever model a developer brings. They act on prompts, which is not the
+  same as being shipped by the developer, and calling them app-layer concedes the argument. See #115.)
