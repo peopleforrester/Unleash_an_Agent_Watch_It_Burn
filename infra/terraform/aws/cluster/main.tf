@@ -374,6 +374,25 @@ module "eso_pod_identity" {
 # (above) injects the creds via the standard AWS SDK chain, which kagent already uses for Bedrock.
 # verify-at-build: we validated the IRSA path live; confirm kagent picks up Pod Identity creds on a
 # real cluster (same SDK chain; high confidence). Fall back to IRSA + a fleet annotate step if not.
+# The four models the workshop can actually bind, as cross-region inference profiles. Nova Pro is the
+# default; the three Claude tiers exist for the cost-race demo. Keep in sync with the ModelConfigs in
+# gitops/ai-layer/resources.yaml: a model listed there and missing here fails at invoke time with an
+# AccessDenied that looks like a Bedrock outage rather than a policy gap.
+locals {
+  bedrock_profiles = [
+    "us.amazon.nova-pro-v1:0",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "us.anthropic.claude-sonnet-4-6",
+    "us.anthropic.claude-opus-4-8",
+  ]
+  # The SAME ids without the "us." routing prefix. A cross-region profile fans out to foundation models
+  # in several regions, and the caller needs permission on BOTH the profile and every underlying model
+  # ARN. Measured on us.amazon.nova-pro-v1:0, which resolves to foundation models in us-east-1, us-west-2
+  # AND us-east-2. Granting only the profile ARN produces AccessDenied on every request, so a "tighter"
+  # policy that omits these does not harden the agent, it breaks it.
+  bedrock_models = [for p in local.bedrock_profiles : replace(p, "us.", "")]
+}
+
 resource "aws_iam_policy" "bedrock_invoke" {
   name        = "${var.name}-bedrock-invoke"
   description = "Bedrock model invocation for the Watch It Burn agent on ${var.name}."
@@ -387,7 +406,21 @@ resource "aws_iam_policy" "bedrock_invoke" {
         "bedrock:Converse",
         "bedrock:ConverseStream",
       ]
-      Resource = "*"
+      # SCOPED, was Resource = "*" (#138). An attendee holds cluster-admin on their own cluster, so they
+      # can schedule a pod under the agent's service account and reach Bedrock directly, around the
+      # guard-proxy and its cost cap. That path cannot be closed from the proxy, which is the point of
+      # the challenge; what CAN be closed is what the bypass reaches once it is there. With "*" it was
+      # every model enabled in the account. It is now the four the workshop binds, so a bypass cannot
+      # discover a more expensive model than the ones already on the menu.
+      #
+      # Region wildcards are deliberate: the profile is regional to this account and the foundation
+      # models are region-less in the ARN but fan out across regions, so pinning either would break the
+      # cross-region routing the profiles exist to provide.
+      Resource = concat(
+        [for p in local.bedrock_profiles :
+        "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/${p}"],
+        [for m in local.bedrock_models : "arn:aws:bedrock:*::foundation-model/${m}"],
+      )
     }]
   })
 }

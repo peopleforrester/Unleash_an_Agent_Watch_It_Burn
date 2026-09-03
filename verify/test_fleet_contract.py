@@ -190,6 +190,32 @@ check("destructive verbs are dry-run unless WIB_APPLY=1", "require_apply" in FLE
 check("teardown runs the tag audit (untagged resources survive a tag-scoped sweep)",
       "tag-audit.sh" in TEARDOWN_SH or "TAG_AUDIT" in TEARDOWN_SH)
 
+print("== Bedrock access is scoped to the models the workshop actually binds ==")
+# An attendee holds cluster-admin on their own cluster, so they can schedule a pod under the agent's
+# service account and reach Bedrock directly, around the guard-proxy and its cost cap (#138). That path
+# cannot be closed from the proxy, and closing it is not the goal: the cluster is theirs to break. What
+# can be closed is what the bypass REACHES, and with Resource = "*" that was every model enabled in the
+# account, so a bypass could find a more expensive model than any on the workshop menu.
+#
+# The two lists must stay in sync in both directions. A model bound in resources.yaml but missing from
+# the IAM policy fails at invoke time with an AccessDenied that reads like a Bedrock outage, which is a
+# far more expensive failure than the one being prevented.
+_cluster_tf = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
+_res = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+check("the Bedrock policy is not Resource = \"*\"",
+      'Action = [\n        "bedrock:InvokeModel"' not in _cluster_tf.replace('Resource = "*"', "SCOPED")
+      or 'inference-profile/${p}' in _cluster_tf)
+_declared = sorted(set(re.findall(r"model:\s*(us\.[A-Za-z0-9._:-]+)", _res)))
+_missing = [m for m in _declared if f'"{m}"' not in _cluster_tf]
+check(f"every bound ModelConfig is in the IAM allow-list ({len(_declared)} declared)", not _missing)
+for m in _missing:
+    print(f"        MISSING from the policy: {m}")
+# Granting only the profile ARN yields AccessDenied on every request: a cross-region profile fans out to
+# foundation models in several regions and the caller needs both. Measured on us.amazon.nova-pro-v1:0,
+# which resolves into us-east-1, us-west-2 and us-east-2.
+check("the policy grants the underlying foundation models too, not just the profiles",
+      "foundation-model/${m}" in _cluster_tf)
+
 print("== the repair loop can reach the clusters the presenters drive from ==")
 # converge built its work set from the ATTENDEE numbering only (#85), so there was no way to point it at
 # the roster. Those are the nine clusters the presenters drive from, and a console NLB that has not
