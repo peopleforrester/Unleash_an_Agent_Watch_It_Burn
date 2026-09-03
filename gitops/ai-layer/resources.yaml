@@ -387,7 +387,29 @@ spec:
       # OTel Operator injects the Python SDK (init-container + PYTHONPATH) so proxy.py's manual spans
       # (PRD #22 M1) emit. The image carries no SDK; this annotation activates injection. References the
       # Instrumentation CR `watch-it-burn-python` in this namespace.
-      annotations: { instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python" }
+      # checksum/proxy-py FORCES A ROLLOUT WHEN proxy.py CHANGES, and it has to be bumped by hand.
+      #
+      # proxy.py is mounted from the guard-proxy-src ConfigMap and read by Python once, at startup.
+      # generatorOptions sets disableNameSuffixHash so that ConfigMap's name is stable, which means a
+      # content change does NOT alter this Deployment and therefore does not restart anything. Argo
+      # reports Synced and Healthy while the process keeps running the code it loaded days ago.
+      #
+      # Observed 2026-09-03 landing the #151 origin check: Argo was synced to the right commit, the new
+      # proxy.py was in the ConfigMap and on the pod's mounted /app/proxy.py, and the endpoint behaved
+      # exactly as before because the process was four days old. Restarting by hand is not an option
+      # either: the fleet's admission policy rejects direct mutation by a non-ArgoCD principal, which is
+      # correct, and is why this has to travel through Git.
+      #
+      # A per-generator `options: disableNameSuffixHash: false` does NOT work: kustomize v5.8.1 lets the
+      # global generatorOptions win, confirmed with a minimal two-generator build. Dropping the global
+      # setting instead would hash every generated ConfigMap in this bundle, which is a far wider change
+      # than this needs.
+      #
+      # verify/test_proxy_checksum.py fails when this value does not match sha256(proxy.py), so editing
+      # the proxy without bumping this is a test failure rather than a silent no-op in the room.
+      annotations:
+        instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
+        checksum/proxy-py: "49b8b5c47148"
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }

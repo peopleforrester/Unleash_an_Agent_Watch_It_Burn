@@ -35,3 +35,37 @@ provider dispatch — all on main). Revisit §4.6-d only if the cost-race demo i
 route is the recommended implementation, and a one-line PRD note would capture that the overlay
 preference is impractical here. The sealed PRD 35 body is unchanged (this is a documented deferral in
 the audit log, not a plan amendment).
+
+## 2026-09-03T18:20:00Z · 2.2 · Rejected approaches for rolling a proxy.py change
+
+### REJECTED: Per-generator `options: disableNameSuffixHash: false` on `guard-proxy-src`
+**Why:** kustomize v5.8.1 lets the top-level `generatorOptions` win over a per-generator
+`options:` block. Confirmed with a minimal two-generator build: one generator asking for a
+hash and one not both produced unsuffixed names. The field is accepted and silently has no
+effect, which is worse than an error.
+**Status:** Permanent for kustomize v5.x as shipped in kubectl v1.37.
+**Do not suggest:** moving the `options:` key, reordering the generators, or setting
+`disableNameSuffixHash: false` on the generator alone. All three hit the same precedence.
+
+### REJECTED: Drop the global `generatorOptions.disableNameSuffixHash`
+**Why:** It would hash every generated ConfigMap in the ai-layer bundle, not just the
+proxy source, days before Portland. Kustomize rewrites the references it owns, but the
+blast radius covers `evil-mcp-src`, `workshop-mcp-src`, `chat-ui-src` and the rest, and the
+stable names are relied on by `agent/gateway/guard-proxy/guard-proxy.yaml` and by the
+`kubectl create configmap` line documented in it.
+**Status:** Revisit between events, when a wider rename can be tested on one cluster first.
+**Do not suggest:** doing it as part of a security fix. The two changes have nothing to do
+with each other and bundling them makes both harder to revert.
+
+### REJECTED: `kubectl rollout restart` across the fleet
+**Why:** The fleet's admission policy rejects direct mutation by a non-ArgoCD principal, and
+it is right to. Eleven of thirteen clusters refused; `r1-1` and `r1-2` accepted, which is
+itself worth a look since the policy is evidently not uniform.
+**Status:** Permanent. Changes travel through Git.
+**Do not suggest:** a one-off restart to "just get it live", including via a Job or a
+scaled-to-zero-and-back. The policy exists so the running state matches the repo.
+
+**Chosen:** a `checksum/proxy-py` annotation on the guard-proxy pod template, bumped in the
+same commit as a proxy.py change, with `verify/test_proxy_checksum.py` failing when the two
+disagree. Keeps the stable ConfigMap names, makes the rollout automatic once the annotation
+moves, and turns a forgotten bump into a red test instead of a silent no-op in the room.
