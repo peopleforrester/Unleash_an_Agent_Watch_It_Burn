@@ -553,11 +553,13 @@ spec:
          question, calls a model server-side, and renders text. See issue #89. -->
     <section class="termcol">
       <div class="termtabs" id="termtabs">
-        <!-- Ported from the Packt VTT (#153): a Blueprint tab showing what was installed at which wave,
-             and an Endpoints tab listing every component with its address and login. Both are iframes
-             served by this same nginx, and Endpoints posts commands back here to type into the terminal. -->
-        <button class="ttab maptab" data-i="map" onclick="showTerm('map')">&#128506; Blueprint</button>
-        <button class="ttab maptab" data-i="links" onclick="showTerm('links')">&#128279; Endpoints</button>
+        <!-- NO Blueprint or Endpoints tab. Both were ported from the Packt VTT (#153) and neither
+             worked in the lab: /diagram and /links serve 200, so the pages are fine, but the panes came
+             up blank. Reported independently by Michael and by Whitney in a walkthrough on 2026-09-03,
+             and her call was to drop them rather than repair them: "They don't work, and even if they
+             did work, they're noise." Step 0 is where an attendee is deciding whether their environment
+             is healthy, and two dead tabs at that moment cost more than the content was worth.
+             The pages themselves still serve at /diagram and /links for anyone who wants them. -->
         <button class="ttab active" data-i="0" onclick="showTerm(0)">Terminal 1</button>
         <!-- VS Code and Notebook tabs HIDDEN for Portland (#105): no round uses them, and an unexplained
              IDE/notebook is get-lost surface (the same failure mode as the removed Tutor tab) in a tight
@@ -568,8 +570,6 @@ spec:
       </div>
       <div class="termpanes" id="termpanes">
         <!-- data-src: these load on FIRST CLICK, so an attendee who never opens them costs nothing. -->
-        <iframe class="tpane mappane" data-i="map" data-src="/diagram" title="Architecture blueprint"></iframe>
-        <iframe class="tpane mappane" data-i="links" data-src="/links" title="Component endpoints"></iframe>
         <iframe class="tpane active" data-i="0" src="/terminal/" title="Terminal 1"></iframe>
         <!-- IDE (/ide/) and Notebook (/jupyter/) panes HIDDEN for Portland (#105) along with their tabs
              above. They lazy-loaded on first click, so they cost nothing here; they are removed because no
@@ -648,18 +648,11 @@ spec:
       document.getElementById('ddcreds').style.display='';
     }
   })();
-  // The Endpoints tab (and anything else embedded here) can ask for a command to be typed into the
-  // terminal rather than making the student copy it across panes. Ported from the Packt VTT (#153).
-  // Origin-checked: only same-origin frames may drive the shell.
-  window.addEventListener('message', function(ev){
-    if (ev.origin !== window.location.origin) return;
-    var d = ev.data;
-    if (!d || d.type !== 'vtt-run' || typeof d.text !== 'string') return;
-    var numeric = document.querySelector('.tpane.active[data-i]');
-    if (!numeric || !/^\d+$/.test(String(numeric.dataset.i||''))) showTerm(0);
-    if (sendToTerminal(d.text)) toast('Sent to your terminal, press Enter');
-    else toast('Copied: ' + d.text.slice(0,40));
-  });
+  // NO vtt-run postMessage listener. It existed so the Endpoints tab could type a command into the
+  // student's shell, and that tab is gone (see the tab strip). It was origin-checked, so this is not a
+  // vulnerability being closed, but an unused path that writes to a live shell is worth deleting rather
+  // than leaving for the next person to find and wire something into.
+  // Restore it with the tab if Endpoints ever comes back.
   function toast(t){var e=document.getElementById('toast');e.textContent=t;e.classList.add('show');clearTimeout(window._tt);window._tt=setTimeout(function(){e.classList.remove('show');},1300);}
   // Push text straight into the live shell instead of making the attendee ferry it through the
   // clipboard. Tapping a command was only ever copying it, which left them to click into an xterm
