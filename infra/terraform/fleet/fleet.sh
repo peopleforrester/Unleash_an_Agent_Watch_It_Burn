@@ -176,6 +176,12 @@ WIB_PROVISIONING_URL="${WIB_PROVISIONING_URL:-https://provisioning.agenticburn.c
 # it explicitly keeps it stable instead of following whichever roster entry happened to render first.
 WIB_PRIMARY_OWNER="${WIB_PRIMARY_OWNER:-michael}"
 
+# Attendee SLOT -> presenter owner, for the two clusters the presenters use as their own STUDENT box.
+# These are real attendee clusters (full profile, student credentials, claimable through provisioning);
+# they simply belong to a named person, so they are named for that person like the roster is. Slot
+# numbers rather than full names so this stays readable and matches the %03d the pool generates.
+WIB_PRESENTER_SLOTS="${WIB_PRESENTER_SLOTS:-001=michael,002=whitney}"
+
 # Railway coordinates for that app, used to resolve its ADMIN_TOKEN automatically (see resolve_admin_token).
 readonly WIB_PROVISIONING_RW_PROJECT="859f9db0-bbda-4d3c-8026-767d0b9047a9"
 readonly WIB_PROVISIONING_RW_ENV="ddb7d7e6-9643-4b55-8dd6-3618a0b6cce4"
@@ -311,10 +317,22 @@ public_host_for() {
         [[ -n "${owner}" && -n "${rr}" ]] && { printf '%s-round%s.agenticburn.com' "${owner}" "${rr}"; return 0; }
         printf '%s.agenticburn.com' "${name#watch-it-burn-}"; return 0
     fi
-    case "${name}" in
-        *-attendee-001) printf 'michael-student.agenticburn.com'; return 0 ;;
-        *-attendee-002) printf 'whitney-student.agenticburn.com'; return 0 ;;
-    esac
+    # PRESENTER student clusters, driven by the same owner idea as the roster rather than by two
+    # hardcoded name cases. The roster already names clusters <owner>-round<n>; these are the same
+    # presenter's STUDENT cluster, so they are <owner>-student, and the fleet reads consistently:
+    #
+    #   michael-round1 / michael-round2 / michael-round3 / michael-student
+    #   whitney-round1 / whitney-round2 / whitney-round3 / whitney-student
+    #
+    # WIB_PRESENTER_SLOTS maps attendee SLOT -> owner, so adding a third presenter is a config change
+    # rather than another case arm. Everything outside the map is a real attendee and gets a themed name.
+    local slot="${name##*-}" _pair _sl _ow
+    for _pair in ${WIB_PRESENTER_SLOTS//,/ }; do
+        _sl="${_pair%%=*}"; _ow="${_pair#*=}"
+        if [[ "${slot}" == "${_sl}" ]]; then
+            printf '%s-student.agenticburn.com' "${_ow}"; return 0
+        fi
+    done
     printf '%s.agenticburn.com' "$(friendly_attendee_name "${name##*-}")"
     return 0
 }
