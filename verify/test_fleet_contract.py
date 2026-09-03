@@ -103,11 +103,20 @@ print("== a provisioned attendee cluster is also REACHABLE and CLAIMABLE ==")
 # a student claiming one was told there were no clusters, and once that was fixed by hand, the URL they
 # were handed 404'd. Observed live 2026-09-02 during a rehearsal, twice, on the same five clusters. At 250
 # clusters that is the entire room, and neither failure looks like a provisioning bug from the outside.
-_up = FLEET_SH[FLEET_SH.index("cmd_up()"):]
-_up = _up[:_up.index("\ncmd_", 1)] if "\ncmd_" in _up[1:] else _up
-check("cmd_up regenerates the router map (else the friendly hostname 404s)", "cmd_routes" in _up)
-check("cmd_up registers with the provisioning app (else the pool reads empty)",
-      "register_with_provisioning" in _up)
+# UP for both attendee and instructor now goes through one core, _provision_spec_fleet (#162). The tail
+# that used to be copied into each caller (routes, register, report) lives there once, so assert it on the
+# core and assert every caller reaches it. This is what makes cmd_up_fleet register too, which it never
+# did inline: the fleet path used to provision the whole room and leave it unclaimable.
+_core = FLEET_SH[FLEET_SH.index("_provision_spec_fleet()"):]
+_core = _core[:_core.index("\nup_one()") ] if "\nup_one()" in _core else _core[:3000]
+check("the provisioning core regenerates the router map (else friendly hostnames 404)", "cmd_routes" in _core)
+check("the provisioning core registers with the provisioning app (else the pool reads empty)",
+      "register_with_provisioning" in _core)
+for _caller in ("cmd_up()", "cmd_up_fleet()", "cmd_instructors()"):
+    _b = FLEET_SH[FLEET_SH.index(_caller):]
+    _b = _b[:_b.index("\n}\n")]
+    check(f"{_caller[:-2]} routes through the shared core (no private provisioning tail)",
+          "_provision_spec_fleet" in _b)
 # The register/ingest envelope is shared with cmd_instructors now (#162), so the loud-on-failure
 # behaviour lives in the helper. Assert it there, and that the helper is the ONLY copy: the whole point
 # of extracting it was that two inline copies drifted (#161).
@@ -117,8 +126,11 @@ check("the shared registration helper is loud when it cannot register",
       "was NOT registered" in _reg and "record_fail" in _reg)
 check("only ONE copy of the token-resolve-then-ingest envelope exists",
       FLEET_SH.count("resolve_admin_token >/dev/null 2>&1; then") == 1)
-check("cmd_instructors uses the same shared helper, not its own copy",
-      "register_with_provisioning" in FLEET_SH[FLEET_SH.index("cmd_instructors() {"):][:4000])
+# Count actual CALL sites, not the comment or the definition: exactly one, in the core.
+_reg_calls = len([ln for ln in FLEET_SH.splitlines()
+                   if ln.lstrip().startswith("register_with_provisioning ")
+                   and not ln.lstrip().startswith("#")])
+check(f"registration happens in exactly one place, the core ({_reg_calls} call site)", _reg_calls == 1)
 
 print("== attendee hostnames are unique and actually varied ==")
 # Two students handed the same hostname is unrecoverable mid-workshop, and the failure is silent: both

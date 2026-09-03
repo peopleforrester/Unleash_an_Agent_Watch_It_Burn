@@ -719,6 +719,74 @@ bootstrap_student_aws() {
     rm -f "${awscsv}"
 }
 
+# One provisioning path for attendee and instructor clusters (#162). Both build PROVISION_SPEC and call
+# _provision_spec_fleet; the only thing that ever differed between them is the per-cluster spec, so that
+# is the input and everything downstream is shared.
+#
+# This replaced three separate copies of the same tail (init, provision, routes, register, report) in
+# cmd_up, cmd_up_fleet and cmd_instructors. Those copies had drifted, and one drift was live: cmd_up_fleet
+# regenerated routes but never registered, so the 250-cluster path left the whole room unclaimable, a
+# sibling of #161 that the single-cluster fix never reached.
+#
+# Spec format, pipe-delimited, mirroring roster.tsv so an instructor row maps across almost verbatim:
+#   account | bootstrap_profile | bootstrap_round | tier | instance_types | pod_pids_limit
+declare -gA PROVISION_SPEC
+
+# One cluster's provision, run inside a per-account run_pool worker where TF_PROFILE and the VPC are
+# already set. Applies only the per-cluster fields from the spec, then the shared up_one.
+_provision_worker() {
+    local name="$1" _acct bp bround tier itype pids
+    IFS='|' read -r _acct bp bround tier itype pids <<<"${PROVISION_SPEC[$name]}"
+    BOOTSTRAP_PROFILE="${bp}"; BOOTSTRAP_ROUND="${bround}"
+    TF_TIER="${tier}"; TF_INSTANCE_TYPES="${itype}"; TF_PIDS_LIMIT="${pids}"
+    up_one "${name}"
+}
+
+# Provision every cluster in PROVISION_SPEC, grouped by account for the VPC read and profile, groups
+# concurrent, then the tail every caller needs. reg_label + reg_fn + reg_args go to the registration
+# helper unchanged.
+_provision_spec_fleet() {
+    local reg_label="$1" reg_fn="$2"; shift 2
+    require_tools
+    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
+
+    # Distinct accounts in first-seen order, then a name group per account.
+    local order=() name a acct group
+    for name in "${!PROVISION_SPEC[@]}"; do
+        a="${PROVISION_SPEC[$name]%%|*}"
+        [[ " ${order[*]} " == *" ${a} "* ]] || order+=("${a}")
+    done
+    for acct in "${order[@]}"; do
+        group=()
+        for name in "${!PROVISION_SPEC[@]}"; do
+            [[ "${PROVISION_SPEC[$name]%%|*}" == "${acct}" ]] && group+=("${name}")
+        done
+        mapfile -t group < <(printf '%s\n' "${group[@]}" | sort)
+        # Preserve cmd_up_fleet's friendly skip: a missing per-account lab VPC is a recorded skip, not a
+        # subshell that exits silently mid-run. The default account uses the default state, so it is exempt.
+        if [[ -z "${WIB_DRY_RUN}" && "${acct}" != "${WIB_DEFAULT_ACCOUNT}" \
+              && ! -f "${LAB_VPC_DIR}/states/${acct}.tfstate" ]]; then
+            log "  account '${acct}': NO lab VPC (apply states/${acct}.tfstate first); skipping its slice"
+            record_fail "account:${acct}-no-vpc"; continue
+        fi
+        log "provisioning ${#group[@]} cluster(s) -> account '${acct}'"
+        # Per-account subshell so VPC_ID/TF_PROFILE stay local; accounts run concurrently as up-fleet did.
+        (
+            if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc_for "${acct}"; fi
+            TF_PROFILE="${acct}"
+            run_pool _provision_worker "${group[@]}"
+        ) &
+        [[ -n "${WIB_SERIAL}" ]] && wait
+    done
+    wait
+    report_failures
+    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
+        cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
+    fi
+    register_with_provisioning "${reg_label}" "${reg_fn}" "$@"
+}
+
 up_one() {
     local name="$1"; assert_ours "${name}"
     # Skip a cluster that already exists AND already passes health. Without this, re-running `up` to
@@ -944,36 +1012,14 @@ _ingest_attendee_names() {
 
 cmd_up() {
     [[ $# -ge 1 ]] || usage
-    require_tools
-    mkdir -p "${STATE_DIR}" "${LOG_DIR}"
-    rm -f "${LOG_DIR}/.failures"
-    if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc; fi
-    log "init cluster module..."
-    terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local names; mapfile -t names < <(expand_names "$@")
+    local n bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="full"
+    declare -gA PROVISION_SPEC=()
+    # Attendee clusters are uniform: the default account, full bootstrap unless bare, no round, no
+    # per-cluster tier/instance-type/pids overrides. account|profile|round|tier|itype|pids
+    for n in "${names[@]}"; do PROVISION_SPEC["${n}"]="${WIB_DEFAULT_ACCOUNT}|${bp}||||"; done
     log "provisioning ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
-    # Attendee clusters bootstrap with the full profile unless WIB_NO_BOOTSTRAP=1 (bare provision).
-    [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || BOOTSTRAP_PROFILE="full"
-    run_pool up_one "${names[@]}"
-    BOOTSTRAP_PROFILE=""
-    # Regenerate the router map. Same reason as ingest below, and the same instructor-only omission: a
-    # freshly provisioned attendee cluster has a friendly hostname that DNS resolves (wildcard -> the apex
-    # router) but that the router has no route for, so it answers 404. Observed live 2026-09-02: a student
-    # claimed a cluster, was handed brave-dolphin.agenticburn.com, and got a 404 from a cluster that was
-    # healthy. Claiming and reaching are two steps, and both have to be automatic.
-    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
-        cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
-    fi
-    # Register with the provisioning app, for exactly the reason the instructor path already does it
-    # (see cmd_instructors): a cluster nobody can look up is not finished. This was instructor-only, so
-    # `up` and `up-fleet` left attendee clusters provisioned, routable, healthy, and INVISIBLE to the
-    # thing that hands them out. Observed live 2026-09-02: five clusters were up and a student claiming
-    # one was told there were none, because provisioning had never heard of them. At 250 clusters that
-    # is the whole room, and the only symptom is an empty pool.
-    #
-    # Non-fatal by design, and LOUD when it cannot run: a quiet skip is what made this invisible.
-    register_with_provisioning "these clusters" _ingest_attendee_names "${names[@]}"
-    report_failures
+    _provision_spec_fleet "these clusters" _ingest_attendee_names "${names[@]}"
 }
 
 cmd_down() {
@@ -1072,20 +1118,16 @@ print_bootstrap_hints() {
 # up_one wrapper (§4.6): look up this cluster's roster row and set the per-cluster TF_* overrides (pids /
 # instance_type / tier) before provisioning. Runs inside run_pool's per-cluster subshell, so the globals
 # are process-local and cannot clash across concurrent clusters.
-_up_from_roster() {
-    local name="$1" entry _n rr tier itype pidscol bp
-    for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r _n rr tier itype pidscol bp owner <<<"${entry}"
-        [[ "${_n}" == "${name}" ]] && { TF_PIDS_LIMIT="${pidscol}"; TF_INSTANCE_TYPES="${itype}"; TF_TIER="${tier}"; break; }
-    done
-    up_one "${name}"
-}
 
 # One round in its own subshell (§4.6): per-round TF_PROFILE / VPC globals stay isolated from other
 # concurrent rounds. Reads the round's clusters from the roster (capped by WIB_PER_ROUND) and provisions
 # or destroys them via the concurrency pool.
+# Tear down one round's roster clusters. UP no longer comes through here: it builds PROVISION_SPEC and
+# goes through the unified _provision_spec_fleet like the attendee path (#162). This is down-only now, so
+# the argument that used to select up/down is gone and the dead reference to the removed _up_from_roster
+# is gone with it.
 _run_round() {
-    local action="$1" r="$2" entry name rr tier itype pidscol bp names=() n=0
+    local r="$1" entry name rr tier itype pidscol bp names=() n=0
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
         [[ "${rr}" == "${r}" ]] || continue
@@ -1097,22 +1139,53 @@ _run_round() {
     log "round ${r} instructors -> account '${acct}': ${names[*]}"
     if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc_for "${acct}"; fi
     TF_PROFILE="${acct}"
-    if [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
-        # R1 = burn profile (BurritoBot + scenario apps, NO enforcing guardrails, the spectacle cluster);
-        # R2/R3 = full profile (adds kyverno/network-policies/falco), armed to Enforce by bootstrap_one.
-        # Derived from the round, not the roster bp column (which _run_round previously ignored, hardcoding
-        # "full" so every cluster came up unarmed with Kyverno stuck in Audit -- found 2026-07-10).
-        [[ "${r}" == "1" ]] && BOOTSTRAP_PROFILE="burn" || BOOTSTRAP_PROFILE="full"
-        BOOTSTRAP_ROUND="${r}"
-    fi
-    if [[ "${action}" == "up" ]]; then run_pool _up_from_roster "${names[@]}"; else run_pool down_one "${names[@]}"; fi
+    run_pool down_one "${names[@]}"
 }
 
 # Provision/destroy the instructor roster. Rounds run CONCURRENTLY by default (§4.6), each in its own
 # subshell; WIB_SERIAL=1 forces the old serial loop. Round selection: 2nd arg > WIB_ROUNDS env > all.
 cmd_instructors() {
     local action="${1:-}" round_filter="${2:-}"
-    case "${action}" in up|down) ;; status) cmd_status; return ;; *) usage ;; esac
+    case "${action}" in
+        up) ;;
+        down) _instructors_down "${round_filter}"; return ;;
+        status) cmd_status; return ;;
+        *) usage ;;
+    esac
+    load_roster
+    local rounds=(1 2 3) r
+    [[ -n "${WIB_ROUNDS}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROUNDS}"
+    [[ -n "${round_filter}" ]] && rounds=("${round_filter}")
+
+    declare -gA PROVISION_SPEC=()
+    local entry name rr tier itype pidscol bpcol owner acct bp n
+    for r in "${rounds[@]}"; do
+        acct="$(account_for_round "${r}")"
+        # R1 is the burn profile (BurritoBot + scenario apps, NO enforcing guardrails); R2/R3 are full,
+        # armed to Enforce by bootstrap_one. Derived from the round, not the roster bp column, which
+        # _run_round used to ignore, leaving Kyverno stuck in Audit (found 2026-07-10). A bare provision
+        # sets no profile so nothing bootstraps.
+        if [[ -n "${WIB_NO_BOOTSTRAP:-}" ]]; then bp=""; elif [[ "${r}" == "1" ]]; then bp="burn"; else bp="full"; fi
+        n=0
+        for entry in "${INSTRUCTORS[@]}"; do
+            IFS='|' read -r name rr tier itype pidscol bpcol owner <<<"${entry}"
+            [[ "${rr}" == "${r}" ]] || continue
+            [[ -n "${WIB_PER_ROUND}" && "${n}" -ge "${WIB_PER_ROUND}" ]] && break
+            # account|profile|round|tier|itype|pids  -- per-cluster tier/itype/pids come from the roster
+            PROVISION_SPEC["${name}"]="${acct}|${bp}|${r}|${tier}|${itype}|${pidscol}"
+            n=$(( n + 1 ))
+        done
+    done
+    [[ "${#PROVISION_SPEC[@]}" -gt 0 ]] || { log "no roster clusters for the requested round(s)"; return 0; }
+    log "provisioning ${#PROVISION_SPEC[@]} instructor cluster(s)..."
+    _provision_spec_fleet "the roster" cmd_ingest_instructors "${round_filter}"
+    [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
+}
+
+# Instructor teardown keeps the round-grouped loop: down has no routes/register tail to share, and
+# down_one needs TF_PROFILE per account, which the round split already provides.
+_instructors_down() {
+    local round_filter="${1:-}"
     require_tools
     mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
     load_roster
@@ -1121,28 +1194,11 @@ cmd_instructors() {
     [[ -n "${WIB_ROUNDS}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROUNDS}"
     [[ -n "${round_filter}" ]] && rounds=("${round_filter}")
     for r in "${rounds[@]}"; do
-        _run_round "${action}" "${r}" &
-        [[ -n "${WIB_SERIAL}" ]] && wait   # serial: finish each round before starting the next
+        _run_round "${r}" &
+        [[ -n "${WIB_SERIAL}" ]] && wait
     done
     wait || true
     report_failures
-    # Auto-regenerate the agenticburn.com router map so instructor friendly URLs resolve (no manual step).
-    [[ "${action}" == "up" && -z "${WIB_NO_BOOTSTRAP:-}" ]] && { cmd_routes || log "routes: run 'fleet.sh routes' manually once LBs are up"; }
-    # Auto-register the roster with the provisioning app, for the same reason routes is automatic: a
-    # cluster nobody can look up is not finished. Previously this was a separate manual `ingest` that
-    # nothing invoked, so instructor clusters were routable but absent from provisioning, and the only
-    # way to find a presenter's Datadog org or terminal password was to read files on the build box.
-    # It configures ITSELF. The URL is a known default and the token is resolved from the live Railway
-    # service, so this needs nothing exported. It used to require two environment variables, which meant
-    # the default outcome of running the tool normally was that registration silently did not happen;
-    # that surfaced days later as a presenter opening provisioning to a blank terminal password. A step
-    # that only runs when someone remembers to set two variables is documented, not automated.
-    #
-    # Non-fatal by design: an unreachable provisioning app must never fail a provision. But it is now
-    # LOUD when it cannot run, because a quiet skip is what made this invisible in the first place.
-    [[ "${action}" == "up" ]] && register_with_provisioning "the roster" cmd_ingest_instructors "${round_filter}"
-    # Print manual-bootstrap hints only when auto-bootstrap was skipped.
-    [[ "${action}" == "up" && -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
 }
 
 # Provision the attendee fleet across WIB_ATTENDEE_ACCOUNTS concurrently: one per-account pool per
@@ -1150,38 +1206,24 @@ cmd_instructors() {
 cmd_up_fleet() {
     local per_account="${1:-}"
     [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: up-fleet <clusters-per-account>"; exit 2; }
-    require_tools
-    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
-    terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
-    log "up-fleet: ${#accounts[@]} account(s) x ${per_account} clusters, all concurrent..."
-    local idx=0 acct start n names
+    local n nm bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="full"
+    declare -gA PROVISION_SPEC=()
+    local allnames=() idx=0 acct start
     for acct in "${accounts[@]}"; do
         acct="${acct// /}"; [[ -n "${acct}" ]] || continue
-        start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
-        idx=$(( idx + 1 ))
-        # Pre-check the account's lab VPC so a missing one is a recorded skip, not a silent subshell exit.
-        # The default account uses the default lab-vpc state, so it has no per-account state file (allowed).
-        if [[ ! -f "${LAB_VPC_DIR}/states/${acct}.tfstate" && "${acct}" != "${WIB_DEFAULT_ACCOUNT}" ]]; then
-            log "  account '${acct}': NO lab VPC (apply states/${acct}.tfstate first); skipping its slice"
-            record_fail "account:${acct}-no-vpc"; continue
-        fi
-        names=(); for n in $(seq "${start}" $(( start + per_account - 1 ))); do
-            names+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
+        start=$(( WIB_NAME_OFFSET + idx * per_account + 1 )); idx=$(( idx + 1 ))
+        for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+            nm="$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")"
+            PROVISION_SPEC["${nm}"]="${acct}|${bp}||||"
+            allnames+=("${nm}")
         done
-        log "  account '${acct}': ${names[0]} .. ${names[-1]}"
-        # Per-account pool in a subshell so VPC_ID/TF_PROFILE/BOOTSTRAP_PROFILE stay local; all run at once.
-        (
-            read_vpc_for "${acct}"
-            TF_PROFILE="${acct}"
-            [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || BOOTSTRAP_PROFILE="full"
-            run_pool up_one "${names[@]}"
-        ) &
     done
-    wait
-    report_failures
-    # Auto-regenerate the agenticburn.com router map so every cluster's friendly URL resolves (no manual step).
-    cmd_routes || log "routes: run 'fleet.sh routes' manually once LBs are up"
+    log "up-fleet: ${#accounts[@]} account(s) x ${per_account} clusters, all concurrent..."
+    # Registers now too. cmd_up_fleet used to regenerate routes but never register, so the fleet path
+    # provisioned clusters that resolved but that provisioning had never heard of (#161/#162). The
+    # shared core does both.
+    _provision_spec_fleet "these clusters" _ingest_attendee_names "${allnames[@]}"
 }
 
 # Tear down the attendee fleet: mirror of up-fleet (same accounts, per_account count, and WIB_NAME_OFFSET)
