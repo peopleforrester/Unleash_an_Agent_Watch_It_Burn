@@ -363,10 +363,14 @@
   // polls it every 12s. Driving the banner from it also makes the toggle visible: run guards-on in the
   // terminal and the banner flips within a poll, which is a better demo than a static label.
   const GUARD_KEYS = ['input_blocklist','input_classifier','output','budget'];
+  // The subtext says what is TRUE, not what to type. Per #170 the challenges turn each guard on with the
+  // full command (kubectl -n agent exec deploy/guard-proxy -- ... /toggle?output=on) precisely so the
+  // student sees the real control surface; guards-on / guards-off survive only as a reset convenience.
+  // Naming a shorthand here would teach the abstraction the challenges deliberately removed.
   const GUARD_VIEW = {
-    none:{cls:'r1',t:'NO GUARDRAILS',s:"— the AI guardrails on this cluster are off, so you are talking straight to the model. Anything that pushes back here is the model's own judgement, not a control."},
-    some:{cls:'r2',t:'SOME GUARDRAILS',s:'— some AI guardrails are on and some are off. Run guards-status in your terminal to see which.'},
-    all:{cls:'r3',t:'ALL GUARDRAILS',s:"— every AI guardrail on this cluster is on. Turn them off from your terminal and send the same prompt again to see the difference."}
+    none:{cls:'r1',t:'NO GUARDRAILS',s:"— the AI guardrails on this cluster are off, so you are talking straight to the model. Anything that pushes back here is the model's own judgement, not a control stopping it."},
+    some:{cls:'r2',t:'SOME GUARDRAILS',s:'— some of the AI guardrails on this cluster are on and some are off. Your lab page lists which control covers which challenge.'},
+    all:{cls:'r3',t:'ALL GUARDRAILS',s:"— every AI guardrail on this cluster is on. Send an attack that worked a moment ago and watch the difference."}
   };
   function applyGuardState(g){
     var on=GUARD_KEYS.filter(function(k){return g&&g[k]===true;}).length;
