@@ -79,10 +79,15 @@ async def check(page, host: str) -> tuple[bool, str]:
 
     # The reply must contain an ANSWER, not only reasoning. #100 was thinking-shown/answer-missing, and a
     # status check alone cannot tell those apart.
-    visible = re.sub(r"<thinking>.*?</thinking>", "", res["reply"], flags=re.S).strip()
+    # Case-insensitive and whitespace-tolerant. Nova varies the tag: <Thinking>, </thinking >, and a
+    # leading space inside the tag all occur. A stricter pattern leaves the tag in place, and the leftover
+    # markup then counts as the "answer", so the test reports a pass or a nonsense failure depending on
+    # which way it lands. It reported 0 visible chars on three healthy clusters before this.
+    visible = re.sub(r"<\s*thinking\s*>.*?<\s*/\s*thinking\s*>", "", res["reply"],
+                     flags=re.S | re.I).strip()
     if len(visible) < 20:
         return False, f"reply has no visible answer outside <thinking> ({len(visible)} chars)"
-    if "<thinking>" in visible:
+    if re.search(r"<\s*/?\s*thinking\s*>", visible, re.I):
         return False, "raw <thinking> tag leaked into the student-visible reply"
 
     # The composer is the one control a student must always be able to reach.

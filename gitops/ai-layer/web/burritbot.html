@@ -360,7 +360,10 @@
   // customer chat (seen live on round1, 2026-09-02). It is FOLDED, never dropped: a workshop about what
   // leaks out of an agent cannot quietly delete part of the model's output, and challenge 5's secret can
   // land inside the scratchpad. The customer sees a clean reply; one click shows what the model thought.
-  const THINK_RE=/<thinking>([\s\S]*?)<\/thinking>/gi;
+  // Whitespace-tolerant as well as case-insensitive. Nova varies the tag (<Thinking>, </thinking >), and
+  // a variant that does not match renders RAW to the student, which is the #100 symptom returning by a
+  // side door. Matching loosely costs nothing here: the only thing between these markers is scratchpad.
+  const THINK_RE=/<\s*thinking\s*>([\s\S]*?)<\s*\/\s*thinking\s*>/gi;
   function botReply(t){
     t=String(t==null?'':t);
     const thoughts=[]; let m;
