@@ -12,6 +12,7 @@ import collections
 import json
 import logging
 import os
+import re
 import threading
 import time
 import urllib.request
@@ -414,6 +415,23 @@ def _effective_ctx(session):
 def _is_dangling_tooluse(reply):
     """True when a reply is the Bedrock 'tool_use without tool_result' error (poisoned session history)."""
     return bool(reply) and "tool_use" in reply and "tool_result" in reply and "ValidationException" in reply
+
+
+# Nova sometimes emits ONLY its <thinking> block and no answer. Measured on a live cluster 2026-09-03:
+# 1 of 6 identical requests came back reasoning-only, so roughly one student prompt in six would render
+# as an empty bubble. It is not a token ceiling (an empty reply used 148 output tokens and a good one
+# 151), it is the model occasionally stopping after the scratchpad.
+#
+# The tag is matched loosely because Nova varies it: <Thinking>, </thinking >, and internal padding all
+# occur, and a strict pattern would leave the tag in place and count it as an answer.
+_THINK_TAG_RE = re.compile(r"<\s*thinking\s*>.*?<\s*/\s*thinking\s*>", re.S | re.I)
+
+
+def _is_thinking_only(reply):
+    """True when stripping the scratchpad leaves nothing a student could read."""
+    if not reply:
+        return False
+    return len(_THINK_TAG_RE.sub("", reply).strip()) < 2
 
 
 def chat_reply_text(resp):
@@ -825,6 +843,16 @@ class Handler(BaseHTTPRequestHandler):
                 if retry is None:
                     return
                 resp = retry
+            # Same shape of self-heal for a reasoning-only reply: ask once more rather than render an
+            # empty bubble at a student. One retry, never a loop, so a model that is reliably terse costs
+            # at most double rather than spinning. The cost is bounded and small next to a workshop where
+            # one prompt in six visibly does nothing.
+            if _is_thinking_only(chat_reply_text(resp)):
+                log.info("model returned reasoning with no answer; retrying once",
+                         extra={"event": "thinking_only_retry"})
+                retry = _forward(_effective_ctx(session))
+                if retry is not None and not _is_thinking_only(chat_reply_text(retry)):
+                    resp = retry
             record_usage(resp)  # feed the live cost counter (same path as A2A)
             pin, pout = chat_usage_tokens(resp)
             reply = chat_reply_text(resp)
