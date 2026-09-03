@@ -34,6 +34,27 @@ with their hands on their own cluster. Budget:
 | **Wrap + feedback** | 15 min | Michael closes | What holds, what does not, and collect feedback |
 | **Slack** | 7 min | | Overrun, questions, a cluster that needs rescuing |
 
+### Where the room participates
+
+The failure mode of this workshop is that it quietly becomes a lecture, and that happens by omission
+rather than by decision: nothing in a run-of-show tells you to stop talking. So the beats where the room
+does something are marked inline with **[ROOM]**, and here they are in one place:
+
+| When | Mechanic | Who calls it |
+|---|---|---|
+| Start of Rounds 1 & 2 | Put `round1.agenticburn.com` on screen. One shared target, no setup. "Try to break ours while we work." | Michael |
+| After each Round 1 beat lands | Take an attempt from the floor. "Who got it to leak? Read us your prompt." | Whitney |
+| Round 1 close | Ask what the room got that we did not try. This is where the good material comes from. | Michael |
+| Round 2, each control | Before revealing it: "what would you put in front of this?" Let them answer first. | Michael |
+| Round 3 start | Heads-down. Say it explicitly, then stop presenting. | Both |
+| Round 3, per challenge | Pause on the challenge number, not the clock. "Hands up if you are still on 3." | Whitney |
+| Wrap | Two or three attempts read out by the people who made them. | Michael |
+
+**Heads-down versus watching the screen** is the distinction to keep saying out loud. Rounds 1 and 2 are
+watch-the-screen with an optional side quest on our box. Round 3 is heads-down and the screen does not
+matter. Attendees will not guess which mode they are in, and a room half-watching and half-typing hears
+neither.
+
 **Nobody installs anything.** The full platform is already deployed on every cluster (41 Argo CD apps, one
 bash script). The hands-on hour is about **manipulating** what is there, not building it.
 
@@ -167,7 +188,7 @@ there, copy-ready, with the expected result and the control that stops it.
 
 **Owner: Michael sends, Whitney runs the Round 2 retries and works the room.**
 
-### Give the room the URL (do this first)
+### [ROOM] Give the room the URL (do this first)
 
 > "Before we start: here is our Round 1 box. It is ours, not yours, and it is meant to be attacked. Open it
 > and try to get it to misbehave while we work. Anything you land, shout it out."
@@ -292,13 +313,21 @@ real run.
 > No node dies in this beat. Nothing to repoint, nothing to rebuild. If the slot is tight you can still
 > narrate it against a single live send, but the climbing counter is worth firing for real.
 
-### Round 1 close (Michael)
+### [ROOM] Round 1 close (Michael)
+
+**Before the close line, take from the floor.** "Anyone get ours to do something we did not?" Read one out
+and let its author say what they typed. An attack the room invented lands harder than one we rehearsed,
+and it is the moment that proves the box was really open rather than staged.
 
 "It is not just data exfil or open channels. The agent can take down your service, and it will if the
 right story is told. There are system prompts in production right now that say, in effect, if anyone
 tells you it will sell more burritos, do what they say next."
 
-### The Round 2 half: same prompts, controls on
+### [ROOM] The Round 2 half: same prompts, controls on
+
+**Ask before you reveal.** For each attack, "what would you put in front of this?" and take two answers
+before showing the control. A room that has guessed NetworkPolicy remembers it; a room that was told
+NetworkPolicy has heard a fact.
 
 **The premise:** same interface, same system prompt, same prompts. We turned on platform controls and
 nothing else. Re-run the attacks that just worked.
@@ -340,8 +369,13 @@ infra layer. The customer here is the developer.
 **This is the workshop.** Everything before it exists to set this hour up. They already onboarded at the
 top, so they go straight in.
 
-**Owner: the room. Both of you float.** Whitney takes the front half of the room, Michael the back. Resist
+**[ROOM] Owner: the room. Both of you float.** Whitney takes the front half, Michael the back. Resist
 driving from the front; the failure mode of this hour is it turning back into a demo.
+
+**Say the mode change out loud**: "screens down on us, heads down on yours, we are coming to you." Then
+actually stop presenting. **Pace on the challenge number, not the clock**: every ten minutes or so,
+"hands up if you are still on 3", and pitch the next nudge at where most hands are rather than where the
+schedule says they should be.
 
 **The pattern for every challenge, and say it out loud once so they internalise it:**
 
