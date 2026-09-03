@@ -228,6 +228,23 @@ check("destructive verbs are dry-run unless WIB_APPLY=1", "require_apply" in FLE
 check("teardown runs the tag audit (untagged resources survive a tag-scoped sweep)",
       "tag-audit.sh" in TEARDOWN_SH or "TAG_AUDIT" in TEARDOWN_SH)
 
+print("== the roster can be sliced by presenter, not only by round ==")
+# roster.tsv has carried an owner column for a while, but the tool only ever exposed the ROUND, so
+# "provision Whitney's set" meant building all nine or naming her clusters by hand, and the -1/-2 suffix
+# split was convention in someone's head (#88). The data was there; the selector was not.
+_ci = FLEET_SH[FLEET_SH.index("cmd_instructors() {"):]
+_ci = _ci[:_ci.index("\n_instructors_down")] if "\n_instructors_down" in _ci else _ci[:5000]
+check("instructors up accepts an owner as well as a round", "owner_filter" in _ci)
+check("a bare digit is still read as a round, so the old form keeps working", "[123] ) round_filter" in _ci)
+check("both/all select the whole roster", "both|all )" in _ci)
+# An unowned spare (-3) belongs to nobody and must not be swept into a named presenter's set.
+check("an owner filter excludes unowned roster rows",
+      '"${owner,,}" != "${owner_filter}" ]] && continue' in _ci)
+_roster = (REPO / "infra/terraform/fleet/roster.tsv").read_text(encoding="utf-8")
+_owned = [l for l in _roster.splitlines() if l.strip() and not l.startswith("#")]
+check(f"roster still carries an owner column on every row ({len(_owned)} rows)",
+      all(len(l.split("|")) >= 7 for l in _owned))
+
 print("== a full-profile cluster arms its Kyverno guardrails ==")
 # Kyverno ships in Audit and bootstrap flips it to Enforce. That flip was gated on `round == 2 || 3`,
 # and an ATTENDEE cluster has no round (cmd_up leaves the spec field empty), so every attendee cluster

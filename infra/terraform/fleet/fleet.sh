@@ -444,7 +444,11 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     status            List clusters that have state and their EKS status.
 
   INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
-    instructors up [round]    Provision the roster (optionally just round 1|2|3). Regenerates routes AND
+    instructors up [round|owner]
+                              Provision the roster. The argument is a ROUND (1|2|3), an OWNER
+                              (michael|whitney, from roster.tsv's owner column), or both|all for
+                              everything. `instructors up whitney` builds exactly her three clusters.
+                              Regenerates routes AND
                               registers the roster with the provisioning app (set WIB_PROVISIONING_URL +
                               WIB_ADMIN_TOKEN; WIB_NO_INGEST=1 opts out).
     instructors down [round]  Destroy the roster (optionally one round).
@@ -1174,14 +1178,27 @@ _run_round() {
 # Provision/destroy the instructor roster. Rounds run CONCURRENTLY by default (§4.6), each in its own
 # subshell; WIB_SERIAL=1 forces the old serial loop. Round selection: 2nd arg > WIB_ROUNDS env > all.
 cmd_instructors() {
-    local action="${1:-}" round_filter="${2:-}"
+    local action="${1:-}" selector="${2:-}"
     case "${action}" in
         up) ;;
-        down) _instructors_down "${round_filter}"; return ;;
+        down) _instructors_down "${selector}"; return ;;
         status) cmd_status; return ;;
         *) usage ;;
     esac
     load_roster
+    # The second argument is either a ROUND (1|2|3) or an OWNER (michael|whitney|both|all), because the
+    # two are the natural ways to slice the roster and neither is ambiguous: a round is a bare digit and
+    # an owner never is (#88). Previously only the round existed, so "give me Whitney's three clusters"
+    # meant provisioning the whole roster or naming her clusters by hand, and the -1/-2 suffix split was
+    # convention held in someone's head rather than in the tool. The owner column in roster.tsv already
+    # carries the answer; this exposes it.
+    local round_filter="" owner_filter=""
+    case "${selector}" in
+        "" ) ;;
+        [123] ) round_filter="${selector}" ;;
+        both|all ) ;;
+        * ) owner_filter="${selector,,}" ;;
+    esac
     local rounds=(1 2 3) r
     [[ -n "${WIB_ROUNDS}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROUNDS}"
     [[ -n "${round_filter}" ]] && rounds=("${round_filter}")
@@ -1199,6 +1216,10 @@ cmd_instructors() {
         for entry in "${INSTRUCTORS[@]}"; do
             IFS='|' read -r name rr tier itype pidscol bpcol owner <<<"${entry}"
             [[ "${rr}" == "${r}" ]] || continue
+            # An owner filter selects that presenter's set. An UNOWNED roster row (empty owner column,
+            # the -3 spares) is excluded when filtering by owner: it belongs to nobody, so "Whitney's
+            # clusters" must not quietly include it.
+            [[ -n "${owner_filter}" && "${owner,,}" != "${owner_filter}" ]] && continue
             [[ -n "${WIB_PER_ROUND}" && "${n}" -ge "${WIB_PER_ROUND}" ]] && break
             # account|profile|round|tier|itype|pids  -- per-cluster tier/itype/pids come from the roster
             PROVISION_SPEC["${name}"]="${acct}|${bp}|${r}|${tier}|${itype}|${pidscol}"
