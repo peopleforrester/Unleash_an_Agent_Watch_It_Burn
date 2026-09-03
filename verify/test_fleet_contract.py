@@ -180,6 +180,22 @@ check("a fleet-wide orphan reaper exists and is dry-run by default",
 check("the reaper also sweeps orphaned EBS volumes (same cause: the CSI controller dies too)",
       "kubernetes.io/cluster/" in FLEET_SH and "delete-volume" in FLEET_SH)
 
+# The reaper decides what to delete by asking whether a load balancer's cluster tag appears in
+# `eks list-clusters`. That list is the ONLY thing separating the verb from a live cluster's front
+# door, so a failure to fetch it must stop the account rather than read as "nothing is alive".
+#
+# It used to be `2>/dev/null || true`, so any API failure produced an empty list, every tagged load
+# balancer failed the liveness test, and WIB_APPLY=1 deleted them. On 2026-09-03 the console NLBs for
+# r2-1 and r2-2 were deleted while both clusters were live and serving.
+check("no liveness query silences its own failure",
+      "--query 'clusters[]' --output text 2>/dev/null" not in FLEET_SH)
+check("the cost reaper tells a failed query apart from a genuinely empty account",
+      "NOTHING reaped here" in FLEET_SH and "reap:list-clusters-failed" in FLEET_SH)
+check("a failed list-clusters skips that account instead of sweeping it",
+      "could not list its EKS clusters" in FLEET_SH and "reap-lbs:list-clusters-failed" in FLEET_SH)
+check("an account reporting zero live clusters is not swept without an explicit override",
+      "reports ZERO live EKS clusters" in FLEET_SH and "WIB_REAP_EMPTY_ACCOUNT" in FLEET_SH)
+
 print("== the stated component count matches what is actually shipped ==")
 # The abstract said 34 in one sentence and 35 in another, the run-of-show said 43, and the lab page said
 # "roughly forty" (#121). A technical audience counts, and three numbers for one platform is worse than a
@@ -211,6 +227,22 @@ check("PVCs are deleted before terraform destroy (else volumes orphan as 'availa
 check("destructive verbs are dry-run unless WIB_APPLY=1", "require_apply" in FLEET_SH)
 check("teardown runs the tag audit (untagged resources survive a tag-scoped sweep)",
       "tag-audit.sh" in TEARDOWN_SH or "TAG_AUDIT" in TEARDOWN_SH)
+
+print("== a full-profile cluster arms its Kyverno guardrails ==")
+# Kyverno ships in Audit and bootstrap flips it to Enforce. That flip was gated on `round == 2 || 3`,
+# and an ATTENDEE cluster has no round (cmd_up leaves the spec field empty), so every attendee cluster
+# received all ten policies and none were ever armed. Measured 2026-09-03: 7 of 7 attendee clusters sat
+# at restrict-image-registries=Audit while r2/r3 were correctly Enforce. Challenge 2's villain image
+# therefore DEPLOYED on the student's own cluster, which is the one cluster where they run it themselves.
+#
+# The condition that matters is the PROFILE, because "full" is what ships the policies. Burn ships none
+# and must never arm (R1 is the unguarded spectacle), which the profile test excludes naturally.
+_boot = FLEET_SH[FLEET_SH.index("bootstrap_one() {"):]
+_boot = _boot[:_boot.index("\narm_infra_guardrails")] if "\narm_infra_guardrails" in _boot else _boot[:6000]
+check("guardrail arming is keyed on the full profile, not on a round number",
+      '"${profile}" == "full"' in _boot)
+check("arming is NOT gated on round 2/3 (attendee clusters have no round)",
+      '"${round}" == "2" || "${round}" == "3" ]] && arm_infra_guardrails' not in FLEET_SH)
 
 print("== Bedrock access is scoped to the models the workshop actually binds ==")
 # An attendee holds cluster-admin on their own cluster, so they can schedule a pod under the agent's

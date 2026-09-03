@@ -599,7 +599,18 @@ bootstrap_one() {
         log "  bootstrapped: ${name} (${profile})"
         bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
         bootstrap_terminal_auth "${name}" "${acct_profile}" "${kcfg}"
-        [[ "${round}" == "2" || "${round}" == "3" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
+        # Arm on the PROFILE, not the round. This was `round == 2 || round == 3`, and an attendee
+        # cluster has no round: cmd_up leaves that spec field empty. So every attendee cluster received
+        # all ten Kyverno policies from the full profile and none of them were ever flipped out of
+        # Audit. Measured 2026-09-03 across the whole attendee fleet, 7 of 7 sat at
+        # restrict-image-registries=Audit while r2/r3 were correctly Enforce, which means Challenge 2's
+        # villain image DEPLOYS on a student's own cluster: the control they are told stops it does
+        # nothing, on the one cluster where they run the challenge themselves.
+        #
+        # "full" is the condition that actually matters, because that is the profile which ships the
+        # policies. The burn profile ships none and must never arm (R1 is the unguarded spectacle), and
+        # it is excluded here by the profile name rather than by the round being 1.
+        [[ "${profile}" == "full" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
     fi
@@ -1669,8 +1680,36 @@ cmd_reap_lbs() {
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
     local acct live arns arn tagged tgs tg vols vol total=0 swept=0
     for acct in "${accounts[@]}"; do
+        # THE LIVE LIST IS THE ONLY THING STANDING BETWEEN THIS VERB AND A LIVE CLUSTER'S FRONT DOOR,
+        # so a failure to fetch it must stop the account, never fall through as "nothing is alive".
+        #
+        # This call used to be `2>/dev/null || true`, which turns any API failure (throttle, expired
+        # token, a transient 500) into an EMPTY live list. Every tagged load balancer then fails the
+        # liveness grep below, is logged as an orphan, and with WIB_APPLY=1 is deleted. The predicate
+        # failed open, in the direction of deletion, on the one input it cannot afford to guess.
+        #
+        # On 2026-09-03 at 13:20Z the console NLBs for watch-it-burn-r2-1 and r2-2 were deleted by this
+        # account's IAM user while both clusters were live and serving. michael-round2 and
+        # whitney-round2 returned 502 from the router afterwards, with healthy pods behind a load
+        # balancer that no longer existed, five days before Portland. Whatever the misclassification
+        # was, an unverified empty list must not be able to reach a delete.
+        local live_rc=0
         live="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" \
-                --query 'clusters[]' --output text 2>/dev/null | tr '\t' '\n' || true)"
+                --query 'clusters[]' --output text | tr '\t' '\n')" || live_rc=$?
+        if [[ "${live_rc}" -ne 0 ]]; then
+            log "  reap-lbs: SKIPPING ${acct}: could not list its EKS clusters (exit ${live_rc})."
+            log "            Without that list every tagged load balancer looks like an orphan."
+            record_fail "reap-lbs:list-clusters-failed:${acct}"
+            continue
+        fi
+        if [[ -z "${live//[[:space:]]/}" ]]; then
+            log "  reap-lbs: SKIPPING ${acct}: it reports ZERO live EKS clusters."
+            log "            That is either a genuinely empty account or a lying API, and the two are"
+            log "            indistinguishable here. Sweep it with WIB_REAP_EMPTY_ACCOUNT=1 if the"
+            log "            account really is empty and you have confirmed that by hand."
+            [[ -n "${WIB_REAP_EMPTY_ACCOUNT:-}" ]] || continue
+            log "            WIB_REAP_EMPTY_ACCOUNT=1 given; proceeding."
+        fi
         arns="$(AWS_PROFILE="${acct}" aws elbv2 describe-load-balancers --region "${WIB_REGION}" \
                 --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true)"
         for arn in ${arns}; do
@@ -1737,7 +1776,18 @@ cmd_reap() {
     local acct live c
     for acct in "${accounts[@]}"; do
         acct="${acct// /}"; [[ -n "${acct}" ]] || continue
-        live="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" --query 'clusters[]' --output text 2>/dev/null | tr '\t' '\n' | grep -E '^watch-it-burn-attendee-' || true)"
+        # Unlike reap-lbs above, an empty list here is SAFE: it skips the account and destroys nothing.
+        # It is still worth telling apart from a failed query, because "no attendee clusters" and "the
+        # API did not answer" read identically in the log, and a cost reaper that quietly reaped nothing
+        # is discovered on the invoice.
+        local reap_rc=0
+        live="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" --query 'clusters[]' --output text | tr '\t' '\n' | grep -E '^watch-it-burn-attendee-')" || reap_rc=$?
+        # grep exits 1 on no match, which is the genuinely-empty case; anything else is the query failing.
+        if [[ "${reap_rc}" -gt 1 ]]; then
+            log "  account '${acct}': could not list EKS clusters (exit ${reap_rc}); NOTHING reaped here"
+            record_fail "reap:list-clusters-failed:${acct}"
+            continue
+        fi
         [[ -n "${live}" ]] || { log "  account '${acct}': no attendee clusters"; continue; }
         (
             read_vpc_for "${acct}"; TF_PROFILE="${acct}"
