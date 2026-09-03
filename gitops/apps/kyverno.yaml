@@ -14,7 +14,16 @@ spec:
   source:
     chart: kyverno
     repoURL: https://kyverno.github.io/kyverno
-    targetRevision: "3.8.1"
+    # chart 3.9.0 -> Kyverno v1.19.0 (2026-08-20), which patches CVE-2026-32280. The April 2026 advisories
+    # (the apiCall SSRF pair GHSA-8wfp-579w-6r25 / GHSA-fmqp-4wfc-w3v7 and CVE-2026-22039 cross-namespace
+    # RBAC bypass) were already fixed in 1.18, which is what we were on, so this bump is the remaining one.
+    #
+    # 1.19 deprecates the legacy kyverno.io policy types with warnings; it does not remove them. All ten
+    # of our ClusterPolicies are kyverno.io/v1 and continue to work, so the migration to the newer
+    # ValidatingPolicy types is a post-Portland job, not a blocker. Verified against a live cluster before
+    # and after: policy inventory identical, and Challenge 2's villain image still denied at admission
+    # while an allowed registry still admits.
+    targetRevision: "3.9.0"
     helm:
       valuesObject:
         # Kyverno namespace excluded by default (excludeKyvernoNamespace: true)
