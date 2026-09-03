@@ -158,6 +158,25 @@ check("a fleet-wide orphan reaper exists and is dry-run by default",
 check("the reaper also sweeps orphaned EBS volumes (same cause: the CSI controller dies too)",
       "kubernetes.io/cluster/" in FLEET_SH and "delete-volume" in FLEET_SH)
 
+print("== the stated component count matches what is actually shipped ==")
+# The abstract said 34 in one sentence and 35 in another, the run-of-show said 43, and the lab page said
+# "roughly forty" (#121). A technical audience counts, and three numbers for one platform is worse than a
+# wrong one. Measured on a live full-profile cluster 2026-09-03: 41 Argo CD Applications, of which one is
+# the app-of-apps and five are demo filler, leaving 35 platform components. So 35 was right all along and
+# the other numbers were drift. This asserts the shipped manifests still add up to what the docs claim,
+# so the next component added fails here instead of being discovered on stage.
+_app_files = {p.stem for p in (REPO / "gitops/apps").glob("*.yaml")}
+_demo = {n for n in _app_files if n.startswith("demo-app-")}
+# Not every file is one Application: istio and cert-manager each ship several, which is why the live
+# count (41) exceeds the file count (38). The invariant we can assert statically is the demo split.
+check(f"exactly 5 demo filler apps ship ({len(_demo)} found)", len(_demo) == 5)
+_docs = (REPO / "docs/RUN-OF-SHOW-2026-08.md").read_text(encoding="utf-8")
+check("the run-of-show no longer claims 43 apps", "43 ArgoCD apps" not in _docs and "43 apps" not in _docs)
+check("the run-of-show states the measured 41", "41 Argo CD apps" in _docs or "41 apps" in _docs)
+_lab = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
+check("the lab page states a number rather than 'roughly forty'",
+      "Roughly forty" not in _lab and "35 platform components" in _lab)
+
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the
 # AWS load balancers, and the PVCs while the EBS CSI controller can still reclaim their volumes.

@@ -57,6 +57,9 @@
   .goal{background:#f6f2ff;border:1px solid #ddd0f5;border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;font-size:13.5px;margin:8px 0}
   /* Step 0 carries two halves (check the lab works, then tour the cluster). This divides them without
      spending a step number, because step N must stay equal to challenge N. */
+  .fblink{display:inline-block;margin-top:6px;background:var(--accent);color:#fff;text-decoration:none;
+    font-weight:800;font-size:14px;padding:10px 18px;border-radius:8px}
+  .fblink:hover{filter:brightness(1.08)}
   .doclink{font-size:11.5px;font-weight:700;text-decoration:none;color:var(--accent);opacity:.8;white-space:nowrap}
   .doclink:hover{opacity:1;text-decoration:underline}
   .sub{margin:22px 0 6px;font-size:14.5px;color:var(--ink);border-top:1px solid var(--line);padding-top:14px}
@@ -198,7 +201,8 @@
           <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
 
           <div class="tip"><b>That is a lot, and you are not expected to know what all of it is.</b>
-          Roughly forty components, all GitOps-managed, each one something a team would otherwise install
+          Forty-one Argo CD apps: 35 platform components, five demo apps, and the app-of-apps that
+          deploys them. All GitOps-managed, each one something a team would otherwise install
           by hand. We only touch a handful today, and those are called out below. Everything else is
           scenery: real, running, and safe to ignore. If a name is unfamiliar, that is fine and it is not
           the point of the lab.</div>
@@ -495,6 +499,23 @@ spec:
         </div>
       </div>
 
+      <!-- Feedback lives HERE, at the bottom of the guide, because this is where an attendee is at
+           minute 120 (#107). The AI Engineer World's Fair run collected ZERO responses: capture rode on
+           a closing slide whose QR was a corrupt PNG, and nothing recorded whether that slide was even
+           reached. The provisioning success page now carries a feedback link too, which fixes "never saw
+           it", but that page is where they were at minute ZERO. Asking someone to dig out a tab they
+           opened two hours ago is a weak ask; the terminal they are already looking at is not. -->
+      <div class="step">
+        <div class="h"><div class="num">&#128172;</div><div class="t">Tell us how that went</div></div>
+        <div class="b">
+          <p>Thirty seconds, anonymous unless you want a reply, and it is the only way this gets better
+          for the next room. You can send it more than once, so there is no need to save it for the end.</p>
+          <p class="small">What we actually want to know: was the pacing right, was anything unclear,
+          and did a challenge fail in a way that was not part of the lesson.</p>
+          <a class="fblink" id="fblink2" href="https://feedback.agenticburn.com" target="_blank" rel="noopener">Leave feedback &rarr;</a>
+        </div>
+      </div>
+
       <p class="foot">Lost? The terminal on the right is the source of truth. Re-run <code class="inl">kubectl get pods -A</code> any time to confirm you are still connected.</p>
       <p class="mobnote foot">On a small screen the terminal is below these steps. A laptop is the better experience.</p>
     </section>
@@ -585,6 +606,9 @@ spec:
     if(user)q2.push('user='+encodeURIComponent(user));
     var vt=document.getElementById('vttbtn'); if(vt&&q2.length)vt.href='/lab?'+q2.join('&');
     var fb=document.getElementById('fbbtn'); if(fb&&q2.length)fb.href=fb.href+'?'+q2.join('&');
+    // The in-guide feedback link carries the same identity as the top-bar one, so a response can be tied
+    // to a cluster and a round without the attendee typing anything.
+    var fb2=document.getElementById('fblink2'); if(fb2&&q2.length)fb2.href=fb2.href+'?'+q2.join('&');
     var bb=document.getElementById('bbbtn');
     if(bb){var p=[]; if(cluster&&cluster!=='(cluster not specified)')p.push('cluster='+encodeURIComponent(cluster)); if(user)p.push('user='+encodeURIComponent(user)); if(p.length)bb.href='/?'+p.join('&');}
     document.title=(instr?'Instructor':'Student')+' VTT — '+cluster;

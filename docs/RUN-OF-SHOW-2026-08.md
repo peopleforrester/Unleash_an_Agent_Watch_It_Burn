@@ -34,7 +34,7 @@ with their hands on their own cluster. Budget:
 | **Wrap + feedback** | 15 min | Michael closes | What holds, what does not, and collect feedback |
 | **Slack** | 7 min | | Overrun, questions, a cluster that needs rescuing |
 
-**Nobody installs anything.** The full platform is already deployed on every cluster (43 ArgoCD apps, one
+**Nobody installs anything.** The full platform is already deployed on every cluster (41 Argo CD apps, one
 bash script). The hands-on hour is about **manipulating** what is there, not building it.
 
 **Your prompts live on the instructor page, not in this doc.** Open **`/brief`** on whichever cluster you
@@ -134,7 +134,7 @@ also the segment that earns the abstract's claims.
 > one bash script. Let me show you what is actually running in there."
 
 ```bash
-kubectl get applications -n argocd          # 43 apps: this whole platform, GitOps-managed
+kubectl get applications -n argocd          # 41 apps: 35 platform components, 5 demo apps, 1 app-of-apps
 kubectl get pods -A | head -40              # what that actually looks like running
 ```
 
