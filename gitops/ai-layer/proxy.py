@@ -283,7 +283,18 @@ def _origin_allowed(handler):
     if o.hostname and host and o.hostname.lower() == host:
         return True   # the attendee's own console page, served from this same hostname
     return origin == CONSOLE_ORIGIN
-PROFANITY = [t.strip().lower() for t in os.environ.get("PROFANITY_LIST", "").split(",") if t.strip()]
+# PROFANITY_LIST defaulted to EMPTY, which meant "moderated" masked only the BLOCK_LIST above (attack
+# keywords and the C5 sentinel) and passed every slur and obscenity through untouched. That was harmless
+# while capture was off; it is not once the feed is projected in a room, which is exactly the state this
+# default now has to survive. A wordlist is not a moderation service and does not pretend to be: it is a
+# floor, it catches the common cases, and the 280-character truncation below bounds the rest. The real
+# control is that attendees are TOLD their prompts may appear on the instructor screen (run-of-show and
+# lab step 0), which is what makes projecting them defensible at all.
+_DEFAULT_PROFANITY = (
+    "fuck,shit,cunt,bitch,bastard,dick,cock,pussy,asshole,motherfucker,wanker,twat,"
+    "nigger,faggot,retard,tranny,slut,whore,rape,kike,spic,chink"
+)
+PROFANITY = [t.strip().lower() for t in os.environ.get("PROFANITY_LIST", _DEFAULT_PROFANITY).split(",") if t.strip()]
 _stream_lock = threading.Lock()
 _prompts = collections.deque(maxlen=50)  # recent MODERATED prompts for the display
 

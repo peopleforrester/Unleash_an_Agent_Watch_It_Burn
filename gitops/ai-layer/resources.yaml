@@ -441,7 +441,12 @@ spec:
             - { name: RATE_LIMIT_RPM, value: "120" }
             - { name: COST_CAP_USD, value: "25" }
             # Optional side-screen prompt stream; ON only once moderation is confirmed (code of conduct).
-            - { name: STREAM_PROMPTS, value: "off" }
+            # ON for Portland (Michael, 2026-09-03), so the instructor feed at start.agenticburn.com
+            # has something to render. Attendees are TOLD their prompts may appear on the instructor
+            # screen, in run-of-show step 0 and in the lab guide; that disclosure is the actual control.
+            # The deterministic mask (BLOCK_LIST + PROFANITY_LIST, truncated to 280 chars) is the floor,
+            # not a moderation service. Turn this back off for any run where the room has not been told.
+            - { name: STREAM_PROMPTS, value: "on" }
             # Unified Service Tagging for Datadog correlation (same scheme as the kagent agent +
             # agentgateway). The Datadog Agent reads this to tag this pod's container logs now; once
             # proxy.py carries manual OTel SDK spans (PRD #22 / issue #19) the same tags map service.version

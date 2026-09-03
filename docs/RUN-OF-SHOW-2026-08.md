@@ -188,6 +188,16 @@ there, copy-ready, with the expected result and the control that stops it.
 
 **Owner: Michael sends, Whitney runs the Round 2 retries and works the room.**
 
+### [ROOM] Say the prompt feed is live (before they type anything)
+
+> "One housekeeping thing. The prompts you send are going to show up on our screen, because watching what
+> the room actually tries is half the fun. Nothing personal or confidential in the chat box, please."
+
+Say this BEFORE handing out the URL below, not after. `STREAM_PROMPTS` is on for this run and the feed at
+`start.agenticburn.com` renders across every cluster. Obvious profanity is masked automatically and
+prompts are truncated, but the mask is a wordlist rather than a moderation service, so the disclosure is
+what makes projecting them defensible. If a run has NOT been told, turn capture back off.
+
 ### [ROOM] Give the room the URL (do this first)
 
 > "Before we start: here is our Round 1 box. It is ours, not yours, and it is meant to be attacked. Open it
