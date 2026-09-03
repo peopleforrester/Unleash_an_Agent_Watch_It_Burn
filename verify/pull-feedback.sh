@@ -71,5 +71,10 @@ echo "NEW since last pull ($(wc -l <"${SNAPSHOT}") -> $(wc -l <"${fresh}") lines
 echo
 # Added lines only. She appends as she walks, so additions are the whole story; a full diff would
 # re-print reflowed paragraphs that say nothing new.
-diff "${SNAPSHOT}" "${fresh}" | sed -n 's/^> //p'
+#
+# `|| true` is REQUIRED, not defensive noise. diff exits 1 whenever the files differ, which is the
+# only case that reaches this line, and under `set -e` with `pipefail` that aborted the script before
+# the snapshot was updated. The next run then diffed against the stale snapshot and re-printed
+# everything as new. Caught 2026-09-04 when the same paragraphs surfaced three pulls running.
+diff "${SNAPSHOT}" "${fresh}" | sed -n 's/^> //p' || true
 cp "${fresh}" "${SNAPSHOT}"
