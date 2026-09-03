@@ -847,15 +847,32 @@ class Handler(BaseHTTPRequestHandler):
             # empty bubble at a student. One retry, never a loop, so a model that is reliably terse costs
             # at most double rather than spinning. The cost is bounded and small next to a workshop where
             # one prompt in six visibly does nothing.
-            if _is_thinking_only(chat_reply_text(resp)):
+            _thinking_only = _is_thinking_only(chat_reply_text(resp))
+            if _thinking_only:
                 log.info("model returned reasoning with no answer; retrying once",
                          extra={"event": "thinking_only_retry"})
                 retry = _forward(_effective_ctx(session))
                 if retry is not None and not _is_thinking_only(chat_reply_text(retry)):
                     resp = retry
+                    _thinking_only = False
             record_usage(resp)  # feed the live cost counter (same path as A2A)
             pin, pout = chat_usage_tokens(resp)
             reply = chat_reply_text(resp)
+            # LAST RESORT, after the retry above already failed. Measured after adding the retry: the
+            # empty-reply rate fell from 1-in-6 to 1-in-10, because sometimes BOTH attempts stop after the
+            # scratchpad. A retry alone is therefore not a guarantee, and "..." in front of a room is the
+            # one outcome worth spending a line of code to prevent.
+            #
+            # Unwrap the scratchpad and hand back its contents. It is the only thing the model produced,
+            # it is usually a serviceable answer in the first person ("I need to list the proteins"), and
+            # showing it is more honest than an empty bubble that implies the agent ignored them.
+            if _thinking_only and reply:
+                _inner = " ".join(t.strip() for t in re.findall(
+                    r"<\s*thinking\s*>(.*?)<\s*/\s*thinking\s*>", reply, re.S | re.I))
+                if _inner.strip():
+                    reply = _inner.strip()
+                    log.info("model returned reasoning twice; surfacing it rather than an empty reply",
+                             extra={"event": "thinking_only_surfaced"})
             if chat_span is not None and _CAPTURE_CONTENT and reply:
                 chat_span.set_attribute("gen_ai.output.messages", _genai_output(reply))
             guarded = False
