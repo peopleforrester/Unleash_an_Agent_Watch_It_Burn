@@ -108,7 +108,8 @@ stragglers a reason to open the laptop they just took out.
 
 > If the slot is running late before you even start, this is the first thing to cut. Fold the story into
 > the Rounds 1 and 2 open instead, beside the Hugging Face breach, where the personal incident and the
-> public one reinforce each other. The 3 minutes comes out of the 10-minute slack, so cutting it hands
+> public one reinforce each other. The 3 minutes comes out of the slack, which is 7 minutes once the cold open is counted (see the shape
+> table above). Cutting it hands
 > the time straight back.
 
 ---
@@ -180,8 +181,14 @@ read a good one out. Whitney watches for a raised hand that is actually stuck.
 
 ### Open (Michael)
 
-The hook: an autonomous AI agent broke into Hugging Face's production Kubernetes in July, roughly 17,600
-attacker actions, no human at the keyboard. Malicious dataset to RCE to a privileged pod with the host
+The hook: an autonomous **agent system** broke into Hugging Face's production Kubernetes in July,
+roughly 17,600 attacker actions, no human at the keyboard. Say **agents**, or "an autonomous agent
+system", never "an agent": reporting after the initial disclosure established roughly **700 coordinating
+instances** out of about 1,200 spun up, which found an unsanctioned channel through an internal package
+registry and split the work between recon, credential hunting and communications. A Portland security
+audience is likely to know that detail, and the singular reads as out of date. The swarm framing is also
+the stronger argument here, because coordination through an unmonitored channel is exactly a platform
+control failure. Malicious dataset to RCE to a privileged pod with the host
 mounted to node root across eleven nodes to stolen service-account tokens to forged credentials to AWS
 keys. Their list of controls that failed reads like this workshop's table of contents, and the one thing
 that partially held was network isolation. "We are going to do a smaller version of that, live, and then
@@ -189,21 +196,30 @@ turn on the controls that would have stopped it." (Do not attribute the model; s
 
 **Then widen it from one breach to the industry position** (this is in the deck, so keep the two in step).
 On **Thursday 2026-08-27** OpenAI organised **"A call for collective action on cyber defense"**
-(`openai.com/collective-cyberdefense/`), signed by more than 100 organisations: the major model vendors,
+(`openai.com/collective-cyberdefense/`), signed by **more than 150 organisations** (155 in the 2026-08-30
+archived snapshot; outlets reported 116 to 128 on publication day, so give a number with a date or say
+"more than 150"): the major model vendors,
 Google, Microsoft, Amazon, Cisco, Oracle, Cloudflare, CrowdStrike, Palo Alto Networks, and well outside
 tech, Mastercard, Visa, Capital One, General Motors, Shopify.
 
-> "In the coming months, AI-enabled cyberattacks will become far more widespread as models around the
-> world become increasingly capable."
+> "In the coming months, AI-enabled cyber attacks will become far more widespread **and sophisticated**
+> as models around the world become increasingly capable."
 
 > "We have a limited window to strengthen cyber defenses."
 
-They call for a **defensive surge**, ask organisations to make cyber defense an **immediate leadership
-priority** and fix the weaknesses in their own software, and say status-quo practices will not be enough.
+They call for **"a global surge in cyber defense"**, ask organisations to make cyber defense an
+**immediate leadership priority** and fix the weaknesses in their own software. Their second principle is
+worth quoting verbatim because it is this workshop's thesis in their words: **"Recognize that status quo
+security won't be enough"**. One of their asks is to **"ensure agentic identities are traceable and
+accountable"**, which is close to a description of Round 3.
+
+> **Do not say "defensive surge".** Several outlets use the phrase and the letter never does. Its own
+> words are "a global surge in cyber defense" and that security teams "need a surge in tools and
+> resources". Quoting a phrase the source did not write is the fastest way to lose a room that has read it.
 
 The line to land: "That was four days ago, and it is signed by the people who build the models and the
-people who run the payment rails. The next two hours are what a defensive surge actually looks like on
-one cluster." It also pre-answers the question the room is holding: this is not a hypothetical.
+people who run the payment rails. The next two hours are what a global surge in cyber defense actually
+looks like on one cluster." It also pre-answers the question the room is holding: this is not a hypothetical.
 
 ### The beats, in order
 
