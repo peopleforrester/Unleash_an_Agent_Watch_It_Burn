@@ -34,18 +34,24 @@ import asyncio
 import re
 import sys
 
-# Round expectations keyed on the hostname shape, mirroring applyRoundFromCluster in burritbot.html.
-# Kept here rather than imported so the test states the intent independently of the code under test: if
-# both drift together, an assertion that reads the implementation would still pass.
-ROUND_RE = re.compile(r"(?:^|[-.])r(?:ound)?([123])(?:[-.]|$)", re.I)
-EXPECTED_BANNER = {"r1": "NO GUARDRAILS", "r2": "SOME GUARDRAILS", "r3": "ALL GUARDRAILS"}
+# The banner is asserted against the cluster's OWN /guards response, not against its hostname.
+#
+# This used to derive the expected banner from the hostname, mirroring the page's own logic. That made
+# the test worse than useless for the bug it should have caught: the page guessed from the hostname, the
+# test guessed the same way, and the two agreed while both were wrong. Student clusters ship with every
+# AI guard off so the attacks land, and the page was telling students "ALL GUARDRAILS" (#193).
+#
+# Reading /guards here means the test measures the same thing a student can measure, so a banner that
+# disagrees with the cluster now fails regardless of what either side believes about the hostname.
+GUARD_KEYS = ("input_blocklist", "input_classifier", "output", "budget")
 
 
-def expected_round(host: str) -> str:
-    """Round clusters are the named minority; everything else is a student cluster (r3)."""
-    label = host.split(".")[0]
-    m = ROUND_RE.search(label)
-    return f"r{m.group(1)}" if m else "r3"
+def banner_for(guards: dict) -> str:
+    """The banner text a truthful page must show for this guard state."""
+    on = sum(1 for k in GUARD_KEYS if guards.get(k) is True)
+    if on == 0:
+        return "NO GUARDRAILS"
+    return "ALL GUARDRAILS" if on == len(GUARD_KEYS) else "SOME GUARDRAILS"
 
 
 async def check(page, host: str) -> tuple[bool, str]:
@@ -54,12 +60,32 @@ async def check(page, host: str) -> tuple[bool, str]:
     # working one. Verified 2026-09-03, when a fixed cluster kept serving the old banner from cache.
     await page.goto(f"{url}?smoke=1", wait_until="domcontentloaded", timeout=60_000)
 
+    # Ask the cluster what is actually on, through the page's own origin, then hold the DOM to it.
+    guards = await page.evaluate(
+        """async () => { try { const r = await fetch('/guards', {cache:'no-store'});
+                               return r.ok ? await r.json() : null; } catch (e) { return null; } }"""
+    )
+    if guards is None:
+        return False, "/guards did not answer, so the banner cannot be verified"
+    want = banner_for(guards)
+
+    # The banner is filled in by the first /guards poll rather than being present in the markup, so give
+    # it a moment. Asserting immediately would race the fetch and read the neutral placeholder.
+    try:
+        await page.wait_for_function(
+            "() => { const t = document.getElementById('bannertext');"
+            "        return t && !/CHECKING/i.test(t.textContent); }",
+            timeout=15_000,
+        )
+    except Exception:
+        return False, "banner never resolved past its placeholder (the /guards poll did not land)"
+
     banner = await page.evaluate(
         "() => document.getElementById('bannertext')?.textContent?.trim() || ''"
     )
-    want = EXPECTED_BANNER[expected_round(host)]
     if banner != want:
-        return False, f"banner is {banner!r}, expected {want!r} for {expected_round(host)}"
+        on = [k for k in GUARD_KEYS if guards.get(k) is True]
+        return False, f"banner says {banner!r} but /guards reports {on or 'nothing'} on, so it should say {want!r}"
 
     # Send a prompt through the PAGE's own fetch, so the browser attaches Origin exactly as it does for a
     # student. This is the check the 403 would have failed.
