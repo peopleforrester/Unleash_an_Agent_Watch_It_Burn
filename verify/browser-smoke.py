@@ -63,11 +63,15 @@ async def check(page, host: str) -> tuple[bool, str]:
 
     # Send a prompt through the PAGE's own fetch, so the browser attaches Origin exactly as it does for a
     # student. This is the check the 403 would have failed.
+    #
+    # Carries PROBE_MARKER so the guard-proxy answers normally but does NOT record it in the side-screen
+    # feed. Without it, running this against 13 clusters put the same prompt on every one of them, and the
+    # instructor console merged them into what looked like a room firing duplicates.
     res = await page.evaluate(
         """async () => {
              const r = await fetch('/chat', {method:'POST',
                  headers:{'Content-Type':'application/json'},
-                 body: JSON.stringify({prompt:'what proteins do you have?'})});
+                 body: JSON.stringify({prompt:'[[wib-probe]] what proteins do you have?'})});
              let j = {}; try { j = await r.json(); } catch (e) {}
              return {status: r.status, reply: j.reply || j.error || ''};
            }"""

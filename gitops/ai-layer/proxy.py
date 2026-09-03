@@ -298,6 +298,20 @@ PROFANITY = [t.strip().lower() for t in os.environ.get("PROFANITY_LIST", _DEFAUL
 _stream_lock = threading.Lock()
 _prompts = collections.deque(maxlen=50)  # recent MODERATED prompts for the display
 
+# Automated probes must not land in the side-screen feed. verify/browser-smoke.py sends a prompt to every
+# cluster on every run, and with capture on those accumulate in the deque above and merge across 13
+# clusters in the instructor console, which reads as a wall of duplicate prompts nobody typed. Observed
+# 2026-09-03: the ONLY text on the whole fleet was the smoke test's own prompt, repeated per run.
+#
+# The marker is checked before moderation and before the append, so a probe is answered normally and
+# simply never recorded. It is deliberately an ugly literal: it must never collide with something an
+# attendee would plausibly type, and it should be obvious in a log that a probe was responsible.
+PROBE_MARKER = "[[wib-probe]]"
+
+
+def _is_probe(text):
+    return PROBE_MARKER in (text or "")
+
 
 def moderate(text):
     """Mask block-listed + profane terms so the side-screen stays within the code of conduct."""
@@ -557,7 +571,7 @@ class Handler(BaseHTTPRequestHandler):
         text = ""
         if isinstance(payload, dict):
             text = extract_text(payload.get("params", {}).get("message", {}).get("parts", []))
-        if STREAM_ENABLED and text:
+        if STREAM_ENABLED and text and not _is_probe(text):
             with _stream_lock:
                 _prompts.append(moderate(text))  # moderated; side-screen feed only
 
@@ -713,7 +727,7 @@ class Handler(BaseHTTPRequestHandler):
             self._send(400, {"reply": "Tell BurritoBot what you'd like.", "guarded": False,
                              "input_tokens": 0, "output_tokens": 0})
             return
-        if STREAM_ENABLED:
+        if STREAM_ENABLED and not _is_probe(prompt):
             with _stream_lock:
                 _prompts.append(moderate(prompt))
         # Input guards (same toggles as the A2A path), then rate/cost cap. A blocked request spends 0 tokens.
