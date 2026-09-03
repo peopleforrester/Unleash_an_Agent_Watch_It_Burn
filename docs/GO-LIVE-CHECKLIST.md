@@ -54,6 +54,19 @@ infra/terraform/fleet/check-tls.sh michael-round1.agenticburn.com michael-round2
 AWS_PROFILE=accen-dev verify/datadog-pool-check.sh
 ```
 
+```bash
+# e) standing hygiene: advisories, pinned versions, orphaned AWS resources, slot-id leaks
+WIB_PROBE_EMAIL=<an address that already holds a claim> verify/fleet-hygiene.sh
+```
+
+- [ ] `HYGIENE CLEAN`. This replaces four checks that used to be run by hand and therefore were not
+      run consistently. It reports open Dependabot alerts, prints every pinned chart version for
+      comparison against the projects' own advisory pages, surveys all five accounts for load
+      balancers, target groups and volumes tagged for a cluster that no longer exists (#157), and
+      RENDERS the claim page to confirm the internal slot id is not shown to a student.
+- [ ] Orphans found? `WIB_APPLY=1 infra/terraform/fleet/fleet.sh reap-lbs` deletes them. The survey
+      is always dry-run; deleting is a separate deliberate act.
+
 - [ ] Every cluster reports `api=200 org_read=200`.
 - [ ] **Whitney opens her Datadog org in a browser before doors.** The check above proves the KEYS work;
       it cannot prove a human can log in, and a Datadog trial can end for the web UI while keys still
