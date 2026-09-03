@@ -190,6 +190,41 @@ check("destructive verbs are dry-run unless WIB_APPLY=1", "require_apply" in FLE
 check("teardown runs the tag audit (untagged resources survive a tag-scoped sweep)",
       "tag-audit.sh" in TEARDOWN_SH or "TAG_AUDIT" in TEARDOWN_SH)
 
+print("== the account sweep only deletes resources we own ==")
+# These AWS accounts are CO-TENANT with the Packt project. sweep-account.sh had two paths that operated
+# account-wide with no ownership filter (#90): it enumerated EIPs with no filter at all and released
+# everything except our NAT allocations, and its volume step WIDENED to "any available volume" whenever
+# the tag filter found none. Measured on accen-dev 2026-09-03: 23 EIPs in the region, exactly 1 ours. The
+# old script would have released 22 belonging to someone else, and an EIP release is not undoable, the
+# address returns to the pool.
+#
+# A tag filter returning nothing is the CORRECT answer to "which of ours are orphaned". If something of
+# ours is ever missed, it was created untagged and the fix belongs at creation, never in a wider query.
+#
+# Assert the ENUMERATIONS THAT FEED A DELETE, not every API call: the script also counts region-wide for
+# reporting, and that read is fine and deliberately unfiltered.
+_sweep = (REPO / "infra/terraform/aws/teardown/sweep-account.sh").read_text(encoding="utf-8")
+def _mapfile_stmt(var):
+    """The mapfile call plus its backslash-continued lines.
+
+    Line-based on purpose: a regex that tries to span shell line continuations consumes the backslash
+    with [^\n] and then cannot match the newline, which silently returns just the first line and made
+    this assertion fail against a script that was already correct."""
+    lines = _sweep.splitlines()
+    for i, ln in enumerate(lines):
+        if f"mapfile -t {var} <" in ln:
+            out = [ln]
+            while out[-1].rstrip().endswith("\\") and i + len(out) < len(lines):
+                out.append(lines[i + len(out)])
+            return "\n".join(out)
+    return ""
+check("the EIP list that feeds release-address is tag-filtered",
+      "tag:project" in _mapfile_stmt("EIPS"))
+check("the volume list that feeds delete-volume is tag-filtered",
+      "tag:" in _mapfile_stmt("VOLS"))
+check("the volume step has no widen-to-everything fallback",
+      "fallback: any available volume" not in _sweep and "NO FALLBACK" in _sweep)
+
 print("== tagging the resources default_tags cannot reach ==")
 # Provider default_tags do not reach managed-node-group instances/volumes, CNI-created ENIs, or
 # CSI-provisioned PVC volumes. One 50-cluster account on the sister fleet had 451 untagged resources,

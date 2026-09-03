@@ -51,10 +51,23 @@ else
     done
   fi
 
-  # 4. Release EIPs not belonging to the NAT gateway
+  # 4. Release OUR EIPs, not every EIP in the region
+  #
+  # This enumerated addresses with NO FILTER and released everything except the NAT allocations. These
+  # accounts are CO-TENANT with the Packt project, so that released their Elastic IPs too, and an EIP
+  # release is not undoable: the address goes back to the pool and whatever pointed at it is broken with
+  # no way to reclaim the same address. Same class of error as an unscoped rsync --delete, in an account
+  # we share.
+  #
+  # The filter is the provider default_tags stamp that every resource we create carries. A resource we
+  # did not tag is a resource we do not delete; if that ever leaves something of ours behind, the fix is
+  # to tag it at creation, never to widen this query.
   PROTECT=" $NAT_ALLOCS "
   mapfile -t EIPS < <($AWS ec2 describe-addresses \
+    --filters 'Name=tag:project,Values=watch-it-burn' \
     --query 'Addresses[].[AllocationId,AssociationId]' --output text 2>/dev/null)
+  total_eips=$($AWS ec2 describe-addresses --query 'length(Addresses)' --output text 2>/dev/null)
+  log "EIPs: ${#EIPS[@]} tagged watch-it-burn, of ${total_eips:-?} in the region (the rest are not ours)"
   rel=0; skip=0
   for row in "${EIPS[@]}"; do
     alloc=$(echo "$row" | awk '{print $1}')
@@ -74,10 +87,14 @@ else
   mapfile -t VOLS < <($AWS ec2 describe-volumes \
     --filters 'Name=status,Values=available' 'Name=tag:KubernetesCluster,Values=watch-it-burn-attendee-*' \
     --query 'Volumes[].VolumeId' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d')
-  # fallback: any available volume if the tag filter found none but volumes exist
+  # NO FALLBACK. This used to widen to "any available volume" when the tag filter found none, which in a
+  # co-tenant account means deleting the Packt project's detached volumes. The tag filter returning
+  # nothing is the CORRECT answer to "which of our volumes are orphaned", not evidence the query is
+  # broken. If one of ours is genuinely missed, it was created untagged and the fix is at creation.
   if (( ${#VOLS[@]} == 0 )); then
-    mapfile -t VOLS < <($AWS ec2 describe-volumes --filters 'Name=status,Values=available' \
-      --query 'Volumes[].VolumeId' --output text 2>/dev/null | tr '\t' '\n' | sed '/^$/d')
+    other=$($AWS ec2 describe-volumes --filters 'Name=status,Values=available' \
+      --query 'length(Volumes)' --output text 2>/dev/null)
+    log "no watch-it-burn volumes to delete (${other:-0} available volume(s) in the region belong to someone else)"
   fi
   log "available volumes to delete: ${#VOLS[@]}"
   vd=0
@@ -102,6 +119,8 @@ log "terraform destroy exit: ${PIPESTATUS[0]}"
 v=$($AWS ec2 describe-vpcs --filters 'Name=tag:Name,Values=watch-it-burn-lab-vpc' --query 'length(Vpcs)' --output text 2>/dev/null)
 lb=$($AWS elbv2 describe-load-balancers --query 'length(LoadBalancers)' --output text 2>/dev/null)
 nat=$($AWS ec2 describe-nat-gateways --filter 'Name=state,Values=available,pending' --query 'length(NatGateways)' --output text 2>/dev/null)
-eip=$($AWS ec2 describe-addresses --query 'length(Addresses)' --output text 2>/dev/null)
-vol=$($AWS ec2 describe-volumes --query 'length(Volumes)' --output text 2>/dev/null)
+# Scoped to OUR tag: counting region-wide reported the co-tenant's resources as our leftovers, which
+# reads as a failed sweep and invites exactly the widening this script just had removed.
+eip=$($AWS ec2 describe-addresses --filters 'Name=tag:project,Values=watch-it-burn' --query 'length(Addresses)' --output text 2>/dev/null)
+vol=$($AWS ec2 describe-volumes --filters 'Name=tag:project,Values=watch-it-burn' --query 'length(Volumes)' --output text 2>/dev/null)
 log "POST-SWEEP: VPC=$v LB=$lb NAT=$nat EIP=$eip Vol=$vol"
