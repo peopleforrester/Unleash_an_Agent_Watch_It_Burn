@@ -13,6 +13,12 @@
     --r3:#7a3ff2;--ok:#2e9e5b;--term:#0f1117;
   }
   *,*::before,*::after{box-sizing:border-box}
+  /* Root size grows with the viewport so the whole page scales from one knob instead of a breakpoint per
+     display (#144). Solved for 16px at 1280 and 21px at 3840: a laptop is unchanged (16.3px at 1440),
+     2560 gets 18.5px, 4K gets 21px, and nothing ever drops below the browser default.
+     The first attempt at this curve was 0.62vw + 13.6px, which reaches the 21px ceiling at 1440 and would
+     have rendered every laptop at 4K type. Check the endpoints before trusting a clamp. */
+  html{font-size:clamp(16px, 0.1953vw + 13.5px, 21px)}
   html,body{margin:0;height:100%}
   body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;background:var(--cream);color:var(--ink);display:flex;flex-direction:column;height:100vh;overflow:hidden}
   header{background:var(--dd);color:#fff;padding:9px 16px;display:flex;align-items:center;gap:12px;flex:0 0 auto}
@@ -27,7 +33,10 @@
   .crumb b{color:#fff;font-family:ui-monospace,Menlo,Consolas,monospace}
   .crumb .role{font-weight:800;text-transform:uppercase;letter-spacing:.4px;font-size:11px;background:var(--r3);color:#fff;padding:2px 8px;border-radius:999px}
   .split{flex:1;display:flex;min-height:0}
-  .guide{width:40%;max-width:560px;min-width:340px;overflow:auto;padding:20px 22px;background:#fff;border-right:1px solid var(--line)}
+  /* FLUID TYPE + a guide column that uses a large display (#144). The guide was capped at 560px, so on a
+     2560 or 3840 screen the instructions sat in a narrow ribbon beside an enormous terminal. The cap now
+     grows with the viewport, and the root size scales the text with it. */
+  .guide{width:40%;max-width:clamp(560px, 34vw, 900px);min-width:340px;overflow:auto;padding:20px 22px;background:#fff;border-right:1px solid var(--line)}
   /* Collapsing the instructions gives the IDE and the notebook the full width. Running VS Code in 60%
      of a laptop screen permanently is a materially worse experience than running it full width, and the
      steps are re-openable in one click. State persists so it survives a reload. */

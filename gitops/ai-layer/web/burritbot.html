@@ -13,6 +13,18 @@
     --r1:#d23b3b;--r2:#2f6fed;--r3:#1f9d57; /* R1 red (no guardrails), R2 blue (+AI), R3 green (your cluster) */
   }
   *,*::before,*::after{box-sizing:border-box}
+  /* FLUID TYPE (#144). Everything below was fixed pixels, so a 4K display rendered the same 14px chat
+     text as a laptop inside a much wider column, and a phone got laptop padding. The root size now grows
+     with the viewport and the sizes that matter are expressed against it, which scales the whole page
+     from one knob instead of needing a breakpoint per display.
+     Floor 16px so nothing shrinks below the browser default; ceiling 21px so a 3840 display gets larger
+     text without the layout turning into a poster. */
+  /* Root size grows with the viewport so the whole page scales from one knob instead of a breakpoint per
+     display (#144). Solved for 16px at 1280 and 21px at 3840: a laptop is unchanged (16.3px at 1440),
+     2560 gets 18.5px, 4K gets 21px, and nothing ever drops below the browser default.
+     The first attempt at this curve was 0.62vw + 13.6px, which reaches the 21px ceiling at 1440 and would
+     have rendered every laptop at 4K type. Check the endpoints before trusting a clamp. */
+  html{font-size:clamp(16px, 0.1953vw + 13.5px, 21px)}
   /* APP SHELL. The composer and its Send button are the one control a student must always be able to
      reach, so the page is sized to the viewport and the MESSAGE STREAM is the only thing that scrolls.
      Reported twice on 2026-09-02: Send sitting below the fold on a laptop.
@@ -37,9 +49,9 @@
   .round-pick{display:flex;align-items:center;gap:8px;font-size:13px}
   .round-pick label{opacity:.85}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
-  .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:13px;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
+  .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
   /* condensed round/cluster banner, lives in the right infra band */
-  .ibanner{padding:11px 13px;color:#fff;font-weight:800;letter-spacing:.3px;border-radius:12px;font-size:13px}
+  .ibanner{padding:0.7rem 0.8rem;color:#fff;font-weight:800;letter-spacing:.3px;border-radius:12px;font-size:0.81rem}
   .ibanner .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35);margin-right:7px}
   .ibanner.r1{background:var(--r1)}.ibanner.r2{background:var(--r2)}.ibanner.r3{background:var(--r3)}
   .ibanner .ibsub{font-weight:600;opacity:.95;font-size:11.5px;margin-top:6px;line-height:1.35}
@@ -51,19 +63,19 @@
   .chatcol{flex:1 1 auto;display:flex;flex-direction:column;min-width:0;min-height:0;background:#fff;border:1px solid var(--line);border-radius:14px;overflow:hidden;box-shadow:0 6px 22px rgba(99,44,166,.08)}
   .chathead{padding:12px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
   .chathead .avatar{width:34px;height:34px;border-radius:50%;background:var(--lav);display:grid;place-items:center;font-size:18px}
-  .chathead h2{margin:0;font-size:15px}
+  .chathead h2{margin:0;font-size:0.94rem}
   .chathead .sub{font-size:12px;color:var(--mid)}
   .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer}
   /* The ONLY scroller in the desktop layout. min-height:0 is what lets it actually shrink. */
   .stream{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#fff,#fdfaff)}
-  .msg{max-width:78%;padding:11px 14px;border-radius:14px;font-size:14px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+  .msg{max-width:78%;padding:0.7rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
   .bot{align-self:flex-start;background:var(--lav);border-bottom-left-radius:4px}
   .me{align-self:flex-end;background:var(--dd);color:#fff;border-bottom-right-radius:4px}
   .sys{align-self:center;font-size:12px;color:var(--mid);background:#f5eefc;border:1px solid var(--line);padding:5px 10px;border-radius:999px}
-  .typing{align-self:flex-start;color:var(--mid);font-size:13px;font-style:italic}
+  .typing{align-self:flex-start;color:var(--mid);font-size:0.81rem;font-style:italic}
   /* Pinned: never shrinks, never scrolls away. */
   .composer{flex:0 0 auto;border-top:1px solid var(--line);padding:12px;display:flex;gap:10px;background:#fff;padding-bottom:max(12px,env(safe-area-inset-bottom))}
-  .composer input,.composer textarea{flex:1;font:inherit;padding:11px 13px;border:1px solid var(--line);border-radius:10px}
+  .composer input,.composer textarea{flex:1;font:inherit;font-size:0.9rem;padding:0.7rem 0.8rem;border:1px solid var(--line);border-radius:10px}
   .composer textarea{resize:none;line-height:1.35;max-height:140px;overflow-y:auto}
   .composer button{font:inherit;font-weight:800;background:var(--accent);color:#fff;border:0;padding:0 18px;border-radius:10px;cursor:pointer}
   .composer button:disabled{opacity:.5;cursor:default}
@@ -73,9 +85,9 @@
   .ipick label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
   .imrow{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0}
   .imlbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
-  .imval{font-variant-numeric:tabular-nums;font-weight:800;font-size:16px;color:var(--ink)}
+  .imval{font-variant-numeric:tabular-nums;font-weight:800;font-size:1rem;color:var(--ink)}
   .card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:13px 14px}
-  .card h3{margin:0 0 8px;font-size:13px;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
+  .card h3{margin:0 0 8px;font-size:0.81rem;text-transform:uppercase;letter-spacing:.4px;color:var(--mid)}
   .saved{display:flex;flex-direction:column;gap:8px}
   #clearsaved{margin-left:auto;font:inherit;font-size:11px;font-weight:700;text-transform:uppercase;
     letter-spacing:.4px;border:1px solid var(--line);background:#fff;color:var(--mid);padding:2px 9px;
