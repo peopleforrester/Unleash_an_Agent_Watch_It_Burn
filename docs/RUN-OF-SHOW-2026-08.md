@@ -310,6 +310,17 @@ VTT terminal; Nova refuses it in chat, so it never fired through the agent and i
 to recover. Denial-of-wallet is the current-attack version and it works the way the demo wants: the
 agent itself runs up the bill, nothing crashes, and there is no node to rebuild.
 
+> **[ROOM] Optional: the fork bomb, on OUR box only (#135).** The fork bomb was retired as a student beat
+> because it kills a node and needs a spare cluster to recover, and because Nova refuses it in chat so it
+> never fired through the agent anyway. It survives as an audience-participation demo against the
+> **instructor** cluster, where a dead node is a story rather than a re-provision. Put
+> `round1.agenticburn.com` on screen, open its terminal, and invite the room: "there is a per-pod PID cap
+> on this box. Try to fork-bomb it from the terminal and watch it hold." The payload is
+> `:(){ :|:& };:`. The cap (`podPidsLimit=1024`, deployed on every profile) refuses new processes rather
+> than letting the node fall over, and Falco plus Talon flag the attempt into Datadog. It is a terminal
+> attack, not a chat one: the model will not type a fork bomb, which is itself worth naming. Do this only
+> if you are ahead on time and only on the instructor box; never point it at a student's own cluster.
+
 **The story:** token spend is its own DoS vector. A room hammering the agent, or an agent talked into a
 loop, runs the Bedrock bill up while everything stays green. Send BurritoBot a few expensive prompts in
 a row (the menu-dump prompt is a good one):
