@@ -245,6 +245,44 @@ if _meter is not None:
 # public screen, back this with a content-moderation service (agentgateway external moderation / LLM
 # Guard), not just this deterministic mask.
 STREAM_ENABLED = os.environ.get("STREAM_PROMPTS", "off").lower() == "on"
+
+# Cross-origin policy for the browser-facing surface (#151).
+#
+# THE CONTROL IS THE ORIGIN HEADER, NOT CORS. Tightening Access-Control-Allow-Origin does not stop a
+# hostile page driving this agent, because CORS governs whether the caller may READ the response and
+# never whether the request ARRIVES. A POST with Content-Type: text/plain is a CORS-simple request, so
+# it skips the preflight entirely, and this proxy ignored Content-Type and json.loads the body anyway.
+# Measured 2026-09-03 against a live cluster from outside:
+#
+#   POST /chat   -H 'Content-Type: text/plain' -d '{}'  ->  200, the handler ran
+#   POST /a2a/   -H 'Content-Type: text/plain' -d '{}'  ->  200, the handler ran
+#   OPTIONS /chat (preflight)                           ->  501, there is no do_OPTIONS
+#
+# So the recommendation in #151 to narrow CORS would have closed nothing. What does close it is
+# rejecting a POST whose Origin is a site we do not serve. Browsers always send Origin on a
+# cross-origin request, so this stops the drive-by; non-browser callers (the in-cluster A2A hop, the
+# verify probes, curl) send no Origin at all and are deliberately unaffected.
+#
+# WHAT THIS DOES NOT DO: it does not authenticate anyone. A direct request from outside a browser has
+# no Origin to check and still reaches the agent, bounded by RATE_LIMIT_RPM and COST_CAP_USD. Closing
+# that needs a shared credential handed out with the cluster URL, which changes the attendee sign-in
+# flow and is a workshop decision rather than a code one. See #151 option 2.
+CONSOLE_ORIGIN = os.environ.get("CONSOLE_ORIGIN", "https://start.agenticburn.com")
+
+
+def _origin_allowed(handler):
+    """True when the request carries no Origin, its own Host, or the instructor console."""
+    origin = handler.headers.get("Origin")
+    if not origin:
+        return True   # not a browser cross-origin request; the A2A hop and every probe land here
+    host = (handler.headers.get("Host") or "").split(":")[0].lower()
+    try:
+        o = urlparse(origin)
+    except Exception:
+        return False
+    if o.hostname and host and o.hostname.lower() == host:
+        return True   # the attendee's own console page, served from this same hostname
+    return origin == CONSOLE_ORIGIN
 PROFANITY = [t.strip().lower() for t in os.environ.get("PROFANITY_LIST", "").split(",") if t.strip()]
 _stream_lock = threading.Lock()
 _prompts = collections.deque(maxlen=50)  # recent MODERATED prompts for the display
@@ -394,7 +432,15 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json")
         # Allow the instructor index (start.agenticburn.com) to read /cost and /prompts cross-subdomain
         # for the one-place live room view. These are read-only, already-moderated surfaces.
-        self.send_header("Access-Control-Allow-Origin", "*")
+        #
+        # Echoed per-request rather than "*", so an arbitrary page cannot read this cluster's spend or
+        # its moderated prompt feed. Vary: Origin keeps a cache from serving one origin's answer to
+        # another. do_OPTIONS is deliberately still absent: a cross-origin preflight therefore fails,
+        # which is a second layer under the Origin check in _origin_allowed.
+        _origin = self.headers.get("Origin")
+        if _origin and _origin_allowed(self):
+            self.send_header("Access-Control-Allow-Origin", _origin)
+            self.send_header("Vary", "Origin")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
@@ -469,6 +515,12 @@ class Handler(BaseHTTPRequestHandler):
             if server_span is not None:
                 server_span.set_attribute("http.request.method", "POST")
                 server_span.set_attribute("url.path", self.path)
+            # Reject a cross-origin browser POST before either handler runs (#151). Both doors are
+            # externally reachable: nginx routes /chat and /a2a/ to this proxy, and both drove the
+            # agent from a hostile origin before this.
+            if not _origin_allowed(self):
+                self._send(403, {"error": "cross-origin request rejected"})
+                return
             # /chat is the BurritoBot storefront contract (B1); everything else is the A2A passthrough.
             if self.path.rstrip("/") == "/chat":
                 self._handle_chat()
