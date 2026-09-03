@@ -1870,12 +1870,13 @@ ingest_one() {
         [[ -n "${console_host}" ]] && break
         sleep 10; waited=$(( waited + 10 ))
     done
-    rm -f "${kcfg}"
-    [[ -n "${console_host}" ]] || { log "  ingest ${name}: console NLB not ready after ${waited}s; skip"; record_fail "ingest:${name}"; return; }
+    # kcfg deliberately stays alive past this point. The terminal credential below is read from the
+    # LIVE Secret rather than the local cache file, so every exit path from here removes it explicitly.
+    [[ -n "${console_host}" ]] || { rm -f "${kcfg}"; log "  ingest ${name}: console NLB not ready after ${waited}s; skip"; record_fail "ingest:${name}"; return; }
     local ak sk
     ak="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f3)"
     sk="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f4)"
-    [[ -n "${ak}" && -n "${sk}" ]] || { log "  ingest ${name}: no persisted AWS creds (${AWS_POOL_DIR}/${name}.csv); skip"; record_fail "ingest:${name}"; return; }
+    [[ -n "${ak}" && -n "${sk}" ]] || { rm -f "${kcfg}"; log "  ingest ${name}: no persisted AWS creds (${AWS_POOL_DIR}/${name}.csv); skip"; record_fail "ingest:${name}"; return; }
     # Datadog org resolution differs by cluster KIND, and getting this wrong is why instructor clusters
     # could not be ingested at all. An attendee cluster resolves by slot: watch-it-burn-attendee-007
     # takes the 7th NON-admin pool entry, matching bootstrap + merge_pool. An instructor cluster
@@ -1900,11 +1901,35 @@ ingest_one() {
     # Username comes from the SAME role split the bootstrap used (#109), never a fleet-wide constant:
     # reporting `sprouts` for an attendee cluster whose Secret says `agentic` hands the student a login
     # that cannot work.
-    local term_user term_pw
-    term_user="$(terminal_creds_for "${name}")"; term_user="${term_user%%:*}"
-    term_pw="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null | tr -d '[:space:]')"
-    term_pw="${term_pw##*:}"   # tolerate either a bare password or a "user:password" pair
-    [[ -n "${term_pw}" ]] || log "  ingest ${name}: WARN no terminal password (${AWS_POOL_DIR}/${name}.terminal); the terminal will prompt and the student cannot log in"
+    # READ THE LIVE SECRET, not the local cache file. The cluster enforces whatever TTYD_CREDENTIAL
+    # says, so that Secret is the only thing entitled to define the credential we hand a student.
+    #
+    # This previously took the username from terminal_creds_for and the password from
+    # ${name}.terminal, which are two different sources that nothing reconciled. The cache file is
+    # written by bootstrap_terminal_auth, so it only tracks the cluster while bootstrap keeps running;
+    # a cluster re-secreted afterwards left the file stale with nothing to correct it. Measured
+    # 2026-09-03: attendee-001 and attendee-002 cached "sprouts" while both clusters enforced
+    # agentic:agentic, so the success page displayed agentic / sprouts. Whitney hit it in a walkthrough
+    # and got in only by guessing the password. Deriving BOTH halves from the Secret makes the
+    # displayed credential wrong only if the cluster itself is wrong.
+    local term_user term_pw live_cred
+    live_cred="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl -n agent get secret terminal-auth \
+        -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+    rm -f "${kcfg}"
+    if [[ "${live_cred}" == *:* ]]; then
+        term_user="${live_cred%%:*}"; term_pw="${live_cred#*:}"
+        # Self-heal the cache so anything still reading the file agrees with the cluster.
+        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${term_pw}" >"${AWS_POOL_DIR}/${name}.terminal"
+        chmod 600 "${AWS_POOL_DIR}/${name}.terminal"
+    else
+        # Fall back to the role split plus the cache only when the Secret cannot be read at all (an
+        # unreachable API server), and say so, because this is the path that can be stale.
+        term_user="$(terminal_creds_for "${name}")"; term_user="${term_user%%:*}"
+        term_pw="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null | tr -d '[:space:]')"
+        term_pw="${term_pw##*:}"   # tolerate either a bare password or a "user:password" pair
+        log "  ingest ${name}: WARN could not read terminal-auth from the cluster; falling back to the cached password, which may be stale"
+    fi
+    [[ -n "${term_pw}" ]] || log "  ingest ${name}: WARN no terminal password; the terminal will prompt and the student cannot log in"
     # The URL the student is actually handed. Two changes from the raw "http://<elb-hostname>" this used
     # to send (#142, #139):
     #   * the MEMORABLE hostname, computed by the same public_host_for() the routes table uses, so the
