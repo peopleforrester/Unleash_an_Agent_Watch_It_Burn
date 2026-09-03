@@ -402,6 +402,11 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     down <name...>    Destroy the named clusters.
     health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
+    converge instructors [round]
+                      Same repair loop, pointed at the roster instead of the attendee pool. These are the
+                      nine clusters the presenters drive from, so a console NLB that has not resolved
+                      here ends the workshop rather than costing one attendee a cluster.
+    converge <name...>  Repair an explicit set, attendee or roster, mixed.
     converge <n>      Re-check an up-fleet run (SAME <n> + WIB_NAME_OFFSET) and REPAIR what is actually
                       broken: hard-refresh unhealthy ArgoCD apps, and wait out LB assignment and DNS
                       resolution on separate budgets. Loops up to \${WIB_CONVERGE_ROUNDS} (default 3).
@@ -1355,6 +1360,18 @@ _account_for_name() {
     # account, the state lookup finds nothing, and a destroy reports success having destroyed nothing.
     local recorded; recorded="$(read_membership "${name}")"
     [[ -n "${recorded}" ]] && { echo "${recorded}"; return 0; }
+    # A ROSTER cluster is not in the attendee numbering at all: watch-it-burn-r2-1 would parse as num=1
+    # and land in the first account regardless of which account round 2 actually lives in. Resolve it by
+    # round, the same way cmd_instructors does.
+    if is_instructor_name "${name}"; then
+        account_for_round "$(round_of_instructor_name "${name}")"; return 0
+    fi
+    # per_account is the divisor below, so a caller with no pool size to offer (converge on explicit
+    # names, for instance) would divide by zero. With no membership record and no pool geometry there is
+    # nothing to reconstruct from, and the default account is the only honest answer.
+    if [[ -z "${per_account}" || "${per_account}" -le 0 ]]; then
+        echo "${WIB_DEFAULT_ACCOUNT}"; return 0
+    fi
     num="${name##*-}"; num="$(( 10#${num} ))"
     idx=$(( (num - WIB_NAME_OFFSET - 1) / per_account ))
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
@@ -1403,22 +1420,58 @@ assert_membership_matches() {
 }
 
 cmd_converge() {
-    local per_account="${1:-}"
-    [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: converge <clusters-per-account>"; exit 2; }
+    # Accepts THREE forms, because the attendee numbering was the only thing it understood (#85):
+    #
+    #   converge <n>                 the attendee pool, n per account (the original, unchanged)
+    #   converge instructors [round] the roster, optionally one round
+    #   converge <name...>           any explicit set, attendee or roster, mixed
+    #
+    # The roster is a separate name space (watch-it-burn-r<round>-<n>) provisioned from roster.tsv and
+    # split across accounts BY ROUND, not by the attendee offset arithmetic. So there was no way to
+    # converge the nine clusters the presenters actually drive from, which are the ones whose console NLB
+    # not resolving in time ends the workshop rather than costing one attendee a cluster. The repair loop
+    # existed and could not be pointed at them.
+    local per_account="" all=() idx=0 acct start n
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+
+    if [[ "${1:-}" == "instructors" ]]; then
+        local round_filter="${2:-}"
+        load_roster
+        local entry nm rnd
+        for entry in "${INSTRUCTORS[@]}"; do
+            nm="${entry%%|*}"; rnd="$(round_of_instructor_name "${nm}")"
+            [[ -z "${round_filter}" || "${rnd}" == "${round_filter}" ]] && all+=("${nm}")
+        done
+        [[ "${#all[@]}" -gt 0 ]] || { log "converge: no roster clusters match round '${round_filter}'"; exit 2; }
+        # Roster clusters resolve their account by round, so the account list this run touches is theirs.
+        accounts=()
+        for nm in "${all[@]}"; do
+            acct="$(account_for_round "$(round_of_instructor_name "${nm}")")"
+            [[ " ${accounts[*]} " == *" ${acct} "* ]] || accounts+=("${acct}")
+        done
+    elif [[ "${1:-}" =~ ^[0-9]+$ && "${1}" -gt 0 ]]; then
+        per_account="$1"
+        for acct in "${accounts[@]}"; do
+            acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+            start=$(( WIB_NAME_OFFSET + idx * per_account + 1 )); idx=$(( idx + 1 ))
+            for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+                all+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
+            done
+        done
+    elif [[ $# -ge 1 ]]; then
+        all=("$@")
+        accounts=()
+        for n in "${all[@]}"; do
+            acct="$(_account_for_name "${n}" 0)"
+            [[ " ${accounts[*]} " == *" ${acct} "* ]] || accounts+=("${acct}")
+        done
+    else
+        log "usage: converge <clusters-per-account> | converge instructors [round] | converge <name...>"
+        exit 2
+    fi
     command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
     require_tools
     mkdir -p "${LOG_DIR}"
-    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
-
-    # The full set this run is responsible for.
-    local all=() idx=0 acct start n
-    for acct in "${accounts[@]}"; do
-        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
-        start=$(( WIB_NAME_OFFSET + idx * per_account + 1 )); idx=$(( idx + 1 ))
-        for n in $(seq "${start}" $(( start + per_account - 1 ))); do
-            all+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
-        done
-    done
 
     local total="${#all[@]}" round=1 remaining=("${all[@]}") still name a
     while [[ "${round}" -le "${CONVERGE_ROUNDS}" && "${#remaining[@]}" -gt 0 ]]; do

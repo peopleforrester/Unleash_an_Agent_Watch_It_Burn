@@ -190,6 +190,24 @@ check("destructive verbs are dry-run unless WIB_APPLY=1", "require_apply" in FLE
 check("teardown runs the tag audit (untagged resources survive a tag-scoped sweep)",
       "tag-audit.sh" in TEARDOWN_SH or "TAG_AUDIT" in TEARDOWN_SH)
 
+print("== the repair loop can reach the clusters the presenters drive from ==")
+# converge built its work set from the ATTENDEE numbering only (#85), so there was no way to point it at
+# the roster. Those are the nine clusters the presenters drive from, and a console NLB that has not
+# resolved on one of them ends the workshop rather than costing one attendee a cluster. The repair loop
+# existed and could not be aimed at the clusters that matter most.
+_conv = FLEET_SH[FLEET_SH.index("cmd_converge() {"):]
+_conv = _conv[:_conv.index("\ncmd_", 1)]
+check("converge accepts the roster", '"${1:-}" == "instructors"' in _conv and "load_roster" in _conv)
+check("converge accepts an explicit set of names", "all=(\"$@\")" in _conv)
+check("roster rounds resolve to their own accounts, not the attendee list",
+      "account_for_round" in _conv)
+# watch-it-burn-r2-1 parses as num=1 under the attendee arithmetic and would land in the first account
+# regardless of which account round 2 lives in; and a caller with no pool size divides by zero.
+check("_account_for_name resolves roster names by round",
+      "is_instructor_name" in FLEET_SH[FLEET_SH.index("_account_for_name() {"):][:1400])
+check("_account_for_name cannot divide by zero on a caller with no pool geometry",
+      '"${per_account}" -le 0' in FLEET_SH[FLEET_SH.index("_account_for_name() {"):][:1400])
+
 print("== the account sweep only deletes resources we own ==")
 # These AWS accounts are CO-TENANT with the Packt project. sweep-account.sh had two paths that operated
 # account-wide with no ownership filter (#90): it enumerated EIPs with no filter at all and released
