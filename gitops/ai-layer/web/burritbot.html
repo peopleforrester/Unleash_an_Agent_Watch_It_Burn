@@ -536,7 +536,19 @@
       if (/(?:^|[-.])(?:a-\d|attendee|student)/.test(s)) return 'r3';
       return '';
     }
-    var r = roundOf(cluster) || roundOf(location.hostname) || 'r1';
+    // DEFAULT r3, NOT r1. The round-3 test above only matches a-NNN / attendee / student, so every
+    // attendee cluster with a themed hostname (hexhen-zelda, sorcerizo-glinda, dragon-potter) matched
+    // nothing and fell through to the old r1 default. A student on their OWN fully-guarded cluster was
+    // therefore told "NO GUARDRAILS - you're talking straight to the model. Nothing is watching", which
+    // is the exact inverse of the truth and contradicts the whole lab. Verified in a browser on
+    // hexhen-zelda 2026-09-03.
+    //
+    // r1 is the wrong default in any case: round clusters are the NAMED, enumerable minority
+    // (michael-round1, round2, r3-1) and always match the pattern above, while attendee clusters are the
+    // open-ended majority whose names deliberately carry no round marker. Defaulting to the guarded
+    // reading also fails safe: mislabelling a guarded cluster as unguarded invites a student to trust
+    // nothing, while the reverse is caught the moment an attack is blocked.
+    var r = roundOf(cluster) || roundOf(location.hostname) || 'r3';
     round=r;
     var sel=document.getElementById('round'); if(sel) sel.value=r;
     var b=document.getElementById('banner'); if(b) b.className='ibanner '+ROUNDS[r].cls;
