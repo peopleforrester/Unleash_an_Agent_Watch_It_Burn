@@ -43,9 +43,9 @@ import sys
 #
 # Reading the cluster's own state here means the test measures the same thing a student can measure, so
 # a badge that disagrees with the cluster fails regardless of what either side believes about the
-# hostname. The page renders eight badges from /controls ({ai:{...}, infra:{...}}); each badge is lit
-# iff its backing field is true. Falco is always-on, so its badge is always lit. This mapping mirrors
-# the BADGES array in burritbot.html; kept here independently so a drift in either fails the test.
+# hostname. The page renders a badge from /controls ({ai:{...}, infra:{...}}) ONLY for a control that
+# is on (#211: no grayed-out placeholders), so the rendered count equals the number of controls on.
+# This mapping mirrors the BADGES array in burritbot.html; kept here independently so a drift fails.
 BADGE_FIELDS = [
     ("infra", "networkpolicy"), ("infra", "kyverno"), ("infra", "kubearmor"),
     ("infra", "falco"),
@@ -76,24 +76,28 @@ async def check(page, host: str) -> tuple[bool, str]:
         return False, "/controls did not answer, so the badges cannot be verified"
     want_lit = expected_lit(controls)
 
-    # The badges are filled in by the first poll rather than being present in the markup, so give them a
-    # moment. Asserting immediately would race the fetch and read the empty strip.
+    # Badges now APPEAR only when their control is installed (#211): no grayed-out placeholders. So the
+    # count of rendered badges must equal the number of controls /controls reports on, and every rendered
+    # badge carries the lit class. On an unguarded cluster the strip is empty and the empty-state note
+    # shows instead. Give the first /controls poll a moment to land.
     try:
         await page.wait_for_function(
-            "() => document.querySelectorAll('#badges .bdg').length >= 9",
+            f"() => {{ const b=document.querySelectorAll('#badges .bdg').length;"
+            f"        const note=document.getElementById('badgesnote');"
+            f"        return b === {want_lit} && (note ? (note.hidden === (b>0)) : true); }}",
             timeout=15_000,
         )
     except Exception:
-        return False, "badge strip never populated all nine (the /controls poll did not land)"
+        rendered = await page.evaluate("() => document.querySelectorAll('#badges .bdg').length")
+        return False, f"{rendered} badges rendered but /controls implies {want_lit} (poll may not have landed)"
 
-    lit = await page.evaluate("() => document.querySelectorAll('#badges .bdg.on').length")
-    falco_lit = await page.evaluate(
-        "() => Array.from(document.querySelectorAll('#badges .bdg.on'))"
-        ".some(e => /Falco/.test(e.textContent))")
-    if not falco_lit:
-        return False, "Falco badge is not lit, but Falco is always engaged"
-    if lit != want_lit:
-        return False, f"{lit} badge(s) lit but /controls implies {want_lit} should be"
+    rendered = await page.evaluate("() => document.querySelectorAll('#badges .bdg').length")
+    all_on = await page.evaluate(
+        "() => Array.from(document.querySelectorAll('#badges .bdg')).every(e => e.classList.contains('on'))")
+    if rendered != want_lit:
+        return False, f"{rendered} badges rendered but /controls implies {want_lit}"
+    if rendered and not all_on:
+        return False, "a rendered badge is not lit; only installed controls should render"
 
     # Send a prompt through the PAGE's own fetch, so the browser attaches Origin exactly as it does for a
     # student. This is the check the 403 would have failed.
@@ -138,7 +142,7 @@ async def check(page, host: str) -> tuple[bool, str]:
     if not send_visible:
         return False, "Send button is not visible in the viewport"
 
-    return True, f"{lit} badge(s) lit, chat 200, answer {len(visible)} chars"
+    return True, f"{rendered} badge(s), chat 200, answer {len(visible)} chars"
 
 
 async def main(hosts: list[str]) -> int:

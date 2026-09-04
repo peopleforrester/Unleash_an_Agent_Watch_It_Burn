@@ -1,5 +1,5 @@
 <!-- ABOUTME: BurritoBot customer chat frontend (issue #38 / B1). Real chat: POST {prompt} -> /chat, renders
-     ABOUTME: {reply,guarded,tokens}. Backend-agnostic (Vertex or Bedrock). Round dropdown repoints the backend. -->
+     ABOUTME: {reply,guarded,tokens}. Backend-agnostic (Vertex or Bedrock). -->
 <!doctype html>
 <html lang="en">
 <head>
@@ -50,19 +50,10 @@
   header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap;margin-left:7px}
   header a.hb:hover{background:rgba(255,255,255,.28)}
   @media(max-width:760px){header a.hb{font-size:11px;padding:6px 9px;margin-left:5px}header{flex-wrap:wrap;row-gap:7px}}
-  .round-pick{display:flex;align-items:center;gap:8px;font-size:13px}
-  .round-pick label{opacity:.85}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
   .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
-  /* condensed round/cluster banner, lives in the right infra band */
-  .ibanner{padding:0.7rem 0.8rem;color:#fff;font-weight:800;letter-spacing:.3px;border-radius:12px;font-size:0.81rem}
-  .ibanner .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35);margin-right:7px}
-  .ibanner.r1{background:var(--r1)}.ibanner.r2{background:var(--r2)}.ibanner.r3{background:var(--r3)}
-  .ibanner .ibsub{font-weight:600;opacity:.95;font-size:11.5px;margin-top:6px;line-height:1.35}
-  /* Per-control badges (Whitney + Michael, 2026-09-04): each guardrail the student installs shows up as
-     its own badge naming the actual tool, instead of a single NO/SOME/ALL summary in our own
-     "guardrails" vocabulary. A badge is dim until its control is measured ON, then lights up. Driven by
-     /guards (the AI guards the student toggles); infra badges join once #160/#197's reader lands. */
+  /* Per-control badges: a badge APPEARS only when its control is measured ON (no grayed-out
+     placeholders, #211). Driven by the /controls poll; names the actual tool the student installed. */
   .badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
   .bdg{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
        border-radius:999px;padding:4px 10px;border:1px solid var(--line);background:#fff;color:var(--mid);
@@ -70,7 +61,13 @@
   .bdg .bdot{width:8px;height:8px;border-radius:50%;background:#c9bce0;flex:none}
   .bdg.on{opacity:1;background:var(--r3);color:#fff;border-color:var(--r3)}
   .bdg.on .bdot{background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
-  .badgesnote{font-size:11.5px;color:var(--mid);margin:4px 0 2px;line-height:1.35}
+  .badgesnote{font-size:11.5px;color:var(--mid);margin:4px 0 2px;line-height:1.35;font-style:italic}
+  /* Workshop Panel header (#212): marks the right column as workshop/infra, visually apart from the
+     BurritoBot storefront so a first-time student does not read it as part of the app. */
+  .panelhdr{display:flex;flex-direction:column;gap:2px;font-weight:800;font-size:13px;color:#0d3b2e;
+            background:#e6f4ec;border:1px solid #bfe3d0;border-left:4px solid var(--r3);
+            border-radius:10px;padding:9px 12px;margin-bottom:2px}
+  .panelhdr .panelsub{font-weight:600;font-size:11px;color:#3a6a54;opacity:.9}
   /* #144: the hard max-width:1340px meant a 2560 or 3840 display rendered the same columns as a laptop
      with dead margins either side, and nothing used the extra space. The cap is now fluid: it grows with
      the viewport and only stops at a width where line length would get uncomfortable. Padding and gap
@@ -97,8 +94,6 @@
   .composer button:disabled{opacity:.5;cursor:default}
   .store{flex:1 1 auto;display:flex;min-width:0;min-height:0;gap:18px}
   .infra{width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;padding-left:18px;border-left:2px solid var(--line)}
-  .ipick{display:flex;flex-direction:column;gap:6px}
-  .ipick label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
   .imrow{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0}
   .imlbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
   .imval{font-variant-numeric:tabular-nums;font-weight:800;font-size:1rem;color:var(--ink)}
@@ -311,33 +306,29 @@
       </div>
     </div>
     </div><!-- /.store -->
-    <aside class="infra"><!-- right: all the infra/info, sequestered from the storefront -->
-      <div class="ipick">
-        <label for="round">Choose</label>
-        <select id="round" onchange="setRound(this.value)">
-          <option value="r1">Round 1 — No guardrails</option>
-          <option value="r2">Round 2 — Some guardrails</option>
-          <option value="r3">Round 3 — Your cluster</option>
-        </select>
+    <!-- WORKSHOP PANEL. Deliberately distinct from the BurritoBot storefront: a first-time student must
+         read this column as the workshop watching the app, not as part of the app they are ordering from
+         (Whitney, 2026-09-05, #212). No round selector: students only ever use their own cluster, and
+         "rounds" is admin-only jargon (#213). -->
+    <aside class="infra">
+      <div class="panelhdr">&#128295; Workshop Panel<span class="panelsub">what the workshop sees, not BurritoBot</span></div>
+      <!-- Guardrails the student has installed. A badge APPEARS only when its control is on; nothing is
+           shown grayed-out, because dim placeholders telegraph how many controls exist and spoil the arc
+           (Whitney, 2026-09-05, #211). The empty-state header is shown until the first control goes in. -->
+      <div class="card">
+        <h3>Guardrails installed</h3>
+        <div id="badges" class="badges" aria-live="polite"></div>
+        <div id="badgesnote" class="badgesnote">Guardrails will appear here when you install them.</div>
       </div>
-      <!-- Per-control badges, filled in by the first /guards poll (init). Whitney and Michael both asked
-           for a badge per real control that lights up as the student installs it, instead of a single
-           NO/SOME/ALL banner in our own "guardrails" vocabulary. Starts with a checking note; the
-           badges strip and the note are written by applyGuardState. -->
-      <div id="badges" class="badges" aria-live="polite"></div>
-      <div id="badgesnote" class="badgesnote">Checking which guardrails are on…</div>
       <div class="card">
         <div class="imrow"><span class="imlbl">Tokens</span><b class="imval" id="tokens">0</b></div>
         <div class="imrow"><span class="imlbl">Cost</span><b class="imval" id="costusd">$0.0000</b></div>
-        <!-- The spend ceiling, shown as soon as the backend reports one (#138). A cap nobody can see reads
-             as "unlimited" until it stops working. Hidden when the backend reports no cap. -->
-        <div class="imrow" id="caprow" style="display:none"><span class="imlbl">Spend cap</span><b class="imval" id="capusd"></b></div>
       </div>
       <div class="card">
         <h3 style="display:flex;align-items:center;gap:8px">Your saved prompts
           <button type="button" id="clearsaved" onclick="clearSaved()" title="Remove every saved prompt">clear</button>
         </h3>
-        <div class="saved" id="saved"><div class="hint">Every prompt you send is saved here, reuse it in the next round.</div></div>
+        <div class="saved" id="saved"><div class="hint">Every prompt you send is saved here, reuse it any time.</div></div>
       </div>
       <div class="clusterid" id="clusterid"></div>
     </aside>
@@ -359,12 +350,9 @@
   // right backend with NO cross-origin call (a cross-origin POST triggers a CORS preflight the backend
   // returns 501 on -> the browser blocks it -> "couldn't reach the kitchen"). The round is for DISPLAY
   // (the banner); the backend is always this cluster.
-  const ROUND_ENDPOINTS = { r1:"/chat", r2:"/chat", r3:"/chat" };
-  const ROUNDS={
-    r1:{cls:'r1',t:'NO GUARDRAILS',s:"— you're talking straight to the model. Nothing is watching. (round-1 cluster)"},
-    r2:{cls:'r2',t:'SOME GUARDRAILS',s:'— infra guardrails are on (AI guardrails are NOT enabled in round 2). Try the same prompts and watch the platform controls block them. (round-2 cluster)'},
-    r3:{cls:'r3',t:'ALL GUARDRAILS',s:"— infra + AI guardrails are available; turn them on yourself in the terminal. (round-3 cluster)"}
-  };
+  // The backend is always this cluster's own console, same-origin, so there is one endpoint. The round
+  // selector is gone (#213): students only ever use their own cluster and "rounds" is admin jargon.
+  const CHAT_ENDPOINT = "/chat";
   // THE BANNER REPORTS MEASURED STATE, NOT A GUESS FROM THE HOSTNAME.
   //
   // It used to be derived from the cluster name, and that inverted twice in one day. First it defaulted
@@ -399,43 +387,35 @@
   // Accepts the /controls shape {ai:{...}, infra:{...}}. Tolerates the older /guards shape (a flat AI
   // object) so a stale cache or a proxy that predates /controls still lights the AI badges instead of
   // showing everything dark.
+  // Render a badge ONLY for a control that is measured ON. No grayed-out placeholders: dim badges
+  // telegraph how many controls exist and spoil the arc (Whitney, 2026-09-05, #211). The panel starts
+  // empty with a header, and fills in one badge at a time as the student installs each control.
   function applyControls(c){
     var strip=document.getElementById('badges'); if(!strip) return;
     var ai    = (c && c.ai)    ? c.ai    : (c || {});
     var infra = (c && c.infra) ? c.infra : {};
-    var installed=0, toggleable=0;
+    var shown=0;
     strip.innerHTML='';
     BADGES.forEach(function(bd){
-      var v = (bd.src==='infra') ? infra[bd.key] : ai[bd.key];
-      var on = v===true;
-      if(!bd.always){ toggleable++; if(on) installed++; }
+      var on = ((bd.src==='infra') ? infra[bd.key] : ai[bd.key]) === true;
+      if(!on) return;                          // absent-until-installed
+      shown++;
       var el=document.createElement('span');
-      el.className='bdg'+(on?' on':'');
+      el.className='bdg on';
       el.innerHTML='<span class="bdot"></span>'+bd.label;
-      el.title = bd.always ? bd.label+' is always watching'
-               : (on ? bd.label+' is installed on this cluster' : bd.label+' is not installed yet');
+      el.title=bd.label+' is installed on this cluster';
       strip.appendChild(el);
     });
     var note=document.getElementById('badgesnote');
-    if(note){
-      note.textContent = installed===0
-        ? "No guardrails installed yet. You are talking straight to the model, so anything that pushes back is the model's own judgement, not a control stopping it."
-        : "Installed guardrails are lit. Send an attack that worked before you installed one and watch the difference.";
-    }
+    if(note) note.hidden = shown>0;            // header shows only while the panel is empty
   }
   // Back-compat alias: earlier code and any external caller referenced applyGuardState.
   function applyGuardState(g){ applyControls(g); }
-  let round='r1', tokens=0, costUsd=0, busy=false, unreachable=0;
+  let tokens=0, costUsd=0, busy=false, unreachable=0;
   // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
   // 5-step order across turns. Reset starts a fresh order (new id).
   function newSession(){var s='sess-'+Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('wib-sess',s);return s;}
   function getSession(){return sessionStorage.getItem('wib-sess')||newSession();}
-  // Selecting a round does NOT relabel the banner. ROUND_ENDPOINTS is all "/chat" (see the note above
-  // it): the backend is always this cluster, so the selector changes nothing about what is guarding the
-  // next message. Writing ROUNDS[r] into the banner here would overwrite the measured state with a
-  // label, which is the same inversion applyGuardState exists to end.
-  function setRound(r){round=r;
-    sys('Round set to '+ROUNDS[r].t.toLowerCase()+' for reference. The guardrail banner shows what is actually on for THIS cluster.');}
   function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
   // Nova emits its scratchpad wrapped in <thinking>...</thinking> and the raw tags were rendering into the
   // customer chat (seen live on round1, 2026-09-02). It is FOLDED, never dropped: a workshop about what
@@ -490,7 +470,7 @@
   function clearSaved(){
     try{ localStorage.removeItem('wib-saved'); }catch(e){}
     const s=document.getElementById('saved');
-    if(s) s.innerHTML='<div class="hint">Every prompt you send is saved here, reuse it in the next round.</div>';
+    if(s) s.innerHTML='<div class="hint">Every prompt you send is saved here, reuse it any time.</div>';
   }
   function resetChat(){
     document.getElementById('stream').innerHTML='';
@@ -542,7 +522,7 @@
     const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
     const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
     try{
-      const res=await fetch(ROUND_ENDPOINTS[round],{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v,session:getSession()})});
+      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v,session:getSession()})});
       t.remove();
       // The cluster RESPONDED (even an error status means it is alive) — never show the cluster-dead
       // screen here; that is reserved for a genuinely unreachable cluster (the catch below).
@@ -558,7 +538,7 @@
       // Could not reach the cluster at all (network error). One blip is transient; only treat the
       // cluster as actually down after two in a row, then show the real cluster-dead screen.
       t.remove(); unreachable++;
-      if(unreachable>=2){ noBurritos(true,'(no cluster connected — round '+round.slice(1)+')'); }
+      if(unreachable>=2){ noBurritos(true,'(no cluster connected)'); }
       else { bubble("Couldn't reach the kitchen just now, give it a moment and send that again.",'bot'); }
     }finally{ busy=false; document.getElementById('sendbtn').disabled=false; i.focus(); }
   }
@@ -592,63 +572,17 @@
   // the backend check so flipping the budget guard live updates the number without a reload. Server-side
   // spend is authoritative here (it survives a page reload; the local counter does not), so use it when it
   // is ahead of what this tab has accumulated.
+  // Keep the Cost counter authoritative (server spend survives a reload; the local tally does not).
+  // The spend-cap display was removed (#214): "infra backstop, not a guardrail" confused students. The
+  // C4 budget cap still ENFORCES at the proxy; only its confusing UI readout is gone.
   async function refreshCap(){
     try{
       const r=await fetch('/cost',{cache:'no-store'}); if(!r.ok) return;
       const d=await r.json();
-      const row=document.getElementById('caprow'), el=document.getElementById('capusd');
-      if(!row||!el) return;
-      if(d.cap_usd>0){
-        // Say WHICH cap this is. A bare dollar figure on a round-1 cluster reads as protection, and
-        // round 1 is the cluster where the whole point of challenge 4 is that nothing stops the bill.
-        // The number shown is the infra backstop until the budget guard is toggled on; those are
-        // different things and the label now says so.
-        el.textContent='$'+Number(d.cap_usd).toFixed(2)+(d.budget_guard?' (budget guard ON)':' (infra backstop, not a guardrail)');
-        row.style.display='';
-      } else { row.style.display='none'; }
       if(typeof d.usd==='number' && d.usd>costUsd){
         costUsd=d.usd; document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
       }
     }catch(e){}
-  }
-  // Set the banner (round) from the cluster name so each cluster shows the right guardrail state.
-  function applyRoundFromCluster(cluster){
-    // Derive the round from the cluster name if we have one, otherwise from the hostname.
-    //
-    // These are checked SEPARATELY and in this order. Concatenating them into one string and running a
-    // single regex silently failed whenever there was no ?cluster= parameter: the hostname then sat
-    // behind a space, which is neither a start-of-string nor a [-.], so nothing matched and every host
-    // fell through to the r1 default. Typing round2.agenticburn.com straight into a browser therefore
-    // showed the "no guardrails" banner on the guarded cluster, which inverts the one thing the banner
-    // exists to say. That is the path attendees actually use to attack rounds 1 and 2 from a single URL.
-    //
-    // Hostname forms that must work: michael-round2, whitney-round2, round2 (shared alias), r2-1
-    // (legacy), and the attendee/student forms which are round-3 shaped.
-    function roundOf(s){
-      s = (s || '').toLowerCase();
-      var m = s.match(/(?:^|[-.])r(?:ound)?([123])(?:[-.]|$)/);
-      if (m) return 'r' + m[1];
-      if (/(?:^|[-.])(?:a-\d|attendee|student)/.test(s)) return 'r3';
-      return '';
-    }
-    // DEFAULT r3, NOT r1. The round-3 test above only matches a-NNN / attendee / student, so every
-    // attendee cluster with a themed hostname (hexhen-zelda, sorcerizo-glinda, dragon-potter) matched
-    // nothing and fell through to the old r1 default. A student on their OWN fully-guarded cluster was
-    // therefore told "NO GUARDRAILS - you're talking straight to the model. Nothing is watching", which
-    // is the exact inverse of the truth and contradicts the whole lab. Verified in a browser on
-    // hexhen-zelda 2026-09-03.
-    //
-    // r1 is the wrong default in any case: round clusters are the NAMED, enumerable minority
-    // (michael-round1, round2, r3-1) and always match the pattern above, while attendee clusters are the
-    // open-ended majority whose names deliberately carry no round marker. Defaulting to the guarded
-    // reading also fails safe: mislabelling a guarded cluster as unguarded invites a student to trust
-    // nothing, while the reverse is caught the moment an attack is blocked.
-    var r = roundOf(cluster) || roundOf(location.hostname) || 'r3';
-    round=r;
-    var sel=document.getElementById('round'); if(sel) sel.value=r;
-    // DELIBERATELY DOES NOT TOUCH THE BANNER. This function only knows a hostname, and a hostname does
-    // not know which guards are on. applyGuardState owns the banner and is driven by /guards; see the
-    // note on applyGuardState/BADGES for the two inversions that came from guessing it here.
   }
   (function init(){
     var q=new URLSearchParams(location.search);
@@ -668,7 +602,6 @@
     if(_pretty){var txt='Cluster '+_pretty+(user?(' \u00b7 '+user):'');
       var ci=document.getElementById('clusterid'); if(ci){ci.textContent=txt; ci.title=cluster||'';}
       var cf=document.getElementById('clusterfoot'); if(cf){cf.textContent=txt; cf.title=cluster||'';}}
-    applyRoundFromCluster(cluster);
     try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
     setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
   })();
