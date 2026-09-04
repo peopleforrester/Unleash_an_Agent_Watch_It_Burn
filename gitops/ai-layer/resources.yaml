@@ -817,9 +817,114 @@ spec:
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: "2", memory: 8Gi } }
           volumeMounts:
             - { name: work, mountPath: /home/student/work }
+            # The fix manifests the student APPLIES in C1 and C3 (#160). Read-only, so the student
+            # applies them as-is (kubectl apply -f ~/challenges/...). Staged as a mount rather than a
+            # heredoc in the lab because C1 is five NetworkPolicies and pasting ~50 lines of
+            # indentation-sensitive YAML into a terminal in a live room is the fragile path.
+            - { name: challenge-fixes, mountPath: /home/student/challenges, readOnly: true }
       volumes:
         - name: work
           persistentVolumeClaim: { claimName: student-work }
+        - name: challenge-fixes
+          configMap: { name: challenge-fixes }
+---
+# The C1 and C3 fix manifests the student applies themselves (#160). These mirror the platform's own
+# policies (policies/network-policies/per-namespace/agent-*.yaml and policies/kubearmor/
+# block-recipe-snoop.yaml); the attendee profile OMITS those from the cluster's desired state so the
+# attacks work, and the student installs them from here. C1 is the WHOLE agent policy set, not just the
+# default-deny: agent-egress-allowlist alone permits only TCP 443, and DNS is a separate UDP-53 allow,
+# so applying the deny without its companions would break the agent's DNS and the model call with it.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: challenge-fixes
+  namespace: agent
+data:
+  c1-network-policy.yaml: |
+    # Challenge 1 fix: lock down egress from the agent namespace.
+    # Default-deny plus the allows the agent needs to keep working (DNS, the model over PrivateLink,
+    # in-cluster telemetry). Apply all of it together: the deny alone would cut DNS.
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-egress-allowlist
+      namespace: agent
+    spec:
+      podSelector: {}
+      policyTypes: [Egress]
+      egress:
+        - to: [{ ipBlock: { cidr: 10.0.0.0/16 } }]      # in-VPC: Bedrock PrivateLink + API server
+          ports: [{ protocol: TCP, port: 443 }]
+        - to: [{ ipBlock: { cidr: 172.20.0.0/16 } }]    # the EKS service CIDR
+          ports: [{ protocol: TCP, port: 443 }]
+        - to: [{ ipBlock: { cidr: 169.254.170.23/32 } }] # the EKS Pod Identity agent
+          ports: [{ protocol: TCP, port: 80 }]
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-dns
+      namespace: agent
+    spec:
+      podSelector: {}
+      policyTypes: [Egress]
+      egress:
+        - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } } }]
+          ports:
+            - { protocol: UDP, port: 53 }
+            - { protocol: TCP, port: 53 }
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-otel-egress
+      namespace: agent
+    spec:
+      podSelector: {}
+      policyTypes: [Egress]
+      egress:
+        - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: monitoring } } }]
+          ports:
+            - { protocol: TCP, port: 4317 }
+            - { protocol: TCP, port: 4318 }
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-kagent-egress
+      namespace: agent
+    spec:
+      podSelector: {}
+      policyTypes: [Egress]
+      egress:
+        - to: [{ namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kagent } } }]
+    ---
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-intra-namespace
+      namespace: agent
+    spec:
+      podSelector: {}
+      policyTypes: [Egress]
+      egress:
+        - to: [{ podSelector: {} }]
+  c3-kubearmor-policy.yaml: |
+    # Challenge 3 fix: block reads of the recipe file inline, in the kernel, for the agent's tool pod.
+    apiVersion: security.kubearmor.com/v1
+    kind: KubeArmorPolicy
+    metadata:
+      name: block-recipe-snoop
+      namespace: agent
+    spec:
+      selector:
+        matchLabels:
+          app: workshop-mcp
+      file:
+        matchDirectories:
+          - dir: /tmp/burrito-data/config/legacy/
+            recursive: true
+      action: Block
 ---
 # The attendee's working tree, kept across a pod restart.
 #

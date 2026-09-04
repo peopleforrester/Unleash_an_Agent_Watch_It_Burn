@@ -241,32 +241,14 @@
             <div class="ctlbody">
               <p><b>What is going on.</b> By default, any pod in a Kubernetes cluster can open a connection to anywhere. Another pod, another namespace, or any address on the internet. Nothing stops it. So an agent that can be talked into making an outbound call can be talked into making it to an address you chose.</p>
               <p><b>What a NetworkPolicy is.</b> A firewall rule for pods, written as a Kubernetes object. You list the destinations that are allowed, and the cluster drops everything else. It is enforced by the network plugin in the cluster itself, so the agent cannot opt out of it, talk its way around it, or even find out it is there.</p>
-              <p><b>The policy below</b> says: pods in the <code class="inl">agent</code> namespace may talk to <code class="inl">10.0.0.0/16</code>, and nowhere else. That range is this cluster's own private network. The model BurritoBot calls lives inside it, reached over a private AWS link rather than the public internet, so ordering a burrito still works normally. <code class="inl">agenticburn.com</code> is a public address, and public addresses are not on the list. BurritoBot still tries to send. The connection is refused before it leaves the node, and the data goes nowhere.</p>
-              <div class="cmd" onclick="cp(this)">kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml<button class="cp">copy</button></div>
-              <pre class="yaml">kind: NetworkPolicy
-metadata:
-  name: agent-egress-allowlist
-  namespace: agent
-spec:
-  podSelector: {}          # every pod in the namespace
-  policyTypes: [Egress]
-  egress:
-    - to:
-        - ipBlock:
-            cidr: 10.0.0.0/16   # in-VPC only: Bedrock's endpoint + the API server
-      ports:
-        - {protocol: TCP, port: 443}</pre>
-              <p><b>Prove it is the policy stopping you.</b> Reach out from inside the agent's own namespace to the webhook you just tried to exfiltrate to. It hangs and fails, because the policy drops it:</p>
+              <p><b>Look at what you are about to apply.</b> The default-deny is only part of it. That rule alone would also cut the agent's DNS and its path to the model, so the file pairs it with the exact allows the agent needs and nothing else: your cluster's private network for the model, kube-system for DNS, the telemetry collector, and the kagent namespace.</p>
+              <div class="cmd" onclick="cp(this)">cat ~/challenges/c1-network-policy.yaml<button class="cp">copy</button></div>
+              <p><b>Apply it.</b></p>
+              <div class="cmd" onclick="cp(this)">kubectl apply -f ~/challenges/c1-network-policy.yaml<button class="cp">copy</button></div>
+              <p><b>Now run the exact same attack again.</b> Send that exfil prompt back to BurritoBot. It still tries to POST the demographics to the webhook, and the connection is refused before it leaves the node, so the data goes nowhere. Ordering a burrito still works, because the model is reached over the private network the policy allows.</p>
+              <p><b>Prove it is the policy, not luck.</b> Reach out to that webhook from inside the agent's own namespace. It hangs and fails:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/workshop-mcp -- curl -s -m 6 -o /dev/null -w 'exit=%{http_code}\n' https://agenticburn.com/beacon || echo "blocked by the NetworkPolicy"<button class="cp">copy</button></div>
-              <p class="small">A NetworkPolicy drops packets silently, so there is no "denied" message to find in a log. The proof is the absence: the same request that reaches anything else on the internet from your laptop cannot leave this namespace.</p>
-              <!-- SEQUENCING DEPENDS ON #160. Attendee clusters currently ship with this NetworkPolicy
-                   already applied, so the student's first attempt is blocked and there is no fix left
-                   for them to apply. Whitney's pattern (#196) wants the attack to succeed, then the
-                   student applies the policy and re-runs the SAME prompt to watch it fail. That needs
-                   the attendee pool bootstrapped without the three infra guardrails. When #160 lands,
-                   this section gains an "apply it" step and a "now send that prompt again" step, and
-                   the wording above changes from "is already here" to "you just turned it on". Written
-                   as-is deliberately rather than claiming an attack succeeded when it did not. -->
+              <p class="small">A NetworkPolicy drops packets silently, so there is no "denied" line in a log. The proof is the absence: the same request that reaches anything on the internet from your laptop cannot leave this namespace. Watch the NetworkPolicy badge on your BurritoBot tab light up once the policy is in.</p>
             </div>
           </details>
 
@@ -294,24 +276,25 @@ spec:
               <p><b>What is going on.</b> The agent asked the cluster to run a container and the cluster did it. Nothing inspected what was being run, where the image came from, or whether anyone had ever looked at it. Deleting the pod afterwards is too late, because by then it has already started.</p>
               <p><b>What admission control is.</b> Every change to a Kubernetes cluster arrives at the API server as a request. Admission control is a checkpoint in front of that: before the object is written down, a policy engine gets to look at it and say yes or no. A rejected workload never runs at all, so there is no window where the villain is live.</p>
               <p><b>Cluster-level policy</b> is the general idea, and several CNCF projects do it: <a href="https://open-policy-agent.github.io/gatekeeper/" target="_blank" rel="noopener">OPA Gatekeeper</a>, <a href="https://kyverno.io/docs/" target="_blank" rel="noopener">Kyverno</a>, and <a href="https://kubewarden.io/" target="_blank" rel="noopener">Kubewarden</a>. They differ mostly in how you write the rules. We use Kyverno here because its policies are plain YAML rather than a separate policy language, and it is already installed on your cluster.</p>
-              <p><b>The policy below</b> is an allowlist of registries. Anything whose image does not match an approved pattern is refused. A friendly image name buys nothing, because the rule matches on where the image comes from and not what it is called: <code class="inl">docker.io/peopleforrester/*</code> is not on the list.</p>
+              <p><b>The policy is already installed, but only watching.</b> A registry allow-list is on your cluster in <code class="inl">Audit</code> mode: it logs a violation and lets the workload run. That is why your villain deployed. Look at it:</p>
               <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy restrict-image-registries -o yaml<button class="cp">copy</button></div>
-              <pre class="yaml">kind: ClusterPolicy
-metadata:
-  name: restrict-image-registries
-spec:
+              <pre class="yaml">spec:
   rules:
     - name: validate-registries
       match:
         any: [{resources: {kinds: [Pod], namespaces: [apps, agent]}}]
       validate:
-        failureAction: Enforce
+        failureAction: Audit          # &lt;- watching, not blocking. You flip this.
         pattern:
           spec:
             containers:
               - image: "harbor.agenticburn.com/* | ghcr.io/*
                        | docker.io/library/* | registry.k8s.io/*
                        | *.dkr.ecr.*.amazonaws.com/*"</pre>
+              <p>An image name buys nothing against it: the rule matches where the image comes from, and <code class="inl">docker.io/peopleforrester/*</code> is not on the list. It just is not enforcing yet.</p>
+              <p><b>Flip it to Enforce.</b></p>
+              <div class="cmd" onclick="cp(this)">kubectl patch clusterpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/rules/0/validate/failureAction","value":"Enforce"}]'<button class="cp">copy</button></div>
+              <p><b>Now run the same attack again.</b> Ask BurritoBot to deploy the same villain. This time admission refuses it before it ever runs, and BurritoBot reports the deployment was rejected by a named policy. Delete the pod from the first attempt if it is still running (<code class="inl">kubectl -n agent delete deploy promo-mascot</code>); the point is that a NEW one can no longer be created. Your Kyverno badge lights once it is enforcing.</p>
             </div>
           </details>
 
@@ -338,27 +321,17 @@ spec:
               <p><b>What runtime security is.</b> The controls in the previous two challenges act before something runs: a NetworkPolicy decides what a pod may connect to, admission control decides whether a workload starts. Runtime security is the layer for what a process does <i>while it is already running</i>, which is the only place an attack like this one shows up. It answers a different question: not "should this exist" but "should this process be allowed to do that, right now".</p>
               <p><b>Two CNCF projects do this and they do different jobs.</b> <a href="https://kubearmor.io/" target="_blank" rel="noopener">KubeArmor</a> <b>prevents</b>: it refuses the action as it happens. <a href="https://falco.org/docs/" target="_blank" rel="noopener">Falco</a> <b>detects</b>: it watches and raises an alert. You want both, and this challenge is the clearest place to see why. Blocking with nothing watching means nobody ever learns the attack was attempted. Watching with nothing blocking means the recipe has already left by the time the alert arrives. Both are installed on your cluster.</p>
               <p><b>How KubeArmor blocks it.</b> The Linux kernel has a built-in hook point for security decisions, and KubeArmor loads a small program into it that runs on every file access from the pods you select. Because the check happens in the kernel, on the path the read has to travel, the process cannot go around it, cannot detect it, and does not get the bytes. It is not the container asking permission and being refused; it is the kernel declining to hand the data over.</p>
-              <p><b>The policy below</b> selects the agent's tool pod by label and blocks reads under the directory the recipe lives in.</p>
-              <div class="cmd" onclick="cp(this)">kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml<button class="cp">copy</button></div>
-              <pre class="yaml">kind: KubeArmorPolicy
-metadata:
-  name: block-recipe-snoop
-  namespace: agent
-spec:
-  selector:
-    matchLabels:
-      app: workshop-mcp
-  file:
-    matchDirectories:
-      - dir: /tmp/burrito-data/config/legacy/
-        recursive: true
-  action: Block</pre>
-              <p><b>See the prevention.</b> Try to read the file yourself, from inside the same container the agent uses. You have cluster-admin on this cluster and it still will not open:</p>
+              <p><b>First, see the detection that already happened.</b> Your attack just succeeded, and Falco was watching. It has a rule for exactly this file, in the <code class="inl">security</code> namespace, and it fired the moment the recipe was read:</p>
+              <div class="cmd" onclick="cp(this)">kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=40 | grep -i "recipe\|sensitive"<button class="cp">copy</button></div>
+              <p>Falco-Talon reacts to that alert by killing the offending pod, so watch the tool pod restart:</p>
+              <div class="cmd" onclick="cp(this)">kubectl -n agent get pods -l app=workshop-mcp -w<button class="cp">copy</button></div>
+              <p class="small">Detection told you it happened and Talon responded, but the recipe was still read before any of that. Detection alone is a smoke alarm after the fire. Press Ctrl+C to stop watching.</p>
+              <p><b>Now add prevention.</b> The file below selects the agent's tool pod by label and blocks reads under the recipe directory, in the kernel, so the read never completes. Look at it, then apply it:</p>
+              <div class="cmd" onclick="cp(this)">cat ~/challenges/c3-kubearmor-policy.yaml<button class="cp">copy</button></div>
+              <div class="cmd" onclick="cp(this)">kubectl apply -f ~/challenges/c3-kubearmor-policy.yaml<button class="cp">copy</button></div>
+              <p><b>Run the same attack again.</b> Ask BurritoBot to grep for the recipe once more. This time the read is refused in the kernel and the agent gets nothing back. Prove it yourself from inside the tool pod, where even cluster-admin cannot open the file:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/workshop-mcp -- cat /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf<button class="cp">copy</button></div>
-              <p><b>The detection half.</b> Falco is watching the same filesystem, in the <code class="inl">security</code> namespace, and it has a rule for exactly this file. It is running right now:</p>
-              <div class="cmd" onclick="cp(this)">kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=5<button class="cp">copy</button></div>
-              <p>Its rule for the recipe fires on a file being <i>successfully read</i>. So once KubeArmor is in place, that rule never fires again, because there is never a successful read to see. Prevention and detection are answering different questions, and the order you apply them in decides which one you get to watch.</p>
-              <p class="small">That is the argument for running both. If you only block, nobody learns the attempt happened. If you only watch, the recipe is already gone by the time the alert arrives. On this cluster the block is winning, which is the right outcome and also why the alert is quiet.</p>
+              <p class="small">One more thing worth noticing: once KubeArmor is blocking, the Falco alert goes quiet, because its rule fires on a <i>successful</i> read and there are no more of those. Prevention and detection answer different questions, and the order you apply them in decides which one you get to watch. Your KubeArmor badge lights when the policy is in; the Falco badge was lit the whole time.</p>
             </div>
           </details>
 
