@@ -36,15 +36,25 @@ present the moment the pod starts and cannot be missing because a seeding step d
 - **KubeArmor** `block-recipe-snoop` (`policies/kubearmor/block-recipe-snoop.yaml`) blocks reads under
   `/tmp/burrito-data/config/legacy/` inline, in the kernel via BPF-LSM, for pods labelled
   `app: workshop-mcp`. The process never receives the bytes.
-- **Falco** `Sensitive File Access` (`gitops/apps/falco.yaml`, which matches this filename explicitly)
-  fires on the attempt and the alert reaches Datadog via falcosidekick.
+- **Falco** `Recipe Snoop In Agent Namespace` (`gitops/apps/falco.yaml`, which matches this filename
+  explicitly) fires on the attempt and the alert reaches Datadog via falcosidekick. Note that its
+  condition is `open_read`, a *successful* read (see the ordering note below).
 - **External Secrets Operator** keeps real secrets out of the filesystem entirely, so there is nothing
   legitimate to find even if the grep had run.
 
-**The teaching point** is that prevention and detection are different jobs and you can watch both do
-theirs in one command. KubeArmor stops it; Falco tells you it was tried. Either alone leaves a gap:
-blocking without alerting means nobody learns an attack happened, and alerting without blocking means
-the recipe already left.
+**The teaching point** is that prevention and detection are different jobs. KubeArmor stops the read;
+Falco records that it was tried. Either alone leaves a gap: blocking without alerting means nobody
+learns an attack happened, and alerting without blocking means the recipe already left.
+
+**They are not watchable on the same action once prevention is applied, and that is not a bug.** The
+Falco rule fires on a *successful* read (`open_read`), and KubeArmor blocks the open in the kernel
+before it succeeds, so with the KubeArmor policy in place there is never a read for Falco to see.
+Verified 2026-09-04 on a `full`-profile cluster: reading the bait file returns `Permission denied`
+with zero matching Falco alerts, while the container runs as root against a world-readable directory,
+so POSIX is not what denies it. To watch both, you have to see detection *first* (attack succeeds,
+Falco fires, Falco-Talon kills the pod) and *then* apply KubeArmor and watch the same attack blocked.
+That ordering is what the student-facing lab does under the attack-then-fix restructure; see #199 and
+#160.
 
 No per-attendee toggle. The KubeArmor policy and the Falco rule are on whenever the `full` profile is,
 which is R2 and R3.
