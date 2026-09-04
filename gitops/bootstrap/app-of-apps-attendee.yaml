@@ -1,0 +1,50 @@
+# ABOUTME: Root app-of-apps for an ATTENDEE cluster. Full platform, but the three infra challenge
+# ABOUTME: controls (C1/C2/C3) start UNINSTALLED so the student installs each one and watches it work.
+# The attendee runs every challenge hands-on (RUN-OF-SHOW-2026-08, corrected 2026-09-04), and the
+# attack-then-fix pattern needs the attack to succeed first. On the "full" profile the C1-C3 controls
+# ship pre-applied, so a student's first attempt was already blocked with no fix left to apply. This
+# profile is "full minus the challenge controls":
+#
+#   - network-policies OMITTED  -> the agent namespace has no egress policy at all, so C1 exfil works.
+#       The student applies the WHOLE agent policy set (default-deny + its DNS/otel/kagent allows) in one
+#       manifest; the default-deny alone would break DNS (UDP 53 is a separate allow), so it must not be
+#       split. See challenges/01 and the staged file in the web-terminal.
+#   - kubearmor-policies OMITTED -> block-recipe-snoop is absent, so C3 filesystem snoop works. The
+#       KubeArmor ENGINE (kubearmor.yaml) is still present, so the student's applied policy takes effect.
+#   - kyverno-policies KEPT but NOT armed -> restrict-image-registries ships in Audit (fleet.sh only arms
+#       "full"), so C2's villain image deploys. The student flips it to Enforce.
+#   - C7 needs nothing here: the rogue MCP tools ship present on every profile; the student removes them.
+#
+# Round/instructor clusters keep the "full" profile (app-of-apps.yaml), where these controls are present
+# and armed, because those are the guarded-state demos.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps-attendee
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: gitops/apps
+    directory:
+      recurse: false
+      # Everything in gitops/apps EXCEPT the two challenge-control apps. kubearmor (engine) and kyverno
+      # (engine) stay; only their policy bundles that would pre-block C3 and pre-enable C2 are dropped.
+      exclude: '{network-policies,kubearmor-policies}.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

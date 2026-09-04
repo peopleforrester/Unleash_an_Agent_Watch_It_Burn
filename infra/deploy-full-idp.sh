@@ -8,9 +8,12 @@ REPO_URL="https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
 # Profile selects which root app-of-apps to apply: "full" (Cluster 2/3) or "burn" (Cluster 1).
 PROFILE="${1:-full}"
 case "${PROFILE}" in
-    full) ROOT_APP="gitops/bootstrap/app-of-apps.yaml" ;;
-    burn) ROOT_APP="gitops/bootstrap/app-of-apps-burn.yaml" ;;
-    *)    echo "usage: deploy-full-idp.sh [full|burn]" >&2; exit 2 ;;
+    full)     ROOT_APP="gitops/bootstrap/app-of-apps.yaml" ;;
+    burn)     ROOT_APP="gitops/bootstrap/app-of-apps-burn.yaml" ;;
+    # attendee: full platform minus the C1-C3 challenge controls, so the student installs each one
+    # themselves (RUN-OF-SHOW-2026-08, #160). See gitops/bootstrap/app-of-apps-attendee.yaml.
+    attendee) ROOT_APP="gitops/bootstrap/app-of-apps-attendee.yaml" ;;
+    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee]" >&2; exit 2 ;;
 esac
 log() { printf '\n==> %s\n' "$*" >&2; }
 

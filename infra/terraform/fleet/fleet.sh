@@ -629,9 +629,14 @@ bootstrap_one() {
         # villain image DEPLOYS on a student's own cluster: the control they are told stops it does
         # nothing, on the one cluster where they run the challenge themselves.
         #
-        # "full" is the condition that actually matters, because that is the profile which ships the
-        # policies. The burn profile ships none and must never arm (R1 is the unguarded spectacle), and
-        # it is excluded here by the profile name rather than by the round being 1.
+        # ONLY "full" arms. That is now a three-way distinction, not two:
+        #   full     (instructor R2/R3) -> arm: restrict-image-registries flipped to Enforce here.
+        #   attendee (the student pool) -> DO NOT arm: it ships kyverno-policies in Audit on purpose, so
+        #            C2's villain image deploys and the STUDENT flips it to Enforce (#160). Its C1 and C3
+        #            controls are omitted from the profile entirely (app-of-apps-attendee.yaml), so there
+        #            is nothing to arm for those either.
+        #   burn     (instructor R1)    -> ships no policies at all; the unguarded spectacle.
+        # Gating on the profile name keeps attendee and burn both unarmed without a round check.
         [[ "${profile}" == "full" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
@@ -1046,7 +1051,7 @@ _ingest_attendee_names() {
 cmd_up() {
     [[ $# -ge 1 ]] || usage
     local names; mapfile -t names < <(expand_names "$@")
-    local n bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="full"
+    local n bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="attendee"
     declare -gA PROVISION_SPEC=()
     # Attendee clusters are uniform: the default account, full bootstrap unless bare, no round, no
     # per-cluster tier/instance-type/pids overrides. account|profile|round|tier|itype|pids
@@ -1257,7 +1262,7 @@ cmd_up_fleet() {
     local per_account="${1:-}"
     [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: up-fleet <clusters-per-account>"; exit 2; }
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
-    local n nm bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="full"
+    local n nm bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="attendee"
     declare -gA PROVISION_SPEC=()
     local allnames=() idx=0 acct start
     for acct in "${accounts[@]}"; do
