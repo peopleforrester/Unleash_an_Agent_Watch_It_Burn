@@ -43,15 +43,10 @@ import sys
 #
 # Reading /guards here means the test measures the same thing a student can measure, so a banner that
 # disagrees with the cluster now fails regardless of what either side believes about the hostname.
-GUARD_KEYS = ("input_blocklist", "input_classifier", "output", "budget")
-
-
-def banner_for(guards: dict) -> str:
-    """The banner text a truthful page must show for this guard state."""
-    on = sum(1 for k in GUARD_KEYS if guards.get(k) is True)
-    if on == 0:
-        return "NO GUARDRAILS"
-    return "ALL GUARDRAILS" if on == len(GUARD_KEYS) else "SOME GUARDRAILS"
+# The three guard-proxy toggles that get badges on the page (C5 output, C6 input, C4 budget). input has
+# two backing keys in /guards but one badge, so map to the badge count, not the key count.
+def lit_badges_expected(guards: dict) -> int:
+    return sum(1 for k in ("output", "input_blocklist", "budget") if guards.get(k) is True)
 
 
 async def check(page, host: str) -> tuple[bool, str]:
@@ -66,26 +61,24 @@ async def check(page, host: str) -> tuple[bool, str]:
                                return r.ok ? await r.json() : null; } catch (e) { return null; } }"""
     )
     if guards is None:
-        return False, "/guards did not answer, so the banner cannot be verified"
-    want = banner_for(guards)
+        return False, "/guards did not answer, so the badges cannot be verified"
+    want_lit = lit_badges_expected(guards)
 
-    # The banner is filled in by the first /guards poll rather than being present in the markup, so give
-    # it a moment. Asserting immediately would race the fetch and read the neutral placeholder.
+    # The badges are filled in by the first /guards poll rather than being present in the markup, so give
+    # them a moment. Asserting immediately would race the fetch and read the empty strip.
     try:
         await page.wait_for_function(
-            "() => { const t = document.getElementById('bannertext');"
-            "        return t && !/CHECKING/i.test(t.textContent); }",
+            "() => document.querySelectorAll('#badges .bdg').length >= 3",
             timeout=15_000,
         )
     except Exception:
-        return False, "banner never resolved past its placeholder (the /guards poll did not land)"
+        return False, "badge strip never populated (the /guards poll did not land)"
 
-    banner = await page.evaluate(
-        "() => document.getElementById('bannertext')?.textContent?.trim() || ''"
-    )
-    if banner != want:
-        on = [k for k in GUARD_KEYS if guards.get(k) is True]
-        return False, f"banner says {banner!r} but /guards reports {on or 'nothing'} on, so it should say {want!r}"
+    lit = await page.evaluate("() => document.querySelectorAll('#badges .bdg.on').length")
+    if lit != want_lit:
+        on = [k for k in ("output", "input_blocklist", "budget") if guards.get(k) is True]
+        return False, (f"{lit} badge(s) lit but /guards reports {on or 'nothing'} on, "
+                       f"so {want_lit} should be lit")
 
     # Send a prompt through the PAGE's own fetch, so the browser attaches Origin exactly as it does for a
     # student. This is the check the 403 would have failed.
@@ -130,7 +123,7 @@ async def check(page, host: str) -> tuple[bool, str]:
     if not send_visible:
         return False, "Send button is not visible in the viewport"
 
-    return True, f"{banner}, chat 200, answer {len(visible)} chars"
+    return True, f"{lit} badge(s) lit, chat 200, answer {len(visible)} chars"
 
 
 async def main(hosts: list[str]) -> int:
