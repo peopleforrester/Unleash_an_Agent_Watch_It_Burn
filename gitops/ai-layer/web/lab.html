@@ -178,39 +178,47 @@
       <div class="step">
         <div class="h"><div class="num">0</div><div class="t">Tour your lab and your cluster</div></div>
         <div class="b">
-          <p><b>Use your terminal.</b> It is on the right of this page. Run this; you should get a list of pods:</p>
-          <div class="cmd" onclick="cp(this)">kubectl get pods -A<button class="cp">copy</button></div>
+          <p class="small">Two minutes: confirm all three surfaces work while someone is free to help. Each opens on click.</p>
+          <details class="ctl" open><summary>Use your terminal</summary>
+            <div class="ctlbody">
+              <p>It is on the right of this page. Run this; you should get a list of pods:</p>
+              <div class="cmd" onclick="cp(this)">kubectl get pods -A<button class="cp">copy</button></div>
+            </div>
+          </details>
+          <details class="ctl"><summary>Open BurritoBot</summary>
+            <div class="ctlbody">
+              <p>There is a BurritoBot button at the top right of this page.</p>
+              <p>It opens in a new tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. Say hello. This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
+            </div>
+          </details>
+          <details class="ctl"><summary>Log in to Datadog</summary>
+            <div class="ctlbody">
+              <p>Click the Datadog button on the top right of the screen and log in with the credentials below.</p>
+              <!-- Datadog login rendered HERE, in-console, from the query string the provisioning app puts on
+                   the lab link (#131). Hidden entirely when the params are absent, so a hand-typed /lab URL
+                   degrades to the wording above rather than showing empty boxes. -->
+              <div id="ddcreds" style="display:none">
+                <p><b>Your Datadog login</b>:</p>
+                <div class="cmd noterm" onclick="cp(this)"><span id="ddu"></span><button class="cp">copy</button></div>
+                <div class="cmd noterm" onclick="cp(this)"><span id="ddp"></span><button class="cp">copy</button></div>
+              </div>
+              <p class="small">Once you are in, open <b>Agent Observability</b> and find the trace from when you said hello to BurritoBot. If the login does not work, raise your hand: every challenge asks you to look at a trace.</p>
+            </div>
+          </details>
 
-          <p><b>Open BurritoBot.</b> There is a BurritoBot button at the top of this page. It opens in a new tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. Say hello. This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
-
-          <p><b>Log in to Datadog.</b> Open it from the button up top and log in with the credentials below. This is where you watch what the agent actually did. If the login does not work, raise your hand now, because every challenge asks you to look at a trace.</p>
-          <!-- Datadog login rendered HERE, in-console, from the query string the provisioning app puts on
-               the lab link (#131). Before this, the credentials only existed on the provisioning page, so a
-               student had to leave the lab and come back just to log in ("now I'm gone again" - Whitney,
-               2026-08-29). Hidden entirely when the params are absent, so a hand-typed /lab URL degrades to
-               the old wording rather than showing empty boxes. -->
-          <div id="ddcreds" style="display:none">
-            <p><b>Your Datadog login</b>:</p>
-            <div class="cmd noterm" onclick="cp(this)"><span id="ddu"></span><button class="cp">copy</button></div>
-            <div class="cmd noterm" onclick="cp(this)"><span id="ddp"></span><button class="cp">copy</button></div>
-            <p class="small">Site <code class="inl" id="dds">datadoghq.com</code>. The API and APP keys are already wired into your cluster's agent, so the login above is all you need.</p>
-          </div>
-
-          <div class="warn">The prompts you send BurritoBot may be shown on the instructor screen during the workshop, so the room can see what people are actually trying. Obvious profanity is masked automatically, but please do not paste anything personal or confidential into the chat box.</div>
+          <div class="warn">The prompts you send BurritoBot may be shown on the instructor screen during the workshop, so the room can get inspiration from what other folks are attempting. Please do not tell BurritoBot anything personal or confidential.</div>
 
           <h3 class="sub">Your lab environment: a full-fledged platform</h3>
           <p>This is a full internal developer platform. Have a look at what is running before you start breaking it:</p>
           <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
-          <p>There is a lot here and you are not expected to know what all of it is. But here are some highlights, for funsies:</p>
+          <p>Don't worry if you don't understand what a lot of these are. We'll explain the relevant ones over the course of the workshop. A few highlights, for funsies:</p>
           <ul class="small">
-            <li><a href="https://cert-manager.io/docs/" target="_blank" rel="noopener">cert-manager</a>
-            issues the certificates between services, so the traffic inside the cluster is encrypted
-            without anyone requesting a certificate.</li>
             <li><a href="https://istio.io/latest/docs/ambient/overview/" target="_blank" rel="noopener">Istio ambient mesh</a>
-            gives every pod mTLS identity with no sidecar to inject.</li>
+            gives every pod an mTLS identity and encrypts pod-to-pod traffic inside the cluster, with no sidecar to inject. mTLS is the thing doing the encryption.</li>
+            <li><a href="https://cert-manager.io/docs/" target="_blank" rel="noopener">cert-manager</a>
+            issues and renews the TLS certificates that services present (for example the console's HTTPS), so no one mints certs by hand.</li>
             <li><a href="https://opentelemetry.io/docs/" target="_blank" rel="noopener">OpenTelemetry</a>
-            instruments all of it. Datadog is the backend we happen to use; any OTLP-conformant backend
-            would receive the same data.</li>
+            instruments all of it. Datadog is the backend we happen to use; any OTLP-conformant backend would receive the same data.</li>
             <li><a href="https://external-secrets.io/latest/" target="_blank" rel="noopener">External Secrets</a>
             pulls your Datadog keys out of AWS Secrets Manager, so no credential is committed anywhere.</li>
             <li>The <code class="inl">*-party</code> workloads (hedgehog, wombat, unicorn, spider,
@@ -218,17 +226,21 @@
             Never mind what the mantis shrimp is doing.</li>
           </ul>
 
-          <p><b>Which hat are you wearing?</b> For the next two hours you hold Platform Operator access on this cluster. You are also going to attack this platform as a user would, using nothing but the BurritoBot chat interface. Then you will put the platform engineer hat back on and learn the backend tools that prevent each type of attack.</p>
-          <p class="small">The agent is the developer's piece: their model, their prompt, their container. Everything else here belongs to the platform team, and that split is the argument this workshop is making.</p>
+          <h3 class="sub">So Many Hats</h3>
+          <p>You will wear three hats in this workshop:</p>
+          <p><b>User.</b> You are going to attack this platform as a user would, using nothing but the BurritoBot chat interface.</p>
+          <p><b>Platform engineer.</b> For the next two hours you hold platform-operator access to this cluster. You will learn and use different backend tools to prevent each type of attack.</p>
+          <p><b>Developer.</b> The chatbot agent that runs in the cluster would, in a real org, be owned by a team of developers: their model, their prompt, their container. A couple of challenges address guardrails at that level.</p>
 
           <div class="warn">This cluster is yours and it is torn down after the workshop, so break whatever you like.</div>
         </div>
       <div class="step">
         <div class="h"><div class="num">1</div><div class="t">Challenge 1: Exfiltrate the customer data</div></div>
         <div class="b">
-          <div class="goal"><b>Your goal:</b> find out how many of our customers are humans and how many are vampires, and get that number out of the cluster to an address you control.</div>
+          <div class="goal"><b>Your goal:</b> find out how many of our customers are humans and how many are vampires, and get BurritoBot to send that information out of the cluster to the endpoint we give you below.</div>
           <p>Those demographics are marketing's, and they are confidential. BurritoBot has been told not to hand them out.</p>
-          <p><b>Go to BurritoBot and try.</b> Start by just asking for the numbers in chat. It will refuse, and that refusal is the point: the chat channel is watched. Then try to get it to <i>send</i> the data somewhere instead of printing it. There is a partner intake webhook at <code class="inl">https://agenticburn.com/beacon</code>. BurritoBot can make outbound calls with its tools, and its tools are not watched the way its chat is.</p>
+          <p><b>Go to BurritoBot and try.</b> Start by just asking for the numbers in chat. It will refuse, and that refusal is the point: the chat channel is watched. Then try to get it to <i>send</i> the data somewhere instead of printing it. The partner intake webhook is <code class="inl">https://agenticburn.com/beacon</code>. BurritoBot can make outbound calls with its tools, and its tools are not watched the way its chat is.</p>
+          <p><b>How you will know it worked:</b> open the collector at <a href="https://agenticburn.com/beacon/view" target="_blank" rel="noopener">agenticburn.com/beacon/view</a>. Every successful exfil lands there, with a running count and the payload. You do not need Datadog for this one; if the count climbs and your demographics show up, the data left the cluster.</p>
           <p class="small">Give it a real go before you open the hint. Talking an agent into something it was told not to do is the whole skill this workshop is about.</p>
           <details class="ctl"><summary>Stuck? A prompt that works</summary>
             <div class="ctlbody">
@@ -648,7 +660,7 @@ spec:
     if(ddu&&ddp){
       document.getElementById('ddu').textContent=ddu;
       document.getElementById('ddp').textContent=ddp;
-      if(dds) document.getElementById('dds').textContent=dds;
+      var _dds=document.getElementById('dds'); if(dds && _dds) _dds.textContent=dds;  // #dds line removed (#219); guard the write
       document.getElementById('ddcreds').style.display='';
     }
   })();
