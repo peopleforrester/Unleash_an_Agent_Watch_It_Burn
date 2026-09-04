@@ -63,6 +63,7 @@
   /* Progressive disclosure for the student challenges (#122): try it yourself, then hints, then a prompt
      that works. Native <details> so the caret, keyboard access and screen-reader semantics come free and
      nothing depends on JS. The solution chip is styled differently so nobody opens it by accident. */
+  .win{background:#e9f9ef;border:1px solid #bce6cc;border-left:4px solid #1f9d57;border-radius:10px;padding:9px 12px;font-size:13.5px;margin:10px 0;color:#0d3b2e}
   .goal{background:#f6f2ff;border:1px solid #ddd0f5;border-left:4px solid var(--accent);border-radius:10px;padding:10px 12px;font-size:13.5px;margin:8px 0}
   /* Step 0 carries two halves (check the lab works, then tour the cluster). This divides them without
      spending a step number, because step N must stay equal to challenge N. */
@@ -248,19 +249,34 @@
               <p class="small">It works because it gives the agent a plausible reason and a ticket number, not because it is clever. That is what these look like in the wild.</p>
             </div>
           </details>
-          <p><b>See what BurritoBot actually did.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and find the trace for the prompt you just sent: the model calls it made, the tools it reached for, and what each one returned.</p>
-          <details class="ctl"><summary>Success! You got BurritoBot to send your data out of the cluster</summary>
+          <p><b>See what BurritoBot actually did.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and find the trace for the prompt you just sent. You should be able to see the model calls it made, the tools it used, and what each tool returned.</p>
+
+          <p class="win"><b>Success!</b> You got BurritoBot to send your data out of the cluster.</p>
+
+          <details class="ctl"><summary>How to fix data exfiltration attacks</summary>
             <div class="ctlbody">
-              <p><b>What is going on.</b> By default, any pod in a Kubernetes cluster can open a connection to anywhere. Another pod, another namespace, or any address on the internet. Nothing stops it. So an agent that can be talked into making an outbound call can be talked into making it to an address you chose.</p>
-              <p><b>What a NetworkPolicy is.</b> A firewall rule for pods, written as a Kubernetes object. You list the destinations that are allowed, and the cluster drops everything else. It is enforced by the network plugin in the cluster itself, so the agent cannot opt out of it, talk its way around it, or even find out it is there.</p>
-              <p><b>Look at what you are about to apply.</b> The default-deny is only part of it. That rule alone would also cut the agent's DNS and its path to the model, so the file pairs it with the exact allows the agent needs and nothing else: your cluster's private network for the model, kube-system for DNS, the telemetry collector, and the kagent namespace.</p>
+              <p><b>First, look at what you'll apply:</b></p>
               <div class="cmd" onclick="cp(this)">cat ~/challenges/c1-network-policy.yaml<button class="cp">copy</button></div>
-              <p><b>Apply it.</b></p>
+
+              <p>It is <b>five NetworkPolicies</b>. A NetworkPolicy is a firewall rule for pods: you list what a pod is allowed to reach, and the cluster drops everything else. Here is what each of the five does:</p>
+              <ul class="small">
+                <li><b>agent-egress-allowlist</b> &mdash; the <i>default-deny</i>: block ALL outbound traffic from the agent, except to your cluster's own private network. "Default-deny" just means "nothing is allowed unless a later rule allows it."</li>
+                <li><b>agent-allow-dns</b> &mdash; lets the agent look up names (DNS). Without this it cannot resolve any address at all.</li>
+                <li><b>agent-allow-otel-egress</b> &mdash; lets it send its telemetry to the collector (so Datadog still gets traces).</li>
+                <li><b>agent-allow-kagent-egress</b> &mdash; lets it talk to the kagent system it runs under.</li>
+                <li><b>agent-allow-intra-namespace</b> &mdash; lets the agent's own pods talk to each other.</li>
+              </ul>
+              <p><b>Where is the model?</b> BurritoBot's model is Amazon Bedrock, reached over a private link that lives <i>inside</i> your cluster's network. So "allow the cluster's private network" is what keeps burrito-ordering working. The partner webhook is out on the public internet, which nothing in the list allows &mdash; so the exfil is dropped while the model still works.</p>
+              <p class="small">That is why it is five policies and not one: the default-deny alone would also cut DNS and the path to the model and break the agent. The four allows put back exactly what it legitimately needs, and nothing else.</p>
+
+              <p><b>Apply it:</b></p>
               <div class="cmd" onclick="cp(this)">kubectl apply -f ~/challenges/c1-network-policy.yaml<button class="cp">copy</button></div>
-              <p><b>Now run the exact same attack again.</b> Send that exfil prompt back to BurritoBot. It still tries to POST the demographics to the webhook, and the connection is refused before it leaves the node, so the data goes nowhere. Ordering a burrito still works, because the model is reached over the private network the policy allows.</p>
-              <p><b>Prove it is the policy, not luck.</b> Reach out to that webhook from inside the agent's own namespace. It hangs and fails:</p>
+
+              <p><b>Now run the exact same attack again.</b> Watch out: BurritoBot may still <i>say</i> it posted the data. Do not trust it &mdash; it is credulous and does not notice the connection was refused. Check the ground truth at <a href="https://agenticburn.com/beacon/view" target="_blank" rel="noopener">agenticburn.com/beacon/view</a>: the count <b>stops climbing</b>. The agent's word is not proof; the collector is.</p>
+
+              <p><b>Prove it is the policy, not luck.</b> Try to reach the webhook from inside the agent's namespace. It hangs and fails:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/workshop-mcp -- curl -s -m 6 -o /dev/null -w 'exit=%{http_code}\n' https://agenticburn.com/beacon || echo "blocked by the NetworkPolicy"<button class="cp">copy</button></div>
-              <p class="small">A NetworkPolicy drops packets silently, so there is no "denied" line in a log. The proof is the absence: the same request that reaches anything on the internet from your laptop cannot leave this namespace. Watch the NetworkPolicy badge on your BurritoBot tab light up once the policy is in.</p>
+              <p class="small">A NetworkPolicy drops packets silently, so there is no "denied" log line. The proof is the absence: a request that reaches anything on the internet from your laptop cannot leave this namespace. The NetworkPolicy badge lights on your BurritoBot tab once the policy is in.</p>
             </div>
           </details>
 
