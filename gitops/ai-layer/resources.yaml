@@ -738,6 +738,16 @@ rules:
   - apiGroups: ["kyverno.io"]
     resources: ["clusterpolicies", "policies"]
     verbs: ["get", "list", "watch", "update", "patch"]
+  # C3 under #160: the student INSTALLS the KubeArmorPolicy themselves (attendee clusters ship without
+  # it). The blanket rule above only grants get/list/watch on kubearmor resources, so create/apply was
+  # Forbidden and the student could not apply their own fix. Verified on attendee-099, 2026-09-04:
+  # `kubectl apply -f ~/challenges/c3-kubearmor-policy.yaml` returned "cannot create resource
+  # kubearmorpolicies". Grant create/apply here. block-argocd-drift does not apply (not a
+  # Deployment/ConfigMap/Service), and kubearmor-policies is omitted from the attendee profile so
+  # nothing reconciles against a student-applied policy.
+  - apiGroups: ["security.kubearmor.com"]
+    resources: ["kubearmorpolicies"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
