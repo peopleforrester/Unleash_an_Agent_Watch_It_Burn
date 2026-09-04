@@ -31,7 +31,13 @@ for c in $(AWS_PROFILE=$PROFILE aws eks list-clusters --region $REGION --query '
     CTX="$(KUBECONFIG=$KCFG kubectl config current-context 2>/dev/null)"
     case "$CTX" in *"$c"*) : ;; *) echo "  $c: CONTEXT MISMATCH ($CTX), skipping"; continue ;; esac
     K=(env KUBECONFIG="$KCFG" AWS_PROFILE="$PROFILE" kubectl --context "$CTX")
+    # Hard-refresh re-reads git; then TRIGGER A SYNC explicitly. Relying on the refresh alone plus
+    # auto-sync left the ConfigMap un-updated inside the 200s marker window on several clusters
+    # (2026-09-04), so the pod was never cycled and served stale config. An explicit sync operation
+    # makes the ConfigMap update promptly and deterministically, which is what the marker wait needs.
     "${K[@]}" -n argocd annotate app ai-layer argocd.argoproj.io/refresh=hard --overwrite >/dev/null 2>&1
+    "${K[@]}" -n argocd patch app ai-layer --type merge \
+        -p '{"operation":{"sync":{"revision":"staging"}}}' >/dev/null 2>&1
     if [[ -n "$MARKER" ]]; then
         ok=0
         for _ in $(seq 1 40); do   # up to ~200s
