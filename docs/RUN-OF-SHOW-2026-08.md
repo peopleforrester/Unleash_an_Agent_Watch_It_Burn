@@ -23,7 +23,39 @@ hands the room the controls and they do it themselves.
 ## Shape of the two hours
 
 **This is a hands-on workshop, not a demo with a hands-on tail.** The room spends the single largest block
-with their hands on their own cluster. Budget:
+with their hands on their own cluster.
+
+**Every challenge is hands-on on the attendee's own cluster.** The shape is demo-then-do, interleaved
+across the whole challenge set, not an instructor-led rounds block followed by one hands-on block.
+Michael's plan, 2026-09-04, which is authoritative and supersedes the earlier "Rounds 1 & 2 instructor-led,
+Round 3 hands-on" table below:
+
+| # | Step | Who drives |
+|---|---|---|
+| 1 | Explain a little, and get the room into their clusters | Both |
+| 2 | Demo how to use the cluster for challenges 1, 2, and maybe 3 | Michael sends, Whitney retries |
+| 3 | **They run challenges 1, 2, 3** on their own clusters | The room; both floating |
+| 4 | Run through challenge 4 and explain it | Both, then the room |
+| 5 | Set up challenge 5 and let them run it | Both, then the room |
+| 6 | Explain challenge 5 | Both |
+| 7 | Run through challenge 6 and explain it | Both, then the room |
+| 8 | **They run challenge 6** | The room |
+| … | Continue the same demo-then-do rhythm through the remaining challenges | Both / the room |
+| end | Q&A: where to go from here, how to use the repo, the closing material | Michael |
+
+The two consequences that drive the platform work:
+
+1. **Attendee clusters start with no controls applied, for every challenge.** The student attacks, sees it
+   work, applies the control themselves, watches a badge appear, and re-runs the same attack to see it
+   blocked. This is the attack-then-fix pattern (see `gitops/ai-layer/web/lab.html`), and it is why the
+   fleet must not pre-arm the C1-C3 infra controls on attendee clusters (issue #160).
+2. **The student DOES install things.** The line "nobody installs anything" below is wrong under this plan
+   and is retained only to be struck: the hands-on hour is the student applying real controls one at a
+   time, which is the whole point.
+
+The block table below is the earlier plan and is kept for its per-beat facilitation detail and its
+verified attack/defense results, which still hold. Read the sequence above for what actually happens in
+the room.
 
 | Block | Time | Who drives | What happens |
 |---|---|---|---|
