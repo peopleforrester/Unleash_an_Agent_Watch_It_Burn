@@ -50,7 +50,7 @@ BADGE_FIELDS = [
     ("infra", "networkpolicy"), ("infra", "kyverno"), ("infra", "kubearmor"),
     ("infra", "falco"),
     ("ai", "budget"), ("ai", "output"), ("ai", "input_blocklist"),
-    ("infra", "tool_allowlist"),
+    ("infra", "tool_allowlist"), ("infra", "rbac_scoped"),
 ]
 
 
@@ -80,11 +80,11 @@ async def check(page, host: str) -> tuple[bool, str]:
     # moment. Asserting immediately would race the fetch and read the empty strip.
     try:
         await page.wait_for_function(
-            "() => document.querySelectorAll('#badges .bdg').length >= 8",
+            "() => document.querySelectorAll('#badges .bdg').length >= 9",
             timeout=15_000,
         )
     except Exception:
-        return False, "badge strip never populated all eight (the /controls poll did not land)"
+        return False, "badge strip never populated all nine (the /controls poll did not land)"
 
     lit = await page.evaluate("() => document.querySelectorAll('#badges .bdg.on').length")
     falco_lit = await page.evaluate(

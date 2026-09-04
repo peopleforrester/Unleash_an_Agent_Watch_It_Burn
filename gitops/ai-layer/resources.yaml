@@ -397,9 +397,19 @@ rules:
     resources: ["kubearmorpolicies"]
     resourceNames: ["block-recipe-snoop"]        # C3 prevention
     verbs: ["get"]
+  # C8 (#111): the student REPLACES the broad agent-sa Role with a scoped one, so the terminal SA
+  # needs to get/update/patch Roles. Scoped to the one Role the challenge touches.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    resourceNames: ["workshop-agent"]
+    verbs: ["get", "update", "patch"]
   - apiGroups: ["kagent.dev"]
     resources: ["agents"]
     resourceNames: ["workshop-agent"]            # C7 tool allow-list
+    verbs: ["get"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    resourceNames: ["workshop-agent"]            # C8: is agent-sa's Role still broad or scoped?
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -470,7 +480,7 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "8017cdf2e3fb"
+        checksum/proxy-py: "d63fb9baae55"
     spec:
       # A dedicated ServiceAccount with a mounted token, so /controls can read the four badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
@@ -935,6 +945,28 @@ data:
           - dir: /tmp/burrito-data/config/legacy/
             recursive: true
       action: Block
+  c8-scoped-role.yaml: |
+    # Challenge 8 fix (#111): scope agent-sa's Role so the token can no longer dump every Secret.
+    # Keeps the workload verbs C1/C2 use, but replaces blanket secrets get/list with get on the ONE
+    # recipe Secret by name. C5's get_recipe still works; listing all Secrets or reading the AWS creds
+    # and terminal password via the API now returns Forbidden. This REPLACES the broad Role.
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: workshop-agent
+      namespace: agent
+    rules:
+      - apiGroups: ["apps"]
+        resources: ["deployments"]
+        verbs: ["create", "get", "list", "patch"]
+      - apiGroups: [""]
+        resources: ["pods", "configmaps", "services"]
+        verbs: ["create", "get", "list", "patch"]
+      # Scoped: get on the recipe Secret by name only. No list, no blanket get.
+      - apiGroups: [""]
+        resources: ["secrets"]
+        resourceNames: ["bat-spit-amazing-awesome-sauce"]
+        verbs: ["get"]
 ---
 # The attendee's working tree, kept across a pod restart.
 #

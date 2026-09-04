@@ -393,7 +393,8 @@
     {src:'ai',    key:'budget',         label:'Budget cap'},
     {src:'ai',    key:'output',         label:'LLM Guard · output'},
     {src:'ai',    key:'input_blocklist',label:'LLM Guard · input'},
-    {src:'infra', key:'tool_allowlist', label:'Tool allow-list'}
+    {src:'infra', key:'tool_allowlist', label:'Tool allow-list'},
+    {src:'infra', key:'rbac_scoped',    label:'RBAC scope'}
   ];
   // Accepts the /controls shape {ai:{...}, infra:{...}}. Tolerates the older /guards shape (a flat AI
   // object) so a stale cache or a proxy that predates /controls still lights the AI badges instead of

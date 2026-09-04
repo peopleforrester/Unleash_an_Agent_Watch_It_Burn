@@ -209,6 +209,29 @@ def read_controls():
             pass
         out["tool_allowlist"] = not (rogue & present)
 
+    # C8 (#111): the agent-sa Role is "fixed" once its secrets access is scoped down from blanket
+    # get/list to get on the recipe Secret by name. Report true when the broad access is gone: no rule
+    # grants list on secrets, and no rule grants get on secrets without a resourceNames restriction.
+    role = _k8s_get("/apis/rbac.authorization.k8s.io/v1/namespaces/agent/roles/workshop-agent")
+    if role is None:
+        out["rbac_scoped"] = None
+    else:
+        broad = False
+        try:
+            for r in role.get("rules", []):
+                groups = r.get("apiGroups", [])
+                res = r.get("resources", [])
+                if "" not in groups or "secrets" not in res:
+                    continue
+                verbs = r.get("verbs", [])
+                names = r.get("resourceNames", [])
+                # broad = can list any secret, or can get secrets without naming them
+                if "list" in verbs or (("get" in verbs) and not names):
+                    broad = True
+        except (AttributeError, TypeError):
+            broad = True
+        out["rbac_scoped"] = not broad
+
     with _controls_lock:
         _controls_cache["ts"] = now
         _controls_cache["val"] = dict(out)

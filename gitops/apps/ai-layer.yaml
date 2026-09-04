@@ -47,6 +47,16 @@ spec:
         # bedrock-haiku/sonnet/opus on the matching R3 instructor cluster. Ignore drift so selfHeal keeps
         # the per-cluster tier instead of reverting to the committed default (bedrock-sonnet).
         - '.spec.declarative.modelConfig'
+    # C8 (#111 SA-token theft): agent-sa's Role ships BROAD (secrets get/list namespace-wide), the
+    # vulnerability the attack exploits. The STUDENT applies a scoped Role (get on the recipe Secret by
+    # name, no list); ignore drift on .rules so selfHeal keeps the tightened rules instead of reverting
+    # to the broad committed default. resources.yaml stays broad so a fresh attendee cluster starts
+    # vulnerable.
+    - group: rbac.authorization.k8s.io
+      kind: Role
+      name: workshop-agent
+      jqPathExpressions:
+        - '.rules'
   syncPolicy:
     automated:
       prune: true
