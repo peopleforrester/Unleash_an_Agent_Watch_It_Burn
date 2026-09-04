@@ -397,12 +397,6 @@ rules:
     resources: ["kubearmorpolicies"]
     resourceNames: ["block-recipe-snoop"]        # C3 prevention
     verbs: ["get"]
-  # C8 (#111): the student REPLACES the broad agent-sa Role with a scoped one, so the terminal SA
-  # needs to get/update/patch Roles. Scoped to the one Role the challenge touches.
-  - apiGroups: ["rbac.authorization.k8s.io"]
-    resources: ["roles"]
-    resourceNames: ["workshop-agent"]
-    verbs: ["get", "update", "patch"]
   - apiGroups: ["kagent.dev"]
     resources: ["agents"]
     resourceNames: ["workshop-agent"]            # C7 tool allow-list
@@ -729,6 +723,12 @@ kind: ClusterRole
 metadata:
   name: console-terminal
 rules:
+  # C8 (#111): the student REPLACES the broad agent-sa Role with a scoped one, so the terminal
+  # SA needs get/update/patch on that one Role.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles"]
+    resourceNames: ["workshop-agent"]
+    verbs: ["get", "update", "patch"]
   - apiGroups: ["*"]
     resources: ["*"]
     verbs: ["get", "list", "watch"]
