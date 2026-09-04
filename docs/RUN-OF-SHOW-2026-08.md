@@ -40,8 +40,14 @@ Round 3 hands-on" table below:
 | 6 | Explain challenge 5 | Both |
 | 7 | Run through challenge 6 and explain it | Both, then the room |
 | 8 | **They run challenge 6** | The room |
-| … | Continue the same demo-then-do rhythm through the remaining challenges | Both / the room |
+| … | Continue the same demo-then-do rhythm through the remaining challenges (7, then 8) | Both / the room |
 | end | Q&A: where to go from here, how to use the repo, the closing material | Michael |
+
+The challenge set is now **eight**. Challenge 8 (service-account token theft, #111/#118) is the one that
+makes the published abstract's "ask it to give itself more permissions" true: the agent reads its own
+service-account token and dumps every Secret straight from the API, bypassing every tool-layer guard;
+the student then scopes the agent's RBAC Role so its token can read only the recipe by name. It is the
+strongest "the guard is only worth what it sits in front of" beat and pairs with C5 (which it bypasses).
 
 The two consequences that drive the platform work:
 
