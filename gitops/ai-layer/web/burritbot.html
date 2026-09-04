@@ -377,7 +377,7 @@
     {src:'infra', key:'networkpolicy',  label:'NetworkPolicy'},
     {src:'infra', key:'kyverno',        label:'Kyverno'},
     {src:'infra', key:'kubearmor',      label:'KubeArmor'},
-    {src:'infra', key:'falco',          label:'Falco',            always:true},
+    {src:'infra', key:'falco',          label:'Falco',            pairWith:'kubearmor'},
     {src:'ai',    key:'budget',         label:'Budget cap'},
     {src:'ai',    key:'output',         label:'LLM Guard · output'},
     {src:'ai',    key:'input_blocklist',label:'LLM Guard · input'},
@@ -398,6 +398,10 @@
     strip.innerHTML='';
     BADGES.forEach(function(bd){
       var on = ((bd.src==='infra') ? infra[bd.key] : ai[bd.key]) === true;
+      // Falco is always running, so on its own it would light a lone badge on a fresh cluster and break
+      // the empty start Whitney asked for (#211). It is the detection half of the C3 pair, so it appears
+      // WITH KubeArmor (the prevention half the student installs), never alone.
+      if(bd.pairWith) on = infra[bd.pairWith]===true;
       if(!on) return;                          // absent-until-installed
       shown++;
       var el=document.createElement('span');

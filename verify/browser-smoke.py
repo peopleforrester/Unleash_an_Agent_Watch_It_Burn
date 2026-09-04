@@ -58,7 +58,11 @@ def expected_lit(controls: dict) -> int:
     ai = controls.get("ai") or {}
     infra = controls.get("infra") or {}
     src = {"ai": ai, "infra": infra}
-    return sum(1 for s, k in BADGE_FIELDS if src[s].get(k) is True)
+    n = sum(1 for s, k in BADGE_FIELDS if k != "falco" and src[s].get(k) is True)
+    # Falco is the detection half of the C3 pair and only renders WITH KubeArmor (#211), never alone.
+    if infra.get("kubearmor") is True:
+        n += 1
+    return n
 
 
 async def check(page, host: str) -> tuple[bool, str]:
