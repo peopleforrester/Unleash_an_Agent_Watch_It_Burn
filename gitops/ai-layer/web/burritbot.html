@@ -59,6 +59,18 @@
   .ibanner .dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35);margin-right:7px}
   .ibanner.r1{background:var(--r1)}.ibanner.r2{background:var(--r2)}.ibanner.r3{background:var(--r3)}
   .ibanner .ibsub{font-weight:600;opacity:.95;font-size:11.5px;margin-top:6px;line-height:1.35}
+  /* Per-control badges (Whitney + Michael, 2026-09-04): each guardrail the student installs shows up as
+     its own badge naming the actual tool, instead of a single NO/SOME/ALL summary in our own
+     "guardrails" vocabulary. A badge is dim until its control is measured ON, then lights up. Driven by
+     /guards (the AI guards the student toggles); infra badges join once #160/#197's reader lands. */
+  .badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
+  .bdg{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
+       border-radius:999px;padding:4px 10px;border:1px solid var(--line);background:#fff;color:var(--mid);
+       opacity:.55;transition:opacity .2s,background .2s,color .2s,border-color .2s}
+  .bdg .bdot{width:8px;height:8px;border-radius:50%;background:#c9bce0;flex:none}
+  .bdg.on{opacity:1;background:var(--r3);color:#fff;border-color:var(--r3)}
+  .bdg.on .bdot{background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
+  .badgesnote{font-size:11.5px;color:var(--mid);margin:4px 0 2px;line-height:1.35}
   /* #144: the hard max-width:1340px meant a 2560 or 3840 display rendered the same columns as a laptop
      with dead margins either side, and nothing used the extra space. The cap is now fluid: it grows with
      the viewport and only stops at a width where line length would get uncomfortable. Padding and gap
@@ -308,13 +320,12 @@
           <option value="r3">Round 3 — Your cluster</option>
         </select>
       </div>
-      <!-- Neutral until /guards answers (first poll runs in init). The markup used to assert
-           "NO GUARDRAILS" before anything had been measured, which is a claim about a security control
-           made before asking the cluster. applyGuardState fills this in. -->
-      <div id="banner" class="ibanner">
-        <span class="dot"></span><span id="bannertext">CHECKING GUARDRAILS…</span>
-        <div id="bannersub" class="ibsub">— asking your cluster which guardrails are on.</div>
-      </div>
+      <!-- Per-control badges, filled in by the first /guards poll (init). Whitney and Michael both asked
+           for a badge per real control that lights up as the student installs it, instead of a single
+           NO/SOME/ALL banner in our own "guardrails" vocabulary. Starts with a checking note; the
+           badges strip and the note are written by applyGuardState. -->
+      <div id="badges" class="badges" aria-live="polite"></div>
+      <div id="badgesnote" class="badgesnote">Checking which guardrails are on…</div>
       <div class="card">
         <div class="imrow"><span class="imlbl">Tokens</span><b class="imval" id="tokens">0</b></div>
         <div class="imrow"><span class="imlbl">Cost</span><b class="imval" id="costusd">$0.0000</b></div>
@@ -364,24 +375,38 @@
   // on, the model's own refusals read as guardrails, and she had no way to tell the two apart.
   //
   // A hostname cannot answer this question. /guards can, it is authoritative, and checkBackend already
-  // polls it every 12s. Driving the banner from it also makes the toggle visible: run guards-on in the
-  // terminal and the banner flips within a poll, which is a better demo than a static label.
-  const GUARD_KEYS = ['input_blocklist','input_classifier','output','budget'];
-  // The subtext says what is TRUE, not what to type. Per #170 the challenges turn each guard on with the
-  // full command (kubectl -n agent exec deploy/guard-proxy -- ... /toggle?output=on) precisely so the
-  // student sees the real control surface; guards-on / guards-off survive only as a reset convenience.
-  // Naming a shorthand here would teach the abstraction the challenges deliberately removed.
-  const GUARD_VIEW = {
-    none:{cls:'r1',t:'NO GUARDRAILS',s:"— the AI guardrails on this cluster are off, so you are talking straight to the model. Anything that pushes back here is the model's own judgement, not a control stopping it."},
-    some:{cls:'r2',t:'SOME GUARDRAILS',s:'— some of the AI guardrails on this cluster are on and some are off. Your lab page lists which control covers which challenge.'},
-    all:{cls:'r3',t:'ALL GUARDRAILS',s:"— every AI guardrail on this cluster is on. Send an attack that worked a moment ago and watch the difference."}
-  };
+  // polls it every 12s. Driving the badges from it also makes a toggle visible: turn a guard on in the
+  // terminal and its badge lights up within a poll, which is a better demo than a static label.
+  // One badge per control the student can turn on, each naming the real tool, lit when /guards reports
+  // it ON. These three are the guard-proxy toggles: C5 output, C6 input, C4 budget. The infra controls
+  // (NetworkPolicy, Kyverno, KubeArmor for C1-C3, and the MCP tool allow-list for C7) are cluster state,
+  // not guard-proxy state, so their badges arrive with the /controls reader in #197 once #160 makes
+  // attendee clusters start unguarded. Ordered by challenge number so the strip reads left to right the
+  // way the lab does.
+  const BADGES = [
+    {key:'output',          label:'LLM Guard · output'},
+    {key:'input_blocklist', label:'LLM Guard · input'},
+    {key:'budget',          label:'Budget cap'}
+  ];
   function applyGuardState(g){
-    var on=GUARD_KEYS.filter(function(k){return g&&g[k]===true;}).length;
-    var v = on===0 ? GUARD_VIEW.none : (on===GUARD_KEYS.length ? GUARD_VIEW.all : GUARD_VIEW.some);
-    var b=document.getElementById('banner'); if(b) b.className='ibanner '+v.cls;
-    var t=document.getElementById('bannertext'); if(t) t.textContent=v.t;
-    var s=document.getElementById('bannersub'); if(s) s.textContent=v.s;
+    var strip=document.getElementById('badges'); if(!strip) return;
+    var onCount=0;
+    strip.innerHTML='';
+    BADGES.forEach(function(bd){
+      var on = !!(g && g[bd.key]===true);
+      if(on) onCount++;
+      var el=document.createElement('span');
+      el.className='bdg'+(on?' on':'');
+      el.innerHTML='<span class="bdot"></span>'+bd.label;
+      el.title = on ? bd.label+' is ON for this cluster' : bd.label+' is off';
+      strip.appendChild(el);
+    });
+    var note=document.getElementById('badgesnote');
+    if(note){
+      note.textContent = onCount===0
+        ? "No guardrails installed yet. You are talking straight to the model, so anything that pushes back is the model's own judgement, not a control stopping it."
+        : "Installed guardrails are lit. Send an attack that worked before turning one on and watch the difference.";
+    }
   }
   let round='r1', tokens=0, costUsd=0, busy=false, unreachable=0;
   // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
@@ -600,7 +625,7 @@
     var sel=document.getElementById('round'); if(sel) sel.value=r;
     // DELIBERATELY DOES NOT TOUCH THE BANNER. This function only knows a hostname, and a hostname does
     // not know which guards are on. applyGuardState owns the banner and is driven by /guards; see the
-    // note on GUARD_VIEW for the two inversions that came from guessing it here.
+    // note on applyGuardState/BADGES for the two inversions that came from guessing it here.
   }
   (function init(){
     var q=new URLSearchParams(location.search);
