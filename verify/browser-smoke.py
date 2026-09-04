@@ -41,12 +41,24 @@ import sys
 # test guessed the same way, and the two agreed while both were wrong. Student clusters ship with every
 # AI guard off so the attacks land, and the page was telling students "ALL GUARDRAILS" (#193).
 #
-# Reading /guards here means the test measures the same thing a student can measure, so a banner that
-# disagrees with the cluster now fails regardless of what either side believes about the hostname.
-# The three guard-proxy toggles that get badges on the page (C5 output, C6 input, C4 budget). input has
-# two backing keys in /guards but one badge, so map to the badge count, not the key count.
-def lit_badges_expected(guards: dict) -> int:
-    return sum(1 for k in ("output", "input_blocklist", "budget") if guards.get(k) is True)
+# Reading the cluster's own state here means the test measures the same thing a student can measure, so
+# a badge that disagrees with the cluster fails regardless of what either side believes about the
+# hostname. The page renders eight badges from /controls ({ai:{...}, infra:{...}}); each badge is lit
+# iff its backing field is true. Falco is always-on, so its badge is always lit. This mapping mirrors
+# the BADGES array in burritbot.html; kept here independently so a drift in either fails the test.
+BADGE_FIELDS = [
+    ("infra", "networkpolicy"), ("infra", "kyverno"), ("infra", "kubearmor"),
+    ("infra", "falco"),
+    ("ai", "budget"), ("ai", "output"), ("ai", "input_blocklist"),
+    ("infra", "tool_allowlist"),
+]
+
+
+def expected_lit(controls: dict) -> int:
+    ai = controls.get("ai") or {}
+    infra = controls.get("infra") or {}
+    src = {"ai": ai, "infra": infra}
+    return sum(1 for s, k in BADGE_FIELDS if src[s].get(k) is True)
 
 
 async def check(page, host: str) -> tuple[bool, str]:
@@ -56,29 +68,32 @@ async def check(page, host: str) -> tuple[bool, str]:
     await page.goto(f"{url}?smoke=1", wait_until="domcontentloaded", timeout=60_000)
 
     # Ask the cluster what is actually on, through the page's own origin, then hold the DOM to it.
-    guards = await page.evaluate(
-        """async () => { try { const r = await fetch('/guards', {cache:'no-store'});
+    controls = await page.evaluate(
+        """async () => { try { const r = await fetch('/controls', {cache:'no-store'});
                                return r.ok ? await r.json() : null; } catch (e) { return null; } }"""
     )
-    if guards is None:
-        return False, "/guards did not answer, so the badges cannot be verified"
-    want_lit = lit_badges_expected(guards)
+    if controls is None:
+        return False, "/controls did not answer, so the badges cannot be verified"
+    want_lit = expected_lit(controls)
 
-    # The badges are filled in by the first /guards poll rather than being present in the markup, so give
-    # them a moment. Asserting immediately would race the fetch and read the empty strip.
+    # The badges are filled in by the first poll rather than being present in the markup, so give them a
+    # moment. Asserting immediately would race the fetch and read the empty strip.
     try:
         await page.wait_for_function(
-            "() => document.querySelectorAll('#badges .bdg').length >= 3",
+            "() => document.querySelectorAll('#badges .bdg').length >= 8",
             timeout=15_000,
         )
     except Exception:
-        return False, "badge strip never populated (the /guards poll did not land)"
+        return False, "badge strip never populated all eight (the /controls poll did not land)"
 
     lit = await page.evaluate("() => document.querySelectorAll('#badges .bdg.on').length")
+    falco_lit = await page.evaluate(
+        "() => Array.from(document.querySelectorAll('#badges .bdg.on'))"
+        ".some(e => /Falco/.test(e.textContent))")
+    if not falco_lit:
+        return False, "Falco badge is not lit, but Falco is always engaged"
     if lit != want_lit:
-        on = [k for k in ("output", "input_blocklist", "budget") if guards.get(k) is True]
-        return False, (f"{lit} badge(s) lit but /guards reports {on or 'nothing'} on, "
-                       f"so {want_lit} should be lit")
+        return False, f"{lit} badge(s) lit but /controls implies {want_lit} should be"
 
     # Send a prompt through the PAGE's own fetch, so the browser attaches Origin exactly as it does for a
     # student. This is the check the 403 would have failed.

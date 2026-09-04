@@ -373,6 +373,67 @@ data:
           redact: true
           match_type: all
 ---
+# guard-proxy's badge reader (#197/#209). Read-only, get-only, on exactly the four objects behind the
+# C1/C2/C3/C7 badges and nothing else. This is the RBAC for the component the challenges attack, so it
+# is written as narrowly as the API allows: named resources where get-by-name works, and no list/watch.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: guard-proxy-reader
+  namespace: agent
+automountServiceAccountToken: false   # only the pod that opts in (the Deployment) mounts the token
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: guard-proxy-reader
+  namespace: agent
+rules:
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    resourceNames: ["agent-egress-allowlist"]   # C1
+    verbs: ["get"]
+  - apiGroups: ["security.kubearmor.com"]
+    resources: ["kubearmorpolicies"]
+    resourceNames: ["block-recipe-snoop"]        # C3 prevention
+    verbs: ["get"]
+  - apiGroups: ["kagent.dev"]
+    resources: ["agents"]
+    resourceNames: ["workshop-agent"]            # C7 tool allow-list
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: guard-proxy-reader
+  namespace: agent
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: Role, name: guard-proxy-reader }
+subjects:
+  - kind: ServiceAccount
+    name: guard-proxy-reader
+    namespace: agent
+---
+# ClusterPolicy is cluster-scoped, so C2's read needs a ClusterRole. Still get-only on the one policy.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: guard-proxy-reader
+rules:
+  - apiGroups: ["kyverno.io"]
+    resources: ["clusterpolicies"]
+    resourceNames: ["restrict-image-registries"]  # C2
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: guard-proxy-reader
+roleRef: { apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: guard-proxy-reader }
+subjects:
+  - kind: ServiceAccount
+    name: guard-proxy-reader
+    namespace: agent
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -409,9 +470,15 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "49b8b5c47148"
+        checksum/proxy-py: "8017cdf2e3fb"
     spec:
-      automountServiceAccountToken: false
+      # A dedicated ServiceAccount with a mounted token, so /controls can read the four badge objects
+      # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
+      # because that read is the whole point; the RBAC bound to guard-proxy-reader is get-only on four
+      # named objects (see the Role/ClusterRole above), which is the narrowest grant that answers "is
+      # this control installed" without letting the attacked component do anything else.
+      serviceAccountName: guard-proxy-reader
+      automountServiceAccountToken: true
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: proxy

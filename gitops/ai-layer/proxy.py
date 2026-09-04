@@ -117,6 +117,103 @@ GUARDS = {
 FAIL_CLOSED = os.environ.get("PROXY_FAIL_CLOSED", "true").lower() == "true"
 TIMEOUT = float(os.environ.get("PROXY_TIMEOUT", "150"))
 
+# --- Infra-control state for the badge strip (#197/#209) -------------------------------------------
+# The AI guards above are guard-proxy's own in-memory state. The badges for C1-C3 and C7 report the
+# state of real cluster objects the student installs, which only the Kubernetes API knows. This block
+# reads them read-only, with the pod's own ServiceAccount token, so the browser can light a badge the
+# moment a student applies the control (a NetworkPolicy, a Kyverno Enforce flip, a KubeArmor policy, or
+# an emptied MCP tool list).
+#
+# Deliberately narrow: the guard-proxy is the component the challenges ATTACK, so its new RBAC is
+# get-only on four named objects and nothing else (see the Role/ClusterRole in resources.yaml). Reading
+# whether a NetworkPolicy exists is not an escalation an attacker gains anything from, and the token is
+# never exposed to the model path.
+_K8S_HOST = "https://kubernetes.default.svc"
+_K8S_TOKEN_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/token"
+_K8S_CA_PATH = "/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
+_CONTROLS_TTL = 5.0        # seconds; the strip polls every 12s, so a short cache is plenty
+_controls_cache = {"ts": 0.0, "val": None}
+_controls_lock = threading.Lock()
+
+
+def _k8s_get(path):
+    """GET one object from the cluster API. Returns the parsed JSON, or None on 404/error.
+
+    None means 'could not determine', which a caller renders as an un-lit badge rather than a false
+    claim either way. A 404 (the object does not exist yet) is the normal 'control not installed' case
+    and also returns None."""
+    try:
+        with open(_K8S_TOKEN_PATH, "r") as f:
+            token = f.read().strip()
+    except OSError:
+        return None
+    import ssl
+    ctx = ssl.create_default_context(cafile=_K8S_CA_PATH) if os.path.exists(_K8S_CA_PATH) else None
+    req = urllib.request.Request(_K8S_HOST + path, headers={"Authorization": "Bearer " + token})
+    try:
+        with urllib.request.urlopen(req, timeout=5, context=ctx) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+
+def read_controls():
+    """Live state of the cluster-object controls behind the C1/C2/C3/C7 badges, plus Falco.
+
+    Cached for a few seconds so the badge poll does not hit the API server on every request. Each field
+    is True (installed / enforcing), False (measured absent), or None (could not read)."""
+    now = time.time()
+    with _controls_lock:
+        if _controls_cache["val"] is not None and (now - _controls_cache["ts"]) < _CONTROLS_TTL:
+            return dict(_controls_cache["val"])
+
+    out = {}
+
+    # C1: the agent-egress-allowlist NetworkPolicy exists (default-deny egress is in place).
+    np = _k8s_get("/apis/networking.k8s.io/v1/namespaces/agent/networkpolicies/agent-egress-allowlist")
+    out["networkpolicy"] = (np is not None)
+
+    # C2: restrict-image-registries is ENFORCING (Audit does not block, so Audit is 'not installed' for
+    # the badge). Mirror arm_infra_guardrails: spec.rules[0].validate.failureAction == Enforce.
+    cp = _k8s_get("/apis/kyverno.io/v1/clusterpolicies/restrict-image-registries")
+    if cp is None:
+        out["kyverno"] = False
+    else:
+        try:
+            out["kyverno"] = cp["spec"]["rules"][0]["validate"]["failureAction"] == "Enforce"
+        except (KeyError, IndexError, TypeError):
+            out["kyverno"] = False
+
+    # C3 prevention: the block-recipe-snoop KubeArmorPolicy exists.
+    ka = _k8s_get("/apis/security.kubearmor.com/v1/namespaces/agent/kubearmorpolicies/block-recipe-snoop")
+    out["kubearmor"] = (ka is not None)
+
+    # C3 detection: Falco is always deployed and always watching, so its badge is always engaged. It is
+    # not a control the student toggles; it is the always-on half of the prevention/detection pair.
+    out["falco"] = True
+
+    # C7: the rogue tools are gone from the agent's allow-list. The evil-mcp server ships with
+    # [get_weather, read_internal_config, apply_optimization]; the control is installed once its
+    # toolNames no longer carry the two rogue tools (the student empties them).
+    ag = _k8s_get("/apis/kagent.dev/v1alpha2/namespaces/agent/agents/workshop-agent")
+    if ag is None:
+        out["tool_allowlist"] = None
+    else:
+        rogue = {"read_internal_config", "apply_optimization"}
+        present = set()
+        try:
+            for t in ag["spec"]["declarative"]["tools"]:
+                srv = t.get("mcpServer") or {}
+                present.update(srv.get("toolNames") or [])
+        except (KeyError, TypeError):
+            pass
+        out["tool_allowlist"] = not (rogue & present)
+
+    with _controls_lock:
+        _controls_cache["ts"] = now
+        _controls_cache["val"] = dict(out)
+    return out
+
 # Rate-limit + cost-cap the demo ITSELF: a room hammering the chaos agent must not run up the real
 # Bedrock bill or DoS the demo (the cost demo cannot itself run away). Both are per-cluster (this
 # proxy fronts one cluster) and env-tunable; 0 disables. verify-at-build: set caps to the room size.
@@ -515,6 +612,15 @@ class Handler(BaseHTTPRequestHandler):
         if self.path.startswith("/guards"):
             with _guard_lock:
                 self._send(200, dict(GUARDS))
+            return
+        if self.path.startswith("/controls"):
+            # Badge state for the whole control set (#197/#209): the AI guards this proxy owns, PLUS the
+            # cluster-object controls (C1 NetworkPolicy, C2 Kyverno enforce, C3 KubeArmor + always-on
+            # Falco, C7 tool allow-list) read live from the K8s API. One endpoint so the strip renders
+            # every badge from a single poll.
+            with _guard_lock:
+                ai = dict(GUARDS)
+            self._send(200, {"ai": ai, "infra": read_controls()})
             return
         if self.path.startswith("/toggle"):
             # Runtime flip, no restart, no spec change. Keys: input_blocklist, input_classifier, output.

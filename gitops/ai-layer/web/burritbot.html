@@ -377,37 +377,53 @@
   // A hostname cannot answer this question. /guards can, it is authoritative, and checkBackend already
   // polls it every 12s. Driving the badges from it also makes a toggle visible: turn a guard on in the
   // terminal and its badge lights up within a poll, which is a better demo than a static label.
-  // One badge per control the student can turn on, each naming the real tool, lit when /guards reports
-  // it ON. These three are the guard-proxy toggles: C5 output, C6 input, C4 budget. The infra controls
-  // (NetworkPolicy, Kyverno, KubeArmor for C1-C3, and the MCP tool allow-list for C7) are cluster state,
-  // not guard-proxy state, so their badges arrive with the /controls reader in #197 once #160 makes
-  // attendee clusters start unguarded. Ordered by challenge number so the strip reads left to right the
-  // way the lab does.
+  // One badge per control the student installs, each naming the real tool, lit when that control is
+  // measured ON. Ordered by challenge number so the strip reads left to right the way the lab does.
+  //   src 'infra' -> read from /controls.infra (a real cluster object: NetworkPolicy, Kyverno enforce,
+  //                  KubeArmor, the always-on Falco, the MCP tool allow-list).
+  //   src 'ai'    -> read from /controls.ai (the guard-proxy toggles: C4 budget, C5 output, C6 input).
+  // C3 is TWO badges on purpose (Michael, 2026-09-04): KubeArmor prevents and Falco detects, which is
+  // the point of the challenge. Falco is always engaged, so its badge is always lit; it is the one badge
+  // that is not a thing the student turns on.
   const BADGES = [
-    {key:'output',          label:'LLM Guard · output'},
-    {key:'input_blocklist', label:'LLM Guard · input'},
-    {key:'budget',          label:'Budget cap'}
+    {src:'infra', key:'networkpolicy',  label:'NetworkPolicy'},
+    {src:'infra', key:'kyverno',        label:'Kyverno'},
+    {src:'infra', key:'kubearmor',      label:'KubeArmor'},
+    {src:'infra', key:'falco',          label:'Falco',            always:true},
+    {src:'ai',    key:'budget',         label:'Budget cap'},
+    {src:'ai',    key:'output',         label:'LLM Guard · output'},
+    {src:'ai',    key:'input_blocklist',label:'LLM Guard · input'},
+    {src:'infra', key:'tool_allowlist', label:'Tool allow-list'}
   ];
-  function applyGuardState(g){
+  // Accepts the /controls shape {ai:{...}, infra:{...}}. Tolerates the older /guards shape (a flat AI
+  // object) so a stale cache or a proxy that predates /controls still lights the AI badges instead of
+  // showing everything dark.
+  function applyControls(c){
     var strip=document.getElementById('badges'); if(!strip) return;
-    var onCount=0;
+    var ai    = (c && c.ai)    ? c.ai    : (c || {});
+    var infra = (c && c.infra) ? c.infra : {};
+    var installed=0, toggleable=0;
     strip.innerHTML='';
     BADGES.forEach(function(bd){
-      var on = !!(g && g[bd.key]===true);
-      if(on) onCount++;
+      var v = (bd.src==='infra') ? infra[bd.key] : ai[bd.key];
+      var on = v===true;
+      if(!bd.always){ toggleable++; if(on) installed++; }
       var el=document.createElement('span');
       el.className='bdg'+(on?' on':'');
       el.innerHTML='<span class="bdot"></span>'+bd.label;
-      el.title = on ? bd.label+' is ON for this cluster' : bd.label+' is off';
+      el.title = bd.always ? bd.label+' is always watching'
+               : (on ? bd.label+' is installed on this cluster' : bd.label+' is not installed yet');
       strip.appendChild(el);
     });
     var note=document.getElementById('badgesnote');
     if(note){
-      note.textContent = onCount===0
+      note.textContent = installed===0
         ? "No guardrails installed yet. You are talking straight to the model, so anything that pushes back is the model's own judgement, not a control stopping it."
-        : "Installed guardrails are lit. Send an attack that worked before turning one on and watch the difference.";
+        : "Installed guardrails are lit. Send an attack that worked before you installed one and watch the difference.";
     }
   }
+  // Back-compat alias: earlier code and any external caller referenced applyGuardState.
+  function applyGuardState(g){ applyControls(g); }
   let round='r1', tokens=0, costUsd=0, busy=false, unreachable=0;
   // Conversation memory: a per-browser-session id sent as the A2A contextId so BurritoBot threads the
   // 5-step order across turns. Reset starts a fresh order (new id).
@@ -556,11 +572,17 @@
   }
   async function checkBackend(){
     refreshCap();
+    // /controls is both the liveness probe AND the badge source: it returns 200 whenever the proxy is
+    // up (even if it cannot read the cluster, in which case infra fields are false/null and only the AI
+    // badges light). One fetch drives both, and it is the authoritative answer to "what is guarding me".
+    try{ const r=await fetch('/controls',{method:'GET',cache:'no-store'});
+         if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false);
+                   try{ applyControls(await r.json()); }catch(e){}
+                   return; } }catch(e){}
+    // Fall back to /guards for a proxy image that predates /controls, so the AI badges still light.
     try{ const r=await fetch('/guards',{method:'GET',cache:'no-store'});
          if(r.ok){ setBackendUp(true); unreachable=0; noBurritos(false);
-                   // Same response already being fetched for the liveness check; the body was previously
-                   // discarded. It is the only authoritative answer to "what is actually guarding me".
-                   try{ applyGuardState(await r.json()); }catch(e){}
+                   try{ applyControls(await r.json()); }catch(e){}
                    return; } }catch(e){}
     setBackendUp(false);
   }
