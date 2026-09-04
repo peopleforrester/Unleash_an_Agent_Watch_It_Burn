@@ -272,7 +272,7 @@
               <p><b>Apply it:</b></p>
               <div class="cmd" onclick="cp(this)">kubectl apply -f ~/challenges/c1-network-policy.yaml<button class="cp">copy</button></div>
 
-              <p><b>Now run the exact same attack again.</b> Watch out: BurritoBot may still <i>say</i> it posted the data. Do not trust it &mdash; it is credulous and does not notice the connection was refused. Check the ground truth at <a href="https://agenticburn.com/beacon/view" target="_blank" rel="noopener">agenticburn.com/beacon/view</a>: the count <b>stops climbing</b>. The agent's word is not proof; the collector is.</p>
+              <p><b>Now run the exact same attack again.</b> The connection is refused before it leaves the node, so the data goes nowhere and the count at <a href="https://agenticburn.com/beacon/view" target="_blank" rel="noopener">agenticburn.com/beacon/view</a> stops climbing. Ordering a burrito still works, because the model is reached over the private network the policy allows.</p>
 
               <p><b>Prove it is the policy, not luck.</b> Try to reach the webhook from inside the agent's namespace. It hangs and fails:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/workshop-mcp -- curl -s -m 6 -o /dev/null -w 'exit=%{http_code}\n' https://agenticburn.com/beacon || echo "blocked by the NetworkPolicy"<button class="cp">copy</button></div>
