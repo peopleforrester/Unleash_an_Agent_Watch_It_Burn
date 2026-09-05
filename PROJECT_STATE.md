@@ -19,6 +19,15 @@ Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-ap
   classifier inside the image as a local `model_path` dir with `lazy_load` off (image
   `llm-guard-0.3.16-offline.2`); proven under the failure condition; `verify/input-guard.sh`.
 - All eight challenges pass attack -> fix -> re-attack on pres-michael from the student terminal.
+- **Service hostnames live (#233):** `<service>-<cluster>.agenticburn.com` for grafana, argocd, kagent and
+  the five party apps, via Host pass-through at the apex and a Host-routed server block in the console
+  nginx; console pod has `platform-console-egress`; Argo CD runs `server.insecure` with resource limits
+  (the policy floor otherwise blocks its rollouts). Round clusters lack the party apps (by profile) and
+  round-2 lacks Grafana (#234). Terraform `event` tag now devopsdays-portland-2026.
+- **Filed:** #242 dual-ship telemetry to the admin org (not wired), #243 Blueprint/Endpoints tabs back
+  (post-Portland), #244 Backstage + catalog (post-Portland), #245 which gateways are real (kagent +
+  agentgateway; kgateway is not installed), #246 Kyverno version in docs (v1.19.0), #247-#249 the
+  World's Fair text still in docs, runbook.md and ABSTRACT.md.
 
 ## Current cycle (2026-09-05, Whitney walkthrough loop + deck)
 
