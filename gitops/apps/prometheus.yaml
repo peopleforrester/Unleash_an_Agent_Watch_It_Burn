@@ -116,6 +116,12 @@ spec:
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 512Mi }
+          # The config-reloader sidecar the operator injects into the Prometheus pod: the chart default
+          # sets requests only, and the floor rejected the whole StatefulSet on it (#234).
+          prometheusConfigReloader:
+            resources:
+              requests: { cpu: 50m, memory: 64Mi }
+              limits: { cpu: 200m, memory: 128Mi }
           admissionWebhooks:
             patch:
               resources:
