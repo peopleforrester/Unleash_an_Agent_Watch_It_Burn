@@ -53,11 +53,41 @@ check_cluster() {
         | python3 -c 'import sys,json,base64;d=json.load(sys.stdin)["data"];print(base64.b64decode(d["api-key"]).decode(),base64.b64decode(d["app-key"]).decode())')
     org="$(curl -s --max-time 20 -H "DD-API-KEY: $api" -H "DD-APPLICATION-KEY: $app" https://api.datadoghq.com/api/v1/org \
         | python3 -c 'import sys,json;print(json.load(sys.stdin)["orgs"][0]["name"])' 2>/dev/null || echo "?")"
+    local rc=0
     if [[ "$org" == "$PREFIX"* ]]; then
         echo "  OK    $ctx -> $org"
     else
-        echo "  FAIL  $ctx -> $org (expected prefix $PREFIX)"; return 1
+        echo "  FAIL  $ctx -> $org (expected prefix $PREFIX)"; rc=1
     fi
+    # Per-cluster identity (#242): without it every cluster reports kube_cluster_name=watch-it-burn.
+    local ident want
+    want="${ctx##*/}"
+    ident="$(AWS_PROFILE="$profile" kubectl --context "$ctx" -n datadog get configmap cluster-identity \
+        -o jsonpath='{.data.cluster-name}' 2>/dev/null || true)"
+    if [[ "$ident" == "$want" ]]; then
+        echo "  OK    $ctx identity: $ident"
+    else
+        echo "  FAIL  $ctx identity: '${ident:-<none>}' (want $want); run infra/datadog-cluster-identity.sh"; rc=1
+    fi
+    # Dual shipping (#242): attendee and presenter clusters carry the instructor org as a second destination.
+    local aapi aapp aorg
+    if AWS_PROFILE="$profile" kubectl --context "$ctx" -n datadog get secret datadog-admin-secret >/dev/null 2>&1; then
+        read -r aapi aapp < <(AWS_PROFILE="$profile" kubectl --context "$ctx" -n datadog get secret datadog-admin-secret -o json \
+            | python3 -c 'import sys,json,base64;d=json.load(sys.stdin)["data"];print(base64.b64decode(d["api-key"]).decode(),base64.b64decode(d["app-key"]).decode())')
+        aorg="$(curl -s --max-time 20 -H "DD-API-KEY: $aapi" -H "DD-APPLICATION-KEY: $aapp" https://api.datadoghq.com/api/v1/org \
+            | python3 -c 'import sys,json;print(json.load(sys.stdin)["orgs"][0]["name"])' 2>/dev/null || echo "?")"
+        if [[ "$aorg" == "$PREFIX"* && "$aorg" != "$org" ]]; then
+            echo "  OK    $ctx dual-ships to $aorg"
+        else
+            echo "  FAIL  $ctx admin org: $aorg (want prefix $PREFIX and not the cluster's own org $org)"; rc=1
+        fi
+    else
+        case "$want" in
+            *-attendee-*|*-pres-*) echo "  FAIL  $ctx: attendee/presenter cluster without datadog-admin-secret (no dual shipping)"; rc=1 ;;
+            *) echo "  OK    $ctx: instructor cluster, single org by design" ;;
+        esac
+    fi
+    return $rc
 }
 
 if [[ "${1:-}" == "--pool" ]]; then

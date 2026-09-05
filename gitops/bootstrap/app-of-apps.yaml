@@ -13,6 +13,11 @@ spec:
     repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
     targetRevision: staging
     path: gitops/apps
+    directory:
+      recurse: false
+      # The attendee collector dual-ships to the instructor org; an instructor cluster already IS the
+      # instructor org, and a second exporter would double-count it (#242).
+      exclude: 'otel-collector-attendee.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

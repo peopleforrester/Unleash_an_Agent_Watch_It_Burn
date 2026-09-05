@@ -1,0 +1,214 @@
+# ABOUTME: Shared Helm values for the OpenTelemetry Collector DaemonSet, used by BOTH otel-collector
+# ABOUTME: Applications (instructor and attendee). Attendee clusters layer values-dual.yaml on top (#242).
+image:
+  repository: "otel/opentelemetry-collector-contrib"
+mode: daemonset
+presets:
+  kubernetesAttributes:
+    enabled: true
+config:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: 0.0.0.0:4317
+        http:
+          endpoint: 0.0.0.0:4318
+  processors:
+    memory_limiter:
+      check_interval: 1s
+      limit_mib: 400
+      spike_limit_mib: 100
+    batch:
+      timeout: 5s
+      send_batch_size: 1024
+      send_batch_max_size: 2048
+    resource:
+      attributes:
+        - key: cluster.name
+          value: watch-it-burn
+          action: upsert
+        # The cluster's real name, from the cluster-identity ConfigMap deploy-full-idp writes. The Datadog
+        # exporter maps k8s.cluster.name to kube_cluster_name, which is what every Datadog view groups
+        # by; without it all sixty clusters collapse into "watch-it-burn" in the admin org (#242).
+        - key: k8s.cluster.name
+          value: ${env:WIB_CLUSTER_NAME}
+          action: upsert
+    # OTTL fallback (PRD #27 M3): stamp peer.service on third-party component CLIENT spans so the
+    # Datadog Service Map draws the agentgateway -> kagent edge, IF agentgateway doesn't emit it
+    # natively. guard-proxy sets its OWN peer.service in code (M2), so it is intentionally NOT
+    # matched here. error_mode: ignore so a mismatched condition is a harmless no-op (peer.service
+    # simply stays unset) and can NEVER drop spans from the traces pipeline.
+    #
+    # verify-at-build: confirm against REAL spans (search_datadog_spans) before relying on this:
+    #   (a) whether agentgateway already sets peer.service natively (if so this statement is inert);
+    #   (b) the exact resource service.name value emitted by agentgateway.
+    # The kagent -> Bedrock edge is deliberately NOT forced here: kagent reaches Bedrock via the AWS
+    # SDK, and Datadog AUTO-INFERS that external dependency from the aws-api spans. Forcing
+    # peer.service="bedrock" would risk a DUPLICATE node alongside Datadog's inferred one. PRD #27
+    # M5 permits 3 internal edges (guard-proxy->agentgateway->kagent) when Bedrock is external-only.
+    # If verify-at-build shows Bedrock is NOT inferred, add:
+    #   set(attributes["peer.service"], "bedrock") where attributes["peer.service"] == nil
+    #     and resource.attributes["service.name"] == "kagent" and kind == SPAN_KIND_CLIENT
+    #     and (IsMatch(attributes["url.full"], ".*bedrock.*") or attributes["rpc.service"] == "BedrockRuntime")
+    filter/drop_noise:
+      error_mode: ignore
+      traces:
+        span:
+          - 'name == "GET /.well-known/agent-card.json"'
+          # Drop A2A event queue micro-spans (25-65µs, ~170/hr) — these carry
+          # gen_ai.conversation.id/task.id which triggers LLM Obs classification,
+          # causing them to appear as orphaned "No content" root entries in the
+          # LLM Obs trace list. They are A2A protocol internals with no LLM content.
+          - 'name == "a2a.server.events.event_queue.EventQueue.enqueue_event"'
+    transform/set_peer_service:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - set(attributes["peer.service"], "kagent") where attributes["peer.service"] == nil and resource.attributes["service.name"] == "agentgateway" and kind == SPAN_KIND_CLIENT
+    # The kagent ADK token metric and the guard-proxy cost metric ship gen_ai.provider.name
+    # unset / "N/A" (Datadog renders it as the literal tag value N/A). The model is a Bedrock model
+    # (us.anthropic.claude-*), so per the OTel GenAI semconv the provider MUST be aws.bedrock
+    # (https://opentelemetry.io/docs/specs/semconv/gen-ai/aws-bedrock/). Stamp it where missing,
+    # on both metric datapoints and spans (LLM Observability + the Grafana provider filter).
+    transform/set_genai_provider:
+      error_mode: ignore
+      metric_statements:
+        - context: datapoint
+          statements:
+            - set(attributes["gen_ai.provider.name"], "aws.bedrock") where attributes["gen_ai.provider.name"] == nil or attributes["gen_ai.provider.name"] == "N/A"
+      trace_statements:
+        - context: span
+          statements:
+            - set(attributes["gen_ai.provider.name"], "aws.bedrock") where (attributes["gen_ai.provider.name"] == nil or attributes["gen_ai.provider.name"] == "N/A") and attributes["gen_ai.operation.name"] != nil
+    # Promote kagent's call_llm span to LLM Obs workflow level so the LLM Obs trace detail
+    # shows a clean invoke_agent → generate_content hierarchy instead of the full 85-span
+    # HTTP trace. Without this, ml_app is derived from the guard-proxy root span and LLM Obs
+    # shows all infrastructure spans (A2A protocol, tool call POSTs, DELETEs) as noise.
+    # gen_ai.operation.name=invoke_agent maps to the "workflow" kind in Datadog LLM Obs.
+    transform/set_llmobs_workflow:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - set(attributes["gen_ai.operation.name"], "invoke_agent") where name == "call_llm" and resource.attributes["service.name"] == "kagent"
+  exporters:
+    prometheusremotewrite:
+      endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
+      tls:
+        insecure: true
+      resource_to_telemetry_conversion:
+        enabled: true
+    otlp/tempo:
+      endpoint: tempo.monitoring.svc.cluster.local:4317
+      tls:
+        insecure: true
+    # PRIMARY telemetry sink: Datadog (Whitney's account). prometheusremotewrite + otlp/tempo
+    # are the secondary "analog" fallback. DD_API_KEY / DD_SITE come from the datadog-secret
+    # (BYO; never stored in this repo). verify-at-build: create the secret + set the DD site.
+    datadog:
+      api:
+        key: ${env:DD_API_KEY}
+        site: ${env:DD_SITE}
+    debug:
+      verbosity: basic
+      sampling_initial: 5
+      sampling_thereafter: 200
+  connectors:
+    # Generates RED metrics from spans. add_resource_attributes propagates the UST resource
+    # attributes (deployment.environment.name -> env, service.version) onto the generated
+    # metrics; it defaults to false, and without it Datadog "View related logs" from a
+    # span-derived metric silently finds nothing (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`), the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`)).
+    # Connector key is `span_metrics` (the current OTel semconv name; `spanmetrics` is the
+    # deprecated alias slated for removal). add_resource_attributes is supported on contrib 0.158.2.
+    span_metrics:
+      add_resource_attributes: true
+    # datadog/connector computes APM Trace Metrics (the trace.* namespace used by SLOs/monitors).
+    # Required since otelcol-contrib v0.95.0: the Datadog exporter no longer derives these itself.
+    # compute_stats_by_span_kind so stats are computed for client/server/etc. spans (PRD #13 M2).
+    datadog/connector:
+      traces:
+        compute_stats_by_span_kind: true
+        peer_tags_aggregation: true   # surface external service dependencies (e.g. Bedrock) on the Datadog Service Map
+  service:
+    telemetry:
+      logs:
+        level: info
+      metrics:
+        address: 0.0.0.0:8888
+    pipelines:
+      metrics:
+        receivers:
+          - otlp
+          - span_metrics # RED metrics generated from spans (carry UST tags for correlation)
+          - datadog/connector # APM trace.* metrics (compute_stats_by_span_kind); PRD #13 M2
+        processors:
+          - memory_limiter
+          - batch
+          - resource
+          - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock where N/A
+        exporters:
+          - datadog               # primary
+          - prometheusremotewrite # secondary / fallback
+          - debug
+      traces:
+        receivers:
+          - otlp
+        processors:
+          - memory_limiter
+          - filter/drop_noise
+          - batch
+          - resource
+          - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
+          - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock on spans where N/A
+          - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
+        exporters:
+          - datadog      # primary
+          - otlp/tempo   # secondary / fallback
+          - span_metrics  # feed the connector so it can derive metrics from these spans
+          - datadog/connector # feed the APM-stats connector (trace.* metrics); PRD #13 M2
+          - debug
+# Datadog credentials for the primary exporter (BYO secret; not stored in this repo).
+# verify-at-build: create `datadog-secret` (key api-key) from Whitney's Datadog account and
+# set DD_SITE to that account's site (e.g. datadoghq.com, us5.datadoghq.com, datadoghq.eu).
+extraEnvs:
+  - name: DD_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: datadog-secret
+        key: api-key
+  - name: DD_SITE
+    value: "datadoghq.com"
+  - name: WIB_CLUSTER_NAME
+    valueFrom:
+      configMapKeyRef:
+        name: cluster-identity
+        key: cluster-name
+        optional: true   # absent on a cluster bootstrapped before #242; rebuilt clusters always have it
+service:
+  enabled: true
+  type: ClusterIP
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+ports:
+  otlp:
+    enabled: true
+    containerPort: 4317
+    servicePort: 4317
+    protocol: TCP
+  otlp-http:
+    enabled: true
+    containerPort: 4318
+    servicePort: 4318
+    protocol: TCP
+  metrics:
+    enabled: true
+    containerPort: 8888
+    servicePort: 8888
+    protocol: TCP

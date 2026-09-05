@@ -1,0 +1,64 @@
+# ABOUTME: Overlay for ATTENDEE and presenter clusters: a second Datadog exporter that ships every span and
+# ABOUTME: metric to the instructor org as well as the student's own. Layered over values.yaml (#242).
+#
+# The Datadog exporter is per-destination, not per-key, so a second org is a second exporter on the same
+# pipelines. The student's org stays first: a throttled or lapsed instructor org must never delay the org
+# the student is looking at. Helm replaces lists rather than merging them, so every list touched here is
+# restated in full.
+#
+# Instructor clusters do NOT get this file (gitops/bootstrap/app-of-apps.yaml excludes the attendee
+# Application): they already ship to the instructor org, and a second exporter with the same key would
+# double-count every metric there.
+#
+# The key comes from datadog-admin-secret, written by infra/datadog-cluster-identity.sh at bootstrap. The
+# exporter fails validation on an empty key and CrashLoops the collector, so the secret is NOT optional
+# here: a cluster on this profile without the secret is a bootstrap bug and should fail loudly.
+config:
+  exporters:
+    datadog/admin:
+      api:
+        key: ${env:DD_ADMIN_API_KEY}
+        site: ${env:DD_SITE}
+      retry_on_failure:
+        enabled: true
+        initial_interval: 1s
+        max_interval: 10s
+        max_elapsed_time: 30s
+      sending_queue:
+        enabled: true
+        queue_size: 200
+  service:
+    pipelines:
+      metrics:
+        exporters:
+          - datadog               # the student's own org, primary
+          - datadog/admin         # the instructor org, secondary
+          - prometheusremotewrite # secondary / fallback
+          - debug
+      traces:
+        exporters:
+          - datadog      # the student's own org, primary
+          - datadog/admin # the instructor org, secondary
+          - otlp/tempo   # secondary / fallback
+          - span_metrics
+          - datadog/connector
+          - debug
+extraEnvs:
+  - name: DD_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: datadog-secret
+        key: api-key
+  - name: DD_SITE
+    value: "datadoghq.com"
+  - name: WIB_CLUSTER_NAME
+    valueFrom:
+      configMapKeyRef:
+        name: cluster-identity
+        key: cluster-name
+        optional: true
+  - name: DD_ADMIN_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: datadog-admin-secret
+        key: api-key

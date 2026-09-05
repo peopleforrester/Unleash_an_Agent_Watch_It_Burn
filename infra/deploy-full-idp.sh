@@ -88,6 +88,9 @@ if [[ -n "${DD_API_KEY}" && -n "${DD_APP_KEY}" ]]; then
 else
   log "    WARN: no Datadog keys (WITB_DD_API_KEY/_APP_KEY unset, no readable local pool secret) — datadog-secret NOT created"
 fi
+# Per-cluster identity for Datadog plus, on attendee/presenter clusters, the instructor org's keys for
+# dual shipping (#242). fleet.sh passes WITB_DD_ADMIN_*; a manual run without them gets identity only.
+WITB_DD_API_KEY="${DD_API_KEY}" bash "${SCRIPT_DIR}/datadog-cluster-identity.sh"
 
 # Installed on BOTH profiles, burn included. A load balancer controller is plumbing, not a guardrail:
 # Round 1's premise is that nothing STOPS the agent, not that the cluster has no way to expose a

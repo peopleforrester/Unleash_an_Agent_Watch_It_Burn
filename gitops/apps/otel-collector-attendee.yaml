@@ -1,5 +1,5 @@
 # ABOUTME: ArgoCD Application for OpenTelemetry Collector DaemonSet.
-# ABOUTME: INSTRUCTOR profile: single Datadog org. Attendee clusters use otel-collector-attendee.yaml (#242).
+# ABOUTME: ATTENDEE/presenter profile: dual-ships to the student's org AND the instructor org (#242).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -21,6 +21,7 @@ spec:
         # the second source is a ref, never deployed, only read for the value files.
         valueFiles:
           - $values/gitops/otel-collector/values.yaml
+          - $values/gitops/otel-collector/values-dual.yaml
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging
       ref: values

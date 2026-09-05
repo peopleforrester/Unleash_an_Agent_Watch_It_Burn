@@ -34,7 +34,9 @@ spec:
       recurse: false
       # Everything in gitops/apps EXCEPT the two challenge-control apps. kubearmor (engine) and kyverno
       # (engine) stay; only their policy bundles that would pre-block C3 and pre-enable C2 are dropped.
-      exclude: '{network-policies,kubearmor-policies}.yaml'
+      # otel-collector.yaml is the instructor collector; this profile takes otel-collector-attendee.yaml,
+      # the same Application name with the dual-ship overlay (#242).
+      exclude: '{network-policies,kubearmor-policies,otel-collector}.yaml'
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd

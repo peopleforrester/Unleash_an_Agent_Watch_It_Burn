@@ -62,6 +62,23 @@ spec:
   # separate override component. Container names per the Datadog AgentContainerName set.
   override:
     nodeAgent:
+      # Per-cluster identity and dual shipping (#242). Both come from objects deploy-full-idp writes at
+      # bootstrap (infra/datadog-cluster-identity.sh): cluster-identity on every cluster, so this cluster
+      # reports its real name instead of the shared literal above; datadog-admin-secret only on attendee
+      # and presenter clusters, holding the instructor org's key in the JSON shapes the Agent expects
+      # (docs.datadoghq.com/agent/configuration/dual-shipping, read 2026-09-05). Every reference is
+      # optional: an instructor cluster has no admin secret and simply ships once.
+      env:
+        - name: DD_CLUSTER_NAME
+          valueFrom: { configMapKeyRef: { name: cluster-identity, key: cluster-name, optional: true } }
+        - name: DD_ADDITIONAL_ENDPOINTS
+          valueFrom: { secretKeyRef: { name: datadog-admin-secret, key: additional-endpoints, optional: true } }
+        - name: DD_PROCESS_CONFIG_ADDITIONAL_ENDPOINTS
+          valueFrom: { secretKeyRef: { name: datadog-admin-secret, key: process-additional-endpoints, optional: true } }
+        - name: DD_LOGS_CONFIG_ADDITIONAL_ENDPOINTS
+          valueFrom: { secretKeyRef: { name: datadog-admin-secret, key: logs-additional-endpoints, optional: true } }
+        - name: DD_LOGS_CONFIG_FORCE_USE_HTTP
+          value: "true"
       containers:
         agent:
           resources:
@@ -75,6 +92,11 @@ spec:
               memory: 200Mi
     clusterAgent:
       replicas: 1
+      env:
+        - name: DD_CLUSTER_NAME
+          valueFrom: { configMapKeyRef: { name: cluster-identity, key: cluster-name, optional: true } }
+        - name: DD_ORCHESTRATOR_EXPLORER_ORCHESTRATOR_ADDITIONAL_ENDPOINTS
+          valueFrom: { secretKeyRef: { name: datadog-admin-secret, key: orchestrator-additional-endpoints, optional: true } }
       containers:
         cluster-agent:
           resources:

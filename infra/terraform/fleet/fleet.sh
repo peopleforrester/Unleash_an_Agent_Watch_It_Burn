@@ -622,8 +622,18 @@ bootstrap_one() {
     # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
     # merge_pool.py's row-position join over attendee-only orgs, so the in-cluster org is the SAME one the
     # provisioning page shows the student. Non-attendee (instructor) clusters use the shared workshop org.
-    local api app slot
+    local api app slot admin_api="" admin_app="" _admin
     slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
+    # The instructor org (watch-it-burn/datadog). Instructor clusters ship to it as their own org; attendee
+    # and presenter clusters ship to it as a SECOND destination (dual shipping, #242), so the instructor
+    # screen sees the whole room and a dead student login never hides a cluster's telemetry.
+    _admin="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
+        --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
+    if [[ -n "${slot}" ]] || is_presenter_name "${name}"; then
+        admin_api="$(jq -r '."api-key" // empty' <<<"${_admin}" 2>/dev/null)"
+        admin_app="$(jq -r '."app-key" // empty' <<<"${_admin}" 2>/dev/null)"
+        [[ -n "${admin_api}" ]] || log "  WARN: ${name}: instructor org keys unreadable; no dual shipping"
+    fi
     if [[ -n "${slot}" ]]; then
         local pool1 pool2
         pool1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
@@ -638,15 +648,16 @@ bootstrap_one() {
     else
         # Presenter student clusters get the admin-attendee org (the one the provisioning admin page shows
         # beside "your student cluster"), so the org a presenter logs into is the org their cluster ships to.
-        local _dd _ddsecret="watch-it-burn/datadog"
-        is_presenter_name "${name}" && _ddsecret="watch-it-burn/datadog-admin-attendee"
-        _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
-            --secret-id "${_ddsecret}" --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
+        local _dd="${_admin}"
+        is_presenter_name "${name}" && _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
+            --secret-id watch-it-burn/datadog-admin-attendee --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
         api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
         app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
     fi
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
+        WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" \
+        CLUSTER_NAME="${name}" \
         bash "${IDP_SCRIPT}" "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
