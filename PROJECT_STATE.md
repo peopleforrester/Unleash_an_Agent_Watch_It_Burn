@@ -3,6 +3,39 @@
 Phase: 3.3 Promote — Portland delivery hardening shipped to main: runtime-security cutover (#127/#137), denial-of-wallet C4 (#114), role-split instructions + instructor brief (#122), 2-hour hands-on run-of-show (#123), platform tour + manipulation commands (#124/#126), agent-probe harness + prompt catalog (#136), and the Whitney onboarding set (#131/#132/#133/#134).
 Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
 
+## Current cycle (2026-09-05, Whitney walkthrough loop + deck)
+
+Whitney's walkthrough doc (verify/pull-feedback.sh) was worked in three batches; every item became an
+issue and every issue is closed with evidence: #211-#226, #228-#232 (#227 was deleted on Michael's
+instruction and its one implemented paragraph reverted). Things a future session must not re-derive:
+
+- **The lab is the run-of-show for students.** Every challenge C1-C8 follows one shape: attack half ends
+  with a green Success line, the fix caret is titled "How to fix <attack>", the command to look at the
+  resource comes first, each resource is explained one plain line per field. Step 0 defines namespace,
+  the agent, workshop-mcp, guard-proxy, kagent, trace and badges before C1 uses them. Two independent
+  outsider reads (#230) verified it; keep that bar on any edit.
+- **No Datadog-independent success signal in the lab** (Whitney's ruling): no beacon/view links, no
+  "the agent may lie" framing. Datadog is the way a student sees what the agent did; the login problem
+  is #187/#95.
+- **kagent: an EMPTY toolNames means every tool on that server.** C7's fix must set evil-mcp to
+  ["get_weather"]; [] keeps leaking (measured). /controls counts an emptied list as unfixed.
+- **The output guard is a Regex scanner** over the recipe's secret parts (llm-guard-scanners), not a
+  lookup of cluster Secret values. C8's base64 dump passes it for that reason.
+- **The reset demo is deleting deploy/guard-proxy** (Argo restores it in seconds). The NetworkPolicy
+  version cannot work on attendee clusters (student-applied, not Argo-owned) and BurritoBot's tool
+  container has no kubectl, so the "get the agent to delete it" beat never reached Kyverno.
+- **Presenter deck** is rounds.agenticburn.com/presenter.html (rounds-agenticburn c1d14cd): demo-then-do,
+  eight challenge slides, no rounds (#106 closed). attendee.html and walkthrough-agenticburn/index.html
+  are superseded and still say rounds; retire or rewrite before reusing.
+- Both presenter student clusters are unguarded attendee-profile clusters (in-place switch, #216).
+  whitney-student carries whatever Whitney applied during her own walkthrough (NetworkPolicy as of
+  this write); do not "fix" that.
+
+Open and owned by Michael: #203 (premise wrong: the agent holds Pod Identity creds because it must
+call Bedrock; needs an architecture call), #187/#95/#175/#177/#174 (Datadog org supply, Sunday),
+#97 cleanup checklist, and the post-Portland builds (#112/#113/#116/#117/#204/#205/#206/#208/#210).
+Clusters track `staging`; main is behind by design until Michael promotes.
+
 ## Current cycle (2026-08-30)
 
 23 issues closed and deployed to all 8 live clusters, verified by `verify/fleet-drift-audit.sh`
@@ -56,13 +89,14 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 ## Branch & Tests
 - Branch: staging
 - Working tree: clean
-- Last CI: n/a (docs-only commits); sha 9309394
+- Last CI: n/a (no repo CI; verify/lab-render.py + verify/browser-smoke.py 8/8 clean); sha 91eeba1
 
 ## Phase History
 - 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
 - 2026-07-05 2.2/2.3 items 1+2 implemented + offline-verified (Nova default + curl fixture); YAML + kustomize green; live-validation deferred to next cluster.
 - 2026-07-06 2.2/2.3 M1 IMDS pin done (on main); §4.6 core (size passthrough + roster-as-data + concurrency default + dry-run) implemented + offline-verified (6 dry-run scenarios), on STAGING, held from main pending live provision. §4.6-d (tier patch) deferred.
 - 2026-07-06 §4.6 + relocation live-validated (watch-it-burn-r2-1: m5.2xlarge node, IMDS hop=1, Nova at Bedrock) and promoted to main.
+- 2026-09-05 3.1 Whitney walkthrough loop (#211-#232) staged and rolled to all 8 presenter clusters; presenter deck rebuilt to the demo-then-do run of show (#106). 3.3 deferred: clusters track staging; promotion is Michael's call.
 - 2026-07-07 3.3 M1 COMPLETE: provider dispatch promoted to main (c7666b1); §4.6-d deferred (Michael). Four of five M1 pieces shipped; M2-M8 remain as future code-only cycles.
 
 ## Audit log pointer
