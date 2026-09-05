@@ -40,6 +40,16 @@ readonly LAB_VPC_DIR="${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
 readonly LOG_DIR="${SCRIPT_DIR}/logs"
 readonly NAME_PREFIX="watch-it-burn-attendee"
+# Presenter STUDENT clusters (#208): provisioned by the same path and profile as an attendee, but a
+# distinct name class so no pool logic (slot join, claim, count, reap) can ever match them. The owner
+# is the suffix: watch-it-burn-pres-michael -> michael-student.agenticburn.com. The prefix is short on
+# purpose: AWS caps IAM role name_prefix at 38 characters and the cluster module appends "-cluster-",
+# so the whole cluster name must stay under 30 (watch-it-burn-presenter-michael failed plan at 40).
+readonly PRESENTER_PREFIX="watch-it-burn-pres"
+readonly PRESENTER_OWNER_MAX=10
+is_presenter_name() { [[ "$1" == "${PRESENTER_PREFIX}-"* ]]; }
+presenter_owner_of() { printf '%s' "${1#${PRESENTER_PREFIX}-}"; }
+presenter_exists_for() { [[ -f "${STATE_DIR}/${PRESENTER_PREFIX}-$1.tfstate" ]]; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
 # 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
 # EKS control-plane create (near-zero local cost), so the binding local limit is RAM during the bootstrap
@@ -326,10 +336,15 @@ public_host_for() {
     #
     # WIB_PRESENTER_SLOTS maps attendee SLOT -> owner, so adding a third presenter is a config change
     # rather than another case arm. Everything outside the map is a real attendee and gets a themed name.
+    if is_presenter_name "${name}"; then
+        printf '%s-student.agenticburn.com' "$(presenter_owner_of "${name}")"; return 0
+    fi
     local slot="${name##*-}" _pair _sl _ow
     for _pair in ${WIB_PRESENTER_SLOTS//,/ }; do
         _sl="${_pair%%=*}"; _ow="${_pair#*=}"
-        if [[ "${slot}" == "${_sl}" ]]; then
+        # Legacy overlay (attendee slot -> presenter). A real presenter cluster for that owner takes the
+        # hostname; the slot then falls through to its themed name so two clusters never share a host.
+        if [[ "${slot}" == "${_sl}" ]] && ! presenter_exists_for "${_ow}"; then
             printf '%s-student.agenticburn.com' "${_ow}"; return 0
         fi
     done
@@ -411,6 +426,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
     up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
+                      A presenter's own student cluster is watch-it-burn-pres-<owner>: same profile
+                      and controls as an attendee, NOT a pool slot, hostname <owner>-student (#208).
     up <name...>      Provision the named clusters.
     up-fleet <n>      Provision <n> clusters in EACH \${WIB_ATTENDEE_ACCOUNTS} account, all concurrent
                       (disjoint name ranges). Honors WIB_NAME_OFFSET to skip existing cluster numbers.
@@ -608,9 +625,12 @@ bootstrap_one() {
         fi
         log "  ${name}: per-student Datadog org (attendee slot ${slot})"
     else
-        local _dd
+        # Presenter student clusters get the admin-attendee org (the one the provisioning admin page shows
+        # beside "your student cluster"), so the org a presenter logs into is the org their cluster ships to.
+        local _dd _ddsecret="watch-it-burn/datadog"
+        is_presenter_name "${name}" && _ddsecret="watch-it-burn/datadog-admin-attendee"
         _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
-            --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
+            --secret-id "${_ddsecret}" --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
         api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
         app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
     fi
@@ -1078,6 +1098,12 @@ cmd_up() {
     [[ $# -ge 1 ]] || usage
     local names; mapfile -t names < <(expand_names "$@")
     local n bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="attendee"
+    for n in "${names[@]}"; do
+        if is_presenter_name "${n}" && [[ "${#n}" -gt $(( ${#PRESENTER_PREFIX} + 1 + PRESENTER_OWNER_MAX )) ]]; then
+            log "REFUSING ${n}: presenter owner longer than ${PRESENTER_OWNER_MAX} chars breaks the 38-char IAM name_prefix cap"
+            exit 2
+        fi
+    done
     declare -gA PROVISION_SPEC=()
     # Attendee clusters are uniform: the default account, full bootstrap unless bare, no round, no
     # per-cluster tier/instance-type/pids overrides. account|profile|round|tier|itype|pids
@@ -1919,6 +1945,11 @@ ingest_one() {
     if [[ -n "${slot}" ]]; then
         dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" --argjson i "$(( slot - 1 ))" \
             '(([$a[],$b[]]|map(select((.role//"")|startswith("admin")|not)))[$i]) // {} | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
+    elif is_presenter_name "${name}"; then
+        # Presenter student cluster (#208): the admin-attendee org, the same row bootstrap_one used, so the
+        # login on the admin page and the org the cluster ships to are one and the same.
+        dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" \
+            '(([$a[],$b[]]|map(select((.role//"")=="admin-attendee"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
     elif is_instructor_name "${name}"; then
         dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" \
             '(([$a[],$b[]]|map(select((.role//"")=="admin-instructor"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
@@ -2121,6 +2152,15 @@ cmd_routes() {
             # a-NNN stays as an ALIAS only, so a link handed out before the rename still resolves. It is
             # not what anyone is told any more.
             printf 'a-%s.agenticburn.com  %s:443\n' "${n}" "${h}" >> "${tmp}"
+        done
+        # Presenter student clusters (#208): <owner>-student, from their own state files.
+        for state in "${STATE_DIR}"/${PRESENTER_PREFIX}-*.tfstate; do
+            [[ -e "${state}" ]] || continue
+            name="$(basename "${state}" .tfstate)"
+            provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue
+            h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
+            [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
+            printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         done
     fi
     rm -f "${kcfg}"
