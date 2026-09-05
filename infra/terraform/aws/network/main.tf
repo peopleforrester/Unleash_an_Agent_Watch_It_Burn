@@ -27,7 +27,7 @@ provider "aws" {
   default_tags {
     tags = {
       project   = "watch-it-burn"
-      event     = "ai-engineer-worldsfair-2026"
+      event     = "devopsdays-portland-2026"
       Purpose   = "lab-shared-vpc"
       ManagedBy = "terraform"
     }

@@ -39,7 +39,7 @@ provider "aws" {
 locals {
   fleet_tags = {
     project   = "watch-it-burn"
-    event     = "ai-engineer-worldsfair-2026"
+    event     = "devopsdays-portland-2026"
     Purpose   = "attendee-cluster"
     ManagedBy = "terraform"
     attendee  = var.name
