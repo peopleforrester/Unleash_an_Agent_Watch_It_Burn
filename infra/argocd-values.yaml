@@ -11,6 +11,13 @@
 dex:
   enabled: false
 server:
+  # The require-resource-limits floor (minimal-floor) rejects any pod without limits. The chart ships
+  # argocd-server without them, so a rollout after install (for example to pick up server.insecure,
+  # #233) is refused by admission and the old pod stays. Measured 2026-09-05 on attendee-002, where a
+  # pod delete then left the UI with zero replicas. Limits here mean every future rollout can happen.
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits: { cpu: "1", memory: 512Mi }
   podAnnotations:
     # Datadog Unified Service Tagging (PRD #28): puts argocd-server on the service catalog / map as a
     # first-class platform component. env locked to production; version = deployed ArgoCD appVersion.
