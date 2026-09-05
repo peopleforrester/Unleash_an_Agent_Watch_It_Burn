@@ -718,3 +718,22 @@ cost is small enough against a 250-attendee delivery that leaving them standing 
 `MASTER-RECREATION-SPEC.md`, `PROGRESS.md` and this file all carried `L-1216C47`, which returns
 `NoSuchResourceException` and reads as "that quota does not exist" rather than as a typo. Corrected
 everywhere 2026-09-02.
+
+## 2026-09-05 · Dual-ship attendee telemetry to the instructor org; give every cluster a real identity (#242)
+
+Every cluster shipped to one Datadog org and reported the same cluster name. Now attendee and presenter
+clusters ship to their own org first and to the instructor org second (Agent additional endpoints for
+metrics, process, orchestrator and logs; a second OTel exporter for spans and metrics), and every cluster
+reports its real name as `kube_cluster_name` from a `cluster-identity` ConfigMap. Instructor clusters ship
+once, by design: they already are the instructor org. Measured on watch-it-burn-pres-michael: the
+instructor org lists the host and kagent spans under `kube_cluster_name:watch-it-burn-pres-michael` while
+the student org still receives the same.
+
+Two traps found on the way. The root app-of-apps is applied by kubectl at bootstrap and never updates
+itself, so a change to a root's `directory.exclude` reaches a live cluster only by re-applying the root
+(fresh clusters read it from the repo). And attendee-001 had been running the full root; the attendee root
+was removed there without its finalizer so nothing cascaded.
+
+Open: attendee-002 (Whitney's live walkthrough cluster) is seeded and re-rooted only after her session,
+and the Sunday rebuild covers every cluster anyway. The instructor trial org now receives the whole room;
+if it throttles on the day, drop `datadog/admin` from the metrics pipeline and keep traces.

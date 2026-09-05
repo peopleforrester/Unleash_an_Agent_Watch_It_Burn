@@ -969,3 +969,8 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
   ebs-csi-controller-sa Pod Identity association present, ZERO IAM OIDC providers for the cluster
   (enable_irsa=false worked). OIDC provider dependency dropped. (The test script's "PVC_NOT_ALL_BOUND" line
   was a false negative from an awk column bug: checked field 4, STATUS is field 3; raw listing showed all Bound.)
+
+### 2026-09-05 addendum: dual telemetry (#242) live on pres-michael and attendee-001
+- Attendee/presenter clusters dual-ship to the instructor org; every cluster reports its real `kube_cluster_name`.
+- Live clusters need `infra/datadog-cluster-identity.sh` plus a re-apply of their root app-of-apps (roots do not self-update). Done: pres-michael, attendee-001, r2-1, r2-2, r3-1, r3-2. Pending: attendee-002 after Whitney's walkthrough; r1-1/r1-2 run no Datadog agent (burn profile).
+- `verify/datadog-orgs.sh <ctx>` now asserts identity and the second org per cluster.
