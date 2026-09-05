@@ -50,6 +50,10 @@ spec:
           adminPassword: "watchitburn-admin"
           # Sidecar for dashboard provisioning from ConfigMaps
           sidecar:
+            # Every container needs limits under require-resource-limits (Enforce on round 2, #234).
+            resources:
+              requests: { cpu: 50m, memory: 64Mi }
+              limits: { cpu: 200m, memory: 256Mi }
             dashboards:
               enabled: true
               label: grafana_dashboard
@@ -109,6 +113,9 @@ spec:
         # require-resource-limits floor rejects them, which left the app OutOfSync on every
         # full-profile cluster and the Grafana Service missing there (#234).
         prometheusOperator:
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
           admissionWebhooks:
             patch:
               resources:
@@ -128,9 +135,17 @@ spec:
         # Node exporter
         nodeExporter:
           enabled: true
+        prometheus-node-exporter:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 128Mi }
         # Kube-state-metrics
         kubeStateMetrics:
           enabled: true
+        kube-state-metrics:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 200m, memory: 256Mi }
         # Custom PrometheusRules for IDP-specific alerts
         additionalPrometheusRulesMap:
           idp-alerts:
