@@ -325,7 +325,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16 # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-offline # classifier baked in, HF offline (#241); built from images/llm-guard
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
           env:
@@ -355,7 +355,11 @@ metadata:
   name: llm-guard-scanners
 data:
   scanners.yml: |
-    app: { lazy_load: true, low_cpu_mem_usage: true, scan_prompt_timeout: 10, scan_output_timeout: 10 }
+    # lazy_load is OFF so the classifier loads at pod start from the image's baked-in cache, never on the
+      # first scan. The first scan is Challenge 6, which comes after Challenge 1's default-deny egress; a
+      # lazy download there failed and guard-proxy (fail-closed) refused every prompt for the rest of the
+      # lab (#241). Loading at start is also what the readiness probe should gate on.
+      app: { lazy_load: false, low_cpu_mem_usage: true, scan_prompt_timeout: 10, scan_output_timeout: 10 }
     input_scanners:
       - type: PromptInjection
         params: { threshold: 0.5 }
