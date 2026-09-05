@@ -47,6 +47,17 @@ readonly NAME_PREFIX="watch-it-burn-attendee"
 # so the whole cluster name must stay under 30 (watch-it-burn-presenter-michael failed plan at 40).
 readonly PRESENTER_PREFIX="watch-it-burn-pres"
 readonly PRESENTER_OWNER_MAX=10
+# Service hostnames (#233): <service>-<label>.agenticburn.com for every cluster, riding the cluster's
+# console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
+# covers one label. Keep in step with the server block in gitops/ai-layer/console.conf.
+readonly WIB_SERVICE_HOSTS="grafana argocd kagent hedgehog wombat unicorn spider mantis-shrimp"
+# Emit the service lines for one cluster: $1 = the cluster's public host, $2 = its console LB.
+emit_service_hosts() {
+    local host="$1" lb="$2" svc label="${1%%.*}"
+    for svc in ${WIB_SERVICE_HOSTS}; do
+        printf '%s-%s.agenticburn.com  %s:443\n' "${svc}" "${label}" "${lb}"
+    done
+}
 is_presenter_name() { [[ "$1" == "${PRESENTER_PREFIX}-"* ]]; }
 presenter_owner_of() { printf '%s' "${1#${PRESENTER_PREFIX}-}"; }
 presenter_exists_for() { [[ -f "${STATE_DIR}/${PRESENTER_PREFIX}-$1.tfstate" ]]; }
@@ -2129,6 +2140,7 @@ cmd_routes() {
         # level, so michael-round1.agenticburn.com validates and roundone.michael.agenticburn.com does
         # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27.
         [[ -n "${owner}" ]] && printf '%s-round%s.agenticburn.com  %s:443\n' "${owner}" "${rr}" "${h}" >> "${tmp}"
+        [[ -n "${owner}" ]] && emit_service_hosts "${owner}-round${rr}.agenticburn.com" "${h}" >> "${tmp}"
         # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
         # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
         # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one
@@ -2152,6 +2164,7 @@ cmd_routes() {
             # a-NNN stays as an ALIAS only, so a link handed out before the rename still resolves. It is
             # not what anyone is told any more.
             printf 'a-%s.agenticburn.com  %s:443\n' "${n}" "${h}" >> "${tmp}"
+            emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         done
         # Presenter student clusters (#208): <owner>-student, from their own state files.
         for state in "${STATE_DIR}"/${PRESENTER_PREFIX}-*.tfstate; do
@@ -2161,6 +2174,7 @@ cmd_routes() {
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
             [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
             printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
+            emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         done
     fi
     rm -f "${kcfg}"

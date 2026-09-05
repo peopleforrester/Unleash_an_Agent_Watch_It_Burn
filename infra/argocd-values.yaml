@@ -19,3 +19,9 @@ server:
     tags.datadoghq.com/version: "v3.4.4"
     ad.datadoghq.com/server.checks: |
       {"argocd":{"instances":[{"api_server_endpoint":"http://%%host%%:8083/metrics"}]}}
+# argocd-server behind the console's reverse proxy at argocd-<cluster>.agenticburn.com (#233). The
+# proxy terminates TLS; without this the server redirects every plain-HTTP hop to https and the
+# login loops. The chart's params ConfigMap carries it, so it survives helm upgrades.
+configs:
+  params:
+    server.insecure: true

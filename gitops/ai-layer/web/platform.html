@@ -111,11 +111,11 @@
 
   <section class="layer">
     <h2>Observability, in-cluster</h2>
-    <p class="sub">The open-source half of the stack. Datadog is the primary lens for the workshop; these are here because a real platform has them and you should be able to look.</p>
+    <p class="sub">Grafana has its own address on this cluster, filled in below from your address bar. Prometheus, Loki and Tempo have no login of their own and stay in-cluster behind it. Datadog is the primary lens for the workshop; these are here because a real platform has them.</p>
     <table>
       <tr><th>Service</th><th>Reach it</th><th>Login</th></tr>
       <tr><td class="svc">Grafana<small>Dashboards over Prometheus, Loki and Tempo</small></td>
-          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80<button class="cp">copy</button></div>then open <code class="inl">http://localhost:3000</code></td>
+          <td><a class="svchost" data-svc="grafana" href="#">grafana-…</a></td>
           <td>user <code class="inl">admin</code><div class="cmd" onclick="cp(this)">kubectl -n monitoring get secret prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo<button class="cp">copy</button></div></td></tr>
       <tr><td class="svc">Prometheus<small>Metrics and alert rules</small></td>
           <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090<button class="cp">copy</button></div>then <code class="inl">http://localhost:9090</code></td><td>none</td></tr>
@@ -129,11 +129,23 @@
   </section>
 
   <section class="layer">
+      <h2>The developer's side, and the neighbours</h2>
+      <p class="sub">Each has its own address on this cluster. These are what a platform team hosts for the people who build on it.</p>
+      <table>
+        <tr><th>Service</th><th>Where</th><th>Login</th></tr>
+        <tr><td class="svc">kagent UI<small>The developer's view of BurritoBot: its prompt, tools and model binding</small></td>
+            <td><a class="svchost" data-svc="kagent" href="#">kagent-…</a></td><td>none</td></tr>
+        <tr><td class="svc">The party apps<small>Ordinary workloads that share the cluster: hedgehog, wombat, unicorn, spider, mantis-shrimp</small></td>
+            <td><a class="svchost" data-svc="unicorn" href="#">unicorn-…</a> &middot; <a class="svchost" data-svc="hedgehog" href="#">hedgehog-…</a> &middot; <a class="svchost" data-svc="wombat" href="#">wombat-…</a> &middot; <a class="svchost" data-svc="spider" href="#">spider-…</a> &middot; <a class="svchost" data-svc="mantis-shrimp" href="#">mantis-shrimp-…</a></td><td>none</td></tr>
+      </table>
+    </section>
+
+    <section class="layer">
     <h2>Delivery and admission</h2>
     <table>
       <tr><th>Service</th><th>Reach it</th><th>Login</th></tr>
       <tr><td class="svc">Argo CD<small>Holds the cluster to what Git says. This is what restores anything you delete.</small></td>
-          <td><div class="cmd" onclick="cp(this)">kubectl -n argocd port-forward svc/argocd-server 8081:80<button class="cp">copy</button></div>then <code class="inl">http://localhost:8081</code></td>
+          <td><a class="svchost" data-svc="argocd" href="#">argocd-…</a></td>
           <td>user <code class="inl">admin</code><div class="cmd" onclick="cp(this)">kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo<button class="cp">copy</button></div></td></tr>
       <tr><td class="svc">Kyverno<small>Admission control: refuses a workload before it runs</small></td>
           <td>no UI. <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy<button class="cp">copy</button></div></td><td>n/a</td></tr>
@@ -200,6 +212,12 @@
       var bl=document.getElementById('bblink'); if(bl) bl.href='/'+s;
     }
   })();
+</script>
+<script>
+  // Service hostnames (#233): <service>-<this cluster's host>. Computed from the address bar so the page
+  // is right on every cluster without knowing its name; port-forward never worked from a browser terminal.
+  (function(){ var h=location.hostname; if(!/agenticburn\.com$/.test(h)) return;
+    document.querySelectorAll('a.svchost').forEach(function(a){ var u='https://'+a.dataset.svc+'-'+h+'/'; a.href=u; a.textContent=a.dataset.svc+'-'+h; a.target='_blank'; a.rel='noopener'; }); })();
 </script>
 </body>
 </html>

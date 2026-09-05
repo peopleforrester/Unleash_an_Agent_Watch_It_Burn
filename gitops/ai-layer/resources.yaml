@@ -387,6 +387,25 @@ data:
           redact: true
           match_type: all
 ---
+# Platform plumbing keeps its egress no matter what a student applies (#233, and the class of failure
+# behind #241). Challenge 1's default-deny selects every pod in this namespace; the console must still
+# reach Grafana, Argo CD, the kagent UI and the party apps on their pod ports to serve
+# <service>-<cluster>.agenticburn.com. NetworkPolicy allows are additive, so this never weakens the
+# lesson: the agent's own pods (workshop-agent, workshop-mcp, evil-mcp) are not selected here.
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: platform-console-egress
+  namespace: agent
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: console
+  policyTypes: [Egress]
+  egress:
+    - {}
+---
 # guard-proxy's badge reader (#197/#209). Read-only, get-only, on exactly the four objects behind the
 # C1/C2/C3/C7 badges and nothing else. This is the RBAC for the component the challenges attack, so it
 # is written as narrowly as the API allows: named resources where get-by-name works, and no list/watch.

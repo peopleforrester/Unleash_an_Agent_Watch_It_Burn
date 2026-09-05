@@ -76,24 +76,29 @@ sec(){ kubectl -n "$1" get secret "$2" -o jsonpath="{.data.$3}" 2>/dev/null | ba
 # from the kubeconfig cluster entry instead of the context name.
 _cn="$(kubectl config view -o jsonpath='{.clusters[0].name}' 2>/dev/null | sed 's|.*/||')"
 echo "Everything installed on ${_cn:-your cluster}."
-echo "Only the console is published; the rest are ClusterIP, so each one shows its port-forward."
+echo "Grafana, Argo CD, the kagent UI and the party apps each have an address on this cluster:"
+echo "  https://<service>-<the host in your address bar>   e.g. https://grafana-<host>.agenticburn.com"
 
 b "OPEN IN YOUR BROWSER NOW"
 row "BurritoBot"  "this cluster's /  (the app under attack)"
 row "Your terminal" "/lab   login: ${TTYD_CREDENTIAL%%:*} / ${TTYD_CREDENTIAL#*:}"
 row "Platform page" "/platform  (this list, in the browser)"
 
-b "OBSERVABILITY (port-forward, then open localhost)"
+b "OBSERVABILITY"
 gp="$(sec monitoring prometheus-grafana admin-password)"
-row "Grafana" "kubectl -n monitoring port-forward svc/prometheus-grafana 3000:80  -> http://localhost:3000"
+row "Grafana" "https://grafana-<host>.agenticburn.com   (Prometheus, Loki and Tempo sit behind it)"
 row ""        "login: admin / ${gp:-<could not read secret>}"
 row "Prometheus" "kubectl -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090"
 row "Loki"       "kubectl -n monitoring port-forward svc/loki 3100:3100   (no login)"
 row "Tempo"      "kubectl -n monitoring port-forward svc/tempo 3200:3200  (no login)"
 
+b "THE DEVELOPER SIDE"
+row "kagent UI" "https://kagent-<host>.agenticburn.com   (BurritoBot as its developer sees it)"
+row "Party apps" "https://unicorn-<host>.agenticburn.com  (also hedgehog-, wombat-, spider-, mantis-shrimp-)"
+
 b "DELIVERY"
 ap="$(sec argocd argocd-initial-admin-secret password)"
-row "Argo CD" "kubectl -n argocd port-forward svc/argocd-server 8081:80  -> http://localhost:8081"
+row "Argo CD" "https://argocd-<host>.agenticburn.com"
 row ""        "login: admin / ${ap:-<could not read secret>}"
 row "Kyverno" "no UI:  kubectl get clusterpolicy"
 
