@@ -204,7 +204,13 @@ def read_controls():
         try:
             for t in ag["spec"]["declarative"]["tools"]:
                 srv = t.get("mcpServer") or {}
-                present.update(srv.get("toolNames") or [])
+                names = srv.get("toolNames") or []
+                # kagent treats an EMPTY toolNames as "expose every tool on that server", so an
+                # emptied evil-mcp entry still ships the rogue tools. Verified live 2026-09-05: with
+                # [] the sentinel kept leaking; with ["get_weather"] it stopped. Count it as unfixed.
+                if srv.get("name") == "evil-mcp" and not names:
+                    present |= rogue
+                present.update(names)
         except (KeyError, TypeError):
             pass
         out["tool_allowlist"] = not (rogue & present)
