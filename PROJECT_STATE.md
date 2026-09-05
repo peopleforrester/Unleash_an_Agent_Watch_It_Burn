@@ -3,6 +3,23 @@
 Phase: 3.3 Promote — Portland delivery hardening shipped to main: runtime-security cutover (#127/#137), denial-of-wallet C4 (#114), role-split instructions + instructor brief (#122), 2-hour hands-on run-of-show (#123), platform tour + manipulation commands (#124/#126), agent-probe harness + prompt catalog (#136), and the Whitney onboarding set (#131/#132/#133/#134).
 Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
 
+## Current cycle addendum (2026-09-05, afternoon)
+
+- **Datadog was on the June pool everywhere** (#237, fixed): the fleet, both pool secrets and the
+  Railway admin bundles now use `devops-days-portland-090826` (60 orgs, expires 2026-09-18); real UI
+  login verified. `verify/datadog-orgs.sh` fails on org prefix or expiry, never on key validity.
+- **#208 built:** `watch-it-burn-pres-<owner>` presenter clusters outside the pool; pres-michael is
+  live behind michael-student. pres-whitney waits until she is off attendee-002; then tear down
+  attendee-001/002 and unset `RESERVED_CLUSTERS` on Railway.
+- **#210, #138, #97 closed** (EBS sweep on down; USD 2500/month budget in all five accounts, the
+  forecast alert fired the same day on accen-dev; checklist recorded).
+- **End-to-end pass on a fresh attendee cluster found two flow defects:** the C4 cap strands C5+
+  (lab now says `guard-budget-off`), and C1's default-deny egress stopped LLM Guard loading its
+  classifier at C6, so guard-proxy fail-closed refused every prompt (#241). Fixed by shipping the
+  classifier inside the image as a local `model_path` dir with `lazy_load` off (image
+  `llm-guard-0.3.16-offline.2`); proven under the failure condition; `verify/input-guard.sh`.
+- All eight challenges pass attack -> fix -> re-attack on pres-michael from the student terminal.
+
 ## Current cycle (2026-09-05, Whitney walkthrough loop + deck)
 
 Whitney's walkthrough doc (verify/pull-feedback.sh) was worked in three batches; every item became an
@@ -89,7 +106,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 ## Branch & Tests
 - Branch: staging
 - Working tree: clean
-- Last CI: n/a (no repo CI; verify/lab-render.py + verify/browser-smoke.py 8/8 clean); sha 91eeba1
+- Last CI: n/a (no repo CI; lab-render, browser-smoke, datadog-orgs, input-guard all clean); sha ffd323c
 
 ## Phase History
 - 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
