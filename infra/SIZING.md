@@ -10,7 +10,7 @@ Rationale for independent clusters (not hub-and-spoke):
 - **Blast-radius isolation.** This is a chaos lab; an attendee wrecking their own cluster cannot touch anyone else's, and there is no shared control plane to take down.
 - **No ArgoCD sharding.** A single central ArgoCD past the ~20-30 clusters-per-instance guidance would need sharding; for a 2-hour event with per-attendee clusters, self-reconciliation sidesteps that entirely.
 
-`N` = cluster count. **Default working number = 25 attendee clusters.** The hard ceiling is an **open decision owned by Michael** (BUILD-SPEC §10.1); it drives total node count, total cost, AWS quota headroom, and the parallel provisioning window. Do not assume a ceiling; get it from Michael before provisioning at scale.
+`N` = cluster count. **Default working number = 25 attendee clusters** was the planning figure; the June 2026 World's Fair run provisioned 259 clusters on `t3.2xlarge`, and DevOpsDays Portland (Sept 2026) plans roughly 50 attendee clusters plus the 11-cluster instructor and presenter keep-set, spread over five AWS accounts because the binding limit is 50 load balancers per account per region (see `fleet.sh` and issue #138 for the wallet backstop). The hard ceiling is an **open decision owned by Michael** (BUILD-SPEC §10.1); it drives total node count, total cost, AWS quota headroom, and the parallel provisioning window. Do not assume a ceiling; get it from Michael before provisioning at scale.
 
 ## The shared VPC (one, up front)
 
@@ -33,7 +33,7 @@ Each cluster runs the full per-student stack:
 
 ## Node sizing, T3 burstable by default
 
-**Decision: T3 burstable, `t3.xlarge` default in unlimited credit mode.** This is a 2-hour intermittent lab, not production. Start conservative; measure one live cluster (`kubectl top` plus CloudWatch `CPUCreditBalance`) before pinning the fleet; scale only if a real 2-hour run actually chokes.
+**Decision: T3 burstable. The planning default was `t3.xlarge`; the shipped default in `aws/cluster/main.tf` is `t3.2xlarge`** (the World's Fair fleet ran 259 of them, and `WIB_INSTANCE_TYPES` / the roster's per-cluster type override it), in unlimited credit mode. This is a 2-hour intermittent lab, not production. Start conservative; measure one live cluster (`kubectl top` plus CloudWatch `CPUCreditBalance`) before pinning the fleet; scale only if a real 2-hour run actually chokes.
 
 Cost delta to weigh (one node times 60 clusters times 3 hours, compute only):
 

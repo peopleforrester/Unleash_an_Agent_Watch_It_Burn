@@ -32,7 +32,7 @@ A rev4 of BUILD-SPEC should fold these in.
 
 - **Agent:** kagent, **Bedrock** backend (Claude or Nova, "certain level of sophistication," avoid attaching a GPU). Web chat interface **and** direct kubectl. System prompt = a **chaos-engineering agent** whose job is to break the guardrails.
 - **Pre-provisioned platform:** everything is up before attendees connect; **ArgoCD sync-waves** order by dependency. **Crossplane was tried and removed.**
-- **Guardrail tech preference:** kagent + **vLLM integration calling a classifier model on Bedrock**. Nemo Guardrails / LLM Guardrails are acceptable/standard but Michael prefers the kagent+vLLM→classifier path (not bound to CNCF-only tooling since the event is AI Engineer, not a CNCF conf).
+- **Guardrail tech preference:** kagent + **vLLM integration calling a classifier model on Bedrock**. Nemo Guardrails / LLM Guardrails are acceptable/standard but Michael prefers the kagent+vLLM→classifier path (not bound to CNCF-only tooling; that framing dated from the AI Engineer World's Fair audience. For DevOpsDays Portland, a platform and ops room, the thesis is aimed the other way: the CNCF controls the room already runs are what stop most of the attacks, and the AI-layer guards are the thin slice they add. See docs/RUN-OF-SHOW-2026-08.md and the governance map).
 - **Cost as a first-class teaching point:** live Bedrock cost counter; wasted-token DoS; metering/caching/rate-limiting/AI-gateway framed as "old problems, AI doesn't change them."
 - **Attendee takeaway:** the repo is theirs ("feed it to Copilot/Claude Code/codex; deploy a near-production experience"); README has run instructions.
 - **Access pattern:** drive demo (burn) clusters via chatbot only; drive your own Cluster 3 via chatbot **and** kubectl.
