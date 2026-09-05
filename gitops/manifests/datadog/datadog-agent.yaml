@@ -79,17 +79,35 @@ spec:
           valueFrom: { secretKeyRef: { name: datadog-admin-secret, key: logs-additional-endpoints, optional: true } }
         - name: DD_LOGS_CONFIG_FORCE_USE_HTTP
           value: "true"
+      # Limits on EVERY container. require-resource-limits is Enforce on round-2/3 clusters and on any
+      # attendee cluster whose student has done Challenge 2, and the agents only ran there because they were
+      # created while the rule was still Audit: the first rollout after arming (2026-09-05, the env change
+      # above) was denied and left those clusters with no node agent at all (#242 follow-up).
       containers:
         agent:
           resources:
             requests:
               cpu: 200m
               memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
         process-agent:
           resources:
             requests:
               cpu: 100m
               memory: 200Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+        system-probe:
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
     clusterAgent:
       replicas: 1
       env:
@@ -103,3 +121,6 @@ spec:
             requests:
               cpu: 200m
               memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
