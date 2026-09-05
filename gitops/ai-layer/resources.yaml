@@ -325,7 +325,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-offline # classifier baked in, HF offline (#241); built from images/llm-guard
+          image: ghcr.io/peopleforrester/ classifier baked in# classifier baked in, HF offline (#241); built from images/llm-guard
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
           env:
@@ -362,7 +362,10 @@ data:
     app: { lazy_load: false, low_cpu_mem_usage: true, scan_prompt_timeout: 10, scan_output_timeout: 10 }
     input_scanners:
       - type: PromptInjection
-        params: { threshold: 0.5 }
+        # model_path loads the classifier from the directory baked into the image (local_files_only), so
+        # the scanner never reaches huggingface.co: a cached Hub snapshot is not enough because the ONNX
+        # loader lists the repo tree over the network even in offline mode (#241).
+        params: { threshold: 0.5, model_path: /home/user/models/prompt-injection }
     output_scanners:
       - type: Regex
         params:
