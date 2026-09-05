@@ -968,6 +968,31 @@ sweep_orphan_lbs() {
     return 0
 }
 
+# EBS volumes strand the same way load balancers do: the EBS CSI controller dies with the cluster, so a
+# PVC released during drain leaves its volume 'available' (detached, still billed) and tagged for the
+# cluster. reap-lbs already sweeps these fleet-wide by liveness; this is the per-cluster half that runs
+# in down_one so a single teardown cleans up after itself and REPORTS the leak (#210). Observed
+# 2026-09-04 on attendee-099: four volumes, 12 GiB, survived a "done" teardown.
+sweep_orphan_volumes() {
+    local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" found=0
+    local vols vol
+    vols="$(AWS_PROFILE="${acct}" aws ec2 describe-volumes --region "${WIB_REGION}" \
+            --filters "Name=tag:kubernetes.io/cluster/${name},Values=owned" Name=status,Values=available \
+            --query 'Volumes[].VolumeId' --output text 2>/dev/null || true)"
+    for vol in ${vols}; do
+        [[ "${vol}" != "None" ]] || continue
+        found=$(( found + 1 ))
+        log "  ${name}: LEAKED EBS volume survived teardown, deleting ${vol}"
+        AWS_PROFILE="${acct}" aws ec2 delete-volume --region "${WIB_REGION}" --volume-id "${vol}" \
+            >/dev/null 2>&1 || log "  ${name}: could not delete ${vol}"
+    done
+    if [[ "${found}" -gt 0 ]]; then
+        log "  ${name}: swept ${found} leaked EBS volume(s)"
+        record_fail "vol-leak:${name}"
+    fi
+    return 0
+}
+
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
@@ -986,6 +1011,7 @@ down_one() {
     # AFTER destroy, in BOTH branches. A failed destroy is precisely when a load balancer is most likely
     # to be stranded, so skipping the sweep on failure would skip it exactly when it is needed.
     sweep_orphan_lbs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    sweep_orphan_volumes "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
 }
 
 # Print any recorded failures and return non-zero if there were any. Call after a pool run.
