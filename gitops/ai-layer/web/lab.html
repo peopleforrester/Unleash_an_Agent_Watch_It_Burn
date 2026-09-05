@@ -433,6 +433,8 @@ if GUARDS['budget'] and spend_usd &gt;= BUDGET_CAP_USD:
     refuse()                 # 0 tokens, 0 cost</pre>
 
               <p><b>Now run the same attack again.</b> Send that prompt a few more times. The cap is 10 cents. Once the counter passes it, BurritoBot stops answering and says the kitchen tab is frozen. The cost counter stops moving, because refused requests never reach the model. The Budget badge lights.</p>
+              <p><b>Before you move on, take the cap back off.</b> The counter is already past the limit, so with the cap on BurritoBot will keep refusing, and the next challenges need it answering. This turns the cap off; the meter keeps counting:</p>
+              <div class="cmd" onclick="cp(this)">guard-budget-off<button class="cp">copy</button></div>
               <p><b>See the numbers</b> the proxy has metered:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/guard-proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/cost').read())"<button class="cp">copy</button></div>
             </div>
