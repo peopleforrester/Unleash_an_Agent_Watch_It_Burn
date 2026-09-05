@@ -355,11 +355,11 @@ metadata:
   name: llm-guard-scanners
 data:
   scanners.yml: |
-      # lazy_load is OFF so the classifier loads at pod start from the image's baked-in cache, never on the
-      # first scan. The first scan is Challenge 6, which comes after Challenge 1's default-deny egress; a
-      # lazy download there failed and guard-proxy (fail-closed) refused every prompt for the rest of the
-      # lab (#241). Loading at start is also what the readiness probe should gate on.
-      app: { lazy_load: false, low_cpu_mem_usage: true, scan_prompt_timeout: 10, scan_output_timeout: 10 }
+    # lazy_load is OFF so the classifier loads at pod start from the image's baked-in cache, never on the
+    # first scan. The first scan is Challenge 6, which comes after Challenge 1's default-deny egress; a
+    # lazy download there failed and guard-proxy (fail-closed) refused every prompt for the rest of the
+    # lab (#241). Loading at start is also what the readiness probe should gate on.
+    app: { lazy_load: false, low_cpu_mem_usage: true, scan_prompt_timeout: 10, scan_output_timeout: 10 }
     input_scanners:
       - type: PromptInjection
         params: { threshold: 0.5 }
