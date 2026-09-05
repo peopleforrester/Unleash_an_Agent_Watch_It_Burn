@@ -28,7 +28,6 @@ apps/                    # 26 ArgoCD Application manifests
   backstage.yaml         # Developer portal
   backstage-resources.yaml # Backstage RBAC + catalog ConfigMap
   cert-manager.yaml      # TLS certificate management
-  cert-manager-issuers.yaml # Let's Encrypt ClusterIssuers
   resource-quotas.yaml   # ResourceQuota + PDBs
   demo-app-unicorn.yaml     # Demo app (interactive)
   ecom-frontend.yaml     # Demo app (e-commerce)

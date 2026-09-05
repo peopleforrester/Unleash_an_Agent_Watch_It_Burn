@@ -15,7 +15,7 @@
 # Watch It Burn: Master Recreation Specification
 
 **Title:** Build a Platform, Unleash an Agent on it... and Watch it Burn!
-**Event:** AI Engineer World's Fair 2026, San Francisco, Moscone West (Day 1 Workshop, 2:20 to 4:20pm, Track 5).
+**Event:** DevOpsDays Portland 2026, Tue 2026-09-08 13:00-15:00 Pacific, Room 327 (first delivered at the AI Engineer World's Fair, San Francisco, June 2026).
 **Speakers:** Michael Forrester (Accenture) with Whitney Lee. Co-sponsored by Datadog and Accenture.
 **Repo:** `github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn`, working branch `staging`.
 
@@ -208,7 +208,7 @@ Every cluster is self-contained: its own in-cluster ArgoCD reconciles it from th
 | Removed central datadog ESO + grafana-admin ESO; inject `datadog-secret` directly at bootstrap | The IDP did not converge on the 4 student accounts (their Secrets Manager has no `watch-it-burn/*`), crash-looping the Datadog Agent + Falcosidekick. The cluster's own account never touches Secrets Manager; Grafana uses a static admin password. The `ClusterSecretStore` is kept (the eso-s3-exfil game plants a secret locally) | commit `a811323` |
 | Falcosidekick→Talon via cross-namespace FQDN; Talon rules under `config.rulesOverride` | Falcosidekick (security ns) → Talon Service (falco ns): a bare `falco-talon` NXDOMAINs. A top-level `rulesOverride` is silently ignored ("0 rules loaded") | `gitops/apps/falcosidekick.yaml`, `gitops/apps/falco-talon.yaml`, commits `16a7616`, `e2c4192` |
 | Pod-DELETE, never `rollout restart`, for managed workloads | A restart patches the Deployment spec, which `block-argocd-drift` rejects. Deleting a child pod does not; the controller recreates it. Stakater Reloader is not used for the same reason | `DECISION-LOG.md` |
-| Ingresses HTTP-only; Let's Encrypt issuers kept as templates | cert-manager HTTP-01 does not scale to 250 (LE rate limits). ACM is the production path at fleet scale | commit `1bb1239`, `security/cert-manager/cluster-issuers.yaml` |
+| Ingresses HTTP-only; Let's Encrypt issuers removed 2026-09-05 (#235) | cert-manager HTTP-01 does not scale to 250 (LE rate limits). ACM is the production path at fleet scale | commit `1bb1239`, `security/cert-manager/cluster-issuers.yaml` |
 
 ### Components & Versions
 
@@ -223,7 +223,7 @@ Child apps are `argoproj.io/v1alpha1` `Application` objects in `argocd`, `projec
 | istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.1.0 (app 0.44.1), kagent 0.9.9 | varies |
 | falco-talon / falcosidekick | -2 | helm | talon chart 0.4.1 (app 0.3.0), falcosidekick 0.14.0 | falco / security |
 | cert-manager / kagent / prometheus | 1 | helm | cert-manager v1.20.2, kagent 0.9.9, kube-prometheus-stack 86.2.3 | varies |
-| cert-manager-issuers / otel-operator / otel-collector / customer-stream | 2 | git + helm | otel-operator 0.117.0, otel-collector 0.158.2 | varies |
+| otel-operator / otel-collector / customer-stream | 2 | git + helm | otel-operator 0.117.0, otel-collector 0.158.2 | varies |
 | ai-layer / datadog-operator / loki / tempo / resource-quotas | 3 | git + helm | datadog-operator chart 2.23.2 (app 1.27.1) | varies |
 | alloy / datadog-agent-cr | 4 | helm + git | alloy 1.10.0 | monitoring / datadog |
 | unicorn/spider/hedgehog/wombat/mantis-shrimp -party | 7 | git | n/a | apps |

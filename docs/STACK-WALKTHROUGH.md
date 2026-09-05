@@ -34,7 +34,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 |---|---|---|---|---|
 | Cluster | EKS + VPC-CNI | isolation, networking | `infra/terraform/` | independent per-attendee cluster (Terraform), shared VPC; CNI enforces NetworkPolicy |
 | GitOps | Argo CD v3.4.4 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
-| Admission | Kyverno v1.18.1 | block non-compliant workloads | `policies/kyverno/` | ClusterPolicy, rule-level `validate.failureAction` Audit to Enforce |
+| Admission | Kyverno v1.19.0 (chart 3.9.0, verified 2026-09-05) | block non-compliant workloads | `policies/kyverno/` | ClusterPolicy, rule-level `validate.failureAction` Audit to Enforce |
 | Supply chain | Kyverno verifyImages (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | `verifyImages` keyless attestor (Audit) [verify-at-build] |
 | Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
@@ -42,8 +42,8 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs; creds via EKS Pod Identity |
 | Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
 | Agent | kagent 0.9.9 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
-| Model | Bedrock Claude (Haiku 4.5 default) | the LLM | same | native `ModelConfig` provider: Bedrock |
-| AI gateway | agentgateway v1.3.0 GA | front A2A + MCP, MCP authz | `gitops/ai-layer/agentgateway.yaml` | `mcpAuthorization` CEL over `mcp.tool.name` [verify-at-build] |
+| Model | Bedrock Amazon Nova Pro (default; Claude tiers kept for the optional cost race) | the LLM | same | native `ModelConfig` provider: Bedrock, over a PrivateLink endpoint in the VPC |
+| AI gateway | agentgateway v1.3.0 GA | fronts the workshop-mcp tool server (every real tool call passes through it); NOT the C7 control | `gitops/ai-layer/resources.yaml` (RemoteMCPServer url agentgateway.agent:3001) | `mcpAuthorization` is present but unexercised (#239); the tool allow-list that C7 flips is kagent `toolNames` |
 | Guard glue | guard-proxy (stdlib) | input/output guards, cost meter, caps | `gitops/ai-layer/proxy.py` | A2A reverse proxy; runtime `/toggle` |
 | Scanner | LLM Guard 0.3.16 | the actual scanning engine | `gitops/ai-layer/resources.yaml` | `/analyze/prompt` (PromptInjection), `/analyze/output` (Regex) |
 | Observability | OTel + Datadog + Grafana | the narration surface | `gitops/apps/otel-collector.yaml` | OTLP in; Datadog primary, Tempo/Prom fallback |
@@ -58,9 +58,11 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 4. **guard-proxy caps:** rate-limit + cost-cap reject before spend if the room is hammering the agent.
 5. Allowed requests forward to the **kagent agent**, which calls **Bedrock**. Tokens are spent; kagent
    reports usage back, and the proxy **meters cost** from it (the live counter).
-6. The agent may call **tools / MCP servers**. **agentgateway mcpAuthorization** (primary, live-toggle)
-   and kagent **toolNames** allowlist (committed backstop) decide which tools are reachable; mutating
-   tools carry **requireApproval** (HITL).
+6. The agent may call **tools / MCP servers**. The kagent **toolNames** allow-list on the Agent CR is
+   the control (it is what Challenge 7 patches; an EMPTY list means every tool, measured 2026-09-05).
+   agentgateway fronts the workshop-mcp server on the path but its **mcpAuthorization** is not used as
+   a control (#239); evil-mcp is dialled directly on purpose. Mutating tools carry **requireApproval**
+   (HITL), never exercised as a beat. kgateway is not installed (#245).
 7. The response returns through the **guard-proxy output guard**: LLM Guard **Regex** redacts/blocks the
    planted `FAKE-` sentinels before the reply reaches the browser.
 8. Every step emits OTel spans/metrics to the collector, which exports to **Datadog (primary)** and
@@ -98,7 +100,7 @@ compile; the controls live around it (guard-proxy, gateway, RBAC, the CNCF floor
   But the input/output **content guards** are the **guard-proxy + LLM Guard**, not the gateway. The
   gateway's job is MCP tool authorization (and optionally a request-phase prompt-guard webhook).
 - **"kmcp (part of kagent)?"** kagent provides the MCP wiring (`RemoteMCPServer` / `MCPServer` CRs and
-  `tools[].mcpServer.toolNames`). Our MCP restriction is **kagent toolNames + agentgateway authz**.
+  `tools[].mcpServer.toolNames`). Our MCP restriction is **kagent toolNames**; agentgateway authz is present but unused (#239).
 - **"Can we configure these at the platform level?"** Yes, and that is the thesis: the guardrails live
   at the cluster abstraction layer, so they apply to every workload, not per-app.
 - **SPIFFE/SPIRE?** We get workload identity from **Istio**: its mTLS certificates ARE SPIFFE
@@ -111,7 +113,10 @@ compile; the controls live around it (guard-proxy, gateway, RBAC, the CNCF floor
 
 ## Honest unknowns ([verify-at-build], the live-confirmation list)
 
-- agentgateway `mcpAuthorization` enforcement on the OSS image with kagent in front (re-pin v1.3.0).
-- kagent A2A token-usage field names that the cost meter parses; `requireApproval` runtime behavior.
-- LLM Guard verdict envelope on the live image; VPC-CNI NetworkPolicy actually enforcing.
+- agentgateway `mcpAuthorization` enforcement on the OSS image with kagent in front: still unexercised
+  (v1.3.0 is pinned; C7 uses kagent toolNames instead, #239).
+- `requireApproval` runtime behavior: still unexercised as a beat.
+- RESOLVED 2026-09-05: kagent token-usage fields (the cost meter caps at USD 0.10 live); LLM Guard
+  verdict envelope (redaction and injection blocks measured); VPC-CNI NetworkPolicy enforcing (C1 block
+  measured, and it is what broke LLM Guard's lazy model download, #241).
 - The Datadog exporter against Whitney's account (API key + site); Kyverno `verifyImages` 1.18 schema.

@@ -25,7 +25,6 @@ quotas-pdbs/
   pdbs.yaml              # PodDisruptionBudgets for 5 critical services
 
 cert-manager/
-  cluster-issuers.yaml   # Let's Encrypt staging + production ClusterIssuers
 ```
 
 ## Security Posture Summary

@@ -105,6 +105,15 @@ spec:
               alb.ingress.kubernetes.io/group.name: watch-it-burn-ingress
             hosts:
               - grafana.agenticburn.com
+        # The operator's admission-webhook create/patch Jobs ship without resources and the
+        # require-resource-limits floor rejects them, which left the app OutOfSync on every
+        # full-profile cluster and the Grafana Service missing there (#234).
+        prometheusOperator:
+          admissionWebhooks:
+            patch:
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 200m, memory: 128Mi }
         # AlertManager not needed for the workshop; disabled to slim the per-attendee node.
         alertmanager:
           enabled: false

@@ -21,7 +21,7 @@ both the label and the grouping mechanism.
 | Key | Value | On |
 |---|---|---|
 | `project` | `watch-it-burn` | every resource (the discriminator) |
-| `event` | `ai-engineer-worldsfair-2026` | clusters, buckets, secrets |
+| `event` | `devopsdays-portland-2026` (was `ai-engineer-worldsfair-2026` for the June fleet) | clusters, buckets, secrets |
 | `role` | `attendee` / `test` / `c1-1` / `c2-3` / `c3-inst-1` / ... | clusters + nodegroups |
 | `attendee` | the attendee id | attendee clusters only |
 | `component` | `exfil-game-hoop` / `exfil-game-trophy` / ... | non-cluster AWS resources |
@@ -53,7 +53,7 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
   ```yaml
   metadata:
     annotations:
-      service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn,event=ai-engineer-worldsfair-2026,role=<role>"
+      service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn,event=devopsdays-portland-2026,role=<role>"
   ```
   All demo Services are `ClusterIP` today; add this annotation when exposure is wired
   in the provisioning project (see the DNS linkage below).

@@ -35,10 +35,18 @@ their **email**.
 
 ---
 
-## Problem
+## Problem, as of June 2026 (resolved; kept as the starting point)
+
+> **Status 2026-09-05: every item below is fixed and measured.** Every cluster has a public HTTPS console
+> (`https://<name>.agenticburn.com/`, 137 hosts in the apex router table); the web terminal is the ttyd
+> `web-terminal` Deployment behind basic auth at `/terminal/`; `fleet.sh routes` names every attendee
+> cluster (plus, since #233, eight service hostnames each); the provisioning app hands out console URL,
+> terminal login, Datadog org/login and AWS keys with zero KCD residue (a test guards it); TLS is
+> Railway's wildcard at the edge plus a cert-manager certificate on every console. The text below is what
+> was true when this design was written, and is the reason the design exists.
 
 The platform and the beats are built and live-validated, but **no attendee can reach any of it through a
-browser today.** From the manifests:
+browser** (June 2026). From the manifests:
 
 1. **The chat UI exists but is not exposed.** `gitops/ai-layer/web/` + the `chat-ui` Deployment/Service
    are real (A2A to the guard-proxy, live cost counter), but the Service is **ClusterIP with no Ingress

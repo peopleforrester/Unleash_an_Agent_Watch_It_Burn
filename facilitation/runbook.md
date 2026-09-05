@@ -4,7 +4,7 @@
 
 DevOpsDays Portland 2026, Smith Memorial Student Union, Room 327. Michael Forrester (Accenture) with Whitney Lee.
 
-**Confirmed slot:** Day 1 (Workshop Day), **2:20–4:20pm**, **Track 5**, **2 hours**.
+**Slot:** Tue 2026-09-08, **13:00 to 15:00 Pacific**, **Room 327**, **2 hours**. (The June World's Fair slot this file was written for is done; see `docs/RUN-OF-SHOW-2026-08.md` for the current sequence. The 60-minute table at the end is a cut-down for a shortened slot, not the plan.)
 (Public schedule lists Michael solo; Whitney is co-speaker per the accepted abstract, the organizers have been emailed to add her.)
 
 Split: Michael owns architecture, the security thesis, and the cost argument. Whitney owns the live

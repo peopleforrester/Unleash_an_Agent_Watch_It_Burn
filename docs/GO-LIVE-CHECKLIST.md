@@ -119,7 +119,7 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 ### 2. The real attendee pool (the committed pool.csv is a placeholder)
 - [ ] Per-attendee AWS keys: scoped IAM users/keys for ~250 attendees (or a per-cluster-scoped scheme).
 - [ ] Merge the attendee Datadog accounts with the AWS keys into the real pool (`merge_pool.py`). The new
-      AI Engineer World's Fair pool (296 attendee orgs) is staged in Secrets Manager (`watch-it-burn/datadog-pool`
+      DevOpsDays Portland pool (60 orgs, expires 2026-09-18, tested 60/60 on 2026-09-05) is staged in Secrets Manager (`watch-it-burn/datadog-pool`
       + `watch-it-burn/datadog-pool-2`, split because one secret caps at 64 KB); `merge_pool` reads both.
       Merge once the per-attendee AWS keys exist. (Old expired trial pool replaced 2026-06-26.)
 - [ ] Deploy the real pool to the distributor (Railway), replacing the placeholder seed.
