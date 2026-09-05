@@ -48,6 +48,50 @@ variable "profile" {
   description = "AWS profile that owns this lab VPC. Required; every caller passes it explicitly."
 }
 
+# Wallet backstop (#138). A student holds cluster-admin on their own cluster, so anything inside the
+# cluster (the guard-proxy cost cap included) can be bypassed by someone who knows how. The only
+# control that survives cluster-admin is account-level, and AWS Budgets is the cheapest one: it does
+# not stop spend, it tells a human before the invoice does. One budget per fleet account, applied with
+# the account's lab VPC so every account that can host clusters carries it.
+variable "budget_limit_usd" {
+  type        = number
+  default     = 2500
+  description = "Monthly spend ceiling for this fleet account that triggers the alert ladder."
+}
+
+variable "budget_emails" {
+  type        = list(string)
+  default     = ["michaelrishiforrester@gmail.com"]
+  description = "Who is emailed at 50/80/100 percent of actual spend and at 100 percent forecasted."
+}
+
+resource "aws_budgets_budget" "fleet" {
+  name         = "watch-it-burn-fleet-monthly"
+  budget_type  = "COST"
+  limit_amount = tostring(var.budget_limit_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  dynamic "notification" {
+    for_each = [50, 80, 100]
+    content {
+      comparison_operator        = "GREATER_THAN"
+      threshold                  = notification.value
+      threshold_type             = "PERCENTAGE"
+      notification_type          = "ACTUAL"
+      subscriber_email_addresses = var.budget_emails
+    }
+  }
+
+  notification {
+    comparison_operator        = "GREATER_THAN"
+    threshold                  = 100
+    threshold_type             = "PERCENTAGE"
+    notification_type          = "FORECASTED"
+    subscriber_email_addresses = var.budget_emails
+  }
+}
+
 data "aws_availability_zones" "available" {
   filter {
     name   = "opt-in-status"
