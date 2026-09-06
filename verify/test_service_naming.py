@@ -33,6 +33,22 @@ check(f"emitted service names {sorted(emitted)} are the family", emitted and emi
 check("the root service (guard-proxy's span) is exactly 'burritobot'", ROOT_SERVICE in emitted)
 check("no old service name is emitted anywhere", not any(o in (REPO / p).read_text() for p in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yaml") for o in OLD))
 
+print("== the service name is PINNED where the OTel operator would otherwise inject one ==")
+# OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES, and the operator injects it from
+# the Deployment name at admission. Without the pin the rename is applied, synced, running, and ignored.
+import subprocess
+rendered = subprocess.run(["kubectl", "kustomize", str(REPO / "gitops/ai-layer")], capture_output=True, text=True, check=True).stdout
+for doc in yaml.safe_load_all(rendered):
+    if not doc or doc.get("kind") != "Deployment":
+        continue
+    env = {e["name"]: e.get("value") for e in doc["spec"]["template"]["spec"]["containers"][0].get("env", [])}
+    ra = env.get("OTEL_RESOURCE_ATTRIBUTES", "")
+    if "service.name=" not in ra:
+        continue
+    want = ra.split("service.name=", 1)[1].split(",")[0]
+    check(f"{doc['metadata']['name']}: OTEL_SERVICE_NAME pins '{want}' (operator injection cannot win)",
+          env.get("OTEL_SERVICE_NAME") == want)
+
 print("== the collector's conditions match the names that are emitted ==")
 # Comment lines are ignored: values.yaml documents a commented Bedrock peer.service example, which is an
 # external service and deliberately not in the family.

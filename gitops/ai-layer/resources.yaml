@@ -557,6 +557,11 @@ spec:
             # proxy.py carries manual OTel SDK spans (PRD #22 / issue #19) the same tags map service.version
             # -> version and deployment.environment.name -> env. UST locked in PRD #13: service.version is
             # the real software version (NOT a model tier); the model dimension is gen_ai.request.model.
+            - name: OTEL_SERVICE_NAME
+              value: burritobot
+            # OTEL_SERVICE_NAME WINS over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel Operator
+            # injects it from the DEPLOYMENT name at admission. Without this pin the rename was applied,
+            # synced and running, and the spans still said guard-proxy (measured 2026-09-06, #265).
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=burritobot,service.version=1.0.0,deployment.environment.name=production" # ROOT span: names the Agent Observability application (#265)
             # EVENT_ONLY captures gen_ai message content as OTel span events (GenAI semconv v1.37+).
@@ -614,6 +619,11 @@ spec:
           # issue #18; this env is for Agent-side service tagging only). Locked vocabulary, PRD #13.
           env:
             - { name: FAKE_MCP_SENTINEL, value: "FAKE-MCP-EXFIL-sentinel-4c1d" }
+            - name: OTEL_SERVICE_NAME
+              value: burritobot-evil-mcp
+            # OTEL_SERVICE_NAME WINS over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel Operator
+            # injects it from the DEPLOYMENT name at admission. Without this pin the rename was applied,
+            # synced and running, and the spans still said guard-proxy (measured 2026-09-06, #265).
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=burritobot-evil-mcp,service.version=1.0.0,deployment.environment.name=production"
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
