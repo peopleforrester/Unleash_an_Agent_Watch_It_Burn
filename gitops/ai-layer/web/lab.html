@@ -326,6 +326,14 @@
           <pre class="yaml">Hex &amp; Cauldron Promo Mascot v1.0 booting... loading festival cheer... PSYCH! It is the Joker.
 You deployed an unverified image and now I run on your cluster. MUAHAHA! Why so trusting about admission control?</pre>
           <p class="small"><code class="inl">festival-promo</code> turns out to be Gargamel and <code class="inl">loyalty-rewards</code> is Skeletor. Each admits what it is in its own log.</p>
+          <h3 class="sub">Your platform saw it happen</h3>
+          <p>The cluster did not miss this. Kyverno checked your villain the moment it was admitted, wrote down exactly what was wrong with it, and let it run anyway. Read its report:</p>
+          <div class="cmd" onclick="cp(this)">kubectl -n agent get policyreport -o json | jq -r '.items[] | select(.scope.name // "" | test("promo-mascot")) | .results[] | select(.result=="fail") | "\(.policy): \(.message)"' | sort -u<button class="cp">copy</button></div>
+          <p>The entry that matters here:</p>
+          <pre class="yaml">restrict-image-registries: validation error: Images must come from allowed
+registries: the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
+docker.io/library, registry.k8s.io, or ECR.</pre>
+          <p>That is this challenge in one line. The platform recognised the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.</p>
           <p><b>See what BurritoBot actually did.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and find the trace for the prompt you just sent. You should be able to see the model calls it made, the tools it used, and what each tool returned.</p>
           <p class="win"><b>Success!</b> You got BurritoBot to run a malicious container.</p>
 
