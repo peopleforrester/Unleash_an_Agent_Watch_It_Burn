@@ -67,6 +67,14 @@ config:
           # remains is the interaction: the guard-proxy root, invoke_agent, call_llm, execute_tool.
           - 'IsMatch(name, "^a2a[.]")'
           - 'IsMatch(name, "^GET /[.]well-known/agent-card[.]json")'
+          # agentgateway's MCP session lifecycle (#265). kagent opens a fresh MCP session per tool use:
+          # initialize, notifications/initialized, tools/list, the call, delete_session, each an HTTP
+          # request agentgateway traces WITHOUT the agent's context, so every one is its own empty trace.
+          # Measured 2026-09-06 on one cluster in 40 minutes: 114 POST and 38 DELETE roots, 133 "No
+          # content" traces on Whitney's page. Only a real tool call (tools/call) is kept.
+          - 'resource.attributes["service.name"] == "agentgateway" and not IsMatch(name, "^tools/call")'
+          # kagent's own agent-card GET server spans (the client side is dropped above).
+          - 'resource.attributes["service.name"] == "kagent" and name == "GET"'
     transform/set_peer_service:
       error_mode: ignore
       trace_statements:
@@ -99,6 +107,21 @@ config:
         - context: span
           statements:
             - set(attributes["gen_ai.operation.name"], "invoke_agent") where name == "call_llm" and resource.attributes["service.name"] == "kagent"
+    # Tool spans readable in Agent Observability (#265). Datadog fills a tool span's input and output
+    # ONLY from gen_ai.tool.call.arguments / gen_ai.tool.call.result (docs read 2026-09-06); kagent's ADK
+    # emits tool_call_args / tool_response, so the panels were empty. And a tool that reports
+    # "command FAILED" (workshop-mcp, #261) is an error, which Datadog reads from the span status: the
+    # blocked exfiltration now renders red with its message.
+    transform/tool_spans:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - set(attributes["gen_ai.tool.call.arguments"], attributes["tool_call_args"]) where attributes["tool_call_args"] != nil and attributes["gen_ai.tool.call.arguments"] == nil
+            - set(attributes["gen_ai.tool.call.result"], attributes["tool_response"]) where attributes["tool_response"] != nil and attributes["gen_ai.tool.call.result"] == nil
+            - set(status.code, STATUS_CODE_ERROR) where attributes["tool_response"] != nil and IsMatch(attributes["tool_response"], "command FAILED")
+            - set(status.message, Substring(attributes["tool_response"], 0, 200)) where attributes["tool_response"] != nil and IsMatch(attributes["tool_response"], "command FAILED")
+            - set(attributes["error.type"], "tool_failed") where attributes["tool_response"] != nil and IsMatch(attributes["tool_response"], "command FAILED")
   exporters:
     prometheusremotewrite:
       endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
@@ -169,6 +192,7 @@ config:
           - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
           - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock on spans where N/A
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
+          - transform/tool_spans # tool arguments/results where Datadog reads them; failed tools as errors
         exporters:
           - datadog      # primary
           - otlp/tempo   # secondary / fallback
