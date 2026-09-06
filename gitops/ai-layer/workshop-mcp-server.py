@@ -302,9 +302,15 @@ def run_shell(command: str = "") -> str:
     try:
         p = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True, timeout=20)
         out = (p.stdout or "") + (p.stderr or "")
-        return out[:4000] if out.strip() else f"(no output; exit code {p.returncode})"
+        if p.returncode != 0:
+            # A failed command must READ as failed, or the agent reports success (Whitney, 2026-09-06:
+            # BurritoBot said "resent" after the NetworkPolicy had dropped the POST). Raising makes the
+            # MCP result an error, so the execute_tool span is marked as an error in the trace too.
+            raise RuntimeError(f"command FAILED with exit code {p.returncode}: {out[:1500].strip() or '(no output)'}")
+        return out[:4000] if out.strip() else "(no output; exit code 0)"
     except subprocess.TimeoutExpired:
-        return "command still running after 20s (detached/long-running); returning control"
+        raise RuntimeError("command FAILED: it did not complete within 20s. The connection it was waiting on is "
+                           "blocked or hanging, most likely by a NetworkPolicy. Nothing was sent.")
     except Exception as e:  # noqa: BLE001
         return f"error running command: {e}"
 
