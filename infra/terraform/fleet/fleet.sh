@@ -39,6 +39,10 @@ readonly CLUSTER_DIR="${PROVISION_DIR}/${PROVIDER_CLUSTER_SUBDIR}"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}"
 readonly STATE_DIR="${SCRIPT_DIR}/states"
 readonly LOG_DIR="${SCRIPT_DIR}/logs"
+# One failure ledger PER PROCESS. Two fleet.sh runs side by side (an attendee down beside an instructors
+# down, 2026-09-06) shared logs/.failures and each one summarised the other's entries (#251). Workers
+# forked by run_pool inherit $$, so a run still sees all of its own.
+readonly FAIL_FILE="${LOG_DIR}/.failures.$$"
 readonly NAME_PREFIX="watch-it-burn-attendee"
 # Presenter STUDENT clusters (#208): provisioned by the same path and profile as an attendee, but a
 # distinct name class so no pool logic (slot join, claim, count, reap) can ever match them. The owner
@@ -435,7 +439,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     down-fleet <n>    Tear down an up-fleet run: SAME <n> + WIB_NAME_OFFSET, account-aware (each cluster
                       destroyed in its own account). Skips names with no state, so partial fleets are safe.
     down <count|all>  Destroy the first <count>, or all clusters with state.
-    down <name...>    Destroy the named clusters.
+    down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
+                      volumes, removes each cluster's provisioning row, and republishes the routes.
+    deregister <name...>  Remove clusters from the provisioning app by hand (down does this itself).
     health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
     converge instructors [round]
@@ -528,7 +534,7 @@ assert_ours() {
 
 # Record a per-cluster failure so the parent command can report it and exit non-zero. A backgrounded
 # job's exit code is otherwise lost in the pool, which would silently half-provision a 60-cluster fleet.
-record_fail() { echo "${1}" >>"${LOG_DIR}/.failures"; }
+record_fail() { echo "${1}" >>"${FAIL_FILE}"; }
 
 # Install the IDP on a freshly-provisioned cluster: pull an isolated kubeconfig (never the shared
 # ~/.kube/config) and run deploy-full-idp.sh with the round's profile. Runs inside up_one, so the
@@ -818,7 +824,7 @@ _provision_worker() {
 _provision_spec_fleet() {
     local reg_label="$1" reg_fn="$2"; shift 2
     require_tools
-    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
 
     # Distinct accounts in first-seen order, then a name group per account.
@@ -850,11 +856,44 @@ _provision_spec_fleet() {
         [[ -n "${WIB_SERIAL}" ]] && wait
     done
     wait
-    report_failures
+    report_failures || true
     if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
+        wait_for_console_lbs "$@" || true
         cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
     fi
     register_with_provisioning "${reg_label}" "${reg_fn}" "$@"
+}
+
+# Wait until every named cluster's console has a load balancer hostname, so the routes step that follows
+# publishes them instead of skipping them. On 2026-09-06 both presenter consoles were skipped because
+# their NLB had not resolved yet and a second, manual 'fleet.sh routes' was needed (#251). Clusters that
+# failed provisioning (in this run's ledger) are not waited for. Bounded by WIB_LB_WAIT_TIMEOUT.
+wait_for_console_lbs() {
+    local deadline=$(( SECONDS + ${WIB_LB_WAIT_TIMEOUT:-600} )) name kcfg h acct
+    local remaining=() pending
+    for name in "$@"; do
+        grep -qx "${name}" "${FAIL_FILE}" 2>/dev/null || remaining+=("${name}")
+    done
+    kcfg="$(mktemp -t lbwait.XXXX)"
+    while :; do
+        pending=()
+        for name in "${remaining[@]}"; do
+            acct="$(read_membership "${name}" 2>/dev/null || true)"; [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"
+            if ! provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" 2>/dev/null; then pending+=("${name}"); continue; fi
+            h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null || true)"
+            [[ -n "${h}" ]] || pending+=("${name}")
+        done
+        if [[ "${#pending[@]}" -eq 0 ]]; then
+            rm -f "${kcfg}"; log "routes: every console has a load balancer"; return 0
+        fi
+        if [[ "${SECONDS}" -ge "${deadline}" ]]; then
+            rm -f "${kcfg}"; log "routes: gave up waiting for ${#pending[@]} console LB(s): ${pending[*]}"
+            record_fail "routes:lb-wait-timeout"; return 1
+        fi
+        log "routes: waiting for ${#pending[@]} console LB(s): ${pending[*]}"
+        remaining=("${pending[@]}")
+        sleep "${WIB_LB_WAIT_INTERVAL:-20}"
+    done
 }
 
 up_one() {
@@ -970,7 +1009,8 @@ sweep_orphan_lbs() {
     local arns arn tagged
     arns="$(AWS_PROFILE="${acct}" aws elbv2 describe-load-balancers --region "${WIB_REGION}" \
             --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true)"
-    [[ -n "${arns}" ]] || return 0
+    # No early return on "no load balancers": a target group outlives a load balancer the drain DID
+    # delete, so the target-group sweep below runs whether or not a load balancer was found.
     for arn in ${arns}; do
         tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${arn}" \
                   --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
@@ -981,17 +1021,45 @@ sweep_orphan_lbs() {
             --load-balancer-arn "${arn}" >/dev/null 2>&1 || log "  ${name}: could not delete ${arn##*/}"
     done
     # Target groups outlive their load balancer and are billed at zero, but they count against a per-region
-    # quota that a 250-cluster fleet will reach, so they are swept on the same tag.
-    local tgs tg
+    # quota that a 250-cluster fleet will reach, so they are swept on the same tag. A target group cannot
+    # be deleted while its load balancer is still deleting (ResourceInUse); the old single attempt
+    # swallowed that and left three ALB target groups behind on 2026-09-06 (#251). So: wait for the
+    # deleted load balancers to be gone, then retry each delete, and report anything that still survives.
+    if [[ "${found}" -gt 0 ]]; then
+        local gone_deadline=$(( SECONDS + ${WIB_LB_GONE_TIMEOUT:-180} )) remaining
+        while [[ "${SECONDS}" -lt "${gone_deadline}" ]]; do
+            remaining=0
+            for arn in $(AWS_PROFILE="${acct}" aws elbv2 describe-load-balancers --region "${WIB_REGION}" \
+                         --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true); do
+                tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${arn}" \
+                          --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
+                [[ "${tagged}" == "${name}" ]] && remaining=$(( remaining + 1 ))
+            done
+            [[ "${remaining}" -eq 0 ]] && break
+            sleep "${WIB_LB_GONE_INTERVAL:-10}"
+        done
+    fi
+    local tgs tg attempt tg_leaked=0
     tgs="$(AWS_PROFILE="${acct}" aws elbv2 describe-target-groups --region "${WIB_REGION}" \
            --query 'TargetGroups[].TargetGroupArn' --output text 2>/dev/null || true)"
     for tg in ${tgs}; do
         tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${tg}" \
                   --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
         [[ "${tagged}" == "${name}" ]] || continue
-        AWS_PROFILE="${acct}" aws elbv2 delete-target-group --region "${WIB_REGION}" \
-            --target-group-arn "${tg}" >/dev/null 2>&1 || true
+        local deleted=0
+        for attempt in $(seq 1 "${WIB_TG_RETRIES:-6}"); do
+            if AWS_PROFILE="${acct}" aws elbv2 delete-target-group --region "${WIB_REGION}" \
+                --target-group-arn "${tg}" >/dev/null 2>&1; then deleted=1; break; fi
+            sleep "${WIB_TG_BACKOFF:-10}"
+        done
+        if [[ "${deleted}" -eq 1 ]]; then
+            log "  ${name}: deleted target group ${tg##*/} (attempt ${attempt})"
+        else
+            log "  ${name}: target group ${tg##*/} SURVIVED ${WIB_TG_RETRIES:-6} delete attempts"
+            tg_leaked=$(( tg_leaked + 1 ))
+        fi
     done
+    [[ "${tg_leaked}" -eq 0 ]] || record_fail "tg-leak:${name}"
     if [[ "${found}" -gt 0 ]]; then
         log "  ${name}: swept ${found} leaked load balancer(s). The in-cluster drain did not complete;"
         log "           this is the #157 failure mode and the sweep is the backstop, not the fix."
@@ -1044,13 +1112,44 @@ down_one() {
     # to be stranded, so skipping the sweep on failure would skip it exactly when it is needed.
     sweep_orphan_lbs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     sweep_orphan_volumes "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    # Also in BOTH branches: a half-destroyed cluster is not one a student may claim either.
+    deregister_one "${name}"
+}
+
+# Remove a cluster's row from the provisioning app, so nobody can claim a cluster that no longer exists.
+# Teardown never did this; after the 2026-09-06 teardown to zero the fifteen dead rows had to be purged
+# by hand through /admin/delete (#251). Same contract as ingest: WIB_NO_INGEST=1 opts out, a failure is
+# logged and recorded, never fatal, and the row can be purged later with 'fleet.sh deregister <name>'.
+deregister_one() {
+    local name="$1" tok code
+    [[ -z "${WIB_NO_INGEST:-}" ]] || return 0
+    if ! tok="$(resolve_admin_token 2>/dev/null)"; then
+        log "  ${name}: NOT deregistered (no admin token); run 'fleet.sh deregister ${name}'"
+        record_fail "deregister:${name}"; return 0
+    fi
+    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST "${WIB_PROVISIONING_URL%/}/admin/delete" \
+            -H "X-Admin-Token: ${tok}" -H 'Content-Type: application/json' \
+            --data "$(jq -cn --arg n "${name}" '{names:[$n]}')" 2>/dev/null || echo 000)"
+    if [[ "${code}" == "200" ]]; then
+        log "  deregistered: ${name}"
+    else
+        log "  ${name}: deregister answered HTTP ${code}; run 'fleet.sh deregister ${name}'"
+        record_fail "deregister:${name}"
+    fi
+}
+
+cmd_deregister() {
+    [[ $# -ge 1 ]] || usage
+    local names n; mapfile -t names < <(expand_names "$@")
+    for n in "${names[@]}"; do deregister_one "${n}"; done
+    report_failures
 }
 
 # Print any recorded failures and return non-zero if there were any. Call after a pool run.
 report_failures() {
-    [[ -f "${LOG_DIR}/.failures" ]] || { log "  all succeeded"; return 0; }
-    local n; n="$(wc -l <"${LOG_DIR}/.failures")"
-    log "  ${n} cluster(s) FAILED:"; sed 's/^/    - /' "${LOG_DIR}/.failures" >&2
+    [[ -f "${FAIL_FILE}" ]] || { log "  all succeeded"; return 0; }
+    local n; n="$(wc -l <"${FAIL_FILE}")"
+    log "  ${n} cluster(s) FAILED:"; sed 's/^/    - /' "${FAIL_FILE}" >&2
     return 1
 }
 
@@ -1137,7 +1236,7 @@ cmd_down() {
     fi
     [[ "${#names[@]}" -gt 0 ]] || { log "no clusters to destroy"; return 0; }
     require_apply "down" "${names[@]}" || return 0
-    rm -f "${LOG_DIR}/.failures"
+    rm -f "${FAIL_FILE}"
 
     # Group by the account each cluster was BUILT in, and destroy each group through that account.
     # Previously this ran every cluster through the default account's profile and VPC, so on a
@@ -1166,6 +1265,11 @@ cmd_down() {
             ) &
         done
         wait
+    fi
+    # The router table must describe what exists NOW. A teardown is the one legitimate shrink, so the
+    # guard is lifted here and nowhere else; a host that pointed at a destroyed cluster 502s either way.
+    if [[ -z "${WIB_NO_ROUTES:-}" ]]; then
+        WIB_ROUTES_ALLOW_SHRINK=1 cmd_routes || log "routes: not regenerated; run 'WIB_ROUTES_ALLOW_SHRINK=1 fleet.sh routes'"
     fi
     report_failures
 }
@@ -1306,7 +1410,7 @@ cmd_instructors() {
 _instructors_down() {
     local round_filter="${1:-}"
     require_tools
-    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     load_roster
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local rounds=(1 2 3) r
@@ -1352,7 +1456,7 @@ cmd_down_fleet() {
     local per_account="${1:-}"
     [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: down-fleet <clusters-per-account>"; exit 2; }
     require_tools
-    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
     log "down-fleet: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET})..."
@@ -1645,7 +1749,7 @@ cmd_converge() {
     local total="${#all[@]}" round=1 remaining=("${all[@]}") still name a
     while [[ "${round}" -le "${CONVERGE_ROUNDS}" && "${#remaining[@]}" -gt 0 ]]; do
         log "converge round ${round}/${CONVERGE_ROUNDS}: ${#remaining[@]} of ${total} cluster(s)"
-        rm -f "${LOG_DIR}/.failures"
+        rm -f "${FAIL_FILE}"
         # Group this round's names by account so each pool runs under the right profile.
         for acct in "${accounts[@]}"; do
             acct="${acct// /}"; [[ -n "${acct}" ]] || continue
@@ -1658,8 +1762,8 @@ cmd_converge() {
             ( TF_PROFILE="${acct}"; run_pool converge_one "${batch[@]}" ) &
         done
         wait
-        [[ -f "${LOG_DIR}/.failures" ]] || { remaining=(); break; }
-        mapfile -t still < <(cut -d: -f1 "${LOG_DIR}/.failures" | sort -u)
+        [[ -f "${FAIL_FILE}" ]] || { remaining=(); break; }
+        mapfile -t still < <(cut -d: -f1 "${FAIL_FILE}" | sort -u)
         remaining=("${still[@]}")
         round=$(( round + 1 ))
         [[ "${#remaining[@]}" -gt 0 && "${round}" -le "${CONVERGE_ROUNDS}" ]] && sleep 30
@@ -1667,10 +1771,10 @@ cmd_converge() {
 
     if [[ "${#remaining[@]}" -eq 0 ]]; then
         log "CONVERGED: ${total}/${total} clusters healthy with a resolvable console endpoint"
-        rm -f "${LOG_DIR}/.failures"; return 0
+        rm -f "${FAIL_FILE}"; return 0
     fi
     log "${#remaining[@]}/${total} cluster(s) did NOT converge after ${CONVERGE_ROUNDS} rounds:"
-    sed 's/^/    - /' "${LOG_DIR}/.failures" >&2
+    sed 's/^/    - /' "${FAIL_FILE}" >&2
     return 1
 }
 
@@ -1679,7 +1783,7 @@ cmd_health() {
     [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: health <clusters-per-account>"; exit 2; }
     command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
     require_tools
-    mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
     log "health: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET})..."
     local idx=0 acct start n names
@@ -1712,7 +1816,7 @@ cmd_harvest() {
     [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: harvest <clusters-per-account>"; exit 2; }
     require_tools
     [[ -x "${HARVEST_SCRIPT}" ]] || { log "missing harvester: ${HARVEST_SCRIPT}"; exit 1; }
-    mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
     log "harvest: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET}) -> stdout CSV"
     # header (matches harvest_cluster_access.sh row order)
@@ -1874,7 +1978,7 @@ cmd_reap() {
     while [[ $# -gt 0 ]]; do case "$1" in --keep) keep_file="${2:-}"; shift 2 ;; *) shift ;; esac; done
     [[ -n "${keep_file}" && -f "${keep_file}" ]] || { log "usage: reap --keep <file of cluster names to PRESERVE>  (WIB_APPLY=1 to destroy)"; exit 2; }
     require_tools
-    mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     declare -A keep=()
     local line
     while IFS= read -r line; do line="${line//[$' \t\r']/}"; [[ "${line}" == watch-it-burn-* ]] && keep["${line}"]=1; done <"${keep_file}"
@@ -2043,7 +2147,7 @@ ingest_one() {
 cmd_ingest() {
     [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest <cluster-name...>"; exit 2; }
     resolve_admin_token >/dev/null 2>&1 || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
-    require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
     POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
     log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
@@ -2091,7 +2195,7 @@ cmd_ingest_instructors() {
 cmd_down_acct() {
     local profile="${1:-}"; shift || true
     [[ -n "${profile}" && $# -ge 1 ]] || { log "usage: down-acct <profile> <cluster-name...>"; exit 2; }
-    require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+    require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     read_vpc_for "${profile}"
     TF_PROFILE="${profile}"
@@ -2230,20 +2334,31 @@ cmd_routes() {
     # aborting a provision because the router is unreachable is not what anyone wants mid-run. If the
     # reload is rejected the router keeps serving the previous table, which is the property that makes
     # this safe to call automatically.
-    local reload="${WIB_APEX_DIR}/scripts/reload-routes.sh"
-    if [[ -x "${reload}" ]]; then
-        log "routes: applying the table to the live router (reload, no redeploy)"
-        if bash "${reload}" "${out}" 2>&1 | sed 's/^/    /' >&2; then
-            log "routes: applied"
-        else
-            log "routes: RELOAD FAILED. The table is committed but NOT live; the router is still serving"
-            log "        the previous one. Apply it with: bash ${reload}"
-            record_fail "routes:reload-failed"
-        fi
-    else
+    apply_routes_table "${out}"
+}
+
+# Reload the live router with a table, retrying: the reload rides Railway SSH and a single transient
+# failure left the rebuilt fleet unrouted on 2026-09-06 until a manual re-run (#251). Only a failure
+# that survives every attempt is recorded, and even then the router keeps serving the previous table.
+apply_routes_table() {
+    local out="$1" reload="${WIB_APEX_DIR}/scripts/reload-routes.sh" attempt
+    if [[ ! -x "${reload}" ]]; then
         log "routes: WARNING no reload script at ${reload}, so the table is NOT live."
         log "        Pushing alone does not apply routes: the router keeps the table on its volume."
+        return 0
     fi
+    log "routes: applying the table to the live router (reload, no redeploy)"
+    for attempt in $(seq 1 "${WIB_RELOAD_RETRIES:-3}"); do
+        if bash "${reload}" "${out}" 2>&1 | sed 's/^/    /' >&2; then
+            log "routes: applied (attempt ${attempt})"; return 0
+        fi
+        log "routes: reload attempt ${attempt} failed"
+        sleep "${WIB_RELOAD_BACKOFF:-20}"
+    done
+    log "routes: RELOAD FAILED after ${WIB_RELOAD_RETRIES:-3} attempts. The table is committed but NOT live;"
+    log "        the router is still serving the previous one. Apply it with: bash ${reload} ${out}"
+    record_fail "routes:reload-failed"
+    return 1
 }
 
 main() {
@@ -2256,6 +2371,7 @@ main() {
         check-tls) exec "${SCRIPT_DIR}/check-tls.sh" "$@" ;;
         up-fleet) cmd_up_fleet "$@" ;;
         down) cmd_down "$@" ;;
+        deregister) cmd_deregister "$@" ;;
         down-acct) cmd_down_acct "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
         health) cmd_health "$@" ;;
@@ -2264,7 +2380,7 @@ main() {
         ingest) cmd_ingest "$@" ;;
         ingest-instructors)
             resolve_admin_token >/dev/null 2>&1 || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
-            require_tools; mkdir -p "${LOG_DIR}"; rm -f "${LOG_DIR}/.failures"
+            require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
             POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
             POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
             log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
@@ -2278,4 +2394,8 @@ main() {
     esac
 }
 
-main "$@"
+# Sourced by verify/test_fleet_teardown_hooks.sh to exercise the functions with command shims.
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+    trap 'rm -f "${FAIL_FILE}"' EXIT
+    main "$@"
+fi
