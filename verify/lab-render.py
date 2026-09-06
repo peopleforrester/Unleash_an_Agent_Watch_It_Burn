@@ -56,7 +56,7 @@ async def main():
         await b.close()
 
     # 11 steps (tour + 8 challenges + reset + feedback) and one Agent Observability link per challenge.
-    ok = len(steps) == 11 and res["empty"] == 0 and dd == 9 and leaked == 0
+    ok = len(steps) == 11 and res["empty"] == 0 and dd == 10 and leaked == 0
     print("  LAB RENDER OK" if ok else "  LAB RENDER PROBLEM")
     return 0 if ok else 1
 
