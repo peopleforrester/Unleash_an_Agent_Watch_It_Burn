@@ -17,6 +17,7 @@ spec:
   background: false
   rules:
     - name: require-signed-images
+      skipBackgroundRequests: true
       match:
         any:
           - resources:

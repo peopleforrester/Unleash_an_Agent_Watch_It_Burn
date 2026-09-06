@@ -24,6 +24,7 @@ spec:
   background: false
   rules:
     - name: deny-drift-on-argocd-managed
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -79,6 +80,7 @@ spec:
               - kind: Group
                 name: system:masters
       validate:
+        allowExistingViolations: true
         failureAction: Enforce
         message: >-
           This resource is managed by ArgoCD. Change it in Git, not in the cluster.

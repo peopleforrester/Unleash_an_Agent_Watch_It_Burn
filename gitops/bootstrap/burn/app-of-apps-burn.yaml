@@ -21,7 +21,6 @@ spec:
       targetRevision: staging
       path: gitops/apps
       directory:
-        recurse: false
         # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
         # observability/eso/backstage. Just the agent + ai-layer (cost meter) + burn targets, plus
         # cert-manager for the console certificate (see below).

@@ -50,12 +50,12 @@ kind: Deployment
 metadata:
   name: customer-consumer
   namespace: apps
-  labels: { app: customer-consumer }
+  labels: { app: customer-consumer, version: v1 }
 spec:
   replicas: 1
   selector: { matchLabels: { app: customer-consumer } }
   template:
-    metadata: { labels: { app: customer-consumer } }
+    metadata: { labels: { app: customer-consumer, version: v1 } }  # require-labels (Enforce) demands app AND version on pods in apps
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
@@ -64,6 +64,10 @@ spec:
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256
           command: ["python", "/app/consumer.py"]
           ports: [{ name: http, containerPort: 8080 }]
+          # require-probes (Enforce in apps) demands both; without them the Deployment was DENIED on every
+          # attendee cluster and the Challenge 1 target never existed there (#254).
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 15, failureThreshold: 3 }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 48Mi }, limits: { cpu: 100m, memory: 96Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
@@ -85,12 +89,12 @@ kind: Deployment
 metadata:
   name: customer-generator
   namespace: apps
-  labels: { app: customer-generator }
+  labels: { app: customer-generator, version: v1 }
 spec:
   replicas: 1
   selector: { matchLabels: { app: customer-generator } }
   template:
-    metadata: { labels: { app: customer-generator } }
+    metadata: { labels: { app: customer-generator, version: v1 } }  # require-labels (Enforce) demands app AND version on pods in apps
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
@@ -98,6 +102,12 @@ spec:
         - name: generator
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256
           command: ["python", "/app/generator.py"]
+          # The generator's only job is to post to the consumer, so "alive" means the consumer is reachable.
+          readinessProbe: &gen-probe
+            exec: { command: ["python", "-c", "import urllib.request; urllib.request.urlopen('http://customer-consumer.apps.svc.cluster.local:8080/healthz', timeout=3)"] }
+            periodSeconds: 10
+            timeoutSeconds: 5
+          livenessProbe: { <<: *gen-probe, periodSeconds: 30, failureThreshold: 3 }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 48Mi }, limits: { cpu: 100m, memory: 96Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]

@@ -13,6 +13,7 @@ spec:
   background: false
   rules:
     - name: protect-platform-namespaces
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -35,6 +36,7 @@ spec:
               - kind: Group
                 name: system:masters # admins/teardown can still delete
       validate:
+        allowExistingViolations: true
         failureAction: Enforce
         message: "Protected platform namespace; deletion is not permitted (workshop floor)."
         deny:
@@ -44,6 +46,7 @@ spec:
                 operator: Equals
                 value: "true"
     - name: protect-platform-workloads
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -68,6 +71,7 @@ spec:
               - kind: Group
                 name: system:serviceaccounts:kube-system # controllers
       validate:
+        allowExistingViolations: true
         failureAction: Enforce
         message: "Protected platform workload; deletion is not permitted (workshop floor)."
         deny:

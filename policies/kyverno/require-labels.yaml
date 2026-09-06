@@ -15,6 +15,7 @@ spec:
   background: true
   rules:
     - name: require-app-label
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -23,12 +24,14 @@ spec:
               namespaces:
                 - apps
       validate:
+        allowExistingViolations: true
         message: "The label 'app' is required on pods in apps namespace."
         pattern:
           metadata:
             labels:
               app: "?*"
     - name: require-version-label
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -37,6 +40,7 @@ spec:
               namespaces:
                 - apps
       validate:
+        allowExistingViolations: true
         message: "The label 'version' is required on pods in apps namespace."
         pattern:
           metadata:

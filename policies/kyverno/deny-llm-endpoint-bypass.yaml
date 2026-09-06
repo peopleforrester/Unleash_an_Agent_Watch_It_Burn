@@ -51,6 +51,7 @@ spec:
   background: true
   rules:
     - name: no-public-llm-base-url
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -67,6 +68,7 @@ spec:
                 - "guard-proxy*"
                 - "agentgateway*"
       validate:
+        allowExistingViolations: true
         failureAction: Audit
         message: >-
           This pod sets an LLM endpoint pointing at a public API. Models must be reached through

@@ -102,6 +102,14 @@ spec:
     automated:
       prune: true
       selfHeal: true
+    # The chart renders `labels: {}` on its CRDs and the API drops it, which showed every CRD OutOfSync
+    # forever (#254). Ignored on the one field; RespectIgnoreDifferences keeps the sync from writing it.
     syncOptions:
+      - RespectIgnoreDifferences=true
       - CreateNamespace=true
       - ServerSideApply=true
+  ignoreDifferences:
+    - group: apiextensions.k8s.io
+      kind: CustomResourceDefinition
+      jsonPointers:
+        - /metadata/labels

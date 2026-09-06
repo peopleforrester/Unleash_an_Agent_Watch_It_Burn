@@ -14,6 +14,7 @@ spec:
   background: true
   rules:
     - name: validate-registries
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -23,6 +24,7 @@ spec:
                 - apps
                 - agent # the ai-layer namespace where BurritoBot's deploy_app lands the C2 villain image
       validate:
+        allowExistingViolations: true
         # Audit by default so Round 1 still DEPLOYS the villain image (C2 "watch it burn"). Round 2/3
         # flip this to Enforce live (toggle-kyverno-enforce.sh; ArgoCD ignoreDifferences on failureAction
         # keeps the flip from being self-healed). rule-level since Kyverno 1.13 (on 1.18.1).

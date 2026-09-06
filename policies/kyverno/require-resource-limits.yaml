@@ -15,12 +15,14 @@ spec:
   background: true
   rules:
     - name: require-pod-resource-limits
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
               kinds:
                 - Pod
       validate:
+        allowExistingViolations: true
         failureAction: Audit
         message: >-
           CPU and memory resource limits are required on every container.

@@ -15,6 +15,7 @@ spec:
   background: true
   rules:
     - name: disallow-privileged-containers
+      skipBackgroundRequests: true
       match:
         any:
           - resources:
@@ -23,6 +24,7 @@ spec:
               namespaces:
                 - apps
       validate:
+        allowExistingViolations: true
         message: "Privileged containers are not allowed in the apps namespace."
         pattern:
           spec:
