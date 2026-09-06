@@ -33,10 +33,12 @@ spec:
       kind: Deployment
       name: guard-proxy
       jqPathExpressions:
-        # Only LITERAL entries are ignored (the toggles set values). An entry with valueFrom is a Secret
-        # or ConfigMap reference kustomize renames with the content hash (#252); ignoring the whole env
-        # left guard-proxy pointing at a pruned Secret on every cluster on 2026-09-06 (#254).
-        - '.spec.template.spec.containers[] | select(.name=="proxy") | .env[] | select(.valueFrom == null)'
+        # ONLY the env vars a live toggle changes, BY NAME. Two failures taught this list. Ignoring the
+        # whole env hid the Secret reference kustomize renames with the content hash, so guard-proxy
+        # pointed at a pruned Secret (#254). Ignoring every literal then swallowed OTEL_RESOURCE_ATTRIBUTES,
+        # so renaming the service to burritobot never reached a cluster while Argo still reported the
+        # Deployment Synced (#265). Anything not named here is managed by Git and syncs normally.
+        - '.spec.template.spec.containers[] | select(.name=="proxy") | .env[] | select(.name | test("^(INPUT_BLOCKLIST|INPUT_CLASSIFIER|OUTPUT_GUARD|PROXY_FAIL_CLOSED|MODEL_TIER|RATE_LIMIT_RPM|COST_CAP_USD|STREAM_PROMPTS|OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT)$"))'
     # Beat-3 (C7) LIVE TOGGLE: challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh patches
     # the kagent Agent's MCP toolNames allowlist (ON excludes the rogue tools, --off lets them back in).
     # Ignore drift on the Agent's tools so selfHeal does not revert the live toggle, same as the

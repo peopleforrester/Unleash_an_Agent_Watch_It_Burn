@@ -104,6 +104,11 @@ for ig in app["spec"].get("ignoreDifferences", []):
         check(f"ignore expression selects no valueFrom entry (found {refs})", not refs)
         check("ignore expression still covers the literal toggle entries",
               any(isinstance(e, dict) and e.get("name") == "INPUT_BLOCKLIST" for e in selected))
+        # A service rename must always reach the cluster: ignoring the identity env made Argo report the
+        # Deployment Synced while its service.name stayed stale (#265).
+        ignored_names = {e.get("name") for e in selected if isinstance(e, dict)}
+        check(f"ignore expression does NOT cover the service identity (ignored: {sorted(ignored_names)})",
+              not ({"OTEL_RESOURCE_ATTRIBUTES", "OTEL_SERVICE_NAME", "AGENT_URL", "LLM_GUARD_URL"} & ignored_names))
 
 print()
 if failures:
