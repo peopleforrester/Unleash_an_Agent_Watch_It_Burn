@@ -61,6 +61,12 @@ config:
           # causing them to appear as orphaned "No content" root entries in the
           # LLM Obs trace list. They are A2A protocol internals with no LLM content.
           - 'name == "a2a.server.events.event_queue.EventQueue.enqueue_event"'
+          # Every other A2A protocol internal and both shapes of the agent-card fetch (#264). They are
+          # emitted without a parent, so each one showed up as its own trace beside the real one and
+          # a student saw "three more traces generated at the same time" (Whitney, 2026-09-06). What
+          # remains is the interaction: the guard-proxy root, invoke_agent, call_llm, execute_tool.
+          - 'IsMatch(name, "^a2a\\.")'
+          - 'IsMatch(name, "^GET /\\.well-known/agent-card\\.json")'
     transform/set_peer_service:
       error_mode: ignore
       trace_statements:
