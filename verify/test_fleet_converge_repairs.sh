@@ -35,6 +35,7 @@ case "$*" in
   *"config current-context"*) echo "ctx-test" ;;
   *"get applications.argoproj.io -n argocd -o json"*) cat "${T}/apps.json" 2>/dev/null || echo '{"items":[]}' ;;
   *"get pods -A -o json"*) cat "${T}/pods.json" 2>/dev/null || echo '{"items":[]}' ;;
+  *"-n agent get configmap cluster-identity"*) cat "${T}/public_host" 2>/dev/null ;;
   *"get configmap cluster-identity"*) cat "${T}/identity" 2>/dev/null ;;
   *"get secret datadog-secret -o jsonpath={.data.api-key}"*) printf '%s' "$(cat "${T}/live_key" 2>/dev/null)" | base64 ;;
   *"get secret datadog-admin-secret"*) [[ -f "${T}/admin_present" ]] && exit 0; exit 1 ;;
@@ -65,8 +66,13 @@ check "a slot beyond the pool resolves nothing and returns 1" \
 
 echo "== repair_datadog =="
 : >"${CALLS}"; printf 'watch-it-burn-attendee-002' >"${T}/identity"; printf 'ROW2_API' >"${T}/live_key"; touch "${T}/admin_present"
+printf '%s' "$(src 'public_host_for watch-it-burn-attendee-002')" >"${T}/public_host"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
 check "a cluster that matches the repo is left alone (no identity script, no reload)" '! grep -q "identity-script\|reload" "${CALLS}"'
+: >"${CALLS}"; printf 'stale.agenticburn.com' >"${T}/public_host"
+src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
+check "a wrong public-host is repaired through the identity script" 'grep -q "identity-script" "${CALLS}"'
+printf '%s' "$(src 'public_host_for watch-it-burn-attendee-002')" >"${T}/public_host"
 : >"${CALLS}"; rm -f "${T}/identity"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
 check "missing identity: identity script runs with the cluster name and admin key, consumers reloaded" \

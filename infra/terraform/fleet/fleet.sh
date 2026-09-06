@@ -661,12 +661,15 @@ repair_datadog() {
         log "  ${name}: repair: cannot resolve Datadog keys; leaving the cluster as it is"
         record_fail "${name}:datadog-keys-unresolved"; return 0
     fi
-    local ident live_key admin_present=0 want_admin=0 reasons=()
+    local ident live_key admin_present=0 want_admin=0 reasons=() host want_host
     ident="$(KUBECONFIG="${kcfg}" kubectl -n datadog get configmap cluster-identity -o jsonpath='{.data.cluster-name}' 2>/dev/null || true)"
+    host="$(KUBECONFIG="${kcfg}" kubectl -n agent get configmap cluster-identity -o jsonpath='{.data.public-host}' 2>/dev/null || true)"
+    want_host="$(public_host_for "${name}")"
     live_key="$(KUBECONFIG="${kcfg}" kubectl -n datadog get secret datadog-secret -o jsonpath='{.data.api-key}' 2>/dev/null | base64 -d 2>/dev/null || true)"
     KUBECONFIG="${kcfg}" kubectl -n datadog get secret datadog-admin-secret >/dev/null 2>&1 && admin_present=1
     [[ -n "${admin_api}" ]] && want_admin=1
     [[ "${ident}" == "${name}" ]] || reasons+=("identity='${ident:-none}'")
+    [[ "${host}" == "${want_host}" ]] || reasons+=("public-host='${host:-none}'")
     [[ "${live_key}" == "${api}" ]] || reasons+=("own-key-drift")
     [[ "${admin_present}" -eq "${want_admin}" ]] || reasons+=("admin-secret=${admin_present},want=${want_admin}")
     [[ "${#reasons[@]}" -gt 0 ]] || { log "  ${name}: datadog identity, keys and dual shipping match the repo"; return 0; }
@@ -678,7 +681,7 @@ repair_datadog() {
             --from-literal=api-key="${api}" --from-literal=app-key="${app}" \
             --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
     done
-    KUBECONFIG="${kcfg}" CLUSTER_NAME="${name}" WITB_DD_API_KEY="${api}" \
+    KUBECONFIG="${kcfg}" CLUSTER_NAME="${name}" WITB_DD_API_KEY="${api}" WITB_PUBLIC_HOST="${want_host}" \
         WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" run_identity_script 2>&1 | sed 's/^/    /' >&2 || true
     local ctx; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
     KUBECONFIG="${kcfg}" reload_datadog_consumers "${ctx}" "${acct}" >/dev/null 2>&1 || log "  ${name}: consumer reload failed; agents pick the change up on their next restart"
@@ -872,7 +875,7 @@ bootstrap_one() {
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
         WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" \
-        CLUSTER_NAME="${name}" \
+        CLUSTER_NAME="${name}" WITB_PUBLIC_HOST="$(public_host_for "${name}")" \
         bash "${IDP_SCRIPT}" "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"

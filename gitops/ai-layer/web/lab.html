@@ -179,17 +179,16 @@
       <div class="step">
         <div class="h"><div class="num">0</div><div class="t">Tour your lab and your cluster</div></div>
         <div class="b">
-          <p class="small">Two minutes: check that the terminal, BurritoBot, and Datadog all work while someone is free to help. Each opens on click.</p>
           <details class="ctl" open><summary>Use your terminal</summary>
             <div class="ctlbody">
-              <p>It is on the right of this page. Run this. You should see a list of running containers (Kubernetes calls them pods):</p>
+              <p>Your terminal is on the right of this page. You can't miss it. Run the command below, and see a list of running pods.</p>
               <div class="cmd" onclick="cp(this)">kubectl get pods -A<button class="cp">copy</button></div>
             </div>
           </details>
           <details class="ctl"><summary>Open BurritoBot</summary>
             <div class="ctlbody">
-              <p>There is a BurritoBot button at the top right of this page.</p>
-              <p>It opens in a new tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. Say hello. This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
+              <p>There is a BurritoBot button at the top right of this page. Press it.</p>
+              <p>It opens in a new browser tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. Say hello. This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
             </div>
           </details>
           <details class="ctl"><summary>Log in to Datadog</summary>
@@ -203,16 +202,16 @@
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddu"></span><button class="cp">copy</button></div>
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddp"></span><button class="cp">copy</button></div>
               </div>
-              <p class="small">Once you are in, use the left menu to open <b>Agent Observability</b>. The newest entry is your hello. Click it: this is a <b>trace</b>, the record of what BurritoBot did with one message. Every challenge sends you back here. If the login does not work, raise your hand: every challenge asks you to look at a trace.</p>
+              <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. The newest entry is your hello. Click it: this is a <b>trace</b>, the record of what BurritoBot did with one message.</p>
             </div>
           </details>
 
           <div class="warn">The prompts you send BurritoBot may be shown on the instructor screen during the workshop, so the room can get inspiration from what other folks are attempting. Please do not tell BurritoBot anything personal or confidential.</div>
 
           <h3 class="sub">Your lab environment: a full-fledged platform</h3>
-          <p>This is a full internal developer platform: 38 Argo CD applications on your cluster, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 40, because the two controls you install in Challenges 1 and 3 are already there). Have a look at what is running before you start breaking it:</p>
+          <p>This is a full internal developer platform. Have a look at what is running:</p>
           <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
-          <p>Don't worry if you don't understand what a lot of these are. We'll explain the relevant ones over the course of the workshop. A few highlights, for funsies:</p>
+          <p>You do not need to understand all of these. We explain the relevant ones over the course of the workshop. Here are a few highlights:</p>
           <ul class="small">
             <li><a href="https://istio.io/latest/docs/ambient/overview/" target="_blank" rel="noopener">Istio ambient mesh</a>
             encrypts all traffic between containers inside the cluster, automatically.</li>

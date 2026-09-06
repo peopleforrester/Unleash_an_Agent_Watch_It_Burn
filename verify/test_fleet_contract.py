@@ -213,8 +213,10 @@ check("the run-of-show no longer claims 43 apps", "43 ArgoCD apps" not in _docs 
 check("the run-of-show states the measured 40 (instructor) and 38 (attendee)",
       "40 Argo CD apps" in _docs and "38 on an attendee cluster" in _docs)
 _lab = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
-check("the lab page states the measured count rather than 'roughly forty'",
-      "Roughly forty" not in _lab and "38 Argo CD applications" in _lab)
+_platform = (REPO / "gitops/ai-layer/web/platform.html").read_text(encoding="utf-8")
+# Whitney (2026-09-06): the count is not lab copy. It lives on the platform page, which is the catalogue.
+check("the platform page states the measured count and the lab page states none",
+      "38 Argo CD applications" in _platform and "Roughly forty" not in _lab and "Argo CD applications on your cluster" not in _lab)
 
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the

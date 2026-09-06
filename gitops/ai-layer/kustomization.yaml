@@ -48,6 +48,12 @@ configMapGenerator:
   - name: console-conf
     files:
       - default.conf=console.conf # nginx conf.d entry
+  - name: web-terminal-entrypoint
+    files:
+      # The terminal's banner and catalogue. Mounted over the image's copy so a wording change rolls the
+      # pod through the content hash instead of an image rebuild plus a pod delete (Whitney's edits,
+      # 2026-09-06). verify/test_manifest_contract.py keeps this byte-identical to images/web-terminal/.
+      - entrypoint.sh=web-terminal/entrypoint.sh
 
 secretGenerator:
   - name: llm-guard-auth

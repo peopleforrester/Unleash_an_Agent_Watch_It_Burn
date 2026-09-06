@@ -868,8 +868,14 @@ spec:
           # with zero session loss. The node is a t3.2xlarge (~31Gi) running one attendee, so the high
           # limit costs nothing; the request stays low so pod packing is unaffected.
           resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: "2", memory: 8Gi } }
+          env:
+            # This cluster's public console hostname, for the catalogue the terminal prints. Written by
+            # infra/datadog-cluster-identity.sh into the agent namespace's cluster-identity ConfigMap.
+            - name: WIB_PUBLIC_HOST
+              valueFrom: { configMapKeyRef: { name: cluster-identity, key: public-host, optional: true } }
           volumeMounts:
             - { name: work, mountPath: /home/student/work }
+            - { name: entrypoint, mountPath: /entrypoint.sh, subPath: entrypoint.sh, readOnly: true }
             # The fix manifests the student APPLIES in C1 and C3 (#160). Read-only, so the student
             # applies them as-is (kubectl apply -f ~/challenges/...). Staged as a mount rather than a
             # heredoc in the lab because C1 is five NetworkPolicies and pasting ~50 lines of
@@ -880,6 +886,8 @@ spec:
           persistentVolumeClaim: { claimName: student-work }
         - name: challenge-fixes
           configMap: { name: challenge-fixes }
+        - name: entrypoint
+          configMap: { name: web-terminal-entrypoint, defaultMode: 0755 }
 ---
 # The C1 and C3 fix manifests the student applies themselves (#160). These mirror the platform's own
 # policies (policies/network-policies/per-namespace/agent-*.yaml and policies/kubearmor/

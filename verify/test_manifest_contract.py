@@ -274,3 +274,9 @@ _bad_mounts = _check_mounts_have_volumes()
 if _bad_mounts:
     print("  detail:", "; ".join(_bad_mounts[:3]))
 check("every volumeMount resolves to a volume in the same pod spec", not _bad_mounts)
+
+print("== the terminal entrypoint mounted from gitops is the one baked into the image ==")
+_gitops_ep = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_bytes()
+_image_ep = (REPO / "images/web-terminal/entrypoint.sh").read_bytes()
+check("gitops/ai-layer/web-terminal/entrypoint.sh == images/web-terminal/entrypoint.sh", _gitops_ep == _image_ep)
+

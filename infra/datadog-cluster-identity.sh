@@ -21,14 +21,17 @@ CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cl
 SITE="${DD_SITE:-datadoghq.com}"
 ADMIN_API="${WITB_DD_ADMIN_API_KEY:-}"
 ADMIN_APP="${WITB_DD_ADMIN_APP_KEY:-}"
-readonly NAMESPACES="datadog monitoring"
+readonly NAMESPACES="datadog monitoring agent"
+# WITB_PUBLIC_HOST: this cluster's public console hostname (fleet.sh public_host_for), printed by the
+# web terminal's catalogue so every address a student sees is complete. Empty on a manual run.
+PUBLIC_HOST="${WITB_PUBLIC_HOST:-}"
 
 for ns in ${NAMESPACES}; do
     kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
     kubectl -n "${ns}" create configmap cluster-identity --from-literal=cluster-name="${CLUSTER_NAME}" \
-        --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+        --from-literal=public-host="${PUBLIC_HOST}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 done
-log "cluster-identity=${CLUSTER_NAME} in ${NAMESPACES// /\/}"
+log "cluster-identity=${CLUSTER_NAME} public-host=${PUBLIC_HOST:-<unset>} in ${NAMESPACES// /\/}"
 
 if [[ -z "${ADMIN_API}" || "${ADMIN_API}" == "${WITB_DD_API_KEY:-}" ]]; then
     for ns in ${NAMESPACES}; do
