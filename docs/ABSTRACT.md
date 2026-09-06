@@ -1,10 +1,60 @@
-# AI Engineer World's Fair 2026, Accepted Talk Abstract
+# Talk Abstract: the published DevOpsDays Portland 2026 listing, and the June originals
 
-Frozen reference. This file captures the accepted abstract as submitted (Version 1, solo) and a co-speaker variant adding Whitney Lee (Version 2). The talk content, title, description, and speaker pitch are unchanged between versions. Only the speaker attribution differs.
+The canonical abstract is whatever the event has published. Since 2026-09-06 that is the DevOpsDays
+Portland listing below, copied verbatim from the pretalx schedule export
+(https://talks.devopsdays.org/devopsdays-portland-2026/talk/BYT7TC/, fetched 2026-09-06). The June
+World's Fair versions follow as frozen history; the "abstract truth" rule in `BUILD-SPEC.md` now reads
+against the Portland text.
 
-This is the canonical "Proposed Amended Description" the build must make literally true (see `BUILD-SPEC.md` §2 and the "abstract truth" rule). If the build and this abstract disagree on behavior, the abstract wins.
+> **Scheduled slot (pretalx, 2026-09-06):** Tuesday 2026-09-08, 13:00 to 15:00 Pacific, Room 327,
+> Workshops track, 2 hours. Speakers: Michael Forrester, Whitney Lee.
 
-> **Scheduled slot (confirmed on the AI Engineer schedule):** 2 hours, Day 1 (Workshop Day), 2:20–4:20pm, Track 5. The Format field below reads "1–2 hours" as submitted; the booked slot is the full 2 hours. The public schedule currently lists Michael solo; organizers have been emailed to add Whitney as co-speaker.
+## Version 3, DevOpsDays Portland 2026 (published, canonical)
+
+### Title
+
+Build a Platform, Unleash an Agent on It… and Watch It Burn
+
+### Abstract (as published)
+
+We built a burrito-ordering AI agent, put it on Kubernetes with scoped cluster access and a live terminal, and let a room of engineers try to break it.  It is tons of fun.
+Over three rounds they push the agent to steal customer data, deploy malicious workloads, and take the cluster down. Forkbombs anyone!
+
+The first round has nothing protecting the agent, and it usually falls apart in about one prompt.
+
+The second runs the same attacks against an ordinary CNCF platform floor, which blocks most of them, though a few run up a bill before they get stopped.
+
+In the third round attendees switch on the remaining guardrails themselves and watch how the agent's behavior and its token cost change.
+
+Running it taught us that for most shops, AI doesn't create just brand-new security problems it also makes the ones you already have more expensive. Token spend becomes its own denial-of-service vector for example. Most of what your platform already does holds up against an agent (or for an agent), and the gap that's left is smaller and stranger than people assume.  This workshop covers the base guardrails as well as that enhanced gap that you must have for AI workloads.
+
+We ran this at AI Engineer World's Fair on June 29th 2026. This version covers what held up, what broke, and what we've changed since.  We have made vast improvements including model triage, provisioning and sandboxing (as an option).   This will be a very evolved, much more polished, and much more expanded presentation than the one we ran at AI Engineer World's Fair. This will be much more hands-on instead of just a web interface. They will actually get access to their own cluster.
+
+### Description (as published)
+
+You get a Kubernetes cluster already running a full internal developer platform with 34 components.  You also get an AI agent with access to that cluster and a BurritoBot Web Interface to that Agent.
+Your job is to make the agent do damage. Ask it to deploy a workload the policies forbid. Ask it to give itself more permissions. Ask it to change infrastructure without going through Git. Ask it to read a secret and hand you back the value. Some of those attempts get stopped by the platform. The rest get through, until you switch on guardrails built for agents specifically.
+The session runs across three clusters. The first has nothing protecting the agent: all three attacks land, a counter on screen shows the cloud bill climbing, and a fork bomb takes the cluster down. The second runs the same attacks against the platform controls, where each one is blocked by a different thing (a NetworkPolicy egress rule, a Kyverno registry allowlist, a per-pod PID limit), though the bill still moves because the request reached the model before anything stopped it. In the third you drive your own agent, switch on the agent-specific guardrails (output filtering, input filtering, tool restriction), and watch each one change the agent's behavior on the dashboard.
+The part most teams miss: almost everything an agent tries against a real platform is already handled by tools you probably run today, like admission control, RBAC, and GitOps. What those tools can't see is the agent's input, its output, and the tools it's allowed to reach. That's the part agents change, and it's where this workshop spends its time.  By the end of this workshop you will know what infrastructure guardrails help and where you need AI specific guardrails to fill the gaps.
+
+You work entirely in a browser, with a chat window to your agent and a terminal to your cluster. Nothing to install.
+Everything is CNCF or open source: Argo CD, Kyverno, Falco, Istio ambient, LLM Guard, agentgateway, kagent on Bedrock, and the rest of a 35-component platform.
+
+### Reconciliation vs the build (2026-09-06)
+
+The published text was written before the run of show settled, and four claims in it no longer match
+what attendees get. None changes the promise ("break the agent, then switch on the guardrails yourself");
+the delivery narration should say what actually happens rather than what the listing says.
+
+| Published claim | What the build does | Where |
+|---|---|---|
+| "three rounds", "three clusters" | Eight challenges, demo-then-do, on one cluster per attendee plus the instructor round clusters | `docs/RUN-OF-SHOW-2026-08.md` |
+| "a fork bomb takes the cluster down", "a per-pod PID limit" | The fork bomb was retired (#114); Challenge 4 is denial-of-wallet, stopped by the budget cap | `gitops/ai-layer/web/lab.html`, C4 |
+| "34 components" / "35-component platform" | About 39 Argo applications on the attendee profile; say "about forty" or leave the number out | `gitops/bootstrap/app-of-apps-attendee.yaml` |
+| "sandboxing (as an option)" | Deferred; no sandbox in the Portland build | memory: agent sandbox deferred |
+
+The rest holds: scoped cluster access, a live terminal, the browser-only surface, the CNCF stack named,
+and the bill moving before the platform stops a request.
 
 ---
 
