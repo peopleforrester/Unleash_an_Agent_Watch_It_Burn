@@ -103,7 +103,7 @@ check "three failures: returns 1 and records routes:reload-failed" 'grep -qx "rc
 
 echo "== wiring =="
 check "down_one calls deregister_one" 'grep -q "^    deregister_one \"\${name}\"" "${FLEET}"'
-check "up waits for console LBs before routes" 'grep -q "wait_for_console_lbs \"\$@\" || true" "${FLEET}"'
+check "up waits for console LBs before routes" 'grep -q "wait_for_console_lbs \"\${built\[@\]}\" || true" "${FLEET}"'
 check "down republishes routes with the shrink allowed" 'grep -q "WIB_ROUTES_ALLOW_SHRINK=1 cmd_routes" "${FLEET}"'
 check "deregister is a subcommand" 'grep -q "deregister) cmd_deregister" "${FLEET}"'
 check "no shared .failures path remains" '! grep -q "LOG_DIR}/.failures\"" "${FLEET}"'
