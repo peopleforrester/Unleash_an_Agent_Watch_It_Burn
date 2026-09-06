@@ -460,7 +460,7 @@ app.py, pool.csv, pool.db, railway.json) into this repo's provisioning for our o
 
 ARCHITECTURE REVISED (Michael approved, 2026-06-21): dropped hub-and-spoke -> INDEPENDENT per-attendee
 clusters. Each attendee gets their own standalone EKS cluster (take-home) running its OWN in-cluster
-ArgoCD reconciling itself from gitops/bootstrap/app-of-apps.yaml (destination kubernetes.default.svc).
+ArgoCD reconciling itself from gitops/bootstrap/full/app-of-apps.yaml (destination kubernetes.default.svc).
 No hub, no central control plane. Matches the Packt sister repo. Networking: ONE shared VPC
 (10.0.0.0/16, two /18 private subnets across 2 AZs); all clusters share it (NOT one VPC each). T3
 burstable (t3.xlarge, unlimited mode), conservative start. Changes made: deleted platform/argocd/
@@ -890,7 +890,7 @@ Attendee count + ceiling; access model; co-speaker split; 90 vs 120 min; host pr
 (EKS default); whether to build the OTel re-leak advanced beat or keep it slide-only.
 
 ## SESSION CLOSE 2026-06-19, fleet + presentation done (offline)
-- Three-cluster fleet (task #7) authored: gitops/bootstrap/app-of-apps-burn.yaml (C1 burn profile,
+- Three-cluster fleet (task #7) authored: gitops/bootstrap/burn/app-of-apps-burn.yaml (C1 burn profile,
   directory.include subset, no enforcing policies), full app-of-apps for C2/C3; minimal-floor split to
   policies/floor; deploy-full-idp.sh takes a profile (full|burn). VERIFY-AT-BUILD: the burn include-glob
   + C1 composition not yet live-tested (no cluster up).
@@ -980,3 +980,9 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
 - Provisioning DB holds exactly those four rows; RESERVED_CLUSTERS removed; presenter overlay removed from fleet.sh.
 - Sunday: `fleet.sh instructors up` for the six round clusters, then `fleet.sh routes` once their consoles resolve, then ingest-instructors.
 - Teardown defects filed as #251 (target-group retry, per-run failure ledger).
+
+### 2026-09-06 addendum: hand fixes wired into the process (#251 to #257 closed)
+- `fleet.sh converge <names>` is the repair verb; `up` runs it after registering; `down all` / `down-fleet` end with `audit-zero`; `down` deregisters and republishes routes.
+- ai-layer generated names are hashed (content changes roll pods); roots self-manage; verify/test_no_permanent_drift.py keeps converge honest.
+- Fleet reports CONVERGED 4/4 on the rebuilt clusters. Sunday: `fleet.sh instructors up`, then `fleet.sh converge instructors`.
+- Pool loads: `provisioning-agenticburn/scripts/load_datadog_pool.py <orgs.json> --profile accen-dev --apply`. Doc: `scripts/compile-design-doc.py --publish`.
