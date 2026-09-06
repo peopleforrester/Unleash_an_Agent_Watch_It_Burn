@@ -54,6 +54,11 @@ spec:
           args: ["-f", "/etc/agentgateway/config.yaml"]
           env:
             # UST for Datadog correlation (resource attributes on agentgateway's spans).
+            # OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES wherever the SDK honors
+            # it. agentgateway is a Rust binary whose reported name has been "agentgateway" regardless, so
+            # the collector conditions below tolerate BOTH names until this is measured to take (#265).
+            - name: OTEL_SERVICE_NAME
+              value: burritobot-gateway
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=burritobot-gateway,service.version=v1.3.0,deployment.environment.name=production" # one name family (#265)
             # NOTE: tracing is configured in the config file's top-level `tracing` block (below), NOT via

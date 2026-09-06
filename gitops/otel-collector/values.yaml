@@ -72,15 +72,18 @@ config:
           # request agentgateway traces WITHOUT the agent's context, so every one is its own empty trace.
           # Measured 2026-09-06 on one cluster in 40 minutes: 114 POST and 38 DELETE roots, 133 "No
           # content" traces on Whitney's page. Only a real tool call (tools/call) is kept.
-          - 'resource.attributes["service.name"] == "burritobot-gateway" and not IsMatch(name, "^tools/call")'
+          # BOTH names on purpose: the gateway is a Rust binary that has reported "agentgateway" whatever
+          # the OTel env says, so a condition pinned to the new name alone would silently stop filtering
+          # and the empty MCP-session traces would return (#265).
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call")'
           # kagent's own agent-card GET server spans (the client side is dropped above).
-          - 'resource.attributes["service.name"] == "burritobot-agent" and name == "GET"'
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "GET"'
     transform/set_peer_service:
       error_mode: ignore
       trace_statements:
         - context: span
           statements:
-            - set(attributes["peer.service"], "burritobot-agent") where attributes["peer.service"] == nil and resource.attributes["service.name"] == "burritobot-gateway" and kind == SPAN_KIND_CLIENT
+            - set(attributes["peer.service"], "burritobot-agent") where attributes["peer.service"] == nil and IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and kind == SPAN_KIND_CLIENT
     # The kagent ADK token metric and the guard-proxy cost metric ship gen_ai.provider.name
     # unset / "N/A" (Datadog renders it as the literal tag value N/A). The model is a Bedrock model
     # (us.anthropic.claude-*), so per the OTel GenAI semconv the provider MUST be aws.bedrock
@@ -106,7 +109,7 @@ config:
       trace_statements:
         - context: span
           statements:
-            - set(attributes["gen_ai.operation.name"], "invoke_agent") where name == "call_llm" and resource.attributes["service.name"] == "burritobot-agent"
+            - set(attributes["gen_ai.operation.name"], "invoke_agent") where name == "call_llm" and IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$")
     # Make a blocked tool call visible (#265). kagent's execute_tool span is a stub (name and id only);
     # the tool RESULT, including workshop-mcp's "command FAILED" (#261), arrives as a tool-role message in
     # the NEXT model call's gen_ai.input.messages. Marking that model span as an error is what turns the

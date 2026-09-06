@@ -53,8 +53,13 @@ print("== the collector's conditions match the names that are emitted ==")
 # Comment lines are ignored: values.yaml documents a commented Bedrock peer.service example, which is an
 # external service and deliberately not in the family.
 vals = "\n".join(l for l in (REPO / "gitops/otel-collector/values.yaml").read_text().split("\n") if not l.strip().startswith("#"))
+# Conditions may name a LEGACY alias as well: a binary that ignores the rename must keep being filtered.
+LEGACY = {"agentgateway", "kagent", "guard-proxy", "evil-mcp-shim"}
 referenced = set(re.findall(r'service\.name"\]\s*==\s*"([A-Za-z0-9_.-]+)"', vals))
-check(f"collector matches only emitted services {sorted(referenced)}", referenced <= emitted)
+referenced |= {n for grp in re.findall(r'IsMatch\(resource\.attributes\["service\.name"\],\s*"\^\(([^)]+)\)\$"', vals) for n in grp.split("|")}
+check(f"collector matches only known services {sorted(referenced)}", referenced <= (emitted | LEGACY))
+check("every collector condition that names a legacy alias also names its new name",
+      all(any(n in emitted for n in grp.split("|")) for grp in re.findall(r'IsMatch\(resource\.attributes\["service\.name"\],\s*"\^\(([^)]+)\)\$"', vals)))
 peers = set(re.findall(r'set\(attributes\["peer\.service"\],\s*"([A-Za-z0-9_.-]+)"\)', vals))
 check(f"peer.service values {sorted(peers)} name real services", peers <= emitted)
 
