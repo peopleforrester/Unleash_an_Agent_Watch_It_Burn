@@ -789,3 +789,19 @@ instrumented while guard-proxy still traced. Fixed with a PreSync gate in ai-lay
 kagent spans now arrive in every cluster's own org. Her wording edits landed in the lab, the BurritoBot
 panel and the terminal catalogue, which now prints real hostnames from the identity ConfigMap and is
 mounted as a hashed ConfigMap so a wording change rolls the pod.
+
+## 2026-09-07 · Presenter clusters renamed owner-first, and Challenge 2 reveals the platform catching the villain
+
+The presenter clusters are `watch-it-burn-<owner>-student`, matching the hostname they serve and the
+roster's `<owner>-round<n>`. The previous `watch-it-burn-pres-<owner>` put the role first for no reason
+and read as a different class of thing from every other cluster the presenters touch. Renaming a cluster
+is a destroy-and-create, so it was done in the Sunday window: hostnames and Datadog orgs carried over,
+terminal passwords and IAM users were minted fresh, both clusters converged 38/38, and the old names are
+gone from AWS, the repo and the provisioning roster.
+
+Challenge 2's reveal was "a pod called promo-mascot exists", which Whitney called underwhelming. Deploying
+a villain through BurritoBot on a live cluster showed something better already happening: Kyverno writes a
+PolicyReport at admission naming `restrict-image-registries` and the rule broken, and lets the container
+run because the policy is in Audit. The reveal is now the container's taunt in its own log followed by
+that report, which states the challenge's lesson (the platform saw it and had no authority to stop it)
+and sets up the Audit-to-Enforce fix. Falco does not fire on these containers and is not claimed to.
