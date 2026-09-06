@@ -33,7 +33,10 @@ spec:
       kind: Deployment
       name: guard-proxy
       jqPathExpressions:
-        - '.spec.template.spec.containers[] | select(.name=="proxy") | .env'
+        # Only LITERAL entries are ignored (the toggles set values). An entry with valueFrom is a Secret
+        # or ConfigMap reference kustomize renames with the content hash (#252); ignoring the whole env
+        # left guard-proxy pointing at a pruned Secret on every cluster on 2026-09-06 (#254).
+        - '.spec.template.spec.containers[] | select(.name=="proxy") | .env[] | select(.valueFrom == null)'
     # Beat-3 (C7) LIVE TOGGLE: challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh patches
     # the kagent Agent's MCP toolNames allowlist (ON excludes the rogue tools, --off lets them back in).
     # Ignore drift on the Agent's tools so selfHeal does not revert the live toggle, same as the

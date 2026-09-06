@@ -81,6 +81,24 @@ with tempfile.TemporaryDirectory(dir=REPO) as tmp:
     after = next(d for d in render(copy) if d["kind"] == "Deployment" and d["metadata"]["name"] == "console")["spec"]["template"]
     check("editing lab.html changes the console pod template (so Argo CD rolls it)", before != after)
 
+print("== the ai-layer ignoreDifferences never covers a renamed reference ==")
+# ai-layer ignores drift on the proxy env so live toggles survive selfHeal. Run the committed jq
+# expressions against the rendered guard-proxy Deployment: whatever they select is invisible to
+# Argo CD, so no selected entry may carry valueFrom (a Secret/ConfigMap reference the hash renames).
+app = yaml.safe_load((REPO / "gitops/apps/ai-layer.yaml").read_text())
+gp = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "guard-proxy")
+import json
+for ig in app["spec"].get("ignoreDifferences", []):
+    if ig.get("kind") != "Deployment" or ig.get("name") != "guard-proxy":
+        continue
+    for expr in ig.get("jqPathExpressions", []):
+        out = subprocess.run(["jq", "-c", expr], input=json.dumps(gp), capture_output=True, text=True, check=True).stdout
+        selected = [json.loads(line) for line in out.splitlines() if line.strip()]
+        refs = [e.get("name") for e in selected if isinstance(e, dict) and e.get("valueFrom")]
+        check(f"ignore expression selects no valueFrom entry (found {refs})", not refs)
+        check("ignore expression still covers the literal toggle entries",
+              any(isinstance(e, dict) and e.get("name") == "INPUT_BLOCKLIST" for e in selected))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

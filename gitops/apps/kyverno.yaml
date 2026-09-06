@@ -11,7 +11,6 @@ metadata:
     # ignored. A server-side dry run compares what the API would actually store. Verified on
     # watch-it-burn-pres-michael 2026-09-06: OutOfSync to Synced within a minute of this annotation.
     argocd.argoproj.io/compare-options: ServerSideDiff=true
-  annotations:
     argocd.argoproj.io/sync-wave: "-5"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
