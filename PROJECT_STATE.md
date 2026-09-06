@@ -974,3 +974,9 @@ Shipped to staging this session (all CI green; weaver workflow is the first repo
 - Attendee/presenter clusters dual-ship to the instructor org; every cluster reports its real `kube_cluster_name`.
 - Live clusters need `infra/datadog-cluster-identity.sh` plus a re-apply of their root app-of-apps (roots do not self-update). Done: pres-michael, attendee-001, r2-1, r2-2, r3-1, r3-2. Pending: attendee-002 after Whitney's walkthrough; r1-1/r1-2 run no Datadog agent (burn profile).
 - `verify/datadog-orgs.sh <ctx>` now asserts identity and the second org per cluster.
+
+### 2026-09-06 addendum: fleet torn down to zero and rebuilt small (#208 done)
+- Live: watch-it-burn-pres-michael, pres-whitney, attendee-001, attendee-002 (accen-dev), all attendee profile, verified for Datadog org, identity, dual shipping and input guard.
+- Provisioning DB holds exactly those four rows; RESERVED_CLUSTERS removed; presenter overlay removed from fleet.sh.
+- Sunday: `fleet.sh instructors up` for the six round clusters, then `fleet.sh routes` once their consoles resolve, then ingest-instructors.
+- Teardown defects filed as #251 (target-group retry, per-run failure ledger).

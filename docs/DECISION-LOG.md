@@ -737,3 +737,21 @@ was removed there without its finalizer so nothing cascaded.
 Open: attendee-002 (Whitney's live walkthrough cluster) is seeded and re-rooted only after her session,
 and the Sunday rebuild covers every cluster anyway. The instructor trial org now receives the whole room;
 if it throttles on the day, drop `datadog/admin` from the metrics pipeline and keep traces.
+
+## 2026-09-06 · Full teardown to zero and rebuild, as a rehearsal of both paths
+
+Fifteen clusters in accen-dev (seven attendee, two presenter, six instructor) were destroyed with
+`fleet.sh down` (`WIB_APPLY=1`) and `fleet.sh instructors down`, and all five accounts were read back at
+zero: no clusters, instances, load balancers, target groups or volumes, only each lab VPC's NAT, its EIP
+and the Bedrock endpoint interfaces. The sweep cleaned every leaked load balancer and volume; three ALB
+target groups on pres-whitney survived because their ALB was still deleting when the sweep ran (#251).
+The provisioning database was purged through `/admin/delete` (fleet.sh never removes rows on teardown),
+RESERVED_CLUSTERS was deleted from Railway, and the attendee-slot presenter overlay left fleet.sh.
+
+Rebuild: `fleet.sh up watch-it-burn-pres-michael watch-it-burn-pres-whitney watch-it-burn-attendee-001
+watch-it-burn-attendee-002` with `WIB_ROUTES_ALLOW_SHRINK=1`. All four bootstrapped, ingested with the
+Portland orgs (-002 for both presenters, -003 and -004 for the pool), and from a cold start carried their
+identity ConfigMap and the instructor-org admin secret; `verify/datadog-orgs.sh` passed on all four and
+the input guard passed on michael-student. The routes step inside `up` ran before the presenter load
+balancers existed and its router reload failed; a second `fleet.sh routes` applied 38 hosts. Sunday's
+full rebuild adds the six instructor clusters on the same path.
