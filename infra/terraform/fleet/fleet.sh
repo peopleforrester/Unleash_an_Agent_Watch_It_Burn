@@ -60,7 +60,6 @@ emit_service_hosts() {
 }
 is_presenter_name() { [[ "$1" == "${PRESENTER_PREFIX}-"* ]]; }
 presenter_owner_of() { printf '%s' "${1#${PRESENTER_PREFIX}-}"; }
-presenter_exists_for() { [[ -f "${STATE_DIR}/${PRESENTER_PREFIX}-$1.tfstate" ]]; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
 # 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
 # EKS control-plane create (near-zero local cost), so the binding local limit is RAM during the bootstrap
@@ -201,7 +200,6 @@ WIB_PRIMARY_OWNER="${WIB_PRIMARY_OWNER:-michael}"
 # These are real attendee clusters (full profile, student credentials, claimable through provisioning);
 # they simply belong to a named person, so they are named for that person like the roster is. Slot
 # numbers rather than full names so this stays readable and matches the %03d the pool generates.
-WIB_PRESENTER_SLOTS="${WIB_PRESENTER_SLOTS:-001=michael,002=whitney}"
 
 # Railway coordinates for that app, used to resolve its ADMIN_TOKEN automatically (see resolve_admin_token).
 readonly WIB_PROVISIONING_RW_PROJECT="859f9db0-bbda-4d3c-8026-767d0b9047a9"
@@ -345,20 +343,12 @@ public_host_for() {
     #   michael-round1 / michael-round2 / michael-round3 / michael-student
     #   whitney-round1 / whitney-round2 / whitney-round3 / whitney-student
     #
-    # WIB_PRESENTER_SLOTS maps attendee SLOT -> owner, so adding a third presenter is a config change
-    # rather than another case arm. Everything outside the map is a real attendee and gets a themed name.
+    # A presenter cluster is named for its owner (#208); every other name is a real attendee and gets a
+    # themed hostname. The attendee-slot overlay that once mapped attendee-001/002 to the presenters is
+    # gone: both presenters run on watch-it-burn-pres-<owner> since 2026-09-06.
     if is_presenter_name "${name}"; then
         printf '%s-student.agenticburn.com' "$(presenter_owner_of "${name}")"; return 0
     fi
-    local slot="${name##*-}" _pair _sl _ow
-    for _pair in ${WIB_PRESENTER_SLOTS//,/ }; do
-        _sl="${_pair%%=*}"; _ow="${_pair#*=}"
-        # Legacy overlay (attendee slot -> presenter). A real presenter cluster for that owner takes the
-        # hostname; the slot then falls through to its themed name so two clusters never share a host.
-        if [[ "${slot}" == "${_sl}" ]] && ! presenter_exists_for "${_ow}"; then
-            printf '%s-student.agenticburn.com' "${_ow}"; return 0
-        fi
-    done
     printf '%s.agenticburn.com' "$(friendly_attendee_name "${name##*-}")"
     return 0
 }
