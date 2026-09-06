@@ -42,6 +42,9 @@ data:
         try:
             urllib.request.urlopen(urllib.request.Request(URL + "/ingest", data=json.dumps(rec).encode(),
                 headers={"Content-Type": "application/json"}, method="POST"), timeout=5)
+            # Heartbeat for the probes: a delivered record is what "alive" means for a generator. The
+            # probes only stat this file, so they cost nothing under the container's CPU limit.
+            with open("/heartbeat/alive", "w") as f: f.write(str(i))
         except Exception: pass
         time.sleep(3)
 ---
@@ -102,15 +105,22 @@ spec:
         - name: generator
           image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256
           command: ["python", "/app/generator.py"]
-          # The generator's only job is to post to the consumer, so "alive" means the consumer is reachable.
-          readinessProbe: &gen-probe
-            exec: { command: ["python", "-c", "import urllib.request; urllib.request.urlopen('http://customer-consumer.apps.svc.cluster.local:8080/healthz', timeout=3)"] }
-            periodSeconds: 10
-            timeoutSeconds: 5
-          livenessProbe: { <<: *gen-probe, periodSeconds: 30, failureThreshold: 3 }
+          # require-probes (Enforce in apps) demands both. They stat the heartbeat the loop writes after
+          # each delivered record: a Python interpreter per probe timed out under the 100m CPU limit and
+          # crash-looped the generator on three of four clusters (2026-09-06).
+          readinessProbe: { exec: { command: ["test", "-f", "/heartbeat/alive"] }, periodSeconds: 10, timeoutSeconds: 3 }
+          livenessProbe:
+            exec: { command: ["sh", "-c", "find /heartbeat/alive -mmin -2 | grep -q ."] }
+            periodSeconds: 30
+            timeoutSeconds: 3
+            failureThreshold: 3
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 48Mi }, limits: { cpu: 100m, memory: 96Mi } }
-          volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
+          volumeMounts:
+            - { name: src, mountPath: /app, readOnly: true }
+            - { name: heartbeat, mountPath: /heartbeat }
       volumes:
         - name: src
           configMap: { name: customer-stream-src }
+        - name: heartbeat
+          emptyDir: { sizeLimit: 1Mi }
