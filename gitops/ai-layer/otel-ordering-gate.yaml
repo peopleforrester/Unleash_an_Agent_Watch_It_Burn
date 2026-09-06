@@ -1,0 +1,131 @@
+# ABOUTME: PreSync gate: wait for the OTel operator's pod webhook to be SERVING and the Instrumentation to
+# ABOUTME: exist before the Agent CR is applied, so BurritoBot's pod is admitted WITH instrumentation.
+#
+# Why. The operator's pod webhook (mpod.kb.io) fails open. When the Agent CR landed before the webhook was
+# serving, kagent's Deployment created the BurritoBot pod with its inject annotation and nothing injected,
+# and that cluster never produced an agent trace. Nine of ten fresh clusters on 2026-09-06. Same shape as
+# kubearmor-ordering-gate.yaml; fleet.sh converge holds the runtime backstop (repair_agent_injection).
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-gate-script
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+data:
+  gate.py: |
+    import json, os, ssl, sys, time, urllib.request, urllib.error
+    SA = "/var/run/secrets/kubernetes.io/serviceaccount"
+    TOKEN = open(f"{SA}/token").read().strip()
+    CTX = ssl.create_default_context(cafile=f"{SA}/ca.crt")
+    BASE = f"https://{os.environ['KUBERNETES_SERVICE_HOST']}:{os.environ['KUBERNETES_SERVICE_PORT']}"
+    def api(path):
+        req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {TOKEN}"})
+        with urllib.request.urlopen(req, context=CTX, timeout=10) as r:
+            return json.load(r)
+    def webhook_serving():
+        try:
+            ep = api("/api/v1/namespaces/opentelemetry-operator-system/endpoints/otel-operator-opentelemetry-operator-webhook")
+        except urllib.error.HTTPError:
+            return False
+        return any(s.get("addresses") for s in ep.get("subsets") or [])
+    def instrumentation_present():
+        try:
+            api("/apis/opentelemetry.io/v1alpha1/namespaces/agent/instrumentations/watch-it-burn-python"); return True
+        except urllib.error.HTTPError:
+            return False
+    deadline = time.time() + 480
+    while time.time() < deadline:
+        try:
+            if webhook_serving() and instrumentation_present():
+                print("[gate] OTel operator webhook serving and Instrumentation present; the agent pod will be instrumented.")
+                sys.exit(0)
+        except Exception as e:
+            print(f"[gate] transient check error: {e}")
+        time.sleep(10)
+    print("[gate] OTel webhook or Instrumentation not ready before deadline; proceeding. "
+          "fleet.sh converge recreates an uninstrumented agent pod once the webhook serves.")
+    sys.exit(0)
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: otel-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: otel-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+rules:
+  - apiGroups: [""]
+    resources: ["endpoints"]
+    verbs: ["get"]
+  - apiGroups: ["opentelemetry.io"]
+    resources: ["instrumentations"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: otel-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0"
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: otel-gate
+subjects:
+  - kind: ServiceAccount
+    name: otel-gate
+    namespace: agent
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: otel-gate
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  ttlSecondsAfterFinished: 120
+  template:
+    metadata:
+      annotations:
+        sidecar.istio.io/inject: "false"
+    spec:
+      serviceAccountName: otel-gate
+      restartPolicy: Never
+      containers:
+        - name: gate
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim
+          command: ["python3", "/gate/gate.py"]
+          volumeMounts:
+            - name: script
+              mountPath: /gate
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "200m", memory: "128Mi" }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 65532
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+            seccompProfile: { type: RuntimeDefault }
+      volumes:
+        - name: script
+          configMap: { name: otel-gate-script }

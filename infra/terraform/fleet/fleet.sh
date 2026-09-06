@@ -722,6 +722,14 @@ verify_one() {
     else
         log "  ${name}: datadog-orgs verification FAILED"; record_fail "${name}:datadog-orgs"
     fi
+    # BurritoBot must actually trace: an annotated agent pod still without instrumentation is a failure
+    # (the repair above recreates it once the webhook serves; the next converge round re-checks).
+    local still; still="$(uninjected_agent_pods "${kcfg}")"
+    if [[ -n "${still}" ]]; then
+        log "  ${name}: agent pod(s) NOT instrumented: $(echo ${still})"; record_fail "${name}:otel-injection"
+    else
+        log "  ${name}: agent pods instrumented"
+    fi
 }
 
 # Argo CD's automated sync retries a failed operation five times and then waits for a NEW revision.
@@ -740,10 +748,44 @@ repair_failed_syncs() {
     done < <(jq -r '.items[] | select(.status.sync.status=="OutOfSync" and (.status.operationState.phase=="Failed" or .status.operationState.phase=="Error") and (.operation == null)) | .metadata.name' <<<"${apps}" 2>/dev/null)
 }
 
+# The OTel operator's pod webhook fails OPEN (mpod.kb.io failurePolicy Ignore): a pod created before the
+# webhook is serving is admitted with its inject annotation but no instrumentation, and never traces.
+# On 2026-09-06 that was BurritoBot on nine of ten fresh clusters ("Datadog is not receiving any traces
+# from BurritoBot"); the one cluster that traced had its pod recreated later by chance. Once the webhook
+# has endpoints and the Instrumentation exists, deleting such a pod is the whole fix: the Deployment
+# recreates it and the webhook injects.
+OTEL_WEBHOOK_NS="opentelemetry-operator-system"; OTEL_WEBHOOK_SVC="otel-operator-opentelemetry-operator-webhook"
+otel_webhook_serving() {
+    local kcfg="$1"
+    [[ -n "$(KUBECONFIG="${kcfg}" kubectl -n "${OTEL_WEBHOOK_NS}" get endpoints "${OTEL_WEBHOOK_SVC}" -o jsonpath='{.subsets[*].addresses[*].ip}' 2>/dev/null)" ]] \
+        && KUBECONFIG="${kcfg}" kubectl -n agent get instrumentation watch-it-burn-python >/dev/null 2>&1
+}
+uninjected_agent_pods() { # pods in agent with the inject annotation and no injected init container
+    KUBECONFIG="$1" kubectl -n agent get pods -o json 2>/dev/null | jq -r '.items[]
+        | select(.metadata.annotations["instrumentation.opentelemetry.io/inject-python"] != null)
+        | select(.metadata.deletionTimestamp == null)
+        | select(([.spec.initContainers[]?.name] | map(select(startswith("opentelemetry-auto-instrumentation"))) | length) == 0)
+        | .metadata.name' 2>/dev/null
+}
+repair_agent_injection() {
+    local name="$1" kcfg="$2" pod pods
+    pods="$(uninjected_agent_pods "${kcfg}")"; [[ -n "${pods}" ]] || return 0
+    if ! otel_webhook_serving "${kcfg}"; then
+        log "  ${name}: agent pod(s) without OTel injection but the webhook is not serving yet; leaving them"
+        return 0
+    fi
+    while read -r pod; do
+        [[ -n "${pod}" ]] || continue
+        log "  ${name}: recreating ${pod} (inject annotation, no instrumentation; webhook now serving)"
+        KUBECONFIG="${kcfg}" kubectl -n agent delete pod "${pod}" --wait=false >/dev/null 2>&1 || true
+    done <<<"${pods}"
+}
+
 repair_one() {
     local name="$1" kcfg="$2" acct="$3"
     repair_stuck_syncs "${name}" "${kcfg}"
     repair_failed_syncs "${name}" "${kcfg}"
+    repair_agent_injection "${name}" "${kcfg}"
     repair_stuck_pods "${name}" "${kcfg}"
     repair_datadog "${name}" "${kcfg}" "${acct}"
     verify_one "${name}" "${kcfg}" "${acct}"

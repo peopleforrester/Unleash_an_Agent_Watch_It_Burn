@@ -96,6 +96,26 @@ printf '{"items":[{"metadata":{"name":"otel-operator"},"status":{"sync":{"status
 check "OutOfSync apps whose last operation failed get a sync operation; a Synced one and one already running do not" \
   'grep -q "patch application otel-operator --type merge" "${CALLS}" && grep -q "patch application ai-layer-otel --type merge" "${CALLS}" && ! grep -q "patch application busy\|patch application fine" "${CALLS}"'
 
+echo "== repair_agent_injection =="
+mkpods() { printf '{"items":[{"metadata":{"name":"workshop-agent-a","namespace":"agent","annotations":{"instrumentation.opentelemetry.io/inject-python":"watch-it-burn-python"}},"spec":{"initContainers":%s,"containers":[]}},{"metadata":{"name":"guard-proxy-b","namespace":"agent"},"spec":{"containers":[]}}]}' "$1" >"${T}/agentpods.json"; }
+python3 - "${SHIM}/kubectl" <<'PY2'
+import sys,pathlib
+p=pathlib.Path(sys.argv[1]); s=p.read_text()
+s=s.replace('case "$*" in','case "$*" in\n  *"-n agent get pods -o json"*) cat "${T}/agentpods.json" 2>/dev/null || echo \'{"items":[]}\'; exit 0 ;;\n  *"get endpoints otel-operator-opentelemetry-operator-webhook"*) cat "${T}/webhook_ip" 2>/dev/null; exit 0 ;;\n  *"get instrumentation watch-it-burn-python"*) [[ -f "${T}/instr_present" ]] && exit 0; exit 1 ;;',1)
+p.write_text(s)
+PY2
+mkpods '[]'; printf '10.0.1.5' >"${T}/webhook_ip"; touch "${T}/instr_present"; : >"${CALLS}"
+src 'repair_agent_injection c /dev/null'
+check "an annotated pod without the injected init container is recreated once the webhook serves" \
+  'grep -q "\-n agent delete pod workshop-agent-a" "${CALLS}" && ! grep -q "delete pod guard-proxy-b" "${CALLS}"'
+: >"${CALLS}"; : >"${T}/webhook_ip"; src 'repair_agent_injection c /dev/null'
+check "with no webhook endpoints the pod is left alone (deleting it would not help)" '! grep -q "delete pod" "${CALLS}"'
+printf '10.0.1.5' >"${T}/webhook_ip"; mkpods '[{"name":"opentelemetry-auto-instrumentation-python"}]'; : >"${CALLS}"; src 'repair_agent_injection c /dev/null'
+check "an already-instrumented pod is left alone" '! grep -q "delete pod" "${CALLS}"'
+mkpods '[]'; : >"${CALLS}"; src 'verify_one c /dev/null acct; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "verify records an uninstrumented agent pod as <name>:otel-injection" 'grep -qx "c:otel-injection" "${T}/out"'
+rm -f "${T}/agentpods.json"
+
 echo "== repair_stuck_pods =="
 printf '{"items":[{"metadata":{"namespace":"datadog","name":"datadog-agent-old","deletionTimestamp":"%s"}},{"metadata":{"namespace":"agent","name":"console-new","deletionTimestamp":"%s"}},{"metadata":{"namespace":"agent","name":"console-live"}}]}' "$old" "$new" >"${T}/pods.json"
 : >"${CALLS}"; src 'repair_stuck_pods c /dev/null'

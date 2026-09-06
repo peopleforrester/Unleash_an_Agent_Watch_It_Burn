@@ -81,6 +81,12 @@ with tempfile.TemporaryDirectory(dir=REPO) as tmp:
     after = next(d for d in render(copy) if d["kind"] == "Deployment" and d["metadata"]["name"] == "console")["spec"]["template"]
     check("editing lab.html changes the console pod template (so Argo CD rolls it)", before != after)
 
+print("== the OTel ordering gate runs before the Agent CR ==")
+gate = [d for d in docs if d["kind"] == "Job" and d["metadata"]["name"] == "otel-gate"]
+check("otel-gate Job is a PreSync hook", bool(gate) and gate[0]["metadata"]["annotations"].get("argocd.argoproj.io/hook") == "PreSync")
+check("otel-gate waits on the webhook endpoints and the Instrumentation",
+      any(d["kind"] == "ConfigMap" and d["metadata"]["name"].startswith("otel-gate-script") and "endpoints/otel-operator-opentelemetry-operator-webhook" in d["data"]["gate.py"] and "instrumentations/watch-it-burn-python" in d["data"]["gate.py"] for d in docs))
+
 print("== the ai-layer ignoreDifferences never covers a renamed reference ==")
 # ai-layer ignores drift on the proxy env so live toggles survive selfHeal. Run the committed jq
 # expressions against the rendered guard-proxy Deployment: whatever they select is invisible to
