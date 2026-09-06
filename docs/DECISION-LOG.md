@@ -772,3 +772,20 @@ entries. And the customer-stream Deployments had never deployed on an attendee c
 require-probes are Enforce in the apps namespace, both denied them, and Argo CD reported the app Healthy
 with two SyncFailed resources. converge cannot say CONVERGED past that, which is the point of it: at
 13:33 UTC it said CONVERGED 4/4 for the first time.
+
+## 2026-09-06 (afternoon) · The full set for the walkthrough, and what a build from zero taught
+
+Ten clusters live: pres-michael, pres-whitney, attendee-001, attendee-002, and the six owned round
+clusters. Building the full profile from zero with the guardrails armed exposed four defects that the
+old clusters had hidden because they were created before arming: cert-manager, alloy, loki, tempo and
+six more containers without limits (denied; the console certificate never issued), the party apps on a
+registry outside the allow-list, the party apps unreachable behind the apps ingress policy (port 80 not
+admitted), and Argo CD giving up on otel-operator after five failed retries. Each is a manifest fix with
+a render gate (`verify/test_enforce_floor.py`, `verify/test_no_permanent_drift.py`) or a converge repair.
+
+Whitney's "Datadog is not receiving any traces from BurritoBot" was the OTel operator webhook failing
+open: nine of ten fresh clusters admitted the agent pod before the webhook served, so it was never
+instrumented while guard-proxy still traced. Fixed with a PreSync gate in ai-layer and a converge repair;
+kagent spans now arrive in every cluster's own org. Her wording edits landed in the lab, the BurritoBot
+panel and the terminal catalogue, which now prints real hostnames from the identity ConfigMap and is
+mounted as a hashed ConfigMap so a wording change rolls the pod.
