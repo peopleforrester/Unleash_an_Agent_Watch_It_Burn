@@ -65,8 +65,8 @@ config:
           # emitted without a parent, so each one showed up as its own trace beside the real one and
           # a student saw "three more traces generated at the same time" (Whitney, 2026-09-06). What
           # remains is the interaction: the guard-proxy root, invoke_agent, call_llm, execute_tool.
-          - 'IsMatch(name, "^a2a\\.")'
-          - 'IsMatch(name, "^GET /\\.well-known/agent-card\\.json")'
+          - 'IsMatch(name, "^a2a[.]")'
+          - 'IsMatch(name, "^GET /[.]well-known/agent-card[.]json")'
     transform/set_peer_service:
       error_mode: ignore
       trace_statements:
