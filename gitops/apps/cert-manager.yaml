@@ -46,8 +46,14 @@ spec:
           keep: true
         replicaCount: 1
         webhook:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 256Mi }
           replicaCount: 1
         cainjector:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 256Mi }
           replicaCount: 1
         resources:
           requests:
@@ -56,6 +62,12 @@ spec:
           limits:
             cpu: 200m
             memory: 256Mi
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        startupapicheck:
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager

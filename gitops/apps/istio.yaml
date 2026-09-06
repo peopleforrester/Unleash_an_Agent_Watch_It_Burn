@@ -40,6 +40,12 @@ spec:
     helm:
       valuesObject:
         profile: ambient
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        cni:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 256Mi }
   destination: { server: https://kubernetes.default.svc, namespace: istio-system }
   syncPolicy:
     automated: { prune: true, selfHeal: true }
@@ -91,6 +97,11 @@ spec:
     targetRevision: "1.30.1"
     helm:
       valuesObject:
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        resources:
+          requests: { cpu: 100m, memory: 128Mi }
+          limits: { cpu: 500m, memory: 512Mi }
         # Datadog Agent Autodiscovery: the `istio` named integration in ambient mode (PRD #26 M2).
         # Key uses ztunnel's real container name `istio-proxy`; ztunnel exposes Prometheus stats on :15020.
         podAnnotations:

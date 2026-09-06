@@ -26,7 +26,7 @@ spec:
         fsGroup: 1000
       containers:
         - name: demo-app-unicorn
-          image: public.ecr.aws/docker/library/nginx:1.27-alpine
+          image: docker.io/library/nginx:1.27-alpine  # restrict-image-registries allows docker.io/library, not public ECR
           ports:
             - containerPort: 80
               protocol: TCP

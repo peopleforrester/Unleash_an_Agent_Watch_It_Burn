@@ -20,6 +20,9 @@ spec:
         controller:
           type: deployment # loki.source.kubernetes reads logs via the K8s API (no per-node hostpath)
         alloy:
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
           # verify-at-build: confirm Alloy config syntax against chart 1.10.0 before deploy.
           configMap:
             content: |
@@ -31,6 +34,12 @@ spec:
               loki.write "default" {
                 endpoint { url = "http://loki:3100/loki/api/v1/push" }
               }
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        configReloader:
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

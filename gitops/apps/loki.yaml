@@ -34,6 +34,9 @@ spec:
                   prefix: loki_index_
                   period: 24h
         singleBinary:
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
           replicas: 1
           persistence:
             size: 5Gi
@@ -54,6 +57,12 @@ spec:
           enabled: false
         gateway:
           enabled: false
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        sidecar:
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 200m, memory: 128Mi }
   destination:
     server: https://kubernetes.default.svc
     namespace: monitoring

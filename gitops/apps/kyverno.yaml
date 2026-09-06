@@ -45,6 +45,10 @@ spec:
                     - kube-node-lease
         # Resource limits for Kyverno admission controller
         admissionController:
+          container:
+            resources:
+              requests: { cpu: 100m, memory: 128Mi }
+              limits: { cpu: 500m, memory: 512Mi }
           replicas: 1
           resources:
             limits:

@@ -39,6 +39,12 @@ spec:
       valuesObject:
         # Operator auto-creates the default KubeArmorConfig -> deploys the enforcement DaemonSet + relay.
         autoDeploy: true
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        kubearmorOperator:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 256Mi }
   destination:
     server: https://kubernetes.default.svc
     namespace: kubearmor
