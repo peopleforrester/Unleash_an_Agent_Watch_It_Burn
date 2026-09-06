@@ -114,6 +114,9 @@ printf '10.0.1.5' >"${T}/webhook_ip"; mkpods '[{"name":"opentelemetry-auto-instr
 check "an already-instrumented pod is left alone" '! grep -q "delete pod" "${CALLS}"'
 mkpods '[]'; : >"${CALLS}"; src 'verify_one c /dev/null acct; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
 check "verify records an uninstrumented agent pod as <name>:otel-injection" 'grep -qx "c:otel-injection" "${T}/out"'
+: >"${T}/webhook_ip"; : >"${CALLS}"; src 'verify_one c /dev/null acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "with no serving webhook (burn profile) an uninjected pod is not recorded" '! grep -q "otel-injection" "${T}/out"'
+printf '10.0.1.5' >"${T}/webhook_ip"
 rm -f "${T}/agentpods.json"
 
 echo "== repair_stuck_pods =="

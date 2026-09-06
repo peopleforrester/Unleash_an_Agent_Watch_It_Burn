@@ -724,11 +724,15 @@ verify_one() {
     fi
     # BurritoBot must actually trace: an annotated agent pod still without instrumentation is a failure
     # (the repair above recreates it once the webhook serves; the next converge round re-checks).
+    # Only where instrumentation is possible: the burn profile ships no OTel operator at all, so an
+    # annotated pod there can never be injected and is not a failure of that cluster.
     local still; still="$(uninjected_agent_pods "${kcfg}")"
-    if [[ -n "${still}" ]]; then
+    if [[ -z "${still}" ]]; then
+        log "  ${name}: agent pods instrumented"
+    elif otel_webhook_serving "${kcfg}"; then
         log "  ${name}: agent pod(s) NOT instrumented: $(echo ${still})"; record_fail "${name}:otel-injection"
     else
-        log "  ${name}: agent pods instrumented"
+        log "  ${name}: no serving OTel webhook on this cluster (burn profile, or operator still starting); injection not judged"
     fi
 }
 
