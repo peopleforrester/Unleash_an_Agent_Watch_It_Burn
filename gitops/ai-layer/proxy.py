@@ -92,7 +92,9 @@ AGENT_URL = os.environ.get("AGENT_URL", "http://workshop-agent.attendee-test:808
 # draws an edge to. Derived from AGENT_URL's host so the edge always names whatever this proxy really
 # calls. Target topology: AGENT_URL fronts agentgateway (-> "agentgateway"); until agentgateway is
 # deployed it points straight at the kagent agent. PEER_SERVICE overrides if the host label is wrong.
-_PEER_SERVICE = os.environ.get("PEER_SERVICE") or (urlparse(AGENT_URL).hostname or "agentgateway").split(".")[0]
+# The Service Map node name of the next hop: the downstream SERVICE, not the Kubernetes hostname. The
+# services are one "burritobot" family (#265) while the Service is still called agentgateway.
+_PEER_SERVICE = os.environ.get("PEER_SERVICE") or "burritobot-gateway"
 LLM_GUARD_URL = os.environ.get("LLM_GUARD_URL", "http://llm-guard.attendee-test:8000")
 LLM_GUARD_TOKEN = os.environ.get("LLM_GUARD_TOKEN", "")
 # Guard state is RUNTIME-mutable (flipped via GET /toggle), seeded from env. This is deliberate:

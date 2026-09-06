@@ -92,8 +92,8 @@ HEADERS = {"DD-API-KEY": DD_API_KEY, "DD-APPLICATION-KEY": DD_APP_KEY}
 # external-only (PRD #27 M3/M5 Decision Log). Add ("kagent", "bedrock") here only if verify-at-build
 # shows Bedrock is NOT auto-inferred AND the M3 transform was extended to stamp it.
 EXPECTED_EDGES = [
-    ("guard-proxy", "agentgateway"),
-    ("agentgateway", "kagent"),
+    ("burritobot", "burritobot-gateway"),
+    ("burritobot-gateway", "burritobot-agent"),
 ]
 
 failures = []
@@ -218,7 +218,7 @@ def test_log_trace_reverse_pivot(trace_id):
     resp = _request("GET", f"https://api.{DD_SITE}/api/v1/trace/{trace_id}")
     trace = resp.get("trace", resp)
     spans = trace.get("spans", []) if isinstance(trace, dict) else []
-    has_guard = any(s.get("service") == "guard-proxy" for s in spans)
+    has_guard = any(s.get("service") == "burritobot" for s in spans)
     check(f"Reverse pivot: guard-proxy span present in trace {trace_id}", has_guard)
 
 

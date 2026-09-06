@@ -55,7 +55,7 @@ spec:
           env:
             # UST for Datadog correlation (resource attributes on agentgateway's spans).
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=agentgateway,service.version=v1.3.0,deployment.environment.name=production"
+              value: "service.name=burritobot-gateway,service.version=v1.3.0,deployment.environment.name=production" # one name family (#265)
             # NOTE: tracing is configured in the config file's top-level `tracing` block (below), NOT via
             # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emits ZERO spans on v1.3.0 (verified live: a targeted
             # `service:agentgateway` Datadog span search returned 0). The config-file path is the working one.

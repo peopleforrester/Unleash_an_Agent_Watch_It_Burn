@@ -252,11 +252,12 @@ spec:
       env:
         # OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel Operator
         # auto-sets it from the deployment name (workshop-agent) at injection. Pin it to the locked UST
-        # service.name=kagent explicitly, or the agent reports as workshop-agent (confirmed live 2026-06-25).
+        # ONE NAME FAMILY (#265): Datadog derives the Agent Observability application from the ROOT span's
+        # service, so every service in the BurritoBot path is prefixed "burritobot" (the root is burritobot).
         - name: OTEL_SERVICE_NAME
-          value: kagent
+          value: burritobot-agent
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "service.name=kagent,service.version=v0.9.9,deployment.environment.name=production"
+          value: "service.name=burritobot-agent,service.version=v0.9.9,deployment.environment.name=production"
         # Capture gen_ai message content on ADK spans (the agent waterfall input/output). SPAN_AND_EVENT,
         # NOT "true" (invalid under gen_ai_latest_experimental, silently collects nothing). SPAN_AND_EVENT
         # (not bare EVENT_ONLY) so the content lands as gen_ai.input.messages / gen_ai.output.messages SPAN
@@ -507,7 +508,7 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "b32aec91e992"
+        checksum/proxy-py: "59caec1f1768"
     spec:
       # A dedicated ServiceAccount with a mounted token, so /controls can read the four badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
@@ -557,7 +558,7 @@ spec:
             # -> version and deployment.environment.name -> env. UST locked in PRD #13: service.version is
             # the real software version (NOT a model tier); the model dimension is gen_ai.request.model.
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=guard-proxy,service.version=1.0.0,deployment.environment.name=production"
+              value: "service.name=burritobot,service.version=1.0.0,deployment.environment.name=production" # ROOT span: names the Agent Observability application (#265)
             # EVENT_ONLY captures gen_ai message content as OTel span events (GenAI semconv v1.37+).
             # "true" is a silent no-op under gen_ai_latest_experimental; must be EVENT_ONLY.
             - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
@@ -614,7 +615,7 @@ spec:
           env:
             - { name: FAKE_MCP_SENTINEL, value: "FAKE-MCP-EXFIL-sentinel-4c1d" }
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=evil-mcp-shim,service.version=1.0.0,deployment.environment.name=production"
+              value: "service.name=burritobot-evil-mcp,service.version=1.0.0,deployment.environment.name=production"
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
         - name: src

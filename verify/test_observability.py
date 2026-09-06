@@ -23,7 +23,30 @@ def check(name, cond):
 
 
 # Collector: OTLP in, traces pipeline exports to Tempo.
-cfg = otel["spec"]["source"]["helm"]["valuesObject"]["config"]
+
+def _app_values(app):
+    """The Helm valuesObject of an Application, single- or multi-source, and the repo value files it layers.
+
+    otel-collector became multi-source in #242 (chart source + a `ref: values` source pointing at this
+    repo), so `spec.source` no longer exists on it. This resolves both shapes and merges the repo value
+    files the chart source lists, which is where the collector config now lives.
+    """
+    src = app["spec"].get("source") or app["spec"]["sources"][0]
+    helm = src.get("helm", {}) or {}
+    vals = dict(helm.get("valuesObject") or {})
+    for vf in helm.get("valueFiles", []):
+        path = REPO / vf.replace("$values/", "")
+        if path.exists():
+            layer = yaml.safe_load(path.read_text()) or {}
+            for k, v in layer.items():
+                if isinstance(v, dict) and isinstance(vals.get(k), dict):
+                    vals[k] = {**vals[k], **v}
+                else:
+                    vals[k] = v
+    return vals
+
+_otel_vals = _app_values(otel)
+cfg = _otel_vals["config"]
 check("collector has an otlp receiver", "otlp" in cfg["receivers"])
 check("collector traces pipeline exports to Tempo", "otlp/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
 check("collector cluster.name is not the stale KubeAuto value",
@@ -34,12 +57,12 @@ check("Datadog is the primary traces exporter", cfg["service"]["pipelines"]["tra
 check("Datadog is the primary metrics exporter", cfg["service"]["pipelines"]["metrics"]["exporters"][0] == "datadog")
 check("Grafana/Tempo kept as the secondary traces fallback", "otlp/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
 check("Datadog API key is NOT hardcoded (env reference)", cfg["exporters"]["datadog"]["api"]["key"].startswith("${env:"))
-_vals = otel["spec"]["source"]["helm"]["valuesObject"]
+_vals = _otel_vals
 _ddenv = {e["name"]: e for e in _vals.get("extraEnvs", [])}
 check("DD_API_KEY sourced from a BYO secret (not in repo)", "secretKeyRef" in _ddenv.get("DD_API_KEY", {}).get("valueFrom", {}))
 
 # Prometheus: slimmed (alertmanager off) + a single alertmanager key + short retention.
-pvals = prom["spec"]["source"]["helm"]["valuesObject"]
+pvals = _app_values(prom)
 check("alertmanager disabled (slim the per-attendee node)", pvals["alertmanager"]["enabled"] is False)
 check("prometheus retention trimmed to hours", pvals["prometheus"]["prometheusSpec"]["retention"].endswith("h"))
 ds = {d["name"]: d for d in pvals["grafana"]["additionalDataSources"]}
@@ -95,12 +118,12 @@ def _kagent_env():
 
 # Deployments (containers[0] env) for three components; kagent is an Agent CRD handled separately.
 _UST = {
-    "guard-proxy": ("gitops/ai-layer/resources.yaml", "service.name=guard-proxy", "service.version=1.0.0"),
-    "evil-mcp-shim": ("gitops/ai-layer/resources.yaml", "service.name=evil-mcp-shim", "service.version=1.0.0"),
-    "agentgateway": ("gitops/ai-layer/agentgateway.yaml", "service.name=agentgateway", "service.version=v1.3.0"),
+    "guard-proxy": ("gitops/ai-layer/resources.yaml", "service.name=burritobot,", "service.version=1.0.0"),
+    "evil-mcp-shim": ("gitops/ai-layer/resources.yaml", "service.name=burritobot-evil-mcp", "service.version=1.0.0"),
+    "agentgateway": ("gitops/ai-layer/agentgateway.yaml", "service.name=burritobot-gateway", "service.version=v1.3.0"),
 }
 _ust_targets = [(n, _container_env(p, n).get("OTEL_RESOURCE_ATTRIBUTES", ""), s, v) for n, (p, s, v) in _UST.items()]
-_ust_targets.append(("kagent", _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", ""), "service.name=kagent", "service.version=v0.9.9"))
+_ust_targets.append(("kagent", _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", ""), "service.name=burritobot-agent", "service.version=v0.9.9"))
 for _name, _ust, _svc, _ver in _ust_targets:
     check(f"{_name} carries locked UST (service.name + real service.version + env=production)",
           _svc in _ust and _ver in _ust and "deployment.environment.name=production" in _ust
@@ -125,7 +148,7 @@ def _pod_annotations(path, *navkeys, doc_name=None):
     else:
         node = docs[0]
     if node.get("kind") == "Application":
-        node = node["spec"]["source"]["helm"]["valuesObject"]
+        node = _app_values(node)
     for k in navkeys:
         node = node[k]
     return node.get("podAnnotations", {})
@@ -147,7 +170,7 @@ for _name, _svc, _ver, _ann in _PLATFORM_UST:
           and str(_ann.get("tags.datadoghq.com/version")) == _ver)
 
 # Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.
-fvals = yaml.safe_load((REPO / "gitops" / "apps" / "falcosidekick.yaml").read_text())["spec"]["source"]["helm"]["valuesObject"]
+fvals = _app_values(yaml.safe_load((REPO / "gitops" / "apps" / "falcosidekick.yaml").read_text()))
 check("falcosidekick has a Datadog output", "datadog" in fvals["config"])
 # falcosidekick chart 0.14.0 reads env from config.extraEnv (NOT top-level extraEnv) — see
 # PRD #23 M2 fix (commit c7f4e7b). Assert against that path.
