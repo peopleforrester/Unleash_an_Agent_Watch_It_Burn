@@ -53,5 +53,10 @@ secretGenerator:
     literals:
       - token=witb-llm-guard-token # verify-at-build: source from a real secret store (ESO) for prod
 
+# Generated names CARRY the kustomize content hash (#252). kustomize rewrites every reference it owns,
+# so a change to lab.html, console.conf, proxy.py or any other generated source changes the workload
+# spec and Argo CD rolls the pod, with no manual pod delete on any cluster. The superseded objects are
+# pruned. verify/test_ai_layer_rollout.py fails if this is ever disabled again. Anything OUTSIDE this
+# bundle that names a generated object must use the rendered (hashed) name, or read it by label.
 generatorOptions:
-  disableNameSuffixHash: true # stable names — Deployments reference these by fixed name
+  disableNameSuffixHash: false

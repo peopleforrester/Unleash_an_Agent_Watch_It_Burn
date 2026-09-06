@@ -69,3 +69,14 @@ scaled-to-zero-and-back. The policy exists so the running state matches the repo
 same commit as a proxy.py change, with `verify/test_proxy_checksum.py` failing when the two
 disagree. Keeps the stable ConfigMap names, makes the rollout automatic once the annotation
 moves, and turns a forgotten bump into a red test instead of a silent no-op in the room.
+
+## 2026-09-06T13:30:00Z · 2.2 · Supersedes "Drop the global generatorOptions.disableNameSuffixHash" (rejected 2026-09-03)
+
+The 2026-09-03 rejection was conditional: "Revisit between events, when a wider rename can be tested
+on one cluster first." The condition changed on 2026-09-06: the owner directed that every fix be wired
+so it needs no manual step, four freshly rebuilt clusters exist to prove the rename on before Sunday's
+full rebuild, and the one runtime reliance the rejection named (`agent/gateway/guard-proxy/guard-proxy.yaml`)
+is a hand-apply manifest nothing in gitops, infra or verify applies. The hash is now ON for the whole
+ai-layer bundle; `verify/test_ai_layer_rollout.py` asserts it, and asserts that editing lab.html changes
+the console pod template. The `checksum/proxy-py` annotation and its test stay: `/controls` reports that
+checksum in the room, which is a different job from rolling the pod. Issue #252.
