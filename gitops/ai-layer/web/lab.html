@@ -210,7 +210,7 @@
           <div class="warn">The prompts you send BurritoBot may be shown on the instructor screen during the workshop, so the room can get inspiration from what other folks are attempting. Please do not tell BurritoBot anything personal or confidential.</div>
 
           <h3 class="sub">Your lab environment: a full-fledged platform</h3>
-          <p>This is a full internal developer platform. Have a look at what is running before you start breaking it:</p>
+          <p>This is a full internal developer platform: 38 Argo CD applications on your cluster, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 40, because the two controls you install in Challenges 1 and 3 are already there). Have a look at what is running before you start breaking it:</p>
           <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
           <p>Don't worry if you don't understand what a lot of these are. We'll explain the relevant ones over the course of the workshop. A few highlights, for funsies:</p>
           <ul class="small">

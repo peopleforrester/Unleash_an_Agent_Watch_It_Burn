@@ -210,10 +210,11 @@ _demo = {n for n in _app_files if n.startswith("demo-app-")}
 check(f"exactly 5 demo filler apps ship ({len(_demo)} found)", len(_demo) == 5)
 _docs = (REPO / "docs/RUN-OF-SHOW-2026-08.md").read_text(encoding="utf-8")
 check("the run-of-show no longer claims 43 apps", "43 ArgoCD apps" not in _docs and "43 apps" not in _docs)
-check("the run-of-show states the measured 41", "41 Argo CD apps" in _docs or "41 apps" in _docs)
+check("the run-of-show states the measured 40 (instructor) and 38 (attendee)",
+      "40 Argo CD apps" in _docs and "38 on an attendee cluster" in _docs)
 _lab = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
-check("the lab page states a number rather than 'roughly forty'",
-      "Roughly forty" not in _lab and "35 platform components" in _lab)
+check("the lab page states the measured count rather than 'roughly forty'",
+      "Roughly forty" not in _lab and "38 Argo CD applications" in _lab)
 
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the

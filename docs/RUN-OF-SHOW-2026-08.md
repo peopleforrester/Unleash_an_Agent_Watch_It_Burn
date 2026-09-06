@@ -93,7 +93,7 @@ watch-the-screen with an optional side quest on our box. Round 3 is heads-down a
 matter. Attendees will not guess which mode they are in, and a room half-watching and half-typing hears
 neither.
 
-**Nobody installs anything.** The full platform is already deployed on every cluster (41 Argo CD apps, one
+**Nobody installs anything.** The full platform is already deployed on every cluster (40 Argo CD apps on an instructor cluster, 38 on an attendee cluster where the C1 and C3 controls start uninstalled, one
 bash script). The hands-on hour is about **manipulating** what is there, not building it.
 
 **Your prompts live on the instructor page, not in this doc.** Open **`/brief`** on whichever cluster you
@@ -194,7 +194,7 @@ also the segment that earns the abstract's claims.
 > one bash script. Let me show you what is actually running in there."
 
 ```bash
-kubectl get applications -n argocd          # 41 apps: 35 platform components, 5 demo apps, 1 app-of-apps
+kubectl get applications -n argocd          # 40 apps: 34 platform components, 5 demo apps, 1 app-of-apps (38 on an attendee cluster)
 kubectl get pods -A | head -40              # what that actually looks like running
 ```
 
