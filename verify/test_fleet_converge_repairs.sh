@@ -108,6 +108,11 @@ check "a failing datadog-orgs verifier is recorded as <name>:datadog-orgs" 'grep
 echo "== wiring =="
 check "converge_one runs repair_one" 'grep -q "^    repair_one \"\${name}\" \"\${kcfg}\" \"\${acct_profile}\"" "${FLEET}"'
 check "up ends with a converge pass over what it built" 'grep -q "repair-and-verify pass over" "${FLEET}"'
+check "the post-up wait and verify iterate the PROVISION_SPEC names, never the register arguments" \
+  'grep -q "wait_for_console_lbs \"\${built\[@\]}\"" "${FLEET}" && grep -q "for _n in \"\${built\[@\]}\"" "${FLEET}" && ! grep -q "wait_for_console_lbs \"\$@\"" "${FLEET}"'
+: >"${CALLS}"; rm -f "${T}/k_polls"
+src 'wait_for_console_lbs ""; echo rc=$?' >"${T}/out"
+check "an empty name is not waited for" 'grep -qx "rc=0" "${T}/out" && [[ ! -f "${T}/k_polls" ]]'
 check "bootstrap_one resolves keys through datadog_keys_for" 'grep -q "< <(datadog_keys_for \"\${name}\")" "${FLEET}"'
 check "status, routes and converge prune empty states" '[[ "$(grep -c "^    prune_empty_states$" "${FLEET}")" -eq 3 ]]'
 

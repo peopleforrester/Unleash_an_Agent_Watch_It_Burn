@@ -1013,17 +1013,21 @@ _provision_spec_fleet() {
     done
     wait
     report_failures || true
+    # The clusters this run built are PROVISION_SPEC's keys. "$@" is the registration argument list,
+    # which for 'instructors up <owner>' is an owner name, not a cluster: the first live run after #251
+    # waited ten minutes for a console named "" and then verified a cluster called "michael".
+    local built=("${!PROVISION_SPEC[@]}")
     if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
-        wait_for_console_lbs "$@" || true
+        wait_for_console_lbs "${built[@]}" || true
         cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
     fi
     register_with_provisioning "${reg_label}" "${reg_fn}" "$@"
     # One repair-and-verify pass over what was just built (#254): identity, keys, dual shipping, stuck
     # operations and pods, and the Datadog verifier, so 'up' ends with a checked cluster, not a hopeful one.
     if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_VERIFY:-}" ]]; then
-        log "verify: repair-and-verify pass over ${#} cluster(s)"
+        log "verify: repair-and-verify pass over ${#built[@]} cluster(s)"
         local _acct _n
-        for _n in "$@"; do
+        for _n in "${built[@]}"; do
             grep -qx "${_n}" "${FAIL_FILE}" 2>/dev/null && continue
             _acct="$(read_membership "${_n}" 2>/dev/null || true)"; [[ -n "${_acct}" ]] || _acct="${WIB_DEFAULT_ACCOUNT}"
             ( TF_PROFILE="${_acct}"; converge_one "${_n}" )
@@ -1040,8 +1044,10 @@ wait_for_console_lbs() {
     local deadline=$(( SECONDS + ${WIB_LB_WAIT_TIMEOUT:-600} )) name kcfg h acct
     local remaining=() pending
     for name in "$@"; do
+        [[ -n "${name}" ]] || continue
         grep -qx "${name}" "${FAIL_FILE}" 2>/dev/null || remaining+=("${name}")
     done
+    [[ "${#remaining[@]}" -gt 0 ]] || return 0
     kcfg="$(mktemp -t lbwait.XXXX)"
     while :; do
         pending=()
