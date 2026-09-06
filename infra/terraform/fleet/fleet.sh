@@ -37,7 +37,7 @@ readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
 readonly CLUSTER_DIR="${PROVISION_DIR}/${PROVIDER_CLUSTER_SUBDIR}"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}"
-readonly STATE_DIR="${SCRIPT_DIR}/states"
+readonly STATE_DIR="${WIB_STATE_DIR:-${SCRIPT_DIR}/states}"   # WIB_STATE_DIR: the shim tests point this at a temp dir
 readonly LOG_DIR="${SCRIPT_DIR}/logs"
 # One failure ledger PER PROCESS. Two fleet.sh runs side by side (an attendee down beside an instructors
 # down, 2026-09-06) shared logs/.failures and each one summarised the other's entries (#251). Workers
@@ -608,21 +608,15 @@ arm_infra_guardrails() {
     return 1
 }
 
-bootstrap_one() {
-    local name="$1" profile="$2" round="${3:-}"
-    local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
-    local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
-    provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
-    # Datadog keys, read from the central pool on the PROVISIONING box (default account); deploy-full-idp
-    # injects them as a plain K8s Secret (the cluster's own account never touches Secrets Manager).
-    # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
-    # merge_pool.py's row-position join over attendee-only orgs, so the in-cluster org is the SAME one the
-    # provisioning page shows the student. Non-attendee (instructor) clusters use the shared workshop org.
-    local api app slot admin_api="" admin_app="" _admin
+# The ONE place that says which Datadog keys a cluster gets, used by bootstrap and by converge's repair
+# so the two can never disagree (#254). Prints "api app admin_api admin_app" (admin_* empty when the
+# cluster does not dual-ship) and returns 1 when the cluster's own org cannot be resolved.
+#   attendee-NNN : pool row N (non-admin rows, in order) + the instructor org as the second destination
+#   pres-<owner> : the admin-attendee org (what the admin page shows) + the instructor org second (#242)
+#   instructor   : the instructor org itself, and nothing second (it already IS the instructor org)
+datadog_keys_for() {
+    local name="$1" slot api="" app="" admin_api="" admin_app="" _admin _dd
     slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
-    # The instructor org (watch-it-burn/datadog). Instructor clusters ship to it as their own org; attendee
-    # and presenter clusters ship to it as a SECOND destination (dual shipping, #242), so the instructor
-    # screen sees the whole room and a dead student login never hides a cluster's telemetry.
     _admin="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
         --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
     if [[ -n "${slot}" ]] || is_presenter_name "${name}"; then
@@ -636,19 +630,133 @@ bootstrap_one() {
         pool2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
         read -r api app < <(jq -rn --argjson a "${pool1}" --argjson b "${pool2}" --argjson i "$(( slot - 1 ))" \
             '([$a[], $b[]] | map(select((.role // "") | startswith("admin") | not)))[$i] | "\(.["api-key"] // "") \(.["app-key"] // "")"' 2>/dev/null)
-        if [[ -z "${api}" || -z "${app}" ]]; then
-            log "  BOOTSTRAP FAILED: ${name} could not resolve its per-student Datadog org (slot ${slot}); refusing to fall back to the shared org"
-            record_fail "${name}"; rm -f "${kcfg}"; return
-        fi
-        log "  ${name}: per-student Datadog org (attendee slot ${slot})"
     else
-        # Presenter student clusters get the admin-attendee org (the one the provisioning admin page shows
-        # beside "your student cluster"), so the org a presenter logs into is the org their cluster ships to.
-        local _dd="${_admin}"
+        _dd="${_admin}"
         is_presenter_name "${name}" && _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
             --secret-id watch-it-burn/datadog-admin-attendee --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
         api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
         app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
+    fi
+    [[ -n "${api}" && -n "${app}" ]] || return 1
+    printf '%s %s %s %s\n' "${api}" "${app}" "${admin_api}" "${admin_app}"
+}
+
+# ---- converge repairs (#254): the things that were fixed by hand on live clusters, made a verb ----
+# Each repair is a check followed by the smallest action that puts the cluster back on the repo, and
+# records what it did. The external actions are wrapped in one-line functions so the shim test can
+# replace them; the decisions stay in the code under test.
+run_identity_script()        { bash "${INFRA_DIR}/datadog-cluster-identity.sh"; }
+reload_datadog_consumers()   { bash "${INFRA_DIR}/reload-datadog-consumers.sh" "$1" "$2"; }
+run_datadog_orgs_verify()    { bash "${INFRA_DIR}/../verify/datadog-orgs.sh" "$1" "$2"; }
+age_minutes()                { local now then; now="$(date +%s)"; then="$(date -d "$1" +%s 2>/dev/null || echo "${now}")"; echo $(( (now - then) / 60 )); }
+
+# Identity, admin secret and the cluster's own key must match what datadog_keys_for says. Repairs by
+# rewriting datadog-secret, re-running the identity script, and restarting the consumers.
+repair_datadog() {
+    local name="$1" kcfg="$2" acct="$3" api app admin_api admin_app
+    if ! read -r api app admin_api admin_app < <(datadog_keys_for "${name}"); then
+        log "  ${name}: repair: cannot resolve Datadog keys; leaving the cluster as it is"
+        record_fail "${name}:datadog-keys-unresolved"; return 0
+    fi
+    local ident live_key admin_present=0 want_admin=0 reasons=()
+    ident="$(KUBECONFIG="${kcfg}" kubectl -n datadog get configmap cluster-identity -o jsonpath='{.data.cluster-name}' 2>/dev/null || true)"
+    live_key="$(KUBECONFIG="${kcfg}" kubectl -n datadog get secret datadog-secret -o jsonpath='{.data.api-key}' 2>/dev/null | base64 -d 2>/dev/null || true)"
+    KUBECONFIG="${kcfg}" kubectl -n datadog get secret datadog-admin-secret >/dev/null 2>&1 && admin_present=1
+    [[ -n "${admin_api}" ]] && want_admin=1
+    [[ "${ident}" == "${name}" ]] || reasons+=("identity='${ident:-none}'")
+    [[ "${live_key}" == "${api}" ]] || reasons+=("own-key-drift")
+    [[ "${admin_present}" -eq "${want_admin}" ]] || reasons+=("admin-secret=${admin_present},want=${want_admin}")
+    [[ "${#reasons[@]}" -gt 0 ]] || { log "  ${name}: datadog identity, keys and dual shipping match the repo"; return 0; }
+    log "  ${name}: repairing datadog (${reasons[*]})"
+    local ns
+    for ns in datadog monitoring security; do
+        KUBECONFIG="${kcfg}" kubectl create namespace "${ns}" --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
+        KUBECONFIG="${kcfg}" kubectl -n "${ns}" create secret generic datadog-secret \
+            --from-literal=api-key="${api}" --from-literal=app-key="${app}" \
+            --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
+    done
+    KUBECONFIG="${kcfg}" CLUSTER_NAME="${name}" WITB_DD_API_KEY="${api}" \
+        WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" run_identity_script 2>&1 | sed 's/^/    /' >&2 || true
+    local ctx; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
+    KUBECONFIG="${kcfg}" reload_datadog_consumers "${ctx}" "${acct}" >/dev/null 2>&1 || log "  ${name}: consumer reload failed; agents pick the change up on their next restart"
+    log "  ${name}: datadog repaired"
+}
+
+# An Argo CD sync operation Running for longer than WIB_STUCK_SYNC_MIN blocks every retry of that app
+# (the Prometheus deadlock of #234 sat like that for an hour). Terminating it lets auto-sync retry.
+repair_stuck_syncs() {
+    local name="$1" kcfg="$2" apps a started
+    apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)" || return 0
+    while IFS=$'\t' read -r a started; do
+        [[ -n "${a}" ]] || continue
+        if [[ "$(age_minutes "${started}")" -ge "${WIB_STUCK_SYNC_MIN:-15}" ]]; then
+            log "  ${name}: terminating sync operation on ${a} (Running since ${started})"
+            KUBECONFIG="${kcfg}" kubectl -n argocd patch application "${a}" --type json -p '[{"op":"remove","path":"/operation"}]' >/dev/null 2>&1 || true
+        fi
+    done < <(jq -r '.items[] | select(.status.operationState.phase=="Running") | [.metadata.name, .status.operationState.startedAt] | @tsv' <<<"${apps}" 2>/dev/null)
+}
+
+# A pod stuck Terminating past WIB_STUCK_POD_MIN holds its DaemonSet slot on a one-node cluster (the
+# Datadog agent of 2026-09-05, twice). Force-deleting it is what was done by hand; now it is a rule.
+repair_stuck_pods() {
+    local name="$1" kcfg="$2" pods ns pod ts
+    pods="$(KUBECONFIG="${kcfg}" kubectl get pods -A -o json 2>/dev/null)" || return 0
+    while IFS=$'\t' read -r ns pod ts; do
+        [[ -n "${pod}" ]] || continue
+        if [[ "$(age_minutes "${ts}")" -ge "${WIB_STUCK_POD_MIN:-10}" ]]; then
+            log "  ${name}: force-deleting ${ns}/${pod} (Terminating since ${ts})"
+            KUBECONFIG="${kcfg}" kubectl -n "${ns}" delete pod "${pod}" --force --grace-period=0 >/dev/null 2>&1 || true
+        fi
+    done < <(jq -r '.items[] | select(.metadata.deletionTimestamp != null) | [.metadata.namespace, .metadata.name, .metadata.deletionTimestamp] | @tsv' <<<"${pods}" 2>/dev/null)
+}
+
+# The verifiers that were run by hand after every change: run per cluster and recorded in the ledger.
+verify_one() {
+    local name="$1" kcfg="$2" acct="$3" ctx
+    ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
+    if KUBECONFIG="${kcfg}" run_datadog_orgs_verify "${ctx}" "${acct}" 2>&1 | sed 's/^/    /' >&2; then
+        log "  ${name}: datadog-orgs verified"
+    else
+        log "  ${name}: datadog-orgs verification FAILED"; record_fail "${name}:datadog-orgs"
+    fi
+}
+
+repair_one() {
+    local name="$1" kcfg="$2" acct="$3"
+    repair_stuck_syncs "${name}" "${kcfg}"
+    repair_stuck_pods "${name}" "${kcfg}"
+    repair_datadog "${name}" "${kcfg}" "${acct}"
+    verify_one "${name}" "${kcfg}" "${acct}"
+}
+
+# A state file that records zero resources is what a failed or interrupted run leaves behind (three
+# were found after the 2026-09-06 teardown). It makes status, routes and converge chase a cluster that
+# does not exist, so it is pruned wherever those verbs start.
+prune_empty_states() {
+    local f
+    for f in "${STATE_DIR}"/*.tfstate; do
+        [[ -e "${f}" ]] || continue
+        if [[ "$(jq '.resources | length' "${f}" 2>/dev/null || echo 1)" == "0" ]]; then
+            log "  pruning empty state $(basename "${f}") (zero resources)"
+            rm -f "${f}" "$(membership_file "$(basename "${f}" .tfstate)")"
+        fi
+    done
+}
+
+bootstrap_one() {
+    local name="$1" profile="$2" round="${3:-}"
+    local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
+    provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
+    # Datadog keys, read from the central pool on the PROVISIONING box (default account); deploy-full-idp
+    # injects them as a plain K8s Secret (the cluster's own account never touches Secrets Manager).
+    # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
+    # merge_pool.py's row-position join over attendee-only orgs, so the in-cluster org is the SAME one the
+    # provisioning page shows the student. Non-attendee (instructor) clusters use the shared workshop org.
+    local api app admin_api admin_app
+    if ! read -r api app admin_api admin_app < <(datadog_keys_for "${name}"); then
+        log "  BOOTSTRAP FAILED: ${name} could not resolve its Datadog org; refusing to fall back to the shared org"
+        record_fail "${name}"; rm -f "${kcfg}"; return
     fi
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
@@ -862,6 +970,18 @@ _provision_spec_fleet() {
         cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
     fi
     register_with_provisioning "${reg_label}" "${reg_fn}" "$@"
+    # One repair-and-verify pass over what was just built (#254): identity, keys, dual shipping, stuck
+    # operations and pods, and the Datadog verifier, so 'up' ends with a checked cluster, not a hopeful one.
+    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_VERIFY:-}" ]]; then
+        log "verify: repair-and-verify pass over ${#} cluster(s)"
+        local _acct _n
+        for _n in "$@"; do
+            grep -qx "${_n}" "${FAIL_FILE}" 2>/dev/null && continue
+            _acct="$(read_membership "${_n}" 2>/dev/null || true)"; [[ -n "${_acct}" ]] || _acct="${WIB_DEFAULT_ACCOUNT}"
+            ( TF_PROFILE="${_acct}"; converge_one "${_n}" )
+        done
+        report_failures || true
+    fi
 }
 
 # Wait until every named cluster's console has a load balancer hostname, so the routes step that follows
@@ -1276,6 +1396,7 @@ cmd_down() {
 
 cmd_status() {
     require_tools
+    prune_empty_states
     local f name
     [[ -d "${STATE_DIR}" ]] || { log "no clusters provisioned"; return 0; }
     for f in "${STATE_DIR}"/*.tfstate; do
@@ -1609,6 +1730,7 @@ converge_one() {
                 argocd.argoproj.io/refresh=hard --overwrite >/dev/null 2>&1 || true
         done <<<"${bad}"
     fi
+    repair_one "${name}" "${kcfg}" "${acct_profile}"
     local ep; ep="$(converge_endpoint "${name}" "${kcfg}")"
     local ok=$?
     rm -f "${kcfg}"
@@ -1745,6 +1867,7 @@ cmd_converge() {
     command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
     require_tools
     mkdir -p "${LOG_DIR}"
+    prune_empty_states
 
     local total="${#all[@]}" round=1 remaining=("${all[@]}") still name a
     while [[ "${round}" -le "${CONVERGE_ROUNDS}" && "${#remaining[@]}" -gt 0 ]]; do
@@ -2215,6 +2338,7 @@ cmd_down_acct() {
 # reach their cluster via the raw console NLB the provisioning app hands out, so they need no router line.
 cmd_routes() {
     require_tools
+    prune_empty_states
     local out="${WIB_APEX_DIR}/routes.map"
     local kcfg tmp; kcfg="$(mktemp -t routes.XXXX)"; tmp="$(mktemp -t routesmap.XXXX)"
     {
