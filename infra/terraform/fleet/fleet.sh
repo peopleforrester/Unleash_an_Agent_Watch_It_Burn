@@ -442,6 +442,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
                       volumes, removes each cluster's provisioning row, and republishes the routes.
     deregister <name...>  Remove clusters from the provisioning app by hand (down does this itself).
+    audit-zero        Assert every fleet account holds nothing billable beyond its lab VPC's NAT, its
+                      address and the Bedrock endpoint ENIs; names anything else. 'down all' and
+                      'down-fleet' end with it.
     health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
     converge instructors [round]
@@ -728,6 +731,51 @@ repair_one() {
     repair_datadog "${name}" "${kcfg}" "${acct}"
     verify_one "${name}" "${kcfg}" "${acct}"
 }
+
+# Zero audit (#255). After a fleet teardown the only billable things left in an account are what its
+# lab VPC keeps by design: one NAT gateway, the Elastic IP attached to it, and the interface ENIs of the
+# NAT and the Bedrock endpoint. Everything else is named and counted as a failure, so "down all" ends
+# with a verdict instead of a hand-run loop over five accounts.
+_audit_ids() { # $1 account, rest: aws args; prints whitespace-separated ids, never fails the caller
+    local acct="$1"; shift
+    AWS_PROFILE="${acct}" aws "$@" --region "${WIB_REGION}" --output text 2>/dev/null | tr '\t\n' '  ' || true
+}
+audit_zero_account() {
+    local acct="$1" bad=0 ids kind
+    local -A found=()
+    found[eks]="$(_audit_ids "${acct}" eks list-clusters --query 'clusters[]')"
+    found[ec2]="$(_audit_ids "${acct}" ec2 describe-instances --filters Name=instance-state-name,Values=pending,running,stopping,stopped --query 'Reservations[].Instances[].InstanceId')"
+    found[elbv2]="$(_audit_ids "${acct}" elbv2 describe-load-balancers --query 'LoadBalancers[].LoadBalancerName')"
+    found[target-group]="$(_audit_ids "${acct}" elbv2 describe-target-groups --query 'TargetGroups[].TargetGroupName')"
+    found[volume]="$(_audit_ids "${acct}" ec2 describe-volumes --query 'Volumes[].VolumeId')"
+    for kind in eks ec2 elbv2 target-group volume; do
+        ids="$(echo ${found[$kind]})"
+        [[ -z "${ids}" ]] || { log "  ${acct}: ${kind} NOT zero: ${ids}"; record_fail "zero:${acct}:${kind}"; bad=1; }
+    done
+    local nat eip nat_n eip_n
+    nat="$(_audit_ids "${acct}" ec2 describe-nat-gateways --filter Name=state,Values=available,pending --query 'NatGateways[].NatGatewayId')"
+    eip="$(_audit_ids "${acct}" ec2 describe-addresses --query 'Addresses[].AllocationId')"
+    nat_n="$(echo ${nat} | wc -w)"; eip_n="$(echo ${eip} | wc -w)"
+    if [[ "${nat_n}" -gt 1 ]]; then log "  ${acct}: ${nat_n} NAT gateways (the lab VPC keeps one): ${nat}"; record_fail "zero:${acct}:nat"; bad=1; fi
+    if [[ "${eip_n}" -ne "${nat_n}" ]]; then log "  ${acct}: ${eip_n} Elastic IP(s) for ${nat_n} NAT gateway(s): ${eip}"; record_fail "zero:${acct}:eip"; bad=1; fi
+    local enis
+    enis="$(AWS_PROFILE="${acct}" aws ec2 describe-network-interfaces --region "${WIB_REGION}" --filters Name=status,Values=in-use \
+            --query 'NetworkInterfaces[].[NetworkInterfaceId,Description]' --output text 2>/dev/null \
+            | grep -v -i "NAT Gateway\|VPC Endpoint" | awk '{print $1}' | tr '\n' ' ' || true)"
+    [[ -z "$(echo ${enis})" ]] || { log "  ${acct}: ENIs in use beyond the NAT and the Bedrock endpoint: ${enis}"; record_fail "zero:${acct}:eni"; bad=1; }
+    [[ "${bad}" -eq 0 ]] && log "  ${acct}: ZERO (only the lab VPC's NAT, its address and the endpoint ENIs remain)"
+    return "${bad}"
+}
+audit_zero() {
+    local accounts acct rc=0; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    log "audit-zero: ${#accounts[@]} account(s)"
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        audit_zero_account "${acct}" || rc=1
+    done
+    return "${rc}"
+}
+cmd_audit_zero() { require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"; audit_zero; report_failures; }
 
 # A state file that records zero resources is what a failed or interrupted run leaves behind (three
 # were found after the 2026-09-06 teardown). It makes status, routes and converge chase a cluster that
@@ -1391,6 +1439,8 @@ cmd_down() {
     if [[ -z "${WIB_NO_ROUTES:-}" ]]; then
         WIB_ROUTES_ALLOW_SHRINK=1 cmd_routes || log "routes: not regenerated; run 'WIB_ROUTES_ALLOW_SHRINK=1 fleet.sh routes'"
     fi
+    # "down all" means the fleet is meant to be gone: say so with a verdict, or name what is left (#255).
+    [[ "${1:-}" == "all" ]] && audit_zero
     report_failures
 }
 
@@ -1613,6 +1663,7 @@ cmd_down_fleet() {
         ) &
     done
     wait
+    audit_zero   # #255: a fleet teardown ends with the zero verdict per account
     report_failures
 }
 
@@ -2496,6 +2547,7 @@ main() {
         up-fleet) cmd_up_fleet "$@" ;;
         down) cmd_down "$@" ;;
         deregister) cmd_deregister "$@" ;;
+        audit-zero) cmd_audit_zero ;;
         down-acct) cmd_down_acct "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
         health) cmd_health "$@" ;;
