@@ -63,6 +63,8 @@ ign = k["spec"].get("ignoreDifferences", [])
 check("ignoreDifferences covers CustomResourceDefinition /metadata/labels",
       any(i.get("kind") == "CustomResourceDefinition" and "/metadata/labels" in i.get("jsonPointers", []) for i in ign))
 check("RespectIgnoreDifferences is a sync option", "RespectIgnoreDifferences=true" in k["spec"]["syncPolicy"].get("syncOptions", []))
+check("the kyverno app compares server-side (CRD defaults the API strips)",
+      k["metadata"].get("annotations", {}).get("argocd.argoproj.io/compare-options") == "ServerSideDiff=true")
 
 print()
 if failures:
