@@ -49,7 +49,11 @@ readonly NAME_PREFIX="watch-it-burn-attendee"
 # is the suffix: watch-it-burn-pres-michael -> michael-student.agenticburn.com. The prefix is short on
 # purpose: AWS caps IAM role name_prefix at 38 characters and the cluster module appends "-cluster-",
 # so the whole cluster name must stay under 30 (watch-it-burn-presenter-michael failed plan at 40).
-readonly PRESENTER_PREFIX="watch-it-burn-pres"
+# A presenter's own student cluster is named for its OWNER FIRST, exactly like the hostname it serves and
+# like the roster's michael-round1 (#258, Michael 2026-09-06): watch-it-burn-michael-student serves
+# michael-student.agenticburn.com. The earlier watch-it-burn-pres-michael put the role first for no reason.
+# 29 characters at owner=7, inside the 38-char IAM role name_prefix cap the module appends "-cluster-" to.
+readonly PRESENTER_SUFFIX="student"
 readonly PRESENTER_OWNER_MAX=10
 # Service hostnames (#233): <service>-<label>.agenticburn.com for every cluster, riding the cluster's
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
@@ -62,8 +66,9 @@ emit_service_hosts() {
         printf '%s-%s.agenticburn.com  %s:443\n' "${svc}" "${label}" "${lb}"
     done
 }
-is_presenter_name() { [[ "$1" == "${PRESENTER_PREFIX}-"* ]]; }
-presenter_owner_of() { printf '%s' "${1#${PRESENTER_PREFIX}-}"; }
+is_presenter_name() { [[ "$1" =~ ^watch-it-burn-[a-z0-9-]+-${PRESENTER_SUFFIX}$ ]]; }
+presenter_owner_of() { local n="${1#watch-it-burn-}"; printf '%s' "${n%-${PRESENTER_SUFFIX}}"; }
+presenter_name_for() { printf 'watch-it-burn-%s-%s' "$1" "${PRESENTER_SUFFIX}"; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
 # 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
 # EKS control-plane create (near-zero local cost), so the binding local limit is RAM during the bootstrap
@@ -1450,7 +1455,8 @@ cmd_up() {
     local names; mapfile -t names < <(expand_names "$@")
     local n bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="attendee"
     for n in "${names[@]}"; do
-        if is_presenter_name "${n}" && [[ "${#n}" -gt $(( ${#PRESENTER_PREFIX} + 1 + PRESENTER_OWNER_MAX )) ]]; then
+        local _own; _own="$(presenter_owner_of "${n}")"
+        if is_presenter_name "${n}" && [[ "${#_own}" -gt "${PRESENTER_OWNER_MAX}" ]]; then
             log "REFUSING ${n}: presenter owner longer than ${PRESENTER_OWNER_MAX} chars breaks the 38-char IAM name_prefix cap"
             exit 2
         fi
@@ -2523,7 +2529,7 @@ cmd_routes() {
             emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         done
         # Presenter student clusters (#208): <owner>-student, from their own state files.
-        for state in "${STATE_DIR}"/${PRESENTER_PREFIX}-*.tfstate; do
+        for state in "${STATE_DIR}"/watch-it-burn-*-${PRESENTER_SUFFIX}.tfstate; do
             [[ -e "${state}" ]] || continue
             name="$(basename "${state}" .tfstate)"
             provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue

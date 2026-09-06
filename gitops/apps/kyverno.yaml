@@ -9,7 +9,7 @@ metadata:
     # Server-side diff (#254): the chart's CRDs carry defaults the API server strips (labels: {} and
     # more), and the client-side comparison flagged every CRD OutOfSync forever even with the labels
     # ignored. A server-side dry run compares what the API would actually store. Verified on
-    # watch-it-burn-pres-michael 2026-09-06: OutOfSync to Synced within a minute of this annotation.
+    # watch-it-burn-michael-student 2026-09-06: OutOfSync to Synced within a minute of this annotation.
     argocd.argoproj.io/compare-options: ServerSideDiff=true
     argocd.argoproj.io/sync-wave: "-5"
   finalizers:
