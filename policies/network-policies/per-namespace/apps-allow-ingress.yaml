@@ -21,6 +21,11 @@ spec:
           port: 8080
         - protocol: TCP
           port: 5000
+        # The party apps serve on 80 and the console nginx (agent namespace, in-VPC) proxies the
+        # <app>-<cluster>.agenticburn.com hostnames to them (#233). Without 80 here every party
+        # hostname on a full-profile cluster timed out behind default-deny (2026-09-06).
+        - protocol: TCP
+          port: 80
     # Also allow from kube-system for internal ingress controller routing
     - from:
         - namespaceSelector:
@@ -31,3 +36,8 @@ spec:
           port: 8080
         - protocol: TCP
           port: 5000
+        # The party apps serve on 80 and the console nginx (agent namespace, in-VPC) proxies the
+        # <app>-<cluster>.agenticburn.com hostnames to them (#233). Without 80 here every party
+        # hostname on a full-profile cluster timed out behind default-deny (2026-09-06).
+        - protocol: TCP
+          port: 80

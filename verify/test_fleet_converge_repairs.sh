@@ -90,6 +90,12 @@ printf '{"items":[{"metadata":{"name":"prometheus"},"status":{"operationState":{
 check "only the operation Running past the threshold is terminated" \
   'grep -q "patch application prometheus --type json" "${CALLS}" && ! grep -q "patch application kagent\|patch application ai-layer" "${CALLS}"'
 
+echo "== repair_failed_syncs =="
+printf '{"items":[{"metadata":{"name":"otel-operator"},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Failed"}}},{"metadata":{"name":"ai-layer-otel"},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Error"}}},{"metadata":{"name":"busy"},"operation":{"sync":{}},"status":{"sync":{"status":"OutOfSync"},"operationState":{"phase":"Failed"}}},{"metadata":{"name":"fine"},"status":{"sync":{"status":"Synced"},"operationState":{"phase":"Failed"}}}]}' >"${T}/apps.json"
+: >"${CALLS}"; src 'repair_failed_syncs c /dev/null'
+check "OutOfSync apps whose last operation failed get a sync operation; a Synced one and one already running do not" \
+  'grep -q "patch application otel-operator --type merge" "${CALLS}" && grep -q "patch application ai-layer-otel --type merge" "${CALLS}" && ! grep -q "patch application busy\|patch application fine" "${CALLS}"'
+
 echo "== repair_stuck_pods =="
 printf '{"items":[{"metadata":{"namespace":"datadog","name":"datadog-agent-old","deletionTimestamp":"%s"}},{"metadata":{"namespace":"agent","name":"console-new","deletionTimestamp":"%s"}},{"metadata":{"namespace":"agent","name":"console-live"}}]}' "$old" "$new" >"${T}/pods.json"
 : >"${CALLS}"; src 'repair_stuck_pods c /dev/null'
@@ -107,6 +113,8 @@ check "a failing datadog-orgs verifier is recorded as <name>:datadog-orgs" 'grep
 
 echo "== wiring =="
 check "converge_one runs repair_one" 'grep -q "^    repair_one \"\${name}\" \"\${kcfg}\" \"\${acct_profile}\"" "${FLEET}"'
+check "repair_one includes repair_failed_syncs" 'grep -q "^    repair_failed_syncs \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
+check "converge instructors skips roster slots with no state" 'grep -q "not provisioned, skipping" "${FLEET}"'
 check "up ends with a converge pass over what it built" 'grep -q "repair-and-verify pass over" "${FLEET}"'
 check "the post-up wait and verify iterate the PROVISION_SPEC names, never the register arguments" \
   'grep -q "wait_for_console_lbs \"\${built\[@\]}\"" "${FLEET}" && grep -q "for _n in \"\${built\[@\]}\"" "${FLEET}" && ! grep -q "wait_for_console_lbs \"\$@\"" "${FLEET}"'

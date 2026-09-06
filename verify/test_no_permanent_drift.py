@@ -57,6 +57,16 @@ for mf in sorted((REPO / "gitops/manifests").rglob("*.yaml")):
         check(f"{mf.relative_to(REPO)} {d['metadata']['name']}: every container has readiness and liveness probes",
               all("readinessProbe" in c and "livenessProbe" in c for c in cs))
 
+print("== every apps-namespace Service port is admitted by the apps ingress policy ==")
+pol = docs(REPO / "policies/network-policies/per-namespace/apps-allow-ingress.yaml")[0]
+allowed = {int(pp["port"]) for rule in pol["spec"]["ingress"] for pp in rule.get("ports", [])}
+for mf in sorted((REPO / "gitops/manifests").rglob("*.yaml")):
+    for d in docs(mf):
+        if d.get("kind") != "Service" or d["metadata"].get("namespace") != "apps":
+            continue
+        ports = {int(pp.get("targetPort", pp["port"])) for pp in d["spec"]["ports"] if str(pp.get("targetPort", pp["port"])).isdigit()}
+        check(f"{mf.relative_to(REPO)} {d['metadata']['name']}: target ports {sorted(ports)} allowed by allow-ingress-controller", ports <= allowed)
+
 print("== the kyverno app ignores the CRD labels its chart renders empty ==")
 k = docs(REPO / "gitops/apps/kyverno.yaml")[0]
 ign = k["spec"].get("ignoreDifferences", [])

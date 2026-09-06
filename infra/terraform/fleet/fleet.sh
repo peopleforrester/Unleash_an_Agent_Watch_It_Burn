@@ -724,9 +724,26 @@ verify_one() {
     fi
 }
 
+# Argo CD's automated sync retries a failed operation five times and then waits for a NEW revision.
+# A chart app whose revision is the chart version never gets one, so an app whose sync failed while a
+# dependency was down (otel-operator behind cert-manager's webhook, 2026-09-06) stays Failed forever.
+# Creating the operation is what the CLI's 'app sync' does; this does the same for OutOfSync apps whose
+# last operation ended in Failed or Error and nothing is running.
+repair_failed_syncs() {
+    local name="$1" kcfg="$2" apps a
+    apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)" || return 0
+    while read -r a; do
+        [[ -n "${a}" ]] || continue
+        log "  ${name}: re-triggering sync of ${a} (last operation failed, revision unchanged)"
+        KUBECONFIG="${kcfg}" kubectl -n argocd patch application "${a}" --type merge \
+            -p '{"operation":{"initiatedBy":{"username":"fleet-converge"},"sync":{"prune":true}}}' >/dev/null 2>&1 || true
+    done < <(jq -r '.items[] | select(.status.sync.status=="OutOfSync" and (.status.operationState.phase=="Failed" or .status.operationState.phase=="Error") and (.operation == null)) | .metadata.name' <<<"${apps}" 2>/dev/null)
+}
+
 repair_one() {
     local name="$1" kcfg="$2" acct="$3"
     repair_stuck_syncs "${name}" "${kcfg}"
+    repair_failed_syncs "${name}" "${kcfg}"
     repair_stuck_pods "${name}" "${kcfg}"
     repair_datadog "${name}" "${kcfg}" "${acct}"
     verify_one "${name}" "${kcfg}" "${acct}"
@@ -1892,7 +1909,11 @@ cmd_converge() {
         local entry nm rnd
         for entry in "${INSTRUCTORS[@]}"; do
             nm="${entry%%|*}"; rnd="$(round_of_instructor_name "${nm}")"
-            [[ -z "${round_filter}" || "${rnd}" == "${round_filter}" ]] && all+=("${nm}")
+            [[ -z "${round_filter}" || "${rnd}" == "${round_filter}" ]] || continue
+            # A roster slot with no state was never provisioned (the unowned third slot per round); it
+            # is not an unreachable cluster and must not count against the verdict.
+            [[ -f "${STATE_DIR}/${nm}.tfstate" ]] || { log "  ${nm}: not provisioned, skipping"; continue; }
+            all+=("${nm}")
         done
         [[ "${#all[@]}" -gt 0 ]] || { log "converge: no roster clusters match round '${round_filter}'"; exit 2; }
         # Roster clusters resolve their account by round, so the account list this run touches is theirs.
