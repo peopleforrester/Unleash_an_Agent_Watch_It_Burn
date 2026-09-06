@@ -54,7 +54,7 @@ namespaces/
 The root `bootstrap/app-of-apps.yaml` is applied once manually:
 
 ```bash
-kubectl apply -f gitops/bootstrap/app-of-apps.yaml
+kubectl apply -f gitops/bootstrap/full/app-of-apps.yaml
 ```
 
 After this, ArgoCD manages everything. No more `kubectl apply` is needed.

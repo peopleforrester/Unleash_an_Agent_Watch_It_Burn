@@ -184,7 +184,7 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
 ### Cluster topology
 - **Independent per-student clusters.** Each student gets their **own standalone EKS cluster**, take-home,
   running its **own in-cluster ArgoCD** that reconciles itself from Git
-  (`gitops/bootstrap/app-of-apps.yaml`, destination the local cluster `kubernetes.default.svc`). There is
+  (`gitops/bootstrap/full/app-of-apps.yaml`, destination the local cluster `kubernetes.default.svc`). There is
   no hub cluster and no central ArgoCD managing other clusters. The facilitator/presenter cluster and the
   burn clusters are simply more independent clusters of the same shape. Per-attendee clusters are named
   `watch-it-burn-attendee-<id>`. This matches the sister Packt repo (one cluster per student, in-cluster ArgoCD).

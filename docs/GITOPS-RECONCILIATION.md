@@ -17,7 +17,7 @@ the revised BUILD-SPEC / SIZING. The rest of this doc is retained as the record 
 GitOps is the single source of truth. The canonical deployment is the app-of-apps:
 
 ```
-gitops/bootstrap/app-of-apps.yaml  ->  gitops/apps/*.yaml  ->  { policies/, security/, gitops/, backstage/k8s, observability-idp/ }
+gitops/bootstrap/full/app-of-apps.yaml  ->  gitops/apps/*.yaml  ->  { policies/, security/, gitops/, backstage/k8s, observability-idp/ }
 ```
 
 ArgoCD owns every resource. Nothing the cluster needs at steady state is applied by an

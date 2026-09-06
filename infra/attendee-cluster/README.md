@@ -5,7 +5,7 @@
 
 One **independent EKS cluster per attendee** (no vCluster, no hub-and-spoke). Each cluster runs the
 full per-attendee IDP and its **own in-cluster ArgoCD**, which reconciles the cluster from Git
-(`gitops/bootstrap/app-of-apps.yaml`, destination `kubernetes.default.svc`). An attendee takes their
+(`gitops/bootstrap/full/app-of-apps.yaml`, destination `kubernetes.default.svc`). An attendee takes their
 cluster home and it keeps working, because nothing depends on a central control plane.
 
 > **Provisioning is Terraform.** This doc is the *model*; the IaC lives in `infra/terraform/`

@@ -2,7 +2,7 @@
 
 # SIZING, Nodes, Cost, and the LLM Guard Footprint Decision
 
-Architecture (BUILD-SPEC rev4): **independent, standalone EKS cluster per student.** Each student gets their own take-home EKS cluster running its **own in-cluster ArgoCD** that reconciles itself from Git (`gitops/bootstrap/app-of-apps.yaml`, whose destination is the local cluster `kubernetes.default.svc`). There is no hub cluster and no central ArgoCD managing other clusters. The facilitator/presenter cluster and the demo burn clusters are simply more independent clusters of the same shape. All clusters share **one VPC** (provisioned once up front); cost and the binding AWS service quota scale with the cluster count, but networking does not, because the VPC and subnets are shared.
+Architecture (BUILD-SPEC rev4): **independent, standalone EKS cluster per student.** Each student gets their own take-home EKS cluster running its **own in-cluster ArgoCD** that reconciles itself from Git (`gitops/bootstrap/full/app-of-apps.yaml`, whose destination is the local cluster `kubernetes.default.svc`). There is no hub cluster and no central ArgoCD managing other clusters. The facilitator/presenter cluster and the demo burn clusters are simply more independent clusters of the same shape. All clusters share **one VPC** (provisioned once up front); cost and the binding AWS service quota scale with the cluster count, but networking does not, because the VPC and subnets are shared.
 
 Rationale for independent clusters (not hub-and-spoke):
 

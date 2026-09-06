@@ -45,10 +45,10 @@ Two deployment profiles, selected by `infra/deploy-full-idp.sh <profile>`:
 
 | Role | Cluster(s) | Profile | Root app | Operated as |
 |---|---|---|---|---|
-| **Cluster 1** | 3 | `burn` | `gitops/bootstrap/app-of-apps-burn.yaml` | no enforcing policies; gets wrecked; cost counter via the guard-proxy |
-| **Cluster 2** | 3 | `full` | `gitops/bootstrap/app-of-apps.yaml` | full IDP; **run with AI guards OFF** = the CNCF-only experience |
-| **Instructor Cluster 3** | 3 (one per model tier) | `full` | `gitops/bootstrap/app-of-apps.yaml` | full IDP + AI layer; each pinned to a tier (Haiku/Sonnet/Opus) for the side-by-side comparison; the Haiku one doubles as the follow-along where guards are toggled |
-| **Attendee Cluster 3** | N + reserve | `full` | `gitops/bootstrap/app-of-apps.yaml` | each attendee's own; they toggle guards |
+| **Cluster 1** | 3 | `burn` | `gitops/bootstrap/burn/app-of-apps-burn.yaml` | no enforcing policies; gets wrecked; cost counter via the guard-proxy |
+| **Cluster 2** | 3 | `full` | `gitops/bootstrap/full/app-of-apps.yaml` | full IDP; **run with AI guards OFF** = the CNCF-only experience |
+| **Instructor Cluster 3** | 3 (one per model tier) | `full` | `gitops/bootstrap/full/app-of-apps.yaml` | full IDP + AI layer; each pinned to a tier (Haiku/Sonnet/Opus) for the side-by-side comparison; the Haiku one doubles as the follow-along where guards are toggled |
+| **Attendee Cluster 3** | N + reserve | `full` | `gitops/bootstrap/full/app-of-apps.yaml` | each attendee's own; they toggle guards |
 
 C2 and C3 share the **full** deployment and differ only in operation (C2: guards stay off; C3: guards
 get toggled on via the guard-proxy `/toggle`). A stricter C2 without the AI layer at all is a possible

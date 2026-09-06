@@ -6,7 +6,7 @@ docs = [d for d in yaml.safe_load_all((REPO/"gitops/manifests/customer-stream/st
 deps = {d["metadata"]["name"]: d for d in docs if d.get("kind") == "Deployment"}
 cm = next(d for d in docs if d.get("kind") == "ConfigMap")
 gen = cm["data"]["generator.py"]
-burn = (REPO/"gitops/bootstrap/app-of-apps-burn.yaml").read_text()
+burn = (REPO/"gitops/bootstrap/burn/app-of-apps-burn.yaml").read_text()
 app = yaml.safe_load((REPO/"gitops/apps/customer-stream.yaml").read_text())
 failures = []
 def check(n, c):

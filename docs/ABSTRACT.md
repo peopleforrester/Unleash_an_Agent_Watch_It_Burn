@@ -50,7 +50,7 @@ the delivery narration should say what actually happens rather than what the lis
 |---|---|---|
 | "three rounds", "three clusters" | Eight challenges, demo-then-do, on one cluster per attendee plus the instructor round clusters | `docs/RUN-OF-SHOW-2026-08.md` |
 | "a fork bomb takes the cluster down", "a per-pod PID limit" | The fork bomb was retired (#114); Challenge 4 is denial-of-wallet, stopped by the budget cap | `gitops/ai-layer/web/lab.html`, C4 |
-| "34 components" / "35-component platform" | About 39 Argo applications on the attendee profile; say "about forty" or leave the number out | `gitops/bootstrap/app-of-apps-attendee.yaml` |
+| "34 components" / "35-component platform" | About 39 Argo applications on the attendee profile; say "about forty" or leave the number out | `gitops/bootstrap/attendee/app-of-apps-attendee.yaml` |
 | "sandboxing (as an option)" | Deferred; no sandbox in the Portland build | memory: agent sandbox deferred |
 
 The rest holds: scoped cluster access, a live terminal, the browser-only surface, the CNCF stack named,

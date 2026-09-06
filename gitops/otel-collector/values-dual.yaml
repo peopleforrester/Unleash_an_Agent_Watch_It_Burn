@@ -6,7 +6,7 @@
 # the student is looking at. Helm replaces lists rather than merging them, so every list touched here is
 # restated in full.
 #
-# Instructor clusters do NOT get this file (gitops/bootstrap/app-of-apps.yaml excludes the attendee
+# Instructor clusters do NOT get this file (gitops/bootstrap/full/app-of-apps.yaml excludes the attendee
 # Application): they already ship to the instructor org, and a second exporter with the same key would
 # double-count every metric there.
 #

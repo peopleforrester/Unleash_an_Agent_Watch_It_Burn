@@ -15,7 +15,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
    the default-deny). `infra/terraform/{lab-vpc,cluster,fleet}/`.
 2. **Kubernetes + GitOps.** Each cluster runs its **own in-cluster Argo CD** (app-of-apps + sync-waves)
    that reconciles the cluster from Git, destination the local cluster `kubernetes.default.svc`. No hub,
-   no central ArgoCD managing other clusters. `gitops/bootstrap/app-of-apps.yaml` (full) and
+   no central ArgoCD managing other clusters. `gitops/bootstrap/full/app-of-apps.yaml` (full) and
    `app-of-apps-burn.yaml` (Cluster 1, bare).
 3. **CNCF security floor (the "80%").** Kyverno (admission), Falco (runtime), NetworkPolicy
    (default-deny), External Secrets Operator, cert-manager, scoped RBAC, cosign image signing.

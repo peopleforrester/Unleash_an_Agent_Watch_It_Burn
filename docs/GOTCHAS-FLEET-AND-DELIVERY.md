@@ -184,7 +184,7 @@ the drift guard is back on `Enforce`.
 
 ## Editing app-of-apps-burn.yaml in git does nothing to a live cluster
 
-**Symptom:** you change the `directory.include` list in `gitops/bootstrap/app-of-apps-burn.yaml`, push,
+**Symptom:** you change the `directory.include` list in `gitops/bootstrap/burn/app-of-apps-burn.yaml`, push,
 promote, hard-refresh the app, and the live Application's include list is unchanged. Argo CD even reports
 `app-of-apps-burn` as **Synced at your new commit**, which makes it look like the change landed.
 
