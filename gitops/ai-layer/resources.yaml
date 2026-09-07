@@ -818,6 +818,15 @@ rules:
   - apiGroups: ["security.kubearmor.com"]
     resources: ["kubearmorpolicies"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # C8 under #317: the student asks what the stolen credential can actually do, before and after they
+  # scope it, with `kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent`. That
+  # needs impersonate on the ONE ServiceAccount the challenge is about; without it the command returns
+  # Forbidden and the clearest evidence in the workshop is unavailable. Scoped by resourceNames so the
+  # terminal cannot borrow any other identity on the cluster.
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    resourceNames: ["agent-sa"]
+    verbs: ["impersonate"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
