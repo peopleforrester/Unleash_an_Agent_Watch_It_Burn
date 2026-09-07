@@ -346,6 +346,8 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
 
           <details class="ctl"><summary>How to fix rogue image deployments</summary>
             <div class="ctlbody">
+              <p>This is a <b>supply-chain</b> problem. Nothing about the request was malformed: the agent was allowed to create Deployments, and it created one. What was missing is a rule about WHICH images may run here at all.</p>
+              <p>That rule belongs at <b>admission</b>, the moment a request reaches the cluster and before anything is scheduled. An admission controller inspects every incoming object and can refuse it outright, so a workload that breaks the rule never runs rather than being cleaned up afterwards. Several projects in the CNCF do this: <a href="https://open-policy-agent.github.io/gatekeeper/" target="_blank" rel="noopener">OPA Gatekeeper</a>, <a href="https://kubewarden.io/" target="_blank" rel="noopener">Kubewarden</a> and <a href="https://kyverno.io/docs" target="_blank" rel="noopener">Kyverno</a>. This cluster runs Kyverno.</p>
               <p><b>First, look at the policy that is already on your cluster:</b></p>
               <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy restrict-image-registries -o yaml<button class="cp">copy</button></div>
               <pre class="yaml">spec:
@@ -400,6 +402,8 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
 
           <details class="ctl"><summary>How to fix filesystem snooping</summary>
             <div class="ctlbody">
+              <p>This is a <b>runtime</b> problem. The agent was allowed to run a command, and the command it ran was a perfectly ordinary read. Nothing at admission could have caught it, because nothing was created: the damage happened inside a container that was already running.</p>
+              <p>Runtime security watches what processes actually do once they are running, and it comes in two halves worth telling apart: <b>detection</b> tells you it happened, and <b>prevention</b> stops it happening. You are about to see both.</p>
               <p><b>First, see that the attack was noticed.</b> <a href="https://falco.org/docs/" target="_blank" rel="noopener">Falco</a> is <b>detection</b>: it watches what running processes do and raises an alert. It has a rule for this exact file, and it fired the moment the recipe was read. You should see at least one line from the rule <b>Recipe Snoop In Agent Namespace</b>, naming the recipe file (if nothing shows, wait ten seconds and rerun):</p>
               <div class="cmd" onclick="cp(this)">kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=200 | grep -i "Recipe Snoop"<button class="cp">copy</button></div>
               <p>Falco's partner, <a href="https://falcosecurity.github.io/falco-talon/" target="_blank" rel="noopener">Falco-Talon</a>, <b>responded</b> by killing workshop-mcp, the tool container that ran the command, and Kubernetes started a fresh one. Look at its age: a low number means it was just replaced.</p>
@@ -488,9 +492,9 @@ if GUARDS['budget'] and spend_usd &gt;= BUDGET_CAP_USD:
 
           <details class="ctl"><summary>How to fix secret leaks in replies</summary>
             <div class="ctlbody">
-              <p>Nothing was broken into. The recipe is in a Kubernetes Secret, which is the right place for it. The agent is allowed to read Secrets in its own namespace, which it needs for real work. You asked it to use an access it already had, and it did.</p>
+              <p>Nothing was broken into. The CEO's record is in a Kubernetes Secret, which is the right place for it. The agent is allowed to read Secrets in its own namespace, which it needs for real work. You asked it to use an access it already had, and it did.</p>
 
-              <p><b>The fix is output scanning:</b> a check that reads the model's reply <i>before</i> it reaches you and redacts anything that must not be sent. It has a list of patterns for the secret parts of the recipe (the signature, the amounts, and one made-up ingredient) and redacts every match, however BurritoBot words it. Turn it on:</p>
+              <p><b>The fix is output scanning:</b> a check that reads the model's reply <i>before</i> it reaches you and redacts anything that must not be sent. It has a list of patterns for the parts that must never leave (the signature line, the address, the handling instructions) and redacts every match, however BurritoBot words it. Turn it on:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/guard-proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/toggle?output=on').read())"<button class="cp">copy</button></div>
               <p class="small">It prints the guard settings; <code class="inl">output</code> now reads <code class="inl">true</code>.</p>
               <pre class="yaml">GET /toggle?output=on        -&gt;  GUARDS['output'] = True

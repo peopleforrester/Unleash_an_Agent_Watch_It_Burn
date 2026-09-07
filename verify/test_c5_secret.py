@@ -80,6 +80,11 @@ check("the title states the goal", "leak the CEO's home address" in LAB)
 check("the goal names the Secret", NAME in LAB)
 check("the hidden prompt names the Secret", LAB.count(NAME) >= 2)
 check("the tool example names it", NAME in MCP)
+# The fix card described the recipe long after the recipe stopped being this challenge's secret, which is
+# the kind of staleness a rename leaves behind in prose rather than in code.
+check("C5's fix card describes the CEO record", "The CEO's record is in a Kubernetes Secret" in LAB)
+check("it no longer claims the recipe is the thing being protected",
+      "The recipe is in a Kubernetes Secret" not in LAB)
 
 # The tool that reads the Secret must be named for what it does. It was get_recipe, from when C5 was the
 # recipe challenge, which left a tool called get_recipe handing out a CEO's home address.
