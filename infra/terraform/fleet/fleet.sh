@@ -459,7 +459,7 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       <owner> (michael, whitney: their rounds AND their student cluster) | all | names.
 
     up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
-                      A presenter's own student cluster is watch-it-burn-pres-<owner>: same profile
+                      A presenter's own student cluster is watch-it-burn-<owner>-student: same profile
                       and controls as an attendee, NOT a pool slot, hostname <owner>-student (#208).
     up <name...>      Provision the named clusters.
     up-fleet <n>      Provision <n> clusters in EACH \${WIB_ATTENDEE_ACCOUNTS} account, all concurrent
