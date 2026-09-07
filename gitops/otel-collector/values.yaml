@@ -95,18 +95,34 @@ config:
           # the spans that carry the conversation; removing a parent leaves its children with a dangling
           # reference and can re-root them into separate entries, which is the opposite of the goal.
           # Those get measured before they are touched.
-          # Matched on a SUBSTRING, not the displayed name. Datadog renders this span's resource as
-          # "Converse Bedrock Runtime"; the OTel span name the collector sees is the AWS SDK's own
-          # shape, so an equality test against the rendered name matched nothing and the spans kept
-          # shipping (measured 2026-09-07, still present after the rule went live).
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "[Cc]onverse")'
-          # call_llm and invocation carry no content either, and they exist only to nest the spans that do.
-          # An empty parent buys two things: the turn's timing, and somewhere for the children to hang. For
-          # a student answering "what did the agent do", it buys nothing and costs a click into a blank
-          # panel. Dropped, on the understanding that the children may re-root; that is measured below and
-          # reverted if the trace reads worse than it did with them.
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "call_llm"'
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "invocation"'
+          # The rule below matched NOTHING and the spans kept shipping, which the previous comment here
+          # half-diagnosed and then repeated: it warned that Datadog renames the span, then still matched
+          # on Datadog's rendered name. The collector never sees the word "Converse" anywhere.
+          #
+          # Measured out of Tempo, 2026-09-07. The AWS SDK's span is named `chat <model>` per the GenAI
+          # semconv, and Datadog RENDERS it as "Converse Bedrock Runtime". So match the real name, and
+          # require the span to be empty, because `chat` is a legitimate GenAI operation and a future
+          # instrumentation that puts the conversation on it must not be dropped:
+          #   chat us.amazon.nova-pro-v1:0        gen_ai.input.messages absent   <- 3 of these per turn
+          #   generate_content us.amazon.nova-...  gen_ai.input.messages present  <- the conversation
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "^chat ") and attributes["gen_ai.input.messages"] == nil'
+          # call_llm and invocation were dropped here as empty parents, "on the understanding that the
+          # children may re-root; that is measured below and reverted if the trace reads worse than it did
+          # with them". It has now been measured, in the Datadog UI, and it reads worse. The trace detail
+          # opens on:
+          #
+          #   Trace contains multiple root spans
+          #   Across its root spans, this trace has 2 errors and 0 failed evaluations.
+          #
+          # and shows TWO spans, with the blocked tool call sitting in a different root of the same trace.
+          # A student who clicks their interaction gets a fragment and has to know to press "Filter to
+          # Trace" to see the rest, which is the exact failure this was meant to fix: #316, "easily find
+          # the full trace from that interaction". An empty parent costs one click into a blank panel. A
+          # missing parent costs the shape of the whole trace, so the drop is REVERTED.
+          #
+          # They do not stay blank either: transform/set_llmobs_workflow stamps
+          # gen_ai.operation.name=invoke_agent on both, so Datadog classifies them as agent spans and
+          # renders the invoke_agent -> generate_content hierarchy rather than a generic workflow.
           # guard-proxy's badge poll. read_controls() asks the Kubernetes API every few seconds whether each
           # C1/C2/C3/C7 control object exists, and a 404 IS the answer for "not installed yet" — the Python
           # catches it and renders an un-lit badge. The HTTP client instrumentation records the 404 as a
