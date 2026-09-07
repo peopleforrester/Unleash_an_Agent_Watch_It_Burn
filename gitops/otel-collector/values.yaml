@@ -86,6 +86,16 @@ config:
           # generate_content spans, which carry gen_ai.input.messages and gen_ai.output.messages.
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)( /.*)?$")'
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, " http (send|receive)$")'
+          # The AWS SDK's own span for the Bedrock call. It is a LEAF under generate_content with no
+          # gen_ai attributes and no children, so it renders as one more "No content" row per model call
+          # and tells a student nothing the parent does not. Measured 2026-09-07: a tool-using interaction
+          # is nine spans, seven of them empty, and two of those seven are this.
+          #
+          # Only the leaves are dropped here. call_llm and invocation are also empty, and are PARENTS of
+          # the spans that carry the conversation; removing a parent leaves its children with a dangling
+          # reference and can re-root them into separate entries, which is the opposite of the goal.
+          # Those get measured before they are touched.
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "Converse Bedrock Runtime"'
     transform/set_peer_service:
       error_mode: ignore
       trace_statements:
