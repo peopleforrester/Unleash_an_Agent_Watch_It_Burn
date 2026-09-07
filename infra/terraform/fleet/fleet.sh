@@ -2685,7 +2685,14 @@ cmd_routes() {
         for state in "${STATE_DIR}"/${NAME_PREFIX}-*.tfstate; do
             [[ -e "${state}" ]] || continue
             name="$(basename "${state}" .tfstate)"; n="${name##*-}"
-            provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue
+            # The account comes from the cluster's own membership record, NOT from the default account.
+            # The pool spreads across five accounts, and read_membership is what every other account-aware
+            # path already uses (the LB wait two functions up, teardown's refusal check). While this line
+            # said WIB_DEFAULT_ACCOUNT, the forty clusters built outside it were skipped without comment,
+            # so their students would have been handed a hostname that 404s (measured 2026-09-07: 10 of 50
+            # published, attendee-037 recorded in aws1-student31 and absent from the table).
+            acct="$(read_membership "${name}")"; [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"
+            provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
             [[ -n "${h}" ]] || continue
             # Memorable name first: this is the one the student is given (#142). "brave-badger" survives
@@ -2700,7 +2707,8 @@ cmd_routes() {
         for state in "${STATE_DIR}"/watch-it-burn-*-${PRESENTER_SUFFIX}.tfstate; do
             [[ -e "${state}" ]] || continue
             name="$(basename "${state}" .tfstate)"
-            provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}" || continue
+            acct="$(read_membership "${name}")"; [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"
+            provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
             h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
             [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
             printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"

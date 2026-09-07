@@ -254,6 +254,15 @@ check("the instructor routes loop publishes a host for every row, owned or not",
       '[[ -n "${owner}" ]] && printf' not in _routes and 'printf \'%s  %s:443\\n\' "$(public_host_for "${name}")"' in _routes)
 check("service subdomains are emitted for every row too",
       '[[ -n "${owner}" ]] && emit_service_hosts' not in _routes)
+# The attendee pool spreads across five accounts. The routes builder read every cluster through the
+# DEFAULT account, so the 40 built elsewhere were silently skipped and their students would have been
+# handed a hostname the router never learned (measured 2026-09-07: 10 of 50 in the table).
+_routes_all = FLEET_SH[FLEET_SH.index("cmd_routes() {"):]
+_routes_all = _routes_all[:_routes_all.index("\ncmd_", 10)] if "\ncmd_" in _routes_all[10:] else _routes_all[:14000]
+check("no routes loop reads a cluster through the default account",
+      'provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}"' not in _routes_all)
+check("the routes loops resolve each cluster's own recorded account",
+      _routes_all.count('acct="$(read_membership "${name}")"') >= 2)
 _roster = (REPO / "infra/terraform/fleet/roster.tsv").read_text(encoding="utf-8")
 _owned = [l for l in _roster.splitlines() if l.strip() and not l.startswith("#")]
 check(f"roster still carries an owner column on every row ({len(_owned)} rows)",
