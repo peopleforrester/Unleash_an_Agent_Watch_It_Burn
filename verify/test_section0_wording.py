@@ -72,6 +72,31 @@ print("== the feedback button it points at is really there ==")
 check("the top-bar button exists", re.search(r'id="fbbtn"[^>]*>&#128172; Feedback', LAB) is not None)
 check("it is at the top right, as the text says", LAB.index('id="fbbtn"') < LAB.index("Leave some feedback"))
 
+print("== Challenge 1's fix card is named and defined in her words ==")
+check("the fix caret names the fix, not 'let's fix it'",
+      "How to block data exfiltration attacks in Kubernetes" in LAB and "Now let's fix it!" not in LAB)
+check("the NetworkPolicy definition is hers", "application-centric Kubernetes construct" in FLAT)
+check("it covers traffic inside AND outside the cluster",
+      "within your cluster, and also between Pods and the outside world" in FLAT)
+# It quoted the docs and then re-explained the quote, which is two definitions where one will do.
+check("the doubled definition is gone", "a firewall rule for pods" not in LAB)
+check("the kubernetes.io link survived the rewrite",
+      "kubernetes.io/docs/concepts/services-networking/network-policies/" in LAB)
+
+print("== Challenge 2's audit section sits in the fix, before the Enforce flip ==")
+C2 = LAB[LAB.find("Challenge 2: Deploy"):LAB.find("Challenge 3: Get the secret")]
+i_fix = C2.find("How to fix rogue image deployments")
+i_audit = C2.find("Your platform saw it happen")
+i_enforce = C2.find("failureAction")
+check("the audit section is inside the fix card", i_audit > i_fix > 0)
+check("and before the Audit-to-Enforce flip", i_enforce == -1 or i_audit < i_enforce)
+check("the success line still ends the attack half", C2.find("class=\"win\"") < i_fix)
+# She asked for the policy source to go: the prose says what the rule does and the student only has to apply it.
+check("the policy YAML is no longer printed in the fix card", "- name: validate-registries" not in LAB)
+# Moving the block re-indented it, and whitespace inside <pre> renders literally.
+check("the report example is not accidentally indented",
+      "\nregistries: the internal Harbor" in LAB)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

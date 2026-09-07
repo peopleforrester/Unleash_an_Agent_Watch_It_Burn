@@ -312,12 +312,12 @@
 
           <p class="win"><b>Success!</b> You got BurritoBot to send your data out of the cluster.</p>
 
-          <details class="ctl"><summary>Now let's fix it!</summary>
+          <details class="ctl"><summary>How to block data exfiltration attacks in Kubernetes</summary>
             <div class="ctlbody">
               <p>This type of attack is called <b>data exfiltration</b>. We need to add a guardrail to stop unauthorized data from being sent outside of the cluster. One way to do this is by adding Kubernetes network policies.</p>
               <div class="where"><b>Where this guardrail runs:</b> <span class="wpt">the cluster network</span>. The CNI drops the packet. Nothing ever reaches the agent to be checked, because the agent is not the thing doing the checking.
                 <span class="wnot">BurritoBot's code, its prompt and its tools are unchanged. The platform team owns this rule.</span></div>
-              <p>The Kubernetes documentation defines them like this: "NetworkPolicies are an application-centric construct which allow you to specify how a pod is allowed to communicate with various network entities over the network." (<a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener">kubernetes.io</a>). In practice, a NetworkPolicy is a firewall rule for pods: you list what a pod is allowed to reach, and the cluster drops everything else.</p>
+              <p><a href="https://kubernetes.io/docs/concepts/services-networking/network-policies/" target="_blank" rel="noopener">NetworkPolicies</a> are an application-centric Kubernetes construct which allow you to specify how a pod is allowed to communicate with various network &ldquo;entities&rdquo;. NetworkPolicies allow you to specify rules for traffic flow within your cluster, and also between Pods and the outside world.</p>
               <p><b>First, look at what you will apply:</b></p>
               <div class="cmd" onclick="cp(this)">cat ~/challenges/c1-network-policy.yaml<button class="cp">copy</button></div>
               <p>You will be applying <b>five NetworkPolicies</b>. Here is what each of the five does:</p>
@@ -380,14 +380,6 @@ waiting on is blocked or hanging, most likely by a NetworkPolicy. Nothing was se
           <pre class="yaml">Hex &amp; Cauldron Promo Mascot v1.0 booting... loading festival cheer... PSYCH! It is the Joker.
 You deployed an unverified image and now I run on your cluster. MUAHAHA! Why so trusting about admission control?</pre>
           <p class="small"><code class="inl">festival-promo</code> turns out to be Gargamel and <code class="inl">loyalty-rewards</code> is Skeletor. Each admits what it is in its own log.</p>
-          <h3 class="sub">Your platform saw it happen</h3>
-          <p>The cluster did not miss this. Kyverno checked your villain the moment it was admitted, wrote down exactly what was wrong with it, and let it run anyway. Read its report:</p>
-          <div class="cmd" onclick="cp(this)">kubectl -n agent get policyreport -o json | jq -r '.items[] | select(.scope.name // "" | test("promo-mascot")) | .results[] | select(.result=="fail") | "\(.policy): \(.message)"' | sort -u<button class="cp">copy</button></div>
-          <p>The entry that matters here:</p>
-          <pre class="yaml">restrict-image-registries: validation error: Images must come from allowed
-registries: the internal Harbor, ghcr.io, cr.<a href="https://agentgateway.dev/docs/" target="_blank" rel="noopener">agentgateway</a>.dev, cr.kagent.dev,
-docker.io/library, registry.k8s.io, or ECR.</pre>
-          <p>That is this challenge in one line. The platform recognised the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.</p>
           <p><b>See what BurritoBot actually did.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and find the trace for the prompt you just sent. You should be able to see the model calls it made, the tools it used, and what each tool returned.</p>
           <p class="win"><b>Success!</b> You got BurritoBot to run a malicious container.</p>
 
@@ -397,21 +389,16 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
               <div class="where"><b>Where this guardrail runs:</b> <span class="wpt">the API server, at admission</span>. Kyverno is a webhook the API server calls before an object is stored, so the Deployment is refused rather than created and cleaned up.
                 <span class="wnot">BurritoBot's code, its prompt and its tools are unchanged. The platform team owns this policy.</span></div>
               <p>That rule belongs at <b>admission</b>, the moment a request reaches the cluster and before anything is scheduled. An admission controller inspects every incoming object and can refuse it outright, so a workload that breaks the rule never runs rather than being cleaned up afterwards. Several projects in the CNCF do this: <a href="https://open-policy-agent.github.io/gatekeeper/" target="_blank" rel="noopener">OPA Gatekeeper</a>, <a href="https://kubewarden.io/" target="_blank" rel="noopener">Kubewarden</a> and <a href="https://kyverno.io/docs" target="_blank" rel="noopener">Kyverno</a>. This cluster runs Kyverno.</p>
+            <h3 class="sub">Your platform saw it happen</h3>
+            <p>The cluster did not miss this. Kyverno checked your villain the moment it was admitted, wrote down exactly what was wrong with it, and let it run anyway. Read its report:</p>
+            <div class="cmd" onclick="cp(this)">kubectl -n agent get policyreport -o json | jq -r '.items[] | select(.scope.name // "" | test("promo-mascot")) | .results[] | select(.result=="fail") | "\(.policy): \(.message)"' | sort -u<button class="cp">copy</button></div>
+            <p>The entry that matters here:</p>
+            <pre class="yaml">restrict-image-registries: validation error: Images must come from allowed
+registries: the internal Harbor, ghcr.io, cr.<a href="https://agentgateway.dev/docs/" target="_blank" rel="noopener">agentgateway</a>.dev, cr.kagent.dev,
+docker.io/library, registry.k8s.io, or ECR.</pre>
+            <p>That is this challenge in one line. The platform recognised the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.</p>
               <p><b>First, look at the policy that is already on your cluster:</b></p>
               <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy restrict-image-registries -o yaml<button class="cp">copy</button></div>
-              <pre class="yaml">spec:
-  rules:
-    - name: validate-registries
-      match:
-        any: [{resources: {kinds: [Pod], namespaces: [apps, agent]}}]
-      validate:
-        failureAction: Audit          # &lt;- watching, not blocking. You flip this.
-        pattern:
-          spec:
-            containers:
-              - image: "harbor.agenticburn.com/* | ghcr.io/*
-                       | docker.io/library/* | registry.k8s.io/*
-                       | *.dkr.ecr.*.amazonaws.com/*"</pre>
               <p>This is a <b>Kyverno ClusterPolicy</b>. Kyverno is an <i>admission controller</i>: a checkpoint in front of the Kubernetes API. Every new container is checked before the cluster accepts it. If the checkpoint says no, the container never starts.</p>
               <p>What this policy says:</p>
               <ul class="small">
