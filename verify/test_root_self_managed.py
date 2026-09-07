@@ -12,7 +12,10 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 BOOT = REPO / "gitops/bootstrap"
 REPO_URL = "https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
 PROFILES = {
-    "full": {"name": "app-of-apps", "exclude": "otel-collector-attendee.yaml"},
+    # full excludes the two CHALLENGE-CONTROL apps for the same reason attendee does (#281): a presenter
+    # must start a challenge where the room starts. It differs from attendee only in which collector
+    # overlay it drops, because an instructor cluster already IS the instructor org.
+    "full": {"name": "app-of-apps", "exclude": "{network-policies,kubearmor-policies,otel-collector-attendee}.yaml"},
     "attendee": {"name": "app-of-apps-attendee", "exclude": "{network-policies,kubearmor-policies,otel-collector}.yaml"},
     "burn": {"name": "app-of-apps-burn", "include": True},
 }
