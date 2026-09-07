@@ -76,8 +76,16 @@ config:
           # the OTel env says, so a condition pinned to the new name alone would silently stop filtering
           # and the empty MCP-session traces would return (#265).
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call")'
-          # kagent's own agent-card GET server spans (the client side is dropped above).
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "GET"'
+          # kagent's own agent-card GET server spans (the client side is dropped above), and every other
+          # HTTP verb from the agent's ASGI instrumentation. Measured 2026-09-07 against the live org: 37 of
+          # 50 sampled burritobot-agent spans were POST, "POST /", DELETE, "POST / http send" or
+          # "POST / http receive". They carry http and asgi attributes and NO gen_ai attributes at all, so
+          # Datadog has no operation name to classify them by, files each as a generic workflow, and renders
+          # it in Agent Observability as "input: No content / output: No content". That is what buried a
+          # student's own hello in a list of blank rows. The conversation is unaffected: it lives on the
+          # generate_content spans, which carry gen_ai.input.messages and gen_ai.output.messages.
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)( /.*)?$")'
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, " http (send|receive)$")'
     transform/set_peer_service:
       error_mode: ignore
       trace_statements:
@@ -109,7 +117,11 @@ config:
       trace_statements:
         - context: span
           statements:
-            - set(attributes["gen_ai.operation.name"], "invoke_agent") where name == "call_llm" and IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$")
+            # "invocation" is kagent's outer wrapper. It carries gen_ai.conversation and gen_ai.task but not
+            # gen_ai.operation.name, and Datadog says so itself: "No operation was reported, so this span
+            # defaults to a generic workflow instead of being classified as an LLM, tool, retrieval, or
+            # agent span." This rule already did the right thing for call_llm and simply never matched it.
+            - set(attributes["gen_ai.operation.name"], "invoke_agent") where (name == "call_llm" or name == "invocation") and IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$")
     # Make a blocked tool call visible (#265). kagent's execute_tool span is a stub (name and id only);
     # the tool RESULT, including workshop-mcp's "command FAILED" (#261), arrives as a tool-role message in
     # the NEXT model call's gen_ai.input.messages. Marking that model span as an error is what turns the
