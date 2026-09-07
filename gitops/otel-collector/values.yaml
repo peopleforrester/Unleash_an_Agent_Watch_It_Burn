@@ -162,6 +162,29 @@ config:
           statements:
             - set(status.code, STATUS_CODE_ERROR) where attributes["gen_ai.input.messages"] != nil and IsMatch(attributes["gen_ai.input.messages"], "command FAILED")
             - set(status.message, "a tool call failed (see the tool result in this conversation)") where attributes["gen_ai.input.messages"] != nil and IsMatch(attributes["gen_ai.input.messages"], "command FAILED")
+    # The execute_tool span is NOT a stub. Measured on watch-it-burn-michael-admin, 2026-09-07, by reading
+    # the trace out of Tempo rather than out of Datadog: the span carries the full tool arguments and the
+    # full tool result, including the exfiltrated payload and the blocked curl's exact failure. ADK writes
+    # them under its own gcp.vertex.agent.* prefix instead of the OTel GenAI semconv names, so Datadog,
+    # which reads gen_ai.*, has nothing to render and shows the tool call as empty. The data was on the
+    # wire the whole time under a name nobody was looking at.
+    #
+    # This is the thing Whitney asked for as a student and could not get (#316): "see BurritoBot's tool
+    # calls and responses". Copy, never move: the ADK names stay so anything already keyed on them keeps
+    # working, and so the origin of the values remains visible.
+    transform/adk_tool_content:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - set(attributes["gen_ai.tool.call.arguments"], attributes["gcp.vertex.agent.tool_call_args"]) where attributes["gcp.vertex.agent.tool_call_args"] != nil
+            - set(attributes["gen_ai.tool.call.result"], attributes["gcp.vertex.agent.tool_response"]) where attributes["gcp.vertex.agent.tool_response"] != nil
+            # MCP reports a failed tool with isError, and the tool span itself carried no status at all, so
+            # a blocked exfiltration and a successful one looked identical on the span named after the tool.
+            # Marking it here puts the error on the span a student actually clicks, rather than only on the
+            # model call that read the result afterwards.
+            - set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "\"isError\": true")
+            - set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "\"isError\": true")
   exporters:
     prometheusremotewrite:
       endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
@@ -233,6 +256,7 @@ config:
           - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock on spans where N/A
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
           - transform/mark_tool_failure # a model call that received a failed tool result renders as an error
+          - transform/adk_tool_content # surface ADK's tool args/result under gen_ai.* so Datadog renders them
         exporters:
           - datadog      # primary
           - otlp/tempo   # secondary / fallback
