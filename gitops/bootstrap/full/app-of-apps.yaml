@@ -19,7 +19,13 @@ spec:
       directory:
         # The attendee collector dual-ships to the instructor org; an instructor cluster already IS the
         # instructor org, and a second exporter would double-count it (#242).
-        exclude: 'otel-collector-attendee.yaml'
+        # network-policies and kubearmor-policies are the C1 and C3 CHALLENGE CONTROLS, not platform
+        # baseline, so a presenter's cluster now starts in the same state as a student's and the fix step
+        # arms them. Shipping them here made rounds 2 and 3 the only clusters where the first attack was
+        # pre-blocked, and both apps run selfHeal with no ignoreDifferences, so deleting the policies to
+        # stage the attack restored them in about a second (measured on r3-3, #281): a failed demo with no
+        # visible cause. The attendee profile has always excluded exactly these two; the profiles now agree.
+        exclude: '{network-policies,kubearmor-policies,otel-collector-attendee}.yaml'
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging
       path: gitops/bootstrap/full
