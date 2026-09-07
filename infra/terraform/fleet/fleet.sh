@@ -2662,8 +2662,15 @@ cmd_routes() {
         # Single label, deliberately. The certificate is *.agenticburn.com, which covers exactly one
         # level, so michael-round1.agenticburn.com validates and roundone.michael.agenticburn.com does
         # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27.
-        [[ -n "${owner}" ]] && printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
-        [[ -n "${owner}" ]] && emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
+        # EVERY roster row gets a host, including an unassigned one. An empty owner means a shared hot
+        # spare, and a spare nobody can reach has not been proven to work: the point of holding one is to
+        # swap it in mid-workshop, which is the worst moment to discover its console never served. It is
+        # published under the name public_host_for already gives it (r1-3.agenticburn.com), so the two
+        # functions that name a cluster agree. While they did not, the acceptance pass reported three
+        # permanent failures for hosts the table was never asked to carry, which teaches everyone to read
+        # past a red line.
+        printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
+        emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
         # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
         # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one

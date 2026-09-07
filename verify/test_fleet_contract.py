@@ -243,6 +243,17 @@ check("both/all select the whole roster", "both|all )" in _ci)
 # An unowned spare (-3) belongs to nobody and must not be swept into a named presenter's set.
 check("an owner filter excludes unowned roster rows",
       '"${owner,,}" != "${owner_filter}" ]] && continue' in _ci)
+# Every roster row must reach the routes table, unassigned ones included. The instructor loop used to
+# emit a host only when the owner column was non-empty, while public_host_for named the unassigned rows
+# r1-3.agenticburn.com regardless, so the acceptance pass demanded three hosts the table never carried and
+# reported them FAILED on every single run (measured 2026-09-07: r1-3, r2-3 and r3-3, consoles serving).
+# A check that is always red is a check nobody reads.
+_routes = FLEET_SH[FLEET_SH.index("cmd_routes() {"):]
+_routes = _routes[:_routes.index("\n# Admin attendee clusters")] if "\n# Admin attendee clusters" in _routes else _routes[:8000]
+check("the instructor routes loop publishes a host for every row, owned or not",
+      '[[ -n "${owner}" ]] && printf' not in _routes and 'printf \'%s  %s:443\\n\' "$(public_host_for "${name}")"' in _routes)
+check("service subdomains are emitted for every row too",
+      '[[ -n "${owner}" ]] && emit_service_hosts' not in _routes)
 _roster = (REPO / "infra/terraform/fleet/roster.tsv").read_text(encoding="utf-8")
 _owned = [l for l in _roster.splitlines() if l.strip() and not l.startswith("#")]
 check(f"roster still carries an owner column on every row ({len(_owned)} rows)",
