@@ -32,7 +32,18 @@ spec:
         # present on all three builds per the uniform-build goal; with no KubeArmorPolicy it enforces nothing,
         # so R1 stays guardrail-free and the C3 snoop still succeeds. kubearmor-policies is OMITTED here
         # (the KubeArmorPolicy lives only in the full profile); Tetragon was retired 2026-08-30.
-        include: '{namespaces,cert-manager,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,demo-app-unicorn,demo-app-hedgehog,demo-app-spider,demo-app-wombat,demo-app-mantis-shrimp}.yaml'
+        # OBSERVABILITY IS NOT A GUARDRAIL. This profile is the one with nothing defending the agent:
+        # no Kyverno, no NetworkPolicies, no KubeArmor policy, no Falco. That stays exactly as it is.
+        # What it gains here is the ability to SEE what happens, which it had none of: it shipped no
+        # collector and had zero pods in the datadog namespace (#283), so the whole room could attack it
+        # and there would be nothing to look at afterwards. The Community phase ends by pulling up the
+        # traces together and finding someone's successful prompt by name (#303), and that is the moment
+        # the observability half of the workshop earns its place. It also puts attackme into the single
+        # shared presenter org alongside the admin clusters and the students' dual-shipped telemetry
+        # (#296). external-secrets and eso-resources come along because the Datadog key is pulled from
+        # AWS Secrets Manager; otel-operator and ai-layer-otel because the agent pod is only traced if
+        # the webhook injects it at admission.
+        include: '{namespaces,cert-manager,external-secrets,eso-resources,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,otel-operator,ai-layer-otel,otel-collector,datadog-operator,datadog-agent-cr,demo-app-unicorn,demo-app-hedgehog,demo-app-spider,demo-app-wombat,demo-app-mantis-shrimp}.yaml'
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging
       path: gitops/bootstrap/burn

@@ -73,6 +73,16 @@ done
 check "admin takes the non-dual collector (it ships to the shared org directly)" \
     '[[ "$sel_admin" == *"otel-collector-attendee"* ]]'
 
+echo "== the community cluster can be WATCHED, even though nothing defends it =="
+# Observability is not a guardrail. attackme ships no enforcement at all and must still emit telemetry,
+# or the Community phase ends with the room unable to see what it just did (#283, #296, #303).
+for app in otel-collector otel-operator ai-layer-otel datadog-operator datadog-agent-cr external-secrets; do
+    check "burn ships ${app}" '[[ "$sel_burn" == *"${app}"* ]]'
+done
+for app in kyverno falco network-policies kubearmor-policies; do
+    check "burn still ships NO ${app}" '[[ "$sel_burn" != *"${app}"* ]]'
+done
+
 echo "== the controls still EXIST to be applied as the fix =="
 # Excluding them from bootstrap must not mean deleting them: the student and the presenter both apply
 # them by hand, from the staged manifests, as the fix step.
