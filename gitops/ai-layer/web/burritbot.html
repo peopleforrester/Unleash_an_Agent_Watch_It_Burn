@@ -54,6 +54,10 @@
   .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
   /* Per-control badges: a badge APPEARS only when its control is measured ON (no grayed-out
      placeholders, #211). Driven by the /controls poll; names the actual tool the student installed. */
+  /* The community-cluster banner. Bold because its job is to stop a wrong assumption before it forms;
+     contained because it must not read as an error. */
+  .combanner{font-weight:800;font-size:13px;line-height:1.35;color:#fff;background:var(--acn,#A100FF);
+             border-radius:10px;padding:10px 12px;margin:0 0 10px}
   .badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
   .bdg{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
        border-radius:999px;padding:4px 10px;border:1px solid var(--line);background:#fff;color:var(--mid);
@@ -312,6 +316,14 @@
          "rounds" is admin-only jargon (#213). -->
     <aside class="infra">
       <div class="panelhdr">&#128295; Workshop Panel</div>
+      <!-- Shown ONLY on the community cluster (#292). The whole room shares this one bot, so someone
+           else's prompt can change what you see; on your own cluster nothing you do touches anyone.
+           Those two situations look identical on screen, and a student who assumes this is theirs reads
+           another person's answer as their bot misbehaving.
+           Deliberately ONE sentence. An earlier draft added "This is not the student BurritoBot", which
+           gives away that they will get their own cluster later, and at this point they have not been
+           told (Whitney, 2026-09-07). -->
+      <div id="communitybanner" class="combanner" hidden>This is the Community BurritoBot.</div>
       <!-- Guardrails the student has installed. A badge APPEARS only when its control is on; nothing is
            shown grayed-out, because dim placeholders telegraph how many controls exist and spoil the arc
            (Whitney, 2026-09-05, #211). The empty-state header is shown until the first control goes in. -->
@@ -391,6 +403,11 @@
   // telegraph how many controls exist and spoil the arc (Whitney, 2026-09-05, #211). The panel starts
   // empty with a header, and fills in one badge at a time as the student installs each control.
   function applyControls(c){
+    // The community cluster announces itself, driven by the host guard-proxy reports rather than anything
+    // baked into this page: the same page ships to every cluster, and a stray banner on fifty student
+    // clusters would be worse than none at all.
+    var ban=document.getElementById('communitybanner');
+    if(ban){ ban.hidden = !(c && typeof c.host === 'string' && /^attackme\./.test(c.host)); }
     var strip=document.getElementById('badges'); if(!strip) return;
     var ai    = (c && c.ai)    ? c.ai    : (c || {});
     var infra = (c && c.infra) ? c.infra : {};

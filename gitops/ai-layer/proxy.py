@@ -651,7 +651,11 @@ class Handler(BaseHTTPRequestHandler):
             # every badge from a single poll.
             with _guard_lock:
                 ai = dict(GUARDS)
-            self._send(200, {"ai": ai, "infra": read_controls()})
+            # "host" tells the page which cluster answered. The community cluster is shared by the
+            # whole room, and a student who does not know that reads someone else's prompt as their
+            # own bot misbehaving (#292). Carried on the poll the badges already make.
+            self._send(200, {"ai": ai, "infra": read_controls(),
+                             "host": os.environ.get("WIB_PUBLIC_HOST", "")})
             return
         if self.path.startswith("/toggle"):
             # Runtime flip, no restart, no spec change. Keys: input_blocklist, input_classifier, output.

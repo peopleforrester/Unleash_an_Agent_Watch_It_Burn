@@ -538,6 +538,12 @@ spec:
             # what creates the guard-proxy -> agentgateway -> kagent Service Map chain (PRD #27). guard-proxy
             # derives peer.service from this host, so the CLIENT span correctly names "agentgateway".
             - { name: AGENT_URL, value: "http://agentgateway.agent.svc.cluster.local:3000" }
+            # This cluster's public hostname, so /controls can say WHICH cluster answered. The community
+            # cluster is shared by the whole room and must announce itself; a student's own cluster must
+            # not (#292). Written by infra/datadog-cluster-identity.sh. Optional, so a cluster without the
+            # ConfigMap reports no host rather than failing to start.
+            - name: WIB_PUBLIC_HOST
+              valueFrom: { configMapKeyRef: { name: cluster-identity, key: public-host, optional: true } }
             - { name: LLM_GUARD_URL, value: "http://llm-guard.agent.svc.cluster.local:8000" }
             - name: LLM_GUARD_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }
