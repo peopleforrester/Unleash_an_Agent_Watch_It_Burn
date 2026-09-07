@@ -32,7 +32,10 @@ def check(name: str, cond: bool) -> None:
         failures.append(name)
 
 
-m = re.search(r"Challenge 8: Steal the credentials.*?(?=End of Challenge 8)", LAB, re.S)
+# Bounded on the NEXT section's heading, not on an "End of Challenge 8" marker. Those markers were
+# removed at Whitney's request, and a test anchored to page decoration breaks when the decoration
+# goes, which says nothing about the thing being tested.
+m = re.search(r"Challenge 8: Steal the credentials.*?(?=Challenge 9: Tell us)", LAB, re.S)
 C8 = m.group(0) if m else ""
 FLAT = " ".join(C8.split())
 

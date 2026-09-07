@@ -56,8 +56,13 @@
      placeholders, #211). Driven by the /controls poll; names the actual tool the student installed. */
   /* The community-cluster banner. Bold because its job is to stop a wrong assumption before it forms;
      contained because it must not read as an error. */
-  .combanner{font-weight:800;font-size:13px;line-height:1.35;color:#fff;background:var(--acn,#A100FF);
-             border-radius:10px;padding:10px 12px;margin:0 0 10px}
+  /* RED, deliberately not the page accent (#335). Everything else on this page is Accenture purple:
+     the header, the send button, every card edge. A warning wearing the house colour reads as
+     branding, and this is the one element whose whole job is to say "this is not your cluster".
+     A student has two BurritoBot tabs open during the Community phase and acting on the wrong one
+     is the confusion that follows them all session. */
+  .combanner{font-weight:800;font-size:13px;line-height:1.35;color:#fff;background:#C62222;
+             border:1px solid #8E1414;border-radius:10px;padding:10px 12px;margin:0 0 10px}
   .badges{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
   .bdg{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;
        border-radius:999px;padding:4px 10px;border:1px solid var(--line);background:#fff;color:var(--mid);

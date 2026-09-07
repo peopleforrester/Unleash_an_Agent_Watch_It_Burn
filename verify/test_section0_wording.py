@@ -50,18 +50,25 @@ check("it no longer calls the trace their hello", "The newest entry is your hell
 check("the two-minute wait is stated once, not twice", FLAT.count("two minutes") == 2)
 check("the recovery advice survived", "Then BurritoBot has not been asked anything yet" in LAB)
 
-print("== the section ends with an invitation, not another step ==")
-check("there is a poke-around section", "Have a poke around" in LAB)
-check("it names the system prompt", "system prompt" in FLAT)
-check("it names the model and the cost", "which <b>model</b> it runs on" in LAB and "cost" in FLAT)
-check("it says reading the prompt is not cheating", "not cheating" in FLAT)
-check("it is marked as optional", "Nothing here is a step" in FLAT)
+print("== the poke-around section is gone, and stays gone ==")
+# She asked for ONE sentence inviting a student to explore Datadog. What shipped was two paragraphs,
+# including an argument that reading the system prompt "is not cheating" that she never asked for. Her
+# next pass cut the whole section. Same shape as the say-hello correction: the explanation outgrew the
+# instruction it served, so the instruction went with it.
+check("the poke-around section is removed", "Have a poke around" not in LAB)
+check("the not-cheating argument is gone", "not cheating" not in FLAT)
 
 print("== feedback is invited during the lab, before the longest step ==")
 check("the feedback section exists", "Leave some feedback" in LAB)
 check("it names the button as it appears", "&#128172; Feedback</b> button" in LAB)
-check("it says feedback can be given repeatedly", "as often as you like throughout the lab" in FLAT)
-check("it asks for likes and dislikes", "especially like or dislike" in FLAT)
+check("it says feedback can be given repeatedly",
+      "as often as you like throughout the course of the lab" in FLAT)
+check("it asks for likes and dislikes", "especially like or don't like" in FLAT)
+# Her wording, verbatim, including the joke. The version it replaced was mine and she cut its last line.
+check("it invites a joke or a hello from someone with nothing to say",
+      "simply say hello, or tell us a joke" in FLAT)
+check("the toad-tilla line survived", "toad-tilla chips" in FLAT)
+check("my closing line is gone", "the version we can actually act on" not in FLAT)
 # Placement is the point: after enough of the lab to have an opinion, before the step that takes longest.
 i_fb, i_dd = LAB.find("Leave some feedback"), LAB.find("Log in to Datadog")
 i_bb = LAB.find("Open BurritoBot")
@@ -96,6 +103,30 @@ check("the policy YAML is no longer printed in the fix card", "- name: validate-
 # Moving the block re-indented it, and whitespace inside <pre> renders literally.
 check("the report example is not accidentally indented",
       "\nregistries: the internal Harbor" in LAB)
+
+print("== the section-end markers are gone ==")
+# "At the end of each section it says 'End of Challenge X: blah blah blah' - remove all of those."
+check("no End of Challenge marker survives", "End of Challenge" not in LAB)
+check("no End of Section marker survives", "End of Section" not in LAB)
+check("the style went with them", ".stepend{" not in LAB)
+
+print("== Challenge 9 is a numbered step, before Reset and explore ==")
+check("it is numbered and renamed", "Challenge 9: Tell us how it went" in LAB)
+check("the old title is gone", "Tell us how that went" not in LAB)
+check("Ophelia does the asking", "Ophelia Thorn personally thanks you in advance" in FLAT)
+check("the old pacing-and-clarity copy is gone", "was the pacing right" not in FLAT)
+# Order matters: the feedback ask lands while they are still working, not after the wind-down section.
+i9, ir = LAB.find("Challenge 9: Tell us how it went"), LAB.find("Reset and explore")
+check("it comes before Reset and explore", i9 != -1 and ir != -1 and i9 < ir)
+
+print("== the instructor-screen warning comes BEFORE they are told to type ==")
+# She asked for this twice. A warning about what not to type, placed after the section that tells you to
+# type, is a warning nobody reads in time.
+ob = LAB.find("summary>Open BurritoBot")
+send = LAB.find("Send it at least one message")
+warn = LAB.find("shown on the instructor screen")
+check("the warning is inside the Open BurritoBot section", ob != -1 and warn > ob)
+check("and above the instruction to send a message", send != -1 and warn < send)
 
 print()
 if failures:

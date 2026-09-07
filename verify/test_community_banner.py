@@ -36,6 +36,11 @@ print("== the banner exists and starts hidden ==")
 check("the element is in the workshop panel", 'id="communitybanner"' in PAGE)
 check("it starts hidden, so nothing flashes before identity is known", 'class="combanner" hidden' in PAGE)
 check("it has its own style", ".combanner{" in PAGE)
+# Red, and specifically NOT the page accent. The banner is the only warning on a page that is
+# Accenture purple throughout, so matching the accent made it read as branding (#335).
+check("it is red", "background:#C62222" in PAGE)
+check("it does not wear the page accent", "background:var(--acn" not in
+      PAGE[PAGE.index(".combanner{"):PAGE.index(".combanner{") + 260])
 
 print("== it says exactly one thing ==")
 m = re.search(r'id="communitybanner"[^>]*>([^<]*)<', PAGE)
