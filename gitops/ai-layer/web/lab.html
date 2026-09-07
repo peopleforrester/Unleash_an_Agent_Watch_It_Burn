@@ -394,8 +394,8 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
 
           <details class="ctl"><summary>How to fix filesystem snooping</summary>
             <div class="ctlbody">
-              <p><b>First, see that the attack was noticed.</b> <a href="https://falco.org/docs/" target="_blank" rel="noopener">Falco</a> is <b>detection</b>: it watches what running processes do and raises an alert. It has a rule for this exact file, and it fired the moment the recipe was read. You should see at least one line naming the recipe file (if nothing shows, wait ten seconds and rerun):</p>
-              <div class="cmd" onclick="cp(this)">kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=40 | grep -i "recipe\|sensitive"<button class="cp">copy</button></div>
+              <p><b>First, see that the attack was noticed.</b> <a href="https://falco.org/docs/" target="_blank" rel="noopener">Falco</a> is <b>detection</b>: it watches what running processes do and raises an alert. It has a rule for this exact file, and it fired the moment the recipe was read. You should see at least one line from the rule <b>Recipe Snoop In Agent Namespace</b>, naming the recipe file (if nothing shows, wait ten seconds and rerun):</p>
+              <div class="cmd" onclick="cp(this)">kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=200 | grep -i "Recipe Snoop"<button class="cp">copy</button></div>
               <p>Falco's partner, Falco-Talon, <b>responded</b> by killing workshop-mcp, the tool container that ran the command, and Kubernetes started a fresh one. Look at its age: a low number means it was just replaced.</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent get pods -l app=workshop-mcp<button class="cp">copy</button></div>
               <p class="small">But the recipe was already read before the alert fired. Detection is a smoke alarm. You also need something that stops the read.</p>
@@ -457,7 +457,7 @@ if GUARDS['budget'] and spend_usd &gt;= BUDGET_CAP_USD:
               <p><b>Now run the same attack again.</b> Send that prompt a few more times. The cap is 10 cents. Once the counter passes it, BurritoBot stops answering and says the kitchen tab is frozen. The cost counter stops moving, because refused requests never reach the model. The Budget badge lights.</p>
               <p><b>Before you move on, take the cap back off.</b> The counter is already past the limit, so with the cap on BurritoBot will keep refusing, and the next challenges need it answering. This turns the cap off; the meter keeps counting:</p>
               <div class="cmd" onclick="cp(this)">guard-budget-off<button class="cp">copy</button></div>
-              <p><b>See the numbers</b> the proxy has metered:</p>
+              <p><b>See the numbers</b> the proxy has metered. The <code class="inl">cap_usd</code> it reports is the always-on safety cap for the whole cluster, a backstop so nobody runs up a real bill. It is not the ten-cent budget guard you just toggled: that one is enforced only while the guard is on, and it is what refused your requests a moment ago.</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/guard-proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/cost').read())"<button class="cp">copy</button></div>
             </div>
           </details>
@@ -645,7 +645,7 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
           <h3 class="sub">Try breaking a control and watch it come back</h3>
           <p><b>Argo CD</b> keeps this cluster matching what is checked into Git. If something drifts, it puts it back. Try deleting the guard-proxy, the checkpoint in front of BurritoBot's model:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete deploy guard-proxy; kubectl -n agent get deploy guard-proxy -w<button class="cp">copy</button></div>
-          <p class="small">It is back within seconds. You have full admin rights here and you still could not keep it deleted. Press Ctrl+C to stop watching.</p>
+          <p class="small"><b>Your delete is refused outright.</b> A Kyverno policy, <code class="inl">block-argocd-drift</code>, denies UPDATE and DELETE on anything Argo CD manages, so the request never reaches the cluster and the deployment never goes away. Had it got through, Argo CD would have put it back within seconds anyway. That is two independent layers, and you hold cluster-admin against both. Press Ctrl+C to stop watching.</p>
           <p>Three layers stand behind that. BurritoBot's own account is not allowed to delete Deployments at all. An account that is allowed still gets rejected by a Kyverno policy, because only Argo CD may change the things Argo CD manages. And if anything gets past both, Argo CD restores it within seconds. Look at the policy:</p>
           <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy block-argocd-drift -o yaml<button class="cp">copy</button></div>
 
