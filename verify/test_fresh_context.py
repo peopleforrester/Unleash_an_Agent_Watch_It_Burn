@@ -61,6 +61,25 @@ check("the button carries the same fact", 'title="Start a new conversation.' in 
 check("the button says a refresh is not a reset",
       re.search(r'title="[^"]*refresh does not do this', PAGE) is not None)
 
+print("== Challenge 1 tells them to reset at the point it matters ==")
+# Measured on watch-it-burn-michael-admin, 2026-09-07/08, 10 different prompts written without reference to
+# the system prompt:
+#   fresh conversation per attempt   15 of 20 complied   83%
+#   one conversation, after the in-chat refusal the lab itself asks for   0 of 10 complied   0%
+# The lab was instructing every student to poison their own context before the real attempt, which is what
+# made Challenge 1 look unwinnable (#321). The reset step is the fix and it belongs BETWEEN the two asks.
+C1 = LAB[LAB.find("Challenge 1: Exfiltrate"):LAB.find("Challenge 2: Deploy")]
+check("C1 tells the student to reset", "press &#8635; Reset before you go further" in C1)
+check("it says why: the refusal stays in the conversation", "that no stays in the conversation" in C1)
+check("it cites the measured rates", "83%" in C1 and "0%" in C1)
+check("it reassures them the prompts survive", "saved prompts stay" in C1)
+# Order is the whole point: after the chat ask that gets refused, before the exfil attempt.
+i_ask = C1.find("First, ask it for the demographic info in chat")
+i_reset = C1.find("press &#8635; Reset")
+i_exfil = C1.find("send the data somewhere instead")
+check("the reset sits after the in-chat ask", i_ask != -1 and i_reset > i_ask)
+check("and before the exfil attempt", i_exfil != -1 and i_reset < i_exfil)
+
 print("== the lab explains it before the challenges start ==")
 check("the lab has the section", "When BurritoBot refuses you, reset it" in LAB)
 check("it names the button", "↺ Reset button" in LAB)
