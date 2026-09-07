@@ -80,6 +80,25 @@ for needed in ("filter/drop_noise", "transform/mark_tool_failure", "transform/ad
 check("the ADK tool-content copy runs after the noise filter",
       traces.index("transform/adk_tool_content") > traces.index("filter/drop_noise"))
 
+print("== the lab describes what the trace actually contains ==")
+# Measured on watch-it-burn-michael-admin, 2026-09-07, after the transform went live:
+#   execute_tool run_shell           STATUS_CODE_ERROR   args = the full curl, result = "command FAILED..."
+#   execute_tool get_marketing_intel UNSET               result = the full customer data
+# The lab used to promise "a tool call to agenticburn.com/beacon", which was not what the span showed.
+LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
+check("the lab names the tool span a student should open", "execute_tool run_shell" in LAB)
+check("it says the arguments carry the stolen payload",
+      "arguments are the command the agent tried to run" in LAB)
+check("it quotes the failure the tool actually returns",
+      "most likely by a NetworkPolicy. Nothing was sent." in LAB)
+check("it contrasts the blocked call with the successful one",
+      "is not an error, and its result is the full customer data" in LAB)
+check("it says why that contrast is the point",
+      "could not tell a blocked exfiltration from a completed one" in LAB)
+# The old promise named a URL the span does not carry as its own field.
+check("the old inaccurate promise is gone",
+      "the trace shows a tool call to <code class=\"inl\">agenticburn.com/beacon</code>" not in LAB)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
