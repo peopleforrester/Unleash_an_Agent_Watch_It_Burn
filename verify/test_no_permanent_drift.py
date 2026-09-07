@@ -29,6 +29,15 @@ for root in sorted((REPO / "gitops/bootstrap").glob("*/*.yaml")):
     dirs = [s.get("directory", {}) for s in d["spec"]["sources"]]
     check(f"{root.parent.name}: no 'recurse: false' (default; live never carries it)", all("recurse" not in x for x in dirs))
 
+print("== every root ignores the finalizers a chart adds to its child Applications ==")
+for root in sorted((REPO / "gitops/bootstrap").glob("*/*.yaml")):
+    d = docs(root)[0]
+    ign = d["spec"].get("ignoreDifferences", [])
+    check(f"{root.parent.name}: ignores Application /metadata/finalizers",
+          any(i.get("kind") == "Application" and "/metadata/finalizers" in i.get("jsonPointers", []) for i in ign))
+    check(f"{root.parent.name}: RespectIgnoreDifferences is set",
+          "RespectIgnoreDifferences=true" in d["spec"]["syncPolicy"].get("syncOptions", []))
+
 print("== every Kyverno validate rule states the defaults the webhook writes back ==")
 for pol in sorted(list((REPO / "policies/kyverno").glob("*.yaml")) + list((REPO / "policies/floor").glob("*.yaml"))):
     for d in docs(pol):

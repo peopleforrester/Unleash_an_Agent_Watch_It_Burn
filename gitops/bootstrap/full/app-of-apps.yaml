@@ -26,10 +26,20 @@ spec:
   destination:
     server: https://kubernetes.default.svc
     namespace: argocd
+  # Kyverno's chart adds its own pre-delete finalizers to the Application at runtime, which git can never
+  # match, so every root reported OutOfSync forever on a difference nobody can fix (#265). Ignored, and
+  # RespectIgnoreDifferences so a sync does not try to strip them either.
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jsonPointers:
+        - /metadata/finalizers
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
     retry:
       limit: 5
       backoff:
