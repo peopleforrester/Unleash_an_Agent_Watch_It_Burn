@@ -78,6 +78,18 @@ check("it says base64 is not encryption", "not encryption and is not protection"
 check("it links that to Challenge 5's guard", "output guard from Challenge 5 stayed silent" in FLAT)
 check("it names the secrets that come back", "student-aws-creds" in C8 and "terminal-auth" in C8)
 
+print("== the two answers are the ones the cluster actually gives ==")
+# Measured on watch-it-burn-michael-admin, 2026-09-07, from inside the real student terminal pod:
+#   before  secrets  []  []                       [get list]
+#   after   secrets  []  [ceo-personal-record]    [get]
+# The lab said [get list watch] before this was checked, which is the kind of plausible detail that
+# survives review and fails in front of a room.
+check("the before row is quoted as measured", "[get list]</code>, with an empty Resource Names column" in C8)
+check("the applied Role produces the after row", 'resourceNames: ["ceo-personal-record"]' in RES)
+# kubectl apply on a Role it did not create warns about a missing annotation. Students will see it.
+check("the harmless apply warning is explained", "last-applied-configuration" in C8)
+check("the line that matters is named", "workshop-agent configured" in C8)
+
 print("== the fix is measured, not described ==")
 check("the after-check is the same command", "Same command, same credential" in FLAT)
 check("it says what changed in the row", "<code class=\"inl\">list</code> is gone" in C8)
