@@ -1,5 +1,5 @@
 <!-- ABOUTME: Round-3 student lab page (B5/B12). Katacoda/KodeKloud split: student instructions on the
-     ABOUTME: left, the in-browser ttyd shell embedded on the right. Student audience only, no attack spoilers. -->
+     ABOUTME: left, the in-browser <a href="https://github.com/tsl0922/ttyd" target="_blank" rel="noopener">ttyd</a> shell embedded on the right. Student audience only, no attack spoilers. -->
 <!doctype html>
 <html lang="en" data-vtt-page="lab">
 <head>
@@ -190,7 +190,7 @@
           <details class="ctl"><summary>Open BurritoBot</summary>
             <div class="ctlbody">
               <p>There is a BurritoBot button at the top right of this page. Press it.</p>
-              <p>It opens in a new browser tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. <b>Send it a message.</b> Anything will do: <i>hello</i>, <i>good morning</i>, <i>what can you do?</i> You need at least one message before the next step, because Datadog only has something to show you once BurritoBot has actually done something. This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
+              <p>It opens in a new browser tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. <b>Send it a message.</b> Anything will do: <i>hello</i>, <i>good morning</i>, <i>what can you do?</i> You need at least one message before the next step, because <a href="https://docs.datadoghq.com/" target="_blank" rel="noopener">Datadog</a> only has something to show you once BurritoBot has actually done something. This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
             </div>
           </details>
           <details class="ctl"><summary>Log in to Datadog</summary>
@@ -278,10 +278,10 @@
                 <li><b>agent-egress-allowlist</b> &mdash; the <i>default-deny</i>: block ALL outbound traffic from the agent, except to your cluster's own private network. "Default-deny" just means "nothing is allowed unless a later rule allows it."</li>
                 <li><b>agent-allow-dns</b> &mdash; lets the agent look up names (DNS). Without this it cannot resolve any address at all.</li>
                 <li><b>agent-allow-otel-egress</b> &mdash; lets it keep sending traces to Datadog.</li>
-                <li><b>agent-allow-kagent-egress</b> &mdash; lets it talk to kagent, the framework that runs BurritoBot.</li>
+                <li><b>agent-allow-kagent-egress</b> &mdash; lets it talk to <a href="https://kagent.dev/docs" target="_blank" rel="noopener">kagent</a>, the framework that runs BurritoBot.</li>
                 <li><b>agent-allow-intra-namespace</b> &mdash; lets the agent's own pods talk to each other.</li>
               </ul>
-              <p><b>Where is the model?</b> The AI model behind BurritoBot is Amazon Bedrock. The cluster reaches it over a private address inside its own network, not the public internet. So "allow the cluster's private network" is what keeps burrito-ordering working. The partner webhook is out on the public internet, which nothing in the list allows &mdash; so the exfil is dropped while the model still works.</p>
+              <p><b>Where is the model?</b> The AI model behind BurritoBot is Amazon <a href="https://docs.aws.amazon.com/bedrock/" target="_blank" rel="noopener">Bedrock</a>. The cluster reaches it over a private address inside its own network, not the public internet. So "allow the cluster's private network" is what keeps burrito-ordering working. The partner webhook is out on the public internet, which nothing in the list allows &mdash; so the exfil is dropped while the model still works.</p>
               <p class="small">That is why it is five policies and not one: the default-deny alone would also cut DNS and the path to the model and break the agent. The four allows put back exactly what it legitimately needs, and nothing else.</p>
 
               <p><b>Apply it:</b></p>
@@ -333,7 +333,7 @@ You deployed an unverified image and now I run on your cluster. MUAHAHA! Why so 
           <div class="cmd" onclick="cp(this)">kubectl -n agent get policyreport -o json | jq -r '.items[] | select(.scope.name // "" | test("promo-mascot")) | .results[] | select(.result=="fail") | "\(.policy): \(.message)"' | sort -u<button class="cp">copy</button></div>
           <p>The entry that matters here:</p>
           <pre class="yaml">restrict-image-registries: validation error: Images must come from allowed
-registries: the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
+registries: the internal Harbor, ghcr.io, cr.<a href="https://agentgateway.dev/docs/" target="_blank" rel="noopener">agentgateway</a>.dev, cr.kagent.dev,
 docker.io/library, registry.k8s.io, or ECR.</pre>
           <p>That is this challenge in one line. The platform recognised the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.</p>
           <p><b>See what BurritoBot actually did.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and find the trace for the prompt you just sent. You should be able to see the model calls it made, the tools it used, and what each tool returned.</p>
@@ -396,7 +396,7 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
             <div class="ctlbody">
               <p><b>First, see that the attack was noticed.</b> <a href="https://falco.org/docs/" target="_blank" rel="noopener">Falco</a> is <b>detection</b>: it watches what running processes do and raises an alert. It has a rule for this exact file, and it fired the moment the recipe was read. You should see at least one line from the rule <b>Recipe Snoop In Agent Namespace</b>, naming the recipe file (if nothing shows, wait ten seconds and rerun):</p>
               <div class="cmd" onclick="cp(this)">kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=200 | grep -i "Recipe Snoop"<button class="cp">copy</button></div>
-              <p>Falco's partner, Falco-Talon, <b>responded</b> by killing workshop-mcp, the tool container that ran the command, and Kubernetes started a fresh one. Look at its age: a low number means it was just replaced.</p>
+              <p>Falco's partner, <a href="https://falcosecurity.github.io/falco-talon/" target="_blank" rel="noopener">Falco-Talon</a>, <b>responded</b> by killing workshop-mcp, the tool container that ran the command, and Kubernetes started a fresh one. Look at its age: a low number means it was just replaced.</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent get pods -l app=workshop-mcp<button class="cp">copy</button></div>
               <p class="small">But the recipe was already read before the alert fired. Detection is a smoke alarm. You also need something that stops the read.</p>
 
@@ -645,7 +645,7 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
           <h3 class="sub">Try breaking a control and watch it come back</h3>
           <p><b>Argo CD</b> keeps this cluster matching what is checked into Git. If something drifts, it puts it back. Try deleting the guard-proxy, the checkpoint in front of BurritoBot's model:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete deploy guard-proxy; kubectl -n agent get deploy guard-proxy -w<button class="cp">copy</button></div>
-          <p class="small"><b>Your delete is refused outright.</b> A Kyverno policy, <code class="inl">block-argocd-drift</code>, denies UPDATE and DELETE on anything Argo CD manages, so the request never reaches the cluster and the deployment never goes away. Had it got through, Argo CD would have put it back within seconds anyway. That is two independent layers, and you hold cluster-admin against both. Press Ctrl+C to stop watching.</p>
+          <p class="small"><b>Your delete is refused outright.</b> A Kyverno policy, <code class="inl">block-argocd-drift</code>, denies UPDATE and DELETE on anything <a href="https://argo-cd.readthedocs.io/en/stable/" target="_blank" rel="noopener">Argo CD</a> manages, so the request never reaches the cluster and the deployment never goes away. Had it got through, Argo CD would have put it back within seconds anyway. That is two independent layers, and you hold cluster-admin against both. Press Ctrl+C to stop watching.</p>
           <p>Three layers stand behind that. BurritoBot's own account is not allowed to delete Deployments at all. An account that is allowed still gets rejected by a Kyverno policy, because only Argo CD may change the things Argo CD manages. And if anything gets past both, Argo CD restores it within seconds. Look at the policy:</p>
           <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy block-argocd-drift -o yaml<button class="cp">copy</button></div>
 
