@@ -1527,9 +1527,16 @@ register_with_provisioning() {
 
 # A small adapter so the attendee path can pass its name list to the shared helper, which expects one
 # ingest function. Registers each provisioned attendee cluster in the default account.
+# The pool spreads across WIB_ATTENDEE_ACCOUNTS, so an attendee cluster's account is the one its
+# membership file records, never the default. While this passed WIB_DEFAULT_ACCOUNT, ingest_one looked
+# for every cluster in accen-dev, did not find the ones built elsewhere, and registered nothing for them:
+# a student handed that slot could not claim it. Measured 2026-09-07 on attendee-002 (aws1-student31).
 _ingest_attendee_names() {
-    local _n
-    for _n in "$@"; do ingest_one "${_n}" "${WIB_DEFAULT_ACCOUNT}"; done
+    local _n _a
+    for _n in "$@"; do
+        _a="$(read_membership "${_n}" 2>/dev/null || true)"; [[ -n "${_a}" ]] || _a="${WIB_DEFAULT_ACCOUNT}"
+        ingest_one "${_n}" "${_a}"
+    done
 }
 
 cmd_up() {
@@ -2594,7 +2601,11 @@ cmd_ingest() {
         local name rnd acct
         for name in "$@"; do
             rnd="$(round_of_instructor_name "${name}")"
-            if [[ -n "${rnd}" ]]; then acct="$(account_for_round "${rnd}")"; else acct="${WIB_DEFAULT_ACCOUNT}"; fi
+            # An attendee name resolves through its membership record for the same reason a roster name
+            # resolves through its round: neither is necessarily in the default account. The retry loop
+            # at the bottom of this function already did this; this branch did not.
+            if [[ -n "${rnd}" ]]; then acct="$(account_for_round "${rnd}")"
+            else acct="$(read_membership "${name}" 2>/dev/null || true)"; [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"; fi
             ingest_one "${name}" "${acct}"
         done
     fi

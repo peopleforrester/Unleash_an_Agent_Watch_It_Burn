@@ -263,6 +263,17 @@ check("no routes loop reads a cluster through the default account",
       'provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}"' not in _routes_all)
 check("the routes loops resolve each cluster's own recorded account",
       _routes_all.count('acct="$(read_membership "${name}")"') >= 2)
+# Registration has the same account problem routes had, and a worse consequence: an attendee cluster
+# that is not registered cannot be CLAIMED, so the student holding that slot never gets in. Both ingest
+# call sites passed WIB_DEFAULT_ACCOUNT for attendee names while the pool spans five accounts.
+_ing = FLEET_SH[FLEET_SH.index("_ingest_attendee_names() {"):]
+_ing = _ing[:_ing.index("\n}") + 2]
+check("the provision-time ingest resolves each attendee's recorded account",
+      "read_membership" in _ing and 'ingest_one "${_n}" "${WIB_DEFAULT_ACCOUNT}"' not in _ing)
+_ci2 = FLEET_SH[FLEET_SH.index("cmd_ingest() {"):]
+_ci2 = _ci2[:_ci2.index("\ncmd_") if "\ncmd_" in _ci2[10:] else 6000]
+check("ingest by name does not assume the default account for an attendee",
+      'else acct="${WIB_DEFAULT_ACCOUNT}"; fi' not in _ci2)
 _roster = (REPO / "infra/terraform/fleet/roster.tsv").read_text(encoding="utf-8")
 _owned = [l for l in _roster.splitlines() if l.strip() and not l.startswith("#")]
 check(f"roster still carries an owner column on every row ({len(_owned)} rows)",
