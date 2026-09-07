@@ -1110,7 +1110,7 @@ _provision_spec_fleet() {
     # The clusters this run built are PROVISION_SPEC's keys. "$@" is the registration argument list,
     # which for 'instructors up <owner>' is an owner name, not a cluster: the first live run after #251
     # waited ten minutes for a console named "" and then verified a cluster called "michael".
-    local built=("${!PROVISION_SPEC[@]}")
+    local built=("${!PROVISION_SPEC[@]}") _spec_rc=0
     if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
         wait_for_console_lbs "${built[@]}" || true
         cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
@@ -1129,8 +1129,12 @@ _provision_spec_fleet() {
         report_failures || true
         # ACCEPTANCE is the last word of a build. Provisioning summaries have reported success while
         # nobody could claim a cluster (2026-09-07: "48 ok, 0 FAILED", 38 unregistered).
-        cmd_verify "${built[@]}" || log "verify: FAILURES above; the fleet is NOT ready"
+        # The acceptance result IS the return value of a build. It used to be swallowed by this `||`, so
+        # `up <names>` reported success no matter what verify found, which is the failure mode the
+        # comment above was written about.
+        cmd_verify "${built[@]}" || { _spec_rc=1; log "verify: FAILURES above; the fleet is NOT ready"; }
     fi
+    return "${_spec_rc}"
 }
 
 # Wait until every named cluster's console has a load balancer hostname, so the routes step that follows
@@ -1811,8 +1815,13 @@ cmd_instructors() {
     done
     [[ "${#PROVISION_SPEC[@]}" -gt 0 ]] || { log "no roster clusters for the requested round(s)"; return 0; }
     log "provisioning ${#PROVISION_SPEC[@]} instructor cluster(s)..."
-    _provision_spec_fleet "the roster" cmd_ingest_instructors "${round_filter}"
+    # Keep the build's own result and return it. This used to end on the bootstrap-hints test, which is
+    # false on every normal run, so under `set -e` the verb exited 1 even after its verify reported every
+    # cluster healthy. The 03:30 run on 2026-09-07 aborted before its attendee clusters for exactly this.
+    local _rc=0
+    _provision_spec_fleet "the roster" cmd_ingest_instructors "${round_filter}" || _rc=$?
     [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
+    return "${_rc}"
 }
 
 # Instructor teardown keeps the round-grouped loop: down has no routes/register tail to share, and
