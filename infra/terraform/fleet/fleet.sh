@@ -342,6 +342,18 @@ public_host_for() {
     local name="$1" owner="${2:-}"
     if is_instructor_name "${name}"; then
         local rr; rr="$(round_of_instructor_name "${name}")"
+        # Look the owner up when the caller did not pass one, instead of falling back to the raw cluster
+        # name. That fallback produced r1-2.agenticburn.com, a host the router has never served, so any
+        # caller that was not cmd_routes computed a name that 404s: verify reported Whitney's three round
+        # consoles dead on 2026-09-07 while they were serving fine (#265). One function names a cluster.
+        if [[ -z "${owner}" ]]; then
+            local _e _nm _own
+            load_roster
+            for _e in "${INSTRUCTORS[@]}"; do
+                _nm="${_e%%|*}"; _own="${_e##*|}"
+                [[ "${_nm}" == "${name}" ]] && { owner="${_own}"; break; }
+            done
+        fi
         [[ -n "${owner}" && -n "${rr}" ]] && { printf '%s-round%s.agenticburn.com' "${owner}" "${rr}"; return 0; }
         printf '%s.agenticburn.com' "${name#watch-it-burn-}"; return 0
     fi
@@ -435,6 +447,17 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       upgrade the terminal needs is accepted. Pass --no-ws for hosts with no terminal.
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
+    scale <n>         DESIRED STATE: make exactly <n> attendee clusters exist. Creates what is missing,
+                      and with WIB_APPLY=1 destroys what is beyond <n>. Idempotent, so 10 -> 40 -> 50 is
+                      three runs of the same verb. Ends with 'verify'.
+    verify [selector] Acceptance for the clusters a selector names: console, lab page, terminal, Argo
+                      convergence, Datadog org/identity/dual-shipping. Non-zero exit if any fails, and a
+                      JSON report at logs/verify-<ts>.json (WIB_VERIFY_REPORT to place it,
+                      WIB_VERIFY_CHAT=N to also send N real prompts).
+
+    SELECTORS (every verb takes them): attendees | attendees:<n> | instructors | presenters |
+                      <owner> (michael, whitney: their rounds AND their student cluster) | all | names.
+
     up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
                       A presenter's own student cluster is watch-it-burn-pres-<owner>: same profile
                       and controls as an attendee, NOT a pool slot, hostname <owner>-student (#208).
@@ -1104,6 +1127,9 @@ _provision_spec_fleet() {
             ( TF_PROFILE="${_acct}"; converge_one "${_n}" )
         done
         report_failures || true
+        # ACCEPTANCE is the last word of a build. Provisioning summaries have reported success while
+        # nobody could claim a cluster (2026-09-07: "48 ok, 0 FAILED", 38 unregistered).
+        cmd_verify "${built[@]}" || log "verify: FAILURES above; the fleet is NOT ready"
     fi
 }
 
@@ -1383,6 +1409,58 @@ deregister_one() {
     fi
 }
 
+# ONE SELECTOR LANGUAGE for every verb, so "Whitney's clusters" is the same phrase whether you are
+# provisioning, verifying or tearing down (Michael, 2026-09-07). Prints cluster names, one per line.
+#
+#   attendees            every attendee cluster that HAS state
+#   attendees:40         attendee-001 .. attendee-040, whether or not they exist yet
+#   instructors          the nine roster clusters (rounds)
+#   presenters           every <owner>-student cluster with state
+#   michael | whitney    that owner's round clusters AND their student cluster
+#   all                  everything with state
+#   <name> ...           explicit names, expanded as before
+#
+# Selection NEVER creates or destroys; it only names. The verb decides what to do with the names.
+resolve_selector() {
+    local sel="$1" accounts n nm
+    case "${sel}" in
+        attendees)
+            find "${STATE_DIR}" -name "${NAME_PREFIX}-*.tfstate" -exec basename {} .tfstate \; 2>/dev/null | sort ;;
+        attendees:*)
+            local want="${sel#attendees:}"
+            [[ "${want}" =~ ^[0-9]+$ ]] || { log "selector '${sel}': attendees:<count>"; return 2; }
+            for n in $(seq 1 "${want}"); do printf '%s-%03d\n' "${NAME_PREFIX}" "${n}"; done ;;
+        instructors|rounds)
+            load_roster; local entry
+            for entry in "${INSTRUCTORS[@]}"; do
+                nm="${entry%%|*}"; [[ -f "${STATE_DIR}/${nm}.tfstate" ]] && printf '%s\n' "${nm}"
+            done ;;
+        presenters)
+            find "${STATE_DIR}" -name "watch-it-burn-*-${PRESENTER_SUFFIX}.tfstate" -exec basename {} .tfstate \; 2>/dev/null | sort ;;
+        all)
+            find "${STATE_DIR}" -name '*.tfstate' -exec basename {} .tfstate \; 2>/dev/null | sort ;;
+        *)
+            # An owner name selects that person's whole set: their rounds and their student cluster.
+            if [[ "${sel}" =~ ^[a-z][a-z0-9-]*$ ]] && ! [[ "${sel}" == watch-it-burn-* ]]; then
+                load_roster; local entry owner
+                for entry in "${INSTRUCTORS[@]}"; do
+                    nm="${entry%%|*}"; owner="${entry##*|}"
+                    [[ "${owner}" == "${sel}" && -f "${STATE_DIR}/${nm}.tfstate" ]] && printf '%s\n' "${nm}"
+                done
+                local st="${STATE_DIR}/$(presenter_name_for "${sel}").tfstate"
+                [[ -f "${st}" ]] && printf '%s\n' "$(presenter_name_for "${sel}")"
+            else
+                expand_names "${sel}"
+            fi ;;
+    esac
+    return 0
+}
+
+# Resolve every argument through the selector and de-duplicate, so verbs take "whitney attendees:5" etc.
+resolve_all() {
+    local a; for a in "$@"; do resolve_selector "${a}"; done | awk 'NF && !seen[$0]++'
+}
+
 cmd_deregister() {
     [[ $# -ge 1 ]] || usage
     local names n; mapfile -t names < <(expand_names "$@")
@@ -1519,7 +1597,90 @@ cmd_down() {
     fi
     # "down all" means the fleet is meant to be gone: say so with a verdict, or name what is left (#255).
     [[ "${1:-}" == "all" ]] && audit_zero
+    # A console load balancer that was not ready is a WAIT, not a verdict: at fleet scale most clusters are
+    # still resolving when the loop first reaches them. On 2026-09-07 a 58-cluster build reported "48 ok,
+    # 0 FAILED" while 38 clusters were never registered and no student could have claimed them. Retry the
+    # skipped names until they resolve or the budget is gone, and only then report a failure.
+    local attempt names
+    for attempt in $(seq 1 "${WIB_INGEST_RETRIES:-8}"); do
+        [[ -f "${FAIL_FILE}" ]] || break
+        mapfile -t names < <(grep '^ingest:' "${FAIL_FILE}" 2>/dev/null | cut -d: -f2 | sort -u)
+        [[ "${#names[@]}" -gt 0 ]] || break
+        log "ingest: ${#names[@]} cluster(s) not registered yet, retry ${attempt}/${WIB_INGEST_RETRIES:-8} in ${WIB_INGEST_BACKOFF:-45}s"
+        sleep "${WIB_INGEST_BACKOFF:-45}"
+        rm -f "${FAIL_FILE}"
+        local nm rnd acct
+        for nm in "${names[@]}"; do
+            rnd="$(round_of_instructor_name "${nm}")"
+            if [[ -n "${rnd}" ]]; then acct="$(account_for_round "${rnd}")"; else acct="$(read_membership "${nm}" 2>/dev/null || echo "${WIB_DEFAULT_ACCOUNT}")"; fi
+            ingest_one "${nm}" "${acct}"
+        done
+    done
     report_failures
+}
+
+# DESIRED STATE, not a delta. "scale 40" means "there are 40 attendee clusters when this returns",
+# whether there were 0, 10 or 50 before, and running it twice changes nothing the second time. The old
+# up-fleet <n> was per-account and shifted which account a NAME belonged to whenever n changed, so
+# 10 -> 40 rebuilt nothing consistently. Account for a NEW name is round-robin by its number; an existing
+# name keeps the account its membership file records, so growing never moves a cluster.
+cmd_scale() {
+    local want="${1:-}"
+    [[ "${want}" =~ ^[0-9]+$ ]] || { log "usage: scale <total-attendee-clusters>   (e.g. scale 40)"; exit 2; }
+    require_tools
+    local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+    local existing; mapfile -t existing < <(resolve_selector attendees)
+    local have="${#existing[@]}" n nm acct idx create=() extra=()
+    for n in $(seq 1 "${want}"); do
+        nm="$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")"
+        [[ -f "${STATE_DIR}/${nm}.tfstate" ]] || create+=("${nm}")
+    done
+    for nm in "${existing[@]}"; do
+        n="${nm##*-}"; n="$(( 10#${n} ))"
+        [[ "${n}" -le "${want}" ]] || extra+=("${nm}")
+    done
+    log "scale: ${have} attendee cluster(s) now, ${want} wanted -> create ${#create[@]}, remove ${#extra[@]}"
+    if [[ "${#extra[@]}" -gt 0 ]]; then
+        if [[ -z "${WIB_APPLY:-}" ]]; then
+            log "  REFUSING to remove ${#extra[@]} cluster(s) without WIB_APPLY=1: ${extra[*]}"
+            log "  (scaling DOWN destroys clusters and the rows students may already hold)"
+            return 2
+        fi
+        log "  removing ${#extra[@]}: ${extra[*]}"
+        cmd_down "${extra[@]}"
+    fi
+    if [[ "${#create[@]}" -eq 0 ]]; then
+        log "scale: nothing to create"
+    else
+        declare -gA PROVISION_SPEC=()
+        local bp="attendee"; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] && bp=""
+        for nm in "${create[@]}"; do
+            n="${nm##*-}"; n="$(( 10#${n} ))"
+            acct="$(read_membership "${nm}" 2>/dev/null || true)"
+            [[ -n "${acct}" ]] || { idx=$(( (n - 1) % ${#accounts[@]} )); acct="${accounts[$idx]// /}"; }
+            PROVISION_SPEC["${nm}"]="${acct}|${bp}||||"
+        done
+        log "scale: provisioning ${#create[@]} cluster(s) (max ${MAX_PARALLEL} parallel)..."
+        _provision_spec_fleet "these clusters" _ingest_attendee_names "${create[@]}"
+    fi
+    # A scale is not done until the clusters a student would open actually work.
+    [[ -n "${WIB_NO_VERIFY:-}" ]] || cmd_verify "attendees:${want}"
+}
+
+# ACCEPTANCE, not provisioning output. Answers "can the people holding these links do the workshop":
+# console, lab page, terminal auth, Argo convergence, Datadog org + identity + dual shipping, per cluster.
+# Writes a machine-readable report so two runs can be diffed instead of re-read.
+cmd_verify() {
+    local sels=("$@"); [[ "${#sels[@]}" -gt 0 ]] || sels=("all")
+    local names; mapfile -t names < <(resolve_all "${sels[@]}")
+    [[ "${#names[@]}" -gt 0 ]] || { log "verify: selector matched no clusters: ${sels[*]}"; return 2; }
+    local report="${WIB_VERIFY_REPORT:-${LOG_DIR}/verify-$(date -u +%Y%m%dT%H%M%SZ).json}"
+    mkdir -p "${LOG_DIR}"
+    log "verify: ${#names[@]} cluster(s) -> ${report}"
+    local only; only="$(printf '%s,' "${names[@]}")"; only="${only%,}"
+    local walk="${INFRA_DIR}/../verify/fleet-walkthrough.sh"
+    [[ -x "${walk}" ]] || { log "verify: missing ${walk}"; return 1; }
+    bash "${walk}" --only "${only}" --json "${report}" ${WIB_VERIFY_CHAT:+--chat ${WIB_VERIFY_CHAT}}
 }
 
 cmd_status() {
@@ -2501,8 +2662,8 @@ cmd_routes() {
         # Single label, deliberately. The certificate is *.agenticburn.com, which covers exactly one
         # level, so michael-round1.agenticburn.com validates and roundone.michael.agenticburn.com does
         # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27.
-        [[ -n "${owner}" ]] && printf '%s-round%s.agenticburn.com  %s:443\n' "${owner}" "${rr}" "${h}" >> "${tmp}"
-        [[ -n "${owner}" ]] && emit_service_hosts "${owner}-round${rr}.agenticburn.com" "${h}" >> "${tmp}"
+        [[ -n "${owner}" ]] && printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
+        [[ -n "${owner}" ]] && emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
         # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
         # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one
@@ -2623,6 +2784,8 @@ main() {
     load_roster   # populate INSTRUCTORS for every command (routes/reap/hints), not just cmd_instructors
     case "${cmd}" in
         up) cmd_up "$@" ;;
+        scale) cmd_scale "$@" ;;
+        verify) cmd_verify "$@" ;;
         routes) cmd_routes "$@" ;;
         preflight) exec "${SCRIPT_DIR}/preflight.sh" "$@" ;;
         check-tls) exec "${SCRIPT_DIR}/check-tls.sh" "$@" ;;
