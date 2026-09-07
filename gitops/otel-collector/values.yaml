@@ -108,21 +108,21 @@ config:
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "^chat ") and attributes["gen_ai.input.messages"] == nil'
           # call_llm and invocation were dropped here as empty parents, "on the understanding that the
           # children may re-root; that is measured below and reverted if the trace reads worse than it did
-          # with them". It has now been measured, in the Datadog UI, and it reads worse. The trace detail
-          # opens on:
+          # with them". Measured in the Datadog UI on 2026-09-07, and the drop is REVERTED, but be precise
+          # about what that did and did not fix.
           #
-          #   Trace contains multiple root spans
-          #   Across its root spans, this trace has 2 errors and 0 failed evaluations.
+          # The trace detail opens on "Trace contains multiple root spans ... this trace has 2 errors",
+          # shows two spans, and puts the blocked tool call in a different root of the same trace. A
+          # student who clicks their interaction gets a fragment. Restoring these two spans was tried as
+          # the fix and DID NOT resolve it: the warning is still there afterwards, so the split is not
+          # caused by the missing parents. It is between the guard-proxy spans and the kagent spans, and
+          # is tracked separately.
           #
-          # and shows TWO spans, with the blocked tool call sitting in a different root of the same trace.
-          # A student who clicks their interaction gets a fragment and has to know to press "Filter to
-          # Trace" to see the rest, which is the exact failure this was meant to fix: #316, "easily find
-          # the full trace from that interaction". An empty parent costs one click into a blank panel. A
-          # missing parent costs the shape of the whole trace, so the drop is REVERTED.
-          #
-          # They do not stay blank either: transform/set_llmobs_workflow stamps
-          # gen_ai.operation.name=invoke_agent on both, so Datadog classifies them as agent spans and
-          # renders the invoke_agent -> generate_content hierarchy rather than a generic workflow.
+          # They are restored anyway, on their own merits rather than as a fix. They are the agent's own
+          # call hierarchy, transform/set_llmobs_workflow stamps gen_ai.operation.name=invoke_agent on
+          # both so Datadog classifies them as agent spans rather than generic workflows, and an empty
+          # parent costs one click while a missing one costs the shape of the subtree.
+
           # guard-proxy's badge poll. read_controls() asks the Kubernetes API every few seconds whether each
           # C1/C2/C3/C7 control object exists, and a 404 IS the answer for "not installed yet" — the Python
           # catches it and renders an un-lit badge. The HTTP client instrumentation records the 404 as a
