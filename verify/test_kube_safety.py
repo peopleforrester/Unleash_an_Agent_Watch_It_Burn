@@ -14,15 +14,25 @@ def check(n, c):
 
 check("CLAUDE.md documents the kube-context safety rule", "Kube-context safety" in claude and "use-context" in claude)
 # No global current-context mutation in any HOST script. The rule targets the shared host
-# ~/.kube/config on this multi-tenant box; container entrypoints under images/ run with an isolated
-# in-container HOME and cannot touch shared host state, so they are out of this rule's scope.
+# ~/.kube/config on this multi-tenant box, where another session may be driving another cluster.
+#
+# A container entrypoint is exempt, but the exemption is EARNED rather than granted by path: it must
+# export its own HOME before touching contexts, which is what puts the kubeconfig it writes inside the
+# container and out of reach of anything shared. Excluding by directory instead (the previous rule
+# covered `images/` only) missed the identical second copy under gitops/ and turned a real check red for
+# four days. A path list has to be remembered; this property is visible in the file itself.
 hits = []
 for f in REPO.rglob("*.sh"):  # actual scripts only; docs may name the prohibition
-    if ".git" in str(f) or "/images/" in str(f).replace("\\", "/"):
+    if ".git" in str(f):
         continue
-    if "kubectl config use-context" in f.read_text():
-        hits.append(f.name)
-check("no `kubectl config use-context` in any host script", not hits)
+    txt = f.read_text()
+    if "kubectl config use-context" not in txt:
+        continue
+    isolated = "export HOME=" in txt and txt.index("export HOME=") < txt.index("kubectl config use-context")
+    if not isolated:
+        hits.append(str(f.relative_to(REPO)))
+check(f"no `kubectl config use-context` outside an isolated container HOME ({', '.join(hits) or 'none'})",
+      not hits)
 # Every demo script requires CONTEXT and routes kubectl through --context.
 for s in DEMO:
     txt = (REPO / s).read_text()

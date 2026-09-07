@@ -73,12 +73,17 @@ def load_credentials():
 _ENV_SOURCE = load_credentials()
 _missing = [k for k in ("DD_API_KEY", "DD_APP_KEY") if not os.environ.get(k)]
 if _missing:
-    sys.exit(
-        f"missing {', '.join(_missing)}.\n"
+    # Exit 2, the repo's SKIP code, not 1. This test queries live Datadog, so a machine without the
+    # credentials cannot run it and has not failed it. Exiting 1 made the offline render gate red for
+    # any checkout without the secrets, which trains people to ignore a red suite.
+    print(
+        f"SKIP: missing {', '.join(_missing)}.\n"
         f"  credential file searched: {_ENV_SOURCE or 'none found'}\n"
         "  put them in this repo's .env (gitignored), in ~/secrets/datadog/datadog.env, or point\n"
-        "  WITB_ENV_FILE at a file that defines them. Values live in peopleforrester/mrf-secrets."
+        "  WITB_ENV_FILE at a file that defines them. Values live in peopleforrester/mrf-secrets.",
+        file=sys.stderr,
     )
+    sys.exit(2)
 
 DD_API_KEY = os.environ["DD_API_KEY"]
 DD_APP_KEY = os.environ["DD_APP_KEY"]
