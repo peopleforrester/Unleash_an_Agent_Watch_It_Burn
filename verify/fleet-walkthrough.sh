@@ -57,6 +57,14 @@ for name in "${names[@]}"; do
             | awk '{t++; if($2=="Synced"&&$3=="Healthy")o++} END{print o+0, t+0}')
         [[ "${total}" -gt 0 ]] || issues="${issues} no-argo"
         [[ "${okc}" == "${total}" ]] || issues="${issues} argo=${okc}/${total}"
+        # 3b. nothing has pre-solved a challenge for the student. C6's success signal is a Deployment
+        # named maintenance-shell, so a rehearsal that left one behind hands the student a challenge that
+        # is already done and a pod nobody can explain in Step 0 (#285). One kubectl, and it catches the
+        # whole class of "a probe run polluted this cluster".
+        if AWS_PROFILE="${acct}" KUBECONFIG="${kc}" kubectl --context "${ctx}" -n agent get deploy \
+                maintenance-shell >/dev/null 2>&1; then
+            issues="${issues} c6-artifact-present"
+        fi
         # 4. the Datadog org, identity and dual shipping this cluster was given
         if ! AWS_PROFILE="${acct}" KUBECONFIG="${kc}" bash "${HERE}/datadog-orgs.sh" "${ctx}" "${acct}" >/dev/null 2>&1; then
             issues="${issues} datadog"

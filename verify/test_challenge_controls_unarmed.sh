@@ -95,4 +95,11 @@ check "the C1 fix manifest is still staged for the terminal" \
 check "the C3 fix manifest is still staged for the terminal" \
     'grep -q "c3-kubearmor-policy.yaml" gitops/ai-layer/resources.yaml'
 
+echo "== a rehearsal must not leave a challenge pre-solved =="
+# The probe's attacks BUILD things, and only its toggles were being restored (#285).
+PROBE="${REPO}/verify/agent_probe.py"; WALK="${REPO}/verify/fleet-walkthrough.sh"
+check "the probe removes the Deployment its C6 beat creates" 'grep -q "remove_c6_artifact" "${PROBE}"'
+check "it does so in the same restore path as the guards" 'grep -q "c6 artifact:" "${PROBE}"'
+check "the acceptance pass fails a cluster that still has one" 'grep -q "c6-artifact-present" "${WALK}"'
+
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]
