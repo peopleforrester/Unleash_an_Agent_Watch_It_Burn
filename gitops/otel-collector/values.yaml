@@ -95,7 +95,11 @@ config:
           # the spans that carry the conversation; removing a parent leaves its children with a dangling
           # reference and can re-root them into separate entries, which is the opposite of the goal.
           # Those get measured before they are touched.
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "Converse Bedrock Runtime"'
+          # Matched on a SUBSTRING, not the displayed name. Datadog renders this span's resource as
+          # "Converse Bedrock Runtime"; the OTel span name the collector sees is the AWS SDK's own
+          # shape, so an equality test against the rendered name matched nothing and the spans kept
+          # shipping (measured 2026-09-07, still present after the rule went live).
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "[Cc]onverse")'
           # call_llm and invocation carry no content either, and they exist only to nest the spans that do.
           # An empty parent buys two things: the turn's timing, and somewhere for the children to hang. For
           # a student answering "what did the agent do", it buys nothing and costs a click into a blank
