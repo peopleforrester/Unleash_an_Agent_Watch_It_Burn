@@ -107,6 +107,13 @@ config:
           # reverted if the trace reads worse than it did with them.
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "call_llm"'
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "invocation"'
+          # guard-proxy's badge poll. read_controls() asks the Kubernetes API every few seconds whether each
+          # C1/C2/C3/C7 control object exists, and a 404 IS the answer for "not installed yet" — the Python
+          # catches it and renders an un-lit badge. The HTTP client instrumentation records the 404 as a
+          # failed span first, so a cluster in its normal starting state emits a steady drip of error spans
+          # (10 in 25 minutes, measured 2026-09-07). That buries the one error that matters, a blocked tool
+          # call, and puts guard-proxy's error rate up for behaving correctly.
+          - 'IsMatch(resource.attributes["service.name"], "^burritobot$") and IsMatch(name, "^(GET|POST|PATCH)$") and (IsMatch(attributes["http.url"], "kubernetes.default.svc") or IsMatch(attributes["url.full"], "kubernetes.default.svc"))'
     transform/set_peer_service:
       error_mode: ignore
       trace_statements:
