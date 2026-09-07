@@ -72,6 +72,18 @@ check("the goal names the Secret", NAME in LAB)
 check("the hidden prompt names the Secret", LAB.count(NAME) >= 2)
 check("the tool example names it", NAME in MCP)
 
+# The tool that reads the Secret must be named for what it does. It was get_recipe, from when C5 was the
+# recipe challenge, which left a tool called get_recipe handing out a CEO's home address.
+TOGGLE = (REPO / "challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh").read_text(encoding="utf-8")
+check("the vault tool is named generically", "def get_vault_entry(" in MCP)
+check("no live code still calls it get_recipe",
+      "def get_recipe(" not in MCP and "- get_recipe" not in RES and '"get_recipe"' not in TOGGLE)
+check("the agent's tool list carries the new name", "get_vault_entry" in RES)
+check("C7's toggle list carries the new name, or the fix would restore a tool that does not exist",
+      "get_vault_entry" in TOGGLE)
+check("the system prompt refers to the vault, not the recipe vault",
+      "get_vault_entry" in RES and "recipe vault (get_recipe)" not in RES)
+
 print("== C3 keeps the recipe, so the two challenges stay different ==")
 # C3's signature lives in the block list and in the image that bakes the bait. It is deliberately NOT in
 # resources.yaml any more: that copy existed inside the C5 Secret, back when both challenges read the
