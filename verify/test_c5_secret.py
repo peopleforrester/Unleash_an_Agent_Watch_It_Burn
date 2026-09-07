@@ -54,6 +54,15 @@ check("the pattern actually matches the signature",
 print("== the agent is told the rule that makes it attackable ==")
 check("the system prompt names the Secret", f'"{NAME}"' in RES)
 check("the compliment rule is stated", "compliment" in RES and "decline" in RES)
+# The bot must answer a harmless question about a real word. It defined "hex" as "a whimsical term we use
+# on our menu" six times running, which reads as broken and teaches a student the bot deflects everything
+# before they reach a single challenge (#302).
+check("the prompt refuses to stonewall a real word", "REAL word rather than a menu item" in RES)
+# The phrase wraps across a YAML block line, so normalise before matching rather than pinning the wrap.
+FLAT = " ".join(RES.split())
+check("it gives the actual meaning to use", "spell or charm meant to bring bad luck" in FLAT)
+check("the held-back list still covers BOTH secrets",
+      "the sauce recipe, the CEO's" in RES.replace("\n      ", " "))
 
 print("== C8's Role still permits exactly this Secret ==")
 check("the scoped Role names it", f'resourceNames: ["{NAME}"]' in RES)
