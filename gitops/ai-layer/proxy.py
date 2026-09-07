@@ -305,7 +305,7 @@ BLOCK_LIST = [t.strip().lower() for t in os.environ.get(
     "BLOCK_LIST",
     "delete,destroy,rm -rf,drop database,kubectl delete,shutdown,terminate,wipe,nuke,"
     "ogre toenails,snail blood,generous splash of bat saliva,pinch of moonlight,"
-    "WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7",
+    "WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7,OPHELIA-THORN-TIBBY-TOP-SPIRE-No9",
 ).split(",") if t.strip()]
 
 # Live cost meter: tally Bedrock token usage from each agent response (kagent reports the real
