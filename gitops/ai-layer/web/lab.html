@@ -197,12 +197,24 @@
             <div class="ctlbody">
               <p>Your terminal is on the right of this page. You can't miss it. Run the command below, and see a list of running pods.</p>
               <div class="cmd" onclick="cp(this)">kubectl get pods -A<button class="cp">copy</button></div>
+              <p>Dang, that's a lot of pods.</p>
             </div>
           </details>
           <details class="ctl"><summary>Open BurritoBot</summary>
             <div class="ctlbody">
               <p>There is a BurritoBot button at the top right of this page. Press it.</p>
-              <p>It opens in a new browser tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. <b>Send it a message.</b> Anything will do: <i>hello</i>, <i>good morning</i>, <i>what can you do?</i> You need at least one message before the next step, because <a href="https://docs.datadoghq.com/" target="_blank" rel="noopener">Datadog</a> only has something to show you once BurritoBot has actually done something. This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
+              <p>It opens in a new browser tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. <b>Send it at least one message to make sure it is working.</b> <i>Hello world</i>, perhaps, or: <i>Is your guacamole made with real Ogre Snot?</i> This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
+            </div>
+          </details>
+          <!-- Before the Datadog step, deliberately (Whitney, #315). Feedback given DURING the lab, at the
+               moment something delights or annoys, is worth more than feedback given at the end when the
+               room is packing up. Putting the invitation after the first two steps means they have seen
+               enough to have an opinion, and before the longest step means they meet it while they still
+               have attention to spare. -->
+          <details class="ctl"><summary>Leave some feedback</summary>
+            <div class="ctlbody">
+              <p>Press the <b>&#128172; Feedback</b> button at the top right of this page.</p>
+              <p>You can give us the gift of feedback as often as you like throughout the lab, not just at the end. If there is something you especially like or dislike, tell us while it is fresh. That is the version we can actually act on.</p>
             </div>
           </details>
           <details class="ctl"><summary>Log in to Datadog</summary>
@@ -216,8 +228,15 @@
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddu"></span><button class="cp">copy</button></div>
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddp"></span><button class="cp">copy</button></div>
               </div>
-              <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. The newest entry is your hello. Click it: this is a <b>trace</b>, the record of what BurritoBot did with one message.</p>
-              <div class="warn">A trace can take up to two minutes to appear in Datadog, so give it a moment before you look. <b>No entries at all?</b> Then BurritoBot has not been asked anything yet. Go back to the BurritoBot tab, send it any message, wait up to two minutes, and refresh.</div>
+              <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. Within two minutes of interacting with BurritoBot you should see a trace. Click it: this is the record of what BurritoBot did with one message.</p>
+              <div class="warn"><b>No entries at all?</b> Then BurritoBot has not been asked anything yet. Go back to the BurritoBot tab, send it any message, wait up to two minutes, and refresh.</div>
+            </div>
+          </details>
+
+          <details class="ctl"><summary>Have a poke around</summary>
+            <div class="ctlbody">
+              <p>Nothing here is a step, and nothing later depends on it. While you are in Datadog, follow your nose. You can find the agent's <b>system prompt</b>, the instructions it was given before you ever typed anything, and which <b>model</b> it runs on, and what each call cost. It is all sitting on the spans you just opened.</p>
+              <p class="small">Reading the system prompt is not cheating. It is the single most useful thing you can do before attacking something, and everything you are about to try gets easier once you have.</p>
             </div>
           </details>
 
