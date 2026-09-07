@@ -238,7 +238,9 @@ print("== the roster can be sliced by presenter, not only by round ==")
 _ci = FLEET_SH[FLEET_SH.index("cmd_instructors() {"):]
 _ci = _ci[:_ci.index("\n_instructors_down")] if "\n_instructors_down" in _ci else _ci[:5000]
 check("instructors up accepts an owner as well as a round", "owner_filter" in _ci)
-check("a bare digit is still read as a round, so the old form keeps working", "[123] ) round_filter" in _ci)
+# Rounds are gone (#291). The roster carries a ROLE, so the selector takes community|admin as well as an
+# owner, and neither is ambiguous.
+check("a role selects that part of the roster", "community|admin ) role_filter" in _ci)
 check("both/all select the whole roster", "both|all )" in _ci)
 # An unowned spare (-3) belongs to nobody and must not be swept into a named presenter's set.
 check("an owner filter excludes unowned roster rows",
@@ -330,8 +332,8 @@ _conv = FLEET_SH[FLEET_SH.index("cmd_converge() {"):]
 _conv = _conv[:_conv.index("\ncmd_", 1)]
 check("converge accepts the roster", '"${1:-}" == "instructors"' in _conv and "load_roster" in _conv)
 check("converge accepts an explicit set of names", "all=(\"$@\")" in _conv)
-check("roster rounds resolve to their own accounts, not the attendee list",
-      "account_for_round" in _conv)
+check("roster clusters resolve their account by role, not by the attendee arithmetic",
+      "account_for_role" in _conv)
 # watch-it-burn-r2-1 parses as num=1 under the attendee arithmetic and would land in the first account
 # regardless of which account round 2 lives in; and a caller with no pool size divides by zero.
 check("_account_for_name resolves roster names by round",

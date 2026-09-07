@@ -1,27 +1,24 @@
-# Instructor roster (PRD 35 §4.6). Pipe-delimited:
-#   name|round|tier|instance_type|pids|bootstrap|owner
+# Instructor roster. Pipe-delimited:
+#   name|role|tier|instance_type|pids|bootstrap|owner
 #
-# OWNER is what splits the roster into per-presenter sets. Each presenter gets their own round 1, 2 and
-# 3, and provisioning shows a presenter only their own clusters rather than all nine. It is an explicit
-# column, not a convention, because "the -1 suffix means Michael" is exactly the kind of rule that lives
-# in one person's head and is wrong six weeks later. An empty owner means shared/unassigned.
+# ROLE replaced the old round number (#291). Rounds 1, 2 and 3 are gone: there is one Community cluster
+# the whole room attacks together, and one admin cluster per presenter. The role decides the bootstrap
+# profile and the public hostname, so it is data here rather than a rule someone has to remember:
 #
-# The owner also drives the friendly hostname: owner + round -> michael-round1.agenticburn.com. Note the
-# single label. The TLS certificate is *.agenticburn.com, which covers ONE level, so a nested name like
-# roundone.michael.agenticburn.com does not validate and fails to connect at all (verified 2026-08-27).
+#   community  no guardrails at all, the unguarded spectacle. Reachable at attackme.agenticburn.com.
+#              pids=-1 because Challenge 4's fork bomb has to burn an uncapped node.
+#   admin      the student build with every guardrail ARMED, so a presenter can show a control already
+#              working instead of staging an attack against it. Reachable at <owner>-admin.agenticburn.com.
+#
+# OWNER is what splits the roster per presenter. It is empty for the community cluster, which belongs to
+# the room. It also drives the hostname, so it is an explicit column rather than a convention: "the -1
+# suffix means Michael" is exactly the kind of rule that lives in one person's head and is wrong six
+# weeks later.
+#
+# Every roster cluster lives in WIB_DEFAULT_ACCOUNT. The per-round accounts went with the rounds.
 #
 # Empty column = default: tier -> gitops default (Nova); instance_type -> cluster module default;
-# pids -> module default (1024). R1 sets pids=-1 so the C4 fork bomb burns the uncapped node.
-# NOTE: the tier column is parsed + passed through, but the per-cluster model patch (§4.6-d) is NOT yet
-# wired, so every cluster currently runs the gitops default model (Nova) regardless of tier.
-# Change what the fleet provisions here (or point WIB_ROSTER_FILE elsewhere); no fleet.sh edit needed.
-# Subset a run without editing this file: WIB_ROUNDS=2,3 and/or WIB_PER_ROUND=1.
-watch-it-burn-r1-1|1|||-1|burn|michael
-watch-it-burn-r1-2|1|||-1|burn|whitney
-watch-it-burn-r1-3|1|||-1|burn|
-watch-it-burn-r2-1|2||||full|michael
-watch-it-burn-r2-2|2||||full|whitney
-watch-it-burn-r2-3|2||||full|
-watch-it-burn-r3-1|3||||full|michael
-watch-it-burn-r3-2|3||||full|whitney
-watch-it-burn-r3-3|3||||full|
+# pids -> module default (1024).
+watch-it-burn-community|community|||-1|burn|
+watch-it-burn-michael-admin|admin||||admin|michael
+watch-it-burn-whitney-admin|admin||||admin|whitney

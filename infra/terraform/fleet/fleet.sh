@@ -127,10 +127,14 @@ load_roster() {
             INSTRUCTORS+=("${line}")
         done < "${WIB_ROSTER_FILE}"
     fi
+    # The fallback MUST describe the same fleet as roster.tsv. It used to say every round was the full
+    # profile while the file said round 1 was burn, and it carried six columns where the file has seven,
+    # so a checkout without the file would have built an armed community cluster with no owner and no
+    # friendly hostname, silently (#284).
     [[ "${#INSTRUCTORS[@]}" -gt 0 ]] || INSTRUCTORS=(
-        "watch-it-burn-r1-1|1|||-1|full" "watch-it-burn-r1-2|1|||-1|full" "watch-it-burn-r1-3|1|||-1|full"
-        "watch-it-burn-r2-1|2||||full"   "watch-it-burn-r2-2|2||||full"   "watch-it-burn-r2-3|2||||full"
-        "watch-it-burn-r3-1|3||||full"   "watch-it-burn-r3-2|3||||full"   "watch-it-burn-r3-3|3||||full"
+        "watch-it-burn-community|community|||-1|burn|"
+        "watch-it-burn-michael-admin|admin||||admin|michael"
+        "watch-it-burn-whitney-admin|admin||||admin|whitney"
     )
 }
 
@@ -245,8 +249,8 @@ resolve_admin_token() {
     WIB_ADMIN_TOKEN_CACHE="${tok}"
     printf '%s' "${tok}"
 }
-WIB_ROUNDS="${WIB_ROUNDS:-}"                      # comma list of rounds to include, e.g. "2,3" (empty = all)
-WIB_PER_ROUND="${WIB_PER_ROUND:-}"               # max clusters per round (empty = all)
+WIB_ROLES="${WIB_ROLES:-}"                        # comma list of roles to include, e.g. "admin" (empty = all)
+WIB_PER_ROLE="${WIB_PER_ROLE:-}"                  # max clusters per role (empty = all)
 # Rounds run CONCURRENTLY by default (each round its own subshell so per-round vars cannot clash; the
 # single shared terraform init + isolated per-cluster -state make it safe, same as run_pool within a
 # round). Set WIB_SERIAL=1 to force the old serial round loop.
@@ -259,19 +263,11 @@ WIB_DRY_RUN="${WIB_DRY_RUN:-}"
 TF_INSTANCE_TYPES=""
 TF_TIER=""
 
-account_for_round() {
-    case "$1" in
-        1) printf '%s' "${WIB_ACCOUNT_R1}" ;;
-        2) printf '%s' "${WIB_ACCOUNT_R2}" ;;
-        3) printf '%s' "${WIB_ACCOUNT_R3}" ;;
-        *) log "bad round: $1"; exit 1 ;;
-    esac
-}
-
-# An instructor/roster cluster is watch-it-burn-r<round>-<n>, as distinct from the numbered attendee
+# An instructor/roster cluster is watch-it-burn-community or watch-it-burn-<owner>-admin (#291), as
+# distinct from the numbered attendee
 # pool (watch-it-burn-attendee-NNN). Several verbs need to tell them apart, because the attendee path
 # derives a pool slot from the trailing number and that is meaningless for the roster.
-is_instructor_name() { [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; }
+is_instructor_name() { [[ "$1" == "watch-it-burn-community" || "$1" =~ ^watch-it-burn-[a-z0-9-]+-admin$ ]]; }
 
 # --- Memorable attendee hostnames (#142) ---------------------------------------------------------
 # An attendee used to be handed a raw load-balancer hostname
@@ -341,7 +337,7 @@ friendly_attendee_name() {
 public_host_for() {
     local name="$1" owner="${2:-}"
     if is_instructor_name "${name}"; then
-        local rr; rr="$(round_of_instructor_name "${name}")"
+        local rr; rr="$(role_of_instructor_name "${name}")"
         # Look the owner up when the caller did not pass one, instead of falling back to the raw cluster
         # name. That fallback produced r1-2.agenticburn.com, a host the router has never served, so any
         # caller that was not cmd_routes computed a name that 404s: verify reported Whitney's three round
@@ -354,7 +350,10 @@ public_host_for() {
                 [[ "${_nm}" == "${name}" ]] && { owner="${_own}"; break; }
             done
         fi
-        [[ -n "${owner}" && -n "${rr}" ]] && { printf '%s-round%s.agenticburn.com' "${owner}" "${rr}"; return 0; }
+        # The community cluster is the one the whole room attacks, and it is reachable at the name the
+        # room is told: attackme. An admin cluster is its owner's, so it reads <owner>-admin.
+        [[ "${rr}" == "community" ]] && { printf 'attackme.agenticburn.com'; return 0; }
+        [[ -n "${owner}" && "${rr}" == "admin" ]] && { printf '%s-admin.agenticburn.com' "${owner}"; return 0; }
         printf '%s.agenticburn.com' "${name#watch-it-burn-}"; return 0
     fi
     # PRESENTER student clusters, driven by the same owner idea as the roster rather than by two
@@ -427,11 +426,23 @@ require_apply() {
 # without the caller having to thread the roster through.
 # Returns the round, or nothing. ALWAYS exits 0: "this is not a roster cluster" is a normal answer,
 # not a failure. Under `set -e` a helper that returns non-zero kills the caller at the assignment
-# `rnd="$(round_of_instructor_name ...)"`, with no message, which is exactly how `ingest <attendee-name>`
+# `rnd="$(role_of_instructor_name ...)"`, with no message, which is exactly how `ingest <attendee-name>`
 # silently did nothing at all.
-round_of_instructor_name() {
-    if [[ "$1" =~ ^watch-it-burn-r([123])-[0-9]+$ ]]; then printf '%s' "${BASH_REMATCH[1]}"; fi
+role_of_instructor_name() {
+    case "$1" in
+        watch-it-burn-community)       printf 'community' ;;
+        watch-it-burn-*-admin)         printf 'admin' ;;
+    esac
     return 0
+}
+# Kept as the single place that answers "which account holds a roster cluster". Every roster cluster now
+# lives in the default account: the per-round accounts existed to spread three rounds of three, and there
+# are no rounds. Callers still ask rather than assuming, so moving one later is one edit here.
+account_for_role() {
+    case "$1" in
+        community|admin) printf '%s' "${WIB_DEFAULT_ACCOUNT}" ;;
+        *) log "bad role: $1"; exit 1 ;;
+    esac
 }
 
 usage() {
@@ -1622,8 +1633,8 @@ cmd_down() {
         rm -f "${FAIL_FILE}"
         local nm rnd acct
         for nm in "${names[@]}"; do
-            rnd="$(round_of_instructor_name "${nm}")"
-            if [[ -n "${rnd}" ]]; then acct="$(account_for_round "${rnd}")"; else acct="$(read_membership "${nm}" 2>/dev/null || echo "${WIB_DEFAULT_ACCOUNT}")"; fi
+            rnd="$(role_of_instructor_name "${nm}")"
+            if [[ -n "${rnd}" ]]; then acct="$(account_for_role "${rnd}")"; else acct="$(read_membership "${nm}" 2>/dev/null || echo "${WIB_DEFAULT_ACCOUNT}")"; fi
             ingest_one "${nm}" "${acct}"
         done
     done
@@ -1733,12 +1744,12 @@ read_vpc_for() {
 
 # fleet.sh only provisions; remind which bootstrap profile each instructor needs (burn vs full).
 print_bootstrap_hints() {
-    local round_filter="${1:-}" entry name rr tier itype pidscol bp
+    local role_filter="${1:-}" entry name rr tier itype pidscol bp
     log "next: bootstrap each (fleet.sh provisions; deploy-full-idp.sh bootstraps):"
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
-        [[ -n "${round_filter}" && "${round_filter}" != "${rr}" ]] && continue
-        log "  ${name}: AWS_PROFILE=$(account_for_round "${rr}") KUBECONFIG=<isolated> deploy-full-idp.sh ${bp}"
+        [[ -n "${role_filter}" && "${role_filter}" != "${rr}" ]] && continue
+        log "  ${name}: AWS_PROFILE=$(account_for_role "${rr}") KUBECONFIG=<isolated> deploy-full-idp.sh ${bp}"
     done
 }
 
@@ -1747,22 +1758,22 @@ print_bootstrap_hints() {
 # are process-local and cannot clash across concurrent clusters.
 
 # One round in its own subshell (§4.6): per-round TF_PROFILE / VPC globals stay isolated from other
-# concurrent rounds. Reads the round's clusters from the roster (capped by WIB_PER_ROUND) and provisions
+# concurrent rounds. Reads the round's clusters from the roster (capped by WIB_PER_ROLE) and provisions
 # or destroys them via the concurrency pool.
 # Tear down one round's roster clusters. UP no longer comes through here: it builds PROVISION_SPEC and
 # goes through the unified _provision_spec_fleet like the attendee path (#162). This is down-only now, so
 # the argument that used to select up/down is gone and the dead reference to the removed _up_from_roster
 # is gone with it.
-_run_round() {
+_run_role() {
     local r="$1" entry name rr tier itype pidscol bp names=() n=0
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
         [[ "${rr}" == "${r}" ]] || continue
-        [[ -n "${WIB_PER_ROUND}" && "${n}" -ge "${WIB_PER_ROUND}" ]] && break
+        [[ -n "${WIB_PER_ROLE}" && "${n}" -ge "${WIB_PER_ROLE}" ]] && break
         names+=("${name}"); n=$((n + 1))
     done
     [[ "${#names[@]}" -gt 0 ]] || return 0
-    local acct; acct="$(account_for_round "${r}")"
+    local acct; acct="$(account_for_role "${r}")"
     log "round ${r} instructors -> account '${acct}': ${names[*]}"
     if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc_for "${acct}"; fi
     TF_PROFILE="${acct}"
@@ -1770,7 +1781,7 @@ _run_round() {
 }
 
 # Provision/destroy the instructor roster. Rounds run CONCURRENTLY by default (§4.6), each in its own
-# subshell; WIB_SERIAL=1 forces the old serial loop. Round selection: 2nd arg > WIB_ROUNDS env > all.
+# subshell; WIB_SERIAL=1 forces the old serial loop. Round selection: 2nd arg > WIB_ROLES env > all.
 cmd_instructors() {
     local action="${1:-}" selector="${2:-}"
     case "${action}" in
@@ -1780,32 +1791,29 @@ cmd_instructors() {
         *) usage ;;
     esac
     load_roster
-    # The second argument is either a ROUND (1|2|3) or an OWNER (michael|whitney|both|all), because the
-    # two are the natural ways to slice the roster and neither is ambiguous: a round is a bare digit and
-    # an owner never is (#88). Previously only the round existed, so "give me Whitney's three clusters"
-    # meant provisioning the whole roster or naming her clusters by hand, and the -1/-2 suffix split was
-    # convention held in someone's head rather than in the tool. The owner column in roster.tsv already
-    # carries the answer; this exposes it.
-    local round_filter="" owner_filter=""
+    # The second argument is a ROLE (community|admin) or an OWNER (michael|whitney|both|all). Rounds are
+    # gone (#291); the roster carries a role instead, so "give me the community cluster" and "give me
+    # Whitney's" are both one word, and neither is ambiguous.
+    local role_filter="" owner_filter=""
     case "${selector}" in
         "" ) ;;
-        [123] ) round_filter="${selector}" ;;
+        community|admin ) role_filter="${selector}" ;;
         both|all ) ;;
         * ) owner_filter="${selector,,}" ;;
     esac
-    local rounds=(1 2 3) r
-    [[ -n "${WIB_ROUNDS}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROUNDS}"
-    [[ -n "${round_filter}" ]] && rounds=("${round_filter}")
+    local roles=(community admin) r
+    [[ -n "${role_filter}" ]] && roles=("${role_filter}")
 
     declare -gA PROVISION_SPEC=()
     local entry name rr tier itype pidscol bpcol owner acct bp n
-    for r in "${rounds[@]}"; do
-        acct="$(account_for_round "${r}")"
-        # R1 is the burn profile (BurritoBot + scenario apps, NO enforcing guardrails); R2/R3 are full,
-        # armed to Enforce by bootstrap_one. Derived from the round, not the roster bp column, which
-        # _run_round used to ignore, leaving Kyverno stuck in Audit (found 2026-07-10). A bare provision
-        # sets no profile so nothing bootstraps.
-        if [[ -n "${WIB_NO_BOOTSTRAP:-}" ]]; then bp=""; elif [[ "${r}" == "1" ]]; then bp="burn"; else bp="full"; fi
+    for r in "${roles[@]}"; do
+        acct="$(account_for_role "${r}")"
+        # The profile follows the ROLE, not the roster's bp column, which an earlier loop ignored and left
+        # Kyverno stuck in Audit (2026-07-10). community is the unguarded spectacle; admin is the student
+        # build with everything armed (#294). A bare provision sets no profile so nothing bootstraps.
+        if [[ -n "${WIB_NO_BOOTSTRAP:-}" ]]; then bp=""
+        elif [[ "${r}" == "community" ]]; then bp="burn"
+        else bp="admin"; fi
         n=0
         for entry in "${INSTRUCTORS[@]}"; do
             IFS='|' read -r name rr tier itype pidscol bpcol owner <<<"${entry}"
@@ -1814,36 +1822,36 @@ cmd_instructors() {
             # the -3 spares) is excluded when filtering by owner: it belongs to nobody, so "Whitney's
             # clusters" must not quietly include it.
             [[ -n "${owner_filter}" && "${owner,,}" != "${owner_filter}" ]] && continue
-            [[ -n "${WIB_PER_ROUND}" && "${n}" -ge "${WIB_PER_ROUND}" ]] && break
+            [[ -n "${WIB_PER_ROLE}" && "${n}" -ge "${WIB_PER_ROLE}" ]] && break
             # account|profile|round|tier|itype|pids  -- per-cluster tier/itype/pids come from the roster
             PROVISION_SPEC["${name}"]="${acct}|${bp}|${r}|${tier}|${itype}|${pidscol}"
             n=$(( n + 1 ))
         done
     done
-    [[ "${#PROVISION_SPEC[@]}" -gt 0 ]] || { log "no roster clusters for the requested round(s)"; return 0; }
+    [[ "${#PROVISION_SPEC[@]}" -gt 0 ]] || { log "no roster clusters for the requested role(s)"; return 0; }
     log "provisioning ${#PROVISION_SPEC[@]} instructor cluster(s)..."
     # Keep the build's own result and return it. This used to end on the bootstrap-hints test, which is
     # false on every normal run, so under `set -e` the verb exited 1 even after its verify reported every
     # cluster healthy. The 03:30 run on 2026-09-07 aborted before its attendee clusters for exactly this.
     local _rc=0
-    _provision_spec_fleet "the roster" cmd_ingest_instructors "${round_filter}" || _rc=$?
-    [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${round_filter}"
+    _provision_spec_fleet "the roster" cmd_ingest_instructors "${role_filter}" || _rc=$?
+    [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] && print_bootstrap_hints "${role_filter}"
     return "${_rc}"
 }
 
 # Instructor teardown keeps the round-grouped loop: down has no routes/register tail to share, and
 # down_one needs TF_PROFILE per account, which the round split already provides.
 _instructors_down() {
-    local round_filter="${1:-}"
+    local role_filter="${1:-}"
     require_tools
     mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     load_roster
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     local rounds=(1 2 3) r
-    [[ -n "${WIB_ROUNDS}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROUNDS}"
-    [[ -n "${round_filter}" ]] && rounds=("${round_filter}")
+    [[ -n "${WIB_ROLES}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROLES}"
+    [[ -n "${role_filter}" ]] && rounds=("${role_filter}")
     for r in "${rounds[@]}"; do
-        _run_round "${r}" &
+        _run_role "${r}" &
         [[ -n "${WIB_SERIAL}" ]] && wait
     done
     wait || true
@@ -2065,7 +2073,7 @@ _account_for_name() {
     # and land in the first account regardless of which account round 2 actually lives in. Resolve it by
     # round, the same way cmd_instructors does.
     if is_instructor_name "${name}"; then
-        account_for_round "$(round_of_instructor_name "${name}")"; return 0
+        account_for_role "$(role_of_instructor_name "${name}")"; return 0
     fi
     # per_account is the divisor below, so a caller with no pool size to offer (converge on explicit
     # names, for instance) would divide by zero. With no membership record and no pool geometry there is
@@ -2098,7 +2106,7 @@ record_membership() {
 read_membership() {
     local f; f="$(membership_file "$1")"
     if [[ -r "${f}" ]]; then head -1 "${f}" | tr -d '[:space:]'; fi
-    return 0   # an unrecorded cluster is a normal answer; see round_of_instructor_name
+    return 0   # an unrecorded cluster is a normal answer; see role_of_instructor_name
 }
 
 # Refuse to destroy through a profile that disagrees with the recorded one. Without the record we
@@ -2136,22 +2144,22 @@ cmd_converge() {
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
 
     if [[ "${1:-}" == "instructors" ]]; then
-        local round_filter="${2:-}"
+        local role_filter="${2:-}"
         load_roster
         local entry nm rnd
         for entry in "${INSTRUCTORS[@]}"; do
-            nm="${entry%%|*}"; rnd="$(round_of_instructor_name "${nm}")"
-            [[ -z "${round_filter}" || "${rnd}" == "${round_filter}" ]] || continue
+            nm="${entry%%|*}"; rnd="$(role_of_instructor_name "${nm}")"
+            [[ -z "${role_filter}" || "${rnd}" == "${role_filter}" ]] || continue
             # A roster slot with no state was never provisioned (the unowned third slot per round); it
             # is not an unreachable cluster and must not count against the verdict.
             [[ -f "${STATE_DIR}/${nm}.tfstate" ]] || { log "  ${nm}: not provisioned, skipping"; continue; }
             all+=("${nm}")
         done
-        [[ "${#all[@]}" -gt 0 ]] || { log "converge: no roster clusters match round '${round_filter}'"; exit 2; }
+        [[ "${#all[@]}" -gt 0 ]] || { log "converge: no roster clusters match role '${role_filter}'"; exit 2; }
         # Roster clusters resolve their account by round, so the account list this run touches is theirs.
         accounts=()
         for nm in "${all[@]}"; do
-            acct="$(account_for_round "$(round_of_instructor_name "${nm}")")"
+            acct="$(account_for_role "$(role_of_instructor_name "${nm}")")"
             [[ " ${accounts[*]} " == *" ${acct} "* ]] || accounts+=("${acct}")
         done
     elif [[ "${1:-}" =~ ^[0-9]+$ && "${1}" -gt 0 ]]; then
@@ -2600,11 +2608,11 @@ cmd_ingest() {
         # up the wrong account and fail to find the cluster whenever the R1/R2/R3 split is in use.
         local name rnd acct
         for name in "$@"; do
-            rnd="$(round_of_instructor_name "${name}")"
+            rnd="$(role_of_instructor_name "${name}")"
             # An attendee name resolves through its membership record for the same reason a roster name
             # resolves through its round: neither is necessarily in the default account. The retry loop
             # at the bottom of this function already did this; this branch did not.
-            if [[ -n "${rnd}" ]]; then acct="$(account_for_round "${rnd}")"
+            if [[ -n "${rnd}" ]]; then acct="$(account_for_role "${rnd}")"
             else acct="$(read_membership "${name}" 2>/dev/null || true)"; [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"; fi
             ingest_one "${name}" "${acct}"
         done
@@ -2616,12 +2624,12 @@ cmd_ingest() {
 # the instructor set was to type six names, so in practice it never happened and the presenters' own
 # clusters were missing from provisioning entirely.
 cmd_ingest_instructors() {
-    local round_filter="${1:-}" entry name rnd
+    local role_filter="${1:-}" entry name rnd
     load_roster
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rnd _tier _it _pid _bp _owner <<<"${entry}"
-        [[ -n "${round_filter}" && "${rnd}" != "${round_filter}" ]] && continue
-        ingest_one "${name}" "$(account_for_round "${rnd}")"
+        [[ -n "${role_filter}" && "${rnd}" != "${role_filter}" ]] && continue
+        ingest_one "${name}" "$(account_for_role "${rnd}")"
     done
 }
 
@@ -2663,7 +2671,7 @@ cmd_routes() {
     local -A round_done=()
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rr _tier _it _pid bp owner <<<"${entry}"
-        acct="$(account_for_round "${rr}")"
+        acct="$(account_for_role "${rr}")"
         provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
         h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
         [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }

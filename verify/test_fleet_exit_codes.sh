@@ -45,8 +45,9 @@ echo "== a build whose acceptance passed returns success =="
 out="$(VERIFY_RC=0 src 'cmd_instructors up both')"
 check "instructors up exits 0 when verify passes" 'grep -q "rc=0" <<<"$out"'
 # The names come out of an associative array, so their order is hash order, not roster order.
-check "the acceptance pass actually ran over all nine built clusters" \
-    '[[ "$(grep -c "watch-it-burn-r[123]-[123]" <<<"$(grep "verify ran on:" <<<"$out" | tr " " "\n")")" -eq 9 ]]'
+# The roster is three clusters now, not nine: one community and one admin per presenter (#291).
+check "the acceptance pass actually ran over all three built clusters" \
+    '[[ "$(grep -cE "watch-it-burn-(community|[a-z]+-admin)" <<<"$(grep "verify ran on:" <<<"$out" | tr " " "\n")")" -eq 3 ]]'
 
 echo "== a build whose acceptance FAILED does not report success =="
 out="$(VERIFY_RC=1 src 'cmd_instructors up both')"
