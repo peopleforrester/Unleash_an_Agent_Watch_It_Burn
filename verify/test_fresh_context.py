@@ -86,6 +86,11 @@ check("it names the button", "↺ Reset button" in LAB)
 check("it says a refresh does not reset", "Refreshing the page does not do this" in LAB)
 check("it covers the hard refresh people will try next", "hard refresh" in LAB)
 check("it explains why a stale refusal matters", "path-dependent" in LAB)
+# The advice has to be a habit, not a rescue: a student who only resets after noticing something is
+# wrong has already spent the attempt. The measured numbers are what make that worth doing.
+check("it tells them to reset at the start of every challenge",
+      "at the start of every challenge" in LAB)
+check("it gives them the measured reason", "83% of the time in a fresh" in LAB and "0% of the time once" in LAB)
 check("it names the confusion this prevents", "identical to a guardrail" in LAB)
 # Michael's counter-argument: a real deployment keeps context on purpose. The workshop is otherwise careful
 # to be realistic, and a student who spots the difference has spotted something true.
