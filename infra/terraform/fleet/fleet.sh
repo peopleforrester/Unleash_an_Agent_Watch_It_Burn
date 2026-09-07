@@ -925,7 +925,7 @@ bootstrap_one() {
         #            is nothing to arm for those either.
         #   burn     (instructor R1)    -> ships no policies at all; the unguarded spectacle.
         # Gating on the profile name keeps attendee and burn both unarmed without a round check.
-        [[ "${profile}" == "full" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
+        [[ "${profile}" == "full" || "${profile}" == "admin" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
     fi

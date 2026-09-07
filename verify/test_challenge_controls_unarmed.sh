@@ -61,6 +61,18 @@ for app in "${CHALLENGE_APPS[@]}"; do
         '[[ "$(named "$f_sel" "$app")" == "$(named "$a_sel" "$app")" ]]'
 done
 
+echo "== admin is the ONE profile that arms them, on purpose =="
+# The presenters demonstrate a control already working rather than staging an attack, so selfHeal is not
+# a hazard there and the armed state is the point (#294). This is an exception with a reason, which is why
+# it is asserted explicitly rather than the checks above being loosened.
+sel_admin="$(selection admin)"
+check "an admin root exists" '[[ "$sel_admin" != none:* ]]'
+for app in "${CHALLENGE_APPS[@]}"; do
+    check "admin: ${app} IS deployed (armed by design)" '[[ "$sel_admin" != *"${app}"* ]]'
+done
+check "admin takes the non-dual collector (it ships to the shared org directly)" \
+    '[[ "$sel_admin" == *"otel-collector-attendee"* ]]'
+
 echo "== the controls still EXIST to be applied as the fix =="
 # Excluding them from bootstrap must not mean deleting them: the student and the presenter both apply
 # them by hand, from the staged manifests, as the fix step.

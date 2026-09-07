@@ -13,7 +13,10 @@ case "${PROFILE}" in
     # attendee: full platform minus the C1-C3 challenge controls, so the student installs each one
     # themselves (RUN-OF-SHOW-2026-08, #160). See gitops/bootstrap/attendee/app-of-apps-attendee.yaml.
     attendee) ROOT_APP="gitops/bootstrap/attendee/app-of-apps-attendee.yaml" ;;
-    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee]" >&2; exit 2 ;;
+    # admin: the presenters' own cluster. The student build with every guardrail ARMED, so a control can be
+    # shown already working rather than staged (#294). See gitops/bootstrap/admin/app-of-apps-admin.yaml.
+    admin)    ROOT_APP="gitops/bootstrap/admin/app-of-apps-admin.yaml" ;;
+    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin]" >&2; exit 2 ;;
 esac
 log() { printf '\n==> %s\n' "$*" >&2; }
 

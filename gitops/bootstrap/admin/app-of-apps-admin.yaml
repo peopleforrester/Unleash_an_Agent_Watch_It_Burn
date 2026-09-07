@@ -1,0 +1,67 @@
+# ABOUTME: Root app-of-apps for an ADMIN cluster: the presenters' own. The student build with every
+# ABOUTME: guardrail ARMED, so a control can be shown already working instead of being staged first.
+#
+# The three cluster types differ only in where they sit on one axis, how much of the platform is already
+# defending the agent:
+#
+#   community (burn)  no guardrails at all. The room attacks it together and nothing stops them.
+#   attendee          the platform is present, the C1-C3 controls are NOT applied. The student runs each
+#                     attack, then installs the control themselves and watches it work.
+#   admin (this one)  everything applied and enforcing from the first minute.
+#
+# Why admin is not just "full". The full profile used to ship the challenge controls armed, and that made
+# a presenter's first attack bounce with no fix left to apply. Worse, network-policies and
+# kubearmor-policies run selfHeal with no ignoreDifferences, so deleting the policies to stage an attack
+# restored them in about a second, measured on r3-3 (#281). A presenter was left with a dead demo and no
+# visible cause. That is why full no longer arms them.
+#
+# This profile arms them deliberately, and the selfHeal trap does not apply, because an admin cluster is
+# used to demonstrate a control ALREADY WORKING rather than to stage an attack against it. If a demo ever
+# needs the attack to land, it belongs on the community cluster or on a claimed student cluster, not here.
+# Do not merge this profile back into attendee to "reduce duplication": the difference between them is the
+# entire point, and it is one line.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps-admin
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  # Multi-source, and the SECOND source is this file's own directory (#253): the root reconciles its own
+  # spec from staging on every sync, so a change here reaches every live cluster through Argo CD.
+  sources:
+    - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+      targetRevision: staging
+      path: gitops/apps
+      directory:
+        # Everything, INCLUDING network-policies and kubearmor-policies: this cluster is the armed one.
+        # Only the attendee collector overlay is dropped, because an admin cluster ships to the shared
+        # presenter org as its PRIMARY destination rather than dual-shipping to it as a second one (#296).
+        exclude: 'otel-collector-attendee.yaml'
+    - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+      targetRevision: staging
+      path: gitops/bootstrap/admin
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # Kyverno's chart adds its own pre-delete finalizers to the Application at runtime, which git can never
+  # match, so every root reported OutOfSync forever on a difference nobody can fix (#265).
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jsonPointers:
+        - /metadata/finalizers
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

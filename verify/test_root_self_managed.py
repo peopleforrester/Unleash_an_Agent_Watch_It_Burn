@@ -18,6 +18,11 @@ PROFILES = {
     "full": {"name": "app-of-apps", "exclude": "{network-policies,kubearmor-policies,otel-collector-attendee}.yaml"},
     "attendee": {"name": "app-of-apps-attendee", "exclude": "{network-policies,kubearmor-policies,otel-collector}.yaml"},
     "burn": {"name": "app-of-apps-burn", "include": True},
+    # admin (#294): the presenters' own clusters. The student build with every guardrail ARMED, so a
+    # control can be shown already working instead of being staged. It therefore keeps the two challenge
+    # -control apps that attendee and full drop, and takes the non-dual collector because it ships to the
+    # shared presenter org as its primary (#296).
+    "admin": {"name": "app-of-apps-admin", "exclude": "otel-collector-attendee.yaml"},
 }
 failures = []
 
