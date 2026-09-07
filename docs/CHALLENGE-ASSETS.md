@@ -45,12 +45,32 @@ Challenge 4 has two numbers and they are often confused:
 
 ## Where the guardrails live
 
-C1, C2 and C3 are **infrastructure** controls: NetworkPolicy, admission control, runtime enforcement. They
-are installed as cluster objects and a student applies them.
+Every control here is **platform-owned**. The developer shipped none of them, and the agent's own code is
+never edited in any of the eight challenges. What moves is the enforcement point, and it lands in five
+distinct places:
 
-C4, C5 and C6 are **platform-injected** controls in guard-proxy: the agent's own code is untouched and the
-checkpoint sits in front of the model.
+| Where | Challenges | What is doing the enforcing |
+|---|---|---|
+| **the cluster network** | 1 | the CNI drops the packet |
+| **the API server, at admission** | 2 | a Kyverno webhook, before the object is stored |
+| **the Linux kernel** | 3 | a KubeArmor policy in a kernel security module, on the syscall |
+| **inside guard-proxy** | 4, 5, and half of 6 | the proxy's own code, in front of the model |
+| **a service guard-proxy calls** | the other half of 6 | LLM Guard: its own Deployment, its own pod, reached over HTTP |
+| **the API server, at authorization** | 8 | a Kubernetes Role, before admission is even reached |
+| **nowhere in the request path** | 7 | the tool is removed from the agent's spec, so there is nothing to evade |
 
-C7 and C8 change the **agent itself**: its tool list and its permissions.
+Two of these are worth stating out loud because they are the ones people get wrong.
 
-That progression is the argument of the workshop, and it is why the challenge order is not arbitrary.
+**Challenge 6 spans two components.** The block list is a string match inside guard-proxy. The classifier
+is not in guard-proxy at all: it is a separate deployment the proxy calls and waits for. One toggle, two
+places. `kubectl -n agent get pods` shows both.
+
+**Challenges 7 and 8 block nothing.** Nothing inspects a request and refuses it. The tool stops existing,
+and the credential stops reaching. That is a different kind of control from everything before it, and it is
+why they come last.
+
+Do not describe any of this as an **app-layer** control. Every one of them is deployed and owned by the
+platform team, around whatever model the developer brings. Calling the guard-proxy controls app-layer
+concedes the argument the workshop is making.
+
+That progression is why the challenge order is not arbitrary.
