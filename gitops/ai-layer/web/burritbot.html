@@ -301,7 +301,7 @@
       <div class="chathead">
         <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
         <div><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div></div>
-        <button class="reset" onclick="resetChat()">↺ Reset</button>
+        <button class="reset" onclick="resetChat()" title="Start a new conversation. BurritoBot forgets everything you have said, including anything it has already refused. A page refresh does not do this.">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
       <div class="composer">
@@ -493,12 +493,15 @@
     const s=document.getElementById('saved');
     if(s) s.innerHTML='<div class="hint">Every prompt you send is saved here, reuse it any time.</div>';
   }
+  // Reset mints a new session id, which is sent as the A2A contextId, so the agent genuinely forgets. A
+  // page refresh does NOT: sessionStorage survives both a refresh and a hard refresh in the same tab, and
+  // that surprises students (#311). The saved prompts are deliberately KEPT: the reason to reset is that
+  // BurritoBot refused you, and the very next thing you want is the prompt you just sent.
   function resetChat(){
     document.getElementById('stream').innerHTML='';
-    clearSaved();
     newSession();
     greet();
-    sys('Reset: new conversation, saved prompts cleared.');
+    sys('New conversation. BurritoBot has forgotten everything you said. Your saved prompts are still here.');
   }
   // Asks for the BASE, the first step on the board (#143). It asked for the protein before, which was
   // step 2, so the bot and the menu disagreed about where to start.
