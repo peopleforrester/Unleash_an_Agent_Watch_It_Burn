@@ -177,14 +177,19 @@ config:
       trace_statements:
         - context: span
           statements:
-            - set(attributes["gen_ai.tool.call.arguments"], attributes["gcp.vertex.agent.tool_call_args"]) where attributes["gcp.vertex.agent.tool_call_args"] != nil
-            - set(attributes["gen_ai.tool.call.result"], attributes["gcp.vertex.agent.tool_response"]) where attributes["gcp.vertex.agent.tool_response"] != nil
+            # Every statement is a SINGLE-QUOTED YAML scalar, like the filter rules above. An unquoted
+            # statement containing `": true"` parses as a YAML mapping, and the collector then refuses the
+            # whole config with "expected type 'string', got unconvertible type 'map[string]interface {}'"
+            # and CrashLoops. Caught on michael-admin before it reached anything else.
+            - 'set(attributes["gen_ai.tool.call.arguments"], attributes["gcp.vertex.agent.tool_call_args"]) where attributes["gcp.vertex.agent.tool_call_args"] != nil'
+            - 'set(attributes["gen_ai.tool.call.result"], attributes["gcp.vertex.agent.tool_response"]) where attributes["gcp.vertex.agent.tool_response"] != nil'
             # MCP reports a failed tool with isError, and the tool span itself carried no status at all, so
             # a blocked exfiltration and a successful one looked identical on the span named after the tool.
             # Marking it here puts the error on the span a student actually clicks, rather than only on the
-            # model call that read the result afterwards.
-            - set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "\"isError\": true")
-            - set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "\"isError\": true")
+            # model call that read the result afterwards. The `.` in the pattern matches the closing quote
+            # of the JSON key, which keeps a backslash out of a YAML scalar that is already fiddly.
+            - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
   exporters:
     prometheusremotewrite:
       endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
