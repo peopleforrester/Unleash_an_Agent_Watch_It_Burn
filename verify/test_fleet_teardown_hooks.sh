@@ -24,7 +24,8 @@ case "$*" in
   *"describe-target-groups"*) echo "arn:tg/one"; exit 0 ;;
   *"delete-target-group"*) n=$(cat "${T}/tg_tries" 2>/dev/null || echo 0); echo $((n+1)) >"${T}/tg_tries"
         [[ "$n" -ge "${TG_OK_AFTER:-0}" ]] && exit 0; exit 254 ;;
-  *"describe-volumes"*) exit 0 ;;
+  *"describe-volumes"*) echo "${VOL_ID:-}"; exit 0 ;;
+  *"delete-volume"*) exit "${VOL_DELETE_RC:-0}" ;;
 esac
 exit 0
 S
@@ -74,12 +75,28 @@ TAG_NAME=watch-it-burn-attendee-009 LB_GONE_AFTER=3 TG_OK_AFTER=2 \
   src 'sweep_orphan_lbs watch-it-burn-attendee-009 acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
 check "polls describe-load-balancers until the LB is gone (>=3 polls)" '[[ "$(cat "${T}/lb_polls")" -ge 3 ]]'
 check "retries delete-target-group until it succeeds (3 attempts)" '[[ "$(cat "${T}/tg_tries")" -eq 3 ]]'
-check "records lb-leak (the sweep had work) but no tg-leak" 'grep -qx "lb-leak:watch-it-burn-attendee-009" "${T}/out" && ! grep -q "tg-leak" "${T}/out"'
+# #269: a load balancer the sweep deleted and that then disappeared was CLEANED. The backstop doing its job
+# is not a failure, so neither lb-leak nor tg-leak is recorded on a swept-clean run.
+check "swept clean records no lb-leak and no tg-leak" '! grep -q "lb-leak" "${T}/out" && ! grep -q "tg-leak" "${T}/out"'
+rm -f "${T}/lb_polls" "${T}/tg_tries"
+# A load balancer that never disappears after deletion IS a real leak: record lb-leak. Timeout 0 so the
+# gone-wait polls once and gives up immediately with the survivor still present.
+TAG_NAME=watch-it-burn-attendee-009 LB_GONE_AFTER=99 TG_OK_AFTER=0 WIB_LB_GONE_TIMEOUT=0 \
+  src 'sweep_orphan_lbs watch-it-burn-attendee-009 acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "a load balancer that survives the sweep records lb-leak" 'grep -qx "lb-leak:watch-it-burn-attendee-009" "${T}/out"'
 rm -f "${T}/lb_polls" "${T}/tg_tries"
 TAG_NAME=watch-it-burn-attendee-009 LB_GONE_AFTER=0 TG_OK_AFTER=99 WIB_TG_RETRIES=4 \
   src 'sweep_orphan_lbs watch-it-burn-attendee-009 acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
 check "with NO leaked load balancer the target groups are still swept, and one that never deletes is tg-leak" \
   '[[ "$(cat "${T}/tg_tries")" -eq 4 ]] && grep -qx "tg-leak:watch-it-burn-attendee-009" "${T}/out" && ! grep -q "lb-leak" "${T}/out"'
+
+echo "== volume sweep records vol-leak only on survival (#269) =="
+VOL_ID=vol-abc VOL_DELETE_RC=0 \
+  src 'sweep_orphan_volumes watch-it-burn-attendee-009 acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "a volume the sweep deletes is not a failure" '! grep -q "vol-leak" "${T}/out"'
+VOL_ID=vol-abc VOL_DELETE_RC=254 \
+  src 'sweep_orphan_volumes watch-it-burn-attendee-009 acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "a volume that survives deletion records vol-leak" 'grep -qx "vol-leak:watch-it-burn-attendee-009" "${T}/out"'
 
 echo "== routes waits for the consoles =="
 rm -f "${T}/k_polls"; : >"${CALLS}"
@@ -107,6 +124,8 @@ check "up waits for console LBs before routes" 'grep -q "wait_for_console_lbs \"
 check "down republishes routes with the shrink allowed" 'grep -q "WIB_ROUTES_ALLOW_SHRINK=1 cmd_routes" "${FLEET}"'
 check "deregister is a subcommand" 'grep -q "deregister) cmd_deregister" "${FLEET}"'
 check "no shared .failures path remains" '! grep -q "LOG_DIR}/.failures\"" "${FLEET}"'
+check "drain waits for the cluster load balancers to be gone before destroy (#269)" \
+  'grep -q "cluster_lb_count \"\${name}\" \"\${acct}\"" "${FLEET}"'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ -s "${T}/stderr" ]] && { echo "  (stderr from sourced runs, last lines)"; tail -5 "${T}/stderr" | sed 's/^/    /'; }

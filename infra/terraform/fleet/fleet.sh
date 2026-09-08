@@ -1266,6 +1266,20 @@ up_one() {
 # ENIs then block VPC/subnet deletion and cost money (observed: 100 orphaned LBs/account after a fleet
 # teardown). Best-effort: if the cluster is already gone/unreachable, just proceed to destroy. `--wait`
 # on a LoadBalancer Service blocks on the controller's finalizer, i.e. until the AWS LB is actually gone.
+# How many AWS load balancers are still tagged for this cluster. Used both to WAIT during drain (so the
+# in-cluster controller finishes releasing them before we destroy the cluster, #269) and to count SURVIVORS
+# after the sweep's delete attempts (a swept-and-cleaned leak is a backstop success, not a failure).
+cluster_lb_count() {
+    local name="$1" acct="$2" arn tagged n=0
+    for arn in $(AWS_PROFILE="${acct}" aws elbv2 describe-load-balancers --region "${WIB_REGION}" \
+                 --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true); do
+        tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${arn}" \
+                  --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
+        [[ "${tagged}" == "${name}" ]] && n=$(( n + 1 ))
+    done
+    printf '%s' "${n}"
+}
+
 drain_cluster_lbs() {
     local name="$1" acct="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kc; kc="$(mktemp -t "${name}.drain.XXXX")"
@@ -1299,6 +1313,19 @@ drain_cluster_lbs() {
         # terminating blocks on its finalizer, and the short sleep below is enough for the controller to
         # observe the deletions; we are about to destroy the cluster either way.
         KUBECONFIG="${kc}" kubectl delete pvc -A --all --wait=false --timeout=60s >/dev/null 2>&1 || true
+        # Wait for the AWS load balancers to actually disappear before we destroy the cluster (#269). An NLB
+        # takes longer to delete than the old fixed `sleep 10`, so the in-cluster controller was being
+        # killed mid-deletion on every teardown and sweep_orphan_lbs had to pick up the pieces afterwards.
+        # Waiting here lets the ordered cleanup finish; the sweep stays as the backstop if it times out.
+        # Bounded by the same gone budget the sweep uses.
+        if [[ -n "${lbsvcs}" ]]; then
+            local gone_deadline=$(( SECONDS + ${WIB_LB_GONE_TIMEOUT:-180} ))
+            while [[ "$(cluster_lb_count "${name}" "${acct}")" -gt 0 && "${SECONDS}" -lt "${gone_deadline}" ]]; do
+                sleep "${WIB_LB_GONE_INTERVAL:-10}"
+            done
+        fi
+        # A short trailing settle so the EBS CSI controller can act on the PVC deletions before it, too,
+        # goes with the cluster.
         sleep 10
     else
         # The cluster API was unreachable, so NOTHING was drained and the controller will die with the
@@ -1346,18 +1373,16 @@ sweep_orphan_lbs() {
     # be deleted while its load balancer is still deleting (ResourceInUse); the old single attempt
     # swallowed that and left three ALB target groups behind on 2026-09-06 (#251). So: wait for the
     # deleted load balancers to be gone, then retry each delete, and report anything that still survives.
+    # `survived_lb` is the authoritative count after the wait: a load balancer still tagged for the cluster
+    # once the gone budget is spent is a real leak (#269); one that we deleted and that then disappeared was
+    # cleaned, and the backstop doing its job is not a failure.
+    local survived_lb=0
     if [[ "${found}" -gt 0 ]]; then
-        local gone_deadline=$(( SECONDS + ${WIB_LB_GONE_TIMEOUT:-180} )) remaining
-        while [[ "${SECONDS}" -lt "${gone_deadline}" ]]; do
-            remaining=0
-            for arn in $(AWS_PROFILE="${acct}" aws elbv2 describe-load-balancers --region "${WIB_REGION}" \
-                         --query 'LoadBalancers[].LoadBalancerArn' --output text 2>/dev/null || true); do
-                tagged="$(AWS_PROFILE="${acct}" aws elbv2 describe-tags --region "${WIB_REGION}" --resource-arns "${arn}" \
-                          --query "TagDescriptions[0].Tags[?Key=='elbv2.k8s.aws/cluster'].Value|[0]" --output text 2>/dev/null || true)"
-                [[ "${tagged}" == "${name}" ]] && remaining=$(( remaining + 1 ))
-            done
-            [[ "${remaining}" -eq 0 ]] && break
+        local gone_deadline=$(( SECONDS + ${WIB_LB_GONE_TIMEOUT:-180} ))
+        survived_lb="$(cluster_lb_count "${name}" "${acct}")"
+        while [[ "${survived_lb}" -gt 0 && "${SECONDS}" -lt "${gone_deadline}" ]]; do
             sleep "${WIB_LB_GONE_INTERVAL:-10}"
+            survived_lb="$(cluster_lb_count "${name}" "${acct}")"
         done
     fi
     local tgs tg attempt tg_leaked=0
@@ -1382,9 +1407,16 @@ sweep_orphan_lbs() {
     done
     [[ "${tg_leaked}" -eq 0 ]] || record_fail "tg-leak:${name}"
     if [[ "${found}" -gt 0 ]]; then
-        log "  ${name}: swept ${found} leaked load balancer(s). The in-cluster drain did not complete;"
-        log "           this is the #157 failure mode and the sweep is the backstop, not the fix."
-        record_fail "lb-leak:${name}"
+        if [[ "${survived_lb}" -gt 0 ]]; then
+            log "  ${name}: ${survived_lb} load balancer(s) SURVIVED the sweep and are still billing"
+            record_fail "lb-leak:${name}"
+        else
+            # The drain did not finish releasing them in time and the AWS-side sweep cleaned them up. That
+            # is the backstop working, not a failure (#269): before this, every teardown recorded lb-leak
+            # here and `down` exited 1 on a perfect run.
+            log "  ${name}: swept ${found} leaked load balancer(s), all gone. The in-cluster drain did not"
+            log "           finish in time; the sweep is the backstop, not a failure."
+        fi
     fi
     return 0
 }
@@ -1400,16 +1432,25 @@ sweep_orphan_volumes() {
     vols="$(AWS_PROFILE="${acct}" aws ec2 describe-volumes --region "${WIB_REGION}" \
             --filters "Name=tag:kubernetes.io/cluster/${name},Values=owned" Name=status,Values=available \
             --query 'Volumes[].VolumeId' --output text 2>/dev/null || true)"
+    local survived=0
     for vol in ${vols}; do
         [[ "${vol}" != "None" ]] || continue
         found=$(( found + 1 ))
         log "  ${name}: LEAKED EBS volume survived teardown, deleting ${vol}"
-        AWS_PROFILE="${acct}" aws ec2 delete-volume --region "${WIB_REGION}" --volume-id "${vol}" \
-            >/dev/null 2>&1 || log "  ${name}: could not delete ${vol}"
+        if ! AWS_PROFILE="${acct}" aws ec2 delete-volume --region "${WIB_REGION}" --volume-id "${vol}" >/dev/null 2>&1; then
+            log "  ${name}: could not delete ${vol}"
+            survived=$(( survived + 1 ))
+        fi
     done
     if [[ "${found}" -gt 0 ]]; then
-        log "  ${name}: swept ${found} leaked EBS volume(s)"
-        record_fail "vol-leak:${name}"
+        if [[ "${survived}" -gt 0 ]]; then
+            # Same rule as the load balancers (#269): a volume the sweep could not delete is a real leak;
+            # one it deleted was the backstop cleaning up after the drain, not a failure.
+            log "  ${name}: ${survived} EBS volume(s) SURVIVED deletion and are still billing"
+            record_fail "vol-leak:${name}"
+        else
+            log "  ${name}: swept ${found} leaked EBS volume(s), all deleted (backstop, not a failure)"
+        fi
     fi
     return 0
 }
