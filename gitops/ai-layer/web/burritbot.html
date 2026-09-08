@@ -534,8 +534,13 @@
     const cb=document.createElement('button');cb.textContent='Copy';
     cb.onclick=()=>{navigator.clipboard.writeText(t).then(()=>{cb.textContent='Copied';setTimeout(()=>{cb.textContent='Copy';},1200);}).catch(()=>{});};
     a.appendChild(rb);a.appendChild(cb);w.appendChild(a);
-    s.appendChild(w);
-    while(s.querySelectorAll('.saved-item').length>10)s.removeChild(s.querySelector('.saved-item'));
+    // Newest first (Michael, 2026-09-08). A student sends dozens of prompts in an hour and wants the
+    // one they just sent, not the one they opened with. Prepending also means the rail does not grow
+    // downward out of view on a laptop.
+    s.insertBefore(w, s.firstChild);
+    // Trim from the BOTTOM now, because the bottom is the oldest.
+    var items=s.querySelectorAll('.saved-item');
+    while(items.length>10){s.removeChild(items[items.length-1]);items=s.querySelectorAll('.saved-item');}
   }
   function save(t){const item={t:t,ts:Date.now()};renderSaved(item);try{var a=JSON.parse(localStorage.getItem('wib-saved')||'[]');a.push(item);if(a.length>10)a=a.slice(-10);localStorage.setItem('wib-saved',JSON.stringify(a));}catch(e){}}
   function noBurritos(on,sub){const n=document.getElementById('noburritos');if(sub)document.getElementById('nbsub').textContent=sub;n.style.display=on?'flex':'none';}
