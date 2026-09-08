@@ -5,6 +5,11 @@ Claude Code agent to read and act on. Read each unread item, then move its
 line under Processed once handled.
 
 ## Unread
+- 2026-09-08  [2026-09-08-burritobot-ai-guardrails-workshop-slide-review.md](./2026-09-08-burritobot-ai-guardrails-workshop-slide-review.md) — 3 section(s) of this conversation match the Unleash_an_Agent_Watch_It_Burn topic.
+- 2026-09-07  [2026-09-07-burritobot-watch-it-burn-workshop-rounds-and-llm-guard-chall.md](./2026-09-07-burritobot-watch-it-burn-workshop-rounds-and-llm-guard-chall.md) — 4 section(s) of this conversation match the Unleash_an_Agent_Watch_It_Burn topic.
+- 2026-09-07  [2026-09-07-burritobot-ai-security-workshop-design.md](./2026-09-07-burritobot-ai-security-workshop-design.md) — 2 section(s) of this conversation match the Unleash_an_Agent_Watch_It_Burn topic.
+- 2026-09-07  [2026-09-07-burritobot-community-vs-student-cluster-ui-and-datadog-telem.md](./2026-09-07-burritobot-community-vs-student-cluster-ui-and-datadog-telem.md) — 1 section(s) of this conversation match the Unleash_an_Agent_Watch_It_Burn topic.
+- 2026-09-07  [2026-09-07-michael-rishi-forrester-burritobot-agentic-security-lab-chal.md](./2026-09-07-michael-rishi-forrester-burritobot-agentic-security-lab-chal.md) — 3 section(s) of this conversation match the Unleash_an_Agent_Watch_It_Burn topic.
 - 2026-09-04  [2026-09-04-house-move-pmi-refund-claude-vs-copilot-workshop.md](./2026-09-04-house-move-pmi-refund-claude-vs-copilot-workshop.md) — 1 section(s) of this conversation match the Unleash_an_Agent_Watch_It_Burn topic.
 - 2026-08-29  [2026-08-29-burritobot-workshop-student-experience-idp-demo-review.md](./2026-08-29-burritobot-workshop-student-experience-idp-demo-review.md) — 2 section(s) of this conversation match the Unleash_an_Agent_Watch_It_Burn topic.
 

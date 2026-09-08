@@ -21,3 +21,7 @@ __pycache__/
 aws-pool*.csv
 verify/.feedback/
 .fleet-hooks-test.*/
+
+# Per-machine Claude Code settings (a remote environment id, not shareable state).
+# .claude/settings.json IS tracked: it carries this repo's deliberate model pin.
+.claude/settings.local.json
