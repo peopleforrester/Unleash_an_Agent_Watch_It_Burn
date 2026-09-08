@@ -585,7 +585,13 @@ spec:
             - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
               value: EVENT_ONLY
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
-          resources: { requests: { cpu: 50m, memory: 64Mi }, limits: { cpu: 250m, memory: 128Mi } }
+          # 128Mi OOMKilled the proxy on its heavy paths, flapping ready<->OOM. Three independent
+          # challenge runs on attendee-001 (C1, C2, C6) all hit it: the long blocked-egress turn,
+          # the large Kyverno-denial response, and the injection classifier each spike memory, and
+          # under 50 live attendees an OOMing proxy takes chat and the guard toggles down with it.
+          # 256Mi limit, 128Mi request. A live `kubectl set resources` is reverted by Argo selfHeal,
+          # so the fix has to live here.
+          resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 256Mi } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
         - name: src
