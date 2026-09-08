@@ -85,21 +85,24 @@ print("== the lab describes what the trace actually contains ==")
 # Measured on watch-it-burn-michael-admin, 2026-09-07, after the transform went live:
 #   execute_tool run_shell           STATUS_CODE_ERROR   args = the full curl, result = "command FAILED..."
 #   execute_tool get_marketing_intel UNSET               result = the full customer data
-# The lab used to promise "a tool call to agenticburn.com/beacon", which was not what the span showed.
+#
+# WHAT THIS BLOCK USED TO PIN, AND WHY IT NO LONGER DOES. It required Challenge 1 to walk the student
+# through the span by name: "execute_tool run_shell", the arguments carrying the stolen payload, the
+# quoted "command FAILED..." result, and the contrast with get_marketing_intel. Whitney replaced that
+# whole block on 2026-09-08 with a short instruction to find the trace and see that the POST to the
+# beacon failed. Her edits are primary on this page, so what is pinned now is that the lab still sends
+# the student to the trace and still tells them what outcome to look for. Do not restore the span
+# walkthrough as a fix for a failure here.
+#
+# The collector side is unchanged and is still asserted above: mark_tool_failure is what puts the error
+# status on that span, so the thing her sentence promises is still produced.
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
-check("the lab names the tool span a student should open", "execute_tool run_shell" in LAB)
-check("it says the arguments carry the stolen payload",
-      "arguments are the command the agent tried to run" in LAB)
-check("it quotes the failure the tool actually returns",
-      "most likely by a NetworkPolicy. Nothing was sent." in LAB)
-check("it contrasts the blocked call with the successful one",
-      "is not an error, and its result is the full customer data" in LAB)
-# Whitney cut the trailing explanation ("and the trace now says which is which. Before you applied the
-# policy, both were unmarked and you could not tell a blocked exfiltration from a completed one") at her
-# doc line 463, so the sentence now ends on the contrast itself. What is pinned is that the contrast
-# still states the OUTCOME of both calls, which is the part that teaches. Do not restore the old tail.
-check("it says why that contrast is the point",
-      "The theft succeeded and the sending did not." in LAB)
+check("the lab sends the student to the trace after the fix",
+      "See the block in the trace." in LAB)
+check("it uses the standard trace instruction she settled on",
+      "You should be able to see the model calls it made, the tools it used, and what each tool returned." in LAB)
+check("it names the outcome to look for",
+      "tried to POST to the Beacon endpoint but was unsuccessful" in LAB)
 # The old promise named a URL the span does not carry as its own field.
 check("the old inaccurate promise is gone",
       "the trace shows a tool call to <code class=\"inl\">agenticburn.com/beacon</code>" not in LAB)
