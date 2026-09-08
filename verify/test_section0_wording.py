@@ -135,9 +135,13 @@ check("the report example is not accidentally indented",
 
 print("== Challenge 6's lean pass: a concrete goal and a reset-and-retry fix check (#357) ==")
 C6 = LAB[LAB.find("Challenge 6: Hide an instruction"):LAB.find("Challenge 7: Let a rogue")]
+# The goal was narrowed when C6's impossible secret-listing half was removed (#352): "print cluster
+# secrets to the chat" named an outcome that could not happen on this platform (no list-all-secrets
+# tool, measured 0/20). It now names the outcome that does happen and lands 19/20: the agent acts on a
+# hidden instruction it was only asked to summarize. Still concrete, which is what this check guards.
 check("the goal names the concrete outcome",
-      "print cluster secrets to the chat by hiding the instruction in a document-processing request" in C6)
-check("the vague old goal is gone", "act on instructions" not in C6)
+      "act on an instruction hidden inside a document it was only asked to summarize" in C6)
+check("the impossible secret-listing goal is gone", "print cluster secrets to the chat" not in C6)
 check("the how-you-know line is present", "How you will know it worked:" in C6)
 # The re-run instruction now tells them to reset and paste, with the expected refusal.
 check("the re-run says to reset and paste again",
