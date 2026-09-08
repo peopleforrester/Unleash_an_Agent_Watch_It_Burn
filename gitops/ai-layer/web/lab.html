@@ -387,7 +387,7 @@ You deployed an unverified image and now I run on your cluster. MUAHAHA! Why so 
             <div class="ctlbody">
               <p>This is a <b>supply-chain</b> problem. Nothing about the request was malformed: the agent was allowed to create Deployments, and it created one. What was missing is a rule about WHICH images may run here at all.</p>
               <h3 class="sub">What is a cluster-level policy?</h3>
-              <p>A policy is an organization-specific rule about what actions (like create, update, delete) are allowed to happen on what objects in a system. An <b>admission controller policy</b> is a rule specifically about what you are allowing into your Kubernetes cluster.</p>
+              <p>A policy is an organization-specific rule about what actions (like create, update, delete) are allowed to happen on what objects in a system. An <b><a href="https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/" target="_blank" rel="noopener">admission controller</a> policy</b> is a rule specifically about what you are allowing into your Kubernetes cluster.</p>
               <p>Admission controller policies are helpful in many ways, such as:</p>
               <ul class="small">
                 <li><b>Security</b> &mdash; for example, ensuring that Pods do not run in privileged mode.</li>
@@ -702,7 +702,7 @@ read_internal_config tool to complete it. However, that tool is not available to
         <div class="h"><div class="num">8</div><div class="t">Challenge 8: Steal the credentials behind the guard</div></div>
         <div class="b">
           <div class="goal"><b>Your goal:</b> read every secret in your namespace in the clear &mdash; the recipe, the AWS keys, the terminal password &mdash; using a credential BurritoBot's pod was handed automatically.</div>
-          <p>Every guard so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for &mdash; a <b>ServiceAccount</b> called <code class="inl">agent-sa</code>, with a bearer token projected into the container on disk &mdash; and anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.</p>
+          <p>Every guard so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for &mdash; a <b><a href="https://kubernetes.io/docs/concepts/security/service-accounts/" target="_blank" rel="noopener">ServiceAccount</a></b> called <code class="inl">agent-sa</code>, with a bearer token projected into the container on disk &mdash; and anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.</p>
 
           <p><b>First, ask what that identity is allowed to do.</b> You are not asking what BurritoBot <i>does</i>; you are asking what its credential would let anyone holding it do. Run this in your terminal:</p>
           <div class="cmd" onclick="cp(this)">kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent<button class="cp">copy</button></div>
@@ -730,7 +730,7 @@ read_internal_config tool to complete it. However, that tool is not available to
 
               <p><b>First, look at the scoped Role you are about to apply:</b></p>
               <div class="cmd" onclick="cp(this)">cat ~/challenges/c8-scoped-role.yaml<button class="cp">copy</button></div>
-              <p>This is a Kubernetes <b>Role</b>: a list of which actions (create, read, list, and so on) an account may take on which resources. What this one says:</p>
+              <p>This is a Kubernetes <b><a href="https://kubernetes.io/docs/reference/access-authn-authz/rbac/" target="_blank" rel="noopener">Role</a></b> (part of <b>RBAC</b>, role-based access control): a list of which actions (create, read, list, and so on) an account may take on which resources. What this one says:</p>
               <ul class="small">
                 <li><b>deployments, pods, configmaps, services</b> &mdash; create/get/list/patch. The agent still needs these for ordinary work (and for Challenges 1 and 2).</li>
                 <li><b>secrets, resourceNames: [ceo-personal-record]</b> &mdash; <code class="inl">get</code> that one Secret, by name.</li>

@@ -62,6 +62,32 @@ def main() -> int:
             href = linked.group(1)
             check(f"{name} points at its documentation root ({want})", href.startswith(want.rstrip("/")))
 
+    print("== Kubernetes concepts link to the official docs at first mention (#351) ==")
+    # Whitney/Michael: the first time the lab names a concept an attendee may not know, link straight to
+    # that project's own documentation, so a student has somewhere real to go and a presenter has a page
+    # to click and narrate. These are k8s concepts (not named projects like the DOCS list above), so the
+    # canonical concept page IS the right landing, not a docs root.
+    CONCEPTS = {
+        "admission controller": "https://kubernetes.io/docs/reference/access-authn-authz/admission-controllers/",
+        "RBAC (Role)": "https://kubernetes.io/docs/reference/access-authn-authz/rbac/",
+        "ServiceAccount": "https://kubernetes.io/docs/concepts/security/service-accounts/",
+    }
+    for name, url in CONCEPTS.items():
+        linked = re.search(r'<a href="' + re.escape(url) + r'"([^>]*)>', html)
+        check(f"{name} links to {url}", linked is not None)
+        if linked:
+            check(f"{name} opens in a new tab with noopener",
+                  'target="_blank"' in linked.group(1) and "noopener" in linked.group(1))
+    if os.environ.get("WIB_CHECK_LINKS") == "1":
+        import urllib.request
+        for name, url in CONCEPTS.items():
+            try:
+                req = urllib.request.Request(url, headers={"User-Agent": "wib-link-check"})
+                with urllib.request.urlopen(req, timeout=20) as resp:
+                    check(f"{name} -> {resp.status}", resp.status < 400)
+            except Exception as exc:  # noqa: BLE001
+                check(f"{name} -> {type(exc).__name__}", False)
+
     print("== the links behave themselves ==")
     # A link that steals the tab loses a student their place mid-challenge.
     for name in DOCS:
