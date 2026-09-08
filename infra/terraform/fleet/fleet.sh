@@ -827,11 +827,46 @@ repair_agent_injection() {
     done <<<"${pods}"
 }
 
+# The agent's declared tools can go stale on a live cluster and gitops will not fix it. Argo cannot write
+# a single element of the .spec.declarative.tools array while RespectIgnoreDifferences is on, so a rename
+# lands in the manifest, the cluster keeps the old name, and Argo reports Synced and Healthy throughout.
+# That is how get_recipe -> get_vault_entry left Challenge 5 impossible on every attendee cluster (#349):
+# converge did not touch the field, an explicit sync reported "no more tasks", and Force changed nothing
+# because no write was being attempted.
+#
+# Replacing the object is the only repair that works. Deleting the Agent CR makes Argo recreate it from the
+# manifest; kagent owns the agent Deployment through an ownerRef, so the pod cycles with it (about a
+# minute). Idempotent: it only acts when the live tool list actually differs from the committed one.
+repair_agent_tools() {
+    local name="$1" kcfg="$2"
+    local want live
+    want="$(python3 - <<'PYEOF' 2>/dev/null
+import pathlib, yaml
+for d in yaml.safe_load_all(pathlib.Path("gitops/ai-layer/resources.yaml").read_text()):
+    if d and d.get("kind") == "Agent":
+        for s in d["spec"]["declarative"]["tools"]:
+            m = s.get("mcpServer") or {}
+            if m.get("name") == "workshop-mcp":
+                print(",".join(sorted(m.get("toolNames") or [])))
+PYEOF
+)"
+    [[ -n "${want}" ]] || return 0
+    live="$(KUBECONFIG="${kcfg}" kubectl -n agent get agent workshop-agent \
+        -o jsonpath='{range .spec.declarative.tools[?(@.mcpServer.name=="workshop-mcp")]}{.mcpServer.toolNames}{end}' 2>/dev/null \
+        | tr -d '[]"' | tr ',' '\n' | sort | paste -sd, -)"
+    [[ -n "${live}" ]] || return 0
+    if [[ "${live}" != "${want}" ]]; then
+        log "  ${name}: agent tool list is stale; recreating the Agent CR so Argo rewrites it"
+        KUBECONFIG="${kcfg}" kubectl -n agent delete agent workshop-agent >/dev/null 2>&1 || true
+    fi
+}
+
 repair_one() {
     local name="$1" kcfg="$2" acct="$3"
     repair_stuck_syncs "${name}" "${kcfg}"
     repair_failed_syncs "${name}" "${kcfg}"
     repair_agent_injection "${name}" "${kcfg}"
+    repair_agent_tools "${name}" "${kcfg}"
     repair_stuck_pods "${name}" "${kcfg}"
     repair_datadog "${name}" "${kcfg}" "${acct}"
     verify_one "${name}" "${kcfg}" "${acct}"

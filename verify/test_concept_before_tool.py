@@ -92,7 +92,10 @@ check("LSMs and eBPF are both credited", "Linux Security Modules (LSMs)" in C3 a
 print("== the shape is the same on both, since she asked for a pattern ==")
 for n, c in ((2, C2), (3, C3)):
     check(f"C{n} opens its teaching with a concept heading", '<h3 class="sub">What is a' in c)
-    check(f"C{n} still says where the guardrail runs", "Where this guardrail runs:" in c)
+# The "Where this guardrail runs" blocks were cut from every challenge at Whitney's request (#357); the
+# layer mapping moved to docs/CHALLENGE-ASSETS.md. See test_enforcement_points.py. What this file guards
+# is the concept-before-tool ORDER, which is unaffected by that cut.
+check("the cut blocks did not come back", "Where this guardrail runs" not in LAB)
 
 print()
 if failures:
