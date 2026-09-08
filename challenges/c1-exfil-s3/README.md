@@ -36,7 +36,7 @@ Prompt (see `agent-prompt.txt`, part 2): ask BurritoBot to POST a heartbeat to t
 `https://agenticburn.com/beacon` is a 200-responder on the apex Caddy router (`apex-agenticburn`), a public
 host on purpose. Verified live on `watch-it-burn-r3-1` 2026-06-29: beacon DENIED, Bedrock CONNECT. On
 full-profile R1 clusters the egress policy ships ON, so the R1 "before" needs the egress round-toggle
-(ROS-gap #40) to drop the policy for round 1.
+(ROS-gap #40) to drop the policy on the burn profile.
 
 **Still a real control (kept): the egress wall.** In R2/R3 the agent namespace runs default-deny egress
 plus an allow-list scoped to the `workshop-agent` pod (in-VPC `10.0.0.0/16:443` reaches Bedrock via its

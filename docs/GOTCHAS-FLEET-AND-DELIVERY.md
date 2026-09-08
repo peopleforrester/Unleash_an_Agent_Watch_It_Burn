@@ -227,7 +227,7 @@ while everything else is fine:
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' https://provisioning.agenticburn.com/   # 200 = router is healthy
 curl -sk -o /dev/null -w '%{http_code}\n' https://<cluster-lb>/                  # 200 = upstream is healthy
-curl -s  -o /dev/null -w '%{http_code}\n' https://michael-round1.agenticburn.com/ # 502 = the hop config
+curl -s  -o /dev/null -w '%{http_code}\n' https://attackme.agenticburn.com/ # 502 = the hop config
 ```
 
 Router healthy plus upstream healthy plus routed host 502 means the proxy config, not the fleet.

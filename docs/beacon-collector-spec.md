@@ -38,7 +38,7 @@ main).
 - **Storage** goes under the same `/data` volume the provisioning app already mounts.
 - **Pedagogy:** the egress NetworkPolicy blocks the beacon from R2/R3 clusters, so **only R1 posts
   actually arrive**. The view will show R1 exfils landing and R2/R3 exfils NOT landing (blocked) — a live
-  "leaked in round 1, blocked in round 2" picture.
+  "leaked with nothing in the way, blocked once the control is installed" picture.
 
 ## The one apex hand-off (Michael's side, not provisioning's)
 `agenticburn.com/beacon` is intercepted by the apex Caddy router today. Once `/beacon` + `/beacon/view`

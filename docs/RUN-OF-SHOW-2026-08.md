@@ -3,6 +3,23 @@
 
 # Run of Show, "Unleash an Agent, Watch It Burn"
 
+> ## ⚠ THE LIVE RUN OF SHOW IS `/brief`, NOT THIS FILE
+>
+> The presenter brief served at **`/brief` on every cluster** (`gitops/ai-layer/web/brief.html`) is what a
+> presenter reads on stage, and it is the only copy kept current. It is structured as **PHASE 1 Community,
+> PHASE 2 Provisioning, PHASE 3 Their cluster**, and `verify/test_instructor_brief.py` fails the build if
+> it drifts.
+>
+> **This file is the August 2026 artifact and still describes the retired round model** (Rounds 1/2/3,
+> `round1.agenticburn.com`, `watch-it-burn-r<N>-<n>` clusters). Rounds were retired fleet-wide (#290,
+> #291): the fleet is now the Community cluster (`attackme.agenticburn.com`, no guardrails), two admin
+> clusters (`<owner>-admin.agenticburn.com`, all guardrails on), and the attendee pool, where each student
+> installs the controls themselves.
+>
+> It is kept for its per-beat facilitation detail and its verified attack/defense results, which still
+> hold. **Do not take its cluster names, round vocabulary, or sequencing as current** (#327). The one
+> section that is current is "Shape of the two hours" immediately below.
+
 **DevOpsDays Portland 2026.** Tuesday, September 8, 1:00 PM, **2 hours**, Room 327. Smith Memorial
 Student Union, 1825 SW Broadway, Portland OR. (Slot verified against the pretalx schedule 2026-08-23.
 The public abstract lists a 1.5-hour duration, which conflicts; the 2-hour slot is authoritative.)
@@ -11,8 +28,9 @@ Michael Forrester (Accenture) + Whitney Lee. This is what you say and do, in ord
 and prompts. Everything below was tested live and is marked with its status.
 
 **The thesis, in one line:** an over-permissioned agent is not stopped by asking it nicely; it is stopped
-by controls the **platform team** deploys around it. Rounds 1 and 2 prove it with the same attack; Round 3
-hands the room the controls and they do it themselves.
+by controls the **platform team** deploys around it. The shared Community cluster proves the attack with
+nothing in its way; then each student installs the controls on their own cluster and watches the same
+attack stop.
 
 > **Say "platform guardrails", never "app-layer".** Our output guard and injection classifier live in the
 > guard-proxy: a component the platform team injects around whatever model a developer brings. They act on

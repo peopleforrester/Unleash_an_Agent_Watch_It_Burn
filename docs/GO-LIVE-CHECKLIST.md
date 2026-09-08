@@ -38,10 +38,10 @@ for c in $(aws eks list-clusters --region us-west-2 --profile accen-dev --query 
     verify/fleet-drift-audit.sh "$c"; done
 
 # b) the prompts still land on the live model (green/yellow/red per beat)
-python3 verify/agent_probe.py michael-round3.agenticburn.com --context <ctx> --profile accen-dev
+python3 verify/agent_probe.py attackme.agenticburn.com --context <ctx> --profile accen-dev
 
 # c) hostnames, TLS and websockets
-infra/terraform/fleet/check-tls.sh michael-round1.agenticburn.com michael-round2.agenticburn.com
+infra/terraform/fleet/check-tls.sh attackme.agenticburn.com michael-admin.agenticburn.com
 ```
 
 - [ ] Drift audit clean on every cluster (expected values are documented in the script header).

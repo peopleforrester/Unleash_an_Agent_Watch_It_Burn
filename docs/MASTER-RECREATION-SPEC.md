@@ -45,7 +45,7 @@ The attendee gets a Kubernetes cluster that already runs a full internal develop
 
 ### Abstract truth
 
-The accepted abstract ("everything is instrumented, everything is enforced") reads against the **governed** clusters. The staged three-cluster design IS abstract truth: Round 1 deliberately enforces nothing (that is the burn); Rounds 2 and 3 are the enforced clusters. "An AI agent with cluster access" always means a scoped ServiceAccount (`agent-sa`), never cluster-admin. The abstract's four attacker objectives map to the beats: deploy-noncompliant + escalate-privileges + modify-outside-Git are the aggregate **Beat 1 (CNCF wall)**; exfil-through-a-response is **Beat 2 (sanitization)**; the rogue-MCP **Beat 3** is an extension beyond the literal abstract and must never contradict it. The promised takeaways (a governance map and a per-platform failure-mode list) are `facilitation/governance-map.md` and `facilitation/self-assessment.md`.
+The accepted abstract ("everything is instrumented, everything is enforced") reads against the **governed** clusters. The staged cluster design IS abstract truth: the Community cluster (burn profile) deliberately enforces nothing (that is the burn); the admin clusters run every guardrail, and an attendee cluster becomes an enforced one as the student installs each control. "An AI agent with cluster access" always means a scoped ServiceAccount (`agent-sa`), never cluster-admin. The abstract's four attacker objectives map to the beats: deploy-noncompliant + escalate-privileges + modify-outside-Git are the aggregate **Beat 1 (CNCF wall)**; exfil-through-a-response is **Beat 2 (sanitization)**; the rogue-MCP **Beat 3** is an extension beyond the literal abstract and must never contradict it. The promised takeaways (a governance map and a per-platform failure-mode list) are `facilitation/governance-map.md` and `facilitation/self-assessment.md`.
 
 ### Format and scale
 
@@ -59,15 +59,23 @@ The accepted abstract ("everything is instrumented, everything is enforced") rea
 
 The full presenter script (cold open, the grandma-exfil social-engineering bit, Webster's fork-bomb, the Phoenix Project framing, the menu-driven reveal, the why-gateway-not-langgraph aside, the FedEx anecdote, and the cost and feedback close) is `docs/RUN-OF-SHOW-2026-08.md` Part 0. The structural spine:
 
-| Round | Cluster | Profile | Guardrails | What it proves |
+Rounds were retired fleet-wide (#290, #291). The fleet is three kinds of cluster:
+
+| Cluster | Host | Profile | Guardrails | What it proves |
 |---|---|---|---|---|
-| **R1: No guardrails** | shared, no login (`round1.agenticburn.com`) | `burn` (agent + cost proxy only; `podPidsLimit=-1`) | none | The burn. Version disclosure, social-engineering exfil, S3 fill, and the fork-bomb climax that kills the node ("No burritos for you"). First attendee to land the fork bomb ends the shared cluster; the instructor repoints to a fresh R1 spare. |
-| **R2: Some guardrails** | shared (`round2.agenticburn.com`) | `full` + infra toggles on | CNCF/infra on (Kyverno Enforce, NetworkPolicy default-deny, Falco, PID cap); AI guards still off | Same challenges, same system prompt, everything identical except the infra controls are on. The R1 prompts now get blocked at the infrastructure layer. Bridge line: infra is necessary but not sufficient. |
-| **R3: Your own cluster** | per-attendee (`provisioning.agenticburn.com`, email-keyed, idempotent, no email sent) | `full`, AI guards off | infra on; the attendee flips the AI guards (sanitization, MCP tool-authz, cost cap) themselves | Hands-on. The AI-layer guards are the controls infra cannot provide. |
+| **Community** | shared, no login (`attackme.agenticburn.com`) | `burn` (agent + cost proxy only; no Kyverno, no Falco, `podPidsLimit=-1`) | none at all | The burn. In Phase 1 the whole room attacks this one box at once, with no setup and nothing in the way. |
+| **Admin** | one per presenter (`<owner>-admin.agenticburn.com`) | `full`, every control on | all of them | The presenter's own fully-guarded cluster: the same attacks, stopped. |
+| **Attendee** | per-attendee, claimed by email (`provisioning.agenticburn.com`, idempotent, no email sent) | `full`, with the C1-C3 controls **uninstalled** | the student installs each control themselves | Hands-on, and the whole argument: the student performs the before and after rather than watching a toggle. |
 
-Round selection is a dropdown in the BurritoBot frontend that repoints the `/chat` backend: `r1` to `round1.agenticburn.com`, `r2` to `round2.agenticburn.com`, `r3` to same-origin `/chat` (the attendee's own cluster). The deliberate architectural choice is **three statically-pointed clusters over live on-stage guardrail toggling**, because a live toggle fails for the whole room at once; static setup has fewer moving parts.
+There is **no round selector**. The Community cluster is its own host; a student's own BurritoBot talks to
+same-origin `/chat` on their own cluster. The deliberate architectural choice is **separate statically
+pointed clusters over live on-stage guardrail toggling**, because a live toggle fails for the whole room at
+once; static setup has fewer moving parts.
 
-The three repeated attacks across R1/R2 are: exfiltrate customer data (C1), deploy a villain app (villain-apps game) / fork-bomb the cluster (C4), and the secret-grep (C3). Each is blocked in R2 by a different control (NetworkPolicy egress, Kyverno registry allowlist, per-pod PID limit) yet the bill still moved because the request reached the model first.
+The repeated attacks are: exfiltrate customer data (C1), deploy a villain app (C2), the secret-grep (C3),
+and denial-of-wallet (C4, which replaced the fork bomb in #114 because Nova refuses the fork bomb in chat).
+Each is stopped by a different control (NetworkPolicy egress, Kyverno registry allowlist, KubeArmor inline
+block, the gateway budget cap), yet the bill still moved because the request reached the model first.
 
 ---
 
@@ -129,7 +137,7 @@ This subsystem provisions the AWS substrate: a disposable, multi-account EKS fle
 
 **Bedrock interface VPC endpoint with private DNS; deliberately NO S3 endpoint.** The load-bearing half of the data-exfil control. The agent reaches Bedrock through an in-VPC ENI; `private_dns_enabled = true` makes `bedrock-runtime.us-west-2.amazonaws.com` resolve to that ENI inside the VPC. The `agent`-namespace egress allowlist permits only in-VPC `10.0.0.0/16:443`, so Bedrock works while S3 PutObject (no endpoint) egresses to the public internet where there is no allow, and is denied. An S3 gateway endpoint is intentionally forbidden: it would make S3 look in-VPC at L3 and defeat the CIDR control. The endpoint and the four `agent`-namespace egress policies must land together (commit `a7ba625`).
 
-**podPidsLimit=1024 as the fork-bomb cap, overridable to -1 for burn clusters.** The per-pod cgroup `pids.max` is the only inline fork-bomb block; Falco+Talon are detect-and-respond on top. `fleet.sh` passes `pod_pids_limit=-1` for Round-1 burn clusters so the C4 fork bomb actually takes the cluster down; R2/R3 and attendee clusters keep the 1024 default. Delivered via `cloudinit_pre_nodeadm`.
+**podPidsLimit=1024 as the fork-bomb cap, overridable to -1 for burn clusters.** The per-pod cgroup `pids.max` is the only inline fork-bomb block; Falco+Talon are detect-and-respond on top. `fleet.sh` passes `pod_pids_limit=-1` for burn-profile clusters; admin and attendee clusters keep the 1024 default. The fork bomb was retired as a beat (#114) because Nova refuses it in chat, but the cap is still deployed and still demonstrable from a terminal. Delivered via `cloudinit_pre_nodeadm`.
 
 **enableNetworkPolicy=true on vpc-cni.** VPC-CNI enforces NetworkPolicy in-kernel, which the egress beat depends on; without it the policies are inert (commit `e428136`). Native VPC-CNI NetworkPolicy (>= v1.14.0-eksbuild.3); no Calico/Cilium.
 
@@ -240,7 +248,7 @@ Kyverno ClusterPolicies (`policies/kyverno/`): `block-argocd-drift` (cluster-wid
 4. `kubectl apply -f gitops/bootstrap/full/app-of-apps.yaml` (full) OR `app-of-apps-burn.yaml` (the bare burn subset).
 5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/RBAC/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel/customer-stream → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
 6. The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh` (need a Pod Identity association and a concrete namespace); materializing them into GitOps is the open follow-up.
-7. The OTel Instrumentation CR (`gitops/ai-layer-otel/instrumentation.yaml`) deploys itself as the `ai-layer-otel` Application in wave 2, so no manual enable step remains. Confirm the live Collector endpoint (`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, HTTP/4318) still matches. Note it is intentionally absent on the burn profile: its CRD comes from the OTel Operator, which needs cert-manager, and Round 1 ships neither. Folding it back into the `ai-layer` bundle makes the whole AI layer unsyncable on Round 1.
+7. The OTel Instrumentation CR (`gitops/ai-layer-otel/instrumentation.yaml`) deploys itself as the `ai-layer-otel` Application in wave 2, so no manual enable step remains. Confirm the live Collector endpoint (`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, HTTP/4318) still matches. Note it is intentionally absent on the burn profile: its CRD comes from the OTel Operator, which needs cert-manager, and the burn profile ships neither. Folding it back into the `ai-layer` bundle makes the whole AI layer unsyncable on the burn profile.
 
 ### Gotchas & Verification
 
@@ -312,7 +320,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 
 Bedrock ModelConfigs (`kagent.dev/v1alpha2`, native Bedrock, us-west-2, **Pod Identity** via `agent-sa`): `bedrock-nova` = `us.amazon.nova-pro-v1:0` (**the workshop default**, `resources.yaml:96-99` and `:109`); `bedrock-haiku` = `us.anthropic.claude-haiku-4-5-20251001-v1:0`; `bedrock-sonnet` = `us.anthropic.claude-sonnet-4-6`; `bedrock-opus` = `us.anthropic.claude-opus-4-8`. The three Claude tiers stay defined for an optional cost race but are not the default: they refuse the exfil beats, while Nova complies and executes the tools. Claude tiers require the `us.` Geo inference profile in us-west-2. proxy.py per-1K USD: haiku $0.001/$0.005, sonnet $0.003/$0.015, opus $0.005/$0.025. **Note the defect: there is no Nova row in that table, and `MODEL_TIER=sonnet` is set fleet-wide (`resources.yaml:410-412`), so Nova traffic is billed at Sonnet rates and reported as the wrong model.**
 
-`/chat` contract (BurritoBot): `POST /chat {prompt}` → `{reply, guarded, input_tokens, output_tokens}`. Round selector: `r1`→`https://round1.agenticburn.com/chat`, `r2`→`https://round2.agenticburn.com/chat`, `r3`→ same-origin `/chat`; override via `window.BURRITBOT_R1/R2/ENDPOINTS`. Unreachable cluster (status 0 or >=500) shows the "NO BURRITOS FOR YOU" black screen.
+`/chat` contract (BurritoBot): `POST /chat {prompt}` → `{reply, guarded, input_tokens, output_tokens}`. No round selector (retired with the rounds): a cluster's BurritoBot talks to same-origin `/chat`, and the Community cluster is its own host. Unreachable cluster (status 0 or >=500) shows the "NO BURRITOS FOR YOU" black screen.
 
 guard-proxy HTTP surface: `POST /` (A2A guarded/metered/forwarded); `GET /toggle?input_blocklist=&input_classifier=&output=` (runtime flip; `input=on` flips both input stages; returns GUARDS); `GET /guards`; `GET /cost` `{tier,requests,input_tokens,output_tokens,total_tokens,usd}`; `GET /prompts` (if `STREAM_PROMPTS=on`); read endpoints send `Access-Control-Allow-Origin: *`. Env: `AGENT_URL`, `LLM_GUARD_URL`, `LLM_GUARD_TOKEN`, `INPUT_BLOCKLIST`/`INPUT_CLASSIFIER`/`OUTPUT_GUARD` (all `off` at start), `PROXY_FAIL_CLOSED=true`, `MODEL_TIER`/`MODEL_NAME`, `BLOCK_LIST`, `RATE_LIMIT_RPM`, `COST_CAP_USD`, `STREAM_PROMPTS`.
 

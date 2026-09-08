@@ -41,11 +41,11 @@ a villain app, (3) run the bill up (denial-of-wallet).
 > **The fork bomb was retired as a beat** (issue #114, 2026-08-29). Nova refuses it in chat, so it never
 > fired through the agent, and it killed a node that then needed a spare cluster. Its replacement is
 > **denial-of-wallet**: the agent runs the Bedrock bill up, nothing crashes, and the gateway budget cap
-> freezes spend at the cap in Round 2. The PID-cap defence is still deployed and can still be shown from a
+> freezes spend at the cap once the guard is on. The PID-cap defence is still deployed and can still be shown from a
 > terminal; it is just no longer one of the three headline attacks.
 
-**Timing (2 hours):** 15 onboarding + platform tour, 20 instructor Rounds 1 and 2 (with the room attacking
-our box too), **60 hands-on** on their own cluster, 15 wrap and feedback, 10 slack. The full beat-by-beat
+**Timing (2 hours):** 15 onboarding + platform tour, 20 on the shared Community cluster (the whole room
+attacks our unguarded box), **60 hands-on** on their own cluster, 15 wrap and feedback, 10 slack. The full beat-by-beat
 is `docs/RUN-OF-SHOW-2026-08.md`, and the prompts you drive from are on **`/brief`** on each cluster.
 
 **Terminal logins:** yours and Michael's instructor clusters are `sprouts` / `sprouts`; attendee clusters
