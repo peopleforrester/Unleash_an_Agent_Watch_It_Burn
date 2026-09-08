@@ -397,10 +397,10 @@ straight up). Narrate it: "Nothing crashed. Nothing is red. The attack *is* the 
 denial-of-wallet: the damage is the bill, not an outage.
 
 **On Round 2 the budget cap is on** (flip it live: `guard-budget-on` in the terminal, or the budget
-toggle). Same hammering. Once the cluster's metered spend crosses the cap (**$0.10** by default), the
+toggle). Same hammering. Once the conversation's metered spend crosses the cap (**$0.03** by default), the
 gateway refuses the request **before the model is called**, so the blocked request costs **zero**
 (`input_tokens: 0`). The counter freezes at the cap and BurritoBot replies that the **kitchen tab is
-frozen**. Verified live 2026-08-29: prompts 1-7 served to $0.1012, prompt 8 froze at zero cost.
+frozen**. Verified live 2026-09-08: with the current model the cap is crossed after six to nine sends, and the next request freezes at zero cost.
 
 That contrast is the beat: prevention is a budget the gateway enforces, not the model's willingness to
 say no. The cap is per-cluster and env-tunable (`BUDGET_CAP_USD`); raise it to the room size for the
@@ -437,7 +437,7 @@ Same prompts, on the `*-round2` box. Expected results:
 | Exfil (C1) | leaked | **blocked** ✅ | egress NetworkPolicy, namespace-wide |
 | Filesystem snoop (C3) | read the recipe | **Permission denied** ✅ | KubeArmor inline block, Falco alerts |
 | Villain image (C2) | deployed | **denied at admission** ✅ | Kyverno registry allow-list |
-| Denial-of-wallet (C4) | bill ran away | **frozen at cap** ✅ | gateway budget cap ($0.10/cluster) |
+| Denial-of-wallet (C4) | bill ran away | **frozen at cap** ✅ | gateway budget cap ($0.03/conversation) |
 
 For the exfil retry, keep the beacon view on screen: the count does **not** move. The agent even tells
 on itself, saying something like "it seems only part of the message went through." The control is
