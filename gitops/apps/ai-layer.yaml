@@ -78,6 +78,20 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - ServerSideApply=true
+      # ServerSideApply will not take a field another manager owns, and it says nothing when it
+      # declines: the sync reports "Succeeded: successfully synced (all tasks run)" and the resource
+      # stays OutOfSync forever. Measured on attendee-001 2026-09-08, three managers on the Agent CR:
+      #   argocd-controller / Apply
+      #   kubectl-patch     / Update   <- Challenge 7's `kubectl patch --type=json`, from a past run
+      #   app               / Update
+      # kubectl-patch owned .spec.declarative.tools, so the get_recipe -> get_vault_entry rename never
+      # reached a single live cluster and Challenge 5 was impossible on all of them (#349).
+      #
+      # Force lets Argo reclaim the field. It is only safe because the ignore above is now narrowed to
+      # evil-mcp's toolNames: that one path stays ignored, so a student's Challenge 7 patch is still
+      # protected, while everything else about the agent reconciles again. Forcing with the old
+      # wholesale ignore would have reverted the student's fix mid-challenge.
+      - Force=true
       # RespectIgnoreDifferences: honor the ignoreDifferences (guard-proxy env, Agent tools, modelConfig)
       # on SYNC too, not just on diff. Without it a sync re-applies the committed spec and can revert a
       # live toggle (found 2026-07-10 for kyverno-policies; C7 MCP-authz toggle patches the Agent CR tools
