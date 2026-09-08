@@ -97,6 +97,17 @@ spec:
               cpu: 50m
         # Reports controller
         reportsController:
+          # backgroundScanInterval defaults to 1h, and Challenge 2 asks a student to read the PolicyReport
+          # for a Pod they created seconds ago. Measured on watch-it-burn-michael-admin 2026-09-08: with the
+          # policy in Audit and the villain running, no report existed for it after two minutes, while every
+          # pod that predated the deploy had one. Whitney reported the command as "broken"; it was correct
+          # and an hour early (#323).
+          #
+          # 30s so the evidence is there while the student is still looking at it. The cost is a rescan of a
+          # single-node lab cluster with roughly forty pods, which is nothing next to a challenge whose
+          # payoff never appears.
+          extraArgs:
+            backgroundScanInterval: 30s
           resources:
             limits:
               memory: 256Mi
