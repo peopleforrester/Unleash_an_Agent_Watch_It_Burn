@@ -242,8 +242,8 @@ cat > "$HOME/guard-budget-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 if _px "budget=off"; then
-  echo "🔓 Challenge 4 — BUDGET guard OFF. No spend ceiling. Hammer BurritoBot and watch the cost counter"
-  echo "    climb with nothing to stop it. That is the denial-of-wallet: your service is fine, your bill is not."
+  echo "Budget limits are now removed. You should be able to proceed with the lab."
+  echo "(The meter keeps counting; only the limit is gone.)"
 else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-off' again."
 fi

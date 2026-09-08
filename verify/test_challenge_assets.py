@@ -45,8 +45,15 @@ for label, needle, source in FACTS:
     check(f"{label} ({needle})", needle in DOC and needle in source)
 
 print("== the two caps are stated correctly ==")
-check("the demo cap is 10 cents in the doc and the proxy",
-      "BUDGET_CAP_USD" in DOC and '"0.10"' in PROXY and "0.10" in DOC)
+# 3 cents, and PER CONVERSATION. Both halves matter: the number was measured (10 cents was ~20 sends of
+# the expensive prompt, #345) and the scope is what stops Challenge 4 killing the rest of the lab (#346).
+check("the demo cap is 3 cents in the doc and the proxy",
+      "BUDGET_CAP_USD" in DOC and '"0.03"' in PROXY and "0.03" in DOC)
+check("the doc says the demo cap is per conversation", "per conversation" in DOC)
+check("the proxy measures it per session, not cluster-wide",
+      "def cost_capped(session=" in PROXY and "_session_cost" in PROXY)
+check("the cluster-wide backstop is still cluster-wide",
+      "spend >= COST_CAP_USD" in PROXY)
 check("the safety cap is 25 dollars in the doc and the manifest",
       "COST_CAP_USD" in DOC and 'COST_CAP_USD, value: "25"' in RES and "25 dollars" in DOC)
 

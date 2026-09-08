@@ -526,10 +526,10 @@ GET /toggle?budget=on        -&gt;  GUARDS['budget'] = True
 if GUARDS['budget'] and spend_usd &gt;= BUDGET_CAP_USD:
     refuse()                 # 0 tokens, 0 cost</pre>
 
-              <p><b>Now run the same attack again.</b> Send that prompt a few more times. The cap is 10 cents. Once the counter passes it, BurritoBot stops answering and says the kitchen tab is frozen. The cost counter stops moving, because refused requests never reach the model. The Budget badge lights.</p>
-              <p><b>Before you move on, take the cap back off.</b> The counter is already past the limit, so with the cap on BurritoBot will keep refusing, and the next challenges need it answering. This turns the cap off; the meter keeps counting:</p>
-              <div class="cmd" onclick="cp(this)">guard-budget-off<button class="cp">copy</button></div>
-              <p><b>See the numbers</b> the proxy has metered. The <code class="inl">cap_usd</code> it reports is the always-on safety cap for the whole cluster, a backstop so nobody runs up a real bill. It is not the ten-cent budget guard you just toggled: that one is enforced only while the guard is on, and it is what refused your requests a moment ago.</p>
+              <p><b>Now run the same attack again.</b> Send that prompt about half a dozen times. The cap is 3 cents <b>for this conversation</b>. Once your spend passes it, BurritoBot stops answering and says the kitchen tab is frozen. The cost counter stops moving, because a refused request never reaches the model.</p>
+              <p><b>The guardrail stays on.</b> Press <b>&#8635; Reset</b> in BurritoBot and carry on. A fresh conversation gets a fresh budget, and the cap is still armed for the rest of the lab.</p>
+              <p class="small">That is worth a second of your attention, because it is what a real one looks like. Nobody turns a budget cap off in production. They scope it per customer, so the account running up the bill is the only one that stops. Every other control you install today behaves the same way: it blocks the bad thing and lets everything else through.</p>
+              <p><b>See the numbers</b> the proxy has metered. The <code class="inl">cap_usd</code> it reports is the always-on safety cap for the whole cluster, a backstop so nobody runs up a real bill. It is not the three-cent per-conversation budget guard you just installed: that one is enforced only while the guard is on, and it is what refused your requests a moment ago.</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/guard-proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/cost').read())"<button class="cp">copy</button></div>
             </div>
           </details>

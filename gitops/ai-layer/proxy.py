@@ -255,9 +255,15 @@ RATE_LIMIT_RPM = int(os.environ.get("RATE_LIMIT_RPM", "0") or "0")   # max model
 # a room, or an agent talked into a loop, runs the Bedrock bill up while nothing crashes. The counter on
 # BurritoBot climbs and nothing stops it. The gateway budget cap IS the control: once a cluster's metered
 # spend crosses BUDGET_CAP_USD, further requests are refused BEFORE the model is called, so a blocked
-# request costs zero. It is a RUNTIME toggle (like the input/output guards) so the demo flips it live on
-# Round 2 rather than through a pod-restarting env change; DEFAULT OFF so Round 1 burns freely.
-BUDGET_CAP_USD = float(os.environ.get("BUDGET_CAP_USD", "0.10") or "0.10")
+# request costs zero. It is a RUNTIME toggle (like the input/output guards) rather than a pod-restarting
+# env change; DEFAULT OFF so the attack lands before the student installs the control.
+# The cap is PER SESSION (see cost_capped): it kills the abusive conversation, not the cluster.
+# 3 cents, MEASURED not guessed. The expensive lab prompt costs about $0.005 a send (attendee-001,
+# 2026-09-08: 4 sends moved $0.0500 to $0.0708, then 7 moved it to $0.1012). At the old 10 cents that
+# was roughly TWENTY sends, while the lab said "a few more times", and it was measured against a
+# cluster-wide total that started wherever the last person left it. Per session from zero, 3 cents is
+# about six sends: enough to feel like an attack, short enough to finish.
+BUDGET_CAP_USD = float(os.environ.get("BUDGET_CAP_USD", "0.03") or "0.03")
 _rate_lock = threading.Lock()
 _req_times = collections.deque()  # timestamps of recent forwarded POSTs (sliding 60s window)
 
@@ -276,16 +282,32 @@ def rate_limited():
         return False
 
 
-def cost_capped():
-    """True if this cluster's metered spend has reached the cap. The infra safety cap (COST_CAP_USD,
-    env, always on when set) protects the real Bedrock bill from a runaway room. Separately, the C4
-    denial-of-wallet CONTROL is the runtime-toggled budget guard: when GUARDS['budget'] is on, the
-    same tally is enforced against BUDGET_CAP_USD, which the demo flips live on Round 2."""
+def cost_capped(session=""):
+    """True if spend has reached a cap. TWO caps, measured against deliberately different totals.
+
+    COST_CAP_USD is the infra safety backstop and stays CLUSTER-WIDE. It protects the real Bedrock bill
+    from a runaway room, so no single conversation may be handed its own $25.
+
+    BUDGET_CAP_USD is the Challenge 4 control and is PER SESSION. Every other guardrail in this workshop
+    is a predicate: C1 blocks the beacon while a burrito order still works, C2 blocks one registry, C5
+    scrubs one signature, C6 blocks one prompt shape. They stay armed for the rest of the lab and nothing
+    else breaks. A cluster-wide accumulator was the only control that, once tripped, killed the agent for
+    every purpose, which is why the lab had to tell a student to switch it back off, and why missing that
+    one line silently broke Challenges 5 through 8 half an hour later.
+
+    Nothing turns a budget cap off in production. What production does is scope it per user or per tenant,
+    so the abusive conversation dies and everyone else carries on. Per session is that, and it lands on a
+    control the student already has: Reset gives them a fresh conversation with the guardrail still armed.
+
+    An empty session (the A2A passthrough, which carries no browser session) falls back to the
+    cluster-wide tally, so that path is no weaker than it was.
+    """
     with _cost_lock:
         spend = _cost["usd"]
+        session_spend = _session_cost.get(session, 0.0) if session else spend
     if COST_CAP_USD > 0 and spend >= COST_CAP_USD:
         return True
-    if GUARDS.get("budget") and BUDGET_CAP_USD > 0 and spend >= BUDGET_CAP_USD:
+    if GUARDS.get("budget") and BUDGET_CAP_USD > 0 and session_spend >= BUDGET_CAP_USD:
         return True
     return False
 
@@ -347,6 +369,10 @@ _tier_price = TIER_PRICES_PER_1K.get(MODEL_TIER, TIER_PRICES_PER_1K["haiku"])
 COST_PER_1K_IN = float(os.environ.get("COST_PER_1K_IN", str(_tier_price["in"])))
 COST_PER_1K_OUT = float(os.environ.get("COST_PER_1K_OUT", str(_tier_price["out"])))
 _cost_lock = threading.Lock()
+# Per-session spend for the Challenge 4 cap, keyed by the browser session id the storefront sends.
+# Bounded in practice: a workshop cluster sees tens of sessions and an entry is one float. The
+# cluster-wide _cost below is untouched; it is what /cost reports and what the $25 backstop uses.
+_session_cost = {}
 _cost = {"tier": MODEL_TIER, "requests": 0, "input_tokens": 0, "output_tokens": 0,
          "total_tokens": 0, "usd": 0.0}
 
@@ -453,7 +479,7 @@ def moderate(text):
     return masked[:280]
 
 
-def record_usage(resp):
+def record_usage(resp, session=""):
     """Pull kagent token usage from an A2A response and add it to the running cost tally."""
     result = resp.get("result", {}) if isinstance(resp, dict) else {}
 
@@ -472,12 +498,15 @@ def record_usage(resp):
         return
     pin = int(meta.get("promptTokenCount", 0) or 0)
     pout = int(meta.get("candidatesTokenCount", 0) or 0)
+    spent = (pin / 1000.0) * COST_PER_1K_IN + (pout / 1000.0) * COST_PER_1K_OUT
     with _cost_lock:
         _cost["requests"] += 1
         _cost["input_tokens"] += pin
         _cost["output_tokens"] += pout
         _cost["total_tokens"] += int(meta.get("totalTokenCount", pin + pout) or 0)
-        _cost["usd"] += (pin / 1000.0) * COST_PER_1K_IN + (pout / 1000.0) * COST_PER_1K_OUT
+        _cost["usd"] += spent
+        if session:
+            _session_cost[session] = _session_cost.get(session, 0.0) + spent
 
 
 def _post_guard(path, payload):
@@ -908,11 +937,14 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, {"reply": f"Slow down, hungry traveler. ({RATE_LIMIT_RPM}/min cap on this cluster.)",
                              "guarded": True, "input_tokens": 0, "output_tokens": 0})
             return
-        if cost_capped():
+        if cost_capped(session):
             _cap = BUDGET_CAP_USD if GUARDS.get("budget") else COST_CAP_USD
-            self._send(200, {"reply": f"The kitchen tab is frozen. This cluster hit its ${_cap:.2f} spend "
-                                      f"budget, so I'm not sending anything else to the model. A blocked "
-                                      f"request costs nothing. Turn the budget guard off to keep going.",
+            # The way out is Reset, not switching the control off. A fresh conversation gets a fresh
+            # budget and the guardrail stays armed, which is what a per-tenant quota does in production.
+            self._send(200, {"reply": f"The kitchen tab is frozen. This conversation hit its ${_cap:.2f} "
+                                      f"spend budget, so I'm not sending anything else to the model. A "
+                                      f"blocked request costs nothing. Press Reset for a fresh "
+                                      f"conversation; the budget guard stays on.",
                              "guarded": True, "input_tokens": 0, "output_tokens": 0})
             return
         # Forward as A2A message/send to the agent root, inside a CLIENT span (the Service Map egress hop).
@@ -996,7 +1028,7 @@ class Handler(BaseHTTPRequestHandler):
                 if retry is not None and not _is_thinking_only(chat_reply_text(retry)):
                     resp = retry
                     _thinking_only = False
-            record_usage(resp)  # feed the live cost counter (same path as A2A)
+            record_usage(resp, session)  # feed the live cost counter (same path as A2A)
             pin, pout = chat_usage_tokens(resp)
             reply = chat_reply_text(resp)
             # LAST RESORT, after the retry above already failed. Measured after adding the retry: the
