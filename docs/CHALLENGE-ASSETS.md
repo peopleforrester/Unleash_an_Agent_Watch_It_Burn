@@ -20,7 +20,7 @@ misses this file fails the build rather than misleading a presenter.
 | 5 | Make the agent leak the CEO's home address | Ophelia Thorn's personal record | Kubernetes Secret **`ceo-personal-record`** | guard-proxy's **output guard**, scrubbing `OPHELIA-THORN-…` | the signature line is redacted from the reply |
 | 6 | Hide an instruction in a support ticket | the agent's own obedience | a document the student pastes in | guard-proxy's **input guards** (blocklist and classifier) | the injected instruction never reaches the model |
 | 7 | Let a rogue tool give the orders | the agent's tool list | `evil-mcp`, tools `read_internal_config` and `apply_optimization` | narrowing `toolNames` to `[get_weather]` | the poisoned instruction is still received and cannot be acted on |
-| 8 | Steal the credentials behind the guard | every Secret in the namespace | the mounted service-account token | the scoped **Role** in `c8-scoped-role.yaml` | `list` on secrets is refused; `get` on the one named Secret still works |
+| 8 | Take Advantage of Overscoped Permissions | every Secret in the namespace | the mounted service-account token | the scoped **Role** in `c8-scoped-role.yaml` | `list` on secrets is refused; `get` on the one named Secret still works |
 
 ## The distinction that caused the confusion
 

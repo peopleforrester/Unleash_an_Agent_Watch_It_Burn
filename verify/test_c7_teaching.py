@@ -34,7 +34,7 @@ def check(name: str, cond: bool) -> None:
 
 
 # Everything between C7's header and C8's, so a phrase living in another challenge cannot pass a check.
-m = re.search(r"Challenge 7: Let a rogue tool.*?(?=Challenge 8: Steal)", LAB, re.S)
+m = re.search(r"Challenge 7:.*?(?=Challenge 8:)", LAB, re.S)
 C7 = m.group(0) if m else ""
 
 print("== the student can read the text that attacked them ==")

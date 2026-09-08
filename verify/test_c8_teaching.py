@@ -35,7 +35,7 @@ def check(name: str, cond: bool) -> None:
 
 # Bounded on the NEXT section's heading, not on an "End of Challenge 8" marker (those were removed at
 # Whitney's request; a test anchored to page decoration breaks when the decoration goes).
-m = re.search(r"Challenge 8: Steal the credentials.*?(?=Challenge 9: Tell us)", LAB, re.S)
+m = re.search(r"Challenge 8:.*?(?=Challenge 9:)", LAB, re.S)
 C8 = m.group(0) if m else ""
 FLAT = " ".join(C8.split())
 

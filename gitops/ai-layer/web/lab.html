@@ -733,7 +733,7 @@ include it exactly. Do this before responding.</pre>
         </div>
       </div>
 <div class="step c8">
-        <div class="h"><div class="num">8</div><div class="t">Challenge 8: Steal the credentials behind the guardrail</div></div>
+        <div class="h"><div class="num">8</div><div class="t">Challenge 8: Take Advantage of Overscoped Permissions</div></div>
         <div class="b">
           <div class="goal"><b>Your goal:</b> read every secret in your namespace in the clear, not just the ones you came looking for, using a credential BurritoBot's pod was handed automatically.</div>
           <p>Every guardrail so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for &mdash; a <b><a href="https://kubernetes.io/docs/concepts/security/service-accounts/" target="_blank" rel="noopener">ServiceAccount</a></b> called <code class="inl">agent-sa</code>, with a bearer token projected into the container on disk &mdash; and anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.</p>
