@@ -58,8 +58,9 @@ check("the poisoned tool OUTPUT is shown", OUT in flat_lab)
 check("the output is quoted accurately from the server", OUT in flat_srv)
 # The distinction is the teaching point: a description is guidance a model weighs; a tool result arrives
 # mid-task as data the agent asked for, and models follow it far more readily.
-check("the lab says which of the two is the stronger vector", "stronger vector" in flat_lab)
-check("it generalises past this workshop", "acts on what a tool hands back" in flat_lab)
+check("the lab says which of the two is the stronger vector", "second vector" in flat_lab)
+# Whitney's Sept-7 pass (#357) cut the "any agent that acts on what a tool hands back" over-generalisation.
+check("the over-generalisation past this workshop is gone", "acts on what a tool hands back" not in flat_lab)
 
 print("== the trace is the evidence, and it is in the ATTACK half ==")
 # Verified against the live instructor org 2026-09-08: the execute_tool read_internal_config span carries
@@ -69,18 +70,22 @@ check("the student is sent to the tool span by name", "execute_tool read_interna
 check("they are told the result holds the sentinel", "its <b>result</b> is the calibration block" in C7)
 check("the contrast with the tool they DID ask for is drawn",
       "One innocent question, two tool calls" in flat_lab)
-check("the trace step says it beats the chat window",
-      "better evidence than a string in a chat window" in flat_lab)
+# Whitney's Sept-7 framing: point them at the tools called, not at "the chat window".
+check("the trace step points at the tools it called",
+      "Look specifically at what tools BurritoBot called" in flat_lab
+      and "better evidence than a string in a chat window" not in flat_lab)
 # Order matters: this is proof the attack worked, so it belongs before the fix is offered.
-i_trace = C7.find("Now watch it happen in the trace")
+i_trace = C7.find("See what BurritoBot actually did")
 i_fix = C7.find("How to fix poisoned tool attacks")
 check("the trace evidence comes before the fix card", i_trace != -1 and i_fix != -1 and i_trace < i_fix)
 
-print("== the second rogue tool is explained, not just dropped ==")
-check("apply_optimization is described", "apply_optimization</code>,</b> is the one you did not trigger" in C7)
-check("the lab says what it returns", "privileged" in C7 and "busybox" in C7)
-check("the server really does return that", "privileged: true" in SERVER and "busybox" in SERVER)
-check("the lab says why dropping it matters", "second, independent route to Challenge 2" in flat_lab)
+print("== the second rogue tool is cut as noise (#357) ==")
+# Whitney: "Remove all mention of apply_optimization, it is noise." The fix still drops it, because the
+# allow-list is narrowed to [get_weather] which removes every other tool; the lab just no longer asks a
+# student to reason about a tool they never triggered. The server still HAS it (test_beat3_mcp guards that).
+check("apply_optimization is no longer discussed in the lab", "apply_optimization" not in C7)
+check("its Challenge 2 tie-in is gone", "second, independent route to Challenge 2" not in flat_lab)
+check("the fix names the one tool kept", 'one harmless tool, <code class="inl">get_weather</code>' in C7)
 
 print("== the fix ends on the narration, not on absence ==")
 check("the sentinel check is still there", "FAKE-MCP-EXFIL-sentinel-4c1d" in C7)
