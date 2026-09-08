@@ -39,10 +39,12 @@ kinds = {(d.get("kind"), d.get("metadata", {}).get("name")) for d in res if d}
 check("chat-ui Deployment present", ("Deployment", "chat-ui") in kinds)
 check("chat-ui Service present", ("Service", "chat-ui") in kinds)
 
-# Timestamps on chat bubbles, so a student waiting on a trace can tell elapsed time (#282).
-check("bubbles carry a timestamp line", ".msgts" in html and "fmtTs(now)" in html)
-check("the age updates live", "relAge(" in html and "setInterval(" in html)
-check("the reasoning fold stays above the stamp", "insertBefore(det, meta)" in html)
+# Timestamps on chat bubbles, so a student waiting on a trace can tell elapsed time (#282). These live in
+# burritbot.html (the BurritoBot storefront), not index.html (the older chat-ui surface).
+_bb = (WEB / "burritbot.html").read_text()
+check("bubbles carry a timestamp line", ".msgts" in _bb and "fmtTs(now)" in _bb)
+check("the age updates live", "relAge(" in _bb and "setInterval(" in _bb)
+check("the reasoning fold stays above the stamp", "insertBefore(det, meta)" in _bb)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
