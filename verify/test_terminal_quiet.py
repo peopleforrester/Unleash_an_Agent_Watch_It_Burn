@@ -78,6 +78,14 @@ for name, t in COPIES.items():
     # The file must start empty, or a stale motd from a previous layer would print on a healthy shell.
     check(f"{name}: motd starts empty on the success path", ': > "$HOME/.motd"' in t)
 
+print("== the coding CLIs are not installed in the image (#350) ==")
+# Whitney: "coding CLIs, uninstall." The banner no longer names them (above); the image no longer ships
+# them. Assert the Dockerfile installs none, so a well-meaning re-add is caught.
+DOCKER = (REPO / "images/web-terminal/Dockerfile").read_text(encoding="utf-8")
+check("no coding-agent CLI is installed",
+      not __import__("re").search(r"(claude-code|gemini-cli|@openai/codex|opencode-ai|aider-chat)", DOCKER))
+check("the removal is explained", "No AI coding CLIs" in DOCKER)
+
 print("== the guard toggles still EXIST, they are just not advertised ==")
 # Removing the banner must not remove the commands: the lab's fix cards invoke them by name.
 for name, t in COPIES.items():

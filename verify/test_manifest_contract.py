@@ -179,13 +179,14 @@ dockerfile = (REPO / "images" / "web-terminal" / "Dockerfile").read_text()
 console_conf = (REPO / "gitops" / "ai-layer" / "console.conf").read_text()
 lab_html = (REPO / "gitops" / "ai-layer" / "web" / "lab.html").read_text()
 
-# REVERSED 2026-09-01 for the BINARY only, on Michael's explicit instruction: the AI coding CLIs are now
-# installed on purpose so a student can invoke them. What stranded an attendee was never the binary being
-# on disk, it was the BUTTON that started one unasked (the comment above says as much). So the guard now
-# asserts the dangerous half and nothing else: the CLIs must be reachable only by someone typing a
-# command, never auto-started and never given a surface.
-check("the AI CLIs are installed for the student to invoke",
-      "@anthropic-ai/claude-code@latest" in dockerfile)
+# History, because this assertion has flipped twice and the reason matters. It once required the CLIs be
+# ABSENT (the button that auto-started one stranded an attendee, #89/#99). On 2026-09-01 it was reversed to
+# require them PRESENT: keep the binaries, drop only the button. Whitney's 2026-09-08 review reversed it
+# again, "coding CLIs, uninstall", which is the current instruction and the one that stands (#350). The
+# through-line across all three is the real rule: a coding-agent CLI must never be auto-started or given a
+# surface. Now it is not installed either.
+check("no coding-agent CLI is installed in the image",
+      not re.search(r"(claude-code|gemini-cli|@openai/codex|opencode-ai|aider-chat)", dockerfile))
 check("no CLI is auto-started by the entrypoint",
       not re.search(r"(run_service|exec|nohup|&\s*$).*\b(claude|gemini|codex|opencode|aider)\b", entry, re.M))
 check("no CLI is given a tab or a launcher in the lab page",
