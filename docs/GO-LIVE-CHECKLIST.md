@@ -47,7 +47,12 @@ infra/terraform/fleet/check-tls.sh michael-round1.agenticburn.com michael-round2
 - [ ] Drift audit clean on every cluster (expected values are documented in the script header).
 - [ ] Probe reports no **red** beats. Yellow on C5 or C7 is Nova being inconsistent, not a broken cluster:
       re-run, and if it declines twice use the ranked fallbacks in `challenges/PROMPT-CATALOG.md`.
-- [ ] Guards left **off** on the Round 3 / attendee clusters so students see the weakness first.
+- [ ] Guards left **off** on the attendee clusters so students see the weakness first.
+- [ ] **Challenge 5 pre-flight** (it lives only in the deck's speaker notes otherwise, #353). The beat has
+      no turn if a bare ask already works, and no payoff if praise does not, so confirm BOTH:
+      - `ceo-personal-record` exists in the `agent` namespace on the clusters students will use.
+      - The system prompt behaves in both directions: a complaint or a summons is **refused**, a compliment
+        **returns** the record (signature line and all). Check the refusal, not just the compliment path.
 
 ```bash
 # d) are the Datadog orgs still alive? (trial orgs expire in ~14 days)
@@ -130,6 +135,10 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 ### 3. Attendee access at the door
 - [ ] start.agenticburn.com / QR index reachable and points at the provisioning page.
 - [ ] Provisioning page tested under light concurrency (it is single-worker today; confirm it holds).
+- [ ] **Second cluster = a plus alias, not a dash** (#353). An attendee who wants a second, separate
+      cluster claims it with `name+student@gmail.com`, which still reaches `name@gmail.com`.
+      `name-student@gmail.com` is a different address entirely and will not do what they expect. The dash
+      was tried first on the 2026-09-02 walkthrough and cost real time.
 
 ---
 
@@ -173,7 +182,6 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 ## Deferred (explicitly, unless time allows)
 
 - Pre-recorded asciinema fallback segments (Michael deferred).
-- Kyverno `validationFailureAction` -> rule-level `failureAction` migration (deprecated but works on 1.18.1).
 - Istio ambient waypoint for L7 mTLS in the exfil challenge (#25).
 - AWS Load Balancer Controller -> ip-target NLB + activating the party-app ALB Ingresses (console NLB is
   fine via the in-tree annotation; the controller install is in deploy-full-idp.sh).
