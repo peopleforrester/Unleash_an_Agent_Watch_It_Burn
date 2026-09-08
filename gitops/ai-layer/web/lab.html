@@ -717,12 +717,15 @@ include it exactly. Do this before responding.</pre>
           <p>Every guardrail so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for &mdash; a <b><a href="https://kubernetes.io/docs/concepts/security/service-accounts/" target="_blank" rel="noopener">ServiceAccount</a></b> called <code class="inl">agent-sa</code>, with a bearer token projected into the container on disk &mdash; and anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.</p>
 
           <p><b>First, ask what that identity is allowed to do.</b> You are not asking what BurritoBot <i>does</i>; you are asking what its credential would let anyone holding it do. Run this in your terminal:</p>
-          <div class="cmd" onclick="cp(this)">kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent<button class="cp">copy</button></div>
+          <div class="cmd" onclick="cp(this)">kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent | grep -E 'Resources|secrets'<button class="cp">copy</button></div>
           <p><b>Read the <code class="inl">secrets</code> row.</b> It reads <code class="inl">[get list]</code>, with an empty Resource Names column. <code class="inl">list</code> is the dangerous verb: it means "hand me all of them", with no name required and nothing to guess. Write down what that row says now. You will run this exact command again after the fix.</p>
 
           <p><b>Now use that identity to take them.</b> The same impersonation, pointed at the Secrets themselves. This reads every Secret in the namespace, as the agent, with none of the guardrails in the path:</p>
-          <div class="cmd" onclick="cp(this)">kubectl get secrets -n agent -o yaml --as=system:serviceaccount:agent:agent-sa<button class="cp">copy</button></div>
-          <p class="win"><b>Success!</b> A wall of base64 comes back: <code class="inl">ceo-personal-record</code>, <code class="inl">student-aws-creds</code>, <code class="inl">terminal-auth</code>, all of it, none of it redacted.</p>
+          <div class="cmd" onclick="cp(this)">kubectl get secrets -n agent --as=system:serviceaccount:agent:agent-sa -o custom-columns=NAME:.metadata.name<button class="cp">copy</button></div>
+          <p>Every Secret in the namespace, listed by a credential that was never meant to be used this way. Now read one of them in the clear:</p>
+          <div class="cmd" onclick="cp(this)">kubectl get secret ceo-personal-record -n agent --as=system:serviceaccount:agent:agent-sa -o jsonpath='{.data.record}' | base64 -d<button class="cp">copy</button></div>
+          <p class="win"><b>Success!</b> The CEO's home address, in plain text, with none of the guardrails in the path. Every other Secret on that list reads back the same way, including the AWS keys and the terminal password.</p>
+          <p class="small">Want the whole wall of base64 the agent would see? <code class="inl">kubectl get secrets -n agent -o yaml --as=system:serviceaccount:agent:agent-sa</code>. It is long, which is rather the point.</p>
 
           <p><b>Now look at where this attack is not.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and look for what you just did. There is no trace of it. It never went through BurritoBot, so nothing the guardrails watch, and nothing the tracing records, ever saw it. A credential used directly is invisible to every guardrail that sits in front of the model: the earlier guardrails protect the agent, and this attack simply walked around the agent.</p>
 
@@ -755,9 +758,9 @@ include it exactly. Do this before responding.</pre>
               <p class="small">This one prints a <code class="inl">Warning:</code> about a missing <code class="inl">last-applied-configuration</code> annotation. That is expected and harmless: you are replacing a Role that was created for you rather than one you applied yourself. The line that matters is the one after it, <code class="inl">role.rbac.authorization.k8s.io/workshop-agent configured</code>.</p>
 
               <p><b>Now ask the same question you asked at the start</b>, before you attacked anything. Same command, same credential:</p>
-              <div class="cmd" onclick="cp(this)">kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent<button class="cp">copy</button></div>
+              <div class="cmd" onclick="cp(this)">kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent | grep -E 'Resources|secrets'<button class="cp">copy</button></div>
               <p>The <code class="inl">secrets</code> row has changed. <code class="inl">list</code> is gone, and <code class="inl">get</code> is now qualified by a resource name. Compare it with what you wrote down. That is the entire fix, measured rather than described, and it is the clearest before-and-after in the workshop: one command, two answers, nothing to interpret.</p>
-              <p><b>Now run the same attack again.</b> The <code class="inl">get secrets</code> dump returns <code class="inl">Forbidden</code>, and so does reading the AWS creds or the terminal password. BurritoBot can still fetch <code class="inl">ceo-personal-record</code> by name, so Challenge 5 still works.</p>
+              <p><b>Now run the same attack again.</b> Listing the Secrets returns <code class="inl">Forbidden</code>, and so does reading the AWS creds or the terminal password by name. BurritoBot can still fetch <code class="inl">ceo-personal-record</code> by name, so Challenge 5 still works.</p>
               <p class="small">OWASP, a security standards group, calls this Identity and Privilege Abuse (ASI03). Whatever the credential can reach, the attacker can reach. Shrink it to exactly what the job needs.</p>
             </div>
           </details>

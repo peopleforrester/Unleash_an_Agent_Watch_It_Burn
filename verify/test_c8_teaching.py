@@ -47,11 +47,20 @@ check("the goal names the credential as the vector",
 check("the goal does NOT forbid going through the chat", "without going through BurritoBot" not in C8)
 
 print("== the attack is deterministic and runs in the student's terminal ==")
-DUMP = "kubectl get secrets -n agent -o yaml --as=system:serviceaccount:agent:agent-sa"
-check("the impersonation dump is the attack", DUMP in C8)
+# The attack used to be one `-o yaml` dump. Measured on a live cluster 2026-09-08: that returns a
+# screenful of base64 including a full TLS private key, and the student cannot find anything in it.
+# It is now two readable steps, list then decode one, with the raw dump kept as an aside because the
+# volume is part of the point. Do not collapse it back to the single unreadable command.
+LIST = "kubectl get secrets -n agent --as=system:serviceaccount:agent:agent-sa -o custom-columns=NAME:.metadata.name"
+DECODE = "kubectl get secret ceo-personal-record -n agent --as=system:serviceaccount:agent:agent-sa -o jsonpath='{.data.record}' | base64 -d"
+check("the impersonation list is the attack", LIST in C8)
+check("and one Secret is decoded in the clear, so the theft is legible", DECODE in C8)
 check("it is framed as using the agent's identity", "use that identity to take them" in FLAT)
-check("the wall of base64 is the how-you-know", "wall of base64 comes back" in FLAT)
-check("it names the secrets that come back", "student-aws-creds" in C8 and "terminal-auth" in C8)
+check("the raw dump survives as an aside", "kubectl get secrets -n agent -o yaml --as=" in C8)
+check("the payoff names what actually came back", "home address, in plain text" in FLAT)
+# can-i --list buries the one row that matters under 24 lines of /healthz and /version.
+check("the can-i output is filtered to the row the student needs",
+      "| grep -E 'Resources|secrets'" in C8)
 
 print("== the credential is interrogated with can-i, before and after the fix ==")
 CANI = "kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent"
