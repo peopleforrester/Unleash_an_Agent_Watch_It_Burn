@@ -67,10 +67,26 @@ print("== Challenge 9 states the thank-you the form actually offers ==")
 # The long form's checkbox says two hours, so the lab copy has to say two hours as well.
 check("the cluster extension is named as two hours", "two more hours on your cluster" in SRC)
 
+# Every surface, not just the guide. The first pass at #364 fixed lab.html and left BurritoBot pointing
+# at the long form, which is the tab a student actually sits in for the whole workshop.
+WEB = LAB.parent
+print("== every student-facing Feedback button goes to /quick ==")
+for name, ctx in (("burritbot.html", "Challenges"), ("platform.html", "Tour")):
+    src = (WEB / name).read_text()
+    m = re.search(r'id="fbbtn"[^>]*href="([^"]+)"', src)
+    h = m.group(1) if m else ""
+    check(f"{name}: has a Feedback button", bool(h))
+    check(f"{name}: goes to /quick, not the long form", "/quick" in h)
+    check(f"{name}: carries context={ctx}", f"context={ctx}" in h)
+    check(f"{name}: carries a source label", "source=" in h)
+    # The same second-? bug lived here too.
+    check(f"{name}: identity join is conditional",
+          "fb.href+'?'" not in src.replace(" ", ""))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("All feedback-link checks passed.")
+print("All feedback-link checks passed (all surfaces).")

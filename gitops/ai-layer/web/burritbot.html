@@ -272,7 +272,11 @@
     <a class="hb" id="vttbtn" href="/lab" target="_blank" rel="noopener">&#9000; Terminal</a>
     <a class="hb" id="bbbtn" href="/">&#127791; BurritoBot</a>
     <a class="hb" id="ddbtn" href="https://app.datadoghq.com" target="_blank" rel="noopener">&#128202; Datadog</a>
-    <a class="hb" id="fbbtn" href="https://feedback.agenticburn.com" target="_blank" rel="noopener">&#128172; Feedback</a>
+    <!-- /quick, not the long end-of-workshop form (#364). This is the tab a student sits in for the
+         whole workshop, so it is the likeliest place a thought gets dropped mid-attack, and /quick stays
+         on the page after a send. source=burritobot separates a note left here from one left in the
+         guide, which is what says whether friction was in the chat or in the instructions. -->
+    <a class="hb" id="fbbtn" href="https://feedback.agenticburn.com/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener">&#128172; Feedback</a>
   </header>
 
   <div class="wrap">
@@ -662,7 +666,10 @@
     var nq=[]; if(cluster)nq.push('cluster='+encodeURIComponent(cluster)); if(user)nq.push('user='+encodeURIComponent(user));
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
-      var fb=document.getElementById('fbbtn'); if(fb)fb.href=fb.href+'?'+nq.join('&');
+      // Join with & when the href already carries a query string (#364). A bare '?' on a URL that
+      // already has one drops the cluster identity silently instead of failing loudly.
+      var fb=document.getElementById('fbbtn');
+      if(fb&&nq.length)fb.href+=(fb.href.indexOf('?')>=0?'&':'?')+nq.join('&');
       var bbn=document.getElementById('bbbtn'); if(bbn)bbn.href='/?'+nq.join('&');
     }
     // Same as lab.html: show the name the student was GIVEN (the hostname they are on), not the
