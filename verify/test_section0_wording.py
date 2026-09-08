@@ -46,8 +46,12 @@ print("== the trace instruction assumes nothing about what they sent ==")
 check("it is framed by time, not by content",
       "Within two minutes of interacting with BurritoBot you should see a trace" in FLAT)
 check("it no longer calls the trace their hello", "The newest entry is your hello" not in LAB)
-# The delay used to be stated twice, once in the sentence and once in the warning below it.
-check("the two-minute wait is stated once, not twice", FLAT.count("two minutes") == 2)
+# The delay used to be stated twice, once in the sentence and once in the warning below it. Counted over
+# Section 0 only: later challenges have their own unrelated two-minute facts (C3's bounded Falco tail),
+# and a whole-file count would read those as a regression here.
+_s0 = FLAT[:FLAT.find("Challenge 1: Exfiltrate the customer data")]
+assert _s0, "could not locate the end of Section 0"
+check("the two-minute wait is stated once, not twice", _s0.count("two minutes") == 2)
 check("the recovery advice survived", "Then BurritoBot has not been asked anything yet" in LAB)
 
 print("== the poke-around invitation is the lean one sentence she asked for ==")

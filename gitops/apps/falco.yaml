@@ -148,12 +148,20 @@ spec:
               tags: [container, network, aws, mitre_credential_access]
               source: syscall
 
+            # The first clause is open_write, NOT evt.dir. `evt.dir = <` matches the return direction of
+            # any syscall yielding an fd, so READS fired this rule while its name, desc and
+            # mitre_persistence tag all promise writes. Measured cost on a live cluster: the datadog-agent
+            # container opening /etc/passwd to resolve uid to name produced ~104 events/sec, 3,744 of the
+            # last 3,992 Falco log lines, which cut the retrievable buffer to about 36 seconds and buried
+            # the C3 detection step the lab tells students to watch for. open_write is a stock macro from
+            # falco_rules.yaml, which rules_files (above) loads before /etc/falco/rules.d, so it is defined
+            # by the time this override parses.
             - rule: Write Below Etc in Container
               desc: >
                 Detect file writes under /etc inside a container. Legitimate
                 containers rarely modify /etc.
               condition: >
-                evt.dir = < and
+                open_write and
                 fd.name startswith /etc/ and
                 container and
                 not proc.name in (sed, tee) and

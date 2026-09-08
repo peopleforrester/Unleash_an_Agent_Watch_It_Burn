@@ -54,7 +54,15 @@ check("Talon's description is kept",
 check("C3 says Talon is detect-only here", re.search(r"detect only", C3) is not None)
 
 print("== the detect-then-prevent contrast the challenge is built on survives ==")
-check("Falco detection is still shown", 'grep -i "Recipe Snoop"' in C3)
+check("Falco detection is still shown", '-i "Recipe Snoop"' in C3)
+# The Falco step streams the log rather than searching history: on a live cluster the retrievable buffer
+# spans ~36 seconds, so any --tail value shows the student nothing. --line-buffered is load-bearing too;
+# without it grep holds the match in its own buffer and the alert never appears.
+check("the Falco step follows the log stream", "-c falco -f |" in C3)
+check("grep does not buffer the match away", "--line-buffered" in C3)
+check("the tail is bounded so the student is not stranded", "timeout 120 kubectl -n security logs" in C3)
+check("the student is told to start the watch before re-running the attack",
+      "Start this in your terminal first and leave it running" in C3)
 check("KubeArmor prevention is still the payoff", "c3-kubearmor-policy.yaml" in C3)
 check("the smoke-alarm line is kept", "Detection is a smoke alarm" in C3)
 
