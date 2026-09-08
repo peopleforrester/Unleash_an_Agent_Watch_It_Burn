@@ -43,11 +43,20 @@ spec:
     # the kagent Agent's MCP toolNames allowlist (ON excludes the rogue tools, --off lets them back in).
     # Ignore drift on the Agent's tools so selfHeal does not revert the live toggle, same as the
     # guard-proxy env toggles above. The committed default (resources.yaml) is the defended "on" list.
+    #
+    # NARROWED to the evil-mcp entry only (#349). Ignoring `.spec.declarative.tools` wholesale also stopped
+    # OUR changes reaching a cluster, silently: when get_recipe was renamed to get_vault_entry the manifest
+    # updated and every live Agent CR kept pointing at the tool that no longer existed, so Challenge 5 was
+    # impossible while Argo reported Synced and Healthy throughout. Same shape as the guard-proxy env
+    # lesson two comments above, and as the Kyverno extraArgs key that applied cleanly and did nothing.
+    #
+    # Only Challenge 7 patches a tool list live, and only evil-mcp's. Selecting that one server by NAME
+    # rather than by array index keeps it correct if the order ever changes.
     - group: kagent.dev
       kind: Agent
       name: workshop-agent
       jqPathExpressions:
-        - '.spec.declarative.tools'
+        - '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
         # Per-cluster model tier (cost-race demo): setup-instructor-cluster.sh patches modelConfig to
         # bedrock-haiku/sonnet/opus on the matching R3 instructor cluster. Ignore drift so selfHeal keeps
         # the per-cluster tier instead of reverting to the committed default (bedrock-sonnet).

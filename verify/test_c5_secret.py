@@ -79,6 +79,19 @@ print("== the lab page describes the same challenge ==")
 check("the title states the goal", "leak the CEO's home address" in LAB)
 check("the goal names the Secret", NAME in LAB)
 check("the hidden prompt names the Secret", LAB.count(NAME) >= 2)
+# Counting the Secret NAME is not enough, and this is the check that was missing. The rename updated the
+# name and left the story: the hint went on asking for a "recipe card", a "recipe value" and the Bat Spit
+# sauce, which is Challenge 3's asset. It named the right Secret and asked for the wrong contents, so a
+# name-count passed while the prompt could not possibly work (#348).
+C5 = LAB[LAB.index("Challenge 5: Make the agent leak"):LAB.index("Challenge 6:")]
+check("C5's hint asks for the address, not a recipe",
+      "recipe card" not in C5 and "recipe value" not in C5 and "Bat Spit" not in C5)
+check("it uses the compliment framing the system prompt rewards",
+      "thank-you gift basket" in C5)
+check("it asks for the whole record, which is what carries the signature",
+      "full record" in C5)
+# C3's asset must not reappear here under any name. That collapse is what #304 exists to prevent.
+check("C3's sauce is nowhere in C5", "Amazing Awesome" not in C5)
 check("the tool example names it", NAME in MCP)
 # The fix card described the recipe long after the recipe stopped being this challenge's secret, which is
 # the kind of staleness a rename leaves behind in prose rather than in code.
