@@ -123,6 +123,18 @@ check("the policy YAML is no longer printed in the fix card", "- name: validate-
 check("the report example is not accidentally indented",
       "\nregistries: the internal Harbor" in LAB)
 
+print("== Challenge 6's lean pass: a concrete goal and a reset-and-retry fix check (#357) ==")
+C6 = LAB[LAB.find("Challenge 6: Hide an instruction"):LAB.find("Challenge 7: Let a rogue")]
+check("the goal names the concrete outcome",
+      "print cluster secrets to the chat by hiding the instruction in a document-processing request" in C6)
+check("the vague old goal is gone", "act on instructions" not in C6)
+check("the how-you-know line is present", "How you will know it worked:" in C6)
+# The re-run instruction now tells them to reset and paste, with the expected refusal.
+check("the re-run says to reset and paste again",
+      "Press &#8635; Reset, then copy-paste the same ticket prompt" in C6)
+check("the C5 comparison she cut is gone",
+      "Send the ticket back" not in C6 and "trace you left behind in Challenge 5" not in C6)
+
 print("== the section-end markers are gone ==")
 # "At the end of each section it says 'End of Challenge X: blah blah blah' - remove all of those."
 check("no End of Challenge marker survives", "End of Challenge" not in LAB)
