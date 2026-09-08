@@ -61,6 +61,21 @@ check("the output is quoted accurately from the server", OUT in flat_srv)
 check("the lab says which of the two is the stronger vector", "stronger vector" in flat_lab)
 check("it generalises past this workshop", "acts on what a tool hands back" in flat_lab)
 
+print("== the trace is the evidence, and it is in the ATTACK half ==")
+# Verified against the live instructor org 2026-09-08: the execute_tool read_internal_config span carries
+# the sentinel in gen_ai.tool.call.result. That is only true since the ADK tool-content transform (#316);
+# before it, Datadog rendered the tool call empty and this step would have sent students to a blank panel.
+check("the student is sent to the tool span by name", "execute_tool read_internal_config" in C7)
+check("they are told the result holds the sentinel", "its <b>result</b> is the calibration block" in C7)
+check("the contrast with the tool they DID ask for is drawn",
+      "One innocent question, two tool calls" in flat_lab)
+check("the trace step says it beats the chat window",
+      "better evidence than a string in a chat window" in flat_lab)
+# Order matters: this is proof the attack worked, so it belongs before the fix is offered.
+i_trace = C7.find("Now watch it happen in the trace")
+i_fix = C7.find("How to fix poisoned tool attacks")
+check("the trace evidence comes before the fix card", i_trace != -1 and i_fix != -1 and i_trace < i_fix)
+
 print("== the second rogue tool is explained, not just dropped ==")
 check("apply_optimization is described", "apply_optimization</code>,</b> is the one you did not trigger" in C7)
 check("the lab says what it returns", "privileged" in C7 and "busybox" in C7)
