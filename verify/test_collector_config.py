@@ -18,6 +18,7 @@ The check is cheap and the failure is total, so it runs offline on every build.
 from __future__ import annotations
 
 import pathlib
+import re
 import sys
 
 import yaml
@@ -98,6 +99,25 @@ check("it says why that contrast is the point",
 # The old promise named a URL the span does not carry as its own field.
 check("the old inaccurate promise is gone",
       "the trace shows a tool call to <code class=\"inl\">agenticburn.com/beacon</code>" not in LAB)
+
+print("== Kyverno reports arrive while the student is still looking (#323) ==")
+# Challenge 2 asks a student to read the PolicyReport for a Pod they created seconds ago. The chart default
+# scans hourly, so the report Whitney called a "broken command" was correct and up to an hour early.
+#
+# Measured on watch-it-burn-michael-admin, 2026-09-08, policy in Audit and the villain running:
+#   at 1h default   no report for the pod after 2 minutes, while every older pod had one
+#   at 30s          restrict-image-registries: validation error: Images must come from allowed registries...
+KYV = (REPO / "gitops/apps/kyverno.yaml").read_text(encoding="utf-8")
+check("the scan interval is set", "backgroundScanInterval: 30s" in KYV)
+# The key path is the trap. reportsController.extraArgs is a real key, applies cleanly, syncs Healthy and
+# does nothing, because the chart already emits the flag from its own value and the duplicate is ignored.
+check("it is under the chart's own feature block",
+      re.search(r"features:\s*\n\s+backgroundScan:\s*\n\s+backgroundScanInterval: 30s", KYV) is not None)
+# Test the KEY, not the word. The comment above it names extraArgs precisely so nobody tries it again,
+# and a check that cannot tell a YAML key from prose fails on its own documentation.
+check("extraArgs is not used as a key",
+      re.search(r"^\s*extraArgs:", KYV, re.M) is None)
+check("the comment records how the wrong key failed", "duplicate flag is ignored" in KYV)
 
 print()
 if failures:
