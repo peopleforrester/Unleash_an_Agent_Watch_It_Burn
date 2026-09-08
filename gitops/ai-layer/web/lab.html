@@ -434,7 +434,11 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
               <p><b>Flip it from Audit to Enforce:</b></p>
               <div class="cmd" onclick="cp(this)">kubectl patch clusterpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/rules/0/validate/failureAction","value":"Enforce"}]'<button class="cp">copy</button></div>
 
-              <p><b>Now run the same attack again.</b> Ask BurritoBot to deploy the same villain. This time the API refuses it before it ever runs, and BurritoBot tells you a named policy rejected it.</p>
+              <p><b>Now run the same attack again.</b> Press &#8635; Reset, send the same prompt, and watch what changes. This time the API refuses the Deployment before it ever runs.</p>
+              <p class="small">BurritoBot usually tells you a named policy rejected it. Sometimes it returns a raw model error instead. Either way the villain never started, which is the part that matters, and the next two steps are how you confirm it rather than taking its word.</p>
+              <p><b>Do not take BurritoBot's word for it.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> and open the newest trace. The tool call that tried to create the Deployment is marked as an error, and its result is the admission-control refusal, naming <code class="inl">restrict-image-registries</code>.</p>
+              <p>You can see the same refusal from your terminal:</p>
+              <div class="cmd" onclick="cp(this)">kubectl -n agent get events --sort-by=.lastTimestamp | tail -20<button class="cp">copy</button></div>
               <p class="small">Clean up the first one if it is still running: <code class="inl">kubectl -n agent delete deploy promo-mascot</code>.</p>
             </div>
           </details>
