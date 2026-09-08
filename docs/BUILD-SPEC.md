@@ -186,8 +186,13 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
   running its **own in-cluster ArgoCD** that reconciles itself from Git
   (`gitops/bootstrap/full/app-of-apps.yaml`, destination the local cluster `kubernetes.default.svc`). There is
   no hub cluster and no central ArgoCD managing other clusters. The facilitator/presenter cluster and the
-  burn clusters are simply more independent clusters of the same shape. Per-attendee clusters are named
-  `watch-it-burn-attendee-<id>`. This matches the sister Packt repo (one cluster per student, in-cluster ArgoCD).
+  burn clusters are simply more independent clusters of the same shape. Per-attendee clusters carry the
+  provisioning **slot id** `watch-it-burn-attendee-<id>`, which is an internal identifier and **not** the
+  name a student ever sees (#359). The student-facing name is the two-word host that
+  `public_host_for()` / `friendly_attendee_name()` in `infra/terraform/fleet/fleet.sh` returns, for example
+  `bane-sabrina.agenticburn.com`; that first label is what the claim page shows and what a student reads
+  aloud to a facilitator. `verify/fleet-hygiene.sh` fails the build if a slot id reaches a student surface.
+  This matches the sister Packt repo (one cluster per student, in-cluster ArgoCD).
 - **Per-attendee Cluster 3**, own EKS cluster: full IDP (in-cluster ArgoCD, Kyverno, Falco, observability) +
   always-on kagent agent + the guard layer + the (initially open) MCP wiring. Attendee drives via chat
   UI and kubectl.
