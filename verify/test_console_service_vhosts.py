@@ -68,6 +68,18 @@ check("no argocd app in the burn profile include list",
 check("but Datadog IS there, or the page would be sending them nowhere",
       "datadog-agent-cr" in BURN and "otel-collector" in BURN)
 
+print("== every page that ships is actually routed (#338) ==")
+# display.html shipped in the image and was asserted by test_brand_skin, but console.conf had no location
+# for it, so it 404'd on every cluster while the suite stayed green on a page nobody could fetch. A test
+# that checks a file's CONTENT without checking it is REACHABLE is the trap. Assert both display routes,
+# and, generally, that every served-looking web page has a location.
+check("display is routed", "location = /display " in CONF)
+check("the historical /display.html is routed too", "location = /display.html " in CONF)
+WEB = REPO / "gitops/ai-layer/web"
+# Pages the console serves at an extensionless path; each must have a matching location.
+for name in ("burritbot", "lab", "brief", "platform", "diagram", "links", "console", "display"):
+    check(f"/{name} has a location", f"/{name} " in CONF and (f"{name}.html" in CONF or name == "console.js"))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
