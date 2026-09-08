@@ -104,7 +104,12 @@
   .composer button{font:inherit;font-weight:800;background:var(--accent);color:#fff;border:0;padding:0 18px;border-radius:10px;cursor:pointer}
   .composer button:disabled{opacity:.5;cursor:default}
   .store{flex:1 1 auto;display:flex;min-width:0;min-height:0;gap:18px}
-  .infra{width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;padding-left:18px;border-left:2px solid var(--line)}
+  /* The column has its OWN ground, not just a titled header (Whitney, doc line 165). She asked for
+     "a whole different color scheme" so a first-time student does not read the right column as part
+     of the app they are ordering from. The header alone did not carry that: it sat on the same white
+     as the storefront. Same green family as .panelhdr so the two read as one surface. */
+  .infra{width:300px;flex:0 0 300px;display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;
+         padding:14px;background:#f4faf6;border:1px solid #cfe6d9;border-radius:14px;border-left:4px solid var(--r3)}
   .imrow{display:flex;justify-content:space-between;align-items:baseline;padding:3px 0}
   .imlbl{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--mid);font-weight:800}
   .imval{font-variant-numeric:tabular-nums;font-weight:800;font-size:1rem;color:var(--ink)}
@@ -178,7 +183,7 @@
      usable room for the conversation. */
   @media(max-width:980px){
     .wrap{flex-direction:column;overflow-y:auto;min-height:0}
-    .infra{width:100%;flex:0 0 auto;border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px;overflow:visible}
+    .infra{width:100%;flex:0 0 auto;border-left:4px solid var(--r3);padding:14px;overflow:visible}
     .store{flex-direction:column;min-height:0}
     .menu{width:100%;flex:0 0 auto;max-height:34dvh}
     .chatcol{flex:0 0 auto;height:min(66dvh,620px)}
@@ -218,7 +223,7 @@
     .menu,.chatcol,.infra{width:100%;flex:0 0 auto;height:auto;min-height:0;overflow:visible}
     .menu{max-height:none}
     .menu .mscroll{max-height:none;overflow:visible}
-    .infra{border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px}
+    .infra{border-left:4px solid var(--r3);padding:14px}
     /* The one place a bounded scroller earns its keep: a long conversation should not push the composer
        and the workshop panel miles down the page. Cap the stream and let it scroll inside the chat card;
        everything else flows. */

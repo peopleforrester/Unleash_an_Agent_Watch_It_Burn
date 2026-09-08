@@ -72,7 +72,13 @@
   .step.c1 details.hint>summary,.step.c2 details.hint>summary,.step.c3 details.hint>summary,.step.c4 details.hint>summary,
   .step.c5 details.hint>summary,.step.c6 details.hint>summary,.step.c7 details.hint>summary,.step.c8 details.hint>summary{color:var(--cc)}
   .step .b{padding:12px 14px;font-size:14px;line-height:1.5;color:#3a3340}
-  .step .b p{margin:0 0 9px}
+  /* Whitney asked four separate times for whitespace between instructions, most directly at her
+     doc line 913: "All of this text feels dense. Can we put a line of whitespace between each
+     instruction?" Spacing is the honest fix rather than <br> tags, because it applies to every
+     challenge at once and cannot be forgotten on the next one. A paragraph that opens with a
+     bold lead is an instruction beat, so it gets extra room above it. */
+  .step .b p{margin:0 0 13px}
+  .step .b p:has(> b:first-child){margin-top:18px}
   .cmd{position:relative;display:block;background:var(--term);color:#e6e1f0;border-radius:8px;padding:10px 40px 10px 12px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px;margin:10px 0 14px;white-space:pre-wrap;word-break:break-all;cursor:pointer}
   .cmd:hover{outline:2px solid var(--accent)}
   .cmd .cp{position:absolute;top:6px;right:6px;font-family:inherit;font-size:11px;font-weight:700;background:var(--accent);color:#fff;border:0;border-radius:6px;padding:3px 7px;cursor:pointer}
@@ -107,7 +113,11 @@
   .ctl>summary::before{content:"\25B8 ";font-size:10px}
   .ctl[open]>summary::before{content:"\25BE "}
   .ctlbody{padding:0 12px 12px}
-  .ctlbody p{margin:4px 0 8px;font-size:13.5px}
+  .ctlbody p{margin:0 0 13px;font-size:13.5px}
+  .ctlbody p:has(> b:first-child){margin-top:18px}
+  /* A command and the sentence that introduces it belong together, so the gap goes AFTER the
+     command, not between the instruction and the thing it tells you to run. */
+  .ctlbody .cmd,.step .b .cmd{margin-bottom:14px}
   .yaml{margin:8px 0 0;padding:11px 13px;background:#101A42;color:#e8e4f5;border-radius:8px;
     font-family:Consolas,Menlo,monospace;font-size:12px;line-height:1.5;white-space:pre;overflow-x:auto}
   .yaml .k{color:#9fd0ff}
