@@ -95,6 +95,14 @@ spec:
             requests:
               memory: 128Mi
               cpu: 50m
+        # Kyverno's own feature block owns the scan interval. Setting reportsController.extraArgs instead
+        # looks right, applies cleanly, syncs Healthy, and changes nothing, because the chart already emits
+        # --backgroundScanInterval from this value and the duplicate flag is ignored. Verified on
+        # watch-it-burn-michael-admin 2026-09-08 by reading the argument off the live Deployment rather than
+        # trusting Argo's Synced status.
+        features:
+          backgroundScan:
+            backgroundScanInterval: 30s
         # Reports controller
         reportsController:
           # backgroundScanInterval defaults to 1h, and Challenge 2 asks a student to read the PolicyReport
@@ -106,8 +114,6 @@ spec:
           # 30s so the evidence is there while the student is still looking at it. The cost is a rescan of a
           # single-node lab cluster with roughly forty pods, which is nothing next to a challenge whose
           # payoff never appears.
-          extraArgs:
-            backgroundScanInterval: 30s
           resources:
             limits:
               memory: 256Mi
