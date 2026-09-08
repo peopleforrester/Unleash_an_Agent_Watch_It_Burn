@@ -94,8 +94,9 @@ check("the top-bar button exists", re.search(r'id="fbbtn"[^>]*>&#128172; Feedbac
 check("it is at the top right, as the text says", LAB.index('id="fbbtn"') < LAB.index("Leave some feedback"))
 
 print("== Challenge 1's fix card is named and defined in her words ==")
+# Her heading (doc line 905) names the control and the platform, not just the attack.
 check("the fix caret names the fix, not 'let's fix it'",
-      "How to fix data exfiltration attacks" in LAB and "Now let's fix it!" not in LAB)
+      "How to block data exfiltration attacks in Kubernetes" in LAB and "Now let's fix it!" not in LAB)
 check("the NetworkPolicy definition is hers", "application-centric Kubernetes construct" in FLAT)
 check("it covers traffic inside AND outside the cluster",
       "within your cluster, and also between Pods and the outside world" in FLAT)

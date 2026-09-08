@@ -61,22 +61,22 @@ check("the button carries the same fact", 'title="Start a new conversation.' in 
 check("the button says a refresh is not a reset",
       re.search(r'title="[^"]*refresh does not do this', PAGE) is not None)
 
-print("== Challenge 1 tells them to reset at the point it matters ==")
-# The lab was instructing every student to poison their own context before the real attempt, which is what
-# made Challenge 1 look unwinnable (#321). The reset step is the fix and it belongs BETWEEN the two asks.
-# Whitney's Sept-7 lean pass (#357) cut the measured 83%/0% rates from the student pages; that evidence now
-# lives only in the presenter brief (asserted by test_instructor_brief). Here we check the reset step is
-# present and correctly placed, not that it quotes the numbers.
+print("== the Reset mechanic is explained in exactly ONE place ==")
+# THIS CHECK WAS INVERTED ON PURPOSE. It used to require Challenge 1 to carry its own Reset paragraph,
+# placed between the in-chat ask and the exfil attempt (#321). Whitney deleted that paragraph (her doc
+# line 909): the mechanic belongs in Section 0's "Remember: You can always clear BurritoBot's context"
+# collapsible, which is where she put it, and repeating it inside the attack instructions was part of the
+# density she objected to. So the invariant is no longer "C1 repeats it" but "it is said once, in
+# Section 0, and does not creep back into a challenge". Do not "fix" a failure here by restoring the C1
+# paragraph.
 C1 = LAB[LAB.find("Challenge 1: Exfiltrate"):LAB.find("Challenge 2: Deploy")]
-check("C1 tells the student to reset", "press &#8635; Reset before you go further" in C1)
-check("it says why: the refusal stays in the conversation", "that no stays in the conversation" in C1)
-check("it reassures them the prompts survive", "saved prompts stay" in C1)
-# Order is the whole point: after the chat ask that gets refused, before the exfil attempt.
-i_ask = C1.find("First, ask it for the demographic info in chat")
-i_reset = C1.find("press &#8635; Reset")
-i_exfil = C1.find("send the data somewhere instead")
-check("the reset sits after the in-chat ask", i_ask != -1 and i_reset > i_ask)
-check("and before the exfil attempt", i_exfil != -1 and i_reset < i_exfil)
+check("Section 0 owns the explanation", "Remember: You can always clear BurritoBot's context" in LAB)
+check("C1 does not repeat it", "press &#8635; Reset before you go further" not in C1
+      and "that no stays in the conversation" not in C1)
+# The attack instructions themselves must still be intact after the paragraph was removed from between
+# them, so the in-chat ask and the exfil attempt both survive and remain in that order.
+_ask, _exfil = C1.find("First, ask it for the demographic info in chat"), C1.find("send the data somewhere instead")
+check("the two attack beats survive, in order", _ask != -1 and _exfil != -1 and _ask < _exfil)
 
 print("== the lab explains it before the challenges start ==")
 # Whitney's Sept-7 lean pass (#357) retitled this section and cut the measurement paragraph and the

@@ -94,8 +94,12 @@ check("it quotes the failure the tool actually returns",
       "most likely by a NetworkPolicy. Nothing was sent." in LAB)
 check("it contrasts the blocked call with the successful one",
       "is not an error, and its result is the full customer data" in LAB)
+# Whitney cut the trailing explanation ("and the trace now says which is which. Before you applied the
+# policy, both were unmarked and you could not tell a blocked exfiltration from a completed one") at her
+# doc line 463, so the sentence now ends on the contrast itself. What is pinned is that the contrast
+# still states the OUTCOME of both calls, which is the part that teaches. Do not restore the old tail.
 check("it says why that contrast is the point",
-      "could not tell a blocked exfiltration from a completed one" in LAB)
+      "The theft succeeded and the sending did not." in LAB)
 # The old promise named a URL the span does not carry as its own field.
 check("the old inaccurate promise is gone",
       "the trace shows a tool call to <code class=\"inl\">agenticburn.com/beacon</code>" not in LAB)
