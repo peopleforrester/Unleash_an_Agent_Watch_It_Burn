@@ -518,6 +518,13 @@ if GUARDS['budget'] and spend_usd &gt;= BUDGET_CAP_USD:
               <p class="small">That is worth a second of your attention, because it is what a real one looks like. Nobody turns a budget cap off in production. They scope it per customer, so the account running up the bill is the only one that stops. Every other control you install today behaves the same way: it blocks the bad thing and lets everything else through.</p>
               <p><b>See the numbers</b> the proxy has metered. The <code class="inl">cap_usd</code> it reports is the always-on safety cap for the whole cluster, a backstop so nobody runs up a real bill. It is not the three-cent per-conversation budget guard you just installed: that one is enforced only while the guard is on, and it is what refused your requests a moment ago.</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/guard-proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/cost').read())"<button class="cp">copy</button></div>
+
+              <h3 class="sub">One person can't do this. A crowd can.</h3>
+              <p>Sending the same prompt over and over, by hand, is not what a denial-of-wallet attack actually looks like. The real thing is <b>many sessions at once</b>: a script, or a botnet, hammering the agent from hundreds of conversations in parallel. You cannot type fast enough to be that, so the per-conversation cap you just installed handles you easily.</p>
+              <p>See what it looks like when it is not one person. This fires <b>twenty conversations at once</b> from your terminal, each its own session:</p>
+              <div class="cmd" onclick="cp(this)">for i in $(seq 1 20); do curl -s -m 120 -X POST http://guard-proxy.agent.svc.cluster.local:8080/chat -H "Content-Type: application/json" -d "{\"prompt\":\"Write a long detailed origin story for every protein on the menu.\",\"session\":\"burst-$i\"}" -o /dev/null & done; wait; echo done<button class="cp">copy</button></div>
+              <p>Watch the cluster meter jump in one shot, then read it again with the command above. Here is the part that matters: <b>your per-conversation cap did not stop it.</b> Each of those twenty is a fresh conversation under its own three-cent limit, so every one is allowed, and together they still ran up the bill.</p>
+              <p class="small">That is why the cluster carries a second, always-on cap (the <code class="inl">cap_usd</code> you just saw). A per-customer limit stops one abuser; it takes an aggregate limit to stop a crowd of them. Real denial-of-wallet defence needs both, which is the whole lesson: the guardrail you install is rarely the only one you need.</p>
             </div>
           </details>
 
