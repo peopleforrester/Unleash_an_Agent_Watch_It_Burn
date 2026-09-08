@@ -87,20 +87,24 @@ check("apply_optimization is no longer discussed in the lab", "apply_optimizatio
 check("its Challenge 2 tie-in is gone", "second, independent route to Challenge 2" not in flat_lab)
 check("the fix names the one tool kept", 'one harmless tool, <code class="inl">get_weather</code>' in C7)
 
-print("== the fix ends on the narration, not on absence ==")
-check("the sentinel check is still there", "FAKE-MCP-EXFIL-sentinel-4c1d" in C7)
-check("the lab says absence is weak evidence", "Absence is weak evidence" in flat_lab)
-check("the student is told to read the reasoning", "Model reasoning" in C7)
-check("the shape of the narration is quoted", "that tool is not available to me" in C7)
-check("it names what the trace shows side by side", "the intent is in the model span" in flat_lab)
+print("== the fix ends on the trace, not on narration ==")
+# WHAT THIS BLOCK USED TO PIN, AND WHY IT DOES NOT.
+# It required the lab to quote BurritoBot's own reasoning back ("absence is weak evidence", "read the
+# reasoning", "the intent is in the model span") and to carry a C6-versus-C7 contrast box. Whitney cut
+# both: the narration block at her doc lines 1016-1026, and the contrast box at 1026. Her objection was
+# that they read as commentary in the middle of an instruction, and that the student has just done both
+# halves anyway. Her success criterion sends them to the trace instead.
+# THE CONTRAST ARGUMENT IS NOT LOST. It is the workshop's thesis, so it moved to the instructor brief
+# rather than being deleted; test_instructor_brief pins it there. Do not restore either block to the
+# student lab as a "fix" for a failure here.
+check("the sentinel is not the only tell", "cannot call" in flat_lab)
+check("the student is sent to the trace to verify",
+      "Verify this by looking at the trace" in flat_lab)
+check("the spec is read back so the change is visible, not asserted",
+      "Read the spec back and see the change" in C7)
+check("the empty-list trap still carries its instruction",
+      'means "every tool", not "no tools"' in flat_lab and "Name the ones you keep" in flat_lab)
 
-print("== C6 and C7 are contrasted, since that is the taxonomy the deck argues ==")
-check("the contrast box exists", 'class="contrast"' in C7)
-check("it names both challenges", "Challenge 6 and Challenge 7" in C7)
-check("it states the two control types", "stops the text before the model reads it" in flat_lab)
-check("it says why capability removal is the durable one", "more persuadable than this one" in flat_lab)
-# The contrast box borrows .where's layout but is a different claim, and must not be counted as one of the
-# eight enforcement-point statements. test_enforcement_points.py asserts that count.
 check("it is not a .where block", 'class="where"><b>Challenge 6' not in LAB)
 
 print("== the fix is regression-tested, not only the attack ==")

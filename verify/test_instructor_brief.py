@@ -88,6 +88,24 @@ print("== the nuances a presenter needs mid-room survived the rewrite ==")
 check("the image-substitution nuance is kept",
       "silently substitutes a permitted image" in FLAT)
 
+# ---------------------------------------------------------------------------
+print("== the C6-versus-C7 thesis lives here, not in the student lab ==")
+# Whitney cut the contrast box from Challenge 7 (her doc line 1026): it read as commentary in the middle
+# of an instruction. The argument is what the whole workshop is for, so it moved into the brief for the
+# presenter to say out loud. If this fails, the thesis has been lost entirely rather than relocated.
+BRIEF_SRC = (pathlib.Path(__file__).resolve().parent.parent
+             / "gitops/ai-layer/web/brief.html").read_text(encoding="utf-8")
+LAB_SRC = (pathlib.Path(__file__).resolve().parent.parent
+           / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
+check("the brief carries the C6 versus C7 contrast",
+      "Challenge 6 and Challenge 7 are the same class of attack" in BRIEF_SRC)
+check("it states both control types",
+      "stops the text before the model reads it" in BRIEF_SRC
+      and "find the capability gone" in BRIEF_SRC)
+check("it says why capability removal is the durable one",
+      "more persuadable than this one" in BRIEF_SRC)
+check("and the student lab does NOT carry it", "Challenge 6 and Challenge 7" not in LAB_SRC)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

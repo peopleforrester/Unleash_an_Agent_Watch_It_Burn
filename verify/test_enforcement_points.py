@@ -37,11 +37,16 @@ print("== the blocks are cut from the student lab, and stay cut ==")
 check("no 'Where this guardrail runs' block survives", "Where this guardrail runs" not in LAB)
 check("the .where class is gone with them", 'class="where"' not in LAB and ".where{" not in LAB)
 
-print("== the C6/C7 contrast box is NOT part of that cut ==")
-# She did not ask for this one, and it makes a different claim: two kinds of control, not a location.
-check("the contrast box survives", 'class="contrast"' in LAB)
-check("it still names both challenges", "Challenge 6 and Challenge 7" in LAB)
-check("it keeps its own styling", ".contrast{" in LAB and ".contrast .wpt{" in LAB)
+print("== the C6/C7 contrast box has moved to the instructor brief ==")
+# This block previously asserted the contrast box SURVIVED in the student lab, on the reasoning that
+# "she did not ask for this one". That was read from her first pass only. She did ask, in her second
+# pass at doc line 1026, and the same scoping miss is what left four challenges out of #357 entirely.
+# Her objection was placement, not substance: it reads as commentary in the middle of an instruction,
+# to a student who has just done both halves. The argument is the workshop's thesis, so it moved into
+# the presenter brief for the instructor to say out loud. test_instructor_brief pins it there, and
+# fails if it is lost rather than relocated.
+check("the contrast box is gone from the student lab",
+      'class="contrast"' not in LAB and "Challenge 6 and Challenge 7" not in LAB)
 
 print("== the layer mapping lives in the presenter doc and is still right ==")
 for where in ("the cluster network", "the API server, at admission", "the Linux kernel",
