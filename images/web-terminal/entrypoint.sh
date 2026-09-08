@@ -24,7 +24,7 @@ if [ -f "$SA/token" ]; then
   kubectl config set-context this --cluster=this --user=me \
     --namespace="$(cat "$SA/namespace")" >/dev/null
   kubectl config use-context this >/dev/null
-  echo "kubectl is configured for THIS cluster (namespace: $(cat "$SA/namespace"))." > "$HOME/.motd"
+  : > "$HOME/.motd"   # start empty; only failures write to it
 else
   echo "WARNING: no in-cluster ServiceAccount token found; kubectl is not auto-configured." > "$HOME/.motd"
 fi
@@ -44,7 +44,6 @@ region = ${AWS_DEFAULT_REGION:-us-west-2}
 output = json
 CFG
   chmod 600 "$HOME/.aws/credentials"
-  printf 'aws is configured with your keys (default profile, region %s).\n' "${AWS_DEFAULT_REGION:-us-west-2}" >> "$HOME/.motd"
 fi
 
 # Round-3 self-serve guardrail toggles (B5/B11). Each prints PLAIN-LANGUAGE confirmation of what changed
@@ -253,19 +252,18 @@ chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
   "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off
 
+# No banner. The shell opens on a prompt and nothing else (#342).
+#
+# What it used to print was seven lines of orientation a student had already been given by the lab page,
+# plus two things they are specifically not supposed to know about: `guards-on`/`guards-off`, which is our
+# abstraction rather than anything Kubernetes has, and `platform`, which Whitney asked to remove outright.
+# The lab is the place that tells a student what to do; a shell that repeats it in different words is one
+# more thing to read and one more chance for the two to disagree.
+#
+# The only surviving .motd write is the failure case, which fires when there is no ServiceAccount token and
+# kubectl is therefore NOT configured. That is a broken terminal, and a broken terminal must say so.
 cat > "$HOME/.bashrc" <<'BRC'
 cat ~/.motd 2>/dev/null
-echo "Welcome to your Watch It Burn cluster shell."
-echo "  kubectl is wired to your cluster   (try: kubectl get pods -A)"
-echo "  aws is ready with your keys        (try: aws sts get-caller-identity)"
-echo "  flip your AI guardrails with       guards-on   guards-off"
-echo "  see which guards are on           guards-status"
-echo "  every service, URL and password    platform"
-# Named, not launched. A student who wants an AI CLI types one; a student who does not never sees it.
-# The "+" tab opens another terminal if they want one running beside their work.
-echo ""
-echo "  AI coding CLIs are installed:      claude   gemini   codex   opencode   aider"
-echo "  (each needs its own auth/API key; the workshop does not sign you in)"
 cd "$HOME"
 export PATH="$HOME:$PATH"
 export PS1='\[\e[38;5;208m\]watch-it-burn\[\e[0m\]:\w$ '
@@ -368,7 +366,6 @@ run_service jupyter /opt/jupyter/bin/jupyter lab \
 # route around. TTYD_CREDENTIAL ("user:password") arrives from the optional `terminal-auth` Secret,
 # created per-cluster by the provisioning bootstrap with a random password.
 if [[ -n "${TTYD_CREDENTIAL:-}" ]]; then
-  printf 'This terminal requires the username and password from your cluster hand-out.\n' >> "$HOME/.motd"
   exec ttyd -p 7681 -W -b /terminal -c "${TTYD_CREDENTIAL}" \
     -t fontSize=14 -t 'theme={"background":"#0f1117"}' \
     bash --rcfile "$HOME/.bashrc"
