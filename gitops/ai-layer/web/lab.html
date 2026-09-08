@@ -213,13 +213,14 @@
               <p>Your terminal is on the right of this page. You can't miss it. Run the command below, and see a list of running pods.</p>
               <div class="cmd" onclick="cp(this)">kubectl get pods -A<button class="cp">copy</button></div>
               <p>Dang, that's a lot of pods.</p>
+              <p>Don't worry if you don't understand what a lot of these things are. We'll explain the relevant ones to you over the course of this workshop.</p>
             </div>
           </details>
           <details class="ctl"><summary>Open BurritoBot</summary>
             <div class="ctlbody">
               <div class="warn">The prompts you send BurritoBot may be shown on the instructor screen during the workshop, so the room can get inspiration from what other folks are attempting. Please do not tell BurritoBot anything personal or confidential.</div>
               <p>There is a BurritoBot button at the top right of this page. Press it.</p>
-              <p>It opens in a new browser tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. <b>Send it at least one message to make sure it is working.</b> <i>Hello world</i>, perhaps, or: <i>Is your guacamole made with real Ogre Snot?</i> This is the interface you will be attacking later, but do not tell BurritoBot that.</p>
+              <p>It opens in a new browser tab, and you will meet BurritoBot, a goth burrito-ordering chatbot. <b>Send it at least one message to make sure it is working.</b> <i>Hello world</i>, perhaps, or: <i>Is your guacamole made with real Ogre Snot?</i> We all know that imitation ogre snot is vastly inferior to the real thing. Anyway, this is the interface you will be attacking later, but do not tell BurritoBot that.</p>
             </div>
           </details>
           <!-- Before the Datadog step, deliberately (Whitney, #315). Feedback given DURING the lab, at the
@@ -245,9 +246,9 @@
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddu"></span><button class="cp">copy</button></div>
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddp"></span><button class="cp">copy</button></div>
               </div>
-              <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. Within two minutes of interacting with BurritoBot you should see a trace. Click it: this is the record of what BurritoBot did during a user interaction. Poke around in Datadog while you are here: try to find the agent's system prompt and which model it uses.</p>
-              <p class="small">If the trace opens with a note saying it has <b>multiple root spans</b>, press <b>Filter to Trace</b> to see the whole thing. One message from you crosses two services on its way to the model, and Datadog shows you the piece you clicked first. Filtering joins them back up.</p>
-              <div class="warn"><b>No entries at all?</b> Then BurritoBot has not been asked anything yet. Go back to the BurritoBot tab, send it any message, wait up to two minutes, and refresh.</div>
+              <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. Within two minutes of interacting with BurritoBot you should see a trace. Click it: this is the record of what BurritoBot did during a user interaction.</p>
+              <p class="small">Then, if you like, poke around in Datadog. Try and find the agent's system prompt, and figure out which model it is using.</p>
+              <div class="warn"><b>No traces?</b> Go back to the BurritoBot tab, send it any message, and wait up to two minutes to see your message (and BurritoBot's response) in Datadog.</div>
             </div>
           </details>
 
@@ -256,9 +257,8 @@
                challenges, because without it a refusal looks exactly like a guardrail working (#311). -->
           <details class="ctl"><summary>Remember: You can always clear BurritoBot's context</summary>
             <div class="ctlbody">
-              <p>Every challenge here is an exercise in persuasion, and persuasion is path-dependent. Once BurritoBot has said no in a conversation, that no is part of what it reads back on every later message, and you end up arguing with its own previous answer rather than starting clean. From the chat window that looks identical to a guardrail stopping you, which is the one thing you do not want to confuse.</p>
-              <p><b>The ↺ Reset button at the top of the chat gives you a brand-new conversation.</b> BurritoBot forgets everything, <i>especially</i> whatever it dug its heels in about. Your saved prompts stay, so you can send the same thing again to a bot with no memory of refusing it. <b>Press it at the start of every challenge, and any time an attempt has gone sideways.</b></p>
-              <p><b>Refreshing the page does not do this.</b> Neither does a hard refresh. Press Reset.</p>
+              <p><b>The ↺ Reset button at the top of the chat gives you a brand-new conversation.</b> BurritoBot forgets everything you have said, including whatever it dug its heels in about. ESPECIALLY whatever it dug its heels in about.</p>
+              <p><b>Refreshing the page does not do this.</b> Neither does a hard refresh. Press ↺ Reset.</p>
             </div>
           </details>
 
@@ -266,7 +266,7 @@
           <h3 class="sub">Your lab environment: a full-fledged platform</h3>
           <p>This is a full internal developer platform. Have a look at what is running:</p>
           <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
-          <p>You do not need to understand all of these. We explain the relevant ones over the course of the workshop. Here are a few highlights:</p>
+          <p>There is a lot here and you are not expected to know what all of it is. But here are some highlights, for funsies:</p>
           <ul class="small">
             <li><a href="https://istio.io/latest/docs/ambient/overview/" target="_blank" rel="noopener">Istio ambient mesh</a>
             encrypts all traffic between containers inside the cluster, automatically.</li>
@@ -282,9 +282,8 @@
           
           </ul>
 
-          <p class="small">Don't worry if you don't recognise a lot of this. Nothing here needs to be understood before you start, and the challenges explain each piece as you reach it.</p>
           <h3 class="sub">BurritoBot's components</h3>
-          <p>BurritoBot is three pieces, all running in a <b>namespace</b> (a folder inside the cluster) called <code class="inl">agent</code>:</p>
+          <p>BurritoBot is made up of three components, all running in a <a href="https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/" target="_blank" rel="noopener"><b>namespace</b></a> called <code class="inl">agent</code>:</p>
           <ul class="small">
             <li><b>the agent</b> &mdash; talks to the AI model. It is run by <b>kagent</b>, a framework for hosting agents on Kubernetes.</li>
             <li><b>workshop-mcp</b>, the tool container &mdash; a <b>tool</b> is an action the model can ask for, like "send a web request" or "run a command".</li>
@@ -293,11 +292,11 @@
 
           <h3 class="sub">So Many Hats <span class="em">&#127913;</span></h3>
           <p>You will wear three hats in this workshop:</p>
-          <p><b>User / Attacker.</b> Every attack in this workshop arrives the way a customer's message would: through the chat box, with no privileges at all. The attacker and the user are the same person using the same interface, and that is exactly why these attacks work. You will use nothing but the BurritoBot chat interface.</p>
+          <p><b>User / Hacker.</b> Every attack in this workshop arrives the way a customer's message would: through the chat box, with no privileges at all. The attacker and the user are the same person using the same interface, and that is exactly why these attacks work. You will use nothing but the BurritoBot chat interface.</p>
           <p><b>Platform engineer.</b> For the next two hours you hold platform-operator access to this cluster. You will learn and use different backend tools to prevent each type of attack.</p>
           <p><b>Developer.</b> In a real org, the chatbot agent that runs in the cluster would be owned by a team of developers. Over the course of this workshop, we will be looking at its tool list and its permissions, and talking about how to manipulate these at the app level versus the infrastructure level.</p>
 
-          <div class="warn">This cluster is yours and it is torn down after the workshop.</div>
+          <div class="warn">There's a lot running on this cluster beyond what the workshop uses, and you are welcome to explore it. However, if you change something and it breaks, we will not be able to help you troubleshoot during this workshop, nor will we be able to give you a replacement cluster. Consider yourself warned.</div>
         </div>
 <div class="step c1">
         <div class="h"><div class="num">1</div><div class="t">Challenge 1: Exfiltrate the customer data</div></div>

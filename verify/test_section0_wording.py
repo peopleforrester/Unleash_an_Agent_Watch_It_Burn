@@ -52,7 +52,11 @@ check("it no longer calls the trace their hello", "The newest entry is your hell
 _s0 = FLAT[:FLAT.find("Challenge 1: Exfiltrate the customer data")]
 assert _s0, "could not locate the end of Section 0"
 check("the two-minute wait is stated once, not twice", _s0.count("two minutes") == 2)
-check("the recovery advice survived", "Then BurritoBot has not been asked anything yet" in LAB)
+# Whitney rewrote this box (her doc line 336): "No traces? Go back to the BurritoBot tab, send it any
+# message, and wait up to two minutes to see your message (and BurritoBot's response) in Datadog." The
+# old opener "Then BurritoBot has not been asked anything yet" is gone by her instruction, so what is
+# pinned here is the RECOVERY ACTION, which is the part a stuck student needs.
+check("the recovery advice survived", "No traces?" in LAB and "send it any message" in LAB)
 
 print("== the poke-around invitation is the lean one sentence she asked for ==")
 # She asked for ONE sentence inviting a student to explore Datadog. What shipped once was two paragraphs,
@@ -61,9 +65,10 @@ print("== the poke-around invitation is the lean one sentence she asked for ==")
 # trace line: "poke around in Datadog, try to find the agent's system prompt and which model it uses".
 check("the trace line is reframed by interaction, not by message count",
       "what BurritoBot did during a user interaction" in FLAT)
+# Her exact wording now, on its own line rather than tacked onto the trace sentence (her doc line 882).
 check("the lean poke-around invitation is present",
-      "poke around in datadog while you are here: try to find the agent's system prompt and which model it uses"
-      in FLAT.lower())
+      "then, if you like, poke around in datadog. try and find the agent's system prompt, and figure out "
+      "which model it is using." in FLAT.lower())
 check("the bloated version does not come back", "Have a poke around" not in LAB)
 check("the not-cheating argument is gone", "not cheating" not in FLAT)
 

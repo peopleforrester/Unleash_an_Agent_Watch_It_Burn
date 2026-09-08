@@ -87,12 +87,19 @@ check("the lab has the section", "Remember: You can always clear BurritoBot's co
 check("it names the button", "↺ Reset button" in LAB)
 check("it says a refresh does not reset", "Refreshing the page does not do this" in LAB)
 check("it covers the hard refresh people will try next", "hard refresh" in LAB)
-check("it explains why a stale refusal matters", "path-dependent" in LAB)
-# The advice has to be a habit, not a rescue: a student who only resets after noticing something is
-# wrong has already spent the attempt.
-check("it tells them to reset at the start of every challenge",
-      "at the start of every challenge" in LAB)
-check("it names the confusion this prevents", "identical to a guardrail" in LAB)
+# WHAT THIS CHECK USED TO PIN, AND WHY IT NO LONGER DOES.
+# It required three things in the Reset explainer: the word "path-dependent", the instruction to reset
+# "at the start of every challenge", and the phrase "identical to a guardrail". Whitney cut all three by
+# name (her doc lines 883 and 1085), calling the paragraph too dense, and her wording wins on this page.
+# Restoring those strings would be re-applying text she deleted, so do not "fix" this by putting them
+# back. What survives is the part a stuck student actually needs: the button, what it forgets, and the
+# fact that a refresh is not a substitute.
+check("it names the button, not just the idea", "Reset button at the top of the chat" in LAB)
+check("it says what BurritoBot forgets",
+      "forgets everything you have said" in LAB and "dug its heels in about" in LAB)
+# Her capitalised ESPECIALLY is deliberate emphasis and is the whole point of the sentence.
+check("it keeps her emphasis on the refusal it forgets",
+      "ESPECIALLY whatever it dug its heels in about" in LAB)
 
 print()
 if failures:
