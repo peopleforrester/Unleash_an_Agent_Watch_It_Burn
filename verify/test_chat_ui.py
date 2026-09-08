@@ -39,6 +39,11 @@ kinds = {(d.get("kind"), d.get("metadata", {}).get("name")) for d in res if d}
 check("chat-ui Deployment present", ("Deployment", "chat-ui") in kinds)
 check("chat-ui Service present", ("Service", "chat-ui") in kinds)
 
+# Timestamps on chat bubbles, so a student waiting on a trace can tell elapsed time (#282).
+check("bubbles carry a timestamp line", ".msgts" in html and "fmtTs(now)" in html)
+check("the age updates live", "relAge(" in html and "setInterval(" in html)
+check("the reasoning fold stays above the stamp", "insertBefore(det, meta)" in html)
+
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
     sys.exit(1)

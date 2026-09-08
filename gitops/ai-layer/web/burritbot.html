@@ -91,6 +91,8 @@
   /* The ONLY scroller in the desktop layout. min-height:0 is what lets it actually shrink. */
   .stream{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#fff,#fdfaff)}
   .msg{max-width:78%;padding:0.7rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
+  .msgts{margin-top:5px;font-size:10.5px;color:var(--mid);opacity:.75;font-variant-numeric:tabular-nums}
+  .me .msgts{text-align:right;color:rgba(255,255,255,.8)}
   .bot{align-self:flex-start;background:var(--lav);border-bottom-left-radius:4px}
   .me{align-self:flex-end;background:var(--dd);color:#fff;border-bottom-right-radius:4px}
   .sys{align-self:center;font-size:12px;color:var(--mid);background:#f5eefc;border:1px solid var(--line);padding:5px 10px;border-radius:999px}
@@ -463,7 +465,24 @@
   // 5-step order across turns. Reset starts a fresh order (new id).
   function newSession(){var s='sess-'+Math.random().toString(36).slice(2)+Date.now().toString(36);sessionStorage.setItem('wib-sess',s);return s;}
   function getSession(){return sessionStorage.getItem('wib-sess')||newSession();}
-  function bubble(t,who){const d=document.createElement('div');d.className='msg '+who;d.textContent=t;const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
+  // Each chat bubble carries the clock time it was sent plus a live-updating age ("just now", "30s ago"),
+  // so a student waiting on a trace can tell elapsed time from a feeling (#282). The age is refreshed by a
+  // single interval below rather than a timer per message.
+  const _stamped = [];
+  function relAge(ms){const s=Math.round((Date.now()-ms)/1000);
+    if(s<10)return 'just now'; if(s<60)return s+'s ago';
+    const m=Math.round(s/60); if(m<60)return m+' min ago'; return Math.round(m/60)+'h ago';}
+  function bubble(t,who){
+    const d=document.createElement('div');d.className='msg '+who;
+    const body=document.createElement('div');body.textContent=t;d.appendChild(body);
+    const now=Date.now();
+    const meta=document.createElement('div');meta.className='msgts';
+    meta.innerHTML='<span class="clock">'+fmtTs(now)+'</span> <span class="age">just now</span>';
+    d.appendChild(meta);
+    _stamped.push({at:now, el:meta.querySelector('.age')});
+    const s=document.getElementById('stream');s.appendChild(d);s.scrollTop=s.scrollHeight;return d;}
+  // One ticker updates every bubble's age. 15s is fine: the numbers it shows change on that granularity.
+  setInterval(function(){for(const m of _stamped){ if(m.el) m.el.textContent=relAge(m.at); }},15000);
   // Nova emits its scratchpad wrapped in <thinking>...</thinking> and the raw tags were rendering into the
   // customer chat (seen live on round1, 2026-09-02). It is FOLDED, never dropped: a workshop about what
   // leaks out of an agent cannot quietly delete part of the model's output, and challenge 5's secret can
@@ -483,7 +502,9 @@
       const det=document.createElement('details'); det.className='think';
       const sum=document.createElement('summary'); sum.textContent='model reasoning';
       const body=document.createElement('div'); body.className='thinkbody'; body.textContent=th;
-      det.appendChild(sum); det.appendChild(body); d.appendChild(det);
+      det.appendChild(sum); det.appendChild(body);
+      // Insert before the timestamp line so the stamp stays the last thing in the bubble.
+      const meta=d.querySelector('.msgts'); if(meta) d.insertBefore(det, meta); else d.appendChild(det);
     });
     const s=document.getElementById('stream'); s.scrollTop=s.scrollHeight;
     return d;
