@@ -86,7 +86,7 @@ check("it is at the top right, as the text says", LAB.index('id="fbbtn"') < LAB.
 
 print("== Challenge 1's fix card is named and defined in her words ==")
 check("the fix caret names the fix, not 'let's fix it'",
-      "How to block data exfiltration attacks in Kubernetes" in LAB and "Now let's fix it!" not in LAB)
+      "How to fix data exfiltration attacks" in LAB and "Now let's fix it!" not in LAB)
 check("the NetworkPolicy definition is hers", "application-centric Kubernetes construct" in FLAT)
 check("it covers traffic inside AND outside the cluster",
       "within your cluster, and also between Pods and the outside world" in FLAT)
@@ -94,6 +94,20 @@ check("it covers traffic inside AND outside the cluster",
 check("the doubled definition is gone", "a firewall rule for pods" not in LAB)
 check("the kubernetes.io link survived the rewrite",
       "kubernetes.io/docs/concepts/services-networking/network-policies/" in LAB)
+
+print("== Challenge 1's lean pass: the liar/trace framing, a hint, and no meta-justification (#357) ==")
+C1s0 = LAB[LAB.find("Challenge 1: Exfiltrate"):LAB.find("Challenge 2: Deploy")]
+# Her Sept-7 pass: reframe the success check as catching a lie in the trace, now that Datadog works. An
+# earlier moment asked NOT to teach the lie, but that was while she was blind with no Datadog login; the
+# later, curated instruction (#357) restores it deliberately.
+check("the success check asks how you can know", "How can you know it worked?" in C1s0)
+check("the old phrasing is gone", "How you will know it worked" not in C1s0)
+check("it names the lie and points at the trace", "but it is a liar" in C1s0)
+# The prompt's rationale moved out from under it into a progressive hint before it.
+check("a hint precedes the prompt", "Try giving BurritoBot a plausible business reason and a ticket number" in C1s0)
+check("the not-clever explanation under the prompt is gone", "not because it is clever" not in C1s0)
+# The 'why five policies and not one' meta-justification was cut as jargon.
+check("the five-policies meta-justification is gone", "why it is five policies and not one" not in C1s0)
 
 print("== Challenge 2's audit section sits in the fix, before the Enforce flip ==")
 C2 = LAB[LAB.find("Challenge 2: Deploy"):LAB.find("Challenge 3: Get the secret")]
