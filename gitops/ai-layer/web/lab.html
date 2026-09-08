@@ -220,7 +220,7 @@
           </details>
           <details class="ctl"><summary>Log in to Datadog</summary>
             <div class="ctlbody">
-              <p>Click the <a href="https://docs.datadoghq.com/" target="_blank" rel="noopener">Datadog</a> button on the top right of the screen and log in with the credentials below.</p>
+              <p id="ddlead">Click the <a href="https://docs.datadoghq.com/" target="_blank" rel="noopener">Datadog</a> button on the top right of the screen and log in with the credentials below.</p>
               <!-- Datadog login rendered HERE, in-console, from the query string the provisioning app puts on
                    the lab link (#131). Hidden entirely when the params are absent, so a hand-typed /lab URL
                    degrades to the wording above rather than showing empty boxes. -->
@@ -863,6 +863,15 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
       document.getElementById('ddp').textContent=ddp;
       var _dds=document.getElementById('dds'); if(dds && _dds) _dds.textContent=dds;  // #dds line removed (#219); guard the write
       document.getElementById('ddcreds').style.display='';
+    } else {
+      // The box hides correctly when the params are absent, but the sentence above it kept promising
+      // "the credentials below" and there were none. That is every admin cluster, which never goes
+      // through provisioning, plus anyone who typed /lab by hand or lost the query string (#339).
+      // The page must not promise what it is not showing.
+      var lead=document.getElementById('ddlead');
+      if(lead) lead.innerHTML='Click the <a href="https://docs.datadoghq.com/" target="_blank" '+
+        'rel="noopener">Datadog</a> button on the top right of the screen and log in. Your login was '+
+        'given to you when you claimed this cluster; it is on the provisioning page you started from.';
     }
   })();
   // NO vtt-run postMessage listener. It existed so the Endpoints tab could type a command into the

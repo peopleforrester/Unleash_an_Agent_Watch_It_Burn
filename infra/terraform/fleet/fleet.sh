@@ -1751,6 +1751,63 @@ print_bootstrap_hints() {
         [[ -n "${role_filter}" && "${role_filter}" != "${rr}" ]] && continue
         log "  ${name}: AWS_PROFILE=$(account_for_role "${rr}") KUBECONFIG=<isolated> deploy-full-idp.sh ${bp}"
     done
+    print_roster_lab_links "${role_filter}"
+}
+
+# The lab page renders the Datadog login from ?ddu=&ddp= on its own URL, and the provisioning app is what
+# appends those. Roster clusters are deliberately not in the provisioning pool, so nothing ever built that
+# link for them and the page told a presenter to use "the credentials below" with nothing below it (#339).
+#
+# Printed for the operator to bookmark rather than written anywhere. The login is the shared instructor
+# org's, which both presenters already hold, so this is a convenience and not a new place a secret lives.
+print_roster_lab_links() {
+    local role_filter="${1:-}" entry name rr tier itype pidscol bp owner host dd em pw site
+    local -a rows=()
+    for entry in "${INSTRUCTORS[@]}"; do
+        IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
+        [[ -n "${role_filter}" && "${role_filter}" != "${rr}" ]] && continue
+        host="$(public_host_for "${name}" "${owner:-}")"
+        [[ -n "${host}" ]] || continue
+        dd="$(datadog_row_for_role "${rr}" || echo '{}')"
+        em="$(jq -r '.email // ""' <<<"${dd}" 2>/dev/null)"
+        pw="$(jq -r '.password // ""' <<<"${dd}" 2>/dev/null)"
+        site="$(jq -r '.site // "datadoghq.com"' <<<"${dd}" 2>/dev/null)"
+        if [[ -n "${em}" && -n "${pw}" ]]; then
+            rows+=("  ${name}: https://${host}/lab?cluster=${name}&ddu=$(urlenc "${em}")&ddp=$(urlenc "${pw}")&dds=${site}")
+        else
+            rows+=("  ${name}: https://${host}/lab?cluster=${name}   (no Datadog row resolved; the page will say so rather than promise a login)")
+        fi
+    done
+    [[ "${#rows[@]}" -gt 0 ]] || return 0
+    log "lab links for the roster clusters (bookmark these; they carry the Datadog login the page shows):"
+    printf '%s\n' "${rows[@]}" >&2
+}
+
+# The Datadog row a roster cluster ships to. Community and admin clusters share the single
+# admin-instructor org, selected by ROLE rather than by a pool index, which is the same rule cmd_ingest
+# uses. Loads the pools itself: this runs on the provision path, outside register_with_provisioning, so
+# POOL1/POOL2 are not already set. Returns {} rather than failing when the secret is unreachable, because
+# a missing login must degrade to a link without one, never break a provision.
+datadog_row_for_role() {
+    local role="$1" p1 p2
+    p1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
+        --secret-id watch-it-burn/datadog-pool --region "${WIB_REGION}" \
+        --query SecretString --output text 2>/dev/null || echo '[]')"
+    p2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
+        --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" \
+        --query SecretString --output text 2>/dev/null || echo '[]')"
+    case "${role}" in
+        community|admin) : ;;
+        *) echo '{}'; return 0 ;;
+    esac
+    jq -cn --argjson a "${p1}" --argjson b "${p2}" \
+        '(([$a[],$b[]]|map(select((.role//"")=="admin-instructor"))[0]) // {})' 2>/dev/null || echo '{}'
+}
+
+# Percent-encode for a query string. Datadog trial passwords contain punctuation, and an unencoded one
+# silently truncates the parameter at the first & or #, which renders half a credential.
+urlenc() {
+    jq -rn --arg s "$1" '$s|@uri'
 }
 
 # up_one wrapper (§4.6): look up this cluster's roster row and set the per-cluster TF_* overrides (pids /
