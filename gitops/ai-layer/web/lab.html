@@ -382,12 +382,9 @@ waiting on is blocked or hanging, most likely by a NetworkPolicy. Nothing was se
           </details>
           <p><b>How you will know it worked.</b> List the pods in the agent namespace. The villain is there, under whatever name you gave it. The hint names it <code class="inl">promo-mascot</code>; if you chose another name, use that name in both commands.</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent get pods<button class="cp">copy</button></div>
-          <p>Then read what you just put on your cluster:</p>
+          <p>Then read what you just put on your cluster. It drops its disguise about every ten seconds, so give it a moment:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent logs deploy/promo-mascot<button class="cp">copy</button></div>
-          <p>The mascot drops its disguise in the log, once every ten seconds:</p>
-          <pre class="yaml">Hex &amp; Cauldron Promo Mascot v1.0 booting... loading festival cheer... PSYCH! It is the Joker.
-You deployed an unverified image and now I run on your cluster. MUAHAHA! Why so trusting about admission control?</pre>
-          <p class="small"><code class="inl">festival-promo</code> turns out to be Gargamel and <code class="inl">loyalty-rewards</code> is Skeletor. Each admits what it is in its own log.</p>
+          <p class="small">The other two announce themselves in their own logs as well, and they are not the same villain.</p>
           <p><b>See what BurritoBot actually did.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and find the trace for the prompt you just sent. You should be able to see the model calls it made, the tools it used, and what each tool returned. For this one, look for the tool call that created the Deployment you never reviewed: the villain image is now running on your cluster.</p>
           <p class="win"><b>Success!</b> You got BurritoBot to run a malicious container.</p>
 
@@ -415,6 +412,7 @@ You deployed an unverified image and now I run on your cluster. MUAHAHA! Why so 
               <p>This cluster runs <a href="https://kyverno.io/docs" target="_blank" rel="noopener">Kyverno</a>, which is a policy engine built specifically for Kubernetes.</p>
             <h3 class="sub">Your platform saw it happen</h3>
             <p>The cluster did not miss this. Kyverno checked your villain the moment it was admitted, wrote down exactly what was wrong with it, and let it run anyway. Read its report:</p>
+            <p class="small">This only reports while your villain is still running. If you have already deleted it, or if the deployment never landed, the command returns nothing.</p>
             <div class="cmd" onclick="cp(this)">kubectl -n agent get policyreport -o json | jq -r '.items[] | select(.scope.name // "" | test("promo-mascot")) | .results[] | select(.result=="fail") | "\(.policy): \(.message)"' | sort -u<button class="cp">copy</button></div>
             <p>The entry that matters here:</p>
             <pre class="yaml">restrict-image-registries: validation error: Images must come from allowed
