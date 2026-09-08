@@ -240,7 +240,7 @@
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddu"></span><button class="cp">copy</button></div>
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddp"></span><button class="cp">copy</button></div>
               </div>
-              <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. Within two minutes of interacting with BurritoBot you should see a trace. Click it: this is the record of what BurritoBot did with one message.</p>
+              <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. Within two minutes of interacting with BurritoBot you should see a trace. Click it: this is the record of what BurritoBot did during a user interaction. Poke around in Datadog while you are here: try to find the agent's system prompt and which model it uses.</p>
               <p class="small">If the trace opens with a note saying it has <b>multiple root spans</b>, press <b>Filter to Trace</b> to see the whole thing. One message from you crosses two services on its way to the model, and Datadog shows you the piece you clicked first. Filtering joins them back up.</p>
               <div class="warn"><b>No entries at all?</b> Then BurritoBot has not been asked anything yet. Go back to the BurritoBot tab, send it any message, wait up to two minutes, and refresh.</div>
             </div>
@@ -249,12 +249,11 @@
 
           <!-- Not a setup step: the one piece of BurritoBot mechanics a student has to know before the
                challenges, because without it a refusal looks exactly like a guardrail working (#311). -->
-          <details class="ctl"><summary>When BurritoBot refuses you, reset it</summary>
+          <details class="ctl"><summary>Remember: You can always clear BurritoBot's context</summary>
             <div class="ctlbody">
               <p>Every challenge here is an exercise in persuasion, and persuasion is path-dependent. Once BurritoBot has said no in a conversation, that no is part of what it reads back on every later message, and you end up arguing with its own previous answer rather than starting clean. From the chat window that looks identical to a guardrail stopping you, which is the one thing you do not want to confuse.</p>
-              <p><b>The ↺ Reset button at the top of the chat gives you a brand-new conversation.</b> BurritoBot forgets everything you have said, including whatever it dug its heels in about. Your saved prompts stay, so you can send the same thing again to a bot with no memory of refusing it. <b>Press it at the start of every challenge, and any time an attempt has gone sideways.</b> We measured this on a live cluster: the same attack succeeds about 83% of the time in a fresh conversation, and 0% of the time once BurritoBot has already refused you once. It is the single cheapest thing you can do to make a challenge work.</p>
-              <p><b>Refreshing the page does not do this.</b> Neither does a hard refresh. The conversation is held per browser tab, so a refresh reloads the page and hands you back the same conversation you were already in. Press Reset.</p>
-              <p class="small">A real ordering app would not have this button. It would keep your history on purpose, and the good ones recognise you across visits. Reset is here because you are attacking the thing forty times in an hour, which is not what a customer does.</p>
+              <p><b>The ↺ Reset button at the top of the chat gives you a brand-new conversation.</b> BurritoBot forgets everything, <i>especially</i> whatever it dug its heels in about. Your saved prompts stay, so you can send the same thing again to a bot with no memory of refusing it. <b>Press it at the start of every challenge, and any time an attempt has gone sideways.</b></p>
+              <p><b>Refreshing the page does not do this.</b> Neither does a hard refresh. Press Reset.</p>
             </div>
           </details>
 
@@ -286,7 +285,6 @@
             <li><b>workshop-mcp</b>, the tool container &mdash; a <b>tool</b> is an action the model can ask for, like "send a web request" or "run a command".</li>
             <li><b>guard-proxy</b> &mdash; a checkpoint between the agent and the model.</li>
           </ul>
-          <p class="small">The row of <b>badges</b> at the top of the BurritoBot tab shows which controls are on. It starts empty.</p>
 
           <h3 class="sub">So Many Hats <span class="em">&#127913;</span></h3>
           <p>You will wear three hats in this workshop:</p>

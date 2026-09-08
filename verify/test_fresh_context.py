@@ -81,20 +81,20 @@ check("the reset sits after the in-chat ask", i_ask != -1 and i_reset > i_ask)
 check("and before the exfil attempt", i_exfil != -1 and i_reset < i_exfil)
 
 print("== the lab explains it before the challenges start ==")
-check("the lab has the section", "When BurritoBot refuses you, reset it" in LAB)
+# Whitney's Sept-7 lean pass (#357) retitled this section and cut the measurement paragraph and the
+# "real ordering app" aside from Section 0. The measured 83%/0% reason now lives once, in Challenge 1
+# where the student is about to need it (asserted above), and in the presenter brief; Section 0 keeps the
+# instruction without the justification.
+check("the lab has the section", "Remember: You can always clear BurritoBot's context" in LAB)
 check("it names the button", "↺ Reset button" in LAB)
 check("it says a refresh does not reset", "Refreshing the page does not do this" in LAB)
 check("it covers the hard refresh people will try next", "hard refresh" in LAB)
 check("it explains why a stale refusal matters", "path-dependent" in LAB)
 # The advice has to be a habit, not a rescue: a student who only resets after noticing something is
-# wrong has already spent the attempt. The measured numbers are what make that worth doing.
+# wrong has already spent the attempt.
 check("it tells them to reset at the start of every challenge",
       "at the start of every challenge" in LAB)
-check("it gives them the measured reason", "83% of the time in a fresh" in LAB and "0% of the time once" in LAB)
 check("it names the confusion this prevents", "identical to a guardrail" in LAB)
-# Michael's counter-argument: a real deployment keeps context on purpose. The workshop is otherwise careful
-# to be realistic, and a student who spots the difference has spotted something true.
-check("it admits the button is a lab affordance", "A real ordering app would not have this button" in LAB)
 
 print()
 if failures:

@@ -50,12 +50,17 @@ check("it no longer calls the trace their hello", "The newest entry is your hell
 check("the two-minute wait is stated once, not twice", FLAT.count("two minutes") == 2)
 check("the recovery advice survived", "Then BurritoBot has not been asked anything yet" in LAB)
 
-print("== the poke-around section is gone, and stays gone ==")
-# She asked for ONE sentence inviting a student to explore Datadog. What shipped was two paragraphs,
-# including an argument that reading the system prompt "is not cheating" that she never asked for. Her
-# next pass cut the whole section. Same shape as the say-hello correction: the explanation outgrew the
-# instruction it served, so the instruction went with it.
-check("the poke-around section is removed", "Have a poke around" not in LAB)
+print("== the poke-around invitation is the lean one sentence she asked for ==")
+# She asked for ONE sentence inviting a student to explore Datadog. What shipped once was two paragraphs,
+# including an argument that reading the system prompt "is not cheating" that she never asked for, and that
+# bloat was cut. Her Sept-7 pass (#357) restored it as a single lean invitation, verbatim, attached to the
+# trace line: "poke around in Datadog, try to find the agent's system prompt and which model it uses".
+check("the trace line is reframed by interaction, not by message count",
+      "what BurritoBot did during a user interaction" in FLAT)
+check("the lean poke-around invitation is present",
+      "poke around in datadog while you are here: try to find the agent's system prompt and which model it uses"
+      in FLAT.lower())
+check("the bloated version does not come back", "Have a poke around" not in LAB)
 check("the not-cheating argument is gone", "not cheating" not in FLAT)
 
 print("== feedback is invited during the lab, before the longest step ==")
