@@ -230,6 +230,7 @@
                 <div class="cmd noterm" onclick="cp(this)"><span id="ddp"></span><button class="cp">copy</button></div>
               </div>
               <p class="small">Once you are in, open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener"><b>Agent Observability</b></a>. Within two minutes of interacting with BurritoBot you should see a trace. Click it: this is the record of what BurritoBot did with one message.</p>
+              <p class="small">If the trace opens with a note saying it has <b>multiple root spans</b>, press <b>Filter to Trace</b> to see the whole thing. One message from you crosses two services on its way to the model, and Datadog shows you the piece you clicked first. Filtering joins them back up.</p>
               <div class="warn"><b>No entries at all?</b> Then BurritoBot has not been asked anything yet. Go back to the BurritoBot tab, send it any message, wait up to two minutes, and refresh.</div>
             </div>
           </details>
