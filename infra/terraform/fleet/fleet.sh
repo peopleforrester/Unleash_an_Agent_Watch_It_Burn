@@ -2845,7 +2845,7 @@ cmd_routes() {
     if [[ -d "${STATE_DIR}" ]]; then
         for state in "${STATE_DIR}"/${NAME_PREFIX}-*.tfstate; do
             [[ -e "${state}" ]] || continue
-            name="$(basename "${state}" .tfstate)"; n="${name##*-}"
+            name="$(basename "${state}" .tfstate)"
             # The account comes from the cluster's own membership record, NOT from the default account.
             # The pool spreads across five accounts, and read_membership is what every other account-aware
             # path already uses (the LB wait two functions up, teardown's refusal check). While this line
@@ -2859,9 +2859,11 @@ cmd_routes() {
             # Memorable name first: this is the one the student is given (#142). "brave-badger" survives
             # being read to a room and typed from memory; "a-042" and a raw ELB hostname do not.
             printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
-            # a-NNN stays as an ALIAS only, so a link handed out before the rename still resolves. It is
-            # not what anyone is told any more.
-            printf 'a-%s.agenticburn.com  %s:443\n' "${n}" "${h}" >> "${tmp}"
+            # The a-NNN compatibility alias is GONE (#359). It survived the #142 rename only so links
+            # handed out before it still resolved, and no such link is outstanding: the pool is rebuilt
+            # from scratch for the event and every student is given the memorable name. Emitting it
+            # doubled the route table for no reader, and a second hostname per cluster is a second thing
+            # to get wrong in the shrink guard below.
             emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         done
         # Presenter student clusters (#208): <owner>-student, from their own state files.
@@ -2884,14 +2886,21 @@ cmd_routes() {
     # omits to a 404. It has happened: a subset run on 2026-08-26 rewrote the table from three clusters
     # and took two live round URLs down. The published table is the thing to compare against, not the
     # working copy, because the working copy may already be a bad render from a previous attempt.
+    #
+    # The published table is discounted by the RETIRED a-NNN aliases (#359). They are no longer emitted,
+    # so a correct run legitimately produces a table two hosts shorter than the one on HEAD, and counting
+    # them would make this guard refuse every publish until someone overrode it with the very flag that
+    # also disables the protection. Retiring a hostname is not the same event as losing one.
     local new_count old_count
     new_count="$(grep -c agenticburn.com "${tmp}" || true)"
-    old_count="$(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null | grep -c agenticburn.com || true)"
+    old_count="$(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null \
+        | grep agenticburn.com | grep -vc '^a-[0-9]' || true)"
     if [[ -z "${WIB_ROUTES_ALLOW_SHRINK:-}" && "${new_count}" -lt "${old_count}" ]]; then
         log "routes: REFUSING to publish ${new_count} host(s), down from ${old_count} already published."
         log "        Hosts that would be dropped:"
         comm -13 <(grep -o '^[^ ]*\.agenticburn\.com' "${tmp}" | sort) \
-                 <(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null | grep -o '^[^ ]*\.agenticburn\.com' | sort) \
+                 <(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null \
+                     | grep -v '^a-[0-9]' | grep -o '^[^ ]*\.agenticburn\.com' | sort) \
             | sed 's/^/          - /' >&2
         log "        Every one of those becomes a 404. If the shrink is intended (a teardown), re-run"
         log "        with WIB_ROUTES_ALLOW_SHRINK=1. Otherwise wait for the missing consoles and retry."

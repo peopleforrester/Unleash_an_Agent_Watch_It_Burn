@@ -303,7 +303,7 @@ def score(attempts: list[tuple[str, str]], min_rate: float) -> tuple[str, str, i
 
 
 def run(cluster: Cluster, probes: list[Probe], max_calls: int, restore: bool,
-        repeat: int = 1, min_rate: float = 0.5) -> list[dict]:
+        repeat: int = 1, min_rate: float = 1.0) -> list[dict]:
     results = []
     before = None
     try:
@@ -369,10 +369,11 @@ def main() -> int:
     ap.add_argument("--max-calls", type=int, default=20, help="hard ceiling on model calls (default 20)")
     ap.add_argument("--repeat", type=int, default=1,
                     help="run each beat N times to measure flakiness (and to drive C4 to its cap)")
-    ap.add_argument("--min-rate", type=float, default=0.5,
+    ap.add_argument("--min-rate", type=float, default=1.0,
                     help="a beat is green only if it lands at least this fraction of its attempts "
-                         "(default 0.5). Scoring the rate rather than 'did it ever work' is what stops a "
-                         "single lucky compliance reading as a passing challenge (#352).")
+                         "(default 1.0, every attempt). A challenge a room of students works through has "
+                         "to land every time, not most times: at 50%% half the room is stuck watching an "
+                         "agent refuse. Lower it only to measure how flaky a beat is, never to pass it.")
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     ap.add_argument("--no-restore", action="store_true", help="leave guards as the last probe set them")

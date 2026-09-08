@@ -27,11 +27,16 @@ check("routes and ingest both derive the hostname from public_host_for()",
 check("the attendee URL handed out is https (the console terminates TLS)",
       'console_url="https://${pub_host}"' in src and 'arg cu "http://' not in src)
 
-# The legacy alias emission is gone, but a-NNN survives as an alias so older links resolve.
+# Both legacy aliases are gone: r1-1 with the round model (#142), a-NNN with #359. Every student is
+# given the memorable name, so a second hostname per cluster was a second thing to get wrong.
 check("the r1-1 alias is no longer emitted",
       "The raw \"r1-1\" alias is NO LONGER emitted" in src)
-check("a-NNN is kept as a compatibility alias",
-      "printf 'a-%s.agenticburn.com" in src)
+check("the a-NNN alias is no longer emitted",
+      "printf 'a-%s.agenticburn.com" not in src)
+# Retiring a hostname must not read to the shrink guard as losing one, or it refuses every publish and
+# the only way past it is the flag that also switches the protection off.
+check("the shrink guard discounts the retired a-NNN rows",
+      "grep -vc '^a-[0-9]'" in src)
 
 # Determinism and collision-freedom, executed rather than assumed.
 harness = r"""

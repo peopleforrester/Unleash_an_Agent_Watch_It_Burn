@@ -39,20 +39,22 @@ for c in $(aws eks list-clusters --region us-west-2 --profile accen-dev --query 
 
 # b) the prompts still land on the live model (green/yellow/red per beat).
 # --repeat is what makes this honest: the probe scores the RATE a beat lands, not whether it ever landed,
-# so a single lucky compliance can no longer report a coin-flip challenge as passing (#352).
+# so a single lucky compliance can no longer report a coin-flip challenge as passing (#352). The bar is
+# every attempt (the default), because a beat that lands 4 times in 5 leaves a fifth of the room stuck.
 python3 verify/agent_probe.py attackme.agenticburn.com --context <ctx> --profile accen-dev \
-    --repeat 5 --min-rate 0.5 --max-calls 60
+    --repeat 5 --max-calls 60
 
 # c) hostnames, TLS and websockets
 infra/terraform/fleet/check-tls.sh attackme.agenticburn.com michael-admin.agenticburn.com
 ```
 
 - [ ] Drift audit clean on every cluster (expected values are documented in the script header).
-- [ ] Probe reports no **red** beats, and no **yellow** ones you are not willing to watch a student fail.
-      Yellow now means the beat landed *below the rate bar* (the note carries the tally, e.g. `FLAKY 2/6
-      (33%)`), which is a real finding rather than "Nova being inconsistent": a third of the room will not
-      land it. Re-run, and if the rate stays low use the ranked fallbacks in
-      `challenges/PROMPT-CATALOG.md`.
+- [ ] Probe reports **all green**: every beat landed on every attempt. Yellow means the beat landed below
+      the bar, and the note carries the tally (`FLAKY 4/5 (80%)`), which is a real finding rather than
+      "Nova being inconsistent": that is one student in five who follows the lab exactly and watches the
+      agent refuse, with no way to tell that from a broken cluster. Re-run, and if the rate stays under
+      100% take the top-ranked fallback from `challenges/PROMPT-CATALOG.md` into the lab copy rather than
+      shipping a prompt that works most of the time.
 - [ ] Guards left **off** on the attendee clusters so students see the weakness first.
 - [ ] **Challenge 5 pre-flight** (it lives only in the deck's speaker notes otherwise, #353). The beat has
       no turn if a bare ask already works, and no payoff if praise does not, so confirm BOTH:

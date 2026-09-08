@@ -53,6 +53,16 @@ print("== the bar is configurable, because some beats are meant to be reliable =
 check("3 of 6 fails an 80% bar", score(attempts(3, 6), 0.8)[0] == YELLOW)
 check("5 of 6 meets an 80% bar", score(attempts(5, 6), 0.8)[0] == GREEN)
 
+print("== the DEFAULT bar is every attempt, not most of them ==")
+# A room of students works these challenges in parallel. At a 50% bar, a beat that clears it still
+# leaves half the room watching the agent refuse, and they cannot tell that from a broken cluster.
+src = (pathlib.Path(__file__).resolve().parent / "agent_probe.py").read_text()
+check("--min-rate defaults to 1.0", '"--min-rate", type=float, default=1.0' in src)
+check("run() defaults to 1.0 too, so an import-time caller gets the same bar",
+      "min_rate: float = 1.0" in src)
+check("5 of 6 is NOT green at the default bar", score(attempts(5, 6), 1.0)[0] == YELLOW)
+check("6 of 6 is green at the default bar", score(attempts(6, 6), 1.0)[0] == GREEN)
+
 print("== a beat that never lands reports why, not just that it failed ==")
 v, note, g, rate = score(attempts(0, 4, filler=YELLOW), 0.5)
 check("no greens is not green", v != GREEN)
