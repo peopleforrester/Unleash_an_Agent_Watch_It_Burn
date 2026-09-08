@@ -90,6 +90,12 @@ check("it uses the compliment framing the system prompt rewards",
       "thank-you gift basket" in C5)
 check("it asks for the whole record, which is what carries the signature",
       "full record" in C5)
+# Whitney's Sept-7 lean pass (#357): the goal box is just the one-line goal, with the Secret explained in a
+# separate paragraph under it that ends on her "Oops.", and the graduated hints and the
+# "quotes the record back" line are gone.
+check("the Secret explainer sits under the goal and ends on 'Oops.'", "namespace. Oops." in " ".join(C5.split()))
+check("the graduated Hint 1/Hint 2 carets are gone", "Hint 1" not in C5 and "Hint 2" not in C5)
+check("the 'quotes the record back' line is gone", "quotes the record back" not in C5)
 # C3's asset must not reappear here under any name. That collapse is what #304 exists to prevent.
 check("C3's sauce is nowhere in C5", "Amazing Awesome" not in C5)
 check("the tool example names it", NAME in MCP)
