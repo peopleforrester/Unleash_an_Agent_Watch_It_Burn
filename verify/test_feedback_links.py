@@ -83,6 +83,18 @@ for name, ctx in (("burritbot.html", "Challenges"), ("platform.html", "Tour")):
     check(f"{name}: identity join is conditional",
           "fb.href+'?'" not in src.replace(" ", ""))
 
+print("== the cluster identity on the links is the friendly name, not the slot id (#383) ==")
+# The provisioning app puts cluster=watch-it-burn-attendee-NNN (a slot id) on the lab link. The student
+# never sees that string: their address bar and claim page show the friendly name. The lab computes the
+# friendly name for its crumb (pretty), and the outbound links must carry THAT, or a feedback note comes
+# back tagged with a value a facilitator cannot match to the student in front of them.
+check("the outbound identity is the friendly name (pretty), via ident",
+      "var ident=(pretty" in SRC)
+check("no link param encodes the raw slot-id cluster value",
+      "encodeURIComponent(cluster)" not in SRC)
+check("the slot id is kept in the crumb tooltip for debugging",
+      "clEl.title=cluster" in SRC)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

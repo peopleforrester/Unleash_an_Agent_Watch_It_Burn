@@ -919,7 +919,12 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
     var pb=document.getElementById('provbtn'); if(prov&&pb) pb.href=prov;
     // carry the cluster identity onto the BurritoBot link so its label matches this VTT
     // Identity follows every nav link, so a presenter driving two clusters never lands on the wrong one.
-    var q2=[]; if(cluster&&cluster!=='(cluster not specified)')q2.push('cluster='+encodeURIComponent(cluster));
+    // #383: the links carry the FRIENDLY name (pretty), the value the student sees in their own
+    // address bar and on their claim page, not the provisioning slot id. A feedback note or a
+    // presenter following a nav link now names the cluster the way the room does. The slot id is
+    // still in the crumb tooltip (clEl.title) for anyone debugging a specific slot.
+    var ident=(pretty&&pretty!=='(cluster not specified)')?pretty:cluster;
+    var q2=[]; if(ident&&ident!=='(cluster not specified)')q2.push('cluster='+encodeURIComponent(ident));
     if(user)q2.push('user='+encodeURIComponent(user));
     var vt=document.getElementById('vttbtn'); if(vt&&q2.length)vt.href='/lab?'+q2.join('&');
     // Join with & when the href already carries a query string. The Feedback button does (#364), and
@@ -953,7 +958,7 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
       }
     }
     var bb=document.getElementById('bbbtn');
-    if(bb){var p=[]; if(cluster&&cluster!=='(cluster not specified)')p.push('cluster='+encodeURIComponent(cluster)); if(user)p.push('user='+encodeURIComponent(user)); if(p.length)bb.href='/?'+p.join('&');}
+    if(bb){var p=[]; if(ident&&ident!=='(cluster not specified)')p.push('cluster='+encodeURIComponent(ident)); if(user)p.push('user='+encodeURIComponent(user)); if(p.length)bb.href='/?'+p.join('&');}
     document.title=(instr?'Instructor':'Student')+' VTT — '+cluster;
     // Datadog login, carried on the lab link by the provisioning app (#131) so the student never has to
     // navigate back to the provisioning page mid-lab. Shown only when both halves are present; a partial
