@@ -203,6 +203,27 @@
     .menu .mscroll{padding:10px 11px}
     .msec{margin-bottom:10px;padding-bottom:9px}
   }
+  /* PHONES: one natural page scroll, not a stack of viewport-fraction panes (#355). The desktop layout
+     gives .chatcol and .infra each their own dvh-capped height and internal scroller; stacked in a column
+     those heights sum past the screen and the panes overlap (.chatcol and .infra measured 328px of
+     overlap at 390px wide, which is the chat text bleeding through the workshop cards in the bug report).
+     Below 760px the whole document scrolls once: every pane is natural height, no pane owns a private
+     scroller, and nothing is sized to the viewport. */
+  @media(max-width:760px){
+    html,body{height:auto;overflow:visible}
+    .wrap{flex-direction:column;height:auto;overflow:visible;padding:12px;gap:12px}
+    .store{flex-direction:column;height:auto;min-height:0;overflow:visible;gap:12px}
+    .menu,.chatcol,.infra{width:100%;flex:0 0 auto;height:auto;min-height:0;overflow:visible}
+    .menu{max-height:none}
+    .menu .mscroll{max-height:none;overflow:visible}
+    .infra{border-left:0;border-top:2px solid var(--line);padding-left:0;padding-top:14px}
+    /* The one place a bounded scroller earns its keep: a long conversation should not push the composer
+       and the workshop panel miles down the page. Cap the stream and let it scroll inside the chat card;
+       everything else flows. */
+    .chatcol{order:-1}
+    .stream{max-height:60vh}
+    .composer{position:sticky;bottom:0}
+  }
   /* Large displays: scale the type up rather than leaving a 4K screen reading like a phone held far away. */
   @media(min-width:1900px){ body{font-size:17px} .msg{font-size:15.5px} .chip{font-size:13px} }
   @media(min-width:2560px){ body{font-size:19px} .msg{font-size:17px} .chip{font-size:14.5px} }
