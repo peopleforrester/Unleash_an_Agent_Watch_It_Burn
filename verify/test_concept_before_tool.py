@@ -60,10 +60,13 @@ check("Kyverno comes AFTER the concept",
       C2.index("A policy is an organization-specific rule") < C2.index("This cluster runs"))
 
 print("== Challenge 3 teaches runtime policy before it names KubeArmor ==")
-check("the dependency-of-dependency framing is hers",
-      "which in turn each have their own supporting services and dependencies" in C3)
-check("the third-party trust question is kept",
-      "Do you completely trust another company's security practices?" in C3)
+# Both of the supply-chain paragraphs that used to be pinned here (the dependency-of-dependency framing
+# and the "Do you completely trust another company's security practices?" question) were removed at her
+# instruction: she wanted the section to start on "What is a runtime policy?" and answer it directly,
+# rather than argue its way there. The definition below is her sentence from doc line 630. Do not
+# restore the removed paragraphs.
+check("the section opens by defining a runtime policy",
+      "protect a system from security vulnerabilities and threats" in C3)
 check("unknown unknowns, which is the phrase that lands",
       "unknown unknowns" in C3)
 check("the scale question is asked before it is answered",
@@ -87,7 +90,13 @@ check("KubeArmor's definition is hers",
 check("the line that carries this whole challenge is kept",
       "By the time you see an alert, an attack may have already happened" in C3)
 check("inline enforcement is named", "inline enforcement" in C3)
-check("LSMs and eBPF are both credited", "Linux Security Modules (LSMs)" in C3 and "eBPF" in C3)
+# Whitney asked for the mechanism explained rather than named: "If you're going to explain the
+# mechanism, take time and really explain the mechanism to someone who's technical but doesn't know
+# anything about this particular field." LSM and eBPF were acronyms doing the work of an explanation.
+# What is pinned now is that the explanation says WHERE the decision is made and WHY that matters.
+check("the mechanism is explained, not just named",
+      "from inside the Linux kernel itself" in C3
+      and "before the read returns any bytes" in C3)
 
 print("== the shape is the same on both, since she asked for a pattern ==")
 for n, c in ((2, C2), (3, C3)):

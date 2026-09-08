@@ -64,7 +64,12 @@ check("the tail is bounded so the student is not stranded", "timeout 120 kubectl
 check("the student is told to start the watch before re-running the attack",
       "Start this in your terminal first and leave it running" in C3)
 check("KubeArmor prevention is still the payoff", "c3-kubearmor-policy.yaml" in C3)
-check("the smoke-alarm line is kept", "Detection is a smoke alarm" in C3)
+# Whitney cut "Detection is a smoke alarm" by name (her doc line 676). What the line was there to do,
+# and what is pinned instead, is the point it made: detection arrives after the read has already
+# happened, so prevention is a separate job. Do not restore the metaphor.
+check("detection is still distinguished from prevention",
+      "the recipe was already read before the alert fired" in C3
+      and "You also need something that stops the read" in C3)
 
 print()
 if failures:
