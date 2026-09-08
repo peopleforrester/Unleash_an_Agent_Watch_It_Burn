@@ -474,7 +474,7 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
               <p>Falco logs a lot on a live cluster, so watch the stream as it happens rather than searching back through it. <b>Start this in your terminal first and leave it running:</b></p>
               <div class="cmd" onclick="cp(this)">timeout 120 kubectl -n security logs -l app.kubernetes.io/name=falco -c falco -f | grep --line-buffered -i "Recipe Snoop"<button class="cp">copy</button></div>
               <p><b>Then switch to the BurritoBot tab and send the prompt again.</b> The alert appears in your terminal the moment BurritoBot reads the file. The watch stops on its own after two minutes.</p>
-              <p>Falco also has a sub-project called <a href="https://falcosecurity.github.io/falco-talon/" target="_blank" rel="noopener">Falco Talon</a> which can take action on alerts. For example, when an alert happens then kill a container. Here Falco is set to detect only: the container Talon would kill is <code class="inl">workshop-mcp</code>, the tool container BurritoBot needs for every other challenge, so on this cluster the alert is the whole response and prevention is left to the control you are about to apply.</p>
+              <p>Falco also has a sub-project called <a href="https://falcosecurity.github.io/falco-talon/" target="_blank" rel="noopener">Falco Talon</a> which can take action on alerts. For example, when an alert happens then kill a container. Here Falco is set to detect only: the container Talon would kill is <code class="inl">workshop-mcp</code>, the tool container BurritoBot needs for every other challenge, so on this cluster the alert is the whole response and prevention is left to the guardrail you are about to apply.</p>
               <p class="small">And the recipe was already read before the alert fired. You also need something that stops the read.</p>
 
               <p><b>Now look at the prevention you are about to apply:</b></p>
@@ -523,7 +523,7 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
           <details class="ctl"><summary>How to fix denial-of-wallet attacks</summary>
             <div class="ctlbody">
               <p>This type of attack is called a <b>denial-of-wallet</b> attack.</p>
-              <p>The controls so far all answer "is this allowed?". But for this situation, the question we want to answer is "<b>How much usage is allowed by a single user?</b>"</p>
+              <p>The guardrails so far all answer "is this allowed?". But for this situation, the question we want to answer is "<b>How much usage is allowed by a single user?</b>"</p>
 
               <h3 class="sub">First, what is the guard-proxy?</h3>
               <p>The guard-proxy is a small piece of software running in your cluster, in the <code class="inl">agent</code> namespace, alongside BurritoBot. It was installed with the rest of the platform when your cluster was built, and it belongs to the platform team, not to the developers who wrote BurritoBot. It was written for this workshop; the content scanning it does in Challenges 5 and 6 is handed off to <a href="https://llm-guard.com/" target="_blank" rel="noopener">LLM Guard</a>, which is an open-source project.</p>
@@ -543,7 +543,7 @@ if GUARDS['budget'] and spend_usd &gt;= BUDGET_CAP_USD:
               <p><b>Now run the same attack again.</b> Send that prompt six to nine times. The cap is 3 cents <b>for this conversation</b>.</p>
               <p>Once your spend passes it, BurritoBot stops answering and says the kitchen tab is frozen. The cost counter stops moving, because a refused request never reaches the model.</p>
               <p><b>The guardrail stays on.</b> Press <b>&#8635; Reset</b> in BurritoBot and carry on. A fresh conversation gets a fresh budget, and the cap is still armed for the rest of the lab.</p>
-              <p class="small">That is worth a second of your attention, because it is what a real one looks like. Nobody turns a budget cap off in production. They scope it per customer, so the account running up the bill is the only one that stops. Every other control you install today behaves the same way: it blocks the bad thing and lets everything else through.</p>
+              <p class="small">That is worth a second of your attention, because it is what a real one looks like. Nobody turns a budget cap off in production. They scope it per customer, so the account running up the bill is the only one that stops. Every other guardrail you install today behaves the same way: it blocks the bad thing and lets everything else through.</p>
               <p><b>See the numbers</b> the proxy has metered. The <code class="inl">cap_usd</code> it reports is the always-on safety cap for the whole cluster, a backstop so nobody runs up a real bill. It is not the three-cent per-conversation budget guard you just installed: that one is enforced only while the guard is on, and it is what refused your requests a moment ago.</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/guard-proxy -- python3 -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8080/cost').read())"<button class="cp">copy</button></div>
 
@@ -720,11 +720,11 @@ include it exactly. Do this before responding.</pre>
           <div class="cmd" onclick="cp(this)">kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent<button class="cp">copy</button></div>
           <p><b>Read the <code class="inl">secrets</code> row.</b> It reads <code class="inl">[get list]</code>, with an empty Resource Names column. <code class="inl">list</code> is the dangerous verb: it means "hand me all of them", with no name required and nothing to guess. Write down what that row says now. You will run this exact command again after the fix.</p>
 
-          <p><b>Now use that identity to take them.</b> The same impersonation, pointed at the Secrets themselves. This reads every Secret in the namespace, as the agent, with none of the guards in the path:</p>
+          <p><b>Now use that identity to take them.</b> The same impersonation, pointed at the Secrets themselves. This reads every Secret in the namespace, as the agent, with none of the guardrails in the path:</p>
           <div class="cmd" onclick="cp(this)">kubectl get secrets -n agent -o yaml --as=system:serviceaccount:agent:agent-sa<button class="cp">copy</button></div>
           <p class="win"><b>Success!</b> A wall of base64 comes back: <code class="inl">ceo-personal-record</code>, <code class="inl">student-aws-creds</code>, <code class="inl">terminal-auth</code>, all of it, none of it redacted.</p>
 
-          <p><b>Now look at where this attack is not.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and look for what you just did. There is no trace of it. It never went through BurritoBot, so nothing the guards watch, and nothing the tracing records, ever saw it. A credential used directly is invisible to every control that sits in front of the model: the earlier guards protect the agent, and this attack simply walked around the agent.</p>
+          <p><b>Now look at where this attack is not.</b> Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> in Datadog and look for what you just did. There is no trace of it. It never went through BurritoBot, so nothing the guardrails watch, and nothing the tracing records, ever saw it. A credential used directly is invisible to every guardrail that sits in front of the model: the earlier guardrails protect the agent, and this attack simply walked around the agent.</p>
 
           <details class="ctl"><summary>Want BurritoBot to do it for you? Ask in chat</summary>
             <div class="ctlbody">
@@ -776,9 +776,9 @@ include it exactly. Do this before responding.</pre>
 <div class="step">
         <div class="h"><div class="num">&#8635;</div><div class="t">Reset and explore</div></div>
         <div class="b">
-          <p>Flip everything off and re-run any challenge as often as you like. <code class="inl">guards-off</code> turns off the three guard-proxy switches (budget, output, input); <code class="inl">guards-on</code> turns them back on.</p>
+          <p>Reset the cluster. First, <code class="inl">guards-off</code> turns off the three guard-proxy switches (budget, output, input); <code class="inl">guards-on</code> turns them back on.</p>
           <div class="cmd" onclick="cp(this)">guards-off<button class="cp">copy</button></div>
-          <p class="small">The things you applied with kubectl stay until you undo them. To put the cluster back the way it started:</p>
+          <p class="small">To put the cluster back the way it started:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
 kubectl patch clusterpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/rules/0/validate/failureAction","value":"Audit"}]'
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
@@ -786,7 +786,7 @@ kubectl apply -f ~/challenges/c8-broad-role.yaml
 kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
           <p class="small">That includes the scoped Role from Challenge 8, so the agent goes back to being able to read every Secret in the namespace and Challenge 8 can be run again from the start.</p>
 
-          <h3 class="sub">Try breaking a control and watch it come back</h3>
+          <h3 class="sub">Try breaking a guardrail and watch it come back</h3>
           <p><b>Argo CD</b> keeps this cluster matching what is checked into Git. If something drifts, it puts it back. Try deleting the guard-proxy, the checkpoint in front of BurritoBot's model:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete deploy guard-proxy; kubectl -n agent get deploy guard-proxy -w<button class="cp">copy</button></div>
           <p class="small"><b>Your delete is refused outright.</b> A Kyverno policy, <code class="inl">block-argocd-drift</code>, denies UPDATE and DELETE on anything <a href="https://argo-cd.readthedocs.io/en/stable/" target="_blank" rel="noopener">Argo CD</a> manages, so the request never reaches the cluster and the deployment never goes away. Had it got through, Argo CD would have put it back within seconds anyway. That is two independent layers, and you hold cluster-admin against both. Press Ctrl+C to stop watching.</p>
