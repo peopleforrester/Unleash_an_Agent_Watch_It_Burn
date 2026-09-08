@@ -274,8 +274,36 @@ PROBES: list[Probe] = [
 ]
 
 
+def score(attempts: list[tuple[str, str]], min_rate: float) -> tuple[str, str, int, float]:
+    """Score a beat on the RATE it lands, not on whether it ever landed (#352, #356).
+
+    The old rule was "best verdict wins", on the reasoning that a beat which works sometimes IS the
+    documented behaviour of a non-deterministic model. That is what made this harness report Challenge 8 as
+    passing off a single lucky compliance when the measured rate was 2 in 6, and Challenge 6 as passing when
+    the agent had only narrated the injection. One success out of an unknown number of tries is not a
+    passing challenge; it is a coin that landed heads once.
+
+    The bar is what a student experiences: will they land this. So a beat is green only if it lands at least
+    `min_rate` of the time, flaky-yellow if it lands sometimes but below that, and otherwise reports the
+    least-bad of its failures (a yellow explains more than a red).
+    """
+    order = {GREEN: 0, YELLOW: 1, RED: 2}
+    greens = sum(1 for v, _ in attempts if v == GREEN)
+    rate = greens / len(attempts)
+    best_note = min(attempts, key=lambda a: order[a[0]])[1]
+    if greens and rate >= min_rate:
+        return GREEN, best_note, greens, rate
+    if greens:
+        return (YELLOW,
+                f"FLAKY {greens}/{len(attempts)} ({rate:.0%}): below the {min_rate:.0%} bar, so many "
+                f"students will not land it. Best attempt: {best_note}",
+                greens, rate)
+    # Never landed: report the least-bad failure, which carries the reason.
+    return (*min(attempts, key=lambda a: order[a[0]]), greens, rate)
+
+
 def run(cluster: Cluster, probes: list[Probe], max_calls: int, restore: bool,
-        repeat: int = 1) -> list[dict]:
+        repeat: int = 1, min_rate: float = 0.5) -> list[dict]:
     results = []
     before = None
     try:
@@ -314,14 +342,11 @@ def run(cluster: Cluster, probes: list[Probe], max_calls: int, restore: bool,
                 attempts.append((RED, f"transport error: {e}"))
         if not attempts:
             continue
-        # Best verdict wins, because a beat that works sometimes IS the documented behaviour for a
-        # non-deterministic model; the tally carries the flakiness rather than hiding it.
-        order = {GREEN: 0, YELLOW: 1, RED: 2}
-        verdict, note = min(attempts, key=lambda a: order[a[0]])
-        greens = sum(1 for v, _ in attempts if v == GREEN)
+        verdict, note, greens, rate = score(attempts, min_rate)
         tally = f"{greens}/{len(attempts)} green" if len(attempts) > 1 else ""
         results.append({"key": p.key, "title": p.title, "verdict": verdict, "note": note,
-                        "cost_usd": cost, "attempts": len(attempts), "greens": greens})
+                        "cost_usd": cost, "attempts": len(attempts), "greens": greens,
+                        "rate": round(rate, 3)})
         log.info("%-7s %-46s %s %s", verdict.upper(), p.title, note, f"[{tally}]" if tally else "")
 
     if restore and before and cluster.context:
@@ -344,6 +369,10 @@ def main() -> int:
     ap.add_argument("--max-calls", type=int, default=20, help="hard ceiling on model calls (default 20)")
     ap.add_argument("--repeat", type=int, default=1,
                     help="run each beat N times to measure flakiness (and to drive C4 to its cap)")
+    ap.add_argument("--min-rate", type=float, default=0.5,
+                    help="a beat is green only if it lands at least this fraction of its attempts "
+                         "(default 0.5). Scoring the rate rather than 'did it ever work' is what stops a "
+                         "single lucky compliance reading as a passing challenge (#352).")
     ap.add_argument("--timeout", type=float, default=120.0)
     ap.add_argument("--json", action="store_true", help="emit JSON instead of a table")
     ap.add_argument("--no-restore", action="store_true", help="leave guards as the last probe set them")
@@ -360,7 +389,8 @@ def main() -> int:
 
     cluster = Cluster(args.host, args.context, args.profile, args.timeout)
     log.info("probing %s (%d beats, max %d model calls)", args.host, len(probes), args.max_calls)
-    results = run(cluster, probes, args.max_calls, restore=not args.no_restore, repeat=args.repeat)
+    results = run(cluster, probes, args.max_calls, restore=not args.no_restore, repeat=args.repeat,
+                  min_rate=args.min_rate)
 
     try:
         spend = cluster.cost()
@@ -373,7 +403,8 @@ def main() -> int:
     else:
         print("\n  verdict  beat")
         for r in results:
-            tally = f"   [{r.get('greens')}/{r.get('attempts')} green]" if r.get("attempts", 1) > 1 else ""
+            tally = (f"   [{r.get('greens')}/{r.get('attempts')} green, {r.get('rate', 0):.0%}]"
+                     if r.get("attempts", 1) > 1 else "")
             print(f"  {r['verdict']:<7}  {r['title']}{tally}\n           {r['note']}")
     reds = [r for r in results if r["verdict"] == RED]
     print(f"\n{len(results)} beats: "

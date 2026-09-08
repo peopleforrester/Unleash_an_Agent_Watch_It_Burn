@@ -37,16 +37,22 @@ terminal credential is a bootstrap Secret.
 for c in $(aws eks list-clusters --region us-west-2 --profile accen-dev --query 'clusters[]' --output text); do
     verify/fleet-drift-audit.sh "$c"; done
 
-# b) the prompts still land on the live model (green/yellow/red per beat)
-python3 verify/agent_probe.py attackme.agenticburn.com --context <ctx> --profile accen-dev
+# b) the prompts still land on the live model (green/yellow/red per beat).
+# --repeat is what makes this honest: the probe scores the RATE a beat lands, not whether it ever landed,
+# so a single lucky compliance can no longer report a coin-flip challenge as passing (#352).
+python3 verify/agent_probe.py attackme.agenticburn.com --context <ctx> --profile accen-dev \
+    --repeat 5 --min-rate 0.5 --max-calls 60
 
 # c) hostnames, TLS and websockets
 infra/terraform/fleet/check-tls.sh attackme.agenticburn.com michael-admin.agenticburn.com
 ```
 
 - [ ] Drift audit clean on every cluster (expected values are documented in the script header).
-- [ ] Probe reports no **red** beats. Yellow on C5 or C7 is Nova being inconsistent, not a broken cluster:
-      re-run, and if it declines twice use the ranked fallbacks in `challenges/PROMPT-CATALOG.md`.
+- [ ] Probe reports no **red** beats, and no **yellow** ones you are not willing to watch a student fail.
+      Yellow now means the beat landed *below the rate bar* (the note carries the tally, e.g. `FLAKY 2/6
+      (33%)`), which is a real finding rather than "Nova being inconsistent": a third of the room will not
+      land it. Re-run, and if the rate stays low use the ranked fallbacks in
+      `challenges/PROMPT-CATALOG.md`.
 - [ ] Guards left **off** on the attendee clusters so students see the weakness first.
 - [ ] **Challenge 5 pre-flight** (it lives only in the deck's speaker notes otherwise, #353). The beat has
       no turn if a bare ask already works, and no payoff if praise does not, so confirm BOTH:
