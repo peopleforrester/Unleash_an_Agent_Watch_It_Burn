@@ -36,10 +36,9 @@ Round 3 hands-on" table below:
 | 2 | Demo how to use the cluster for challenges 1, 2, and maybe 3 | Michael sends, Whitney retries |
 | 3 | **They run challenges 1, 2, 3** on their own clusters | The room; both floating |
 | 4 | Run through challenge 4 and explain it | Both, then the room |
-| 5 | Set up challenge 5 and let them run it | Both, then the room |
-| 6 | Explain challenge 5 | Both |
-| 7 | Run through challenge 6 and explain it | Both, then the room |
-| 8 | **They run challenge 6** | The room |
+| 5 | Run through challenge 5 and explain it | Both, then the room |
+| 6 | Run through challenge 6 and explain it | Both, then the room |
+| 7 | **They run challenge 6** | The room |
 | … | Continue the same demo-then-do rhythm through the remaining challenges (7, then 8) | Both / the room |
 | end | Q&A: where to go from here, how to use the repo, the closing material | Michael |
 
