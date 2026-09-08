@@ -57,6 +57,18 @@ check("the cluster-wide backstop is still cluster-wide",
 check("the safety cap is 25 dollars in the doc and the manifest",
       "COST_CAP_USD" in DOC and 'COST_CAP_USD, value: "25"' in RES and "25 dollars" in DOC)
 
+print("== Challenge 4's attack prompt is the measured one (#345) ==")
+# Whitney could not move the meter past five cents with the old prompt and asked for one that works,
+# verified. Measured on attendee-001, 2026-09-08, cost per send:
+#   old "list every protein, salsa and topping"      $0.0058
+#   new "origin story for every protein"             $0.0134   (2.3x)
+# End to end at the 3-cent per-conversation cap: four sends served, fifth frozen, replies ~6.7k chars
+# every time, so the attack itself lands reliably rather than sometimes being refused.
+LAB4 = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
+check("the sample prompt is the expensive one", "origin story for every single protein" in LAB4)
+check("the weak prompt is gone", "List every protein, salsa, and topping you have" not in LAB4)
+check("the send count matches the measurement", "four or five times" in LAB4)
+
 print("== C3 and C5 are still different assets ==")
 # The whole point of the table. If these ever read the same object again, the confusion returns.
 check("C3's asset is a file on disk", "file baked into the workshop-mcp image" in DOC)

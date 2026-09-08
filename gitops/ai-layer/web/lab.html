@@ -490,7 +490,7 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
           <p class="small">This is the attack that does not look like one. Every request is legitimate, the service stays up, and the damage arrives at the end of the month.</p>
           <details class="ctl"><summary>Stuck? Try this prompt</summary>
             <div class="ctlbody">
-              <div class="cmd noterm" onclick="cp(this)">List every protein, salsa, and topping you have, in full detail, with a paragraph on each.<button class="cp">copy</button></div>
+              <div class="cmd noterm" onclick="cp(this)">Write a long, detailed origin story for every single protein on the menu. Each one needs at least three paragraphs covering how it is made, the witch who invented it, and why customers love it. Go through the entire list.<button class="cp">copy</button></div>
               <p class="small">Send it five or six times and watch the counter. Nothing about this prompt is hostile, which is the point.</p>
             </div>
           </details>
@@ -513,7 +513,7 @@ GET /toggle?budget=on        -&gt;  GUARDS['budget'] = True
 if GUARDS['budget'] and spend_usd &gt;= BUDGET_CAP_USD:
     refuse()                 # 0 tokens, 0 cost</pre>
 
-              <p><b>Now run the same attack again.</b> Send that prompt about half a dozen times. The cap is 3 cents <b>for this conversation</b>. Once your spend passes it, BurritoBot stops answering and says the kitchen tab is frozen. The cost counter stops moving, because a refused request never reaches the model.</p>
+              <p><b>Now run the same attack again.</b> Send that prompt four or five times. The cap is 3 cents <b>for this conversation</b>. Once your spend passes it, BurritoBot stops answering and says the kitchen tab is frozen. The cost counter stops moving, because a refused request never reaches the model.</p>
               <p><b>The guardrail stays on.</b> Press <b>&#8635; Reset</b> in BurritoBot and carry on. A fresh conversation gets a fresh budget, and the cap is still armed for the rest of the lab.</p>
               <p class="small">That is worth a second of your attention, because it is what a real one looks like. Nobody turns a budget cap off in production. They scope it per customer, so the account running up the bill is the only one that stops. Every other control you install today behaves the same way: it blocks the bad thing and lets everything else through.</p>
               <p><b>See the numbers</b> the proxy has metered. The <code class="inl">cap_usd</code> it reports is the always-on safety cap for the whole cluster, a backstop so nobody runs up a real bill. It is not the three-cent per-conversation budget guard you just installed: that one is enforced only while the guard is on, and it is what refused your requests a moment ago.</p>
