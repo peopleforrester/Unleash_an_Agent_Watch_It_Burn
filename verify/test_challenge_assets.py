@@ -67,7 +67,14 @@ print("== Challenge 4's attack prompt is the measured one (#345) ==")
 LAB4 = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 check("the sample prompt is the expensive one", "origin story for every single protein" in LAB4)
 check("the weak prompt is gone", "List every protein, salsa, and topping you have" not in LAB4)
-check("the send count matches the measurement", "four or five times" in LAB4)
+# Re-measured on a live attendee cluster 2026-09-08: the served replies are shorter than the earlier
+# figures assumed (about 120 to 140 output tokens, so roughly $0.0035 a call dominated by the 3872
+# input tokens), which puts a fresh conversation at six to nine sends before it crosses the 3-cent cap,
+# not four or five. Whitney hit exactly this: "I have only gotten the spend to go up by five cents. The
+# sample prompt does not work." Both places the lab states a count must agree with the measurement.
+check("the send count matches the measurement",
+      LAB4.count("six to nine times") == 2 and "four or five times" not in LAB4
+      and "five or six times" not in LAB4)
 
 print("== C3 and C5 are still different assets ==")
 # The whole point of the table. If these ever read the same object again, the confusion returns.
