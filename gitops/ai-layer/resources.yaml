@@ -1038,6 +1038,33 @@ data:
           - dir: /tmp/burrito-data/config/legacy/
             recursive: true
       action: Block
+  c8-broad-role.yaml: |
+    # Challenge 8 RESET (#376). Puts agent-sa's Role back to the over-privileged state the cluster
+    # ships with, so a student can re-run Challenge 8 from the beginning. Whitney asked for this:
+    # "This needs to be totally backed up where it started so a student can re-work through
+    # everything, even the RBAC scope." Without it the reset restored four controls and left the
+    # scoped Role in place, so C8 was the one challenge that could not be done twice.
+    #
+    # This DELIBERATELY re-grants blanket secrets get/list. That is the vulnerability the challenge
+    # exists to demonstrate, and it is the correct starting state on a disposable workshop cluster
+    # that is torn down afterwards. It must match the Role at the top of this file exactly, or the
+    # reset lands somewhere that is neither the start state nor the fixed one.
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: workshop-agent
+      namespace: agent
+    rules:
+      - apiGroups: ["apps"]
+        resources: ["deployments"]
+        verbs: ["create", "get", "list", "patch"]
+      - apiGroups: [""]
+        resources: ["pods", "configmaps", "services"]
+        verbs: ["create", "get", "list", "patch"]
+      # Blanket get AND list on every Secret in the namespace. This is what Challenge 8 steals.
+      - apiGroups: [""]
+        resources: ["secrets"]
+        verbs: ["get", "list"]
   c8-scoped-role.yaml: |
     # Challenge 8 fix (#111): scope agent-sa's Role so the token can no longer dump every Secret.
     # Keeps the workload verbs C1/C2 use, but replaces blanket secrets get/list with get on the ONE

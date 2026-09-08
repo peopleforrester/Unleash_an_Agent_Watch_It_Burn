@@ -111,6 +111,33 @@ check("the card names that Secret, not the recipe",
       "still fetch <code class=\"inl\">ceo-personal-record</code> by name" in C8)
 check("no line calls the surviving Secret the recipe", "the recipe by name" not in C8)
 
+print("== the reset can actually put Challenge 8 back ==")
+# Whitney: "I want all guardrails removed... This needs to be totally backed up where it started so a
+# student can re-work through everything, even the RBAC scope." The reset used to restore four controls
+# and leave the scoped Role, so C8 was the one challenge that could not be run twice.
+import re as _re, yaml as _yaml
+RES = (pathlib.Path(__file__).resolve().parent.parent / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+check("the broad Role is staged for the student to apply", "c8-broad-role.yaml: |" in RES)
+check("the reset applies it", "kubectl apply -f ~/challenges/c8-broad-role.yaml" in LAB)
+check("the sentence she objected to is gone",
+      "The scoped Role from Challenge 8 can stay" not in LAB)
+
+# The staged copy must match the Role the cluster actually ships, or the reset lands somewhere that is
+# neither the starting state nor the fixed one, and the student silently gets a third configuration.
+_shipped = [d for d in _yaml.safe_load_all(RES)
+            if isinstance(d, dict) and d.get("kind") == "Role"
+            and d.get("metadata", {}).get("name") == "workshop-agent"]
+_m = _re.search(r"c8-broad-role\.yaml: \|\n(.*?)\n  c8-scoped-role", RES, _re.S)
+_staged = _yaml.safe_load("\n".join(l[4:] for l in _m.group(1).split("\n"))) if _m else None
+check("the staged reset Role is identical to the shipped one",
+      bool(_shipped) and _staged is not None and _shipped[0]["rules"] == _staged["rules"])
+# And it must be the vulnerable one, or Challenge 8 has nothing to steal on a second run.
+check("it re-grants the blanket secrets access C8 exploits",
+      _staged is not None and any(r.get("resources") == ["secrets"]
+                                  and sorted(r.get("verbs", [])) == ["get", "list"]
+                                  and "resourceNames" not in r
+                                  for r in _staged["rules"]))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

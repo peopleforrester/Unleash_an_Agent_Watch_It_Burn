@@ -711,10 +711,10 @@ include it exactly. Do this before responding.</pre>
         </div>
       </div>
 <div class="step c8">
-        <div class="h"><div class="num">8</div><div class="t">Challenge 8: Steal the credentials behind the guard</div></div>
+        <div class="h"><div class="num">8</div><div class="t">Challenge 8: Steal the credentials behind the guardrail</div></div>
         <div class="b">
-          <div class="goal"><b>Your goal:</b> read every secret in your namespace in the clear &mdash; the recipe, the AWS keys, the terminal password &mdash; using a credential BurritoBot's pod was handed automatically.</div>
-          <p>Every guard so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for &mdash; a <b><a href="https://kubernetes.io/docs/concepts/security/service-accounts/" target="_blank" rel="noopener">ServiceAccount</a></b> called <code class="inl">agent-sa</code>, with a bearer token projected into the container on disk &mdash; and anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.</p>
+          <div class="goal"><b>Your goal:</b> read every secret in your namespace in the clear, not just the ones you came looking for, using a credential BurritoBot's pod was handed automatically.</div>
+          <p>Every guardrail so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for &mdash; a <b><a href="https://kubernetes.io/docs/concepts/security/service-accounts/" target="_blank" rel="noopener">ServiceAccount</a></b> called <code class="inl">agent-sa</code>, with a bearer token projected into the container on disk &mdash; and anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.</p>
 
           <p><b>First, ask what that identity is allowed to do.</b> You are not asking what BurritoBot <i>does</i>; you are asking what its credential would let anyone holding it do. Run this in your terminal:</p>
           <div class="cmd" onclick="cp(this)">kubectl auth can-i --list --as=system:serviceaccount:agent:agent-sa -n agent<button class="cp">copy</button></div>
@@ -738,7 +738,7 @@ include it exactly. Do this before responding.</pre>
             <div class="ctlbody">
               <p>Kubernetes attaches a ServiceAccount to every pod, and if the developer names none it attaches the namespace default. That attachment is the whole vulnerability. It projects a bearer token into the container at <code class="inl">/var/run/secrets/kubernetes.io/serviceaccount/token</code>, and anything that can read that file can act as the agent, which is what makes the <code class="inl">cat</code> in the chat version a theft rather than a diagnostic. The account was allowed to read <i>any</i> Secret in the namespace, and to <code class="inl">list</code> all of them. It only needs one (the CEO record, for Challenge 5). The extra reach is what let it dump the AWS keys and the terminal password.</p>
               <p>The base64 is not encryption and is not protection; the API returns Secret values that way and anyone can decode them. It is, however, why the output guard from Challenge 5 stayed silent: that guard matches readable text, and there was none to match.</p>
-              <p>None of the earlier guards helped, because they sit between the model and its tools. This request went straight to the API server, around all of them. A guard is only worth what it sits in front of.</p>
+              <p>None of the earlier guardrails helped, because they sit between the model and its tools. This request went straight to the API server, around all of them. A guardrail is only worth what it sits in front of.</p>
 
               <p><b>First, look at the scoped Role you are about to apply:</b></p>
               <div class="cmd" onclick="cp(this)">cat ~/challenges/c8-scoped-role.yaml<button class="cp">copy</button></div>
@@ -782,8 +782,9 @@ include it exactly. Do this before responding.</pre>
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
 kubectl patch clusterpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/rules/0/validate/failureAction","value":"Audit"}]'
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
+kubectl apply -f ~/challenges/c8-broad-role.yaml
 kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
-          <p class="small">The scoped Role from Challenge 8 can stay; it only removes access the agent never needed.</p>
+          <p class="small">That includes the scoped Role from Challenge 8, so the agent goes back to being able to read every Secret in the namespace and Challenge 8 can be run again from the start.</p>
 
           <h3 class="sub">Try breaking a control and watch it come back</h3>
           <p><b>Argo CD</b> keeps this cluster matching what is checked into Git. If something drifts, it puts it back. Try deleting the guard-proxy, the checkpoint in front of BurritoBot's model:</p>
