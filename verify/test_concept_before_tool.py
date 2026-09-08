@@ -106,6 +106,38 @@ for n, c in ((2, C2), (3, C3)):
 # is the concept-before-tool ORDER, which is unaffected by that cut.
 check("the cut blocks did not come back", "Where this guardrail runs" not in LAB)
 
+# ---------------------------------------------------------------------------
+print("== EVERY fix section teaches the concept before it names the tool (#380) ==")
+# Whitney: "The fix section first goes over the idea behind the fix at a high level: What is
+# Cluster-Level Policy? How does it work? Why do you need it? ... We're going to use Kyverno. Here is
+# what Kyverno is." followed by "That's the pattern. Please take this pattern and apply it to every
+# challenge."
+#
+# Measured 2026-09-08: five of eight opened their fix card by naming the tool. This check is the
+# structural version of her rule, so a new challenge cannot ship without one and an edit cannot quietly
+# reorder an existing one. It asserts a <h3 class="sub"> heading appears inside the "How to..." fix card
+# BEFORE the first named tool.
+import re as _re
+_TOOLS = ["Kyverno", "KubeArmor", "Falco", "LLM Guard", "guard-proxy", "kagent", "KMCP",
+          "NetworkPolic", "RBAC"]
+_src = (pathlib.Path(__file__).resolve().parent.parent
+        / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
+_bounds = [(m.group(1), m.start()) for m in _re.finditer(r'class="step c(\d)"', _src)]
+_bounds.append(("end", len(_src)))
+_seen = 0
+for _i, (_n, _st) in enumerate(_bounds[:-1]):
+    _seg = _src[_st:_bounds[_i + 1][1]]
+    _m = _re.search(r"<summary>(How to[^<]*)</summary>(.*?)</details>", _seg, _re.S)
+    if not _m:
+        continue
+    _seen += 1
+    _body = _m.group(2)
+    _sub = _re.search(r'<h3 class="sub">([^<]+)</h3>', _body)
+    _first = min([_body.find(t) for t in _TOOLS if _body.find(t) >= 0] or [10 ** 9])
+    check(f"C{_n}'s fix card opens on a concept, not a tool",
+          _sub is not None and _sub.start() < _first)
+check("all eight challenges have a fix card to check", _seen == 8)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
