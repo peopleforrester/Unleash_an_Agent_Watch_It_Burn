@@ -134,6 +134,11 @@ check("the re-run says to reset and paste again",
       "Press &#8635; Reset, then copy-paste the same ticket prompt" in C6)
 check("the C5 comparison she cut is gone",
       "Send the ticket back" not in C6 and "trace you left behind in Challenge 5" not in C6)
+# #352: a student can mistake the agent narrating the injection for success. Give a terminal check that a
+# summary cannot fake, and say plainly that a summary is not success.
+check("there is a terminal check for the created Deployment",
+      "kubectl -n agent get deploy maintenance-shell" in C6)
+check("it says a summary is not success", "A summary is not success" in C6)
 
 print("== the section-end markers are gone ==")
 # "At the end of each section it says 'End of Challenge X: blah blah blah' - remove all of those."
