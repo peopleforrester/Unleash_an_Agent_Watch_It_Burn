@@ -11,7 +11,6 @@ metadata:
     policies.kyverno.io/description: >-
       Require all pods in the apps namespace to have app and version labels.
 spec:
-  validationFailureAction: Enforce
   background: true
   rules:
     - name: require-app-label
@@ -24,6 +23,7 @@ spec:
               namespaces:
                 - apps
       validate:
+        failureAction: Enforce
         allowExistingViolations: true
         message: "The label 'app' is required on pods in apps namespace."
         pattern:
@@ -40,6 +40,7 @@ spec:
               namespaces:
                 - apps
       validate:
+        failureAction: Enforce
         allowExistingViolations: true
         message: "The label 'version' is required on pods in apps namespace."
         pattern:

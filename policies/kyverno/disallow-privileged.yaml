@@ -11,7 +11,6 @@ metadata:
     policies.kyverno.io/description: >-
       Disallow privileged containers in the apps namespace.
 spec:
-  validationFailureAction: Enforce
   background: true
   rules:
     - name: disallow-privileged-containers
@@ -24,6 +23,7 @@ spec:
               namespaces:
                 - apps
       validate:
+        failureAction: Enforce
         allowExistingViolations: true
         message: "Privileged containers are not allowed in the apps namespace."
         pattern:

@@ -35,7 +35,7 @@
 # TO PROMOTE TO ENFORCE: validate on a live cluster that guard-proxy and agentgateway still admit, then
 # flip failureAction here. Do not promote it blind.
 #
-# verify-at-build: written against Kyverno v1.18.1 using rule-level validate.failureAction, matching
+# verify-at-build: written against Kyverno v1.19.0 using rule-level validate.failureAction, matching
 # require-resource-limits.yaml. The foreach/deny conditions are NOT yet exercised on a live cluster.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy

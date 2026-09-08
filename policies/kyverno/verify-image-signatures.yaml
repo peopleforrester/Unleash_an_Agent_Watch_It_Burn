@@ -1,7 +1,7 @@
 # ABOUTME: Kyverno image-signature verification (the "Harbor + image signing" CNCF control Whitney raised).
 # ABOUTME: Starts in Audit so it never blocks the demo unexpectedly; flip to Enforce to require signatures.
 #
-# verify-at-build: confirm the verifyImages schema for the pinned Kyverno v1.18.1 (failureAction
+# verify-at-build: confirm the verifyImages schema for the pinned Kyverno v1.19.0 (failureAction
 #   placement) and fill the cosign attestor for YOUR supply chain (keyless subject/issuer for the
 #   registry/CI that signs the workshop images, or a public key). imageReferences must scope to your
 #   registry, not "*". This is the signing half of the Harbor + image-signing story; Harbor itself is
