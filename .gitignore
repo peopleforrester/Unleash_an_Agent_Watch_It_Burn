@@ -25,3 +25,7 @@ verify/.feedback/
 # Per-machine Claude Code settings (a remote environment id, not shareable state).
 # .claude/settings.json IS tracked: it carries this repo's deliberate model pin.
 .claude/settings.local.json
+
+# Post-event harvest: raw per-cluster behavioural data, may contain attendee-typed text.
+# Never committed: analysis products are summarised into docs/ by hand.
+.harvest/

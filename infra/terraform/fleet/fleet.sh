@@ -903,6 +903,17 @@ audit_zero_account() {
             --query 'NetworkInterfaces[].[NetworkInterfaceId,Description]' --output text 2>/dev/null \
             | grep -v -i "NAT Gateway\|VPC Endpoint" | awk '{print $1}' | tr '\n' ' ' || true)"
     [[ -z "$(echo ${enis})" ]] || { log "  ${acct}: ENIs in use beyond the NAT and the Bedrock endpoint: ${enis}"; record_fail "zero:${acct}:eni"; bad=1; }
+    # Security groups cost nothing, so they never made this audit fail and 105 per account accumulated
+    # unnoticed. They still matter: a non-default group blocks the lab VPC from ever being deleted. Named
+    # rather than counted, so the next teardown can see which cluster leaked them.
+    local sgleft
+    sgleft="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
+              --filters 'Name=group-name,Values=k8s-*' \
+              --query 'SecurityGroups[].GroupName' --output text 2>/dev/null | tr '\t' ' ' || true)"
+    if [[ -n "$(echo ${sgleft})" ]]; then
+        log "  ${acct}: orphaned k8s security groups still present (they block VPC deletion): $(echo ${sgleft} | wc -w)"
+        record_fail "zero:${acct}:sg"; bad=1
+    fi
     [[ "${bad}" -eq 0 ]] && log "  ${acct}: ZERO (only the lab VPC's NAT, its address and the endpoint ENIs remain)"
     return "${bad}"
 }
@@ -1455,6 +1466,62 @@ sweep_orphan_volumes() {
     return 0
 }
 
+# The AWS Load Balancer Controller creates security groups that terraform does not own, so a destroyed
+# cluster leaves them behind. They are FREE, which is why audit-zero passed on 53 torn-down clusters while
+# 105 of them sat in the lab VPC, and it is also why nobody noticed: the only symptom is that the VPC can
+# never be deleted afterwards, because AWS refuses to drop a VPC that still holds non-default groups.
+#
+# They carry NO tags, unlike the load balancers and volumes above, so the tag filter those sweeps use
+# matches nothing here. Verified on a live leftover set 2026-09-08: 105 of 105 had zero tags. The only
+# identifier is the NAME, which the controller builds as k8s-traffic-<cluster name with dashes stripped>-
+# <hash> (watch-it-burn-attendee-010 -> k8s-traffic-watchitburnattendee010-7ad7b645a).
+#
+# Rules are revoked before deletion because the groups reference each other, and a referenced group cannot
+# be deleted; stripping the rules first breaks the cycle. Deletion is then retried, since order still
+# matters for any reference the revoke missed.
+sweep_orphan_sgs() {
+    local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" found=0 survived=0
+    local squashed sgs sg
+    squashed="${name//-/}"
+    sgs="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
+            --filters "Name=group-name,Values=k8s-traffic-${squashed}-*,k8s-${squashed}-*" \
+            --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true)"
+    for sg in ${sgs}; do
+        [[ "${sg}" != "None" ]] || continue
+        found=$(( found + 1 ))
+        # Strip rules first: a group referenced by another group refuses to delete.
+        local ing egr
+        ing="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
+               --group-ids "${sg}" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null || echo '[]')"
+        egr="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
+               --group-ids "${sg}" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null || echo '[]')"
+        [[ "${ing}" == "[]" ]] || AWS_PROFILE="${acct}" aws ec2 revoke-security-group-ingress \
+            --region "${WIB_REGION}" --group-id "${sg}" --ip-permissions "${ing}" >/dev/null 2>&1 || true
+        [[ "${egr}" == "[]" ]] || AWS_PROFILE="${acct}" aws ec2 revoke-security-group-egress \
+            --region "${WIB_REGION}" --group-id "${sg}" --ip-permissions "${egr}" >/dev/null 2>&1 || true
+    done
+    # Retry deletion: cross-references resolve as siblings go away.
+    local attempt
+    for attempt in 1 2 3; do
+        survived=0
+        for sg in ${sgs}; do
+            [[ "${sg}" != "None" ]] || continue
+            AWS_PROFILE="${acct}" aws ec2 delete-security-group --region "${WIB_REGION}" \
+                --group-id "${sg}" >/dev/null 2>&1 || survived=$(( survived + 1 ))
+        done
+        [[ "${survived}" -eq 0 ]] && break
+    done
+    if [[ "${found}" -gt 0 ]]; then
+        if [[ "${survived}" -gt 0 ]]; then
+            log "  ${name}: ${survived} security group(s) SURVIVED deletion; the lab VPC cannot be destroyed until they go"
+            record_fail "sg-leak:${name}"
+        else
+            log "  ${name}: swept ${found} orphaned security group(s) (backstop, not a failure)"
+        fi
+    fi
+    return 0
+}
+
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
@@ -1474,6 +1541,7 @@ down_one() {
     # to be stranded, so skipping the sweep on failure would skip it exactly when it is needed.
     sweep_orphan_lbs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     sweep_orphan_volumes "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    sweep_orphan_sgs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     # Also in BOTH branches: a half-destroyed cluster is not one a student may claim either.
     deregister_one "${name}"
 }
