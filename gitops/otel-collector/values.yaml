@@ -249,7 +249,16 @@ config:
       logs:
         level: info
       metrics:
-        address: 0.0.0.0:8888
+        # Collector 0.159.0 (chart 0.172.1) REMOVED service.telemetry.metrics.address and fails to
+        # start on it: "'migration.MetricsConfigV030' has invalid keys: address". The replacement is
+        # a Prometheus reader, which expresses the same thing (scrape endpoint on :8888) in the
+        # config shape the new version accepts. Found on a live upgrade, #389.
+        readers:
+          - pull:
+              exporter:
+                prometheus:
+                  host: 0.0.0.0
+                  port: 8888
     pipelines:
       metrics:
         receivers:
