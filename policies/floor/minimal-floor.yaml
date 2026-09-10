@@ -70,6 +70,17 @@ spec:
                 name: system:masters
               - kind: Group
                 name: system:serviceaccounts:kube-system # controllers
+              # Argo CD must be able to replace what it owns, or the platform cannot upgrade itself.
+              # Found upgrading kagent 0.9.9 to 0.10.1 (#389): the new chart replaces a Deployment in
+              # ns kagent, this rule denied the DELETE, and the sync retried forever while the app sat
+              # OutOfSync and the old version kept running. The companion block-argocd-drift rule already
+              # asserts that only Argo CD may change what Argo CD manages, so excluding it here is that
+              # same intent applied consistently rather than a hole in the floor.
+              # The student-facing guardrail is untouched: a human at the terminal is not this subject,
+              # and every other principal is still denied.
+              - kind: ServiceAccount
+                name: argocd-application-controller
+                namespace: argocd
       validate:
         allowExistingViolations: true
         failureAction: Enforce
