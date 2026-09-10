@@ -14,7 +14,7 @@ spec:
   sources:
     - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
       chart: opentelemetry-collector
-      targetRevision: "0.158.2"
+      targetRevision: "0.172.1"
       helm:
         # Values live in the repo so the instructor and attendee Applications share one config and
         # differ by one overlay file (gitops/otel-collector/values-dual.yaml). Argo CD multi-source:

@@ -16,7 +16,7 @@ spec:
     chart: datadog-operator
     repoURL: https://helm.datadoghq.com
     # Pinned (PRD #26 M1: no "latest"). datadog-operator 2.23.2 = operator app 1.27.1 (helm search, 2026-06-25).
-    targetRevision: "2.23.2"
+    targetRevision: "2.26.0"
     helm:
       valuesObject:
         replicaCount: 1

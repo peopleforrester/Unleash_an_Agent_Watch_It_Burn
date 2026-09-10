@@ -49,7 +49,7 @@ spec:
       containers:
         - name: agentgateway
           # verify-at-build: pin @sha256 once resolved. Registry is cr.agentgateway.dev (verified 2026-06-25).
-          image: cr.agentgateway.dev/agentgateway:v1.3.0
+          image: cr.agentgateway.dev/agentgateway:v1.5.0
           imagePullPolicy: IfNotPresent
           args: ["-f", "/etc/agentgateway/config.yaml"]
           env:
