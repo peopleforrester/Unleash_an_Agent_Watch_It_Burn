@@ -89,7 +89,12 @@ def _load_from_secrets_manager():
     for a checkout with no AWS credentials, which genuinely cannot run this.
     """
     import json as _json, subprocess as _sp
-    secret = os.environ.get("WITB_DD_SECRET_ID", "watch-it-burn/datadog-admin-attendee")
+    # watch-it-burn/datadog holds the org every cluster DUAL-SHIPS to (api-key ...4b2214 =
+    # devops-days-portland-090826-001). Not datadog-admin-attendee, which is a DIFFERENT org (...-002)
+    # used for the presenter's own attendee cluster. Querying the wrong one returns zero metrics for a
+    # perfectly healthy fleet, which reads as a platform regression and is not one; that misread
+    # happened twice before this default was written down.
+    secret = os.environ.get("WITB_DD_SECRET_ID", "watch-it-burn/datadog")
     profile = os.environ.get("AWS_PROFILE", "accen-dev")
     region = os.environ.get("WIB_REGION", "us-west-2")
     try:
