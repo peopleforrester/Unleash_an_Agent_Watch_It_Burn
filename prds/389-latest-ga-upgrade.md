@@ -150,12 +150,18 @@ no health check would catch, because every pod would be Running and every app Sy
 
 ## Open questions
 
-- `[Answer]:` **agentgateway version lines.** Releases are v1.x (latest v1.5.0, 2026-08-27) but the
-  Kubernetes documentation is served under a `2.2.x` path. Are these the same artifact, a standalone
-  versus Kubernetes distribution split, or a docs-versioning scheme? Settle before tier 2.
-- `[Answer]:` **tempo.** Pinned from `grafana-community.github.io`; the index queried was
-  `grafana.github.io`, so the comparison in the inventory is not like-for-like and its row is marked
-  UNVERIFIED. Re-measure against the repo the Application actually names.
+- **RESOLVED 2026-09-10, agentgateway version lines.** The artifact is **v1.5.0**. The `2.2.x` in
+  documentation URLs is a docs tree, not a binary version; the Kubernetes and standalone distributions
+  are documented separately and both resolve. Tier 2 targets the release tag v1.5.0.
+- **RESOLVED 2026-09-10, tempo.** Measurement error, not an ambiguity: the wrong chart repo was queried.
+  Single-binary goes **2.2.3 -> 2.3.0** (app 2.10.7 -> 2.10.8), a patch bump. Tempo **3.0.3** is only
+  available through the **`tempo-distributed` chart 3.5.1**, which is a microservices deployment rather
+  than one pod and therefore a different change with a different resource budget. Tier 1 takes 2.3.0;
+  moving to Tempo 3 is separate work with its own justification.
+- **ANSWERED 2026-09-10, why not Kubernetes 1.37.** Because EKS does not offer it. Upstream Kubernetes
+  is v1.37.0, but `aws eks describe-cluster-versions` lists **1.36 as the highest and the default**
+  (standard support to 2027-08-02), then 1.35 and 1.34. 1.36 is the ceiling available to us, and moving
+  1.35 -> 1.36 buys roughly five extra months of standard support.
 - `[Answer]:` **Do we want kagent 0.10's Bedrock Guardrails at all?** They overlap guard-proxy
   directly. Turning them on is a design decision about the workshop, not an upgrade detail.
 - `[Answer]:` **How many provisioning passes is this worth?** Four tiers means at least four cluster

@@ -31,11 +31,20 @@ column is the one that matters, and the image tag can be overridden past whateve
 | loki | 7.0.0 | 7.3.0 | 3.6.12 | behind |
 | opentelemetry-collector | 0.158.2 | 0.172.1 | 0.159.0 | behind |
 | opentelemetry-operator | 0.117.0 | 0.122.0 | 0.158.0 | behind |
-| tempo | 2.2.3 | see note | 2.9.0 | UNVERIFIED |
+| tempo (single-binary) | 2.2.3 (app 2.10.7) | 2.3.0 | 2.10.8 | behind (patch) |
 
-`tempo` is pinned from `grafana-community.github.io`; the index queried was `grafana.github.io`, so its
-row is not a like-for-like comparison. Verify against the repo the Application actually names before
-acting on it.
+**Tempo, resolved 2026-09-10.** The earlier "unverified" note was a measurement error on my side: the
+Application names `grafana-community.github.io` (the single-binary chart moved there 2026-01-30) and the
+index queried was `grafana.github.io`. Against the correct repo there is no ambiguity.
+
+* Staying single-binary: chart **2.2.3 -> 2.3.0**, app 2.10.7 -> 2.10.8. A patch bump, nothing more.
+* Wanting **Tempo 3.0.3**, the latest GA of the application: that requires the **`tempo-distributed`
+  chart 3.5.1**, because the single-binary chart line tracks 2.10.x and does not ship 3.x at all.
+
+Those are not the same change. `tempo-distributed` is a microservices deployment (distributor, ingester,
+querier, compactor, and more) rather than one pod, so it is materially heavier per cluster. At fleet
+scale that cost is multiplied by fifty. **Recommendation: take chart 2.3.0 and stay single-binary**
+unless Tempo 3 is wanted for its own sake, in which case the resource budget has to be re-measured.
 
 ## Not Helm-managed
 
@@ -44,13 +53,15 @@ acting on it.
 | kagent / kagent-crds | 0.9.9 | **0.10.1** (2026-09-08) | GitHub releases |
 | agentgateway | v1.3.0 | **v1.5.0** (2026-08-27) | GitHub releases |
 | LLM Guard | 0.3.16 | 0.3.16 | PyPI, already current |
-| EKS control plane | 1.35 | **1.36** available | `aws eks describe-cluster-versions` |
+| EKS control plane | 1.35 | **1.36** (AWS ceiling; upstream k8s is v1.37.0 but EKS does not offer it) | `aws eks describe-cluster-versions` |
 | autoinstrumentation-python | 0.63b1 | check upstream | not yet measured |
 | Our own images (web-terminal, workshop-mcp, sample-app) | rolling | base images: debian bookworm-slim, python 3.12-slim | rebuild to pick up CVE fixes |
 
-**agentgateway has two version lines.** Releases are v1.x, but the Kubernetes documentation is served
-under a `2.2.x` path. Those were not reconciled here; do not assume v1.5.0 and "2.2.x" refer to the same
-thing until the distribution question is settled.
+**agentgateway version lines, resolved 2026-09-10.** The artifact is **v1.5.0** (released 2026-08-27;
+v1.4.1, v1.4.0 precede it). The `2.2.x` seen in documentation URLs is a **documentation tree**, not the
+binary version: `/docs/kubernetes/2.2.x/`, `/docs/kubernetes/latest/` and `/docs/standalone/main/` all
+resolve, and the Kubernetes and standalone distributions are documented separately. Upgrade target is
+the release tag, **v1.5.0**.
 
 ## How this was measured
 
