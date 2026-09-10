@@ -61,13 +61,55 @@ def load_credentials():
     candidates.extend(parent / ".env" for parent in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents])
     candidates.extend(parent / ".env" for parent in here.parents)
     candidates.append(pathlib.Path.home() / "secrets" / "datadog" / "datadog.env")
+    # A file that EXISTS but does not define both keys must not stop the search. Returning on mere
+    # existence let ~/secrets/datadog/datadog.env, which carries DD_API_KEY and no DD_APP_KEY, shadow
+    # every later source and skip this test on every machine we own. That is the same shadowing bug
+    # this function's docstring was written to prevent, one level up: there a dead value beat a live
+    # one, here a partial file beats a complete source.
+    needed = ("DD_API_KEY", "DD_APP_KEY")
     for path in candidates:
         if not path.is_file():
             continue
         for key, value in _parse_env_file(path):
             os.environ[key] = value  # override: the file is the source of truth
-        return path
-    return None
+        if all(os.environ.get(k) for k in needed):
+            return path
+    return _load_from_secrets_manager()
+
+
+def _load_from_secrets_manager():
+    """Last resort: read the keys out of AWS Secrets Manager, where this fleet actually keeps them.
+
+    Without this the test SKIPped on every machine that has AWS access but no hand-placed credential
+    file, which is every machine we use. A gate that always skips is not a gate: it went unnoticed
+    through an entire event because a skip reads the same as a pass in a green suite.
+
+    The secret is the admin-attendee org, the one that dual-ships from every cluster, so a trace from
+    any cluster in the fleet is visible to it. Failure is silent and returns None, preserving the SKIP
+    for a checkout with no AWS credentials, which genuinely cannot run this.
+    """
+    import json as _json, subprocess as _sp
+    secret = os.environ.get("WITB_DD_SECRET_ID", "watch-it-burn/datadog-admin-attendee")
+    profile = os.environ.get("AWS_PROFILE", "accen-dev")
+    region = os.environ.get("WIB_REGION", "us-west-2")
+    try:
+        out = _sp.run(
+            ["aws", "secretsmanager", "get-secret-value", "--secret-id", secret,
+             "--region", region, "--query", "SecretString", "--output", "text"],
+            capture_output=True, text=True, timeout=45,
+            env={**os.environ, "AWS_PROFILE": profile},
+        )
+        if out.returncode != 0:
+            return None
+        d = _json.loads(out.stdout)
+    except Exception:
+        return None
+    if not (d.get("api-key") and d.get("app-key")):
+        return None
+    os.environ["DD_API_KEY"] = d["api-key"]
+    os.environ["DD_APP_KEY"] = d["app-key"]
+    os.environ.setdefault("DD_SITE", d.get("site") or "datadoghq.com")
+    return f"aws-secretsmanager:{secret}"
 
 
 _ENV_SOURCE = load_credentials()
