@@ -67,7 +67,7 @@ variable "name" {
 
 variable "kubernetes_version" {
   type    = string
-  default = "1.35"
+  default = "1.36"
 }
 
 variable "vpc_id" {

@@ -16,7 +16,11 @@ spec:
     # The tempo single-binary chart moved from grafana/helm-charts to
     # grafana-community/helm-charts on 2026-01-30; the old path is a dead stub.
     repoURL: https://grafana-community.github.io/helm-charts
-    targetRevision: "2.2.3" # app 2.10.7 (single-binary; tempo-distributed tracks app 3.0)
+    # Staying on the single-binary 2.x line by decision (2026-09-10). Tempo 3.0.3 exists but only
+    # through the tempo-distributed chart (3.5.1), which is a microservices deployment (distributor,
+    # ingester, querier, compactor) rather than one pod. At fifty clusters that resource cost is
+    # multiplied fifty times for no workshop benefit, so 3.x is deliberately not taken. See PRD #389.
+    targetRevision: "2.3.0" # app 2.10.8 (single-binary; tempo-distributed tracks app 3.0)
     helm:
       valuesObject:
         tempo:

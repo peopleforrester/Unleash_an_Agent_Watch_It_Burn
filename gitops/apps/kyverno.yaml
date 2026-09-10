@@ -28,7 +28,7 @@ spec:
     # ValidatingPolicy types is a post-Portland job, not a blocker. Verified against a live cluster before
     # and after: policy inventory identical, and Challenge 2's villain image still denied at admission
     # while an allowed registry still admits.
-    targetRevision: "3.9.0"
+    targetRevision: "3.9.1"
     helm:
       valuesObject:
         # Kyverno namespace excluded by default (excludeKyvernoNamespace: true)
