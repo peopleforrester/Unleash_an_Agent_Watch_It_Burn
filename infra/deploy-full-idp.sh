@@ -31,7 +31,7 @@ helm repo update >/dev/null
 # immediately and the pods come up normally. Wait on the core components explicitly afterwards.
 # argocd-values.yaml carries dex.enabled=false + the Datadog Agent Autodiscovery annotation on
 # argocd-server (PRD #26 M2). Folded in here because ArgoCD is bootstrap-installed, not Application-managed.
-helm upgrade --install argocd argo/argo-cd --version 9.6.0 \
+helm upgrade --install argocd argo/argo-cd --version 10.8.4 \
   -n argocd --create-namespace --values "${SCRIPT_DIR}/argocd-values.yaml"
 log "    waiting for ArgoCD core components..."
 kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=180s

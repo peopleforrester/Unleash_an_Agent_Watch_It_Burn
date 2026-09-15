@@ -2,6 +2,10 @@
 <!-- ABOUTME: split called out, so an upgrade targets the APPLICATION version rather than whatever the chart ships. -->
 # Upgrade inventory
 
+> **Superseded 2026-09-15.** Every tier in PRD #389 has been applied and validated on a live cluster.
+> The "pinned" column below is the pre-upgrade state and is kept for the record; the post-upgrade
+> versions are in the PRD's "Final versions" table. Re-measure before the next upgrade round.
+
 Measured 2026-09-10 against live sources: Helm repository `index.yaml` files, the GitHub releases API,
 PyPI, and `aws eks describe-cluster-versions`. Not from recollection. Re-run `/tmp` vercheck or the
 commands in "How this was measured" before acting; these numbers rot.

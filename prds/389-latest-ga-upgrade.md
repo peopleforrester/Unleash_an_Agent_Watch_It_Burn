@@ -3,7 +3,10 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/389
 **Inventory**: [`docs/UPGRADE-INVENTORY.md`](../docs/UPGRADE-INVENTORY.md) (measured 2026-09-10)
 **Priority**: Medium. Nothing is broken; the stack is simply drifting, and drift gets more expensive per month.
-**Status**: Not started. Phase 1.2 (plan written, awaiting approval).
+**Status**: **All four tiers complete and validated on a live cluster** (watch-it-burn-attendee-001,
+2026-09-10 to 2026-09-15). Three real defects were found and fixed along the way; see "What the rollout
+actually found" at the bottom. The cluster then ran five days untouched at 38/38 Healthy and Synced,
+which is the strongest stability evidence available for the upgraded stack.
 
 ---
 
@@ -173,3 +176,74 @@ no health check would catch, because every pod would be Running and every app Sy
 - Rebuilding our own images (`web-terminal`, `workshop-mcp`, `sample-app`) for base-image CVEs. Worth
   doing, unrelated to version drift.
 - Anything that changes challenge content. This PRD upgrades the platform; it does not redesign beats.
+
+
+---
+
+## What the rollout actually found
+
+Recorded because the value of this work turned out to be the defects, not the version numbers.
+
+### 1. The platform could not upgrade itself (fixed, 67d2e1b)
+
+`protect-platform-workloads` denied DELETE of Deployments in the platform namespaces and excluded only
+`system:masters` and the kube-system service accounts. Argo CD was never excluded. kagent 0.10.1
+**removes** the `kagent-querydoc` Deployment, so the upgrade required a DELETE and its own admission
+policy denied it.
+
+**The failure mode is the finding.** The Application read `Healthy` but `OutOfSync`, the sync retried on
+a backoff, and kagent **0.9.9 kept serving**. No pod was unhealthy and nothing was red. A rollout check
+that stops at application health would have called tier 2 a success while the upgrade had not happened.
+This was latent since the floor policy was written and would have blocked every future platform upgrade,
+not just this one.
+
+### 2. Collector 0.159.0 removed `service.telemetry.metrics.address` (fixed, 4e123ef)
+
+The agent collector crash-looped on `'migration.MetricsConfigV030' has invalid keys: address`. This is
+the case this PRD exists to name: the chart bump carried an application whose **config schema** changed
+underneath it, and no chart release note surfaces that. It failed loudly at pod start, which is the good
+outcome and the reason it cost minutes rather than a rehearsal.
+
+### 3. A verification gate that had never once executed (fixed, def0016 and 5b7cdf1)
+
+`test_datadog_service_map.py` exited 2 on every machine we own. Not for want of credentials: a partial
+`~/secrets/datadog/datadog.env` defining `DD_API_KEY` and not `DD_APP_KEY` shadowed every later source,
+because the loader returned on the first file that EXISTED rather than the first that SATISFIED. A skip
+reads like a pass in a green suite, which is what let it survive an entire event. Fixed, plus a Secrets
+Manager fallback, and then corrected again when the fallback pointed at the wrong Datadog org.
+
+**Consequence worth stating: there is still no baseline.** Because that gate never ran before this work,
+its remaining failures cannot be dated. They are not attributed to this upgrade and must not be, until a
+known-good run exists to compare against.
+
+## The risk that did not materialise
+
+The PRD led with the fear that upgrading would defuse the workshop, since kagent 0.10 ships Bedrock
+Guardrails and `requireApproval`. **It did not.** On the upgraded stack `/controls` reports every AI
+guard off, the agent answers and calls tools, and the behavioural probe returned five green beats
+including C5 leaking with the guard off, C5 scrubbed with it on, C6 blocked upstream at zero input
+tokens, and C7's rogue tool running and leaking its sentinel. Neither red was a regression: C6's was a
+transport timeout on the long ticket prompt, and C7's is a documented harness limitation that the probe
+states in its own comments, since C7's fix is a kubectl patch the probe cannot arm itself.
+
+## Final versions
+
+| | Before | After |
+|---|---|---|
+| EKS control plane | 1.35 | **1.36** |
+| Argo CD | chart 9.6.0 / v3.4.4 | **chart 10.8.4 / v3.5.2** |
+| kagent | 0.9.9 | **0.10.1** |
+| agentgateway | v1.3.0 | **v1.5.0** |
+| istio (4 charts) | 1.30.1 | **1.30.4** |
+| cert-manager | v1.20.3 | **v1.21.1** |
+| kyverno | 3.9.0 | **3.9.1** |
+| falco-talon | 0.4.1 | **0.4.2** |
+| external-secrets | 2.6.0 | **2.10.0** |
+| datadog-operator | 2.23.2 | **2.26.0** |
+| otel-operator | 0.117.0 | **0.122.0** |
+| otel-collector | 0.158.2 | **0.172.1** |
+| tempo | 2.2.3 | **2.3.0** (2.x by decision) |
+
+Argo CD is bootstrap-installed by `infra/deploy-full-idp.sh`, not Application-managed, so tier 4 was a
+`helm upgrade` against the same values file. `infra/deploy-full-idp.sh` still pins 9.6.0 and must be
+updated to 10.8.4 or the next fresh cluster rebuilds on the old chart.
