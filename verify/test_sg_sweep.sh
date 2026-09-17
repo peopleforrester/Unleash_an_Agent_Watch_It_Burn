@@ -60,6 +60,18 @@ check "egress rules are revoked"             "[ -n '${rev_e}' ]"
 check "revoke happens BEFORE the first delete" "[ -n '${del}' ] && [ '${rev_i}' -lt '${del}' ] && [ '${rev_e}' -lt '${del}' ]"
 check "every discovered group is deleted"    "[ \$(grep -c 'delete-security-group' '${CALLS}') -ge 2 ]"
 
+echo "== the filter covers service- and ingress-named groups, not just per-cluster ones =="
+# The first version filtered on k8s-traffic-<squashed cluster>-* only. k8s-agent-console-43c584a1f2 and
+# k8s-watchitburningres-11bfcbd899 do not carry the cluster name, survived that sweep, and then blocked
+# the lab VPC from deleting. Scoping by vpc-id is what makes the wide k8s-* filter safe: this account
+# also holds a packt-lab-vpc that is not ours.
+check "the sweep scopes by vpc-id" \
+      "grep -q 'Name=vpc-id,Values=' '${FLEET}'"
+check "and matches every k8s-* group in that VPC" \
+      "grep -q 'Name=group-name,Values=k8s-\*' '${FLEET}'"
+check "the lab VPC id is resolved from state" \
+      "grep -q '^read_vpc_id_for()' '${FLEET}'"
+
 echo "== it is wired into the teardown, not just defined =="
 check "down_one calls sweep_orphan_sgs" \
       "grep -q 'sweep_orphan_sgs \"\${name}\"' '${FLEET}'"

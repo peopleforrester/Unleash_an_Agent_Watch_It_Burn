@@ -1488,9 +1488,25 @@ sweep_orphan_sgs() {
     local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" found=0 survived=0
     local squashed sgs sg
     squashed="${name//-/}"
-    sgs="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
-            --filters "Name=group-name,Values=k8s-traffic-${squashed}-*,k8s-${squashed}-*" \
-            --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true)"
+    # The name filter used to be k8s-traffic-<squashed>-* and k8s-<squashed>-*, which catches the
+    # per-cluster traffic groups and MISSES the ones named after a service or an ingress:
+    # k8s-agent-console-43c584a1f2 and k8s-watchitburningres-11bfcbd899 both survived a sweep and then
+    # blocked the lab VPC from deleting. Found by running this sweep, which is the useful kind of bug.
+    #
+    # The filter is now every k8s-* group in the LAB VPC. Scoping by vpc-id is what makes that safe: it
+    # cannot reach a co-tenant's groups, and this account holds a packt-lab-vpc that is not ours. A
+    # cluster-name filter was never the right shape, because the controller does not put the cluster
+    # name in every group it creates.
+    local vpc; vpc="$(read_vpc_id_for "${acct}" 2>/dev/null || true)"
+    if [[ -n "${vpc}" ]]; then
+        sgs="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
+                --filters "Name=vpc-id,Values=${vpc}" "Name=group-name,Values=k8s-*" \
+                --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true)"
+    else
+        sgs="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
+                --filters "Name=group-name,Values=k8s-traffic-${squashed}-*,k8s-${squashed}-*" \
+                --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true)"
+    fi
     for sg in ${sgs}; do
         [[ "${sg}" != "None" ]] || continue
         found=$(( found + 1 ))
@@ -1725,6 +1741,23 @@ cmd_up() {
 #
 # Guarded on the account holding no clusters. Destroying the VPC out from under a live cluster would
 # strand its ENIs and leave a mess that takes longer to clean than it saves.
+# The lab VPC id for an account, read from its terraform state. Returns empty if there is no state,
+# which callers treat as "fall back to a narrower filter" rather than "no VPC".
+read_vpc_id_for() {
+    local acct="$1" state
+    state="$(lab_vpc_state_for "${acct}")"
+    [[ -f "${state}" ]] || return 1
+    python3 - "${state}" <<'PYEOF' 2>/dev/null
+import json,sys
+d=json.load(open(sys.argv[1]))
+for r in d.get("resources") or []:
+    if r.get("type")=="aws_vpc":
+        for i in r.get("instances") or []:
+            v=(i.get("attributes") or {}).get("id")
+            if v: print(v); raise SystemExit
+PYEOF
+}
+
 destroy_lab_vpc_for() {
     local acct="$1"
     local state; state="$(lab_vpc_state_for "${acct}")"
