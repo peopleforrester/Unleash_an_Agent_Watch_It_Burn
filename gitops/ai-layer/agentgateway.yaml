@@ -67,6 +67,7 @@ spec:
           ports:
             - { name: proxy, containerPort: 3000 } # A2A reverse proxy -> workshop-agent
             - { name: mcp, containerPort: 3001 }    # MCP front -> workshop-mcp
+            - { name: llm, containerPort: 3002 }
             - { name: ready, containerPort: 15021 } # agentgateway built-in readiness listener (verified live)
           securityContext:
             allowPrivilegeEscalation: false
@@ -97,6 +98,9 @@ spec:
   ports:
     - { name: proxy, port: 3000, targetPort: proxy }
     - { name: mcp, port: 3001, targetPort: mcp }
+    # The LLM bind. Inference goes kagent -> here -> bedrock or a local vLLM, so the backend is a
+    # route change rather than an edit to every Agent's ModelConfig. See PRD #389 / issue #394.
+    - { name: llm, port: 3002, targetPort: llm }
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -105,48 +109,50 @@ metadata:
   labels: { app.kubernetes.io/name: agentgateway }
 data:
   config.yaml: |
-    # yaml-language-server: $schema=https://agentgateway.dev/schema/config
-    # agentgateway OSS v1.3.0 standalone config.
-    #
-    # TRACING lives under the top-level `config` key (RawConfig == the `config:` block), NOT bare
-    # `tracing` and NOT under frontendPolicies. The live v1.3.0 binary is explicit:
-    #   - bare `tracing:`  -> "unknown field `tracing`, expected one of config, binds, frontendPolicies, ..."
-    #   - frontendPolicies.tracing -> "no variant of enum SimpleLocalBackend"
-    # So `config.tracing` is the path. Fields (v1.3.0 JSON schema RawTracing): otlpEndpoint, otlpProtocol
-    # (grpc|http, default grpc), path (default /v1/traces), headers, randomSampling. OTLP/HTTP to the
-    # Collector :4318 receiver (same path kagent/guard-proxy use). In the manifest so it survives reprovision.
     config:
       tracing:
         otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
         otlpProtocol: http
-        # THE missing piece: agentgateway defaults to 0% sampling and exports NOTHING. randomSampling: true
-        # emits a span for every request (per agentgateway OTel docs). This is what makes the
-        # guard-proxy -> agentgateway -> kagent Service Map edge render (#27) and M4 spans land (#20).
         randomSampling: true
-
     binds:
-      # A2A reverse proxy: guard-proxy -> agentgateway:3000 -> kagent workshop-agent:8080.
-      - port: 3000
-        listeners:
-          - protocol: HTTP
-            routes:
-              - backends:
-                  - host: workshop-agent.agent.svc.cluster.local:8080
-                    weight: 1
-      # MCP front for the workshop MCP server, with default-allow authorization (beat-3 "before" state).
-      # The restrictive allowlist (beat-3 "after") replaces the 'true' rule. workshop-mcp serves
-      # streamable-http at :8000/mcp (verify-at-build: confirm the upstream path).
-      - port: 3001
-        listeners:
-          - protocol: HTTP
-            routes:
-              - policies:
-                  mcpAuthorization:
-                    rules:
-                      - 'true' # default Allow — all tools reachable (beat-3 "before")
-                backends:
-                  - mcp:
-                      targets:
-                        - name: workshop-mcp
-                          mcp:
-                            host: http://workshop-mcp.agent.svc.cluster.local:8000/mcp
+    - port: 3000
+      listeners:
+      - protocol: HTTP
+        routes:
+        - backends:
+          - host: workshop-agent.agent.svc.cluster.local:8080
+            weight: 1
+    - port: 3001
+      listeners:
+      - protocol: HTTP
+        routes:
+        - policies:
+            mcpAuthorization:
+              rules:
+              - 'true'
+          backends:
+          - mcp:
+              targets:
+              - name: workshop-mcp
+                mcp:
+                  host: http://workshop-mcp.agent.svc.cluster.local:8000/mcp
+    - port: 3002
+      listeners:
+      - protocol: HTTP
+        routes:
+        - backends:
+          - llm:
+              models:
+              - name: bedrock-nova
+                provider: bedrock
+                auth:
+                  aws: {}
+                model: us.amazon.nova-pro-v1:0
+              - name: local-qwen3
+                provider:
+                  custom:
+                    formats:
+                    - type: completions
+                model: qwen3-1.7b
+                host: vllm-qwen3.agent.svc.cluster.local:8000
+

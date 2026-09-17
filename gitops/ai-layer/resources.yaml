@@ -36,6 +36,46 @@ subjects:
   - kind: ServiceAccount
     name: agent-sa
 ---
+# --- Inference behind the gateway (issue #394) ------------------------------------------------------
+# These two are the toggle. Both speak OpenAI to kagent and differ only in which backend agentgateway
+# routes to, so switching a cluster between a hosted model and a local one is a change to the Agent's
+# `modelConfig:` field and nothing else. No Agent rewrite, no challenge rewrite.
+#
+# Why provider: OpenAI for a Bedrock model. The provider names the WIRE FORMAT kagent speaks to the
+# gateway, not what serves the tokens. agentgateway terminates that and re-speaks Bedrock or an
+# OpenAI-compatible local endpoint on the far side. The sister platform reached the same shape: its
+# ModelConfig declares provider: OpenAI while pointing at a local vLLM.
+#
+# The secondary win: agentgateway's prompt guards attach ONLY to llm.models[] backends and are
+# confirmed not to attach to a plain A2A hop (see the header of agentgateway.yaml). Routing inference
+# through the LLM bind is what makes those guards reachable at all.
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: gateway-bedrock-nova
+spec:
+  provider: OpenAI
+  model: bedrock-nova            # the model NAME in agentgateway's llm.models[], not a Bedrock id
+  openAI:
+    baseUrl: http://agentgateway.agent.svc.cluster.local:3002/v1
+---
+# Local inference. Resolves only where the vllm-qwen3 workload is installed, which is the opt-in half
+# of the toggle; the route is present everywhere so switching needs no gateway edit.
+#
+# Sized from the sister platform's measured deployment rather than guessed: vLLM runs CPU-ONLY there
+# (vllm-openai-cpu, no GPU), the Qwen3-1.7B weights are BAKED INTO THE IMAGE with HF_HUB_OFFLINE so
+# nothing is pulled at runtime, and it asks 4 CPU / 16Gi on the SAME t3.2xlarge node type this fleet
+# already uses. That is why local inference is affordable here and does not imply bigger nodes.
+apiVersion: kagent.dev/v1alpha2
+kind: ModelConfig
+metadata:
+  name: gateway-local-qwen3
+spec:
+  provider: OpenAI
+  model: local-qwen3
+  openAI:
+    baseUrl: http://agentgateway.agent.svc.cluster.local:3002/v1
+---
 # === Model tier configs for the chaos-engineering comparison (BUILD-SPEC §2) ===
 # The same scoped agent is run on escalating Claude tiers to show how differently each one
 # tries to escape its own jail, while the live cost counter makes the frontier-model burn
