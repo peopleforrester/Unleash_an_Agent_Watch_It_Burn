@@ -153,6 +153,9 @@ data:
               provider:
                 bedrock:
                   model: us.amazon.nova-pro-v1:0
+                  # Required by the bedrock provider; omitting it fails the whole config at startup
+                  # with "missing field `region`". Matches WIB_REGION and the cluster's own region.
+                  region: us-west-2
         - matches:
           - path:
               pathPrefix: /local
