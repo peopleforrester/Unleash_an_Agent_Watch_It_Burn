@@ -477,7 +477,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       (disjoint name ranges). Honors WIB_NAME_OFFSET to skip existing cluster numbers.
     down-fleet <n>    Tear down an up-fleet run: SAME <n> + WIB_NAME_OFFSET, account-aware (each cluster
                       destroyed in its own account). Skips names with no state, so partial fleets are safe.
-    down <count|all>  Destroy the first <count>, or all clusters with state.
+    down <count|all>  Destroy the first <count>, or all clusters with state. 'down all' also destroys
+                      each account's lab VPC (NAT + address + endpoint), which is the last thing that
+                      bills after the clusters are gone. Set WIB_KEEP_VPC=1 to keep the networking for a
+                      fast rebuild.
+    down-infra [accts]  Destroy ONLY the lab VPC in each account (default: every attendee account).
+                      Refuses per account while any cluster is still live there.
     down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
                       volumes, removes each cluster's provisioning row, and republishes the routes.
     deregister <name...>  Remove clusters from the provisioning app by hand (down does this itself).
@@ -1713,6 +1718,65 @@ cmd_up() {
     _provision_spec_fleet "these clusters" _ingest_attendee_names "${names[@]}"
 }
 
+# Destroy an account's lab VPC: the NAT gateway, its Elastic IP and the Bedrock endpoint. These are the
+# only things in a torn-down account that still bill, roughly $1.25/day/account, and `down` never touched
+# them. "Tear it down" meant the clusters and left the networking running, which is a defect in this
+# command rather than a choice for the caller to remember every time.
+#
+# Guarded on the account holding no clusters. Destroying the VPC out from under a live cluster would
+# strand its ENIs and leave a mess that takes longer to clean than it saves.
+destroy_lab_vpc_for() {
+    local acct="$1"
+    local state; state="$(lab_vpc_state_for "${acct}")"
+    [[ -f "${state}" ]] || { log "  ${acct}: no lab VPC state, nothing to destroy"; return 0; }
+    local live
+    live="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" \
+            --query 'length(clusters)' --output text 2>/dev/null || echo 0)"
+    if [[ "${live}" != "0" ]]; then
+        log "  ${acct}: REFUSING to destroy the lab VPC, ${live} cluster(s) still live"
+        record_fail "vpc-in-use:${acct}"
+        return 1
+    fi
+    local n
+    n="$(python3 -c "import json,sys;print(len(json.load(open(sys.argv[1])).get('resources') or []))" "${state}" 2>/dev/null || echo 0)"
+    if [[ "${n}" == "0" ]]; then log "  ${acct}: lab VPC state is empty, already destroyed"; return 0; fi
+    log "  ${acct}: destroying the lab VPC (${n} resources in state)"
+    terraform -chdir="${LAB_VPC_DIR}" init -input=false >/dev/null 2>&1
+    if AWS_PROFILE="${acct}" terraform -chdir="${LAB_VPC_DIR}" destroy -auto-approve -no-color \
+        -state="${state}" -var "profile=${acct}" -var "region=${WIB_REGION}" \
+        >"${LOG_DIR}/${acct}.lab-vpc-destroy.log" 2>&1; then
+        log "  ${acct}: lab VPC destroyed"
+    else
+        log "  ${acct}: lab VPC destroy FAILED (see ${LOG_DIR}/${acct}.lab-vpc-destroy.log)"
+        record_fail "vpc-destroy:${acct}"
+        return 1
+    fi
+    return 0
+}
+
+# accen-dev keeps its lab VPC in the DEFAULT terraform.tfstate; every other account has its own file
+# under states/. Mirrors read_vpc_for, which resolves the same split in the other direction.
+lab_vpc_state_for() {
+    local acct="$1"
+    if [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
+        printf '%s/terraform.tfstate' "${LAB_VPC_DIR}"
+    else
+        printf '%s/states/%s.tfstate' "${LAB_VPC_DIR}" "${acct}"
+    fi
+}
+
+cmd_down_infra() {
+    require_tools; mkdir -p "${LOG_DIR}"
+    local accounts acct rc=0; IFS=',' read -ra accounts <<<"${1:-${WIB_ATTENDEE_ACCOUNTS}}"
+    require_apply "down-infra" "${accounts[@]}" || return 0
+    log "down-infra: destroying the lab VPC in ${#accounts[@]} account(s)"
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        destroy_lab_vpc_for "${acct}" || rc=1
+    done
+    return "${rc}"
+}
+
 cmd_down() {
     [[ $# -ge 1 ]] || usage
     require_tools
@@ -1762,7 +1826,17 @@ cmd_down() {
         WIB_ROUTES_ALLOW_SHRINK=1 cmd_routes || log "routes: not regenerated; run 'WIB_ROUTES_ALLOW_SHRINK=1 fleet.sh routes'"
     fi
     # "down all" means the fleet is meant to be gone: say so with a verdict, or name what is left (#255).
-    [[ "${1:-}" == "all" ]] && audit_zero
+    # `down all` means ALL. The lab VPC is the last billable thing standing, so it goes too unless the
+    # caller explicitly keeps it for a fast rebuild (WIB_KEEP_VPC=1). Leaving it behind by default is how
+    # a "destroy everything" run quietly kept costing money.
+    if [[ "${1:-}" == "all" ]]; then
+        if [[ -n "${WIB_KEEP_VPC:-}" ]]; then
+            log "WIB_KEEP_VPC set: leaving the lab VPCs up (NAT + address still bill)"
+        else
+            cmd_down_infra || true
+        fi
+        audit_zero
+    fi
     # A console load balancer that was not ready is a WAIT, not a verdict: at fleet scale most clusters are
     # still resolving when the loop first reaches them. On 2026-09-07 a 58-cluster build reported "48 ok,
     # 0 FAILED" while 38 clusters were never registered and no student could have claimed them. Retry the
@@ -3048,6 +3122,7 @@ main() {
         audit-zero) cmd_audit_zero ;;
         down-acct) cmd_down_acct "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
+        down-infra) cmd_down_infra "$@" ;;
         health) cmd_health "$@" ;;
         converge) cmd_converge "$@" ;;
         harvest) cmd_harvest "$@" ;;
