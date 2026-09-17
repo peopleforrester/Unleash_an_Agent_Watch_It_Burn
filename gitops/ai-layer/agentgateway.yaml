@@ -156,6 +156,14 @@ data:
                   # Required by the bedrock provider; omitting it fails the whole config at startup
                   # with "missing field `region`". Matches WIB_REGION and the cluster's own region.
                   region: us-west-2
+              # The credential provider must be switched on explicitly. Without this the route resolves
+              # and the request reaches the backend, then fails with "backend authentication failed: the
+              # credential provider was not enabled". No ServiceAccount in this namespace carries an IRSA
+              # role, so this resolves against the node instance role, the same path guard-proxy uses to
+              # reach Bedrock today.
+              policies:
+                backendAuth:
+                  aws: {}
         - matches:
           - path:
               pathPrefix: /local
