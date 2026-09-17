@@ -161,9 +161,8 @@ data:
               # credential provider was not enabled". No ServiceAccount in this namespace carries an IRSA
               # role, so this resolves against the node instance role, the same path guard-proxy uses to
               # reach Bedrock today.
-              policies:
-                backendAuth:
-                  aws: {}
+              auth:
+                aws: {}
         - matches:
           - path:
               pathPrefix: /local
