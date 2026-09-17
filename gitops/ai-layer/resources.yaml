@@ -55,9 +55,9 @@ metadata:
   name: gateway-bedrock-nova
 spec:
   provider: OpenAI
-  model: bedrock-nova            # the model NAME in agentgateway's llm.models[], not a Bedrock id
+  model: bedrock-nova            # the backend NAME in agentgateway, not a Bedrock model id
   openAI:
-    baseUrl: http://agentgateway.agent.svc.cluster.local:3002/v1
+    baseUrl: http://agentgateway.agent.svc.cluster.local:3002/bedrock/v1
 ---
 # Local inference. Resolves only where the vllm-qwen3 workload is installed, which is the opt-in half
 # of the toggle; the route is present everywhere so switching needs no gateway edit.
@@ -74,7 +74,7 @@ spec:
   provider: OpenAI
   model: local-qwen3
   openAI:
-    baseUrl: http://agentgateway.agent.svc.cluster.local:3002/v1
+    baseUrl: http://agentgateway.agent.svc.cluster.local:3002/local/v1
 ---
 # === Model tier configs for the chaos-engineering comparison (BUILD-SPEC §2) ===
 # The same scoped agent is run on escalating Claude tiers to show how differently each one

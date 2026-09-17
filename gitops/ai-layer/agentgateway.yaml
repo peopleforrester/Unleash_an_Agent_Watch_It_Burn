@@ -140,19 +140,31 @@ data:
       listeners:
       - protocol: HTTP
         routes:
-        - backends:
-          - llm:
-              models:
-              - name: bedrock-nova
-                provider: bedrock
-                auth:
-                  aws: {}
-                model: us.amazon.nova-pro-v1:0
-              - name: local-qwen3
-                provider:
-                  custom:
-                    formats:
-                    - type: completions
-                model: qwen3-1.7b
-                host: vllm-qwen3.agent.svc.cluster.local:8000
+        - matches:
+          - path:
+              pathPrefix: /bedrock
+          policies:
+            urlRewrite:
+              path:
+                prefix: /
+          backends:
+          - ai:
+              name: bedrock-nova
+              provider:
+                bedrock:
+                  model: us.amazon.nova-pro-v1:0
+        - matches:
+          - path:
+              pathPrefix: /local
+          policies:
+            urlRewrite:
+              path:
+                prefix: /
+          backends:
+          - ai:
+              name: local-qwen3
+              provider:
+                openAI:
+                  model: qwen3-1.7b
+              host: vllm-qwen3.agent.svc.cluster.local:8000
 
