@@ -169,5 +169,8 @@ data:
               provider:
                 openAI:
                   model: qwen3-1.7b
-              host: vllm-qwen3.agent.svc.cluster.local:8000
+              # hostOverride, not host: the binary enumerates the valid keys in its rejection message
+              # (name, provider, hostOverride, pathOverride, pathPrefix, tokenize, policies...). This is
+              # what redirects the OpenAI provider at a local vLLM instead of api.openai.com.
+              hostOverride: vllm-qwen3.agent.svc.cluster.local:8000
 
