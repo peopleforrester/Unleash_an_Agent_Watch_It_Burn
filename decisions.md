@@ -80,3 +80,40 @@ is a hand-apply manifest nothing in gitops, infra or verify applies. The hash is
 ai-layer bundle; `verify/test_ai_layer_rollout.py` asserts it, and asserts that editing lab.html changes
 the console pod template. The `checksum/proxy-py` annotation and its test stay: `/controls` reports that
 checksum in the room, which is a different job from rolling the pod. Issue #252.
+
+## 2026-09-17T15:40:00Z · 1.2 · Gitea is not part of this IDP, and the reason was never written down
+
+Asked why the IDP has no Gitea. It has none, and searching this repo for "gitea" returns nothing at
+all: not a manifest, not a note, not a rejection. The absence was undocumented, which is the actual
+defect here. A decision nobody recorded gets re-litigated, and this one had already reached the point
+of being asked.
+
+**What is true.** The sister project (`events/Packt-agentic-devops`) does run Gitea, at
+`solution/platform/1-foundation/gitea`, beside openbao, argo-rollouts and argo-workflows. Its own
+ABOUTME states the purpose exactly:
+
+> in-cluster Gitea installed at PROVISIONING time, so ArgoCD can source the platform manifests from
+> inside the cluster instead of from GitHub
+
+The port commit that founded this platform (`6880677`, "Port KubeAuto IDP foundation") brought **zero**
+Gitea files.
+
+### REJECTED: add Gitea to the Watch It Burn IDP
+
+**Why:** it solves a problem this workshop does not have. Gitea exists in the sister project because
+its students sync the platform from **inside** the cluster, editing manifests in an in-cluster git
+service as a teaching beat. Our Argo CD sources directly from GitHub through the `witb-repo` secret
+and a `gh` token, and no challenge asks a student to commit anything. Adding Gitea would add a
+StatefulSet, a database, a credential and a sync path that nothing in the eight challenges exercises,
+on a platform already at 38 Applications that must build in 15 to 25 minutes, 50 times over.
+
+**Status:** Revisit when a challenge genuinely needs in-cluster git. The obvious candidate is a
+supply-chain or GitOps-tampering beat, where the student modifies a manifest and watches Argo CD or
+the drift policy react. That is a real workshop idea and Gitea would be the right way to build it. It
+does not exist today.
+
+**Do not suggest:** adding Gitea "for completeness" or because the sister repo has it; mirroring the
+GitHub repo into the cluster purely to remove the GitHub dependency (the token path works and is one
+secret); or treating its absence as an oversight from the port. The port was manifests-only by
+design, and the same mechanism is why `kubeauto-unicorn-party:2.0.2` did not come across either: its
+content lived inside an image in a foreign ECR registry rather than in a manifest.
