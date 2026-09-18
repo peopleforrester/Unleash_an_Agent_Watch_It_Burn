@@ -77,7 +77,7 @@ check "the empty-table count does not use the || echo fallback" \
       "! grep -q 'grep -cvE .* || echo 1' '${FLEET}'"
 check "it captures the count separately from the exit status" \
       "grep -q 'route_lines=\"\$(grep -cvE' '${FLEET}'"
-check "and compares numerically" "grep -q '\\${route_lines}. -eq 0' '${FLEET}'"
+check "and compares numerically" "grep -qF 'route_lines}\" -eq 0' '${FLEET}'"
 
 echo "== there is ONE teardown path, not two (#398) =="
 TD="${HERE}/../teardown/teardown.sh"
