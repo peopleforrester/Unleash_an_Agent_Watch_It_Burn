@@ -70,6 +70,19 @@ check "only when a shrink was asserted"     "grep -q 'WIB_ROUTES_ALLOW_SHRINK:-'
 check "and only when the table is truly empty" \
       "grep -q 'the table is empty and a shrink was asserted' '${FLEET}'"
 
+echo "== there is ONE teardown path, not two (#398) =="
+TD="${HERE}/../teardown/teardown.sh"
+# Two implementations of one verb guarantee that whichever is run, something is skipped, and both exit
+# zero so the gap is invisible. That is how 107 orphaned log groups accumulated while a correct
+# cleanup-log-groups.sh sat in the repo wired into the path nobody runs.
+check "teardown.sh delegates to fleet.sh"  "grep -q 'exec env WIB_APPLY=1' '${TD}'"
+check "and does no work of its own"        "! grep -qE '^\s*(terraform|aws) ' '${TD}'"
+check "it no longer calls cleanup-log-groups directly" "! grep -q 'CLEANUP_LOGS' '${TD}'"
+check "it no longer calls tag-audit directly"          "! grep -q 'TAG_AUDIT' '${TD}'"
+check "tag-audit now runs inside down all" "grep -q 'aws/teardown/tag-audit.sh' '${FLEET}'"
+check "tag audit runs before the sweeps"   \
+      "[ \$(grep -n 'tag-audit.sh' '${FLEET}' | head -1 | cut -d: -f1) -lt \$(grep -n 'cmd_down_infra || true' '${FLEET}' | head -1 | cut -d: -f1) ]"
+
 echo
 if [ "${fail}" -gt 0 ]; then echo "FAILED: ${fail} check(s), ${pass} passed"; exit 1; fi
 echo "All down-infra checks passed (${pass})."

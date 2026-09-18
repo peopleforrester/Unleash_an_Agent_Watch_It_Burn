@@ -1951,6 +1951,21 @@ cmd_down() {
     # caller explicitly keeps it for a fast rebuild (WIB_KEEP_VPC=1). Leaving it behind by default is how
     # a "destroy everything" run quietly kept costing money.
     if [[ "${1:-}" == "all" ]]; then
+        # Tag repair, absorbed from teardown/teardown.sh (#398). Its job is to give untagged workshop
+        # resources their project tag so a tag-driven sweep cannot walk past them and leave them
+        # billing, which means it has to run as part of a teardown rather than beside one. It never
+        # deletes: --fix only adds tags, and deletion stays in sweep-account.sh where it is guarded.
+        local tag_audit="${PROVISION_DIR}/aws/teardown/tag-audit.sh"
+        if [[ -x "${tag_audit}" ]]; then
+            local a
+            IFS=',' read -ra _ta <<<"${WIB_ATTENDEE_ACCOUNTS}"
+            for a in "${_ta[@]}"; do
+                a="${a// /}"; [[ -n "${a}" ]] || continue
+                "${tag_audit}" "${a}" --fix --region "${WIB_REGION}" >/dev/null 2>&1 \
+                    || log "  ${a}: tag audit reported findings (continuing)"
+            done
+            log "tag audit: ran across ${#_ta[@]} account(s)"
+        fi
         if [[ -n "${WIB_KEEP_VPC:-}" ]]; then
             log "WIB_KEEP_VPC set: leaving the lab VPCs up (NAT + address still bill)"
         else
