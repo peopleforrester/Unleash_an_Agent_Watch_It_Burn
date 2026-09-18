@@ -483,6 +483,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       fast rebuild.
     down-infra [accts]  Destroy ONLY the lab VPC in each account (default: every attendee account).
                       Refuses per account while any cluster is still live there.
+    reap-secrets [accts]  Force-delete every watch-it-burn/* secret. NOT part of 'down all': the Datadog
+                      pool secret is what the next 'up' provisions against.
     down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
                       volumes, removes each cluster's provisioning row, and republishes the routes.
     deregister <name...>  Remove clusters from the provisioning app by hand (down does this itself).
@@ -1842,6 +1844,48 @@ lab_vpc_state_for() {
     fi
 }
 
+# Our Secrets Manager entries. About $0.40 each per month, which is small enough to leave forever and
+# is exactly the residue that accumulates across events: six were found by hand on 2026-09-18 and
+# deleted with a one-off CLI loop because no command did it.
+#
+# Two things this must get right, both learned on adjacent sweeps the same week:
+#   * Scope by the watch-it-burn/ PREFIX, never a broad match. These accounts are shared with the Packt
+#     project and a name-only filter has already nearly reached a co-tenant's resources once.
+#   * Force-delete. A secret in the default 30-day recovery window STILL BILLS, so the ordinary
+#     delete-secret leaves the cost in place for a month while appearing to have worked.
+#
+# Deliberately NOT part of `down all`. The Datadog pool secret is what the next `up` provisions against,
+# so a teardown that reaps it by default destroys the thing the next event needs. Opt in.
+reap_secrets_for() {
+    local acct="$1" names n=0
+    names="$(AWS_PROFILE="${acct}" aws secretsmanager list-secrets --region "${WIB_REGION}" \
+             --query "SecretList[?starts_with(Name, 'watch-it-burn/')].Name" --output text 2>/dev/null | tr '\t' '\n')"
+    local s
+    for s in ${names}; do
+        [[ -n "${s}" ]] || continue
+        if AWS_PROFILE="${acct}" aws secretsmanager delete-secret --region "${WIB_REGION}" \
+            --secret-id "${s}" --force-delete-without-recovery >/dev/null 2>&1; then
+            log "  ${acct}: deleted ${s}"; n=$(( n + 1 ))
+        else
+            log "  ${acct}: could not delete ${s}"; record_fail "secret:${acct}:${s}"
+        fi
+    done
+    [[ "${n}" -eq 0 ]] && log "  ${acct}: no watch-it-burn/* secrets"
+    return 0
+}
+
+cmd_reap_secrets() {
+    require_tools; mkdir -p "${LOG_DIR}"
+    local accounts acct; IFS=',' read -ra accounts <<<"${1:-${WIB_ATTENDEE_ACCOUNTS}}"
+    require_apply "reap-secrets" "${accounts[@]}" || return 0
+    log "reap-secrets: watch-it-burn/* in ${#accounts[@]} account(s)"
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        reap_secrets_for "${acct}"
+    done
+    return 0
+}
+
 cmd_down_infra() {
     require_tools; mkdir -p "${LOG_DIR}"
     local accounts acct rc=0; IFS=',' read -ra accounts <<<"${1:-${WIB_ATTENDEE_ACCOUNTS}}"
@@ -3169,9 +3213,23 @@ apply_routes_table() {
         log "        Pushing alone does not apply routes: the router keeps the table on its volume."
         return 0
     fi
+    # An EMPTY table is refused by reload-routes.sh unless ALLOW_EMPTY=1, which is correct: pushing one
+    # by accident unroutes every attendee. But when the last cluster is destroyed the table is empty
+    # BECAUSE THE FLEET IS GONE, and the refusal made a fully successful `down all` exit non-zero and
+    # print "1 cluster(s) FAILED" (#395). scheduled-down.sh then kept its one-shot cron line, since it
+    # deliberately keeps it on failure, so every clean teardown looked like a broken one.
+    #
+    # The intent signal already exists. The teardown path sets WIB_ROUTES_ALLOW_SHRINK to say a smaller
+    # table is expected, and shrinking to zero is still a shrink. Carrying that through is narrower than
+    # allowing empty unconditionally: a routes run that has NOT asserted a shrink still gets the guard.
+    local allow_empty=0
+    if [[ -n "${WIB_ROUTES_ALLOW_SHRINK:-}" ]] && [[ "$(grep -cvE '^\s*(#|$)' "${out}" 2>/dev/null || echo 1)" == "0" ]]; then
+        allow_empty=1
+        log "routes: the table is empty and a shrink was asserted, so this is a teardown; allowing it"
+    fi
     log "routes: applying the table to the live router (reload, no redeploy)"
     for attempt in $(seq 1 "${WIB_RELOAD_RETRIES:-3}"); do
-        if bash "${reload}" "${out}" 2>&1 | sed 's/^/    /' >&2; then
+        if ALLOW_EMPTY="${allow_empty}" bash "${reload}" "${out}" 2>&1 | sed 's/^/    /' >&2; then
             log "routes: applied (attempt ${attempt})"; return 0
         fi
         log "routes: reload attempt ${attempt} failed"
@@ -3200,6 +3258,7 @@ main() {
         down-acct) cmd_down_acct "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;
         down-infra) cmd_down_infra "$@" ;;
+        reap-secrets) cmd_reap_secrets "$@" ;;
         health) cmd_health "$@" ;;
         converge) cmd_converge "$@" ;;
         harvest) cmd_harvest "$@" ;;

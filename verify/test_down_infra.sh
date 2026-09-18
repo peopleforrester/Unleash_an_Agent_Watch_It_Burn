@@ -51,6 +51,25 @@ check "it refuses while the cluster exists" \
 check "a failed delete is recorded"        "grep -q 'loggroup-leak:' '${FLEET}'"
 check "audit-zero names leftover log groups" "grep -q 'zero:\${acct}:loggroups' '${FLEET}'"
 
+echo "== secrets have a command, scoped and forceful =="
+check "reap-secrets is defined"      "grep -q '^cmd_reap_secrets()' '${FLEET}'"
+check "it is in the dispatch"        "grep -qE '^\s+reap-secrets\) cmd_reap_secrets' '${FLEET}'"
+# A name-only filter in a SHARED account has already nearly reached a co-tenant's resources once.
+check "scoped by the watch-it-burn/ prefix" \
+      "grep -q \"starts_with(Name, 'watch-it-burn/')\" '${FLEET}'"
+# A secret in the 30-day recovery window still bills, so the default delete looks like it worked and does not stop the cost.
+check "force-deletes rather than scheduling" \
+      "grep -q 'force-delete-without-recovery' '${FLEET}'"
+check "NOT chained into down all"    "! grep -q 'cmd_reap_secrets || true' '${FLEET}'"
+
+echo "== a clean teardown exits zero (#395) =="
+# The router refuses an empty table, correctly. But when the last cluster is gone the table is empty
+# because the fleet is gone, and the refusal made a successful 'down all' report failure.
+check "ALLOW_EMPTY is passed to the reload" "grep -q 'ALLOW_EMPTY=\"\${allow_empty}\"' '${FLEET}'"
+check "only when a shrink was asserted"     "grep -q 'WIB_ROUTES_ALLOW_SHRINK:-' '${FLEET}'"
+check "and only when the table is truly empty" \
+      "grep -q 'the table is empty and a shrink was asserted' '${FLEET}'"
+
 echo
 if [ "${fail}" -gt 0 ]; then echo "FAILED: ${fail} check(s), ${pass} passed"; exit 1; fi
 echo "All down-infra checks passed (${pass})."
