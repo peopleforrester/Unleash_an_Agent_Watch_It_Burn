@@ -3238,7 +3238,12 @@ apply_routes_table() {
     # table is expected, and shrinking to zero is still a shrink. Carrying that through is narrower than
     # allowing empty unconditionally: a routes run that has NOT asserted a shrink still gets the guard.
     local allow_empty=0
-    if [[ -n "${WIB_ROUTES_ALLOW_SHRINK:-}" ]] && [[ "$(grep -cvE '^\s*(#|$)' "${out}" 2>/dev/null || echo 1)" == "0" ]]; then
+    # grep -c PRINTS 0 and EXITS 1 when nothing matches, so `$(grep -c ... || echo 1)` captures "0\n1"
+    # and never equals "0". That is why the first version of this never fired and a clean teardown kept
+    # reporting failure. Count without letting the exit status add a second line.
+    local route_lines
+    route_lines="$(grep -cvE '^[[:space:]]*(#|$)' "${out}" 2>/dev/null)" || route_lines=0
+    if [[ -n "${WIB_ROUTES_ALLOW_SHRINK:-}" ]] && [[ "${route_lines}" -eq 0 ]]; then
         allow_empty=1
         log "routes: the table is empty and a shrink was asserted, so this is a teardown; allowing it"
     fi

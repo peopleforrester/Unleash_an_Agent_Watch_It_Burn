@@ -69,6 +69,15 @@ check "ALLOW_EMPTY is passed to the reload" "grep -q 'ALLOW_EMPTY=\"\${allow_emp
 check "only when a shrink was asserted"     "grep -q 'WIB_ROUTES_ALLOW_SHRINK:-' '${FLEET}'"
 check "and only when the table is truly empty" \
       "grep -q 'the table is empty and a shrink was asserted' '${FLEET}'"
+# The first version of this counted with $(grep -c ... || echo 1). grep -c PRINTS 0 and EXITS 1 when
+# nothing matches, so the substitution captured "0\n1" and never equalled "0": the branch could not fire
+# and a clean teardown kept reporting failure. Caught only by running a real teardown and reading the
+# exit, not by any check.
+check "the empty-table count does not use the || echo fallback" \
+      "! grep -q 'grep -cvE .* || echo 1' '${FLEET}'"
+check "it captures the count separately from the exit status" \
+      "grep -q 'route_lines=\"\$(grep -cvE' '${FLEET}'"
+check "and compares numerically" "grep -q '\\${route_lines}. -eq 0' '${FLEET}'"
 
 echo "== there is ONE teardown path, not two (#398) =="
 TD="${HERE}/../teardown/teardown.sh"
