@@ -161,8 +161,13 @@ data:
               # credential provider was not enabled". No ServiceAccount in this namespace carries an IRSA
               # role, so this resolves against the node instance role, the same path guard-proxy uses to
               # reach Bedrock today.
-              auth:
-                aws: {}
+              # NO auth block here. Two shapes were tried and BOTH break startup on v1.5.0:
+              # policies.backendAuth.aws parses but never enables the provider, and a bare auth key is
+              # rejected outright ("unknown field `auth`, expected one of name, provider, hostOverride,
+              # pathOverride, pathPrefix, tokenize, policies"). A crash-looping gateway is worse than an
+              # unauthenticated route, so the block is omitted until the correct key is known from the
+              # agentgateway source rather than inferred. The route resolves; requests to it return
+              # "the credential provider was not enabled" and nothing else is affected. See #394.
         - matches:
           - path:
               pathPrefix: /local
