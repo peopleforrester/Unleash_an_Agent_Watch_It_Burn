@@ -40,6 +40,17 @@ check "default account uses terraform.tfstate" \
 check "other accounts use states/<acct>.tfstate" \
       "grep -A8 '^lab_vpc_state_for()' '${FLEET}' | grep -q 'states/%s.tfstate'"
 
+echo "== EKS log groups are cleaned up too =="
+# /aws/eks/<cluster>/cluster OUTLIVES the cluster and nothing ever deleted one. 107 groups and about
+# 111 GB were found orphaned on 2026-09-18, including clusters from the retired round naming. Small,
+# permanent, and growing by one group per cluster per event, which is the worst shape for a leak.
+check "sweep_orphan_log_group is defined"  "grep -q '^sweep_orphan_log_group()' '${FLEET}'"
+check "down_one calls it"                  "grep -q 'sweep_orphan_log_group \"\${name}\"' '${FLEET}'"
+check "it refuses while the cluster exists" \
+      "grep -A6 '^sweep_orphan_log_group()' '${FLEET}' | grep -q 'describe-cluster'"
+check "a failed delete is recorded"        "grep -q 'loggroup-leak:' '${FLEET}'"
+check "audit-zero names leftover log groups" "grep -q 'zero:\${acct}:loggroups' '${FLEET}'"
+
 echo
 if [ "${fail}" -gt 0 ]; then echo "FAILED: ${fail} check(s), ${pass} passed"; exit 1; fi
 echo "All down-infra checks passed (${pass})."

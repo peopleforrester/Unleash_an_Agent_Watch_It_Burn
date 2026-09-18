@@ -911,6 +911,15 @@ audit_zero_account() {
     # Security groups cost nothing, so they never made this audit fail and 105 per account accumulated
     # unnoticed. They still matter: a non-default group blocks the lab VPC from ever being deleted. Named
     # rather than counted, so the next teardown can see which cluster leaked them.
+    # Log groups outlive their clusters and cost real storage. Named here so a leak is visible in the
+    # same place every other leak is, rather than discovered by a manual sweep months later.
+    local lgleft
+    lgleft="$(AWS_PROFILE="${acct}" aws logs describe-log-groups --region "${WIB_REGION}" \
+              --query "length(logGroups[?contains(logGroupName,'watch-it-burn')])" --output text 2>/dev/null || echo 0)"
+    if [[ "${lgleft}" != "0" && -n "${lgleft}" ]]; then
+        log "  ${acct}: ${lgleft} orphaned watch-it-burn log group(s) still stored"
+        record_fail "zero:${acct}:loggroups"; bad=1
+    fi
     local sgleft
     sgleft="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
               --filters 'Name=group-name,Values=k8s-*' \
@@ -1484,6 +1493,40 @@ sweep_orphan_volumes() {
 # Rules are revoked before deletion because the groups reference each other, and a referenced group cannot
 # be deleted; stripping the rules first breaks the cycle. Deletion is then retried, since order still
 # matters for any reference the revoke missed.
+# EKS writes control-plane logs to /aws/eks/<cluster>/cluster, and that log group OUTLIVES the cluster.
+# Nothing in this teardown path ever deleted one, so they accumulated across every event: 107 groups and
+# roughly 111 GB were found orphaned on 2026-09-18, including groups for round-model clusters (r2-1,
+# r3-1, r3-2, pres-michael) retired long before the current naming existed.
+#
+# The cost is small and permanent, which is the worst shape for a leak: never large enough to notice in a
+# bill, never going away, and growing by one group per cluster per event. At 50 clusters an event that is
+# 50 new groups each time.
+#
+# Deleted AFTER the cluster is gone, in both branches, for the same reason as the other sweeps: a failed
+# destroy is exactly when something gets stranded.
+sweep_orphan_log_group() {
+    local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}"
+    local group="/aws/eks/${name}/cluster"
+    # Never delete the log group of a cluster that still exists. A destroy that failed leaves the cluster
+    # up, and its logs are the first thing anyone debugging that failure will want.
+    if AWS_PROFILE="${acct}" aws eks describe-cluster --name "${name}" --region "${WIB_REGION}" \
+        >/dev/null 2>&1; then
+        log "  ${name}: cluster still exists, leaving ${group} in place"
+        return 0
+    fi
+    AWS_PROFILE="${acct}" aws logs describe-log-groups --region "${WIB_REGION}" \
+        --log-group-name-prefix "${group}" --query 'length(logGroups)' --output text 2>/dev/null \
+        | grep -q '^[1-9]' || return 0
+    if AWS_PROFILE="${acct}" aws logs delete-log-group --region "${WIB_REGION}" \
+        --log-group-name "${group}" >/dev/null 2>&1; then
+        log "  ${name}: deleted the orphaned log group ${group}"
+    else
+        log "  ${name}: could not delete ${group}"
+        record_fail "loggroup-leak:${name}"
+    fi
+    return 0
+}
+
 sweep_orphan_sgs() {
     local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" found=0 survived=0
     local squashed sgs sg
@@ -1563,6 +1606,7 @@ down_one() {
     sweep_orphan_lbs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     sweep_orphan_volumes "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     sweep_orphan_sgs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    sweep_orphan_log_group "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     # Also in BOTH branches: a half-destroyed cluster is not one a student may claim either.
     deregister_one "${name}"
 }
