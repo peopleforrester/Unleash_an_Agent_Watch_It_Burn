@@ -5,7 +5,9 @@
 #401 (version drift), #402 (reap secrets), #395 (teardown exit code)
 **Priority**: High. Not because anything is broken right now, but because the gaps are only visible
 while the memory of this week is fresh, and they are the reason several leaks went unnoticed for months.
-**Status**: Not started. Phase 1.2 (plan written, awaiting approval).
+**Status**: **Delivered 2026-09-18.** All six children closed. The five commands exist, the runbook
+names them, and every new check carries a negative control proving it can fail. Validation of the
+accompanying chart upgrades is running on a live cluster; see "What shipped" below.
 
 ---
 
@@ -89,3 +91,47 @@ of date, using commands named in one document, with no session transcript to con
 
 - The IDP component parity work (#394) and the inference toggle. Different problem.
 - Anything about challenge content.
+
+
+---
+
+## What shipped
+
+| Issue | Delivered | Where |
+|---|---|---|
+| #398 | One teardown path. `teardown.sh` reduced from 80 lines to 36 and execs `fleet.sh down all`; the tag audit it uniquely performed was absorbed. | `7f36f5f` |
+| #399 | Harvest code moved to `scripts/harvest/`, five passes plus one entry point, parameterised by `WIB_EVENT`. Data still ignored. | `2a35cba` |
+| #400 | `verify/account-audit.sh`, broader than `audit-zero`, co-tenant exclusions written in. | `20daa40` |
+| #401 | `verify/version-drift.py`, reading the repo each Application actually names. | `20daa40` |
+| #402 | `fleet.sh reap-secrets`, prefix-scoped and force-deleting. | `4cf5d9d` |
+| #395 | A clean teardown exits zero. | `4cf5d9d` |
+| — | `docs/RUNBOOK.md` | `3074bcd` |
+
+## What the work found while being done
+
+Two defects surfaced by the new tools on their first run, which is the argument for having built them:
+
+**`kube-prometheus-stack` had never been upgraded**, despite being listed as behind in the inventory and
+flagged high-risk in PRD #389. It is pinned in `gitops/apps/prometheus.yaml`, named for its purpose
+rather than its chart, and the upgrade pass matched files to chart names. `version-drift.py` reports by
+chart name and found it immediately: 86.2.3, five majors behind.
+
+**Tempo's pin carried a rationale that had expired.** The comment said Tempo 3 was reachable only
+through the microservices chart, which was true on 2026-09-10 and is no longer: the single-binary line
+now ships 3.0.3. A dated markdown inventory could never have told us that; a command re-run eight days
+later did.
+
+Nine charts had drifted in eight days. That rate is the case for `version-drift.py` running on a
+schedule rather than being remembered.
+
+## What is still not deterministic
+
+Recorded honestly rather than left implied:
+
+- **Upgrade validation still needs a human decision.** `version-drift.py` says what is behind; nothing
+  says whether a five-major jump is safe to take. That judgement is not automatable and should not be
+  pretended otherwise.
+- **The empty-routes fix is narrow by design.** It allows an empty table only when a shrink was already
+  asserted. A teardown driven some other way still hits the guard, correctly.
+- **`account-audit.sh` enumerates resource types by hand.** A service nobody thought of is invisible to
+  it. The tagging-API check partly covers that, but only for resources that carry our tags.
