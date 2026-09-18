@@ -14,7 +14,7 @@ spec:
   source:
     chart: alloy
     repoURL: https://grafana.github.io/helm-charts
-    targetRevision: "1.10.0" # current GA (Promtail successor; Promtail is EOL as of early 2026)
+    targetRevision: "1.12.1" # current GA (Promtail successor; Promtail is EOL as of early 2026)
     helm:
       valuesObject:
         controller:
