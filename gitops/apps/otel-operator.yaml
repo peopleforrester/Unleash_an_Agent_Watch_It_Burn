@@ -19,6 +19,24 @@ spec:
   source:
     repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
     chart: opentelemetry-operator
+    # HELD at 0.122.0 (app 0.158.0). 0.123.0 was taken in af91d05 and backed out after a controlled
+    # test on 2026-09-19 (#405): same node, same platform, same node pressure, one variable changed.
+    #
+    #                        0.123.0            0.122.0
+    #   operator restarts    28                 0
+    #   ai-layer sync        Running, forever   Succeeded
+    #   OTel injection       0 pods             2 pods
+    #   node cpu limits      371%               371%
+    #   node memory limits   121%               120%
+    #
+    # The failure mode is what makes this worth holding rather than living with. The operator fails to
+    # reach the API server on startup, its admission webhook never serves, the otel-gate sync hook waits
+    # on that webhook forever, and the ai-layer Application parks in Running. Every later change to
+    # ai-layer is then blocked, with nothing reporting an error: a committed and synced fix to
+    # agentgateway-config was observed unable to reach its pod for exactly this reason.
+    #
+    # Re-test before taking 0.123.0 again. verify/version-drift.py will keep reporting this as behind,
+    # which is correct and deliberate.
     targetRevision: "0.122.0"
     helm:
       valuesObject:
