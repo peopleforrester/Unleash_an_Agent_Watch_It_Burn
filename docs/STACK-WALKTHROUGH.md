@@ -92,10 +92,24 @@ kagent controller into a running Deployment. The whole agent is declarative, in
 So "building the agent" here means writing that one CR and letting kagent run it. There is no app to
 compile; the controls live around it (guard-proxy, gateway, RBAC, the CNCF floor), which is the point.
 
+## Who governs what (verified 2026-09-10)
+
+Say this instead of "everything is CNCF or open source". The accurate version is better material,
+because the three layers of this stack have three different answers and the last one is the thesis.
+
+| Layer | Home | What we run from it |
+|---|---|---|
+| Platform floor | **CNCF** | Argo CD, Kyverno, Falco, Istio, Prometheus, and kagent, which Solo.io donated to CNCF |
+| Agent protocols | **AAIF**, under the Linux Foundation, formed 2025-12-09 | MCP, A2A, and agentgateway. AAIF also hosts goose and AGENTS.md |
+| Guardrails | **nowhere** | LLM Guard is Protect AI's, with no foundation behind it. LF AI & Data has TrustyAI, OWASP GenAI has a taxonomy, and neither is a home for this layer |
+
+The last row is why guard-proxy is hand-rolled. The ecosystem has consolidated the layer below us
+and the layer beside us, and has not consolidated the one the workshop is about.
+
 ## Naming clarifications (Whitney's exact questions)
 
-- **"kgateway?"** No. It is **agentgateway** (the OSS Linux Foundation / Agentic AI Foundation project,
-  v1.3.0 GA 2026-06-18). kgateway is a different, Envoy-based project; we do not use it.
+- **"kgateway?"** No. It is **agentgateway** (the OSS Linux Foundation / Agentic AI Foundation project;
+  we run v1.5.0). kgateway is a different, Envoy-based project; we do not use it.
 - **"An Agent Gateway?"** Yes, **agentgateway** fronts the agent's A2A endpoint and its MCP traffic.
   But the input/output **content guards** are the **guard-proxy + LLM Guard**, not the gateway. The
   gateway's job is MCP tool authorization (and optionally a request-phase prompt-guard webhook).

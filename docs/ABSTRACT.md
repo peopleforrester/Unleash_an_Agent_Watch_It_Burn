@@ -52,9 +52,12 @@ the delivery narration should say what actually happens rather than what the lis
 | "a fork bomb takes the cluster down", "a per-pod PID limit" | The fork bomb was retired (#114); Challenge 4 is denial-of-wallet, stopped by the budget cap | `gitops/ai-layer/web/lab.html`, C4 |
 | "34 components" / "35-component platform" | About 39 Argo applications on the attendee profile; say "about forty" or leave the number out | `gitops/bootstrap/attendee/app-of-apps-attendee.yaml` |
 | "sandboxing (as an option)" | Deferred; no sandbox in the Portland build | memory: agent sandbox deferred |
+| "Everything is CNCF or open source: ... LLM Guard, agentgateway, kagent" | Open source yes, CNCF no. agentgateway and the A2A protocol are **AAIF** projects under the Linux Foundation; kagent is CNCF (donated by Solo.io); LLM Guard is Protect AI's and has no foundation at all | `docs/STACK-WALKTHROUGH.md`, "Who governs what" |
 
-The rest holds: scoped cluster access, a live terminal, the browser-only surface, the CNCF stack named,
-and the bill moving before the platform stops a request.
+The rest holds: scoped cluster access, a live terminal, the browser-only surface, the platform floor
+named, and the bill moving before the platform stops a request. Say the governance line the accurate
+way from the stage: the CNCF floor, the AAIF agent protocols, and a guardrail layer with no foundation
+behind it.
 
 ---
 
