@@ -440,6 +440,18 @@ module "agent_bedrock_pod_identity" {
       namespace       = "agent"
       service_account = "agent-sa"
     }
+    # agentgateway signs its own Bedrock calls (#394). Its inference bind on :3002 fronts Bedrock for
+    # kagent, and the bedrock provider supplies implicit AWS auth by itself: agentgateway v1.5.0's
+    # AIProvider::Bedrock arm of default_connector_policies sets BackendAuthKind::Aws(Implicit), which
+    # resolves through aws_config::load_defaults and therefore through Pod Identity. There is no config
+    # key to add and none was missing; what was missing is a credential for the gateway's own
+    # ServiceAccount to find. Same policy as the agent, because the two call the same four models: a
+    # second policy would only be a second thing to keep in step.
+    gateway = {
+      cluster_name    = module.eks.cluster_name
+      namespace       = "agent"
+      service_account = "agentgateway"
+    }
   }
 }
 

@@ -156,18 +156,19 @@ data:
                   # Required by the bedrock provider; omitting it fails the whole config at startup
                   # with "missing field `region`". Matches WIB_REGION and the cluster's own region.
                   region: us-west-2
-              # The credential provider must be switched on explicitly. Without this the route resolves
-              # and the request reaches the backend, then fails with "backend authentication failed: the
-              # credential provider was not enabled". No ServiceAccount in this namespace carries an IRSA
-              # role, so this resolves against the node instance role, the same path guard-proxy uses to
-              # reach Bedrock today.
-              # NO auth block here. Two shapes were tried and BOTH break startup on v1.5.0:
-              # policies.backendAuth.aws parses but never enables the provider, and a bare auth key is
-              # rejected outright ("unknown field `auth`, expected one of name, provider, hostOverride,
-              # pathOverride, pathPrefix, tokenize, policies"). A crash-looping gateway is worse than an
-              # unauthenticated route, so the block is omitted until the correct key is known from the
-              # agentgateway source rather than inferred. The route resolves; requests to it return
-              # "the credential provider was not enabled" and nothing else is affected. See #394.
+              # NO auth block here, and that is the correct configuration, not a gap. Read from the
+              # v1.5.0 source rather than inferred from rejection messages (#394):
+              # crates/agentgateway/src/llm/mod.rs, AIProvider::default_connector_policies, gives the
+              # Bedrock arm backend_auth: BackendAuthKind::Aws(AwsAuth::Implicit{..}) by itself, and
+              # crates/agentgateway/src/http/auth/aws.rs resolves Implicit through
+              # aws_config::load_defaults, signs for service "bedrock" by default, and takes the region
+              # from the request extension the provider sets from `region` below.
+              #
+              # So the credential is ambient and the gateway's ServiceAccount has to carry one. It does
+              # now: infra/terraform/aws/cluster/main.tf associates the agentgateway SA with the same
+              # Bedrock Pod Identity role as agent-sa. An explicit policies.backendAuth.aws block is
+              # accepted by the schema (LocalNamedAIProvider.policies -> backendAuth -> aws) and would
+              # be redundant here; `auth:` at this level is not a field at all.
         - matches:
           - path:
               pathPrefix: /local
