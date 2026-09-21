@@ -155,7 +155,14 @@ metadata:
   name: kubearmor-gate
   annotations:
     argocd.argoproj.io/hook: PreSync
-    argocd.argoproj.io/hook-delete-policy: HookSucceeded
+    # HookSucceeded ALONE parks every later sync of this Application (#407). The Job has a fixed name, and
+    # Argo CD only deletes a HookSucceeded hook when the WHOLE sync succeeded, so a failed gate, or a
+    # successful gate in a sync that failed for any other reason, leaves the Job in place. The next sync
+    # then tries to create a Job that already exists and the operation sits in Running, indefinitely,
+    # with nothing reporting an error: a committed fix to agentgateway-config was confirmed Synced by
+    # Argo CD and could not reach the pod for two days because of this. BeforeHookCreation deletes the
+    # stale Job immediately before creating the new one, which is the documented general-purpose pairing.
+    argocd.argoproj.io/hook-delete-policy: HookSucceeded,BeforeHookCreation
     argocd.argoproj.io/sync-wave: "1"
 spec:
   backoffLimit: 1

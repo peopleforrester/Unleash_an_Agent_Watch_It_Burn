@@ -87,6 +87,32 @@ check("otel-gate Job is a PreSync hook", bool(gate) and gate[0]["metadata"]["ann
 check("otel-gate waits on the webhook endpoints and the Instrumentation",
       any(d["kind"] == "ConfigMap" and d["metadata"]["name"].startswith("otel-gate-script") and "endpoints/otel-operator-opentelemetry-operator-webhook" in d["data"]["gate.py"] and "instrumentations/watch-it-burn-python" in d["data"]["gate.py"] for d in docs))
 
+# #407: a fixed-name PreSync Job carrying HookSucceeded ALONE is never cleaned up unless the whole sync
+# succeeded, so one failed gate parks every later sync of ai-layer with the Application still reading
+# Running. Both gates must carry BeforeHookCreation as well, and both must be bounded: the gate exits 0
+# on its deadline (degrade) and the Job carries activeDeadlineSeconds as the backstop for a pod that
+# never starts at all.
+for name in ("otel-gate", "kubearmor-gate"):
+    job = next((d for d in docs if d["kind"] == "Job" and d["metadata"]["name"] == name), None)
+    check(f"{name} Job is present", job is not None)
+    if not job:
+        continue
+    policy = job["metadata"]["annotations"].get("argocd.argoproj.io/hook-delete-policy", "")
+    check(f"{name} carries BeforeHookCreation, so a failed gate cannot park the next sync",
+          "BeforeHookCreation" in policy)
+    check(f"{name} Job has an activeDeadlineSeconds backstop",
+          isinstance(job["spec"].get("activeDeadlineSeconds"), int))
+    script = next((d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"].startswith(f"{name}-script")), None)
+    check(f"{name} script is bounded by a deadline and exits rather than waiting forever",
+          script is not None and "deadline" in script["data"]["gate.py"] and "sys.exit(0)" in script["data"]["gate.py"])
+
+# The degrade path is only useful if it says what it was waiting for. A gate that gives up silently
+# sends the next person tracing a stuck Application back to an operator in another namespace.
+otel_script = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"].startswith("otel-gate-script"))
+check("the otel gate names the endpoints object it gave up on",
+      "DEGRADED" in otel_script["data"]["gate.py"]
+      and "otel-operator-opentelemetry-operator-webhook" in otel_script["data"]["gate.py"])
+
 print("== the ai-layer ignoreDifferences never covers a renamed reference ==")
 # ai-layer ignores drift on the proxy env so live toggles survive selfHeal. Run the committed jq
 # expressions against the rendered guard-proxy Deployment: whatever they select is invisible to
