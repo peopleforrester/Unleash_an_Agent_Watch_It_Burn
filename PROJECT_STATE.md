@@ -3,6 +3,42 @@
 Phase: 3.3 Promote — Portland delivery hardening shipped to main: runtime-security cutover (#127/#137), denial-of-wallet C4 (#114), role-split instructions + instructor brief (#122), 2-hour hands-on run-of-show (#123), platform tour + manipulation commands (#124/#126), agent-probe harness + prompt catalog (#136), and the Whitney onboarding set (#131/#132/#133/#134).
 Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
 
+## Current cycle (2026-09-21, post-event defect burn-down)
+
+The fleet is at TRUE ZERO across all five accounts and 17 regions; `verify/account-audit.sh` reports
+CLEAN and #390 is closed on that evidence. Everything below is code and docs, validated offline.
+
+- **The platform floor (#404, closed).** `converge` called a four-namespace cluster with zero Argo CD
+  Applications "CONVERGED". Both `converge` and `health` now require at least ten Applications and the
+  namespaces every profile brings before they give any verdict, and they tell absent CRDs, an
+  unreadable API server and a genuinely empty list apart. `verify/test_platform_floor.sh`, 19 checks,
+  fails against the previous code.
+- **The sync-hook deadlock (#407, closed).** The premise as filed was wrong: the otel gate has always
+  been bounded (480s, degrade to exit 0, under a 600s activeDeadlineSeconds). What parked `ai-layer`
+  for two days is that a fixed-name hook Job carrying `HookSucceeded` alone is never deleted unless the
+  whole sync succeeded, so the next sync cannot recreate it. Both gates now carry
+  `HookSucceeded,BeforeHookCreation`, and the degrade message names what it gave up on.
+- **agentgateway credentials (#394, the inference half).** Read from the v1.5.0 source: the Bedrock
+  provider attaches implicit AWS auth itself, so there was never a config key to add. The gateway's
+  ServiceAccount now has the same Bedrock Pod Identity association as `agent-sa`. The upstream schema
+  for the tag we run is vendored at `verify/schemas/` and `verify/test_agentgateway_config.py`
+  validates the committed config against it, with three historical crash-loops as negative controls.
+- **The party apps (#393).** The unicorn page drew a hedgehog (the two pages were byte-identical once
+  the name token was normalized) and nothing anywhere was scaled by elapsed time, so speed tracked the
+  viewer's refresh rate. The unicorn has its own art; all five are delta-time normalized. Measured:
+  236 px of drift between 60 Hz and 144 Hz over three seconds before, 1.3 px after.
+- **Governance (#388, closed).** agentgateway and A2A are AAIF projects under the Linux Foundation,
+  kagent is CNCF, LLM Guard has no foundation. The published abstract is a verbatim record and stays;
+  the correction lives in its reconciliation table and in a governance table in STACK-WALKTHROUGH.md.
+- **The two guardrail spikes (#406).** Protect AI ARCHIVED llm-guard on 2026-07-08, models included.
+  agentgateway's response guard can replace our output regex; its request guard cannot replace the
+  input classifier without a remote service or a webhook back to LLM Guard. Recommendation: keep
+  guard-proxy, publish the offline image we already build, decline the library fork.
+  `docs/spike-guardrail-layer-2026-09-21.md`. Michael's call on the publish half.
+- **#408 closed**, live crontab repointed at `talks/` after the repo move (backed up first); the
+  tracked-copy half is peopleforrester/llm-coding-workflow#180, since a hook blocks cross-repo writes.
+- Three tests that pinned teardown.sh's pre-#398 shape now assert the same behavior in fleet.sh.
+
 ## Current cycle addendum (2026-09-05, afternoon)
 
 - **Datadog was on the June pool everywhere** (#237, fixed): the fleet, both pool secrets and the
@@ -115,7 +151,8 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 ## Branch & Tests
 - Branch: staging
 - Working tree: clean
-- Last CI: n/a (no repo CI; lab-render, browser-smoke, datadog-orgs, input-guard all clean); sha ffd323c
+- Last CI: n/a (no repo CI). Offline gate `verify/run-tests.sh`: 73 tests, 1 skipped (needs a
+  credential), ALL GREEN as of 2026-09-21.
 
 ## Phase History
 - 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
@@ -124,6 +161,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-07-06 §4.6 + relocation live-validated (watch-it-burn-r2-1: m5.2xlarge node, IMDS hop=1, Nova at Bedrock) and promoted to main.
 - 2026-09-05 3.1 Whitney walkthrough loop (#211-#232) staged and rolled to all 8 presenter clusters; presenter deck rebuilt to the demo-then-do run of show (#106). 3.3 deferred: clusters track staging; promotion is Michael's call.
 - 2026-07-07 3.3 M1 COMPLETE: provider dispatch promoted to main (c7666b1); §4.6-d deferred (Michael). Four of five M1 pieces shipped; M2-M8 remain as future code-only cycles.
+- 2026-09-21 3.1 post-event defect burn-down staged: #388, #390, #404, #407, #408 closed; #393, #394, #406 advanced. Offline suite green. 3.3 is Michael's call.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.
