@@ -45,7 +45,9 @@ out="$(ACCTS="acct-a,acct-b" src 'audit_zero; echo rc=$?')"
 check "a clean account and a dirty one are both reported" 'grep -q "acct-a: ZERO" <<<"$out" && grep -q "acct-b: ec2 NOT zero: i-0bad" <<<"$out" && grep -q "rc=1" <<<"$out"'
 
 echo "== wiring =="
-check "down all ends with the audit" 'grep -q "\[\[ \"\${1:-}\" == \"all\" \]\] && audit_zero" "${FLEET}"'
+# `down all` grew from a one-liner into a block (tag audit, lab VPC, then the verdict), so assert the
+# audit is inside that block rather than pinning the exact line it used to be.
+check "down all ends with the audit" 'awk "/if \[\[ \"\\\$\{1:-\}\" == \"all\" \]\]; then/,/^    fi$/" "${FLEET}" | grep -q "^        audit_zero$"'
 check "down-fleet ends with the audit" 'awk "/^cmd_down_fleet\(\)/,/^}/" "${FLEET}" | grep -q "^    audit_zero"'
 check "audit-zero is a subcommand" 'grep -q "audit-zero) cmd_audit_zero" "${FLEET}"'
 echo; echo "  ${pass} passed, ${fail} failed"; exit $(( fail > 0 ))

@@ -43,10 +43,18 @@ check("s3 hoop setup tags the bucket project=watch-it-burn",
 trophy = (REPO / "games/eso-s3-exfil/plant-trophy.sh").read_text()
 check("trophy secret created with project=watch-it-burn tag",
       "create-secret" in trophy and "Key=project,Value=watch-it-burn" in trophy)
+# teardown.sh is a three-line wrapper over `fleet.sh down all` (#398), so the co-tenant guard lives in
+# fleet.sh now: assert_ours refuses any name that is not watch-it-burn-*, on every destructive verb.
+# These accounts are shared with the Packt project, so this is the check that keeps a teardown here from
+# reaching their clusters.
 teardown = (REPO / "teardown/teardown.sh").read_text()
+fleet = (TF / "fleet/fleet.sh").read_text()
 check("teardown is prefix-scoped to watch-it-burn (cannot hit the co-tenant Packt clusters)",
-      'CLUSTER_PREFIX' in teardown and "watch-it-burn" in teardown
-      and 'refusing prefix' in teardown)
+      "assert_ours" in fleet and 'REFUSING non-watch-it-burn name' in fleet
+      and '[[ "${name}" == watch-it-burn-* ]]' in fleet)
+check("and teardown.sh goes through fleet.sh rather than destroying anything itself",
+      'exec env WIB_APPLY=1 "${FLEET}" down all' in teardown
+      and "terraform -chdir" not in teardown and "aws eks delete-cluster" not in teardown)
 check("tagging convention doc exists", (REPO / "infra/TAGGING.md").exists())
 check("shared-VPC doc exists (one VPC, not per-cluster)", (REPO / "infra/shared-vpc/README.md").exists())
 check("Terraform provisioning README exists", (TF / "README.md").exists())

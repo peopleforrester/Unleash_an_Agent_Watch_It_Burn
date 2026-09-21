@@ -2341,6 +2341,53 @@ cmd_down_fleet() {
     report_failures
 }
 
+# The platform floor (#404). "Healthy" and "converged" are this fleet's words for "a student can be
+# handed this cluster", and both verbs used to be satisfied by ANY number of Argo CD Applications above
+# zero. A bootstrap that dies early leaves a cluster with the root app and nothing under it, and that
+# read as a working platform. The floor is deliberately far below every profile's real count (burn, the
+# smallest, brings about twenty) so it only ever fires on the unambiguous case.
+readonly PLATFORM_MIN_APPS="${WIB_PLATFORM_MIN_APPS:-10}"
+# The namespaces a built cluster has no matter which profile it runs. `agent` holds the agent, the
+# console and the lab page, which is the entire attendee surface, so its absence means the student has
+# nothing to open whatever the Applications say.
+readonly PLATFORM_NAMESPACES="${WIB_PLATFORM_NAMESPACES:-argocd agent}"
+
+# Read the Applications, and tell the three "no applications" cases apart, because they need different
+# answers: CRDs absent means nothing was ever bootstrapped; CRDs present with an empty list means the
+# root app-of-apps was never applied; an unreadable API server means the cluster, not the platform.
+# Prints the JSON on success, or a one-word reason on failure.
+read_argo_apps() {
+    local kcfg="$1" out rc
+    out="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>&1)"; rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        if grep -qiE "doesn't have a resource type|no matches for kind|could not find the requested resource" <<<"${out}"; then
+            echo "no-argocd-crds"
+        else
+            echo "argocd-unreadable"
+        fi
+        return 1
+    fi
+    echo "${out}"
+}
+
+# Does this cluster carry a platform at all? Prints a reason and returns 1 when it does not. Both
+# health_one and converge_one gate on this before they look at sync status, so neither can report a
+# verdict about an empty cluster.
+platform_floor() {
+    local kcfg="$1" apps="$2" total ns missing=()
+    total="$(jq '.items | length' <<<"${apps}" 2>/dev/null || echo 0)"
+    if [[ "${total}" -lt "${PLATFORM_MIN_APPS}" ]]; then
+        echo "no-platform apps=${total}/min-${PLATFORM_MIN_APPS}"; return 1
+    fi
+    for ns in ${PLATFORM_NAMESPACES}; do
+        KUBECONFIG="${kcfg}" kubectl get namespace "${ns}" >/dev/null 2>&1 || missing+=("${ns}")
+    done
+    if [[ "${#missing[@]}" -gt 0 ]]; then
+        echo "missing-namespaces=[$(IFS=,; echo "${missing[*]}")]"; return 1
+    fi
+    return 0
+}
+
 # Per-cluster IDP health: the REAL "is the platform up" gate (cmd_status only reports EKS control-plane
 # state). Pulls an ISOLATED kubeconfig per cluster (never ~/.kube/config) with the account's profile, then
 # asserts the ArgoCD app-of-apps is fully converged (every Application Synced AND Healthy) plus a pod
@@ -2352,11 +2399,14 @@ health_one() {
     if ! provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"; then
         log "  ${name}: UNREACHABLE (no kubeconfig)"; record_fail "${name}:unreachable"; rm -f "${kcfg}"; return
     fi
-    local apps total healthy pending failed
-    apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)"
-    if [[ -z "${apps}" || "$(jq '.items | length' <<<"${apps}" 2>/dev/null)" == "0" ]]; then
-        log "  ${name}: NO ArgoCD applications (bootstrap not applied / ArgoCD down)"
-        record_fail "${name}:no-argocd"; rm -f "${kcfg}"; return
+    local apps total healthy pending failed floor
+    if ! apps="$(read_argo_apps "${kcfg}")"; then
+        log "  ${name}: NO ArgoCD applications (${apps})"
+        record_fail "${name}:${apps}"; rm -f "${kcfg}"; return
+    fi
+    if ! floor="$(platform_floor "${kcfg}" "${apps}")"; then
+        log "  ${name}: NO PLATFORM (${floor}); this needs a bootstrap, not a health check"
+        record_fail "${name}:${floor}"; rm -f "${kcfg}"; return
     fi
     total="$(jq '.items | length' <<<"${apps}")"
     healthy="$(jq '[.items[] | select(.status.sync.status=="Synced" and .status.health.status=="Healthy")] | length' <<<"${apps}")"
@@ -2438,11 +2488,14 @@ converge_one() {
     if ! provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"; then
         log "  ${name}: UNREACHABLE (no kubeconfig)"; record_fail "${name}:unreachable"; rm -f "${kcfg}"; return
     fi
-    local apps total healthy bad a
-    apps="$(KUBECONFIG="${kcfg}" kubectl get applications.argoproj.io -n argocd -o json 2>/dev/null)"
-    if [[ -z "${apps}" || "$(jq '.items | length' <<<"${apps}" 2>/dev/null)" == "0" ]]; then
-        log "  ${name}: NO ArgoCD applications; converge cannot help, this needs a bootstrap"
-        record_fail "${name}:no-argocd"; rm -f "${kcfg}"; return
+    local apps total healthy bad a floor
+    if ! apps="$(read_argo_apps "${kcfg}")"; then
+        log "  ${name}: NO ArgoCD applications (${apps}); converge cannot help, this needs a bootstrap"
+        record_fail "${name}:${apps}"; rm -f "${kcfg}"; return
+    fi
+    if ! floor="$(platform_floor "${kcfg}" "${apps}")"; then
+        log "  ${name}: NO PLATFORM (${floor}); converge repairs a platform, it does not install one"
+        record_fail "${name}:${floor}"; rm -f "${kcfg}"; return
     fi
     total="$(jq '.items | length' <<<"${apps}")"
     healthy="$(jq '[.items[] | select(.status.sync.status=="Synced" and .status.health.status=="Healthy")] | length' <<<"${apps}")"

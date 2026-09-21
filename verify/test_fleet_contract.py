@@ -228,8 +228,14 @@ check("LB services are drained before terraform destroy", 0 < drain_at < destroy
 check("PVCs are deleted before terraform destroy (else volumes orphan as 'available')",
       "delete pvc" in FLEET_SH)
 check("destructive verbs are dry-run unless WIB_APPLY=1", "require_apply" in FLEET_SH)
+# The tag audit used to live in teardown.sh. It is now inside `fleet.sh down all` (#398), because the
+# unattended cron path calls fleet.sh and was therefore running the less complete teardown. Assert it at
+# its new home AND that teardown.sh still reaches it, or a wrapper that quietly stopped delegating would
+# pass a check written against fleet.sh alone.
 check("teardown runs the tag audit (untagged resources survive a tag-scoped sweep)",
-      "tag-audit.sh" in TEARDOWN_SH or "TAG_AUDIT" in TEARDOWN_SH)
+      "tag-audit.sh" in FLEET_SH)
+check("and teardown.sh reaches it by delegating to down all",
+      "down" in TEARDOWN_SH and "all" in TEARDOWN_SH and "fleet.sh" in TEARDOWN_SH.lower())
 
 print("== the roster can be sliced by presenter, not only by round ==")
 # roster.tsv has carried an owner column for a while, but the tool only ever exposed the ROUND, so
