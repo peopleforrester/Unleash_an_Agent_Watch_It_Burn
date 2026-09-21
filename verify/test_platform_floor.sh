@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: Behavioural test for the platform floor: health and converge must refuse to give a verdict
+# ABOUTME: Behavioral test for the platform floor: health and converge must refuse to give a verdict
 # ABOUTME: about a cluster that has no platform on it, however cheerful its node and its DNS look.
 #
 # Why this exists (#404). `converge watch-it-burn-attendee-001` printed "CONVERGED: 1/1 clusters healthy
