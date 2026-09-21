@@ -1,4 +1,4 @@
-# ABOUTME: Render-gate check for the Istio service mesh: ambient apps pinned to 1.30.1 + STRICT mTLS
+# ABOUTME: Render-gate check for the Istio service mesh: all ambient charts on ONE pinned version + STRICT mTLS
 # ABOUTME: (whose certs are SPIFFE identities). Structural, no cluster needed.
 import pathlib, sys, yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -11,7 +11,13 @@ def check(n, c):
 for n in ("istio-base", "istio-cni", "istiod", "ztunnel", "istio-mesh-config"):
     check(f"app present: {n}", n in byname)
 helm_apps = [a for a in apps if a["spec"]["source"].get("chart")]
-check("all istio charts pinned to 1.30.1", all(a["spec"]["source"]["targetRevision"] == "1.30.1" for a in helm_apps))
+# The version lives here as a single constant rather than four literals. Bumping istio means editing
+# this line and gitops/apps/istio.yaml, and the check below catches the case that actually breaks a
+# mesh: base, cni, istiod and ztunnel drifting apart from each other.
+ISTIO_VERSION = "1.30.4"
+_revs = {a["spec"]["source"]["targetRevision"] for a in helm_apps}
+check(f"all istio charts pinned to {ISTIO_VERSION}", _revs == {ISTIO_VERSION})
+check("no istio chart has drifted from the others", len(_revs) == 1)
 check("cni + istiod use ambient profile",
       byname["istio-cni"]["spec"]["source"]["helm"]["valuesObject"].get("profile") == "ambient"
       and byname["istiod"]["spec"]["source"]["helm"]["valuesObject"].get("profile") == "ambient")
