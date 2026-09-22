@@ -33,10 +33,23 @@ Two details that decide the question:
 |---|---|
 | Output regex over the planted sentinel patterns | `promptGuard.response.regex` with the same patterns. **Covered.** |
 | Input prompt-injection classification (DeBERTa, local, model-based) | No local classifier. The four managed options are all remote third-party services; `webhook` is the only self-hosted path, and the thing a webhook would call is LLM Guard. **Not covered.** |
-| The cost cap that ends Challenge 4 (`COST_CAP_USD`, live toggle) | Not a gateway feature. |
+| The cost cap that ends Challenge 4 (`COST_CAP_USD`, live toggle) | **Correction, 2026-09-22: this line said "not a gateway feature" and was wrong.** agentgateway v1.5.0 has `Budget` on an API key, `BudgetLimitUnit: [USD, Tokens]`, `BudgetExceededAction: [Audit, Block]`, over a rolling window. Verified in the vendored schema. What survives is the limitation both share, below. |
 | `MODEL_TIER`, `RATE_LIMIT_RPM`, `PROXY_FAIL_CLOSED` as live demo toggles | Not gateway features. |
 | `STREAM_PROMPTS`, the live prompt feed the room watches | Not a gateway feature. |
 | The span attributes the Datadog recipe reads | agentgateway emits its own spans; these are ours. |
+
+### The spend cap, corrected
+
+Both implementations meter AFTER the response and refuse the NEXT request. agentgateway's own schema
+says so: "Usage is charged after an LLM response when the provider reports the tokens or cost required
+by the configured unit. Requests with unavailable usage are logged but cannot be charged or blocked
+retroactively." `proxy.py` does the same thing: spend crosses `BUDGET_CAP_USD`, and further requests
+are refused before the model is called.
+
+So neither stops the request that crosses the line, and neither bounds a single very expensive request.
+The honest difference between them is scope, not capability: ours is per session and per cluster, the
+gateway's is per API key. Spend enforcement is therefore NOT a reason to keep guard-proxy. The input
+classifier is.
 
 ### Finding
 
