@@ -106,6 +106,13 @@ because the three layers of this stack have three different answers and the last
 The last row is why guard-proxy is hand-rolled. The ecosystem consolidated the layer below us and the
 layer beside us, and left the one the workshop is about.
 
+One trap to know before someone corrects this table from the wrong page. **agentgateway appears in the
+CNCF landscape**, in Network / Gateway, with a `repo_url` and no `project:` field. The landscape maps
+the whole ecosystem and inclusion in it is not CNCF hosting; the project list at `aaif.io/projects` is
+the authority, and it names Model Context Protocol, goose, AGENTS.md, agentgateway, A2A and Agent
+Router (verified 2026-09-22). The landscape also still carries "Envoy-ai-gateway" under its retired
+name and URL.
+
 Two dates make that concrete rather than rhetorical. **Palo Alto Networks completed its acquisition of
 Protect AI on 2025-07-22 and archived LLM Guard on 2026-07-08**, two months before this workshop ran.
 And **Agent Router joined AAIF on 2026-09-10 with no prompt guards and no spend controls, neither
