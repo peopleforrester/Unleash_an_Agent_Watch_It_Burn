@@ -92,19 +92,25 @@ kagent controller into a running Deployment. The whole agent is declarative, in
 So "building the agent" here means writing that one CR and letting kagent run it. There is no app to
 compile; the controls live around it (guard-proxy, gateway, RBAC, the CNCF floor), which is the point.
 
-## Who governs what (verified 2026-09-10)
+## Who governs what (verified 2026-09-10, updated 2026-09-22)
 
 Say this instead of "everything is CNCF or open source". The accurate version is better material,
 because the three layers of this stack have three different answers and the last one is the thesis.
 
-| Layer | Home | What we run from it |
+| Layer | Home | What we run from it, and who else is there |
 |---|---|---|
 | Platform floor | **CNCF** | Argo CD, Kyverno, Falco, Istio, Prometheus, and kagent, which Solo.io donated to CNCF |
-| Agent protocols | **AAIF**, under the Linux Foundation, formed 2025-12-09 | MCP, A2A, and agentgateway. AAIF also hosts goose and AGENTS.md |
-| Guardrails | **nowhere** | LLM Guard is Protect AI's, with no foundation behind it. LF AI & Data has TrustyAI, OWASP GenAI has a taxonomy, and neither is a home for this layer |
+| Agent protocols and routing | **AAIF**, under the Linux Foundation, formed 2025-12-09 | MCP, A2A, and agentgateway. AAIF also hosts goose, AGENTS.md, and **Agent Router**, which was Envoy AI Gateway until it joined on 2026-09-10 under the same maintainers and the same Apache 2.0 license |
+| Guardrails | **nowhere** | LLM Guard was Protect AI's and is archived. LF AI and Data has TrustyAI, OWASP GenAI publishes a taxonomy, CoSAI publishes papers and one ruleset. None of them is a home for this layer |
 
-The last row is why guard-proxy is hand-rolled. The ecosystem has consolidated the layer below us
-and the layer beside us, and has not consolidated the one the workshop is about.
+The last row is why guard-proxy is hand-rolled. The ecosystem consolidated the layer below us and the
+layer beside us, and left the one the workshop is about.
+
+Two dates make that concrete rather than rhetorical. **Palo Alto Networks completed its acquisition of
+Protect AI on 2025-07-22 and archived LLM Guard on 2026-07-08**, two months before this workshop ran.
+And **Agent Router joined AAIF on 2026-09-10 with no prompt guards and no spend controls, neither
+shipped nor on its roadmap**: the foundation that now owns the routing layer has taken no position on
+the guard layer.
 
 ## Naming clarifications (Whitney's exact questions)
 
