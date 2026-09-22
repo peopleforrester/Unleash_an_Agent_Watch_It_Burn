@@ -376,13 +376,14 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          # Built from images/llm-guard, which now builds the API server from vendored upstream source
-          # on python:3.12-slim instead of wrapping laiyer/llm-guard-api. Classifier baked in as a local
-          # model dir with HF offline (#241), and torch resolved from PyTorch's CPU index, which took the
-          # image from 4,211 MB to 1,392 MB compressed by dropping fifteen NVIDIA wheels this fleet's
-          # GPU-less nodes never load (#413). Pinned by digest as well as tag: a tag is a moving pointer
-          # and the allowlist should name an artifact (#415).
-          image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.1@sha256:709e6cecdcb9824f75bcf5b89d0c1c9552f05ee30104a31d7e90b9e35b9f557a
+          # Built from images/llm-guard, which builds the API server from vendored upstream source in a
+          # multi-stage build on python:3.12-slim instead of wrapping laiyer/llm-guard-api. Classifier
+          # baked in as a local model dir with HF offline (#241); torch from PyTorch's CPU index, which
+          # dropped fifteen NVIDIA wheels this fleet's GPU-less nodes never load; and the compiler left
+          # behind in the builder stage. 4,211 MB to 1,280 MB compressed, and 916 unique CVEs to 24 with
+          # no criticals (#413, #415). Pinned by digest as well as tag: a tag is a moving pointer and the
+          # allowlist should name an artifact.
+          image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.2@sha256:9fe5d2ae3a83ecf2d2242f1a20bc3008ce7c8d19ddbe62516db06905ac9fe135
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
           env:

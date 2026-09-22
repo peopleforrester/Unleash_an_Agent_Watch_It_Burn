@@ -104,14 +104,15 @@ is 12 open issues and 26 open pull requests.)
 ### What we already have
 
 `images/llm-guard/Dockerfile` builds
-`ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.1`, with the classifier baked in as a
+`ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.2`, with the classifier baked in as a
 local directory and Hugging Face forced offline, because a cluster running Challenge 1's default-deny
 egress cannot reach the Hub on its first scan (#241).
 
-Since 2026-09-22 it builds the API server from vendored upstream source on `python:3.12-slim` rather
-than wrapping `laiyer/llm-guard-api`, with torch resolved from PyTorch's CPU index. That took it from
-**4,211 MB to 1,392 MB compressed**, and removed a dependency on an archived repository staying
-reachable.
+Since 2026-09-23 it is a multi-stage build of the API server from vendored upstream source on
+`python:3.12-slim` rather than a wrapper around `laiyer/llm-guard-api`, with torch resolved from
+PyTorch's CPU index and the compiler left behind in the builder stage. That took it from **4,211 MB to
+1,280 MB compressed** and from **916 unique CVEs to 24, with no criticals**, and removed a dependency
+on an archived repository staying reachable.
 
 That is not a fork of the library. It is a packaging of it, and it is the thing people actually hit:
 the upstream image cannot start a scan without network access to a model host.
