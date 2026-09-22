@@ -1,44 +1,69 @@
 # Forking a Dead Security Library, and Getting Off Hugging Face
 
-Research report, 2026-09-22. Two questions: what it would actually cost to maintain a fork of
-`protectai/llm-guard`, and how to hold the prompt-injection model weights and the Python packages
-independently of Hugging Face and PyPI.
+Research report, 2026-09-22. Three questions: what it would actually cost to maintain a fork of
+`protectai/llm-guard`; how to hold the prompt-injection model weights and the Python packages
+independently of Hugging Face and PyPI; and what the 4.2 GB guard image is made of.
 
 Every figure below was measured on 2026-09-22 against a live source. The command or API that
 produced it is named so you can re-run it. Claims I could not verify are collected at the end.
 
 Working files: `/tmp/claude-1000/-home-michael-repos-talks-Unleash-an-Agent-Watch-It-Burn/deddecfd-5492-4059-a230-666342ff1423/scratchpad/lg/`
 holds the bare clone (`repo.git`), the full issue and PR dump (`issues_raw.json`), the fork listing
-(`forks.json`), both dependency resolutions (`resolved_core.txt`, `resolved_onnx.txt`), the
+(`forks.json`), six dependency resolutions (`resolved_onnx.txt`, `resolved_core.txt`,
+`resolved_cpu.txt`, `resolved_min.txt`, `resolved_min_cpu.txt`, `resolved_bare.txt`), the
 hash-pinned lock (`hashed.txt`) and the OSV results (`osv_pinned_hits.json`).
+
+---
+
+# Correction to carry into the issue tracker: the "38 open issues" figure is wrong
+
+**`protectai/llm-guard` does not have 38 open issues. It has 12 open issues and 26 open pull
+requests.**
+
+GitHub's REST API field `open_issues_count` counts pull requests as issues. This is documented
+behavior and it is a long-standing source of confusion, because the web UI shows the two separately
+while the API sums them. `gh api repos/protectai/llm-guard --jq .open_issues_count` returns 38;
+paginating `/issues?state=all` and partitioning on the presence of a `pull_request` key returns
+12 + 26.
+
+The distinction changes what a fork inherits, so it is worth fixing rather than rounding past:
+
+- **26 open PRs is contributed code waiting for review**, including four security fixes and seven
+  new scanners. That is an asset a fork receives, not a liability.
+- **12 open issues is the actual user-facing backlog**, and two of those (#324 "Is this repo
+  maintained?", #336 a design question) are answer-and-close items. The real defect and
+  compatibility backlog is nine items.
+
+Wherever the tracker says "38 open issues", it should say "12 open issues and 26 open pull
+requests (GitHub's `open_issues_count` sums the two)".
+
+The same measurement corrects two other figures in the brief, both immaterial to any conclusion but
+worth recording: the last functional commit is **2025-09-03**, not 2026, and the repo has
+**326 unique forks** of which **60 were pushed after the archive**, not 54 (the API returns 467 fork
+rows with pagination duplicates, and the count drifts with the measurement date).
 
 ---
 
 # PART 1: What maintaining a fork of `protectai/llm-guard` actually costs
 
-## 1.1 Baseline facts, with corrections to the brief
+## 1.1 Baseline facts
 
 | Fact | Measured | Source |
 |---|---|---|
 | Archived | `archived: true`, last push `2026-07-08T23:58:40Z` UTC (`2026-07-09 01:58 +0200` local) | `gh api repos/protectai/llm-guard` |
-| Stars / forks | 3,208 / 461 | same |
-| **"38 open issues"** | **12 open issues plus 26 open PRs.** GitHub's `open_issues_count` counts PRs. | `gh api --paginate .../issues?state=all`, 350 items |
+| Stars / forks | 3,208 / 461 reported, **326 unique** | same, plus `--paginate .../forks` |
+| Open items | **12 issues + 26 PRs** (not 38 issues) | `gh api --paginate .../issues?state=all`, 350 items |
 | Last functional commit | `2025-09-03` (#283). The final commit is "Archiving Project (#355)". | `git log` on a bare clone |
 | Last release | v0.3.16, PyPI upload `2025-05-19T12:12:58Z`. 26 releases total, first `2023-08-08`. | `pypi.org/pypi/llm-guard/json` |
-| License | MIT (repo), and the PyPI metadata carries the full MIT text with "Copyright (c) Protect AI" | both |
+| License | MIT (repo); the PyPI metadata carries the full MIT text, "Copyright (c) Protect AI" | both |
 | Python support | `>=3.10,<3.13` | PyPI `requires_python` |
 | Acquisition | Palo Alto Networks completed the Protect AI acquisition **2025-07-22** | [PAN press release](https://www.paloaltonetworks.com/company/press/2025/palo-alto-networks-completes-acquisition-of-protect-ai) |
-| Forks pushed since archive | **60 unique**, of 326 unique forks. The API returns 467 rows with pagination duplicates. | `gh api --paginate .../forks` |
+| Forks pushed since archive | **60 unique**, of 326 | `gh api --paginate .../forks` |
 | Best fork | **2 stars.** Only 22 of 326 forks have any star at all. | same |
 
-The archive came **11.5 months after** the acquisition closed. That is the normal lag for an
-acquirer working through a portfolio's open source.
-
-Two corrections to the brief worth carrying forward. First, the "38 open issues" figure is 12
-issues and 26 PRs, which changes what a fork inherits: most of the backlog is contributed code
-waiting for review, not user complaints. Second, the last functional commit is 2025-09-03, so the
-code had been frozen for **ten months** before the archive notice went up, and the last release was
-**fourteen months** before it.
+The archive came **11.5 months after** the acquisition closed. The code, though, had been frozen for
+**ten months** before the archive notice and the last release was **fourteen months** before it. The
+archive flag recorded a death that had already happened.
 
 ## 1.2 Dependency surface
 
@@ -53,30 +78,7 @@ The ML-heavy share is `torch`, `transformers`, `tokenizers`, `safetensors`, `onn
 `optimum`, `presidio-analyzer`, `presidio-anonymizer`, `spacy` plus its nine support packages
 (thinc, blis, cymem, murmurhash, preshed, srsly, catalogue, confection, wasabi), `nltk`, `numpy`, <!-- lexicon: catalogue is a PyPI package name -->
 `datasets`, `pyarrow` and `pandas`. That is roughly **40 of 119 packages, 34% by count**, and
-effectively all of the weight.
-
-Measured cost of that weight in your own image. `ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-offline.2`
-is **4,211 MB compressed across 15 layers**, with a single 3,364 MB layer (torch and CUDA) and a
-679 MB layer (the baked model). Current digest:
-`sha256:ec8ead8acca5c3f76cd2db192ad3d62c4651fe5ce61cc073021c27b98c9f845a`.
-
-### The pin structure is the real inherited liability
-
-Seven of the 13 direct requirements are exact `==` pins:
-
-```
-bc-detect-secrets==1.5.43
-json-repair==0.44.1
-presidio-analyzer==2.2.358
-presidio-anonymizer==2.2.358
-regex==2024.11.6
-transformers==4.51.3
-optimum[onnxruntime]==1.25.2      # extra
-```
-
-An exact pin means every security bump is a source change in the fork plus a release, not a
-lockfile refresh. It also creates transitive back-pressure: `presidio-anonymizer==2.2.358` is what
-holds `cryptography` down at 44.0.3, which is exactly open issue #342.
+effectively all of the weight. Section 3 takes that apart.
 
 ## 1.3 Security exposure
 
@@ -98,7 +100,8 @@ OSV `querybatch` over all 119 packages at their resolved versions, deduplicated 
 | **Total** | | **24 unique CVEs across 4 packages** | 40 |
 
 A `pip install llm-guard==0.3.16` today lands you on 24 known CVEs immediately, and you cannot fix
-the two largest groups without editing the fork's source, because both are exact pins.
+the two largest groups without editing the fork's source, because both are exact pins. Section 1.7
+works through why.
 
 ### Advisory arrival rate against the dependency set
 
@@ -128,16 +131,14 @@ OSV, PyPI ecosystem, deduplicated by CVE alias, strict `published` field, 24-mon
 
 I re-checked the nltk figure because 47 advisories in 24 months looked like a broken measurement.
 It is real. GHSA-3gq4-3j92-5w49 (NLTK Corpus Reader Sandbox Bypass, published 2026-09-08) and
-GHSA-469j-vmhf-r6v7 (NLTK Downloader Path Traversal, published 2026-03-19) are genuine nltk
-advisories affecting the `nltk` PyPI package.
+GHSA-469j-vmhf-r6v7 (NLTK Downloader Path Traversal, published 2026-03-19) both genuinely affect
+the `nltk` PyPI package.
 
 **103 advisories against the direct dependencies in 24 months is 4.3 per month** arriving at the
 fork's door for triage, even though only a fraction turn out to be actionable at any given pin
 level.
 
 ## 1.4 Historical maintenance load: what it took with a funded team
-
-From the bare clone and the full issue and PR dump.
 
 **Authorship and bus factor.** 518 commits from 27 git authors. GitHub reports **21 contributors**.
 One person, `asofter` (Oleksandr Yaremchuk, counted under two identities), wrote **419 of 518
@@ -151,16 +152,15 @@ commits, 81%**. Dependabot wrote 82. That leaves **17 commits, 3.3%, from everyo
 2023-10  63   2024-03  27   2024-09   4   2025-05   5
 2023-11  62   2024-04  49   2024-10   7   2025-07  10
 2023-12  27   2024-05  24   2024-11   0   2025-09   1
-             2024-06  16   2024-12   0   2026-07   1  (the archive commit)
-                           2025-01   0
+              2024-06  16   2024-12   0   2026-07   1  (the archive commit)
+                            2025-01   0
 ```
 
 Three consecutive months with zero commits (2024-11 through 2025-01). All of 2025 produced 20
 commits.
 
 **Releases.** 26 total, 15 of them in the first 12 months. The nine-month gap between v0.3.15
-(2024-08-22) and v0.3.16 (2025-05-19) is where the project actually died, fourteen months before
-the archive notice.
+(2024-08-22) and v0.3.16 (2025-05-19) is where the project actually died.
 
 **Issues.** 116 opened over 34 months, **3.4 per month**. Median **time-to-close 67.7 days** (mean
 134.6, p25 7.7, p75 205.1, p90 350.2, max 579.1). Only **24% closed within 7 days** and **40%
@@ -169,10 +169,10 @@ within 30 days**. That is the triage performance of a funded vendor team, and it
 **Pull requests.** 234 total. **163 from dependabot (70%)**, 71 human. Dependabot opened **5.8 per
 month mean, 6.0 median, over 28 months**, peaking at 13. Only 82 dependabot commits landed, so
 roughly **half the bot PRs were merged**. Human PRs during the active life ran 2.4 per month and
-were merged at a median of **1.14 days**. Responsiveness to contributors was excellent;
-issue triage was not.
+were merged at a median of **1.14 days**. Responsiveness to contributors was excellent; issue
+triage was not.
 
-## 1.5 What a fork inherits: the 12 issues and 26 PRs, categorized
+## 1.5 What a fork inherits
 
 **Open issues (12):**
 
@@ -180,25 +180,25 @@ issue triage was not.
 |---|---|---|
 | Security or dependency-blocking | 3 | #313 transformers vulnerability; #342 presidio blocks cryptography >=46 (CVE-2026-26007); #347 downstream release tracking |
 | Runtime compatibility | 2 | #319 Python 3.13 core rules compliance; #320 sentencepiece install failure |
-| Functional bugs | 3 | #154 scanner reconfiguration after model load; #331 PromptInjection drops phone and email; #337 Anonymize ignores `language` and hardcodes ALL_SUPPORTED_LANGUAGES |
+| Functional bugs | 3 | #154 scanner reconfiguration after model load; #331 PromptInjection drops phone and email; #337 Anonymize ignores `language`, hardcodes ALL_SUPPORTED_LANGUAGES |
 | Feature proposals | 2 | #326 loading other models; #340 ATRScanner backed by 338 agent threat rules |
 | Questions and meta | 2 | #324 "Is this repo maintained?"; #336 where cryptographic agent identity belongs |
 
-The oldest open issue, #154, has been open since 2024-06-20. Two of the twelve (#324, #336) are
-questions a fork maintainer would answer and close on day one. The real backlog is nine items.
+The oldest open issue, #154, has been open since 2024-06-20.
 
 **Open PRs (26):**
 
 | Category | Count | Notable |
 |---|---|---|
-| Dependabot | 5 | GitHub Actions majors (checkout 4→6, codeql 3→4, cache 4→5, setup-python 5→6); optimum 1.25.2→2.0.0 (two PRs) |
+| Dependabot | 5 | GitHub Actions majors (checkout 4→6, codeql 3→4, cache 4→5, setup-python 5→6); optimum 1.25.2→**2.0.0** (two PRs, #296 and #298) |
 | Security fixes | 4 | #323 and #332 are **duplicate** path-traversal and dangerous-assert fixes; #309 transformers; #353 presidio unblock for #342 |
 | New scanners | 7 | #346 AgentThreatRules; #350 AgentEscalation; #351 AgentMemoryPoisoning; #352 CredentialExfiltration; #327 ToolCallAudit; #288 Regex vault support; #322 BanSubstrings Pydantic v2 |
 | Bug fixes | 4 | #335 secrets redaction offset errors; #339 MaliciousURLs `top_k`; #308 json-repair; #317 feedback capture |
 | Docs | 4 | #328, #334, #354, #333 (MiniMax examples) |
 | Architecture | 1 | **#252 "Minify LLM-Guard and Lazy-Load Heavy Dependencies", open since 2025-06-03** |
 
-#252 is the one that would most reduce the 4.2 GB image, and it has sat for fifteen months.
+#252 is the one that would most reduce the 4.2 GB image, and it has sat for fifteen months. Section
+3 measures what it would have been worth.
 
 Worth noting for the workshop narrative: PRs #350, #351 and #352 are literally agent-escalation,
 memory-poisoning and credential-exfiltration scanners, filed by one outside contributor
@@ -219,35 +219,37 @@ was still trying to extend the tool into agent security on the day it was closed
 | best llm-guard fork | | none | not measurable | **2** |
 
 Every fork that survived had an institution behind it **before the first commit**, not after.
-Bandit is the cheapest successful case and it still needed an existing organization (PyCQA) with
-governance and a shared CI estate to move into. llm-guard has 21 contributors, 81% of the commits
-from one person, and nothing to move into.
+Bandit is the cheapest successful case and it still needed an existing organization with governance
+and a shared CI estate to move into. llm-guard has 21 contributors, 81% of commits from one person,
+and nothing to move into.
 
 ### The sharper question: has anyone sustained a fork of a tool an acquirer deliberately retired?
 
-The three Linux Foundation forks above are **relicense forks**, not abandonment forks. Terraform,
-Vault and Redis were all still actively developed when they were forked. What triggered each fork
-was a license change that threatened downstream commercial users, which produced an immediate,
-well-funded coalition with an existing product dependency and a legal reason to act. That is a
-different situation from llm-guard in every respect that matters: the code was alive, the community
-was large, and the forkers were companies with revenue at risk.
+The three Linux Foundation forks above are **relicense forks, not abandonment forks**. Terraform,
+Vault and Redis were all actively developed when they were forked. What triggered each fork was a
+license change that threatened downstream commercial users, which produced an immediate, well-funded
+coalition with an existing product dependency and a legal reason to act. That is different from
+llm-guard in every respect that matters: the code was alive, the community was large, and the
+forkers were companies with revenue at risk.
 
-I could not find a case of a *successfully sustained community fork of a security tool that an
-acquirer deliberately retired*. The honest statement is that my sources do not contain one, not
-that none exists (WebSearch was unavailable, see the verification-gap section). What I can measure
-is that llm-guard is not becoming one: fourteen months after the code froze and two and a half
-months after the archive, 326 unique forks exist, 60 have been pushed since the archive, 22 have
-any star at all, and the maximum is two.
+I could not find a case of a successfully sustained community fork of a security tool that an
+acquirer deliberately retired. The honest statement is that my sources do not contain one, not that
+none exists; WebSearch was unavailable for this report (see the verification-gap section).
+
+What I can measure is that llm-guard is not becoming one. Fourteen months after the code froze and
+two and a half months after the archive: 326 unique forks, 60 pushed since the archive, 22 with any
+star, maximum 2.
 
 Twenty-one forks bothered to rename themselves, which is the clearest available signal of intent to
 take over: `llm-guard-enhanced`, `sigma-guard`, `Tueri`, `llm-guard-extended`, `aiops-llm-guard`,
-`llm-guard-with-stateless-anonymization`, `llm-Sec`, `llm-guard-Ascend`, and thirteen others. Not
-one accumulated more than one star.
+`llm-guard-with-stateless-anonymization`, `llm-Sec`, `llm-guard-Ascend`, `llm-guard-cont`,
+`llm-guard-sfc`, `AA-llm-guard`, `app-llm-guard`, `llm-guard-base`, `llm-guard-dev`,
+`agentic-ai-chatbot-defense`, `sight`, and five others. Not one accumulated more than one star.
 
 ### The retire-versus-lead-generation pattern, checked against the evidence
 
-The team lead's framing is that across recent AI-security acquisitions, open source survived where
-it was lead generation and was archived where it substituted for the paid runtime product. The
+The framing from the team lead is that across recent AI-security acquisitions, open source survived
+where it was lead generation and was archived where it substituted for the paid runtime product. The
 Protect AI portfolio is consistent with that, with one correction.
 
 | Repo | Stars | Archived | Last push | Last commit | Relationship to the paid product |
@@ -263,12 +265,12 @@ The two archived repos are the two runtime guardrail products. The four left pub
 exploit collections and scan-time tools, which generate leads and cost nothing to leave up. The
 pattern holds.
 
-**The correction: rebuff was already dead before the acquisition.** Its last commit is 2024-01-25
-and its last push 2024-08-07, both well before the deal closed on 2025-07-22. GitHub's API returns
+**Correction: rebuff was already dead before the acquisition.** Its last commit is 2024-01-25 and its
+last push 2024-08-07, both well before the deal closed on 2025-07-22. GitHub's API returns
 `archived_at: null` for both rebuff and llm-guard, so I cannot date the archive *action* for either
-and cannot say whether PAN set rebuff's flag or Protect AI did. What is measurable is that rebuff
-was abandoned eighteen months before PAN arrived, so it is weak evidence for a deliberate-retirement
-thesis. llm-guard is the strong case: it was still taking contributions the week it was closed.
+and cannot attribute either flag to PAN rather than to Protect AI. Rebuff was abandoned eighteen
+months before PAN arrived, so it is weak evidence for a deliberate-retirement thesis. **llm-guard is
+the strong case**: it was still taking contributions the week it was closed.
 
 **"Not archived" carries no signal here.** `modelscan` has been untouched for seven months and
 `vulnhuntr` for nineteen. The entire Protect AI open-source portfolio is cold. A fork decision that
@@ -279,12 +281,13 @@ rests on "at least modelscan is still open" is resting on a flag nobody has both
 Issue #347, filed 2026-07-01 by `orenk9`, tracks a release **`v0.3.16+aidealy.5`**. Its changelog is
 a precise inventory of the work this report is costing:
 
-- Fixed: resolve ONNX repos to local snapshot paths before `from_pretrained` (the `HF_HUB_OFFLINE`
-  failure, which is the same bug your `images/llm-guard/Dockerfile` header documents)
-- Changed: default `TokenLimit` encoding to `o200k_base`; **pin `transformers` to 4.57.x**; refresh
-  lockfiles; exclude `onnxruntime-gpu` on macOS; point `llm-guard-api` at the Aidealy fork; require
-  `orjson` in download-models; CI workflow permission and action bumps
-- Security: regenerate locks for cryptography, pygments and requests advisories; document
+- **Fixed:** resolve ONNX repos to local snapshot paths before `from_pretrained` (the
+  `HF_HUB_OFFLINE` failure, which is the same bug your `images/llm-guard/Dockerfile` header
+  documents, and which optimum 2.0 / optimum-onnx 0.1.0 introduced)
+- **Changed:** default `TokenLimit` encoding to `o200k_base`; **pin `transformers` to 4.57.x**;
+  refresh lockfiles; exclude `onnxruntime-gpu` on macOS; point `llm-guard-api` at the Aidealy fork;
+  require `orjson` in download-models; CI workflow permission and action bumps
+- **Security:** regenerate locks for cryptography, pygments and requests advisories; document
   `pip-audit` ignores; `apt-get upgrade` in the API Docker images for base-layer CVEs
 
 That fork is **not on PyPI** (`llm-guard-aidealy`, `aidealy-llm-guard`, `llmguard` and
@@ -292,7 +295,93 @@ That fork is **not on PyPI** (`llm-guard-aidealy`, `aidealy-llm-guard`, `llmguar
 repositories. This is a company keeping a private copy alive for its own product, which is the
 realistic model for a tool in this position, and it is not a community fork by any definition.
 
-## 1.7 The costed answer
+## 1.7 The exact-pin structure: the strongest argument against forking
+
+Seven of the 13 direct requirements are exact `==` pins. This is the mechanism that converts routine
+dependency hygiene into source maintenance, and it is why the SAFE number below is not zero.
+
+**Why an exact pin is different from a range.** With `torch>=2.4.0`, a CVE in torch is fixed by
+re-running your lock. Nobody edits llm-guard. With `transformers==4.51.3`, the same CVE requires
+editing `pyproject.toml` **inside llm-guard**, which means you must own a fork, run its test suite,
+cut a release and republish. One character in a version specifier is the difference between a
+lockfile refresh and becoming a maintainer.
+
+### What each pin would actually cost on a routine security bump
+
+| Pin | Edit | Test | Release | Risk |
+|---|---|---|---|---|
+| **`presidio-anonymizer==2.2.358`** | `pyproject.toml`, and `presidio-analyzer` in lockstep (they version together) | Anonymize / Deanonymize / Sensitive scanner suites; presidio 2.2.362 changes analyzer registry behavior, and #337 shows the `language` handling is already fragile | fork release + PyPI + container rebuild | **Highest. Worked example below.** |
+| **`presidio-analyzer==2.2.358`** | same edit, same PR | additionally drags the `spacy` model pin; a spaCy minor can invalidate the downloaded `en_core_web_*` model | same | High. Pulls a second ML stack with it. |
+| **`transformers==4.51.3`** | `pyproject.toml`; 4.51→4.57 is six minors | every model-loading scanner; `tokenizers` compat range moves with it; the ONNX loader path via `optimum` must be re-validated | same, plus re-bake the model image | **Most CVEs (18), lowest real exploitability for you.** See below. |
+| **`optimum[onnxruntime]==1.25.2`** | `pyproject.toml`; dependabot #296/#298 propose **2.0.0**, a major | 2.0 split ONNX support into a separate `optimum-onnx` package. Issue #347 documents that `optimum-onnx` 0.1.0 **breaks offline ONNX loading** by looking for a non-existent `refs/<commit>` file in a baked HF cache | same | **Highest blast radius.** This is exactly your architecture. |
+| **`bc-detect-secrets==1.5.43`** | `pyproject.toml` | Secrets scanner suite; the plugin registry is version-sensitive | same | Low. Rarely advises. |
+| **`json-repair==0.44.1`** | `pyproject.toml`; PR #308 already proposes it | JSON output scanner | same | Low, but it carries 1 CVE today and the fix is already written. |
+| **`regex==2024.11.6`** | `pyproject.toml` | every regex-based scanner, including **your C5 output guard** | same | Low velocity, but the pin is two years stale. |
+
+### The worked example: `presidio-anonymizer` holds `cryptography` hostage
+
+The chain, all of it measured:
+
+1. `llm-guard==0.3.16` pins `presidio-anonymizer==2.2.358` exactly.
+2. `presidio-anonymizer` 2.2.358's own requirement caps `cryptography`. The resolver lands on
+   **`cryptography==44.0.3`**.
+3. `cryptography==44.0.3` carries **6 unique CVEs** per OSV today, including CVE-2026-26007.
+4. The fix is to allow `presidio-anonymizer>=2.2.362`, which permits `cryptography>=46.0.5`.
+5. That fix **already exists**. It is filed as issue **#342** (2026-05-21) and as pull request
+   **#353** (2026-07-08).
+6. PR #353 was opened **on the day the repository was archived**. It will never merge.
+
+So the sequence to remediate one CVE in your TLS stack, on an unforked llm-guard, is: you cannot. On
+a forked llm-guard it is: cherry-pick #353, re-resolve, run the Anonymize and Sensitive scanner
+suites, cut a release, rebuild and republish a 4.2 GB container, and redeploy fifty clusters. For a
+one-line version-specifier change, in a scanner you do not use.
+
+**That last clause is the point.** Your deployed configuration runs exactly two scanners, from
+`gitops/ai-layer/resources.yaml`, ConfigMap `llm-guard-scanners`:
+
+```yaml
+input_scanners:
+  - type: PromptInjection
+    params: { threshold: 0.5, model_path: /home/user/models/prompt-injection }
+output_scanners:
+  - type: Regex
+    params: { patterns: [...], is_blocked: true, redact: true, match_type: all }
+```
+
+`PromptInjection` is an ONNX classifier loaded from a local directory. `Regex` is pure regex with no
+model at all. **Neither one touches presidio, spacy, nltk, faker, bc-detect-secrets, tiktoken,
+pandas, pyarrow, datasets or torch for any actual work.** Presidio is dead weight in your deployment,
+and it is nevertheless the thing pinning your `cryptography` version to one carrying six CVEs.
+
+### The one most likely to force your hand first
+
+**`presidio-anonymizer==2.2.358`.** Not because it is the most dangerous, but because it is the one
+where every condition for being forced is already satisfied:
+
+- The blocked package is `cryptography`, which **every** SCA scanner flags, in every report, with a
+  named CVE (CVE-2026-26007). It is not a judgment call you can defer with a documented exception.
+- The remediation is a one-line change, so "it is too hard" is not available as an answer.
+- The remediation is **already written** (PR #353), so "nobody has done the work" is not available
+  either.
+- And it **cannot merge**, because the repository is archived.
+
+That is the whole argument for not forking, compressed into one artifact: a trivial, already-written
+fix for a scanner you do not use, which you can only apply by becoming a maintainer.
+
+**The honest counterpoint on `transformers`.** It carries 18 of the 24 CVEs and has the highest
+advisory velocity in the tree (28 in 24 months). But a large share of transformers advisories
+concern `trust_remote_code`, model conversion utilities, and architectures you do not load. You run
+one local ONNX classifier from a directory with `local_files_only`. The CVE count is alarming and the
+actual exploitability in your configuration is low. Do not let a scanner's transformers count drive
+the fork decision; let the cryptography chain drive it, because that one is real.
+
+**The one with the largest blast radius is `optimum`.** Dependabot #296 and #298 propose 1.25.2 →
+2.0.0. Optimum 2.0 moved ONNX support into a separate `optimum-onnx` package, and issue #347 records
+that `optimum-onnx` 0.1.0 breaks exactly the offline-ONNX-from-baked-cache pattern your Dockerfile
+is built around. If you ever do fork, that is the bump that costs a week, not an hour, and it is
+already sitting in the PR queue waiting for whoever takes over.
+
+## 1.8 The costed answer
 
 ### Keeping a fork merely SAFE
 
@@ -311,7 +400,7 @@ Plus one-off work that cannot be avoided:
 
 | One-off | Estimate | Why |
 |---|---|---|
-| Unpin the 7 exact `==` requirements, re-lock, fix the fallout | **20 to 40 h** | Required before any CVE bump is a one-line change instead of a source edit. `transformers` 4.51.3 to 4.57.x alone crosses a `tokenizers` major. Aidealy has already done this work behind a private fork. |
+| Unpin the 7 exact `==` requirements, re-lock, fix the fallout | **20 to 40 h** | Section 1.7. Required before any CVE bump is a one-line change instead of a source edit. `transformers` 4.51.3 to 4.57.x alone crosses a `tokenizers` major. Aidealy has already done this work behind a private fork. |
 | Python 3.13 and 3.14 support (issue #319, the `<3.13` cap) | **16 to 40 h** | `sentencepiece` is already failing (#320). spaCy 3.8 and presidio set the ceiling, so this is upstream-blocked, not local work. |
 | Clear the 4 open security PRs (#309, #323, #332, #353) | **8 to 16 h** | #323 and #332 are duplicate path-traversal fixes that need reconciling before either can land. |
 
@@ -321,9 +410,9 @@ you do not own and cannot influence upstream.
 
 ### Keeping a fork ALIVE
 
-Measured from what Protect AI actually spent. Forty to seventy commits per month with a median
-issue time-to-close of 67.7 days is the output of roughly **one full-time engineer plus fractional
-help**. When that one person's output fell, the project stopped within three months.
+Measured from what Protect AI actually spent. Forty to seventy commits per month with a median issue
+time-to-close of 67.7 days is the output of roughly **one full-time engineer plus fractional help**.
+When that one person's output fell, the project stopped within three months.
 
 | Activity | Working | h/month |
 |---|---|---|
@@ -344,28 +433,28 @@ Sustaining the pace of the project's actual peak (2023-09 through 2024-05) is **
 datasets. Refreshing it against new injection techniques is an ML workload with data collection,
 labeling, training and evaluation. It has no relationship to the software maintenance numbers above,
 and it is the reason a "maintained fork" of the code still degrades in effectiveness. The Python can
-be perfectly current while the detector ages. The model card itself now carries the archive warning,
-so upstream will not refresh it either.
+be perfectly current while the detector ages. The model card now carries the archive warning, so
+upstream will not refresh it either.
 
 ### The recommendation this produces
 
 **Do not fork it.**
 
 The evidence: 21 contributors with an 81% bus factor; no institution; no fork above two stars
-fourteen months after the code stopped moving; the only serious fork is private and commercial; and
-the tool sits in the category an acquirer retires rather than the category it keeps for lead
-generation. A safe fork is $13k/year forever. An alive fork is a headcount decision. For a workshop
-that uses LLM Guard as one implementation behind a platform-injected guardrail layer, neither is the
-right spend.
+fourteen months after the code stopped moving; the only serious fork is private and commercial; the
+tool sits in the category an acquirer retires rather than the category it keeps for lead generation;
+and the pin structure means even trivial remediation requires maintainership. A safe fork is
+$13k/year forever. An alive fork is a headcount decision. For a workshop that uses LLM Guard as one
+implementation behind a platform-injected guardrail layer, neither is the right spend.
 
 What to do instead, in order:
 
-1. **Pin what you have by digest and stop building from upstream.** Part 2 covers this. It is about
-   a day of work and it removes the entire failure mode.
-2. **Re-evaluate the control, not the library.** Your guard-proxy is the platform-injected layer in
+1. **Pin what you have by digest and stop building from upstream.** Part 2. About a day of work, and
+   it removes the entire failure mode.
+2. **Drop the CUDA payload.** Part 3. One flag, 89% of the image.
+3. **Re-evaluate the control, not the library.** Your guard-proxy is the platform-injected layer in
    the taxonomy. LLM Guard is one implementation behind it, and the taxonomy survives replacing it.
-3. **Track the Aidealy fork through issue #347** rather than starting a third one. Someone is
-   already paying the SAFE cost and publishing the changelog.
+4. **Track the Aidealy fork through issue #347** rather than starting a third one.
 
 ---
 
@@ -400,16 +489,15 @@ matches across the tree. Every image is referenced by mutable tag, including ima
 re-host.
 
 The good news is that you already mirror third-party images into your own namespace
-(`ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim`, `:nginx-1.27-alpine`). The pattern
-exists and is working. The model is the one artifact that still comes from somebody else's server at
-build time.
+(`ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim`, `:nginx-1.27-alpine`). The pattern exists
+and works. The model is the one artifact that still comes from somebody else's server at build time.
 
 ## 2.2 Current state of the model on Hugging Face
 
 | Fact | Value |
 |---|---|
 | Repo | `protectai/deberta-v3-base-prompt-injection-v2` |
-| Status | Up, public, not gated, not disabled (as of 2026-09-22) |
+| Status | Up, public, not gated, not disabled (2026-09-22) |
 | Revision | `90c9989b1a342275dd0d1a95aad283c04e075671` |
 | Last modified | `2026-07-09T16:01:38Z` |
 | Downloads, 30 days | 839,512 |
@@ -435,24 +523,24 @@ Read from `cncf/landscape` `landscape.yml` on 2026-09-22:
 | Harbor | CNCF (registry) | | | `goharbor/harbor` |
 | zot | CNCF (registry) | | | `project-zot/zot` |
 | sigstore / cosign | CNCF | | cosign v3.1.3 (2026-08-06) | `sigstore/cosign` |
-| Kubeflow Model Registry | CNCF (Kubeflow) | | v0.3.17 (2026-09-21) | `kubeflow/model-registry`, redirects to `kubeflow/hub` |
+| Kubeflow Model Registry | CNCF (Kubeflow) | | v0.3.17 (2026-09-21) | `kubeflow/model-registry` → `kubeflow/hub` |
 
 Vendor products, by contrast: Artifactory (JFrog), the Ollama registry, `llmariner`, and MLflow's
 registry as hosted by Databricks. MLflow itself is Apache-2.0 open source.
 
 One stewardship signal worth recording, given the subject of this report: **`iterative/dvc` now
-redirects to `treeverse/dvc`.** The tool you would adopt to escape one vendor's stewardship risk has
+redirects to `treeverse/dvc`**. The tool you would adopt to escape one vendor's stewardship risk has
 itself changed hands. Similarly `jozu-ai/kitops` now redirects to `kitops-ml/kitops` (the CNCF
 donation), `containers/skopeo` to `podman-container-tools/skopeo`, and `kubeflow/model-registry` to
-`kubeflow/hub`. Four of the eight candidate projects have moved organizations. Pin by URL that
+`kubeflow/hub`. Four of the eight candidate projects have moved organizations. Pin by a URL that
 survives a redirect, and do not hardcode an org name in automation.
 
 ### Rank 1: OCI artifact in your own GHCR namespace, digest-pinned, cosign-signed
 
-**Do this one.** Reasons: one trust root, one auth path, the registry you already push to, and it
-composes with both cosign and KServe modelcars if you ever need them. ModelPack even specifies a
-media type for the licensing problem in section 2.5: `application/vnd.cncf.model.doc.v1.tar` is
-defined as "a tar archive that contains documentation files like `README.md`, `LICENSE`, etc."
+**Do this one.** One trust root, one auth path, the registry you already push to, and it composes
+with both cosign and KServe modelcars if you ever need them. ModelPack even specifies a media type
+for the licensing problem in section 2.5: `application/vnd.cncf.model.doc.v1.tar` is defined as "a
+tar archive that contains documentation files like `README.md`, `LICENSE`, etc."
 
 ModelPack's full media type set, from `modelpack/model-spec` `docs/spec.md` on `main`:
 
@@ -498,8 +586,8 @@ cosign sign --yes "ghcr.io/peopleforrester/watch-it-burn@$DIGEST"
 #    then: COPY --from=model /pi-model /home/user/models/prompt-injection
 ```
 
-**One verified constraint: GHCR does not implement the OCI referrers API.** A referrers query
-against the real digest of your llm-guard image returns
+**One verified constraint: GHCR does not implement the OCI referrers API.** A referrers query against
+the real digest of your llm-guard image returns
 `{"errors":[{"code":"MANIFEST_UNKNOWN","message":"manifest unknown"}]}` with HTTP 404, while
 `GET /v2/` on the same token returns 200. So cosign signatures and attestations on GHCR land under
 the fallback `sha256-<digest>.sig` tag scheme rather than as referrers. That works. Two consequences:
@@ -509,10 +597,10 @@ CNCF.
 
 ### Rank 2: Object store mirror plus a checksum manifest
 
-`aws s3 cp --recursive` the snapshot into a bucket you own, keep `pi-model.SHA256` beside it, and
-have the build verify with `sha256sum -c`. This is the simplest possible thing and needs no new
-tooling. It loses content-addressing, the cosign integration and the registry auth you already have,
-which is the only reason it ranks below the OCI path. Durability is equivalent.
+`aws s3 cp --recursive` the snapshot into a bucket you own, keep `pi-model.SHA256` beside it, and have
+the build verify with `sha256sum -c`. Simplest possible thing, no new tooling. It loses
+content-addressing, the cosign integration and the registry auth you already have, which is the only
+reason it ranks below the OCI path. Durability is equivalent.
 
 ### Rank 3: Sigstore model signing, alongside either of the above
 
@@ -528,33 +616,32 @@ model_signing verify ./pi-model --signature model.sig
 ```
 
 This is the current best practice for signing **model artifacts specifically**, as opposed to cosign
-which signs the OCI wrapper. Use both: `model_signing` attests to the weights themselves and
-survives repackaging, `cosign` attests to the artifact you distribute them in.
+which signs the OCI wrapper. Use both: `model_signing` attests to the weights and survives
+repackaging, `cosign` attests to the artifact you distribute them in.
 
-Caveat to flag: **its last release was 2025-10-10, eleven months ago**, while the repo is actively
-pushed (2026-09-21). Check release cadence before depending on it for anything beyond a workshop.
+Caveat: **its last release was 2025-10-10, eleven months ago**, while the repo is actively pushed
+(2026-09-21). Check release cadence before depending on it beyond a workshop.
 
 ### Rank 4: Private Hugging Face repo mirror (rejected as primary)
 
-`huggingface_hub` v1.32.0 (2026-09-17) makes this trivial and your `snapshot_download` code would
-not change at all. It moves the dependency rather than removing it: same provider, same outage
-domain, same terms of service, same organizational risk. Acceptable as a convenience copy, wrong as
-the durable one.
+`huggingface_hub` v1.32.0 (2026-09-17) makes this trivial and your `snapshot_download` code would not
+change at all. It moves the dependency rather than removing it: same provider, same outage domain,
+same terms of service, same organizational risk. Acceptable as a convenience copy, wrong as the
+durable one.
 
-Useful mechanics from the current `huggingface_hub` docs regardless of which option you pick:
+Useful mechanics from the current docs regardless of which option you pick:
 
-- `revision=` accepts a **full-length commit hash** (7-character short hashes are rejected)
+- `revision=` accepts a **full-length commit hash**; 7-character short hashes are rejected
 - `local_dir=` writes the original file structure instead of the blob cache, which is what you want
   for a container layer
-- `hf download --dry-run` reports what would be fetched and how many bytes, which is a cheap
-  pre-flight in CI
-- `hf_xet` replaced the deprecated `hf_transfer` as the fast download path, and it queries the CAS
-  by **the LFS SHA256 of each file**, which is the same hash you pin against
+- `hf download --dry-run` reports what would be fetched and how many bytes, a cheap CI pre-flight
+- `hf_xet` replaced the deprecated `hf_transfer` as the fast download path, and it queries the CAS by
+  **the LFS SHA256 of each file**, which is the same hash you pin against
 
 ### Rank 5: Git LFS, DVC, MLflow, Kubeflow Model Registry (real, but oversized here)
 
 Kubeflow Model Registry (v0.3.17, 2026-09-21) and MLflow (28,096 stars, actively pushed) are genuine
-registries with lineage, staging and promotion. For a single 1.4 GB classifier that ships inside one
+registries with lineage, staging and promotion. For a single classifier that ships inside one
 container image, each is a new system to run, back up and patch. Revisit if the workshop ever serves
 more than one model. DVC carries the stewardship note above.
 
@@ -591,8 +678,7 @@ spec:
 The docs are explicit that you must use a **specific tag rather than `latest`**, because `latest` (or
 no tag) forces `imagePullPolicy: Always`, which re-downloads the model on every pod restart and
 scale-up and destroys the local caching that is the entire point of the feature. Not applicable to
-your current guard-proxy architecture, but it is a reason to prefer the Rank 1 OCI path if that ever
-changes.
+your current guard-proxy architecture, but a reason to prefer the Rank 1 OCI path if that changes.
 
 ## 2.4 The same question for Python packages and the base image
 
@@ -613,8 +699,8 @@ pip download -r requirements.lock --require-hashes -d ./wheelhouse
 pip install --no-index --find-links ./wheelhouse -r requirements.lock
 ```
 
-Scope it with `--platform` and `--only-binary=:all:` or the wheelhouse carries the full 3.4 GB
-torch and CUDA payload.
+Scope it with `--platform` and `--only-binary=:all:`, and do the Part 3 CPU-index change first, or
+the wheelhouse carries the full 2,748 MB CUDA payload.
 
 **A running mirror** is the heavier option: **devpi** (1,223 stars, pushed 2026-08-10; the GitHub API
 reports no SPDX license, so read `LICENSE` in-tree before adopting) or Artifactory (vendor). For a
@@ -645,12 +731,11 @@ the per-platform one.
 ### What the licenses actually are
 
 - `protectai/deberta-v3-base-prompt-injection-v2`: **Apache-2.0**. A full `LICENSE` file (10,172
-  bytes, the standard Apache License 2.0 text) is in the repo. **There is no `NOTICE` file** in the
-  file listing.
+  bytes, the standard Apache License 2.0 text) is in the repo. **There is no `NOTICE` file.**
 - Its base model `microsoft/deberta-v3-base`: **MIT** (HF API `cardData.license`). The lineage
   carries two licenses.
 - The model card lists seven training datasets with their own terms. Those govern the training, not
-  your redistribution of the weights, but a downstream user may ask about them.
+  your redistribution of the weights, but a downstream user may ask.
 
 ### Obligations when you bake the weights into a public image
 
@@ -663,9 +748,9 @@ the per-platform one.
 | 5 | Carry the MIT notice for the base model | MIT terms | **CHECK.** MIT requires the copyright and permission notice travel with the Software. The derived weights ship under Apache-2.0, the license Protect AI chose, so retaining their `LICENSE` and model card satisfies the practical case |
 | 6 | Do not use "Protect AI" or "Palo Alto Networks" marks to imply endorsement | Apache-2.0 section 6 | **FINE.** Your image tag is `watch-it-burn:llm-guard-*`, which names the project, not the vendor |
 
-**Baking Apache-2.0 weights into a public container image creates no obligation beyond items 1, 2
-and 4.** Apache-2.0 is not copyleft. There is no source-disclosure trigger and nothing propagates to
-the rest of the image or to the other software in it.
+**Baking Apache-2.0 weights into a public container image creates no obligation beyond items 1, 2 and
+4.** Apache-2.0 is not copyleft. There is no source-disclosure trigger and nothing propagates to the
+rest of the image or to the other software in it.
 
 ### The fix
 
@@ -689,8 +774,8 @@ llm-guard's `model_path` parameter loads them with `local_files_only`.
 |---|---|---|
 | Model revision | HF commit SHA | `revision="90c9989b1a342275dd0d1a95aad283c04e075671"` (full length; short hashes are rejected) |
 | Model weights | LFS sha256, readable without downloading | `model.safetensors` = `6521cb8d0ac08148c81464899c424e6148fcc62befa371089fa4061d8b6e0424` (737,719,272 B); `onnx/model.onnx` = `f0ea7f239f765aedbde7c9e163a7cb38a79c5b8853d3f76db5152172047b228c` (738,563,188 B) |
-| How to read those | | `curl -s https://huggingface.co/<repo>/raw/main/<file>` returns the Git LFS pointer, which carries `oid sha256:...` and `size`. No download required. |
-| Model directory | in-toto manifest, Sigstore keyless | `model_signing sign ./pi-model` then `model_signing verify ./pi-model --signature model.sig` |
+| How to read those | | `curl -s https://huggingface.co/<repo>/raw/main/<file>` returns the Git LFS pointer, carrying `oid sha256:...` and `size`. No download required. |
+| Model directory | in-toto manifest, Sigstore keyless | `model_signing sign ./pi-model`, then `model_signing verify ./pi-model --signature model.sig` |
 | OCI artifact | digest plus signature | `crane digest`, reference `@sha256:...`, `cosign sign`. Fallback tag scheme on GHCR, not referrers. |
 | Python deps | per-wheel sha256 | `uv pip compile --generate-hashes`, install with `--require-hashes` |
 | Base images | digest | `crane copy src@digest`, reference `@sha256:` in `gitops/` |
@@ -698,8 +783,196 @@ llm-guard's `model_path` parameter loads them with `local_files_only`.
 
 Current best practice for signing model artifacts specifically is the Sigstore model-transparency
 route, because the signature covers a per-file hash manifest of the weights and therefore survives
-repackaging: the weights can move from an HF snapshot to an OCI artifact to a container layer and
-the same signature still verifies. Use cosign in addition, for the distribution wrapper.
+repackaging: the weights can move from an HF snapshot to an OCI artifact to a container layer and the
+same signature still verifies. Use cosign in addition, for the distribution wrapper.
+
+---
+
+# PART 3: The 4.2 GB image, and how to make it about 1 GB
+
+Measured because we run one of these per attendee cluster, up to fifty at once.
+
+## 3.1 What the 4,211 MB is made of
+
+`ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-offline.2`, linux/amd64 manifest, measured
+with `crane manifest --platform linux/amd64`:
+
+- **15 layers, 4,211 MB compressed**
+- One layer is **3,364 MB** (`sha256:515f284b90f68990e...`)
+- One layer is **679 MB** (`sha256:0f3a5081f6820878c...`), which is the baked model
+- The remaining 13 layers total about 168 MB
+
+The 3,364 MB layer is the Python dependency install. Measured against PyPI wheel sizes for the exact
+resolved versions:
+
+| GPU-only wheel | MB |
+|---|---|
+| nvidia-cudnn-cu13 | 651.0 |
+| nvidia-cublas | 542.8 |
+| triton | 248.1 |
+| nvidia-cusolver | 223.5 |
+| nvidia-cusparselt-cu13 | 221.1 |
+| nvidia-nccl-cu13 | 216.0 |
+| nvidia-cufft | 214.1 |
+| nvidia-cusparse | 162.2 |
+| nvidia-cuda-nvrtc | 90.2 |
+| nvidia-curand | 62.0 |
+| nvidia-nvshmem-cu13 | 60.4 |
+| nvidia-nvjitlink | 42.5 |
+| nvidia-cuda-cupti | 10.7 |
+| nvidia-cuda-runtime | 2.3 |
+| nvidia-cufile | 1.2 |
+| nvidia-nvtx | 0.1 |
+| **CUDA/GPU total** | **2,748.0** |
+
+Plus `torch==2.14.0` itself at **554.6 MB** (the CUDA-linked build). **2,748 + 555 = 3,303 MB**, which
+accounts for the observed 3,364 MB layer almost exactly.
+
+**Roughly 78% of the entire image is CUDA.** It runs on t3.2xlarge nodes, which have no GPU.
+
+## 3.2 Does the ONNX inference path need torch at runtime?
+
+This is the load-bearing question, so I read the source rather than assuming. Answers from
+`git show v0.3.16:...` on the bare clone.
+
+**Does it need CUDA? No.** `_ort_model_for_sequence_classification` in `llm_guard/transformers_helpers.py`
+selects the provider:
+
+```python
+provider = "CPUExecutionProvider"
+package_name = "optimum[onnxruntime]"
+if device().type == "cuda":
+    package_name = "optimum[onnxruntime-gpu]"
+    provider = "CUDAExecutionProvider"
+```
+
+On a CPU node it takes the first branch every time. The CUDA wheels are never loaded, never linked,
+never read. They are 2.7 GB of files that exist so that one `if` can evaluate to false.
+
+**Does it need torch? Yes, and eagerly.** Two mechanisms, both verified:
+
+1. `llm_guard/util.py:102-109` implements the probe itself in torch:
+   ```python
+   def device():
+       torch = cast("torch", lazy_load_dep("torch"))
+       if torch.cuda.is_available():
+           return torch.device("cuda:0")
+       elif torch.backends.mps.is_available():
+           return torch.device("mps")
+       return torch.device("cpu")
+   ```
+   So torch is imported on every model load purely to answer "is there a GPU". In your deployment it
+   is used for nothing else.
+
+2. Worse, the import is **not lazy at package level**.
+   `llm_guard/output_scanners/__init__.py` line 19 does `from .relevance import Relevance`, and
+   `llm_guard/output_scanners/relevance.py` line 6 is a bare top-level `import torch`. So
+   `import llm_guard` pulls torch eagerly, for every scanner, including your pure-Regex output guard.
+   The `lazy_load_dep` machinery elsewhere in the package is defeated by that one line.
+
+Only three files in the whole package reference torch: `util.py` (the device probe),
+`output_scanners/relevance.py` and `output_scanners/factual_consistency.py`. You use neither
+scanner.
+
+**Third constraint: `optimum` itself requires torch.** Resolving `onnxruntime + optimum +
+transformers` with no llm-guard at all still produces 48 packages including torch and all 15 CUDA
+wheels. You cannot escape torch while using optimum's ONNX loader, which is what llm-guard uses.
+
+## 3.3 Is there a documented CPU-only install?
+
+Yes for the CUDA wheels, no for torch itself.
+
+llm-guard's own warning text documents the split (`transformers_helpers.py`):
+
+> `pip install llm-guard[onnxruntime]` for CPU or `pip install llm-guard[onnxruntime-gpu]` for GPU
+
+But that extra only selects the `optimum` variant. It does **not** control which torch build gets
+resolved, and the default PyPI `torch` wheel declares the NVIDIA wheels as hard dependencies.
+Dropping them is a resolver-level change, not an extras change: point at PyTorch's CPU index.
+
+Measured, all four resolutions run on 2026-09-22 with `uv pip compile --python-version 3.12`:
+
+| Stack | Packages | NVIDIA wheels | Wheel payload |
+|---|---|---|---|
+| `llm-guard[onnxruntime]==0.3.16`, default PyPI (**what you ship**) | 119 | 15 | **3,549 MB** |
+| same, with `--extra-index-url https://download.pytorch.org/whl/cpu --index-strategy unsafe-best-match` | 100 | **0** | **399 MB** |
+| `optimum + transformers + onnxruntime`, CPU index, no llm-guard | 29 | 0 | 241 MB |
+| `onnxruntime + tokenizers + numpy` only (direct ONNX, no optimum) | 18 | 0 | **59 MB** |
+
+The CPU index resolves `torch==2.14.0+cpu`, whose wheel is **159.3 MB** against 554.6 MB for the
+default build, and drops all 15 NVIDIA wheels plus `triton` outright.
+
+**One flag removes 3,150 MB of wheels, 89% of the dependency payload**, and changes no llm-guard
+source at all. It is a build-arg change in `images/llm-guard/Dockerfile`, not a fork.
+
+## 3.4 What a minimal image would weigh
+
+All three figures below are **approximate**. They are derived from measured wheel sizes plus a
+measured base-image size, not from a built image, because building and pushing a 4 GB image to
+validate the estimate was out of scope for this research pass. Installed size runs above wheel size,
+though for this tree the large components are already-compressed shared objects, so the ratio is
+closer to 1.2x than to the usual 2 to 3x.
+
+| Build | Composition | Approximate compressed image |
+|---|---|---|
+| **Today** (measured, not estimated) | base + 3,549 MB wheels + 750 MB model | **4,211 MB** |
+| **CPU-index torch**, everything else unchanged | base + 399 MB wheels + 750 MB model | **~1,050 to 1,250 MB** |
+| **Minimal**: direct ONNX inference, no optimum, no torch, no presidio/spacy/nltk | base + ~60 MB wheels + 750 MB model | **~900 to 1,000 MB** |
+
+Base is `python:3.12-slim`, roughly 45 MB compressed. Model is `onnx/model.onnx` at 738.6 MB plus
+about 11 MB of tokenizer files.
+
+**The two conclusions that matter:**
+
+1. **The one-flag change gets you 95% of the available savings.** Once CUDA is gone, the 750 MB model
+   dominates, so the minimal rebuild is only about 150 MB better than the CPU-index build and costs a
+   fork plus a rewrite of the scanner loading path. Not worth it.
+
+2. **Doing both the CPU-index change and the model mirror from Part 2 in the same rebuild** is the
+   efficient sequencing, because both touch `images/llm-guard/Dockerfile` and both require one image
+   rebuild and one fleet redeploy.
+
+### Fleet impact
+
+At 50 clusters, each pulling the guard image at least once, the CPU-index change removes roughly
+**3.1 GB per pull**. Whether that is 50 pulls or more depends on node count and scheduling, which I
+did not measure, so I am giving the per-pull figure rather than a fleet total. The effects worth
+naming, in rough order of how much they will be felt on workshop day:
+
+- **Cold-start time per cluster.** A 4.2 GB pull against a 1.1 GB pull is the single largest
+  contributor to how long a freshly provisioned cluster takes to become usable.
+- **Node disk.** 4.2 GB compressed unpacks to substantially more on the node filesystem. On default
+  gp3 root volumes that is a real fraction of the disk for one pod.
+- **Registry egress and rate limits.** Fifty concurrent 4.2 GB pulls from GHCR is a different traffic
+  profile than fifty 1.1 GB pulls.
+
+### The change
+
+```dockerfile
+# images/llm-guard/Dockerfile (or the base image it builds FROM)
+RUN pip install --no-cache-dir \
+      --extra-index-url https://download.pytorch.org/whl/cpu \
+      "llm-guard[onnxruntime]==0.3.16"
+```
+
+With `uv`, add `--index-strategy unsafe-best-match` so the CPU index is consulted alongside PyPI
+rather than shadowing it. Verify the result rather than trusting the build log:
+
+```bash
+docker run --rm <image> python -c "import torch; print(torch.__version__)"   # expect 2.14.0+cpu
+docker run --rm <image> sh -c 'ls /usr/local/lib/python3.12/site-packages | grep -c nvidia'  # expect 0
+crane manifest --platform linux/amd64 <image> | jq '[.layers[].size] | add/1e6'
+```
+
+Then re-run `verify/input-guard.sh` against a live cluster before the change is trusted, because the
+provider selection path is exactly what this touches.
+
+**One caution, stated once.** `torch==2.14.0+cpu` is a different build, not a different version. The
+ONNX inference path does not use torch for computation, so the classifier's outputs should be
+bit-identical, but "should be" is a prediction and the C6 challenge depends on the threshold at 0.5
+behaving exactly as it does now. Run the input-guard verification against a real cluster before the
+change goes into a workshop, and compare scores on a few known-positive and known-negative prompts
+rather than only checking that the pod starts.
 
 ---
 
@@ -707,28 +980,33 @@ the same signature still verifies. Use cosign in addition, for the distribution 
 
 - **WebSearch was unavailable for this entire report.** The session had exhausted its 50-call budget
   before this task started. Everything above is verified against the GitHub API, `cncf/landscape`
-  `landscape.yml`, PyPI, OSV, the Hugging Face API, and WebFetch of canonical documentation pages.
-  No general web search was run. Anything a search would have surfaced that is not in those sources
-  is absent here. This matters most for section 1.6: my statement that I found no successfully
-  sustained community fork of a deliberately retired security tool is a statement about my sources,
-  not a proof of absence.
+  `landscape.yml`, PyPI, OSV, the Hugging Face API, PyTorch's own wheel index, the llm-guard source
+  at tag `v0.3.16`, this repo's working tree, and WebFetch of canonical documentation pages. No
+  general web search was run. This matters most for section 1.6: my statement that I found no
+  successfully sustained community fork of a deliberately retired security tool is a statement about
+  my sources, not a proof of absence.
+- **The minimal-image weights in section 3.4 are estimates, and labeled as such.** The 4,211 MB
+  current figure is measured from the live manifest. The 1,050 to 1,250 MB and 900 to 1,000 MB
+  figures are derived from measured wheel sizes and a measured base-image size, not from a built
+  image.
+- **Whether `torch==2.14.0+cpu` changes classifier scores.** It should not, because the ONNX runtime
+  does the inference and torch is only used for the device probe. I did not run the model both ways
+  to confirm, and section 3.4 says so at the point of use.
 - **Archive dates for `llm-guard` and `rebuff`.** GitHub's API returns `archived_at: null` for both,
-  so I can date the last push and the last commit but not the archive action itself, and I cannot
-  attribute either archive to PAN rather than to Protect AI.
+  so I can date the last push and the last commit but not the archive action, and I cannot attribute
+  either flag to PAN rather than to Protect AI.
 - **ModelPack's current spec version number.** Neither `modelpack.org` nor `modelpack/model-spec`
   states one, and the spec repo has published no releases. The media types above are read from
   `docs/spec.md` on `main`.
 - **KitOps ModelKit spec version.** The docs page says v0.1 with no date.
 - **Whether GHCR plans referrers API support.** I measured that it does not have it today (404
   `MANIFEST_UNKNOWN` on a real digest while `/v2/` returns 200). I have no roadmap source.
-- **The Aidealy fork's location, license and terms.** Not on PyPI under the obvious names, not in
-  the public fork list, and its filer `orenk9` has no public repositories. Everything I have about
-  it comes from the text of issue #347.
+- **The Aidealy fork's location, license and terms.** Not on PyPI under the obvious names, not in the
+  public fork list, and its filer `orenk9` has no public repositories. Everything I have about it
+  comes from the text of issue #347.
 - **Whether the 21 GitHub-reported contributors and the 27 git authors reconcile exactly.** They
   differ because of unmatched email identities. The 81% single-author figure holds under either
   count.
-- **The brief's "54 forks pushed since the archive."** I measured 60 unique out of 326 unique forks.
-  The delta is consistent with a different measurement date and with GitHub's fork listing returning
-  duplicate rows under pagination (467 rows, 326 distinct names). Not material to any conclusion.
+- **Node count and total fleet egress for section 3.4.** I measured per-pull savings only.
 - **`devpi`'s license.** The GitHub API reports no SPDX identifier. Read `LICENSE` in-tree before
   adopting it.

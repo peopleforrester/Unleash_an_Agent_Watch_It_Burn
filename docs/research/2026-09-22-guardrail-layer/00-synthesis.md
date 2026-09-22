@@ -198,11 +198,32 @@ re-evaluate the control rather than the library.
 
 ## What this means for our decisions
 
-**Decision A (give the offline image a home): still yes, with a new question first.** The image is
-**4,211 MB compressed across 15 layers**, one layer of 3,364 MB (the Python ML stack, including 15
-CUDA wheels we never execute on a CPU-only ONNX path) and 679 MB of model weights. We ship that to up
-to fifty clusters. Settle the size before the publish, because recommending a 4.2 GB image is a
-different act from recommending a lean one. (#413)
+**Decision A (give the offline image a home): still yes, and the size question has a one-flag answer.**
+The image is **4,211 MB compressed across 15 layers**. Measured composition: **roughly 78% of it is
+CUDA**, on nodes that have no GPU. `llm_guard/transformers_helpers.py` selects
+`CUDAExecutionProvider` only when a GPU is present and takes the CPU branch every time on a
+t3.2xlarge, so those wheels are never loaded or linked.
+
+Four dependency resolutions run 2026-09-22 with `uv pip compile`:
+
+| Stack | Packages | NVIDIA wheels | Wheel payload |
+|---|---|---|---|
+| what we ship today | 119 | 15 | **3,549 MB** |
+| same, plus `--extra-index-url https://download.pytorch.org/whl/cpu` | 100 | **0** | **399 MB** |
+| optimum + transformers + onnxruntime, no llm-guard | 29 | 0 | 241 MB |
+| onnxruntime + tokenizers + numpy, direct ONNX | 18 | 0 | 59 MB |
+
+**One index flag removes 3,150 MB, 89% of the dependency payload, and changes no llm-guard source.**
+It is a build argument in `images/llm-guard/Dockerfile`, not a fork. Estimated image afterwards:
+**~1,050 to 1,250 MB**, approximate because it is derived from measured wheel sizes rather than a
+built image.
+
+The minimal rebuild (direct ONNX, no optimum, no torch, no presidio or spaCy) saves only about another
+150 MB, because once CUDA is gone the 750 MB model dominates, and it costs a fork plus a rewrite of
+the scanner loading path. Not worth it.
+
+Sequencing: do the CPU-index change and the model mirror from report 04 in the SAME rebuild. Both
+touch the same Dockerfile and both need one image build and one fleet redeploy. (#413, #414)
 
 **Decision B (fork and maintain): the deferral is now costed and the answer is no.** $13k/year
 forever for a library we do not own, no institution behind it, no fork above two stars, and a detector
