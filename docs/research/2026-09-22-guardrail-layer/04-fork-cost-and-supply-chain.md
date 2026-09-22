@@ -51,7 +51,7 @@ code had been frozen for **ten months** before the archive notice went up, and t
 
 The ML-heavy share is `torch`, `transformers`, `tokenizers`, `safetensors`, `onnx`, `onnxruntime`,
 `optimum`, `presidio-analyzer`, `presidio-anonymizer`, `spacy` plus its nine support packages
-(thinc, blis, cymem, murmurhash, preshed, srsly, catalogue, confection, wasabi), `nltk`, `numpy`,
+(thinc, blis, cymem, murmurhash, preshed, srsly, catalogue, confection, wasabi), `nltk`, `numpy`, <!-- lexicon: catalogue is a PyPI package name -->
 `datasets`, `pyarrow` and `pandas`. That is roughly **40 of 119 packages, 34% by count**, and
 effectively all of the weight.
 
