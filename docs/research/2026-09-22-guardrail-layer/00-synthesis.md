@@ -35,7 +35,7 @@ Every date verified against a primary source.
 | **2026-06-17** | **guard-proxy's first commit here** (`db3ed42`) |
 | 2026-07-08 / 09 | Protect AI archives LLM Guard. Last push 2026-07-08T23:58:40Z; the banner reads Jul 9 |
 | **2026-08-25** | agentgateway merges API-key scoped budgets (PR #3143) |
-| 2026-08-27 | agentgateway v1.5.0 ships them. v1.4.1's schema has no `Budget`; v1.5.0's does |
+| 2026-08-27 | agentgateway v1.5.0 ships them. v1.4.1's schema has no `Budget`; v1.5.0's does. Ancestry checked: commit `67906b4` is not in v1.4.0 and is 22 behind v1.5.0, so v1.5.0 contains it |
 | 2026-09-08 | We run Portland |
 | 2026-09-10 | Envoy AI Gateway becomes Agent Router and joins AAIF |
 
@@ -57,7 +57,7 @@ guard-proxy's eight jobs against the field:
 | 3 | Hard USD spend cap | Yes, once | LiteLLM, pre-call. agentgateway post-hoc. Kong Enterprise only |
 | 4 | Rate limiting | Yes | Least contested cell in the study |
 | 5 | Model tier switch | Yes | Every proxy and gateway |
-| 6 | Fail closed | Partly | Explicit in ours; undocumented in LiteLLM; per-policy in agentgateway |
+| 6 | Fail closed | Yes | LiteLLM's `generic_guardrail_api` defaults to `unreachable_fallback="fail_closed"` with `fail_on_error=True`; per-policy in agentgateway. An earlier pass recorded this as undocumented from a search that was too narrow |
 | 7 | OTel gen_ai spans with content | Yes | LiteLLM, agentgateway, Kong 2.0+ Enterprise |
 | 8 | Live prompt feed | **No** | No precedent in any of the 26 projects |
 
@@ -70,12 +70,23 @@ proxy.** Not the model provider: no provider guardrail has a budget. Not the mes
 admission, or observability. LiteLLM does it correctly, which means the question was never "does this
 exist" but "write one or adopt one".
 
-**2. Platform-injected input scanning with a self-hosted classifier has no owner.** agentgateway's
+**2. Platform-injected input scanning with a self-hosted ML classifier has no owner.** agentgateway's
 `RequestGuard` is a closed `oneOf` with six variants: regex (local, but pattern matching is not
 classification), a webhook (a socket you must fill), and four remote paid services. Searching its
 entire 370 KB schema for `classifier`, `deberta`, `onnx`, `transformer`, `model_path` returns zero.
-Every turnkey option means egress from a default-deny cluster and a per-request fee. The most widely
-used open tool behind that socket was archived two months before this workshop ran.
+
+One exception, found on a second pass and worth stating precisely rather than glossing: **LiteLLM
+ships a local filter** at `litellm/proxy/guardrails/guardrail_hooks/litellm_content_filter/`, MIT,
+with zero HTTP calls (grep for `http_handler|httpx|requests\.|api_base` returns 0), a 38 KB
+`patterns.json`, and category files named `prompt_injection_jailbreak.yaml`,
+`prompt_injection_data_exfiltration.yaml`, `prompt_injection_sql.yaml`,
+`prompt_injection_system_prompt.yaml`, `prompt_injection_malicious_code.yaml`.
+
+That is local and it is injection-specific, and it is **pattern-based, not an ML classifier**. So the
+accurate claim is narrower: no gateway or proxy ships a local ML classifier, which makes guard-proxy's
+sidecar-plus-model shape standard rather than a workaround. The turnkey ML options are all remote,
+which means egress from a default-deny cluster and a per-request fee, and the most widely used open
+tool behind that socket was archived two months before this workshop ran.
 
 **3. A room-visible live prompt feed has no precedent anywhere.** That one is workshop apparatus, not
 a product category, and was always going to be bespoke.
@@ -124,7 +135,7 @@ own filings where they exist, which is not what the press reported:
 | Closed | Deal | Price | The open source afterwards |
 |---|---|---|---|
 | Oct 2024 | Cisco / Robust Intelligence | undisclosed | none existed |
-| 2025-07-22 | Palo Alto / Protect AI | ~$700M, press only | **llm-guard and rebuff archived**; modelscan, nbdefense, vulnhuntr, ai-exploits left public and stale |
+| 2025-07-22 | Palo Alto / Protect AI | ~$700M, press only | **llm-guard archived** 2026-07-08, 11.5 months after the deal closed; modelscan, nbdefense, vulnhuntr, ai-exploits left public and stale. `rebuff` is also archived but its last commit is 2024-01-25, eighteen months before the deal, so it is weak support for the pattern. GitHub returns `archived_at: null` for both, so the archive action itself cannot be dated or attributed |
 | 2025-09-05 | SentinelOne / Prompt Security | **$159.3M** per its 10-Q, not the reported $250M | kept alive (Prompt Fuzzer) |
 | 2025-09-29 | F5 / CalypsoAI | $180M | none existed |
 | Sept 2025 | Cato / Aim Security | ~$350M, press only | none existed |
@@ -133,8 +144,9 @@ own filings where they exist, which is not what the press reported:
 | 2025 | Tenable / Apex Security | >$105M, press only | none existed |
 | 2026-05-29 | Palo Alto / Portkey | undisclosed | folding into Prisma AIRS |
 
-The pattern is clean: **open source survived where it was lead generation and was archived where it
-substituted for the paid runtime product.** LLM Guard was the second kind.
+The pattern: **open source survived where it was lead generation and was archived where it substituted
+for the paid runtime product.** LLM Guard is the strong case for it. `rebuff` was already abandoned
+before its acquirer arrived, so it should not be cited as a second example.
 
 Two structural facts underneath that. **Spend and content enforcement live in different products**:
 not one of the eleven commercial security vendors documents a hard USD cap, and the three products
@@ -206,8 +218,8 @@ an org name. (#414, #416)
 whether it should exist at all or be LiteLLM plus our classifier plus a thin shim. Rewriting it in
 another language doubles down on the part that was never the hard part. The arguments for keeping it
 are real (1,076 lines with zero dependencies against LiteLLM's Postgres and Python surface per
-cluster; explicit fail-closed where theirs is undocumented; the live feed has no precedent) but they
-are engineering arguments, not scarcity arguments. (#412)
+cluster, and the live feed has no precedent) but they are engineering arguments, not scarcity
+arguments. Fail-closed is no longer among them: LiteLLM defaults to it. (#412)
 
 ## Claims that survive scrutiny, and claims that do not
 
@@ -220,8 +232,9 @@ is one search away and predates us.
   LiteLLM is the only open-source project that spans both.
 - Every managed guardrail blocks on content, never on volume, so denial of wallet has no vendor answer.
 - OpenTelemetry's AI conventions define 48 attributes and not one of them is money.
-- No proxy or gateway ships a local injection classifier. They all delegate, and the tool most of them
-  delegated to was archived on 2026-07-08, two months before this workshop ran.
+- No proxy or gateway ships a local ML classifier. LiteLLM ships a local pattern-based filter with
+  injection categories; everything stronger is delegated, and the tool most of them delegate to was
+  archived on 2026-07-08, two months before this workshop ran.
 - A provider-side guard is something an application chooses to call. Only admission control can make
   a control present whether or not the developer wanted it.
 - Nine acquisitions in 24 months, and the open source survived exactly where it was marketing.
@@ -232,7 +245,6 @@ Carried forward rather than smoothed over:
 
 - Whether LiteLLM emitted OTel `gen_ai` spans as of 2026-06-17. It does today; the date is unverified,
   so one leg of the "it was already served" claim has an unknown at our build date.
-- LiteLLM's behavior when a guardrail backend is unreachable: undocumented, so pass-or-fail is unknown.
 - Whether a single LiteLLM request can overshoot its reserved estimate (no `max_tokens`, reasoning
   tokens, tier pricing resolved at response time). The reservation design closes the concurrency race;
   no no-overshoot guarantee is documented, and the report flags its own reading as inference.
