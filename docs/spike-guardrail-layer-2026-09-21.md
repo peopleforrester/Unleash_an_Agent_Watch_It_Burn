@@ -97,14 +97,21 @@ That second clause is the one that matters to us. Our input guard is
 `ProtectAI/deberta-v3-base-prompt-injection-v2`, pulled from the same unmaintained Hugging Face org at
 image build time.
 
-At archive: 3,209 stars, 461 forks, 38 open issues. MIT licensed, so a fork carries no legal friction.
+At archive: 3,209 stars, 461 forks, MIT licensed, so a fork carries no legal friction. (The "38 open
+issues" this originally said is GitHub's `open_issues_count`, which sums pull requests: the real split
+is 12 open issues and 26 open pull requests.)
 
 ### What we already have
 
 `images/llm-guard/Dockerfile` builds
-`ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-offline.2`: the upstream API server with the
-classifier baked in as a local directory and Hugging Face forced offline, because a cluster running
-Challenge 1's default-deny egress cannot reach the Hub on its first scan (#241).
+`ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.1`, with the classifier baked in as a
+local directory and Hugging Face forced offline, because a cluster running Challenge 1's default-deny
+egress cannot reach the Hub on its first scan (#241).
+
+Since 2026-09-22 it builds the API server from vendored upstream source on `python:3.12-slim` rather
+than wrapping `laiyer/llm-guard-api`, with torch resolved from PyTorch's CPU index. That took it from
+**4,211 MB to 1,392 MB compressed**, and removed a dependency on an archived repository staying
+reachable.
 
 That is not a fork of the library. It is a packaging of it, and it is the thing people actually hit:
 the upstream image cannot start a scan without network access to a model host.
