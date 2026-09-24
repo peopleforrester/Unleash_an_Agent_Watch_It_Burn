@@ -9,7 +9,11 @@ set -u
 PROFILE="$1"
 STATE_ARG="$2"
 REGION="us-west-2"
-TFDIR="/home/michael/repos/events/Unleash_an_Agent_Watch_It_Burn/infra/terraform/aws/network"
+# Derived from this script's own location, not hardcoded. The absolute path here pointed at
+# repos/events/, a directory the 2026-09-20 restructure retired, so every run terraform-destroyed
+# nothing and said so quietly (#409). A teardown that cannot find its state does not fail closed:
+# it leaves the lab VPC, its NAT gateway and its address billing, and the first evidence is the bill.
+TFDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../network" && pwd)"
 AWS="aws --profile $PROFILE --region $REGION"
 
 log() { echo "$(date +%H:%M:%S) [$PROFILE] $*"; }
