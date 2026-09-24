@@ -330,7 +330,7 @@ and would be a from-scratch rewrite per cloud. Decisions (via AskUserQuestion): 
 state (fan-out), and EKS-now with a portable seam (GKE/AKS later = swap just the cluster module).
 
 Research spike (3 parallel agents) read the reference repos. WINNER = the Packt sister repo
-(`~/repos/events/Packt-agentic-devops/scripts/provision/`): a `lab-vpc/` shared root + a parameterized
+(`~/repos/talks/Packt-agentic-devops/scripts/provision/`): a `lab-vpc/` shared root + a parameterized
 `cluster/` root + a `fleet.sh` driver doing per-attendee isolated state (`-state=states/<name>.tfstate`)
 in a parallel pool (MAX_PARALLEL). KCD-Texas confirmed secondary patterns (workspaces, enableNetworkPolicy);
 KubeAuto is single-cluster (not a fleet). I MODELED ours directly on Packt.

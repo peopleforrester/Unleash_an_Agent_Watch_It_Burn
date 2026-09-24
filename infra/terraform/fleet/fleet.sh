@@ -24,13 +24,20 @@ PROVIDER="${PROVIDER:-aws}"
 . "${SCRIPT_DIR}/providers/${PROVIDER}.sh"
 readonly PROVIDER
 readonly IDP_SCRIPT="${INFRA_DIR}/deploy-full-idp.sh"
-# The provisioning app (web UI + the harvester scripts the fleet runs during `ingest`) was extracted to
-# a sibling repo (peopleforrester/provisioning-agenticburn). Locate the scripts via WIB_PROVISION_DIR;
-# default is the sibling checkout next to this repo. Override if it lives elsewhere on this box.
-readonly WIB_PROVISION_DIR="${WIB_PROVISION_DIR:-${REPO_ROOT}/../provisioning-agenticburn}"
-# The apex wildcard router (agenticburn.com) was extracted to its own repo (peopleforrester/
-# apex-agenticburn); routes.map lives there and Railway deploys it from that repo's MAIN.
-readonly WIB_APEX_DIR="${WIB_APEX_DIR:-${REPO_ROOT}/../apex-agenticburn}"
+# The provisioning app (web UI + the harvester scripts the fleet runs during `ingest`) and the apex
+# wildcard router each live in their own repo. Both used to be checked out as siblings of this one, and
+# the 2026-09-20 restructure moved them into an agenticburn/ group while this repo went to talks/, so a
+# plain `../<repo>` default has pointed at nothing since (#410). Look in both places, newest layout
+# first, and fall back to the current one so a failure names a path somebody can actually go and check.
+_sibling_repo() {   # $1 repo name; echoes the first location that exists, else the canonical one
+    local name="$1" c
+    for c in "${REPO_ROOT}/../../agenticburn/${name}" "${REPO_ROOT}/../${name}"; do
+        [[ -d "${c}" ]] && { (cd "${c}" && pwd); return 0; }
+    done
+    echo "${REPO_ROOT}/../../agenticburn/${name}"
+}
+readonly WIB_PROVISION_DIR="${WIB_PROVISION_DIR:-$(_sibling_repo provisioning-agenticburn)}"
+readonly WIB_APEX_DIR="${WIB_APEX_DIR:-$(_sibling_repo apex-agenticburn)}"
 readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
 readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"

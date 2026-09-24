@@ -15,7 +15,7 @@ under `peopleforrester`, deployed by Railway from its `main` branch.
 | Apex / wildcard router (Caddy) | `railway/apex/` | `peopleforrester/apex-agenticburn` | https://agenticburn.com (apex + `*.agenticburn.com`) |
 | Provisioning distributor (Flask) | `lab-distribution/` | `peopleforrester/provisioning-agenticburn` | https://provisioning.agenticburn.com |
 
-On a workstation they are expected as siblings of this repo (e.g. `~/repos/events/<app>-agenticburn`).
+On a workstation they are expected as siblings of this repo (e.g. `~/repos/agenticburn/<app>-agenticburn`).
 
 ## The one remaining coupling: fleet -> provisioning
 
