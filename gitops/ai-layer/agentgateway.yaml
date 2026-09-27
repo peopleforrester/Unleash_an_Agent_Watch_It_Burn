@@ -48,8 +48,10 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: agentgateway
-          # verify-at-build: pin @sha256 once resolved. Registry is cr.agentgateway.dev (verified 2026-06-25).
-          image: cr.agentgateway.dev/agentgateway:v1.5.0
+          # Pinned by digest as well as tag. This is the one image we run from a registry we do not
+          # control, so it is the one where a moving tag matters most (#415). Re-resolve with
+          # `docker buildx imagetools inspect cr.agentgateway.dev/agentgateway:<tag>` on any bump.
+          image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896
           imagePullPolicy: IfNotPresent
           args: ["-f", "/etc/agentgateway/config.yaml"]
           env:

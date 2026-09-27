@@ -177,7 +177,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: gate
-          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
           command: ["python3", "/gate/gate.py"]
           volumeMounts:
             - name: script

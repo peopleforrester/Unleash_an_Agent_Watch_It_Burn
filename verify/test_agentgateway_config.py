@@ -127,8 +127,20 @@ docs = [d for d in yaml.safe_load_all(GATEWAY.read_text(encoding="utf-8")) if d]
 deployment = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "agentgateway")
 image = deployment["spec"]["template"]["spec"]["containers"][0]["image"]
 
+
+def image_tag(ref: str) -> str:
+    """The tag out of a reference that may also carry a digest.
+
+    `repo:tag@sha256:...` is the pinned form (#415), and a naive rsplit on ':' returns the digest hex
+    from it. Splitting the digest off first is what makes the version check survive pinning.
+    """
+    return ref.split("@", 1)[0].rsplit(":", 1)[-1]
+
+
 print("== the schema on disk is the one for the image we run ==")
-check(f"image is {SCHEMA_VERSION} (found {image.rsplit(':', 1)[-1]})", image.endswith(f":{SCHEMA_VERSION}"))
+check(f"image is {SCHEMA_VERSION} (found {image_tag(image)})", image_tag(image) == SCHEMA_VERSION)
+# Pinning is asserted separately so a future bump cannot quietly drop the digest (#415).
+check("the gateway image is pinned by digest as well as tag", "@sha256:" in image)
 check("the vendored schema for that version exists", SCHEMA.exists())
 if not SCHEMA.exists():
     print(f"\nFAILED: {len(failures)} check(s)")

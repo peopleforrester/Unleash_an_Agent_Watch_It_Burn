@@ -64,7 +64,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: consumer
-          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
           command: ["python", "/app/consumer.py"]
           ports: [{ name: http, containerPort: 8080 }]
           # require-probes (Enforce in apps) demands both; without them the Deployment was DENIED on every
@@ -103,7 +103,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: generator
-          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e
           command: ["python", "/app/generator.py"]
           # require-probes (Enforce in apps) demands both. They stat the heartbeat the loop writes after
           # each delivered record: a Python interpreter per probe timed out under the 100m CPU limit and

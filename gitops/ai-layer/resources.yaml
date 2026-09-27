@@ -587,7 +587,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: proxy
-          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim # verify-at-build: pin @sha256; bake proxy.py into an image for prod
+          image: ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e # verify-at-build: bake proxy.py into an image for prod (#411, #412)
           command: ["python", "/app/proxy.py"]
           ports: [{ name: http, containerPort: 8080 }]
           env:
@@ -678,7 +678,7 @@ spec:
     spec:
       containers:
         - name: shim
-          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
           imagePullPolicy: Always # mutable :workshop-mcp tag; re-pull so a rebuild (e.g. the #137 baked bait) lands on restart
           # NO runtime pip install. Dependencies are baked into the image (images/workshop-mcp), which is
           # what allows this pod to run behind the default-deny egress policy: installing at startup
@@ -745,7 +745,7 @@ spec:
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: nginx
-          image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
           ports: [{ name: http, containerPort: 8080 }]
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
           resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
@@ -782,7 +782,7 @@ spec:
       serviceAccountName: agent-sa
       containers:
         - name: shim
-          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
           imagePullPolicy: Always # mutable :workshop-mcp tag; re-pull so a rebuild (e.g. the #137 baked bait) lands on restart
           # curl is needed for the C1 webhook-exfil beat: run_shell issues `curl -X POST` to the beacon,
           # and python-3.12-slim ships without it (PRD 37). Installed at startup alongside the existing
@@ -927,7 +927,7 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: ttyd
-          image: ghcr.io/peopleforrester/watch-it-burn:web-terminal # built from images/web-terminal/
+          image: ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf # built from images/web-terminal/
           imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
           ports:
             - { name: ttyd, containerPort: 7681 }
@@ -1222,7 +1222,7 @@ spec:
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: nginx
-          image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine # verify-at-build: pin @sha256
+          image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
           ports: [{ name: http, containerPort: 8080 }, { name: https, containerPort: 8443 }]
           # /healthz is served by nginx itself, so it reports whether the front door is alive rather
           # than whether the platform behind it is. That distinction is the point: this Service is the
