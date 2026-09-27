@@ -31,20 +31,32 @@
 #    file removes nothing: pip's install sits in a layer between them. So the compiler lives in a
 #    builder stage and never reaches the runtime image, which carries only libgomp1.
 #
+# 4. The Hugging Face dependency (#414). The build used to download the classifier from
+#    huggingface.co. Runtime was already safe, since the weights are baked in and the Hub is
+#    switched off, but a REBUILD was not, and the archive notice covers the models as well as the
+#    code. The weights now come from images/llm-guard-model in our own registry, pinned by digest.
+#
 # WHY THE SOURCE IS VENDORED
 #
 # src/ holds llm_guard_api at tag v0.3.16, copied verbatim from protectai/llm-guard, MIT, with its
 # LICENSE alongside as LICENSE.upstream. Protect AI archived that repository on 2026-07-08 after Palo
 # Alto Networks acquired them, so building from a clone of it is a dependency on somebody else's
 # archived repository staying reachable. 40 KB of Python removes that. See #414 for the same argument
-# applied to the model weights, which are still fetched at build time here.
+# applied to the model weights, which are now mirrored too.
 #
 # Build and push (from the repo root):
-#   docker build -t ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.2 images/llm-guard
-#   docker push ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.2
+#   docker build -t ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.3 images/llm-guard
+#   docker push ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.3
 
 # ---------------------------------------------------------------------------------------------------
-# Builder: compilers, the full install, and the model download. None of this stage ships.
+# The classifier weights, from our own mirror. A scratch image holding files and nothing executable.
+# Re-pin with `docker buildx imagetools inspect <ref>` when the model revision changes.
+# ---------------------------------------------------------------------------------------------------
+ARG MODEL_IMAGE=ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-90c9989b@sha256:a8a678af4326562aaa265b718dc9aaa172e9940f40545eca174b0737a63ec8e4
+FROM ${MODEL_IMAGE} AS model
+
+# ---------------------------------------------------------------------------------------------------
+# Builder: compilers and the full install. None of this stage ships.
 # ---------------------------------------------------------------------------------------------------
 FROM python:3.12-slim AS builder
 
@@ -78,21 +90,15 @@ RUN pip install --no-cache-dir ".[cpu]"
 
 RUN python -m spacy download en_core_web_sm
 
-# The classifier, baked in. Exactly the model this llm-guard version defaults to (V2_MODEL), tokenizer
-# files plus its ONNX export, moved to the top level because model_path clears the onnx subfolder.
+# The classifier comes from OUR mirror, not from Hugging Face (#414). The weights are
+# deberta-v3-base-prompt-injection-v2 at revision 90c9989b, Apache-2.0, published as
+# images/llm-guard-model and pinned by digest above so the builder enforces it. Nothing in this
+# build reaches huggingface.co any more: the upstream project was archived on 2026-07-08 and the
+# archive notice covers the models, so a build that depends on that org staying alive is a build
+# that stops working on somebody else's schedule.
 ENV WIB_PI_MODEL_DIR=/home/user/models/prompt-injection
-RUN python - <<'PY'
-import os, shutil
-from huggingface_hub import snapshot_download
-from llm_guard.input_scanners.prompt_injection import V2_MODEL
-d = os.environ["WIB_PI_MODEL_DIR"]
-snapshot_download(repo_id=V2_MODEL.path, local_dir=d,
-                  allow_patterns=["*.json", "spm.model", "onnx/model.onnx*"])
-for f in os.listdir(os.path.join(d, "onnx")):
-    if f.startswith("model.onnx"):
-        shutil.move(os.path.join(d, "onnx", f), os.path.join(d, f))
-print("model dir:", sorted(os.listdir(d)))
-PY
+COPY --from=model --chown=user:user /model ${WIB_PI_MODEL_DIR}
+COPY --from=model /LICENSE ${WIB_PI_MODEL_DIR}/LICENSE.model
 
 # ---------------------------------------------------------------------------------------------------
 # Runtime: no compiler, no headers, no pip cache. Only what serves a request.
