@@ -1,11 +1,34 @@
-# ABOUTME: Kyverno image-signature verification (the "Harbor + image signing" CNCF control Whitney raised).
-# ABOUTME: Starts in Audit so it never blocks the demo unexpectedly; flip to Enforce to require signatures.
+# ABOUTME: Kyverno image-signature verification: every image from our own registry must carry a valid
+# ABOUTME: cosign signature made with the key in policies/cosign/, or admission denies the pod.
 #
-# verify-at-build: confirm the verifyImages schema for the pinned Kyverno v1.19.0 (failureAction
-#   placement) and fill the cosign attestor for YOUR supply chain (keyless subject/issuer for the
-#   registry/CI that signs the workshop images, or a public key). imageReferences must scope to your
-#   registry, not "*". This is the signing half of the Harbor + image-signing story; Harbor itself is
-#   a registry choice, not required for the policy to work.
+# This is Enforce, and it is scoped so that it can be. Two facts make that safe rather than reckless:
+#
+#   1. imageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*. Third-party images the
+#      allowlist permits (docker.io/library/nginx, cr.agentgateway.dev, the OTel autoinstrumentation
+#      image) do not match this rule and are unaffected by it.
+#   2. All eight tags the manifests reference were signed and verified before this was flipped on.
+#      An unsigned image from our registry is now denied, which is the point.
+#
+# WHY A KEY AND NOT KEYLESS
+#
+# The version of this file before this one carried a keyless attestor whose subject was the literal
+# placeholder "https://github.com/<org>/<repo>/.github/workflows/*", while its own header claimed the
+# policy started in Audit and its rule said Enforce. It could never have verified anything, and nothing
+# failed only because no matching image was being admitted (#331).
+#
+# Keyless binds a signature to a CI identity, which is the better model when CI does the building. Six
+# of our eight images are built by hand on netcup, so a keyless subject would name an identity that
+# does not sign them.
+#
+# The load-bearing reason is Challenge 1. Attendees apply a default-deny egress NetworkPolicy, so any
+# control that has to reach the internet at admission time AFTER that point is a control that stops
+# working halfway through the workshop. Key-based verification needs only the registry, and the
+# signature bundles carry an offline transparency-log inclusion proof, so rekor.ignoreTlog below is
+# what keeps this working on a cluster the students have just sealed. Signatures ARE uploaded to the
+# public Rekor log, because these are public images and the audit trail is worth having; admission
+# simply does not depend on reaching it.
+#
+# Signing procedure and key custody: policies/cosign/README.md. Render gate: verify/test_image_signing.py.
 apiVersion: kyverno.io/v1
 kind: ClusterPolicy
 metadata:
@@ -13,6 +36,9 @@ metadata:
   annotations:
     policies.kyverno.io/title: Verify Image Signatures
     policies.kyverno.io/category: Supply Chain / CNCF
+    policies.kyverno.io/description: >-
+      Requires a valid cosign signature on every image from ghcr.io/peopleforrester/watch-it-burn, in
+      any namespace. Verification is key-based and needs no Sigstore network access.
 spec:
   background: false
   rules:
@@ -23,21 +49,35 @@ spec:
           - resources:
               kinds:
                 - Pod
-              namespaces:
-                - apps
       verifyImages:
+        # Both registries we publish to, under ONE key. Deliberately NOT namespaced: an image of ours
+        # running in any namespace must be signed, so the control cannot be sidestepped by deploying
+        # somewhere else.
+        #
+        # Harbor is here because the version of this policy before this one enforced signatures on
+        # harbor.agenticburn.com and nothing else. Harbor is documented (infra/harbor/) and permitted by
+        # the registry allowlist but deployed nowhere, which is why that rule never fired. Rescoping to
+        # ghcr alone would have quietly dropped a requirement, so both are listed and both are signed
+        # with the key in policies/cosign/. infra/harbor/sign-and-push.sh signs with that key too.
         - imageReferences:
-            - "harbor.agenticburn.com/*" # verify-at-build: the Harbor host. Scoped so ONLY Harbor images
-                                         # must be signed; allowlisted public images (python/nginx) are unaffected.
-          failureAction: Enforce  # require a valid signature for Harbor images (the cosign demo)
+            - "ghcr.io/peopleforrester/watch-it-burn*"
+            - "harbor.agenticburn.com/*"
+          failureAction: Enforce
           required: true
           verifyDigest: true
           mutateDigest: true
           attestors:
             - count: 1
               entries:
-                - keyless:        # verify-at-build: keyless (Fulcio/Rekor) attestor for your CI signer
-                    subject: "https://github.com/<org>/<repo>/.github/workflows/*"
-                    issuer: "https://token.actions.githubusercontent.com"
+                - keys:
+                    publicKeys: |-
+                      -----BEGIN PUBLIC KEY-----
+                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY6GWxIIKvm+YJ5NBdShf0/tu5b12
+                      9xxmGEdvEIlFN+1+NN57nfI3u5Xi0k8ogOj2173Vzbvt+v9I2JnexTct5Q==
+                      -----END PUBLIC KEY-----
                     rekor:
-                      url: https://rekor.sigstore.dev
+                      # The bundle carries its own inclusion proof, so this verifies offline, which a
+                      # cluster running Challenge 1's default-deny egress requires.
+                      ignoreTlog: true
+                    ctlog:
+                      ignoreSCT: true
