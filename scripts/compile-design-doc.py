@@ -21,7 +21,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 DOC_ID = "18xDmjUyA5OYOSMI1-EkHEeG7RLUQTN6Ev_ZTrD7_P04"
-GDOC_UPDATE = pathlib.Path.home() / "repos/workflow/llm-coding-workflow/scripts/gdoc-update.py"
+GDOC_UPDATE = pathlib.Path.home() / "repos/workflow/scripts-knowledge/bin/gdoc-update.py"
 TITLE = "Unleash an Agent, Watch It Burn: design decisions and tech stack"
 SECTIONS: list[tuple[str, str]] = [
     ("What the workshop is", "README.md"),
