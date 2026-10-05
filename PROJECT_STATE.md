@@ -3,6 +3,26 @@
 Phase: 3.3 Promote — Portland delivery hardening shipped to main: runtime-security cutover (#127/#137), denial-of-wallet C4 (#114), role-split instructions + instructor brief (#122), 2-hour hands-on run-of-show (#123), platform tour + manipulation commands (#124/#126), agent-probe harness + prompt catalog (#136), and the Whitney onboarding set (#131/#132/#133/#134).
 Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
 
+## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
+
+- **Supply chain closed (#413, #414, #415, #331).** The guard image is multi-stage, CPU-only and built
+  from vendored source: 4,211 MB to 1,280 MB, 916 unique CVEs to 24, zero critical. Its classifier
+  weights are mirrored in our registry (provenance proven by hash against Hugging Face), so a rebuild
+  no longer touches huggingface.co. Every image from a registry we publish to is pinned by digest
+  (`verify/test_image_pins.py`), signed with one cosign key, and `verify-image-signatures` ENFORCES it.
+  **Sign with cosign 2.x**: cosign 3.x signatures are invisible to Kyverno 1.19.1, measured with the
+  CLI at the cluster's own version. `verify/sign-images.sh` refuses 3.x. The private key is in
+  `~/secrets/cosign/` on netcup; committing it is mrf-secrets#4.
+- **Components split into their own public repos (#411)**, consumed as HTTPS submodules:
+  `gitops/ai-layer/guard-proxy` -> guard-proxy-agenticburn (47 commits of history carried),
+  `images/llm-guard` -> llm-guard-cpu-offline (5). The kustomize render is byte-identical across the
+  move, so nothing deployed changed. **Clone with `--recurse-submodules`.** The fleet copy-machine
+  sync does not init submodules (llm-coding-workflow#261).
+- **Upstream LLM Guard mirrored, private (#416)**, with the PyPI artifacts as a release.
+- **guard-proxy is being rewritten in Go (#412).** Plan in `prds/412-guard-proxy-go-rewrite.md`,
+  **awaiting Michael's approval (1.3)**, five questions open. No Go until approved.
+- Closed this cycle: #331, #393, #406, #408, #409, #410, #411, #413, #414, #416.
+
 ## Current cycle (2026-09-21, post-event defect burn-down)
 
 The fleet is at TRUE ZERO across all five accounts and 17 regions; `verify/account-audit.sh` reports
@@ -151,8 +171,8 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 ## Branch & Tests
 - Branch: staging
 - Working tree: clean
-- Last CI: n/a (no repo CI). Offline gate `verify/run-tests.sh`: 73 tests, 1 skipped (needs a
-  credential), ALL GREEN as of 2026-09-21.
+- Last CI: no workflow covers the changed paths. Offline gate `verify/run-tests.sh`: 74 tests,
+  1 skipped (needs a credential), ALL GREEN as of 2026-10-05. Two submodules; clone with them.
 
 ## Phase History
 - 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
@@ -162,6 +182,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-09-05 3.1 Whitney walkthrough loop (#211-#232) staged and rolled to all 8 presenter clusters; presenter deck rebuilt to the demo-then-do run of show (#106). 3.3 deferred: clusters track staging; promotion is Michael's call.
 - 2026-07-07 3.3 M1 COMPLETE: provider dispatch promoted to main (c7666b1); §4.6-d deferred (Michael). Four of five M1 pieces shipped; M2-M8 remain as future code-only cycles.
 - 2026-09-21 3.1 post-event defect burn-down staged: #388, #390, #404, #407, #408 closed; #393, #394, #406 advanced. Offline suite green. 3.3 is Michael's call.
+- 2026-10-05 3.3 supply chain, signing and component split promoted to main; #412 Go rewrite at 1.2, plan written, awaiting 1.3 approval.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.
