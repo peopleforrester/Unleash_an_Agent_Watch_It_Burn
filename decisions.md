@@ -117,3 +117,34 @@ GitHub repo into the cluster purely to remove the GitHub dependency (the token p
 secret); or treating its absence as an oversight from the port. The port was manifests-only by
 design, and the same mechanism is why `kubeauto-unicorn-party:2.0.2` did not come across either: its
 content lived inside an image in a foreign ECR registry rather than in a manifest.
+
+## 2026-10-05T00:00:00Z · 1.3 · Component repos, the guard-proxy rewrite, and the upstream mirror
+
+Five decisions from Michael, taken one at a time on 2026-10-05, closing the open questions on #411,
+#412 and #416.
+
+**Component repos (#411).** guard-proxy and the LLM Guard offline image each get their own repo,
+wired back here as git submodules (submodules chosen 2026-09-24):
+
+| Component | Repo | Visibility |
+|---|---|---|
+| guard-proxy | `peopleforrester/guard-proxy-agenticburn` | public |
+| LLM Guard offline image | `peopleforrester/llm-guard-cpu-offline` | public |
+
+Both public, matching this repo and the images, which are already anonymously pullable. Neither holds
+a secret: the cosign signing key lives in mrf-secrets.
+
+**guard-proxy is rewritten in Go (#412).** Michael's reasoning: it is going to become a product
+quickly, and Go has better libraries for this than Rust. This reverses the recommendation in the
+2026-09-22 research synthesis, which was to keep it in Python as the workshop's demo object; that
+recommendation assumed it stayed a teaching prop, and it does not.
+
+The rewrite also folds in what LiteLLM does better. The research established that LiteLLM's
+pre-call budget reservation (estimate the request's maximum cost, reserve it, reject before the
+provider is called) is a stronger mechanism than guard-proxy's post-hoc metering, which blocks only
+the next request. That gap analysis is the first deliverable of the rewrite, ahead of any Go code.
+
+**Upstream mirror (#416).** `peopleforrester/llm-guard-upstream-mirror`, private. A backup so builds
+survive if Protect AI deletes the archived repo; it invites nothing and promises nothing. The public
+offering is `llm-guard-cpu-offline`. Forking and maintaining the library (decision B) stays declined
+on the cost measured in the 2026-09-22 research.
