@@ -94,6 +94,8 @@ Pinned versions are in [`VERSIONS.lock`](VERSIONS.lock).
 |---|---|
 | `gitops/` | Argo CD app-of-apps: the whole platform as code |
 | `gitops/ai-layer/` | the agent and the AI guardrails (kagent, LLM Guard, MCP) |
+| `gitops/ai-layer/guard-proxy/` | submodule: [guard-proxy-agenticburn](https://github.com/peopleforrester/guard-proxy-agenticburn), the platform-injected guard proxy |
+| `images/llm-guard/` | submodule: [llm-guard-cpu-offline](https://github.com/peopleforrester/llm-guard-cpu-offline), LLM Guard packaged to scan offline |
 | `policies/kyverno/` | the admission policies |
 | `security/`, `observability-idp/`, `backstage/` | the platform foundation |
 | `agent/`, `challenges/` | guardrail sources and the attack content |
@@ -102,6 +104,18 @@ Pinned versions are in [`VERSIONS.lock`](VERSIONS.lock).
 | `verify/` | the verification scripts + the offline render-gate test suite |
 | `facilitation/` | run-of-show, governance map, self-assessment, the question tracker |
 | `docs/` | build spec, build plan, abstract, design decisions, and the stack walkthrough |
+
+Two components live in their own repositories and are included as git submodules, so clone with
+them:
+
+```bash
+git clone --recurse-submodules https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+# or, in an existing clone:
+git submodule update --init --recursive
+```
+
+Without them, `kubectl kustomize gitops/ai-layer` fails and the offline tests that import the guard
+proxy cannot find it. Argo CD fetches submodules on its own, so a cluster needs nothing extra.
 
 ## Safety
 
