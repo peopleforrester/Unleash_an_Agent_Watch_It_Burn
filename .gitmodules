@@ -1,0 +1,3 @@
+[submodule "images/llm-guard"]
+	path = images/llm-guard
+	url = https://github.com/peopleforrester/llm-guard-cpu-offline.git

@@ -376,15 +376,15 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          # Built from images/llm-guard, which builds the API server from vendored upstream source in a
-          # multi-stage build on python:3.12-slim instead of wrapping laiyer/llm-guard-api. Classifier
-          # baked in as a local model dir with HF offline (#241); torch from PyTorch's CPU index, which
-          # dropped fifteen NVIDIA wheels this fleet's GPU-less nodes never load; and the compiler left
-          # behind in the builder stage. 4,211 MB to 1,280 MB compressed, and 916 unique CVEs to 24 with
-          # no criticals (#413, #415). Pinned by digest as well as tag: a tag is a moving pointer and the
-          # allowlist should name an artifact. The classifier weights now come from our own mirror
-          # (images/llm-guard-model, revision 90c9989b) rather than from huggingface.co, so a rebuild
-          # no longer depends on an archived org staying reachable (#414).
+          # Built from images/llm-guard, the llm-guard-cpu-offline submodule: the API server from
+          # vendored upstream source in a multi-stage build on python:3.12-slim, rather than a wrapper
+          # around laiyer/llm-guard-api. The classifier is baked in as a local model dir with HF
+          # offline (#241), and its weights come from our own mirror (images/llm-guard/model, revision
+          # 90c9989b), so a rebuild no longer depends on an archived Hugging Face org (#414). Torch
+          # comes from PyTorch's CPU index, dropping fifteen NVIDIA wheels these GPU-less nodes never
+          # load, and the compiler stays in the builder stage: 4,211 MB to 1,280 MB compressed, and
+          # 916 unique CVEs to 24 with no criticals (#413, #415). Pinned by digest as well as tag,
+          # because a tag is a moving pointer and the allowlist should name an artifact.
           image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.3@sha256:be7d89d52d0e655b5233c5cbef80d3e76cd9b0b215da0c3777c259900d730061
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
