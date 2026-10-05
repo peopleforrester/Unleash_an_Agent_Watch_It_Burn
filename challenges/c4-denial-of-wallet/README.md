@@ -16,7 +16,7 @@ agent itself running up the cost, and no node dies, so there is nothing to rebui
 | Admin cluster (all guardrails on) | frozen at cap | gateway refuses once metered spend crosses `BUDGET_CAP_USD` |
 | Attendee cluster (student installs it) | student turns it on | same control, exposed as `guard-budget-on` in the workbench terminal |
 
-**Defense (guard-proxy, `gitops/ai-layer/proxy.py`):**
+**Defense (guard-proxy, `gitops/ai-layer/guard-proxy/proxy.py`):**
 - A per-cluster **budget cap** (`BUDGET_CAP_USD`, default **$0.10**) metered against the same cost tally
   the counter shows.
 - A **runtime toggle** (`GUARDS["budget"]`, flipped via `/toggle?budget=on` or the `guard-budget-on`

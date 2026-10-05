@@ -2,7 +2,7 @@
 # ABOUTME: and the display page reads the moderated /prompts feed. No cluster needed.
 import importlib.util, pathlib, sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("gp_stream", REPO / "gitops/ai-layer/proxy.py")
+spec = importlib.util.spec_from_file_location("gp_stream", REPO / "gitops/ai-layer/guard-proxy/proxy.py")
 proxy = importlib.util.module_from_spec(spec); spec.loader.exec_module(proxy)
 disp_html = (REPO / "gitops/ai-layer/web/display.html").read_text()
 disp_js = (REPO / "gitops/ai-layer/web/display.js").read_text()

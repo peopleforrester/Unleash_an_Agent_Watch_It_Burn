@@ -7,7 +7,7 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-SRC = REPO / "gitops" / "ai-layer" / "proxy.py"
+SRC = REPO / "gitops" / "ai-layer" / "guard-proxy" / "proxy.py"
 RES = REPO / "gitops" / "ai-layer" / "resources.yaml"
 
 failures = []

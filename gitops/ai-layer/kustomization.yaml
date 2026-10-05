@@ -19,7 +19,10 @@ resources:
 configMapGenerator:
   - name: guard-proxy-src
     files:
-      - proxy.py
+      # guard-proxy lives in its own repo (peopleforrester/guard-proxy-agenticburn), mounted here as a
+      # git submodule (#411). The key stays proxy.py, so the container's /app/proxy.py path and the
+      # generated ConfigMap's content hash are unchanged by the move.
+      - proxy.py=guard-proxy/proxy.py
   - name: evil-mcp-src
     files:
       - server.py

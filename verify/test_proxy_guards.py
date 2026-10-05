@@ -5,7 +5,7 @@ import pathlib
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("guard_proxy_g", REPO / "gitops" / "ai-layer" / "proxy.py")
+spec = importlib.util.spec_from_file_location("guard_proxy_g", REPO / "gitops" / "ai-layer" / "guard-proxy" / "proxy.py")
 proxy = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(proxy)
 

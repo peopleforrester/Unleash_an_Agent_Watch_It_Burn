@@ -64,7 +64,7 @@ peers = set(re.findall(r'set\(attributes\["peer\.service"\],\s*"([A-Za-z0-9_.-]+
 check(f"peer.service values {sorted(peers)} name real services", peers <= emitted)
 
 print("== the proxy's own peer.service default names a real service ==")
-proxy = (REPO / "gitops/ai-layer/proxy.py").read_text()
+proxy = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()
 m = re.search(r'_PEER_SERVICE = os\.environ\.get\("PEER_SERVICE"\) or "([A-Za-z0-9_.-]+)"', proxy)
 check("proxy.py peer.service default is a service in the family", bool(m) and m.group(1) in emitted)
 

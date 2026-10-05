@@ -1,1 +1,1 @@
-../../../gitops/ai-layer/proxy.py
+../../../gitops/ai-layer/guard-proxy/proxy.py

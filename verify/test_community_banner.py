@@ -14,7 +14,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PAGE = (REPO / "gitops/ai-layer/web/burritbot.html").read_text(encoding="utf-8")
-PROXY = (REPO / "gitops/ai-layer/proxy.py").read_text(encoding="utf-8")
+PROXY = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text(encoding="utf-8")
 RES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
 
 failures: list[str] = []

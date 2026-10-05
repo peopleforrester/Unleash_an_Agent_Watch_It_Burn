@@ -14,7 +14,7 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parent.parent
 DOC = (REPO / "docs/CHALLENGE-ASSETS.md").read_text(encoding="utf-8")
 RES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
-PROXY = (REPO / "gitops/ai-layer/proxy.py").read_text(encoding="utf-8")
+PROXY = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text(encoding="utf-8")
 DOCKERFILE = (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8")
 KUBEARMOR = (REPO / "policies/kubearmor/block-recipe-snoop.yaml").read_text(encoding="utf-8")
 
