@@ -1,7 +1,7 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 3.3 Promote — Portland delivery hardening shipped to main: runtime-security cutover (#127/#137), denial-of-wallet C4 (#114), role-split instructions + instructor brief (#122), 2-hour hands-on run-of-show (#123), platform tour + manipulation commands (#124/#126), agent-probe harness + prompt catalog (#136), and the Whitney onboarding set (#131/#132/#133/#134).
-Approved: 2026-07-03T19:59:22Z by Michael (sha256:5e110e425e70) — PRD 35 re-approval
+Phase: 2.1 Test (PRD #412 M0: conformance suite against the Python guard-proxy)
+Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guard-proxy Go rewrite
 
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
@@ -150,6 +150,7 @@ half of every challenge goes dark.
 - [x] 3.3 Promote  (all four M1 pieces fast-forwarded to main; §4.6-d deferred)
 
 ## Contracts
+- 2026-10-10T23:36:09Z · PRD #412 guard-proxy Go rewrite, approved by Michael, sha256:3a5aa82f1a71f5c30360c684aa873704df14374e9468b63e50bc7d5fd118ac73 (`prds/412-guard-proxy-go-rewrite.md`)
 - 2026-07-03T19:59:22Z · sha256:5e110e425e70 · PRD 35 multi-cloud (AKS + GKE) incl. §3.7 hardening parity + §4.6 cluster-shape parameterization. APPROVED, read-only; changes need /prd-amend.
 - PRD 36 · multi-cloud attack -> control -> signal matrix (reference/acceptance spine; sibling of 35, no separate gate).
 - PRD 37 · curl/wget missing from workshop-mcp image (open NOTE, small fixture fix).
@@ -183,6 +184,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-07-07 3.3 M1 COMPLETE: provider dispatch promoted to main (c7666b1); §4.6-d deferred (Michael). Four of five M1 pieces shipped; M2-M8 remain as future code-only cycles.
 - 2026-09-21 3.1 post-event defect burn-down staged: #388, #390, #404, #407, #408 closed; #393, #394, #406 advanced. Offline suite green. 3.3 is Michael's call.
 - 2026-10-05 3.3 supply chain, signing and component split promoted to main; #412 Go rewrite at 1.2, plan written, awaiting 1.3 approval.
+- 2026-10-10T23:36:09Z 1.3 -> 2.1 PRD #412 approved by Michael; M0 (conformance suite against the Python proxy) begins.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.

@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/412
 **Code lives in**: https://github.com/peopleforrester/guard-proxy-agenticburn (submodule at
 `gitops/ai-layer/guard-proxy/`, #411)
-**Status**: **Questions answered 2026-10-11; awaiting approval of the plan as a whole (lifecycle 1.3).** No Go code until approved.
+**Status**: **Approved by Michael 2026-10-11 (lifecycle 1.3). Sealed:** changes go through an amendment. Work begins at M0.
 **Decided by Michael, 2026-10-05**: rewrite in Go, because it is expected to become a product and Go's
 libraries suit it better than Rust's; fold in what LiteLLM does better.
 

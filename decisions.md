@@ -167,3 +167,15 @@ Michael answered the five open questions in `prds/412-guard-proxy-go-rewrite.md`
    Apache-2.0 from its first commit.
 
 The plan as a whole still needs approval (1.3) before any Go is written.
+
+## 2026-10-10T23:36:09Z · 1.3 · PRD #412 approved: guard-proxy rewritten in Go
+
+Approved-by: Michael@2026-10-10T23:36:09Z
+Plan: `prds/412-guard-proxy-go-rewrite.md` (sha256:3a5aa82f1a71f5c30360c684aa873704df14374e9468b63e50bc7d5fd118ac73)
+
+Approved as written, after Michael answered its five open questions one at a time and the known bugs
+on the new proxy's path were classified (#382 and #320 deferred against a Python baseline, #333 a
+prerequisite for M7). The plan is now read-only; changes go through an amendment.
+
+Work starts at M0: a black-box HTTP conformance suite that must pass against the Python proxy before
+any Go is written. It lives in guard-proxy-agenticburn, beside the implementation it constrains.
