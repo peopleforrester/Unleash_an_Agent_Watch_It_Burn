@@ -128,6 +128,23 @@ toggle, fail-closed, and the spend cap. It is written against the **Python** imp
 must pass there, which proves it captures today's behavior. The Go implementation then has to pass
 the same suite. This is the TDD gate for the whole rewrite.
 
+## Known bugs on the new proxy's path
+
+The Go proxy is a new consumer of shared layers: agentgateway downstream, the span contract, Datadog
+LLM Observability, and the admission policy that keeps traffic going through it at all. Open bugs in
+those layers would otherwise surface during the rewrite looking like defects of the new code. Each is
+classified here, before work starts.
+
+| Bug | Does the Go proxy hit it? | Disposition |
+|---|---|---|
+| **#382** agentgateway mints a span, propagates its id, and never exports it, so the agent subtree is orphaned | **Yes.** The missing span sits directly beneath guard-proxy's own `http.client.request` to agentgateway `:3000`. Every trace the Go proxy produces will show the gap | **Deferred**, as Michael ruled on 2026-09-08. The defect is in agentgateway, not in guard-proxy, so fixing it is not part of this rewrite. **Telling it apart:** the gap is always between `http.client.request (agentgateway:3000)` and `burritobot-agent invocation`; everything above it is guard-proxy's own and must be intact |
+| **#320** One interaction shows as two root spans in Datadog | **Possibly.** guard-proxy emits the root span, and the cause is not established; the issue rules out the obvious suspect | **Deferred, with a baseline.** Before M5, record the Python proxy's root-span count for a fixed interaction. M5 requires the Go proxy to **match that baseline**, so the rewrite neither fixes nor masks it without anyone knowing |
+| **#264, #265** One trace per interaction, and trace noise | Same family as #320 | Deferred with #320, under the same baseline rule |
+| **#333** `deny-llm-endpoint-bypass` has never been exercised on a live cluster | **Not on the code path**, since it is an admission policy. But it is what stops a pod reaching Bedrock directly, around the proxy, so the product claim "applies to every workload" depends on it | **Prerequisite for M7.** The live validation exercises the policy with a pod that fits the bypass shape and reads the policy report. Without that, M7 cannot claim the proxy is unavoidable |
+
+So nothing blocks M0 through M6. M5's acceptance compares against the Python baseline rather than
+against a perfect trace, and M7 is gated on #333.
+
 ## Milestones
 
 | # | Deliverable | Done when |
@@ -137,9 +154,9 @@ the same suite. This is the TDD gate for the whole rewrite.
 | M2 | Guards at parity: LLM Guard input, regex output, fail closed | conformance passes for every guard case |
 | M3 | Budgets: reservation with a capped `max_tokens`, scopes, `CountTokens`, embedded store | a single request cannot exceed the cap, proven by a test that tries; a restart mid-window does not reset spend; `CountTokens` latency measured |
 | M4 | Rate limits (RPM and TPM), routing, toggles, the prompt feed | full conformance passes |
-| M5 | Telemetry: gen_ai spans from weaver-generated constants, content-capture modes | Datadog LLM Observability shows input and output, as it does today |
+| M5 | Telemetry: gen_ai spans from weaver-generated constants, content-capture modes | Datadog LLM Observability shows input and output, as it does today; root-span count matches the recorded Python baseline (#320) |
 | M6 | Image: signed with cosign 2.x, digest-pinned, ConfigMap delivery retired | `verify/sign-images.sh --check` passes; workshop deploys the image |
-| M7 | Live validation on a cluster | all eight challenges pass attack, fix, re-attack |
+| M7 | Live validation on a cluster | all eight challenges pass attack, fix, re-attack; `deny-llm-endpoint-bypass` exercised with a bypass-shaped pod (#333) |
 
 M0 through M2 is the minimum to replace the Python in the workshop. M3 is the product claim.
 
