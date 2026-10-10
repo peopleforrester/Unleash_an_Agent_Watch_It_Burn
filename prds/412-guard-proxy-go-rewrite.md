@@ -3,7 +3,7 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/412
 **Code lives in**: https://github.com/peopleforrester/guard-proxy-agenticburn (submodule at
 `gitops/ai-layer/guard-proxy/`, #411)
-**Status**: **Awaiting approval (lifecycle 1.3).** No Go code until this plan is approved.
+**Status**: **Questions answered 2026-10-11; awaiting approval of the plan as a whole (lifecycle 1.3).** No Go code until approved.
 **Decided by Michael, 2026-10-05**: rewrite in Go, because it is expected to become a product and Go's
 libraries suit it better than Rust's; fold in what LiteLLM does better.
 
@@ -108,12 +108,13 @@ response ◀─ telemetry ◀─ budget RECONCILE ◀─ output guards ◀──
 - **Guards are a Go interface.** Implementations: the LLM Guard API client (today's input guard),
   declarative regex (today's output guard, with agentgateway's built-ins), and Bedrock
   `ApplyGuardrail` as a remote option. Each declares the phases it runs in.
-- **Budgets are scoped.** Per cluster, per session, per identity, each with a window. State lives in
-  the process. Whether it must survive a restart is an open question below.
+- **Budgets are scoped and durable.** Per cluster, per session, per identity, each with a window.
+  State lives in an embedded store on the pod's volume, so a restart cannot reset a budget.
 - **Config is one YAML file, validated at start.** An unknown key fails startup instead of silently
   disabling a guard. The current environment variables map onto it for one release so the workshop
   manifests keep working.
-- **Live toggles stay**, as an authenticated admin API, because the workshop depends on them.
+- **Live toggles and the prompt feed ship in the product**, as an authenticated admin API. The
+  prompt feed is off by default, because it streams user prompts.
 
 ## The safety net: a black-box conformance suite, written first
 
@@ -132,9 +133,9 @@ the same suite. This is the TDD gate for the whole rewrite.
 | # | Deliverable | Done when |
 |---|---|---|
 | M0 | Conformance suite against the Python proxy | passes against `proxy.py`; every guard, endpoint, toggle and failure mode covered |
-| M1 | Go skeleton: listener, upstream proxying, config validation, health | conformance passes for the pass-through cases |
+| M1 | Go skeleton: listener, upstream proxying, config validation, health; Apache-2.0 `LICENSE` | conformance passes for the pass-through cases |
 | M2 | Guards at parity: LLM Guard input, regex output, fail closed | conformance passes for every guard case |
-| M3 | Budgets: reservation with a capped `max_tokens`, scopes, `CountTokens` | a single request cannot exceed the cap, proven by a test that tries |
+| M3 | Budgets: reservation with a capped `max_tokens`, scopes, `CountTokens`, embedded store | a single request cannot exceed the cap, proven by a test that tries; a restart mid-window does not reset spend; `CountTokens` latency measured |
 | M4 | Rate limits (RPM and TPM), routing, toggles, the prompt feed | full conformance passes |
 | M5 | Telemetry: gen_ai spans from weaver-generated constants, content-capture modes | Datadog LLM Observability shows input and output, as it does today |
 | M6 | Image: signed with cosign 2.x, digest-pinned, ConfigMap delivery retired | `verify/sign-images.sh --check` passes; workshop deploys the image |
@@ -142,21 +143,38 @@ the same suite. This is the TDD gate for the whole rewrite.
 
 M0 through M2 is the minimum to replace the Python in the workshop. M3 is the product claim.
 
-## Open questions
+## Decisions on the open questions
 
-1. **Per-request `CountTokens` adds a round trip to Bedrock before every call.** Accept the latency for
-   an exact count, or count with a conservative byte-based over-estimate and accept a looser bound?
-   Either way the request is refused when the estimate cannot be produced. No silent fallback.
-   `[Answer]:`
-2. **Must budget state survive a restart?** In-process is simplest and matches fifty disposable
-   clusters. A product will want persistence, which means an embedded store, not Postgres.
-   `[Answer]:`
-3. **Product boundary.** Is the workshop apparatus (live prompt feed, `/controls`) part of the product,
-   or a build tag that only the workshop enables? `[Answer]:`
-4. **Keep the ConfigMap fast-edit loop for workshop days?** It lets a fix reach a live cluster in
-   seconds, and a compiled binary loses it. `[Answer]:`
-5. **License for the product.** The repo is MIT today. A product may want something else, and that
-   choice is easier before outside contributions arrive. `[Answer]:`
+Answered by Michael on 2026-10-11, one at a time.
+
+1. **Token counting: exact, via Bedrock `CountTokens`.** One extra round trip to Bedrock before every
+   call, through the endpoint the agent already uses. The reservation is exact. If the count cannot
+   be produced, the request is refused; there is no estimator to fall back to.
+   *Consequence:* M3 must measure the added latency, and a `CountTokens` outage is a refusal, so its
+   availability becomes part of the proxy's own availability.
+
+2. **Budget state persists across restarts, in an embedded store.** SQLite or bbolt, file-backed in
+   the pod's volume. A restart can no longer be used to reset a budget. Still one binary, no Postgres.
+   *Consequence:* the pod needs a volume that outlives the container, and the store needs a test that
+   restarts the proxy mid-window and proves the spent-so-far survives.
+
+3. **The workshop apparatus is part of the product.** The live prompt feed, `/controls` and `/toggle`
+   ship in every build.
+   *Consequence, stated once:* the prompt feed streams user prompts, so in the product it is **off by
+   default and behind authentication**, and the admin endpoints require it too. That keeps the
+   decision intact while making sure an unconfigured deployment does not publish anyone's prompts.
+
+4. **The code fast-edit loop is retired.** Code reaches a cluster only as a signed, digest-pinned
+   image. Behavior on the day still changes in seconds, through the YAML config and the live toggles.
+   *Consequence:* the signature policy covers everything that runs, and M6 removes the
+   `configMapGenerator` for `proxy.py` from `gitops/ai-layer/kustomization.yaml`.
+
+5. **License: Apache-2.0.** Chosen before any outside contribution, while that is still simple.
+   *Consequence:* the existing `LICENSE` names **Michael Forrester and Whitney Lee** as copyright
+   holders of the MIT code, so `proxy.py` cannot be relicensed without both. It does not need to be.
+   The Go implementation is new code and is Apache-2.0 from its first commit; `proxy.py` keeps its MIT
+   notice for as long as it remains in the repo as the reference implementation. MIT code can sit
+   inside an Apache-2.0 project as long as its notice is kept.
 
 ## Out of scope
 

@@ -148,3 +148,22 @@ the next request. That gap analysis is the first deliverable of the rewrite, ahe
 survive if Protect AI deletes the archived repo; it invites nothing and promises nothing. The public
 offering is `llm-guard-cpu-offline`. Forking and maintaining the library (decision B) stays declined
 on the cost measured in the 2026-09-22 research.
+
+## 2026-10-11T00:00:00Z · 1.2 · PRD #412 open questions answered
+
+Michael answered the five open questions in `prds/412-guard-proxy-go-rewrite.md`, one at a time:
+
+1. Token counting is exact, via Bedrock `CountTokens`, with no estimator fallback: a request whose
+   count cannot be produced is refused.
+2. Budget state persists across restarts in an embedded store (SQLite or bbolt), so a restart cannot
+   reset a budget. Still no Postgres.
+3. The workshop apparatus (live prompt feed, `/controls`, `/toggle`) ships in the product. Design
+   consequence recorded in the PRD: the prompt feed is off by default and the admin API is
+   authenticated, because the feed streams user prompts.
+4. The code fast-edit loop is retired. Code reaches a cluster only as a signed, digest-pinned image;
+   behavior still changes live through the YAML config and the toggles.
+5. License is Apache-2.0. `proxy.py` keeps its MIT notice, because its LICENSE names Michael Forrester
+   and Whitney Lee as holders and relicensing it would need both. The Go code is new and is
+   Apache-2.0 from its first commit.
+
+The plan as a whole still needs approval (1.3) before any Go is written.
