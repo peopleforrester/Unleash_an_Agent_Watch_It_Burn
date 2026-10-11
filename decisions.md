@@ -179,3 +179,32 @@ prerequisite for M7). The plan is now read-only; changes go through an amendment
 
 Work starts at M0: a black-box HTTP conformance suite that must pass against the Python proxy before
 any Go is written. It lives in guard-proxy-agenticburn, beside the implementation it constrains.
+
+## 2026-10-11T00:29:21Z · 2.1 · PRD #412 M0 complete: conformance suite pinned to proxy.py
+
+The suite lives in guard-proxy-agenticburn `conformance/`, beside the code it constrains. It runs
+any implementation as a subprocess through `GUARD_PROXY_CMD` against real local fakes for the agent
+and the LLM Guard API, and asserts only client-observable behavior. Result: 163 tests green against
+proxy.py, CI green on c72cc28, promoted to that repo's main.
+
+Proof that it constrains anything: `mutation_check.py` breaks proxy.py 16 ways (fail-open default,
+case-sensitive block-list, ignored classifier verdict, scrub gaps, cap and rate-limit off-by-ones,
+session-blind budget, wrong price, probe in feed, no retries, CORS echo, credential forwarding).
+All 16 are caught. The first run let the cost-cap off-by-one escape; the boundary tests that close
+it were added, and a budget-cap mutant with them.
+
+Scope clarifications, within the sealed plan rather than amendments:
+- Telemetry assertions are deferred to M5, whose acceptance is already a recorded Python baseline.
+  The Python proxy only emits spans under the OTel SDK the cluster injects, so the harness cannot
+  observe them without reproducing that injection.
+- `/controls` is covered for the no-credentials case only. proxy.py hardcodes the API host; the Go
+  implementation adds an endpoint override and the suite extends then.
+
+Defects found while pinning behavior are asserted as they stand (tests ending `_today`) and filed on
+guard-proxy-agenticburn: #1 (a failed reasoning-only retry writes two responses and drops the usable
+reply), #2 (raw `<thinking></thinking>` tags reach the student), #3 (retry tokens are never metered,
+so `/cost` and both caps undercount), #4 (feed moderation misses capitalized terms). Per the
+fix-shared-bugs rule these sit on the Go proxy's path. #3 bears directly on the M3 claim that a
+single request cannot exceed the cap, so it must be fixed in both implementations before M3 is
+accepted. #1, #2 and #4 can be fixed in either order, as long as proxy.py and its `_today` test
+change together.

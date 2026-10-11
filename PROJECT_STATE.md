@@ -1,6 +1,6 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 2.1 Test (PRD #412 M0: conformance suite against the Python guard-proxy)
+Phase: 2.2 Implement (PRD #412 M1: Go skeleton; M0 conformance suite done)
 Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guard-proxy Go rewrite
 
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
@@ -20,7 +20,13 @@ Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guar
   sync does not init submodules (llm-coding-workflow#261).
 - **Upstream LLM Guard mirrored, private (#416)**, with the PyPI artifacts as a release.
 - **guard-proxy is being rewritten in Go (#412).** Plan in `prds/412-guard-proxy-go-rewrite.md`,
-  **awaiting Michael's approval (1.3)**, five questions open. No Go until approved.
+  approved and sealed 2026-10-10 (sha256:3a5aa82f1a71), all five questions answered. **M0 done
+  2026-10-11**: `conformance/` in guard-proxy-agenticburn, 163 black-box tests green against
+  proxy.py, every one of 16 deliberate mutants caught, CI green. Pinning behavior exposed four
+  proxy.py defects, asserted as-is in tests ending `_today` and filed as guard-proxy#1 (a failed
+  retry writes two responses), #2 (raw `<thinking>` tags), #3 (retry tokens unmetered, so caps
+  undercount), #4 (feed moderation misses capitalized terms). Telemetry is deferred to M5's
+  baseline. M1 (Go skeleton) is next.
 - Closed this cycle: #331, #393, #406, #408, #409, #410, #411, #413, #414, #416.
 
 ## Current cycle (2026-09-21, post-event defect burn-down)
@@ -138,16 +144,18 @@ Highest open risk: **#95**, Whitney's Datadog org/trial. If it is expired on the
 half of every challenge goes dark.
 
 ## Lifecycle
-(reflects the PRD 35 **M1** unit of work, now shipped. M2-M8 each start a fresh cycle when begun.)
-- [x] 1.1 Research
-- [x] 1.2 Plan
-- [x] 1.3 Approve  ← PRD 35 sealed
-- [x] 2.1 Test  (offline gates + live-provision validation as the test surface)
-- [x] 2.2 Implement  (IMDS pin, §4.6 core, relocation, provider dispatch)
-- [x] 2.3 Verify  (terraform validate, dry-run, forkbomb test, kustomize, grep-gate; live provisions)
-- [x] 3.1 Stage
-- [x] 3.2 Confirm CI  (offline gates green; no repo CI, validated manually + live)
-- [x] 3.3 Promote  (all four M1 pieces fast-forwarded to main; §4.6-d deferred)
+(reflects PRD #412, the guard-proxy Go rewrite. The PRD's milestones M1 to M7 run inside 2.2 and 2.3,
+each gated by the M0 conformance suite.)
+- [x] 1.1 Research  (guardrail-layer research, docs/research/2026-09-22-guardrail-layer/)
+- [x] 1.2 Plan  (prds/412-guard-proxy-go-rewrite.md)
+- [x] 1.3 Approve  <- sealed 2026-10-10, sha256:3a5aa82f1a71
+- [x] 2.1 Test  (M0: 163-test black-box conformance suite in guard-proxy-agenticburn, green against
+  proxy.py, 16 of 16 mutants caught, CI green, on its main at c72cc28)
+- [ ] 2.2 Implement  <- M1 next: Go skeleton, pass-through conformance, Apache-2.0 LICENSE
+- [ ] 2.3 Verify
+- [ ] 3.1 Stage
+- [ ] 3.2 Confirm CI
+- [ ] 3.3 Promote
 
 ## Contracts
 - 2026-10-10T23:36:09Z · PRD #412 guard-proxy Go rewrite, approved by Michael, sha256:3a5aa82f1a71f5c30360c684aa873704df14374e9468b63e50bc7d5fd118ac73 (`prds/412-guard-proxy-go-rewrite.md`)
@@ -172,8 +180,12 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 ## Branch & Tests
 - Branch: staging
 - Working tree: clean
-- Last CI: no workflow covers the changed paths. Offline gate `verify/run-tests.sh`: 74 tests,
-  1 skipped (needs a credential), ALL GREEN as of 2026-10-05. Two submodules; clone with them.
+- Last CI: no workflow here covers the changed paths. Offline gate `verify/run-tests.sh`: 74 tests,
+  1 skipped (needs a credential), ALL GREEN as of 2026-10-11. Two submodules; clone with them.
+- guard-proxy-agenticburn: conformance CI green on c72cc28 (run 38098263819), promoted to its main.
+- Promotion of this repo's docs-only commits is refused by ship's exact-SHA CI gate because no
+  workflow covers prds/, decisions.md or PROJECT_STATE.md (llm-coding-workflow#267). main is at
+  a362cd4; everything since sits on staging.
 
 ## Phase History
 - 2026-07-05 init-state migrated the pre-lifecycle PROJECT_STATE.md to the lifecycle schema; deduced Phase 1.3 (PRD 35 approved, Phase 2 pending).
@@ -185,6 +197,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-09-21 3.1 post-event defect burn-down staged: #388, #390, #404, #407, #408 closed; #393, #394, #406 advanced. Offline suite green. 3.3 is Michael's call.
 - 2026-10-05 3.3 supply chain, signing and component split promoted to main; #412 Go rewrite at 1.2, plan written, awaiting 1.3 approval.
 - 2026-10-10T23:36:09Z 1.3 -> 2.1 PRD #412 approved by Michael; M0 (conformance suite against the Python proxy) begins.
+- 2026-10-11 2.1 -> 2.2 M0 done: conformance suite green against proxy.py (163 tests), mutation check 16/16, guard-proxy CI green and promoted (c72cc28); submodule pin bumped, render hash unchanged. Four proxy.py defects filed (guard-proxy#1 to #4). M1 next.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.
