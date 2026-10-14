@@ -1,6 +1,6 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 2.2 Implement (PRD #412 M2: guards at parity; M0 and M1 done)
+Phase: 2.2 Implement (PRD #412 M3: budgets; M0 to M2 done)
 Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guard-proxy Go rewrite
 
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
@@ -30,7 +30,12 @@ Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guar
   strict YAML config with the workshop env vars mapped on, `/healthz`, Apache-2.0 `LICENSE`
   (proxy.py and `conformance/` keep MIT in `LICENSE-MIT`). Passes the 22 conformance tests marked
   `passthrough`; routes later milestones build answer 501. Go 1.27.2, not the PRD's 1.27.1, for its
-  `net/http` security fixes. Gotchas in `docs/gotchas-go.md`. M2 (guards at parity) is next.
+  `net/http` security fixes. Gotchas in `docs/gotchas-go.md`. **M2 done 2026-10-14** (0679083):
+  block-list, LLM Guard classifier and output guard enforced on A2A POSTs, fail closed by default,
+  `guard_error` WARNING logged on a scanner failure. Passes the 22 A2A guard cases (marker `guards`)
+  plus the 22 `passthrough`. The `/chat` guard cases wait for the `/chat` route, and without `/chat`
+  and `/toggle` the Go build still cannot replace proxy.py in the workshop. M3 (budgets) is next;
+  guard-proxy#3 must be fixed in both implementations before M3 is accepted.
 - Closed this cycle: #331, #415, #393, #406, #408, #409, #410, #411, #413, #414, #416.
 
 ## Current cycle (2026-09-21, post-event defect burn-down)
@@ -155,7 +160,7 @@ each gated by the M0 conformance suite.)
 - [x] 1.3 Approve  <- sealed 2026-10-10, sha256:3a5aa82f1a71
 - [x] 2.1 Test  (M0: 163-test black-box conformance suite in guard-proxy-agenticburn, green against
   proxy.py, 16 of 16 mutants caught, CI green, on its main at c72cc28)
-- [ ] 2.2 Implement  <- M1 done (1874403); M2 next: guards at parity
+- [ ] 2.2 Implement  <- M2 done (0679083); M3 next: budgets
 - [ ] 2.3 Verify
 - [ ] 3.1 Stage
 - [ ] 3.2 Confirm CI
@@ -186,7 +191,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - Working tree: clean apart from Michael's ACTION_ITEMS.md and transcripts/ (left untouched)
 - Last CI: no workflow here covers the changed paths. Offline gate `verify/run-tests.sh`: 74 tests,
   1 skipped (needs a credential), ALL GREEN as of 2026-10-14. Two submodules; clone with them.
-- guard-proxy-agenticburn: CI green on 1874403 (run 38490687225, conformance and go jobs), promoted
+- guard-proxy-agenticburn: CI green on 0679083 (run 38640241252, conformance and go jobs), promoted
   to its main.
 - Promotion of this repo's docs-only commits is refused by ship's exact-SHA CI gate because no
   workflow covers prds/, decisions.md or PROJECT_STATE.md (llm-coding-workflow#267). main is at
@@ -204,6 +209,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-10-10T23:36:09Z 1.3 -> 2.1 PRD #412 approved by Michael; M0 (conformance suite against the Python proxy) begins.
 - 2026-10-11 2.1 -> 2.2 M0 done: conformance suite green against proxy.py (163 tests), mutation check 16/16, guard-proxy CI green and promoted (c72cc28); submodule pin bumped, render hash unchanged. Four proxy.py defects filed (guard-proxy#1 to #4). M1 next.
 - 2026-10-14 2.2 (M1) Go skeleton done: 22 passthrough conformance tests green against the Go binary, full suite still green against proxy.py, guard-proxy CI green and promoted (1874403); pin bumped, render hash unchanged. Stays at 2.2; M2 next.
+- 2026-10-14 2.2 (M2) guards on the A2A path done: 44 conformance tests (passthrough or guards) green against the Go binary, 163 against proxy.py, guard-proxy CI green and promoted (0679083); pin bumped, render hash unchanged. Stays at 2.2; M3 next.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.

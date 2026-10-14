@@ -232,3 +232,30 @@ the contract, each recorded so a later milestone does not re-derive it:
 
 Also closed #415 (all items done or tracked on #412 and llm-coding-workflow#182) and corrected the
 state file, which still said the cosign key existed only on netcup after mrf-secrets#4 had closed.
+
+## 2026-10-14T21:40:00Z · 2.2 · PRD #412 M2 complete on the A2A path; /chat guard cases wait for /chat
+
+guard-proxy-agenticburn 0679083, CI green (run 38640241252), promoted. A second marker, `guards`,
+covers the 22 guard cases on the A2A path: the block-list, the LLM Guard classifier, the output guard
+over artifacts, agent history and status, and fail-closed or fail-open for each failure mode. The Go
+build runs `-m "passthrough or guards"`, 44 tests; proxy.py still runs all 163. Choices made inside
+the contract:
+- **Scope.** The guard cases on `/chat` (test_chat_path.py) and the live-toggle case need the `/chat`
+  route and `/toggle`, which carry per-call cost, retries and toggles from M3 and M4. They join when
+  those routes do. The guard logic is shared, so they exercise the same code. Consequence: the PRD's
+  "M0 through M2 is the minimum to replace the Python in the workshop" does not hold. The workshop
+  needs `/chat` and `/toggle`, so the earliest replacement point is M4.
+- **The output guard calls LLM Guard's `/analyze/output`, as proxy.py does.** The PRD's milestone
+  says "regex output"; the regex is LLM Guard's Regex scanner, server side. A regex guard inside the
+  proxy would be a new guard rather than parity, and no conformance case asks for one.
+- `llm_guard.url` (or `LLM_GUARD_URL`) is required, like the agent URL; the manifests set it.
+- `PROXY_FAIL_CLOSED` accepts only true or false. proxy.py treats any other value as false, so a typo
+  turned fail-closed off.
+- A scanner failure logs `guard_error` at WARNING. proxy.py fails, open or closed, without a log line.
+- `LLM_GUARD_TOKEN` is environment only, never in the YAML; with no token no Authorization header is
+  sent, instead of `Bearer ` with nothing after it.
+- Guards are concrete types (a Blocklist, an LLM Guard client) rather than the PRD's Go interface.
+  The interface arrives with a second implementation (Bedrock ApplyGuardrail), when its shape is known.
+
+Correction to the prior entry: its timestamp `2026-10-14T00:00:00Z` is a placeholder. The M1 record
+was committed at 2026-10-14T00:35:44Z (152485f).
