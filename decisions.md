@@ -208,3 +208,27 @@ fix-shared-bugs rule these sit on the Go proxy's path. #3 bears directly on the 
 single request cannot exceed the cap, so it must be fixed in both implementations before M3 is
 accepted. #1, #2 and #4 can be fixed in either order, as long as proxy.py and its `_today` test
 change together.
+
+## 2026-10-14T00:00:00Z · 2.2 · PRD #412 M1 complete: Go skeleton passes the pass-through conformance subset
+
+guard-proxy-agenticburn 1874403, CI green (run 38490687225), promoted. "Pass-through cases" is now a
+pytest marker, `passthrough`, on 22 tests: /guards seeding, the GET passthrough and its 502s, A2A
+forwarding with every guard off, agent failures as 502 with a `forward_error` ERROR log, and OPTIONS
+as 501. Each later milestone widens the selection; proxy.py always runs all 163. Choices made inside
+the contract, each recorded so a later milestone does not re-derive it:
+- Go 1.27.2 rather than the PRD's 1.27.1: 1.27.2 (2026-10-08) carries `net/http` security fixes. An
+  upward patch, so no amendment is needed.
+- The agent URL is required. proxy.py defaults to a workshop hostname; the manifests set AGENT_URL
+  explicitly (resources.yaml), so nothing deployed depends on the default.
+- `PROXY_TIMEOUT` becomes a total deadline (`http.Client.Timeout`). urllib's is per socket operation.
+- Routes later milestones build (/chat, /cost, /prompts, /controls, /toggle) answer 501 instead of
+  being forwarded to the agent as A2A traffic. `/healthz` is new and is answered locally.
+- Log timestamps are RFC 3339 UTC; proxy.py writes Python's local `formatTime`. Keys and level names
+  match, including WARNING.
+- Licensing: Apache-2.0 in `LICENSE` for the Go code. proxy.py and `conformance/` keep MIT, moved to
+  `LICENSE-MIT`, because both were committed under the MIT notice naming Michael and Whitney.
+- The upstream hop is a rebuilt request on `http.Client`, not `httputil.ReverseProxy`, because the
+  reference sends only the body and a JSON Content-Type.
+
+Also closed #415 (all items done or tracked on #412 and llm-coding-workflow#182) and corrected the
+state file, which still said the cosign key existed only on netcup after mrf-secrets#4 had closed.
