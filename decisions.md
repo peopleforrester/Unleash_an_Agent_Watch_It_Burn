@@ -259,3 +259,11 @@ the contract:
 
 Correction to the prior entry: its timestamp `2026-10-14T00:00:00Z` is a placeholder. The M1 record
 was committed at 2026-10-14T00:35:44Z (152485f).
+
+## 2026-10-15T18:10:00Z · 3.3 · main fast-forwarded to 49ff76c with the CI gate skipped
+
+On Michael's instruction, main was fast-forwarded over cd529d9 (Backstage dependency refresh) and the
+guard-proxy M0 to M2 commits. No workflow covers these paths (both are path-filtered), so CI never ran.
+Verified locally on 49ff76c: guard-proxy `go test ./...`, the conformance suite against proxy.py and
+the Go build; Backstage on Node 24 `yarn install --immutable`, `yarn tsc`, `yarn test`,
+`yarn build:backend`; and `verify/test_proxy_checksum.py`, `test_image_pins.py`, `test_readme_current.py`.
