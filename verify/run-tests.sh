@@ -9,6 +9,19 @@
 # added after it was written: eleven of them by the time this was found.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+
+# A dozen checks read gitops/ai-layer/guard-proxy/proxy.py, which lives in a submodule. A fresh clone
+# has the submodule directories empty, and every one of those checks then dies on a missing file. Check
+# them out here, not in the caller, so `bash verify/run-tests.sh` is the whole command: the hecaton gate
+# runs it without a shell, so a `git submodule update --init && ...` prefix never worked there.
+if [[ -d "${REPO_DIR}/.git" || -f "${REPO_DIR}/.git" ]] \
+    && git -C "${REPO_DIR}" submodule status | grep -q '^-'; then
+    printf 'initialising submodules\n'
+    git -C "${REPO_DIR}" submodule update --init \
+        || { printf 'FAILED to initialise submodules; the guard-proxy checks cannot run\n' >&2; exit 1; }
+fi
+
 fail=0
 ran=0
 failed_names=()
