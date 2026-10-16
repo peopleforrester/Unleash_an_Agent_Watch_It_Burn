@@ -46,11 +46,11 @@ check("run-e2e.sh requires an explicit CONTEXT and passes it to kubectl",
 e2e = sorted(p.name for p in VERIFY.glob("test_*") if "\n# SUITE: e2e" in p.read_text())
 check(f"the render and live checks are in the E2E suite ({', '.join(e2e)})",
       {"test_ai_layer_rollout.py", "test_enforce_floor.py", "test_service_naming_render.py",
-       "test_datadog_service_map.py"} <= set(e2e))
-# Anything else that shells out to kubectl or helm would fail the light suite on a machine without them.
+       "test_datadog_service_map.py", "test_party_refresh_rate.py"} <= set(e2e))
+# Anything else that shells out to kubectl, helm or node would fail the light suite on a machine without them.
 renderers = [p.name for p in VERIFY.glob("test_*.py") if p.name not in e2e
-             and any(f'["{t}",' in p.read_text() for t in ("kubectl", "helm"))]
-check(f"no light-suite test runs kubectl or helm ({', '.join(renderers) or 'none'})", not renderers)
+             and any(f'["{t}",' in p.read_text() for t in ("kubectl", "helm", "node"))]
+check(f"no light-suite test runs kubectl, helm or node ({', '.join(renderers) or 'none'})", not renderers)
 for sh in sorted(VERIFY.glob("*.sh")):
     ok = subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode == 0
     check(f"bash -n clean: {sh.name}", ok)

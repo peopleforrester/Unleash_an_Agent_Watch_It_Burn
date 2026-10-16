@@ -14,24 +14,19 @@ function of the viewer's refresh rate: 2x on a 120 Hz laptop, 2.4x on a 144 Hz p
 `verify/party-refresh-rate.js`, two creatures that start together ended 236 px apart after three
 simulated seconds. After the fix, 1.3 px, which is integration error.
 
-The refresh-rate half needs node. When node is absent the structural checks still run and the
-measurement is reported as skipped, rather than the whole file quietly passing.
+The refresh-rate half needs node, so it is test_party_refresh_rate.py in the E2E suite; this file is
+the structural half, which needs nothing.
 """
 from __future__ import annotations
 
 import pathlib
 import re
-import shutil
-import subprocess
 import sys
-import tempfile
 
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 APPS = ("unicorn", "hedgehog", "wombat", "spider", "mantis-shrimp")
-HARNESS = REPO / "verify/party-refresh-rate.js"
-MAX_DRIFT_PX = 15.0
 
 failures: list[str] = []
 
@@ -82,24 +77,6 @@ check("and a mane rather than quills", "manePhase" in scripts["unicorn"] and "sp
 check("the hedgehog keeps its spikes", "spikePhase" in scripts["hedgehog"])
 check("the unicorn is not wearing the hedgehog's browns",
       "#8B4513" not in scripts["unicorn"] and "#8B4513" in scripts["hedgehog"])
-
-print("== the speed is the same on a 60 Hz screen and a 144 Hz one ==")
-if shutil.which("node") is None:
-    print("  skipped (needs node): refresh-rate measurement")
-else:
-    with tempfile.TemporaryDirectory(dir=REPO) as tmp:
-        for app in APPS:
-            f = pathlib.Path(tmp) / f"{app}.js"
-            f.write_text(scripts[app], encoding="utf-8")
-            out = subprocess.run(["node", str(HARNESS), str(f), app], capture_output=True, text=True)
-            m = re.search(r"worst drift after 3s = ([\d.]+) px", out.stdout or "")
-            if not m:
-                check(f"{app}: the harness ran", False)
-                print(f"        {(out.stdout or out.stderr).strip()[:200]}")
-                continue
-            drift = float(m.group(1))
-            check(f"{app}: 3 seconds at 144 Hz lands within {MAX_DRIFT_PX:.0f} px of 60 Hz (measured {drift:.1f})",
-                  drift <= MAX_DRIFT_PX)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

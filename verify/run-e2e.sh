@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Heavy suite: the live beat harness (run-all.sh) on a cluster, every `# SUITE: e2e` check in
-# ABOUTME: verify/ (kubectl/helm renders, live Datadog), and the Backstage Playwright browser test.
+# ABOUTME: verify/ (kubectl/helm renders, node, live Datadog), doc-link fetches, and Backstage Playwright.
 #
 # Usage: CONTEXT=<kube-context> [NAMESPACE=agent] bash verify/run-e2e.sh
 #
@@ -58,6 +58,8 @@ for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
         *)    run_one "$(basename "${t}")" bash "${t}" ;;
     esac
 done
+# The half of the doc-link check the offline suite leaves out on purpose: fetching every documentation root.
+run_one "test_doc_links.py (WIB_CHECK_LINKS=1, network)" env WIB_CHECK_LINKS=1 python3 "${SCRIPT_DIR}/test_doc_links.py"
 
 # CI is unset on purpose: with CI set, playwright.config.ts starts no web servers and expects one to be
 # running already on :7007. Chained with && because set -e does not apply inside a `|| rc=$?` call.
