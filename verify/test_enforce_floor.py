@@ -6,9 +6,16 @@
 # config-reloader), the Datadog agents, then cert-manager's webhook and cainjector, which took the console
 # certificate and every full-profile console down with it. Kyverno decides this at admission from the
 # rendered manifests, so the same decision can be made here, before a cluster exists.
-import json, pathlib, subprocess, sys, tempfile
+import json, pathlib, shutil, subprocess, sys, tempfile
 
 import yaml
+
+_missing = [t for t in ("helm", "kubectl") if not shutil.which(t)]
+if _missing:
+    # Exit 2, the repo's SKIP code: the floor is judged on rendered manifests, and a machine without the
+    # renderers cannot produce them. Reporting every app as "does not render" would be a false red.
+    print(f"SKIP: {', '.join(_missing)} not on PATH; the Applications cannot be rendered.", file=sys.stderr)
+    sys.exit(2)
 
 
 def load_all(text):

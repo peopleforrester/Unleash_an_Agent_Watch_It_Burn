@@ -34,6 +34,7 @@ src() {
         read_vpc_for() { VPC_ID=vpc-test; SUBNETS_JSON="[]"; }
         prune_empty_states() { :; }
         require_tools() { :; }
+        terraform() { :; }
         print_bootstrap_hints() { echo "hints printed"; }
         cmd_verify() { echo "verify ran on: $*"; return "${VERIFY_RC:-0}"; }
         '"$1"'

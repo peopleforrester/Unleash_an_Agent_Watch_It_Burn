@@ -36,8 +36,13 @@ check("no old service name is emitted anywhere", not any(o in (REPO / p).read_te
 print("== the service name is PINNED where the OTel operator would otherwise inject one ==")
 # OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES, and the operator injects it from
 # the Deployment name at admission. Without the pin the rename is applied, synced, running, and ignored.
-import subprocess
-rendered = subprocess.run(["kubectl", "kustomize", str(REPO / "gitops/ai-layer")], capture_output=True, text=True, check=True).stdout
+import shutil, subprocess
+# Without kubectl this section cannot render, so it is skipped and the test exits 2 (SKIP) at the end
+# if nothing else failed. The source-only sections below still run.
+HAVE_KUBECTL = bool(shutil.which("kubectl"))
+rendered = subprocess.run(["kubectl", "kustomize", str(REPO / "gitops/ai-layer")], capture_output=True, text=True, check=True).stdout if HAVE_KUBECTL else ""
+if not HAVE_KUBECTL:
+    print("  SKIP  kubectl not on PATH; the rendered Deployments cannot be checked")
 for doc in yaml.safe_load_all(rendered):
     if not doc or doc.get("kind") != "Deployment":
         continue
@@ -78,4 +83,7 @@ print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     sys.exit(1)
+if not HAVE_KUBECTL:
+    print("Source checks passed; the render section was skipped (no kubectl).", file=sys.stderr)
+    sys.exit(2)
 print("All service-naming checks passed.")

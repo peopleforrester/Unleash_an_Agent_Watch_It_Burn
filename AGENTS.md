@@ -58,3 +58,6 @@ down after. There is no production-risk constraint here. Apply these without exc
 
 4. **Bias to action.** Make the change, provision/validate, iterate. Surface real trade-offs once and
    briefly, then proceed with the change unless told otherwise. Do not re-raise settled objections.
+
+Test command: `git submodule update --init && bash verify/run-tests.sh`
+E2E command: `cd images/watch-it-burn-backstage && yarn install --immutable && yarn playwright install chromium && env -u CI yarn test:e2e`

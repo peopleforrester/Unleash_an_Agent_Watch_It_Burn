@@ -16,8 +16,8 @@ failed_names=()
 skipped=0
 skipped_names=()
 
-# Exit 2 is SKIP, per the repo's shell convention: a check that needs a credential or a cluster this
-# machine does not have is not a failing check. It is still reported, so a suite that skips everything
+# Exit 2 is SKIP, per the repo's shell convention: a check that needs a credential, a cluster or a tool
+# (kubectl, helm) this machine does not have is not a failing check. It is still reported, so a suite that skips everything
 # cannot be mistaken for a suite that passed everything.
 run_one() {
     local name interp rc
@@ -46,7 +46,7 @@ done
 
 printf '\n%d tests ran, %d skipped\n' "${ran}" "${skipped}"
 if [[ "${skipped}" -gt 0 ]]; then
-    printf '  skipped (needs a credential or a cluster): %s\n' "${skipped_names[*]}"
+    printf '  skipped (needs a credential, a cluster or a tool): %s\n' "${skipped_names[*]}"
 fi
 # A glob that matches nothing is the failure mode this replaces: a runner that exits 0 having done nothing
 # looks exactly like a passing build.

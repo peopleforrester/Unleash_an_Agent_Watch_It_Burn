@@ -14,6 +14,12 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 AI_LAYER = REPO / "gitops/ai-layer"
 failures = []
 
+if not shutil.which("kubectl"):
+    # Exit 2, the repo's SKIP code: every check here reads the kustomize render, and a machine without
+    # kubectl cannot produce it. That is a missing tool, not a failed check.
+    print("SKIP: kubectl not on PATH; the ai-layer render (kubectl kustomize) cannot be produced.", file=sys.stderr)
+    sys.exit(2)
+
 
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}")
