@@ -1,5 +1,6 @@
 # ABOUTME: Live Datadog acceptance for PRD #27 + #28 — asserts AI-layer Service Map edges, platform
 # ABOUTME: component UST, and both log<->trace pivot directions via the Datadog API (NOT a static CI gate).
+# SUITE: e2e (needs Datadog credentials and traffic from a running cluster)
 #
 # Unlike verify/test_observability.py (which statically validates the YAML manifests), this script
 # talks to the LIVE Datadog API and therefore requires DD_API_KEY + DD_APP_KEY and a real trace_id
@@ -120,9 +121,8 @@ def _load_from_secrets_manager():
 _ENV_SOURCE = load_credentials()
 _missing = [k for k in ("DD_API_KEY", "DD_APP_KEY") if not os.environ.get(k)]
 if _missing:
-    # Exit 2, the repo's SKIP code, not 1. This test queries live Datadog, so a machine without the
-    # credentials cannot run it and has not failed it. Exiting 1 made the offline render gate red for
-    # any checkout without the secrets, which trains people to ignore a red suite.
+    # Exit 2, the repo's SKIP code, not 1, so a direct run says why it did nothing. This test is in the
+    # E2E suite (run-e2e.sh), which counts exit 2 as a failure: that suite must not go green without it.
     print(
         f"SKIP: missing {', '.join(_missing)}.\n"
         f"  credential file searched: {_ENV_SOURCE or 'none found'}\n"

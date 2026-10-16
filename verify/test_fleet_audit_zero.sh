@@ -19,7 +19,8 @@ esac
 cat "${T}/${AWS_PROFILE}.${f}" 2>/dev/null; exit 0
 S
 chmod +x "${SHIM}/aws"; export T PATH="${SHIM}:${PATH}"
-src() { ( cd "$(dirname "${FLEET}")" && WIB_ATTENDEE_ACCOUNTS="${ACCTS:-acct-a}" bash -c "source '${FLEET}' >/dev/null 2>&1; set +e; $1" 2>&1 ) ; }
+# audit_zero records failures under LOG_DIR, which cmd_audit_zero creates first; a fresh clone has none.
+src() { ( cd "$(dirname "${FLEET}")" && WIB_ATTENDEE_ACCOUNTS="${ACCTS:-acct-a}" bash -c "source '${FLEET}' >/dev/null 2>&1; set +e; mkdir -p \"\${LOG_DIR}\"; $1" 2>&1 ) ; }
 clean() { rm -f "${T}"/acct-a.* "${T}"/acct-b.*; printf 'nat-1\n' >"${T}/acct-a.nat"; printf 'eipalloc-1\n' >"${T}/acct-a.eip"
   printf 'eni-1\tInterface for NAT Gateway nat-1\neni-2\tVPC Endpoint Interface vpce-1\n' >"${T}/acct-a.eni"; }
 

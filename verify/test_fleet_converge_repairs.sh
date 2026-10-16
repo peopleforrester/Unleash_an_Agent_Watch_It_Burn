@@ -48,6 +48,7 @@ export T CALLS PATH="${SHIM}:${PATH}"
 src() { # $1: snippet run after sourcing; the three external actions are replaced by recorders
   ( cd "$(dirname "${FLEET}")" && WIB_STATE_DIR="${T}/states" \
       bash -c "source '${FLEET}' >/dev/null 2>&1
+        mkdir -p \"\${LOG_DIR}\"  # record_fail writes here; the cmd_* callers create it, a fresh clone has none
         run_identity_script() { echo \"identity-script CLUSTER_NAME=\${CLUSTER_NAME} admin=\${WITB_DD_ADMIN_API_KEY}\" >>'${CALLS}'; }
         reload_datadog_consumers() { echo \"reload \$1 \$2\" >>'${CALLS}'; }
         run_datadog_orgs_verify() { echo \"verify \$1 \$2\" >>'${CALLS}'; return \${VERIFY_RC:-0}; }

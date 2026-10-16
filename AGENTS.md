@@ -58,3 +58,6 @@ down after. There is no production-risk constraint here. Apply these without exc
 
 4. **Bias to action.** Make the change, provision/validate, iterate. Surface real trade-offs once and
    briefly, then proceed with the change unless told otherwise. Do not re-raise settled objections.
+
+Test command: `bash verify/run-tests.sh`
+E2E command: `bash verify/run-e2e.sh`
