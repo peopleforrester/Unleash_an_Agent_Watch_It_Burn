@@ -1,0 +1,49 @@
+# ABOUTME: Repo-wide lint gate: every tracked shell script parses (bash -n) and every tracked Python file
+# ABOUTME: compiles. Submodules lint in their own repos.
+#
+# Why. test_verify_harness.py runs bash -n over verify/ only, but most of the platform's behaviour lives in
+# scripts outside it (infra/terraform/fleet/fleet.sh, scripts/, teardown/, the demo toggles). A syntax
+# error in one of those is found by the first person to run it, usually on the day. Only bash and python3
+# are needed, so this runs on every machine the offline suite runs on.
+import pathlib, subprocess, sys
+
+REPO = pathlib.Path(__file__).resolve().parents[1]
+failures = []
+
+
+def check(n, c):
+    print(f"  {'PASS' if c else 'FAIL'}  {n}")
+    if not c:
+        failures.append(n)
+
+
+def tracked(pattern):
+    out = subprocess.run(["git", "-C", str(REPO), "ls-files", "-z", "--", pattern],
+                         capture_output=True, text=True, check=True).stdout
+    return [REPO / p for p in out.split("\0") if p and (REPO / p).is_file()]
+
+
+shell = tracked("*.sh")
+python = tracked("*.py")
+check(f"found tracked shell scripts to lint ({len(shell)})", len(shell) > 0)
+check(f"found tracked Python files to lint ({len(python)})", len(python) > 0)
+
+print("== every shell script parses ==")
+bad = [str(p.relative_to(REPO)) for p in shell
+       if subprocess.run(["bash", "-n", str(p)], capture_output=True).returncode != 0]
+check(f"bash -n clean ({', '.join(bad) or 'all'})", not bad)
+
+print("== every Python file compiles ==")
+bad = []
+for p in python:
+    try:
+        compile(p.read_text(encoding="utf-8"), str(p), "exec")
+    except SyntaxError as e:
+        bad.append(f"{p.relative_to(REPO)}:{e.lineno}")
+check(f"compiles ({', '.join(bad) or 'all'})", not bad)
+
+print()
+if failures:
+    print(f"FAILED: {len(failures)} check(s)")
+    sys.exit(1)
+print("All lint checks passed.")

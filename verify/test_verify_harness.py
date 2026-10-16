@@ -32,6 +32,25 @@ check("run-tests.sh fails when it finds nothing to run", "NO TESTS FOUND" in run
 # Every test in the directory has to be reachable by that glob, or it is dead weight nothing runs.
 strays = [p.name for p in VERIFY.glob("test_*") if p.suffix not in (".py", ".sh")]
 check(f"no test is unreachable by the runner's glob ({', '.join(strays) or 'none'})", not strays)
+
+# The light and heavy suites split by a `# SUITE: e2e` line in the test, never by what the machine has.
+# A runner that turned a missing tool or credential into a skip went green on machines that ran nothing.
+rune2e = (VERIFY / "run-e2e.sh").read_text()
+check("run-tests.sh has no skip outcome", "skipped" not in runtests)
+check("run-tests.sh hands `# SUITE: e2e` tests to run-e2e.sh", "# SUITE: e2e" in runtests)
+check("run-e2e.sh globs for the same marker", "# SUITE: e2e" in rune2e and 'test_*.py' in rune2e and 'test_*.sh' in rune2e)
+check("run-e2e.sh has no skip outcome", "skipped" not in rune2e)
+check("run-e2e.sh runs the live beat harness", "run-all.sh" in rune2e)
+check("run-e2e.sh requires an explicit CONTEXT and passes it to kubectl",
+      "${CONTEXT:-}" in rune2e and 'kubectl --context "${CONTEXT}"' in rune2e)
+e2e = sorted(p.name for p in VERIFY.glob("test_*") if "\n# SUITE: e2e" in p.read_text())
+check(f"the render and live checks are in the E2E suite ({', '.join(e2e)})",
+      {"test_ai_layer_rollout.py", "test_enforce_floor.py", "test_service_naming_render.py",
+       "test_datadog_service_map.py"} <= set(e2e))
+# Anything else that shells out to kubectl or helm would fail the light suite on a machine without them.
+renderers = [p.name for p in VERIFY.glob("test_*.py") if p.name not in e2e
+             and any(f'["{t}",' in p.read_text() for t in ("kubectl", "helm"))]
+check(f"no light-suite test runs kubectl or helm ({', '.join(renderers) or 'none'})", not renderers)
 for sh in sorted(VERIFY.glob("*.sh")):
     ok = subprocess.run(["bash", "-n", str(sh)], capture_output=True).returncode == 0
     check(f"bash -n clean: {sh.name}", ok)
