@@ -85,7 +85,8 @@ try:
                 continue
             missing_uid.append(f"{p_.relative_to(REPO)}: {name} (verify the image USER is numeric, then allow-list it)")
 except ImportError:
-    print("  SKIP  runAsNonRoot check (pyyaml unavailable)")
+    # The offline suite requires PyYAML (run-tests.sh); a check it cannot run is a failure, not a skip.
+    check("PyYAML is installed (the runAsNonRoot check parses the manifests)", False)
 check(f"every runAsNonRoot resolves to a numeric uid ({len(missing_uid)} unverified)", not missing_uid)
 for x in missing_uid[:10]:
     print(f"        {x}")
