@@ -267,3 +267,24 @@ guard-proxy M0 to M2 commits. No workflow covers these paths (both are path-filt
 Verified locally on 49ff76c: guard-proxy `go test ./...`, the conformance suite against proxy.py and
 the Go build; Backstage on Node 24 `yarn install --immutable`, `yarn tsc`, `yarn test`,
 `yarn build:backend`; and `verify/test_proxy_checksum.py`, `test_image_pins.py`, `test_readme_current.py`.
+
+## 2026-10-22 · gate · question 550: the offline suite alone gates main; the live e2e runs by hand
+
+Question 550 (#442): the heavy gate, `bash verify/run-e2e.sh`, needs kubectl, helm, node, yarn, a
+CONTEXT naming a reachable attendee cluster, the kube and AWS credentials behind it, and Datadog
+credentials. Hecaton's heavy-gate environment provides none of these, and attendee clusters are built
+on demand and torn down afterwards. How should staging reach main?
+
+Answer: gate on the offline tests only for now. Drop the E2E command from the heavy gate (keep
+verify/run-e2e.sh in the repo, runnable by hand). The live e2e runs on demand: spin up a cluster for
+that purpose only, on the smallest instance size that works, run every live test, record results, and
+tear it down in the same session. Never leave a test cluster up. Datadog-dependent checks wait until
+credentials are sorted (#454). Do not weaken the offline tests.
+
+Decided by Michael.
+
+What it changes: AGENTS.md no longer declares an `E2E command:` line, so `bash verify/run-tests.sh`
+gates `main` too, per the hecaton convention that without an E2E command the light command gates main.
+AGENTS.md and the run-e2e.sh header now describe the on-demand live run. run-e2e.sh itself is unchanged
+in behaviour: it still fails, never skips, on a missing tool, context, cluster or credential. Its
+`# SUITE: e2e` checks, the Datadog ones included, stay in it. The offline suite is untouched.

@@ -4,6 +4,9 @@
 #
 # Usage: CONTEXT=<kube-context> [NAMESPACE=agent] bash verify/run-e2e.sh
 #
+# Run by hand, on demand; it gates nothing (decisions.md, question 550). Spin up a cluster for this run
+# only, on the smallest instance size that works, record the results, and tear it down in the same session.
+#
 # The target cluster is never guessed. CONTEXT is required and is passed explicitly to every kubectl call;
 # the current-context is never read (see AGENTS.md, Kube-context safety). KUBECONFIG may be set for this
 # one command to point at an isolated kubeconfig.

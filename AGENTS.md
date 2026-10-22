@@ -60,4 +60,9 @@ down after. There is no production-risk constraint here. Apply these without exc
    briefly, then proceed with the change unless told otherwise. Do not re-raise settled objections.
 
 Test command: `bash verify/run-tests.sh`
-E2E command: `bash verify/run-e2e.sh`
+
+The offline suite above is the only gate, `staging` to `main` included (decisions.md, question 550).
+The live suite, `CONTEXT=<kube-context> bash verify/run-e2e.sh`, is run by hand, on demand: spin up a
+cluster for that run only, on the smallest instance size that works, run every live test, record the
+results in decisions.md, and tear the cluster down in the same session. Never leave a test cluster up.
+The Datadog-dependent checks wait until the Datadog credentials are sorted (#454).
