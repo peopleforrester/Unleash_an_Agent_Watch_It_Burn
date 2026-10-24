@@ -1,7 +1,7 @@
 # ABOUTME: The fleet monitors in the INSTRUCTOR Datadog org, one alert group per kube_cluster_name (#267).
 # ABOUTME: Applied by infra/datadog-fleet/fleet_monitors.py (dry run by default); never edited in the UI.
 #
-# Why the instructor org. Since #242 every attendee and presenter cluster dual-ships its metrics, logs,
+# Why the instructor org. Since #242 every attendee cluster (a presenter's student cluster included: it is a claimed one, #295) dual-ships its metrics, logs,
 # traces and Kubernetes events to the instructor org, and instructor clusters ship there natively, so this
 # org is the one place that can answer "is cluster 37 alive" for the whole room. The per-attendee orgs only
 # ever see one cluster each and get none of this.

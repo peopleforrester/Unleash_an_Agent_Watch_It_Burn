@@ -28,6 +28,8 @@ set -euo pipefail
 _HERE_DDO="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1090
 source "${_HERE_DDO}/../infra/terraform/fleet/fleet.sh" >/dev/null 2>&1 || true
+# Without the rule every cluster would read as "single org by design", which is the false pass above.
+declare -F is_attendee_name >/dev/null || { echo "FATAL: could not load is_attendee_name from fleet.sh" >&2; exit 2; }
 
 PREFIX="${WIB_DD_POOL_PREFIX:-devops-days-portland-090826}"
 ADMIN_APP_KEY="${WITB_DD_ADMIN_APP_KEY:-}"
@@ -83,7 +85,7 @@ check_cluster() {
     else
         echo "  FAIL  $ctx identity: '${ident:-<none>}' (want $want); run infra/datadog-cluster-identity.sh"; rc=1
     fi
-    # Dual shipping (#242): attendee and presenter clusters carry the instructor org as a second
+    # Dual shipping (#242): attendee clusters carry the instructor org as a second
     # destination. The admin APP key is NOT on the cluster any more (#272); it comes from the operator's
     # environment, so this can name the destination org without shipping a read credential to 50 students.
     local aapi aorg
@@ -106,9 +108,11 @@ check_cluster() {
             fi
         fi
     else
-        # is_presenter_name comes from fleet.sh so the rename cannot orphan this check again.
-        if [[ "$want" == *-attendee-* ]] || is_presenter_name "$want"; then
-            echo "  FAIL  $ctx: attendee/presenter cluster without datadog-admin-secret (no dual shipping)"; rc=1
+        # is_attendee_name comes from fleet.sh so a rename cannot orphan this check again. The pool is the
+        # only class that dual-ships: a presenter's student cluster is a claimed pool cluster (#295), and
+        # the community and <owner>-admin clusters ship to the shared presenter org alone.
+        if is_attendee_name "$want"; then
+            echo "  FAIL  $ctx: attendee cluster without datadog-admin-secret (no dual shipping)"; rc=1
         else
             echo "  OK    $ctx: instructor cluster, single org by design"
         fi

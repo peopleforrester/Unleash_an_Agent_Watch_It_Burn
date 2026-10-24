@@ -29,13 +29,13 @@ echo "== the role is derived from the name, so nothing has to remember it =="
 check "the community cluster is community"  '[[ "$(q "role_of_instructor_name watch-it-burn-community")" == community ]]'
 check "an admin cluster is admin"           '[[ "$(q "role_of_instructor_name watch-it-burn-michael-admin")" == admin ]]'
 check "an attendee cluster has no role"     '[[ -z "$(q "role_of_instructor_name watch-it-burn-attendee-007")" ]]'
-check "a presenter student cluster has no role" '[[ -z "$(q "role_of_instructor_name watch-it-burn-whitney-student")" ]]'
+check "a retired presenter student name has no role" '[[ -z "$(q "role_of_instructor_name watch-it-burn-whitney-student")" ]]'
 
 echo "== a roster cluster is recognised as one =="
 check "community counts as a roster cluster" 'q "is_instructor_name watch-it-burn-community"'
 check "admin counts as a roster cluster"     'q "is_instructor_name watch-it-burn-whitney-admin"'
 check "an attendee does not"                 '! q "is_instructor_name watch-it-burn-attendee-042"'
-check "a presenter student cluster does not" '! q "is_instructor_name watch-it-burn-michael-student"'
+check "a retired presenter student name does not" '! q "is_instructor_name watch-it-burn-michael-student"'
 
 echo "== the hostname a human is given =="
 check "the community cluster answers on attackme" \
@@ -44,8 +44,8 @@ check "an admin cluster is named for its owner" \
   '[[ "$(q "public_host_for watch-it-burn-michael-admin")" == michael-admin.agenticburn.com ]]'
 check "the other presenter too" \
   '[[ "$(q "public_host_for watch-it-burn-whitney-admin")" == whitney-admin.agenticburn.com ]]'
-check "a presenter student cluster is unchanged" \
-  '[[ "$(q "public_host_for watch-it-burn-whitney-student")" == whitney-student.agenticburn.com ]]'
+check "nothing is named <owner>-student any more (#295)" \
+  '[[ "$(q "public_host_for watch-it-burn-whitney-student")" != whitney-student.agenticburn.com ]]'
 check "an attendee still gets its memorable name" \
   '[[ "$(q "public_host_for watch-it-burn-attendee-007")" == *-*.agenticburn.com ]]'
 check "no hostname anywhere is a roundN name" \
@@ -92,10 +92,11 @@ check "an attendee slot is what selects a pool org" \
   'grep -q "if \[\[ -n \"\${slot}\" \]\]; then" <<<"$src"'
 check "roster and admin clusters fall through to the instructor org" \
   'grep -q "_dd=\"\${_admin}\"" <<<"$src"'
-check "only slotted and presenter-student clusters get a dual-ship key" \
-  'grep -q "if \[\[ -n \"\${slot}\" \]\] || is_presenter_name \"\${name}\"; then" <<<"$src"'
-# An admin cluster must NOT match the presenter-student rule, or it would dual-ship to its own org.
-check "an admin cluster is not a presenter student cluster" \
-  '! q "is_presenter_name watch-it-burn-michael-admin"'
+check "only slotted clusters get a dual-ship key" \
+  '! grep -q "|| is_presenter_name \"\${name}\"; then" <<<"$src"'
+# The presenter rule now names the admin clusters (#295), so it must not be what selects dual shipping, or
+# an admin cluster would dual-ship to the org it already ships to.
+check "an admin cluster is a presenter cluster, and that alone grants no second key" \
+  'q "is_presenter_name watch-it-burn-michael-admin" && ! grep -q "is_presenter_name" <<<"$(sed -n "/^datadog_keys_for() {/,/^}/p" "${FLEET}")"'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Tests for #272: the instructor org's APP key is never written to a cluster, and the verifier
-# ABOUTME: recognises a presenter cluster by fleet.sh's own naming rule rather than a stale glob. Offline.
+# ABOUTME: recognises a dual-shipping cluster by fleet.sh's own naming rule rather than a stale glob. Offline.
 #
 # Why. The admin app key is a READ credential for the org that aggregates every cluster's telemetry,
 # including LLM Observability spans carrying each attendee's prompts. It was written into the agent,
@@ -10,7 +10,8 @@
 # The second half: verify/datadog-orgs.sh decided "is this a cluster that must dual-ship?" with the glob
 # *-pres-*, which the #208/#258 rename to <owner>-student killed. watch-it-burn-michael-student matched
 # nothing and was reported "instructor cluster, single org by design" — a false pass on a presenter's own
-# demo cluster.
+# demo cluster. Those student clusters are retired (#295): a presenter claims a pool cluster by email, so the
+# attendee pool is the only class that dual-ships, and the verifier asks fleet.sh's is_attendee_name.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IDENT="${HERE}/../infra/datadog-cluster-identity.sh"
@@ -49,18 +50,21 @@ check "a missing app key SKIPs loudly instead of passing quietly" \
 check "an admin secret with no api-key is still a failure" \
     'grep -q "has no api-key" <<<"$ORGS_SRC"'
 
-echo "== presenter clusters are recognised by fleet.sh's rule, not a glob =="
+echo "== dual-shipping clusters are recognised by fleet.sh's rule, not a glob =="
 check "the dead *-pres-* glob is gone" '! grep -q -- "\*-pres-\*" <<<"$ORGS_SRC"'
-check "it calls is_presenter_name" 'grep -q "is_presenter_name" <<<"$ORGS_SRC"'
+check "the *-attendee-* glob is gone too" '! grep -q -- "\*-attendee-\*" <<<"$ORGS_SRC"'
+check "it calls is_attendee_name" 'grep -q "is_attendee_name" <<<"$ORGS_SRC"'
 check "and it sources fleet.sh to get it" 'grep -q "source .*fleet.sh" <<<"$ORGS_SRC"'
+check "and refuses to run without it, rather than calling everything single-org" \
+    'grep -q "declare -F is_attendee_name" <<<"$ORGS_SRC"'
 
-# The regression itself: the renamed presenter clusters must be classified as needing dual shipping.
-echo "== the rule actually matches today's presenter names =="
-match() { ( source "${FLEET}" >/dev/null 2>&1; is_presenter_name "$1" && echo yes || echo no ) 2>/dev/null | tail -1; }
-check "watch-it-burn-michael-student is a presenter cluster"  '[[ "$(match watch-it-burn-michael-student)" == yes ]]'
-check "watch-it-burn-whitney-student is a presenter cluster"  '[[ "$(match watch-it-burn-whitney-student)" == yes ]]'
-check "an instructor round cluster is NOT"                    '[[ "$(match watch-it-burn-r3-1)" == no ]]'
-check "an attendee cluster is NOT (it matches by its own glob)" '[[ "$(match watch-it-burn-attendee-007)" == no ]]'
+# The regression itself: what must dual-ship is classified as such, and nothing else is.
+echo "== the rule actually matches today's names =="
+match() { ( source "${FLEET}" >/dev/null 2>&1; is_attendee_name "$1" && echo yes || echo no ) 2>/dev/null | tail -1; }
+check "an attendee pool cluster dual-ships"                   '[[ "$(match watch-it-burn-attendee-007)" == yes ]]'
+check "an admin cluster does NOT (it ships to the shared org)" '[[ "$(match watch-it-burn-michael-admin)" == no ]]'
+check "the community cluster does NOT"                        '[[ "$(match watch-it-burn-community)" == no ]]'
+check "a retired presenter student name is not a pool cluster" '[[ "$(match watch-it-burn-whitney-student)" == no ]]'
 check "the old pres- form no longer matches, so nothing silently depends on it" \
     '[[ "$(match watch-it-burn-pres-michael)" == no ]]'
 

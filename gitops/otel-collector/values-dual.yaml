@@ -1,4 +1,4 @@
-# ABOUTME: Overlay for ATTENDEE and presenter clusters: a second Datadog exporter that ships every span and
+# ABOUTME: Overlay for ATTENDEE clusters (a presenter claims one too, #295): a second Datadog exporter that ships every span and
 # ABOUTME: metric to the instructor org as well as the student's own. Layered over values.yaml (#242).
 #
 # The Datadog exporter is per-destination, not per-key, so a second org is a second exporter on the same

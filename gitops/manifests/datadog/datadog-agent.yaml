@@ -65,7 +65,7 @@ spec:
       # Per-cluster identity and dual shipping (#242). Both come from objects deploy-full-idp writes at
       # bootstrap (infra/datadog-cluster-identity.sh): cluster-identity on every cluster, so this cluster
       # reports its real name instead of the shared literal above; datadog-admin-secret only on attendee
-      # and presenter clusters, holding the instructor org's key in the JSON shapes the Agent expects
+      # clusters (a presenter's student cluster is a claimed one, #295), holding the instructor org's key in the JSON shapes the Agent expects
       # (docs.datadoghq.com/agent/configuration/dual-shipping, read 2026-09-05). Every reference is
       # optional: an instructor cluster has no admin secret and simply ships once.
       env:

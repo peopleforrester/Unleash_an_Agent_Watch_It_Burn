@@ -51,16 +51,19 @@ readonly LOG_DIR="${SCRIPT_DIR}/logs"
 # forked by run_pool inherit $$, so a run still sees all of its own.
 readonly FAIL_FILE="${LOG_DIR}/.failures.$$"
 readonly NAME_PREFIX="watch-it-burn-attendee"
-# Presenter STUDENT clusters (#208): provisioned by the same path and profile as an attendee, but a
-# distinct name class so no pool logic (slot join, claim, count, reap) can ever match them. The owner
-# is the suffix: watch-it-burn-pres-michael -> michael-student.agenticburn.com. The prefix is short on
-# purpose: AWS caps IAM role name_prefix at 38 characters and the cluster module appends "-cluster-",
-# so the whole cluster name must stay under 30 (watch-it-burn-presenter-michael failed plan at 40).
-# A presenter's own student cluster is named for its OWNER FIRST, exactly like the hostname it serves and
-# like the roster's michael-round1 (#258, Michael 2026-09-06): watch-it-burn-michael-student serves
-# michael-student.agenticburn.com. The earlier watch-it-burn-pres-michael put the role first for no reason.
-# 29 characters at owner=7, inside the 38-char IAM role name_prefix cap the module appends "-cluster-" to.
-readonly PRESENTER_SUFFIX="student"
+# The attendee pool, by name: watch-it-burn-attendee-NNN. Every cluster anybody claims by email is one of
+# these, the presenters' included (#295), so this is the class that takes a pool org and dual-ships.
+is_attendee_name() { [[ "$1" =~ ^${NAME_PREFIX}-[0-9]+$ ]]; }
+# PRESENTER clusters are named for their OWNER FIRST, then the role: watch-it-burn-michael-admin serves
+# michael-admin.agenticburn.com (#258, #294). This is the ONE place that rule lives; is_instructor_name,
+# role_of_instructor_name and public_host_for all ask it, because two places disagreeing about a cluster's
+# name produced #265 and #272. The only presenter role left is admin: the dedicated <owner>-student
+# clusters are retired (#295), and a presenter who needs a student cluster claims one from the pool by
+# email, exactly as an attendee does.
+# The name stays short on purpose: AWS caps IAM role name_prefix at 38 characters and the cluster module
+# appends "-cluster-", so the whole cluster name must stay under 30 (watch-it-burn-presenter-michael failed
+# plan at 40). 27 characters at owner=7.
+readonly PRESENTER_SUFFIX="admin"
 readonly PRESENTER_OWNER_MAX=10
 # Service hostnames (#233): <service>-<label>.agenticburn.com for every cluster, riding the cluster's
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
@@ -75,7 +78,6 @@ emit_service_hosts() {
 }
 is_presenter_name() { [[ "$1" =~ ^watch-it-burn-[a-z0-9-]+-${PRESENTER_SUFFIX}$ ]]; }
 presenter_owner_of() { local n="${1#watch-it-burn-}"; printf '%s' "${n%-${PRESENTER_SUFFIX}}"; }
-presenter_name_for() { printf 'watch-it-burn-%s-%s' "$1" "${PRESENTER_SUFFIX}"; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
 # 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
 # EKS control-plane create (near-zero local cost), so the binding local limit is RAM during the bootstrap
@@ -216,11 +218,6 @@ WIB_PROVISIONING_URL="${WIB_PROVISIONING_URL:-https://provisioning.agenticburn.c
 # it explicitly keeps it stable instead of following whichever roster entry happened to render first.
 WIB_PRIMARY_OWNER="${WIB_PRIMARY_OWNER:-michael}"
 
-# Attendee SLOT -> presenter owner, for the two clusters the presenters use as their own STUDENT box.
-# These are real attendee clusters (full profile, student credentials, claimable through provisioning);
-# they simply belong to a named person, so they are named for that person like the roster is. Slot
-# numbers rather than full names so this stays readable and matches the %03d the pool generates.
-
 # Railway coordinates for that app, used to resolve its ADMIN_TOKEN automatically (see resolve_admin_token).
 readonly WIB_PROVISIONING_RW_PROJECT="859f9db0-bbda-4d3c-8026-767d0b9047a9"
 readonly WIB_PROVISIONING_RW_ENV="ddb7d7e6-9643-4b55-8dd6-3618a0b6cce4"
@@ -270,11 +267,11 @@ WIB_DRY_RUN="${WIB_DRY_RUN:-}"
 TF_INSTANCE_TYPES=""
 TF_TIER=""
 
-# An instructor/roster cluster is watch-it-burn-community or watch-it-burn-<owner>-admin (#291), as
-# distinct from the numbered attendee
-# pool (watch-it-burn-attendee-NNN). Several verbs need to tell them apart, because the attendee path
-# derives a pool slot from the trailing number and that is meaningless for the roster.
-is_instructor_name() { [[ "$1" == "watch-it-burn-community" || "$1" =~ ^watch-it-burn-[a-z0-9-]+-admin$ ]]; }
+# An instructor/roster cluster is watch-it-burn-community or a presenter's watch-it-burn-<owner>-admin
+# (#291), as distinct from the numbered attendee pool (watch-it-burn-attendee-NNN). Several verbs need to
+# tell them apart, because the attendee path derives a pool slot from the trailing number and that is
+# meaningless for the roster. The admin half is is_presenter_name, not a second copy of its regex.
+is_instructor_name() { [[ "$1" == "watch-it-burn-community" ]] || is_presenter_name "$1"; }
 
 # --- Memorable attendee hostnames (#142) ---------------------------------------------------------
 # An attendee used to be handed a raw load-balancer hostname
@@ -338,44 +335,23 @@ friendly_attendee_name() {
     return 0
 }
 
-# The public hostname a cluster should be reached on, without the scheme. Roster clusters use their
-# owner-and-round name; attendee clusters use their memorable name. One function so `routes` (which
-# publishes the name) and `ingest` (which tells provisioning what to hand the student) cannot disagree.
+# The public hostname a cluster should be reached on, without the scheme. The community cluster answers on
+# attackme; a presenter's cluster on <owner>-admin; attendee clusters on their memorable name. One function
+# so `routes` (which publishes the name) and `ingest` (which tells provisioning what to hand the student)
+# cannot disagree. The owner comes from the NAME, by the same rule that recognises a presenter cluster:
+# a caller-supplied or fallen-back owner is how r1-2.agenticburn.com, a host the router never served, came
+# out of every caller that was not cmd_routes (#265). test_presenter_student_retired.sh holds the roster's
+# owner column to the name, so the two cannot drift.
 public_host_for() {
-    local name="$1" owner="${2:-}"
-    if is_instructor_name "${name}"; then
-        local rr; rr="$(role_of_instructor_name "${name}")"
-        # Look the owner up when the caller did not pass one, instead of falling back to the raw cluster
-        # name. That fallback produced r1-2.agenticburn.com, a host the router has never served, so any
-        # caller that was not cmd_routes computed a name that 404s: verify reported Whitney's three round
-        # consoles dead on 2026-09-07 while they were serving fine (#265). One function names a cluster.
-        if [[ -z "${owner}" ]]; then
-            local _e _nm _own
-            load_roster
-            for _e in "${INSTRUCTORS[@]}"; do
-                _nm="${_e%%|*}"; _own="${_e##*|}"
-                [[ "${_nm}" == "${name}" ]] && { owner="${_own}"; break; }
-            done
-        fi
-        # The community cluster is the one the whole room attacks, and it is reachable at the name the
-        # room is told: attackme. An admin cluster is its owner's, so it reads <owner>-admin.
-        [[ "${rr}" == "community" ]] && { printf 'attackme.agenticburn.com'; return 0; }
-        [[ -n "${owner}" && "${rr}" == "admin" ]] && { printf '%s-admin.agenticburn.com' "${owner}"; return 0; }
-        printf '%s.agenticburn.com' "${name#watch-it-burn-}"; return 0
-    fi
-    # PRESENTER student clusters, driven by the same owner idea as the roster rather than by two
-    # hardcoded name cases. The roster already names clusters <owner>-round<n>; these are the same
-    # presenter's STUDENT cluster, so they are <owner>-student, and the fleet reads consistently:
-    #
-    #   michael-round1 / michael-round2 / michael-round3 / michael-student
-    #   whitney-round1 / whitney-round2 / whitney-round3 / whitney-student
-    #
-    # A presenter cluster is named for its owner (#208); every other name is a real attendee and gets a
-    # themed hostname. The attendee-slot overlay that once mapped attendee-001/002 to the presenters is
-    # gone: both presenters run on watch-it-burn-pres-<owner> since 2026-09-06.
+    local name="$1"
+    # The community cluster is the one the whole room attacks, and it is reachable at the name the room
+    # is told: attackme.
+    [[ "${name}" == "watch-it-burn-community" ]] && { printf 'attackme.agenticburn.com'; return 0; }
     if is_presenter_name "${name}"; then
-        printf '%s-student.agenticburn.com' "$(presenter_owner_of "${name}")"; return 0
+        printf '%s-%s.agenticburn.com' "$(presenter_owner_of "${name}")" "${PRESENTER_SUFFIX}"; return 0
     fi
+    # Every other name is the attendee pool, and a presenter who claims a student cluster by email gets
+    # one of these like anybody else (#295), memorable name included.
     printf '%s.agenticburn.com' "$(friendly_attendee_name "${name##*-}")"
     return 0
 }
@@ -436,10 +412,9 @@ require_apply() {
 # `rnd="$(role_of_instructor_name ...)"`, with no message, which is exactly how `ingest <attendee-name>`
 # silently did nothing at all.
 role_of_instructor_name() {
-    case "$1" in
-        watch-it-burn-community)       printf 'community' ;;
-        watch-it-burn-*-admin)         printf 'admin' ;;
-    esac
+    if [[ "$1" == "watch-it-burn-community" ]]; then printf 'community'
+    elif is_presenter_name "$1"; then printf '%s' "${PRESENTER_SUFFIX}"
+    fi
     return 0
 }
 # Kept as the single place that answers "which account holds a roster cluster". Every roster cluster now
@@ -480,12 +455,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       the Datadog pool is loaded, with the session window in UTC.
 
     SELECTORS (every verb takes them): attendees | attendees:<n> | instructors | presenters |
-                      <owner> (michael, whitney: their rounds AND their student cluster) | all | names.
+                      <owner> (michael, whitney: their admin cluster) | all | names.
 
     up <count>        Provision watch-it-burn-attendee-001 .. -<count> (or pass explicit names).
-                      A presenter's own student cluster is watch-it-burn-<owner>-student: same profile
-                      and controls as an attendee, NOT a pool slot, hostname <owner>-student (#208).
-    up <name...>      Provision the named clusters.
+                      There is no presenter student cluster (#295): a presenter claims a pool cluster
+                      by email at provisioning, exactly as an attendee does.
+    up <name...>      Provision the named attendee clusters. Refuses any other name.
     up-fleet <n>      Provision <n> clusters in EACH \${WIB_ATTENDEE_ACCOUNTS} account, all concurrent
                       (disjoint name ranges). Honors WIB_NAME_OFFSET to skip existing cluster numbers.
     down-fleet <n>    Tear down an up-fleet run: SAME <n> + WIB_NAME_OFFSET, account-aware (each cluster
@@ -674,20 +649,19 @@ arm_infra_guardrails() {
 # The ONE place that says which Datadog keys a cluster gets, used by bootstrap and by converge's repair
 # so the two can never disagree (#254). Prints "api app admin_api admin_app" (admin_* empty when the
 # cluster does not dual-ship) and returns 1 when the cluster's own org cannot be resolved.
-#   attendee-NNN : pool row N (non-admin rows, in order) + the instructor org as the second destination
-#   pres-<owner> : the admin-attendee org (what the admin page shows) + the instructor org second (#242)
-#   instructor   : the instructor org itself, and nothing second (it already IS the instructor org)
+#   attendee-NNN : pool row N (non-admin rows, in order) + the instructor org as the second destination.
+#                  A presenter's own student cluster is one of these, claimed by email (#295).
+#   instructor   : the instructor org itself, and nothing second (it already IS the instructor org).
+#                  The community and <owner>-admin clusters both take this path.
 datadog_keys_for() {
     local name="$1" slot api="" app="" admin_api="" admin_app="" _admin _dd
     slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
     _admin="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
         --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
-    if [[ -n "${slot}" ]] || is_presenter_name "${name}"; then
+    if [[ -n "${slot}" ]]; then
         admin_api="$(jq -r '."api-key" // empty' <<<"${_admin}" 2>/dev/null)"
         admin_app="$(jq -r '."app-key" // empty' <<<"${_admin}" 2>/dev/null)"
         [[ -n "${admin_api}" ]] || log "  WARN: ${name}: instructor org keys unreadable; no dual shipping"
-    fi
-    if [[ -n "${slot}" ]]; then
         local pool1 pool2
         pool1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
         pool2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
@@ -695,8 +669,6 @@ datadog_keys_for() {
             '([$a[], $b[]] | map(select((.role // "") | startswith("admin") | not)))[$i] | "\(.["api-key"] // "") \(.["app-key"] // "")"' 2>/dev/null)
     else
         _dd="${_admin}"
-        is_presenter_name "${name}" && _dd="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
-            --secret-id watch-it-burn/datadog-admin-attendee --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
         api="$(jq -r '."api-key" // empty' <<<"${_dd}" 2>/dev/null)"
         app="$(jq -r '."app-key" // empty' <<<"${_dd}" 2>/dev/null)"
     fi
@@ -1654,9 +1626,10 @@ deregister_one() {
 #
 #   attendees            every attendee cluster that HAS state
 #   attendees:40         attendee-001 .. attendee-040, whether or not they exist yet
-#   instructors          the nine roster clusters (rounds)
-#   presenters           every <owner>-student cluster with state
-#   michael | whitney    that owner's round clusters AND their student cluster
+#   instructors          the roster clusters (community + one admin per presenter) with state
+#   presenters           every presenter cluster (<owner>-admin, is_presenter_name) with state
+#   michael | whitney    that owner's roster clusters. A presenter's student cluster is a claimed pool
+#                        cluster since #295, so it is in `attendees`, like any other claim.
 #   all                  everything with state
 #   <name> ...           explicit names, expanded as before
 #
@@ -1676,19 +1649,18 @@ resolve_selector() {
                 nm="${entry%%|*}"; [[ -f "${STATE_DIR}/${nm}.tfstate" ]] && printf '%s\n' "${nm}"
             done ;;
         presenters)
-            find "${STATE_DIR}" -name "watch-it-burn-*-${PRESENTER_SUFFIX}.tfstate" -exec basename {} .tfstate \; 2>/dev/null | sort ;;
+            find "${STATE_DIR}" -name '*.tfstate' -exec basename {} .tfstate \; 2>/dev/null | sort \
+                | while read -r nm; do if is_presenter_name "${nm}"; then printf '%s\n' "${nm}"; fi; done ;;
         all)
             find "${STATE_DIR}" -name '*.tfstate' -exec basename {} .tfstate \; 2>/dev/null | sort ;;
         *)
-            # An owner name selects that person's whole set: their rounds and their student cluster.
+            # An owner name selects that person's whole set: their roster rows.
             if [[ "${sel}" =~ ^[a-z][a-z0-9-]*$ ]] && ! [[ "${sel}" == watch-it-burn-* ]]; then
                 load_roster; local entry owner
                 for entry in "${INSTRUCTORS[@]}"; do
                     nm="${entry%%|*}"; owner="${entry##*|}"
                     [[ "${owner}" == "${sel}" && -f "${STATE_DIR}/${nm}.tfstate" ]] && printf '%s\n' "${nm}"
                 done
-                local st="${STATE_DIR}/$(presenter_name_for "${sel}").tfstate"
-                [[ -f "${st}" ]] && printf '%s\n' "$(presenter_name_for "${sel}")"
             else
                 expand_names "${sel}"
             fi ;;
@@ -1779,10 +1751,15 @@ cmd_up() {
     [[ $# -ge 1 ]] || usage
     local names; mapfile -t names < <(expand_names "$@")
     local n bp=""; [[ -n "${WIB_NO_BOOTSTRAP:-}" ]] || bp="attendee"
+    # `up` builds the attendee POOL and nothing else. It used to take any name, and that is how the
+    # dedicated presenter student clusters (watch-it-burn-<owner>-student) were built outside the pool,
+    # so the presenters never walked the claim flow the room walks (#295). A roster cluster comes from
+    # `instructors up`; a presenter who wants a student cluster claims one by email.
     for n in "${names[@]}"; do
-        local _own; _own="$(presenter_owner_of "${n}")"
-        if is_presenter_name "${n}" && [[ "${#_own}" -gt "${PRESENTER_OWNER_MAX}" ]]; then
-            log "REFUSING ${n}: presenter owner longer than ${PRESENTER_OWNER_MAX} chars breaks the 38-char IAM name_prefix cap"
+        if ! is_attendee_name "${n}"; then
+            log "REFUSING ${n}: up provisions the attendee pool (${NAME_PREFIX}-NNN) only."
+            log "          Roster clusters: 'instructors up'. A presenter's student cluster: claim one at"
+            log "          ${WIB_PROVISIONING_URL} with your own email, exactly as an attendee does."
             exit 2
         fi
     done
@@ -2134,7 +2111,7 @@ print_roster_lab_links() {
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
         [[ -n "${role_filter}" && "${role_filter}" != "${rr}" ]] && continue
-        host="$(public_host_for "${name}" "${owner:-}")"
+        host="$(public_host_for "${name}")"
         [[ -n "${host}" ]] || continue
         dd="$(datadog_row_for_role "${rr}" || echo '{}')"
         em="$(jq -r '.email // ""' <<<"${dd}" 2>/dev/null)"
@@ -2258,6 +2235,13 @@ cmd_instructors() {
             # clusters" must not quietly include it.
             [[ -n "${owner_filter}" && "${owner,,}" != "${owner_filter}" ]] && continue
             [[ -n "${WIB_PER_ROLE}" && "${n}" -ge "${WIB_PER_ROLE}" ]] && break
+            if is_presenter_name "${name}"; then
+                local _own; _own="$(presenter_owner_of "${name}")"
+                if [[ "${#_own}" -gt "${PRESENTER_OWNER_MAX}" ]]; then
+                    log "REFUSING ${name}: presenter owner longer than ${PRESENTER_OWNER_MAX} chars breaks the 38-char IAM name_prefix cap"
+                    exit 2
+                fi
+            fi
             # account|profile|round|tier|itype|pids  -- per-cluster tier/itype/pids come from the roster
             PROVISION_SPEC["${name}"]="${acct}|${bp}|${r}|${tier}|${itype}|${pidscol}"
             n=$(( n + 1 ))
@@ -2998,11 +2982,6 @@ ingest_one() {
     if [[ -n "${slot}" ]]; then
         dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" --argjson i "$(( slot - 1 ))" \
             '(([$a[],$b[]]|map(select((.role//"")|startswith("admin")|not)))[$i]) // {} | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
-    elif is_presenter_name "${name}"; then
-        # Presenter student cluster (#208): the admin-attendee org, the same row bootstrap_one used, so the
-        # login on the admin page and the org the cluster ships to are one and the same.
-        dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" \
-            '(([$a[],$b[]]|map(select((.role//"")=="admin-attendee"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
     elif is_instructor_name "${name}"; then
         dd="$(jq -cn --argjson a "${POOL1}" --argjson b "${POOL2}" \
             '(([$a[],$b[]]|map(select((.role//"")=="admin-instructor"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
@@ -3053,7 +3032,7 @@ ingest_one() {
     #     undone the encrypted hop for anyone who followed it.
     # Falls back to the raw console host if no public name resolves, so a cluster still reaches its
     # student rather than being unreachable because a name lookup failed.
-    local pub_host; pub_host="$(public_host_for "${name}" "${owner:-}")"
+    local pub_host; pub_host="$(public_host_for "${name}")"
     local console_url="https://${pub_host}"
     [[ -n "${pub_host}" ]] || console_url="https://${console_host}"
     local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "${console_url}" --arg tu "${term_user}" --arg tp "${term_pw}" --argjson dd "${dd}" \
@@ -3227,17 +3206,6 @@ cmd_routes() {
             # from scratch for the event and every student is given the memorable name. Emitting it
             # doubled the route table for no reader, and a second hostname per cluster is a second thing
             # to get wrong in the shrink guard below.
-            emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
-        done
-        # Presenter student clusters (#208): <owner>-student, from their own state files.
-        for state in "${STATE_DIR}"/watch-it-burn-*-${PRESENTER_SUFFIX}.tfstate; do
-            [[ -e "${state}" ]] || continue
-            name="$(basename "${state}" .tfstate)"
-            acct="$(read_membership "${name}")"; [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"
-            provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
-            h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
-            [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
-            printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
             emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         done
     fi

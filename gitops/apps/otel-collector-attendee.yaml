@@ -1,5 +1,5 @@
 # ABOUTME: ArgoCD Application for OpenTelemetry Collector DaemonSet.
-# ABOUTME: ATTENDEE/presenter profile: dual-ships to the student's org AND the instructor org (#242).
+# ABOUTME: ATTENDEE profile: dual-ships to the student's org AND the instructor org (#242).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

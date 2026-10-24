@@ -9,7 +9,7 @@
 #
 # Usage:
 #   verify/input-guard.sh <host> <kube-context> [aws-profile]
-#   verify/input-guard.sh michael-student arn:aws:eks:us-west-2:...:cluster/watch-it-burn-michael-student
+#   verify/input-guard.sh michael-admin arn:aws:eks:us-west-2:...:cluster/watch-it-burn-michael-admin
 #
 # Exits non-zero if the benign prompt is blocked, the injection passes, or the cluster does not answer.
 set -euo pipefail

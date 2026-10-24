@@ -10,7 +10,7 @@
 # Usage:
 #   verify/fleet-walkthrough.sh                 # every cluster with terraform state
 #   verify/fleet-walkthrough.sh --chat 5        # also send a real prompt to 5 clusters (slow, ~20s each)
-#   verify/fleet-walkthrough.sh --only michael-student,attendee-001
+#   verify/fleet-walkthrough.sh --only michael-admin,attendee-001
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/.." && pwd)"
@@ -25,7 +25,7 @@ while [[ $# -gt 0 ]]; do
         *) echo "usage: $0 [--chat N] [--only a,b] [--json report.json]" >&2; exit 2 ;;
     esac
 done
-# fleet.sh carries the naming rules (public_host_for, is_presenter_name); source it rather than restate them.
+# fleet.sh carries the naming rules (public_host_for, is_presenter_name, is_attendee_name); source it rather than restate them.
 source "${FLEET}" >/dev/null 2>&1
 KDIR="$(mktemp -d -t wibwalk.XXXX)"; trap 'rm -rf "${KDIR}"' EXIT
 pass=0; fail=0; rows=""

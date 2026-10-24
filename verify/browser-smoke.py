@@ -23,8 +23,8 @@ response. So this drives Chrome, sends a real prompt through the page's own fetc
 DOM.
 
 Usage:
-    uv run --with playwright verify/browser-smoke.py                  # all live clusters
-    uv run --with playwright verify/browser-smoke.py michael-round1   # named hosts only
+    uv run --with playwright verify/browser-smoke.py                  # the roster clusters
+    uv run --with playwright verify/browser-smoke.py michael-admin    # named hosts only
 
 Exits non-zero if any cluster fails, so it can gate a demo.
 """
@@ -184,8 +184,8 @@ if __name__ == "__main__":
     args = sys.argv[1:]
     if not args:
         args = [
-            "michael-student", "whitney-student",
-            "michael-round1", "michael-round2", "michael-round3",
-            "whitney-round1", "whitney-round2", "whitney-round3",
+            # The roster (#291). A presenter's student cluster is a claimed pool cluster (#295):
+            # pass its memorable name to smoke it.
+            "attackme", "michael-admin", "whitney-admin",
         ]
     sys.exit(asyncio.run(main(args)))

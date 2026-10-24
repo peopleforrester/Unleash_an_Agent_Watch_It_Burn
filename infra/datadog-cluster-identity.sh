@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# ABOUTME: Writes the per-cluster Datadog identity (cluster-identity ConfigMap) and, on attendee and presenter
+# ABOUTME: Writes the per-cluster Datadog identity (cluster-identity ConfigMap) and, on attendee pool
 # ABOUTME: clusters, datadog-admin-secret with the instructor org's keys for dual shipping (#242).
 #
 # Runs against the cluster in KUBECONFIG. Idempotent, so it can be re-run on a live cluster after the fact
 # (infra/reload-datadog-consumers.sh restarts the readers). Called by deploy-full-idp.sh; fleet.sh supplies the
-# admin keys for attendee and presenter clusters only. An instructor cluster ships to the instructor org
-# already, so it gets the ConfigMap and any stale admin secret is removed, never a second copy of itself.
+# admin keys for attendee pool clusters only (a presenter's student cluster is a claimed one, #295). An
+# instructor cluster ships to the instructor org already, so it gets the ConfigMap and any stale admin secret
+# is removed, never a second copy of itself.
 #
 # Env:
 #   CLUSTER_NAME             derived from the kube context when unset (arn:...:cluster/<name>)

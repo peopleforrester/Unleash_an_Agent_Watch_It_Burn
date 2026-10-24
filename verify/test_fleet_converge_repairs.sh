@@ -58,8 +58,10 @@ src() { # $1: snippet run after sourcing; the three external actions are replace
 echo "== datadog_keys_for: one truth for every cluster class =="
 check "attendee-002 gets pool row 2 plus the instructor org second" \
   '[[ "$(src "datadog_keys_for watch-it-burn-attendee-002")" == "ROW2_API ROW2_APP ADMIN_API ADMIN_APP" ]]'
-check "pres-michael gets the admin-attendee org plus the instructor org second" \
-  '[[ "$(src "datadog_keys_for watch-it-burn-michael-student")" == "PRES_API PRES_APP ADMIN_API ADMIN_APP" ]]'
+check "an admin cluster gets the instructor org and nothing second" \
+  '[[ "$(src "datadog_keys_for watch-it-burn-michael-admin")" == "ADMIN_API ADMIN_APP  " ]]'
+check "nothing reads the retired admin-attendee org (#295)" \
+  '( : >"${CALLS}"; src "datadog_keys_for watch-it-burn-michael-admin" >/dev/null; ! grep -q datadog-admin-attendee "${CALLS}" )'
 check "an instructor cluster gets the instructor org and nothing second" \
   '[[ "$(src "datadog_keys_for watch-it-burn-r2-1")" == "ADMIN_API ADMIN_APP  " ]]'
 check "a slot beyond the pool resolves nothing and returns 1" \

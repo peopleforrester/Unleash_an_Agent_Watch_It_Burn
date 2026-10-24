@@ -269,8 +269,9 @@ _routes_all = FLEET_SH[FLEET_SH.index("cmd_routes() {"):]
 _routes_all = _routes_all[:_routes_all.index("\ncmd_", 10)] if "\ncmd_" in _routes_all[10:] else _routes_all[:14000]
 check("no routes loop reads a cluster through the default account",
       'provider_write_kubeconfig "${name}" "${kcfg}" "${WIB_DEFAULT_ACCOUNT}"' not in _routes_all)
+# One state loop now: the presenter student loop that shared this line is gone with the clusters (#295).
 check("the routes loops resolve each cluster's own recorded account",
-      _routes_all.count('acct="$(read_membership "${name}")"') >= 2)
+      _routes_all.count('acct="$(read_membership "${name}")"') >= 1)
 # Registration has the same account problem routes had, and a worse consequence: an attendee cluster
 # that is not registered cannot be CLAIMED, so the student holding that slot never gets in. Both ingest
 # call sites passed WIB_DEFAULT_ACCOUNT for attendee names while the pool spans five accounts.

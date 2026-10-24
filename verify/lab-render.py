@@ -10,15 +10,16 @@ markup to the student. Both serve HTTP 200 and both look fine to curl.
 
 Run after any structural edit to lab.html, and after rolling it to the fleet:
 
-    uv run --with playwright verify/lab-render.py                 # whitney-student
-    uv run --with playwright verify/lab-render.py michael-student
+    uv run --with playwright verify/lab-render.py                 # whitney-admin
+    uv run --with playwright verify/lab-render.py michael-admin
+    uv run --with playwright verify/lab-render.py <claimed-name>  # a pool cluster, e.g. a presenter's claim
 
 Exits non-zero if the page did not render as expected.
 """
 import asyncio, re, sys
 from playwright.async_api import async_playwright
 
-HOST = sys.argv[1] if len(sys.argv) > 1 else "whitney-student"
+HOST = sys.argv[1] if len(sys.argv) > 1 else "whitney-admin"
 
 
 async def main():
