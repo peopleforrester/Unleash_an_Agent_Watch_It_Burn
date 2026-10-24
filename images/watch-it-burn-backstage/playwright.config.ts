@@ -62,5 +62,7 @@ export default defineConfig({
 
   outputDir: 'node_modules/.cache/e2e-test-results',
 
-  projects: generateProjects(), // Find all packages with e2e-test folders
+  // Find all packages with e2e-test folders. The helper defaults to the system Google Chrome; run on the
+  // Chromium that `yarn playwright install chromium` (verify/run-e2e.sh) puts in place without root.
+  projects: generateProjects({ channel: 'chromium' }),
 });

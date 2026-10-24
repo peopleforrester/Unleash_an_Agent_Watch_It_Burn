@@ -18,7 +18,8 @@ BACKSTAGE_DIR="${SCRIPT_DIR}/../images/watch-it-burn-backstage"
 NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
-for tool in kubectl helm python3 node yarn; do
+# uv brings the pinned Python libraries (playwright, llm-guard, mcp) the checks need, without a global install.
+for tool in kubectl helm python3 node yarn uv; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
 # test_kyverno_cel_policies.py evaluates the policies with the Kyverno CLI, pinned to the deployed v1.19.0.

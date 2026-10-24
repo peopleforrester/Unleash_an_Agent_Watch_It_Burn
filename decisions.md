@@ -719,3 +719,22 @@ conference-knowledge for event state; the two submodule repos; and this repo's o
 - **README unchanged.** It already gives the title, speakers, argument, the event (with its slot pointed at
   conference-knowledge since #417) and the repos it is built from. It does not say "delivered"; that is
   public prose, so it is left for Michael.
+
+## 2026-10-24 · #441 · The E2E suite's no-cluster half run green; the cluster half waits for AWS access
+
+`bash verify/run-e2e.sh` was run piece by piece on the hecaton host, with the pinned tools from
+VERSIONS.lock (kubectl v1.36.2, helm v4.2.1, kyverno v1.19.0, conftest v0.71.1, terraform v1.15.6) downloaded
+and checksum-verified into the clone's ignored `tmp/`. Green: the four render tests, the Kyverno CLI policies,
+the IAM structural pipeline, the party refresh-rate, audience page, mobile-titles and topic-classifier checks,
+the doc-link fetches (`WIB_CHECK_LINKS=1`), the Backstage Playwright test, and the library half of
+`test_tool_audit_live.py`. Not run: `run-all.sh`, the CONTEXT checks, the live Datadog check and the AWS
+policy and model-pin checks. This host has no AWS credentials and no Docker daemon, so it could not
+provision an attendee spoke.
+
+Fixed along the way:
+- **Backstage Playwright never launched.** `generateProjects()` defaults to `channel: 'chrome'`, the system
+  Google Chrome at `/opt/google/chrome`, which only a root apt install provides. run-e2e.sh installs
+  Playwright's Chromium, so the config now asks for `channel: 'chromium'`.
+- **`test_tool_audit_live.py` needed a global `pip install mcp`** that run-e2e.sh never checked for. It now
+  runs itself under `uv run --python 3.12 --with mcp==<the workshop-mcp image's pin>`, like the classifier
+  and mobile-title checks, and run-e2e.sh requires `uv` up front.
