@@ -91,7 +91,7 @@ AWS account (1 of 5)
             ├── policy + mesh + security (Kyverno, Istio ambient, Falco/Talon, ESO, cert-manager)
             ├── observability (OTel Operator+Collector, Datadog Operator+Agent, Prometheus)
             ├── AI layer (kagent agent, agentgateway, guard-proxy, llm-guard, MCP servers, BurritoBot)
-            └── demo burn targets (customer-stream, *-party apps)
+            └── demo burn targets (*-party apps)
 ```
 
 **Recreation depends in this order** (each layer needs the one above):
@@ -208,7 +208,7 @@ Every cluster is self-contained: its own in-cluster ArgoCD reconciles it from th
 |---|---|---|
 | App-of-apps; child apps in `gitops/apps/*.yaml` | One root `Application` points at `gitops/apps`; ordering is by sync-wave, not file | `gitops/bootstrap/full/app-of-apps.yaml` |
 | All child apps `targetRevision: staging`, `prune: true`, `selfHeal: true` | GitOps is the single source of truth; selfHeal reverts drift behind the Kyverno drift block | `docs/GITOPS-RECONCILIATION.md` |
-| A bare second root `app-of-apps-burn.yaml` for Cluster 1 | The burn cluster dies in one prompt. ArgoCD `directory.include` brace-glob selects ONLY `{namespaces,kagent-crds,kagent,ai-layer,customer-stream,*-party}.yaml`: no Kyverno, no floor, no RBAC/Falco/cert-manager/ESO | `gitops/bootstrap/burn/app-of-apps-burn.yaml` |
+| A bare second root `app-of-apps-burn.yaml` for Cluster 1 | The burn cluster dies in one prompt. ArgoCD `directory.include` brace-glob selects ONLY `{namespaces,kagent-crds,kagent,ai-layer,*-party}.yaml`: no Kyverno, no floor, no RBAC/Falco/cert-manager/ESO | `gitops/bootstrap/burn/app-of-apps-burn.yaml` |
 | ArgoCD `ignoreDifferences` on every live-toggled field | Without it selfHeal reverts the toggle within seconds. Scoped to exactly one field each | `gitops/apps/kyverno-policies.yaml`, `gitops/apps/ai-layer.yaml`, commit `41eabf9` |
 | ai-layer moved sync-wave 2 → 3 (after the OTel Operator) | THE 2026-06-26 "Datadog is empty" root cause: in the same wave as `otel-operator`, app pods were admitted before the mutating webhook was ready, so no SDK init container, no OTLP endpoint, zero telemetry | `gitops/apps/ai-layer.yaml`, commit `2e18f56` |
 | block-argocd-drift scoped by the `argocd.argoproj.io/tracking-id` ANNOTATION, not the `app.kubernetes.io/instance` LABEL | THE 2026-06-27 fix: this ArgoCD uses annotation tracking, so managed resources never carried the instance label and the policy match never fired (the agent could freely drift `guard-proxy`). Proven inert via a server dry-run patch as agent-sa that was ADMITTED | `policies/kyverno/block-argocd-drift.yaml`, commit `9a3971e` |
@@ -231,7 +231,7 @@ Child apps are `argoproj.io/v1alpha1` `Application` objects in `argocd`, `projec
 | istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.1.0 (app 0.44.1), kagent 0.9.9 | varies |
 | falco-talon / falcosidekick | -2 | helm | talon chart 0.4.1 (app 0.3.0), falcosidekick 0.14.0 | falco / security |
 | cert-manager / kagent / prometheus | 1 | helm | cert-manager v1.20.2, kagent 0.9.9, kube-prometheus-stack 86.2.3 | varies |
-| otel-operator / otel-collector / customer-stream | 2 | git + helm | otel-operator 0.117.0, otel-collector 0.158.2 | varies |
+| otel-operator / otel-collector | 2 | git + helm | otel-operator 0.117.0, otel-collector 0.158.2 | varies |
 | ai-layer / datadog-operator / loki / tempo / resource-quotas | 3 | git + helm | datadog-operator chart 2.23.2 (app 1.27.1) | varies |
 | alloy / datadog-agent-cr | 4 | helm + git | alloy 1.10.0 | monitoring / datadog |
 | unicorn/spider/hedgehog/wombat/mantis-shrimp -party | 7 | git | n/a | apps |
@@ -246,7 +246,7 @@ Kyverno CEL ValidatingPolicies (`policies/kyverno/`, `policies.kyverno.io/v1`, #
 2. Pre-seed `datadog-secret` (keys `api-key`, `app-key`) directly in `datadog`, `monitoring`, AND `security` (Falcosidekick reads it from `security`) before the app-of-apps.
 3. Install ArgoCD in-cluster (Helm; `gitops/argocd/values.yaml`). This and the secret pre-seed are the only imperative steps.
 4. `kubectl apply -f gitops/bootstrap/full/app-of-apps.yaml` (full) OR `app-of-apps-burn.yaml` (the bare burn subset).
-5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/RBAC/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel/customer-stream → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
+5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/RBAC/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
 6. The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh` (need a Pod Identity association and a concrete namespace); materializing them into GitOps is the open follow-up.
 7. The OTel Instrumentation CR (`gitops/ai-layer-otel/instrumentation.yaml`) deploys itself as the `ai-layer-otel` Application in wave 2, so no manual enable step remains. Confirm the live Collector endpoint (`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, HTTP/4318) still matches. Note it is intentionally absent on the burn profile: its CRD comes from the OTel Operator, which needs cert-manager, and the burn profile ships neither. Folding it back into the `ai-layer` bundle makes the whole AI layer unsyncable on the burn profile.
 
