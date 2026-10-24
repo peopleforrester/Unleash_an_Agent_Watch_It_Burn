@@ -42,7 +42,7 @@ FLAT = " ".join(C8.split())
 print("== the goal matches the other challenges: one line, no self-contradiction ==")
 check("C8 section found", bool(C8))
 check("the goal names the credential as the vector",
-      "using a credential BurritoBot's pod was handed automatically" in FLAT)
+      "using a credential BurritoBot's tools were handed automatically" in FLAT)
 # #360: the old goal forbade the chat and then attacked through it. It must never come back.
 check("the goal does NOT forbid going through the chat", "without going through BurritoBot" not in C8)
 

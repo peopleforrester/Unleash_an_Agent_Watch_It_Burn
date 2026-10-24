@@ -68,6 +68,8 @@ spec:
     # http://169.254.170.23/v1/credentials). The agent fetches its AWS creds here to call Bedrock; without
     # this allow the Bedrock call fails "Error retrieving credentials from container-role" (found live
     # 2026-06-26). Link-local node-local endpoint, not an internet path, so C1 still holds.
+    # It is NOT the instance metadata service: IMDS is 169.254.169.254, is allowed nowhere here, and is
+    # also denied outright by the Admin-tier ClusterNetworkPolicy agent-deny-imds (#203).
     - to:
         - ipBlock:
             cidr: 169.254.170.23/32

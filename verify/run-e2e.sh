@@ -2,7 +2,7 @@
 # ABOUTME: Heavy suite: the live beat harness (run-all.sh) on a cluster, every `# SUITE: e2e` check in
 # ABOUTME: verify/ (kubectl/helm renders, node, live Datadog), doc-link fetches, and Backstage Playwright.
 #
-# Usage: CONTEXT=<kube-context> [NAMESPACE=agent] bash verify/run-e2e.sh
+# Usage: CONTEXT=<kube-context> AWS_PROFILE=<profile> [NAMESPACE=agent] bash verify/run-e2e.sh
 #
 # The target cluster is never guessed. CONTEXT is required and is passed explicitly to every kubectl call;
 # the current-context is never read (see AGENTS.md, Kube-context safety). KUBECONFIG may be set for this
@@ -17,9 +17,11 @@ BACKSTAGE_DIR="${SCRIPT_DIR}/../images/watch-it-burn-backstage"
 NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
-for tool in kubectl helm python3 node yarn; do
+for tool in kubectl helm python3 node yarn aws; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
+# test_agent_cloud_credential_live.py reads the agent's IAM role and runs Access Analyzer on its policy (#203).
+[[ -n "${AWS_PROFILE:-}" ]] || missing+=("AWS_PROFILE is not set: name the AWS profile of the account that owns the cluster")
 if [[ -z "${CONTEXT:-}" ]]; then
     missing+=("CONTEXT is not set: name the kube-context of the test attendee cluster to run against")
 elif command -v kubectl >/dev/null 2>&1 \

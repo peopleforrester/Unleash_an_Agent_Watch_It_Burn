@@ -317,3 +317,28 @@ work. The leftover talk content (opener, incident slides, citations, and the C2/
 notes) moves to one new deferred-barcelona issue. No slide or lab prose changes here: that content is
 still Michael's to write, and its dated facts get re-checked before they go on a slide.
 `docs/research/2026-08-28-challenge-currency-review.md` records the disposition.
+## 2026-10-24T06:12:05Z · 2.2 · The agent holds ONE scoped cloud credential, and the lab proves it (#203)
+
+#203 asked to prove the agent pod holds no cloud credential. Michael measured attendee-001 on
+2026-09-04 and corrected the premise on the issue: the kagent container calls Bedrock and gets its
+credential through the agent:agent-sa Pod Identity association, so `aws sts get-caller-identity` as the
+agent SUCCEEDS. The claim built here is his reframe: one credential, Bedrock invoke on the four workshop
+models, everything else denied, IMDS blocked. The C8 lab beat (`cloud-credential-probe.yaml` in
+~/challenges) shows each of those as ALLOWED, DENIED by IAM, UNREACHABLE or BLOCKED.
+
+agent-sa now sets `automountServiceAccountToken: false`. The kagent pod does not call the API server (it
+reaches the controller with its own projected `kagent-token`, audience `kagent`, in kagent 0.9.9's
+manifest_builder.go), and workshop-mcp opts back in on its pod spec because its REAL tools and Challenge
+8 use the token. The IMDS deny is an Admin-tier `ClusterNetworkPolicy` in its own Argo CD app.
+
+### REJECTED: a NetworkPolicy for the "explicit 169.254.169.254 deny"
+**Why:** A NetworkPolicy cannot deny. Any policy that selects the agent pods makes them default-deny for
+egress, and attendee clusters ship with no agent NetworkPolicy so Challenge 1's exfil works first. The
+rule would either be unreadable or would break C1.
+**Do not suggest:** an `ipBlock` with `except: [169.254.169.254/32]`, which needs a wide allow around it.
+
+### REJECTED: running the beat inside the agent pod
+**Why:** The kagent image has no aws CLI, and the point is the credential, not the pod. Pod Identity binds
+the role to the ServiceAccount, so a Job running as agent-sa holds exactly what BurritoBot holds. That is
+also the lesson: anyone who can run a pod as agent-sa has it, so the scope is the control.
+**Do not suggest:** exec'ing `aws` or `curl` into workshop-agent.
