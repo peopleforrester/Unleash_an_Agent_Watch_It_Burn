@@ -1487,3 +1487,12 @@ run's own submodule clone. Everything passed there. Every other clone then faile
 - **agent/487-7110 itself is not repinned here.** No run can push guard-proxy, and repinning that branch to
   `ccdda73` would drop the C2 fix it exists for. The C2 ValidatingPolicy read goes to guard-proxy-agenticburn
   as its own issue; #487 repins once that is pushed.
+
+## 2026-10-25 · #522 · `verify/test_repo_identity.py` holds the #422 identity statement in place
+
+#422 added the "Where things live" section to `AGENTS.md`, but no test read it. The new offline test fails if
+`CLAUDE.md` stops being a symlink to `AGENTS.md`, if the section stops saying which workshop this repo builds,
+who presents it and that it holds the build and not the record of the talk, or if it stops pointing at
+talks-knowledge (register, abstracts, talk scripts) and conference-knowledge (event state). It reads the
+workshop title from the README heading and the submodule paths from `.gitmodules`, so neither is written down
+a second time in the test.
