@@ -6,43 +6,71 @@
 # the student is looking at. Helm replaces lists rather than merging them, so every list touched here is
 # restated in full.
 #
+# Since #500 the Datadog half of the collector config is not in values.yaml's `config` at all: it is the
+# otel-collector-datadog ConfigMap (extraManifests), which the datadog-gate init container loads as a second
+# collector config only when datadog-secret exists. So this file restates that ConfigMap, the single-org
+# overlay plus datadog/admin, rather than adding to `config`. verify/test_collector_no_datadog.py holds the two
+# overlays to each other: everything in the single-org one, in the same order, with datadog/admin after the
+# student's own org.
+#
 # Instructor clusters do NOT get this file (gitops/bootstrap/full/app-of-apps.yaml excludes the attendee
 # Application): they already ship to the instructor org, and a second exporter with the same key would
 # double-count every metric there.
 #
 # The key comes from datadog-admin-secret, written by infra/datadog-cluster-identity.sh at bootstrap. The
 # exporter fails validation on an empty key and CrashLoops the collector, so the secret is NOT optional
-# here: a cluster on this profile without the secret is a bootstrap bug and should fail loudly.
-config:
-  exporters:
-    datadog/admin:
-      api:
-        key: ${env:DD_ADMIN_API_KEY}
-        site: ${env:DD_SITE}
-      retry_on_failure:
-        enabled: true
-        initial_interval: 1s
-        max_interval: 10s
-        max_elapsed_time: 30s
-      sending_queue:
-        enabled: true
-        queue_size: 200
-  service:
-    pipelines:
-      metrics:
+# here: a cluster on this profile without the secret is a bootstrap bug and should fail loudly. The same goes
+# for the student's own datadog-secret, which is why both references below stay non-optional on this profile
+# while values.yaml makes DD_API_KEY optional for the instructor and admin clusters.
+extraManifests:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: otel-collector-datadog
+    data:
+      datadog.yaml: |
         exporters:
-          - datadog               # the student's own org, primary
-          - datadog/admin         # the instructor org, secondary
-          - prometheusremotewrite # secondary / fallback
-          - debug
-      traces:
-        exporters:
-          - datadog      # the student's own org, primary
-          - datadog/admin # the instructor org, secondary
-          - otlp/tempo   # secondary / fallback
-          - span_metrics
-          - datadog/connector
-          - debug
+          datadog:
+            api:
+              key: ${env:DD_API_KEY}
+              site: ${env:DD_SITE}
+          datadog/admin:
+            api:
+              key: ${env:DD_ADMIN_API_KEY}
+              site: ${env:DD_SITE}
+            retry_on_failure:
+              enabled: true
+              initial_interval: 1s
+              max_interval: 10s
+              max_elapsed_time: 30s
+            sending_queue:
+              enabled: true
+              queue_size: 200
+        connectors:
+          datadog/connector:
+            traces:
+              compute_stats_by_span_kind: true
+              peer_tags_aggregation: true
+        service:
+          pipelines:
+            metrics:
+              receivers:
+                - otlp
+                - span_metrics
+                - datadog/connector
+              exporters:
+                - datadog               # the student's own org, primary
+                - datadog/admin         # the instructor org, secondary
+                - prometheusremotewrite # secondary / fallback
+                - debug
+            traces:
+              exporters:
+                - datadog      # the student's own org, primary
+                - datadog/admin # the instructor org, secondary
+                - otlp_grpc/tempo # secondary / fallback
+                - span_metrics
+                - datadog/connector
+                - debug
 extraEnvs:
   - name: DD_API_KEY
     valueFrom:

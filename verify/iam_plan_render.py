@@ -148,7 +148,8 @@ def render(root: str, edit=None) -> dict:
             args = ["plan", "-input=false", "-no-color", "-refresh=false", "-out=render.tfplan", "-var", "profile=render"]
             if root == "cluster":
                 args += [f"-target={t}" for t in CLUSTER_TARGETS]
-                args += ["-var", f"name={CLUSTER_NAME}", "-var", "vpc_id=vpc-render", "-var", 'private_subnet_ids=["subnet-render"]']
+                args += ["-var", f"name={CLUSTER_NAME}", "-var", "vpc_id=vpc-render", "-var", 'private_subnet_ids=["subnet-render"]',
+                         "-var", "event=render"]  # no default (#494)
             r = run(*args)
             if r.returncode:
                 raise SystemExit(f"FAIL: terraform plan of {root} failed:\n{r.stderr or r.stdout}")

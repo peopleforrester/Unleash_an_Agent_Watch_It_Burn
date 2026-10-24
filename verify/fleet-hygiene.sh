@@ -103,6 +103,28 @@ else
     note "fleet.sh not executable; skipping the orphan survey"
 fi
 
+# --- 3b. Provisioning rows with no cluster behind them ------------------------------------------------
+# The admin page counts rows. A row whose cluster was destroyed without being deregistered still counts,
+# so "Available 2" read over one live cluster and one long-gone roster cluster from the retired round
+# naming (#391). Dry-run survey only: WIB_APPLY is stripped so this gate can never delete a row.
+echo
+echo "== every provisioning row names a live cluster =="
+if [[ -x "${REPO}/infra/terraform/fleet/fleet.sh" ]]; then
+    out="$(env -u WIB_APPLY "${REPO}/infra/terraform/fleet/fleet.sh" reconcile-pool 2>&1 \
+           | grep -E 'GHOST|name a live cluster|have no live cluster|pool:' || true)"
+    if printf '%s' "${out}" | grep -q "name a live cluster"; then
+        ok "every provisioning row names a live EKS cluster"
+    elif printf '%s' "${out}" | grep -q "GHOST"; then
+        printf '%s\n' "${out}" | sed 's/^/    /'
+        bad "provisioning rows with no cluster; the admin counts are too high. Remove with: WIB_APPLY=1 fleet.sh reconcile-pool"
+    else
+        [[ -n "${out}" ]] && printf '%s\n' "${out}" | sed 's/^/    /'
+        note "reconcile-pool reached no verdict (no admin token or AWS credentials?)"
+    fi
+else
+    note "fleet.sh not executable; skipping the pool survey"
+fi
+
 # --- 4. Internal slot id must not reach a student ---------------------------------------------------
 # watch-it-burn-attendee-NNN is a provisioning slot id. It is not the hostname the student was given, not
 # the name on their claim page, and not something anyone can act on or read aloud. It kept surfacing as a

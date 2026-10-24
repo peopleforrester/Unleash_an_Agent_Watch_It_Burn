@@ -45,6 +45,15 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 300m, memory: 256Mi }
+        # C3's detection signal (#497). A Block policy emits a KubeArmor alert as it denies, on the attempt,
+        # unlike Falco's open_read rule, which never fires because the read never succeeds. The relay only
+        # prints those alerts to its stdout with this on (chart default false), and that stdout is where
+        # challenges/c3-secret-grep/fallback.kubectl.sh and the segment 4 beat read the alert with
+        # `kubectl logs deployment/kubearmor-relay`. Only this key is set; Helm merges the rest of
+        # kubearmorConfig from the chart defaults. Alerts only: enableStdOutLogs would flood the relay log
+        # with every process event.
+        kubearmorConfig:
+          enableStdOutAlerts: true
   destination:
     server: https://kubernetes.default.svc
     namespace: kubearmor

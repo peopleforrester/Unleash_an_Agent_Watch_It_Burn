@@ -20,9 +20,14 @@ workshop and they stay off for this session.
   (checkout `~/repos/agenticburn/rounds-agenticburn`). Issue rounds-agenticburn#38
   cuts that deck from this run-of-show, beat for beat.
 - The prompts the presenters send are not reproduced here. They live, copy-ready,
-  on `/brief` on each cluster (`gitops/ai-layer/web/brief.html`) and in
-  `challenges/PROMPT-CATALOG.md` with their verified results. Drive from `/brief`,
-  read the timing from this file.
+  on `/kubecon` on each cluster (`gitops/ai-layer/web/kubecon.html`): the demo-only
+  cut laid out by the segments below, with each beat's prompt, who sends it, the
+  admin-terminal toggle where one applies, the success marker and the deterministic
+  fallback, and no provisioning or student-lab content. The 2-hour workshop's own
+  brief is still at `/brief`; this session drives from `/kubecon`.
+  `challenges/PROMPT-CATALOG.md` carries the same prompts with their verified
+  results and ranked written fallbacks. Drive from `/kubecon`, read the timing from
+  this file.
 
 ## The one platform, and the two clusters on it
 
@@ -57,7 +62,7 @@ alive, so never flip a guard with `kubectl set env`.
 | 3 | 3 | M | The admin cluster: Argo CD apps, the platform tour | Watches | 3 |
 | 4 | 6 | W narrates, M names controls | Admin cluster: re-run the attacks, each blocked | Watches | 5 |
 | 5 | 7 | M+W | Admin cluster: toggle the AI guardrails on live | Watches | 2, 6 |
-| 6 | 3 | W | Datadog traces on the shared org | Watches | 7 |
+| 6 | 3 | W | Datadog Agent Observability, or the admin cluster's Grafana view if no pool is live | Watches | 7 |
 | 7 | 4 | M+W | On-topic guardrail on, then the close | Watches | 8 |
 
 Total 30 minutes. Demo (segments 2 to 6) is 24 minutes. Open and close (segments
@@ -87,8 +92,8 @@ bot before it misbehaves.
 
 - BurritoBot answers as the burrito chain (menu, an order), then the room coaxes it
   off the rails: the weird off-topic asks the abstract invites, and the leak of the
-  fictional CEO's record. Prompts and verified results are on `/brief` (Community
-  phase) and in `challenges/PROMPT-CATALOG.md`.
+  fictional CEO's record. Prompts and verified results are on `/kubecon` (Segment 2)
+  and in `challenges/PROMPT-CATALOG.md`.
 - **Michael on cost:** keep the live cost counter on the bot visible. Narrate it
   climbing while the room hammers it. "Nothing crashed, nothing is red, and the
   bill is the attack." This is the denial-of-wallet point, delivered as narration
@@ -138,11 +143,17 @@ abstract's "the Kubernetes security layers you should already have."
   allow-list. Read the deny message aloud. Watch for the agent silently
   substituting a permitted image and claiming success (check the running image
   before saying the wall failed; it is a better story when it lies).
-- C3 read the recipe off the filesystem, blocked inline in the kernel by KubeArmor
-  with Falco alerting. One command shows prevention and detection doing different
-  jobs.
-- If a prompt wanders, drive that beat's `challenges/<beat>/fallback.*.sh` so the
-  control is what is proven, not the model's mood. Do not debug live.
+- C3 read the recipe off the filesystem, blocked inline in the kernel by KubeArmor,
+  and caught by KubeArmor's own alert for the denied attempt. One command shows
+  prevention and detection doing different jobs:
+  `CONTEXT=<admin-context> bash challenges/c3-secret-grep/fallback.kubectl.sh`
+  prints the agent's `Permission denied` and then the `kubearmor-relay` alert line
+  (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
+  alert here: Falco's recipe-snoop rule fires on a successful read, and on this
+  cluster there is none.
+- If a prompt wanders, drive that beat's fallback so the control is what is
+  proven, not the model's mood. Do not debug live. The scripts are in the table
+  under "Fallback scripts, per beat" below.
 - **Michael's thread:** the damage was stopped, but the cost counter still moved on
   the community side, because the request reached the model before admission
   refused it. Admission is the last mile and the most expensive.
@@ -159,7 +170,7 @@ abstract's "the Kubernetes security layers you should already have."
 On the admin cluster the AI guardrails start off. Turn them on one at a time from
 the terminal and re-run the same ask each time, so the room watches one platform
 setting change the outcome. Prompts and verified both-direction results are on
-`/brief` and in `challenges/PROMPT-CATALOG.md`.
+`/kubecon` and in `challenges/PROMPT-CATALOG.md`.
 
 - C6 prompt injection hidden in a support ticket. Before: it rides in and spends
   tokens. `guard-input-on`: blocked upstream at zero tokens, the cost counter does
@@ -170,10 +181,12 @@ setting change the outcome. Prompts and verified both-direction results are on
 - C7 the under-protected MCP server. A poisoned tool description chains the agent
   into a rogue tool it was never asked to use. `guard-mcp-on`: the tool is gone
   from the allow-list and the call cannot happen.
-- Say the C6-versus-C7 line out loud after C7 (it is on `/brief`): both are the
+- Say the C6-versus-C7 line out loud after C7 (it is on `/kubecon`): both are the
   same class of attack stopped two different ways. One talks the model out of it;
   the other lets the model be fully persuaded and finds the capability gone. Only
   the second still holds when the next model is more persuadable.
+- If a prompt wanders, drive that beat's fallback from the table under "Fallback
+  scripts, per beat" below. Do not debug live.
 - **Challenges shown live:** C6, C5, C7.
 - **Delivers:** point 2 (the under-protected MCP server, via C7) and point 6 (pre-
   and mid-inference prompt analysis). See the open question on what "mid-inference"
@@ -185,17 +198,41 @@ setting change the outcome. Prompts and verified both-direction results are on
 
 ### Segment 6: GenAI observability on stage (3 min). Owner: Whitney.
 
-Open Agent Observability in the shared Datadog org. Show the agent's input, output,
-and tool calls for the beats just run: the injection that was blocked at zero
-tokens, the output that came back redacted, the rogue MCP tool that never fired.
-The observability is the lens that proves each guardrail did its job.
+Show the agent's input, output, and tool calls for the beats just run: the
+injection that was blocked at zero tokens, the output that came back redacted, the
+rogue MCP tool that never fired. The observability is the lens that proves each
+guardrail did its job.
+
+**Which surface is shown.** Decide it the night before and say it on stage:
+
+- **Datadog pool live:** Agent Observability in the shared Datadog org.
+- **No pool live:** the Grafana view on the admin cluster, which reads Tempo and
+  needs no Datadog key (#500). Michael's cluster:
+  `https://grafana-michael-admin.agenticburn.com/d/witb-agent-obs` (Whitney's:
+  `https://grafana-whitney-admin.agenticburn.com/d/witb-agent-obs`). Login
+  `admin`; the admin cluster terminal prints the password in its catalogue. Say
+  "this is Grafana reading the traces from Tempo, on the cluster itself".
+
+In the Grafana view, the "Segment 6" row has one panel per beat, newest first,
+over the last 30 minutes. On an admin cluster only the presenters use
+BurritoBot, so that window is this session:
+
+- **C6:** the `/chat` request with no model call under it. Open it: one guard-proxy
+  span, no agent and no model spans, so zero input tokens. The cost panel above it
+  did not move.
+- **C5:** the reply that came back redacted. Open it: the top span carries the
+  reply the user got, with `[REDACTED]`; the `chat` span under it carries what the
+  model said before the output guard.
+- **C7:** the weather-tool ask that never reached `read_internal_config`. The
+  panel beside it lists the calls that did reach it; the ask sent before
+  `guard-mcp-on` is there, and the one sent after is not.
 
 - Rehearse the search. Finding one trace by name in front of a room is the part
-  that goes wrong; have one located before the session starts.
-- **Delivers:** point 7 (good GenAI observability practices). This segment depends
-  on a live Datadog org pool, which is not set up yet (#454); see the open
-  questions. If no pool is live by the day, fall back to Grafana or Tempo and say
-  which; do not leave point 7 unshown.
+  that goes wrong; have one located before the session starts. On Grafana, run
+  the three beats once in rehearsal and confirm each panel shows a row.
+- **Delivers:** point 7 (good GenAI observability practices), on Datadog if the
+  pool (#454) is live and on the Grafana view if not. Do not leave point 7
+  unshown.
 - **Hand-off to Michael:** "And after all of that, what is the bot supposed to do?"
 
 ### Segment 7: The bot sells burritos only, then close (4 min). Owner: Michael and Whitney.
@@ -235,15 +272,17 @@ verbatim text in `abstracts/recovered/sessionize-public-profile.md` section 5.
 | 4 | Starts wide open, the audience hacks it live | 2 (community bot, phones) | Yes |
 | 5 | The Kubernetes security layers you should already have | 4 (C1, C2, C3), before the LLM layer | Yes |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre, C5 and C7 at the gateway) | Partial. "Mid-inference" is an unsettled scope call (open question) |
-| 7 | Good GenAI observability practices | 6 (Datadog traces) | At risk. Needs a live Datadog pool (#454), not yet set up |
+| 7 | Good GenAI observability practices | 6 (Datadog, or the Grafana view) | Yes on the Grafana view without a pool (#500), once proven on a cluster at bring-up (#503); Datadog needs the pool (#454) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail) | **At risk.** The on-topic guardrail does not exist yet (#455 MISSING) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live half yes; recorded half needs #452 built |
 
 Points the cut cannot deliver today, marked so they are not presented as ready:
-point 8 (no on-topic guardrail yet, #455), point 7 (no live Datadog pool yet,
-#454), point 6 "mid-inference" (unsettled definition, #456 and talks-knowledge#29),
-and the recorded half of point 9 (#452). The live-input half of point 9 and all of
-points 1 through 5 are deliverable on the platform as built.
+point 8 (no on-topic guardrail yet, #455), point 6 "mid-inference" (unsettled
+definition, #456 and talks-knowledge#29), and the recorded half of point 9 (#452).
+The live-input half of point 9 and all of points 1 through 5 are deliverable on the
+platform as built. Point 7 no longer waits on the Datadog pool: the Grafana view
+carries it without a key (#500), and it has not yet been shown on a live cluster;
+the bring-up probe (#503) is where it is proven.
 
 ## Challenges shown live, and challenges cut
 
@@ -251,7 +290,7 @@ points 1 through 5 are deliverable on the platform as built.
 |---|---|---|
 | C1 exfiltrate customer data (NetworkPolicy) | Shown, segment 4 | Cleanest Kubernetes-egress block; carries point 5 |
 | C2 villain image (Kyverno admission) | Shown, segment 4 | Admission-control block, a different control from C1 |
-| C3 recipe on the filesystem (KubeArmor, Falco) | Shown, segment 4 | Prevention-versus-detection in one command |
+| C3 recipe on the filesystem (KubeArmor block and alert) | Shown, segment 4 | Prevention-versus-detection in one command |
 | C4 denial-of-wallet (budget cap) | Narrated only, segment 2 | The cost-counter story lands as live narration during the wide-open burn; a full before/after beat costs minutes the 30-minute slot does not have. The budget cap stays armed and can be shown in Q&A |
 | C5 secret leak (output guard) | Shown, segments 2 and 5 | The audience beat and the output-guard toggle |
 | C6 prompt injection (input guard) | Shown, segment 5 | Pre-inference analysis, point 6 |
@@ -279,16 +318,61 @@ is merely slow rather than rebuilding:
 - [ ] **Hostnames serve over HTTPS and websocket:**
   `./fleet.sh check-tls attackme.agenticburn.com michael-admin.agenticburn.com whitney-admin.agenticburn.com`.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.
-- [ ] **The pinned model answers in the delivery region.** Reconcile the model pin
-  and the cost counter's `MODEL_TIER` per #453, then send one throwaway order to
+- [ ] **The pinned model answers in the delivery region.** From the repo root:
+  `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`. It
+  reads the pin from `gitops/ai-layer/resources.yaml` (Nova Pro,
+  `us.amazon.nova-pro-v1:0`, with `MODEL_TIER` `nova`), then checks against live
+  Bedrock that the inference profile is ACTIVE, that the model is not Legacy or
+  scheduled to go Legacy before 2026-11-12, that one Converse call answers, and that
+  the cross-region quota covers the room. It must end `MODEL PIN GREEN`; anything
+  else, stop and fix the pin before the day (#453). Then send one throwaway order to
   each bot and confirm it answers with a menu, not an empty reply (an empty reply
   means the MCP servers are down; see the workshop runbook's failure playbook).
+- [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
+  the repo root, one command per cluster. It runs the beats in this file's order and
+  prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
+  (default 20): a community run makes 3 model calls, an admin run 12. Pull each
+  admin cluster's credentials into its own kubeconfig first; the probe passes it per
+  command and never touches `~/.kube/config`.
+
+  ```bash
+  python3 verify/kubecon_probe.py community attackme.agenticburn.com
+  python3 verify/kubecon_probe.py admin michael-admin.agenticburn.com \
+      --context <michael-admin-context> --kubeconfig /tmp/michael-admin.kubeconfig --profile accen-dev
+  python3 verify/kubecon_probe.py admin whitney-admin.agenticburn.com \
+      --context <whitney-admin-context> --kubeconfig /tmp/whitney-admin.kubeconfig --profile accen-dev
+  ```
+
+  - Community (segment 2): the wide-open start, a burrito order answered, the CEO
+    record leaking with the `/brief` prompt, the linked-list ask answered, the cost
+    counter moving, and the projected feed on.
+  - Admin: the kube-context and the hostname are the same cluster (if not, it stops
+    before flipping anything); the start state (every AI guard off; Kyverno Deny,
+    NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
+    cluster; C1, C2 and C3 blocked, judged on the control and not the model (the
+    lab's curl from `workshop-mcp`, a server-side dry run as `agent-sa`, and the C3
+    fallback); C6, C5 and C7 off then on, with the guards turned on cumulatively as
+    segment 5 does; the on-topic guard redirecting the four canonical off-topic asks
+    and letting "what are your hours" and "do you have mild salsa" through. Its last
+    act is `guards-off`, run even when a beat fails, so the stage starts clean.
+  - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
+    up in the feed the room sees.
+  - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
+    fallback for before the day, not something to find out on stage. Two are
+    expected to fail until their fixes land: the Kyverno badge (#487, the pinned
+    guard-proxy still reads the retired ClusterPolicy) and the on-topic beats (#455,
+    the pinned guard-proxy has no topic stage yet). Record the date, the clusters and
+    the spend it prints on #503.
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
-  so the AI guardrails start off and the live toggles in segment 5 are real.
+  so the AI guardrails start off and the live toggles in segment 5 are real. The
+  probe above ends with it already; run it again if anyone has touched the guards
+  since.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
-  pool is live, decide the Grafana or Tempo fallback for segment 6 and say so on the
-  day.
+  pool is live, segment 6 runs on the admin cluster's Grafana view
+  (`https://grafana-michael-admin.agenticburn.com/d/witb-agent-obs`): open it, run
+  the C6, C5 and C7 beats once, and confirm each of the three segment 6 panels shows
+  a row. Say on the day which surface is shown.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
   per-segment videos and screenshots deck must exist and be rehearsed once, so a
   dead venue network does not end the session. The repo paths for these are not
@@ -297,13 +381,15 @@ is merely slow rather than rebuilding:
 - [ ] **Audience path and phones (#450, #451).** Confirm the room's rate limit and
   timeouts are sized for a ballroom and that the page, the projector QR, and the
   Feedback link work on a real iPhone and a real Android phone on venue-like
-  Wi-Fi and on cellular.
+  Wi-Fi and on cellular. Fill in `facilitation/kubecon-na-2026-phone-check.md`.
+  The QR on the slide is `facilitation/kubecon-na-2026-audience-qr.svg`, and the
+  Feedback button opens the session survey, both set in
+  `gitops/ai-layer/web/event.js`.
 
 ## Rollback on the day
 
-1. A prompt wanders on a shown beat: run that beat's
-   `challenges/<beat>/fallback.*.sh` so the guardrail is what is proven. Do not
-   debug the model live.
+1. A prompt wanders on a shown beat: run that beat's fallback from the table
+   below so the guardrail is what is proven. Do not debug the model live.
 2. The venue network cannot carry the room: the presenters drive the audience
    beat themselves from the admin cluster and the room watches, rather than hacking
    from phones.
@@ -312,6 +398,24 @@ is merely slow rather than rebuilding:
    it is an open question today (see below).
 4. Any beat over its time budget by half: cut it to a sentence and move on. The room
    never watches unrehearsed troubleshooting.
+
+### Fallback scripts, per beat
+
+Run them from a checkout of this repo on the presenter laptop, against the admin
+cluster: `CONTEXT` is its kube-context, the only input any of them takes (prefix
+`KUBECONFIG=<file>` if its credentials are in an isolated kubeconfig). None of them
+calls the model. Each prints PASS or FAIL per check and exits non-zero on any FAIL,
+and none writes a scratch file. The C5 and C6 scripts turn their guard on the way
+`guard-output-on` and `guard-input-on` do, and put it back the way they found it.
+
+| Beat | Run | PASS means |
+|---|---|---|
+| C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://agenticburn.com/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
+| C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `agent-sa`, a Deployment of `docker.io/peopleforrester/joker:latest` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
+| C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |
+| C6 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh input` | With the input guards on, the support-ticket injection sent to guard-proxy comes back `guarded: true`, `input_tokens: 0` |
+| C5 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh output` | With the output guard on, the CEO record sent through guard-proxy's output path comes back with `OPHELIA-THORN-TIBBY-TOP-SPIRE-No9` and the address redacted |
+| C7 | none yet (#496) | |
 
 ## Teardown
 
@@ -350,8 +454,9 @@ written down rather than guessed.
    rollback step and the Night Before step reference them; they need to exist before
    the cold read, and this file should name their exact paths once they do.
 3. **The Datadog pool for segment 6 is not set up (#454).** Whitney is expected to
-   set one up the week of 2026-10-26. If it is not live, what is the agreed fallback
-   for showing point 7: Grafana, Tempo, or recorded traces?
+   set one up the week of 2026-10-26. If it is not live, segment 6 shows the admin
+   cluster's Grafana view (#500), so point 7 no longer waits on the pool. Still
+   open: whether the pool is live by the day.
 4. **What "mid-inference" means for point 6 (#456, talks-knowledge#29).** The
    guard-proxy scans request and response at the gateway. Is a gateway response scan
    what the abstract means by mid-inference, or does it mean scanning during
@@ -363,11 +468,17 @@ written down rather than guessed.
    runtime-toggleable the way the AI guardrails are). Confirm that reading of "one
    demo platform," or say if both halves should run on a single cluster with only the
    AI guardrails toggled.
-6. **The model pin and cost counter (#453).** The repo lists several Bedrock
-   inference profiles, binds Haiku 4.5, and sets `MODEL_TIER` to `nova`. These must
-   be reconciled and confirmed served in the delivery region before the day, or the
-   cost counter prices the wrong model and the denial-of-wallet narration in segment
-   2 is wrong.
+6. **The model pin and cost counter (#453).** Reconciled: the deployed agent runs
+   Nova Pro (`bedrock-nova`, `us.amazon.nova-pro-v1:0`, us-west-2), and
+   guard-proxy's `MODEL_TIER` is `nova`, priced at $0.0008 in and $0.0032 out per
+   1K tokens. That price matches the AWS price list for us-west-2 (published
+   2026-10-16, read 2026-10-24). The Haiku files under `agent/` are pre-GitOps
+   copies that nothing applies. The public AWS pages read on 2026-10-24 (the Nova
+   Pro model card and Model lifecycle (Legacy)) list Nova Pro as Active, with no
+   legacy or end-of-life date. Still open: the live check in the delivery account,
+   `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`, has
+   not been run yet. It needs the accen-dev credentials. Record its date and output
+   on #453.
 7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized for a
    ballroom on one venue Wi-Fi NAT, verified on real phones. Not yet done; needs the
    live platform and two real devices.

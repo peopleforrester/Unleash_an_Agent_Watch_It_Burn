@@ -12,6 +12,9 @@ REGION="us-west-2"
 # nothing and said so quietly (#409). A teardown that cannot find its state does not fail closed:
 # it leaves the lab VPC, its NAT gateway and its address billing, and the first evidence is the bill.
 TFDIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../network" && pwd)"
+# The network root has no default for `event`, so destroy needs it too; the one setting is fleet/event.sh.
+# shellcheck source=SCRIPTDIR/../../fleet/event.sh
+. "$(dirname "${BASH_SOURCE[0]}")/../../fleet/event.sh"
 AWS="aws --profile $PROFILE --region $REGION"
 log() { echo "$(date +%H:%M:%S) [$PROFILE] $*"; }
 
@@ -59,10 +62,10 @@ log "SGs left after delete loop: ${#remaining[@]}"
 log "terraform destroy lab VPC..."
 if [[ "$STATE_ARG" == "DEFAULT" ]]; then
   terraform -chdir="$TFDIR" destroy -auto-approve \
-    -var "profile=$PROFILE" -var "region=$REGION" 2>&1 | tail -6
+    -var "profile=$PROFILE" -var "region=$REGION" -var "event=$WIB_EVENT" 2>&1 | tail -6
 else
   terraform -chdir="$TFDIR" destroy -auto-approve -state="$STATE_ARG" \
-    -var "profile=$PROFILE" -var "region=$REGION" 2>&1 | tail -6
+    -var "profile=$PROFILE" -var "region=$REGION" -var "event=$WIB_EVENT" 2>&1 | tail -6
 fi
 log "terraform destroy exit: ${PIPESTATUS[0]}"
 

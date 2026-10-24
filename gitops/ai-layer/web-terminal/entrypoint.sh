@@ -52,9 +52,13 @@ fi
 # toolNames allow-list; the ai-layer app ignores drift on .spec.declarative.tools so the toggle persists.
 #
 # _px <query> : hit the guard-proxy /toggle endpoint, swallow the JSON, return its exit code.
+# _pxkey <query> <key> : the same, then print what the proxy now reports for <key>: True, False, or missing
+# when this guard-proxy has no such guard. Prints nothing when the proxy could not be reached.
 cat > "$HOME/.guardlib" <<'EOS'
 _px() { kubectl -n agent exec deploy/guard-proxy -- python3 -c \
   "import urllib.request;urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10).read()" >/dev/null 2>&1; }
+_pxkey() { kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import json,urllib.request;print(json.load(urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10)).get('$2','missing'))" 2>/dev/null | tail -1; }
 # _evil <json-array> : set ONLY the evil-mcp toolNames (index 1 of the tools array). workshop-mcp
 # (index 0, the real BurritoBot tools) is never touched, so the recipe/customer/shell tools survive.
 _evil() { kubectl -n agent patch agent workshop-agent --type=json \
@@ -123,16 +127,19 @@ g=json.load(sys.stdin)
 label={"output":"C5 output guard (scrubs secrets on the way out)",
        "input_blocklist":"C6 input block-list (cheap, pre-model)",
        "input_classifier":"C6 injection classifier (model-based)",
-       "budget":"C4 spend budget (freezes cost at the cap)"}
-for k in ("output","input_blocklist","input_classifier","budget"):
+       "budget":"C4 spend budget (freezes cost at the cap)",
+       "topic":"On-topic guard (BurritoBot sells burritos only)"}
+for k in ("output","input_blocklist","input_classifier","budget","topic"):
     on=g.get(k)
-    print(("  ON   " if on else "  off  ")+label.get(k,k))
+    print(("  n/a  " if on is None else "  ON   " if on else "  off  ")+label.get(k,k))
 '
 echo
-echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  (or guards-on / guards-off)"
+echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  guard-topic-on  (or guards-on / guards-off)"
 EOS
 
-# Combined: flip EVERY AI guard at once (the "reset and explore" convenience).
+# Combined: flip EVERY AI guard at once (the "reset and explore" convenience). guards-on leaves the on-topic
+# guard OFF on purpose: every challenge prompt is off-topic by design, so with it on it would refuse each one
+# before the guard that challenge teaches could fire. guards-off does turn it off, so off means wide open.
 cat > "$HOME/guards-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
@@ -145,7 +152,7 @@ EOS
 cat > "$HOME/guards-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-_px "output=off" && _px "input_blocklist=off&input_classifier=off" && _px "budget=off"
+_px "output=off" && _px "input_blocklist=off&input_classifier=off" && _px "budget=off" && _px "topic=off"
 _evil '["get_weather","read_internal_config","apply_optimization"]'
 echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
 EOS
@@ -248,9 +255,43 @@ else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-off' again."
 fi
 EOS
+# The KubeCon ending (#455, run-of-show segment 7): the on-topic guard. BurritoBot answers the menu, hours
+# and locations and turns everything else back to the menu, before the model is called. It reports what the
+# proxy says rather than assuming the flip worked, because a guard-proxy without the topic stage ignores the
+# key and would otherwise print a confident ON for a guard that does not exist.
+cat > "$HOME/guard-topic-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+case "$(_pxkey "topic=on" topic)" in
+  True)
+    echo "🛡️  On-topic guard ON. BurritoBot now sells burritos only: the menu, hours and locations get answered,"
+    echo "    and anything else (salsa dance moves, a hot dog party, karaoke for a wedding) is turned back to the"
+    echo "    menu, politely, before the model is called. Re-send your weirdest off-topic question." ;;
+  "")
+    echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-topic-on' again."; exit 1 ;;
+  *)
+    echo "⚠️  This guard-proxy has no on-topic guard, so nothing changed. It needs the guard-proxy build with"
+    echo "    the topic stage."; exit 1 ;;
+esac
+EOS
+cat > "$HOME/guard-topic-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+case "$(_pxkey "topic=off" topic)" in
+  False)
+    echo "🔓 On-topic guard OFF. BurritoBot will chat about anything again. Ask it for salsa dance moves." ;;
+  missing)
+    echo "🔓 This guard-proxy has no on-topic guard, so BurritoBot already chats about anything." ;;
+  "")
+    echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-topic-off' again."; exit 1 ;;
+  *)
+    echo "⚠️  The guard-proxy still reports the on-topic guard on. Try 'guard-topic-off' again."; exit 1 ;;
+esac
+EOS
 chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
-  "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off
+  "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off \
+  "$HOME"/guard-topic-on "$HOME"/guard-topic-off
 
 # No banner. The shell opens on a prompt and nothing else (#342).
 #

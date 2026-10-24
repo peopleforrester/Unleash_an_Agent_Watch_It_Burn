@@ -318,7 +318,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 | console | `nginxinc/nginx-unprivileged:1.27-alpine` | 8080/8443 | serves BurritoBot, `/lab`, `/console` and the other pages from the `console-src` ConfigMap; the separate chat-ui was removed (#240) |
 | web-terminal | `ghcr.io/peopleforrester/watch-it-burn:web-terminal` (ttyd) | 7681 | `runAsUser: 1000` (image USER `term`) |
 
-Bedrock ModelConfigs (`kagent.dev/v1alpha2`, native Bedrock, us-west-2, **Pod Identity** via `agent-sa`): `bedrock-nova` = `us.amazon.nova-pro-v1:0` (**the workshop default**, `resources.yaml:96-99` and `:109`); `bedrock-haiku` = `us.anthropic.claude-haiku-4-5-20251001-v1:0`; `bedrock-sonnet` = `us.anthropic.claude-sonnet-4-6`; `bedrock-opus` = `us.anthropic.claude-opus-4-8`. The three Claude tiers stay defined for an optional cost race but are not the default: they refuse the exfil beats, while Nova complies and executes the tools. Claude tiers require the `us.` Geo inference profile in us-west-2. proxy.py per-1K USD: haiku $0.001/$0.005, sonnet $0.003/$0.015, opus $0.005/$0.025. **Note the defect: there is no Nova row in that table, and `MODEL_TIER=sonnet` is set fleet-wide (`resources.yaml:410-412`), so Nova traffic is billed at Sonnet rates and reported as the wrong model.**
+Bedrock ModelConfigs (`kagent.dev/v1alpha2`, native Bedrock, us-west-2, **Pod Identity** via `agent-sa`): `bedrock-nova` = `us.amazon.nova-pro-v1:0` (**the workshop default**, `resources.yaml:96-99` and `:109`); `bedrock-haiku` = `us.anthropic.claude-haiku-4-5-20251001-v1:0`; `bedrock-sonnet` = `us.anthropic.claude-sonnet-4-6`; `bedrock-opus` = `us.anthropic.claude-opus-4-8`. The three Claude tiers stay defined for an optional cost race but are not the default: they refuse the exfil beats, while Nova complies and executes the tools. Claude tiers require the `us.` Geo inference profile in us-west-2. proxy.py per-1K USD: nova $0.0008/$0.0032, haiku $0.001/$0.005, sonnet $0.003/$0.015, opus $0.005/$0.025. guard-proxy's `MODEL_TIER` is `nova`, matching the bound ModelConfig (`verify/test_cost_tier_matches_model.py`); the defect this note used to record (no Nova row, `MODEL_TIER=sonnet` fleet-wide, Nova billed at Sonnet rates) was fixed live 2026-08-30. `verify/model_pin_check.py` checks the pin answers in the delivery account and region (#453).
 
 `/chat` contract (BurritoBot): `POST /chat {prompt}` → `{reply, guarded, input_tokens, output_tokens}`. No round selector (retired with the rounds): a cluster's BurritoBot talks to same-origin `/chat`, and the Community cluster is its own host. Unreachable cluster (status 0 or >=500) shows the "NO BURRITOS FOR YOU" black screen.
 
@@ -436,7 +436,9 @@ OTel Collector (DaemonSet, contrib 0.158.2, ns=monitoring)
    receivers otlp(4317/4318); processors memory_limiter->batch->resource(cluster.name)->transform/set_genai_provider
      (+ transform/set_peer_service on traces; + transform/redact_sentinel in Act 2)
    connectors span_metrics (RED, add_resource_attributes), datadog/connector (APM trace.* stats)
-   exporters PRIMARY datadog ; SECONDARY prometheusremotewrite + otlp/tempo
+   exporters PRIMARY datadog ; SECONDARY prometheusremotewrite + otlp_grpc/tempo
+   (#500: datadog + datadog/connector are a second --config the datadog-gate init container loads only when
+    datadog-secret exists; without it the collector ships to Tempo + Prometheus only)
    v
 Datadog org (attendee trial org) -- APM, LLM Observability, Metrics, Service Map, Logs
 

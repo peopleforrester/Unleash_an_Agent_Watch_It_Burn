@@ -39,6 +39,13 @@ spec:
         # Everything, INCLUDING network-policies and kubearmor-policies: this cluster is the armed one.
         # Only the attendee collector overlay is dropped, because an admin cluster ships to the shared
         # presenter org as its PRIMARY destination rather than dual-shipping to it as a second one (#296).
+        #
+        # Datadog is NOT excluded, with or without a Datadog key (#500). What switches it is whether
+        # datadog-secret exists on the cluster, not this file: the collector's datadog-gate adds the Datadog
+        # exporter only when it does, and falcosidekick's key reference is optional, so with no key the
+        # collector ships to Tempo and Prometheus only, falcosidekick forwards to Talon only, and the
+        # Datadog Agent waits for the secret, which deploy-full-idp.sh logs as a known gap. When the pool
+        # arrives, writing the secret and restarting the readers adds Datadog with no change here.
         exclude: 'otel-collector-attendee.yaml'
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging

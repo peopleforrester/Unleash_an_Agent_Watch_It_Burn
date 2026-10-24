@@ -23,8 +23,8 @@ TAG_VALUE="${COST_TAG_VALUE:-watch-it-burn}"  # tag value identifying this works
 # accen-dev is a LINKED account in an AWS Organization. Cost-allocation tags are activated on the PAYER
 # account only, and a linked account cannot even list them:
 #   AccessDeniedException: Linked account doesn't have access to cost allocation tags
-# Until `project` is activated by whoever owns the payer account, Cost Explorer cannot group or filter by
-# it and a tag-filtered query is structurally empty. The unfiltered fallback below is the honest answer
+# Until `project` is activated by whoever owns the payer account (teardown/activate-cost-tags.sh), Cost
+# Explorer cannot group or filter by it and a tag-filtered query is structurally empty. The unfiltered fallback below is the honest answer
 # available from here: it is the WHOLE account, so on a co-tenant account it is an upper bound that
 # includes the other project, never a workshop-only figure.
 GRANULARITY="DAILY"                        # DAILY | MONTHLY
@@ -44,15 +44,17 @@ Required:
                          AFTER the last billed day to include the final day).
 
 Options:
-  --tag-key <key>        Cost-allocation tag key (default: workshop, or $COST_TAG_KEY).
+  --tag-key <key>        Cost-allocation tag key (default: project, or $COST_TAG_KEY).
+                         Use --tag-key event --tag-value <delivery> to cost one delivery alone.
   --tag-value <value>    Tag value for this run (default: watch-it-burn, or $COST_TAG_VALUE).
   --granularity <g>      DAILY or MONTHLY (default: DAILY).
   --by-service           Also print a per-AWS-service breakdown.
   -h, --help             Show this help.
 
 Notes:
-  * The cost-allocation tag MUST be activated in the Billing console before it can be queried,
-    and tagged resources only show cost from the activation date forward.
+  * The cost-allocation tag MUST be activated on the PAYER account before it can be queried:
+    teardown/activate-cost-tags.sh, run with the payer's credentials. Activation counts forward
+    only; that script also requests a backfill, which recovers up to the previous twelve months.
   * Cost Explorer get-cost-and-usage incurs a small per-request charge.
 EOF
 }
@@ -149,7 +151,8 @@ if [[ -z "${TOTAL_SUM:-}" ]] || awk -v v="${TOTAL_SUM:-0}" 'BEGIN{exit !(v+0==0)
   echo
   echo ">> Tag-filtered total is 0.00, which on this account almost certainly means the"
   echo "   '${TAG_KEY}' cost-allocation tag is not activated on the PAYER account rather than"
-  echo "   that nothing was spent. A linked account cannot activate it."
+  echo "   that nothing was spent. A linked account cannot activate it; the payer account runs"
+  echo "   teardown/activate-cost-tags.sh, which activates it and backfills the past months."
   echo ">> Unfiltered total for the same window (WHOLE ACCOUNT, includes any co-tenant project):"
   aws ce get-cost-and-usage --region us-east-1 \
       --time-period "Start=${START},End=${END}" --granularity MONTHLY --metrics UnblendedCost \

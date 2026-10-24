@@ -94,6 +94,9 @@ WIB_PROBE_EMAIL=<an address that already holds a claim> verify/fleet-hygiene.sh
       RENDERS the claim page to confirm the internal slot id is not shown to a student.
 - [ ] Orphans found? `WIB_APPLY=1 infra/terraform/fleet/fleet.sh reap-lbs` deletes them. The survey
       is always dry-run; deleting is a separate deliberate act.
+- [ ] A `GHOST` row under "every provisioning row names a live cluster"? That row's cluster is gone, and
+      the admin page still counts it (#391). `WIB_APPLY=1 infra/terraform/fleet/fleet.sh reconcile-pool`
+      deregisters every such row; `down all` and `down-fleet` run the same step at the end of a teardown.
 
 - [ ] Every cluster reports `api=200 org_read=200`.
 

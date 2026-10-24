@@ -467,3 +467,204 @@ only so that links handed out before the rename still resolved, and none is stil
 - Still left from #359: provisioning-agenticburn's `STUDENT_PREVIEW_CONSOLE_URL` defaults to
   `https://a-001.agenticburn.com`. That default now points at a host that is never served, so it has to
   change in that repo. It is filed there as a follow-up.
+
+## 2026-10-24 · #451 · The event knob sets the storefront's Feedback link and the projector QR; segno 1.6.6
+
+The storefront's Feedback button was hardcoded to `feedback.agenticburn.com/quick`, and the feedback app stays
+off for the KubeCon breakout (#448). The destination is now set per event in `gitops/ai-layer/web/event.js`,
+shipped in the console ConfigMap next to `active-skin.js`, and never edited into the page.
+
+- **Per event, not per cluster.** The fleet is rebuilt for each event, and the console never learns its own
+  public host (console.conf, #152). A knob the page reads in the browser is the one place both the community
+  and the admin clusters get the same answer without a guard-proxy change in its own repo.
+- **The survey URL goes out verbatim.** It is a third party's page, so the cluster and user the workshop
+  appends for `/quick` (#364, #383) are not added. Only an `https://` value is used; anything else leaves the
+  workshop default.
+- **The value** is the answer to question 147 (BurritoBot repo #80), given by the coordinator under Michael's
+  standing rules: `https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553`. Whether
+  it shows this talk is checked once Sessionize opens rating (`facilitation/kubecon-na-2026-phone-check.md`).
+- **The QR** is rendered from `publicUrl` in the same file by `scripts/audience-qr.py`, so the slide and the
+  page cannot name two addresses. **segno 1.6.6** (PyPI, current on 2026-10-24) renders it: pure Python, no
+  native libraries, and deterministic, so `verify/test_audience_page_e2e.py` can compare the committed SVG
+  byte for byte. It is used only through `uv run --with segno==1.6.6`, never installed into the offline
+  suite's interpreter. The offline suite reads the URL from the SVG's `<title>` instead.
+
+## 2026-10-24 · #455 · The on-topic guard: phrases decide the canonical asks, BanTopics the rest
+
+The talk ends with BurritoBot selling burritos only (abstract points 1 and 8, run-of-show segment 7). The guard
+is a fifth `GUARDS` key, `topic`, in guard-proxy's `proxy.py`, toggled live through `/toggle` like the other
+four. That is where the 2026-10-24 audit comment on #455 put it: the deployed proxy is `proxy.py`, and the Go
+build answers 501 on `/toggle` and `/chat`. Its content belongs with the persona, so it lives here as
+guard-proxy env: `TOPIC_GUARD` (off), `TOPIC_OFF_LIST`, `TOPIC_ON_LIST` and `TOPIC_REFUSAL`. The rule, the
+asks it is judged on and the classifier settings are in `verify/topic_cases.py`.
+
+**How it decides, cheapest first.** An off phrase refuses. Then an on phrase passes. Anything with neither goes
+to LLM Guard's BanTopics. Phrases match as whole words, in any case, with an optional plural "s". The four
+canonical asks (salsa dance moves, a hot dog party, karaoke for a wedding, the abstract's linked list) are
+refused on a phrase, so the stage beat never depends on a model score. Every on-topic ask passes on a phrase,
+so the classifier can never refuse a real customer. "What are your hours" and "do you have mild salsa" are
+among them. The refusal costs no model call and offers the menu, the hours and the locations.
+
+**Why the phrases have to carry the on-topic side.** BanTopics (llm-guard 0.3.16) runs the zero-shot pipeline
+with `multi_label=False` and blocks when the top label scores over the threshold. The softmax runs over the
+banned labels only, so a short menu question lands its whole score on some banned label. Measured with the
+API's own BanTopics model: "do you have mild salsa" scored 0.846 as "music and singing", "what is a hex?" 0.972
+as "computer programming", and "how spicy is Dragon's Blood" 0.956 as "movies and entertainment". The
+classifier is reliable on prompts with no menu vocabulary, which is where an off-topic paraphrase that dodges
+the off list ends up. With 13 narrow labels and threshold 0.5 it refuses all 16 paraphrases left to it and
+passes all 4 vague menu asks ("what do you recommend", "do you deliver"): 61 asks, none wrong.
+
+- **The model** is `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` at `8e7e5af5983a0ddb1a5b45a38b129ab69e2258e8`,
+  MIT. That is the revision llm-guard 0.3.16 pins for BanTopics, so the copy the image bakes is the copy
+  measured. Its `onnx/model.onnx` is 738,563,249 bytes (sha256 `d46fa6c1…3efa81c`), plus `spm.model` and the
+  tokenizer files. The image grows by roughly that much. Measured off-cluster: the model loads in 4 to 14 s
+  and a scan takes about 1 s on one pinned core, or 2 to 4 s on a busy 16-core host. The llm-guard pod is
+  limited to one CPU. The canonical asks never pay this cost, because a phrase decides them.
+- **guards-on leaves it off; guards-off turns it off.** Every challenge prompt is off-topic by design, so
+  with the guard on it would refuse each one before the guard that challenge teaches could fire. The
+  run-of-show turns it on alone, in segment 7.
+- **The persona now has hours and locations.** The menu was all it could answer from before. Open every day
+  11am to 11pm, until midnight on Fridays and Saturdays. Three cantinas: 13 Mandrake Row, Black-Bog Market,
+  and the Moonrise Pass drive-thru. The storefront shows neither, so `web/burritbot.html` is unchanged.
+- **Known limit:** an on phrase passes without asking the classifier, so "a burrito-themed bedtime story"
+  gets through. The off list catches the mixes the talk uses ("salsa dance moves"), and an off phrase is
+  checked first.
+
+### REJECTED: BanTopics alone, with off-topic labels
+**Why:** see the scores above. It refused "do you have mild salsa", one of the two asks the issue names as
+the on-topic test.
+
+### REJECTED: the same model as an allow classifier (multi-label, one on-topic hypothesis)
+**Why:** with no context the model does not know salsa is food. "do you have mild salsa" scored 0.02 against
+"a restaurant: its food, menu, ordering, opening hours or locations". It also needs a scanner LLM Guard does
+not have, which means changing the vendored API, and the API is a packaging, not a fork (2026-10-05).
+
+### REJECTED: roberta-base-zeroshot-v2.0-c, the smaller model (499 MB)
+**Why:** it got 4 of the 61 asks wrong ("what's the capital of France", "teach me the bachata"). The deberta
+model got none wrong.
+
+**What is not done here, and in what order it lands:**
+1. guard-proxy-agenticburn: the `topic` stage in `proxy.py`, on both `/` (A2A) and `/chat`, reading these four
+   variables. The injection stage must start sending `scanners_suppress: ["BanTopics"]` and the topic stage
+   `["PromptInjection"]`. Without that, BanTopics in `scanners.yml` would also run whenever C6 is on.
+2. llm-guard-cpu-offline: bake the model above the way the injection model is baked (mirrored model image,
+   pinned by digest, loaded through `model_path`), and measure the image size and start time on the built image.
+3. Here: bump both pins, add BanTopics with `topic_cases.CLASSIFIER`'s topics and threshold to
+   `llm-guard-scanners`, update `verify/test_proxy_guards.py`'s key set, and run the probe (#503) on an
+   admin cluster both ways. `verify/test_topic_guard.py` arms its scanner checks the moment BanTopics
+   appears in `scanners.yml`. Until the image carries the model, adding it there would stop LLM Guard from
+   starting (`lazy_load` is off), and that would fail the injection classifier closed.
+
+**New dev dependencies, used only by `verify/test_topic_classifier.py` (E2E suite) through `uv run`, never
+installed into the offline suite's interpreter:**
+- **llm-guard 0.3.16** (PyPI, 2025-05-19). It is the last release and the image's version, so the test runs
+  the scanner guard-proxy will actually call.
+- **torch 2.14.0+cpu** (PyTorch CPU index, 2026-09-02). This is the image's pin. 2.14.1 exists, but matching
+  the image is the point, and the CPU build keeps the CUDA packages out.
+- The model above, fetched from Hugging Face on the first run.
+
+## 2026-10-24T13:16:17Z · question 629 · The admin console's cluster actions run through a fleet.sh runner (#268)
+
+**Question 629:** Who runs the admin console's cluster actions, given the provisioning app on Railway has
+no AWS credentials? The three options were a scoped AWS role for the app (A), a queue plus an in-cluster
+agent on every cluster (B), or a queue plus a `fleet.sh` runner on a host that already holds the fleet
+profiles (C).
+
+**Answer:** C. The app queues each action and records the audit line. A `fleet.sh serve-actions` loop on a
+host that already holds the fleet profiles polls `/admin/actions` with the admin token and runs the
+matching `fleet.sh` verb, adding `restart-agent`, `restart-console` and `terminal-password` as verbs. It
+also runs `fleet-walkthrough --json` on an interval and posts the result as the health report. This covers
+all four actions, issues no new credential, and makes the console a caller of `fleet.sh`, as the issue
+intends. The catch is that the runner has to be up during the workshop, on a named host: a presenter
+laptop by default, since netcup stays out of the path.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes:**
+- `fleet.sh` gains four verbs: `restart-agent`, `restart-console`, `terminal-password` and
+  `serve-actions [--once]`. The restarts are pod deletes, because `block-argocd-drift` denies the
+  Deployment UPDATE a rollout restart makes, and the 2026-09-03 entry rules rollout restarts out. Each verb
+  checks that the kubeconfig's context is the named cluster before it mutates anything. The runner runs
+  only the four names in `ADMIN_ACTIONS`, and only against a cluster with state on the runner. It claims an
+  action before running it, so no action runs twice.
+- The walkthrough report gains the health row's columns: `console_http`, `argo` (Synced+Healthy of
+  total), `agent_ready` (a new check, `agent-not-ready` when it fails) and `last_trace`, from one
+  instructor-org query in `verify/last_trace.py`. The walkthrough now reads `fleet.sh`'s `STATE_DIR`
+  instead of a hardcoded path.
+- `docs/admin-console.md` is the HTTP contract the provisioning app has to implement: the queue, claim,
+  result and health routes, and a `requested_by` that names a presenter, because the admin token is shared
+  and cannot tell them apart. The app side lives in `provisioning-agenticburn` and is a separate piece of
+  work. Until it lands, `serve-actions` has no queue to poll.
+- Rejected with A and B: neither could run `converge`, which needs the Terraform state and the
+  per-account profiles. A puts write access to every cluster behind one shared token on a public app. B
+  puts a credential and a privileged component on every cluster the challenges attack.
+## 2026-10-24 · #500 · Datadog is switched by datadog-secret on the cluster, not by the profile
+
+The admin profile has to run with no Datadog key (#454) and add Datadog "with no other change" once the pool
+exists. The switch is therefore the presence of `datadog-secret`, read at pod start, so the same root, the
+same Applications and the same values serve both states, and `fleet.sh converge` writing the secret plus
+`infra/reload-datadog-consumers.sh` is the whole change on a running cluster.
+
+- **Collector:** `values.yaml` `config` is Datadog-free (Tempo + Prometheus). The Datadog exporter and
+  connector are the `otel-collector-datadog` ConfigMap (chart `extraManifests`), loaded as a second `--config`
+  that the `datadog-gate` init container fills: the overlay when `DD_API_KEY` resolves, `{}` when it does not,
+  logged either way. The image is the signed busybox mirror the platform already admits, so nothing new is
+  pulled. `otlp/tempo` became `otlp_grpc/tempo`, the name the chart already rewrote it to in `relay.yaml`; the
+  overlay does not go through that rewrite.
+- **falcosidekick:** the `DATADOG_APIKEY` reference is optional; the chart's empty default key keeps the output off.
+- **Datadog Agent:** stays in the profile, and waits for the secret. `deploy-full-idp.sh` logs that as the
+  known gap. It is operator-managed, so its pods cannot be gated the same way from here.
+- **Attendee** keeps both secrets non-optional and restates the overlay with `datadog/admin`.
+
+### REJECTED: making the reference optional and nothing else
+The datadog exporter refuses an empty key ("api.key is not set", otelcol-contrib 0.160.0) and the collector
+validates every defined component, used in a pipeline or not, so the pod would start and then exit.
+
+### REJECTED: a no-Datadog values file chosen by deploy-full-idp.sh when it has no keys
+It needs a second root (or a patched one) for the same profile, and the root reconciles its own spec from git
+(#253). Worse, a cluster brought up without keys would stay Datadog-free after the pool arrived, because
+`converge` writes the secret but never re-applies a root.
+## 2026-10-24 · #501 · The KubeCon brief is its own page `/kubecon`, not a mode of `/brief`
+## 2026-10-24 · #501 · The KubeCon brief is its own page, `/kubecon`
+
+The 30-minute breakout drives from a demo-only brief laid out by run-of-show segment: for each shown beat
+(C1, C2, C3, C5, C6, C7, off-topic, on-topic) the prompt, who sends it, the admin-terminal toggle where one
+applies, the success marker, and the deterministic fallback. It ships as `gitops/ai-layer/web/kubecon.html`,
+routed at `/kubecon` (console.conf) and carried in the console-src ConfigMap, with the run-of-show linking
+it.
+
+**Why a separate page.** `/brief` is the 2-hour workshop: three phases, a
+provisioning step where each person claims a cluster by email, and eight student challenges the students
+install themselves. The breakout must carry none of that (the run-of-show says it stays off for this
+session). A role toggle on `brief.html` would still ship the provisioning and student-lab prose in the page
+source, one query parameter away. A separate page cannot show what it does not contain.
+`verify/test_instructor_brief.py` now holds both: the three-phase workshop brief unchanged, and the KubeCon
+brief's one-block-per-beat contract plus a body-level assertion that it carries no provisioning or claim
+content.
+
+**No apex-router gate on `/kubecon`.** The apex router 404s `/brief` on non-roster clusters
+(peopleforrester/apex-agenticburn `Caddyfile`, #152), because in the 2-hour workshop a student who guesses
+the path gets the presenters' timing. The breakout has no student pool: only the Community cluster and the
+two presenter admin clusters run this session, so there is nothing to spoil and the gate is not added. If
+the page is ever served alongside an attendee pool, gate it in the router the same way `/brief` is. That
+change is in the sister repo (deploy configuration) and is filed as a follow-up.
+
+## 2026-10-24 · #387 · BurritoBot is a phone surface; the lab is not; playwright 1.64.1 for the render check
+
+An attendee on the 2026-09-08 Portland run asked for the workshop to work better on mobile. Michael's answer,
+recorded in the issue and here so it stops reading as a backlog item:
+
+- **The lab is not a mobile surface and will not become one.** The guide, the terminal, Datadog and `kubectl`
+  are the hands-on hour, and that hour needs a laptop. `lab.html` gets no phone work for this.
+- **BurritoBot is.** Chatting with the agent is a phone-shaped task, and the KubeCon room opens it from phones.
+  The fix asked for, the title stacking, is in `web/burritbot.html`: below 680px the header is the title on its
+  own row over one even row of the four buttons (two rows of two under 360px), and below 760px the chat card
+  puts the avatar, "BurritoBot" and Reset on one row with the tagline under them. Desktop is unchanged.
+- **The expectation is copy, and it is Michael's.** A line in the published abstract and in the workshop's
+  opening material saying this is a laptop workshop is public prose, so it is filed as a follow-up for him,
+  not written here.
+
+**playwright 1.64.1** (PyPI, current on 2026-10-24) renders the page in headless Chromium for
+`verify/test_mobile_titles_e2e.py`, which measures the boxes at 320 to 680px and 1280px. A CSS grep cannot
+say whether a title wraps. It is used only through `uv run --with playwright==1.64.1`, in the E2E suite,
+never installed into the offline suite's interpreter; `verify/test_mobile_titles.py` is the offline half.

@@ -35,11 +35,12 @@ a from-scratch rewrite. Modeled directly on the Packt sister repo's proven two-t
 terraform -chdir=../org/boundary init
 terraform -chdir=../org/boundary apply -state=states/<profile>.tfstate -var profile=<profile>
 
-# 1. Provision the shared VPC once.
-cd lab-vpc && terraform init && terraform apply
+# 1. Provision the shared VPC once. `event` has no default: it is the one setting in fleet/event.sh.
+. fleet/event.sh
+cd aws/network && terraform init && terraform apply -var profile=<profile> -var event="${WIB_EVENT}"
 
 # 2. Bring up N attendee clusters (parallel, capped).
-cd ../fleet
+cd ../../fleet
 ./fleet.sh up 60                          # watch-it-burn-attendee-001 .. -060
 ./fleet.sh up watch-it-burn-attendee-007  # or specific names
 
@@ -51,7 +52,7 @@ cd ../fleet
 ./cleanup-log-groups.sh --delete          # sweep orphaned EKS log groups (ours only)
 
 # 5. When the event is over, destroy the shared VPC.
-cd ../lab-vpc && terraform destroy
+cd ../aws/network && terraform destroy -var profile=<profile> -var event="${WIB_EVENT}"
 ```
 
 ## Notes

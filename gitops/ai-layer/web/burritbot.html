@@ -42,14 +42,27 @@
   /* Chrome and footer never shrink; the middle band absorbs whatever is left. */
   body>header,body>footer{flex:0 0 auto}
   header{background:var(--dd);color:#fff;padding:10px 18px;display:flex;align-items:center;gap:14px}
-  header .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px}
+  header .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:18px;flex-shrink:0;white-space:nowrap}
   header .brand .em{font-size:22px}
   .brand .logo{width:26px;height:26px;display:inline-block;vertical-align:middle}
   .avatar .logo{width:22px;height:22px;display:block}
   header .spacer{flex:1}
   header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap;margin-left:7px}
   header a.hb:hover{background:rgba(255,255,255,.28)}
-  @media(max-width:760px){header a.hb{font-size:11px;padding:6px 9px;margin-left:5px}header{flex-wrap:wrap;row-gap:7px}}
+  /* PHONE TITLE BAR (#387). A flex-wrap here put "BurritoBot" and one stray button on the top row and
+     dropped the rest below it, ragged: at 390px Terminal rode up beside the title and three buttons sat
+     under it, at 360px three sat under it and Feedback was left alone on a third row. Below 680px, where
+     the title and four buttons stop fitting on one line, the title gets its own row and the four buttons
+     share one even row beneath it, or two even rows of two where four cannot fit (under 360px).
+     681-760px keeps the one row, with the smaller buttons that let it fit. */
+  @media(max-width:760px){header a.hb{font-size:11px;padding:6px 9px;margin-left:5px}}
+  @media(max-width:680px){
+    header{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 6px;padding:10px 12px}
+    header .brand{grid-column:1/-1}
+    header .spacer{display:none}
+    header a.hb{font-size:11px;padding:7px 4px;margin:0;text-align:center;overflow:hidden;text-overflow:ellipsis}
+  }
+  @media(max-width:359px){header{grid-template-columns:repeat(2,minmax(0,1fr))}}
   select{font:inherit;font-weight:700;padding:7px 10px;border-radius:8px;border:0;background:#fff;color:var(--ink);cursor:pointer}
   .cost{font-variant-numeric:tabular-nums;font-weight:700;font-size:0.81rem;background:rgba(255,255,255,.16);padding:5px 10px;border-radius:8px}
   /* Per-control badges: a badge APPEARS only when its control is measured ON (no grayed-out
@@ -87,7 +100,18 @@
   .chathead .avatar{width:34px;height:34px;border-radius:50%;background:var(--lav);display:grid;place-items:center;font-size:18px}
   .chathead h2{margin:0;font-size:0.94rem}
   .chathead .sub{font-size:12px;color:var(--mid)}
-  .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer}
+  .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  /* PHONE CHAT TITLE (#387). In a row, the tagline squeezed between the avatar and Reset ran to three or
+     four lines at phone width and Reset broke onto two ("↺" over "Reset"). Below 760px the avatar, the
+     "BurritoBot" title and Reset share the first row and the tagline takes the full width under them. */
+  @media(max-width:760px){
+    .chathead{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:4px 10px;padding:10px 12px}
+    .chathead .ctitle{display:contents}
+    .chathead .avatar{grid-column:1;grid-row:1}
+    .chathead h2{grid-column:2;grid-row:1;align-self:center}
+    .chathead .reset{grid-column:3;grid-row:1}
+    .chathead .sub{grid-column:1/-1;grid-row:2}
+  }
   /* The ONLY scroller in the desktop layout. min-height:0 is what lets it actually shrink. */
   .stream{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px;display:flex;flex-direction:column;gap:12px;background:linear-gradient(180deg,#fff,#fdfaff)}
   .msg{max-width:78%;padding:0.7rem 0.9rem;border-radius:14px;font-size:0.875rem;line-height:1.45;white-space:pre-wrap;word-wrap:break-word}
@@ -280,7 +304,9 @@
     <!-- /quick, not the long end-of-workshop form (#364). This is the tab a student sits in for the
          whole workshop, so it is the likeliest place a thought gets dropped mid-attack, and /quick stays
          on the page after a send. source=burritobot separates a note left here from one left in the
-         guide, which is what says whether friction was in the chat or in the instructions. -->
+         guide, which is what says whether friction was in the chat or in the instructions.
+         This href is the workshop default. An event that names its own survey overrides it from
+         event.js (#451); do not edit an event's URL in here. -->
     <a class="hb" id="fbbtn" href="https://feedback.agenticburn.com/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener">&#128172; Feedback</a>
   </header>
 
@@ -337,7 +363,7 @@
     <div class="chatcol">
       <div class="chathead">
         <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
-        <div><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div></div>
+        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div></div>
         <button class="reset" onclick="resetChat()" title="Start a new conversation. BurritoBot forgets everything you have said, including anything it has already refused. A page refresh does not do this.">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
@@ -393,6 +419,9 @@
   <div id="noburritos"><b>NO BURRITOS FOR YOU</b><span id="nbsub">(no cluster connected)</span></div>
   <div id="celebrate"><div class="winmsg"><h2>🌯 Free burritos for life! 🌯</h2><p>You made it through the whole order at Hex &amp; Cauldron. Click anywhere to close.</p></div></div>
 
+<!-- The event knob (#451): where Feedback goes for the event this fleet serves. A missing file leaves
+     window.WIB_EVENT unset, and the button keeps the workshop's /quick form below. -->
+<script src="event.js"></script>
 <script>
   // Every cluster's BurritoBot talks to its OWN same-origin /chat. The agenticburn.com router proxies the
   // whole host+path (e.g. r2-1.agenticburn.com/chat) to that cluster's console, so same-origin reaches the
@@ -679,12 +708,16 @@
     var cluster=q.get('cluster'), user=q.get('user');
     // Identity follows the nav links, so the VTT button lands on THIS cluster's terminal.
     var nq=[]; if(cluster)nq.push('cluster='+encodeURIComponent(cluster)); if(user)nq.push('user='+encodeURIComponent(user));
+    // An event that names its own survey (event.js, #451) sends Feedback there verbatim: it is a third
+    // party's page, so no cluster or user rides along. Otherwise the button keeps the workshop's /quick.
+    var ev=window.WIB_EVENT||{}, fb=document.getElementById('fbbtn');
+    var evfb=(typeof ev.feedbackUrl==='string' && /^https:\/\//.test(ev.feedbackUrl)) ? ev.feedbackUrl : '';
+    if(fb&&evfb)fb.href=evfb;
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that
       // already has one drops the cluster identity silently instead of failing loudly.
-      var fb=document.getElementById('fbbtn');
-      if(fb&&nq.length)fb.href+=(fb.href.indexOf('?')>=0?'&':'?')+nq.join('&');
+      if(fb&&!evfb)fb.href+=(fb.href.indexOf('?')>=0?'&':'?')+nq.join('&');
       var bbn=document.getElementById('bbbtn'); if(bbn)bbn.href='/?'+nq.join('&');
     }
     // Same as lab.html: show the name the student was GIVEN (the hostname they are on), not the

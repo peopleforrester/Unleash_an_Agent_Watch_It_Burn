@@ -21,7 +21,7 @@ both the label and the grouping mechanism.
 | Key | Value | On |
 |---|---|---|
 | `project` | `watch-it-burn` | every resource (the discriminator) |
-| `event` | `devopsdays-portland-2026` (was `ai-engineer-worldsfair-2026` for the June fleet) | clusters, buckets, secrets |
+| `event` | `kubecon-na-2026` (was `devopsdays-portland-2026` for Portland, `ai-engineer-worldsfair-2026` for the June fleet). Set in one place, `infra/terraform/fleet/event.sh`; see below | clusters, buckets, secrets |
 | `role` | `attendee` / `test` / `c1-1` / `c2-3` / `c3-inst-1` / ... | clusters + nodegroups |
 | `attendee` | the attendee id | attendee clusters only |
 | `component` | `exfil-game-hoop` / `exfil-game-trophy` / ... | non-cluster AWS resources |
@@ -44,6 +44,12 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
   `project=watch-it-burn` to every resource the provider creates (VPC, cluster, node group, IRSA /
   Pod Identity roles, EBS), so the whole stack inherits it. The per-attendee cluster also gets
   `attendee=<name>`. (Provisioning is Terraform, not eksctl.)
+- **The `event` value** - one setting, `WIB_EVENT` in `infra/terraform/fleet/event.sh` (default
+  `kubecon-na-2026`; `WIB_EVENT=<slug>` in the environment overrides it for one run). Both roots take it
+  as `var.event`, which has no default, so an apply that does not pass `-var event=...` fails instead of
+  tagging with a stale value. `fleet.sh` passes it on every cluster apply and destroy and on the lab-VPC
+  destroy; `preflight.sh` prints it and the lab-VPC teardown scripts source it. For the next event,
+  change that one line. A `WIB_DRY_RUN=1 fleet.sh ...` run shows the value on each cluster's line.
 - **Node groups / EC2 / EBS** - inherited from the provider default_tags above.
 - **S3 buckets** - `aws s3api put-bucket-tagging` in `games/eso-s3-exfil/s3-hoop-setup.sh`.
 - **Secrets Manager** - `--tags` on `create-secret` in `games/eso-s3-exfil/plant-trophy.sh`.
@@ -53,7 +59,7 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
   ```yaml
   metadata:
     annotations:
-      service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn,event=devopsdays-portland-2026,role=<role>"
+      service.beta.kubernetes.io/aws-load-balancer-additional-resource-tags: "project=watch-it-burn,event=<WIB_EVENT>,role=<role>"
   ```
   All demo Services are `ClusterIP` today; add this annotation when exposure is wired
   in the provisioning project (see the DNS linkage below).

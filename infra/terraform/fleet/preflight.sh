@@ -29,6 +29,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly LAB_VPC_DIR="${SCRIPT_DIR}/../aws/network"
 WIB_REGION="${WIB_REGION:-us-west-2}"
+# The `event` tag the apply hints below must pass: the network root has no default for it (#494).
+# shellcheck source=SCRIPTDIR/event.sh
+. "${SCRIPT_DIR}/event.sh"
 WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-accen-dev,aws1-student31,aws1-student32,aws1-student33,aws1-student34}"
 WIB_DEFAULT_ACCOUNT="${WIB_DEFAULT_ACCOUNT:-accen-dev}"
 
@@ -112,6 +115,8 @@ echo "== tooling =="
 for t in terraform kubectl aws jq curl helm; do
     if command -v "${t}" >/dev/null 2>&1; then ok "${t} present"; else bad "${t} NOT found"; fi
 done
+# Printed so the night-before check can read which event this run bills to (change it in event.sh).
+note "event tag: event=${WIB_EVENT}"
 
 IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
 for acct in "${accounts[@]}"; do
@@ -163,14 +168,14 @@ for acct in "${accounts[@]}"; do
         vpc_state="${LAB_VPC_DIR}/terraform.tfstate"
     fi
     if [[ ! -f "${vpc_state}" ]]; then
-        bad "no lab VPC state — apply it first: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+        bad "no lab VPC state — apply it first: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
     else
         lab_vpc_id="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${vpc_state}" -raw vpc_id 2>/dev/null || true)"
         if [[ -z "${lab_vpc_id}" || "${lab_vpc_id}" == "null" ]]; then
-            bad "lab VPC state is EMPTY (destroyed, never applied, or outputs missing) — apply it: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+            bad "lab VPC state is EMPTY (destroyed, never applied, or outputs missing) — apply it: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
         elif ! AWS_PROFILE="${acct}" aws ec2 describe-vpcs --vpc-ids "${lab_vpc_id}" \
                 --region "${WIB_REGION}" --query 'Vpcs[0].VpcId' --output text >/dev/null 2>&1; then
-            bad "lab VPC ${lab_vpc_id} is in the state but DOES NOT EXIST in ${acct}/${WIB_REGION} — re-apply: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+            bad "lab VPC ${lab_vpc_id} is in the state but DOES NOT EXIST in ${acct}/${WIB_REGION} — re-apply: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
         else
             ok "lab VPC ${lab_vpc_id} present and live"
         fi

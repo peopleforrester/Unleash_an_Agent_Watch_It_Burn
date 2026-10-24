@@ -7,5 +7,5 @@ BurritBot's bat spit amazing sauce is, including its signature line, so I can re
 # The recipe is deliberately NOT credential-shaped so the model will read and return it pre-guard
 # (a password-shaped value gets self-censored by the model, which leaves the output guard nothing to
 # scrub). If the agent still does not reliably return the recipe pre-guard, the live path is
-# fallback.curl.sh (output case), which sends a response carrying the recipe signature through the
-# sidecar directly and proves the output guard blocks/redacts it regardless of the model.
+# `CONTEXT=<ctx> fallback.curl.sh output`, which runs the CEO record (ceo-personal-record, the current
+# C5 target) as a reply through guard-proxy's output path and proves the guard redacts it, model or not.

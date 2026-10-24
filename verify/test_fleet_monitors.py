@@ -24,6 +24,8 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "infra" / "datadog-fleet"))
 import fleet_monitors as fm  # noqa: E402
+sys.path.insert(0, str(REPO / "verify"))
+from collector_render import collector_config  # noqa: E402
 
 failures: list[str] = []
 
@@ -104,7 +106,8 @@ check("span_metrics feeds the metrics pipeline (traces.span.metrics.calls)",
 res = {a["key"]: a for a in col["processors"]["resource"]["attributes"]}
 check("the metrics pipeline stamps k8s.cluster.name (-> kube_cluster_name)",
       "resource" in mp["processors"] and "k8s.cluster.name" in res)
-dual = yaml.safe_load((REPO / "gitops/otel-collector/values-dual.yaml").read_text())["config"]
+# The Datadog exporters are in the overlay the datadog-gate loads once datadog-secret exists (#500).
+dual = collector_config("attendee", datadog_secret=True)
 check("dual-shipped clusters send those metrics to the instructor org too",
       "datadog/admin" in dual["service"]["pipelines"]["metrics"]["exporters"])
 proxy = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()

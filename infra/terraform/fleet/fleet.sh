@@ -41,11 +41,11 @@ readonly WIB_APEX_DIR="${WIB_APEX_DIR:-$(_sibling_repo apex-agenticburn)}"
 readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
 readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
-readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
+readonly AWS_POOL_DIR="${WIB_AWS_POOL_DIR:-${SCRIPT_DIR}/aws-pool}"   # gitignored: holds live access keys; WIB_AWS_POOL_DIR for the shim tests
 readonly CLUSTER_DIR="${PROVISION_DIR}/${PROVIDER_CLUSTER_SUBDIR}"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}"
 readonly STATE_DIR="${WIB_STATE_DIR:-${SCRIPT_DIR}/states}"   # WIB_STATE_DIR: the shim tests point this at a temp dir
-readonly LOG_DIR="${SCRIPT_DIR}/logs"
+readonly LOG_DIR="${WIB_LOG_DIR:-${SCRIPT_DIR}/logs}"   # WIB_LOG_DIR: the shim tests point this at a temp dir
 # One failure ledger PER PROCESS. Two fleet.sh runs side by side (an attendee down beside an instructors
 # down, 2026-09-06) shared logs/.failures and each one summarised the other's entries (#251). Workers
 # forked by run_pool inherit $$, so a run still sees all of its own.
@@ -97,6 +97,10 @@ MAX_PARALLEL="${MAX_PARALLEL:-8}"
 # Defaults keep the existing SINGLE-account attendee flow unchanged (TF_PROFILE empty -> the cluster
 # module's default profile/region). Set the per-round account profiles when the 5-account fleet exists.
 WIB_REGION="${WIB_REGION:-us-west-2}"
+# The `event` cost-allocation tag, from its one setting in event.sh (env WIB_EVENT overrides). Passed to
+# both Terraform roots as -var event=, on apply and destroy alike, since neither root has a default.
+# shellcheck source=SCRIPTDIR/event.sh
+. "${SCRIPT_DIR}/event.sh"
 # Instructor clusters spread per round across separate accounts so no one account hits an EKS/VPC quota
 # wall ("overload"): Round 1 -> account 1, Round 2 -> account 2, Round 3 -> account 3. Switchable here.
 WIB_ACCOUNT_R1="${WIB_ACCOUNT_R1:-accen-dev}"
@@ -476,6 +480,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
                       volumes, removes each cluster's provisioning row, and republishes the routes.
     deregister <name...>  Remove clusters from the provisioning app by hand (down does this itself).
+    reconcile-pool    Name every provisioning row whose cluster no longer exists in any fleet account
+                      (a ghost the admin page still counts), and with WIB_APPLY=1 deregister them.
+                      'down all' and 'down-fleet' end with it. Non-zero while a ghost remains.
     audit-zero        Assert every fleet account holds nothing billable beyond its lab VPC's NAT, its
                       address and the Bedrock endpoint ENIs; names anything else. 'down all' and
                       'down-fleet' end with it.
@@ -492,6 +499,20 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       Run this after 'up-fleet'. Without it a run reports a success rate that is wrong:
                       on the sister Packt fleet 27 of 250 clusters were healthy but had an NLB whose
                       hostname had not propagated yet, so the run scored 89% and 27 clusters were fine.
+    restart-agent <name...>
+                      Restart BurritoBot: delete the agent pod and wait for a Ready replacement. A pod
+                      delete, never a rollout restart, which the drift policy refuses.
+    restart-console <name...>
+                      The same for the console pod.
+    terminal-password <name...>
+                      Re-issue the terminal login: rewrite terminal-auth with the credential the
+                      cluster's role is handed, then restart the terminal so ttyd reads it.
+    serve-actions [--once]
+                      The admin console's runner (#268): poll the provisioning app's action queue with
+                      the admin token, run each queued restart-agent | restart-console | converge |
+                      terminal-password, post the result, and post a 'verify all' health report every
+                      \${WIB_ACTIONS_HEALTH_EVERY} seconds (default 300). Run it on a host holding the
+                      fleet profiles for the length of the workshop. See docs/admin-console.md.
     harvest <n>      Harvest student-facing access info (console NLB / grafana / ...) of an up-fleet run
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
     aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
@@ -1256,12 +1277,12 @@ up_one() {
     local ns=(); [[ -n "${WIB_NODE_SIZE}" ]] && ns=(-var "node_min_size=${WIB_NODE_SIZE}" -var "node_max_size=${WIB_NODE_SIZE}" -var "node_desired_size=${WIB_NODE_SIZE}")
     local dk=(); [[ -n "${WIB_DISK}" ]] && dk=(-var "node_disk_size=${WIB_DISK}")
     if [[ -n "${WIB_DRY_RUN}" ]]; then
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
-        -var "name=${name}" -var "vpc_id=${VPC_ID}" \
+        -var "name=${name}" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
@@ -1582,7 +1603,7 @@ down_one() {
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
-        -var "name=${name}" -var "vpc_id=${VPC_ID}" \
+        -var "name=${name}" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
         >"${LOG_DIR}/${name}.destroy.log" 2>&1; then
         rm -f "${STATE_DIR}/${name}.tfstate" "$(membership_file "${name}")"; log "  ok: ${name}"
@@ -1813,7 +1834,7 @@ destroy_lab_vpc_for() {
     log "  ${acct}: destroying the lab VPC (${n} resources in state)"
     terraform -chdir="${LAB_VPC_DIR}" init -input=false >/dev/null 2>&1
     if AWS_PROFILE="${acct}" terraform -chdir="${LAB_VPC_DIR}" destroy -auto-approve -no-color \
-        -state="${state}" -var "profile=${acct}" -var "region=${WIB_REGION}" \
+        -state="${state}" -var "profile=${acct}" -var "region=${WIB_REGION}" -var "event=${WIB_EVENT}" \
         >"${LOG_DIR}/${acct}.lab-vpc-destroy.log" 2>&1; then
         log "  ${acct}: lab VPC destroyed"
     else
@@ -1942,6 +1963,10 @@ cmd_down() {
     # caller explicitly keeps it for a fast rebuild (WIB_KEEP_VPC=1). Leaving it behind by default is how
     # a "destroy everything" run quietly kept costing money.
     if [[ "${1:-}" == "all" ]]; then
+        # down_one deregistered what this run destroyed. A row it never knew about (a roster cluster torn
+        # down by hand, a name from a retired scheme) survives that, and every event adds to it (#391).
+        # The fleet is meant to be gone here, so an all-empty account answer is the expected one.
+        WIB_RECONCILE_EMPTY_FLEET=1 reconcile_pool || true
         # Tag repair, absorbed from teardown/teardown.sh (#398). Its job is to give untagged workshop
         # resources their project tag so a tag-driven sweep cannot walk past them and leave them
         # billing, which means it has to run as part of a teardown rather than beside one. It never
@@ -2079,7 +2104,7 @@ read_vpc_for() {
     if [[ ! -f "${state}" ]]; then
         log "no lab VPC for account '${profile}'. Apply it first:"
         log "  terraform -chdir=${LAB_VPC_DIR} apply -state=states/${profile}.tfstate \\"
-        log "    -var profile=${profile} -var region=${WIB_REGION}"
+        log "    -var profile=${profile} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
         exit 1
     fi
     VPC_ID="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${state}" -raw vpc_id 2>/dev/null || true)"
@@ -2353,6 +2378,8 @@ cmd_down_fleet() {
         ) &
     done
     wait
+    # Rows this teardown did not destroy and that have no cluster either go too (#391); see cmd_down.
+    WIB_RECONCILE_EMPTY_FLEET=1 reconcile_pool || true
     audit_zero   # #255: a fleet teardown ends with the zero verdict per account
     report_failures
 }
@@ -2939,6 +2966,149 @@ cmd_reap() {
     report_failures >&2 || true
 }
 
+# --- Pool reconcile (#391): every provisioning row must name a cluster that exists ---------------------
+# Teardown deregisters what it destroys (down_one), and only that. A cluster deleted from the console, one
+# whose state was lost, or one torn down before deregistration existed keeps its row for good. Before the
+# tier-2 upgrade the admin page read "Total 2, Available 2" over ONE live cluster: the other row was
+# watch-it-burn-r2-2, destroyed long before and named in the round scheme #290 retired. The page counts
+# rows, so every row with no cluster behind it is a seat, or a roster entry, that is not there.
+#
+# The test is the one reap-lbs uses: is the name in `eks list-clusters` of any fleet account. Not the
+# roster and not a name pattern. A roster row whose cluster was never rebuilt looks as current as one that
+# is serving, and a retired name is only the case that happened to be visible this time.
+
+# Every row in the pool as "<name>\t<state>", read from /admin/roster, the one admin view that lists every
+# row (/admin/export lists claimed rows only). The page is HTML, so the parse is checked against the row
+# count the page prints itself: a template change that breaks the parse fails here, loudly, instead of
+# reading as an empty pool with nothing wrong in it.
+pool_rows() {
+    local tok page rc=0
+    tok="$(resolve_admin_token)" || { log "pool: cannot resolve the provisioning admin token"; return 1; }
+    page="$(mktemp)"
+    if ! curl -sf --max-time 30 --get --data-urlencode "token=${tok}" \
+            "${WIB_PROVISIONING_URL%/}/admin/roster" -o "${page}"; then
+        log "pool: ${WIB_PROVISIONING_URL%/}/admin/roster did not answer"; rm -f "${page}"; return 1
+    fi
+    python3 - "${page}" <<'PY' || rc=$?
+import re, sys
+from html.parser import HTMLParser
+
+class Roster(HTMLParser):
+    """The <td> texts of every row of the roster table (class "rt"); header rows hold only <th>."""
+    def __init__(self):
+        super().__init__()
+        self.rows, self.row, self.cell, self.inside = [], None, None, False
+    def handle_starttag(self, tag, attrs):
+        if tag == "table" and "rt" in (dict(attrs).get("class") or "").split():
+            self.inside = True
+        elif self.inside and tag == "tr":
+            self.row = []
+        elif self.row is not None and tag == "td":
+            self.cell = []
+    def handle_endtag(self, tag):
+        if tag == "td" and self.cell is not None:
+            self.row.append("".join(self.cell).strip())
+            self.cell = None
+        elif tag == "tr" and self.row is not None:
+            if self.row:
+                self.rows.append(self.row)
+            self.row = None
+        elif tag == "table":
+            self.inside = False
+    def handle_data(self, data):
+        if self.cell is not None:
+            self.cell.append(data)
+
+page = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+parsed = Roster()
+parsed.feed(page)
+said = re.search(r"All (\d+) rows", page)
+if not said:
+    sys.exit("pool: /admin/roster printed no row count, so it is not the page this reads")
+if int(said.group(1)) != len(parsed.rows):
+    sys.exit(f"pool: /admin/roster says {said.group(1)} rows but {len(parsed.rows)} parsed; "
+             "refusing to judge a pool it cannot read")
+for row in parsed.rows:
+    if len(row) < 2 or not row[1]:
+        sys.exit(f"pool: a roster row carries no cluster name: {row}")
+    print(f"{row[1]}\t{row[0]}")
+PY
+    rm -f "${page}"
+    return "${rc}"
+}
+
+# Every live EKS cluster in the fleet accounts (the attendee accounts plus the default account, which holds
+# the roster), one per line. Fails, printing nothing, when ANY account cannot be listed: a row whose
+# account did not answer would look exactly like a ghost, so one silent account must stop the whole verdict.
+fleet_live_clusters() {
+    local accounts acct out all=""
+    local -A seen=()
+    IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS},${WIB_DEFAULT_ACCOUNT}"
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"
+        [[ -n "${acct}" && -z "${seen[${acct}]:-}" ]] || continue
+        seen["${acct}"]=1
+        if ! out="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" \
+                    --query 'clusters[]' --output text)"; then
+            log "pool: could not list the EKS clusters in '${acct}'; judging no row"
+            record_fail "pool:list-clusters-failed:${acct}"
+            return 1
+        fi
+        all+="${out}"$'\n'
+    done
+    tr '\t ' '\n\n' <<<"${all}" | awk 'NF && $0 != "None"' | sort -u
+}
+
+# Name every pool row whose cluster is gone. DRY-RUN unless WIB_APPLY=1, which deregisters each one
+# through the same deregister_one teardown uses. Returns 0 when the pool describes the live fleet (or every
+# ghost was removed), 1 when it does not, or could not be read.
+reconcile_pool() {
+    [[ -z "${WIB_NO_INGEST:-}" ]] || { log "pool: WIB_NO_INGEST set; the provisioning pool is not reconciled"; return 0; }
+    local rows live name state total=0 ghosts=0 dereg_before dereg_after
+    rows="$(pool_rows)" || { record_fail "pool:unreadable"; return 1; }
+    live="$(fleet_live_clusters)" || return 1
+    # The reap-lbs lesson: an empty answer from every account is either a fleet that is gone or an API that
+    # is lying, and the two look the same. Mid-event, believing it deletes every attendee's row. Teardown,
+    # which has just destroyed the fleet on purpose, is the caller that passes the override.
+    if [[ -z "${live}" && -n "${rows}" && -z "${WIB_RECONCILE_EMPTY_FLEET:-}" ]]; then
+        log "pool: every fleet account reports ZERO live EKS clusters while the pool still holds rows."
+        log "      Set WIB_RECONCILE_EMPTY_FLEET=1 if the fleet really is gone; nothing judged."
+        record_fail "pool:zero-live-clusters"; return 1
+    fi
+    dereg_before="$(grep -c '^deregister:' "${FAIL_FILE}" 2>/dev/null || true)"
+    # fd 3, so nothing a deregister runs can swallow the rest of the rows from stdin.
+    while IFS=$'\t' read -r -u 3 name state; do
+        [[ -n "${name}" ]] || continue
+        total=$(( total + 1 ))
+        grep -qxF -- "${name}" <<<"${live}" && continue
+        ghosts=$(( ghosts + 1 ))
+        log "  GHOST  ${state:-?}  ${name}  (no live EKS cluster by that name in any fleet account)"
+        if [[ -n "${WIB_APPLY:-}" ]]; then deregister_one "${name}"; else record_fail "pool-ghost:${name}"; fi
+    done 3<<<"${rows}"
+    if [[ "${ghosts}" -eq 0 ]]; then
+        log "pool: all ${total} row(s) name a live cluster"; return 0
+    fi
+    if [[ -z "${WIB_APPLY:-}" ]]; then
+        log "pool: ${ghosts} of ${total} row(s) have no live cluster, so the admin page's counts are ${ghosts} too high."
+        log "      DRY-RUN; WIB_APPLY=1 fleet.sh reconcile-pool deregisters them."
+        return 1
+    fi
+    dereg_after="$(grep -c '^deregister:' "${FAIL_FILE}" 2>/dev/null || true)"
+    log "pool: ${ghosts} of ${total} row(s) had no live cluster; deregistered"
+    [[ "${dereg_after:-0}" -eq "${dereg_before:-0}" ]]
+}
+
+cmd_reconcile_pool() {
+    local t; for t in aws curl jq python3; do
+        command -v "${t}" >/dev/null 2>&1 || { log "missing tool: ${t}"; exit 1; }
+    done
+    mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
+    [[ -n "${WIB_APPLY:-}" ]] || log "reconcile-pool: DRY-RUN (set WIB_APPLY=1 to deregister the ghosts)"
+    log "reconcile-pool: ${WIB_PROVISIONING_URL%/} against ${WIB_ATTENDEE_ACCOUNTS},${WIB_DEFAULT_ACCOUNT}"
+    reconcile_pool || true
+    report_failures
+}
+
 # Push one converged cluster's full row into the live provisioning pool via /admin/import: harvest the
 # console NLB, read the boot-persisted AWS creds, look up the per-student Datadog org by slot (same index
 # as bootstrap + merge_pool). No CSV rebuild, no redeploy. POOL1/POOL2 are preloaded by cmd_ingest.
@@ -3317,6 +3487,226 @@ apply_routes_table() {
     return 1
 }
 
+# --- admin actions (#268) ------------------------------------------------------------------------
+#
+# Whitney has to be able to see the fleet's health and restart part of a cluster without kubectl or AWS
+# credentials. The provisioning app is the console, but it runs on Railway with no AWS credentials, so it
+# cannot reach EKS. It queues the action and records who asked and when; `serve-actions` is the runner, a
+# loop on a host that already holds the fleet profiles (a presenter laptop by default). The loop polls the
+# queue with the admin token, runs the matching verb below and posts the result back. That keeps the
+# console a caller of fleet.sh rather than a second copy of its logic, and no new credential is issued
+# (decisions.md, question 629). The HTTP contract the app implements is in docs/admin-console.md.
+#
+# Restarts are pod deletes. A `rollout restart` is a Deployment UPDATE, which block-argocd-drift denies for
+# any principal that is not Argo CD, kagent, a system account or system:masters, and decisions.md
+# (2026-09-03) rules it out for the fleet anyway. A pod DELETE is matched by neither policy, and the
+# Deployment recreates the pod from the spec Argo CD owns, so the running state still matches the repo.
+readonly AGENT_POD_SELECTOR="app.kubernetes.io/name=workshop-agent"
+readonly CONSOLE_POD_SELECTOR="app.kubernetes.io/name=console"
+readonly TERMINAL_POD_SELECTOR="app.kubernetes.io/name=web-terminal"
+readonly RESTART_WAIT="${WIB_RESTART_WAIT:-180}"              # seconds for a replacement pod to go Ready
+readonly RESTART_INTERVAL="${WIB_RESTART_INTERVAL:-5}"
+readonly ACTIONS_POLL="${WIB_ACTIONS_POLL:-10}"               # seconds between queue polls
+readonly ACTIONS_HEALTH_EVERY="${WIB_ACTIONS_HEALTH_EVERY:-300}"  # seconds between health reports
+# The queue's action names are the fleet.sh verbs they run. Nothing outside this list is ever executed,
+# whatever the queue says.
+readonly ADMIN_ACTIONS="restart-agent restart-console converge terminal-password"
+
+# Write an isolated kubeconfig for one cluster and print its context, refusing unless that context IS the
+# cluster asked for (AGENTS.md rule 8: confirm the target before every mutation).
+admin_kubeconfig() {
+    local name="$1" acct="$2" kcfg="$3" ctx
+    provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || { log "  ${name}: UNREACHABLE (no kubeconfig)"; return 1; }
+    ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
+    if [[ "${ctx}" != *"/${name}" ]]; then
+        log "  REFUSING ${name}: its kubeconfig points at '${ctx:-nothing}', not this cluster"; return 1
+    fi
+    printf '%s' "${ctx}"
+}
+
+# Delete the pods a selector names and wait for a Ready replacement. Non-zero, saying why, when nothing
+# matched or nothing new came back Ready inside RESTART_WAIT: a restart nobody saw finish is not done.
+restart_pods() {
+    local name="$1" kcfg="$2" ctx="$3" ns="$4" sel="$5" olds=() waited=0 ready
+    read -ra olds <<<"$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" get pods -l "${sel}" \
+        -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
+    [[ "${#olds[@]}" -gt 0 ]] || { log "  ${name}: no pod matches ${sel} in ${ns}"; return 1; }
+    log "  ${name}: deleting ${olds[*]} (${ns})"
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" delete pod "${olds[@]}" --wait=false >/dev/null 2>&1; then
+        log "  ${name}: the delete was refused"; return 1
+    fi
+    while [[ "${waited}" -lt "${RESTART_WAIT}" ]]; do
+        ready="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" get pods -l "${sel}" -o json 2>/dev/null \
+            | python3 -c '
+import json, sys
+old = set(sys.argv[1:])
+try:
+    items = json.load(sys.stdin).get("items") or []
+except ValueError:
+    items = []
+print(sum(1 for p in items if not p["metadata"].get("deletionTimestamp") and p["metadata"]["name"] not in old
+          and any(c.get("type") == "Ready" and c.get("status") == "True"
+                  for c in (p.get("status") or {}).get("conditions") or [])))' "${olds[@]}" 2>/dev/null)"
+        [[ "${ready:-0}" -ge 1 ]] && { log "  ${name}: replacement Ready (${ns}, ${sel})"; return 0; }
+        sleep "${RESTART_INTERVAL}"; waited=$(( waited + RESTART_INTERVAL ))
+    done
+    log "  ${name}: no Ready replacement for ${sel} after ${RESTART_WAIT}s"; return 1
+}
+
+restart_agent_one()   { restart_pods "$1" "$2" "$3" agent "${AGENT_POD_SELECTOR}"; }
+restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTOR}"; }
+
+# Re-issue the terminal login: write the credential this cluster's role is handed (terminal_creds_for, the
+# same function the bootstrap and the provisioning bundle use) and restart the terminal, because ttyd
+# reads it once at startup. It restores the expected credential rather than minting a new one: the login
+# is shared and speakable by design (bootstrap_terminal_auth), and a fresh random one would make the
+# access page every student reads wrong. This is the repair for a lost or edited terminal-auth secret.
+terminal_password_one() {
+    local name="$1" kcfg="$2" ctx="$3" cred pwfile="${AWS_POOL_DIR}/$1.terminal"
+    cred="$(terminal_creds_for "${name}")"
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent create secret generic terminal-auth \
+            --from-literal="TTYD_CREDENTIAL=${cred}" --dry-run=client -o yaml 2>/dev/null \
+        | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent apply -f - >/dev/null 2>&1; then
+        log "  ${name}: could not write terminal-auth"; return 1
+    fi
+    mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${cred#*:}" >"${pwfile}"; chmod 600 "${pwfile}"
+    log "  ${name}: terminal-auth set for user '${cred%%:*}'; restarting the terminal so ttyd reads it"
+    restart_pods "${name}" "${kcfg}" "${ctx}" agent "${TERMINAL_POD_SELECTOR}"
+}
+
+# Run one per-cluster admin function over named clusters, each in the account it was built in.
+_admin_each() {   # $1 verb (for messages), $2 per-cluster function, rest: cluster names
+    local verb="$1" fn="$2"; shift 2
+    [[ $# -gt 0 ]] || { log "usage: ${verb} <name...>"; exit 2; }
+    command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
+    local name acct kcfg ctx rc=0
+    for name in "$@"; do
+        assert_ours "${name}"
+        acct="$(_account_for_name "${name}" 0)"
+        kcfg="$(mktemp -t "${name}.admin.XXXX")"
+        if ctx="$(AWS_PROFILE="${acct}" admin_kubeconfig "${name}" "${acct}" "${kcfg}")"; then
+            AWS_PROFILE="${acct}" "${fn}" "${name}" "${kcfg}" "${ctx}" || { log "${verb} ${name}: FAILED"; rc=1; }
+        else
+            rc=1
+        fi
+        rm -f "${kcfg}"
+    done
+    [[ "${rc}" -eq 0 ]] && log "${verb}: done for $*"
+    return "${rc}"
+}
+cmd_restart_agent()     { _admin_each restart-agent restart_agent_one "$@"; }
+cmd_restart_console()   { _admin_each restart-console restart_console_one "$@"; }
+cmd_terminal_password() { _admin_each terminal-password terminal_password_one "$@"; }
+
+# One field of a JSON object, empty when absent.
+_json_field() { python3 -c 'import json, sys; v = json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2" 2>/dev/null; }
+
+# One call to the provisioning app with the admin token. Prints the response body; succeeds only on a 200.
+_prov_call() {   # $1 method, $2 path, $3 optional JSON body file
+    local method="$1" path="$2" body="${3:-}" tok out code
+    tok="$(resolve_admin_token)" || { log "serve-actions: cannot resolve the provisioning admin token"; return 1; }
+    out="$(mktemp)"
+    code="$(curl -s -o "${out}" -w '%{http_code}' --max-time 30 -X "${method}" "${WIB_PROVISIONING_URL%/}${path}" \
+        -H "X-Admin-Token: ${tok}" -H 'Content-Type: application/json' ${body:+--data-binary "@${body}"} || echo 000)"
+    cat "${out}"; rm -f "${out}"
+    [[ "${code}" == "200" ]]
+}
+
+# Claim, run and report one queued action. The claim comes first, so two runners (or one restarted
+# mid-action) never run the same action twice, and a refused action is still answered rather than left
+# pending. Every action also gets a local audit line in logs/admin-actions.tsv: when, id, who, what, where,
+# exit code. The app keeps the authoritative record; this one survives the app being unreachable.
+run_admin_action() {   # $1 one action, as JSON
+    local a="$1" id action cluster who reason="" rc=0 outf res
+    id="$(_json_field "${a}" id)"; action="$(_json_field "${a}" action)"
+    cluster="$(_json_field "${a}" cluster)"; who="$(_json_field "${a}" requested_by)"; who="${who:-unknown}"
+    [[ "${id}" =~ ^[A-Za-z0-9_-]+$ ]] || { log "serve-actions: skipping an action with no usable id: ${a}"; return 0; }
+    if [[ " ${ADMIN_ACTIONS} " != *" ${action} "* ]]; then
+        reason="unknown action '${action}' (allowed: ${ADMIN_ACTIONS})"
+    elif [[ ! "${cluster}" =~ ^watch-it-burn-[a-z0-9-]+$ ]]; then
+        reason="not a watch-it-burn cluster: '${cluster}'"
+    elif [[ ! -f "${STATE_DIR}/${cluster}.tfstate" ]]; then
+        reason="${cluster} has no state on this runner, so it is not a cluster this fleet provisioned"
+    fi
+    if ! _prov_call POST "/admin/actions/${id}/claim" >/dev/null; then
+        log "serve-actions: action ${id} was not claimable (taken or withdrawn); leaving it"; return 0
+    fi
+    outf="$(mktemp)"
+    if [[ -n "${reason}" ]]; then
+        rc=2; printf 'refused: %s\n' "${reason}" >"${outf}"; log "serve-actions: ${id} refused: ${reason}"
+    else
+        log "serve-actions: ${id} ${action} ${cluster} (requested by ${who})"
+        bash "${SCRIPT_DIR}/fleet.sh" "${action}" "${cluster}" >"${outf}" 2>&1 || rc=$?
+    fi
+    mkdir -p "${LOG_DIR}"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${id}" "${who}" "${action}" "${cluster}" "${rc}" \
+        >>"${LOG_DIR}/admin-actions.tsv"
+    res="$(mktemp)"
+    python3 -c 'import json, sys
+rc = int(sys.argv[1])
+print(json.dumps({"status": "done" if rc == 0 else "failed", "exit_code": rc, "output": sys.argv[2],
+                  "runner": sys.argv[3], "finished_at": sys.argv[4]}))' \
+        "${rc}" "$(tail -c 4000 "${outf}")" "$(hostname)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"${res}"
+    _prov_call POST "/admin/actions/${id}/result" "${res}" >/dev/null \
+        || log "serve-actions: ${id} finished (exit ${rc}) but the app did not record the result"
+    rm -f "${outf}" "${res}"
+}
+
+# Walk the fleet (the same checks as `verify`) and post the JSON report to the admin page. A walkthrough
+# that finds a broken cluster exits non-zero, and that is the report, so only a missing report is a failure.
+post_fleet_health() {
+    local report rc=0; report="$(mktemp -t wib-health.XXXX)"
+    mkdir -p "${LOG_DIR}"
+    WIB_VERIFY_REPORT="${report}" cmd_verify all >>"${LOG_DIR}/serve-actions-health.log" 2>&1 || true
+    if [[ ! -s "${report}" ]]; then
+        log "serve-actions: the walkthrough wrote no report (see ${LOG_DIR}/serve-actions-health.log)"; rc=1
+    elif ! _prov_call POST /admin/health "${report}" >/dev/null; then
+        log "serve-actions: the app did not accept the health report"; rc=1
+    fi
+    rm -f "${report}"
+    return "${rc}"
+}
+
+# The runner loop. --once does one health report and one pass over the queue, then exits.
+cmd_serve_actions() {
+    local once=""; [[ "${1:-}" == "--once" ]] && once=1
+    # What the loop and the walkthrough need. Each verb it runs checks its own tools (converge: terraform).
+    local t; for t in curl python3 aws kubectl; do
+        command -v "${t}" >/dev/null 2>&1 || { log "missing tool: ${t}"; exit 1; }
+    done
+    WIB_ADMIN_TOKEN="$(resolve_admin_token)" || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
+    log "serve-actions: ${WIB_PROVISIONING_URL%/}/admin/actions every ${ACTIONS_POLL}s, health every ${ACTIONS_HEALTH_EVERY}s"
+    local last_health=0 health_pid="" now body actions a queue_ok
+    while :; do
+        queue_ok=1
+        now="$(date +%s)"
+        # The walkthrough takes minutes on a full fleet, so it runs beside the queue rather than in front of
+        # it, and a report still running is never started twice.
+        if (( now - last_health >= ACTIONS_HEALTH_EVERY )) && ! { [[ -n "${health_pid}" ]] && kill -0 "${health_pid}" 2>/dev/null; }; then
+            post_fleet_health & health_pid=$!; last_health="${now}"
+        fi
+        # One action per line, as JSON; anything but {"actions": [...]} is an unanswered queue.
+        if body="$(_prov_call GET "/admin/actions?status=pending")" && actions="$(python3 -c 'import json, sys
+acts = json.load(sys.stdin)["actions"]
+assert isinstance(acts, list)
+for x in acts:
+    print(json.dumps(x))' <<<"${body}" 2>/dev/null)"; then
+            while read -r a; do
+                [[ -n "${a}" ]] && run_admin_action "${a}"
+            done <<<"${actions}"
+        else
+            log "serve-actions: the queue did not answer with an action list; retrying in ${ACTIONS_POLL}s"
+            queue_ok=""
+        fi
+        if [[ -n "${once}" ]]; then
+            # One pass is a verdict: non-zero when the queue or the health report did not get through.
+            [[ -z "${health_pid}" ]] || wait "${health_pid}" || return 1
+            [[ -n "${queue_ok}" ]]; return
+        fi
+        sleep "${ACTIONS_POLL}"
+    done
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     load_roster   # populate INSTRUCTORS for every command (routes/reap/hints), not just cmd_instructors
@@ -3340,6 +3730,10 @@ main() {
         reap-secrets) cmd_reap_secrets "$@" ;;
         health) cmd_health "$@" ;;
         converge) cmd_converge "$@" ;;
+        restart-agent) cmd_restart_agent "$@" ;;
+        restart-console) cmd_restart_console "$@" ;;
+        terminal-password) cmd_terminal_password "$@" ;;
+        serve-actions) cmd_serve_actions "$@" ;;
         harvest) cmd_harvest "$@" ;;
         ingest) cmd_ingest "$@" ;;
         ingest-instructors)
@@ -3352,6 +3746,7 @@ main() {
         aws-keys) cmd_aws_keys "$@" ;;
         reap-lbs) cmd_reap_lbs ;;
         reap) cmd_reap "$@" ;;
+        reconcile-pool) cmd_reconcile_pool ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
         *) usage ;;
