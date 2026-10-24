@@ -2,8 +2,8 @@
 # ABOUTME: the tool pod can reach guard-proxy's /toggle, and why enrolling `agent` is not a one-label change.
 """Why this exists (#238).
 
-The tour says the mesh "encrypts all traffic between containers inside the cluster, automatically", and no
-file has ever enrolled a namespace. docs/research/2026-10-24-istio-ambient-evaluation.md weighs keeping
+The tour used to say the mesh "encrypts all traffic between containers inside the cluster, automatically",
+and no file has ever enrolled a namespace (#482 reworded it). docs/research/2026-10-24-istio-ambient-evaluation.md weighs keeping
 the five Istio apps for a challenge against dropping them. Its answer depends on the facts below:
 
 - nothing is enrolled, so today the mesh changes no traffic;
@@ -72,6 +72,18 @@ check(f"no manifest or script sets {LABEL}", not enrolled,
       f"{enrolled}: the mesh may now capture traffic; re-read sections 1, 3 and 4 of {EVALUATION}")
 ns_docs = docs("gitops/namespaces/namespaces.yaml")
 check("no Namespace object carries the label", not any(has_key(d, LABEL) for d in ns_docs) and len(ns_docs) > 0)
+
+# While nothing is enrolled, the student pages say so (#482, question 702): the tour no longer claims the mesh
+# encrypts traffic and hands the student the command that shows the label is missing, and C1's README no longer
+# lists mesh mTLS as one of its controls. Enrolling a namespace fails the check above first; rewrite both then.
+lab = (REPO / "gitops/ai-layer/web/lab.html").read_text()
+mesh_li = re.search(r'<li data-full><a href="https://istio\.io/[^"]*"[^>]*>Istio ambient mesh</a>(.*?)</li>', lab, re.S)
+tour = " ".join(mesh_li.group(1).split()) if mesh_li else ""
+check("the tour says the mesh is installed but enrols no namespace",
+      "no namespace is enrolled" in tour and "not encrypting anything" in tour
+      and f"kubectl get ns -L {LABEL}" in tour and "encrypts all traffic" not in tour, tour or "no Istio tour bullet")
+c1 = (REPO / "challenges/c1-exfil-s3/README.md").read_text()
+check("C1's README does not list mesh mTLS as a control", not re.search(r"(?i)istio.*mtls|mtls.*istio", c1))
 
 # --- section 2.1: the tool pod can reach guard-proxy's /toggle; the public /a2a/ route is gone (#481) ------
 intra = one(docs("policies/network-policies/per-namespace/agent-allow-intra-namespace.yaml"),

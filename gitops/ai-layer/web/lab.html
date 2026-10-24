@@ -303,7 +303,7 @@
           <p class="burnnote" data-burn>The Community cluster carries a shorter list on purpose. Istio is not installed here, and neither is anything that defends the agent: no Kyverno, no Falco, no NetworkPolicy until you apply one.</p>
           <ul class="small">
             <li data-full><a href="https://istio.io/latest/docs/ambient/overview/" target="_blank" rel="noopener">Istio ambient mesh</a>
-            encrypts all traffic between containers inside the cluster, automatically.</li>
+            is installed, but no namespace is enrolled in it yet, so it is not encrypting anything. Run <code class="inl">kubectl get ns -L istio.io/dataplane-mode</code> and see.</li>
             <li><a href="https://cert-manager.io/docs/" target="_blank" rel="noopener">cert-manager</a>
             issues and renews the TLS certificates that services present (for example the console's HTTPS).</li>
             <li><a href="https://opentelemetry.io/docs/" target="_blank" rel="noopener">OpenTelemetry</a>

@@ -61,7 +61,6 @@ that tried to *exfiltrate* the data over the network is blocked, which is what t
   intra-namespace allows). The `network-policies` Argo CD app ships them armed on the `admin` profile only;
   the `full` and `attendee` profiles exclude it (#281) and `burn` never had it. The student applies the
   same five policies in one manifest, because the default-deny alone would break DNS.
-- Istio ambient mTLS for in-cluster traffic (not on the Community cluster).
 
 To prove the
 network block when the agent wanders, run `CONTEXT=<ctx> fallback.kubectl.sh`: it POSTs to the beacon from

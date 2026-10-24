@@ -181,6 +181,9 @@ Until a decision lands, the tour sentence is the cheapest thing to fix. Suggeste
 review, since it is student-facing: *"Istio ambient mesh is installed, but no namespace is enrolled in it
 yet, so it is not encrypting anything. Run `kubectl get ns -L istio.io/dataplane-mode` and see."* Or
 drop the bullet.
+**Done in #482 (question 702):** the tour bullet now carries that text, and the "Istio ambient mTLS for
+in-cluster traffic" control is gone from `challenges/c1-exfil-s3/README.md`. `verify/test_mesh_enrollment.py`
+holds both while nothing is enrolled.
 
 ## 4. What dropping it saves
 

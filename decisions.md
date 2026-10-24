@@ -1448,3 +1448,24 @@ target on workshop-mcp's :3001. `verify/test_agentgateway_config.py` validates t
 vendored v1.5.0 schema as committed and with the get_weather rule, shows an unknown key beside the rules is
 rejected, and checks every container runs the pinned image and reports v1.5.0. The live proof is the #503
 probe at bring-up.
+## 2026-10-25 · #482 · question 702 · the tour says the mesh enrols nothing, and C1 drops its mesh mTLS control
+
+**Question 702:** Should the false Istio encryption lines in the lab tour and the C1 README be corrected
+now, before the keep-or-drop decision on Istio (#471) is made? No file sets `istio.io/dataplane-mode`, so the
+tour's "encrypts all traffic between containers inside the cluster, automatically" and C1's "Istio ambient
+mTLS for in-cluster traffic" were false on every cluster.
+
+**Answer:** Reword the tour line now and delete the C1 bullet.
+
+**Decided by:** Michael.
+
+**What it changes:** the tour bullet in `gitops/ai-layer/web/lab.html` (and its generated copy
+`challenges/LAB-TEXT.md`) now reads the text from section 3 of
+`docs/research/2026-10-24-istio-ambient-evaluation.md`: the mesh is installed, no namespace is enrolled, so
+it encrypts nothing, and `kubectl get ns -L istio.io/dataplane-mode` shows it. The console terminal's
+ClusterRole already lets students list namespaces. `challenges/c1-exfil-s3/README.md` no longer lists mesh
+mTLS as a C1 control; the egress-wall bullet stays. `verify/test_mesh_enrollment.py` now fails if the tour
+claims encryption again or C1 lists mesh mTLS while nothing is enrolled. The keep-or-drop question on #471 is
+untouched: if Istio is dropped the bullet goes, and if namespaces are enrolled the bullet is rewritten (the
+enrolment check in the same test fails first). The links, platform and diagram pages and
+`docs/STACK-WALKTHROUGH.md` still describe the mesh as a control; those wait on #471.
