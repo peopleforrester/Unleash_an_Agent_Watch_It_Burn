@@ -1,0 +1,140 @@
+# ABOUTME: The instructor fleet dashboard (#267): one row per kube_cluster_name with agent up, console up,
+# ABOUTME: traces in the last 5 minutes and spend so far. The screen to have open during the workshop.
+#
+# This is the Datadog dashboard API body (v1, ordered layout) written as YAML. fleet_monitors.py finds the
+# live dashboard by its title and replaces it in place, so the URL stays the same across applies within an
+# org. A new event's instructor org is a new org, so its first apply prints a new URL.
+#
+# The table is the point. Every column is one query grouped by kube_cluster_name, and the table joins them
+# on that group, so a cluster that is missing a column is visible as a blank or red cell in its own row. It
+# runs over a fixed 5-minute window, whatever the dashboard's time picker says, because "is it alive now"
+# is the only question it answers.
+title: "Watch It Burn: fleet"
+description: "One row per cluster. Managed by infra/datadog-fleet/fleet_monitors.py; edits in the UI are overwritten on the next apply."
+layout_type: ordered
+widgets:
+  - definition:
+      type: note
+      content: |
+        **One row per student cluster.** Red means act now. Agent 0 or blank: the cluster has stopped reporting.
+        Console 0: the student's link is a 502. Traces blank: nobody has chatted in 5 minutes, or the trace path is broken.
+        From outside, for one cluster: `fleet.sh verify <cluster>`. The alerts below are the continuous version of that walk.
+      background_color: yellow
+      font_size: "14"
+      text_align: left
+      show_tick: false
+      has_padding: true
+
+  - definition:
+      type: query_value
+      title: Clusters reporting
+      time: { live_span: 5m }
+      precision: 0
+      autoscale: false
+      requests:
+        - response_format: scalar
+          queries:
+            - data_source: metrics
+              name: agents
+              query: "count_not_null(max:datadog.agent.running{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name})"
+              aggregator: last
+          formulas:
+            - formula: agents
+
+  - definition:
+      type: query_value
+      title: Room spend so far (USD)
+      time: { live_span: 5m }
+      precision: 2
+      autoscale: false
+      custom_unit: "$"
+      requests:
+        - response_format: scalar
+          queries:
+            - data_source: metrics
+              name: spend
+              query: "sum:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*}"
+              aggregator: last
+          formulas:
+            - formula: spend
+
+  - definition:
+      type: manage_status
+      title: Fleet alerts
+      query: 'tag:"managed-by:wib-fleet-monitors"'
+      summary_type: groups
+      display_format: countsAndList
+      color_preference: background
+      hide_zero_counts: true
+      show_last_triggered: true
+      sort: "status,asc"
+
+  - definition:
+      type: query_table
+      title: Every cluster, last 5 minutes
+      time: { live_span: 5m }
+      has_search_bar: auto
+      requests:
+        - response_format: scalar
+          queries:
+            - data_source: metrics
+              name: agent
+              query: "max:datadog.agent.running{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              aggregator: last
+            - data_source: metrics
+              name: console
+              query: "max:kubernetes_state.deployment.replicas_available{kube_cluster_name:watch-it-burn-*,kube_namespace:agent,kube_deployment:console} by {kube_cluster_name}"
+              aggregator: last
+            - data_source: metrics
+              name: burritobot
+              query: "max:kubernetes_state.deployment.replicas_available{kube_cluster_name:watch-it-burn-*,kube_namespace:agent,kube_deployment:workshop-agent} by {kube_cluster_name}"
+              aggregator: last
+            - data_source: metrics
+              name: traces
+              query: "sum:traces.span.metrics.calls{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}.as_count()"
+              aggregator: sum
+            - data_source: metrics
+              name: cost
+              query: "max:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              aggregator: last
+          formulas:
+            - formula: agent
+              alias: agent up
+              conditional_formats:
+                - { comparator: "<", value: 1, palette: white_on_red }
+                - { comparator: ">=", value: 1, palette: white_on_green }
+            - formula: console
+              alias: console up
+              conditional_formats:
+                - { comparator: "<", value: 1, palette: white_on_red }
+                - { comparator: ">=", value: 1, palette: white_on_green }
+            - formula: burritobot
+              alias: BurritoBot up
+              conditional_formats:
+                - { comparator: "<", value: 1, palette: white_on_red }
+                - { comparator: ">=", value: 1, palette: white_on_green }
+            - formula: traces
+              alias: spans (5 min)
+              conditional_formats:
+                - { comparator: "<", value: 1, palette: white_on_yellow }
+            - formula: cost
+              alias: spend so far (USD)
+          # Lowest agent value first, so a dead cluster sorts to the top of a 50-row table.
+          sort:
+            count: 500
+            order_by:
+              - { type: formula, index: 0, order: asc }
+
+  - definition:
+      type: timeseries
+      title: Spans per cluster (who is chatting)
+      show_legend: false
+      requests:
+        - response_format: timeseries
+          display_type: bars
+          queries:
+            - data_source: metrics
+              name: spans
+              query: "sum:traces.span.metrics.calls{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}.as_count()"
+          formulas:
+            - formula: spans

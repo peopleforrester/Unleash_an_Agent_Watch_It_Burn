@@ -472,6 +472,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       convergence, Datadog org/identity/dual-shipping. Non-zero exit if any fails, and a
                       JSON report at logs/verify-<ts>.json (WIB_VERIFY_REPORT to place it,
                       WIB_VERIFY_CHAT=N to also send N real prompts).
+    monitors [--apply|--check] [--session START/END] [--notify @handle]
+                      The continuous version of 'verify' (#267): the fleet monitors and the fleet
+                      dashboard in the INSTRUCTOR Datadog org, from infra/datadog-fleet/. Dry run by
+                      default; --apply validates every monitor with Datadog before writing any;
+                      --check compares the live org with the repo. Run --apply once per event, after
+                      the Datadog pool is loaded, with the session window in UTC.
 
     SELECTORS (every verb takes them): attendees | attendees:<n> | instructors | presenters |
                       <owner> (michael, whitney: their rounds AND their student cluster) | all | names.
@@ -3347,6 +3353,9 @@ main() {
         up) cmd_up "$@" ;;
         scale) cmd_scale "$@" ;;
         verify) cmd_verify "$@" ;;
+        # The account and region are passed, never left to the ambient AWS defaults (AGENTS.md rule 6).
+        monitors) exec python3 "${INFRA_DIR}/datadog-fleet/fleet_monitors.py" \
+            --profile "${WIB_DEFAULT_ACCOUNT}" --region "${WIB_REGION}" "$@" ;;
         routes) cmd_routes "$@" ;;
         preflight) exec "${SCRIPT_DIR}/preflight.sh" "$@" ;;
         check-tls) exec "${SCRIPT_DIR}/check-tls.sh" "$@" ;;

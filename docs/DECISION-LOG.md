@@ -805,3 +805,26 @@ PolicyReport at admission naming `restrict-image-registries` and the rule broken
 run because the policy is in Audit. The reveal is now the container's taunt in its own log followed by
 that report, which states the challenge's lesson (the platform saw it and had no authority to stop it)
 and sets up the Audit-to-Enforce fix. Falco does not fire on these containers and is not claimed to.
+
+## 2026-10-24 · Fleet monitors and a fleet dashboard in the instructor org (#267)
+
+Nothing watched the fleet: no Datadog monitor was defined anywhere and the instructor org read "No
+Monitors", although every cluster already ships there (#242). `infra/datadog-fleet/` now defines six
+per-cluster monitors (agent heartbeat absent, console unavailable, BurritoBot not ready, guard-proxy
+error logs, node NotReady, no traces in the session) and a dashboard with one row per
+`kube_cluster_name`, loaded by `fleet.sh monitors`. The loader follows the pool loader (#256): dry run by
+default, every monitor validated by Datadog before any write, and an upsert by a `wib-monitor:<key>` tag,
+so a re-apply never duplicates a monitor.
+
+Signal choices, each tied to something the repo produces so a test can hold it there
+(`verify/test_fleet_monitors.py`): readiness comes from kube-state-metrics Deployment availability rather
+than pod conditions, because one number per Deployment is what a 50-row table can show; "traces from a
+cluster" is the span_metrics connector's `traces.span.metrics.calls`, because the collector stamps
+`k8s.cluster.name` on its metrics pipeline, while APM `trace.*` metrics carry no cluster tag; guard-proxy
+errors are its ERROR logs, which already carry the forward failures. The session window is applied as
+downtimes the loader owns, since Datadog's per-monitor custom schedules are a private beta.
+
+Not done here: `monitoring.agenticburn.com` needs a handle in the apex router, which is another repo.
+Until then the link is the dashboard URL the apply prints. The definitions have not been applied to a live
+org in this change; the first apply on the next event's instructor org is what proves the metric and tag
+names against real data, and `verify/test_fleet_monitors_live.py` (E2E) is the check.

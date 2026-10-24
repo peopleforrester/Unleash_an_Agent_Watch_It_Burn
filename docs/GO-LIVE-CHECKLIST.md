@@ -68,6 +68,18 @@ AWS_PROFILE=accen-dev verify/datadog-pool-check.sh
 ```
 
 ```bash
+# d2) the fleet monitors and the fleet dashboard in the instructor org (#267). Once per event, after the
+#     pool is loaded (a new event is a new instructor org), with the session window in UTC.
+infra/terraform/fleet/fleet.sh monitors                      # dry run: what would be written
+infra/terraform/fleet/fleet.sh monitors --apply --session <start>Z/<end>Z [--notify @handle]
+infra/terraform/fleet/fleet.sh monitors --check              # the org holds exactly the repo
+```
+
+- [ ] The apply printed a `fleet dashboard:` URL. Open it on the instructor screen; every live cluster has
+      a row, and the agent and console columns are green. The no-traces monitor stays muted outside the
+      window, so re-run with a corrected `--session` if the timing moves.
+
+```bash
 # e) standing hygiene: advisories, pinned versions, orphaned AWS resources, slot-id leaks
 WIB_PROBE_EMAIL=<an address that already holds a claim> verify/fleet-hygiene.sh
 ```
