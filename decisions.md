@@ -1036,3 +1036,26 @@ the repo's heavy tests need real services the gate cannot reach, so no line is d
 either is missing, by design.
 **Status:** Revisit when the gate can reach a live cluster and AWS.
 **Do not suggest:** a skip-on-missing mode in run-e2e.sh; it would let the gate go green having proved nothing.
+
+## 2026-10-24 · #476 · The burn collector ships to Datadog only, through its own Application
+
+**Before, attackme ran the instructor collector.** The burn root selected `otel-collector.yaml`, values.yaml
+alone, whose pipelines export to prometheusremotewrite and otlp_grpc/tempo in relay.yaml and in the Datadog
+overlay both. The burn root installs neither Prometheus nor Tempo, so every batch went to two dead endpoints
+and was retried; Datadog still got its copy.
+
+- **A third collector Application, `gitops/apps/otel-collector-burn.yaml`,** with the same name as the other
+  two and `values-burn.yaml` layered over values.yaml, the shape of the attendee one. The burn root selects it;
+  the full, attendee and admin roots now exclude it, as two of them already excluded the attendee one.
+- **values-burn.yaml restates only the exporters lists:** relay.yaml's (metrics to debug, traces to
+  span_metrics and debug) and the otel-collector-datadog ConfigMap's (Datadog, the connectors, debug). The
+  Tempo and Prometheus exporter definitions stay in the map, defined and never started; deleting a key with
+  a Helm null is not something to trust across versions. Without datadog-secret the burn collector exports
+  to debug only.
+- **The datadog-gate's log lines no longer promise Tempo and Prometheus unconditionally**; they say "on the
+  profiles that install them", which also rolls the collector once on every profile.
+- **Test:** `verify/test_collector_backends.py` renders the collector each root actually selects and fails
+  when an exporter's backend Application is not in that root's selection, with and without datadog-secret,
+  or when an exporter is unclassified. It also holds values-burn.yaml to values.yaml's lists minus the two
+  sinks. Checked offline only: no helm or otelcol-contrib binary on the run host, so neither `helm template`
+  nor `otelcol-contrib validate` has been run against the burn render.

@@ -20,6 +20,7 @@ apps/                    # 26 ArgoCD Application manifests
   network-policies.yaml  # Default-deny + allow rules
   prometheus.yaml        # kube-prometheus-stack (Prometheus + Grafana)
   otel-collector.yaml    # OpenTelemetry Collector
+  otel-collector-burn.yaml  # The burn cluster's collector: Datadog only (no Prometheus or Tempo there)
   grafana-dashboards.yaml  # Platform Overview dashboard
   tempo.yaml             # Distributed tracing
   loki.yaml              # Log aggregation

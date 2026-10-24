@@ -40,8 +40,9 @@ spec:
         # Everything in gitops/apps EXCEPT the two challenge-control apps. kubearmor (engine) and kyverno
         # (engine) stay; only their policy bundles that would pre-block C3 and pre-enable C2 are dropped.
         # otel-collector.yaml is the instructor collector; this profile takes otel-collector-attendee.yaml,
-        # the same Application name with the dual-ship overlay (#242).
-        exclude: '{network-policies,kubearmor-policies,otel-collector}.yaml'
+        # the same Application name with the dual-ship overlay (#242). otel-collector-burn.yaml is the burn
+        # cluster's Datadog-only collector (#476), the same name again.
+        exclude: '{network-policies,kubearmor-policies,otel-collector,otel-collector-burn}.yaml'
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging
       path: gitops/bootstrap/attendee

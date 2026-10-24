@@ -224,6 +224,7 @@ config:
     # The PRIMARY sink, Datadog, is NOT defined here. It lives in the Datadog overlay below
     # (extraManifests, otel-collector-datadog), which the datadog-gate init container switches on only
     # when datadog-secret exists. This file on its own is the Datadog-free collector: Tempo + Prometheus.
+    # The burn profile installs neither, so values-burn.yaml takes both out of every pipeline list (#476).
     debug:
       verbosity: basic
       sampling_initial: 5
@@ -306,7 +307,7 @@ config:
 #
 # The collector replaces lists when it merges, so the overlay restates the two pipeline lists it changes in
 # full; the processors lists are not touched and come from relay.yaml. values-dual.yaml (attendee) restates
-# this ConfigMap with the instructor org added.
+# this ConfigMap with the instructor org added, and values-burn.yaml (burn) with Tempo and Prometheus removed.
 extraManifests:
   - apiVersion: v1
     kind: ConfigMap
@@ -356,10 +357,10 @@ initContainers:
       - |
         if [ -n "${DD_API_KEY:-}" ]; then
           cp /datadog-overlay/datadog.yaml /datadog-gate/datadog.yaml
-          echo "datadog-gate: datadog-secret found. Datadog export ON: traces to Datadog and Tempo, metrics to Datadog and Prometheus."
+          echo "datadog-gate: datadog-secret found. Datadog export ON: traces and metrics to Datadog, and to Tempo and Prometheus on the profiles that install them."
         else
           echo '{}' > /datadog-gate/datadog.yaml
-          echo "datadog-gate: no datadog-secret. Datadog export OFF: traces to Tempo, metrics to Prometheus only. Known gap until a Datadog key is loaded (#454); write datadog-secret and restart this pod to turn it on."
+          echo "datadog-gate: no datadog-secret. Datadog export OFF: traces to Tempo, metrics to Prometheus only, on the profiles that install them (burn installs neither and exports to debug only). Known gap until a Datadog key is loaded (#454); write datadog-secret and restart this pod to turn it on."
         fi
     env:
       - name: DD_API_KEY

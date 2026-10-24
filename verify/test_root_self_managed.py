@@ -15,14 +15,14 @@ PROFILES = {
     # full excludes the two CHALLENGE-CONTROL apps for the same reason attendee does (#281): a presenter
     # must start a challenge where the room starts. It differs from attendee only in which collector
     # overlay it drops, because an instructor cluster already IS the instructor org.
-    "full": {"name": "app-of-apps", "exclude": "{network-policies,kubearmor-policies,otel-collector-attendee}.yaml"},
-    "attendee": {"name": "app-of-apps-attendee", "exclude": "{network-policies,kubearmor-policies,otel-collector}.yaml"},
+    "full": {"name": "app-of-apps", "exclude": "{network-policies,kubearmor-policies,otel-collector-attendee,otel-collector-burn}.yaml"},
+    "attendee": {"name": "app-of-apps-attendee", "exclude": "{network-policies,kubearmor-policies,otel-collector,otel-collector-burn}.yaml"},
     "burn": {"name": "app-of-apps-burn", "include": True},
     # admin (#294): the presenters' own clusters. The student build with every guardrail ARMED, so a
     # control can be shown already working instead of being staged. It therefore keeps the two challenge
     # -control apps that attendee and full drop, and takes the non-dual collector because it ships to the
     # shared presenter org as its primary (#296).
-    "admin": {"name": "app-of-apps-admin", "exclude": "otel-collector-attendee.yaml"},
+    "admin": {"name": "app-of-apps-admin", "exclude": "{otel-collector-attendee,otel-collector-burn}.yaml"},
 }
 failures = []
 

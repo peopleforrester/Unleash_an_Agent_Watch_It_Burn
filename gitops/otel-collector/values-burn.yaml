@@ -1,0 +1,63 @@
+# ABOUTME: Overlay for the BURN cluster (attackme, the Community phase): Datadog is the only telemetry sink,
+# ABOUTME: because the burn profile installs neither Prometheus nor Tempo. Layered over values.yaml (#476).
+#
+# values.yaml exports metrics to prometheusremotewrite and traces to otlp_grpc/tempo, in relay.yaml and in the
+# Datadog overlay both. The burn root (gitops/bootstrap/burn/app-of-apps-burn.yaml) selects neither
+# prometheus.yaml nor tempo.yaml, so on attackme every batch went to two endpoints with nothing behind them and
+# was retried, while Datadog got its copy. This file takes the two exporters out of every pipeline list. Their
+# definitions stay in values.yaml's `exporters` map (Helm merges maps, and deleting a key with null is not
+# something to trust across Helm versions); the collector validates a defined exporter but never starts one no
+# pipeline names, so nothing dials either endpoint.
+#
+# Helm replaces lists rather than merging them, and so does the collector when it loads the gate's second
+# config, so every list touched here is restated in full. verify/test_collector_backends.py holds both halves
+# to values.yaml's lists with the two exporters removed, in the same order, and checks that every exporter a
+# profile's collector names has its backend in that profile's root selection.
+#
+# Without datadog-secret (the gate writes an empty second config) the collector here exports to debug only.
+# That is a valid config and an honest one: burn has no in-cluster sink, and its key arrives through
+# external-secrets, which the burn root selects.
+config:
+  service:
+    pipelines:
+      metrics:
+        exporters:
+          - debug
+      traces:
+        exporters:
+          - span_metrics # feed the connector so it can derive metrics from these spans
+          - debug
+# The single-org Datadog overlay from values.yaml, with prometheusremotewrite and otlp_grpc/tempo removed.
+extraManifests:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: otel-collector-datadog
+    data:
+      datadog.yaml: |
+        exporters:
+          datadog:
+            api:
+              key: ${env:DD_API_KEY}
+              site: ${env:DD_SITE}
+        connectors:
+          datadog/connector:
+            traces:
+              compute_stats_by_span_kind: true
+              peer_tags_aggregation: true
+        service:
+          pipelines:
+            metrics:
+              receivers:
+                - otlp
+                - span_metrics
+                - datadog/connector
+              exporters:
+                - datadog # the only metrics sink on burn
+                - debug
+            traces:
+              exporters:
+                - datadog # the only trace sink on burn
+                - span_metrics
+                - datadog/connector
+                - debug

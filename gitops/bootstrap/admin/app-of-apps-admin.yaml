@@ -46,7 +46,8 @@ spec:
         # collector ships to Tempo and Prometheus only, falcosidekick forwards to Talon only, and the
         # Datadog Agent waits for the secret, which deploy-full-idp.sh logs as a known gap. When the pool
         # arrives, writing the secret and restarting the readers adds Datadog with no change here.
-        exclude: 'otel-collector-attendee.yaml'
+        # otel-collector-burn.yaml is the burn cluster's Datadog-only collector (#476); same Application name.
+        exclude: '{otel-collector-attendee,otel-collector-burn}.yaml'
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging
       path: gitops/bootstrap/admin
