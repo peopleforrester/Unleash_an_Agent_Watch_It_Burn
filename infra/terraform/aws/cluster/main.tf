@@ -223,9 +223,13 @@ data "aws_iam_policy" "permissions_boundary" {
   name = local.permissions_boundary_name
 }
 
+# Every registry module here is pinned to its minor (~> X.Y.0). .terraform.lock.hcl locks providers but
+# not modules, so a looser range let a fresh init pick up a newer module whose higher aws floor (21.29.0
+# needs >= 6.59.0) no longer fit the committed lock, and init failed (#468). Moving a module's minor is
+# now a deliberate edit, made together with `terraform init -upgrade` and the regenerated lock.
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 21.0"
+  version = "~> 21.29.0"
 
   name               = var.name
   kubernetes_version = var.kubernetes_version
@@ -339,7 +343,7 @@ module "eks" {
 # volumes use the default aws/ebs KMS key, which that policy covers, so no aws_ebs_csi_kms_arns is needed.
 module "ebs_csi_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "~> 1.0"
+  version = "~> 1.12.0"
 
   permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
@@ -359,7 +363,7 @@ module "ebs_csi_pod_identity" {
 # association instead of 60 OIDC trust policies). The Helm chart creates the SA in kube-system.
 module "aws_lb_controller_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "~> 1.0"
+  version = "~> 1.12.0"
 
   permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
@@ -380,7 +384,7 @@ module "aws_lb_controller_pod_identity" {
 # annotation, no per-cluster OIDC trust. Replaces the prior IRSA role (modern June-2026 convention).
 module "eso_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "~> 1.0"
+  version = "~> 1.12.0"
 
   permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
@@ -472,7 +476,7 @@ resource "aws_iam_policy" "bedrock_invoke" {
 
 module "agent_bedrock_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "~> 1.0"
+  version = "~> 1.12.0"
 
   permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
@@ -555,7 +559,7 @@ variable "tutor_model" {
 
 module "tutor_bedrock_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
-  version = "~> 1.0"
+  version = "~> 1.12.0"
 
   permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 

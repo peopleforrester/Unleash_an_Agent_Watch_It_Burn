@@ -973,3 +973,18 @@ only `job`, so the #190 audit query had to line-filter every stream: `{job=~".+"
   (tool_audit.py, test_tool_audit_live.py). `verify/test_alloy_labels.py` holds the wiring offline. The
   relabel's output was checked against Alloy v1.19.2 (chart 1.12.1's appVersion) with `alloy validate` and
   a local `alloy run` on static targets; the Loki end is the live half of test_tool_audit_live.py.
+## 2026-10-24 · #468 · Terraform registry modules pinned to their minor; cluster lock regenerated
+
+**The lock did not cover what moved.** `.terraform.lock.hcl` locks providers, not modules. The cluster root
+asked for `terraform-aws-modules/eks/aws ~> 21.0`, which now resolves to 21.29.0, and that release needs
+aws >= 6.59.0 while the committed lock held aws 6.51.0. A fresh `terraform init` failed; only machines with an
+older module cached in `.terraform/modules` still worked.
+
+- **Pin:** every registry module is `~> X.Y.Z` (patch releases only): EKS `~> 21.29.0`, eks-pod-identity
+  `~> 1.12.0`, VPC `~> 5.21.0` (the network root had the same exposure, though its lock still fit). Moving a
+  module's minor is a deliberate edit, made with `terraform init -upgrade` and the regenerated lock.
+- **Lock:** the cluster lock was regenerated with Terraform v1.15.6 (`init -upgrade`): aws 6.70.0, cloudinit
+  2.4.1, null 3.3.2, time 0.14.2, tls 4.4.2.
+- **Tests:** `verify/test_terraform_module_pins.py` (offline) fails on any unpinned registry module or a lock
+  that does not record the root's provider constraint. `verify/test_terraform_lock_init.py` (E2E) runs
+  `terraform init -lockfile=readonly` on every root in an empty directory and fails if the lock does not fit.

@@ -114,9 +114,11 @@ locals {
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 }
 
+# Pinned to its minor, as the cluster root's modules are: the lock file does not lock modules, so a looser
+# range can resolve to a release whose aws floor the committed lock does not meet (#468).
 module "vpc" {
   source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.0"
+  version = "~> 5.21.0"
 
   name = "watch-it-burn-lab-vpc"
   cidr = "10.0.0.0/16"
