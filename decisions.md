@@ -267,3 +267,14 @@ guard-proxy M0 to M2 commits. No workflow covers these paths (both are path-filt
 Verified locally on 49ff76c: guard-proxy `go test ./...`, the conformance suite against proxy.py and
 the Go build; Backstage on Node 24 `yarn install --immutable`, `yarn tsc`, `yarn test`,
 `yarn build:backend`; and `verify/test_proxy_checksum.py`, `test_image_pins.py`, `test_readme_current.py`.
+
+## 2026-10-24T02:04:41Z · 2.2 · PRD #412 stays as sealed; guard-proxy#3 fixed ahead of M3
+
+Michael reviewed the two points raised at M2 and wants no change: no `/prd-amend` for the claim that
+M0 to M2 can replace proxy.py (the earliest real replacement point remains M4, as recorded on
+2026-10-14), and the output guard keeps calling LLM Guard /analyze/output rather than an in-proxy regex.
+
+guard-proxy#3 fixed in proxy.py (ccdda73). Each self-heal attempt is metered as it returns, including a
+first attempt whose retry fails. /cost `requests` now counts model calls rather than turns, and a
+/chat turn's input_tokens, output_tokens and cost_usd cover every attempt. Rejected: metering only on
+success, because a failed retry's first attempt was still billed.

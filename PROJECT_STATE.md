@@ -34,8 +34,9 @@ Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guar
   block-list, LLM Guard classifier and output guard enforced on A2A POSTs, fail closed by default,
   `guard_error` WARNING logged on a scanner failure. Passes the 22 A2A guard cases (marker `guards`)
   plus the 22 `passthrough`. The `/chat` guard cases wait for the `/chat` route, and without `/chat`
-  and `/toggle` the Go build still cannot replace proxy.py in the workshop. M3 (budgets) is next;
-  guard-proxy#3 must be fixed in both implementations before M3 is accepted.
+  and `/toggle` the Go build still cannot replace proxy.py in the workshop. M3 (budgets) is next.
+  guard-proxy#3 (retry tokens never metered) is fixed in proxy.py (ccdda73, 167 conformance tests);
+  the Go `/chat` must meter every attempt the same way, which the conformance tests now enforce.
 - Closed this cycle: #331, #415, #393, #406, #408, #409, #410, #411, #413, #414, #416.
 
 ## Current cycle (2026-09-21, post-event defect burn-down)
@@ -210,6 +211,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-10-11 2.1 -> 2.2 M0 done: conformance suite green against proxy.py (163 tests), mutation check 16/16, guard-proxy CI green and promoted (c72cc28); submodule pin bumped, render hash unchanged. Four proxy.py defects filed (guard-proxy#1 to #4). M1 next.
 - 2026-10-14 2.2 (M1) Go skeleton done: 22 passthrough conformance tests green against the Go binary, full suite still green against proxy.py, guard-proxy CI green and promoted (1874403); pin bumped, render hash unchanged. Stays at 2.2; M2 next.
 - 2026-10-14 2.2 (M2) guards on the A2A path done: 44 conformance tests (passthrough or guards) green against the Go binary, 163 against proxy.py, guard-proxy CI green and promoted (0679083); pin bumped, render hash unchanged. Stays at 2.2; M3 next.
+- 2026-10-24 2.2 (M3 prerequisite) guard-proxy#3 fixed in proxy.py (ccdda73): every self-heal attempt is metered; pin and checksum/proxy-py bumped. Stays at 2.2.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.
