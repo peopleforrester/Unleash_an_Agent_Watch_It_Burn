@@ -1059,3 +1059,24 @@ and was retried; Datadog still got its copy.
   or when an exporter is unclassified. It also holds values-burn.yaml to values.yaml's lists minus the two
   sinks. Checked offline only: no helm or otelcol-contrib binary on the run host, so neither `helm template`
   nor `otelcol-contrib validate` has been run against the burn render.
+## 2026-10-24 · #460 · The World's Fair debrief is `notes/DEBRIEF-worlds-fair-2026.md`, built only from this repo's records
+
+**Where it lives.** `notes/` is new here. The name follows the Portland repo's `notes/DEBRIEF.md`, with the
+event in the filename because this repo has more than one delivery. The debrief is history: like
+`docs/DECISION-LOG.md`, it describes the June round model as it ran, and it is not rewritten when the
+workshop changes.
+
+**Provenance rule.** Every figure cites a file, a commit, a deleted file (`git show f5c9a66^:...`), the
+`delivered/aiewf-2026` tag or a transcript. Anything without a record is written **unrecorded**. That
+covers attendance, the network, segment times, which challenges landed, when the fleet came up and went
+down, the peak hosts, the workshop-only cost and all feedback. Michael's later "250 attendees" (transcript,
+2026-09-01) is quoted as a recollection, not used as the count. The 727.52 USD whole-account upper bound
+(`767e97a`) is shown as that, never as the workshop's cost.
+
+**Two corrections found on the way.** Neither changes the files they appear in, which are records.
+
+- The Portland debrief's "roughly 400 orphaned load balancers and 61 orphaned volumes" does not describe
+  the World's Fair. In this repo, 61 volumes is the 2026-06-27 pre-event sweep (with 18 load balancers),
+  and roughly 400 load balancers has no record.
+- The `delivered/aiewf-2026` tag message says the delivery-day commits ran "from 10:27 to 12:51 Pacific".
+  Their author timestamps, read in `America/Los_Angeles`, run 05:34 to 12:51: 40 commits.
