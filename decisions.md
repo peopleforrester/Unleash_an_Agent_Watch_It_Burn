@@ -952,3 +952,18 @@ mints no new key and gives that user an EKS access entry with cluster admin agai
 - **Audit:** `audit-zero` fails on any `wib-*` user whose cluster is not live (`zero:<acct>:iam-users`), so it
   is no longer only about billable things. `verify/account-audit.sh` counts our IAM users beside the roles
   and policies.
+## 2026-10-24 · #463 · run_shell's non-zero exit reaches the caller as an MCP error
+
+**Made the fix.** run_shell raised `RuntimeError("command FAILED with exit code N ...")` inside its try block,
+and the generic `except Exception` beside it returned that as text, so FastMCP answered `exit 3` with
+isError=false. A timeout raised from its own handler, out of the generic one's reach, so it alone came back as
+isError=true. An `except RuntimeError: raise` now sits before the generic handler; a command that cannot be
+started at all (an OSError) is still returned as text.
+
+**Why the C1 trace is not at risk.** Both raises keep the `command FAILED` wording, and mcp 1.29.1 puts the
+message in the error result's text (`verify/test_tool_audit_live.py` asserts it against the pinned library), so
+`transform/mark_tool_failure` still matches it in the next model call's input messages. What changes is the
+execute_tool span: `transform/adk_tool_content` marks it from `isError: true`, which before this happened only
+for a hung curl. A curl that fails fast (exit 6 or 7) now marks the span too, as the comment in run_shell said
+it would. The 2026-09-07 measurement in `verify/test_collector_config.py` was made before the fix. Re-measuring
+the C1 trace on a cluster is a follow-up.

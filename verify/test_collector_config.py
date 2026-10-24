@@ -85,6 +85,8 @@ print("== the lab describes what the trace actually contains ==")
 # Measured on watch-it-burn-michael-admin, 2026-09-07, after the transform went live:
 #   execute_tool run_shell           STATUS_CODE_ERROR   args = the full curl, result = "command FAILED..."
 #   execute_tool get_marketing_intel UNSET               result = the full customer data
+# That predates #463: run_shell then returned a non-zero exit as text (isError=false) and raised only on a
+# timeout. It now raises on both, with "command FAILED" kept in the text, so the expected trace is the same.
 #
 # WHAT THIS BLOCK USED TO PIN, AND WHY IT NO LONGER DOES. It required Challenge 1 to walk the student
 # through the span by name: "execute_tool run_shell", the arguments carrying the stolen payload, the
