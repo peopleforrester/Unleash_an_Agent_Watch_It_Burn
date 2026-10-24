@@ -1469,3 +1469,21 @@ claims encryption again or C1 lists mesh mTLS while nothing is enrolled. The kee
 untouched: if Istio is dropped the bullet goes, and if namespaces are enrolled the bullet is rewritten (the
 enrolment check in the same test fails first). The links, platform and diagram pages and
 `docs/STACK-WALKTHROUGH.md` still describe the mesh as a control; those wait on #471.
+## 2026-10-25 · #521 · A submodule may only be pinned at a commit a branch of its remote holds
+
+Branch agent/487-7110 pinned `gitops/ai-layer/guard-proxy` at `627cb97`, a commit that existed only in the
+run's own submodule clone. Everything passed there. Every other clone then failed `git submodule update
+--init` with "upload-pack: not our ref", and so would both test runners once the branch reached staging.
+
+- **The offline suite now refuses such a pin.** `verify/submodule-pins-pushed.sh` reads each gitlink in
+  HEAD and fails unless the submodule's clone has the commit and a `refs/remotes/` branch contains it. It
+  reads the refs as of the last fetch, never the network, so it belongs in `run-tests.sh`; a commit pushed
+  since the last fetch reads as unpushed until `git -C <submodule> fetch`. `verify/test_submodule_pins_pushed.sh`
+  tests it on throwaway repos and then holds this repo's two pins to it.
+- **The order is fixed by that check.** A change to guard-proxy or the LLM Guard image lands in its own repo
+  first, through that repo's issue and promotion, as the C7 badge did (guard-proxy-agenticburn#5). This repo
+  repins only after the commit is on a branch there. A run that cannot push the submodule commit stops at
+  red here instead of leaving a pin no other clone can fetch.
+- **agent/487-7110 itself is not repinned here.** No run can push guard-proxy, and repinning that branch to
+  `ccdda73` would drop the C2 fix it exists for. The C2 ValidatingPolicy read goes to guard-proxy-agenticburn
+  as its own issue; #487 repins once that is pushed.
