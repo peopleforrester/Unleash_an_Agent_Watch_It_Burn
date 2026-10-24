@@ -15,7 +15,7 @@
 # Watch It Burn: Master Recreation Specification
 
 **Title:** Build a Platform, Unleash an Agent on it... and Watch it Burn!
-**Event:** DevOpsDays Portland 2026, Tue 2026-09-08 13:00-15:00 Pacific, Room 327 (first delivered at the AI Engineer World's Fair, San Francisco, June 2026).
+**Event:** DevOpsDays Portland 2026, two hours (first delivered at the AI Engineer World's Fair, San Francisco, June 2026). Slots, rooms and venues for both live in conference-knowledge (`events/registry.yaml`, entries `devopsdays-portland-2026` and `aiewf-2026-watch-it-burn`).
 **Speakers:** Michael Forrester (Accenture) with Whitney Lee. Co-sponsored by Datadog and Accenture.
 **Repo:** `github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn`, working branch `staging`.
 

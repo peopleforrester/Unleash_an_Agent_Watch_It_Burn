@@ -10,7 +10,7 @@
 [![Guardrails: CNCF](https://img.shields.io/badge/guardrails-CNCF-3ECF8E)](#the-stack)
 [![License: MIT](https://img.shields.io/badge/License-MIT-A100FF)](LICENSE)
 
-A hands-on workshop at **DevOpsDays Portland 2026** (Smith Memorial Student Union, Room 327).
+A hands-on workshop at **DevOpsDays Portland 2026**. Slot, venue and delivery live in conference-knowledge.
 Presented by **Michael Forrester** (Accenture) with **Whitney Lee**.
 
 **TL;DR:** one lesson in three moves. First the whole room attacks a shared cluster with no
@@ -43,7 +43,7 @@ problem, and you will see which guardrail stops the spend rather than paying for
 
 ## How the session runs
 
-The workshop runs two hours (Tue Sept 8, 2026, 1:00 to 3:00 PM Pacific, Room 327) in three moves.
+The workshop runs two hours in three moves.
 
 1. **The Community cluster.** The whole room points at one shared cluster, `attackme.agenticburn.com`,
    which runs with no guardrails at all. Everyone attacks it together: talk the agent into leaking the

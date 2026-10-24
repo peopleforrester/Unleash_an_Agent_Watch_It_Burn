@@ -2,7 +2,7 @@
 
 # Slides Outline
 
-2-hour slot (Day 1, 2:20–4:20pm, Track 5). Speaker cue per slide: (M) Michael, (W) Whitney, (M+W) both.
+2-hour slot (the June World's Fair slot, conference-knowledge (`events/registry.yaml`, entry `aiewf-2026-watch-it-burn`)). Speaker cue per slide: (M) Michael, (W) Whitney, (M+W) both.
 Slides marked "built live" carry only a title; the work happens on the cluster.
 
 **Narrative arc:** a personal failure (why, tier 1) scales to enterprise stakes (why, tier 2), which

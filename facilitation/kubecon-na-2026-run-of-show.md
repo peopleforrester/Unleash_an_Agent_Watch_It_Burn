@@ -3,9 +3,10 @@
 
 # KubeCon NA 2026 Run of Show
 
-"BurritoBot Said Let's Dance, the Platform Said No." Sessionize session 1249553.
-Thursday 2026-11-12, 13:50 to 14:20 MST (30 minutes), Grand Ballroom BDF, Salt
-Lake City. Michael Forrester (Accenture) and Whitney Lee.
+"BurritoBot Said Let's Dance, the Platform Said No." Sessionize session 1249553,
+30 minutes. Michael Forrester (Accenture) and Whitney Lee. The day, time, room
+and venue live in conference-knowledge (`events/registry.yaml`, entry
+`kubecon-na-2026`); the public copy is the Sessionize session page.
 
 **This is the breakout, not the workshop.** It is a demo. Nobody in the room
 provisions a cluster. The audience takes part only from their phones against the

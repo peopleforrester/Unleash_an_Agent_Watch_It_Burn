@@ -6,8 +6,8 @@ Portland listing below, copied verbatim from the pretalx schedule export
 World's Fair versions follow as frozen history; the "abstract truth" rule in `BUILD-SPEC.md` now reads
 against the Portland text.
 
-> **Scheduled slot (pretalx, 2026-09-06):** Tuesday 2026-09-08, 13:00 to 15:00 Pacific, Room 327,
-> Workshops track, 2 hours. Speakers: Michael Forrester, Whitney Lee.
+> **Slot, room and track:** conference-knowledge (`events/registry.yaml`, entry
+> `devopsdays-portland-2026`) is the record for the scheduled slot. Speakers: Michael Forrester, Whitney Lee.
 
 ## Version 3, DevOpsDays Portland 2026 (published, canonical)
 
@@ -63,10 +63,8 @@ behind it.
 
 ## Version 1, As Submitted (Solo, Frozen)
 
-- **Event:** AI Engineer World's Fair 2026, San Francisco, Moscone West, Jun 29 – Jul 2
+- **Event, submission and status:** AI Engineer World's Fair 2026, accepted. Venue, dates, the submission platform and the acceptance record live in conference-knowledge (`events/registry.yaml`, entry `aiewf-2026-watch-it-burn`).
 - **Speaker:** Michael Forrester (Accenture), solo
-- **Status:** ACCEPTED (first wave, 1,600+ submissions)
-- **Submitted via:** AI Engineer platform (ai.engineer / Accelerant-era form). NOT Sessionize. The org later moved to Sessionize, so this abstract never existed in a Sessionize record.
 - **Source of this text:** Reconstructed from the Mar 14, 2026 "CFP submissions this week" conversation, where the talk was redesigned mid-session into the pre-built-platform / break-it-with-an-agent format. This was never saved as its own file before today. Verify against the version actually submitted in the AI Engineer platform before treating as canonical.
 
 ### Title
@@ -95,10 +93,8 @@ I gave an AI coding agent full Kubernetes cluster access. It deleted my cluster.
 
 ## Version 2, With Whitney Lee as Co-Speaker
 
-- **Event:** AI Engineer World's Fair 2026, San Francisco, Moscone West, Jun 29 – Jul 2
+- **Event, submission and status:** AI Engineer World's Fair 2026, accepted. Venue, dates, the submission platform and the acceptance record live in conference-knowledge (`events/registry.yaml`, entry `aiewf-2026-watch-it-burn`).
 - **Speakers:** Michael Forrester (Accenture) with co-speaker Whitney Lee
-- **Status:** ACCEPTED (first wave, 1,600+ submissions). Accepted as a solo submission; Whitney Lee added as co-speaker after acceptance.
-- **Submitted via:** AI Engineer platform (ai.engineer / Accelerant-era form). NOT Sessionize. The org later moved to Sessionize, so this abstract never existed in a Sessionize record.
 - **Source of this text:** Reconstructed from the Mar 14, 2026 "CFP submissions this week" conversation, where the talk was redesigned mid-session into the pre-built-platform / break-it-with-an-agent format. Verify against the version actually submitted in the AI Engineer platform before treating as canonical.
 
 ### Title

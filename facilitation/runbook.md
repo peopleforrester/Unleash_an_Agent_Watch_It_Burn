@@ -2,10 +2,9 @@
 
 # Runbook, "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 
-DevOpsDays Portland 2026, Smith Memorial Student Union, Room 327. Michael Forrester (Accenture) with Whitney Lee.
+DevOpsDays Portland 2026. Michael Forrester (Accenture) with Whitney Lee.
 
-**Slot:** Tue 2026-09-08, **13:00 to 15:00 Pacific**, **Room 327**, **2 hours**. (The June World's Fair slot this file was written for is done; see `docs/RUN-OF-SHOW-2026-08.md` for the current sequence. The 60-minute table at the end is a cut-down for a shortened slot, not the plan.)
-(Public schedule lists Michael solo; Whitney is co-speaker per the accepted abstract, the organizers have been emailed to add her.)
+**Slot:** **2 hours**. Date, time, room and venue live in conference-knowledge (`events/registry.yaml`, entry `devopsdays-portland-2026`). (The June World's Fair slot this file was written for is done; see `docs/RUN-OF-SHOW-2026-08.md` for the current sequence. The 60-minute table at the end is a cut-down for a shortened slot, not the plan.)
 
 Split: Michael owns architecture, the security thesis, and the cost argument. Whitney owns the live
 attack narration, the observability view, and the attendee experience. Every segment has an owner and
@@ -175,7 +174,7 @@ reinforces it.
 
 ## 60-minute run, total = 60 minutes (NOT the plan: kept only as a cut-down for a shortened slot)
 
-> The Portland slot is **2 hours**, verified against pretalx 2026-08-23. This 60-minute variant is a
+> The Portland slot is **2 hours**. This 60-minute variant is a
 > contingency for a slot that gets cut, not the canonical run.
 
 | Time | Min | Owner | Segment |

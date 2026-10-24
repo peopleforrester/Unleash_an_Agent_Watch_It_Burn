@@ -20,9 +20,8 @@
 > hold. **Do not take its cluster names, round vocabulary, or sequencing as current** (#327). The one
 > section that is current is "Shape of the two hours" immediately below.
 
-**DevOpsDays Portland 2026.** Tuesday, September 8, 1:00 PM, **2 hours**, Room 327. Smith Memorial
-Student Union, 1825 SW Broadway, Portland OR. (Slot verified against the pretalx schedule 2026-08-23.
-The public abstract lists a 1.5-hour duration, which conflicts; the 2-hour slot is authoritative.)
+**DevOpsDays Portland 2026.** **2 hours.** Date, time, room and venue live in
+conference-knowledge (`events/registry.yaml`, entry `devopsdays-portland-2026`).
 
 Michael Forrester (Accenture) + Whitney Lee. This is what you say and do, in order, with the exact URLs
 and prompts. Everything below was tested live and is marked with its status.

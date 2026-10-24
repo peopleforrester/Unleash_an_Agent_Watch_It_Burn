@@ -3,7 +3,7 @@
 ABOUTME: The complete remaining work to run the workshop, grouped by priority.
 ABOUTME: P0 = the workshop cannot run without it; P1 = the demo will not land right; P2 = polish.
 
-**Delivery: DevOpsDays Portland 2026, Tuesday September 8, 1:00 to 3:00 PM Pacific, Room 327.**
+**Delivery: DevOpsDays Portland 2026.** Date, time and room live in conference-knowledge (`events/registry.yaml`, entry `devopsdays-portland-2026`).
 
 Updated 2026-09-02. Check items off here as they land; "done" detail goes to PROGRESS.md.
 The header used to read "~4 days out" against the June AI Engineer World's Fair date, which is done;

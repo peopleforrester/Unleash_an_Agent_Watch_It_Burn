@@ -3,9 +3,9 @@
 > **Amended 2026-06-28** by [`docs/DESIGN-DECISIONS.md`](DESIGN-DECISIONS.md) — point-by-point UI feedback from the Michael + Whitney walkthrough (BurritoBot, VTT, provisioning). Read it alongside this doc.
 
 
-**Current delivery: DevOpsDays Portland 2026, Tue 2026-09-08 13:00-15:00 Pacific, Room 327, Michael Forrester with Whitney Lee, ~50 attendees, eight challenges demo-then-do; the run of show is `docs/RUN-OF-SHOW-2026-08.md`.** The lines below describe the June AI Engineer World's Fair delivery (San Francisco, Moscone West, Jun 29-Jul 2) and are kept as history.
-June format, superseded: workshop content was designed for **60 minutes** (3 rounds: R1 burn, R2 CNCF, R3 student cluster; format cut 2026-06-25). Booked room slot: Day 1 (Workshop Day), 2:20–4:20pm, Track 5 (a 2-hour window). Canonical minute-by-minute is the 60-minute table in `facilitation/runbook.md`.
-Speakers: Michael Forrester (Accenture) with Whitney Lee (public schedule lists Michael solo; organizers emailed to add Whitney).
+**Current delivery: DevOpsDays Portland 2026, two hours, Michael Forrester with Whitney Lee, ~50 attendees, eight challenges demo-then-do; the run of show is `docs/RUN-OF-SHOW-2026-08.md`.** Date, time, room and venue live in conference-knowledge (`events/registry.yaml`, entry `devopsdays-portland-2026`). The lines below describe the June AI Engineer World's Fair delivery (conference-knowledge (`events/registry.yaml`, entry `aiewf-2026-watch-it-burn`)) and are kept as history.
+June format, superseded: workshop content was designed for **60 minutes** (3 rounds: R1 burn, R2 CNCF, R3 student cluster; format cut 2026-06-25). Booked room slot: a 2-hour window. Canonical minute-by-minute is the 60-minute table in `facilitation/runbook.md`.
+Speakers: Michael Forrester (Accenture) with Whitney Lee.
 
 Spec rev4, 2026-06-17. Supersedes rev3. Single source of truth for Claude Code. If the live
 abstract (`docs/ABSTRACT.md`) and this file disagree on behavior, the abstract wins and this file

@@ -39,7 +39,9 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = REPO / "gitops" / "ai-layer" / "resources.yaml"
 PROXY = REPO / "gitops" / "ai-layer" / "guard-proxy" / "proxy.py"
 
-# KubeCon NA 2026 breakout, Sessionize 1249553. The model has to be Active through the end of this day.
+# KubeCon NA 2026 breakout, Sessionize 1249553. The model has to be Active through the end of this day. The
+# date comes from conference-knowledge (events/registry.yaml, kubecon-na-2026 schedule), which is the record:
+# if the slot moves there, change it here.
 DELIVERY_DATE = "2026-11-12"
 # What one audience turn costs Bedrock. A turn that calls a tool is two model calls (choose the tool, then
 # answer), and C6 on Nova meters ~3,500 tokens a turn (challenges/PROMPT-CATALOG.md). Both are flags so a

@@ -689,3 +689,22 @@ and on an admin cluster on the KubeCon projector, any phone in the room could tu
 - **Live check:** `verify/test_console_no_toggle_live.py` (E2E suite) fetches `/a2a/toggle`, `/a2a/guards`,
   `/a2a/` and `/toggle` through the apex router and expects 404. It runs the terminal's `_px` helper
   and `guards-status` with no change of state, then confirms the guards did not move.
+
+## 2026-10-24 · #417 · Event slots, rooms and submission records point at conference-knowledge
+
+conference-knowledge (`events/registry.yaml`) is the record for every event this talk runs at: entries
+`aiewf-2026-watch-it-burn`, `devopsdays-portland-2026` and `kubecon-na-2026`. The working docs that copied a
+slot, room, venue or submission status (README, ATTRIBUTION, the run-of-shows, runbook, slides outline,
+Whitney's start page, the build and recreation specs, the go-live checklist, ABSTRACT) now name the entry
+instead. Kept on purpose:
+
+- **Dated logs** (`PROJECT_STATE.md` history, `docs/DECISION-LOG.md`, `PROGRESS.md`, `transcripts/`, this
+  file) say what was true when written. Rewriting them would falsify them.
+- **Inputs the code runs on.** `DELIVERY_DATE` in `verify/model_pin_check.py` and `feedbackUrl` in
+  `gitops/ai-layer/web/event.js` stay, because the offline suite has no `~/repos` to read. Each names its
+  source, and a slot change in the registry means changing them here.
+- **Format lengths** (two hours, 30 minutes) shape the run-of-show, so they stay with it.
+
+Three facts this repo held that the registry did not (the World's Fair submission record, the Portland
+1.5-hour public listing, the KubeCon survey state on 2026-10-24) went to conference-knowledge as an
+`agent-task` issue.

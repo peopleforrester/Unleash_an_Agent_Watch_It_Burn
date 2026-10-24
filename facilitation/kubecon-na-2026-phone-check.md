@@ -75,7 +75,8 @@ What each column means:
 ## The projector QR, from the back of the room
 
 Project `facilitation/kubecon-na-2026-audience-qr.svg` at the size the slide will
-use, in a room at least as deep as Grand Ballroom BDF or as close as you can get.
+use, in a room at least as deep as the session's room (conference-knowledge (`events/registry.yaml`, entry `kubecon-na-2026`))
+or as close as you can get.
 Scan it with each phone's own camera app, not a QR app, from the back row.
 
 | Phone | Distance from the screen | Scans first try | Opens https://attackme.agenticburn.com/ | Checked by, date |

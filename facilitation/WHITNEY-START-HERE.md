@@ -5,12 +5,13 @@ the docs below are current and the talk materials are drafts for your input.
 
 ## KubeCon NA 2026: read this first
 
-The KubeCon NA breakout (Thursday 2026-11-12, 13:50 to 14:20 MST, Grand Ballroom BDF) is a different
+The KubeCon NA breakout (Sessionize session 1249553) is a different
 format from the 2-hour workshop below: a 30-minute demo, no attendee labs, the audience taking part only
 from their phones. Its run-of-show is **`facilitation/kubecon-na-2026-run-of-show.md`**. Read that for the
 KubeCon cold read; the workshop files below are the other format. The open questions at the end of it are
 the things still to settle, including whether the on-topic guardrail (the burrito-only ending) is built in
-time.
+time. Its day, time and room are on the public session page, and the record is conference-knowledge
+(`events/registry.yaml`, entry `kubecon-na-2026`).
 
 ## The talk
 
@@ -18,15 +19,14 @@ time.
 real Kubernetes platform and watch what the guardrails catch and what slips through. We regroup and
 hand them a governance map for their own platform.
 
-## Confirmed slot
+## The slot
 
-**DevOpsDays Portland 2026**, Tuesday September 8, **1:00 to 3:00 PM Pacific**, Room 327, Smith Memorial
-Student Union, 1825 SW Broadway, Portland OR. **Two hours.** Co-speakers: Michael Forrester and you.
-(Slot verified against the pretalx schedule 2026-08-23. The public abstract lists 1.5 hours, which
-conflicts; the 2-hour slot is authoritative.)
+**DevOpsDays Portland 2026**, **two hours**. Co-speakers: Michael Forrester and you. Date, time, room and
+venue are on the event's pretalx schedule; the record is conference-knowledge (`events/registry.yaml`,
+entry `devopsdays-portland-2026`).
 
-> This doc previously described the June AI Engineer World's Fair slot (Day 1, 2:20 to 4:20pm, Track 5,
-> Moscone West). That event is done; Portland is the live delivery.
+> This doc previously described the June AI Engineer World's Fair slot, entry `aiewf-2026-watch-it-burn`
+> in the same file. That event is done.
 
 ## The repo
 
