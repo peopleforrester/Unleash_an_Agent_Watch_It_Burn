@@ -648,3 +648,23 @@ the path gets the presenters' timing. The breakout has no student pool: only the
 two presenter admin clusters run this session, so there is nothing to spoil and the gate is not added. If
 the page is ever served alongside an attendee pool, gate it in the router the same way `/brief` is. That
 change is in the sister repo (deploy configuration) and is filed as a follow-up.
+
+## 2026-10-24 · #387 · BurritoBot is a phone surface; the lab is not; playwright 1.64.1 for the render check
+
+An attendee on the 2026-09-08 Portland run asked for the workshop to work better on mobile. Michael's answer,
+recorded in the issue and here so it stops reading as a backlog item:
+
+- **The lab is not a mobile surface and will not become one.** The guide, the terminal, Datadog and `kubectl`
+  are the hands-on hour, and that hour needs a laptop. `lab.html` gets no phone work for this.
+- **BurritoBot is.** Chatting with the agent is a phone-shaped task, and the KubeCon room opens it from phones.
+  The fix asked for, the title stacking, is in `web/burritbot.html`: below 680px the header is the title on its
+  own row over one even row of the four buttons (two rows of two under 360px), and below 760px the chat card
+  puts the avatar, "BurritoBot" and Reset on one row with the tagline under them. Desktop is unchanged.
+- **The expectation is copy, and it is Michael's.** A line in the published abstract and in the workshop's
+  opening material saying this is a laptop workshop is public prose, so it is filed as a follow-up for him,
+  not written here.
+
+**playwright 1.64.1** (PyPI, current on 2026-10-24) renders the page in headless Chromium for
+`verify/test_mobile_titles_e2e.py`, which measures the boxes at 320 to 680px and 1280px. A CSS grep cannot
+say whether a title wraps. It is used only through `uv run --with playwright==1.64.1`, in the E2E suite,
+never installed into the offline suite's interpreter; `verify/test_mobile_titles.py` is the offline half.
