@@ -41,11 +41,11 @@ readonly WIB_APEX_DIR="${WIB_APEX_DIR:-$(_sibling_repo apex-agenticburn)}"
 readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
 readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
-readonly AWS_POOL_DIR="${SCRIPT_DIR}/aws-pool"   # gitignored: holds live access keys
+readonly AWS_POOL_DIR="${WIB_AWS_POOL_DIR:-${SCRIPT_DIR}/aws-pool}"   # gitignored: holds live access keys; WIB_AWS_POOL_DIR for the shim tests
 readonly CLUSTER_DIR="${PROVISION_DIR}/${PROVIDER_CLUSTER_SUBDIR}"
 readonly LAB_VPC_DIR="${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}"
 readonly STATE_DIR="${WIB_STATE_DIR:-${SCRIPT_DIR}/states}"   # WIB_STATE_DIR: the shim tests point this at a temp dir
-readonly LOG_DIR="${SCRIPT_DIR}/logs"
+readonly LOG_DIR="${WIB_LOG_DIR:-${SCRIPT_DIR}/logs}"   # WIB_LOG_DIR: the shim tests point this at a temp dir
 # One failure ledger PER PROCESS. Two fleet.sh runs side by side (an attendee down beside an instructors
 # down, 2026-09-06) shared logs/.failures and each one summarised the other's entries (#251). Workers
 # forked by run_pool inherit $$, so a run still sees all of its own.
@@ -496,6 +496,20 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       Run this after 'up-fleet'. Without it a run reports a success rate that is wrong:
                       on the sister Packt fleet 27 of 250 clusters were healthy but had an NLB whose
                       hostname had not propagated yet, so the run scored 89% and 27 clusters were fine.
+    restart-agent <name...>
+                      Restart BurritoBot: delete the agent pod and wait for a Ready replacement. A pod
+                      delete, never a rollout restart, which the drift policy refuses.
+    restart-console <name...>
+                      The same for the console pod.
+    terminal-password <name...>
+                      Re-issue the terminal login: rewrite terminal-auth with the credential the
+                      cluster's role is handed, then restart the terminal so ttyd reads it.
+    serve-actions [--once]
+                      The admin console's runner (#268): poll the provisioning app's action queue with
+                      the admin token, run each queued restart-agent | restart-console | converge |
+                      terminal-password, post the result, and post a 'verify all' health report every
+                      \${WIB_ACTIONS_HEALTH_EVERY} seconds (default 300). Run it on a host holding the
+                      fleet profiles for the length of the workshop. See docs/admin-console.md.
     harvest <n>      Harvest student-facing access info (console NLB / grafana / ...) of an up-fleet run
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
     aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
@@ -3321,6 +3335,226 @@ apply_routes_table() {
     return 1
 }
 
+# --- admin actions (#268) ------------------------------------------------------------------------
+#
+# Whitney has to be able to see the fleet's health and restart part of a cluster without kubectl or AWS
+# credentials. The provisioning app is the console, but it runs on Railway with no AWS credentials, so it
+# cannot reach EKS. It queues the action and records who asked and when; `serve-actions` is the runner, a
+# loop on a host that already holds the fleet profiles (a presenter laptop by default). The loop polls the
+# queue with the admin token, runs the matching verb below and posts the result back. That keeps the
+# console a caller of fleet.sh rather than a second copy of its logic, and no new credential is issued
+# (decisions.md, question 629). The HTTP contract the app implements is in docs/admin-console.md.
+#
+# Restarts are pod deletes. A `rollout restart` is a Deployment UPDATE, which block-argocd-drift denies for
+# any principal that is not Argo CD, kagent, a system account or system:masters, and decisions.md
+# (2026-09-03) rules it out for the fleet anyway. A pod DELETE is matched by neither policy, and the
+# Deployment recreates the pod from the spec Argo CD owns, so the running state still matches the repo.
+readonly AGENT_POD_SELECTOR="app.kubernetes.io/name=workshop-agent"
+readonly CONSOLE_POD_SELECTOR="app.kubernetes.io/name=console"
+readonly TERMINAL_POD_SELECTOR="app.kubernetes.io/name=web-terminal"
+readonly RESTART_WAIT="${WIB_RESTART_WAIT:-180}"              # seconds for a replacement pod to go Ready
+readonly RESTART_INTERVAL="${WIB_RESTART_INTERVAL:-5}"
+readonly ACTIONS_POLL="${WIB_ACTIONS_POLL:-10}"               # seconds between queue polls
+readonly ACTIONS_HEALTH_EVERY="${WIB_ACTIONS_HEALTH_EVERY:-300}"  # seconds between health reports
+# The queue's action names are the fleet.sh verbs they run. Nothing outside this list is ever executed,
+# whatever the queue says.
+readonly ADMIN_ACTIONS="restart-agent restart-console converge terminal-password"
+
+# Write an isolated kubeconfig for one cluster and print its context, refusing unless that context IS the
+# cluster asked for (AGENTS.md rule 8: confirm the target before every mutation).
+admin_kubeconfig() {
+    local name="$1" acct="$2" kcfg="$3" ctx
+    provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || { log "  ${name}: UNREACHABLE (no kubeconfig)"; return 1; }
+    ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
+    if [[ "${ctx}" != *"/${name}" ]]; then
+        log "  REFUSING ${name}: its kubeconfig points at '${ctx:-nothing}', not this cluster"; return 1
+    fi
+    printf '%s' "${ctx}"
+}
+
+# Delete the pods a selector names and wait for a Ready replacement. Non-zero, saying why, when nothing
+# matched or nothing new came back Ready inside RESTART_WAIT: a restart nobody saw finish is not done.
+restart_pods() {
+    local name="$1" kcfg="$2" ctx="$3" ns="$4" sel="$5" olds=() waited=0 ready
+    read -ra olds <<<"$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" get pods -l "${sel}" \
+        -o jsonpath='{.items[*].metadata.name}' 2>/dev/null || true)"
+    [[ "${#olds[@]}" -gt 0 ]] || { log "  ${name}: no pod matches ${sel} in ${ns}"; return 1; }
+    log "  ${name}: deleting ${olds[*]} (${ns})"
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" delete pod "${olds[@]}" --wait=false >/dev/null 2>&1; then
+        log "  ${name}: the delete was refused"; return 1
+    fi
+    while [[ "${waited}" -lt "${RESTART_WAIT}" ]]; do
+        ready="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n "${ns}" get pods -l "${sel}" -o json 2>/dev/null \
+            | python3 -c '
+import json, sys
+old = set(sys.argv[1:])
+try:
+    items = json.load(sys.stdin).get("items") or []
+except ValueError:
+    items = []
+print(sum(1 for p in items if not p["metadata"].get("deletionTimestamp") and p["metadata"]["name"] not in old
+          and any(c.get("type") == "Ready" and c.get("status") == "True"
+                  for c in (p.get("status") or {}).get("conditions") or [])))' "${olds[@]}" 2>/dev/null)"
+        [[ "${ready:-0}" -ge 1 ]] && { log "  ${name}: replacement Ready (${ns}, ${sel})"; return 0; }
+        sleep "${RESTART_INTERVAL}"; waited=$(( waited + RESTART_INTERVAL ))
+    done
+    log "  ${name}: no Ready replacement for ${sel} after ${RESTART_WAIT}s"; return 1
+}
+
+restart_agent_one()   { restart_pods "$1" "$2" "$3" agent "${AGENT_POD_SELECTOR}"; }
+restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTOR}"; }
+
+# Re-issue the terminal login: write the credential this cluster's role is handed (terminal_creds_for, the
+# same function the bootstrap and the provisioning bundle use) and restart the terminal, because ttyd
+# reads it once at startup. It restores the expected credential rather than minting a new one: the login
+# is shared and speakable by design (bootstrap_terminal_auth), and a fresh random one would make the
+# access page every student reads wrong. This is the repair for a lost or edited terminal-auth secret.
+terminal_password_one() {
+    local name="$1" kcfg="$2" ctx="$3" cred pwfile="${AWS_POOL_DIR}/$1.terminal"
+    cred="$(terminal_creds_for "${name}")"
+    if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent create secret generic terminal-auth \
+            --from-literal="TTYD_CREDENTIAL=${cred}" --dry-run=client -o yaml 2>/dev/null \
+        | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent apply -f - >/dev/null 2>&1; then
+        log "  ${name}: could not write terminal-auth"; return 1
+    fi
+    mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${cred#*:}" >"${pwfile}"; chmod 600 "${pwfile}"
+    log "  ${name}: terminal-auth set for user '${cred%%:*}'; restarting the terminal so ttyd reads it"
+    restart_pods "${name}" "${kcfg}" "${ctx}" agent "${TERMINAL_POD_SELECTOR}"
+}
+
+# Run one per-cluster admin function over named clusters, each in the account it was built in.
+_admin_each() {   # $1 verb (for messages), $2 per-cluster function, rest: cluster names
+    local verb="$1" fn="$2"; shift 2
+    [[ $# -gt 0 ]] || { log "usage: ${verb} <name...>"; exit 2; }
+    command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
+    local name acct kcfg ctx rc=0
+    for name in "$@"; do
+        assert_ours "${name}"
+        acct="$(_account_for_name "${name}" 0)"
+        kcfg="$(mktemp -t "${name}.admin.XXXX")"
+        if ctx="$(AWS_PROFILE="${acct}" admin_kubeconfig "${name}" "${acct}" "${kcfg}")"; then
+            AWS_PROFILE="${acct}" "${fn}" "${name}" "${kcfg}" "${ctx}" || { log "${verb} ${name}: FAILED"; rc=1; }
+        else
+            rc=1
+        fi
+        rm -f "${kcfg}"
+    done
+    [[ "${rc}" -eq 0 ]] && log "${verb}: done for $*"
+    return "${rc}"
+}
+cmd_restart_agent()     { _admin_each restart-agent restart_agent_one "$@"; }
+cmd_restart_console()   { _admin_each restart-console restart_console_one "$@"; }
+cmd_terminal_password() { _admin_each terminal-password terminal_password_one "$@"; }
+
+# One field of a JSON object, empty when absent.
+_json_field() { python3 -c 'import json, sys; v = json.loads(sys.argv[1]).get(sys.argv[2]); print("" if v is None else v)' "$1" "$2" 2>/dev/null; }
+
+# One call to the provisioning app with the admin token. Prints the response body; succeeds only on a 200.
+_prov_call() {   # $1 method, $2 path, $3 optional JSON body file
+    local method="$1" path="$2" body="${3:-}" tok out code
+    tok="$(resolve_admin_token)" || { log "serve-actions: cannot resolve the provisioning admin token"; return 1; }
+    out="$(mktemp)"
+    code="$(curl -s -o "${out}" -w '%{http_code}' --max-time 30 -X "${method}" "${WIB_PROVISIONING_URL%/}${path}" \
+        -H "X-Admin-Token: ${tok}" -H 'Content-Type: application/json' ${body:+--data-binary "@${body}"} || echo 000)"
+    cat "${out}"; rm -f "${out}"
+    [[ "${code}" == "200" ]]
+}
+
+# Claim, run and report one queued action. The claim comes first, so two runners (or one restarted
+# mid-action) never run the same action twice, and a refused action is still answered rather than left
+# pending. Every action also gets a local audit line in logs/admin-actions.tsv: when, id, who, what, where,
+# exit code. The app keeps the authoritative record; this one survives the app being unreachable.
+run_admin_action() {   # $1 one action, as JSON
+    local a="$1" id action cluster who reason="" rc=0 outf res
+    id="$(_json_field "${a}" id)"; action="$(_json_field "${a}" action)"
+    cluster="$(_json_field "${a}" cluster)"; who="$(_json_field "${a}" requested_by)"; who="${who:-unknown}"
+    [[ "${id}" =~ ^[A-Za-z0-9_-]+$ ]] || { log "serve-actions: skipping an action with no usable id: ${a}"; return 0; }
+    if [[ " ${ADMIN_ACTIONS} " != *" ${action} "* ]]; then
+        reason="unknown action '${action}' (allowed: ${ADMIN_ACTIONS})"
+    elif [[ ! "${cluster}" =~ ^watch-it-burn-[a-z0-9-]+$ ]]; then
+        reason="not a watch-it-burn cluster: '${cluster}'"
+    elif [[ ! -f "${STATE_DIR}/${cluster}.tfstate" ]]; then
+        reason="${cluster} has no state on this runner, so it is not a cluster this fleet provisioned"
+    fi
+    if ! _prov_call POST "/admin/actions/${id}/claim" >/dev/null; then
+        log "serve-actions: action ${id} was not claimable (taken or withdrawn); leaving it"; return 0
+    fi
+    outf="$(mktemp)"
+    if [[ -n "${reason}" ]]; then
+        rc=2; printf 'refused: %s\n' "${reason}" >"${outf}"; log "serve-actions: ${id} refused: ${reason}"
+    else
+        log "serve-actions: ${id} ${action} ${cluster} (requested by ${who})"
+        bash "${SCRIPT_DIR}/fleet.sh" "${action}" "${cluster}" >"${outf}" 2>&1 || rc=$?
+    fi
+    mkdir -p "${LOG_DIR}"
+    printf '%s\t%s\t%s\t%s\t%s\t%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "${id}" "${who}" "${action}" "${cluster}" "${rc}" \
+        >>"${LOG_DIR}/admin-actions.tsv"
+    res="$(mktemp)"
+    python3 -c 'import json, sys
+rc = int(sys.argv[1])
+print(json.dumps({"status": "done" if rc == 0 else "failed", "exit_code": rc, "output": sys.argv[2],
+                  "runner": sys.argv[3], "finished_at": sys.argv[4]}))' \
+        "${rc}" "$(tail -c 4000 "${outf}")" "$(hostname)" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" >"${res}"
+    _prov_call POST "/admin/actions/${id}/result" "${res}" >/dev/null \
+        || log "serve-actions: ${id} finished (exit ${rc}) but the app did not record the result"
+    rm -f "${outf}" "${res}"
+}
+
+# Walk the fleet (the same checks as `verify`) and post the JSON report to the admin page. A walkthrough
+# that finds a broken cluster exits non-zero, and that is the report, so only a missing report is a failure.
+post_fleet_health() {
+    local report rc=0; report="$(mktemp -t wib-health.XXXX)"
+    mkdir -p "${LOG_DIR}"
+    WIB_VERIFY_REPORT="${report}" cmd_verify all >>"${LOG_DIR}/serve-actions-health.log" 2>&1 || true
+    if [[ ! -s "${report}" ]]; then
+        log "serve-actions: the walkthrough wrote no report (see ${LOG_DIR}/serve-actions-health.log)"; rc=1
+    elif ! _prov_call POST /admin/health "${report}" >/dev/null; then
+        log "serve-actions: the app did not accept the health report"; rc=1
+    fi
+    rm -f "${report}"
+    return "${rc}"
+}
+
+# The runner loop. --once does one health report and one pass over the queue, then exits.
+cmd_serve_actions() {
+    local once=""; [[ "${1:-}" == "--once" ]] && once=1
+    # What the loop and the walkthrough need. Each verb it runs checks its own tools (converge: terraform).
+    local t; for t in curl python3 aws kubectl; do
+        command -v "${t}" >/dev/null 2>&1 || { log "missing tool: ${t}"; exit 1; }
+    done
+    WIB_ADMIN_TOKEN="$(resolve_admin_token)" || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
+    log "serve-actions: ${WIB_PROVISIONING_URL%/}/admin/actions every ${ACTIONS_POLL}s, health every ${ACTIONS_HEALTH_EVERY}s"
+    local last_health=0 health_pid="" now body actions a queue_ok
+    while :; do
+        queue_ok=1
+        now="$(date +%s)"
+        # The walkthrough takes minutes on a full fleet, so it runs beside the queue rather than in front of
+        # it, and a report still running is never started twice.
+        if (( now - last_health >= ACTIONS_HEALTH_EVERY )) && ! { [[ -n "${health_pid}" ]] && kill -0 "${health_pid}" 2>/dev/null; }; then
+            post_fleet_health & health_pid=$!; last_health="${now}"
+        fi
+        # One action per line, as JSON; anything but {"actions": [...]} is an unanswered queue.
+        if body="$(_prov_call GET "/admin/actions?status=pending")" && actions="$(python3 -c 'import json, sys
+acts = json.load(sys.stdin)["actions"]
+assert isinstance(acts, list)
+for x in acts:
+    print(json.dumps(x))' <<<"${body}" 2>/dev/null)"; then
+            while read -r a; do
+                [[ -n "${a}" ]] && run_admin_action "${a}"
+            done <<<"${actions}"
+        else
+            log "serve-actions: the queue did not answer with an action list; retrying in ${ACTIONS_POLL}s"
+            queue_ok=""
+        fi
+        if [[ -n "${once}" ]]; then
+            # One pass is a verdict: non-zero when the queue or the health report did not get through.
+            [[ -z "${health_pid}" ]] || wait "${health_pid}" || return 1
+            [[ -n "${queue_ok}" ]]; return
+        fi
+        sleep "${ACTIONS_POLL}"
+    done
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     load_roster   # populate INSTRUCTORS for every command (routes/reap/hints), not just cmd_instructors
@@ -3344,6 +3578,10 @@ main() {
         reap-secrets) cmd_reap_secrets "$@" ;;
         health) cmd_health "$@" ;;
         converge) cmd_converge "$@" ;;
+        restart-agent) cmd_restart_agent "$@" ;;
+        restart-console) cmd_restart_console "$@" ;;
+        terminal-password) cmd_terminal_password "$@" ;;
+        serve-actions) cmd_serve_actions "$@" ;;
         harvest) cmd_harvest "$@" ;;
         ingest) cmd_ingest "$@" ;;
         ingest-instructors)

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Acceptance walkthrough for the whole fleet: for every provisioned cluster, check the console,
-# ABOUTME: the lab page, the terminal, Argo convergence, and its Datadog org/identity/dual-shipping.
+# ABOUTME: the lab page, the terminal, Argo convergence, BurritoBot's pod, and its Datadog org and traces.
 #
 # Why this exists. Before a delivery the question is not "did provisioning exit 0" but "can a student who
 # opens their link do the workshop". Those are different: a cluster can provision cleanly and still hand
@@ -11,6 +11,11 @@
 #   verify/fleet-walkthrough.sh                 # every cluster with terraform state
 #   verify/fleet-walkthrough.sh --chat 5        # also send a real prompt to 5 clusters (slow, ~20s each)
 #   verify/fleet-walkthrough.sh --only michael-admin,attendee-001
+#   verify/fleet-walkthrough.sh --json report.json   # also write the report the admin console shows (#268)
+#
+# The JSON report carries, per cluster, the columns of the admin console's health row: console HTTP code,
+# Argo Synced+Healthy count, whether BurritoBot's pod is Ready, and the last trace the instructor Datadog
+# org saw from it (verify/last_trace.py). `fleet.sh serve-actions` posts it to the provisioning app.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${HERE}/.." && pwd)"
@@ -28,19 +33,29 @@ done
 # fleet.sh carries the naming rules (public_host_for, is_presenter_name, is_attendee_name); source it rather than restate them.
 source "${FLEET}" >/dev/null 2>&1
 KDIR="$(mktemp -d -t wibwalk.XXXX)"; trap 'rm -rf "${KDIR}"' EXIT
+# Last trace seen, for the whole fleet in one Datadog query. No trace is not a failure (an idle cluster is a
+# correct one), so it is a column rather than an issue. A failed query makes the column unknown, and the
+# report says why instead of showing every cluster as silent.
+TRACES="${KDIR}/traces.tsv"; TRACE_ERR=""
+if ! python3 "${HERE}/last_trace.py" --profile "${PROFILE_DEFAULT}" --region "${WIB_REGION}" \
+        >"${TRACES}" 2>"${KDIR}/traces.err"; then
+    TRACE_ERR="$(tail -1 "${KDIR}/traces.err")"; TRACE_ERR="${TRACE_ERR:-last_trace.py failed}"
+    echo "  last trace unknown: ${TRACE_ERR}"
+fi
 pass=0; fail=0; rows=""
 note() { printf '  %-28s %s\n' "$1" "$2"; }
 ok()   { pass=$((pass+1)); }
 bad()  { fail=$((fail+1)); rows="${rows}\n  FAIL ${1}: ${2}"; }
 
-mapfile -t names < <(find "${REPO}/infra/terraform/fleet/states" -name '*.tfstate' -exec basename {} .tfstate \; 2>/dev/null | sort)
+# fleet.sh's STATE_DIR, so WIB_STATE_DIR moves the walkthrough with the verbs that call it.
+mapfile -t names < <(find "${STATE_DIR}" -name '*.tfstate' -exec basename {} .tfstate \; 2>/dev/null | sort)
 [[ -n "${ONLY}" ]] && mapfile -t names < <(printf '%s\n' "${names[@]}" | grep -E "$(echo "${ONLY}" | tr ',' '|')")
 echo "walking ${#names[@]} cluster(s)"
 chat_done=0
 for name in "${names[@]}"; do
     host="$(public_host_for "${name}")"
     acct="$(read_membership "${name}" 2>/dev/null || true)"; [[ -n "${acct}" ]] || acct="${PROFILE_DEFAULT}"
-    issues=""
+    issues=""; okc=""; total=""; agent_ready=""
     # 1. the console and the lab page a student opens
     code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://${host}/" || echo 000)"
     [[ "${code}" == "200" ]] || issues="${issues} console=${code}"
@@ -65,6 +80,13 @@ for name in "${names[@]}"; do
                 maintenance-shell >/dev/null 2>&1; then
             issues="${issues} c6-artifact-present"
         fi
+        # 3c. BurritoBot answers: its pod exists and is Ready. Argo can call the agent app Healthy while the
+        # pod is between restarts, and otherwise the student's first prompt is what finds out (#268).
+        agent_ready="$(AWS_PROFILE="${acct}" KUBECONFIG="${kc}" kubectl --context "${ctx}" -n agent get pods \
+            -l app.kubernetes.io/name=workshop-agent \
+            -o jsonpath='{range .items[*]}{.status.conditions[?(@.type=="Ready")].status}{"\n"}{end}' 2>/dev/null \
+            | grep -c '^True$')" || true
+        [[ "${agent_ready:-0}" -ge 1 ]] && agent_ready=true || { agent_ready=false; issues="${issues} agent-not-ready"; }
         # 4. the Datadog org, identity and dual shipping this cluster was given
         if ! AWS_PROFILE="${acct}" KUBECONFIG="${kc}" bash "${HERE}/datadog-orgs.sh" "${ctx}" "${acct}" >/dev/null 2>&1; then
             issues="${issues} datadog"
@@ -82,20 +104,29 @@ except Exception: print("")' 2>/dev/null)"
         chat_done=$((chat_done+1))
     fi
     if [[ -z "${issues}" ]]; then ok; note "${name}" "OK  ${host}"; else bad "${name}" "${issues# }"; note "${name}" "FAIL${issues}"; fi
-    [[ -z "${JSON}" ]] || printf '%s\t%s\t%s\t%s\n' "${name}" "${host}" "$([[ -z "${issues}" ]] && echo ok || echo fail)" "${issues# }" >> "${JSON}.tsv"
+    last_trace="$(awk -F'\t' -v n="${name}" '$1 == n { print $2 }' "${TRACES}")"
+    [[ -z "${JSON}" ]] || printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${name}" "${host}" \
+        "$([[ -z "${issues}" ]] && echo ok || echo fail)" "${issues# }" "${code}" "${okc}" "${total}" \
+        "${agent_ready}" "${last_trace}" >> "${JSON}.tsv"
 done
 if [[ -n "${JSON}" ]]; then
-    python3 - "${JSON}" "${JSON}.tsv" <<'PY2'
-import json, sys, datetime, pathlib
+    TRACE_ERR="${TRACE_ERR}" python3 - "${JSON}" "${JSON}.tsv" <<'PY2'
+import json, os, sys, datetime, pathlib
 out, tsv = sys.argv[1], pathlib.Path(sys.argv[2])
+num = lambda v: int(v) if v.isdigit() else None
 rows = []
-for line in tsv.read_text().splitlines():
-    name, host, status, issues = (line.split("\t") + ["", "", "", ""])[:4]
+for line in (tsv.read_text().splitlines() if tsv.exists() else []):
+    name, host, status, issues, console, argo_ok, argo_total, agent, trace = (line.split("\t") + [""] * 9)[:9]
     rows.append({"cluster": name, "host": host, "status": status,
-                 "issues": [i for i in issues.split() if i]})
+                 "issues": [i for i in issues.split() if i],
+                 "console_http": num(console),
+                 "argo": {"synced_healthy": num(argo_ok), "total": num(argo_total)},
+                 "agent_ready": {"true": True, "false": False}.get(agent),
+                 "last_trace": trace or None})
 json.dump({"generated": datetime.datetime.now(datetime.UTC).isoformat(),
            "clusters": len(rows), "healthy": sum(r["status"] == "ok" for r in rows),
-           "failed": sum(r["status"] != "ok" for r in rows), "results": rows},
+           "failed": sum(r["status"] != "ok" for r in rows),
+           "last_trace_error": os.environ.get("TRACE_ERR") or None, "results": rows},
           open(out, "w"), indent=2)
 PY2
     rm -f "${JSON}.tsv"; echo "  report: ${JSON}"

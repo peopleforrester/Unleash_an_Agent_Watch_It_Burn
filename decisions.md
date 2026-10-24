@@ -562,3 +562,39 @@ installed into the offline suite's interpreter:**
 - **torch 2.14.0+cpu** (PyTorch CPU index, 2026-09-02). This is the image's pin. 2.14.1 exists, but matching
   the image is the point, and the CPU build keeps the CUDA packages out.
 - The model above, fetched from Hugging Face on the first run.
+
+## 2026-10-24T13:16:17Z · question 629 · The admin console's cluster actions run through a fleet.sh runner (#268)
+
+**Question 629:** Who runs the admin console's cluster actions, given the provisioning app on Railway has
+no AWS credentials? The three options were a scoped AWS role for the app (A), a queue plus an in-cluster
+agent on every cluster (B), or a queue plus a `fleet.sh` runner on a host that already holds the fleet
+profiles (C).
+
+**Answer:** C. The app queues each action and records the audit line. A `fleet.sh serve-actions` loop on a
+host that already holds the fleet profiles polls `/admin/actions` with the admin token and runs the
+matching `fleet.sh` verb, adding `restart-agent`, `restart-console` and `terminal-password` as verbs. It
+also runs `fleet-walkthrough --json` on an interval and posts the result as the health report. This covers
+all four actions, issues no new credential, and makes the console a caller of `fleet.sh`, as the issue
+intends. The catch is that the runner has to be up during the workshop, on a named host: a presenter
+laptop by default, since netcup stays out of the path.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes:**
+- `fleet.sh` gains four verbs: `restart-agent`, `restart-console`, `terminal-password` and
+  `serve-actions [--once]`. The restarts are pod deletes, because `block-argocd-drift` denies the
+  Deployment UPDATE a rollout restart makes, and the 2026-09-03 entry rules rollout restarts out. Each verb
+  checks that the kubeconfig's context is the named cluster before it mutates anything. The runner runs
+  only the four names in `ADMIN_ACTIONS`, and only against a cluster with state on the runner. It claims an
+  action before running it, so no action runs twice.
+- The walkthrough report gains the health row's columns: `console_http`, `argo` (Synced+Healthy of
+  total), `agent_ready` (a new check, `agent-not-ready` when it fails) and `last_trace`, from one
+  instructor-org query in `verify/last_trace.py`. The walkthrough now reads `fleet.sh`'s `STATE_DIR`
+  instead of a hardcoded path.
+- `docs/admin-console.md` is the HTTP contract the provisioning app has to implement: the queue, claim,
+  result and health routes, and a `requested_by` that names a presenter, because the admin token is shared
+  and cannot tell them apart. The app side lives in `provisioning-agenticburn` and is a separate piece of
+  work. Until it lands, `serve-actions` has no queue to poll.
+- Rejected with A and B: neither could run `converge`, which needs the Terraform state and the
+  per-account profiles. A puts write access to every cluster behind one shared token on a public app. B
+  puts a credential and a privileged component on every cluster the challenges attack.
