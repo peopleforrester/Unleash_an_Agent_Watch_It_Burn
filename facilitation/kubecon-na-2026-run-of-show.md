@@ -12,7 +12,8 @@ and venue live in conference-knowledge (`events/registry.yaml`, entry
 provisions a cluster. The audience takes part only from their phones against the
 wide-open community bot. Do not point anyone at the attendee lab, the
 provisioning page, or the per-challenge install steps: those are the 2-hour
-workshop and they stay off for this session.
+workshop and are not part of this session. The provisioning service still runs, as
+the C1 beacon collector only (open question 9).
 
 - The 2-hour workshop files (`facilitation/runbook.md`,
   `facilitation/slides-outline.md`, `docs/RUN-OF-SHOW-2026-08.md`) are the other
@@ -104,13 +105,13 @@ presenter cluster for the before and after.
 All three hostnames, and C1's `https://agenticburn.com/beacon`, are served through
 the apex router, so it stays up for this session (#502). For this session its table
 carries the roster only: the three hostnames and their service hosts, no
-attendee-pool row (`./fleet.sh routes roster`, Night Before). The attendee lab apps
-(the provisioning distributor and the feedback app) stay off.
+attendee-pool row (`./fleet.sh routes roster`, Night Before). No attendee lab runs:
+nobody is pointed at the provisioning distributor, and the feedback app stays off.
 
 The router does not answer the beacon itself. It forwards `/beacon` and the beacon
 view to the collector in the provisioning app (`docs/beacon-collector-spec.md`), so
-the beacon and its view work only while that service runs. Whether it runs for this
-session is open question 9.
+the provisioning service keeps running for this session, as the beacon collector
+only (open question 9, settled).
 
 Terminal login on both is `sprouts` / `sprouts`. Read it off the cluster if in
 doubt:
@@ -219,8 +220,8 @@ abstract's "the Kubernetes security layers you should already have."
 - C1 exfiltrate the customer data, blocked by the egress NetworkPolicy. Keep the
   beacon view, `https://agenticburn.com/beacon/view`, on screen so the room sees the
   count not move. Open it in its own tab before the segment starts. It is the
-  provisioning app's collector behind the router, so it is up only if that service
-  runs (open question 9).
+  provisioning app's collector behind the router, which keeps running for this
+  session for that alone (open question 9).
 - C2 deploy the villain image, denied at admission by the Kyverno registry
   allow-list. Read the deny message aloud. Watch for the agent silently
   substituting a permitted image and claiming success (check the running image
@@ -436,7 +437,9 @@ is merely slow rather than rebuilding:
   table pushed but not reloaded fails here, not on stage. Then confirm the C1 beacon
   view answers through the router:
   `curl -fsS -o /dev/null -w '%{http_code}\n' https://agenticburn.com/beacon/view`
-  prints `200` only while the provisioning app's collector is up (open question 9).
+  must print `200`. Anything else means the provisioning service, which stays up
+  for this session as the beacon collector (open question 9), is down; bring it back
+  before the day.
 - [ ] **Hostnames serve over HTTPS and websocket:**
   `./fleet.sh check-tls attackme.agenticburn.com michael-admin.agenticburn.com whitney-admin.agenticburn.com`.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.
@@ -625,11 +628,11 @@ number and says who settled it and when, so references to it elsewhere still lan
    `attendee.html` does not set yet (the default, 960 by 700, prints 998 by 728). It
    also refuses any slide that names an abstract point or challenge cut in the tables
    above, so the PDF is exported last, once #456 has settled what is cut.
-9. **The C1 beacon needs the provisioning app running (#502).** The coordinator
-   settled on #502 that the apex router and `/beacon` stay up and that the attendee
-   lab apps, the provisioning distributor among them, stay off. The router forwards
-   `/beacon` and `/beacon/view` to the collector inside the provisioning app, so with
-   that service off the beacon returns an error and the view in segment 4 does not
-   load, and the C1 fallback script fails on reading the count. Open: keep the
-   provisioning service running for this session only as the beacon collector, with
-   nobody pointed at its distributor pages, or show C1 without the beacon view.
+9. **Settled 2026-10-25: the provisioning app keeps running as the C1 beacon
+   collector (#502, question 714).** The router forwards `/beacon` and `/beacon/view`
+   to the collector inside the provisioning app, so with that service off the beacon
+   returns an error, the view in segment 4 does not load, and the C1 fallback script
+   fails on reading the count. Hecaton's research decided it under Michael's
+   standing rules, not Michael: the service stays up for this session as the beacon
+   collector only, and nobody is pointed at its distributor pages, so no attendee
+   lab runs (#448).

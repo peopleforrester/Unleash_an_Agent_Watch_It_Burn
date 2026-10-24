@@ -1323,3 +1323,19 @@ The coordinator settled on #502 (2026-10-24) that the apex router and `/beacon` 
 - **Left open for Michael:** the beacon and `/beacon/view` are forwarded by the router to the collector in
   the provisioning app, so they are up only while that service runs, and #448 keeps the provisioning
   distributor off. The run-of-show records this as its open question 9.
+
+## 2026-10-25 · #502 · question 714: the provisioning app keeps running as the C1 beacon collector
+
+**Question 714:** does the provisioning app on Railway keep running during the KubeCon breakout, only as the
+collector behind the C1 beacon? **Answer:** keep provisioning running as the beacon collector. Decided by
+hecaton's research under Michael's standing rules, not by Michael.
+
+- **Why it was a question.** The apex router forwards `/beacon` and `/beacon/view` to the collector in the
+  provisioning app (`docs/beacon-collector-spec.md`), and #448 names the provisioning distributor as an app
+  that stays off. With it off, the beacon errors, segment 4's beacon view does not load, and
+  `challenges/c1-exfil-s3/fallback.kubectl.sh` fails reading the count.
+- **What it changes.** The run-of-show says the service runs for this session as the beacon collector
+  only, with nobody pointed at its distributor pages, so no attendee lab runs. Open question 9 there is
+  marked settled. The Night Before beacon-view curl must print `200`, and anything else means the service
+  is down and must be brought back before the day. No code changes: the collector, the router's forward
+  and the C1 fallback stay as they are.
