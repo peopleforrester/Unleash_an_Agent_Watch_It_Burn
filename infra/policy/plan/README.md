@@ -71,12 +71,19 @@ and the offline suite fails if one appears.
   `fixtures/violating` must fail under its named policy, `fixtures/compliant` must pass, and the fleet
   must pass with every exception still needed.
 
-## Not yet wired into CI
+## In CI
 
-#200 asks for this to run on every PR that touches `infra/terraform/**`. The workflow is not in the repo
-yet. The runner and how a CI plan gets AWS access are open questions, because this repo is public and
-llm-coding-workflow#145 rules out fork-PR code on the self-hosted runner. Everything a workflow would
-call is here, and it runs the same way on a laptop.
+`.github/workflows/plan-policy.yml` runs on every PR, and every push to `staging` or `main`, that
+touches `infra/terraform/**`, this directory, the plan-policy tests or the workflow itself. It installs
+the pinned toolchain, plans the fleet roots with `plan-fleet.py`, and fails on any policy violation or
+stale exception (`check-plan.py --require-all-exceptions-used`). Then it runs the e2e self-test with
+Terraform and OpenTofu.
+
+The job runs on GitHub-hosted `ubuntu-latest` and plans against the local AWS mock (question 592 in
+`decisions.md`). It holds no AWS credential and no secret, so a fork PR is checked safely, which it
+could never be on the self-hosted runner (llm-coding-workflow#145). It plans `aws/network` and
+`aws/cluster`, the two roots `fleet.sh` applies. A new root under `infra/terraform/` is only checked
+once it is added to `plan-fleet.py`.
 
 ## Parallel with admission (#204)
 

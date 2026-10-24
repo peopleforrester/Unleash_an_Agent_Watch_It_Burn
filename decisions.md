@@ -986,3 +986,31 @@ reported findings in module blocks that `count` disables (appmesh, velero, clust
 fleet never creates). Reading the module source gave the wrong addresses too: `custom[0]`, where the
 modules actually create `ebs_csi[0]`, `lb_controller[0]` and `external_secrets[0]`. Each row in `exceptions.md` matches a
 finding on the mock-AWS plan, and the e2e suite fails when one stops matching.
+
+## 2026-10-24T17:12:43Z · question 592 · The plan-policy check runs on GitHub-hosted runners, against the AWS mock
+
+**Question 592:** #200's plan-policy check is built and proven locally, but no CI workflow runs it yet.
+Where should it run on PRs that touch infra/terraform/** or infra/policy/plan/**? This repo is public,
+and llm-coding-workflow#145 rules out fork-PR code on the netcup runner. plan-fleet.py can now plan the
+real fleet roots against a local AWS mock, so a CI plan no longer needs AWS credentials.
+
+**Answer:** GitHub-hosted ubuntu-latest, with the fleet planned by plan-fleet.py against the mock. CI
+holds no AWS credentials or secrets, fork PRs are checked safely, and Actions minutes on a public repo
+are not metered (llm-coding-workflow#194). This matches the draft rule in llm-coding-workflow#202 that
+public repos taking fork PRs use hosted runners.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes:** `.github/workflows/plan-policy.yml` is added. On every PR, and every push to
+staging or main, that touches infra/terraform/**, infra/policy/plan/**, the plan-policy tests or the
+workflow, it:
+
+1. installs the pinned toolchain with install-tools.py;
+2. plans aws/network and aws/cluster with plan-fleet.py;
+3. fails on any unexcused finding or stale exception (`check-plan.py --require-all-exceptions-used`);
+4. runs the Terraform and OpenTofu self-test (verify/test_plan_policy_e2e.py).
+
+actions/checkout and actions/setup-python are pinned to commit SHAs (v7.0.1 3d3c42e5, v7.1.0 6d4fd22b,
+read from their release tags 2026-10-24). PyYAML is pinned at 6.0.3 for the job. The workflow is not on
+the netcup runner and takes no OIDC role. A real-account plan (#201's pipeline role) stays a separate
+decision.

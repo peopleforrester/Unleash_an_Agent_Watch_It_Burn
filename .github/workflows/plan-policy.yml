@@ -1,0 +1,65 @@
+# ABOUTME: CI gate for the fleet Terraform (#200): plans aws/network and aws/cluster, then fails the PR on any
+# ABOUTME: plan-time policy violation (Kyverno JSON mode, Checkov, Trivy) not excused in infra/policy/plan/exceptions.md.
+#
+# Runner and credentials, per question 592 (decisions.md): GitHub-hosted ubuntu-latest, with the fleet planned
+# by plan-fleet.py against a local AWS mock. The job holds no AWS credential and no secret, so a fork PR runs
+# here safely, which it must never do on the self-hosted netcup runner (llm-coding-workflow#145). Actions
+# minutes on a public repo are not metered (llm-coding-workflow#194).
+name: plan-policy
+
+on:
+  push:
+    branches: [staging, main]
+    paths:
+      - 'infra/terraform/**'
+      - 'infra/policy/plan/**'
+      - 'verify/test_plan_policy*.py'
+      - '.github/workflows/plan-policy.yml'
+  pull_request:
+    paths:
+      - 'infra/terraform/**'
+      - 'infra/policy/plan/**'
+      - 'verify/test_plan_policy*.py'
+      - '.github/workflows/plan-policy.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      # Actions pinned to commit SHAs, not tags: a tag can be moved under us (#200, the trivy-action
+      # compromise of March 2026). Trivy itself needs no action; install-tools.py checks its tarball's sha256.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0  # v7.1.0
+        with:
+          python-version: '3.13'
+
+      - name: Install the pinned plan-policy toolchain (infra/policy/plan/tools.yaml)
+        run: |
+          set -euo pipefail
+          # The `runner` context is not available in job-level env, so the paths are exported from here.
+          {
+            echo "PLAN_DIR=$RUNNER_TEMP/fleet-plan"
+            echo "TF_PLUGIN_CACHE_DIR=$RUNNER_TEMP/terraform-plugin-cache"
+          } >> "$GITHUB_ENV"
+          python -m pip install --quiet PyYAML==6.0.3
+          mkdir -p "$RUNNER_TEMP/terraform-plugin-cache"
+          python infra/policy/plan/install-tools.py "$RUNNER_TEMP/plan-policy-tools"
+          echo "$RUNNER_TEMP/plan-policy-tools/bin" >> "$GITHUB_PATH"
+
+      - name: Plan the fleet roots (aws/network, aws/cluster) against a local AWS mock
+        run: python infra/policy/plan/plan-fleet.py --tf terraform "$PLAN_DIR"
+
+      # The gate. A violation fails here and names the policy and the address, for example
+      #   no-public-s3-acl (kyverno): ... aws_s3_bucket.assets (acl = public-read)
+      # --require-all-exceptions-used also fails on an exceptions.md row that no longer matches anything.
+      - name: Check the plans against policy
+        run: python infra/policy/plan/check-plan.py --require-all-exceptions-used "$PLAN_DIR/network.plan.json" "$PLAN_DIR/cluster.plan.json"
+
+      # Proves the check itself: every fixture violation fails under its named policy, the compliant twin
+      # passes, and the same holds for plans made by OpenTofu (#200: "checks read OpenTofu natively").
+      - name: Self-test the check with Terraform and OpenTofu
+        run: python verify/test_plan_policy_e2e.py

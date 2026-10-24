@@ -79,7 +79,8 @@ Before an apply, a plan of these roots can be checked against the plan-time poli
 [`infra/policy/plan/`](../policy/plan/README.md): no public S3 ACL, no public EKS endpoint, no IAM `*`,
 no unencrypted RDS. The check runs Kyverno in JSON mode, Checkov and Trivy over `terraform show -json`
 output. `plan-fleet.py` there plans `aws/network` and `aws/cluster` against a local AWS API, so the fleet
-can be checked without an AWS account (#200).
+can be checked without an AWS account. `.github/workflows/plan-policy.yml` runs that check on every PR
+that touches `infra/terraform/**` (#200).
 
 ## Post-provision
 
