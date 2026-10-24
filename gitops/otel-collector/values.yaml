@@ -213,17 +213,17 @@ config:
         insecure: true
       resource_to_telemetry_conversion:
         enabled: true
-    otlp/tempo:
+    # otlp_grpc, not otlp: the chart renames the old name when it renders relay.yaml (a deprecation it warns
+    # about), and the Datadog overlay below does not go through that rewrite. Written as otlp/tempo, the
+    # overlay named an exporter that no longer existed after the rename and the collector refused the config
+    # ('references exporter "otlp/tempo" which is not configured', otelcol-contrib 0.160.0). One name everywhere.
+    otlp_grpc/tempo:
       endpoint: tempo.monitoring.svc.cluster.local:4317
       tls:
         insecure: true
-    # PRIMARY telemetry sink: Datadog (Whitney's account). prometheusremotewrite + otlp/tempo
-    # are the secondary "analog" fallback. DD_API_KEY / DD_SITE come from the datadog-secret
-    # (BYO; never stored in this repo). verify-at-build: create the secret + set the DD site.
-    datadog:
-      api:
-        key: ${env:DD_API_KEY}
-        site: ${env:DD_SITE}
+    # The PRIMARY sink, Datadog, is NOT defined here. It lives in the Datadog overlay below
+    # (extraManifests, otel-collector-datadog), which the datadog-gate init container switches on only
+    # when datadog-secret exists. This file on its own is the Datadog-free collector: Tempo + Prometheus.
     debug:
       verbosity: basic
       sampling_initial: 5
@@ -237,13 +237,7 @@ config:
     # deprecated alias slated for removal). add_resource_attributes is supported on contrib 0.158.2.
     span_metrics:
       add_resource_attributes: true
-    # datadog/connector computes APM Trace Metrics (the trace.* namespace used by SLOs/monitors).
-    # Required since otelcol-contrib v0.95.0: the Datadog exporter no longer derives these itself.
-    # compute_stats_by_span_kind so stats are computed for client/server/etc. spans (PRD #13 M2).
-    datadog/connector:
-      traces:
-        compute_stats_by_span_kind: true
-        peer_tags_aggregation: true   # surface external service dependencies (e.g. Bedrock) on the Datadog Service Map
+    # datadog/connector (APM trace.* metrics) is in the Datadog overlay below, with the exporter it feeds.
   service:
     telemetry:
       logs:
@@ -259,20 +253,21 @@ config:
                 prometheus:
                   host: 0.0.0.0
                   port: 8888
+    # The Datadog-free pipelines. The Datadog overlay restates the receivers and exporters lists (the
+    # collector replaces lists when it merges configs, as Helm does), so a change to either list here
+    # must be made in the overlay too; verify/test_collector_no_datadog.py fails until it is.
     pipelines:
       metrics:
         receivers:
           - otlp
           - span_metrics # RED metrics generated from spans (carry UST tags for correlation)
-          - datadog/connector # APM trace.* metrics (compute_stats_by_span_kind); PRD #13 M2
         processors:
           - memory_limiter
           - batch
           - resource
           - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock where N/A
         exporters:
-          - datadog               # primary
-          - prometheusremotewrite # secondary / fallback
+          - prometheusremotewrite # the fallback, and the only metrics sink without Datadog
           - debug
       traces:
         receivers:
@@ -288,20 +283,136 @@ config:
           - transform/mark_tool_failure # a model call that received a failed tool result renders as an error
           - transform/adk_tool_content # surface ADK's tool args/result under gen_ai.* so Datadog renders them
         exporters:
-          - datadog      # primary
-          - otlp/tempo   # secondary / fallback
+          - otlp_grpc/tempo # the fallback, and the only trace sink without Datadog
           - span_metrics  # feed the connector so it can derive metrics from these spans
-          - datadog/connector # feed the APM-stats connector (trace.* metrics); PRD #13 M2
           - debug
-# Datadog credentials for the primary exporter (BYO secret; not stored in this repo).
-# verify-at-build: create `datadog-secret` (key api-key) from Whitney's Datadog account and
-# set DD_SITE to that account's site (e.g. datadoghq.com, us5.datadoghq.com, datadoghq.eu).
+
+# ---- Datadog, switched on by the presence of datadog-secret (#500) ----
+#
+# The collector used to name the datadog exporter in this file and read DD_API_KEY with a NON-optional
+# secretKeyRef. With no datadog-secret, which is every cluster brought up before a Datadog org pool exists
+# (#454), the pod could not start at all, so Tempo and Prometheus, the fallback, died with the primary. And
+# making the reference optional alone does not help: the exporter refuses an empty key ("exporters::datadog:
+# api.key is not set", measured against otelcol-contrib 0.160.0, this chart's appVersion) and that fails the
+# whole config, used in a pipeline or not.
+#
+# So the Datadog half is a second collector config file, loaded after relay.yaml with a second --config. The
+# datadog-gate init container decides what that file holds: the overlay below when datadog-secret exists, an
+# empty config when it does not, and it says which in its log. The same profile therefore runs Datadog-free
+# today and ships to Datadog once the key is loaded, with no repo change: write datadog-secret (deploy-full-idp
+# or fleet.sh converge does) and restart the collector pods (infra/reload-datadog-consumers.sh).
+#
+#   kubectl -n monitoring logs ds/otel-collector-opentelemetry-collector-agent -c datadog-gate
+#
+# The collector replaces lists when it merges, so the overlay restates the two pipeline lists it changes in
+# full; the processors lists are not touched and come from relay.yaml. values-dual.yaml (attendee) restates
+# this ConfigMap with the instructor org added.
+extraManifests:
+  - apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: otel-collector-datadog
+    data:
+      datadog.yaml: |
+        exporters:
+          # PRIMARY telemetry sink when present: Datadog (Whitney's account). DD_API_KEY / DD_SITE come from
+          # datadog-secret (BYO; never stored in this repo) and the DD_SITE env below.
+          datadog:
+            api:
+              key: ${env:DD_API_KEY}
+              site: ${env:DD_SITE}
+        connectors:
+          # datadog/connector computes APM Trace Metrics (the trace.* namespace used by SLOs/monitors).
+          # Required since otelcol-contrib v0.95.0: the Datadog exporter no longer derives these itself.
+          # compute_stats_by_span_kind so stats are computed for client/server/etc. spans (PRD #13 M2).
+          datadog/connector:
+            traces:
+              compute_stats_by_span_kind: true
+              peer_tags_aggregation: true   # surface external service dependencies (e.g. Bedrock) on the Datadog Service Map
+        service:
+          pipelines:
+            metrics:
+              receivers:
+                - otlp
+                - span_metrics
+                - datadog/connector # APM trace.* metrics (compute_stats_by_span_kind); PRD #13 M2
+              exporters:
+                - datadog               # primary
+                - prometheusremotewrite # secondary / fallback
+                - debug
+            traces:
+              exporters:
+                - datadog      # primary
+                - otlp_grpc/tempo # secondary / fallback
+                - span_metrics
+                - datadog/connector # feed the APM-stats connector (trace.* metrics); PRD #13 M2
+                - debug
+initContainers:
+  - name: datadog-gate
+    # The signed busybox mirror the platform already admits (verify-image-signatures, registry allowlist).
+    image: ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662
+    command: ["sh", "-c"]
+    args:
+      - |
+        if [ -n "${DD_API_KEY:-}" ]; then
+          cp /datadog-overlay/datadog.yaml /datadog-gate/datadog.yaml
+          echo "datadog-gate: datadog-secret found. Datadog export ON: traces to Datadog and Tempo, metrics to Datadog and Prometheus."
+        else
+          echo '{}' > /datadog-gate/datadog.yaml
+          echo "datadog-gate: no datadog-secret. Datadog export OFF: traces to Tempo, metrics to Prometheus only. Known gap until a Datadog key is loaded (#454); write datadog-secret and restart this pod to turn it on."
+        fi
+    env:
+      - name: DD_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: datadog-secret
+            key: api-key
+            optional: true
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 10001
+      allowPrivilegeEscalation: false
+      readOnlyRootFilesystem: true
+    resources:
+      requests:
+        cpu: 10m
+        memory: 16Mi
+      limits:
+        cpu: 50m
+        memory: 32Mi
+    volumeMounts:
+      - name: datadog-overlay
+        mountPath: /datadog-overlay
+        readOnly: true
+      - name: datadog-gate
+        mountPath: /datadog-gate
+command:
+  extraArgs:
+    - --config=/datadog-gate/datadog.yaml
+extraVolumes:
+  - name: datadog-overlay
+    configMap:
+      name: otel-collector-datadog
+  - name: datadog-gate
+    emptyDir:
+      sizeLimit: 1Mi
+extraVolumeMounts:
+  - name: datadog-gate
+    mountPath: /datadog-gate
+    readOnly: true
+# A change to the overlay rolls the collector, as a change to relay.yaml already does through the chart's own
+# checksum. Without it an edited overlay sat unused until something else restarted the pods.
+podAnnotations:
+  checksum/datadog-overlay: '{{ .Values.extraManifests | toJson | sha256sum }}'
+# DD_API_KEY is optional: the collector starts without datadog-secret, and only the overlay reads it. DD_SITE is
+# that account's site (e.g. datadoghq.com, us5.datadoghq.com, datadoghq.eu).
 extraEnvs:
   - name: DD_API_KEY
     valueFrom:
       secretKeyRef:
         name: datadog-secret
         key: api-key
+        optional: true
   - name: DD_SITE
     value: "datadoghq.com"
   - name: WIB_CLUSTER_NAME

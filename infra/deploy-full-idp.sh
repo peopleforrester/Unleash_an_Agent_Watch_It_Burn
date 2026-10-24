@@ -89,7 +89,14 @@ if [[ -n "${DD_API_KEY}" && -n "${DD_APP_KEY}" ]]; then
   done
   log "    datadog-secret created in datadog/monitoring/security (datadog agent + falcosidekick read it)"
 else
+  # A known gap, not a failure (#454, #500): every profile comes up without Datadog. Nothing below reads
+  # datadog-secret with a non-optional reference except the Datadog Agent, whose pods wait for it.
   log "    WARN: no Datadog keys (WITB_DD_API_KEY/_APP_KEY unset, no readable local pool secret) — datadog-secret NOT created"
+  log "    KNOWN GAP until a Datadog key is loaded: the OTel Collector sends traces to Tempo and metrics to"
+  log "      Prometheus only (its datadog-gate init container logs which), falcosidekick runs without its"
+  log "      Datadog output (Talon and Prometheus unaffected), and the Datadog Agent does not start."
+  log "      To add Datadog later, on this same profile: write datadog-secret (fleet.sh converge, or re-run this"
+  log "      with WITB_DD_API_KEY/_APP_KEY) and restart the readers: infra/reload-datadog-consumers.sh <context>."
 fi
 # Per-cluster identity for Datadog plus, on attendee clusters, the instructor org's keys for
 # dual shipping (#242). fleet.sh passes WITB_DD_ADMIN_*; a manual run without them gets identity only.

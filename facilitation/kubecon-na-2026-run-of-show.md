@@ -57,7 +57,7 @@ alive, so never flip a guard with `kubectl set env`.
 | 3 | 3 | M | The admin cluster: Argo CD apps, the platform tour | Watches | 3 |
 | 4 | 6 | W narrates, M names controls | Admin cluster: re-run the attacks, each blocked | Watches | 5 |
 | 5 | 7 | M+W | Admin cluster: toggle the AI guardrails on live | Watches | 2, 6 |
-| 6 | 3 | W | Datadog traces on the shared org | Watches | 7 |
+| 6 | 3 | W | Datadog Agent Observability, or the admin cluster's Grafana view if no pool is live | Watches | 7 |
 | 7 | 4 | M+W | On-topic guardrail on, then the close | Watches | 8 |
 
 Total 30 minutes. Demo (segments 2 to 6) is 24 minutes. Open and close (segments
@@ -190,17 +190,41 @@ setting change the outcome. Prompts and verified both-direction results are on
 
 ### Segment 6: GenAI observability on stage (3 min). Owner: Whitney.
 
-Open Agent Observability in the shared Datadog org. Show the agent's input, output,
-and tool calls for the beats just run: the injection that was blocked at zero
-tokens, the output that came back redacted, the rogue MCP tool that never fired.
-The observability is the lens that proves each guardrail did its job.
+Show the agent's input, output, and tool calls for the beats just run: the
+injection that was blocked at zero tokens, the output that came back redacted, the
+rogue MCP tool that never fired. The observability is the lens that proves each
+guardrail did its job.
+
+**Which surface is shown.** Decide it the night before and say it on stage:
+
+- **Datadog pool live:** Agent Observability in the shared Datadog org.
+- **No pool live:** the Grafana view on the admin cluster, which reads Tempo and
+  needs no Datadog key (#500). Michael's cluster:
+  `https://grafana-michael-admin.agenticburn.com/d/witb-agent-obs` (Whitney's:
+  `https://grafana-whitney-admin.agenticburn.com/d/witb-agent-obs`). Login
+  `admin`; the admin cluster terminal prints the password in its catalogue. Say
+  "this is Grafana reading the traces from Tempo, on the cluster itself".
+
+In the Grafana view, the "Segment 6" row has one panel per beat, newest first,
+over the last 30 minutes. On an admin cluster only the presenters use
+BurritoBot, so that window is this session:
+
+- **C6:** the `/chat` request with no model call under it. Open it: one guard-proxy
+  span, no agent and no model spans, so zero input tokens. The cost panel above it
+  did not move.
+- **C5:** the reply that came back redacted. Open it: the top span carries the
+  reply the user got, with `[REDACTED]`; the `chat` span under it carries what the
+  model said before the output guard.
+- **C7:** the weather-tool ask that never reached `read_internal_config`. The
+  panel beside it lists the calls that did reach it; the ask sent before
+  `guard-mcp-on` is there, and the one sent after is not.
 
 - Rehearse the search. Finding one trace by name in front of a room is the part
-  that goes wrong; have one located before the session starts.
-- **Delivers:** point 7 (good GenAI observability practices). This segment depends
-  on a live Datadog org pool, which is not set up yet (#454); see the open
-  questions. If no pool is live by the day, fall back to Grafana or Tempo and say
-  which; do not leave point 7 unshown.
+  that goes wrong; have one located before the session starts. On Grafana, run
+  the three beats once in rehearsal and confirm each panel shows a row.
+- **Delivers:** point 7 (good GenAI observability practices), on Datadog if the
+  pool (#454) is live and on the Grafana view if not. Do not leave point 7
+  unshown.
 - **Hand-off to Michael:** "And after all of that, what is the bot supposed to do?"
 
 ### Segment 7: The bot sells burritos only, then close (4 min). Owner: Michael and Whitney.
@@ -240,15 +264,17 @@ verbatim text in `abstracts/recovered/sessionize-public-profile.md` section 5.
 | 4 | Starts wide open, the audience hacks it live | 2 (community bot, phones) | Yes |
 | 5 | The Kubernetes security layers you should already have | 4 (C1, C2, C3), before the LLM layer | Yes |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre, C5 and C7 at the gateway) | Partial. "Mid-inference" is an unsettled scope call (open question) |
-| 7 | Good GenAI observability practices | 6 (Datadog traces) | At risk. Needs a live Datadog pool (#454), not yet set up |
+| 7 | Good GenAI observability practices | 6 (Datadog, or the Grafana view) | Yes on the Grafana view without a pool (#500), once proven on a cluster at bring-up (#503); Datadog needs the pool (#454) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail) | **At risk.** The on-topic guardrail does not exist yet (#455 MISSING) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live half yes; recorded half needs #452 built |
 
 Points the cut cannot deliver today, marked so they are not presented as ready:
-point 8 (no on-topic guardrail yet, #455), point 7 (no live Datadog pool yet,
-#454), point 6 "mid-inference" (unsettled definition, #456 and talks-knowledge#29),
-and the recorded half of point 9 (#452). The live-input half of point 9 and all of
-points 1 through 5 are deliverable on the platform as built.
+point 8 (no on-topic guardrail yet, #455), point 6 "mid-inference" (unsettled
+definition, #456 and talks-knowledge#29), and the recorded half of point 9 (#452).
+The live-input half of point 9 and all of points 1 through 5 are deliverable on the
+platform as built. Point 7 no longer waits on the Datadog pool: the Grafana view
+carries it without a key (#500), and it has not yet been shown on a live cluster;
+the bring-up probe (#503) is where it is proven.
 
 ## Challenges shown live, and challenges cut
 
@@ -335,8 +361,10 @@ is merely slow rather than rebuilding:
   since.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
-  pool is live, decide the Grafana or Tempo fallback for segment 6 and say so on the
-  day.
+  pool is live, segment 6 runs on the admin cluster's Grafana view
+  (`https://grafana-michael-admin.agenticburn.com/d/witb-agent-obs`): open it, run
+  the C6, C5 and C7 beats once, and confirm each of the three segment 6 panels shows
+  a row. Say on the day which surface is shown.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
   per-segment videos and screenshots deck must exist and be rehearsed once, so a
   dead venue network does not end the session. The repo paths for these are not
@@ -401,8 +429,9 @@ written down rather than guessed.
    rollback step and the Night Before step reference them; they need to exist before
    the cold read, and this file should name their exact paths once they do.
 3. **The Datadog pool for segment 6 is not set up (#454).** Whitney is expected to
-   set one up the week of 2026-10-26. If it is not live, what is the agreed fallback
-   for showing point 7: Grafana, Tempo, or recorded traces?
+   set one up the week of 2026-10-26. If it is not live, segment 6 shows the admin
+   cluster's Grafana view (#500), so point 7 no longer waits on the pool. Still
+   open: whether the pool is live by the day.
 4. **What "mid-inference" means for point 6 (#456, talks-knowledge#29).** The
    guard-proxy scans request and response at the gateway. Is a gateway response scan
    what the abstract means by mid-inference, or does it mean scanning during

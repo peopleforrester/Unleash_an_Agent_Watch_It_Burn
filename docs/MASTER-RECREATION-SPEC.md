@@ -436,7 +436,9 @@ OTel Collector (DaemonSet, contrib 0.158.2, ns=monitoring)
    receivers otlp(4317/4318); processors memory_limiter->batch->resource(cluster.name)->transform/set_genai_provider
      (+ transform/set_peer_service on traces; + transform/redact_sentinel in Act 2)
    connectors span_metrics (RED, add_resource_attributes), datadog/connector (APM trace.* stats)
-   exporters PRIMARY datadog ; SECONDARY prometheusremotewrite + otlp/tempo
+   exporters PRIMARY datadog ; SECONDARY prometheusremotewrite + otlp_grpc/tempo
+   (#500: datadog + datadog/connector are a second --config the datadog-gate init container loads only when
+    datadog-secret exists; without it the collector ships to Tempo + Prometheus only)
    v
 Datadog org (attendee trial org) -- APM, LLM Observability, Metrics, Service Map, Logs
 

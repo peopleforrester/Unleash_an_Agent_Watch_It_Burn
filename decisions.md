@@ -598,3 +598,29 @@ laptop by default, since netcup stays out of the path.
 - Rejected with A and B: neither could run `converge`, which needs the Terraform state and the
   per-account profiles. A puts write access to every cluster behind one shared token on a public app. B
   puts a credential and a privileged component on every cluster the challenges attack.
+## 2026-10-24 · #500 · Datadog is switched by datadog-secret on the cluster, not by the profile
+
+The admin profile has to run with no Datadog key (#454) and add Datadog "with no other change" once the pool
+exists. The switch is therefore the presence of `datadog-secret`, read at pod start, so the same root, the
+same Applications and the same values serve both states, and `fleet.sh converge` writing the secret plus
+`infra/reload-datadog-consumers.sh` is the whole change on a running cluster.
+
+- **Collector:** `values.yaml` `config` is Datadog-free (Tempo + Prometheus). The Datadog exporter and
+  connector are the `otel-collector-datadog` ConfigMap (chart `extraManifests`), loaded as a second `--config`
+  that the `datadog-gate` init container fills: the overlay when `DD_API_KEY` resolves, `{}` when it does not,
+  logged either way. The image is the signed busybox mirror the platform already admits, so nothing new is
+  pulled. `otlp/tempo` became `otlp_grpc/tempo`, the name the chart already rewrote it to in `relay.yaml`; the
+  overlay does not go through that rewrite.
+- **falcosidekick:** the `DATADOG_APIKEY` reference is optional; the chart's empty default key keeps the output off.
+- **Datadog Agent:** stays in the profile, and waits for the secret. `deploy-full-idp.sh` logs that as the
+  known gap. It is operator-managed, so its pods cannot be gated the same way from here.
+- **Attendee** keeps both secrets non-optional and restates the overlay with `datadog/admin`.
+
+### REJECTED: making the reference optional and nothing else
+The datadog exporter refuses an empty key ("api.key is not set", otelcol-contrib 0.160.0) and the collector
+validates every defined component, used in a pipeline or not, so the pod would start and then exit.
+
+### REJECTED: a no-Datadog values file chosen by deploy-full-idp.sh when it has no keys
+It needs a second root (or a patched one) for the same profile, and the root reconciles its own spec from git
+(#253). Worse, a cluster brought up without keys would stay Datadog-free after the pool arrived, because
+`converge` writes the secret but never re-applies a root.

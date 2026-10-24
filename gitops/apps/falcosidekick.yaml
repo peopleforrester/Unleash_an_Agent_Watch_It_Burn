@@ -40,12 +40,21 @@ spec:
           # Talon). The datadog-secret (key api-key) must exist in the `security` namespace (falcosidekick's
           # ns), not only `monitoring`. Set DATADOG_HOST to Whitney's site (https://api.us5.datadoghq.com,
           # https://api.datadoghq.eu) if the org is not US1.
+          #
+          # OPTIONAL, so falcosidekick starts on a cluster with no datadog-secret (#500, no Datadog org pool
+          # yet, #454). Non-optional, the pod sat in CreateContainerConfigError and Falco's CRITICAL events
+          # never reached Talon either, so the fork-bomb kill died with the Datadog forward. Without the
+          # secret, DATADOG_APIKEY falls back to the chart's own envFrom secret, which holds the empty
+          # config.datadog.apikey, and an empty key is falcosidekick's off switch for the output: it logs
+          # the outputs it enabled at start, and Datadog is simply not among them. Once datadog-secret exists,
+          # a pod restart (infra/reload-datadog-consumers.sh) turns the output on with no change here.
           extraEnv:
             - name: DATADOG_APIKEY
               valueFrom:
                 secretKeyRef:
                   name: datadog-secret
                   key: api-key
+                  optional: true
             - name: DATADOG_HOST
               value: "https://api.datadoghq.com"
         webui:

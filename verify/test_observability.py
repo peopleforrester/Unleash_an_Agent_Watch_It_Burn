@@ -6,6 +6,9 @@ import sys
 
 import yaml
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from collector_render import collector_config  # noqa: E402
+
 REPO = pathlib.Path(__file__).resolve().parents[1]
 
 otel = yaml.safe_load((REPO / "gitops" / "apps" / "otel-collector.yaml").read_text())
@@ -48,15 +51,18 @@ def _app_values(app):
 _otel_vals = _app_values(otel)
 cfg = _otel_vals["config"]
 check("collector has an otlp receiver", "otlp" in cfg["receivers"])
-check("collector traces pipeline exports to Tempo", "otlp/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
+check("collector traces pipeline exports to Tempo", "otlp_grpc/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
 check("collector cluster.name is not the stale KubeAuto value",
       all(a.get("value") != "kubeauto-ai-day" for a in cfg["processors"]["resource"]["attributes"]))
 
-# Datadog is the PRIMARY sink; Grafana/Tempo/Prometheus are the secondary fallback.
-check("Datadog is the primary traces exporter", cfg["service"]["pipelines"]["traces"]["exporters"][0] == "datadog")
-check("Datadog is the primary metrics exporter", cfg["service"]["pipelines"]["metrics"]["exporters"][0] == "datadog")
-check("Grafana/Tempo kept as the secondary traces fallback", "otlp/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
-check("Datadog API key is NOT hardcoded (env reference)", cfg["exporters"]["datadog"]["api"]["key"].startswith("${env:"))
+# Datadog is the PRIMARY sink when datadog-secret exists; Grafana/Tempo/Prometheus are the secondary fallback.
+# Since #500 the Datadog half is the overlay the datadog-gate loads as a second config, so these read the
+# config the collector runs WITH the secret (test_collector_no_datadog.py covers the run without it).
+dd_cfg = collector_config("instructor", datadog_secret=True)
+check("Datadog is the primary traces exporter", dd_cfg["service"]["pipelines"]["traces"]["exporters"][0] == "datadog")
+check("Datadog is the primary metrics exporter", dd_cfg["service"]["pipelines"]["metrics"]["exporters"][0] == "datadog")
+check("Grafana/Tempo kept as the secondary traces fallback", "otlp_grpc/tempo" in dd_cfg["service"]["pipelines"]["traces"]["exporters"])
+check("Datadog API key is NOT hardcoded (env reference)", dd_cfg["exporters"]["datadog"]["api"]["key"].startswith("${env:"))
 _vals = _otel_vals
 _ddenv = {e["name"]: e for e in _vals.get("extraEnvs", [])}
 check("DD_API_KEY sourced from a BYO secret (not in repo)", "secretKeyRef" in _ddenv.get("DD_API_KEY", {}).get("valueFrom", {}))
@@ -88,12 +94,14 @@ check("span_metrics propagates resource attributes (UST) onto generated metrics"
 check("span_metrics wired into traces exporters", "span_metrics" in cfg["service"]["pipelines"]["traces"]["exporters"])
 check("span_metrics wired into metrics receivers", "span_metrics" in cfg["service"]["pipelines"]["metrics"]["receivers"])
 
-# datadog/connector (PRD #13 M2): APM trace.* metrics, required since otelcol-contrib v0.95.0.
-check("collector has a datadog/connector", "datadog/connector" in conns)
+# datadog/connector (PRD #13 M2): APM trace.* metrics, required since otelcol-contrib v0.95.0. It lives in the
+# Datadog overlay with the exporter it feeds, so it is checked on the config the collector runs with the secret.
+dd_conns = dd_cfg.get("connectors", {})
+check("collector has a datadog/connector", "datadog/connector" in dd_conns)
 check("datadog/connector computes stats by span kind",
-      conns.get("datadog/connector", {}).get("traces", {}).get("compute_stats_by_span_kind") is True)
-check("datadog/connector wired into traces exporters", "datadog/connector" in cfg["service"]["pipelines"]["traces"]["exporters"])
-check("datadog/connector wired into metrics receivers", "datadog/connector" in cfg["service"]["pipelines"]["metrics"]["receivers"])
+      dd_conns.get("datadog/connector", {}).get("traces", {}).get("compute_stats_by_span_kind") is True)
+check("datadog/connector wired into traces exporters", "datadog/connector" in dd_cfg["service"]["pipelines"]["traces"]["exporters"])
+check("datadog/connector wired into metrics receivers", "datadog/connector" in dd_cfg["service"]["pipelines"]["metrics"]["receivers"])
 
 
 # Unified Service Tagging on the AI-layer pods (service.name + env via OTEL_RESOURCE_ATTRIBUTES).
