@@ -738,3 +738,22 @@ launched. The config now passes `{ channel: 'chromium' }`. With that change the 
 The full `run-e2e.sh` still exits 1 in its prerequisite check. Node and yarn are no longer missing, but
 kubectl, helm, the kyverno CLI, conftest, terraform and the aws CLI are, along with a cluster `CONTEXT` and
 the IAM pipeline profile and region.
+## 2026-10-24 · #421 · Dependabot alerts: what cd529d9 left open
+
+cd529d9 cleared the vm2, shell-quote, axios, grpc-js, basic-ftp, fast-uri and undici alerts. For the rest:
+
+- **@graphql-tools/utils (GHSA-7mx3-vvmw-hjmv): fixed by a resolution.** The only consumer is mockttp 3.x, which
+  arrives through `@backstage/backend-openapi-utils` (its `./testUtils` entry; production never loads it). The
+  `schema 10.1.5` and `utils 12.1.0` resolutions pull in `merge 9.2.8`. That is the 10.x/12.x line mockttp 4.x
+  itself uses, and it still accepts graphql 15, which mockttp 3 needs. We did not need four majors. A smoke run
+  against the installed tree passed: `getLocal()` served a rule, and `getAdminServer()` plus `getRemote()` set a
+  rule and read seen requests over the GraphQL admin schema.
+- **http-cache-semantics (GHSA-ch52-4w7c-c8xp): fixed by a lock refresh.** The advisory covers versions up to
+  4.2.0, and 4.3.0 is now out. make-fetch-happen's `^4.1.1` takes it.
+- **node-forge (GHSA-86w9-cpqp-85rv): kept, the alert stays open.** 1.4.0 is still the latest release and is
+  affected. The fix is digitalbazaar/forge#1152, not yet released. No code here verifies an RSA signature with it:
+  backend-defaults uses it only to generate and parse its own self-signed certificate when `backend.https` is set
+  with no certificate (neither app-config sets it), selfsigned is webpack-dev-server's dev certificate, and mockttp
+  is test-only. When forge ships a fixed release, refresh the lock.
+- **urllib3 (3 alerts):** these point at `lab-distribution/uv.lock`, which 5037fa1 removed. No manifest is left
+  to change.

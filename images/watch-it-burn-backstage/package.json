@@ -80,7 +80,9 @@
     "react-router-dom": "6.30.6",
     "webpack-dev-server": "5.2.6",
     "vm2": "3.11.8",
-    "basic-ftp": "6.2.1"
+    "basic-ftp": "6.2.1",
+    "@graphql-tools/schema": "10.1.5",
+    "@graphql-tools/utils": "12.1.0"
   },
   "prettier": "@backstage/cli/config/prettier",
   "lint-staged": {
