@@ -3,6 +3,15 @@
 Everything you need to start. The platform is built (live verification is on the provisioning track);
 the docs below are current and the talk materials are drafts for your input.
 
+## KubeCon NA 2026: read this first
+
+The KubeCon NA breakout (Thursday 2026-11-12, 13:50 to 14:20 MST, Grand Ballroom BDF) is a different
+format from the 2-hour workshop below: a 30-minute demo, no attendee labs, the audience taking part only
+from their phones. Its run-of-show is **`facilitation/kubecon-na-2026-run-of-show.md`**. Read that for the
+KubeCon cold read; the workshop files below are the other format. The open questions at the end of it are
+the things still to settle, including whether the on-topic guardrail (the burrito-only ending) is built in
+time.
+
 ## The talk
 
 "Build a Platform, Unleash an Agent on it... and Watch it Burn!" Attendees drive an AI agent against a
