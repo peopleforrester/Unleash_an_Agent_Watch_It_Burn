@@ -18,8 +18,8 @@ KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 #
 #   The gateway-enforced alternative (route evil-mcp through agentgateway too and flip a CEL rule) is
 #   weighed in docs/research/2026-10-24-agentgateway-evaluation.md (#239). It blocks the same tool
-#   names toolNames does and no more, so toolNames stays the control. The agent/gateway/mcp-authz-*
-#   overlays predate the gitops deploy and are not applied by anything.
+#   names toolNames does and no more, so toolNames stays the control. The pre-gitops
+#   agent/gateway/mcp-authz-* overlays that once held a gateway allowlist were deleted in #479.
 #
 # Rogue tools (induced by the poisoned MCP description; read_internal_config leaks
 # FAKE-MCP-EXFIL-sentinel-4c1d): read_internal_config, apply_optimization.

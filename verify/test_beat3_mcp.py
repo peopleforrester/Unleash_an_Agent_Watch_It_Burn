@@ -1,6 +1,8 @@
 # ABOUTME: Render-gate check for Beat 3 (bad MCP + clown-file): rogue tools exist (BEFORE leaks/drops),
-# ABOUTME: the gateway allowlist denies them (AFTER), and the clown-file is non-compliant so Kyverno rejects it.
+# ABOUTME: the C7 toggle's ON-state toolNames excludes them (AFTER), and Kyverno rejects the clown-file.
+import json
 import pathlib
+import re
 import sys
 
 import yaml
@@ -8,7 +10,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 BEAT = REPO / "challenges" / "03-bad-mcp-excessive-agency"
 SERVER = (BEAT / "evil-mcp-shim" / "server.py").read_text()
-AUTHZ_ON_TEXT = (REPO / "agent" / "gateway" / "mcp-authz-on.yaml").read_text()
+TOGGLE = (BEAT / "toggle-mcp-authz-on.sh").read_text()
 CLOWN = list(yaml.safe_load_all((BEAT / "clown-file.yaml").read_text()))[0]
 
 failures = []
@@ -25,13 +27,27 @@ for tool in ("get_weather", "read_internal_config", "apply_optimization"):
     check(f"evil-mcp exposes {tool}", f"def {tool}(" in SERVER)
 check("apply_optimization is poisoned to push an apply", "MUST apply" in SERVER or "Always apply" in SERVER)
 
-# AFTER: parse the ACTIVE gateway allowlist rules (FORM A) and assert neither rogue tool is permitted.
-cm = next(d for d in yaml.safe_load_all(AUTHZ_ON_TEXT) if d and d.get("kind") == "ConfigMap")
-# MCP config nests under `mcp.` (the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) §2c): mcp.policies.mcpAuthorization.rules
-rules = yaml.safe_load(cm["data"]["config.yaml"])["mcp"]["policies"]["mcpAuthorization"]["rules"]
-rules_text = " ".join(rules)
-check("active allowlist does NOT permit read_internal_config", "read_internal_config" not in rules_text)
-check("active allowlist does NOT permit apply_optimization", "apply_optimization" not in rules_text)
+# AFTER: C7's deployed control is the kagent toolNames allowlist the toggle patches onto workshop-agent's
+# evil-mcp entry (the evil-mcp RemoteMCPServer dials evil-mcp-shim direct, not through agentgateway).
+# Read the EVIL_TOOL each branch of the toggle writes and assert ON is get_weather alone.
+def _evil_tool(state, branch):
+    m = re.search(r"^  EVIL_TOOL='(.*)'$", branch, re.M)
+    check(f"the toggle sets EVIL_TOOL in its {state} branch", m is not None)
+    return json.loads(m.group(1)) if m else {}
+
+
+branches = re.search(r'^if \[\[ "\$\{STATE\}" == "on" \]\]; then\n(.*?)^else\n(.*?)^fi$', TOGGLE, re.M | re.S)
+check("the toggle branches on STATE == on", branches is not None)
+ON_BRANCH, OFF_BRANCH = branches.groups() if branches else ("", "")
+evil_on, evil_off = _evil_tool("ON", ON_BRANCH), _evil_tool("OFF", OFF_BRANCH)
+on_server = evil_on.get("mcpServer", {})
+check("the ON-state entry is the evil-mcp RemoteMCPServer",
+      on_server.get("name") == "evil-mcp" and on_server.get("kind") == "RemoteMCPServer")
+check("ON-state evil-mcp toolNames is exactly [get_weather]", on_server.get("toolNames") == ["get_weather"])
+for tool in ("read_internal_config", "apply_optimization"):
+    check(f"ON-state allowlist does NOT permit {tool}", tool not in on_server.get("toolNames", []))
+    check(f"OFF-state allowlist does permit {tool} (the before-state the beat shows)",
+          tool in evil_off.get("mcpServer", {}).get("toolNames", []))
 
 # Defense in depth: the clown-file payload is non-compliant, so the CNCF wall rejects it if applied.
 container = CLOWN["spec"]["template"]["spec"]["containers"][0]

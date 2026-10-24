@@ -44,14 +44,14 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 | ~~C4 old~~ | ~~Fork bomb~~ | retired as a beat (#114): Nova refuses it in chat. PID-cap defence still deployed, terminal-only | | | n/a |
 | C5 | Output guard | ✅ `challenges/02-sanitization/agent-prompt-exfil.txt` | ✅ `toggle-output-guard-on.sh` | ✅ `fallback.curl.sh output` | ✅ |
 | C6 | Input guard | ✅ `agent-prompt-injection.txt` | ✅ `toggle-input-guard-on.sh` + `toggle-input-classifier-on.sh` | ✅ `fallback.curl.sh input` | ✅ |
-| C7 | Rogue MCP | ✅ `challenges/03-bad-mcp-excessive-agency/agent-prompt.txt` | ✅ `toggle-mcp-authz-on.sh` (agentgateway) + `evil-mcp-shim/` | ✅ `fallback.curl.sh` | ✅ ([SPIKE] enforcement on OSS v1.3.0) |
+| C7 | Rogue MCP | ✅ `challenges/03-bad-mcp-excessive-agency/agent-prompt.txt` | ✅ `toggle-mcp-authz-on.sh` (kagent `toolNames` on the `evil-mcp` entry: ON = `[get_weather]`) + `evil-mcp-shim/` | ✅ `fallback.curl.sh` | ✅ (toggle verified live 2026-06-26, `FACILITATOR.md`) |
 
 ## 5. AI layer
 - ✅ kagent (ADK) agent on Bedrock Sonnet 4.6; live-verified end to end.
 - ✅ **agentgateway** deployed and in the live path (guard-proxy → agentgateway → workshop-agent); tracing fixed (`config.tracing`, schema-correct, in the manifest).
 - ✅ guard-proxy + LLM Guard (input/output); CLIENT span + JSON logging (PRD #27 M2).
 - ✅ workshop-mcp + evil-mcp-shim.
-- 🔄 agentgateway `mcpAuthorization` enforcement on OSS v1.3.0 is the beat-3 spike (kagent `toolNames` allowlist is the recorded fallback).
+- ✅ C7's control is the kagent `toolNames` allowlist (`toggle-mcp-authz-on.sh`). `evil-mcp` dials evil-mcp-shim direct, not through agentgateway, so agentgateway `mcpAuthorization` does not gate it; the gateway-enforced alternative is weighed in `docs/research/2026-10-24-agentgateway-evaluation.md`.
 
 ## 6. Observability
 - ✅ OTel Collector → Datadog; guard-proxy, agentgateway, kagent spans all in Datadog (verified, queries cited in `DECISION-LOG.md`).

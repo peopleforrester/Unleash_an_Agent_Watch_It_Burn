@@ -126,8 +126,7 @@ check("datadog/connector wired into metrics receivers", "datadog/connector" in d
 
 
 # Unified Service Tagging on the AI-layer pods (service.name + env via OTEL_RESOURCE_ATTRIBUTES).
-# Assert against the canonical deployed copies under gitops/ai-layer/ (agent/gateway/ is the synced
-# source mirror). resources.yaml holds many Deployments, so select the target Deployment by name.
+# Assert against the canonical deployed copies under gitops/ai-layer/. resources.yaml holds many Deployments, so select the target Deployment by name.
 def _container_env(path, name):
     docs = [d for d in yaml.safe_load_all((REPO / path).read_text()) if d]
     dep = next(d for d in docs if d.get("kind") == "Deployment" and d.get("metadata", {}).get("name") == name)

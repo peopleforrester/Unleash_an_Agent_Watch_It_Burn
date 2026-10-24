@@ -25,7 +25,7 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   (`ProtectAI/deberta-v3-base-prompt-injection-v2`); the request phase supports **`RejectAction`**
   (hard block + `status_code`). This stage is **model-based, NOT deterministic**, never call the
   combined guard "deterministic" in attendee copy once stage 2 is in the path (spec §3).
-- **Files:** baseline in `gateway/agentgateway.yaml`; toggles
+- **Files:** baseline in `gitops/ai-layer/agentgateway.yaml` (the deployed gateway); toggles
   `gateway/input-guard-off.yaml` (default) / `gateway/input-guard-on.yaml`.
 - **Verdict wiring:** the wrapper calls LLM Guard `/analyze/prompt`; flagged → `RejectAction 403`.
 
@@ -54,14 +54,17 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   (`list_tools`, `call_tool`). Rules OR together; any match grants access. Disallowed tools are
   **auto-filtered out of `list_tools`**, so the agent never sees a tool it cannot call. Server
   allowlisting is structural via the `targets` list. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §4.)
-- **Beat-3 control:** baseline = **default Allow** (`mcp-authz-off.yaml`, the "before") so the rogue
-  tool **`read_internal_config`** is reachable and leaks `FAKE-MCP-EXFIL-sentinel-4c1d`. The "after"
-  (`mcp-authz-on.yaml`) denies the rogue tool (allow-only-with-implicit-deny, or explicit
-  `action: Deny`) and confines authz to the `workshop-mcp` target.
+- **Beat-3 control is NOT this.** The `evil-mcp` RemoteMCPServer dials evil-mcp-shim direct, not
+  through agentgateway, so `mcpAuthorization` never sees the rogue tools. C7's deployed control is the
+  kagent `toolNames` allowlist on the Agent's `evil-mcp` entry, patched by
+  `challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh`: OFF = `get_weather,
+  read_internal_config, apply_optimization` (the "before", the sentinel `FAKE-MCP-EXFIL-sentinel-4c1d`
+  leaks), ON = `get_weather` only (the "after"). Routing evil-mcp through the gateway instead is weighed
+  in `docs/research/2026-10-24-agentgateway-evaluation.md` (#239).
 - **No native human-in-the-loop.** MCP policy is allow/deny/filter via CEL only, do NOT promise HITL;
   narrate it as a gap if the talk needs it. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §"Unverified".)
-- **Files:** baseline in `gateway/agentgateway.yaml`; toggles
-  `gateway/mcp-authz-off.yaml` (default) / `gateway/mcp-authz-on.yaml`.
+- **Files:** `gitops/ai-layer/agentgateway.yaml`. The pre-gitops `gateway/agentgateway.yaml` and
+  `gateway/mcp-authz-{on,off}.yaml` overlays were never applied and were deleted in #479.
 
 ---
 

@@ -140,7 +140,7 @@ What it costs, for the Barcelona design:
 
 - No manifest behaviour changed. The commit fixes four comments that stated the old routing: the
   `agentgateway.yaml` header, two in `resources.yaml` and the toggle's "WHY" block.
-- The `agent/gateway/` overlays (`agentgateway.yaml`, `mcp-authz-on.yaml`, `mcp-authz-off.yaml`) are the
-  pre-gitops v1.2/v1.3 config shape and nothing applies them. `verify/test_beat3_mcp.py` still asserts
-  its "after" state against `mcp-authz-on.yaml` instead of the deployed toggle. That cleanup is a
-  separate follow-up.
+- The `agent/gateway/` overlays (`agentgateway.yaml`, `mcp-authz-on.yaml`, `mcp-authz-off.yaml`) were the
+  pre-gitops v1.2/v1.3 config shape and nothing applied them. `verify/test_beat3_mcp.py` asserted its
+  "after" state against `mcp-authz-on.yaml` instead of the deployed toggle. Both were fixed in #479: the
+  overlays are deleted and the test reads the toggle's ON-state `toolNames`.
