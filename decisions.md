@@ -757,3 +757,18 @@ cd529d9 cleared the vm2, shell-quote, axios, grpc-js, basic-ftp, fast-uri and un
   is test-only. When forge ships a fixed release, refresh the lock.
 - **urllib3 (3 alerts):** these point at `lab-distribution/uv.lock`, which 5037fa1 removed. No manifest is left
   to change.
+
+Advisories published after the issue was filed (same lockfile, `yarn npm audit --all --recursive` on
+2026-10-24). The resolutions move to vm2 3.12.2, dompurify 3.4.17, fast-uri 3.1.9, hono 4.13.13, ip-address 10.7.4
+and undici 7.30.1. A lock refresh takes markdown-it, compression, follow-redirects, handlebars, proxy-addr,
+source-map-js, qs (the `^6` ranges), colord, fast-copy, launch-editor, pbkdf2 and the zod 4 line to their patched
+releases. vm2's only consumer is typescript-json-schema (Backstage CLI config schemas); a smoke run of its
+`VM.run` initializer path passed on 3.12.2. Not done here:
+
+- **body-parser 1.20.9/2.4.0 and multer 2.5.0** were released on 2026-10-22, so `.yarnrc.yml`'s
+  `npmMinimalAgeGate: 3d` holds them until 2026-10-25. Express's `qs ~6.15.1` waits for that body-parser bump.
+- **Majors:** zod 3 (fixed only in 4.6.6), react-router 6 (fixed in 7.18), @azure/msal-node 5 (fixed in 7.1),
+  postcss-selector-parser 6 (fixed in 7.1.6).
+- **elliptic** has no fixed release.
+- **Backstage plugins** (backend-defaults, catalog-, scaffolder-, techdocs-, kubernetes-, proxy-, search-backend,
+  auth-node) need their own version bumps. Dependabot has opened a branch for each.
