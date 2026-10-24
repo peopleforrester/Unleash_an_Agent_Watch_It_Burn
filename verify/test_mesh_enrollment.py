@@ -7,9 +7,9 @@ file has ever enrolled a namespace. docs/research/2026-10-24-istio-ambient-evalu
 the five Istio apps for a challenge against dropping them. Its answer depends on the facts below:
 
 - nothing is enrolled, so today the mesh changes no traffic;
-- the agent's tool pod can call guard-proxy, whose /toggle switches the guards, and the console's public
-  /a2a/ route forwards every guard-proxy path, so a waypoint path policy is the only mesh control that
-  covers both;
+- the agent's tool pod can call guard-proxy, whose /toggle switches the guards. The console's public
+  /a2a/ route used to forward every guard-proxy path too; #481 removed it, so the tool pod's in-cluster
+  call is the path a waypoint policy would close;
 - the ServiceAccounts are shared, so an identity rule cannot single out the console or tell the agent
   from its tool pod;
 - STRICT plus an ip-target NLB, the apps ingress ports and the missing Gateway API CRDs are why enrolling
@@ -73,7 +73,7 @@ check(f"no manifest or script sets {LABEL}", not enrolled,
 ns_docs = docs("gitops/namespaces/namespaces.yaml")
 check("no Namespace object carries the label", not any(has_key(d, LABEL) for d in ns_docs) and len(ns_docs) > 0)
 
-# --- section 2.1: the tool pod can reach guard-proxy's /toggle, and so can the public /a2a/ route ----------
+# --- section 2.1: the tool pod can reach guard-proxy's /toggle; the public /a2a/ route is gone (#481) ------
 intra = one(docs("policies/network-policies/per-namespace/agent-allow-intra-namespace.yaml"),
             "NetworkPolicy", "agent-allow-intra-namespace").get("spec", {})
 egress = intra.get("egress", [])
@@ -84,10 +84,9 @@ beat = (REPO / "verify/beat-02.sh").read_text()
 check("the guard toggles have been called over the Service, from another pod, with no credential",
       'PROXY="http://guard-proxy.${NS}:8080"' in beat and '"${PROXY}/toggle?' in beat)
 conf = (REPO / "gitops/ai-layer/console.conf").read_text()
-a2a = re.search(r"location /a2a/ \{\s*proxy_pass ([^;]+);", conf)
-check("console's public /a2a/ strips its prefix into guard-proxy's whole path space, /toggle included",
-      bool(a2a) and a2a.group(1).strip() == "http://guard-proxy:8080/",
-      f"{a2a.group(1) if a2a else 'no /a2a/ route'}: update section 2.1 and recommendation 4 of {EVALUATION}")
+a2a = re.search(r"(?m)^\s*location\s+[^{]*/a2a", conf)
+check("console's public /a2a/ route is gone (#481), so /toggle is reachable only from inside the cluster",
+      a2a is None, f"{a2a.group(0).strip() if a2a else ''}: update section 2.1 and recommendation 4 of {EVALUATION}")
 
 # --- section 2.3: identities are shared ---------------------------------------------------------------------
 AI = docs("gitops/ai-layer/resources.yaml")

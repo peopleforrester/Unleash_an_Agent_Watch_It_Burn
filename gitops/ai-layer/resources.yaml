@@ -847,7 +847,7 @@ spec:
 # ============================================================
 # Attendee console: web terminal (ttyd) + the split-console frontend.
 # The frontend serves burritbot.html, console.html and the lab pages, and path-routes /terminal/ -> ttyd,
-# /chat + /a2a/ + /cost -> guard-proxy. It is the single attendee-facing Service (LB), fronted per-attendee
+# /chat + /cost + /guards + /prompts + /controls -> guard-proxy (exact paths only: no /toggle, #481). It is the single attendee-facing Service (LB), fronted per-attendee
 # by the apex wildcard router (a-<id>.agenticburn.com).
 # ============================================================
 apiVersion: v1

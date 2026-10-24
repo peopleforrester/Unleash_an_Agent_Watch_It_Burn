@@ -272,7 +272,7 @@ The attackable AI application at the center of the workshop. Attendees jailbreak
 
 ```
 BurritoBot frontend (console nginx, burritbot.html)
-   |  POST /chat {prompt}   (or A2A message/send to "/" via /a2a/)
+   |  POST /chat {prompt}   (the only write route; no /a2a/ and no /toggle from outside, #481)
    v
 guard-proxy (proxy.py, :8080)   <- input guards, cost meter, rate/cost cap, output guard
    |  AGENT_URL = http://agentgateway.agent.svc.cluster.local:3000
@@ -322,7 +322,7 @@ Bedrock ModelConfigs (`kagent.dev/v1alpha2`, native Bedrock, us-west-2, **Pod Id
 
 `/chat` contract (BurritoBot): `POST /chat {prompt}` → `{reply, guarded, input_tokens, output_tokens}`. No round selector (retired with the rounds): a cluster's BurritoBot talks to same-origin `/chat`, and the Community cluster is its own host. Unreachable cluster (status 0 or >=500) shows the "NO BURRITOS FOR YOU" black screen.
 
-guard-proxy HTTP surface: `POST /` (A2A guarded/metered/forwarded); `GET /toggle?input_blocklist=&input_classifier=&output=` (runtime flip; `input=on` flips both input stages; returns GUARDS); `GET /guards`; `GET /cost` `{tier,requests,input_tokens,output_tokens,total_tokens,usd}`; `GET /prompts` (if `STREAM_PROMPTS=on`); read endpoints send `Access-Control-Allow-Origin: *`. Env: `AGENT_URL`, `LLM_GUARD_URL`, `LLM_GUARD_TOKEN`, `INPUT_BLOCKLIST`/`INPUT_CLASSIFIER`/`OUTPUT_GUARD` (all `off` at start), `PROXY_FAIL_CLOSED=true`, `MODEL_TIER`/`MODEL_NAME`, `BLOCK_LIST`, `RATE_LIMIT_RPM`, `COST_CAP_USD`, `STREAM_PROMPTS`.
+guard-proxy HTTP surface: `POST /` (A2A guarded/metered/forwarded); `GET /toggle?input_blocklist=&input_classifier=&output=` (runtime flip; `input=on` flips both input stages; returns GUARDS; in-cluster only, since the console forwards just `/chat`, `/cost`, `/guards`, `/prompts`, `/controls`, #481); `GET /guards`; `GET /cost` `{tier,requests,input_tokens,output_tokens,total_tokens,usd}`; `GET /prompts` (if `STREAM_PROMPTS=on`); read endpoints send `Access-Control-Allow-Origin: *`. Env: `AGENT_URL`, `LLM_GUARD_URL`, `LLM_GUARD_TOKEN`, `INPUT_BLOCKLIST`/`INPUT_CLASSIFIER`/`OUTPUT_GUARD` (all `off` at start), `PROXY_FAIL_CLOSED=true`, `MODEL_TIER`/`MODEL_NAME`, `BLOCK_LIST`, `RATE_LIMIT_RPM`, `COST_CAP_USD`, `STREAM_PROMPTS`.
 
 llm-guard `scanners.yml` (ConfigMap `llm-guard-scanners`): input `PromptInjection` threshold 0.5 (DeBERTa `ProtectAI/deberta-v3-base-prompt-injection-v2`); output `Regex` patterns `FAKE-[A-Z0-9-]+-sentinel-[0-9a-f]+` (MCP exfil) and `WITCH-HAZEL-GHOST-PEPPER-[A-Za-z0-9-]+` (recipe), `is_blocked: true`, `redact: true`, `match_type: search`.
 

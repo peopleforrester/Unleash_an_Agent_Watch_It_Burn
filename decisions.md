@@ -668,3 +668,24 @@ recorded in the issue and here so it stops reading as a backlog item:
 `verify/test_mobile_titles_e2e.py`, which measures the boxes at 320 to 680px and 1280px. A CSS grep cannot
 say whether a title wraps. It is used only through `uv run --with playwright==1.64.1`, in the E2E suite,
 never installed into the offline suite's interpreter; `verify/test_mobile_titles.py` is the offline half.
+## 2026-10-24 · #481 · The console's public /a2a/ route is removed; /toggle is reachable only via kubectl
+
+`console.conf`'s `location /a2a/` proxied to `http://guard-proxy:8080/`. The trailing slash strips the prefix,
+so it forwarded guard-proxy's whole path space, and `https://<cluster>.agenticburn.com/a2a/toggle?output=off`
+reached the unauthenticated `GET /toggle` (`proxy.py` `do_GET`) from the internet. On the community cluster
+and on an admin cluster on the KubeCon projector, any phone in the room could turn the guards off.
+
+- **Fixed in nginx, not in guard-proxy.** The route's only consumer was the split-console chat removed in #240,
+  so dropping it closes the hole with nothing to migrate. A loopback check on `/toggle` in guard-proxy would
+  also close the tool pod's in-cluster call (evaluation #238, section 2.1), but `proxy.py` is a submodule with
+  its own repo, and that call is the candidate mesh challenge, which is Michael's decision.
+- **Exact routes only.** Every remaining guard-proxy route is `location =` on one path: `/chat`, `/cost`,
+  `/guards`, `/prompts`, `/controls`. `verify/test_console_no_toggle.py` resolves request paths against the
+  config the way nginx does and fails if any of them lands on `/toggle`, or if any route to guard-proxy is a
+  prefix or regex. It also checks that the admin and community (burn) profiles both serve this one file.
+- **The students' toggles are unchanged.** The terminal helpers (`.guardlib` `_px`), the lab's commands and
+  the challenge scripts all `kubectl exec` into guard-proxy and call localhost. The beat harness calls the
+  Service from inside the cluster. None of them went through the console.
+- **Live check:** `verify/test_console_no_toggle_live.py` (E2E suite) fetches `/a2a/toggle`, `/a2a/guards`,
+  `/a2a/` and `/toggle` through the apex router and expects 404. It runs the terminal's `_px` helper
+  and `guards-status` with no change of state, then confirms the guards did not move.

@@ -32,6 +32,8 @@ so what it says about `/toggle` comes from the lab and the scripts that call it,
    forwards every guard-proxy path, `/toggle` included (section 2.1). On the community cluster, which the
    whole room shares, a student could turn the guards off for everyone. That fix belongs in nginx or
    guard-proxy, not the mesh.
+   **Done in #481:** `console.conf` no longer has an `/a2a/` route, and every route it keeps to
+   guard-proxy is an exact match on one path (`verify/test_console_no_toggle.py`).
 
 The decision is Michael's. Nothing above changes what is deployed.
 
@@ -80,6 +82,11 @@ with the trailing slash, which strips the prefix. So `https://<cluster>.agenticb
 reaches `/toggle`. The route's only consumer was chat-ui, removed in #240. The console Service is an
 internet-facing NLB (`resources.yaml:1250-1256`), and the community cluster is shared by the whole room.
 That is the reason for recommendation 4, and no mesh policy can fix it (see the table below).
+
+**Closed in #481.** The `/a2a/` route is gone. The console now forwards only `/chat`, `/cost`, `/guards`,
+`/prompts` and `/controls` to guard-proxy, each as an exact match, so `/a2a/toggle` and `/toggle` both 404
+at the console. `verify/test_console_no_toggle.py` resolves request paths against the config the way nginx
+does and fails if any of them reaches `/toggle`. The tool pod's in-cluster call above is still open.
 
 ### 2.2 Which control stops it
 
