@@ -127,7 +127,7 @@
     {n:0, mod:'Before',   name:'A bare cluster', obj:'An empty EKS cluster with credentials. Nothing installed. This is what one bash script starts from.'},
     {n:1, mod:'Wave 1',   name:'Foundation', obj:'Namespaces, cert-manager and External Secrets. Argo CD takes over from here and holds everything to what Git says.'},
     {n:2, mod:'Wave 2',   name:'Platform controls', obj:'Kyverno admission, default-deny NetworkPolicy, Istio ambient mesh, KubeArmor inline prevention, and Falco with Talon for detect-and-respond. This wave is what the workshop is about.'},
-    {n:3, mod:'Wave 3',   name:'Observability', obj:'Prometheus, Grafana, Loki, Tempo, the OpenTelemetry Collector, and the Datadog Agent. Everything the agent does becomes a trace.'},
+    {n:3, mod:'Wave 3',   name:'Observability', obj:'Prometheus, Grafana, Tempo, the OpenTelemetry Collector, and the Datadog Agent. Everything the agent does becomes a trace.'},
     {n:4, mod:'Wave 4',   name:'The AI layer', obj:'kagent on Amazon Bedrock, the MCP tool servers, guard-proxy with LLM Guard, BurritoBot and your terminal. The thing under attack, and the guardrails around it.'},
     {n:5, mod:'Yours',    name:'Your turn', obj:'You flip the AI guardrails yourself and re-run the attacks. Delete a control and watch Argo CD put it back.'}
   ];
@@ -151,8 +151,8 @@
     {l:'Falco', b:'controls', p:2, k:'falco'}, {l:'Falco Talon', b:'controls', p:2, k:'falco-talon'},
 
     {l:'Prometheus', b:'observability', p:3, k:'prometheus'}, {l:'Grafana', b:'observability', p:3, k:'grafana-dashboards'},
-    {l:'Loki', b:'observability', p:3, k:'loki'}, {l:'Tempo', b:'observability', p:3, k:'tempo'},
-    {l:'OTel Collector', b:'observability', p:3, k:'otel-collector'}, {l:'Datadog Agent', b:'observability', p:3, k:'datadog-agent-cr'},
+    {l:'Tempo', b:'observability', p:3, k:'tempo'}, {l:'OTel Collector', b:'observability', p:3, k:'otel-collector'},
+    {l:'Datadog Agent', b:'observability', p:3, k:'datadog-agent-cr'},
 
     {l:'kagent', b:'ai', p:4, k:'kagent'}, {l:'Bedrock (Nova)', b:'ai', p:4, k:'kagent'},
     {l:'MCP servers', b:'ai', p:4, k:'ai-layer'}, {l:'guard-proxy', b:'ai', p:4, k:'ai-layer'},

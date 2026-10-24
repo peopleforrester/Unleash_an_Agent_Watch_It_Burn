@@ -323,45 +323,6 @@ data:
       lifecycle: production
       owner: platform-team
       system: watch-it-burn-idp
-    ---
-    apiVersion: backstage.io/v1alpha1
-    kind: Component
-    metadata:
-      name: loki
-      title: Grafana Loki
-      description: Log aggregation system (v6.29.0). SingleBinary mode with Promtail log shipping from all cluster pods.
-      annotations:
-        argocd/app-name: loki
-        backstage.io/kubernetes-label-selector: "app.kubernetes.io/name=loki"
-        backstage.io/kubernetes-namespace: monitoring
-      tags:
-        - observability
-        - logging
-        - grafana
-    spec:
-      type: service
-      lifecycle: production
-      owner: platform-team
-      system: watch-it-burn-idp
-    ---
-    apiVersion: backstage.io/v1alpha1
-    kind: Component
-    metadata:
-      name: promtail
-      title: Promtail
-      description: Log collector DaemonSet shipping container logs to Loki for centralized log aggregation and search.
-      annotations:
-        argocd/app-name: promtail
-        backstage.io/kubernetes-label-selector: "app.kubernetes.io/name=promtail"
-        backstage.io/kubernetes-namespace: monitoring
-      tags:
-        - observability
-        - logging
-    spec:
-      type: service
-      lifecycle: production
-      owner: platform-team
-      system: watch-it-burn-idp
 
   apis.yaml: |
     apiVersion: backstage.io/v1alpha1

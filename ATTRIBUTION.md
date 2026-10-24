@@ -37,7 +37,7 @@ here under its own license. Pinned versions are in
 - **Datadog** (primary observability): Datadog, Inc.
 - **Prometheus**: Cloud Native Computing Foundation
 - **OpenTelemetry**: Cloud Native Computing Foundation
-- **Grafana**, **Tempo**, and **Loki**: Grafana Labs
+- **Grafana** and **Tempo**: Grafana Labs
 
 ### Agent and AI layer
 

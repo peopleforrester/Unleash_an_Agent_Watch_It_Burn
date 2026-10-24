@@ -24,7 +24,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 5. **AI guardrails (the "20%").** The **guard-proxy** (input block-list + classifier, output redaction,
    cost meter, rate-limit/cost-cap), **LLM Guard** (the scanner engine), **agentgateway** (fronts A2A +
    MCP, MCP authorization), and kagent's **toolNames** allowlist + **requireApproval** HITL.
-6. **Observability.** OTel Collector to **Datadog (primary)** and to **Tempo / Prometheus / Loki +
+6. **Observability.** OTel Collector to **Datadog (primary)** and to **Tempo / Prometheus +
    Grafana (analog fallback)**. `gitops/apps/otel-collector.yaml`.
 7. **Attendee surface.** Browser chat UI (`gitops/ai-layer/web/`) + a web terminal. No local install.
 

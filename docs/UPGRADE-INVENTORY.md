@@ -19,7 +19,6 @@ column is the one that matters, and the image tag can be overridden past whateve
 
 | Chart | Pinned | Latest chart | Latest appVersion | Status |
 |---|---|---|---|---|
-| alloy | 1.10.0 | 1.12.1 | v1.19.2 | behind |
 | argo-cd | 9.6.0 | 10.8.4 | v3.5.2 | behind (major) |
 | backstage | 2.8.2 | 2.10.0 | - | behind |
 | istio base / cni / istiod / ztunnel | 1.30.1 | 1.30.4 | 1.30.4 | behind (patch) |
@@ -32,7 +31,6 @@ column is the one that matters, and the image tag can be overridden past whateve
 | kube-prometheus-stack | 86.2.3 | 90.0.0 | v0.93.1 | behind (4 majors) |
 | kubearmor-operator | 1.7.4 | v1.7.4 | v1.7.4 | current |
 | kyverno | 3.9.0 | 3.9.1 | v1.19.1 | behind (patch) |
-| loki | 7.0.0 | 7.3.0 | 3.6.12 | behind |
 | opentelemetry-collector | 0.158.2 | 0.172.1 | 0.159.0 | behind |
 | opentelemetry-operator | 0.117.0 | 0.122.0 | 0.158.0 | behind |
 | tempo (single-binary) | 2.2.3 (app 2.10.7) | 2.3.0 | 2.10.8 | behind (patch) |

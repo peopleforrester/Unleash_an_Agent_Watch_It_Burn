@@ -81,7 +81,7 @@ and no central control plane.
 - Runtime security: Falco, Falcosidekick, and Falco Talon (detect and respond)
 - Service mesh and identity: Istio ambient (mTLS, SPIFFE workload identity)
 - Secrets and certificates: External Secrets Operator, cert-manager
-- Observability: Datadog (primary), with Prometheus, Grafana, Tempo, Loki, OpenTelemetry as the fallback
+- Observability: Datadog (primary, and the only log store), with Prometheus, Grafana, Tempo, OpenTelemetry as the fallback
 - Developer portal: Backstage
 - Agent: kagent (a CNCF project) on Amazon Bedrock
 - AI guardrails: LLM Guard, agentgateway (MCP authorization)

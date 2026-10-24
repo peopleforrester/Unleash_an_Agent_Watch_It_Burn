@@ -77,8 +77,9 @@ check("DD_API_KEY sourced from a BYO secret (not in repo)", "secretKeyRef" in _d
 pvals = _app_values(prom)
 check("alertmanager disabled (slim the per-attendee node)", pvals["alertmanager"]["enabled"] is False)
 check("prometheus retention trimmed to hours", pvals["prometheus"]["prometheusSpec"]["retention"].endswith("h"))
-ds = {d["name"]: d for d in pvals["grafana"]["additionalDataSources"]}
-check("Loki datasource pinned with uid 'loki'", ds.get("Loki", {}).get("uid") == "loki")
+ds = {d["name"]: d for d in pvals["grafana"].get("additionalDataSources", [])}
+check("prometheus.yaml carries no Loki datasource: no cluster runs Loki (#474)",
+      "Loki" not in ds and all(d.get("uid") != "loki" for d in ds.values()))
 # The Tempo data source ships with Tempo (#475), so a profile without the tempo app has no data source for it:
 # a sidecar-labelled ConfigMap in gitops/tempo/, which the tempo Application deploys beside the chart.
 check("prometheus.yaml no longer carries the Tempo datasource", "Tempo" not in ds and all(d.get("uid") != "tempo" for d in ds.values()))
@@ -94,6 +95,7 @@ check("the Tempo datasource ConfigMap is in Grafana's namespace with the sidecar
 _tds = {d["uid"]: d for f in _ds_cm["data"].values() for d in (yaml.safe_load(f) or {}).get("datasources", [])}
 check("Tempo datasource pinned with uid 'tempo', at the Tempo service",
       _tds.get("tempo", {}).get("type") == "tempo" and _tds["tempo"].get("url") == "http://tempo.monitoring:3100")
+check("Tempo's data source links traces to no Loki, which no cluster runs (#474)", "loki" not in json.dumps(_tds).lower())
 
 # Dashboard: valid JSON with the cost + token + gen_ai trace panels.
 panels = {p["title"]: p for p in dashboard["panels"]}

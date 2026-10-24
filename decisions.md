@@ -1302,3 +1302,31 @@ cluster. Grafana reads env at start, so a public host rewritten later needs a Gr
 
 **Not measured live.** No cluster was available to this run. `verify/test_service_hosts_live.py` now reads
 Grafana's `appUrl` through its hostname and asserts no Grafana Ingress remains; run it on the next build.
+## 2026-10-24 · #474 · Loki and Alloy are dropped; the #190 audit trail is read from Datadog Logs
+
+**Why:** the #236 audit of duplicate components found that no student surface reads Loki, and its one
+consumer was the live half of `verify/test_tool_audit_live.py`. The same workshop-mcp audit lines already
+reached Datadog through the Agent's `containerCollectAll`. Dropping the pair saves two Argo CD apps and a
+5Gi gp2 volume on every cluster.
+
+**What it changes:**
+
+- `gitops/apps/loki.yaml` and `gitops/apps/alloy.yaml` are deleted. Every app-of-apps profile reads
+  `gitops/apps` as a directory with `prune: true`, so Argo CD removes both apps from a live cluster on the
+  next sync. A StatefulSet's PVC outlives the StatefulSet, so on a cluster that already ran Loki the 5Gi
+  volume stays until the cluster is rebuilt or the PVC in `monitoring` is deleted by hand.
+- Grafana loses its Loki data source and Tempo's trace-to-logs link to it (`gitops/apps/prometheus.yaml`).
+  The Loki row leaves `platform.html`, `links.html` and `diagram.html`. The Backstage catalog loses its
+  Loki entry and a Promtail entry that had been stale since Alloy replaced Promtail.
+- The live half of `test_tool_audit_live.py` now searches Datadog Logs (`POST /api/v2/logs/events/search`)
+  in the cluster's own org, with the keys the Agent itself ships with (`datadog/datadog-secret`), on the
+  site the DatadogAgent CR names. It selects by tag (`kube_namespace`, `kube_deployment:workshop-mcp`) and
+  matches the identity in the test, so it does not depend on `agent_identity` being a facet in a fresh
+  trial org. The stream-label check becomes a tag check: `pod_name:workshop-mcp-*` and
+  `kube_container_name:shim`. Datadog's timestamps are milliseconds, so pre-before-post is checked on the
+  line's own `ts`, not on result order.
+- `verify/test_alloy_labels.py` (#464) is deleted with the config it checked. `test_tool_audit.py` now holds
+  offline the wiring the trail depends on instead: log collection on, `containerCollectAll` on, nothing
+  excluding workshop-mcp's logs.
+- The deck line that names Loki (`facilitation/slides-outline.md`) is not changed: the issue leaves that
+  prose to Michael.
