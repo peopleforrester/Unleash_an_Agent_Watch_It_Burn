@@ -49,4 +49,5 @@ that tried to *exfiltrate* the data over the network would be blocked; the live 
 - Istio ambient mTLS for in-cluster traffic.
 
 No per-attendee toggle: egress deny is on in the `full` profile and absent in `burn` (R1). To prove the
-network block when the agent wanders, run `fallback.kubectl.sh`.
+network block when the agent wanders, run `CONTEXT=<ctx> fallback.kubectl.sh`: it POSTs to the beacon from
+the workshop-mcp pod, where `run_shell` runs, and checks the POST fails and the beacon count does not move.

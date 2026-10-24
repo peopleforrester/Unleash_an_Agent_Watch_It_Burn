@@ -151,8 +151,9 @@ abstract's "the Kubernetes security layers you should already have."
   (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
   alert here: Falco's recipe-snoop rule fires on a successful read, and on this
   cluster there is none.
-- If a prompt wanders, drive that beat's `challenges/<beat>/fallback.*.sh` so the
-  control is what is proven, not the model's mood. Do not debug live.
+- If a prompt wanders, drive that beat's fallback so the control is what is
+  proven, not the model's mood. Do not debug live. The scripts are in the table
+  under "Fallback scripts, per beat" below.
 - **Michael's thread:** the damage was stopped, but the cost counter still moved on
   the community side, because the request reached the model before admission
   refused it. Admission is the last mile and the most expensive.
@@ -184,6 +185,8 @@ setting change the outcome. Prompts and verified both-direction results are on
   same class of attack stopped two different ways. One talks the model out of it;
   the other lets the model be fully persuaded and finds the capability gone. Only
   the second still holds when the next model is more persuadable.
+- If a prompt wanders, drive that beat's fallback from the table under "Fallback
+  scripts, per beat" below. Do not debug live.
 - **Challenges shown live:** C6, C5, C7.
 - **Delivers:** point 2 (the under-protected MCP server, via C7) and point 6 (pre-
   and mid-inference prompt analysis). See the open question on what "mid-inference"
@@ -385,9 +388,8 @@ is merely slow rather than rebuilding:
 
 ## Rollback on the day
 
-1. A prompt wanders on a shown beat: run that beat's
-   `challenges/<beat>/fallback.*.sh` so the guardrail is what is proven. Do not
-   debug the model live.
+1. A prompt wanders on a shown beat: run that beat's fallback from the table
+   below so the guardrail is what is proven. Do not debug the model live.
 2. The venue network cannot carry the room: the presenters drive the audience
    beat themselves from the admin cluster and the room watches, rather than hacking
    from phones.
@@ -396,6 +398,24 @@ is merely slow rather than rebuilding:
    it is an open question today (see below).
 4. Any beat over its time budget by half: cut it to a sentence and move on. The room
    never watches unrehearsed troubleshooting.
+
+### Fallback scripts, per beat
+
+Run them from a checkout of this repo on the presenter laptop, against the admin
+cluster: `CONTEXT` is its kube-context, the only input any of them takes (prefix
+`KUBECONFIG=<file>` if its credentials are in an isolated kubeconfig). None of them
+calls the model. Each prints PASS or FAIL per check and exits non-zero on any FAIL,
+and none writes a scratch file. The C5 and C6 scripts turn their guard on the way
+`guard-output-on` and `guard-input-on` do, and put it back the way they found it.
+
+| Beat | Run | PASS means |
+|---|---|---|
+| C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://agenticburn.com/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
+| C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `agent-sa`, a Deployment of `docker.io/peopleforrester/joker:latest` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
+| C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |
+| C6 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh input` | With the input guards on, the support-ticket injection sent to guard-proxy comes back `guarded: true`, `input_tokens: 0` |
+| C5 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh output` | With the output guard on, the CEO record sent through guard-proxy's output path comes back with `OPHELIA-THORN-TIBBY-TOP-SPIRE-No9` and the address redacted |
+| C7 | none yet (#496) | |
 
 ## Teardown
 

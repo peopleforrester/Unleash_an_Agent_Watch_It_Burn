@@ -8,6 +8,8 @@ DEMO = [
  "challenges/02-sanitization/toggle-input-classifier-on.sh","challenges/01-cncf-wall/toggle-kyverno-enforce.sh",
  "challenges/01-cncf-wall/fallback.kubectl.sh","challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh",
  "challenges/c3-secret-grep/fallback.kubectl.sh",
+ "challenges/c1-exfil-s3/fallback.kubectl.sh","challenges/c2-villain-image/fallback.kubectl.sh",
+ "challenges/02-sanitization/fallback.curl.sh",
 ]
 failures = []
 def check(n, c):

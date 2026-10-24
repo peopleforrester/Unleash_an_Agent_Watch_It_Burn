@@ -38,12 +38,12 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 | # | Challenge | Attack prompt | Defense + toggle | Fallback | Packaged? |
 |---|---|---|---|---|---|
 | C1 | Exfil to S3 | ⬜ | substrate built (egress, customer-stream, Istio); ⬜ NetworkPolicy enable toggle | ⬜ | ⬜ **not packaged** |
-| C2 | Malicious deploy | ✅ `challenges/01-cncf-wall/agent-prompt.txt` | ✅ `toggle-kyverno-enforce.sh` | ✅ `fallback.kubectl.sh` | ✅ |
+| C2 | Malicious deploy | ✅ `challenges/01-cncf-wall/agent-prompt.txt` | ✅ `toggle-kyverno-enforce.sh` | ✅ `challenges/c2-villain-image/fallback.kubectl.sh` | ✅ |
 | C3 | Planted-secret grep | ⬜ (breadcrumb files exist) | planted-file exists; ⬜ Falco filesystem-snoop rule + enable toggle | ⬜ | ⬜ **not packaged** |
 | C4 | Denial-of-wallet | ✅ `challenges/c4-denial-of-wallet/agent-prompt.txt` | ✅ gateway budget cap, runtime `guard-budget-on` toggle | ✅ verified live 2026-08-29 (froze at the cap, zero-cost block) | ✅ |
 | ~~C4 old~~ | ~~Fork bomb~~ | retired as a beat (#114): Nova refuses it in chat. PID-cap defence still deployed, terminal-only | | | n/a |
-| C5 | Output guard | ✅ `challenges/02-sanitization/agent-prompt-exfil.txt` | ✅ `toggle-output-guard-on.sh` | ✅ `fallback.curl.sh` | ✅ |
-| C6 | Input guard | ✅ `agent-prompt-injection.txt` | ✅ `toggle-input-guard-on.sh` + `toggle-input-classifier-on.sh` | ✅ | ✅ |
+| C5 | Output guard | ✅ `challenges/02-sanitization/agent-prompt-exfil.txt` | ✅ `toggle-output-guard-on.sh` | ✅ `fallback.curl.sh output` | ✅ |
+| C6 | Input guard | ✅ `agent-prompt-injection.txt` | ✅ `toggle-input-guard-on.sh` + `toggle-input-classifier-on.sh` | ✅ `fallback.curl.sh input` | ✅ |
 | C7 | Rogue MCP | ✅ `challenges/03-bad-mcp-excessive-agency/agent-prompt.txt` | ✅ `toggle-mcp-authz-on.sh` (agentgateway) + `evil-mcp-shim/` | ✅ `fallback.curl.sh` | ✅ ([SPIKE] enforcement on OSS v1.3.0) |
 
 ## 5. AI layer
