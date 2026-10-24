@@ -192,6 +192,9 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
   `public_host_for()` / `friendly_attendee_name()` in `infra/terraform/fleet/fleet.sh` returns, for example
   `bane-sabrina.agenticburn.com`; that first label is what the claim page shows and what a student reads
   aloud to a facilitator. `verify/fleet-hygiene.sh` fails the build if a slot id reaches a student surface.
+  It is the **only** published name for an attendee cluster. The older `a-NNN.agenticburn.com` host
+  (`a-001` for slot 1) is retired, not an alias: `fleet.sh routes` no longer emits it, so a stale
+  reference to it 404s rather than reaching the cluster under a name no student recognises (#359).
   This matches the sister Packt repo (one cluster per student, in-cluster ArgoCD).
 - **Per-attendee Cluster 3**, own EKS cluster: full IDP (in-cluster ArgoCD, Kyverno, Falco, observability) +
   always-on kagent agent + the guard layer + the (initially open) MCP wiring. Attendee drives via chat

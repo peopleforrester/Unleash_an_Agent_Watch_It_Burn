@@ -63,7 +63,7 @@ for host in "$@"; do
     if cert="$(echo | openssl s_client -servername "${host}" -connect "${host}:443" \
                  -verify_return_error 2>/dev/null | openssl x509 -noout -dates -ext subjectAltName 2>/dev/null)"; then
         ok "TLS chain validates"
-        # A wildcard (*.agenticburn.com) legitimately covers a-001.agenticburn.com, so compare on the
+        # A wildcard (*.agenticburn.com) legitimately covers bane-sabrina.agenticburn.com, so compare on the
         # parent domain rather than requiring the literal host to appear in the SAN list.
         parent="${host#*.}"
         if grep -q -e "DNS:${host}" -e "DNS:\*\.${parent}" <<<"${cert}"; then

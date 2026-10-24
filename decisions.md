@@ -450,3 +450,20 @@ rendered ai-layer, neither guard-proxy nor agentgateway sets `OPENAI_BASE_URL`, 
 - Proof that the test can fail: with the old policy on both sides it failed exactly the impostor (no
   result) and the init container (`pass`). With the old policy on the cluster and the new one in the repo,
   it failed the spec comparison.
+
+## 2026-10-24 · #359 · The student's cluster name is the memorable host; a-NNN is retired, not an alias
+
+The issue asked which name is canonical for a student and whether `a-NNN.agenticburn.com` is a permanent
+alias. Michael settled it in 4a1fa58 (2026-09-08): the alias is a leftover. It survived the #142 rename
+only so that links handed out before the rename still resolved, and none is still outstanding.
+
+- **Canonical:** the two-word host that `public_host_for()` / `friendly_attendee_name()` return (slot 1
+  is `bane-sabrina.agenticburn.com`). The claim page shows its first label, and that label is what a
+  student says to a facilitator.
+- **Not a name:** `watch-it-burn-attendee-<id>` is the provisioning slot id (`docs/BUILD-SPEC.md` §5).
+- **Retired:** `a-NNN` and `r1-1`. `fleet.sh routes` emits neither, so a stale reference 404s instead of
+  quietly working. The routes shrink guard does not count the old `a-NNN` rows, so dropping them is not
+  mistaken for losing hosts.
+- Still left from #359: provisioning-agenticburn's `STUDENT_PREVIEW_CONSOLE_URL` defaults to
+  `https://a-001.agenticburn.com`. That default now points at a host that is never served, so it has to
+  change in that repo. It is filed there as a follow-up.

@@ -37,6 +37,12 @@ check("the a-NNN alias is no longer emitted",
 # the only way past it is the flag that also switches the protection off.
 check("the shrink guard discounts the retired a-NNN rows",
       "grep -vc '^a-[0-9]'" in src)
+# A comment that still maps a slot to a-NNN is how four sources came to disagree (#359): the next reader
+# takes it as the name. The spec has to say the alias is retired, not leave it to a live curl sweep.
+check("no fleet.sh comment still maps a cluster to an a-NNN host",
+      re.search(r"-> a-(\d{3}|NNN)\.agenticburn\.com", src) is None)
+check("BUILD-SPEC records a-NNN as retired, not an alias",
+      "is retired, not an alias" in (REPO / "docs" / "BUILD-SPEC.md").read_text())
 
 # Determinism and collision-freedom, executed rather than assumed.
 harness = r"""

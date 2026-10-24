@@ -3130,9 +3130,12 @@ cmd_down_acct() {
 # *.agenticburn.com URL resolves. This replaces hand-editing routes.map / ADMIN_CLUSTERS: the friendly
 # hostnames are STABLE (set once in ADMIN_CLUSTERS), only this host->LB map is dynamic. cmd_up_fleet and
 # cmd_instructors call this automatically after a provision; run standalone with 'fleet.sh routes'.
-# Friendly hosts: instructor watch-it-burn-r1-1 -> r1-1.agenticburn.com (+ roundN -> first live spare of
-# round N); admin attendee watch-it-burn-attendee-001 -> a-001.agenticburn.com. The 250 pool attendees
-# reach their cluster via the raw console NLB the provisioning app hands out, so they need no router line.
+# Friendly hosts: every one comes from public_host_for(), so a presenter cluster is <owner>-admin, the
+# community cluster attackme, and an attendee slot its memorable name (watch-it-burn-attendee-001 ->
+# bane-sabrina.agenticburn.com), plus roundN for the primary owner's cluster. That memorable name is the
+# ONE name a student has: the claim page shows its first label. There is no second alias per cluster:
+# r1-1 went with #142 and a-NNN with #359, so a stale link to either 404s instead of quietly landing on a
+# cluster under a name no student was given.
 cmd_routes() {
     require_tools
     prune_empty_states
@@ -3183,7 +3186,7 @@ cmd_routes() {
         [[ -z "${round_done[$rr]:-}" && "${owner}" == "${WIB_PRIMARY_OWNER}" ]] && {
             printf 'round%s.agenticburn.com  %s:443\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
     done
-    # Admin attendee clusters (attendee-NNN with state in the default account) -> a-NNN.agenticburn.com.
+    # Attendee clusters (attendee-NNN, state in any pool account) -> their memorable name.
     if [[ -d "${STATE_DIR}" ]]; then
         for state in "${STATE_DIR}"/${NAME_PREFIX}-*.tfstate; do
             [[ -e "${state}" ]] || continue
