@@ -20,7 +20,9 @@ the next session does not have to rebuild it from eight issue threads.
 
 ## What the review raised that has no child issue
 
-These are talk-content choices, so they wait on Michael rather than on a build:
+These are talk-content choices, so they wait on Michael rather than on a build. Question 575
+(`decisions.md`, 2026-10-24) settled where they go: #110 closes as a tracker, and these items move
+together to one new `deferred-barcelona` issue, following the pattern of #112, #113, #116 and #117.
 
 - **The suggested new opener** (the 2026-07-16 Hugging Face disclosure). `facilitation/slides-outline.md`
   still opens on the personal cluster-deletion story, and `facilitation/cold-open-script.md` scripts it.

@@ -298,3 +298,22 @@ and the arguments carry the attack.
 helpfully reports on itself undermines the lesson. Rogue calls are attributed from the caller's side by
 the agent's execute_tool spans. The agent's identity header is not sent to the shim either.
 **Do not suggest:** importing tool_audit in `gitops/ai-layer/server.py`.
+## 2026-10-24T04:59:40Z · question 575 · Close #110 as a tracker; the talk content gets one Barcelona issue
+
+**Question 575:** #110's tracked work is either landed (#111, #114, #115) or deferred on purpose to
+Barcelona (#112, #113, #116, #117). What happens to the parts with no child issue: the Hugging Face
+2026-07-16 opener, the "other incidents worth a slide" list, the authorities to cite (OWASP, CISA / Five
+Eyes, MITRE ATLAS, NIST COSAiS), and the C2/C3 verdicts?
+
+**Answer:** Close #110 as a tracker now that its children are landed or deferred, and file one
+deferred-barcelona issue for the opener, incident slides and citations.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael. The basis is Michael's
+own pattern on #112, #113, #116 and #117 (2026-09-07): post-Portland content is deferred to Barcelona on
+its own labelled issue, kept open because the design work is still wanted.
+
+**What it changes:** #110 stops being an open tracker. The four deferred child issues carry their own
+work. The leftover talk content (opener, incident slides, citations, and the C2/C3 and ASI06 to ASI10
+notes) moves to one new deferred-barcelona issue. No slide or lab prose changes here: that content is
+still Michael's to write, and its dated facts get re-checked before they go on a slide.
+`docs/research/2026-08-28-challenge-currency-review.md` records the disposition.
