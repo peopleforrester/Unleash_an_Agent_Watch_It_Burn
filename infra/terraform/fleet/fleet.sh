@@ -3482,16 +3482,9 @@ cmd_routes() {
     mv "${tmp}" "${out}"
     local lines; lines="${new_count}"
     log "routes: wrote ${lines} host(s) to ${out##*/} (apex repo)"
-    if git -C "${WIB_APEX_DIR}" diff --quiet -- "${out}"; then
-        log "routes: no change to the table"
-    else
-        # Commit and push for the RECORD ONLY. This does not apply anything, which is the whole point
-        # of the next step.
-        git -C "${WIB_APEX_DIR}" add "${out}"
-        git -C "${WIB_APEX_DIR}" commit -q -m "routes: regenerate agenticburn.com router map from live fleet (${lines} hosts)" || true
-        git -C "${WIB_APEX_DIR}" push origin HEAD 2>&1 | tail -1 || log "routes: apex push to current branch failed"
-        git -C "${WIB_APEX_DIR}" push origin HEAD:main 2>&1 | tail -1 || log "routes: could not ff apex main; run 'git -C ${WIB_APEX_DIR} push origin <branch>:main'"
-    fi
+    # Commit and push for the RECORD ONLY. This does not apply anything, which is the whole point of
+    # the next step.
+    publish_routes_table "${out}" "${lines}"
 
     # APPLY the table. Pushing is not applying, and assuming otherwise cost a live outage.
     #
@@ -3509,6 +3502,80 @@ cmd_routes() {
     # reload is rejected the router keeps serving the previous table, which is the property that makes
     # this safe to call automatically.
     apply_routes_table "${out}"
+}
+
+# Record a regenerated table in the apex repo: on the checkout's own branch, and on main as ONE commit
+# made on top of origin/main, never by pushing the checkout's HEAD to main (#531).
+#
+# This used to commit on whatever branch the apex checkout was on and then `push origin HEAD:main`. At
+# the KubeCon bring-up on 2026-10-24 that checkout was on staging, 17 commits ahead of main, so publishing
+# a routing table fast-forwarded apex main over all 17 (Caddyfile, reload-routes.sh, tests, AGENTS.md)
+# and skipped apex's staging-to-main gate. routes.map is generated whole from the live fleet, so it does
+# not need the branch's history to land: writing the same file into a worktree of origin/main and
+# committing there gives main the table and nothing else.
+#
+# Failures are logged, not fatal, as the pushes always were: the table is applied to the live router
+# afterwards whether or not the record landed, and a missing record is one command to repair.
+publish_routes_table() {   # $1 the regenerated table inside the apex checkout, $2 its host count
+    local out="$1" lines="$2" file branch wt main_sha sha kept
+    local msg="routes: regenerate agenticburn.com router map from live fleet (${lines} hosts)"
+    file="$(basename "${out}")"
+    branch="$(git -C "${WIB_APEX_DIR}" symbolic-ref --short -q HEAD || true)"
+
+    # The checkout's own branch keeps a record too: the shrink guard reads the table on HEAD. On main
+    # itself this is skipped, because main is written below, from origin/main.
+    if [[ -n "${branch}" && "${branch}" != main ]]; then
+        if git -C "${WIB_APEX_DIR}" diff --quiet -- "${file}"; then
+            log "routes: no change to the table on ${branch}"
+        else
+            git -C "${WIB_APEX_DIR}" add -- "${file}"
+            git -C "${WIB_APEX_DIR}" commit -q -m "${msg}" -- "${file}" || true
+            git -C "${WIB_APEX_DIR}" push origin HEAD 2>&1 | tail -1 || log "routes: apex push to ${branch} failed"
+        fi
+    fi
+
+    if ! git -C "${WIB_APEX_DIR}" fetch -q origin main; then
+        log "routes: could not fetch apex main, so the table is NOT recorded on main"
+        return 0
+    fi
+    main_sha="$(git -C "${WIB_APEX_DIR}" rev-parse FETCH_HEAD)"
+    kept="$(git -C "${WIB_APEX_DIR}" log --oneline "${main_sha}..HEAD" -- 2>/dev/null | grep -v '^[0-9a-f]* routes: regenerate ' || true)"
+    wt="$(mktemp -d -t routes-main.XXXX)"
+    if ! git -C "${WIB_APEX_DIR}" worktree add -q --detach "${wt}" "${main_sha}" >/dev/null 2>&1; then
+        log "routes: could not check out apex main in a worktree, so the table is NOT recorded on main"
+        rm -rf "${wt}"; return 0
+    fi
+    cp "${out}" "${wt}/${file}"
+    git -C "${wt}" add -- "${file}"
+    sha=""
+    if git -C "${wt}" diff --cached --quiet; then
+        log "routes: apex main already carries this table"
+    else
+        if ! git -C "${wt}" commit -q -m "${msg}"; then
+            log "routes: could not commit the table on apex main, so it is NOT recorded there"
+        elif git -C "${wt}" push origin HEAD:main 2>&1 | tail -1; then
+            sha="$(git -C "${wt}" rev-parse HEAD)"
+            log "routes: recorded on apex main as ${sha:0:7}, on top of ${main_sha:0:7}, carrying nothing else"
+        else
+            log "routes: could not push the table to apex main (moved since the fetch?); re-run 'fleet.sh routes'"
+        fi
+    fi
+    git -C "${WIB_APEX_DIR}" worktree remove --force "${wt}" 2>/dev/null || true
+    rm -rf "${wt}"; git -C "${WIB_APEX_DIR}" worktree prune 2>/dev/null || true
+    if [[ -n "${kept}" ]]; then
+        log "routes: these commits on ${branch:-the apex checkout} are not on main and stayed off it:"
+        sed 's/^/          /' <<<"${kept}" >&2
+    fi
+
+    # A checkout that IS main catches up with the commit just pushed. The table is staged first: it is
+    # already the new one in the working tree, and an unstaged edit to a file the merge touches is
+    # refused. If local main holds commits of its own, the fast-forward fails and says so.
+    if [[ "${branch}" == main && -n "${sha}" ]]; then
+        git -C "${WIB_APEX_DIR}" checkout -q "${sha}" -- "${file}"
+        git -C "${WIB_APEX_DIR}" merge -q --ff-only "${sha}" >/dev/null 2>&1 \
+            || log "routes: local apex main has diverged from origin/main; the table is on origin/main as ${sha:0:7}"
+    fi
+    return 0
 }
 
 # Reload the live router with a table, retrying: the reload rides Railway SSH and a single transient

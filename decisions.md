@@ -846,3 +846,18 @@ unreadable boundary is not a present one. The lab-VPC hints name the state `lab_
 under infra/terraform. It now skips `infra/org/boundary` commands. That root declares no `event` variable, so
 passing one would fail the apply. Its single IAM policy per account outlives every event and costs nothing, so
 there is no spend to split by event.
+
+## 2026-10-24 · #531 · fleet.sh routes records routes.map on main from a worktree of origin/main
+
+**Decision:** `cmd_routes` no longer pushes the apex checkout's HEAD to main. `publish_routes_table` fetches
+apex `main`, checks it out in a temporary detached worktree, writes the regenerated routes.map there, and
+pushes that single commit to main. The checkout's own branch (staging at the 2026-10-24 bring-up) still gets
+its own routes commit and push, because the shrink guard reads the table on HEAD. A checkout that is on main
+skips the local commit and fast-forwards to the pushed commit. The commits on the checkout's branch that are
+not on main are listed in the log as kept off it.
+
+**Why this option, not refusing:** the issue offered both. routes.map is generated whole from the live fleet,
+so it does not need the branch's history to land on main. Refusing would leave main's table stale whenever
+apex staging runs ahead, which is the normal state during a bring-up. Failures stay logged and non-fatal as
+before, since the table is applied to the live router either way. Apex main stays at 8c474dc (Michael, on the
+issue): its tests pass on that SHA.
