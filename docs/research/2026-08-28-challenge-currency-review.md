@@ -35,3 +35,10 @@ together to one new `deferred-barcelona` issue, following the pattern of #112, #
   verdicts without a proposed change.
 - **ASI06, ASI07, ASI08, ASI09 and ASI10** remain uncovered. The review chose ASI03 as the theme for its
   additions; #111 covers it today, and #112 and #113 would extend it.
+
+**Update 2026-10-24 (#466, question 679):** a run drafted the opener, the five incident slides and a citation
+slide in `facilitation/slides-draft-2026-currency.md` for Michael to rewrite and approve. That file holds the
+re-check of every dated claim above against its source. Several moved since 2026-08-28: Hugging Face's own
+timeline now names the models (the draft still leaves the attribution off), MITRE ATLAS has moved past
+v5.4.0 to calendar versions, NIST renamed COSAiS on 2026-10-20, and the Five Eyes guidance's wording differs
+from the paraphrase in #110. The delivered outline and cold-open script are unchanged.

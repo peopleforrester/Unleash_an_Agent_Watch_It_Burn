@@ -988,3 +988,35 @@ older module cached in `.terraform/modules` still worked.
 - **Tests:** `verify/test_terraform_module_pins.py` (offline) fails on any unpinned registry module or a lock
   that does not record the root's provider constraint. `verify/test_terraform_lock_init.py` (E2E) runs
   `terraform init -lockfile=readonly` on every root in an empty directory and fails if the lock does not fit.
+## 2026-10-24T20:16:19Z · question 679 · #466: a run drafts the opener, incident slides and citation slide for Michael to rewrite
+
+**Question 679:** #466 (the Hugging Face 2026-07-16 opener, the incident slides, and the OWASP, CISA, MITRE
+ATLAS and NIST COSAiS citations) is talk content that the issue, question 575 and governance all leave for
+Michael to write. Should a run draft any of it for his review (a source re-check of each dated fact from
+#110, or draft slides marked as drafts), or will he write all of it himself?
+
+**Answer:** A run drafts the opener, incident slides and citation slide in facilitation/ for Michael to
+rewrite and approve.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael. The basis is the
+"approval only at publication" rule: a draft in facilitation/ has no live audience, and Michael approves at
+the talk. It also corrects question 575's wording "that content is still Michael's to write", which was
+hecaton's own and had no statement from Michael behind it.
+
+**What it changes:** `facilitation/slides-draft-2026-currency.md` is new. It holds the draft opener (a slide
+and about 75 seconds of script), five incident slides with a one-slide version, a citation slide, and a
+2026-10-24 re-check of every dated claim from #110 against its source. The re-check corrects several of
+#110's facts, and the slide wording follows the corrected versions:
+
+- Hugging Face's own timeline (2026-07-27) now names the models. #110's reason for leaving the attribution
+  off no longer holds, but the draft still leaves it off, as the issue requires. Whether to keep that rule
+  is Michael's call.
+- The connector credential gave cluster-admin on two clusters, not "multiple".
+- The Five Eyes guidance's wording is "prioritising resilience, reversibility and risk containment over
+  efficiency gains". It was published 2026-05-01, and its PDF is dated 2026-04-30.
+- MITRE ATLAS has moved from v5.4.0 to calendar versions (v2026.09).
+- NIST renamed COSAiS to COSIS on 2026-10-20.
+- The Anthropic post is dated 2025-11-13.
+
+The delivered `slides-outline.md` and `cold-open-script.md` are not changed, apart from one build note that
+points at the draft. The disposition is recorded in `docs/research/2026-08-28-challenge-currency-review.md`.

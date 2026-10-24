@@ -88,3 +88,6 @@ to guard), and lands on a map you take home.
   live demos with only a title card.
 - Optional next step: per-slide speaker notes for Whitney, and a cold-open script for slides 2 and 3 (now written: facilitation/cold-open-script.md)
   (the two-tier hook is the most important three minutes of the talk).
+- Draft, not yet adopted: a Hugging Face opener, five incident slides and a citation slide from the 2026
+  currency review, with each dated fact re-checked, are in `facilitation/slides-draft-2026-currency.md`
+  (#466). Nothing above changes until Michael rewrites and approves them.
