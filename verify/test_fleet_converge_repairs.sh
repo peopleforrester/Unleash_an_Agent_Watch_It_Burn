@@ -105,6 +105,7 @@ check "repair: an attendee whose keys do not resolve is still recorded as datado
 boot() { src "provider_write_kubeconfig() { :; }; bootstrap_student_aws() { echo \"student-aws \$1\" >>'${CALLS}'; }
     bootstrap_terminal_auth() { echo \"terminal-auth \$1\" >>'${CALLS}'; }
     arm_infra_guardrails() { echo \"arm \$1\" >>'${CALLS}'; }
+    pin_bedrock_profiles() { echo \"pin-bedrock \$1\" >>'${CALLS}'; }  # its own test: test_pin_bedrock_profiles.sh
     run_idp_script() { echo \"idp \${CLUSTER_NAME} \$1 api=\${WITB_DD_API_KEY} app=\${WITB_DD_APP_KEY}\" >>'${CALLS}'; }
     load_roster; $1
     cat \"\${FAIL_FILE}\" 2>/dev/null; rm -f \"\${FAIL_FILE}\""; }
@@ -118,6 +119,8 @@ check "bootstrap: every roster cluster runs deploy-full-idp with empty keys and 
   '[[ ! -s "${T}/out" ]] && [[ "$(grep -c "^idp watch-it-burn-[a-z-]* [a-z]* api= app=$" "${CALLS}")" -eq 3 ]]'
 check "bootstrap: each one goes on to its terminal login, and the admin clusters are armed" \
   '[[ "$(grep -c "^terminal-auth " "${CALLS}")" -eq 3 ]] && grep -q "^arm watch-it-burn-michael-admin$" "${CALLS}" && grep -q "^arm watch-it-burn-whitney-admin$" "${CALLS}"'
+check "bootstrap: each one points its Bedrock ModelConfigs at its tagged profiles (#513)" \
+  '[[ "$(grep -c "^pin-bedrock " "${CALLS}")" -eq 3 ]]'
 check "bootstrap: the gap is a WARN naming the cluster" \
   '[[ "$(grep -c "WARN: watch-it-burn-[a-z-]*: no Datadog keys" "${T}/stderr")" -eq 3 ]] && ! grep -q "BOOTSTRAP FAILED" "${T}/stderr"'
 : >"${CALLS}"; : >"${T}/stderr"

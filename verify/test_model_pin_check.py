@@ -80,6 +80,47 @@ check("a profile that is not ACTIVE fails",
 check("a profile with no models fails",
       not all_ok(mpc.judge_profile({**PROFILE_OK, "models": []}, "x", "us-west-2")[0]))
 
+print("\n== the clusters' tagged application profiles (#513) ==")
+APP_ARN = "arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/{}"
+PINNED_ARNS = [m["modelArn"] for m in PROFILE_OK["models"]]
+
+
+def app_profile(name, pid, **over):
+    return {"inferenceProfileName": name, "inferenceProfileArn": APP_ARN.format(pid), "inferenceProfileId": pid,
+            "status": "ACTIVE", "type": "APPLICATION", "models": [{"modelArn": a} for a in reversed(PINNED_ARNS)],
+            **over}
+
+
+APPS = {"inferenceProfileSummaries": [
+    app_profile("watch-it-burn-attendee-001-nova", "nova0001"),
+    app_profile("watch-it-burn-michael-admin-nova", "nova0002"),
+    app_profile("watch-it-burn-attendee-001-haiku", "haiku001"),
+    app_profile("packt-cluster-nova", "packt001"),
+]}
+TAGS_OK = {"tags": [{"key": "project", "value": "watch-it-burn"}, {"key": "event", "value": "kubecon-na-2026"},
+                    {"key": "attendee", "value": "watch-it-burn-attendee-001"}, {"key": "consumer", "value": "agent"}]}
+picked = mpc.cluster_profiles(APPS["inferenceProfileSummaries"], "nova")
+check("the clusters' profiles for the pinned tier are picked, by the cluster root's <cluster>-<tier> name",
+      [s["inferenceProfileName"] for s in picked] == ["watch-it-burn-attendee-001-nova", "watch-it-burn-michael-admin-nova"],
+      str(picked))
+check("copies that route where the pin routes pass, in any order",
+      all_ok(mpc.judge_app_profiles(picked, "nova", PINNED_ARNS, "us-west-2")))
+check("no cluster profile at all fails: the agent would be calling an untagged profile, or none",
+      not all_ok(mpc.judge_app_profiles([], "nova", PINNED_ARNS, "us-west-2")))
+check("a copy that routes to another model fails",
+      not all_ok(mpc.judge_app_profiles([app_profile("watch-it-burn-x-nova", "x", models=[
+          {"modelArn": "arn:aws:bedrock:us-east-1::foundation-model/amazon.nova-lite-v1:0"}])], "nova", PINNED_ARNS, "us-west-2")))
+check("a copy that is not ACTIVE fails",
+      not all_ok(mpc.judge_app_profiles([app_profile("watch-it-burn-x-nova", "x", status="INACTIVE")],
+                                        "nova", PINNED_ARNS, "us-west-2")))
+check("project and the fleet's event pass", all_ok(mpc.judge_tags(TAGS_OK, "p", "kubecon-na-2026")))
+check("another event's tag fails", not all_ok(mpc.judge_tags(TAGS_OK, "p", "devopsdays-portland-2026")))
+check("no tags fail", not all_ok(mpc.judge_tags({"tags": []}, "p", "kubecon-na-2026")))
+check("an event that could not be read fails", not all_ok(mpc.judge_tags(TAGS_OK, "p", None)))
+check("the event defaults to fleet/event.sh, as fleet.sh tags with it",
+      mpc.fleet_event('WIB_EVENT="${WIB_EVENT:-kubecon-na-2026}"\n', {}) == "kubecon-na-2026"
+      and mpc.fleet_event("", {"WIB_EVENT": "other-event"}) == "other-event")
+
 print("\n== lifecycle ==")
 check("Active with no scheduled dates passes", all_ok(mpc.judge_lifecycle(fm(), "m", THROUGH)))
 check("Active with a legacy date after the talk passes",
@@ -142,6 +183,7 @@ def run_with(answers):
         log = d / "calls.log"
         env = {**os.environ, "PATH": f"{d}{os.pathsep}{os.environ['PATH']}",
                "FAKE_AWS_LOG": str(log), "FAKE_AWS_ANSWERS": str(d / "answers.json")}
+        env.pop("WIB_EVENT", None)  # the stand-in tags carry event.sh's event; an operator's override is not this run's
         p = subprocess.run([sys.executable, str(CHECK), "--profile", "delivery", "--region", "us-west-2"],
                            capture_output=True, text=True, env=env, timeout=120)
         calls = [json.loads(line) for line in log.read_text().splitlines()] if log.exists() else []
@@ -153,6 +195,8 @@ GOOD = {
     "bedrock get-inference-profile": PROFILE_OK,
     "bedrock get-foundation-model": fm(),
     "bedrock-runtime converse": CONVERSE_OK,
+    "bedrock list-inference-profiles": APPS,
+    "bedrock list-tags-for-resource": TAGS_OK,
     "service-quotas list-service-quotas": {"Quotas": QUOTAS},
     "service-quotas list-aws-default-service-quotas": {"Quotas": []},
 }
@@ -167,9 +211,16 @@ fm_regions = sorted(c[c.index("--region") + 1] for c in calls if c[:2] == ["bedr
 check("the lifecycle is read in every region the profile routes to",
       fm_regions == ["us-east-1", "us-east-2", "us-west-2"], str(fm_regions))
 conv = [c for c in calls if c[:2] == ["bedrock-runtime", "converse"]]
-check("the Converse call uses the pinned profile id in the delivery region",
-      len(conv) == 1 and conv[0][conv[0].index("--model-id") + 1] == pin["model_id"]
+check("the first Converse call uses the pinned profile id in the delivery region",
+      len(conv) == 2 and conv[0][conv[0].index("--model-id") + 1] == pin["model_id"]
       and conv[0][conv[0].index("--region") + 1] == "us-west-2", str(conv))
+check("the second goes through a cluster's tagged application profile, the path the agent takes",
+      len(conv) == 2 and conv[1][conv[1].index("--model-id") + 1] == APP_ARN.format("nova0001"), str(conv))
+apps_calls = [c for c in calls if c[:2] == ["bedrock", "list-inference-profiles"]]
+check("application profiles are listed by type", len(apps_calls) == 1 and "APPLICATION" in apps_calls[0], str(apps_calls))
+tag_arns = sorted(c[c.index("--resource-arn") + 1] for c in calls if c[:2] == ["bedrock", "list-tags-for-resource"])
+check("the tags are read on each cluster profile for the pin, and only those",
+      tag_arns == sorted([APP_ARN.format("nova0001"), APP_ARN.format("nova0002")]), str(tag_arns))
 
 p, _ = run_with({**GOOD, "bedrock-runtime converse": {"output": {"message": {"content": []}}, "stopReason": "end_turn"}})
 check("a pin that does not answer exits 1", p.returncode == 1 and "MODEL PIN FAILED" in p.stderr, f"exit {p.returncode}")
@@ -177,6 +228,10 @@ p, _ = run_with({**GOOD, "bedrock get-foundation-model": fm("LEGACY")})
 check("a Legacy model exits 1", p.returncode == 1, f"exit {p.returncode}")
 p, _ = run_with({k: v for k, v in GOOD.items() if k != "bedrock get-inference-profile"})
 check("a profile the account cannot see exits 1", p.returncode == 1, f"exit {p.returncode}")
+p, _ = run_with({**GOOD, "bedrock list-inference-profiles": {"inferenceProfileSummaries": []}})
+check("no cluster profile for the pin exits 1", p.returncode == 1, f"exit {p.returncode}")
+p, _ = run_with({**GOOD, "bedrock list-tags-for-resource": {"tags": [{"key": "project", "value": "watch-it-burn"}]}})
+check("a cluster profile without the event tag exits 1", p.returncode == 1, f"exit {p.returncode}")
 p, _ = run_with({k: v for k, v in GOOD.items() if k != "sts get-caller-identity"})
 check("a profile with no credentials exits 2", p.returncode == 2, f"exit {p.returncode}")
 

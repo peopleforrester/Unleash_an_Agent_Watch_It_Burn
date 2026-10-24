@@ -51,6 +51,13 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
   destroy; `preflight.sh` prints it and the lab-VPC teardown scripts source it. For the next event,
   change that one line. A `WIB_DRY_RUN=1 fleet.sh ...` run shows the value on each cluster's line.
 - **Node groups / EC2 / EBS** - inherited from the provider default_tags above.
+- **Bedrock model spend** - a system-defined inference profile (`us.amazon.nova-pro-v1:0`) cannot carry
+  tags, so calls through it bill untagged. Each cluster creates one application inference profile per
+  tier (`aws_bedrock_inference_profile.agent`, `<cluster>-nova` and so on, plus `<cluster>-tutor`),
+  copied from the system profile and tagged with the fleet tags plus `consumer=agent|tutor`.
+  `fleet.sh` points the live Bedrock ModelConfigs at those ARNs on bootstrap and converge
+  (`pin_bedrock_profiles`). The `project` and `event` tags only split the bill once they are activated
+  as cost-allocation tags in Billing (#392).
 - **S3 buckets** - `aws s3api put-bucket-tagging` in `games/eso-s3-exfil/s3-hoop-setup.sh`.
 - **Secrets Manager** - `--tags` on `create-secret` in `games/eso-s3-exfil/plant-trophy.sh`.
 - **Load balancers** (when a demo Service is exposed as `type: LoadBalancer` at

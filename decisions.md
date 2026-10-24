@@ -1382,3 +1382,39 @@ LAB-TEXT.md winning wherever an older challenge README disagrees?
   on the held #290 branch), so the shapes were written here. `decisions.md`, the World's Fair debrief,
   `ACTION_ITEMS.md` and `transcripts/` are exempt as records. `docs/ABSTRACT.md` is public prose and is
   held to the numbered names only.
+## 2026-10-25 · #513 · Bedrock spend is tagged through one application inference profile per tier per cluster
+
+From the #392 thread: model spend has to carry `project`/`event` so the denial-of-wallet numbers on stage can
+be checked against the bill. A system-defined profile such as `us.amazon.nova-pro-v1:0` cannot be tagged, so
+every call through one billed untagged.
+
+- **One tagged copy per tier per cluster.** The cluster root creates `aws_bedrock_inference_profile.agent`
+  for nova, haiku, sonnet and opus (guard-proxy's MODEL_TIER names), named `<cluster>-<tier>` and copied from
+  the system profile in the cluster's region, so it routes to the same foundation models. Each carries
+  `local.fleet_tags` plus `consumer=agent`. The tutor's model gets `<cluster>-tutor` with `consumer=tutor`,
+  although no tutor runs today (#89). Application profiles cost nothing.
+- **The ARN reaches the cluster through fleet.sh, not git.** It ends in an id Bedrock picks, and the gitops
+  manifests are the same on every cluster. So each Bedrock ModelConfig still commits the system id, which
+  stays the pin that `model_pin_check.py` and guard-proxy's pricing read. `pin_bedrock_profiles` sets each
+  live `.spec.model` to the cluster's ARN, read from the `bedrock_application_profiles` output in the
+  cluster's state, on bootstrap and on converge. ai-layer ignores that one field on Bedrock ModelConfigs only.
+  A committed id with no tagged copy fails the cluster. A cluster applied before this change fails converge
+  until it is re-applied, because leaving the system id in place would be the untagged spend again.
+- **The IAM grant matches the copies by their tags, not their ARNs.** It allows
+  `application-inference-profile/*` in the cluster's region, on condition of `aws:ResourceTag/project`,
+  `attendee` (the cluster) and `consumer`. The service reference lists `aws:ResourceTag/${TagKey}` for that
+  resource type. Naming the ARNs would make the policy unknown at plan, and the IAM pipeline fails on a
+  document it cannot see (`verify/iam_plan_render.py` renders it known today). The system-profile and
+  foundation-model statement stays. Bedrock authorizes a call through an application profile on the
+  foundation models too, and the pin check's first Converse call still uses the system id. Check 2 of the
+  pipeline (check-no-new-access) will report both Bedrock policies as granting new access. That widening is
+  intended.
+- **The pin check holds the copies to the pin.** After its system-profile checks it lists the account's
+  APPLICATION profiles named `watch-it-burn-*-<tier>`. Each must be ACTIVE, route to the same foundation
+  models as the pin, and carry `project=watch-it-burn` and the event from `fleet/event.sh`. One Converse
+  call also goes through the first copy. So the check needs the clusters up, which the run-of-show already
+  has it do after converge.
+- **Not covered.** The opt-in gateway-* ModelConfigs go through agentgateway, whose bedrock backend still
+  names the system id, so that path still bills untagged. A pod that bypasses the proxy under agent-sa can
+  still call the system profile. The tags only split the bill once `project` and `event` are active as
+  cost-allocation tags.

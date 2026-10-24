@@ -21,6 +21,14 @@
 #   4. one tiny Converse call through the pinned id returns text: this is "the model answers"
 #   5. the cross-region requests- and tokens-per-minute quotas cover the room's ceiling, which is guard-proxy's
 #      RATE_LIMIT_RPM turns a minute, read from the same manifest
+#   6. the clusters' tagged application profiles for the pin (#513) route to the same foundation models, are
+#      ACTIVE, carry project and the event from infra/terraform/fleet/event.sh, and answer one Converse call
+#
+# The pin is still the system profile id in the manifest, and so still the underlying model. What a cluster's
+# agent actually calls is its own application inference profile, a tagged copy of that system profile made by
+# the cluster root (aws_bedrock_inference_profile.agent, named <cluster>-<MODEL_TIER>) and set on the live
+# ModelConfig by fleet.sh pin_bedrock_profiles, because a system profile cannot carry tags and its spend bills
+# untagged. Step 6 holds those copies to the pin, so they need the clusters up: run it after the bring-up.
 #
 # Every aws call names --profile and --region; the ambient AWS default is never used. Nothing here skips: an
 # unreadable answer is a failure with the command printed, because an unreadable quota is not a passing quota.
@@ -28,7 +36,9 @@
 import argparse
 import datetime
 import json
+import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -38,6 +48,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = REPO / "gitops" / "ai-layer" / "resources.yaml"
 PROXY = REPO / "gitops" / "ai-layer" / "guard-proxy" / "proxy.py"
+EVENT_SH = REPO / "infra" / "terraform" / "fleet" / "event.sh"
 
 # KubeCon NA 2026 breakout, Sessionize 1249553. The model has to be Active through the end of this day. The
 # date comes from conference-knowledge (events/registry.yaml, kubecon-na-2026 schedule), which is the record:
@@ -100,6 +111,45 @@ def judge_profile(resp, model_id, region):
          f"status is {status!r}"),
         (f"{model_id} routes to at least one foundation model", bool(arns), "the profile lists no models"),
     ], arns
+
+
+def fleet_event(event_sh_text, environ):
+    """The event the fleet tags with: WIB_EVENT from the environment, else event.sh's default, as fleet.sh reads it."""
+    if environ.get("WIB_EVENT"):
+        return environ["WIB_EVENT"]
+    m = re.search(r'^WIB_EVENT="\$\{WIB_EVENT:-([a-z0-9-]+)\}"', event_sh_text, re.M)
+    return m.group(1) if m else None
+
+
+def cluster_profiles(summaries, tier):
+    """The clusters' application profiles for this MODEL_TIER: the cluster root names them <cluster>-<tier>."""
+    pattern = re.compile(rf"^watch-it-burn-.+-{re.escape(tier)}$")
+    return [s for s in summaries if pattern.match(s.get("inferenceProfileName", ""))]
+
+
+def judge_app_profiles(profiles, tier, pinned_arns, region):
+    """list-inference-profiles --type-equals APPLICATION: each cluster's copy routes where the pin routes."""
+    out = [(f"at least one cluster has a tagged application profile for {tier} in {region}", bool(profiles),
+            f"no profile named watch-it-burn-*-{tier}: the clusters are not up, or were applied before #513")]
+    want = sorted(pinned_arns)
+    for s in profiles:
+        name = s.get("inferenceProfileName")
+        got = sorted(m.get("modelArn", "") for m in s.get("models", []))
+        out.append((f"{name} is an ACTIVE application profile",
+                    s.get("status") == "ACTIVE" and s.get("type") == "APPLICATION",
+                    f"status {s.get('status')!r}, type {s.get('type')!r}"))
+        out.append((f"{name} routes to the pinned model's foundation models", got == want,
+                    f"it routes to {got}, the pin to {want}"))
+    return out
+
+
+def judge_tags(resp, name, event):
+    """list-tags-for-resource: the spend carries project and this event, which is the point of the copy."""
+    tags = {t.get("key"): t.get("value") for t in resp.get("tags", [])}
+    return [(f"{name} is tagged project=watch-it-burn", tags.get("project") == "watch-it-burn",
+             f"project tag is {tags.get('project')!r}"),
+            (f"{name} is tagged event={event}", event is not None and tags.get("event") == event,
+             f"event tag is {tags.get('event')!r}")]
 
 
 def fm_of(arn):
@@ -195,6 +245,8 @@ def main(argv=None):
     ap.add_argument("--through", default=DELIVERY_DATE, help=f"must stay Active through this day (default {DELIVERY_DATE})")
     ap.add_argument("--calls-per-turn", type=int, default=CALLS_PER_TURN)
     ap.add_argument("--tokens-per-turn", type=int, default=TOKENS_PER_TURN)
+    ap.add_argument("--event", default=fleet_event(EVENT_SH.read_text(), os.environ),
+                    help="event tag the clusters' application profiles must carry (default: fleet/event.sh)")
     a = ap.parse_args(argv)
     through = datetime.date.fromisoformat(a.through)
 
@@ -252,6 +304,23 @@ def main(argv=None):
         usage = conv.get("usage", {})
         print(f"  reply {reply[:60]!r}, {usage.get('inputTokens')} in / {usage.get('outputTokens')} out, "
               f"{conv.get('metrics', {}).get('latencyMs')} ms")
+
+        print("\n== the clusters' tagged application profiles (#513) ==")
+        summaries = aws(a.profile, a.region, "bedrock", "list-inference-profiles",
+                        "--type-equals", "APPLICATION").get("inferenceProfileSummaries", [])
+        profiles = cluster_profiles(summaries, pin["model_tier"])
+        record(judge_app_profiles(profiles, pin["model_tier"], arns, a.region))
+        for s in profiles:
+            tags = aws(a.profile, a.region, "bedrock", "list-tags-for-resource",
+                       "--resource-arn", s.get("inferenceProfileArn", ""))
+            record(judge_tags(tags, s.get("inferenceProfileName"), a.event))
+        if profiles:
+            via = profiles[0]
+            conv = aws(a.profile, a.region, "bedrock-runtime", "converse", "--model-id", via["inferenceProfileArn"],
+                       "--messages", json.dumps([{"role": "user", "content": [{"text": "Reply with the one word: ready"}]}]),
+                       "--inference-config", json.dumps({"maxTokens": 16}))
+            checks, reply = judge_converse(conv)
+            record([(f"{name} through {via['inferenceProfileName']}", ok, detail) for name, ok, detail in checks])
 
         print("\n== on-demand quota for the room ==")
         turns = pin["rate_limit_rpm"]

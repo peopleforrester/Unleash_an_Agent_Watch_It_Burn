@@ -92,6 +92,9 @@ spec:
 # live CRs; only the one the Agent names is called.
 # NOTE: Sonnet 4.6 and Opus 4.8 do NOT support In-Region in us-west-2 - the `us.` Geo inference
 # profile (or `global.`) is mandatory; an In-Region model id will fail.
+# LIVE, each Bedrock ModelConfig calls an ARN, not the id below (#513). The id below is the pin; fleet.sh
+# pin_bedrock_profiles sets .spec.model to this cluster's tagged application profile copied from it, so the
+# spend carries project/event. Change the model here and the next bootstrap or converge follows it.
 apiVersion: kagent.dev/v1alpha2
 kind: ModelConfig
 metadata:

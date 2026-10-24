@@ -418,18 +418,42 @@ module "eso_pod_identity" {
 # gitops/ai-layer/resources.yaml: a model listed there and missing here fails at invoke time with an
 # AccessDenied that looks like a Bedrock outage rather than a policy gap.
 locals {
-  bedrock_profiles = [
-    "us.amazon.nova-pro-v1:0",
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
-    "us.anthropic.claude-sonnet-4-6",
-    "us.anthropic.claude-opus-4-8",
-  ]
+  # Keyed by guard-proxy's MODEL_TIER names (_TIER_TO_MODEL_ID in its proxy.py), which also name each
+  # cluster's application inference profile below: <cluster>-nova, <cluster>-haiku, ...
+  bedrock_tiers = {
+    nova   = "us.amazon.nova-pro-v1:0"
+    haiku  = "us.anthropic.claude-haiku-4-5-20251001-v1:0"
+    sonnet = "us.anthropic.claude-sonnet-4-6"
+    opus   = "us.anthropic.claude-opus-4-8"
+  }
+  bedrock_profiles = values(local.bedrock_tiers)
   # The SAME ids without the "us." routing prefix. A cross-region profile fans out to foundation models
   # in several regions, and the caller needs permission on BOTH the profile and every underlying model
   # ARN. Measured on us.amazon.nova-pro-v1:0, which resolves to foundation models in us-east-1, us-west-2
   # AND us-east-2. Granting only the profile ARN produces AccessDenied on every request, so a "tighter"
   # policy that omits these does not harden the agent, it breaks it.
   bedrock_models = [for p in local.bedrock_profiles : replace(p, "us.", "")]
+}
+
+# Model spend carries project/event (#513). A system-defined profile (us.amazon.nova-pro-v1:0) cannot be
+# tagged, so every call through one bills untagged whatever the cost-allocation tags are set to, and the
+# denial-of-wallet numbers on stage could not be checked against the bill. An application inference profile
+# copied from it routes to the same foundation models in the same regions and carries this cluster's tags,
+# so Bedrock spend splits by event and by attendee like the rest of the cluster's bill.
+#
+# One per tier per cluster. The ARN ends in an id Bedrock picks, so the gitops ModelConfigs cannot name it:
+# they keep the system profile id, which stays the pin (model_pin_check.py, guard-proxy's MODEL_TIER), and
+# fleet.sh pin_bedrock_profiles points each live Bedrock ModelConfig at this cluster's ARN from the output
+# below. `consumer` keeps the agent's grant off the tutor's profile and the other way round.
+resource "aws_bedrock_inference_profile" "agent" {
+  for_each = local.bedrock_tiers
+
+  name        = "${var.name}-${each.key}"
+  description = "Watch It Burn agent on ${var.name}: ${each.value}, tagged for cost allocation."
+  model_source {
+    copy_from = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${each.value}"
+  }
+  tags = merge(local.fleet_tags, { consumer = "agent" })
 }
 
 resource "aws_iam_policy" "bedrock_invoke" {
@@ -468,6 +492,28 @@ resource "aws_iam_policy" "bedrock_invoke" {
         StringEquals = {
           "aws:PrincipalTag/eks-cluster-name"     = var.name
           "aws:PrincipalTag/kubernetes-namespace" = "agent"
+        }
+      }
+      }, {
+      # This cluster's tagged application profiles (#513), which is what the ModelConfigs call. Matched by
+      # the profiles' own tags rather than their ARNs: the ARNs are known only after apply, and a policy
+      # document unknown at plan is one the policy pipeline cannot check. The statement above still has to
+      # hold, because a call through an application profile is authorized on the foundation models too.
+      Effect = "Allow"
+      Action = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:Converse",
+        "bedrock:ConverseStream",
+      ]
+      Resource = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:application-inference-profile/*"
+      Condition = {
+        StringEquals = {
+          "aws:PrincipalTag/eks-cluster-name"     = var.name
+          "aws:PrincipalTag/kubernetes-namespace" = "agent"
+          "aws:ResourceTag/project"               = local.fleet_tags.project
+          "aws:ResourceTag/attendee"              = var.name
+          "aws:ResourceTag/consumer"              = "agent"
         }
       }
     }]
@@ -547,6 +593,28 @@ resource "aws_iam_policy" "tutor_bedrock_invoke" {
           "aws:PrincipalTag/kubernetes-service-account" = "web-terminal"
         }
       }
+      }, {
+      # The tutor's tagged application profile (#513), matched by its tags for the reason given on
+      # bedrock_invoke. consumer = "tutor" keeps this grant on the tutor's one profile: the agent's four
+      # carry consumer = "agent", so Sonnet-only still holds.
+      Effect = "Allow"
+      Action = [
+        "bedrock:InvokeModel",
+        "bedrock:InvokeModelWithResponseStream",
+        "bedrock:Converse",
+        "bedrock:ConverseStream",
+      ]
+      Resource = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:application-inference-profile/*"
+      Condition = {
+        StringEquals = {
+          "aws:PrincipalTag/eks-cluster-name"           = var.name
+          "aws:PrincipalTag/kubernetes-namespace"       = "agent"
+          "aws:PrincipalTag/kubernetes-service-account" = "web-terminal"
+          "aws:ResourceTag/project"                     = local.fleet_tags.project
+          "aws:ResourceTag/attendee"                    = var.name
+          "aws:ResourceTag/consumer"                    = "tutor"
+        }
+      }
     }]
   })
 }
@@ -555,6 +623,18 @@ variable "tutor_model" {
   description = "Bedrock inference profile the workshop tutor uses. Verified ACTIVE in us-west-2 on 2026-08-24."
   type        = string
   default     = "us.anthropic.claude-sonnet-5"
+}
+
+# The tutor's spend is tagged the same way as the agent's (#513). No tutor runs today (the web terminal's
+# entrypoint removed it, #89), so nothing calls this yet; a replacement calls tutor_bedrock_profile_arn,
+# not var.tutor_model, or its spend lands untagged again.
+resource "aws_bedrock_inference_profile" "tutor" {
+  name        = "${var.name}-tutor"
+  description = "Watch It Burn workshop tutor on ${var.name}: ${var.tutor_model}, tagged for cost allocation."
+  model_source {
+    copy_from = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.tutor_model}"
+  }
+  tags = merge(local.fleet_tags, { consumer = "tutor" })
 }
 
 module "tutor_bedrock_pod_identity" {
@@ -578,6 +658,16 @@ module "tutor_bedrock_pod_identity" {
 
 output "tutor_bedrock_role_arn" {
   value = module.tutor_bedrock_pod_identity.iam_role_arn
+}
+
+output "tutor_bedrock_profile_arn" {
+  value = aws_bedrock_inference_profile.tutor.arn
+}
+
+# System profile id -> this cluster's application profile ARN. fleet.sh pin_bedrock_profiles reads this to
+# point each Bedrock ModelConfig (which commits the system id) at the tagged profile (#513).
+output "bedrock_application_profiles" {
+  value = { for tier, p in aws_bedrock_inference_profile.agent : local.bedrock_tiers[tier] => p.arn }
 }
 
 output "cluster_name" {

@@ -900,12 +900,74 @@ PYEOF
     fi
 }
 
+# Bedrock spend carries project/event (#513). A system-defined inference profile cannot be tagged, so a
+# ModelConfig that calls us.amazon.nova-pro-v1:0 bills untagged however the cost-allocation tags are set,
+# and the denial-of-wallet numbers on stage cannot be checked against the bill. The cluster root creates
+# one tagged application profile per tier (aws_bedrock_inference_profile.agent), but its ARN ends in an id
+# Bedrock picks at create time, so git cannot carry it: each Bedrock ModelConfig commits the system id, the
+# pin, and this points the live .spec.model at the cluster's ARN for that id. ai-layer ignores that one
+# field on Bedrock ModelConfigs, so selfHeal keeps the ARN.
+#
+# Re-derived from the committed id every time, so a model change in git reaches the cluster on the next
+# bootstrap or converge. A committed id with no profile in the state (a new model, or a cluster applied
+# before #513) is a failure, not a pass: leaving the system id in place is exactly the untagged spend.
+bedrock_modelconfigs() { # "<name> <model>" for each Bedrock ModelConfig the repo commits
+    python3 - "${REPO_ROOT}/gitops/ai-layer/resources.yaml" <<'PYEOF'
+import sys, yaml
+for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
+    if d and d.get("kind") == "ModelConfig" and (d.get("spec") or {}).get("provider") == "Bedrock":
+        print(d["metadata"]["name"], d["spec"]["model"])
+PYEOF
+}
+
+pin_bedrock_profiles() {
+    local name="$1" kcfg="$2" map configs cfg model arn live bad=0 deadline
+    map="$(terraform -chdir="${CLUSTER_DIR}" output -state="${STATE_DIR}/${name}.tfstate" \
+        -json bedrock_application_profiles 2>/dev/null || true)"
+    if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<<"${map}"; then
+        log "  ${name}: ${name}.tfstate has no bedrock_application_profiles; re-apply the cluster so its Bedrock spend is tagged"
+        record_fail "${name}:bedrock-profiles"; return 1
+    fi
+    configs="$(bedrock_modelconfigs 2>/dev/null || true)"
+    if [[ -z "${configs}" ]]; then
+        log "  ${name}: no Bedrock ModelConfig read from gitops/ai-layer/resources.yaml"
+        record_fail "${name}:bedrock-profiles"; return 1
+    fi
+    while read -r cfg model; do
+        arn="$(jq -r --arg m "${model}" '.[$m] // empty' <<<"${map}")"
+        if [[ -z "${arn}" ]]; then
+            log "  ${name}: ModelConfig ${cfg} pins ${model}, which has no application profile on this cluster"
+            bad=1; continue
+        fi
+        # Argo creates the ModelConfigs a few minutes into a bootstrap; wait for them rather than fail.
+        deadline=$(( SECONDS + ${WIB_MODELCONFIG_WAIT:-300} ))
+        live="$(KUBECONFIG="${kcfg}" kubectl -n agent get modelconfig "${cfg}" -o jsonpath='{.spec.model}' 2>/dev/null || true)"
+        while [[ -z "${live}" ]] && (( SECONDS < deadline )); do
+            sleep "${WIB_MODELCONFIG_POLL:-10}"
+            live="$(KUBECONFIG="${kcfg}" kubectl -n agent get modelconfig "${cfg}" -o jsonpath='{.spec.model}' 2>/dev/null || true)"
+        done
+        [[ "${live}" == "${arn}" ]] && continue
+        if [[ -z "${live}" ]]; then
+            log "  ${name}: ModelConfig ${cfg} never appeared in agent; its tagged profile is not pinned"
+            bad=1; continue
+        fi
+        if KUBECONFIG="${kcfg}" kubectl -n agent patch modelconfig "${cfg}" --type merge \
+            -p "$(jq -cn --arg a "${arn}" '{spec: {model: $a}}')" >/dev/null 2>&1; then
+            log "  ${name}: ModelConfig ${cfg} now calls ${arn} (tagged copy of ${model})"
+        else
+            log "  ${name}: could not point ModelConfig ${cfg} at ${arn}"; bad=1
+        fi
+    done <<<"${configs}"
+    [[ "${bad}" -eq 0 ]] || { record_fail "${name}:bedrock-profiles"; return 1; }
+}
+
 repair_one() {
     local name="$1" kcfg="$2" acct="$3"
     repair_stuck_syncs "${name}" "${kcfg}"
     repair_failed_syncs "${name}" "${kcfg}"
     repair_agent_injection "${name}" "${kcfg}"
     repair_agent_tools "${name}" "${kcfg}"
+    pin_bedrock_profiles "${name}" "${kcfg}" || true
     repair_stuck_pods "${name}" "${kcfg}"
     repair_datadog "${name}" "${kcfg}" "${acct}"
     verify_one "${name}" "${kcfg}" "${acct}"
@@ -1033,6 +1095,7 @@ bootstrap_one() {
         log "  bootstrapped: ${name} (${profile})"
         bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
         bootstrap_terminal_auth "${name}" "${acct_profile}" "${kcfg}"
+        pin_bedrock_profiles "${name}" "${kcfg}" || true
         # Arm on the PROFILE, not the round. This was `round == 2 || round == 3`, and an attendee
         # cluster has no round: cmd_up leaves that spec field empty. So every attendee cluster received
         # all ten Kyverno policies from the full profile and none of them were ever flipped out of

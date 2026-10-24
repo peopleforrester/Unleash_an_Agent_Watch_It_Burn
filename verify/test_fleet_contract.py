@@ -332,6 +332,54 @@ for m in _missing:
 check("the policy grants the underlying foundation models too, not just the profiles",
       "foundation-model/${m}" in _cluster_tf)
 
+print("== Bedrock spend carries project/event through tagged application profiles (#513) ==")
+# A system-defined profile cannot carry tags, so spend through us.amazon.nova-pro-v1:0 bills untagged and the
+# denial-of-wallet numbers on stage cannot be checked against the bill. Each cluster copies every tier into an
+# application profile tagged with the fleet's tags, and the agent's ModelConfigs are pointed at those copies.
+def _tf_block(text, header):
+    start = text.index(header)
+    depth, i = 0, text.index("{", start)
+    while True:
+        depth += {"{": 1, "}": -1}.get(text[i], 0)
+        if depth == 0:
+            return text[start:i + 1]
+        i += 1
+
+
+_agent_profile = _tf_block(_cluster_tf, 'resource "aws_bedrock_inference_profile" "agent"')
+check("one application profile per tier, per cluster", "for_each = local.bedrock_tiers" in _agent_profile)
+check("each copies its tier's system-defined profile in the cluster's region",
+      re.search(r'copy_from = "arn:aws:bedrock:\$\{var\.region\}:[^"]+:inference-profile/\$\{each\.value\}"',
+                _agent_profile) is not None)
+check("each carries the fleet tags (project, event, attendee) and consumer = agent",
+      "merge(local.fleet_tags, { consumer = \"agent\" })" in _agent_profile)
+check("each is named <cluster>-<tier>, which model_pin_check.py finds them by",
+      'name        = "${var.name}-${each.key}"' in _agent_profile)
+_tiers_block = _tf_block(_cluster_tf, "bedrock_tiers = {")
+_tf_tiers = dict(re.findall(r'^\s*(\w+)\s*=\s*"([^"]+)"', _tiers_block, re.M))
+_proxy = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text(encoding="utf-8")
+_proxy_tiers = dict(re.findall(r'^\s*"(\w+)":\s*"([^"]+)",', _tf_block(_proxy, "_TIER_TO_MODEL_ID = {"), re.M))
+check("the tiers are guard-proxy's MODEL_TIER names with the same model ids", bool(_tf_tiers) and _tf_tiers == _proxy_tiers)
+if _tf_tiers != _proxy_tiers:
+    print(f"        terraform {_tf_tiers}\n        proxy     {_proxy_tiers}")
+_invoke = _tf_block(_cluster_tf, 'resource "aws_iam_policy" "bedrock_invoke"')
+check("the agent may invoke application profiles in its region",
+      ':application-inference-profile/*"' in _invoke and "arn:aws:bedrock:${var.region}:" in _invoke)
+check("...only its own cluster's, by the profile's tags",
+      '"aws:ResourceTag/attendee"              = var.name' in _invoke
+      and '"aws:ResourceTag/consumer"              = "agent"' in _invoke
+      and '"aws:ResourceTag/project"               = local.fleet_tags.project' in _invoke)
+check("the grant does not name the profiles' ARNs, which are unknown at plan and would blind the IAM pipeline",
+      "aws_bedrock_inference_profile" not in _invoke)
+check("the cluster root outputs system id -> application profile ARN for fleet.sh",
+      'output "bedrock_application_profiles"' in _cluster_tf)
+_tutor_profile = _tf_block(_cluster_tf, 'resource "aws_bedrock_inference_profile" "tutor"')
+_tutor_invoke = _tf_block(_cluster_tf, 'resource "aws_iam_policy" "tutor_bedrock_invoke"')
+check("the tutor's model has a tagged copy too, with consumer = tutor",
+      "inference-profile/${var.tutor_model}" in _tutor_profile and 'consumer = "tutor"' in _tutor_profile)
+check("the tutor may call only the tutor's copy",
+      '"aws:ResourceTag/consumer"                    = "tutor"' in _tutor_invoke)
+
 print("== the repair loop can reach the clusters the presenters drive from ==")
 # converge built its work set from the ATTENDEE numbering only (#85), so there was no way to point it at
 # the roster. Those are the nine clusters the presenters drive from, and a console NLB that has not

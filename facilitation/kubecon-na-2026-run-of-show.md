@@ -517,7 +517,9 @@ is merely slow rather than rebuilding:
   reads the pin from `gitops/ai-layer/resources.yaml` (Nova Pro,
   `us.amazon.nova-pro-v1:0`, with `MODEL_TIER` `nova`), then checks against live
   Bedrock that the inference profile is ACTIVE, that the model is not Legacy or
-  scheduled to go Legacy before 2026-11-12, that one Converse call answers, and that
+  scheduled to go Legacy before 2026-11-12, that one Converse call answers, that
+  each cluster's tagged copy of the profile (what the agent calls, so its spend
+  carries `project` and `event`, #513) routes to the same model and answers, and that
   the cross-region quota covers the room. It must end `MODEL PIN GREEN`; anything
   else, stop and fix the pin before the day (#453). Then send one throwaway order to
   each bot and confirm it answers with a menu, not an empty reply (an empty reply

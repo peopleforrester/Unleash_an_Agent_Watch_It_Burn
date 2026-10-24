@@ -179,3 +179,62 @@ cluster:
       aws:PrincipalTag/kubernetes-namespace: agent
       aws:PrincipalTag/kubernetes-service-account: agent-sa
     expect: implicitDeny
+  # The tagged application profiles each cluster calls (#513). The grant matches the profile's own tags, so the
+  # simulator is handed them as context: Bedrock picks the ARN's id, and these stand in for one.
+  - name: the agent can invoke its own cluster's tagged application profile
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:application-inference-profile/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: agent
+    expect: allowed
+  - name: the agent cannot invoke another cluster's application profile
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:application-inference-profile/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: some-other-cluster
+      aws:ResourceTag/consumer: agent
+    expect: implicitDeny
+  - name: the agent cannot invoke the tutor's application profile
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:application-inference-profile/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: tutor
+    expect: implicitDeny
+  - name: the tutor can invoke its own tagged application profile
+    identity: [aws_iam_policy.tutor_bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:application-inference-profile/f6e5d4c3b2a1
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: web-terminal
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: tutor
+    expect: allowed
+  - name: the tutor cannot invoke the agent's application profiles
+    identity: [aws_iam_policy.tutor_bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:application-inference-profile/a1b2c3d4e5f6
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: web-terminal
+      aws:ResourceTag/project: watch-it-burn
+      aws:ResourceTag/attendee: ${cluster_name}
+      aws:ResourceTag/consumer: agent
+    expect: implicitDeny
