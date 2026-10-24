@@ -2666,3 +2666,29 @@ CLAUDE.md's "Bias to action" rule applies.
 **What it changes:** `facilitation/slides-outline.md` line 43 drops "Loki," from the list. Nothing else in the
 slide or the outline changes. The rest of the list is still Argo CD, Kyverno, Falco, Prometheus, Grafana,
 Tempo, cert-manager, External Secrets and Backstage.
+
+## 2026-10-25 · #474 · The Tempo-to-Loki trace link goes too, and the branch is rebased onto staging
+
+**Why:** the first attempt at this branch failed to rebase onto `origin/staging` (run 7819, `rebase-conflict`).
+Upstream had moved the Tempo data source out of `gitops/apps/prometheus.yaml` into `gitops/tempo/` (#475), and
+replaced the Grafana ALB Ingress with per-cluster hostnames (#493). Both changes touched the same lines this
+branch edited. The conflicts were resolved by taking upstream's side of each hunk and removing only the Loki
+references. No upstream change was reverted.
+
+**What it changes:**
+
+- `gitops/tempo/grafana-datasource.yaml` no longer carries `tracesToLogsV2` pointing at uid `loki`. Without it,
+  Tempo's trace view would offer a log link to a data source that no longer exists. It was missed in the first
+  pass of #474 and is found only on rebase.
+- `verify/test_observability.py` read `pvals["grafana"]["additionalDataSources"]` directly. That key no longer
+  exists in `prometheus.yaml`, so the test would have raised KeyError rather than failed cleanly. It now reads
+  the key with a default, and asserts that no Loki data source remains and that Tempo's data source links to
+  no Loki.
+- Upstream's wording on `platform.html`, `links.html`, `gitops/README.md`, `docs/MASTER-RECREATION-SPEC.md`,
+  `verify/test_service_hosts_live.py` and `verify/test_service_links.py` is kept. Only the Loki entries are
+  removed. Tempo's "instructor clusters only" wording stays as upstream wrote it.
+- The Loki and Alloy reference in `verify/test_service_hosts_live.py` is removed. Its Tempo handling on attendee
+  clusters (#475) is unchanged.
+
+**Checked:** `bash verify/run-tests.sh` passes (117 tests). The E2E checks were not run, because no cluster is
+provisioned in this run.
