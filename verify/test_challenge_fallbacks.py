@@ -25,6 +25,8 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(REPO / "verify"))
+import resource_limits as rl  # noqa: E402
 C1 = "challenges/c1-exfil-s3/fallback.kubectl.sh"
 C2 = "challenges/c2-villain-image/fallback.kubectl.sh"
 C56 = "challenges/02-sanitization/fallback.curl.sh"
@@ -179,6 +181,7 @@ if "create" in args and flag("-f") == "-":
         sys.stderr.write("stub kubectl: not as agent-sa in agent\n"); sys.exit(1)
     images = [c["image"] for c in d["spec"]["template"]["spec"]["containers"]]
     state["created_images"] += images
+    state["created_manifests"].append(d)
     if scenario == "guarded" and not all(any(i.startswith(r) for r in fixture["allowed"]) for i in images):
         sys.stderr.write('Error from server: error when creating "STDIN": admission webhook '
                          '"vpol.validate.kyverno.svc-fail" denied the request: Policy restrict-image-registries '
@@ -226,7 +229,7 @@ def run(script, argv, scenario, with_context=True):
     (work / "state.json").write_text(json.dumps({
         "beacons": ["earlier-cluster"], "guards": {"input_blocklist": False, "input_classifier": False,
                                                     "output": False, "budget": False},
-        "chats": 0, "deployments": [], "created_images": []}))
+        "chats": 0, "deployments": [], "created_images": [], "created_manifests": []}))
     (work / "log").write_text("")
     env = {"PATH": f"{work / 'bin'}:{os.environ['PATH']}", "HOME": str(work), "TMPDIR": str(work / "tmpdir"),
            "STUB_LOG": str(work / "log"), "STUB_STATE": str(work / "state.json"),
@@ -270,6 +273,11 @@ try:
         if beat == "C2":
             check("C2 creates docker.io/peopleforrester/<villain>:latest as agent-sa",
                   state["created_images"] == ["docker.io/peopleforrester/joker:latest"])
+            # #529: on an admin cluster with every policy at Deny, a limit-less Deployment is also refused by
+            # require-resource-limits, and whichever webhook answers first is the deny message the room hears.
+            check("C2's Deployment satisfies require-resource-limits, so only the registry wall can deny it",
+                  len(state["created_manifests"]) == 1 and rl.missing(state["created_manifests"][0]) == [],
+                  [rl.missing(m) for m in state["created_manifests"]])
             check("C2 prints the denial naming restrict-image-registries",
                   "  PASS  the denial names restrict-image-registries" in out)
             check("C2 on an open cluster deletes the villain it was let deploy", state_open["deployments"] == [],

@@ -168,6 +168,16 @@ expect("cpu and memory limits pass", g, "limited", "pass")
 g = run(LIM, [pod("no-limits", "monitoring", [c("x")])], operation="UPDATE")
 expect("an UPDATE to a Pod that already lacked limits passes", g, "no-limits", "pass")
 
+# #529: each ValidatingPolicy is its own webhook and the first to answer is the deny message, so the probe's C2
+# Deployment must break the registry allow-list and nothing else.
+sys.path.insert(0, str(REPO / "verify"))
+import kubecon_probe as kp  # noqa: E402
+print("== the KubeCon probe's C2 Deployment: only the registry wall denies it ==")
+g = run(LIM, [kp.C2_MANIFEST], user="agent-sa")
+expect("the probe's C2 Deployment passes require-resource-limits", g, "promo-mascot", "pass")
+g = run(REG, [kp.C2_MANIFEST], user="agent-sa")
+expect("and fails restrict-image-registries with the named message", g, "promo-mascot", "fail", REG_MSG)
+
 DRIFT = POL / "block-argocd-drift.yaml"
 DRIFT_MSG = "This resource is managed by ArgoCD. Change it in Git, not in the cluster."
 print("== block-argocd-drift: Beat 1's third wall and the lab's delete-guard-proxy step ==")
