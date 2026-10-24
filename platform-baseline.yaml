@@ -10,6 +10,11 @@
 # be one more list to drift. The sister keeps its own set, with versions, in its root components.yaml; the
 # `sister` keys below use its directory names under solution/platform/, so the two can be compared mechanically.
 #
+# Two files, on purpose (question 694 on #394, 2026-10-25): this repo keeps this file and checks the sister's
+# list with the E2E test below, rather than both repos reading one shared file. Revisit if the sister's
+# solution/platform is declared the reusable baseline (open on packt-agentic-devops#32). Because the keys are
+# the sister's directory names, moving these decisions onto its list would be mechanical.
+#
 # Two tests hold it to the truth:
 #   verify/test_platform_baseline.py         offline: every Application in gitops/apps and gitops/apps-disabled
 #                                            is claimed here, every sister component in the snapshot is claimed

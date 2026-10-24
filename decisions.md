@@ -794,3 +794,27 @@ the fleet; and CLAUDE.md rules 3 and 4.
 - **Not yet done: the timed cold build.** The image alone is 4.95 GB compressed. Whether vLLM's 4-CPU
   request fits beside this platform on one t3.2xlarge is unknown until a cold build runs. The
   measured cost then goes into platform-baseline.yaml's vllm entry as `measured: true`.
+
+## 2026-10-25 · question 694 · The component list stays this repo's own file, checked against the sister by a test (#394)
+
+**Question:** should the platform's component list be one file that both workshop repos read, rather than
+this repo keeping its own list and checking the sister's (peopleforrester/packt-agentic-devops) with a test?
+
+**Answer:** Keep this repo's file and its drift test.
+
+**Decided by hecaton's research under Michael's standing rules, not by Michael.** The answer run read
+Michael's 2026-09-17 comment on #394, "one IDP, models local or external, switchable", as a requirement about
+the inference toggle ("one platform whose inference backend is a configuration choice"), not about a shared
+file. Questions 656 and 657 built that toggle in d2412aa. The defect #394 names is a divergence nobody
+recorded, and the drift test already turns that into a failure.
+
+**What it changes.**
+
+- `platform-baseline.yaml` stays the record for this repo, and its header now says why there are two files.
+  The sister keeps its own `components.yaml` with versions; nothing here reads it.
+- `verify/test_platform_baseline_sister.py` (E2E suite) stays the link between the two. When the sister's
+  main gains or loses a component, the test fails until this file records what to do about it.
+- No change in the sister repo, and no file shared across repos.
+- **Revisit when** the sister's `solution/platform` is declared the reusable baseline. That question is open
+  on packt-agentic-devops#32 and is Michael's alone. The entries are keyed on the sister's directory names,
+  so moving these decisions onto its list would be mechanical.
