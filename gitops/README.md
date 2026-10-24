@@ -66,8 +66,7 @@ Gaps between groups are reserved for future components.
 | -2   | Falcosidekick |
 | 1    | Prometheus (kube-prometheus-stack), cert-manager |
 | 2    | OTel Collector, cert-manager ClusterIssuers |
-| 3    | Grafana dashboards, Loki, Tempo |
-| 4    | Promtail |
+| 3    | Grafana dashboards, Tempo |
 | 5    | Sample app, Backstage resources (RBAC, catalog) |
 | 6    | Backstage |
 | 7    | Demo apps (Unicorn Party, E-commerce frontend/API/worker) |

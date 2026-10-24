@@ -17,6 +17,7 @@ router or lands on the BurritoBot storefront. The live half is test_service_host
 """
 from __future__ import annotations
 
+import json
 import pathlib
 import re
 import sys
@@ -51,9 +52,9 @@ check("the console's nginx map routes exactly the hosts fleet.sh publishes", map
       f"map={sorted(mapped)} fleet={sorted(routed)}")
 check("its server_name accepts exactly those hosts", named == routed, f"server_name={sorted(named)}")
 check("Grafana and Argo CD are among them", {"grafana", "argocd"} <= routed)
-# Prometheus, Loki and Tempo have no login of their own (#233). Publishing one would hand the internet an
+# Prometheus and Tempo have no login of their own (#233). Publishing one would hand the internet an
 # unauthenticated query API; the pages reach them through Grafana instead.
-check("Loki, Prometheus and Tempo are not published on their own", not routed & {"loki", "prometheus", "tempo"})
+check("Prometheus and Tempo are not published on their own", not routed & {"prometheus", "tempo"})
 
 print("== the console pages link only to hosts that exist ==")
 page_svcs = set(re.findall(r'data-svc="([a-z-]+)"', PLATFORM))
@@ -94,9 +95,9 @@ for f in sorted((REPO / "gitops/tempo").glob("*.yaml")):
         uids |= {d["uid"] for v in cm["data"].values() for d in (yaml.safe_load(v) or {}).get("datasources", [])}
 page_ds = set(re.findall(r'data-explore="([a-z]+)"', PLATFORM))
 link_ds = set(re.findall(r"\bexplore:'([a-z]+)'", LINKS))
-want = {"loki", "prometheus", "tempo"}
-check("platform.html opens Loki, Prometheus and Tempo in Explore", page_ds == want, f"{sorted(page_ds)}")
-check("links.html opens Loki, Prometheus and Tempo in Explore", link_ds == want, f"{sorted(link_ds)}")
+want = {"prometheus", "tempo"}
+check("platform.html opens Prometheus and Tempo in Explore", page_ds == want, f"{sorted(page_ds)}")
+check("links.html opens Prometheus and Tempo in Explore", link_ds == want, f"{sorted(link_ds)}")
 check("each is a data source uid Grafana is provisioned with", want <= uids, f"uids={sorted(uids)}")
 print("== the pages are true on an attendee cluster, which has no Tempo and no Talon (#475) ==")
 for name, text in (("links.html", LINKS), ("platform.html", PLATFORM)):
@@ -108,6 +109,10 @@ for name, text in (("links.html", LINKS), ("platform.html", PLATFORM)):
     # Falco runs in `security`; `falco` holds only Talon, and on an attendee cluster it does not exist at all.
     check(f"{name} reads Falco's logs where Falco runs (ns security)",
           "kubectl -n security logs -l app.kubernetes.io/name=falco" in text and "kubectl -n falco logs" not in text)
+# Loki is gone (#474): the pod logs, the #190 audit trail among them, are read in Datadog. A data source or
+# a trace-to-logs link left pointing at it is a Grafana pane that errors on open.
+check("Grafana has no data source or link to the removed Loki",
+      "loki" not in uids and "loki" not in json.dumps(grafana).lower(), f"uids={sorted(uids)}")
 for name, text in (("links.html", LINKS), ("platform.html", PLATFORM)):
     check(f"{name} builds the Explore URL Grafana 10+ reads (schemaVersion 1, panes)",
           "explore?schemaVersion=1&orgId=1&panes=" in text and "encodeURIComponent(JSON.stringify(" in text)

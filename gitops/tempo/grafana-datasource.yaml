@@ -24,9 +24,6 @@ data:
         access: proxy
         isDefault: false
         jsonData:
-          tracesToLogsV2:
-            datasourceUid: loki
-            filterByTraceID: true
           tracesToMetrics:
             datasourceUid: prometheus
           nodeGraph:

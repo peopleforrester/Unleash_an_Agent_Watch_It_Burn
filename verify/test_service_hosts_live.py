@@ -16,7 +16,7 @@ it reaches its Service, and each one fails with a page that is recognisable:
 
 This names the hop for each host, in that order, the order #381 asked the diagnosis to go in. Then it
 proves the two with a login get past their front page: Grafana's data sources answer through it (that is
-how a browser reaches Loki, Prometheus and Tempo, which are not published on their own), and Argo CD hands
+how a browser reaches Prometheus and Tempo, which are not published on their own), and Argo CD hands
 out a session, which a server that is not running insecure behind the proxy cannot do.
 
 Read-only: GETs, one Argo CD session POST, and kubectl get. The two passwords are read from the cluster
@@ -47,7 +47,7 @@ APEX_UNKNOWN = "no cluster here yet"                       # apex-agenticburn si
 CONSOLE_DEFAULT = "BurritoBot — agenticburn"               # gitops/ai-layer/web/burritbot.html <title>
 NOT_HERE = "That service is not running on this cluster"   # console.conf @wib_not_here
 # Grafana data sources the console pages open in Explore (platform.html, links.html). tempo only where Tempo is.
-DATASOURCES = ("loki", "prometheus", "tempo")
+DATASOURCES = ("prometheus", "tempo")
 
 failures: list[str] = []
 
@@ -148,7 +148,7 @@ for label in labels:
     why = hop(status, body, f"{ns}/{svc}")
     check(f"{label}: https://{label}-{host}/ reaches it", not why, why)
 
-print("== Grafana works past its front page, and fronts Loki, Prometheus and Tempo ==")
+print("== Grafana works past its front page, and fronts Prometheus and Tempo ==")
 status, body = fetch(f"https://grafana-{host}/api/health")
 check("Grafana's /api/health answers through its hostname", status == 200 and '"database"' in body,
       f"HTTP {status}: {hop(status, body, 'monitoring/prometheus-grafana') or body[:160]}")

@@ -37,7 +37,6 @@
 apps:
   - ai-layer-otel
   - ai-layer
-  - alloy
   - cert-manager
   - customer-stream
   - datadog-agent-cr
@@ -58,7 +57,6 @@ apps:
   - kubearmor
   - kyverno-policies
   - kyverno
-  - loki
   - minimal-floor
   - namespaces
   - otel-collector-attendee
