@@ -345,6 +345,9 @@ abstract's ending: by the end the chatbot is selling burritos, nothing more.
 The nine points are the accepted KubeCon abstract's checklist, transcribed in
 talks-knowledge `talks/2026-10-16_hard-dated-commitments.md` section 1 against the
 verbatim text in `abstracts/recovered/sessionize-public-profile.md` section 5.
+That text is Version 4 of `docs/ABSTRACT.md`. How far each point is built and proven, READY, PARTIAL
+or MISSING with file evidence, is `docs/KUBECON-ABSTRACT-READINESS.md`; keep this table and that one
+saying the same thing.
 
 | # | The abstract says | Segment | Delivered by the cut? |
 |---|---|---|---|

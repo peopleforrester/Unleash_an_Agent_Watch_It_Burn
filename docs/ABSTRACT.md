@@ -1,15 +1,55 @@
-# Talk Abstract: the published DevOpsDays Portland 2026 listing, and the June originals
+# Talk Abstract: the published KubeCon NA 2026 and DevOpsDays Portland 2026 listings, and the June originals
 
-The canonical abstract is whatever the event has published. Since 2026-09-06 that is the DevOpsDays
-Portland listing below, copied verbatim from the pretalx schedule export
-(https://talks.devopsdays.org/devopsdays-portland-2026/talk/BYT7TC/, fetched 2026-09-06). The June
-World's Fair versions follow as frozen history; the "abstract truth" rule in `BUILD-SPEC.md` now reads
-against the Portland text.
+The canonical abstract is whatever the event has published. Two listings are published, one per format:
 
-> **Slot, room and track:** conference-knowledge (`events/registry.yaml`, entry
-> `devopsdays-portland-2026`) is the record for the scheduled slot. Speakers: Michael Forrester, Whitney Lee.
+- **The 30-minute KubeCon NA 2026 breakout** (Version 4 below), Sessionize session 1249553, with Whitney
+  Lee. Michael made this repo the breakout's repo on 2026-10-19 (#456). Its readiness against this text is
+  `docs/KUBECON-ABSTRACT-READINESS.md`; its run-of-show is `facilitation/kubecon-na-2026-run-of-show.md`.
+- **The 2-hour workshop**, the DevOpsDays Portland listing (Version 3 below), copied verbatim from the
+  pretalx schedule export (https://talks.devopsdays.org/devopsdays-portland-2026/talk/BYT7TC/, fetched
+  2026-09-06). The "abstract truth" rule in `BUILD-SPEC.md` reads against this text.
 
-## Version 3, DevOpsDays Portland 2026 (published, canonical)
+The June World's Fair versions follow as frozen history.
+
+> **Slot, room and track:** conference-knowledge (`events/registry.yaml`, entries `kubecon-na-2026` and
+> `devopsdays-portland-2026`) is the record for the scheduled slots. Speakers: Michael Forrester, Whitney Lee.
+
+## Version 4, KubeCon + CloudNativeCon North America 2026 (published, accepted breakout)
+
+- **Session:** Sessionize session 1249553, a 30-minute breakout on the main program. Accepted 2026-08-04
+  (talks-knowledge `talks/register.md`, the BurritoBot entry).
+- **Source of this text:** transcribed verbatim from the public Sessionize speaker profile
+  (https://sessionize.com/peopleforrester) on 2026-09-10, in talks-knowledge
+  `abstracts/recovered/sessionize-public-profile.md` section 5. Copied here on 2026-10-24 from talks-knowledge
+  main at `5a9af49`. The quoted title and text are a verbatim record: do not edit them.
+- **Not the CFP draft.** `presentations/kubecon-na-2026/docs/CFP-SUBMISSION.md` in the archived
+  Kubecon-NA-2026-Whitney-BurritoBot repo is an earlier draft under another title ("Can Your Chatbot Run
+  kubectl? Guardrails for LLMs on Kubernetes"). It was not submitted, and nothing here is held to it.
+
+### Title
+
+BurritoBot Said Let's Dance, the Platform Said No
+
+### Abstract (as published)
+
+In 2026, a developer asked a burrito chain's chatbot to reverse a linked list before ordering their meal. The bot delivered a solution, then asked what they wanted.
+
+A user does not need to be malicious to embarrass an enterprise, just a little bit weird. The model will help, enthusiastically. But that burrito bot sits in a production cluster that someone (probably you) is responsible for, wired into real tools and data. More than reputation is at stake.
+
+In this session we build a chatbot for a fictional burrito chain connected to an under-protected MCP server and deploy on a full IDP (internal developer platform). It starts wide open, and we let the audience hack it live.
+
+We show you the relevant Kubernetes security layers you should already have. Then we turn on LLM-specific guardrails, like pre- and mid-inference prompt analysis. Finally we show good GenAI observability practices. By the end the chatbot is selling burritos. Nothing more.
+
+Bring your weirdest off-topic question.
+
+### Reconciliation vs the build
+
+One row per point the text promises, with its state and file evidence, in
+`docs/KUBECON-ABSTRACT-READINESS.md`. That file is kept current until delivery.
+
+---
+
+## Version 3, DevOpsDays Portland 2026 (published, canonical for the 2-hour workshop)
 
 ### Title
 

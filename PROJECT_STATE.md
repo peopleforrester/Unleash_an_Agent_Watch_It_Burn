@@ -3,6 +3,13 @@
 Phase: 2.2 Implement (PRD #412 M3: budgets; M0 to M2 done)
 Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guard-proxy Go rewrite
 
+## KubeCon NA 2026 abstract readiness (#456)
+
+`docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
+Sessionize 1249553). As of staging `c724652` (2026-10-24): 6 READY, 3 PARTIAL (6 mid-inference's agentgateway
+half #496, 8 the topic stage #455, 9 ballroom sizing #450, phones #451 and the recorded fallback #452), 0
+MISSING, and no point yet green on a live cluster (#509). Update its rows and its record as fixes land.
+
 ## KubeCon NA 2026 dates (#447)
 
 The breakout's dates and the run-through record are in `facilitation/kubecon-na-2026-run-of-show.md`,
