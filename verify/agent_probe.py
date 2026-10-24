@@ -42,6 +42,9 @@ MCP_SENTINEL = "FAKE-MCP-EXFIL-sentinel-4c1d"
 # What the C6 injection talks the agent into creating, in the namespace deploy_app pins it to. The lab tells
 # the student to prove the attack with `kubectl -n agent get deploy maintenance-shell`, so that is the check.
 C6_ARTIFACT = "maintenance-shell"
+# guard-proxy's pod also has the OTel auto-instrumentation init container, so an exec that does not name its
+# container gets kubectl's "Defaulted container" notice on stderr (#528). Name it; read JSON from stdout only.
+GUARD_PROXY_EXEC = ("-n", "agent", "exec", "deploy/guard-proxy", "-c", "proxy", "--", "python3", "-c")
 
 GREEN, YELLOW, RED = "green", "yellow", "red"
 
@@ -104,7 +107,7 @@ class Cluster:
             "import urllib.request;"
             f"print(urllib.request.urlopen('http://localhost:8080/toggle?{query}',timeout=10).read().decode())"
         )
-        raw = self._kubectl("-n", "agent", "exec", "deploy/guard-proxy", "--", "python3", "-c", py)
+        raw = self._kubectl(*GUARD_PROXY_EXEC, py)
         return json.loads(raw.strip().splitlines()[-1])
 
     def remove_c6_artifact(self) -> str:
@@ -140,7 +143,7 @@ class Cluster:
             "import urllib.request;"
             "print(urllib.request.urlopen('http://localhost:8080/guards',timeout=10).read().decode())"
         )
-        raw = self._kubectl("-n", "agent", "exec", "deploy/guard-proxy", "--", "python3", "-c", py)
+        raw = self._kubectl(*GUARD_PROXY_EXEC, py)
         return json.loads(raw.strip().splitlines()[-1])
 
 

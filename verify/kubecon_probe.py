@@ -54,8 +54,8 @@ REPO = HERE.parent
 sys.path.insert(0, str(HERE))
 import topic_cases as tc  # noqa: E402
 from agent_probe import (  # noqa: E402
-    C6_ARTIFACT, GREEN, INJECTION_PROMPT, MCP_PROMPT, Cluster, judge_injection_blocked, judge_injection_lands,
-    judge_mcp_blocked, judge_mcp_leaks, judge_secret_leaks, judge_secret_scrubbed,
+    C6_ARTIFACT, GREEN, GUARD_PROXY_EXEC, INJECTION_PROMPT, MCP_PROMPT, Cluster, judge_injection_blocked,
+    judge_injection_lands, judge_mcp_blocked, judge_mcp_leaks, judge_secret_leaks, judge_secret_scrubbed,
 )
 
 log = logging.getLogger("kubecon-probe")
@@ -308,17 +308,27 @@ class KubeconCluster(Cluster):
             env["AWS_PROFILE"] = self.profile
         return env
 
-    def kubectl_rc(self, *args: str, timeout: float = 90) -> tuple[int, str]:
+    def _run(self, *args: str, timeout: float = 90) -> tuple[int, str, str]:
         if not self.context:
             raise RuntimeError("no --context given")
         p = self.runner(["kubectl", "--context", self.context, *args], capture_output=True, text=True,
                         timeout=timeout, env=self.env())
-        return p.returncode, (p.stdout or "") + (p.stderr or "")
+        return p.returncode, p.stdout or "", p.stderr or ""
+
+    def kubectl_rc(self, *args: str, timeout: float = 90) -> tuple[int, str]:
+        """rc and stdout+stderr, for the judges that read kubectl's own error text (C1, C2)."""
+        rc, out, err = self._run(*args, timeout=timeout)
+        return rc, out + err
+
+    def _stdout_rc(self, *args: str) -> tuple[int, str]:
+        """rc and stdout alone, for anything parsed: stderr notices are not data (#528)."""
+        rc, out, _ = self._run(*args)
+        return rc, out
 
     def _kubectl(self, *args: str) -> str:
-        rc, out = self.kubectl_rc(*args)
+        rc, out, err = self._run(*args)
         if rc != 0:
-            raise RuntimeError(out.strip()[:200])
+            raise RuntimeError((err or out).strip()[:200])
         return out
 
     def get_json(self, path: str) -> dict | None:
@@ -332,7 +342,7 @@ class KubeconCluster(Cluster):
     def toggle(self, query: str) -> dict:
         py = ("import urllib.request;"
               f"print(urllib.request.urlopen('http://localhost:8080/toggle?{query}',timeout=10).read().decode())")
-        raw = self._kubectl("-n", "agent", "exec", "deploy/guard-proxy", "--", "python3", "-c", py)
+        raw = self._kubectl(*GUARD_PROXY_EXEC, py)
         return json.loads(raw.strip().splitlines()[-1])
 
     def _agent(self) -> dict:
@@ -357,18 +367,18 @@ class KubeconCluster(Cluster):
     def measure(self) -> dict:
         """What the start state is judged on, read with kubectl, not with the badges."""
         m: dict = {"guards": self.guards(), "evil_tools": self.evil_tools()}
-        rc, out = self.kubectl_rc("get", "validatingpolicy", "restrict-image-registries", "-o",
+        rc, out = self._stdout_rc("get", "validatingpolicy", "restrict-image-registries", "-o",
                                   "jsonpath={.spec.validationActions}")
         m["kyverno_actions"] = json.loads(out) if rc == 0 and out.strip() else []
-        rc, _ = self.kubectl_rc("-n", "agent", "get", "networkpolicy", "agent-egress-allowlist", "-o", "name")
+        rc, _ = self._stdout_rc("-n", "agent", "get", "networkpolicy", "agent-egress-allowlist", "-o", "name")
         m["networkpolicy"] = rc == 0
-        rc, out = self.kubectl_rc("-n", "agent", "get", "kubearmorpolicy", "block-recipe-snoop", "-o",
+        rc, out = self._stdout_rc("-n", "agent", "get", "kubearmorpolicy", "block-recipe-snoop", "-o",
                                   "jsonpath={.spec.action}")
         m["kubearmor_action"] = out.strip() if rc == 0 else None
         return m
 
     def identity_host(self) -> str | None:
-        rc, out = self.kubectl_rc("-n", "agent", "get", "configmap", "cluster-identity", "-o",
+        rc, out = self._stdout_rc("-n", "agent", "get", "configmap", "cluster-identity", "-o",
                                   "jsonpath={.data.public-host}")
         return out.strip() if rc == 0 else None
 

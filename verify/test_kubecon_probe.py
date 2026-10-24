@@ -221,6 +221,86 @@ except RuntimeError:
     check("kubectl without a context raises", True)
 
 
+print("== kubectl's stderr notices are not parsed as data (#528) ==")
+DEFAULTED = ('Defaulted container "proxy" out of: proxy, opentelemetry-auto-instrumentation-python (init)\n')
+
+
+class NoisyKubectl:
+    """A kubectl runner for one admin cluster whose stderr carries notices after stdout: the guard-proxy pod's
+    "Defaulted container" line on every exec, and a deprecation warning on every get, as a live cluster prints."""
+
+    def __init__(self) -> None:
+        self.g = {k: False for k in kp.AI_GUARDS}
+        self.tools = list(kp.EVIL_FIXED)  # left narrowed, as the failed live run left michael-admin
+        self.execs: list[list[str]] = []
+
+    def __call__(self, argv, **kw):
+        args = argv[3:]  # past kubectl --context <ctx>
+        out, err = "", ""
+        if "exec" in args:
+            self.execs.append(args)
+            py = args[-1]
+            q = re.search(r"/toggle\?([^']*)'", py)
+            for part in (q.group(1).split("&") if q else []):
+                k, v = part.split("=")
+                if k in self.g:
+                    self.g[k] = v == "on"
+            out, err = json.dumps(self.g) + "\n", DEFAULTED
+        elif "patch" in args:
+            self.tools = json.loads(args[args.index("-p") + 1])[0]["value"]
+            out, err = "agent.kagent.dev/workshop-agent patched\n", ""
+        elif args[-2:] == ["-o", "json"]:
+            out = json.dumps({"spec": {"declarative": {"tools": [
+                {"mcpServer": {"name": "workshop-mcp", "toolNames": ["get_menu"]}},
+                {"mcpServer": {"name": "evil-mcp", "toolNames": self.tools}}]}}})
+        elif "validatingpolicy" in args:
+            out = '["Deny"]'
+        elif "networkpolicy" in args:
+            out = "networkpolicy.networking.k8s.io/agent-egress-allowlist\n"
+        elif "kubearmorpolicy" in args:
+            out = "Block"
+        if "get" in args:
+            err = "Warning: this API version is deprecated\n"
+        return subprocess.CompletedProcess(argv, 0, stdout=out, stderr=err)
+
+
+def beat_on(probe: kp.Probe, beat: kp.Beat) -> tuple[bool, str]:
+    """A beat as Probe.run records it: one that raises is a failure whose note is the error."""
+    try:
+        return beat.run(probe)
+    except Exception as e:  # noqa: BLE001 - the "could not run" this section exists to rule out
+        return False, f"could not run: {e}"
+
+
+noisy = NoisyKubectl()
+nc = kp.KubeconCluster(host, "ctx-admin", None, None, 5, runner=noisy)
+noisy_probe = kp.Probe(nc, 20, settle=0, sleep=lambda s: None)
+start_state = next(b for b in kp.ADMIN if b.key == "start-state")
+ok, note = beat_on(noisy_probe, start_state)
+check("start-state runs with the notice on stderr, and fails on the narrowed allow-list alone",
+      not ok and note == f"tool allow-list already narrowed {kp.EVIL_FIXED}", note)
+try:
+    resp = nc.toggle(kp.GUARD_OUTPUT_ON)
+except Exception as e:  # noqa: BLE001
+    resp = {"error": repr(e)}
+check("toggle() parses the JSON on stdout, not the Defaulted container notice", resp.get("output") is True, str(resp))
+ok, note = beat_on(noisy_probe, kp.GUARDS_OFF_BEAT)
+check("guards-off passes with the notice on stderr, every guard off and the rogue tools back",
+      ok and not any(noisy.g.values()) and noisy.tools == kp.EVIL_ALL, note)
+ok, note = beat_on(noisy_probe, start_state)
+check("start-state passes with the notice on stderr once the stage is clean", ok, note)
+check("every guard-proxy exec names the proxy container",
+      bool(noisy.execs) and all(a[a.index("--") - 2:a.index("--")] == ["-c", "proxy"] for a in noisy.execs),
+      str(noisy.execs[:1]))
+gp = next(d for d in kp._resources() if d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
+check("'proxy' is the guard-proxy Deployment's container",
+      [c["name"] for c in gp["spec"]["template"]["spec"]["containers"]] == ["proxy"])
+probe_src = (REPO / "verify/agent_probe.py").read_text() + (REPO / "verify/kubecon_probe.py").read_text()
+check("no kubectl exec in either probe leaves the container for kubectl to default",
+      "GUARD_PROXY_EXEC" in probe_src and not re.search(r'"exec", "deploy/[^"]+", "--"', probe_src)
+      and kp.C1_CHECK[kp.C1_CHECK.index("exec") + 2:kp.C1_CHECK.index("exec") + 4] == ["-c", "shim"])
+
+
 print("== run order, the call ceiling, and guards-off last ==")
 
 
