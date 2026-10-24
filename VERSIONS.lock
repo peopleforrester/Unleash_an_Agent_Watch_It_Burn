@@ -23,7 +23,7 @@ kagent                 chart 0.9.9 / app v0.9.9  (CRD group kagent.dev/v1alpha2;
                        crds ref:  oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds (confirm at deploy)
                        A2A usage metadata key is adk_usage_metadata (NOT kagent_usage_metadata) — research/14 §3a
 vcluster               REMOVED (architecture = separate EKS cluster per attendee)
-kyverno                app v1.18.1 / chart 3.8.1  (CEL ValidatingPolicy, spec.validationActions; #206)
+kyverno                app v1.19.1 / chart 3.9.1  (CEL ValidatingPolicy, spec.validationActions; #206)
 argocd                 v3.4.4  (chart argo-cd 9.6.0; was v3.4.3 / 9.5.21)
 falco                  0.44.1
 falco-talon            chart 0.4.1 / app v0.3.0  (resolves the prior UNKNOWN chart pin)
@@ -54,7 +54,7 @@ tier-opus                us.anthropic.claude-opus-4-8     (NO date stamp; In-Reg
 
 ## IDP foundation (RE-PINNED to current GA 2026-06-20)
 argo-cd                chart 9.6.0       app v3.4.4    (deploy-full-idp.sh pin)
-kyverno                chart 3.8.1       app v1.18.1   (was 3.7.0)
+kyverno                chart 3.9.1       app v1.19.1   (was 3.8.1; #389)
 falco                  chart 9.1.0       app 0.44.1    (was 8.0.0)
 falcosidekick          chart 0.14.0      app 2.31.1    (was 0.12.1)
 external-secrets       chart 2.6.0       app v2.6.0    (was 1.3.2; MAJOR v1->v2 — manifests use external-secrets.io/v1 GA, verify v2 still serves v1 at deploy)

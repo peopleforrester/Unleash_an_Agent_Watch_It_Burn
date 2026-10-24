@@ -19,14 +19,16 @@ spec:
   source:
     chart: kyverno
     repoURL: https://kyverno.github.io/kyverno
-    # chart 3.9.0 -> Kyverno v1.19.0 (2026-08-20), which patches CVE-2026-32280. The April 2026 advisories
-    # (the apiCall SSRF pair GHSA-8wfp-579w-6r25 / GHSA-fmqp-4wfc-w3v7 and CVE-2026-22039 cross-namespace
-    # RBAC bypass) were already fixed in 1.18, which is what we were on, so this bump is the remaining one.
+    # chart 3.9.1 -> Kyverno v1.19.1 (2026-09-10), the patch bump from 3.9.0 in #389. The move to 1.19
+    # (v1.19.0, 2026-08-20) is the one that patches CVE-2026-32280. The April 2026 advisories (the apiCall
+    # SSRF pair GHSA-8wfp-579w-6r25 / GHSA-fmqp-4wfc-w3v7 and CVE-2026-22039 cross-namespace RBAC bypass)
+    # were already fixed in 1.18, which is what we were on, so that bump was the remaining one.
     #
     # 1.19 deprecates the legacy kyverno.io ClusterPolicy/Policy types; removal is planned for 1.20. Our ten
     # policies are on the CEL types the chart installs by default (policies.kyverno.io/v1 ValidatingPolicy
     # and, for image signatures, ImageValidatingPolicy) since #206, so nothing here depends on the legacy
-    # engine. verify/test_kyverno_cel_policies.py runs them through the v1.19.0 CLI.
+    # engine. verify/test_kyverno_cel_policies.py runs them through the v1.19.1 CLI;
+    # test_kyverno_version_pins.py holds that pin, this chart, VERSIONS.lock and the Datadog tag together.
     targetRevision: "3.9.1"
     helm:
       valuesObject:
@@ -73,7 +75,7 @@ spec:
             # service catalog / map. env locked to production; version = deployed Kyverno appVersion.
             tags.datadoghq.com/service: kyverno
             tags.datadoghq.com/env: production
-            tags.datadoghq.com/version: "v1.18.1"
+            tags.datadoghq.com/version: "v1.19.1"
             ad.datadoghq.com/kyverno.checks: |
               {"kyverno":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8000/metrics"}]}}
         # Background controller for policy reports

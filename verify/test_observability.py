@@ -186,7 +186,7 @@ def _pod_annotations(path, *navkeys, doc_name=None):
 _PLATFORM_UST = [
     ("cert-manager", "cert-manager", "v1.20.2", _pod_annotations("gitops/apps/cert-manager.yaml")),
     ("falco", "falco", "0.44.1", _pod_annotations("gitops/apps/falco.yaml")),
-    ("kyverno", "kyverno", "v1.18.1", _pod_annotations("gitops/apps/kyverno.yaml", "admissionController")),
+    ("kyverno", "kyverno", "v1.19.1", _pod_annotations("gitops/apps/kyverno.yaml", "admissionController")),
     ("argocd", "argocd", "v3.4.4", _pod_annotations("infra/argocd-values.yaml", "server")),
     ("istio-ztunnel", "istio", "1.30.1", _pod_annotations("gitops/apps/istio.yaml", doc_name="ztunnel")),
     ("istiod", "istio", "1.30.1", _pod_annotations("gitops/apps/istio.yaml", "pilot", doc_name="istiod")),

@@ -1,6 +1,6 @@
 # ABOUTME: Runs every Kyverno CEL policy through the Kyverno CLI against fixture requests: the villain image,
 # ABOUTME: Beat 1's limit-less Deployment, drift by agent-sa, the floor, and a real signed image on ghcr.io.
-# SUITE: e2e (needs the kyverno CLI v1.19.0 on PATH, and network to ghcr.io for the signature check)
+# SUITE: e2e (needs the kyverno CLI v1.19.1 on PATH, and network to ghcr.io for the signature check)
 #
 # Why (#206). The policies moved from kyverno.io/v1 ClusterPolicy patterns to CEL ValidatingPolicy and
 # ImageValidatingPolicy. A YAML render check can say a field is present; it cannot say an expression
@@ -20,7 +20,7 @@ import json, os, pathlib, shutil, subprocess, sys, tempfile
 REPO = pathlib.Path(__file__).resolve().parents[1]
 POL = REPO / "policies/kyverno"
 FLOOR = REPO / "policies/floor/minimal-floor.yaml"
-WANT_VERSION = "1.19.0"
+WANT_VERSION = "1.19.1"
 failures = []
 
 
@@ -32,8 +32,8 @@ def check(n, c, detail=""):
 
 cli = os.environ.get("KYVERNO_CLI") or shutil.which("kyverno")
 if not cli:
-    print("FAIL: the kyverno CLI is not on PATH (set KYVERNO_CLI to its path). Install v1.19.0 from "
-          "https://github.com/kyverno/kyverno/releases/tag/v1.19.0 (kyverno-cli_v1.19.0_<os>_<arch>.tar.gz).",
+    print("FAIL: the kyverno CLI is not on PATH (set KYVERNO_CLI to its path). Install v1.19.1 from "
+          "https://github.com/kyverno/kyverno/releases/tag/v1.19.1 (kyverno-cli_v1.19.1_<os>_<arch>.tar.gz).",
           file=sys.stderr)
     sys.exit(1)
 ver = subprocess.run([cli, "version"], capture_output=True, text=True).stdout

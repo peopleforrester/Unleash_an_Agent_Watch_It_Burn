@@ -28,9 +28,9 @@ done
 if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
     missing+=("node $(node --version) is on PATH; the Backstage suite needs Node 24")
 fi
-# test_kyverno_cel_policies.py evaluates the policies with the Kyverno CLI, pinned to the deployed v1.19.0.
+# test_kyverno_cel_policies.py evaluates the policies with the Kyverno CLI, pinned to the deployed v1.19.1.
 command -v "${KYVERNO_CLI:-kyverno}" >/dev/null 2>&1 \
-    || missing+=("the kyverno CLI v1.19.0 is not on PATH (or set KYVERNO_CLI): github.com/kyverno/kyverno/releases/tag/v1.19.0")
+    || missing+=("the kyverno CLI v1.19.1 is not on PATH (or set KYVERNO_CLI): github.com/kyverno/kyverno/releases/tag/v1.19.1")
 # The IAM policy pipeline (#207): test_iam_policy_structural.py renders the Terraform roots and runs conftest;
 # test_iam_policy_aws.py sends the documents to Access Analyzer and the policy simulator as a named profile.
 command -v "${CONFTEST:-conftest}" >/dev/null 2>&1 \

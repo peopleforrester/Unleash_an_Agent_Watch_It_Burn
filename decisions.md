@@ -1169,3 +1169,22 @@ pool built to the attendee count alone is two short once both claim.
   data. The claimed cluster is that presenter's seat for the day.
 - **Tests:** `verify/test_scheduled_up.sh` holds the pool to attendees + 2 by default, 250 to 252, an override
   of 0 and 1 seats, and a usage error on a non-numeric seat count.
+
+## 2026-10-24T21:36:00Z · #491 · The Kyverno CLI pin follows the deployed chart to v1.19.1
+
+`gitops/apps/kyverno.yaml` deploys chart 3.9.1, which installs Kyverno v1.19.1 (released 2026-09-10; the
+chart moved from 3.9.0 in #389). The other copies had not followed: `VERSIONS.lock` said app v1.18.1 / chart
+3.8.1 on both kyverno lines, the admission controller's `tags.datadoghq.com/version` said v1.18.1, and
+`verify/test_kyverno_cel_policies.py` demanded CLI v1.19.0 as "the deployed engine".
+
+**The CLI moves up, the chart stays.** The issue offered either. 3.9.1 is the deliberate #389 bump and what
+the #333 live run measured, so pinning the chart back would undo a reviewed upgrade to match a stale test.
+
+**Dev dependency version change:** the Kyverno CLI **v1.19.1** (2026-09-10) replaces v1.19.0. Why: the CLI
+check is only worth having when it is the engine the cluster runs. v1.19.2 (2026-10-20) is out, but it is
+not what the chart deploys, so the CLI does not go there on its own.
+
+**Kept from drifting:** `verify/test_kyverno_version_pins.py` (offline suite) holds both `VERSIONS.lock`
+lines to the Application's chart, and the Datadog tag, the CLI pin, the install messages and
+`policies/README.md` to the lock's app version. Policy header comments that say "Written against Kyverno
+v1.19.0" are left as they are: they record what each policy was written against.
