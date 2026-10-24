@@ -480,6 +480,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
                       volumes, removes each cluster's provisioning row, and republishes the routes.
     deregister <name...>  Remove clusters from the provisioning app by hand (down does this itself).
+    reconcile-pool    Name every provisioning row whose cluster no longer exists in any fleet account
+                      (a ghost the admin page still counts), and with WIB_APPLY=1 deregister them.
+                      'down all' and 'down-fleet' end with it. Non-zero while a ghost remains.
     audit-zero        Assert every fleet account holds nothing billable beyond its lab VPC's NAT, its
                       address and the Bedrock endpoint ENIs; names anything else. 'down all' and
                       'down-fleet' end with it.
@@ -1960,6 +1963,10 @@ cmd_down() {
     # caller explicitly keeps it for a fast rebuild (WIB_KEEP_VPC=1). Leaving it behind by default is how
     # a "destroy everything" run quietly kept costing money.
     if [[ "${1:-}" == "all" ]]; then
+        # down_one deregistered what this run destroyed. A row it never knew about (a roster cluster torn
+        # down by hand, a name from a retired scheme) survives that, and every event adds to it (#391).
+        # The fleet is meant to be gone here, so an all-empty account answer is the expected one.
+        WIB_RECONCILE_EMPTY_FLEET=1 reconcile_pool || true
         # Tag repair, absorbed from teardown/teardown.sh (#398). Its job is to give untagged workshop
         # resources their project tag so a tag-driven sweep cannot walk past them and leave them
         # billing, which means it has to run as part of a teardown rather than beside one. It never
@@ -2371,6 +2378,8 @@ cmd_down_fleet() {
         ) &
     done
     wait
+    # Rows this teardown did not destroy and that have no cluster either go too (#391); see cmd_down.
+    WIB_RECONCILE_EMPTY_FLEET=1 reconcile_pool || true
     audit_zero   # #255: a fleet teardown ends with the zero verdict per account
     report_failures
 }
@@ -2955,6 +2964,149 @@ cmd_reap() {
     done
     wait
     report_failures >&2 || true
+}
+
+# --- Pool reconcile (#391): every provisioning row must name a cluster that exists ---------------------
+# Teardown deregisters what it destroys (down_one), and only that. A cluster deleted from the console, one
+# whose state was lost, or one torn down before deregistration existed keeps its row for good. Before the
+# tier-2 upgrade the admin page read "Total 2, Available 2" over ONE live cluster: the other row was
+# watch-it-burn-r2-2, destroyed long before and named in the round scheme #290 retired. The page counts
+# rows, so every row with no cluster behind it is a seat, or a roster entry, that is not there.
+#
+# The test is the one reap-lbs uses: is the name in `eks list-clusters` of any fleet account. Not the
+# roster and not a name pattern. A roster row whose cluster was never rebuilt looks as current as one that
+# is serving, and a retired name is only the case that happened to be visible this time.
+
+# Every row in the pool as "<name>\t<state>", read from /admin/roster, the one admin view that lists every
+# row (/admin/export lists claimed rows only). The page is HTML, so the parse is checked against the row
+# count the page prints itself: a template change that breaks the parse fails here, loudly, instead of
+# reading as an empty pool with nothing wrong in it.
+pool_rows() {
+    local tok page rc=0
+    tok="$(resolve_admin_token)" || { log "pool: cannot resolve the provisioning admin token"; return 1; }
+    page="$(mktemp)"
+    if ! curl -sf --max-time 30 --get --data-urlencode "token=${tok}" \
+            "${WIB_PROVISIONING_URL%/}/admin/roster" -o "${page}"; then
+        log "pool: ${WIB_PROVISIONING_URL%/}/admin/roster did not answer"; rm -f "${page}"; return 1
+    fi
+    python3 - "${page}" <<'PY' || rc=$?
+import re, sys
+from html.parser import HTMLParser
+
+class Roster(HTMLParser):
+    """The <td> texts of every row of the roster table (class "rt"); header rows hold only <th>."""
+    def __init__(self):
+        super().__init__()
+        self.rows, self.row, self.cell, self.inside = [], None, None, False
+    def handle_starttag(self, tag, attrs):
+        if tag == "table" and "rt" in (dict(attrs).get("class") or "").split():
+            self.inside = True
+        elif self.inside and tag == "tr":
+            self.row = []
+        elif self.row is not None and tag == "td":
+            self.cell = []
+    def handle_endtag(self, tag):
+        if tag == "td" and self.cell is not None:
+            self.row.append("".join(self.cell).strip())
+            self.cell = None
+        elif tag == "tr" and self.row is not None:
+            if self.row:
+                self.rows.append(self.row)
+            self.row = None
+        elif tag == "table":
+            self.inside = False
+    def handle_data(self, data):
+        if self.cell is not None:
+            self.cell.append(data)
+
+page = open(sys.argv[1], encoding="utf-8", errors="replace").read()
+parsed = Roster()
+parsed.feed(page)
+said = re.search(r"All (\d+) rows", page)
+if not said:
+    sys.exit("pool: /admin/roster printed no row count, so it is not the page this reads")
+if int(said.group(1)) != len(parsed.rows):
+    sys.exit(f"pool: /admin/roster says {said.group(1)} rows but {len(parsed.rows)} parsed; "
+             "refusing to judge a pool it cannot read")
+for row in parsed.rows:
+    if len(row) < 2 or not row[1]:
+        sys.exit(f"pool: a roster row carries no cluster name: {row}")
+    print(f"{row[1]}\t{row[0]}")
+PY
+    rm -f "${page}"
+    return "${rc}"
+}
+
+# Every live EKS cluster in the fleet accounts (the attendee accounts plus the default account, which holds
+# the roster), one per line. Fails, printing nothing, when ANY account cannot be listed: a row whose
+# account did not answer would look exactly like a ghost, so one silent account must stop the whole verdict.
+fleet_live_clusters() {
+    local accounts acct out all=""
+    local -A seen=()
+    IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS},${WIB_DEFAULT_ACCOUNT}"
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"
+        [[ -n "${acct}" && -z "${seen[${acct}]:-}" ]] || continue
+        seen["${acct}"]=1
+        if ! out="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" \
+                    --query 'clusters[]' --output text)"; then
+            log "pool: could not list the EKS clusters in '${acct}'; judging no row"
+            record_fail "pool:list-clusters-failed:${acct}"
+            return 1
+        fi
+        all+="${out}"$'\n'
+    done
+    tr '\t ' '\n\n' <<<"${all}" | awk 'NF && $0 != "None"' | sort -u
+}
+
+# Name every pool row whose cluster is gone. DRY-RUN unless WIB_APPLY=1, which deregisters each one
+# through the same deregister_one teardown uses. Returns 0 when the pool describes the live fleet (or every
+# ghost was removed), 1 when it does not, or could not be read.
+reconcile_pool() {
+    [[ -z "${WIB_NO_INGEST:-}" ]] || { log "pool: WIB_NO_INGEST set; the provisioning pool is not reconciled"; return 0; }
+    local rows live name state total=0 ghosts=0 dereg_before dereg_after
+    rows="$(pool_rows)" || { record_fail "pool:unreadable"; return 1; }
+    live="$(fleet_live_clusters)" || return 1
+    # The reap-lbs lesson: an empty answer from every account is either a fleet that is gone or an API that
+    # is lying, and the two look the same. Mid-event, believing it deletes every attendee's row. Teardown,
+    # which has just destroyed the fleet on purpose, is the caller that passes the override.
+    if [[ -z "${live}" && -n "${rows}" && -z "${WIB_RECONCILE_EMPTY_FLEET:-}" ]]; then
+        log "pool: every fleet account reports ZERO live EKS clusters while the pool still holds rows."
+        log "      Set WIB_RECONCILE_EMPTY_FLEET=1 if the fleet really is gone; nothing judged."
+        record_fail "pool:zero-live-clusters"; return 1
+    fi
+    dereg_before="$(grep -c '^deregister:' "${FAIL_FILE}" 2>/dev/null || true)"
+    # fd 3, so nothing a deregister runs can swallow the rest of the rows from stdin.
+    while IFS=$'\t' read -r -u 3 name state; do
+        [[ -n "${name}" ]] || continue
+        total=$(( total + 1 ))
+        grep -qxF -- "${name}" <<<"${live}" && continue
+        ghosts=$(( ghosts + 1 ))
+        log "  GHOST  ${state:-?}  ${name}  (no live EKS cluster by that name in any fleet account)"
+        if [[ -n "${WIB_APPLY:-}" ]]; then deregister_one "${name}"; else record_fail "pool-ghost:${name}"; fi
+    done 3<<<"${rows}"
+    if [[ "${ghosts}" -eq 0 ]]; then
+        log "pool: all ${total} row(s) name a live cluster"; return 0
+    fi
+    if [[ -z "${WIB_APPLY:-}" ]]; then
+        log "pool: ${ghosts} of ${total} row(s) have no live cluster, so the admin page's counts are ${ghosts} too high."
+        log "      DRY-RUN; WIB_APPLY=1 fleet.sh reconcile-pool deregisters them."
+        return 1
+    fi
+    dereg_after="$(grep -c '^deregister:' "${FAIL_FILE}" 2>/dev/null || true)"
+    log "pool: ${ghosts} of ${total} row(s) had no live cluster; deregistered"
+    [[ "${dereg_after:-0}" -eq "${dereg_before:-0}" ]]
+}
+
+cmd_reconcile_pool() {
+    local t; for t in aws curl jq python3; do
+        command -v "${t}" >/dev/null 2>&1 || { log "missing tool: ${t}"; exit 1; }
+    done
+    mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
+    [[ -n "${WIB_APPLY:-}" ]] || log "reconcile-pool: DRY-RUN (set WIB_APPLY=1 to deregister the ghosts)"
+    log "reconcile-pool: ${WIB_PROVISIONING_URL%/} against ${WIB_ATTENDEE_ACCOUNTS},${WIB_DEFAULT_ACCOUNT}"
+    reconcile_pool || true
+    report_failures
 }
 
 # Push one converged cluster's full row into the live provisioning pool via /admin/import: harvest the
@@ -3594,6 +3746,7 @@ main() {
         aws-keys) cmd_aws_keys "$@" ;;
         reap-lbs) cmd_reap_lbs ;;
         reap) cmd_reap "$@" ;;
+        reconcile-pool) cmd_reconcile_pool ;;
         status) cmd_status "$@" ;;
         instructors) cmd_instructors "$@" ;;
         *) usage ;;
