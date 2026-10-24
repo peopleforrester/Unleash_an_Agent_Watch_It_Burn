@@ -73,7 +73,7 @@
 </header>
 
 <main>
-  <p class="lede">Everything below is already running on <b id="cl">your cluster</b>: 36 Argo CD applications, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 40: the Challenge 1 and 3 controls are already installed there, and so are Tempo and Falco Talon). Nothing here needs installing.
+  <p class="lede">Everything below is already running on <b id="cl">your cluster</b>: 34 Argo CD applications, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 38: the Challenge 1 and 3 controls are already installed there, and so are Tempo and Falco Talon). Nothing here needs installing.
   This page exists so you never have to dump a ConfigMap or read a Service list to find out where something is.</p>
 
   <div class="open"><b>Fastest way to see all of it with live values:</b> run <code class="inl">platform</code> in your
@@ -82,7 +82,7 @@
 
   <h2 style="font-size:15px;text-transform:uppercase;letter-spacing:.5px;color:var(--mut);margin:0 0 9px">What was installed, and when</h2>
   <div class="phases">
-    <div class="ph"><div class="w">Wave 1</div><h3>Foundation</h3><p>Namespaces, RBAC, cert-manager, External Secrets, resource quotas.</p></div>
+    <div class="ph"><div class="w">Wave 1</div><h3>Foundation</h3><p>Namespaces, cert-manager, External Secrets.</p></div>
     <div class="ph"><div class="w">Wave 2</div><h3>Platform controls</h3><p>Kyverno admission, NetworkPolicy, Istio ambient mesh, KubeArmor, Falco.</p></div>
     <div class="ph"><div class="w">Wave 3</div><h3>Observability</h3><p>OpenTelemetry Collector, Prometheus, Grafana, Loki, the Datadog Agent.</p></div>
     <div class="ph"><div class="w">Wave 4</div><h3>The AI layer</h3><p>kagent on Bedrock, MCP tool servers, guard-proxy + LLM Guard, BurritoBot, your terminal.</p></div>

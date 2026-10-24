@@ -1188,3 +1188,28 @@ not what the chart deploys, so the CLI does not go there on its own.
 lines to the Application's chart, and the Datadog tag, the CLI pin, the install messages and
 `policies/README.md` to the lock's app version. Policy header comments that say "Written against Kyverno
 v1.19.0" are left as they are: they record what each policy was written against.
+## 2026-10-24 · #478 · The rbac and resource-quotas apps are removed, not moved to apps-disabled
+
+**What went.** `gitops/apps/rbac.yaml` with `security/rbac/`, and `gitops/apps/resource-quotas.yaml` with
+`security/quotas-pdbs/`. The #236 audit (`docs/research/2026-10-24-duplicative-components-audit.md`) found
+that `rbac` bound `app-developer` and `app-viewer` to groups nothing grants, and its `demo-cluster-admin`
+ClusterRole was bound by nothing at all. `resource-quotas` capped `apps` well above what the party apps use,
+and its `minAvailable: 1` PodDisruptionBudgets covered single-replica workloads plus the disabled Backstage.
+No lab step, deck slide, tour stop or challenge used either. Both selected on the full, attendee and admin
+profiles, so each of those clusters runs two fewer Applications; the burn profile never selected them. An instructor
+cluster now shows 38 Argo CD applications and an attendee cluster 34, down from the 40 and 36 that #475 set;
+the platform page, the run-of-show and `verify/test_fleet_contract.py` carry the new numbers. They are the
+measured counts less two, not a fresh measurement on a live cluster.
+
+**Deleted rather than parked in `gitops/apps-disabled/`.** Nothing is waiting to turn them back on, and C8's
+RBAC lesson is the agent-sa Role in `gitops/ai-layer/resources.yaml`, which is untouched. Git history keeps
+the manifests. On a live cluster the roots prune the two child Applications and their resources-finalizer
+removes what they created.
+
+**What else changed.** The build diagram and platform tour no longer list RBAC and resource quotas in Wave 1,
+and the two chips keyed `rbac` and `resource-quotas` are gone: those keys would never have shown as running.
+`verify/test_diagram_chip_apps.py` holds every chip key to an Application in `gitops/apps` (by name or file;
+`argocd` is the one exception, installed by `deploy-full-idp.sh`). `gitops/README.md`, `security/README.md`
+and the wave table in `docs/MASTER-RECREATION-SPEC.md` drop the two apps. `force_update_version` in
+`infra/terraform/aws/cluster/main.tf` stays: it is the right setting for disposable nodes whatever PDBs the
+charts ship, and its comment was left as written.

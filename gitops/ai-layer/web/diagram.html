@@ -125,7 +125,7 @@
 <script>
   var PHASES = [
     {n:0, mod:'Before',   name:'A bare cluster', obj:'An empty EKS cluster with credentials. Nothing installed. This is what one bash script starts from.'},
-    {n:1, mod:'Wave 1',   name:'Foundation', obj:'Namespaces, RBAC, resource quotas, cert-manager and External Secrets. Argo CD takes over from here and holds everything to what Git says.'},
+    {n:1, mod:'Wave 1',   name:'Foundation', obj:'Namespaces, cert-manager and External Secrets. Argo CD takes over from here and holds everything to what Git says.'},
     {n:2, mod:'Wave 2',   name:'Platform controls', obj:'Kyverno admission, default-deny NetworkPolicy, Istio ambient mesh, KubeArmor inline prevention, and Falco with Talon for detect-and-respond. This wave is what the workshop is about.'},
     {n:3, mod:'Wave 3',   name:'Observability', obj:'Prometheus, Grafana, Loki, Tempo, the OpenTelemetry Collector, and the Datadog Agent. Everything the agent does becomes a trace.'},
     {n:4, mod:'Wave 4',   name:'The AI layer', obj:'kagent on Amazon Bedrock, the MCP tool servers, guard-proxy with LLM Guard, BurritoBot and your terminal. The thing under attack, and the guardrails around it.'},
@@ -143,9 +143,8 @@
   // k = the key the status detector reports in `up` when this component is actually running.
   // k = the key the live status detector reports when this component is actually running on YOUR cluster.
   var CHIPS = [
-    {l:'Namespaces', b:'foundation', p:1, k:'namespaces'}, {l:'RBAC', b:'foundation', p:1, k:'rbac'},
-    {l:'cert-manager', b:'foundation', p:1, k:'cert-manager'}, {l:'External Secrets', b:'foundation', p:1, k:'external-secrets'},
-    {l:'Resource quotas', b:'foundation', p:1, k:'resource-quotas'}, {l:'Argo CD', b:'foundation', p:1, k:'argocd'},
+    {l:'Namespaces', b:'foundation', p:1, k:'namespaces'}, {l:'cert-manager', b:'foundation', p:1, k:'cert-manager'},
+    {l:'External Secrets', b:'foundation', p:1, k:'external-secrets'}, {l:'Argo CD', b:'foundation', p:1, k:'argocd'},
 
     {l:'Kyverno', b:'controls', p:2, k:'kyverno'}, {l:'NetworkPolicy', b:'controls', p:2, k:'network-policies'},
     {l:'Istio ambient', b:'controls', p:2, k:'istio'}, {l:'KubeArmor', b:'controls', p:2, k:'kubearmor'},

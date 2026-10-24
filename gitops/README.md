@@ -8,7 +8,7 @@ ArgoCD-managed Kubernetes resources using the app-of-apps pattern.
 bootstrap/
   app-of-apps.yaml      # Root Application that manages all child apps
 
-apps/                    # 26 ArgoCD Application manifests
+apps/                    # 36 ArgoCD Application manifests
   namespaces.yaml        # Namespace definitions (sync-wave: -10)
   kyverno.yaml           # Policy engine
   kyverno-policies.yaml  # Kyverno CEL ValidatingPolicies + ImageValidatingPolicy
@@ -16,7 +16,6 @@ apps/                    # 26 ArgoCD Application manifests
   falcosidekick.yaml     # Falco event forwarding
   external-secrets.yaml  # ESO operator
   eso-resources.yaml     # ClusterSecretStore + ExternalSecrets
-  rbac.yaml              # ClusterRoles + RoleBindings
   network-policies.yaml  # Default-deny + allow rules
   prometheus.yaml        # kube-prometheus-stack (Prometheus + Grafana)
   otel-collector.yaml    # OpenTelemetry Collector
@@ -29,7 +28,6 @@ apps/                    # 26 ArgoCD Application manifests
   backstage.yaml         # Developer portal
   backstage-resources.yaml # Backstage RBAC + catalog ConfigMap
   cert-manager.yaml      # TLS certificate management
-  resource-quotas.yaml   # ResourceQuota + PDBs
   demo-app-unicorn.yaml     # Demo app (interactive)
   ecom-frontend.yaml     # Demo app (e-commerce)
   ecom-api.yaml          # Demo app (e-commerce API)
@@ -72,12 +70,12 @@ Gaps between groups are reserved for future components.
 |------|-----------|
 | -10  | Namespaces |
 | -5   | Kyverno (CRD provider) |
-| -4   | Kyverno policies, RBAC, NetworkPolicies, ESO operator |
+| -4   | Kyverno policies, NetworkPolicies, ESO operator |
 | -3   | Falco, ESO resources (ClusterSecretStore + ExternalSecrets) |
 | -2   | Falcosidekick |
 | 1    | Prometheus (kube-prometheus-stack), cert-manager |
 | 2    | OTel Collector, cert-manager ClusterIssuers |
-| 3    | Grafana dashboards, resource quotas, Loki, Tempo |
+| 3    | Grafana dashboards, Loki, Tempo |
 | 4    | Promtail |
 | 5    | Sample app, Backstage resources (RBAC, catalog) |
 | 6    | Backstage |

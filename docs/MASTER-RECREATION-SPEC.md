@@ -227,12 +227,12 @@ Child apps are `argoproj.io/v1alpha1` `Application` objects in `argocd`, `projec
 | namespaces | -10 | git `gitops/namespaces` | n/a | (cluster) |
 | istio-base / istio-cni | -6 | helm (istio-release) | 1.30.1 | istio-system |
 | istiod / kyverno | -5 | helm | istio 1.30.1 / kyverno chart 3.8.1 (app v1.18.1) | istio-system / kyverno |
-| ztunnel / kyverno-policies / rbac / network-policies / external-secrets / minimal-floor | -4 | helm + git | ztunnel 1.30.1, ESO chart 2.6.0 | varies |
+| ztunnel / kyverno-policies / network-policies / external-secrets / minimal-floor | -4 | helm + git | ztunnel 1.30.1, ESO chart 2.6.0 | varies |
 | istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.1.0 (app 0.44.1), kagent 0.9.9 | varies |
 | falco-talon / falcosidekick | -2 | helm | talon chart 0.4.1 (app 0.3.0), falcosidekick 0.14.0 | falco / security |
 | cert-manager / kagent / prometheus | 1 | helm | cert-manager v1.20.2, kagent 0.9.9, kube-prometheus-stack 86.2.3 | varies |
 | otel-operator / otel-collector / customer-stream | 2 | git + helm | otel-operator 0.117.0, otel-collector 0.158.2 | varies |
-| ai-layer / datadog-operator / loki / tempo / resource-quotas | 3 | git + helm | datadog-operator chart 2.23.2 (app 1.27.1) | varies |
+| ai-layer / datadog-operator / loki / tempo | 3 | git + helm | datadog-operator chart 2.23.2 (app 1.27.1) | varies |
 | alloy / datadog-agent-cr | 4 | helm + git | alloy 1.10.0 | monitoring / datadog |
 | unicorn/spider/hedgehog/wombat/mantis-shrimp -party | 7 | git | n/a | apps |
 
@@ -246,7 +246,7 @@ Kyverno CEL ValidatingPolicies (`policies/kyverno/`, `policies.kyverno.io/v1`, #
 2. Pre-seed `datadog-secret` (keys `api-key`, `app-key`) directly in `datadog`, `monitoring`, AND `security` (Falcosidekick reads it from `security`) before the app-of-apps.
 3. Install ArgoCD in-cluster (Helm; `gitops/argocd/values.yaml`). This and the secret pre-seed are the only imperative steps.
 4. `kubectl apply -f gitops/bootstrap/full/app-of-apps.yaml` (full) OR `app-of-apps-burn.yaml` (the bare burn subset).
-5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/RBAC/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel/customer-stream → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
+5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel/customer-stream → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
 6. The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh` (need a Pod Identity association and a concrete namespace); materializing them into GitOps is the open follow-up.
 7. The OTel Instrumentation CR (`gitops/ai-layer-otel/instrumentation.yaml`) deploys itself as the `ai-layer-otel` Application in wave 2, so no manual enable step remains. Confirm the live Collector endpoint (`http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`, HTTP/4318) still matches. Note it is intentionally absent on the burn profile: its CRD comes from the OTel Operator, which needs cert-manager, and the burn profile ships neither. Folding it back into the `ai-layer` bundle makes the whole AI layer unsyncable on the burn profile.
 
