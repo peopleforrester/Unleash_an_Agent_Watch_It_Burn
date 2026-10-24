@@ -44,7 +44,8 @@ check("resetChat exists", bool(RESET))
 check("it mints a new session id", "newSession()" in RESET)
 check("the new id is persisted, so the next send carries it", "sessionStorage.setItem('wib-sess'" in PAGE)
 check("the session id is what the proxy threads the conversation by",
-      "session:getSession()" in PAGE and "_effective_ctx(session)" in PROXY)
+      # The send reads it once into `sess`, which rides in the body and the X-BurritoBot-Session header (#450).
+      "const sess=getSession();" in PAGE and "session:sess}" in PAGE and "_effective_ctx(session)" in PROXY)
 check("the proxy sends it as the A2A contextId", 'm["contextId"] = ctx' in PROXY)
 check("it clears the rendered conversation too", "innerHTML=''" in RESET)
 check("it re-greets, so the student sees a conversation that has actually restarted", "greet()" in RESET)

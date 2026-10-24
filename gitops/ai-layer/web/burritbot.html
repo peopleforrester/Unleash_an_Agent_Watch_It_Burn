@@ -612,13 +612,20 @@
     const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
     const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
     try{
-      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v,session:getSession()})});
+      // The session rides in a header as well as the body: the console's nginx keys the per-phone limit
+      // on it (console.conf, #450) and cannot read a JSON body.
+      const sess=getSession();
+      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-BurritoBot-Session':sess},body:JSON.stringify({prompt:v,session:sess})});
       t.remove();
       // The cluster RESPONDED (even an error status means it is alive) — never show the cluster-dead
       // screen here; that is reserved for a genuinely unreachable cluster (the catch below).
       unreachable=0; noBurritos(false);
-      if(!res.ok){ bubble("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again.",'bot'); return; }
-      const data=await res.json();
+      // Any answer that carries a reply is shown as that reply, whatever its status. guard-proxy and the
+      // console's nginx both answer in the /chat shape, and a refusal has to read as a refusal on a phone,
+      // not as "the kitchen isn't answering (429)" (#450, BurritoBot#110).
+      let data=null; try{ data=await res.json(); }catch(e){}
+      if(!res.ok && !(data && data.reply)){ bubble("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again.",'bot'); return; }
+      if(!data) throw new Error('chat answered 200 without JSON');  // the catch below, as before
       botReply(data.reply);
       if((data.reply||'').toLowerCase().includes('free burritos for life')) winBubble();
       const it=data.input_tokens||0, ot=data.output_tokens||0; tokens+=it+ot; costUsd+=data.cost_usd||0;

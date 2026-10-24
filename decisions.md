@@ -467,3 +467,49 @@ only so that links handed out before the rename still resolved, and none is stil
 - Still left from #359: provisioning-agenticburn's `STUDENT_PREVIEW_CONSOLE_URL` defaults to
   `https://a-001.agenticburn.com`. That default now points at a host that is never served, so it has to
   change in that repo. It is filed there as a follow-up.
+
+## 2026-10-24T14:50:48Z · #450 · The KubeCon audience path: limits in front of guard-proxy, timeouts in order
+
+The issue asked for an exposure path, a ballroom-sized limit, an answer for the venue NAT, every timeout in
+front of the guarded path longer than the path, and refusals that read as refusals. The equivalents of
+BurritoBot's question 157 here:
+
+- **Path.** The room uses `attackme.agenticburn.com` through the Railway apex, with no dedicated cluster.
+  The run-of-show's "The audience path" section names every hop and its timeout.
+- **Where the limits live.** In the console's nginx, on `/chat`. guard-proxy's `RATE_LIMIT_RPM` is one
+  window for the whole cluster, and guard-proxy is a submodule of another repo (and being rewritten in
+  Go, PRD #412, with identity-keyed limits planned). The console is the first hop this repo owns. Limits:
+  10 a minute per browser session (header `X-BurritoBot-Session`, burst 4) under 300 a minute per address
+  (burst 100). `RATE_LIMIT_RPM` goes from 120 to 300, so the cluster-wide window does not hold the room
+  below its own ceiling.
+- **The address is Railway's `X-Real-IP`.** BurritoBot took the address from a trusted load balancer's
+  X-Forwarded-For entry. Here no hop in the cluster's path sees the phone. The apex Caddy trusts no
+  proxy, so it replaces X-Forwarded-For with the Railway edge's address. The NLB is TCP with ip targets, so
+  nginx's peer is the NLB. The one hop that knows the caller is Railway's edge, which writes `X-Real-IP`.
+  Railway's docs name the header; that the edge overwrites a caller's copy is said only by Railway staff
+  on their forum, so `verify/test_audience_path_live.py` tests it. A caller who dials the NLB directly can
+  forge it, and the cluster-wide window still holds them.
+- **Timeouts.** `PROXY_TIMEOUT` is now set, to 55s. proxy.py's 150s default applies per forward and per
+  LLM Guard call, and a /chat turn can make three forwards and two guard calls: 750s, past Railway's 300s.
+  At 55s the worst turn is 275s, under nginx's new 285s on `/chat` and `/a2a/` (were 160s and 120s),
+  under Railway's 300s and under the NLB's 350s. Caddy sets no response timeout.
+- **`COST_CAP_USD` stays $25.** 300 turns a minute for the 5-minute audience segment at the measured
+  $0.005 a turn on Nova is $7.50, or $22.50 with every turn retried twice.
+- **Refusals.** nginx answers its own 429, 502 and 504 on `/chat` in guard-proxy's `/chat` JSON shape, and
+  the page shows `reply` whatever the status.
+
+### REJECTED: keeping PROXY_TIMEOUT at 150s and raising nginx to cover 750s
+**Why:** Railway closes a request after 300s with no data, so any hop longer than that ends on Railway's
+error instead of guard-proxy's answer, and nobody waits 12 minutes for a burrito.
+**Do not suggest:** a nginx timeout over 300s on `/chat`. Raise PROXY_TIMEOUT again only once guard-proxy
+bounds a /chat turn with one deadline instead of one per call.
+
+### REJECTED: keying the per-address limit on X-Forwarded-For or $remote_addr
+**Why:** both are the same for every phone (the Railway edge and the NLB), so the per-address limit would
+be one bucket for the whole internet.
+
+Validated offline against the console's pinned nginx 1.27.5, run from its image with a fake guard-proxy.
+Seven concurrent requests from one session gave five answers and two refusals as 200 JSON. A malformed
+session id shares one bucket, and a missing one is counted per address only. guard-proxy's own 502 passed
+through unchanged. A dead upstream answered 502 JSON and a slow one 504 JSON. Not yet run live:
+`verify/test_audience_path_live.py`, and whether attackme sustains 300 turns a minute under Bedrock's quota.

@@ -46,6 +46,74 @@ and `guard-budget-on` flip one at a time. They go through the guard-proxy
 `/toggle` endpoint, which Argo CD does not revert and which keeps the cost counter
 alive, so never flip a guard with `kubectl set env`.
 
+## The audience path (#450)
+
+**The room reaches `attackme.agenticburn.com`, the Community cluster, through the
+Railway apex.** No dedicated cluster for the session: attackme is already the
+wide-open bot segment 2 needs, it is on the roster the Night Before brings up, and it
+names itself on the page so nobody mistakes it for their own. Put the URL and its QR
+on screen; nothing else is handed to the room.
+
+A prompt from a phone crosses these hops. Each hop's wait has to be longer than the
+hop behind it, so a slow turn ends on guard-proxy's own answer and not on a
+load balancer's 504:
+
+| Hop | Where it is set | Waits for the answer |
+|---|---|---|
+| Phone browser | `burritbot.html` sets no fetch timeout | the page waits; real phones are #451 |
+| Railway edge | Railway's limit, not configurable | 300s with no data (15 minutes while data flows) |
+| apex Caddy | `apex-agenticburn/Caddyfile` | no response timeout (dial 2s, retried for 5s) |
+| AWS NLB (TCP, ip targets) | AWS default, not set on the console Service | 350s idle |
+| console nginx `/chat`, `/a2a/` | `gitops/ai-layer/console.conf` | 285s |
+| guard-proxy, worst `/chat` turn | `PROXY_TIMEOUT=55` in `gitops/ai-layer/resources.yaml` | 275s: 3 agent forwards and 2 LLM Guard calls at 55s each |
+
+The old values broke this order. nginx `/chat` was 160s and `/a2a/` 120s, while
+guard-proxy allowed each forward 150s, so a turn that retried (or a slow A2A call)
+ended on nginx's 504. guard-proxy's worst turn at 150s a call was 750s, longer than
+Railway's 300s.
+
+**The limits, from the phone outward:**
+
+- **10 a minute per phone.** Keyed on the browser session the page sends
+  (`X-BurritoBot-Session`), in the console's nginx. Nobody waiting on each reply
+  reaches it; a script or a stuck Send key does.
+- **300 a minute per network address.** Keyed on the `X-Real-IP` Railway's edge
+  writes. Every phone on venue Wi-Fi leaves through one NAT address, so on the day
+  this is the room's ceiling. It is not `X-Forwarded-For`: the apex Caddy trusts no
+  proxy, so it replaces that header with the Railway edge's own address, the same
+  for every phone. Behind the NLB, nginx's peer address is the NLB, also the same
+  for every phone.
+- **300 a minute for the whole cluster**, guard-proxy's `RATE_LIMIT_RPM=300` (was
+  120, which would have held the room to less than half its ceiling). It is one
+  window with no address in it, and it also holds a caller who goes around the apex
+  to forge the address.
+
+When any of these says no, the phone shows BurritoBot saying so ("BurritoBot is
+cooking for the whole room at once. Give it a few seconds and send that again."),
+not an HTTP error. A timeout or a down backend also reads as a sentence. The page
+shows the reply text from any answer that carries one, whatever its status.
+
+**The cost cap holds through the segment.** `COST_CAP_USD` stays at $25 for the
+cluster. At the ceiling, 300 turns a minute for segment 2's 5 minutes is 1,500
+turns. At the measured $0.005 a turn on Nova that is $7.50, and $22.50 if every
+turn also takes both of guard-proxy's retries. The other segments run on the admin
+cluster, so attackme's cap only has to last segment 2. The tally lives in memory
+and starts at $0 when the pod starts, so a cluster brought up the night before
+starts the session with only the night-before checks spent. A dearer `MODEL_TIER`
+(#453) breaks this arithmetic and fails `verify/test_audience_path.py`.
+
+**What is held offline, and what still needs the live platform.**
+`verify/test_audience_path.py` (offline suite) holds the hop order, the limits, the
+readable refusals and the cost arithmetic. `verify/test_audience_path_live.py`
+(E2E suite, `CONTEXT=<attackme's context>`) reads the apex Caddyfile for a
+response timeout and checks that Railway replaces a forged `X-Real-IP`. It sends one
+burst from a single session to confirm the 10-a-minute refusal arrives as a reply,
+and reports the slowest turn it saw. It has not been run yet. Two things no test
+here settles: how many turns a minute attackme sustains before Bedrock throttles
+(if that is under 300, `RATE_LIMIT_RPM` comes down to it, so the room hits a
+readable limit before it hits model errors), and real phones on venue-like Wi-Fi
+(#451).
+
 ---
 
 ## The segments, in order (30 minutes)
@@ -294,10 +362,16 @@ is merely slow rather than rebuilding:
   dead venue network does not end the session. The repo paths for these are not
   built yet; see the open questions. The rollback step below names them once they
   exist.
-- [ ] **Audience path and phones (#450, #451).** Confirm the room's rate limit and
-  timeouts are sized for a ballroom and that the page, the projector QR, and the
-  Feedback link work on a real iPhone and a real Android phone on venue-like
-  Wi-Fi and on cellular.
+- [ ] **Audience path (#450).** Run
+  `CONTEXT=<attackme's context> python3 verify/test_audience_path_live.py` from the
+  repo and read its output. Then confirm attackme runs the ballroom limit:
+  `kubectl --context <attackme's context> -n agent exec deploy/guard-proxy -- sh -c 'echo $RATE_LIMIT_RPM $COST_CAP_USD $PROXY_TIMEOUT'`
+  prints `300 25 55`. `RATE_LIMIT_RPM` and `COST_CAP_USD` reach a cluster only when
+  it is created (Argo CD ignores that env; `docs/GOTCHAS-FLEET-AND-DELIVERY.md`), so
+  a cluster older than this change still says 120. `curl -s https://attackme.agenticburn.com/cost`
+  should show only cents spent.
+- [ ] **Phones (#451).** The page, the projector QR, and the Feedback link work on a
+  real iPhone and a real Android phone on venue-like Wi-Fi and on cellular.
 
 ## Rollback on the day
 
@@ -368,9 +442,10 @@ written down rather than guessed.
    be reconciled and confirmed served in the delivery region before the day, or the
    cost counter prices the wrong model and the denial-of-wallet narration in segment
    2 is wrong.
-7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized for a
-   ballroom on one venue Wi-Fi NAT, verified on real phones. Not yet done; needs the
-   live platform and two real devices.
+7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized and held
+   offline (see The audience path above). Still open: one live run of
+   `verify/test_audience_path_live.py` on attackme, attackme's sustained turns a
+   minute under Bedrock's quota, and real phones (#451).
 8. **The deck (#449, rounds-agenticburn#38).** This file is the beat list the deck is
    cut from. The deck itself is built in `peopleforrester/rounds-agenticburn` and is
    not written against these segments yet.

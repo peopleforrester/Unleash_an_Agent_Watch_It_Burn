@@ -134,7 +134,9 @@ print(f"  probing {host} through the router")
 
 print("== the router passes Host to the console ==")
 status, body = fetch(f"https://{host}/whoami")
-check(f"https://{host}/whoami answers host={host}", status == 200 and body.strip() == f"host={host}",
+# The first line only: /whoami also reports the client-address headers since #450.
+check(f"https://{host}/whoami answers host={host}",
+      status == 200 and body.strip().splitlines()[:1] == [f"host={host}"],
       f"HTTP {status}: {body.strip()[:160]}")
 
 print("== every service host reaches its Service ==")

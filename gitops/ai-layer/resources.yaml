@@ -623,14 +623,31 @@ spec:
             - { name: INPUT_CLASSIFIER, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
             - { name: PROXY_FAIL_CLOSED, value: "true" }
+            # Per agent forward and per LLM Guard call (#450). proxy.py's default is 150s, and one /chat turn
+            # can make three forwards and two guard calls, so at 150s the worst turn was 750s: longer than
+            # the console's nginx, and longer than the Railway edge, which closes a request after 300s with
+            # no data. Then the phone saw a hop's 504 where the guardrail's own answer should have been.
+            # 5 x 55s = 275s sits under nginx's 285s, under Railway's 300s and under the NLB's 350s. The
+            # ordering is held by verify/test_audience_path.py. A single forward still gets 55s; the slowest
+            # workshop tools give up at 15s and 20s (workshop-mcp-server.py).
+            - { name: PROXY_TIMEOUT, value: "55" }
             # Cost-counter price tier. The whole fleet runs the workshop default (Sonnet 4.6), so this
             # is sonnet everywhere; the old per-cluster haiku/opus tiers were dropped.
             # MUST match the kagent ModelConfig the workshop-agent is bound to (spec.declarative.modelConfig),
             # or the on-screen cost counter prices the wrong model. Found live 2026-08-30: this said
             # "sonnet" while the agent ran bedrock-nova, overstating spend ~4x on the C4 headline visual.
             - { name: MODEL_TIER, value: "nova" }
-            # Protect the demo from itself (0 = disabled). verify-at-build: set to room size + budget.
-            - { name: RATE_LIMIT_RPM, value: "120" }
+            # Protect the demo from itself (0 = disabled). Sized for the KubeCon ballroom (#450).
+            # RATE_LIMIT_RPM is ONE window for the whole cluster: no address, no session. The per-phone
+            # (10/min) and per-network (300/min) limits are in console.conf, in front of this. On venue
+            # Wi-Fi the whole room is one NAT address, so the room's ceiling is 300 a minute, and this
+            # matches it: at 120 the room would have been held to less than half its own ceiling. It also
+            # holds a caller who dodges the per-address key by going around the apex.
+            # COST_CAP_USD is checked against that ceiling: 300 turns a minute through the 5-minute
+            # audience segment is 1,500 turns, at the measured $0.005 a turn on Nova (BUDGET_CAP_USD's note
+            # in proxy.py) $7.50, and $22.50 if every turn also takes both retries. Under $25 either way,
+            # so the cap does not end the segment. A dearer MODEL_TIER fails verify/test_audience_path.py.
+            - { name: RATE_LIMIT_RPM, value: "300" }
             - { name: COST_CAP_USD, value: "25" }
             # Optional side-screen prompt stream; ON only once moderation is confirmed (code of conduct).
             # ON for Portland (Michael, 2026-09-03), so the instructor feed at start.agenticburn.com
