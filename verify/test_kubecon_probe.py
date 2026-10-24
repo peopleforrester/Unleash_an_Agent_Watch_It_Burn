@@ -18,12 +18,14 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 import kubecon_probe as kp  # noqa: E402
+import resource_limits as rl  # noqa: E402
 import topic_cases as tc  # noqa: E402
 import yaml  # noqa: E402
 from agent_probe import CEO_ADDRESS_RE, EXCERPT, MCP_SENTINEL, SECRET_SIGNATURE  # noqa: E402
 from nova_replies import (  # noqa: E402
     ADMIN_CEO, CEO_IN_THINKING_ONLY, COMMUNITY_CEO, COMMUNITY_OFF_TOPIC, LINKED_LIST, LINKED_LIST_THINKING,
 )
+from registry_allowlist import allowed  # noqa: E402
 
 failures: list[str] = []
 
@@ -258,6 +260,23 @@ check("C1 is the lab's curl from workshop-mcp to the beacon, six seconds",
       "deploy/workshop-mcp -- curl -s -m 6" in lab and kp.BEACON in lab and "-m" in kp.C1_CHECK)
 check("C2 uses the lab's villain image", kp.VILLAIN_IMAGE in lab)
 check("C2 never creates anything: server-side dry run", "--dry-run=server" in kp.C2_CHECK)
+# #529: a limit-less Deployment is also denied by require-resource-limits, and whichever webhook answers first
+# is the deny message, so the C2 manifest must break the registry allow-list and nothing else.
+check("C2 submits its manifest on stdin, not `kubectl create deployment`",
+      kp.C2_CHECK[kp.C2_CHECK.index("create") + 1:][:2] == ["-f", "-"] and "deployment" not in kp.C2_CHECK)
+_c2_tmpl = kp.C2_MANIFEST["spec"]["template"]
+check("the C2 manifest is a Deployment of the villain image in agent",
+      kp.C2_MANIFEST["kind"] == "Deployment" and kp.C2_MANIFEST["metadata"]["namespace"] == "agent"
+      and [c["image"] for c in _c2_tmpl["spec"]["containers"]] == [kp.VILLAIN_IMAGE])
+check("the C2 manifest's selector matches its pod labels (else the API refuses it before admission)",
+      kp.C2_MANIFEST["spec"]["selector"]["matchLabels"].items() <= _c2_tmpl["metadata"]["labels"].items())
+check("require-resource-limits asks for cpu and memory limits", rl.required() == {"cpu", "memory"}, str(rl.required()))
+check("the C2 manifest satisfies require-resource-limits", rl.missing(kp.C2_MANIFEST) == [],
+      str(rl.missing(kp.C2_MANIFEST)))
+check("the limits check has teeth: the old limit-less `create deployment` shape fails it",
+      rl.missing({"kind": "Deployment", "spec": {"template": {"spec": {"containers": [
+          {"name": "promo-mascot", "image": kp.VILLAIN_IMAGE}]}}}}) != [])
+check("the C2 image breaks the registry allow-list", not allowed(kp.VILLAIN_IMAGE))
 check("C3 runs the fallback the run-of-show names", kp.C3_FALLBACK.is_file()
       and "challenges/c3-secret-grep/fallback.kubectl.sh" in (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text())
 check("the probe marker is guard-proxy's", 'PROBE_MARKER = "[[wib-probe]]"' in
@@ -267,14 +286,21 @@ print("== every kubectl call names the context and the isolated kubeconfig ==")
 calls: list[tuple[list[str], dict]] = []
 
 
+stdins: list[str | None] = []
+
+
 def runner(argv, **kw):
     calls.append((argv, kw.get("env") or {}))
+    stdins.append(kw.get("input"))
     return subprocess.CompletedProcess(argv, 0, stdout="{}", stderr="")
 
 
 c = kp.KubeconCluster(host, "ctx-admin", "accen-dev", "/tmp/admin.kubeconfig", 5, runner=runner)
 c.kubectl_rc("get", "pods")
 c.run_c3_fallback()
+kp._c2(kp.Probe(c, 0))
+check("the C2 beat hands kubectl the C2 manifest on stdin",
+      calls[2][0][3:] == kp.C2_CHECK and stdins[2] is not None and json.loads(stdins[2]) == kp.C2_MANIFEST)
 check("kubectl carries --context", calls[0][0][0] == "kubectl" and calls[0][0][1:3] == ["--context", "ctx-admin"])
 check("kubectl gets KUBECONFIG and AWS_PROFILE per command",
       calls[0][1].get("KUBECONFIG") == "/tmp/admin.kubeconfig" and calls[0][1].get("AWS_PROFILE") == "accen-dev")
@@ -416,7 +442,7 @@ class Fake:
         self.log.append(f"tools {names}")
         self.tools = list(names)
 
-    def kubectl_rc(self, *args, timeout=90):
+    def kubectl_rc(self, *args, timeout=90, stdin=None):
         if "curl" in args:
             return 28, "000command terminated with exit code 28\n"
         return 1, DENIED

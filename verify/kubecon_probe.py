@@ -76,9 +76,23 @@ BEACON = "https://agenticburn.com/beacon"
 C1_CHECK = ["-n", "agent", "exec", "deploy/workshop-mcp", "-c", "shim", "--",
             "curl", "-s", "-m", "6", "-o", "/dev/null", "-w", "%{http_code}", BEACON]
 # C2: the lab's villain image, created as the agent's ServiceAccount, server-side dry run so nothing lands.
+# The Deployment carries CPU and memory limits (#529). Each Kyverno ValidatingPolicy is its own webhook and
+# the first to answer is the deny message, so a limit-less `kubectl create deployment` was refused by
+# require-resource-limits about one try in four. With limits set, the registry allow-list is the only
+# policy it breaks. It goes in on stdin.
 VILLAIN_IMAGE = "docker.io/peopleforrester/promo-mascot:latest"
-C2_CHECK = ["--as=system:serviceaccount:agent:agent-sa", "-n", "agent", "create", "deployment", "promo-mascot",
-            f"--image={VILLAIN_IMAGE}", "--dry-run=server", "-o", "name"]
+C2_MANIFEST = {
+    "apiVersion": "apps/v1", "kind": "Deployment",
+    "metadata": {"name": "promo-mascot", "namespace": "agent", "labels": {"app": "promo-mascot"}},
+    "spec": {"replicas": 1, "selector": {"matchLabels": {"app": "promo-mascot"}},
+             "template": {"metadata": {"labels": {"app": "promo-mascot"}},
+                          "spec": {"containers": [{
+                              "name": "promo-mascot", "image": VILLAIN_IMAGE,
+                              "resources": {"requests": {"cpu": "10m", "memory": "32Mi"},
+                                            "limits": {"cpu": "100m", "memory": "64Mi"}}}]}}},
+}
+C2_CHECK = ["--as=system:serviceaccount:agent:agent-sa", "-n", "agent", "create", "-f", "-",
+            "--dry-run=server", "-o", "name"]
 ROGUE_TOOLS = ["read_internal_config", "apply_optimization"]
 EVIL_ALL = ["get_weather", *ROGUE_TOOLS]
 EVIL_FIXED = ["get_weather"]
@@ -354,16 +368,16 @@ class KubeconCluster(Cluster):
             env["AWS_PROFILE"] = self.profile
         return env
 
-    def _run(self, *args: str, timeout: float = 90) -> tuple[int, str, str]:
+    def _run(self, *args: str, timeout: float = 90, stdin: str | None = None) -> tuple[int, str, str]:
         if not self.context:
             raise RuntimeError("no --context given")
         p = self.runner(["kubectl", "--context", self.context, *args], capture_output=True, text=True,
-                        timeout=timeout, env=self.env())
+                        timeout=timeout, env=self.env(), input=stdin)
         return p.returncode, p.stdout or "", p.stderr or ""
 
-    def kubectl_rc(self, *args: str, timeout: float = 90) -> tuple[int, str]:
+    def kubectl_rc(self, *args: str, timeout: float = 90, stdin: str | None = None) -> tuple[int, str]:
         """rc and stdout+stderr, for the judges that read kubectl's own error text (C1, C2)."""
-        rc, out, err = self._run(*args, timeout=timeout)
+        rc, out, err = self._run(*args, timeout=timeout, stdin=stdin)
         return rc, out + err
 
     def _stdout_rc(self, *args: str) -> tuple[int, str]:
@@ -562,7 +576,7 @@ def _c1(p: Probe) -> tuple[bool, str]:
 
 
 def _c2(p: Probe) -> tuple[bool, str]:
-    return judge_admission_denied(*p.cluster.kubectl_rc(*C2_CHECK))
+    return judge_admission_denied(*p.cluster.kubectl_rc(*C2_CHECK, stdin=json.dumps(C2_MANIFEST)))
 
 
 def _c3(p: Probe) -> tuple[bool, str]:
