@@ -99,4 +99,14 @@ check "only slotted clusters get a dual-ship key" \
 check "an admin cluster is a presenter cluster, and that alone grants no second key" \
   'q "is_presenter_name watch-it-burn-michael-admin" && ! grep -q "is_presenter_name" <<<"$(sed -n "/^datadog_keys_for() {/,/^}/p" "${FLEET}")"'
 
+# With no shared org loaded (#454) a roster cluster still bootstraps, without Datadog, and converge reports
+# the gap rather than failing (#510). Only an attendee slot is refused, since falling back would mix
+# students' telemetry into another org. The behaviour is shimmed in test_fleet_converge_repairs.sh.
+boot_src="$(sed -n "/^bootstrap_one() {/,/^}/p" "${FLEET}")"
+repair_src="$(sed -n "/^repair_datadog() {/,/^}/p" "${FLEET}")"
+check "bootstrap refuses an unresolved org only for an attendee slot" \
+  'grep -B1 "refusing to fall back to the shared org" <<<"$boot_src" | grep -q "if is_attendee_name \"\${name}\"; then"'
+check "converge records unresolved keys as a failure only for an attendee slot" \
+  'grep -B1 "datadog-keys-unresolved" <<<"$repair_src" | grep -q "is_attendee_name \"\${name}\" ||"'
+
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

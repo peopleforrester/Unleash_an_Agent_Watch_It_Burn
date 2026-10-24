@@ -719,6 +719,9 @@ repair_datadog() {
     local name="$1" kcfg="$2" acct="$3" api app admin_api admin_app
     if ! read -r api app admin_api admin_app < <(datadog_keys_for "${name}"); then
         log "  ${name}: repair: cannot resolve Datadog keys; leaving the cluster as it is"
+        # A roster cluster without keys is a known gap (#510), not a failure: the next converge after the
+        # keys are loaded finds own-key-drift and turns Datadog on.
+        is_attendee_name "${name}" || { log "  ${name}: Datadog gap logged (no keys yet); not a failure"; return 0; }
         record_fail "${name}:datadog-keys-unresolved"; return 0
     fi
     local ident live_key admin_present=0 want_admin=0 reasons=() host want_host
@@ -972,6 +975,8 @@ prune_empty_states() {
     done
 }
 
+run_idp_script() { bash "${IDP_SCRIPT}" "$1"; }   # one line so the shim test can replace it
+
 bootstrap_one() {
     local name="$1" profile="$2" round="${3:-}"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
@@ -982,16 +987,22 @@ bootstrap_one() {
     # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
     # merge_pool.py's row-position join over attendee-only orgs, so the in-cluster org is the SAME one the
     # provisioning page shows the student. Non-attendee (instructor) clusters use the shared workshop org.
-    local api app admin_api admin_app
+    # An attendee whose org does not resolve is refused: falling back would mix students' telemetry. A
+    # roster cluster with no org is a known, logged gap (#454, #510): it bootstraps without Datadog, and
+    # converge's repair_datadog writes datadog-secret and reloads the consumers once the keys exist.
+    local api="" app="" admin_api="" admin_app=""
     if ! read -r api app admin_api admin_app < <(datadog_keys_for "${name}"); then
-        log "  BOOTSTRAP FAILED: ${name} could not resolve its Datadog org; refusing to fall back to the shared org"
-        record_fail "${name}"; rm -f "${kcfg}"; return
+        if is_attendee_name "${name}"; then
+            log "  BOOTSTRAP FAILED: ${name} could not resolve its Datadog org; refusing to fall back to the shared org"
+            record_fail "${name}"; rm -f "${kcfg}"; return
+        fi
+        log "  WARN: ${name}: no Datadog keys (watch-it-burn/datadog unresolved); bootstrapping without Datadog"
     fi
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
         WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" \
         CLUSTER_NAME="${name}" WITB_PUBLIC_HOST="$(public_host_for "${name}")" \
-        bash "${IDP_SCRIPT}" "${profile}" \
+        run_idp_script "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
         bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
