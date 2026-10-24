@@ -1,0 +1,35 @@
+# ABOUTME: Plan-time policy: every RDS instance and Aurora cluster must set storage_encrypted = true.
+# ABOUTME: Kyverno ValidatingPolicy in JSON mode, evaluated against `terraform show -json` plan output.
+#
+# storage_encrypted defaults to false on aws_db_instance and to false for provisioned Aurora, so leaving it
+# out is the unencrypted case. The rule is "known and true at plan time": absent, false and unknown all fail.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: no-unencrypted-rds
+  annotations:
+    policies.kyverno.io/title: No unencrypted RDS storage
+    policies.kyverno.io/severity: high
+spec:
+  evaluation:
+    mode: JSON
+  variables:
+    # Addresses excused from this policy. Every entry needs a matching row in ../exceptions.md, and
+    # verify/test_plan_policy.py fails the build when the two disagree.
+    - name: exempt
+      expression: "[]"
+    - name: changes
+      expression: >-
+        object.?resource_changes.orValue([]).filter(rc,
+          rc.mode == 'managed' && rc.change.after != null && !(rc.address in variables.exempt))
+    - name: offenders
+      expression: >-
+        variables.changes.filter(rc,
+          rc.type in ['aws_db_instance', 'aws_rds_cluster'] &&
+          rc.change.after.?storage_encrypted.orValue(false) != true
+        ).map(rc, rc.address)
+  validations:
+    - expression: "size(variables.offenders) == 0"
+      messageExpression: >-
+        'no-unencrypted-rds: database storage would be written unencrypted; set storage_encrypted = true on: ' +
+        variables.offenders.join(', ')

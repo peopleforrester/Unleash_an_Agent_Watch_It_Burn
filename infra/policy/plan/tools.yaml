@@ -1,0 +1,50 @@
+# ABOUTME: Pinned toolchain for the plan-time policy check: every binary by version and sha256, pip tools by version.
+# ABOUTME: install-tools.py installs exactly these; check-plan.py refuses to run with any other version.
+#
+# Pinned 2026-10-24 to the then-current releases, each read from its project's release page that day.
+# The #200 brief pinned Kyverno >= 1.18 (1.18 fixed a nil-pointer crash on non-JSON-mode policies given
+# --json payloads), Checkov 3.2.x and Trivy 0.70.x; by 2026-10-24 those had moved on to the lines below.
+# Why each is here, and why tfsec, Terrascan and the standalone kyverno-json binary are not: decisions.md.
+#
+# Binaries are linux x86_64 only, which is what the build host and the netcup runner are. The sha256 is
+# the one the project publishes in its own checksum file for that asset, checked again by
+# install-tools.py before anything is unpacked.
+
+binaries:
+  kyverno:
+    version: 1.19.2
+    url: https://github.com/kyverno/kyverno/releases/download/v1.19.2/kyverno-cli_v1.19.2_linux_x86_64.tar.gz
+    sha256: 357eaf1df8bc24ddd5a73979fadeaae6a032e8710f11af264229756e4956bf4a
+    member: kyverno
+  # Installed from the release tarball, not through aquasecurity/trivy-action: the action's release
+  # infrastructure was compromised in March 2026, and a checksum on the binary is a stronger pin than a
+  # commit SHA on an action that downloads it.
+  trivy:
+    version: 0.76.1
+    url: https://github.com/aquasecurity/trivy/releases/download/v0.76.1/trivy_0.76.1_Linux-64bit.tar.gz
+    sha256: c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
+    member: trivy
+  terraform:
+    version: 1.17.0
+    url: https://releases.hashicorp.com/terraform/1.17.0/terraform_1.17.0_linux_amd64.zip
+    sha256: c168cab7c637a8769fdb90089ddd19de701bc6ff8aca64dc2e2185fe46f59f67
+    member: terraform
+  # Not used to plan the fleet today. It is here so the e2e suite proves every check reads an OpenTofu
+  # plan the same way it reads a Terraform one (#200 acceptance: "checks read OpenTofu natively").
+  tofu:
+    version: 1.13.2
+    url: https://github.com/opentofu/opentofu/releases/download/v1.13.2/tofu_1.13.2_linux_amd64.zip
+    sha256: 723bebb0df8411daff1e5fc3862e28ff5581fe5634087f4c29a9aa41d78208b5
+    member: tofu
+
+# Each installed into its own virtualenv under the install directory, with its console script linked into bin/.
+python:
+  checkov:
+    version: 3.3.30
+    package: checkov
+    command: checkov
+  # The local AWS API that plan-fleet.py plans the real fleet roots against, so a plan needs no AWS account.
+  moto:
+    version: 5.2.4
+    package: "moto[server]"
+    command: moto_server

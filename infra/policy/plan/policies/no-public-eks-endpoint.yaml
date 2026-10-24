@@ -1,0 +1,39 @@
+# ABOUTME: Plan-time policy: no EKS cluster may expose its Kubernetes API endpoint to the internet.
+# ABOUTME: Kyverno ValidatingPolicy in JSON mode, evaluated against `terraform show -json` plan output.
+#
+# endpoint_public_access defaults to TRUE on aws_eks_cluster, so the check is "explicitly false", not "not
+# set to true": a cluster that leaves the argument out is public. The provider writes the default into the
+# plan, and an unknown value is rejected for the same reason as everywhere else in this directory.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: no-public-eks-endpoint
+  annotations:
+    policies.kyverno.io/title: No public EKS API endpoint
+    policies.kyverno.io/severity: high
+spec:
+  evaluation:
+    mode: JSON
+  variables:
+    # Addresses excused from this policy. Every entry needs a matching row in ../exceptions.md, and
+    # verify/test_plan_policy.py fails the build when the two disagree.
+    - name: exempt
+      expression: "['module.eks.aws_eks_cluster.this[0]']"
+    - name: changes
+      expression: >-
+        object.?resource_changes.orValue([]).filter(rc,
+          rc.mode == 'managed' && rc.change.after != null && !(rc.address in variables.exempt))
+    - name: offenders
+      expression: >-
+        variables.changes.filter(rc,
+          rc.type == 'aws_eks_cluster' &&
+          !rc.change.after.?vpc_config.orValue([]).all(vc, vc.?endpoint_public_access.orValue(true) == false)
+        ).map(rc, rc.address) +
+        variables.changes.filter(rc,
+          rc.type == 'aws_eks_cluster' && size(rc.change.after.?vpc_config.orValue([])) == 0
+        ).map(rc, rc.address + ' (no vpc_config in the plan)')
+  validations:
+    - expression: "size(variables.offenders) == 0"
+      messageExpression: >-
+        'no-public-eks-endpoint: the Kubernetes API would be reachable from the internet; set ' +
+        'vpc_config.endpoint_public_access = false on: ' + variables.offenders.join(', ')
