@@ -807,3 +807,28 @@ harvester does.
 
 **Re-ingest:** `fleet.sh ingest pool` reads every row from /admin/roster and re-ingests it by name.
 /admin/import upserts and never touches claim state, so claimed rows pick up the corrected login.
+## 2026-10-24 · #447 · The KubeCon dates and the run-through record live in the KubeCon run-of-show
+
+The archived BurritoBot repo's dated schedule (spec 001, BurritoBot#114, #121, #60) moved here. It is held in
+`facilitation/kubecon-na-2026-run-of-show.md`, section "Dates to hold (#447)", and nowhere else in the repo;
+`PROJECT_STATE.md` and Whitney's start page point at it. `verify/test_kubecon_dates.py` holds it.
+
+- **Michael's revision of 2026-10-24 governs, not the issue body's table.** Work agents build has no
+  forecast date and is listed in build order (platform live on AWS, every abstract point READY or cut,
+  recorded fallback, deck). Dates are for people: the cold read once the platform is live, the Datadog pool
+  the week of 10-26, two timed run-throughs by 11-08, delivery on 11-12. The issue body's 10-23 "platform
+  live" date is therefore not carried. The cold read's calendar hold (Mon 2026-10-26, 10:00 to 16:00
+  Central) is written down, because conference-knowledge says the talk repo holds that date, but the read
+  waits for the live platform rather than for the day.
+- **"The facilitation runbook" is the KubeCon run-of-show.** `facilitation/runbook.md` is the 2-hour
+  workshop's, and the run-of-show already says "read the timing from this file". The record takes
+  BurritoBot#121's shape: a column per run (Run-through 1, Run-through 2, plus Delivered), whole slot and
+  demo rows, and a findings row that takes issue numbers. The demo target is 24:00, the sum of segments 2 to
+  6 in this file's segment table, not BurritoBot's "25 min or less"; the test derives every target from that
+  table so they cannot drift apart. The cold read is logged under it untimed.
+- **Slot and room confirmed, not copied.** conference-knowledge `kubecon-na-2026` `schedule` on 2026-10-24
+  reads 2026-11-12 13:50 to 14:20 MST, Salt Palace, Level 1, Grand Ballroom BDF, which matches BurritoBot#114.
+  Per #417 the run-of-show names the entry; the test fails if a Mountain-time slot or the room appears in it.
+  The delivery date stays, and must equal `DELIVERY_DATE` in `verify/model_pin_check.py`.
+- **Not done here:** the run-throughs (Michael and Whitney present them), bringing the platform up (#454),
+  and repointing spec 001 at this repo, which is a personal-knowledge change.

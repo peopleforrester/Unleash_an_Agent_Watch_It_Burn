@@ -30,6 +30,63 @@ workshop and they stay off for this session.
   results and ranked written fallbacks. Drive from `/kubecon`, read the timing from
   this file.
 
+## Dates to hold (#447)
+
+The plan is Michael's, revised on #447 on 2026-10-24. Work that agents build has no
+forecast date: it is built straight through, in this order.
+
+1. **Platform live on AWS**, brought up from this repo's provisioning
+   (`fleet.sh`, see Night Before) on the five existing accounts (#454). Test
+   clusters from 2026-10-24 are spun up, tested and torn down in one session, on
+   the smallest instances.
+2. **Every abstract point READY, or cut with Whitney's agreement** (#456).
+3. **The recorded fallback** (#452), recorded the moment the live run works.
+4. **The deck, as a 16:9 PDF for Sessionize** (#449). The upload's due date is a
+   speaker obligation in conference-knowledge (`kubecon-na-2026`, `obligations`).
+
+Dates are for people only:
+
+| Step | Who | When | Done when |
+|---|---|---|---|
+| Cold read of this run-of-show | Whitney | Once the platform is live. The calendar holds Mon 2026-10-26, 10:00 to 16:00 Central | She reads this file cold against the live platform, not on paper, and each stop is filed as an issue here. Record it under "Run-through record" below |
+| Datadog org pool (abstract point 7) | Whitney | The week of 2026-10-26 | The pool is loaded and `./fleet.sh monitors --apply` has run (#454) |
+| Two timed run-throughs | Michael and Whitney | By 2026-11-08 | Two full runs, demo included, each timed against the 30-minute slot, with the timings in the record below and what broke filed as issues here |
+| Delivered | Michael and Whitney | 2026-11-12 | The session runs live. Its slot and room are in conference-knowledge (`kubecon-na-2026`, `schedule`) |
+
+The Barcelona challenges wait until 2026-11-13.
+
+### Run-through record
+
+The presenters fill this in; one column per run. Time each run from the first word
+of segment 1 to the last word of segment 7 with one stopwatch, and write minutes
+and seconds (`mm:ss`). The demo is segments 2 to 6. Every finding is an issue in
+this repo, and its number goes in the Findings row, so nothing that broke lives
+only in this table.
+
+| | Run-through 1 | Run-through 2 | Delivered |
+|---|---|---|---|
+| Date | not yet run | not yet run | not yet run |
+| Presenters | | | |
+| Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | |
+| Deck (rounds-agenticburn commit) | | | |
+| Whole slot (target 30:00) | | | |
+| Demo, segments 2 to 6 (target 24:00) | | | |
+| Segment 1 (target 2:00) | | | |
+| Segment 2 (target 5:00) | | | |
+| Segment 3 (target 3:00) | | | |
+| Segment 4 (target 6:00) | | | |
+| Segment 5 (target 7:00) | | | |
+| Segment 6 (target 3:00) | | | |
+| Segment 7 (target 4:00) | | | |
+| Fallbacks driven (beat and script) | | | |
+| Findings filed (issue numbers) | | | |
+
+**Cold read** (untimed; it is a read, not a run):
+
+- Date: not yet run
+- Platform (clusters read against):
+- Findings filed (issue numbers):
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in

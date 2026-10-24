@@ -11,7 +11,9 @@ from their phones. Its run-of-show is **`facilitation/kubecon-na-2026-run-of-sho
 KubeCon cold read; the workshop files below are the other format. The open questions at the end of it are
 the things still to settle, including whether the on-topic guardrail (the burrito-only ending) is built in
 time. Its day, time and room are on the public session page, and the record is conference-knowledge
-(`events/registry.yaml`, entry `kubecon-na-2026`).
+(`events/registry.yaml`, entry `kubecon-na-2026`). The dates you are on (the cold read, once the platform
+is live, and the two timed run-throughs by 2026-11-08) are in its "Dates to hold" section, with the table
+the run-through timings go in.
 
 ## The talk
 

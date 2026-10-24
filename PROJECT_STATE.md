@@ -3,6 +3,13 @@
 Phase: 2.2 Implement (PRD #412 M3: budgets; M0 to M2 done)
 Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guard-proxy Go rewrite
 
+## KubeCon NA 2026 dates (#447)
+
+The breakout's dates and the run-through record are in `facilitation/kubecon-na-2026-run-of-show.md`,
+section "Dates to hold (#447)". Build order with no forecast dates; for people: the cold read once the
+platform is live, two timed run-throughs by 2026-11-08, delivery 2026-11-12. Slot and room:
+conference-knowledge `kubecon-na-2026`.
+
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
 - **Supply chain closed (#413, #414, #415, #331).** The guard image is multi-stage, CPU-only and built
