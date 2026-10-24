@@ -40,7 +40,7 @@ to guard), and lands on a map you take home.
 - Your job for the next two hours is to make the agent break something. We watch what holds.
 
 ## 6. The platform you get (M)
-- A running IDP: Argo CD, Kyverno, Falco, Prometheus, Grafana, Tempo, Loki, cert-manager,
+- A running IDP: Argo CD, Kyverno, Falco, Prometheus, Grafana, Tempo, cert-manager,
   External Secrets, Backstage. You did not build it, and it is yours to keep.
 
 ## 7. How we watch it happen (W)
