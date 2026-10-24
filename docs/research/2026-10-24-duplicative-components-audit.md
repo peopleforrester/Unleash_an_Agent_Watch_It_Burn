@@ -227,6 +227,9 @@ The two ways out:
 
 1. **Enroll `agent` and `apps`.** Then the sentence is true. It needs a live check that STRICT mTLS
    coexists with the C1 egress NetworkPolicy (HBONE uses port 15008), the KubeArmor policy and the probes.
+   (#238 found it is more than a label: STRICT on an enrolled `agent` rejects the console's ip-target
+   NLB and kagent's controller, and `apps-allow-ingress` would refuse 15008. See
+   `2026-10-24-istio-ambient-evaluation.md`, section 3.)
 2. **Drop the five apps and the sentence.** No challenge uses a mesh control, `verify/test_mesh.py` goes, and
    the Istio rows in `test_datadog_service_map.py` and `test_observability.py` change.
 
