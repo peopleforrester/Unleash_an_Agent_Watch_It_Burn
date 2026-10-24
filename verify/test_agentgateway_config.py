@@ -154,6 +154,25 @@ label = deployment["metadata"]["labels"].get("app.kubernetes.io/version")
 check(f"the Deployment's app.kubernetes.io/version label is {tag.lstrip('v')} (found {label})", label == tag.lstrip("v"))
 lock = next((l for l in (REPO / "VERSIONS.lock").read_text(encoding="utf-8").splitlines() if l.startswith("agentgateway ")), "")
 check(f"VERSIONS.lock records agentgateway {tag} (found {lock.split()[1:3]})", lock.split()[1:3] == ["OSS", tag])
+
+print("== the working docs name the image we run ==")
+# #495 fixed gitops/ and VERSIONS.lock; the walkthrough, the specs and the gateway notes went on calling
+# v1.3.0 the current version (#506). Each of these states the deployed version, and a line may name the
+# old one only beside the new one, as history ("moved from v1.3.0"). DECISION-LOG and the dated research
+# notes are records and are not checked.
+CURRENT_DOCS = (
+    "agent/GATEWAY-NOTES.md",
+    "docs/STACK-WALKTHROUGH.md",
+    "docs/MASTER-RECREATION-SPEC.md",
+    "docs/BUILD-SPEC.md",
+    "docs/TECH-STATUS.md",
+    "docs/UPGRADE-INVENTORY.md",
+)
+for rel in CURRENT_DOCS:
+    lines = (REPO / rel).read_text(encoding="utf-8").splitlines()
+    check(f"{rel} names agentgateway {tag}", any("agentgateway" in l and tag in l for l in lines))
+    stale = [i for i, l in enumerate(lines, 1) if "v1.3.0" in l and tag not in l]
+    check(f"{rel} names v1.3.0 only beside {tag} (lines {stale})", not stale)
 if not SCHEMA.exists():
     print(f"\nFAILED: {len(failures)} check(s)")
     sys.exit(1)

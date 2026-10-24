@@ -253,8 +253,9 @@ tools, and the cost counter makes the economic argument the control plane can't 
 
 Pins (live-verified 2026-06-17, re-pinned to current GA 2026-06-20): kagent chart `0.9.9` / CRD
 `v1alpha2`; Argo CD `v3.4.4` / chart `9.6.0`; Kyverno app `v1.18.1` / chart `3.8.1`; Falco `0.44.1`;
-kube-prometheus-stack `86.2.3`; OTel Collector chart `0.158.2` / app `0.153.0`; agentgateway OSS
-`v1.3.0` (GA 2026-06-17; `oci://cr.agentgateway.dev/charts/agentgateway`); Tempo chart `2.2.3` @
+kube-prometheus-stack `86.2.3`; OTel Collector chart `0.158.2` / app `0.153.0`;
+agentgateway OSS `v1.5.0` (released 2026-08-27, moved from `v1.3.0` on 2026-09-10; deployed as the
+manifest `gitops/ai-layer/agentgateway.yaml`, image pinned by digest); Tempo chart `2.2.3` @
 `grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.35`;
 aws-ebs-csi-driver addon + gp3 default SC; Bedrock models
 `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku), `us.anthropic.claude-sonnet-4-6` (Sonnet),

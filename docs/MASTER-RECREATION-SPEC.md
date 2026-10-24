@@ -277,7 +277,7 @@ BurritoBot frontend (console nginx, burritbot.html)
 guard-proxy (proxy.py, :8080)   <- input guards, cost meter, rate/cost cap, output guard
    |  AGENT_URL = http://agentgateway.agent.svc.cluster.local:3000
    v
-agentgateway (OSS v1.3.0, :3000 A2A reverse proxy)   <- plain L7 hop; draws the Service Map edge
+agentgateway (OSS v1.5.0, :3000 A2A reverse proxy)   <- plain L7 hop; draws the Service Map edge
    |  host: workshop-agent.agent.svc.cluster.local:8080
    v
 kagent workshop-agent (A2A serving, :8080; ADK >=1.17)
@@ -300,7 +300,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 - **Cost key is `kagent_usage_metadata`, not `adk_usage_metadata`.** The live kagent 0.9.9 controller emits the former; the proxy accepts both (kagent first) so a re-key never silently zeroes the counter. (commit `638ffcd`)
 - **Workshop default model is Sonnet 4.6; all three tiers defined for the cost race.** Tier swaps by repointing the Agent `modelConfig` (commit + resync), never `kubectl patch` live. Fable 5 retired. (commits `3646a30`, `ff341bd`, `a3d0081`)
 - **Cost metric uses the standard `gen_ai` namespace.** Dropped the custom `witb_cost_usd` metric and the Prometheus `/metrics` endpoint; cost is `gen_ai.client.cost` (the GenAI semconv defines no monetary metric, so cost is a project suffix under the standard namespace). Provider stamped `aws.bedrock` at source + a Collector OTTL net. (commits `f963550`, `d5c2bec`)
-- **agentgateway is the in-path A2A hop and MCP front.** Repointing creates the `guard-proxy → agentgateway → kagent` Service Map chain. OSS v1.3.0 (GA 2026-06-18), registry `cr.agentgateway.dev`. Tracing config under the top-level `config.tracing` key (bare `tracing` and `frontendPolicies.tracing` both crash the v1.3.0 binary). (commits `3831e3d`, `b64e7ea`, `17ee91e`)
+- **agentgateway is the in-path A2A hop and MCP front.** Repointing creates the `guard-proxy → agentgateway → kagent` Service Map chain. OSS v1.5.0 (released 2026-08-27; moved from v1.3.0 in `20aee62`, 2026-09-10), registry `cr.agentgateway.dev`, image pinned by tag and digest. Tracing config under the top-level `config.tracing` key (bare `tracing` and `frontendPolicies.tracing` both crashed the v1.3.0 binary; the config is validated offline against the vendored v1.5.0 schema). (commits `3831e3d`, `b64e7ea`, `17ee91e`, `20aee62`)
 - **beat-2 exfil sentinel reframed from a credential to a recipe (2026-06-27).** A credential-shaped sentinel is self-censored by the model on the response path; reframed to BurritoBot's non-credential "bat spit amazing sauce" `WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7`, which the model echoes cleanly so the output Regex scanner has something real to redact. (commit `9a3971e`)
 - **beat-3 control is the kagent `toolNames` allowlist, not agentgateway `mcpAuthorization`.** The agent dials the rogue `evil-mcp` server directly, so flipping gateway authz does not gate it. An earlier toggle wired rogue tool names into `workshop-mcp`'s allowlist, but a server cannot expose tools it does not serve, so the attack landed in neither state. Fixed to wire the `evil-mcp` server: `--off` allowlists `[get_weather, read_internal_config, apply_optimization]` (attack lands), `--on` allowlists `[get_weather]` only. (`challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh`)
 - **ArgoCD `ignoreDifferences` for the three live toggles** (guard-proxy `.env`, Agent `.spec.declarative.tools`, Agent `.spec.declarative.modelConfig`). **ai-layer is sync-wave 3.** **Fail-closed guard:** `PROXY_FAIL_CLOSED=true`; per-cluster `RATE_LIMIT_RPM` + `COST_CAP_USD` stop the cost demo from running up the real bill.
@@ -310,7 +310,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 | Component | Image / version | Ports | Notes |
 |---|---|---|---|
 | guard-proxy | `python:3.12-slim` running `proxy.py` from ConfigMap | 8080 | stdlib only; OTel SDK injected by Operator annotation |
-| agentgateway | `cr.agentgateway.dev/agentgateway:v1.3.0` | 3000 A2A, 3001 MCP, 15021 readiness | `config.tracing` → OTLP/HTTP 4318; TCP probes (no `/healthz`) |
+| agentgateway | `cr.agentgateway.dev/agentgateway:v1.5.0` (digest-pinned) | 3000 A2A, 3001 MCP, 15021 readiness | `config.tracing` → OTLP/HTTP 4318; TCP probes (no `/healthz`) |
 | kagent workshop-agent | controller 0.9.9 (CRD `kagent.dev/v1alpha2`); ADK >=1.17 | 8080 | `OTEL_SERVICE_NAME=kagent`; `..._CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` |
 | llm-guard | `laiyer/llm-guard-api:0.3.16` (only published image) | 8000 | reads `scanners.yml` from ConfigMap; bearer `llm-guard-auth` |
 | workshop-mcp (good) | `python:3.12-slim` + `mcp`, `workshop-mcp-server.py` | 8000 (`/mcp`) | tools `list_pods`, `apply_manifest` (HITL), `get_secret` |

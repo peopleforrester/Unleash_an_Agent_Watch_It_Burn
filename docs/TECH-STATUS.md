@@ -31,7 +31,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
   [~] Bedrock model access live + A2A usage key (cost counter parses adk_usage_metadata, fixed the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`))
 - [x] guard-proxy: input block-list + classifier (progressive), output Regex, cost meter, rate-limit/cost-cap, prompt-stream
 - [x] LLM Guard wiring; [~] verdict envelope on the live image
-- [x] agentgateway MCP authz config; [~] enforcement on OSS v1.3.0 with kagent
+- [x] agentgateway MCP authz config; [~] enforcement on OSS v1.5.0 with kagent
 - [x] kagent toolNames allowlist + requireApproval (HITL); [~] runtime enforcement
 - [x] evil-mcp-shim + clown-file (Beat 3 BEFORE)
 
