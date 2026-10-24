@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-10-24 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `9d30bbc9d2e641cf1d1de23dcd278bb5ac7a311d` (the last commit to change lab.html, on 2026-10-24) |
-| Source blob | `3a2a885f87c8b4c0d5bc846a309433b4895a9110` |
+| Source commit | `56a19a43cfda31df25c742474f624b43d475eae1` (the last commit to change lab.html, on 2026-10-24) |
+| Source blob | `ea926be05d4c010a104038e8db587dda39db000e` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -114,9 +114,9 @@ There is a lot here and you are not expected to know what all of it is. But here
 
 BurritoBot is made up of three components, all running in a [**namespace**](https://kubernetes.io/docs/concepts/overview/working-with-objects/namespaces/) called `agent`:
 
-- **the agent** — talks to the AI model. It is run by **kagent**, a framework for hosting agents on Kubernetes.
-- **workshop-mcp**, the tool container — a **tool** is an action the model can ask for, like "send a web request" or "run a command".
-- **guard-proxy** — a checkpoint between the agent and the model.
+- **the agent**: talks to the AI model. It is run by **kagent**, a framework for hosting agents on Kubernetes.
+- **workshop-mcp**, the tool container. A **tool** is an action the model can ask for, like "send a web request" or "run a command".
+- **guard-proxy**: a checkpoint between the agent and the model.
 
 ### So Many Hats 🎩
 
@@ -178,11 +178,11 @@ Then try to get BurritoBot to send the data somewhere instead of printing it to 
 >
 > You will be applying **five NetworkPolicies**. Here is what each of the five does:
 >
-> - **agent-egress-allowlist** — the *default-deny*: block ALL outbound traffic from the agent, except to your cluster's own private network. "Default-deny" just means "nothing is allowed unless a later rule allows it."
-> - **agent-allow-dns** — lets the agent look up names (DNS). Without this it cannot resolve any address at all.
-> - **agent-allow-otel-egress** — lets it keep sending traces to Datadog.
-> - **agent-allow-kagent-egress** — lets it talk to [kagent](https://kagent.dev/docs), the framework that runs BurritoBot.
-> - **agent-allow-intra-namespace** — lets the agent's own pods talk to each other.
+> - **agent-egress-allowlist**: the *default-deny*, which blocks ALL outbound traffic from the agent, except to your cluster's own private network. "Default-deny" just means "nothing is allowed unless a later rule allows it."
+> - **agent-allow-dns**: lets the agent look up names (DNS). Without this it cannot resolve any address at all.
+> - **agent-allow-otel-egress**: lets it keep sending traces to Datadog.
+> - **agent-allow-kagent-egress**: lets it talk to [kagent](https://kagent.dev/docs), the framework that runs BurritoBot.
+> - **agent-allow-intra-namespace**: lets the agent's own pods talk to each other.
 >
 > **Where is the model running?** The AI model behind BurritoBot is Amazon [Bedrock](https://docs.aws.amazon.com/bedrock/). The cluster reaches it over a private address inside its own network, not the public internet. So "allow the cluster's private network" is what keeps burrito-ordering working.
 >
@@ -268,10 +268,10 @@ The other two announce themselves in their own logs as well, and they are not th
 >
 > Admission controller policies are helpful in many ways, such as:
 >
-> - **Security** — for example, ensuring that Pods do not run in privileged mode.
-> - **Governance** — for example, label every Ingress with a certain label.
-> - **Automation** — for example, when a new namespace is created, add a ConfigMap in that namespace.
-> - **Cost Optimization** — for example, there should not be any services of type LoadBalancer in a given namespace.
+> - **Security**: for example, ensuring that Pods do not run in privileged mode.
+> - **Governance**: for example, label every Ingress with a certain label.
+> - **Automation**: for example, when a new namespace is created, add a ConfigMap in that namespace.
+> - **Cost Optimization**: for example, there should not be any services of type LoadBalancer in a given namespace.
 >
 > ### How an admission controller works
 >
@@ -337,9 +337,9 @@ The other two announce themselves in their own logs as well, and they are not th
 >
 > What this policy says:
 >
-> - **matchConstraints** — look at every Pod in the `apps` and `agent` namespaces. Kyverno applies the same check to the Deployments that create Pods, so a bad image is refused before any Pod exists.
-> - **validations** — a rule written in [CEL](https://kubernetes.io/docs/reference/using-api/cel/), the expression language Kubernetes uses for its own checks: the image must come from one of the approved download sites listed above.
-> - **validationActions: [Audit]** — if it does not, log it and let it run anyway. This is why your villain deployed.
+> - **matchConstraints**: look at every Pod in the `apps` and `agent` namespaces. Kyverno applies the same check to the Deployments that create Pods, so a bad image is refused before any Pod exists.
+> - **validations**: a rule written in [CEL](https://kubernetes.io/docs/reference/using-api/cel/), the expression language Kubernetes uses for its own checks: the image must come from one of the approved download sites listed above.
+> - **validationActions: [Audit]**: if it does not, log it and let it run anyway. This is why your villain deployed.
 >
 > The villain lives at `docker.io/peopleforrester/...`, which is not on the list. The policy noticed. It just was not allowed to say no.
 >
@@ -409,7 +409,7 @@ A direct order tends to go nowhere. A reason tends to work.
 >
 > *[Not on the Community cluster]* ⤵
 >
-> **First, see that the attack was noticed.** [Falco](https://falco.org/docs/) is a cloud native **threat detector**. In Falco, a *threat* is an event that could endanger the system. Falco processes kernel events in real time and if one violates a **Falco Rule** — a YAML file that defines the conditions under which an alert should be generated — it triggers an alert. It has a rule for this exact file, and it fires the moment BurritoBot reads it.
+> **First, see that the attack was noticed.** [Falco](https://falco.org/docs/) is a cloud native **threat detector**. In Falco, a *threat* is an event that could endanger the system. Falco processes kernel events in real time and if one violates a **Falco Rule** (a YAML file that defines the conditions under which an alert should be generated), it triggers an alert. It has a rule for this exact file, and it fires the moment BurritoBot reads it.
 >
 > Falco logs a lot on a live cluster, so watch the stream as it happens rather than searching back through it. **Start this in your terminal first and leave it running:**
 >
@@ -437,9 +437,9 @@ A direct order tends to go nowhere. A reason tends to work.
 >
 > What this **KubeArmorPolicy** says:
 >
-> - **selector** — apply to the agent's tool pod (matched by its `app: workshop-mcp` label).
-> - **file.matchDirectories** — the recipe directory, `/tmp/burrito-data/config/legacy/`, and everything under it.
-> - **action: Block** — refuse the read. The process gets an error and no bytes.
+> - **selector**: apply to the agent's tool pod (matched by its `app: workshop-mcp` label).
+> - **file.matchDirectories**: the recipe directory, `/tmp/burrito-data/config/legacy/`, and everything under it.
+> - **action: Block**: refuse the read. The process gets an error and no bytes.
 >
 > Because the check is in the kernel, the agent cannot go around it, cannot see it, and cannot talk its way past it.
 >
@@ -648,8 +648,8 @@ kubectl -n agent get deploy maintenance-shell
 >
 > **The fix is input scanning:** a check on the prompt *before* it reaches the model. Two checks run here, because they fail differently:
 >
-> - **Block list** — matches known-bad strings. Fast and exact, but blind to new wording.
-> - **Classifier** — a small model trained to spot injection attempts. Catches new wording, but can be wrong in either direction.
+> - **Block list**: matches known-bad strings. Fast and exact, but blind to new wording.
+> - **Classifier**: a small model trained to spot injection attempts. Catches new wording, but can be wrong in either direction.
 >
 > Turn it on:
 >
@@ -785,7 +785,7 @@ You will see a span called `execute_tool read_internal_config`, a tool you never
 
 **Your goal:** read every secret in your namespace in the clear, not just the ones you came looking for, using a credential BurritoBot's pod was handed automatically.
 
-Every guardrail so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for — a **[ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/)** called `agent-sa`, with a bearer token projected into the container on disk — and anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.
+Every guardrail so far sits between the model and its tools. This attack uses none of them. Kubernetes hands BurritoBot's pod an identity nobody asked for: a **[ServiceAccount](https://kubernetes.io/docs/concepts/security/service-accounts/)** called `agent-sa`, with a bearer token projected into the container on disk. Anything that can act as that account talks to the cluster's API server directly, behind every guard. You will do it from your own terminal, as the agent, in two commands.
 
 **First, ask what that identity is allowed to do.** You are not asking what BurritoBot *does*; you are asking what its credential would let anyone holding it do. Run this in your terminal:
 
@@ -849,9 +849,9 @@ Want the whole wall of base64 the agent would see? `kubectl get secrets -n agent
 >
 > This is the **Role** from above: a list of which actions (create, read, list, and so on) an account may take on which resources. What this one says:
 >
-> - **deployments, pods, configmaps, services** — create/get/list/patch. The agent still needs these for ordinary work (and for Challenges 1 and 2).
-> - **secrets, resourceNames: [ceo-personal-record]** — `get` that one Secret, by name.
-> - **No `list` on secrets** — it can no longer enumerate them, and cannot read any other one.
+> - **deployments, pods, configmaps, services**: create/get/list/patch. The agent still needs these for ordinary work (and for Challenges 1 and 2).
+> - **secrets, resourceNames: [ceo-personal-record]**: `get` that one Secret, by name.
+> - **No `list` on secrets**: it can no longer enumerate them, and cannot read any other one.
 >
 > It replaces the broad Role the agent had.
 >
