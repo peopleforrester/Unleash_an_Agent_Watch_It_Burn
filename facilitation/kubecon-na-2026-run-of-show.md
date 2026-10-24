@@ -583,5 +583,13 @@ number and says who settled it and when, so references to it elsewhere still lan
    ballroom on one venue Wi-Fi NAT, verified on real phones. Not yet done; needs the
    live platform and two real devices.
 8. **The deck (#449, rounds-agenticburn#38).** This file is the beat list the deck is
-   cut from. The deck itself is built in `peopleforrester/rounds-agenticburn` and is
-   not written against these segments yet.
+   cut from. The deck itself is built in `peopleforrester/rounds-agenticburn`
+   (`attendee.html`); this repo builds no slide HTML. The cut is drafted on
+   rounds-agenticburn#38 and waits for Michael's review there. The 16:9 PDF for
+   Sessionize is exported from a checkout of that repo by `scripts/kubecon-deck-pdf.py`
+   into `facilitation/kubecon-na-2026-deck/`, which records the sha256 of the source it
+   was printed from; run its `check` before uploading. The export refuses a deck that
+   is not 16:9, and reveal.js prints the deck at its own `width` and `height`, which
+   `attendee.html` does not set yet (the default, 960 by 700, prints 998 by 728). It
+   also refuses any slide that names an abstract point or challenge cut in the tables
+   above, so the PDF is exported last, once #456 has settled what is cut.

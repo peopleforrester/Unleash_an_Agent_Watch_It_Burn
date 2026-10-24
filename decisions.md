@@ -900,3 +900,33 @@ Michael's answers on #454, and where each one lands in the repo.
   come down in the same session with zero fleet resources verified. A second admin cluster is not part of
   it. The run on attackme and michael-admin is recorded on #510, #526, #528 and #530. The teardown's zero
   check (`verify/account-audit.sh` CLEAN) is not recorded in this repo yet.
+## 2026-10-24 · #449 · The KubeCon deck stays in rounds-agenticburn; this repo exports its 16:9 PDF and holds it to its source
+
+**Where the deck is built.** The issue asked to confirm with Michael and Whitney where the slides are built
+before writing HTML (the coordinator's answer to BurritoBot question 115). The run-of-show had already settled
+it: the presenters drive from `attendee.html` in `peopleforrester/rounds-agenticburn`, and rounds-agenticburn#38
+cut that deck from this repo's run-of-show (drafted on its branch `agent/38-7151`, waiting for Michael's review).
+So this repo builds no slide HTML. What #449 adds is the PDF.
+
+**The export lives here.** `scripts/kubecon-deck-pdf.py export <rounds-checkout>` prints the deck through
+reveal.js's own `?print-pdf` mode in Playwright's Chromium (playwright 1.64.1, already pinned on #387, used only
+through `uv run --with`), into `facilitation/kubecon-na-2026-deck/`: the PDF and `export.json`. This follows
+BurritoBot's M5 approach (an HTML source printed by Chromium and held to it by sha256) without copying its
+slides. It lives here rather than in rounds-agenticburn because the run-of-show and its cut tables are here,
+and the export reads them. The record keeps the rounds-agenticburn commit, the sha256 of `attendee.html` and of
+every local file it loads (an image change makes the PDF stale too), the PDF's sha256, its page count and size,
+and each slide's text without speaker notes. `check` needs no browser. It recomputes all of that and re-scans
+the recorded text against the cut tables as they stand at upload time.
+
+- **Cut items come from the run-of-show, not a copy.** A row of "Abstract points to segments" or "Challenges
+  shown live, and challenges cut" whose cell starts with "Cut" is refused on any slide. The words for each of
+  the nine points are in the script. Today only C8 is cut.
+- **16:9 is the deck's job.** reveal.js sizes the print page from the deck's `width` and `height`, and
+  `attendee.html` sets neither (960 by 700 prints 998 by 728). The export refuses a page that is not 16:9
+  (0.25% tolerance, for reveal's floored margin) rather than overriding the deck's size, which would print a
+  layout nobody presented. 1600 by 900 gives an exact page. Setting it is a rounds-agenticburn change, filed
+  there as a follow-up.
+- **Refused, nothing written:** another repo's checkout, uncommitted changes to the deck, a first slide without
+  the talk title, a page error or a failed request.
+- **The PDF itself is exported last**, once rounds-agenticburn#38 is on its `main`, the deck is 16:9, and #456
+  has settled what is cut. The upload is the presenters'.
