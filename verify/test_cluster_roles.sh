@@ -61,6 +61,29 @@ check "admin bootstraps the armed profile" \
 check "an owner selects only that presenter's cluster" '[[ "$(spec whitney | wc -l)" == "1" ]]'
 check "both selects all three" '[[ "$(spec both | wc -l)" == "3" ]]'
 
+echo "== teardown takes the same selector as the build (#88) =="
+# After rounds were retired, `instructors down` still looped rounds 1/2/3, matched no roster row and
+# destroyed nothing. The workers are stubbed: run_pool prints the names it would hand to down_one.
+down() { q "require_tools() { :; }; terraform() { :; }; report_failures() { :; }
+            read_vpc_for() { VPC_ID=vpc-test; SUBNETS_JSON='[]'; }
+            run_pool() { shift; printf '%s\n' \"\$@\"; }
+            cmd_instructors down $1" | sort | tr '\n' ' '; }
+check "down with no selector destroys the whole roster" \
+  '[[ "$(down "")" == "watch-it-burn-community watch-it-burn-michael-admin watch-it-burn-whitney-admin " ]]'
+check "down both destroys the whole roster" \
+  '[[ "$(down both)" == "watch-it-burn-community watch-it-burn-michael-admin watch-it-burn-whitney-admin " ]]'
+check "down <owner> destroys only that presenter's cluster" '[[ "$(down whitney)" == "watch-it-burn-whitney-admin " ]]'
+check "and never the unowned community cluster" '[[ "$(down michael)" == "watch-it-burn-michael-admin " ]]'
+check "down <role> destroys only that role" '[[ "$(down community)" == "watch-it-burn-community " ]]'
+check "down and up select the same set for every selector" \
+  '( for s in "" both community admin michael whitney; do
+       [[ "$(down "$s")" == "$(spec "$s" | cut -d= -f1 | tr "\n" " ")" ]] || exit 1
+   done )'
+check "an unknown selector destroys nothing" '[[ -z "$(down nobody-by-that-name)" ]]'
+check "and says so rather than exiting silently" \
+  '( cd "$(dirname "${FLEET}")" && bash -c "source \"${FLEET}\" >/dev/null 2>&1; require_tools() { :; }
+       run_pool() { :; }; cmd_instructors down nobody-by-that-name" 2>&1 ) | grep -q "no roster clusters"'
+
 echo "== Datadog: one shared org for the presenters, dual shipping for students (#296) =="
 # datadog_keys_for prints "api app admin_api admin_app". A roster cluster takes the shared org as its
 # PRIMARY and has no second destination; an attendee takes a pool org and dual-ships to the shared one.

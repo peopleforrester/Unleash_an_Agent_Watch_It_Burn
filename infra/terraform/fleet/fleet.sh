@@ -523,19 +523,20 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       across all accounts. DRY-RUN unless WIB_APPLY=1.
     status            List clusters that have state and their EKS status.
 
-  INSTRUCTOR clusters (9 fixed: 3 per round, NOT in the attendee pool):
-    instructors up [round|owner]
-                              Provision the roster. The argument is a ROUND (1|2|3), an OWNER
+  INSTRUCTOR clusters (roster.tsv: one community + one admin per presenter, NOT in the attendee pool):
+    instructors up [role|owner]
+                              Provision the roster. The argument is a ROLE (community|admin), an OWNER
                               (michael|whitney, from roster.tsv's owner column), or both|all for
-                              everything. `instructors up whitney` builds exactly her three clusters.
+                              everything. `instructors up whitney` builds exactly her admin cluster.
                               Regenerates routes AND
                               registers the roster with the provisioning app (set WIB_PROVISIONING_URL +
                               WIB_ADMIN_TOKEN; WIB_NO_INGEST=1 opts out).
-    instructors down [round]  Destroy the roster (optionally one round).
-    ingest-instructors [round]  Register the roster with the provisioning app on its own (the same step
+    instructors down [role|owner]
+                              Destroy the roster, or exactly the part the same selector built with
+                              'instructors up'.
+    ingest-instructors [role]  Register the roster with the provisioning app on its own (the same step
                               'instructors up' runs). Use after a console NLB was not ready in time.
-    Round->account split (avoids per-account overload): R1=\${WIB_ACCOUNT_R1}, R2=\${WIB_ACCOUNT_R2},
-    R3=\${WIB_ACCOUNT_R3}. Override via those env vars. Each account needs its own lab-vpc applied to
+    Every roster cluster lives in \${WIB_DEFAULT_ACCOUNT}, which needs its lab-vpc applied to
     states/<profile>.tfstate first (the command prints the exact apply line if missing).
 
 Provisioning AUTO-BOOTSTRAPS the IDP after each cluster comes up (deploy-full-idp.sh): attendees +
@@ -2175,43 +2176,51 @@ urlenc() {
 # instance_type / tier) before provisioning. Runs inside run_pool's per-cluster subshell, so the globals
 # are process-local and cannot clash across concurrent clusters.
 
-# One round in its own subshell (§4.6): per-round TF_PROFILE / VPC globals stay isolated from other
-# concurrent rounds. Reads the round's clusters from the roster (capped by WIB_PER_ROLE) and provisions
-# or destroys them via the concurrency pool.
-# Tear down one round's roster clusters. UP no longer comes through here: it builds PROVISION_SPEC and
-# goes through the unified _provision_spec_fleet like the attendee path (#162). This is down-only now, so
-# the argument that used to select up/down is gone and the dead reference to the removed _up_from_roster
-# is gone with it.
-_run_role() {
-    local r="$1" entry name rr tier itype pidscol bp names=() n=0
+# The roster cluster names of one ROLE, optionally narrowed to one OWNER, capped by WIB_PER_ROLE. The
+# same rule cmd_instructors up applies when it builds PROVISION_SPEC: an owner filter excludes unowned
+# rows, and the cap counts only rows that survived the filter.
+_roster_names_for() {
+    local r="$1" owner_filter="${2:-}" entry name rr tier itype pidscol bp owner n=0
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rr tier itype pidscol bp owner <<<"${entry}"
         [[ "${rr}" == "${r}" ]] || continue
+        [[ -n "${owner_filter}" && "${owner,,}" != "${owner_filter}" ]] && continue
         [[ -n "${WIB_PER_ROLE}" && "${n}" -ge "${WIB_PER_ROLE}" ]] && break
-        names+=("${name}"); n=$((n + 1))
+        printf '%s\n' "${name}"; n=$((n + 1))
     done
+    return 0
+}
+
+# One role in its own subshell (§4.6): per-role TF_PROFILE / VPC globals stay isolated from other
+# concurrent roles. Tears down the role's roster clusters (narrowed by owner) via the concurrency pool.
+# UP no longer comes through here: it builds PROVISION_SPEC and goes through the unified
+# _provision_spec_fleet like the attendee path (#162).
+_run_role() {
+    local r="$1" owner_filter="${2:-}" names=()
+    mapfile -t names < <(_roster_names_for "${r}" "${owner_filter}")
     [[ "${#names[@]}" -gt 0 ]] || return 0
     local acct; acct="$(account_for_role "${r}")"
-    log "round ${r} instructors -> account '${acct}': ${names[*]}"
+    log "${r} roster clusters -> account '${acct}': ${names[*]}"
     if [[ -n "${WIB_DRY_RUN}" ]]; then VPC_ID="dry-vpc"; SUBNETS_JSON='[]'; else read_vpc_for "${acct}"; fi
     TF_PROFILE="${acct}"
     run_pool down_one "${names[@]}"
 }
 
-# Provision/destroy the instructor roster. Rounds run CONCURRENTLY by default (§4.6), each in its own
-# subshell; WIB_SERIAL=1 forces the old serial loop. Round selection: 2nd arg > WIB_ROLES env > all.
+# Provision/destroy the instructor roster. Down runs each role CONCURRENTLY (§4.6), in its own subshell;
+# WIB_SERIAL=1 forces the old serial loop.
 cmd_instructors() {
     local action="${1:-}" selector="${2:-}"
     case "${action}" in
-        up) ;;
-        down) _instructors_down "${selector}"; return ;;
+        up|down) ;;
         status) cmd_status; return ;;
         *) usage ;;
     esac
-    load_roster
     # The second argument is a ROLE (community|admin) or an OWNER (michael|whitney|both|all). Rounds are
     # gone (#291); the roster carries a role instead, so "give me the community cluster" and "give me
-    # Whitney's" are both one word, and neither is ambiguous.
+    # Whitney's" are both one word, and neither is ambiguous. Parsed once for BOTH directions, so
+    # `instructors down whitney` destroys exactly what `instructors up whitney` built (#88). Down used to
+    # parse its own argument as a round and loop rounds 1/2/3 after the rounds were retired, so it matched
+    # no roster row and destroyed nothing, with or without a selector.
     local role_filter="" owner_filter=""
     case "${selector}" in
         "" ) ;;
@@ -2219,6 +2228,8 @@ cmd_instructors() {
         both|all ) ;;
         * ) owner_filter="${selector,,}" ;;
     esac
+    if [[ "${action}" == "down" ]]; then _instructors_down "${role_filter}" "${owner_filter}"; return; fi
+    load_roster
     local roles=(community admin) r
     [[ -n "${role_filter}" ]] && roles=("${role_filter}")
 
@@ -2257,19 +2268,27 @@ cmd_instructors() {
     return "${_rc}"
 }
 
-# Instructor teardown keeps the round-grouped loop: down has no routes/register tail to share, and
-# down_one needs TF_PROFILE per account, which the round split already provides.
+# Instructor teardown keeps the role-grouped loop: down has no routes/register tail to share, and
+# down_one needs TF_PROFILE per account, which the role split already provides. Role selection: the
+# role filter > WIB_ROLES env > all; the owner filter then narrows each role to one presenter's rows.
 _instructors_down() {
-    local role_filter="${1:-}"
+    local role_filter="${1:-}" owner_filter="${2:-}"
     require_tools
     mkdir -p "${STATE_DIR}" "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     load_roster
+    local roles=(community admin) r total=0
+    [[ -n "${WIB_ROLES}" ]] && IFS=',' read -r -a roles <<<"${WIB_ROLES}"
+    [[ -n "${role_filter}" ]] && roles=("${role_filter}")
+    for r in "${roles[@]}"; do
+        account_for_role "${r}" >/dev/null
+        total=$(( total + $(_roster_names_for "${r}" "${owner_filter}" | wc -l) ))
+    done
+    # Same contract as up: an empty selection is a message and exit 0, never a silent no-op.
+    [[ "${total}" -gt 0 ]] || { log "no roster clusters for the requested selection"; return 0; }
+    log "destroying ${total} roster cluster(s)..."
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
-    local rounds=(1 2 3) r
-    [[ -n "${WIB_ROLES}" ]] && IFS=',' read -r -a rounds <<<"${WIB_ROLES}"
-    [[ -n "${role_filter}" ]] && rounds=("${role_filter}")
-    for r in "${rounds[@]}"; do
-        _run_role "${r}" &
+    for r in "${roles[@]}"; do
+        _run_role "${r}" "${owner_filter}" &
         [[ -n "${WIB_SERIAL}" ]] && wait
     done
     wait || true
