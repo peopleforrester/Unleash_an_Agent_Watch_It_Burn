@@ -77,4 +77,8 @@ down after. There is no production-risk constraint here. Apply these without exc
    briefly, then proceed with the change unless told otherwise. Do not re-raise settled objections.
 
 Test command: `bash verify/run-tests.sh`
-E2E command: `bash verify/run-e2e.sh`
+
+The live-cluster suite, `bash verify/run-e2e.sh`, is run by hand during a cluster build, with CONTEXT,
+IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster. It is deliberately not
+declared as the gate's E2E command: hecaton's promotion gate has no cluster, no AWS and none of its tools,
+so declaring it would hold main red for good (#543).

@@ -1020,3 +1020,19 @@ and about 75 seconds of script), five incident slides with a one-slide version, 
 
 The delivered `slides-outline.md` and `cold-open-script.md` are not changed, apart from one build note that
 points at the draft. The disposition is recorded in `docs/research/2026-08-28-challenge-currency-review.md`.
+
+## 2026-10-24 · 3.3 · No E2E command for the promotion gate; run-e2e.sh is by hand (#543)
+
+`verify/run-e2e.sh` needs a live attendee cluster (CONTEXT), AWS credentials (IAM_PIPELINE_PROFILE,
+IAM_PIPELINE_REGION) and kubectl, helm, node 24, the kyverno CLI, conftest, terraform and the aws CLI.
+Hecaton's promotion gate runs the declared `E2E command:` and has none of these, so promotion to main
+failed on every attempt with 58 merges waiting. AGENTS.md now declares only `Test command:` (the offline
+suite, `verify/run-tests.sh`), which the gate runs instead. The live suite stays the by-hand check during a
+cluster build. This is the standing answer to hecaton's "Declare an E2E command for the heavy gate" issue:
+the repo's heavy tests need real services the gate cannot reach, so no line is declared.
+
+### REJECTED: keep `bash verify/run-e2e.sh` as the E2E command
+**Why:** the gate host has no attendee cluster or AWS profile, and the suite fails rather than skips when
+either is missing, by design.
+**Status:** Revisit when the gate can reach a live cluster and AWS.
+**Do not suggest:** a skip-on-missing mode in run-e2e.sh; it would let the gate go green having proved nothing.
