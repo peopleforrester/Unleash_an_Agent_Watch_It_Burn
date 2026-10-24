@@ -32,6 +32,23 @@ global kube state. Be explicit about the target cluster on every single command.
 If you are unsure which cluster a command will hit, stop and make the context explicit first. This
 mirrors the global rule `~/.claude/rules/infra/kubernetes.md` (Cluster Context Safety).
 
+## Where things live
+
+This repo is the platform and content of the workshop "Build a Platform, Unleash an Agent on it... and
+Watch it Burn!" (Michael Forrester with Whitney Lee). It holds the build, not the record of the talk.
+
+- **The talk register, abstracts and talk scripts:** talks-knowledge (`~/repos/talks/talks-knowledge`,
+  `peopleforrester/talks-knowledge`). `talks/register.md` section 2 is this talk's entry: canonical repo,
+  argument, and where it has run. Submitted abstracts are under `abstracts/` (`library.md` catalogs which
+  went where); talk scripts are under `speaking/`. `docs/ABSTRACT.md` here is a working copy of the
+  published listings.
+- **Event state** (dates, slots, rooms, CFPs, acceptances): conference-knowledge
+  (`~/repos/conferences/conference-knowledge`, `events/registry.yaml`, entries `aiewf-2026-watch-it-burn`,
+  `devopsdays-portland-2026`, `kubecon-na-2026`). Name the entry; do not copy the fact here (#417).
+- **Components built from their own repos** (git submodules): guard-proxy-agenticburn at
+  `gitops/ai-layer/guard-proxy`, llm-guard-cpu-offline at `images/llm-guard`.
+- **This repo's own state:** `PROJECT_STATE.md` (current cycle) and `decisions.md` (append-only).
+
 ## Branch target: staging, not main
 
 All changes must be pushed to the `staging` branch, not `main`. Create feature branches off `staging` and open PRs targeting `staging`. Never open a PR targeting `main` directly.

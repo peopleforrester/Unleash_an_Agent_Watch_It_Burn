@@ -708,3 +708,14 @@ instead. Kept on purpose:
 Three facts this repo held that the registry did not (the World's Fair submission record, the Portland
 1.5-hour public listing, the KubeCon survey state on 2026-10-24) went to conference-knowledge as an
 `agent-task` issue.
+
+## 2026-10-24 · #422 · AGENTS.md says who this repo is and points at talks-knowledge
+
+talks-knowledge asked every talk repo to name itself and point at the talk record (audit 2026-10-14). The only
+gap here was the pointer, so `AGENTS.md` (which `CLAUDE.md` links to) gains a "Where things live" section:
+talks-knowledge for the register (`talks/register.md` section 2), abstracts and talk scripts;
+conference-knowledge for event state; the two submodule repos; and this repo's own state files.
+
+- **README unchanged.** It already gives the title, speakers, argument, the event (with its slot pointed at
+  conference-knowledge since #417) and the repos it is built from. It does not say "delivered"; that is
+  public prose, so it is left for Michael.
