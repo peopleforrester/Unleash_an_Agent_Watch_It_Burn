@@ -280,7 +280,9 @@
     <!-- /quick, not the long end-of-workshop form (#364). This is the tab a student sits in for the
          whole workshop, so it is the likeliest place a thought gets dropped mid-attack, and /quick stays
          on the page after a send. source=burritobot separates a note left here from one left in the
-         guide, which is what says whether friction was in the chat or in the instructions. -->
+         guide, which is what says whether friction was in the chat or in the instructions.
+         This href is the workshop default. An event that names its own survey overrides it from
+         event.js (#451); do not edit an event's URL in here. -->
     <a class="hb" id="fbbtn" href="https://feedback.agenticburn.com/quick?context=Challenges&amp;source=burritobot" target="_blank" rel="noopener">&#128172; Feedback</a>
   </header>
 
@@ -393,6 +395,9 @@
   <div id="noburritos"><b>NO BURRITOS FOR YOU</b><span id="nbsub">(no cluster connected)</span></div>
   <div id="celebrate"><div class="winmsg"><h2>🌯 Free burritos for life! 🌯</h2><p>You made it through the whole order at Hex &amp; Cauldron. Click anywhere to close.</p></div></div>
 
+<!-- The event knob (#451): where Feedback goes for the event this fleet serves. A missing file leaves
+     window.WIB_EVENT unset, and the button keeps the workshop's /quick form below. -->
+<script src="event.js"></script>
 <script>
   // Every cluster's BurritoBot talks to its OWN same-origin /chat. The agenticburn.com router proxies the
   // whole host+path (e.g. r2-1.agenticburn.com/chat) to that cluster's console, so same-origin reaches the
@@ -679,12 +684,16 @@
     var cluster=q.get('cluster'), user=q.get('user');
     // Identity follows the nav links, so the VTT button lands on THIS cluster's terminal.
     var nq=[]; if(cluster)nq.push('cluster='+encodeURIComponent(cluster)); if(user)nq.push('user='+encodeURIComponent(user));
+    // An event that names its own survey (event.js, #451) sends Feedback there verbatim: it is a third
+    // party's page, so no cluster or user rides along. Otherwise the button keeps the workshop's /quick.
+    var ev=window.WIB_EVENT||{}, fb=document.getElementById('fbbtn');
+    var evfb=(typeof ev.feedbackUrl==='string' && /^https:\/\//.test(ev.feedbackUrl)) ? ev.feedbackUrl : '';
+    if(fb&&evfb)fb.href=evfb;
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that
       // already has one drops the cluster identity silently instead of failing loudly.
-      var fb=document.getElementById('fbbtn');
-      if(fb&&nq.length)fb.href+=(fb.href.indexOf('?')>=0?'&':'?')+nq.join('&');
+      if(fb&&!evfb)fb.href+=(fb.href.indexOf('?')>=0?'&':'?')+nq.join('&');
       var bbn=document.getElementById('bbbtn'); if(bbn)bbn.href='/?'+nq.join('&');
     }
     // Same as lab.html: show the name the student was GIVEN (the hostname they are on), not the

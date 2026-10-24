@@ -297,7 +297,10 @@ is merely slow rather than rebuilding:
 - [ ] **Audience path and phones (#450, #451).** Confirm the room's rate limit and
   timeouts are sized for a ballroom and that the page, the projector QR, and the
   Feedback link work on a real iPhone and a real Android phone on venue-like
-  Wi-Fi and on cellular.
+  Wi-Fi and on cellular. Fill in `facilitation/kubecon-na-2026-phone-check.md`.
+  The QR on the slide is `facilitation/kubecon-na-2026-audience-qr.svg`, and the
+  Feedback button opens the session survey, both set in
+  `gitops/ai-layer/web/event.js`.
 
 ## Rollback on the day
 

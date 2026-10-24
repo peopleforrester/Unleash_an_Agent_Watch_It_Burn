@@ -46,6 +46,7 @@ configMapGenerator:
       - web/display.js
       - web/skins.js # VTT skin layer: skin definitions (BurritoBot default + Accenture); see web/SKINS.md
       - web/active-skin.js # the one-line skin knob (switch skins here)
+      - web/event.js # the event knob: the storefront's Feedback destination and the QR's public URL (#451)
       - web/skin.js # applier: sets palette vars + brand text/title/favicon from the active skin
   - name: console-conf
     files:

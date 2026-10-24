@@ -467,3 +467,24 @@ only so that links handed out before the rename still resolved, and none is stil
 - Still left from #359: provisioning-agenticburn's `STUDENT_PREVIEW_CONSOLE_URL` defaults to
   `https://a-001.agenticburn.com`. That default now points at a host that is never served, so it has to
   change in that repo. It is filed there as a follow-up.
+
+## 2026-10-24 · #451 · The event knob sets the storefront's Feedback link and the projector QR; segno 1.6.6
+
+The storefront's Feedback button was hardcoded to `feedback.agenticburn.com/quick`, and the feedback app stays
+off for the KubeCon breakout (#448). The destination is now set per event in `gitops/ai-layer/web/event.js`,
+shipped in the console ConfigMap next to `active-skin.js`, and never edited into the page.
+
+- **Per event, not per cluster.** The fleet is rebuilt for each event, and the console never learns its own
+  public host (console.conf, #152). A knob the page reads in the browser is the one place both the community
+  and the admin clusters get the same answer without a guard-proxy change in its own repo.
+- **The survey URL goes out verbatim.** It is a third party's page, so the cluster and user the workshop
+  appends for `/quick` (#364, #383) are not added. Only an `https://` value is used; anything else leaves the
+  workshop default.
+- **The value** is the answer to question 147 (BurritoBot repo #80), given by the coordinator under Michael's
+  standing rules: `https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553`. Whether
+  it shows this talk is checked once Sessionize opens rating (`facilitation/kubecon-na-2026-phone-check.md`).
+- **The QR** is rendered from `publicUrl` in the same file by `scripts/audience-qr.py`, so the slide and the
+  page cannot name two addresses. **segno 1.6.6** (PyPI, current on 2026-10-24) renders it: pure Python, no
+  native libraries, and deterministic, so `verify/test_audience_page_e2e.py` can compare the committed SVG
+  byte for byte. It is used only through `uv run --with segno==1.6.6`, never installed into the offline
+  suite's interpreter. The offline suite reads the URL from the SVG's `<title>` instead.
