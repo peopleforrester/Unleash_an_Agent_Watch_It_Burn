@@ -66,6 +66,14 @@ case "${method} ${path}" in
 esac
 printf '%s' "${code}"
 S
+# The terminal harvester (provisioning-agenticburn's harvest_terminal_credential.sh <cluster> [region] [out-dir]):
+# terminal-password reads the login it just wrote back through it, as user:password.
+mkdir -p "${T}/prov/scripts"
+cat >"${T}/prov/scripts/harvest_terminal_credential.sh" <<'S'
+#!/usr/bin/env bash
+echo "harvest $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"
+printf 'agentic:agentic\n' >"$3/$1.terminal"
+S
 chmod +x "${SHIM}"/*
 export T CALLS PATH="${SHIM}:${PATH}"
 A=watch-it-burn-attendee-007; ADMIN=watch-it-burn-whitney-admin
@@ -74,7 +82,7 @@ echo accen-qa >"${T}/states/${A}.account"
 ctx_of() { printf 'arn:aws:eks:us-west-2:111122223333:cluster/%s' "$1"; }
 # Sourcing fleet.sh: the source guard keeps main() from running; WIB_* settings make every wait instant.
 src() { # $1: bash snippet to run after sourcing
-  ( cd "$(dirname "${FLEET}")" && WIB_ADMIN_TOKEN=test-token WIB_PROVISIONING_URL=https://prov.test \
+  ( cd "$(dirname "${FLEET}")" && WIB_ADMIN_TOKEN=test-token WIB_PROVISIONING_URL=https://prov.test WIB_PROVISION_DIR="${T}/prov" \
       WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/logs" WIB_AWS_POOL_DIR="${T}/pool" WIB_RESTART_WAIT=2 WIB_RESTART_INTERVAL=1 \
       bash -c "source '${FLEET}' >/dev/null 2>&1; $1" 2>>"${T}/stderr" )
 }
@@ -115,7 +123,8 @@ KCTX="$(ctx_of "${A}")" src "cmd_terminal_password ${A}"; rc=$?
 check "exits 0" '[[ "${rc}" -eq 0 ]]'
 check "an attendee cluster gets the student login" 'grep -q "create secret generic terminal-auth --from-literal=TTYD_CREDENTIAL=agentic:agentic --dry-run=client" "${CALLS}"'
 check "the secret is applied, so an existing one is overwritten" '[[ -s "${T}/applied" ]]'
-check "the local copy ingest publishes matches" '[[ "$(cat "${T}/pool/${A}.terminal")" == agentic ]]'
+check "the local copy ingest publishes is harvested back, as user:password, in the cluster's account" \
+  'grep -q "harvest ${A} .* ${T}/pool \\[AWS_PROFILE=accen-qa\\]" "${CALLS}" && [[ "$(cat "${T}/pool/${A}.terminal")" == agentic:agentic ]]'
 check "the terminal pod is restarted so ttyd reads it" 'grep -q -- "-n agent get pods -l app.kubernetes.io/name=web-terminal" "${CALLS}"'
 : >"${CALLS}"
 KCTX="$(ctx_of "${ADMIN}")" src "cmd_terminal_password ${ADMIN}"

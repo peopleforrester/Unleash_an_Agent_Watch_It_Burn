@@ -789,3 +789,21 @@ is why we use it here" and the "Its policies are written in YAML" tail stay remo
 restored, and no replacement claim (policy reports, signature verification, exceptions, CLI testing) is
 added. The capital "And" the issue mentions no longer exists: cacf1db replaced that sentence with "Some
 cluster-level policy functionality is also available natively in Kubernetes".
+
+## 2026-10-24 · #445 · fleet.sh takes the terminal login only through harvest_terminal_credential.sh
+
+**Decision:** every place fleet.sh used to write `<cluster>.terminal` (bootstrap, `ingest`, `terminal-password`)
+now calls `${WIB_PROVISION_DIR}/scripts/harvest_terminal_credential.sh <cluster> <region> <aws-pool-dir>` in the
+cluster's account and nothing else writes the file. It holds the whole `user:password`, which is the only form
+merge_pool.py accepts since provisioning-agenticburn#16. `ingest` sends both halves from that file, split on
+the first colon.
+
+**On the harvester's exit codes in `ingest`:** 0 registers the row. 1 (unreachable, unreadable, malformed)
+registers nothing and records `ingest:<name>`, so the existing retry loop takes it again; the old fallback to a
+cached password is gone, because that cache is what showed agentic / sprouts. 3 (no Secret, terminal open)
+still registers the console with an empty login and records `terminal-open:<name>`, so the run fails by name
+without hiding the console from a student. fleet.sh removes `<cluster>.terminal` on any non-zero exit, as the
+harvester does.
+
+**Re-ingest:** `fleet.sh ingest pool` reads every row from /admin/roster and re-ingests it by name.
+/admin/import upserts and never touches claim state, so claimed rows pick up the corrected login.

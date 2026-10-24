@@ -41,7 +41,7 @@ no Terraform state on the runner, because the fleet did not provision it.
 | `restart-agent` | `fleet.sh restart-agent <name>` | Deletes BurritoBot's pod (`app.kubernetes.io/name=workshop-agent`, ns `agent`) and waits for a Ready replacement. |
 | `restart-console` | `fleet.sh restart-console <name>` | The same for the console pod (`app.kubernetes.io/name=console`). |
 | `converge` | `fleet.sh converge <name>` | The existing repair loop: hard-refresh unhealthy Argo apps, run the repairs, and wait for the console endpoint to answer 200. |
-| `terminal-password` | `fleet.sh terminal-password <name>` | Rewrites `terminal-auth` with the credential the cluster's role is handed (`terminal_creds_for`), then restarts the terminal so ttyd reads it. This restores the expected login. It does not mint a new one, because the access page every student reads shows the role's credential. |
+| `terminal-password` | `fleet.sh terminal-password <name>` | Rewrites `terminal-auth` with the credential the cluster's role is handed (`terminal_creds_for`), harvests it back to `<cluster>.terminal` as `user:password` (`harvest_terminal_credential.sh`), then restarts the terminal so ttyd reads it. Run `fleet.sh ingest <name>` afterwards to publish it. This restores the expected login. It does not mint a new one, because the access page every student reads shows the role's credential. |
 
 Restarts are pod deletes, never `kubectl rollout restart`. A rollout restart is a Deployment UPDATE, which
 `block-argocd-drift` denies for any principal other than Argo CD, kagent, a system account or

@@ -39,6 +39,7 @@ _sibling_repo() {   # $1 repo name; echoes the first location that exists, else 
 readonly WIB_PROVISION_DIR="${WIB_PROVISION_DIR:-$(_sibling_repo provisioning-agenticburn)}"
 readonly WIB_APEX_DIR="${WIB_APEX_DIR:-$(_sibling_repo apex-agenticburn)}"
 readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
+readonly TERMINAL_HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_terminal_credential.sh"
 readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${WIB_AWS_POOL_DIR:-${SCRIPT_DIR}/aws-pool}"   # gitignored: holds live access keys; WIB_AWS_POOL_DIR for the shim tests
@@ -515,6 +516,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       fleet profiles for the length of the workshop. See docs/admin-console.md.
     harvest <n>      Harvest student-facing access info (console NLB / grafana / ...) of an up-fleet run
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
+    ingest <n> | ingest <name...> | ingest pool
+                      Register clusters with the provisioning app through /admin/import, the terminal
+                      login harvested from each cluster's terminal-auth Secret
+                      (\${WIB_PROVISION_DIR}/scripts/harvest_terminal_credential.sh). 'pool' re-ingests
+                      every row the live pool holds, claimed ones included, so a corrected login reaches
+                      students who already have a cluster.
     aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
                       + offset). DRY-RUN unless WIB_APPLY=1; WIB_ACCESS_ENTRIES=1 maps users into clusters.
     reap-lbs          Find load balancers, target groups and volumes tagged for a cluster that no longer
@@ -1012,6 +1019,37 @@ bootstrap_one() {
     rm -f "${kcfg}"
 }
 
+# Copy this cluster's terminal login, exactly as the agent/terminal-auth Secret holds it, to
+# ${AWS_POOL_DIR}/<name>.terminal, through provisioning-agenticburn's harvest_terminal_credential.sh. That
+# file is what merge_pool.py joins into the pool, and it accepts only the whole user:password value: a
+# bare password, which is what this script used to write, counts as no credential and fails the build by
+# name (provisioning-agenticburn#16, the agentic/sprouts page). One harvester for every writer means the
+# file can only ever say what the cluster enforces.
+# Returns the harvester's code: 0 written, 3 the Secret is absent (the terminal is OPEN), 1 unreachable,
+# unreadable or malformed. On any non-zero code no <name>.terminal is left behind, so a stale one cannot
+# be published as current.
+harvest_terminal_login() {
+    local name="$1" acct_profile="$2" rc=0
+    local file="${AWS_POOL_DIR}/${name}.terminal"
+    if [[ -z "${acct_profile}" ]]; then
+        log "  ${name}: no account to harvest the terminal login from"; rm -f "${file}"; return 1
+    fi
+    if [[ ! -f "${TERMINAL_HARVEST_SCRIPT}" ]]; then
+        log "  ${name}: terminal harvester missing: ${TERMINAL_HARVEST_SCRIPT} (set WIB_PROVISION_DIR)"
+        rm -f "${file}"; return 1
+    fi
+    mkdir -p "${AWS_POOL_DIR}" "${LOG_DIR}"
+    AWS_PROFILE="${acct_profile}" bash "${TERMINAL_HARVEST_SCRIPT}" "${name}" "${WIB_REGION}" "${AWS_POOL_DIR}" \
+        >>"${LOG_DIR}/${name}.terminal.log" 2>&1 || rc=$?
+    case "${rc}" in
+        0) ;;
+        3) log "  ${name}: no terminal-auth Secret, so its terminal is OPEN (no login to harvest)" ;;
+        *) log "  ${name}: could not harvest the terminal login (exit ${rc}; see ${LOG_DIR}/${name}.terminal.log)" ;;
+    esac
+    [[ "${rc}" -eq 0 ]] || rm -f "${file}"
+    return "${rc}"
+}
+
 # Give this cluster's terminal its own password, so the shell is not open to anyone who can reach the
 # load balancer. The credential is enforced by ttyd itself (images/web-terminal/entrypoint.sh), because
 # that is the only place upstream reachability cannot route around: the NLB answers on its bare IP, so
@@ -1019,24 +1057,24 @@ bootstrap_one() {
 # fleet 2026-07-25, after an attendee reached the instructor's cluster on 2026-07-23.
 #
 # Idempotent: an existing secret is left alone, so re-running a bootstrap never changes a password an
-# attendee has already been handed. The password is persisted next to the AWS pool CSV so `ingest` can
-# publish it with the rest of the cluster's access info.
+# attendee has already been handed. The login is harvested from the Secret into <name>.terminal next to
+# the AWS pool CSV (harvest_terminal_login) so `ingest` and merge_pool.py publish it with the rest of
+# the cluster's access info.
 bootstrap_terminal_auth() {
-    local name="$1" acct_profile="$2" kcfg="$3"
-    local pwfile="${AWS_POOL_DIR}/${name}.terminal" pw i
+    local name="$1" acct_profile="$2" kcfg="$3" i
 
     for i in $(seq 1 40); do  # the agent namespace is created asynchronously by ArgoCD
         KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get ns agent >/dev/null 2>&1 && break; sleep 6
     done
 
-    # Already provisioned? Keep whatever the cluster is currently enforcing, and make sure the local
-    # copy matches it, so a lost pwfile does not silently desync from the live password.
+    # Already provisioned? Keep whatever the cluster is currently enforcing, and harvest it, so a lost
+    # .terminal file does not silently desync from the live login.
     local live
     live="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get secret terminal-auth -n agent \
         -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null | base64 -d 2>/dev/null || true)"
     if [[ -n "${live}" ]]; then
-        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${live#*:}" >"${pwfile}"; chmod 600 "${pwfile}"
         log "  terminal-auth already set: ${name}"
+        harvest_terminal_login "${name}" "${acct_profile}" || record_fail "${name}:terminal-harvest"
         return
     fi
 
@@ -1051,10 +1089,10 @@ bootstrap_terminal_auth() {
     # It is not protecting anything that outlives the session.
     # Role-split (#109): instructor clusters get sprouts, the attendee pool gets agentic.
     local cred; cred="$(terminal_creds_for "${name}")"
-    pw="${cred#*:}"
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl create secret generic terminal-auth \
         -n agent --from-literal="TTYD_CREDENTIAL=${cred}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
-        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${pw}" >"${pwfile}"; chmod 600 "${pwfile}"
+        # Read back what the cluster now holds, rather than writing what was meant to be created.
+        harvest_terminal_login "${name}" "${acct_profile}" || record_fail "${name}:terminal-harvest"
         # ttyd reads the credential once at startup, so an already-running terminal keeps serving
         # unauthenticated until it restarts. Roll it now rather than leaving the gap open.
         KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl rollout restart deploy/web-terminal \
@@ -3150,13 +3188,12 @@ ingest_one() {
         [[ -n "${console_host}" ]] && break
         sleep 10; waited=$(( waited + 10 ))
     done
-    # kcfg deliberately stays alive past this point. The terminal credential below is read from the
-    # LIVE Secret rather than the local cache file, so every exit path from here removes it explicitly.
-    [[ -n "${console_host}" ]] || { rm -f "${kcfg}"; log "  ingest ${name}: console NLB not ready after ${waited}s; skip"; record_fail "ingest:${name}"; return; }
+    rm -f "${kcfg}"
+    [[ -n "${console_host}" ]] || { log "  ingest ${name}: console NLB not ready after ${waited}s; skip"; record_fail "ingest:${name}"; return; }
     local ak sk
     ak="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f3)"
     sk="$(tail -n +2 "${AWS_POOL_DIR}/${name}.csv" 2>/dev/null | head -1 | cut -d, -f4)"
-    [[ -n "${ak}" && -n "${sk}" ]] || { rm -f "${kcfg}"; log "  ingest ${name}: no persisted AWS creds (${AWS_POOL_DIR}/${name}.csv); skip"; record_fail "ingest:${name}"; return; }
+    [[ -n "${ak}" && -n "${sk}" ]] || { log "  ingest ${name}: no persisted AWS creds (${AWS_POOL_DIR}/${name}.csv); skip"; record_fail "ingest:${name}"; return; }
     # Datadog org resolution differs by cluster KIND, and getting this wrong is why instructor clusters
     # could not be ingested at all. An attendee cluster resolves by slot: watch-it-burn-attendee-007
     # takes the 7th NON-admin pool entry, matching bootstrap + merge_pool. An instructor cluster
@@ -3173,43 +3210,34 @@ ingest_one() {
             '(([$a[],$b[]]|map(select((.role//"")=="admin-instructor"))[0]) // {}) | {org:(.org//""),email:(.email//""),password:(.password//""),api:(.["api-key"]//""),app:(.["app-key"]//""),site:(.site//"datadoghq.com")}' 2>/dev/null)"
     fi
     [[ -n "${dd}" ]] || dd='{}'   # never let an empty resolver result reach --argjson
-    # ttyd now REFUSES anonymous access (terminal-auth secret), so a row without the terminal password
-    # hands the student a console URL and a login box they cannot satisfy. bootstrap_terminal_auth
-    # persists the password beside the AWS creds; send it. The provisioning app already accepts
-    # terminal_user/terminal_password (scripts/merge_pool.py in provisioning-agenticburn) and shows a
-    # visible degradation when the password is absent, so an empty value is reported rather than silent.
-    # Username comes from the SAME role split the bootstrap used (#109), never a fleet-wide constant:
-    # reporting `sprouts` for an attendee cluster whose Secret says `agentic` hands the student a login
-    # that cannot work.
-    # READ THE LIVE SECRET, not the local cache file. The cluster enforces whatever TTYD_CREDENTIAL
-    # says, so that Secret is the only thing entitled to define the credential we hand a student.
+    # ttyd REFUSES anonymous access (terminal-auth secret), so a row without the terminal login hands the
+    # student a console URL and a login box they cannot satisfy. Send terminal_user and
+    # terminal_password exactly as the cluster's Secret holds them: harvest_terminal_login copies the
+    # whole TTYD_CREDENTIAL to <name>.terminal on every ingest, and both halves come from that one value,
+    # split on the first colon as ttyd splits it.
     #
-    # This previously took the username from terminal_creds_for and the password from
-    # ${name}.terminal, which are two different sources that nothing reconciled. The cache file is
-    # written by bootstrap_terminal_auth, so it only tracks the cluster while bootstrap keeps running;
-    # a cluster re-secreted afterwards left the file stale with nothing to correct it. Measured
-    # 2026-09-03: attendee-001 and attendee-002 cached "sprouts" while both clusters enforced
-    # agentic:agentic, so the success page displayed agentic / sprouts. Whitney hit it in a walkthrough
-    # and got in only by guessing the password. Deriving BOTH halves from the Secret makes the
-    # displayed credential wrong only if the cluster itself is wrong.
-    local term_user term_pw live_cred
-    live_cred="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl -n agent get secret terminal-auth \
-        -o jsonpath='{.data.TTYD_CREDENTIAL}' 2>/dev/null | base64 -d 2>/dev/null || true)"
-    rm -f "${kcfg}"
-    if [[ "${live_cred}" == *:* ]]; then
-        term_user="${live_cred%%:*}"; term_pw="${live_cred#*:}"
-        # Self-heal the cache so anything still reading the file agrees with the cluster.
-        mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${term_pw}" >"${AWS_POOL_DIR}/${name}.terminal"
-        chmod 600 "${AWS_POOL_DIR}/${name}.terminal"
-    else
-        # Fall back to the role split plus the cache only when the Secret cannot be read at all (an
-        # unreachable API server), and say so, because this is the path that can be stale.
-        term_user="$(terminal_creds_for "${name}")"; term_user="${term_user%%:*}"
-        term_pw="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null | tr -d '[:space:]')"
-        term_pw="${term_pw##*:}"   # tolerate either a bare password or a "user:password" pair
-        log "  ingest ${name}: WARN could not read terminal-auth from the cluster; falling back to the cached password, which may be stale"
-    fi
-    [[ -n "${term_pw}" ]] || log "  ingest ${name}: WARN no terminal password; the terminal will prompt and the student cannot log in"
+    # Both halves used to come from two sources nothing reconciled: the username from terminal_creds_for
+    # and the password from a bare-password cache file. Measured 2026-09-03: attendee-001 and -002 cached
+    # "sprouts" while both clusters enforced agentic:agentic, so the success page displayed
+    # agentic / sprouts and Whitney got in only by guessing (provisioning-agenticburn#16). A later
+    # version read the Secret but fell back to that cache when the cluster did not answer; the harvester
+    # removes the file instead, so an unreadable cluster is a failed ingest, retried, never a stale login.
+    local term_user="" term_pw="" cred hrc=0
+    harvest_terminal_login "${name}" "${acct_profile}" || hrc=$?
+    case "${hrc}" in
+        0)  cred="$(head -1 "${AWS_POOL_DIR}/${name}.terminal" 2>/dev/null)"
+            term_user="${cred%%:*}"; term_pw="${cred#*:}"
+            if [[ "${cred}" != *:* || -z "${term_user}" || -z "${term_pw}" ]]; then
+                log "  ingest ${name}: harvested terminal login is not user:password; not registered"
+                record_fail "ingest:${name}"; return
+            fi ;;
+        # No Secret: ttyd runs with no login at all. Register the console anyway (a student can still use
+        # it), send no credential, and fail the run by name, because an open terminal is a fault.
+        3)  log "  ingest ${name}: WARN terminal is OPEN; registering with no terminal login"
+            record_fail "terminal-open:${name}" ;;
+        *)  log "  ingest ${name}: terminal login unreadable; not registered"
+            record_fail "ingest:${name}"; return ;;
+    esac
     # The URL the student is actually handed. Two changes from the raw "http://<elb-hostname>" this used
     # to send (#142, #139):
     #   * the MEMORABLE hostname, computed by the same public_host_for() the routes table uses, so the
@@ -3246,10 +3274,21 @@ ingest_one() {
 
 # Harvest + push the fleet (or explicit names) into the live provisioning pool. Numeric arg = per-account
 # count form (honors WIB_NAME_OFFSET + WIB_ATTENDEE_ACCOUNTS); otherwise explicit cluster names (default account).
+# `ingest pool` re-ingests every row the live pool holds, by name, read from /admin/roster. /admin/import
+# upserts by name and never touches claim state, so this is how rows already claimed pick up a corrected
+# terminal login: the bare-password era left claimed rows showing agentic / sprouts (provisioning-agenticburn#16).
 cmd_ingest() {
-    [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest <cluster-name...>"; exit 2; }
+    [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest pool | ingest <cluster-name...>"; exit 2; }
     resolve_admin_token >/dev/null 2>&1 || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
     require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
+    if [[ "$1" == pool && $# -eq 1 ]]; then
+        local rows _pool_names=()
+        rows="$(pool_rows)" || { log "ingest pool: cannot read the live pool, nothing re-ingested"; exit 1; }
+        mapfile -t _pool_names < <(cut -f1 <<<"${rows}" | awk 'NF' | sort -u)
+        [[ "${#_pool_names[@]}" -gt 0 ]] || { log "ingest pool: the live pool holds no rows"; exit 1; }
+        log "ingest pool: re-ingesting ${#_pool_names[@]} row(s) from ${WIB_PROVISIONING_URL%/}/admin/roster"
+        set -- "${_pool_names[@]}"
+    fi
     POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
     POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
     log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
@@ -3578,16 +3617,20 @@ restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTO
 # is shared and speakable by design (bootstrap_terminal_auth), and a fresh random one would make the
 # access page every student reads wrong. This is the repair for a lost or edited terminal-auth secret.
 terminal_password_one() {
-    local name="$1" kcfg="$2" ctx="$3" cred pwfile="${AWS_POOL_DIR}/$1.terminal"
+    local name="$1" kcfg="$2" ctx="$3" cred
     cred="$(terminal_creds_for "${name}")"
     if ! KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent create secret generic terminal-auth \
             --from-literal="TTYD_CREDENTIAL=${cred}" --dry-run=client -o yaml 2>/dev/null \
         | KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent apply -f - >/dev/null 2>&1; then
         log "  ${name}: could not write terminal-auth"; return 1
     fi
-    mkdir -p "${AWS_POOL_DIR}"; printf '%s\n' "${cred#*:}" >"${pwfile}"; chmod 600 "${pwfile}"
+    # The local copy ingest publishes, read back from the Secret just written (_admin_each sets the
+    # cluster's account as AWS_PROFILE). A failed harvest still restarts the terminal, then fails.
+    local hrc=0
+    harvest_terminal_login "${name}" "${AWS_PROFILE:-}" || hrc=$?
     log "  ${name}: terminal-auth set for user '${cred%%:*}'; restarting the terminal so ttyd reads it"
-    restart_pods "${name}" "${kcfg}" "${ctx}" agent "${TERMINAL_POD_SELECTOR}"
+    restart_pods "${name}" "${kcfg}" "${ctx}" agent "${TERMINAL_POD_SELECTOR}" || return 1
+    [[ "${hrc}" -eq 0 ]]
 }
 
 # Run one per-cluster admin function over named clusters, each in the account it was built in.
