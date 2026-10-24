@@ -1537,3 +1537,25 @@ before anything uses it:
 `verify/test_c7_gateway_toggle.py` (offline) checks the ignore, the exemption and the RBAC from the manifests;
 the toggle child of #496 extends it. `verify/test_kyverno_cel_policies.py` (E2E, Kyverno CLI 1.19.1) evaluates
 the four request shapes. The live proof is the #503 probe at bring-up.
+
+## 2026-10-25 · #523 · The E2E tools go into hecaton's toolchain, not this repo
+
+The kyverno CLI, conftest, terraform and the aws CLI are still missing from the dispatch machine.
+`bash verify/run-e2e.sh` lists them in its prerequisite check, alongside kubectl and helm (#439), `CONTEXT`
+and the IAM pipeline profile and region. A run cannot install them. The run PATH is
+`/var/lib/hecaton/cli:/usr/local/bin:/usr/bin:/bin`, and both `/var/lib/hecaton/cli` and
+`/var/lib/hecaton/toolchain` are root-owned. Hecaton's `deploy/netcup/setup.sh toolchain` section puts pinned
+tarballs there, with checksums, which is how Node, uv and lychee got there. That section belongs to hecaton,
+so the install is a hecaton change. It is filed there as a follow-up with the pins below.
+
+- **Kyverno is v1.19.1, not the issue's v1.19.0.** c47f4a9 (#491) aligned every Kyverno pin on the deployed
+  v1.19.1, and `verify/test_kyverno_cel_policies.py` fails on any other version.
+- **Artifacts, checked on 2026-10-25.** Each SHA-256 below matches the release's own checksum file:
+  - `kyverno-cli_v1.19.1_linux_x86_64.tar.gz`: `b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae`
+  - `conftest_0.71.1_Linux_x86_64.tar.gz`: `c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985`
+  - `terraform_1.15.6_linux_amd64.zip`: `a7150d3b0e1b5c466ad42e8c499954a3c54645f8b56b385fa025d34f7e88faa9`
+- **The aws CLI has no pin in VERSIONS.lock.** The latest v2 release on 2026-10-25 is 2.38.5. AWS publishes
+  a PGP signature for the zip (`.zip.sig`), not a checksum. The SHA-256 of the zip as downloaded that day is
+  `5def7d1b7e55d892f9a381bb2cb2081a685712464be0d36d5d706af0ac48d0d3`.
+- **Nothing changes in `run-e2e.sh`.** It already fails loudly on each missing tool. The kyverno and
+  conftest tests check versions, and `KYVERNO_CLI`, `CONFTEST` and `TERRAFORM` accept a path.
