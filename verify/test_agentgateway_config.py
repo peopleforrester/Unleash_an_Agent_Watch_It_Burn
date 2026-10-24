@@ -150,6 +150,13 @@ tag = image_tag(image)
 env = {e["name"]: e.get("value", "") for e in deployment["spec"]["template"]["spec"]["containers"][0].get("env", [])}
 attrs = dict(kv.split("=", 1) for kv in env.get("OTEL_RESOURCE_ATTRIBUTES", "").split(",") if "=" in kv)
 check(f"spans carry service.version={tag} (found {attrs.get('service.version')})", attrs.get("service.version") == tag)
+# The C7 container (#514) is a second process in the same pod and emits its own spans. It must report the
+# same version, and the first container's check above cannot see it.
+for c in deployment["spec"]["template"]["spec"]["containers"]:
+    cenv = {e["name"]: e.get("value", "") for e in c.get("env", [])}
+    cattrs = dict(kv.split("=", 1) for kv in cenv.get("OTEL_RESOURCE_ATTRIBUTES", "").split(",") if "=" in kv)
+    check(f"container {c['name']} spans carry service.version={tag} (found {cattrs.get('service.version')})",
+          cattrs.get("service.version") == tag)
 label = deployment["metadata"]["labels"].get("app.kubernetes.io/version")
 check(f"the Deployment's app.kubernetes.io/version label is {tag.lstrip('v')} (found {label})", label == tag.lstrip("v"))
 lock = next((l for l in (REPO / "VERSIONS.lock").read_text(encoding="utf-8").splitlines() if l.startswith("agentgateway ")), "")
@@ -202,6 +209,56 @@ for label, mutate in (
         check(label, False)
     except Invalid:
         check(label, True)
+
+print("== C7's evil-mcp bind (#514) validates too, in both of its rule states ==")
+# The second container runs the same binary, so it must run the same pinned image the schema is for.
+images = {c["name"]: c["image"] for c in deployment["spec"]["template"]["spec"]["containers"]}
+check(f"every agentgateway container runs the same pinned image ({sorted(images)})", set(images.values()) == {image})
+c7_cm = next((d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "agentgateway-c7-config"), None)
+check("there is an agentgateway-c7-config ConfigMap", c7_cm is not None)
+c7_text = c7_cm["data"]["config.yaml"] if c7_cm else ""
+marked = [line for line in c7_text.splitlines() if line.rstrip().endswith("# c7-rule")]
+check(f"exactly one line carries the # c7-rule marker, and it is - 'true' ({marked})",
+      [line.strip() for line in marked] == ["- 'true' # c7-rule"])
+# The C7 control's on state (guard-proxy-agenticburn#5 reads the same line): only get_weather is allowed.
+ON_RULE = "'mcp.tool.name == \"get_weather\"'"
+for label, text in (("as committed", c7_text),
+                    ("with the rule set to get_weather", c7_text.replace("- 'true' # c7-rule", f"- {ON_RULE} # c7-rule"))):
+    c7_config = yaml.safe_load(text) or {}
+    try:
+        validate(c7_config, root, root)
+        check(f"the C7 config validates {label}", True)
+    except Invalid as e:
+        check(f"the C7 config validates {label} ({e})", False)
+    routes = [r for b in c7_config.get("binds", []) for l in b["listeners"] for r in l["routes"]]
+    found = [x for r in routes for x in r.get("policies", {}).get("mcpAuthorization", {}).get("rules", [])]
+    want = "true" if label == "as committed" else 'mcp.tool.name == "get_weather"'
+    check(f"its one mcpAuthorization rule is {want!r} {label}", found == [want])
+broken = yaml.safe_load(c7_text) or {}
+try:
+    broken["binds"][0]["listeners"][0]["routes"][0]["policies"]["mcpAuthorization"]["deny"] = ["true"]
+    validate(broken, root, root)
+    rejected = False
+except Invalid:
+    rejected = True
+except (KeyError, IndexError):
+    rejected = False  # no rule block to put the key beside; the checks above already fail
+check("an unknown key beside the C7 rules is rejected (the validator reaches this bind)", rejected)
+
+# Both processes share the pod's network namespace. agentgateway's defaults are admin 15000, stats 15020 and
+# readiness 15021; the first container keeps them, so the second must move or switch off every one.
+c7_static = (yaml.safe_load(c7_text) or {}).get("config", {})
+check("the C7 container's admin and stats listeners are off",
+      c7_static.get("adminAddr") == "off" and c7_static.get("statsAddr") == "off")
+ready_port = int(str(c7_static.get("readinessAddr", ":15021")).rsplit(":", 1)[-1])
+main_ports = {p["containerPort"] for p in deployment["spec"]["template"]["spec"]["containers"][0]["ports"]}
+check(f"its readiness listener ({ready_port}) takes no port the first container holds",
+      ready_port not in main_ports | {15000, 15020, 15021})
+c7_container = next((c for c in deployment["spec"]["template"]["spec"]["containers"] if c["name"] == "agentgateway-c7"), {})
+c7_ports = {p["containerPort"] for p in c7_container.get("ports", [])}
+c7_bind_ports = {b["port"] for b in (yaml.safe_load(c7_text) or {}).get("binds", [])}
+check("the C7 container declares its bind and its readiness port, and nothing the first one holds",
+      c7_ports == c7_bind_ports | {ready_port} and not (c7_ports & main_ports))
 
 print("== the inference bind is what the toggle switches between ==")
 bind = next((b for b in config["binds"] if b["port"] == 3002), None)

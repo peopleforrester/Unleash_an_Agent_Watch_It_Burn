@@ -1418,3 +1418,33 @@ every call through one billed untagged.
   names the system id, so that path still bills untagged. A pod that bypasses the proxy under agent-sa can
   still call the system profile. The tags only split the bill once `project` and `event` are active as
   cost-allocation tags.
+
+## 2026-10-25 · #514 · evil-mcp goes through agentgateway on its own :3003 bind, with the C7 rule committed open
+
+Step 1 of #496, which is split into children so each lands before staging moves under it. This child moves the
+routing only. The `evil-mcp` RemoteMCPServer url is `http://agentgateway.agent:3003/mcp`. A second container in
+the agentgateway Deployment, `agentgateway-c7`, runs the same digest-pinned v1.5.0 image and serves only :3003
+from its own ConfigMap, `agentgateway-c7-config`. Its one `mcpAuthorization` rule is `- 'true' # c7-rule`, so
+C7 behaves as it did: the in-path control is still the kagent `toolNames` allow-list, and guard-mcp-on still
+narrows it.
+
+- **A second container, not a fourth bind.** A later child has Argo CD ignore drift on the C7 rule, and that
+  ignore can only cover a whole `config.yaml` string. On `agentgateway-config` it would take the A2A,
+  workshop-mcp and LLM routes out of GitOps on every cluster.
+- **One target on the bind.** Two targets on one bind get their tool names prefixed, which would rename the
+  tool `get_weather`'s poisoned description points at.
+- **A directory mount, never subPath.** agentgateway v1.5.0 watches the parent directory when its config file
+  is a projected-volume symlink (`crates/agentgateway/src/util.rs`, `should_watch_parent`) and keeps the
+  previous state when a reload fails (`crates/agentgateway/src/state_manager.rs`,
+  `reload_config_after_change`), both read at tag v1.5.0 on 2026-10-24. A subPath file never changes.
+- **No shared ports.** The pod has one network namespace. The C7 container turns admin and stats off and puts
+  readiness on 15022, which the first container does not hold.
+- **The contract for guard-proxy-agenticburn#5** (the C7 badge): ConfigMap `agent/agentgateway-c7-config`, key
+  `config.yaml`, the one line ending `# c7-rule`, where `'true'` is off and `'mcp.tool.name == "get_weather"'`
+  is on. `guard-proxy-reader` may `get` that ConfigMap by name, nothing more.
+
+`verify/test_agentgateway_path.py` now pins evil-mcp through :3003 with exactly one target, and no evil-mcp
+target on workshop-mcp's :3001. `verify/test_agentgateway_config.py` validates the C7 config against the
+vendored v1.5.0 schema as committed and with the get_weather rule, shows an unknown key beside the rules is
+rejected, and checks every container runs the pinned image and reports v1.5.0. The live proof is the #503
+probe at bring-up.

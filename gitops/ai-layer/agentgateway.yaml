@@ -1,5 +1,5 @@
 # ABOUTME: agentgateway OSS v1.5.0 (released 2026-08-27) — the DEPLOYED gateway fronting the kagent agent (A2A)
-# ABOUTME: and the workshop MCP server. Namespace is set by the ai-layer kustomization (agent).
+# ABOUTME: and both MCP servers (workshop-mcp, evil-mcp). Namespace is set by the ai-layer kustomization (agent).
 #
 # Config schema verified live against agentgateway.dev/docs/standalone/latest on 2026-06-25:
 #   - image registry is cr.agentgateway.dev (NOT ghcr.io).
@@ -21,9 +21,10 @@
 #     Measured live 2026-09-05 (386 request log lines in the first hour on a fresh attendee cluster).
 #   - :3002 model calls ONLY when the Agent is switched to a gateway-* ModelConfig. The committed default
 #     (bedrock-nova) calls Bedrock directly.
-#   - NOT evil-mcp. The agent dials evil-mcp-shim directly, and the C7 rogue tools live there, so the
-#     mcpAuthorization rule below ('true') gates nothing C7 depends on. C7's control is the kagent toolNames
-#     allow-list. docs/research/2026-10-24-agentgateway-evaluation.md weighs moving it here.
+#   - :3003 every evil-mcp tool call (#514): the evil-mcp RemoteMCPServer url is agentgateway:3003/mcp, so
+#     C7's rogue tools are reached through the gateway. That bind is served by the agentgateway-c7 container
+#     from its own ConfigMap (see both below for why). Its mcpAuthorization rule is committed 'true', so it
+#     gates nothing yet; the 3001 rule below gates only workshop-mcp.
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -88,10 +89,51 @@ spec:
           volumeMounts:
             - { name: config, mountPath: /etc/agentgateway, readOnly: true }
             - { name: tmp, mountPath: /tmp } # writable scratch under readOnlyRootFilesystem
+        # C7's gateway (#514, part of #496): the same binary, serving ONLY the evil-mcp bind on :3003 from its
+        # own ConfigMap. It is a second process rather than a fourth bind in agentgateway-config because the
+        # C7 rule is meant to change live, and the config is one string: Argo CD can only ignore drift on that
+        # whole string, which on agentgateway-config would take the A2A, workshop-mcp and LLM routes out of
+        # GitOps on every cluster. Here it would cover exactly the evil-mcp bind.
+        # It listens on 3003 and 15022 only. Admin and stats are off: their defaults (15000, 15020) and the
+        # readiness default (15021) are the first container's, and the pod shares one network namespace.
+        - name: agentgateway-c7
+          image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896
+          imagePullPolicy: IfNotPresent
+          args: ["-f", "/etc/agentgateway-c7/config.yaml"]
+          env:
+            - name: OTEL_SERVICE_NAME
+              value: burritobot-gateway
+            - name: OTEL_RESOURCE_ATTRIBUTES
+              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=production" # one name family (#265)
+          ports:
+            - { name: mcp-c7, containerPort: 3003 }   # MCP front -> evil-mcp-shim (C7)
+            - { name: ready-c7, containerPort: 15022 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: "50m", memory: "64Mi" }
+            limits: { cpu: "250m", memory: "128Mi" }
+          readinessProbe: { tcpSocket: { port: mcp-c7 }, initialDelaySeconds: 5, periodSeconds: 10 }
+          livenessProbe: { tcpSocket: { port: ready-c7 }, initialDelaySeconds: 20, periodSeconds: 15 }
+          volumeMounts:
+            # A directory mount, never subPath. A subPath file never changes when the ConfigMap does. With a
+            # directory mount the config file is a projected-volume symlink, and agentgateway v1.5.0 then
+            # watches the parent directory (crates/agentgateway/src/util.rs, should_watch_parent) and keeps
+            # the previous state when a reload fails (crates/agentgateway/src/state_manager.rs,
+            # reload_config_after_change); both read at tag v1.5.0 on 2026-10-24. So a rule edit needs no
+            # restart, and a bad one leaves the last good config serving.
+            - { name: config-c7, mountPath: /etc/agentgateway-c7, readOnly: true }
+            - { name: tmp-c7, mountPath: /tmp }
       volumes:
         - name: config
           configMap: { name: agentgateway-config }
         - name: tmp
+          emptyDir: {}
+        - name: config-c7
+          configMap: { name: agentgateway-c7-config }
+        - name: tmp-c7
           emptyDir: {}
 ---
 apiVersion: v1
@@ -107,6 +149,8 @@ spec:
     # The LLM bind. Inference goes kagent -> here -> bedrock or a local vLLM, so the backend is a
     # route change rather than an edit to every Agent's ModelConfig. See PRD #389 / issue #394.
     - { name: llm, port: 3002, targetPort: llm }
+    # C7's rogue MCP server (#514), served by the agentgateway-c7 container.
+    - { name: mcp-c7, port: 3003, targetPort: mcp-c7 }
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -193,3 +237,43 @@ data:
               # what redirects the OpenAI provider at a local vLLM instead of api.openai.com.
               hostOverride: vllm-qwen3.agent.svc.cluster.local:8000
 
+---
+# C7's gateway config (#514), read by the agentgateway-c7 container. One bind, one target: a lone target is
+# not multiplexed, so the tool names reach the agent unprefixed and get_weather's poisoned description still
+# names a tool that exists (docs/research/2026-10-24-agentgateway-evaluation.md, section 2).
+#
+# The rule line is the contract a C7 control reads and rewrites: key config.yaml, the one line ending in
+# the c7-rule marker comment. 'true' is off (every tool allowed); 'mcp.tool.name == "get_weather"' is on (mcpAuthorization
+# is allow-only and OR-combined, so the gateway drops the rogue tools from tools/list and refuses a
+# tools/call to them before evil-mcp runs it). Committed state is 'true': C7 starts open, like every other
+# guard, and nothing flips it yet. Keep this ConfigMap to the evil-mcp bind.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: agentgateway-c7-config
+  labels: { app.kubernetes.io/name: agentgateway }
+data:
+  config.yaml: |
+    config:
+      adminAddr: "off"
+      statsAddr: "off"
+      readinessAddr: 0.0.0.0:15022
+      tracing:
+        otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
+        otlpProtocol: http
+        randomSampling: true
+    binds:
+    - port: 3003
+      listeners:
+      - protocol: HTTP
+        routes:
+        - policies:
+            mcpAuthorization:
+              rules:
+              - 'true' # c7-rule
+          backends:
+          - mcp:
+              targets:
+              - name: evil-mcp
+                mcp:
+                  host: http://evil-mcp-shim.agent.svc.cluster.local:8000/mcp

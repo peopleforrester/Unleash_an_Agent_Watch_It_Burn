@@ -1,15 +1,16 @@
-# ABOUTME: Render gate for which traffic agentgateway actually carries: the A2A hop and workshop-mcp go
-# ABOUTME: through it, evil-mcp (C7's rogue tools) and the default model calls do not (#239).
+# ABOUTME: Render gate for which traffic agentgateway actually carries: the A2A hop, workshop-mcp and evil-mcp
+# ABOUTME: (C7's rogue tools, on its own bind) go through it; the default model calls do not (#239, #514).
 """Why this exists (#239).
 
 Three documents disagreed about what routes through agentgateway. #239 said nothing did. A code comment
 said the agent dials workshop-mcp directly. The #236 audit said every model call does. Each was read off
 a different file at a different time, and all three were wrong about something.
 
-The evaluation in docs/research/2026-10-24-agentgateway-evaluation.md rests on the table below. Its
-conclusion for C7 depends on one row in particular: the rogue tools live on evil-mcp, the agent reaches
-evil-mcp without the gateway, so a gateway policy cannot be C7's control and the kagent toolNames list
-is. If any row here changes, the evaluation's table and that conclusion need re-reading with it.
+The evaluation in docs/research/2026-10-24-agentgateway-evaluation.md rests on the table below. Its C7
+row changed with #514: evil-mcp is now dialled through the gateway on its own bind (:3003), served by the
+agentgateway-c7 container from its own ConfigMap. A second target on :3001 would have prefixed the tool
+names, so this also pins that the bind has exactly one target and workshop-mcp's has no evil-mcp. If any
+row here changes, the evaluation's table needs re-reading with it.
 """
 from __future__ import annotations
 
@@ -46,10 +47,13 @@ def via_gateway(url: str, port: int) -> bool:
 
 config = yaml.safe_load(one(GATEWAY, "ConfigMap", "agentgateway-config").get("data", {}).get("config.yaml", "{}"))
 binds = {b["port"]: b for b in config.get("binds", [])}
+c7_config = yaml.safe_load(one(GATEWAY, "ConfigMap", "agentgateway-c7-config").get("data", {}).get("config.yaml", "{}"))
+c7_binds = {b["port"]: b for b in c7_config.get("binds", [])}
 
 
-def bind_routes(port: int) -> list:
-    return [r for l in binds.get(port, {}).get("listeners", []) for r in l.get("routes", [])]
+def bind_routes(port: int, where: dict | None = None) -> list:
+    return [r for l in (binds if where is None else where).get(port, {}).get("listeners", [])
+            for r in l.get("routes", [])]
 
 
 # --- port 3000: every chat message (guard-proxy -> agentgateway -> workshop-agent, A2A) -------------
@@ -72,12 +76,41 @@ check("agentgateway :3001 targets workshop-mcp:8000/mcp",
       any(urlparse(h).hostname and urlparse(h).hostname.startswith("workshop-mcp.") and urlparse(h).port == 8000
           and urlparse(h).path == "/mcp" for h in mcp_targets), f"{mcp_targets}")
 
-# --- C7's server: the agent dials evil-mcp directly -----------------------------------------------------
+# --- port 3003: every evil-mcp tool call, C7's rogue server on its own bind (#514) ----------------------
 evil = one(RESOURCES, "RemoteMCPServer", "evil-mcp").get("spec", {})
-check("evil-mcp RemoteMCPServer is NOT routed through agentgateway",
-      (urlparse(evil.get("url", "")).hostname or "").split(".")[0] == "evil-mcp-shim",
-      f"url={evil.get('url')!r}; if this now goes through the gateway, re-read {EVALUATION}")
-check("no agentgateway MCP target serves evil-mcp", not any("evil-mcp" in h for h in mcp_targets), f"{mcp_targets}")
+check("evil-mcp RemoteMCPServer is dialled through agentgateway :3003",
+      via_gateway(evil.get("url", ""), 3003) and urlparse(evil.get("url", "")).path == "/mcp",
+      f"url={evil.get('url')!r}; if this stops going through the gateway, re-read {EVALUATION}")
+check("no agentgateway-config bind serves :3003 (it is the agentgateway-c7 container's)", 3003 not in binds,
+      f"{sorted(binds)}")
+check("agentgateway-c7-config has exactly one bind, :3003", sorted(c7_binds) == [3003], f"{sorted(c7_binds)}")
+c7_targets = [t for r in bind_routes(3003, c7_binds) for b in r.get("backends", [])
+              for t in b.get("mcp", {}).get("targets", [])]
+c7_hosts = [t.get("mcp", {}).get("host", "") for t in c7_targets]
+check("agentgateway :3003 has exactly one MCP target, so the tool names are not prefixed", len(c7_targets) == 1,
+      f"{c7_hosts}")
+check("agentgateway :3003 targets evil-mcp-shim:8000/mcp",
+      len(c7_hosts) == 1 and (urlparse(c7_hosts[0]).hostname or "").startswith("evil-mcp-shim.")
+      and urlparse(c7_hosts[0]).port == 8000 and urlparse(c7_hosts[0]).path == "/mcp", f"{c7_hosts}")
+check("workshop-mcp's :3001 bind carries no evil-mcp target", not any("evil-mcp" in h for h in mcp_targets),
+      f"{mcp_targets}")
+
+deployment = one(GATEWAY, "Deployment", "agentgateway").get("spec", {}).get("template", {}).get("spec", {})
+containers = {c["name"]: c for c in deployment.get("containers", [])}
+c7 = containers.get("agentgateway-c7", {})
+volumes = {v["name"]: v for v in deployment.get("volumes", [])}
+c7_mounts = {m["mountPath"]: m["name"] for m in c7.get("volumeMounts", [])}
+c7_cm_volume = c7_mounts.get("/etc/agentgateway-c7", "")
+check("the agentgateway-c7 container reads /etc/agentgateway-c7/config.yaml",
+      c7.get("args") == ["-f", "/etc/agentgateway-c7/config.yaml"], f"{c7.get('args')}")
+check("which is agentgateway-c7-config, mounted as a directory (a subPath file never sees a ConfigMap change)",
+      volumes.get(c7_cm_volume, {}).get("configMap", {}).get("name") == "agentgateway-c7-config"
+      and not any(m.get("subPath") for m in c7.get("volumeMounts", [])), f"{c7.get('volumeMounts')}")
+c7_ports = {p["name"]: p["containerPort"] for p in c7.get("ports", [])}
+service = one(GATEWAY, "Service", "agentgateway").get("spec", {})
+svc_ports = {p["port"]: p.get("targetPort") for p in service.get("ports", [])}
+check("the agentgateway Service sends :3003 to the agentgateway-c7 container's port 3003",
+      c7_ports.get(svc_ports.get(3003)) == 3003, f"service={svc_ports} c7={c7_ports}")
 
 # --- port 3002: model calls go through it only when the Agent is switched to a gateway-* ModelConfig ----
 agent = one(RESOURCES, "Agent", "workshop-agent").get("spec", {}).get("declarative", {})
@@ -93,4 +126,4 @@ for name in ("gateway-bedrock-nova", "gateway-local-qwen3"):
 if failures:
     print(f"\nFAIL: {len(failures)} check(s) failed: {failures}")
     sys.exit(1)
-print("\nPASS: agentgateway carries the A2A hop and workshop-mcp; evil-mcp and default inference bypass it")
+print("\nPASS: agentgateway carries the A2A hop, workshop-mcp and evil-mcp (:3003); default inference bypasses it")

@@ -10,13 +10,13 @@ AGENT="${AGENT:-workshop-agent}"
 KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 
 # WHY this toggles toolNames and not the agentgateway config:
-#   The rogue tools are served by evil-mcp, and the `evil-mcp` RemoteMCPServer points DIRECT at
-#   evil-mcp-shim (gitops/ai-layer/resources.yaml). Only workshop-mcp is routed through agentgateway
-#   (:3001), so flipping agentgateway's mcpAuthorization would not gate the rogue tools. The in-path,
+#   The rogue tools are served by evil-mcp, and the `evil-mcp` RemoteMCPServer goes through agentgateway
+#   on its own bind, :3003 (gitops/ai-layer/resources.yaml, #514). That bind's mcpAuthorization rule is
+#   committed 'true' and nothing flips it, so it does not gate the rogue tools. The in-path,
 #   deployed, deterministic control is the kagent toolNames allowlist on the Agent CRD, which kagent
 #   enforces when it renders the agent's tool set. This toggle patches that.
 #
-#   The gateway-enforced alternative (route evil-mcp through agentgateway too and flip a CEL rule) is
+#   The gateway-enforced alternative (flip that bind's CEL rule, the line marked `# c7-rule`) is
 #   weighed in docs/research/2026-10-24-agentgateway-evaluation.md (#239). It blocks the same tool
 #   names toolNames does and no more, so toolNames stays the control. The pre-gitops
 #   agent/gateway/mcp-authz-* overlays that once held a gateway allowlist were deleted in #479.

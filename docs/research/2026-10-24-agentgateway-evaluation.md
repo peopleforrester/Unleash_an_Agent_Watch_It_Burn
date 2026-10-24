@@ -39,7 +39,13 @@ lines in its first hour. The manifests agree, with one correction to the #236 au
 | 3000 | every chat message, guard-proxy to workshop-agent over A2A | **yes, always** | `resources.yaml` guard-proxy `AGENT_URL`; `agentgateway.yaml` bind 3000 |
 | 3001 | every workshop-mcp tool call (all of BurritoBot's real tools) | **yes, always** | `workshop-mcp` RemoteMCPServer `url: http://agentgateway.agent:3001/mcp` |
 | 3002 | model calls | **only if a cluster is switched** to `gateway-bedrock-nova` or `gateway-local-qwen3` | the Agent's committed `modelConfig` is `bedrock-nova`, `provider: Bedrock`, which calls Bedrock directly |
-| none | evil-mcp, C7's rogue tools | **no** | `evil-mcp` RemoteMCPServer `url: http://evil-mcp-shim.agent:8000/mcp` |
+| 3003 | evil-mcp, C7's rogue tools (since #514; this row read "none, no" when written) | **yes, always** | `evil-mcp` RemoteMCPServer `url: http://agentgateway.agent:3003/mcp`; the `agentgateway-c7` container |
+
+**Note (2026-10-25, #514).** The last row changed after this evaluation was written. evil-mcp now goes
+through the gateway on its own bind (:3003), served by a second agentgateway container from its own
+ConfigMap, `agentgateway-c7-config`, with one target so the tool names are not prefixed. That bind's
+`mcpAuthorization` rule is committed `'true'`, so it gates nothing yet. The rest of this evaluation is as
+written on 2026-10-24.
 
 The #236 audit says "every model call: both kagent ModelConfigs, port 3002". The two gateway
 ModelConfigs exist, but nothing binds the agent to either of them: no script, overlay or bootstrap
