@@ -11,7 +11,7 @@ is on the projector for KubeCon segments 3 to 7, any phone in the room could swi
 A string check for "no /a2a/" would pass the next prefix route that does the same thing under a new name.
 So this resolves request paths the way nginx does (exact, then longest prefix, ^~, then regex in order) on
 the server block nginx would use, works out the upstream path each one is forwarded as, and fails if any of
-them lands on guard-proxy's /toggle. It also pins that every route to guard-proxy is an exact match on a path
+them reaches guard-proxy's /toggle. It also pins that every route to guard-proxy is an exact match on a path
 from a short list, so a new prefix route to guard-proxy fails here before it can be probed.
 
 "Rendered": what reaches the pod is the console-conf ConfigMap, generated as default.conf from this one

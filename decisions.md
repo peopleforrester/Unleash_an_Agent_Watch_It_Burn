@@ -675,17 +675,17 @@ so it forwarded guard-proxy's whole path space, and `https://<cluster>.agenticbu
 reached the unauthenticated `GET /toggle` (`proxy.py` `do_GET`) from the internet. On the community cluster
 and on an admin cluster on the KubeCon projector, any phone in the room could turn the guards off.
 
-- **Fixed in nginx, not in guard-proxy.** The route's only consumer was the split-console chat removed in #240,
-  so dropping it closes the hole with nothing to migrate. A loopback check on `/toggle` in guard-proxy would
-  also close the tool pod's in-cluster call (evaluation #238, section 2.1), but `proxy.py` is a submodule with
+- **Fixed in nginx; guard-proxy is unchanged.** The route's only consumer was the split-console chat removed in #240,
+  so removing it shuts off the public path with nothing to migrate. A loopback check on `/toggle` in guard-proxy
+  would also block the tool pod's in-cluster call (evaluation #238, section 2.1), but `proxy.py` is a submodule with
   its own repo, and that call is the candidate mesh challenge, which is Michael's decision.
 - **Exact routes only.** Every remaining guard-proxy route is `location =` on one path: `/chat`, `/cost`,
   `/guards`, `/prompts`, `/controls`. `verify/test_console_no_toggle.py` resolves request paths against the
-  config the way nginx does and fails if any of them lands on `/toggle`, or if any route to guard-proxy is a
+  config the way nginx does and fails if any of them reaches `/toggle`, or if any route to guard-proxy is a
   prefix or regex. It also checks that the admin and community (burn) profiles both serve this one file.
 - **The students' toggles are unchanged.** The terminal helpers (`.guardlib` `_px`), the lab's commands and
-  the challenge scripts all `kubectl exec` into guard-proxy and call localhost. The beat harness calls the
-  Service from inside the cluster. None of them went through the console.
+  the challenge scripts all `kubectl exec` into guard-proxy and call localhost. `verify/beat-02.sh` and
+  `verify/beat-cost.sh` call the Service from inside the cluster. None of them went through the console.
 - **Live check:** `verify/test_console_no_toggle_live.py` (E2E suite) fetches `/a2a/toggle`, `/a2a/guards`,
   `/a2a/` and `/toggle` through the apex router and expects 404. It runs the terminal's `_px` helper
   and `guards-status` with no change of state, then confirms the guards did not move.
