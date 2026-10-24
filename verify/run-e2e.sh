@@ -18,9 +18,15 @@ BACKSTAGE_DIR="${SCRIPT_DIR}/../images/watch-it-burn-backstage"
 NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
-for tool in kubectl helm python3 node yarn; do
+for tool in kubectl helm python3 node corepack; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
+# Backstage runs on Node 24 (packages/backend/Dockerfile is node:24). Yarn comes from corepack, which
+# runs the yarn 4 the Backstage package.json pins (packageManager, .yarnrc.yml yarnPath), so no global
+# yarn is needed. A yarn on PATH is not used.
+if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
+    missing+=("node $(node --version) is on PATH; the Backstage suite needs Node 24")
+fi
 # test_kyverno_cel_policies.py evaluates the policies with the Kyverno CLI, pinned to the deployed v1.19.0.
 command -v "${KYVERNO_CLI:-kyverno}" >/dev/null 2>&1 \
     || missing+=("the kyverno CLI v1.19.0 is not on PATH (or set KYVERNO_CLI): github.com/kyverno/kyverno/releases/tag/v1.19.0")
@@ -77,11 +83,11 @@ run_one "test_doc_links.py (WIB_CHECK_LINKS=1, network)" env WIB_CHECK_LINKS=1 p
 # running already on :7007. Chained with && because set -e does not apply inside a `|| rc=$?` call.
 backstage_e2e() {
     ( cd "${BACKSTAGE_DIR}" && unset CI \
-        && yarn install --immutable \
-        && yarn playwright install chromium \
-        && yarn test:e2e )
+        && corepack yarn install --immutable \
+        && corepack yarn playwright install chromium \
+        && corepack yarn test:e2e )
 }
-run_one "backstage playwright (yarn test:e2e)" backstage_e2e
+run_one "backstage playwright (corepack yarn test:e2e)" backstage_e2e
 
 printf '\n%d E2E checks ran\n' "${ran}"
 if [[ "${fail}" -eq 0 ]]; then

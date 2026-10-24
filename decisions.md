@@ -719,3 +719,22 @@ conference-knowledge for event state; the two submodule repos; and this repo's o
 - **README unchanged.** It already gives the title, speakers, argument, the event (with its slot pointed at
   conference-knowledge since #417) and the repos it is built from. It does not say "delivered"; that is
   public prose, so it is left for Michael.
+
+## 2026-10-24 · #440 · The E2E gate gets yarn through corepack and launches Playwright's own Chromium
+
+The dispatch machine now has Node 24.22.0 with corepack 0.36.0. It has no global yarn, and `corepack
+enable` would have to write shims into the root-owned toolchain. `verify/run-e2e.sh` now requires `node`
+and `corepack` instead of `yarn`, fails if Node's major version is not 24, and runs `corepack yarn`. Corepack
+runs the yarn 4.13.0 that the Backstage `package.json` (`packageManager`) and `.yarnrc.yml` (`yarnPath`)
+pin. While a script is running, yarn 4 puts its own `yarn` on PATH, so the `yarn start` web servers in
+`playwright.config.ts` resolve too.
+
+The Backstage Playwright suite had never run here, and its first run showed a second bug.
+`generateProjects()` defaults to the `chrome` channel, which needs Google Chrome at `/opt/google/chrome`.
+The script installs `playwright install chromium`, so the browser it installed was never the one the tests
+launched. The config now passes `{ channel: 'chromium' }`. With that change the suite passes (1 test) with
+`GITHUB_TOKEN` unset: an unset token does not break the app or backend start.
+
+The full `run-e2e.sh` still exits 1 in its prerequisite check. Node and yarn are no longer missing, but
+kubectl, helm, the kyverno CLI, conftest, terraform and the aws CLI are, along with a cluster `CONTEXT` and
+the IAM pipeline profile and region.

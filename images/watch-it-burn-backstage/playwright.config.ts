@@ -62,5 +62,8 @@ export default defineConfig({
 
   outputDir: 'node_modules/.cache/e2e-test-results',
 
-  projects: generateProjects(), // Find all packages with e2e-test folders
+  // Find all packages with e2e-test folders. The channel is Playwright's own Chromium, the browser
+  // verify/run-e2e.sh installs (`yarn playwright install chromium`); the default, 'chrome', needs Google
+  // Chrome installed system-wide at /opt/google/chrome.
+  projects: generateProjects({ channel: 'chromium' }),
 });

@@ -43,6 +43,16 @@ check("run-e2e.sh has no skip outcome", "skipped" not in rune2e)
 check("run-e2e.sh runs the live beat harness", "run-all.sh" in rune2e)
 check("run-e2e.sh requires an explicit CONTEXT and passes it to kubectl",
       "${CONTEXT:-}" in rune2e and 'kubectl --context "${CONTEXT}"' in rune2e)
+# The Backstage Playwright run (#440): yarn is the pinned yarn 4 through corepack, not whatever global
+# yarn a machine has, and the browser the config launches is the one the script installs. The config's
+# default channel, 'chrome', wants Google Chrome at /opt/google/chrome, which `playwright install chromium`
+# never provides, so the suite failed on every machine without a system Chrome.
+check("run-e2e.sh runs Backstage's yarn through corepack",
+      "corepack yarn test:e2e" in rune2e and "\n        && yarn " not in rune2e)
+check("run-e2e.sh requires Node 24", '!= "24"' in rune2e)
+pwconfig = (REPO / "images/watch-it-burn-backstage/playwright.config.ts").read_text()
+check("playwright.config.ts launches the Chromium run-e2e.sh installs",
+      "playwright install chromium" in rune2e and "generateProjects({ channel: 'chromium' })" in pwconfig)
 e2e = sorted(p.name for p in VERIFY.glob("test_*") if "\n# SUITE: e2e" in p.read_text())
 check(f"the render and live checks are in the E2E suite ({', '.join(e2e)})",
       {"test_ai_layer_rollout.py", "test_enforce_floor.py", "test_service_naming_render.py",
