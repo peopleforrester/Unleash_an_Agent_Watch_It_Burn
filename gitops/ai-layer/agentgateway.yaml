@@ -15,11 +15,15 @@
 # workshop-agent is an A2A endpoint, so agentgateway fronts it as a plain L7 hop; the input/output guard
 # decisions remain in guard-proxy (the LLM-Guard reverse proxy, the research spikes (removed 2026-08-30; see `git log --diff-filter=D -- research/`) recommended primary).
 #
-# verify-at-build (live cluster, does NOT block the A2A hop):
-#   - MCP target path: workshop-mcp serves streamable-http at :8000/mcp (RemoteMCPServer url in resources.yaml).
-#     Confirm agentgateway reaches it. The kagent RemoteMCPServer still points DIRECT at workshop-mcp; routing
-#     the agent's MCP calls THROUGH agentgateway (so mcpAuthorization enforces for beat 3) is the remaining
-#     reconciliation (the kagent toolNames allowlist in resources.yaml is the recorded fallback).
+# What goes through this gateway (#239, pinned by verify/test_agentgateway_path.py):
+#   - :3000 every chat message, guard-proxy -> here -> workshop-agent (A2A).
+#   - :3001 every workshop-mcp tool call: the workshop-mcp RemoteMCPServer url is agentgateway:3001/mcp.
+#     Measured live 2026-09-05 (386 request log lines in the first hour on a fresh attendee cluster).
+#   - :3002 model calls ONLY when the Agent is switched to a gateway-* ModelConfig. The committed default
+#     (bedrock-nova) calls Bedrock directly.
+#   - NOT evil-mcp. The agent dials evil-mcp-shim directly, and the C7 rogue tools live there, so the
+#     mcpAuthorization rule below ('true') gates nothing C7 depends on. C7's control is the kagent toolNames
+#     allow-list. docs/research/2026-10-24-agentgateway-evaluation.md weighs moving it here.
 ---
 apiVersion: v1
 kind: ServiceAccount

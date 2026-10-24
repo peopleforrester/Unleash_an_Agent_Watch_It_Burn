@@ -41,6 +41,9 @@ subjects:
 # routes to, so switching a cluster between a hosted model and a local one is a change to the Agent's
 # `modelConfig:` field and nothing else. No Agent rewrite, no challenge rewrite.
 #
+# Neither is the committed default: the Agent below is bound to bedrock-nova, which calls Bedrock
+# directly, so model calls skip the gateway until a cluster is switched to one of these (#239).
+#
 # Why provider: OpenAI for a Bedrock model. The provider names the WIRE FORMAT kagent speaks to the
 # gateway, not what serves the tokens. agentgateway terminates that and re-speaks Bedrock or an
 # OpenAI-compatible local endpoint on the far side. The sister platform reached the same shape: its
@@ -318,8 +321,9 @@ spec:
           value: SPAN_AND_EVENT
     # Committed tool config = the VULNERABLE default (challenge 7 "7a: see the weakness"), consistent
     # with the input/output guards which also boot OFF. The C7 (beat-3) control that is actually IN PATH
-    # is kagent's toolNames allowlist: the agent dials these MCP servers directly, so agentgateway's
-    # mcpAuthorization does not gate them. workshop-mcp carries the legit tools (real, namespace-scoped
+    # is kagent's toolNames allowlist: the agent dials evil-mcp directly, so agentgateway's
+    # mcpAuthorization does not gate the rogue tools (workshop-mcp does go through the gateway, whose rule
+    # is allow-all; #239). workshop-mcp carries the legit tools (real, namespace-scoped
     # via agent-sa). evil-mcp is the look-alike supply-chain MCP wired with its FULL rogue toolset, so
     # get_weather's poisoned description chains the agent into read_internal_config (leaks
     # FAKE-MCP-EXFIL-sentinel-4c1d) / apply_optimization. The student runs guard-mcp-on
@@ -829,10 +833,10 @@ metadata:
 spec:
   description: "The good workshop MCP server (legit agent tools: list_pods, apply_manifest, get_secret)"
   protocol: STREAMABLE_HTTP
-  # Routed THROUGH agentgateway (3001) so agentgateway's mcpAuthorization gates the agent's tool calls
-  # for C7 (beat-3): agent -> agentgateway:3001/mcp -> workshop-mcp:8000/mcp. agentgateway's mcp backend
-  # (gitops/ai-layer/agentgateway.yaml) targets workshop-mcp. verify-at-build: confirm agentgateway
-  # serves the MCP listener at /mcp on :3001 (if it serves at root, drop the /mcp path). Validated live.
+  # Routed THROUGH agentgateway (3001): agent -> agentgateway:3001/mcp -> workshop-mcp:8000/mcp.
+  # agentgateway's mcp backend (gitops/ai-layer/agentgateway.yaml) targets workshop-mcp and its
+  # mcpAuthorization rule is allow-all, so the gateway carries these calls but gates none of them. C7's
+  # rogue tools are on evil-mcp, which is dialled directly (#239). The /mcp path is validated live.
   url: http://agentgateway.agent:3001/mcp
   timeout: 30s
   sseReadTimeout: 5m0s

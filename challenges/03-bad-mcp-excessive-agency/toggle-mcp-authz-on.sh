@@ -10,17 +10,16 @@ AGENT="${AGENT:-workshop-agent}"
 KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 
 # WHY this toggles toolNames and not the agentgateway config:
-#   The kagent Agent's RemoteMCPServer points DIRECT at workshop-mcp (gitops/ai-layer/resources.yaml),
-#   so the agent's tool calls do NOT traverse agentgateway. Flipping agentgateway's mcpAuthorization
-#   therefore would not gate the agent's tools. The in-path, deployed, deterministic control is the
-#   kagent toolNames allowlist on the Agent CRD, which kagent enforces when it renders the agent's
-#   tool set. This toggle patches that.
+#   The rogue tools are served by evil-mcp, and the `evil-mcp` RemoteMCPServer points DIRECT at
+#   evil-mcp-shim (gitops/ai-layer/resources.yaml). Only workshop-mcp is routed through agentgateway
+#   (:3001), so flipping agentgateway's mcpAuthorization would not gate the rogue tools. The in-path,
+#   deployed, deterministic control is the kagent toolNames allowlist on the Agent CRD, which kagent
+#   enforces when it renders the agent's tool set. This toggle patches that.
 #
-#   The gateway-enforced alternative (route the agent through agentgateway:3001/mcp and flip the
-#   route's mcpAuthorization CEL rules) is the "the gateway blocks it" story. It needs the
-#   RemoteMCPServer repointed at agentgateway AND a live spike to confirm the MCP listener path, so it
-#   is NOT wired here (the agent/gateway/mcp-authz-{on,off}.yaml overlays are that path, pending the
-#   Phase-4b SPIKE in challenges/03-.../BUILD-SPIKE.md). Until then, toolNames is the real control.
+#   The gateway-enforced alternative (route evil-mcp through agentgateway too and flip a CEL rule) is
+#   weighed in docs/research/2026-10-24-agentgateway-evaluation.md (#239). It blocks the same tool
+#   names toolNames does and no more, so toolNames stays the control. The agent/gateway/mcp-authz-*
+#   overlays predate the gitops deploy and are not applied by anything.
 #
 # Rogue tools (induced by the poisoned MCP description; read_internal_config leaks
 # FAKE-MCP-EXFIL-sentinel-4c1d): read_internal_config, apply_optimization.

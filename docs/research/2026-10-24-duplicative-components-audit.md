@@ -161,7 +161,7 @@ The issue's premise was "if nothing routes through agentgateway it is idle". Thr
 | Path | Where |
 |---|---|
 | every chat message: guard-proxy to the agent over A2A, port 3000 | `gitops/ai-layer/resources.yaml:607` |
-| every model call: both kagent ModelConfigs, port 3002 | `resources.yaml:60`, `:77` |
+| ~~every model call: both kagent ModelConfigs, port 3002~~ model calls only on a cluster switched to a `gateway-*` ModelConfig; the committed `bedrock-nova` calls Bedrock directly (corrected in #239, `2026-10-24-agentgateway-evaluation.md`) | `resources.yaml:60`, `:77` |
 | every workshop-mcp tool call, port 3001 | `resources.yaml:836` |
 
 The toggle script's "toolNames is the real control" is about C7's *authorization*: the rogue tools live on
