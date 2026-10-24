@@ -562,3 +562,11 @@ installed into the offline suite's interpreter:**
 - **torch 2.14.0+cpu** (PyTorch CPU index, 2026-09-02). This is the image's pin. 2.14.1 exists, but matching
   the image is the point, and the CPU build keeps the CUDA packages out.
 - The model above, fetched from Hugging Face on the first run.
+## 2026-10-24 · #487 · The C2 badge reads the ValidatingPolicy; guard-proxy pinned at 627cb97
+
+Closes the "Not done here" item of the #206 entry above. guard-proxy-agenticburn 627cb97 makes `/controls`
+GET `/apis/policies.kyverno.io/v1/validatingpolicies/restrict-image-registries` and arm C2 when
+`spec.validationActions` contains `Deny`. The version is the one the policy is applied at
+(`policies/kyverno/restrict-image-registries.yaml`), and the read is the one guard-proxy-reader grants.
+No fallback to the ClusterPolicy: it is not deployed, and an Enforcing one is not what admission runs.
+`verify/test_controls_c2.py` pins the path to the policy file, the ClusterRole and the toggle's value.
