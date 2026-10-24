@@ -294,8 +294,45 @@ is merely slow rather than rebuilding:
   else, stop and fix the pin before the day (#453). Then send one throwaway order to
   each bot and confirm it answers with a menu, not an empty reply (an empty reply
   means the MCP servers are down; see the workshop runbook's failure playbook).
+- [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
+  the repo root, one command per cluster. It runs the beats in this file's order and
+  prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
+  (default 20): a community run makes 3 model calls, an admin run 12. Pull each
+  admin cluster's credentials into its own kubeconfig first; the probe passes it per
+  command and never touches `~/.kube/config`.
+
+  ```bash
+  python3 verify/kubecon_probe.py community attackme.agenticburn.com
+  python3 verify/kubecon_probe.py admin michael-admin.agenticburn.com \
+      --context <michael-admin-context> --kubeconfig /tmp/michael-admin.kubeconfig --profile accen-dev
+  python3 verify/kubecon_probe.py admin whitney-admin.agenticburn.com \
+      --context <whitney-admin-context> --kubeconfig /tmp/whitney-admin.kubeconfig --profile accen-dev
+  ```
+
+  - Community (segment 2): the wide-open start, a burrito order answered, the CEO
+    record leaking with the `/brief` prompt, the linked-list ask answered, the cost
+    counter moving, and the projected feed on.
+  - Admin: the kube-context and the hostname are the same cluster (if not, it stops
+    before flipping anything); the start state (every AI guard off; Kyverno Deny,
+    NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
+    cluster; C1, C2 and C3 blocked, judged on the control and not the model (the
+    lab's curl from `workshop-mcp`, a server-side dry run as `agent-sa`, and the C3
+    fallback); C6, C5 and C7 off then on, with the guards turned on cumulatively as
+    segment 5 does; the on-topic guard redirecting the four canonical off-topic asks
+    and letting "what are your hours" and "do you have mild salsa" through. Its last
+    act is `guards-off`, run even when a beat fails, so the stage starts clean.
+  - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
+    up in the feed the room sees.
+  - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
+    fallback for before the day, not something to find out on stage. Two are
+    expected to fail until their fixes land: the Kyverno badge (#487, the pinned
+    guard-proxy still reads the retired ClusterPolicy) and the on-topic beats (#455,
+    the pinned guard-proxy has no topic stage yet). Record the date, the clusters and
+    the spend it prints on #503.
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
-  so the AI guardrails start off and the live toggles in segment 5 are real.
+  so the AI guardrails start off and the live toggles in segment 5 are real. The
+  probe above ends with it already; run it again if anyone has touched the guards
+  since.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
   pool is live, decide the Grafana or Tempo fallback for segment 6 and say so on the
