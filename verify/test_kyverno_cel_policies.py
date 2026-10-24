@@ -260,8 +260,10 @@ g = run(POL / "deny-llm-endpoint-bypass.yaml", [
     pod("rogue-anthropic", "agent", [env("ANTHROPIC_BASE_URL", "https://api.anthropic.com")]),
     pod("rogue-legacy", "agent", [env("OPENAI_API_BASE", "https://api.openai.com/v1")]),
     pod("routed", "agent", [env("OPENAI_BASE_URL", "http://guard-proxy.agent.svc:8080/v1")]),
-    pod("guard-proxy-6d9f", "agent", [env("OPENAI_BASE_URL", "https://api.openai.com/v1")]),
-    pod("agentgateway-0", "agent", [env("ANTHROPIC_BASE_URL", "https://api.anthropic.com")]),
+    pod("rogue-init", "agent", [c("x")], init=[env("OPENAI_API_BASE", "https://api.openai.com/v1")]),
+    pod("guard-proxy-impostor-6d9f", "agent", [env("OPENAI_BASE_URL", "https://api.openai.com/v1")]),
+    pod("agentgateway-impostor-0", "agent", [env("ANTHROPIC_BASE_URL", "https://api.anthropic.com")]),
+    pod("guard-proxy-6d9f", "agent", [c("x", env=[{"name": "AGENT_URL", "value": "http://agentgateway.agent.svc.cluster.local:3000"}])]),
     deploy("rogue-deploy", "agent", [env("OPENAI_BASE_URL", "https://api.openai.com/v1")]),
     pod("other-ns", "apps", [env("OPENAI_BASE_URL", "https://api.openai.com/v1")])])
 BYPASS = "This pod sets an LLM endpoint pointing at a public API."
@@ -269,8 +271,11 @@ expect("OPENAI_BASE_URL at api.openai.com is reported", g, "rogue-openai", "fail
 expect("ANTHROPIC_BASE_URL at api.anthropic.com is reported", g, "rogue-anthropic", "fail", BYPASS)
 expect("OPENAI_API_BASE at api.openai.com is reported", g, "rogue-legacy", "fail", BYPASS)
 expect("a base URL pointed at guard-proxy passes", g, "routed", "pass")
-expect("guard-proxy itself is exempt", g, "guard-proxy-6d9f", "ignored")
-expect("agentgateway itself is exempt", g, "agentgateway-0", "ignored")
+expect("an init container is judged like any other (#333)", g, "rogue-init", "fail", BYPASS)
+# #333: the name exemption these replace let any pod named guard-proxy-* or agentgateway* through unseen.
+expect("a pod NAMED like guard-proxy gets no pass for the name (#333)", g, "guard-proxy-impostor-6d9f", "fail", BYPASS)
+expect("a pod NAMED like agentgateway gets no pass for the name (#333)", g, "agentgateway-impostor-0", "fail", BYPASS)
+expect("guard-proxy as deployed passes on its own env, with no exemption", g, "guard-proxy-6d9f", "pass")
 expect("Deployments are not judged (Pods only, as the ClusterPolicy was)", g, "rogue-deploy", "ignored")
 expect("only the agent namespace is in scope", g, "other-ns", "ignored")
 

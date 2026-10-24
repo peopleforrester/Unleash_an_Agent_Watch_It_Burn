@@ -420,3 +420,33 @@ it in that case. The "developer's view of their agent" is already the real kagen
 - `display.html`/`display.js` moved into `console-src`. They had shipped only in `chat-ui-src`, which kept
   `/display` returning 404 on clusters even after #338 added its route. `verify/test_console_service_vhosts.py`
   now checks that every `try_files` page is packaged in `console-src`, not just that it has a location.
+
+## 2026-10-24T12:05:21Z · #333 · deny-llm-endpoint-bypass exercised live; its name exemption removed
+
+The issue asked for one live test: create a pod of the bypass shape and read the PolicyReport. That test is
+`verify/test_llm_bypass_live.py` (E2E suite, `CONTEXT` required). It was run on 2026-10-24 against Kyverno
+v1.19.1, which is what chart 3.9.1 in `gitops/apps/kyverno.yaml` deploys. No EKS cluster was provisioned
+for it: the run used a local kube-apiserver and controller-manager 1.35.9 with etcd, the chart's CRDs and
+RBAC, and the real admission and reports controllers out of cluster with the chart's own arguments. The
+real guard-proxy and agentgateway Deployments from `kubectl kustomize gitops/ai-layer` were loaded too.
+
+**What it showed.** The policy as shipped does match its own shape. A bare Pod and a Deployment's Pod with
+a public `*_BASE_URL` each got `fail` with the policy's message, through both the admission webhook (an
+EphemeralReport with `audit.kyverno.io/source: admission`) and the background scan. One quirk: Kyverno
+1.19.1 sets the result property `process: background scan` on admission results as well, so that
+property cannot tell the two paths apart.
+
+**What it found.** The matchCondition skipped any pod whose name started with `guard-proxy` or
+`agentgateway`. The API server names a ReplicaSet's pods before admission, so an agent-made Deployment
+called `guard-proxy-anything` produced pods the policy never evaluated. No report recorded them at all.
+Init containers were never checked either, and they got `pass`. The exemption protected nothing: in the
+rendered ai-layer, neither guard-proxy nor agentgateway sets `OPENAI_BASE_URL`, `ANTHROPIC_BASE_URL` or
+`OPENAI_API_BASE`.
+
+- The exemption is removed and init containers are checked. The policy stays `Audit`, as the issue asked.
+- The live test also reads the reports of the running guard-proxy and agentgateway pods and needs `pass`
+  on each. That is the policy's own precondition for promoting it to Deny. The test also refuses to judge
+  a cluster whose installed policy differs from the repo's file.
+- Proof that the test can fail: with the old policy on both sides it failed exactly the impostor (no
+  result) and the init container (`pass`). With the old policy on the cluster and the new one in the repo,
+  it failed the spec comparison.

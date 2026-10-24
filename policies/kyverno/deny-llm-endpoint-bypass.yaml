@@ -24,24 +24,37 @@
 #     policies: require-resource-limits and restrict-image-registries. Those two ARE the CNCF wall the
 #     beat demonstrates. This policy is a different concern, so adding it to that list would change what
 #     the beat shows on stage.
-#   * Enforce on an unvalidated policy can block a legitimate deploy. If the `exclude` below does not
-#     match as intended, guard-proxy itself fails admission and the whole demo is dead. Audit reports
-#     the violation without that risk, which is the larger half of the value here anyway: the bypass
-#     becomes visible in a policy report instead of invisible.
+#   * Enforce on an unvalidated policy can block a legitimate deploy. If the expression matched a pod on
+#     the guarded path, guard-proxy itself would fail admission and the whole demo would be dead. Audit
+#     reports the violation without that risk, which is the larger half of the value here anyway: the
+#     bypass becomes visible in a policy report instead of invisible.
 #
 # Round 1 is unaffected either way; the burn profile ships no Kyverno at all, so this exists only on the
 # rounds that claim to be guarded.
 #
-# TO PROMOTE TO ENFORCE: validate on a live cluster that guard-proxy and agentgateway still admit, then
-# change validationActions here to Deny. Do not promote it blind.
+# TO PROMOTE TO ENFORCE: run verify/test_llm_bypass_live.py on a live cluster (it reads the PolicyReports of
+# the running guard-proxy and agentgateway pods and needs a pass on each), then change validationActions
+# here to Deny. Do not promote it blind.
 #
-# Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206)
-# against Kyverno v1.19.0. The expression is exercised by the Kyverno CLI in
-# verify/test_kyverno_cel_policies.sh, but NOT yet on a live cluster.
+# Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206).
+# Two tests, one per question:
+#   * verify/test_kyverno_cel_policies.py runs the expression through the Kyverno CLI on fixture requests.
+#   * verify/test_llm_bypass_live.py (#333) creates pods of the bypass shape on a cluster and reads the
+#     PolicyReport Kyverno writes for each. First run 2026-10-24 against Kyverno v1.19.1 (chart 3.9.1, the
+#     version gitops/apps/kyverno.yaml deploys) on a local kube-apiserver 1.35.9 with the chart's own
+#     controller args: a bare Pod and a Deployment's Pod each got `fail` with the message below, through
+#     both the admission webhook and the background scan.
 #
-# Pods only, deliberately: autogen is switched off below. The ClusterPolicy this replaced never had
-# Deployment rules (Kyverno skips autogen when a rule excludes by name), and the name exclusion would not
-# carry over anyway, because a Deployment's pod template has no name to match against.
+# No name exemption, on purpose (#333). This used to skip any pod whose name started with `guard-proxy` or
+# `agentgateway`. The live run showed what that cost: a Deployment the agent names `guard-proxy-anything`
+# gets pods that start with that prefix, and the API server names them BEFORE admission, so the bypass
+# pod was skipped at admission and in the background scan, and no report recorded it at all. The
+# exemption protected nothing either: neither guard-proxy nor agentgateway sets any of the env vars below
+# (they reach the model through agentgateway and Bedrock), so both pass the expression as it stands.
+#
+# Pods only, deliberately: autogen is switched off below, as the ClusterPolicy this replaced never had
+# Deployment rules. A Deployment is still caught, at the Pods its ReplicaSet creates; the live test proves
+# that case on its own.
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:
@@ -75,12 +88,6 @@ spec:
           operator: In
           values:
             - agent
-  matchConditions:
-    # The guard-proxy and agentgateway ARE the guarded path; they legitimately hold upstream
-    # configuration. Exempting them by name keeps the rule about workloads that bypass the path.
-    - name: not-the-guarded-path
-      expression: >-
-        !['guard-proxy', 'agentgateway'].exists(p, object.metadata.?name.orValue('').startsWith(p))
   variables:
     # Matches the env vars every mainstream SDK reads when constructed with no explicit base URL, which
     # is the shape that does not show up in a grep for an API call.
@@ -90,8 +97,10 @@ spec:
         'ANTHROPIC_BASE_URL': ['api.anthropic.com'],
         'OPENAI_API_BASE': ['api.openai.com']}
   validations:
+    # Init containers too: one runs to completion before the pod's own containers start, which is time
+    # enough to call a model.
     - expression: >-
-        object.spec.containers.all(c, !c.?env.orValue([]).exists(e,
+        (object.spec.containers + object.spec.?initContainers.orValue([])).all(c, !c.?env.orValue([]).exists(e,
         e.name in variables.publicEndpoints &&
         variables.publicEndpoints[e.name].exists(host, e.?value.orValue('').contains(host))))
       message: >-
