@@ -14,7 +14,8 @@ The beats, in the order facilitation/kubecon-na-2026-run-of-show.md shows them:
     community  the wide-open start, a burrito order, the CEO record leaks, an off-topic ask is answered 3 of 3,
                the cost counter moves, the projected feed is on
     admin      the cluster is the one named, the start state (AI guards off; Kyverno, NetworkPolicy and
-               KubeArmor armed), the /controls badges agree with the cluster, C1 C2 C3 blocked, C6 C5 C7
+               KubeArmor armed), the /controls badges agree with the cluster, agentgateway runs the image and
+               span service.version the repo pins, C1 C2 C3 blocked, C6 C5 C7
                succeed with their guard off and fail with it on, the on-topic guard redirects the off-topic
                asks and lets "what are your hours" and "do you have mild salsa" through, then guards-off
 
@@ -102,6 +103,7 @@ GUARD_OUTPUT_ON = "output=on"
 GUARD_TOPIC_ON = "topic=on"
 GUARDS_OFF = ["output=off", "input_blocklist=off&input_classifier=off", "budget=off", "topic=off"]
 AI_GUARDS = ("output", "input_blocklist", "input_classifier", "budget", "topic")
+GATEWAY_MANIFEST = REPO / "gitops/ai-layer/agentgateway.yaml"
 
 
 def _resources() -> list[dict]:
@@ -112,6 +114,21 @@ def _proxy_env() -> dict[str, str]:
     dep = next(d for d in _resources() if d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
     proxy = next(c for c in dep["spec"]["template"]["spec"]["containers"] if c["name"] == "proxy")
     return {e["name"]: e.get("value") or "" for e in proxy["env"]}
+
+
+def span_version(container: dict) -> str | None:
+    """service.version out of a container's OTEL_RESOURCE_ATTRIBUTES: the version every span it sends carries."""
+    env = {e["name"]: e.get("value") or "" for e in container.get("env") or []}
+    attrs = dict(kv.split("=", 1) for kv in env.get("OTEL_RESOURCE_ATTRIBUTES", "").split(",") if "=" in kv)
+    return attrs.get("service.version")
+
+
+def gateway_pin() -> tuple[str, str | None]:
+    """The agentgateway image and span service.version the repo deploys (#495, #505)."""
+    dep = next(d for d in yaml.safe_load_all(GATEWAY_MANIFEST.read_text()) if d
+               and d.get("kind") == "Deployment" and d["metadata"]["name"] == "agentgateway")
+    c = dep["spec"]["template"]["spec"]["containers"][0]
+    return c["image"], span_version(c)
 
 
 def brief_ceo_prompt() -> str:
@@ -286,6 +303,28 @@ def judge_badges(controls: dict | None, m: dict) -> tuple[bool, str]:
     return True, "every badge matches the cluster"
 
 
+def judge_gateway(dep: dict | None, pin: tuple[str, str | None]) -> tuple[bool, str]:
+    """The live agentgateway runs the image the repo pins, tags its spans with that version, and has rolled out
+    (#505). The Datadog half, one gateway span carrying service.version, is read by hand: the probe has no key."""
+    if not dep:
+        return False, "no agentgateway Deployment in namespace agent"
+    image, version = pin
+    c = dep["spec"]["template"]["spec"]["containers"][0]
+    st, want = dep.get("status") or {}, dep["spec"].get("replicas", 1)
+    bad = []
+    if c.get("image") != image:
+        bad.append(f"image {c.get('image')!r}, the repo pins {image!r}")
+    if span_version(c) != version:
+        bad.append(f"spans tagged service.version={span_version(c)}, the repo says {version}")
+    if (st.get("observedGeneration") != dep["metadata"].get("generation")
+            or st.get("updatedReplicas") != want or st.get("availableReplicas") != want):
+        bad.append(f"not rolled out: {st.get('updatedReplicas')} of {want} updated, {st.get('availableReplicas')} available")
+    if bad:
+        return False, "; ".join(bad)
+    return True, (f"agentgateway runs {image.split('@', 1)[0]} on {want} replica(s), spans tagged "
+                  f"service.version={version}")
+
+
 def judge_egress_blocked(rc: int, out: str) -> tuple[bool, str]:
     """curl -w '%{http_code}' prints 000 when it cannot connect; kubectl then adds its own exit line after it."""
     m = re.match(r"\s*(\d{3})", out)
@@ -437,6 +476,10 @@ class KubeconCluster(Cluster):
         m["kubearmor_action"] = out.strip() if rc == 0 else None
         return m
 
+    def gateway(self) -> dict | None:
+        rc, out = self._stdout_rc("-n", "agent", "get", "deployment", "agentgateway", "-o", "json")
+        return json.loads(out) if rc == 0 and out.strip() else None
+
     def identity_host(self) -> str | None:
         rc, out = self._stdout_rc("-n", "agent", "get", "configmap", "cluster-identity", "-o",
                                   "jsonpath={.data.public-host}")
@@ -571,6 +614,10 @@ def _badges(p: Probe) -> tuple[bool, str]:
     return judge_badges(p.cluster.get_json("/controls"), p.state.get("measured") or p.cluster.measure())
 
 
+def _gateway(p: Probe) -> tuple[bool, str]:
+    return judge_gateway(p.cluster.gateway(), gateway_pin())
+
+
 def _c1(p: Probe) -> tuple[bool, str]:
     return judge_egress_blocked(*p.cluster.kubectl_rc(*C1_CHECK, timeout=60))
 
@@ -643,6 +690,7 @@ ADMIN: list[Beat] = [
     Beat("identity", "-", "The kube-context is the named cluster", _identity),
     Beat("start-state", "3", "Start state: AI guards off, Kyverno, NetworkPolicy, KubeArmor armed", _start_state),
     Beat("badges", "3", "The /controls badges match the cluster", _badges),
+    Beat("gateway", "3", "agentgateway runs the pinned image, spans tagged its version", _gateway),
     Beat("c1", "4", "C1 exfiltration blocked (egress NetworkPolicy)", _c1),
     Beat("c2", "4", "C2 villain image denied (Kyverno admission)", _c2),
     Beat("c3", "4", "C3 recipe read blocked and alerted (KubeArmor)", _c3),

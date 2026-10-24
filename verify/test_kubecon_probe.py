@@ -282,6 +282,53 @@ check("C3 runs the fallback the run-of-show names", kp.C3_FALLBACK.is_file()
 check("the probe marker is guard-proxy's", 'PROBE_MARKER = "[[wib-probe]]"' in
       (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text())
 
+print("== agentgateway runs the version the repo pins (#505) ==")
+gw_doc = next(d for d in yaml.safe_load_all(kp.GATEWAY_MANIFEST.read_text())
+              if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "agentgateway")
+gw_image, gw_version = kp.gateway_pin()
+check("the pin is read off the manifest: the digest-pinned image and its span version",
+      "@sha256:" in gw_image and gw_image.split("@", 1)[0].endswith(f":{gw_version}"), f"{gw_image} {gw_version}")
+
+
+def live_gateway(image: str | None = None, attrs: str | None = None, available: int | None = None) -> dict:
+    """The agentgateway Deployment as kubectl returns it: the manifest, its generation, and a rolled-out status."""
+    dep = json.loads(json.dumps(gw_doc))
+    dep["metadata"]["generation"] = 3
+    c = dep["spec"]["template"]["spec"]["containers"][0]
+    if image:
+        c["image"] = image
+    if attrs is not None:
+        next(e for e in c["env"] if e["name"] == "OTEL_RESOURCE_ATTRIBUTES")["value"] = attrs
+    n = dep["spec"].get("replicas", 1)
+    dep["status"] = {"observedGeneration": 3, "replicas": n, "updatedReplicas": n,
+                     "availableReplicas": n if available is None else available}
+    return dep
+
+
+ok, note = kp.judge_gateway(live_gateway(), kp.gateway_pin())
+check("the pinned gateway, rolled out, passes and names its version", ok and f"service.version={gw_version}" in note, note)
+for name, dep in [
+        ("an older image", live_gateway(image="cr.agentgateway.dev/agentgateway:v1.3.0")),
+        ("the tag without the pinned digest", live_gateway(image=gw_image.split("@", 1)[0])),
+        ("spans still tagged v1.3.0", live_gateway(attrs="service.name=burritobot-gateway,service.version=v1.3.0")),
+        ("no service.version on the spans", live_gateway(attrs="service.name=burritobot-gateway")),
+        ("a rollout with no pod available", live_gateway(available=0)),
+        ("no agentgateway Deployment", None)]:
+    check(f"{name} fails the gateway beat", not passes(kp.judge_gateway(dep, kp.gateway_pin())))
+
+
+def gateway_runner(argv, **kw):
+    if argv[3:] == ["-n", "agent", "get", "deployment", "agentgateway", "-o", "json"]:
+        return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(live_gateway()),
+                                           stderr="Warning: this API version is deprecated\n")
+    return subprocess.CompletedProcess(argv, 1, stdout="", stderr="NotFound\n")
+
+
+gc = kp.KubeconCluster(host, "ctx-admin", None, None, 5, runner=gateway_runner)
+ok, note = kp._gateway(kp.Probe(gc, 0))
+check("the gateway beat reads the live Deployment off stdout and passes", ok, note)
+
+
 print("== every kubectl call names the context and the isolated kubeconfig ==")
 calls: list[tuple[list[str], dict]] = []
 
@@ -420,6 +467,9 @@ class Fake:
     def identity_host(self):
         return self.identity
 
+    def gateway(self):
+        return live_gateway()
+
     def guards(self):
         return dict(self.g)
 
@@ -491,7 +541,7 @@ res = run_admin(f)
 keys = [r["key"] for r in res]
 check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-want = ["identity", "start-state", "badges", "c1", "c2", "c3", "c6-off", "guard-input-on", "c6-on", "c5-off",
+want = ["identity", "start-state", "badges", "gateway", "c1", "c2", "c3", "c6-off", "guard-input-on", "c6-on", "c5-off",
         "guard-output-on", "c5-on", "c7-off", "guard-mcp-on", "c7-on", "guard-topic-on", "topic-off-1",
         "topic-off-2", "topic-off-3", "topic-off-4", "topic-on-1", "topic-on-2", "guards-off"]
 check("the beats run in run-of-show order (segments 3, 4, 5 as C6 C5 C7, 7, then guards-off)", keys == want, str(keys))
