@@ -221,7 +221,7 @@ print("== unknown is not no ==")
 get = fake_get(claims_status=403)
 rc, js, page = run("--json", get=get)
 doc = json.loads(js)
-check("a refused token is named, and the run exits 1", rc == 1 and "403" in doc["errors"].get("claims", ""))
+check("a refused token is named, and the run fails", rc == ov.EXIT_SOURCES and "403" in doc["errors"].get("claims", ""))
 check("with claims unreadable, nobody reads as unclaimed", all(r["email"] is None for r in doc["rows"])
       and doc["summary"]["claimed"] is None and doc["summary"]["free"] is None)
 check("the error and the page carry no token", TOKEN not in js and TOKEN not in page.read_text()
@@ -231,13 +231,13 @@ check("the token went only to the export request",
 rc, js, _ = run("--json", dd=fake_dd(status=400))
 doc = json.loads(js)
 check("a Datadog failure leaves progress unknown, not undone",
-      rc == 1 and "progress" in doc["errors"]
+      rc == ov.EXIT_SOURCES and "progress" in doc["errors"]
       and all(v is None for r in doc["rows"] for v in r["progress"].values())
       and all(r["agent"] is None for r in doc["rows"]))
 rc, js, _ = run("--json", get=fake_get(routed_status=500))
 doc = json.loads(js)
 check("an unreadable routing table leaves every console unknown",
-      rc == 1 and all(r["console"] is None for r in doc["rows"]) and doc["summary"]["consoles_up"] is None)
+      rc == ov.EXIT_SOURCES and all(r["console"] is None for r in doc["rows"]) and doc["summary"]["consoles_up"] is None)
 
 
 def no_aws(profile, region):
@@ -245,7 +245,7 @@ def no_aws(profile, region):
 
 
 rc, js, _ = run("--json", keys_fn=no_aws)
-check("no aws CLI is a named failure, not a crash", rc == 1 and "aws CLI" in json.loads(js)["errors"]["progress"])
+check("no aws CLI is a named failure, not a crash", rc == ov.EXIT_SOURCES and "aws CLI" in json.loads(js)["errors"]["progress"])
 try:
     ov.parse_scalar({"data": {"attributes": {"columns": [
         {"type": "number", "name": "a", "values": [1]}, {"type": "number", "name": "b", "values": [2]}]}}})
@@ -255,10 +255,15 @@ except ov.SourceError:
 check("the scalar parser refuses a shape it does not know", refused)
 
 print("== the CLI refuses what it cannot do ==")
-rc, _, _ = run(env_token="")
-check("no token is exit 2, not an anonymous request", rc == 2)
-rc, _, _ = run("--watch", "3")
-check("--watch faster than the start page is refused", rc == 2)
+get = fake_get()
+rc, _, _ = run(env_token="", get=get)
+check("no token is refused as a usage error before any request, never sent anonymously",
+      rc == ov.EXIT_USAGE and get.calls == [])
+get = fake_get()
+rc, _, _ = run("--watch", "3", get=get)
+check("--watch faster than the start page is refused as a usage error before any request",
+      rc == ov.EXIT_USAGE and get.calls == [])
+check("a refusal and a failed source are told apart by their status", ov.EXIT_USAGE != ov.EXIT_SOURCES != 0)
 slept = []
 
 
