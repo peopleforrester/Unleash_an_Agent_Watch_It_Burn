@@ -356,3 +356,47 @@ against the workshop key (and fails it under a different key).
 this lands the badge reads False until guard-proxy reads `/apis/policies.kyverno.io/v1/validatingpolicies/
 restrict-image-registries` and tests `"Deny" in spec.validationActions`, and the pin is bumped. The
 guard-proxy-reader ClusterRole here already grants that read. Promote the two together.
+
+## 2026-10-24T07:36:04Z · #207 · The IAM half of the policy pipeline is built; the org half waits on access
+
+**Scope follows the owner's 2026-09-04 direction on #207:** build the in-account permission-boundary
+version and treat the org-level half as blocked until the provider grants management or delegated-admin
+access to `o-pslkiycmqp`. No SCP, RCP or org S3 BPA document is drafted.
+
+**Choices made:**
+- **One boundary per account, not per cluster.** A role names its boundary by ARN. A boundary created in
+  the same apply is either known only after apply (so no plan-time check can see it) or raced by
+  CreateRole. `infra/org/boundary` creates `watch-it-burn-permissions-boundary` once per account, and the
+  cluster root looks it up with a data source, so a cluster plan in an account without it fails at plan.
+  **This adds a bootstrap step:** apply `infra/org/boundary` in each of the five accounts before the next
+  `fleet.sh up`.
+- **The boundary is Allow-everything plus Denies.** A strict allow-list ceiling would have to restate
+  every AWS-managed policy the EKS cluster and node roles hold, and a missing service breaks a cluster
+  live. The Allow is waived in `exceptions.md` with that reason. Its Denies are the in-account backstops:
+  no unbounded CreateRole, no IAM escalation, no org or account calls, no public S3, no audit or key
+  tampering.
+- **Both Bedrock grants now carry a Condition** on the Pod Identity session tags (`eks-cluster-name`,
+  `kubernetes-namespace`, plus `kubernetes-service-account` for the tutor). Check 3 asks this of every
+  Allow, and it holds the grant to the cluster and namespace its associations already name. **Not yet
+  seen live**: the next cluster's Bedrock beats are the check, and `test_iam_policy_aws.py` simulates it.
+- **Check 3's rules cover permission policies only** (identity, boundary, SCP, RCP). Trust policies and
+  KMS key policies are checked by Access Analyzer alone: key policies need `Resource: "*"`, and a trust
+  policy's Allow is a grant to a principal, not a permission.
+- **Upstream module policies are waived by address, with the reason.** These are the LB Controller, EBS
+  CSI and ESO policies from terraform-aws-modules/eks-pod-identity, and the EKS module's cluster-encryption
+  grant. They are AWS's published minimums, and the boundary still applies to them.
+- **A new identity policy fails check 2 until accepted** (`--accept-new <address>`). There is nothing on
+  main to compare it against, and passing it unseen would make check 2 skip whatever is new.
+- **The E2E structural test renders today's roots without an AWS account.** `verify/iam_plan_render.py`
+  points a copy at a local endpoint that answers only STS GetCallerIdentity and the boundary lookup. Any
+  other call fails. A recorded fixture would go stale the first time main.tf changed.
+
+**New dev dependency:** conftest **v0.71.1** (2026-10-06, bundles OPA 1.21.1), the issue's named engine for
+check 3. Why Rego rather than Kyverno CEL: IAM's Action, Resource and Statement are each a string or an
+array, and Rego has the prior art for that. It is used by `verify/test_iam_policy_structural.py` (E2E suite),
+which fails loudly when conftest is missing or a different version.
+
+**Not done, and why:** the SCPs, RCPs, org S3 BPA, the deny-manual-edits SCP, the break-glass and the
+console-detach instructor beat all need org access we do not hold (#202). The OIDC `org-policies` GitHub
+environment is a CI workflow and waits for the owner. "CI can write state" and "Datadog can still assume in"
+have no subject: there is no CI role and no Datadog AWS role.

@@ -1,0 +1,154 @@
+# ABOUTME: Check 4 of the IAM policy pipeline (#207): what the policies must and must not let a principal do,
+# ABOUTME: asked of `aws iam simulate-custom-policy` with the plan's own documents and the canonical boundary.
+#
+# Each case: identity  plan addresses of the identity policies the principal holds, or allow-all for "any
+#                      role that carries the boundary, whatever its own policies say"
+#            boundary  canonical (default: infra/org/permissions-boundary.json.tftpl, rendered for the
+#                      plan's account) or none
+#            action, resource, context (condition keys the request carries)
+#            expect    allowed | explicitDeny | implicitDeny | denied (either deny)
+# ${account_id}, ${cluster_name} and ${region} are filled from the plan.
+#
+# Two effects the 2026-09-03 brief asked for have no subject in this repo, so there is no case for them:
+# "CI can write state" (Terraform state is local files per cluster; there is no CI role) and "Datadog can
+# still assume in" (the Datadog integration is API-key only; no AWS integration role exists). When either
+# role is added, its case belongs here.
+
+# Run against a plan of infra/org/boundary: the ceiling every workload role sits under.
+boundary:
+  - name: a bounded role cannot make a bucket public by ACL
+    identity: allow-all
+    action: s3:PutBucketAcl
+    resource: arn:aws:s3:::any-bucket
+    expect: explicitDeny
+  - name: a bounded role cannot upload a public-read object
+    identity: allow-all
+    action: s3:PutObject
+    resource: arn:aws:s3:::any-bucket/key
+    context: {s3:x-amz-acl: public-read}
+    expect: explicitDeny
+  - name: a bounded role can still upload a private object (the ceiling is not deny-all)
+    identity: allow-all
+    action: s3:PutObject
+    resource: arn:aws:s3:::any-bucket/key
+    expect: allowed
+  - name: a bounded role cannot turn off Block Public Access
+    identity: allow-all
+    action: s3:PutBucketPublicAccessBlock
+    resource: arn:aws:s3:::any-bucket
+    expect: explicitDeny
+  - name: a bounded role cannot create a role without the boundary
+    identity: allow-all
+    action: iam:CreateRole
+    resource: arn:aws:iam::${account_id}:role/escape
+    expect: explicitDeny
+  - name: a bounded role cannot create a role under some other boundary
+    identity: allow-all
+    action: iam:CreateRole
+    resource: arn:aws:iam::${account_id}:role/escape
+    context: {iam:PermissionsBoundary: "arn:aws:iam::${account_id}:policy/AdministratorAccess"}
+    expect: explicitDeny
+  - name: a role created under the canonical boundary is not refused by it
+    identity: allow-all
+    action: iam:CreateRole
+    resource: arn:aws:iam::${account_id}:role/bounded
+    context: {iam:PermissionsBoundary: "arn:aws:iam::${account_id}:policy/watch-it-burn-permissions-boundary"}
+    expect: allowed
+  - name: a bounded role cannot strip its own boundary
+    identity: allow-all
+    action: iam:DeleteRolePermissionsBoundary
+    resource: arn:aws:iam::${account_id}:role/any
+    expect: explicitDeny
+  - name: a bounded role cannot rewrite the boundary
+    identity: allow-all
+    action: iam:CreatePolicyVersion
+    resource: arn:aws:iam::${account_id}:policy/watch-it-burn-permissions-boundary
+    expect: explicitDeny
+  - name: a bounded role cannot attach a policy to a role
+    identity: allow-all
+    action: iam:AttachRolePolicy
+    resource: arn:aws:iam::${account_id}:role/any
+    expect: explicitDeny
+  - name: a bounded role cannot detach an org policy
+    identity: allow-all
+    action: organizations:DetachPolicy
+    resource: "*"
+    expect: explicitDeny
+  - name: a bounded role cannot create a cluster
+    identity: allow-all
+    action: eks:CreateCluster
+    resource: "*"
+    expect: explicitDeny
+  - name: a bounded role cannot stop CloudTrail
+    identity: allow-all
+    action: cloudtrail:StopLogging
+    resource: "*"
+    expect: explicitDeny
+
+# Run against a plan of infra/terraform/aws/cluster: the roles one attendee cluster creates.
+cluster:
+  - name: the agent can invoke Nova Pro from its own namespace on its own cluster
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.amazon.nova-pro-v1:0
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+    expect: allowed
+  - name: the agent's grant does not work from another namespace
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.amazon.nova-pro-v1:0
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: apps
+    expect: implicitDeny
+  - name: the agent's grant does not work for another cluster's session
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.amazon.nova-pro-v1:0
+    context:
+      aws:PrincipalTag/eks-cluster-name: some-other-cluster
+      aws:PrincipalTag/kubernetes-namespace: agent
+    expect: implicitDeny
+  - name: the agent cannot reach a model off the menu
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}::foundation-model/amazon.titan-text-premier-v1:0
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+    expect: implicitDeny
+  - name: the agent cannot create a role
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: iam:CreateRole
+    resource: arn:aws:iam::${account_id}:role/escape
+    expect: denied
+  - name: the agent cannot create a cluster
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: eks:CreateCluster
+    resource: "*"
+    expect: denied
+  - name: the agent cannot make a bucket public
+    identity: [aws_iam_policy.bedrock_invoke]
+    action: s3:PutBucketAcl
+    resource: arn:aws:s3:::any-bucket
+    expect: denied
+  - name: the tutor can invoke its Sonnet profile
+    identity: [aws_iam_policy.tutor_bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.anthropic.claude-sonnet-5
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: web-terminal
+    expect: allowed
+  - name: the tutor's grant does not reach the agent's ServiceAccount
+    identity: [aws_iam_policy.tutor_bedrock_invoke]
+    action: bedrock:InvokeModel
+    resource: arn:aws:bedrock:${region}:${account_id}:inference-profile/us.anthropic.claude-sonnet-5
+    context:
+      aws:PrincipalTag/eks-cluster-name: ${cluster_name}
+      aws:PrincipalTag/kubernetes-namespace: agent
+      aws:PrincipalTag/kubernetes-service-account: agent-sa
+    expect: implicitDeny

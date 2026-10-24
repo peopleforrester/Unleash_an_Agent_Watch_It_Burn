@@ -2,7 +2,8 @@
 # ABOUTME: Heavy suite: the live beat harness (run-all.sh) on a cluster, every `# SUITE: e2e` check in
 # ABOUTME: verify/ (kubectl/helm renders, node, live Datadog), doc-link fetches, and Backstage Playwright.
 #
-# Usage: CONTEXT=<kube-context> [NAMESPACE=agent] bash verify/run-e2e.sh
+# Usage: CONTEXT=<kube-context> IAM_PIPELINE_PROFILE=<aws-profile> IAM_PIPELINE_REGION=<region> \
+#            [NAMESPACE=agent] bash verify/run-e2e.sh
 #
 # The target cluster is never guessed. CONTEXT is required and is passed explicitly to every kubectl call;
 # the current-context is never read (see AGENTS.md, Kube-context safety). KUBECONFIG may be set for this
@@ -23,6 +24,14 @@ done
 # test_kyverno_cel_policies.py evaluates the policies with the Kyverno CLI, pinned to the deployed v1.19.0.
 command -v "${KYVERNO_CLI:-kyverno}" >/dev/null 2>&1 \
     || missing+=("the kyverno CLI v1.19.0 is not on PATH (or set KYVERNO_CLI): github.com/kyverno/kyverno/releases/tag/v1.19.0")
+# The IAM policy pipeline (#207): test_iam_policy_structural.py renders the Terraform roots and runs conftest;
+# test_iam_policy_aws.py sends the documents to Access Analyzer and the policy simulator as a named profile.
+command -v "${CONFTEST:-conftest}" >/dev/null 2>&1 \
+    || missing+=("conftest v0.71.1 is not on PATH (or set CONFTEST): github.com/open-policy-agent/conftest/releases/tag/v0.71.1")
+command -v "${TERRAFORM:-terraform}" >/dev/null 2>&1 || missing+=("terraform is not on PATH (or set TERRAFORM); VERSIONS.lock pins v1.15.6")
+command -v aws >/dev/null 2>&1 || missing+=("the aws CLI is not on PATH")
+[[ -n "${IAM_PIPELINE_PROFILE:-}" && -n "${IAM_PIPELINE_REGION:-}" ]] \
+    || missing+=("IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION must name the AWS profile and region the policy pipeline's AWS checks run as")
 if [[ -z "${CONTEXT:-}" ]]; then
     missing+=("CONTEXT is not set: name the kube-context of the test attendee cluster to run against")
 elif command -v kubectl >/dev/null 2>&1 \

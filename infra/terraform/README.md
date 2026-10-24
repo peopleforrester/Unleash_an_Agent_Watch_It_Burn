@@ -30,6 +30,11 @@ a from-scratch rewrite. Modeled directly on the Packt sister repo's proven two-t
 ## Usage
 
 ```bash
+# 0. Once per account: the permissions boundary every cluster role carries (#207). A cluster plan in an
+#    account without it fails at plan with "no matching IAM Policy found". See infra/org/README.md.
+terraform -chdir=../org/boundary init
+terraform -chdir=../org/boundary apply -state=states/<profile>.tfstate -var profile=<profile>
+
 # 1. Provision the shared VPC once.
 cd lab-vpc && terraform init && terraform apply
 
@@ -52,6 +57,9 @@ cd ../lab-vpc && terraform destroy
 ## Notes
 
 - **State isolation:** each cluster has `states/<name>.tfstate`. Blast radius is one attendee.
+- **IAM goes through the policy pipeline:** every role `cluster/` creates carries the canonical
+  permissions boundary, and every policy document it creates is checked by `infra/org/pipeline.py`
+  (syntax, semantic diff, structure, effect). See [`infra/org/README.md`](../org/README.md).
 - **Collision safety:** the account is shared with Packt. Every resource is tagged
   `project=watch-it-burn` plus `attendee=<name>`; the fleet refuses any name not `watch-it-burn-*`.
   Verify and clean up by tag, never by guessing.

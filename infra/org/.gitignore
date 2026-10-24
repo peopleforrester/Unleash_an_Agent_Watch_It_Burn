@@ -1,0 +1,8 @@
+# Per-account boundary state, terraform working files, and the plan JSON the pipeline reads: machine-local.
+**/states/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+show*.json
+!testdata/*.json

@@ -1,0 +1,145 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "CeilingIsEverythingTheRoleIsGranted",
+      "Effect": "Allow",
+      "Action": "*",
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoNewRoleWithoutThisBoundary",
+      "Effect": "Deny",
+      "Action": [
+        "iam:CreateRole",
+        "iam:PutRolePermissionsBoundary"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringNotEquals": {
+          "iam:PermissionsBoundary": "arn:${partition}:iam::${account_id}:policy/${boundary_name}"
+        }
+      }
+    },
+    {
+      "Sid": "NoBoundaryRemovalOrEdit",
+      "Effect": "Deny",
+      "Action": [
+        "iam:DeleteRolePermissionsBoundary",
+        "iam:DeleteUserPermissionsBoundary",
+        "iam:PutUserPermissionsBoundary",
+        "iam:CreatePolicyVersion",
+        "iam:DeletePolicy",
+        "iam:DeletePolicyVersion",
+        "iam:SetDefaultPolicyVersion"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoIamEscalation",
+      "Effect": "Deny",
+      "Action": [
+        "iam:AddUserToGroup",
+        "iam:AttachGroupPolicy",
+        "iam:AttachRolePolicy",
+        "iam:AttachUserPolicy",
+        "iam:CreateAccessKey",
+        "iam:CreateLoginProfile",
+        "iam:CreateOpenIDConnectProvider",
+        "iam:CreatePolicy",
+        "iam:CreateSAMLProvider",
+        "iam:CreateUser",
+        "iam:PassRole",
+        "iam:PutGroupPolicy",
+        "iam:PutRolePolicy",
+        "iam:PutUserPolicy",
+        "iam:UpdateAssumeRolePolicy",
+        "iam:UpdateLoginProfile",
+        "iam:UpdateOpenIDConnectProviderThumbprint",
+        "iam:UpdateSAMLProvider"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoOrgOrAccountChanges",
+      "Effect": "Deny",
+      "Action": [
+        "organizations:*",
+        "account:*"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoClusterOrAccessCreation",
+      "Effect": "Deny",
+      "Action": [
+        "eks:AssociateAccessPolicy",
+        "eks:CreateAccessEntry",
+        "eks:CreateCluster",
+        "eks:CreatePodIdentityAssociation",
+        "eks:DeleteCluster",
+        "eks:UpdateAccessEntry",
+        "eks:UpdateClusterConfig",
+        "eks:UpdatePodIdentityAssociation"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoPublicS3Controls",
+      "Effect": "Deny",
+      "Action": [
+        "s3:DeleteBucketPolicy",
+        "s3:PutAccountPublicAccessBlock",
+        "s3:PutBucketAcl",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutObjectAcl",
+        "s3:PutObjectVersionAcl"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoPublicCannedAclOnWrite",
+      "Effect": "Deny",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:PutObject"
+      ],
+      "Resource": "*",
+      "Condition": {
+        "StringEquals": {
+          "s3:x-amz-acl": [
+            "authenticated-read",
+            "public-read",
+            "public-read-write"
+          ]
+        }
+      }
+    },
+    {
+      "Sid": "NoAuditTampering",
+      "Effect": "Deny",
+      "Action": [
+        "cloudtrail:DeleteTrail",
+        "cloudtrail:PutEventSelectors",
+        "cloudtrail:StopLogging",
+        "cloudtrail:UpdateTrail",
+        "config:DeleteConfigurationRecorder",
+        "config:DeleteDeliveryChannel",
+        "config:StopConfigurationRecorder"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "NoKeyDestruction",
+      "Effect": "Deny",
+      "Action": [
+        "kms:DisableKey",
+        "kms:PutKeyPolicy",
+        "kms:ScheduleKeyDeletion"
+      ],
+      "Resource": "*"
+    }
+  ]
+}

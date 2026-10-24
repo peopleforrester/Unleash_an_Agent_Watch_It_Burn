@@ -198,6 +198,19 @@ locals {
   cloudinit_parts = nonsensitive(var.dockerhub_auth_b64) == "" ? [local.nodeadm_part] : [local.nodeadm_part, local.dockerhub_part]
 }
 
+# The canonical permissions boundary (#207). Every IAM role this root creates carries it: the cluster role,
+# the node role and each Pod Identity role. It is created once per account by infra/org/boundary, not here,
+# so its ARN is known at plan time and no CreateRole can race it. An account where that root was never
+# applied fails right here at plan ("no matching IAM Policy found"), before any unbounded role exists.
+# The policy pipeline (infra/org/pipeline.py, structural check) fails any role whose boundary is not this.
+locals {
+  permissions_boundary_name = "watch-it-burn-permissions-boundary"
+}
+
+data "aws_iam_policy" "permissions_boundary" {
+  name = local.permissions_boundary_name
+}
+
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
   version = "~> 21.0"
@@ -211,6 +224,8 @@ module "eks" {
   # Identity now, so nothing is left to trust an OIDC provider. Dropping it removes the per-cluster OIDC
   # endpoint entirely, fleet-consistent with the "no per-cluster OIDC trust" pattern used below.
   enable_irsa = false
+
+  iam_role_permissions_boundary = data.aws_iam_policy.permissions_boundary.arn
 
   # EKS auto-creates the control-plane log group and it survives destroy; let EKS own it so a
   # reused name never collides with "already exists" on reprovision. (Orphans are swept by
@@ -257,6 +272,8 @@ module "eks" {
       min_size       = var.node_min_size
       max_size       = var.node_max_size
       desired_size   = var.node_desired_size
+
+      iam_role_permissions_boundary = data.aws_iam_policy.permissions_boundary.arn
       # Force the rolling update past pod-eviction blockers. On a single-node cluster the IDP's
       # PodDisruptionBudgets (ArgoCD/Prometheus/etc., minAvailable:1) make a node drain unsatisfiable,
       # so a launch-template change (e.g. the disk fix) wedges with PodEvictionFailure. These clusters
@@ -312,6 +329,8 @@ module "ebs_csi_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 1.0"
 
+  permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
+
   name                      = "${var.name}-ebs-csi"
   attach_aws_ebs_csi_policy = true
 
@@ -329,6 +348,8 @@ module "ebs_csi_pod_identity" {
 module "aws_lb_controller_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 1.0"
+
+  permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
   name                            = "${var.name}-aws-lbc"
   attach_aws_lb_controller_policy = true
@@ -348,6 +369,8 @@ module "aws_lb_controller_pod_identity" {
 module "eso_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 1.0"
+
+  permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
   name                           = "${var.name}-eso"
   attach_external_secrets_policy = true
@@ -421,6 +444,16 @@ resource "aws_iam_policy" "bedrock_invoke" {
         "arn:aws:bedrock:*:${data.aws_caller_identity.current.account_id}:inference-profile/${p}"],
         [for m in local.bedrock_models : "arn:aws:bedrock:*::foundation-model/${m}"],
       )
+      # Only a pod in the agent namespace of THIS cluster can use the grant. EKS Pod Identity puts these
+      # on every session as session tags (the module's trust policy allows sts:TagSession), so a session
+      # taken by some other path, or for some other cluster's association, holds the role and still cannot
+      # invoke. It is also what the policy pipeline's structural check asks of every Allow (#207).
+      Condition = {
+        StringEquals = {
+          "aws:PrincipalTag/eks-cluster-name"     = var.name
+          "aws:PrincipalTag/kubernetes-namespace" = "agent"
+        }
+      }
     }]
   })
 }
@@ -428,6 +461,8 @@ resource "aws_iam_policy" "bedrock_invoke" {
 module "agent_bedrock_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 1.0"
+
+  permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
   # Name kept short: the module derives the IAM role from name_prefix = "${name}-", which is capped
   # at 38 chars. "<cluster>-agent-bedrock-" overran it (40>38); "<cluster>-bedrock-" fits.
@@ -488,6 +523,14 @@ resource "aws_iam_policy" "tutor_bedrock_invoke" {
         "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.tutor_model}",
         "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-*",
       ]
+      # The tutor's one ServiceAccount on this cluster, by Pod Identity session tag; see bedrock_invoke.
+      Condition = {
+        StringEquals = {
+          "aws:PrincipalTag/eks-cluster-name"           = var.name
+          "aws:PrincipalTag/kubernetes-namespace"       = "agent"
+          "aws:PrincipalTag/kubernetes-service-account" = "web-terminal"
+        }
+      }
     }]
   })
 }
@@ -501,6 +544,8 @@ variable "tutor_model" {
 module "tutor_bedrock_pod_identity" {
   source  = "terraform-aws-modules/eks-pod-identity/aws"
   version = "~> 1.0"
+
+  permissions_boundary_arn = data.aws_iam_policy.permissions_boundary.arn
 
   # Short name for the same 38-char name_prefix cap that forced "<cluster>-bedrock-" above.
   name                   = "${var.name}-tutor"

@@ -4,6 +4,7 @@
 
 ## Build host tooling (confirmed 2026-06-22, netcup VPS)
 terraform              v1.15.6   (provisioning; see infra/terraform/)
+conftest               v0.71.1   (OPA 1.21.1; the IAM policy pipeline's structural check, infra/org/; #207)
 docker                 present (Engine Community)
 kubectl                v1.36.2
 helm                   v4.2.1
