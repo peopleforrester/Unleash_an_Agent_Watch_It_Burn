@@ -18,7 +18,8 @@ BACKSTAGE_DIR="${SCRIPT_DIR}/../images/watch-it-burn-backstage"
 NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
-for tool in kubectl helm python3 node corepack; do
+# jq: test_kyverno_cel_live.py runs the lab's own policyreport jq filter.
+for tool in kubectl helm python3 node corepack jq; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
 # Backstage runs on Node 24 (packages/backend/Dockerfile is node:24). Yarn comes from corepack, which
