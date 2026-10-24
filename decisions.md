@@ -488,3 +488,77 @@ shipped in the console ConfigMap next to `active-skin.js`, and never edited into
   native libraries, and deterministic, so `verify/test_audience_page_e2e.py` can compare the committed SVG
   byte for byte. It is used only through `uv run --with segno==1.6.6`, never installed into the offline
   suite's interpreter. The offline suite reads the URL from the SVG's `<title>` instead.
+
+## 2026-10-24 · #455 · The on-topic guard: phrases decide the canonical asks, BanTopics the rest
+
+The talk ends with BurritoBot selling burritos only (abstract points 1 and 8, run-of-show segment 7). The guard
+is a fifth `GUARDS` key, `topic`, in guard-proxy's `proxy.py`, toggled live through `/toggle` like the other
+four. That is where the 2026-10-24 audit comment on #455 put it: the deployed proxy is `proxy.py`, and the Go
+build answers 501 on `/toggle` and `/chat`. Its content belongs with the persona, so it lives here as
+guard-proxy env: `TOPIC_GUARD` (off), `TOPIC_OFF_LIST`, `TOPIC_ON_LIST` and `TOPIC_REFUSAL`. The rule, the
+asks it is judged on and the classifier settings are in `verify/topic_cases.py`.
+
+**How it decides, cheapest first.** An off phrase refuses. Then an on phrase passes. Anything with neither goes
+to LLM Guard's BanTopics. Phrases match as whole words, in any case, with an optional plural "s". The four
+canonical asks (salsa dance moves, a hot dog party, karaoke for a wedding, the abstract's linked list) are
+refused on a phrase, so the stage beat never depends on a model score. Every on-topic ask passes on a phrase,
+so the classifier can never refuse a real customer. "What are your hours" and "do you have mild salsa" are
+among them. The refusal costs no model call and offers the menu, the hours and the locations.
+
+**Why the phrases have to carry the on-topic side.** BanTopics (llm-guard 0.3.16) runs the zero-shot pipeline
+with `multi_label=False` and blocks when the top label scores over the threshold. The softmax runs over the
+banned labels only, so a short menu question lands its whole score on some banned label. Measured with the
+API's own BanTopics model: "do you have mild salsa" scored 0.846 as "music and singing", "what is a hex?" 0.972
+as "computer programming", and "how spicy is Dragon's Blood" 0.956 as "movies and entertainment". The
+classifier is reliable on prompts with no menu vocabulary, which is where an off-topic paraphrase that dodges
+the off list ends up. With 13 narrow labels and threshold 0.5 it refuses all 16 paraphrases left to it and
+passes all 4 vague menu asks ("what do you recommend", "do you deliver"): 61 asks, none wrong.
+
+- **The model** is `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` at `8e7e5af5983a0ddb1a5b45a38b129ab69e2258e8`,
+  MIT. That is the revision llm-guard 0.3.16 pins for BanTopics, so the copy the image bakes is the copy
+  measured. Its `onnx/model.onnx` is 738,563,249 bytes (sha256 `d46fa6c1…3efa81c`), plus `spm.model` and the
+  tokenizer files. The image grows by roughly that much. Measured off-cluster: the model loads in 4 to 14 s
+  and a scan takes about 1 s on one pinned core, or 2 to 4 s on a busy 16-core host. The llm-guard pod is
+  limited to one CPU. The canonical asks never pay this cost, because a phrase decides them.
+- **guards-on leaves it off; guards-off turns it off.** Every challenge prompt is off-topic by design, so
+  with the guard on it would refuse each one before the guard that challenge teaches could fire. The
+  run-of-show turns it on alone, in segment 7.
+- **The persona now has hours and locations.** The menu was all it could answer from before. Open every day
+  11am to 11pm, until midnight on Fridays and Saturdays. Three cantinas: 13 Mandrake Row, Black-Bog Market,
+  and the Moonrise Pass drive-thru. The storefront shows neither, so `web/burritbot.html` is unchanged.
+- **Known limit:** an on phrase passes without asking the classifier, so "a burrito-themed bedtime story"
+  gets through. The off list catches the mixes the talk uses ("salsa dance moves"), and an off phrase is
+  checked first.
+
+### REJECTED: BanTopics alone, with off-topic labels
+**Why:** see the scores above. It refused "do you have mild salsa", one of the two asks the issue names as
+the on-topic test.
+
+### REJECTED: the same model as an allow classifier (multi-label, one on-topic hypothesis)
+**Why:** with no context the model does not know salsa is food. "do you have mild salsa" scored 0.02 against
+"a restaurant: its food, menu, ordering, opening hours or locations". It also needs a scanner LLM Guard does
+not have, which means changing the vendored API, and the API is a packaging, not a fork (2026-10-05).
+
+### REJECTED: roberta-base-zeroshot-v2.0-c, the smaller model (499 MB)
+**Why:** it got 4 of the 61 asks wrong ("what's the capital of France", "teach me the bachata"). The deberta
+model got none wrong.
+
+**What is not done here, and in what order it lands:**
+1. guard-proxy-agenticburn: the `topic` stage in `proxy.py`, on both `/` (A2A) and `/chat`, reading these four
+   variables. The injection stage must start sending `scanners_suppress: ["BanTopics"]` and the topic stage
+   `["PromptInjection"]`. Without that, BanTopics in `scanners.yml` would also run whenever C6 is on.
+2. llm-guard-cpu-offline: bake the model above the way the injection model is baked (mirrored model image,
+   pinned by digest, loaded through `model_path`), and measure the image size and start time on the built image.
+3. Here: bump both pins, add BanTopics with `topic_cases.CLASSIFIER`'s topics and threshold to
+   `llm-guard-scanners`, update `verify/test_proxy_guards.py`'s key set, and run the probe (#503) on an
+   admin cluster both ways. `verify/test_topic_guard.py` arms its scanner checks the moment BanTopics
+   appears in `scanners.yml`. Until the image carries the model, adding it there would stop LLM Guard from
+   starting (`lazy_load` is off), and that would fail the injection classifier closed.
+
+**New dev dependencies, used only by `verify/test_topic_classifier.py` (E2E suite) through `uv run`, never
+installed into the offline suite's interpreter:**
+- **llm-guard 0.3.16** (PyPI, 2025-05-19). It is the last release and the image's version, so the test runs
+  the scanner guard-proxy will actually call.
+- **torch 2.14.0+cpu** (PyTorch CPU index, 2026-09-02). This is the image's pin. 2.14.1 exists, but matching
+  the image is the point, and the CPU build keeps the CUDA packages out.
+- The model above, fetched from Hugging Face on the first run.

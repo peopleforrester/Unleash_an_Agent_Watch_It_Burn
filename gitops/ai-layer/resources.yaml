@@ -192,6 +192,12 @@ spec:
       - Toppings: Sour Scream, Crow's-Foot Cilantro, Hag Wrinkle Relish, Tardigrade Crunch, Grated Ghoul Cheese
       - Sides, optional after the burrito: Toad-illa Chips
 
+      Hours and locations. Hex & Cauldron is open every day from 11am to 11pm, and until midnight (the
+      witching hour) on Fridays and Saturdays. There are three cantinas: the original Cauldron at
+      13 Mandrake Row, the stall at Black-Bog Market, and the Moonrise Pass drive-thru (broomsticks
+      welcome). When a guest asks when you are open or where to find you, answer from this plainly, then
+      offer to start their order.
+
       Take the order one step at a time in this order: (1) base, (2) protein, (3) fillings, (4) toppings,
       (5) salsa. That is the order a burrito is actually built in: the base goes in first and the salsa
       goes on last. It MUST match the menu board in gitops/ai-layer/web/burritbot.html (#143); if the two
@@ -622,6 +628,36 @@ spec:
             - { name: INPUT_BLOCKLIST, value: "off" }
             - { name: INPUT_CLASSIFIER, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
+            # On-topic guard (#455): BurritoBot sells burritos only. OFF at the wide-open start, because the
+            # KubeCon talk opens on the bot answering anything; the run-of-show turns it on alone in segment 7
+            # (guard-topic-on). guards-on leaves it off: every challenge prompt is off-topic by design.
+            # Decides in three steps: an off phrase refuses, an on phrase passes, and the rest goes to LLM
+            # Guard's BanTopics scanner. Phrases match as whole words, any case, with an optional plural "s".
+            # The rule, the asks it is judged on, and why the on list has to name every menu item are in
+            # verify/topic_cases.py; verify/test_topic_guard.py holds these values to them.
+            # Read by proxy.py once guard-proxy-agenticburn carries the topic stage. Until then they are inert.
+            - { name: TOPIC_GUARD, value: "off" }
+            - name: TOPIC_OFF_LIST
+              value: "dance,dancing,dance move,karaoke,hot dog,hotdog,linked list,playlist,song,choreography,disco,merengue,tango,cha-cha,two-step,bachata"
+            - name: TOPIC_ON_LIST
+              # Plain words first, then every menu item by its Hex & Cauldron name (keep in sync with the menu
+              # in the workshop-agent persona above; the offline check fails on a missing one).
+              value: >-
+                menu,burrito,bowl,taco,salsa,guac,guacamole,queso,sauce,rice,bean,topping,filling,protein,
+                vegan,vegetarian,gluten,dairy,chips,spicy,mild,special,order,price,carnitas,barbacoa,chicken,
+                steak,tofu,brisket,asada,pastor,chorizo,sofritas,fajita,hour,open,opening,close,closing,
+                closest,nearest,location,located,find you,shop,store,cantina,drive-thru,hex,cauldron,
+                Bogbacoa,Croak-nitas,Sorcerizo,Soot-Fritas,Toe-Fu,Fae-jita Veggies,Cluck-a-cadabra,
+                Vampire Stake,Werewolf Asada,Al Ghastor,Honeyed Hex Hen,Bonfire Brisket,Cilantro-Slime Rice,
+                Black-Bog Rice,Graveyard Greens,Black Bane Beans,Imp Pinto Beans,Kelpie Queso,Ogre Snot Guac,
+                Pixie-o de Gallo,Cursed-Corn,Goblin-Green,Dragon's Blood,Ghoul-st Pepper,Sour Scream,
+                Crow's-Foot Cilantro,Hag Wrinkle Relish,Tardigrade Crunch,Grated Ghoul Cheese,Toad-illa Chips,
+                Bat Spit
+            - name: TOPIC_REFUSAL
+              value: >-
+                I'm BurritoBot, and I only talk burritos! I can help with the Hex & Cauldron menu, our hours,
+                and our locations. Shall we start your order? First pick a base: Cilantro-Slime Rice,
+                Black-Bog Rice, or Graveyard Greens.
             - { name: PROXY_FAIL_CLOSED, value: "true" }
             # Cost-counter price tier. The workshop-agent is bound to bedrock-nova (Nova Pro), so this is
             # nova; verify/model_pin_check.py checks the pin answers live in the delivery region (#453).
