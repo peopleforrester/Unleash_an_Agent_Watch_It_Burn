@@ -38,9 +38,13 @@ It is created **once per account** by `boundary/`, before any cluster. The clust
 a cluster plan in an account without it fails at plan time, before any unbounded role can exist:
 
 ```bash
+. infra/terraform/fleet/event.sh   # WIB_EVENT, the fleet's one `event` tag setting (#494)
 terraform -chdir=infra/org/boundary init
-terraform -chdir=infra/org/boundary apply -state=states/<profile>.tfstate -var profile=<profile>
+terraform -chdir=infra/org/boundary apply -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
 ```
+
+`event` has no default, as in the network and cluster roots, so an apply that leaves it out fails rather than
+tagging the policy with a stale event (#507).
 
 Roles that carry it: the EKS cluster role, the node role, and the EBS CSI, Load Balancer Controller, ESO,
 agent Bedrock and tutor Bedrock Pod Identity roles (`infra/terraform/aws/cluster/main.tf`).

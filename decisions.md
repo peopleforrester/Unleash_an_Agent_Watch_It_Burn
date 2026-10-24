@@ -1339,3 +1339,17 @@ hecaton's research under Michael's standing rules, not by Michael.
   marked settled. The Night Before beacon-view curl must print `200`, and anything else means the service
   is down and must be brought back before the day. No code changes: the collector, the router's forward
   and the C1 fallback stay as they are.
+## 2026-10-25 · #507 · The permissions-boundary root takes `event` from fleet/event.sh too
+
+**Decision:** `infra/org/boundary/main.tf` tags with `event = var.event`. Like the network and cluster roots,
+`variable "event"` has no default and uses the same slug validation. This replaces the
+`devopsdays-portland-2026` literal, the last one under `infra/`. Every documented apply passes
+`-var event="${WIB_EVENT}"` after sourcing `infra/terraform/fleet/event.sh`: `infra/org/README.md`, step 0 of
+`infra/terraform/README.md`, the root's header and the Night Before list in the KubeCon run-of-show. So does
+preflight's apply hint for a missing boundary. `verify/iam_plan_render.py` passes `event=render` to both roots.
+
+**This supersedes the event-tag paragraph of #526.** That paragraph exempted the boundary from the rule because
+the root declared no `event` variable. Now it declares one, so `verify/test_event_tag.py` has no exemption. It
+checks the boundary root like the other two, scans infra/org for the Portland literal and for applies without
+`event=`, and requires the variable on each documented boundary apply. The policy outlives an event, so its tag
+names the event whose apply last touched it. It costs nothing, so this is labeling only.

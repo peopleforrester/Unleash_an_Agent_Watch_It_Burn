@@ -8,8 +8,9 @@
 # with "no matching IAM Policy found" rather than creating unbounded roles.
 #
 # Apply, per account, with that account's own state file (the same layout as ../../terraform/aws/network):
+#   . infra/terraform/fleet/event.sh
 #   terraform -chdir=infra/org/boundary init
-#   terraform -chdir=infra/org/boundary apply -state=states/<profile>.tfstate -var profile=<profile>
+#   terraform -chdir=infra/org/boundary apply -state=states/<profile>.tfstate -var profile=<profile> -var event="${WIB_EVENT}"
 #
 # The document is the boundary's whole content and lives in the template, not here, so the pipeline's
 # offline checks and its effect tests read the same text this applies.
@@ -30,7 +31,7 @@ provider "aws" {
   default_tags {
     tags = {
       project   = "watch-it-burn"
-      event     = "devopsdays-portland-2026"
+      event     = var.event
       Purpose   = "permissions-boundary"
       ManagedBy = "terraform"
     }
@@ -47,6 +48,17 @@ variable "profile" {
   # No default, for the reason the cluster root gives: accen-dev is shared with the co-tenant Packt project,
   # and a default applies silently into whichever account it names.
   description = "AWS profile of the account to place the boundary in. Required."
+}
+
+variable "event" {
+  type = string
+  # NO DEFAULT, on purpose (#494, #507): the same rule and the same single setting (fleet/event.sh) as the
+  # network and cluster roots. The policy outlives an event, so its tag names the event that last applied it.
+  description = "Event the last apply of this boundary was for (the event= tag), e.g. kubecon-na-2026. Set in fleet/event.sh."
+  validation {
+    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.event))
+    error_message = "event must be a lowercase-hyphenated slug such as kubecon-na-2026."
+  }
 }
 
 # Keep in step with local.permissions_boundary_name in ../../terraform/aws/cluster/main.tf and with

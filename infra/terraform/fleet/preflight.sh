@@ -39,7 +39,8 @@ readonly BOUNDARY_DIR="${SCRIPT_DIR}/../../org/boundary"
 # Keep in step with local.boundary_name in infra/org/boundary/main.tf and the cluster root's lookup.
 readonly BOUNDARY_NAME="watch-it-burn-permissions-boundary"
 WIB_REGION="${WIB_REGION:-us-west-2}"
-# The `event` tag the apply hints below must pass: the network root has no default for it (#494).
+# The `event` tag the apply hints below must pass: the network and boundary roots have no default for it
+# (#494, #507).
 # shellcheck source=SCRIPTDIR/event.sh
 . "${SCRIPT_DIR}/event.sh"
 WIB_ATTENDEE_ACCOUNTS="${WIB_ATTENDEE_ACCOUNTS:-accen-dev,aws1-student31,aws1-student32,aws1-student33,aws1-student34}"
@@ -167,7 +168,7 @@ for acct in "${accounts[@]}"; do
 
     # The boundary has its own per-account state under infra/org/boundary/states/, the default account
     # included: it was never part of the lab VPC's single-account history.
-    boundary_apply="terraform -chdir=${BOUNDARY_DIR} init && terraform -chdir=${BOUNDARY_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+    boundary_apply="terraform -chdir=${BOUNDARY_DIR} init && terraform -chdir=${BOUNDARY_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
     if boundary_err="$(AWS_PROFILE="${acct}" aws iam get-policy \
             --policy-arn "arn:aws:iam::${actual}:policy/${BOUNDARY_NAME}" \
             --query 'Policy.PolicyName' --output text 2>&1 >/dev/null)"; then

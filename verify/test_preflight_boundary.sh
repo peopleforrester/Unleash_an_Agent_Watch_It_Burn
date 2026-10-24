@@ -68,7 +68,7 @@ has() { grep -qF -- "$1" "${OUT}"; }
 fail_line() { grep -F 'FAIL' "${OUT}" | grep -F -- "$1"; }
 reset_states() { rm -f "${NET}/terraform.tfstate" "${NET}"/states/*; }
 
-BAPPLY_DEV="terraform -chdir=${FLEET_DIR}/../../org/boundary init && terraform -chdir=${FLEET_DIR}/../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2"
+BAPPLY_DEV="terraform -chdir=${FLEET_DIR}/../../org/boundary init && terraform -chdir=${FLEET_DIR}/../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event=kubecon-na-2026"
 
 echo "== everything in place: GREEN, and the boundary is checked by ARN in the account =="
 reset_states; echo vpc >"${NET}/terraform.tfstate"
@@ -94,7 +94,7 @@ run accen-dev,aws1-student31 BOUNDARY_aws1_student31=missing
 check "exit 1"                                 '[[ "${rc}" -eq 1 ]]'
 check "accen-dev's boundary passes"            'grep -F PASS "${OUT}" | grep -qF "permissions boundary"'
 check "aws1-student31's apply line names its profile and state" \
-      'fail_line "apply -state=states/aws1-student31.tfstate -var profile=aws1-student31 -var region=us-west-2" | grep -qF "org/boundary"'
+      'fail_line "apply -state=states/aws1-student31.tfstate -var profile=aws1-student31 -var region=us-west-2 -var event=kubecon-na-2026" | grep -qF "org/boundary"'
 check "get-policy ran in both accounts"        '[[ "$(grep -c "iam get-policy" "${CALLS}")" -eq 2 ]]'
 
 echo "== a boundary that cannot be read is a FAIL too, not a pass =="

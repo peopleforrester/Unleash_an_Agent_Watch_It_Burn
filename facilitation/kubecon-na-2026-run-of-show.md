@@ -409,7 +409,7 @@ is merely slow rather than rebuilding:
   `watch-it-burn-permissions-boundary` by name, and an account without it fails both
   roster clusters at plan with "no matching IAM Policy found" after the lab VPC is
   already billing (#526). Apply it once per account, with that account's own state:
-  `terraform -chdir=../../org/boundary init && terraform -chdir=../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2`.
+  `. ./event.sh && terraform -chdir=../../org/boundary init && terraform -chdir=../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}"`.
   `./fleet.sh preflight 1` reports it per account, and on a FAIL prints this line for
   the account that is missing it.
 - [ ] **Platform up on AWS.** Bring up the roster (the community cluster and both

@@ -1,4 +1,4 @@
-# ABOUTME: The fleet's `event` cost-allocation tag comes from one setting (fleet/event.sh), reaches both
+# ABOUTME: The fleet's `event` cost-allocation tag comes from one setting (fleet/event.sh), reaches all three
 # ABOUTME: Terraform roots as var.event, and is never a literal. Offline: the dry run stubs terraform/aws.
 #
 # Why (#494). The tag was a literal in each root's default_tags, so the KubeCon NA fleet built from
@@ -6,9 +6,13 @@
 # root declares `variable "event"` with no default, and every script that applies or destroys a root
 # passes -var event= from WIB_EVENT. A script that forgets it fails at apply rather than mis-tagging, so
 # the last check below reads every such command and requires the variable on it.
+#
+# The permissions-boundary root (infra/org/boundary) follows the same rule since #507. Its one IAM policy
+# per account costs nothing, so a stale tag there is a label only, but it was the last Portland literal.
 import os, pathlib, re, stat, subprocess, sys, tempfile
 REPO = pathlib.Path(__file__).resolve().parents[1]
 TF = REPO / "infra" / "terraform"
+ORG = REPO / "infra" / "org"
 EVENT_SH = TF / "fleet" / "event.sh"
 FLEET = TF / "fleet" / "fleet.sh"
 failures = []
@@ -21,15 +25,17 @@ settings = re.findall(r'^WIB_EVENT="\$\{WIB_EVENT:-([^}]*)\}"$', event_sh, re.M)
 check("fleet/event.sh sets WIB_EVENT once, overridable from the environment", len(settings) == 1)
 check("and its default is the KubeCon NA value (#454)", settings == ["kubecon-na-2026"])
 
-# Both roots take event from a variable that has no default.
-for root in ("network", "cluster"):
-    txt = (TF / "aws" / root / "main.tf").read_text()
+# Every root takes event from a variable that has no default.
+for root, main_tf in (("aws/network", TF / "aws" / "network" / "main.tf"),
+                      ("aws/cluster", TF / "aws" / "cluster" / "main.tf"),
+                      ("org/boundary", ORG / "boundary" / "main.tf")):
+    txt = main_tf.read_text()
     m = re.search(r'variable "event" \{(.*?)\n\}', txt, re.S)
-    check(f"aws/{root} declares variable \"event\"", m is not None)
-    check(f"aws/{root} var.event has no default (an apply that forgets it fails)",
+    check(f"{root} declares variable \"event\"", m is not None)
+    check(f"{root} var.event has no default (an apply that forgets it fails)",
           m is not None and not re.search(r"^\s*default\s*=", m.group(1), re.M))
-    check(f"aws/{root} tags event = var.event", re.search(r"^\s*event\s*=\s*var\.event\s*$", txt, re.M) is not None)
-    check(f"aws/{root} carries no other event = literal",
+    check(f"{root} tags event = var.event", re.search(r"^\s*event\s*=\s*var\.event\s*$", txt, re.M) is not None)
+    check(f"{root} carries no other event = literal",
           not re.search(r'^\s*event\s*=\s*"', txt, re.M))
 
 # fleet.sh reads the setting and passes it.
@@ -38,28 +44,26 @@ check("fleet.sh sources event.sh", re.search(r'^\. "\$\{SCRIPT_DIR\}/event\.sh"$
 check("fleet.sh does not set WIB_EVENT itself (one setting, not two)", "WIB_EVENT=" not in fleet)
 check("fleet.sh passes -var event=${WIB_EVENT}", '-var "event=${WIB_EVENT}"' in fleet)
 
-# No Portland literal remains under infra/terraform outside .terraform/ and state.
+# No Portland literal remains under infra/terraform or infra/org outside .terraform/ and state.
 def is_state(p):
-    rel = p.relative_to(TF).parts
+    rel = p.relative_to(REPO).parts
     return ".terraform" in rel or "states" in rel or p.name.endswith((".tfstate", ".tfstate.backup"))
-stale = [str(p.relative_to(REPO)) for p in TF.rglob("*")
-         if p.is_file() and not is_state(p) and "devopsdays-portland-2026" in p.read_text(errors="ignore")]
-check(f"no literal devopsdays-portland-2026 under infra/terraform (found: {stale})", not stale)
+def tree_files(pattern):
+    return sorted(p for top in (TF, ORG) for p in top.rglob(pattern) if p.is_file() and not is_state(p))
+stale = [str(p.relative_to(REPO)) for p in tree_files("*") if "devopsdays-portland-2026" in p.read_text(errors="ignore")]
+check(f"no literal devopsdays-portland-2026 under infra/terraform or infra/org (found: {stale})", not stale)
 
-# Every terraform apply/destroy of either root, in any script under infra/terraform, passes event: the
-# variable has no default, so one that does not is a teardown or a build that fails on the night.
-missing, seen = [], 0
-for sh in sorted(TF.rglob("*.sh")):
-    if is_state(sh):
-        continue
+# Every terraform apply/destroy of any root, in any script under infra/terraform or infra/org, passes event:
+# the variable has no default, so one that does not is a teardown or a build that fails on the night. The
+# boundary's apply hint in preflight.sh is one of them (#507).
+missing, seen, boundary_seen = [], 0, 0
+for sh in tree_files("*.sh"):
     lines = sh.read_text().splitlines()
     for i, line in enumerate(lines):
         if not re.search(r"terraform -chdir=\S+ (apply|destroy)\b", line) or line.lstrip().startswith("#"):
             continue
-        # infra/org/boundary is neither root: one IAM policy per account that outlives every event, costs
-        # nothing to split, and declares no `event` variable, so -var event= would fail its apply (#526).
         if re.search(r"terraform -chdir=\S*(BOUNDARY_DIR|org/boundary)\S* (apply|destroy)\b", line):
-            continue
+            boundary_seen += 1
         cmd, j = line, i
         # A continuation is a trailing backslash, or `\\"` where the command is a printed hint in a log.
         while cmd.rstrip().endswith(("\\", '\\\\"')) and j + 1 < len(lines):
@@ -67,7 +71,8 @@ for sh in sorted(TF.rglob("*.sh")):
         seen += 1
         if "event=" not in cmd:
             missing.append(f"{sh.relative_to(REPO)}:{i + 1}")
-check(f"found the terraform apply/destroy commands to inspect ({seen})", seen >= 8)
+check(f"found the terraform apply/destroy commands to inspect ({seen})", seen >= 9)
+check(f"and the boundary's among them ({boundary_seen})", boundary_seen >= 1)
 check(f"every terraform apply/destroy passes event (missing: {missing})", not missing)
 # The scripts that pass it outside fleet.sh read it from the same setting rather than their own copy.
 for rel in ("fleet/preflight.sh", "aws/teardown/sgwipe.sh", "aws/teardown/clean-sgs-and-destroy.sh",
@@ -75,6 +80,18 @@ for rel in ("fleet/preflight.sh", "aws/teardown/sgwipe.sh", "aws/teardown/clean-
     txt = (TF / rel).read_text()
     check(f"{rel} sources fleet/event.sh", re.search(r'^\. ".*/event\.sh"$', txt, re.M) is not None
           and "WIB_EVENT=" not in txt)
+
+# The documented boundary applies (both READMEs, the root's own header, the Night Before list) pass it too:
+# they are what a person copies, and the root has no default.
+docs = [ORG / "README.md", TF / "README.md", ORG / "boundary" / "main.tf",
+        REPO / "facilitation" / "kubecon-na-2026-run-of-show.md"]
+doc_lines = [(d, n + 1, l) for d in docs for n, l in enumerate(d.read_text().splitlines())
+             if re.search(r"org/boundary apply\b", l)]
+check(f"each document has its boundary apply line ({len(doc_lines)} found)",
+      {d for d, _, _ in doc_lines} == set(docs))
+undocumented = [f"{d.relative_to(REPO)}:{n}" for d, n, l in doc_lines if '-var event="${WIB_EVENT}"' not in l]
+check(f"every documented boundary apply passes -var event=\"${{WIB_EVENT}}\" (missing: {undocumented})",
+      not undocumented)
 
 # The dry run shows the tag each cluster would be built with, and the env override reaches it.
 def dry_run(extra_env):
