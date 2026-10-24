@@ -13,7 +13,7 @@ Four platform controls catch a careless/compromised agent. Three are always on (
 | Kyverno admission (`require-resource-limits`) | a deploy with no resource limits | Audit by default; **toggle to Enforce live** |
 | RBAC (the agent's scoped Role) | the agent binding itself cluster-admin | always on |
 | `block-argocd-drift` (Kyverno) | direct edits to GitOps-managed resources | always on (Enforce) |
-| NetworkPolicy default-deny egress + allowlist | exfil of data to the public internet / S3 | always on in R2/R3; absent in R1 (burn) |
+| NetworkPolicy default-deny egress + allowlist | exfil of data to the public internet / S3 | armed on the admin clusters; absent on the Community cluster and on an attendee cluster until the student applies it |
 
 ## The one live toggle (admission Audit -> Enforce)
 
@@ -31,13 +31,16 @@ it with a policy message naming `require-resource-limits`.
 > Note (2026-06-29): the live Challenge 1 is now a **chat/screen leak** of customer data, not an S3 push
 > (S3 exfil was CUT). The egress wall below is still a real, deployed control and the verify still holds;
 > it just no longer has a matching S3-push attack in the live run. Keep it as the "could not have pushed
-> it out" network story.
+> it out" network story. Since then the student lab's Challenge 1 (`challenges/LAB-TEXT.md`) has become the
+> outbound beacon, a POST to `https://agenticburn.com/beacon`, and this wall is what blocks it.
 
-In R2/R3 the agent namespace runs default-deny egress plus an allow-list scoped to the `workshop-agent`
-pod: in-VPC `10.0.0.0/16:443` (which reaches Bedrock via its **PrivateLink VPC endpoint**), DNS, the OTel
+Once the policy set is in place, the agent namespace runs default-deny egress plus an allow-list scoped
+to the `workshop-agent` pod: in-VPC `10.0.0.0/16:443` (which reaches Bedrock via its **PrivateLink VPC endpoint**), DNS, the OTel
 collector, the Pod-Identity endpoint, and intra-namespace. **Bedrock works; a push to S3 (public IP, no
-VPC endpoint) is denied.** No toggle, it ships with the R2/R3 gitops. R1 (burn) has none of these policies,
-so the same exfil succeeds, that is the before/after across rounds.
+VPC endpoint) is denied.** The `network-policies` app ships it armed on the `admin` profile only. The
+Community cluster (`burn`) has none of these policies, and the `attendee` profile omits them, so the same
+exfil succeeds there until the student runs `kubectl apply -f ~/challenges/c1-network-policy.yaml`. The
+before/after is the student's own, on their own cluster; an admin cluster shows the "after" from the start.
 
 Verify from the agent pod (CONNECT to Bedrock, DENIED to S3):
 

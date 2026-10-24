@@ -1353,3 +1353,32 @@ the root declared no `event` variable. Now it declares one, so `verify/test_even
 checks the boundary root like the other two, scans infra/org for the Portland literal and for applies without
 `event=`, and requires the variable on each documented boundary apply. The policy outlives an event, so its tag
 names the event whose apply last touched it. It costs nothing, so this is labeling only.
+
+## 2026-10-25 · #498 · question 712 · the round shorthand is rewritten from LAB-TEXT.md and the profiles
+
+**Question 712:** When the old Round 1, 2 and 3 outcome lines in the current docs are rewritten, may their
+facts for each kind of cluster come from `challenges/LAB-TEXT.md` and the bootstrap profiles, with
+LAB-TEXT.md winning wherever an older challenge README disagrees?
+
+**Answer:** Derive from LAB-TEXT.md.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes:**
+
+- About twenty current docs (the C1 and C3 challenge READMEs, the 01 and 03 facilitator notes, the villain
+  image README, the recreation spec, READINESS, GO-LIVE, the gotchas, the beacon spec, the runbook, the
+  quickstart and PRDs 13, 22, 35, 36 and 37) now say what happens on the Community cluster (`burn`), on an
+  admin cluster (`admin`) and on an attendee cluster (`attendee`) before and after the student applies the
+  control, instead of R1/R2/R3. The sources are LAB-TEXT.md, `gitops/bootstrap/*` and `fleet.sh`'s
+  `arm_infra_guardrails`, which arms only `full` and `admin`.
+- Where a README contradicted LAB-TEXT.md, LAB-TEXT.md won. The C1 and C3 READMEs no longer say "no
+  per-attendee toggle, always on in `full`": since #281 the `full` profile omits both controls too. The C3
+  README now says the Community cluster runs the KubeArmor engine with no policy. The villain README drops the
+  stale "scoped to `apps` only" gap, because the policy matches `apps` and `agent`.
+- `verify/test_docs_current.py` now also rejects the shorthand: capital R1/R2/R3, `r2/r3`, "three rounds",
+  "per-round", "cross-round", "round table", "round toggle" and "round state", and it pins what it must and
+  must not catch. `verify/test_round_names_retired.py`, which the issue pointed to, was never promoted (it sits
+  on the held #290 branch), so the shapes were written here. `decisions.md`, the World's Fair debrief,
+  `ACTION_ITEMS.md` and `transcripts/` are exempt as records. `docs/ABSTRACT.md` is public prose and is
+  held to the numbered names only.

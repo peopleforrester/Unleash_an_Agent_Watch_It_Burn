@@ -17,7 +17,7 @@ on, and the identity and egress models diverge enough per cloud that the same
 attack produces a different lesson.
 
 This PRD is that spine: for every attack beat, the control that fires, the
-observable signal in Datadog, the round it belongs to (R1/R2/R3), and how the
+observable signal in Datadog, what happens on each kind of cluster, and how the
 answer shifts per cloud. It is pegged to a recognized taxonomy so each beat has a
 stable external ID, not just a local nickname.
 
@@ -105,9 +105,12 @@ than merely porting it. Identity-as-blast-radius is the connective tissue.
 ## 5. The matrix
 
 Columns: beat and nickname; OWASP ASI / ATLAS peg; what the agent tries; the
-control that fires; the observable signal; the round it is live in; per-cloud
-delta. Beats are the STACK-MAP §4 set. "Round" follows the R1 no-guardrails /
-R2 some-controls / R3 full-controls arc.
+control that fires; the observable signal; the outcome by cluster; per-cloud
+delta. Beats are the STACK-MAP §4 set. "Cluster" follows the three kinds the fleet
+builds (`gitops/bootstrap/`): the Community cluster (`burn`, no guardrails), an
+admin cluster (`admin`, every control armed), and an attendee cluster (`attendee`),
+where the student runs the attack and then applies the control. What a student
+reads on each is `challenges/LAB-TEXT.md`.
 
 ### C1 - PII / data exfil to S3 or external
 
@@ -117,7 +120,9 @@ R2 some-controls / R3 full-controls arc.
 - **Control:** NetworkPolicy default-deny egress; Falco on the sensitive read.
 - **Signal:** Falco alert to Datadog; NetworkPolicy drop; guard-proxy sees no
   matching output on the sanctioned path.
-- **Round:** exfil succeeds in R1; NetworkPolicy lands in R2; full deny + Falco in R3.
+- **Cluster:** exfil succeeds on the Community cluster (no NetworkPolicy, no Falco)
+  and on an attendee cluster until the student applies the agent egress policy set;
+  denied from the start on an admin cluster.
 - **Per-cloud delta:** **AWS** clean deny. **Azure** the exfil target of choice is
   the `AZURE_OPENAI_API_KEY` Secret (see C1'). **GCP** default-deny that allows
   Vertex also allows GCS; the naive egress policy does not separate them (VPC-SC or
@@ -132,8 +137,8 @@ R2 some-controls / R3 full-controls arc.
 - **Control:** Secret not mounted where the agent runs; egress deny; Kyverno on
   Secret access patterns.
 - **Signal:** Falco on the Secret read; guard-proxy/egress drop on the exfil.
-- **Round:** R3 free-play highlight; this is the Azure-specific "why keyless matters"
-  beat.
+- **Cluster:** not one of the eight current challenges; a free-play highlight on an
+  Azure run. This is the Azure-specific "why keyless matters" beat.
 - **Per-cloud delta:** exists only on Azure. AWS and GCP are keyless, so there is no
   portable credential to steal. This is the beat that makes the identity table
   concrete.
@@ -144,7 +149,10 @@ R2 some-controls / R3 full-controls arc.
 - **Agent tries:** schedule a pod from an untrusted registry.
 - **Control:** Kyverno registry allowlist (Enforce).
 - **Signal:** Kyverno admission deny event to Datadog.
-- **Round:** allowed in R1; Kyverno allowlist in R2/R3.
+- **Cluster:** deploys on the Community cluster (no Kyverno) and on an attendee
+  cluster while `restrict-image-registries` is in Audit; denied on an admin cluster,
+  which is armed to Deny at bootstrap, and on an attendee cluster once the student
+  flips it to Deny.
 - **Per-cloud delta:** identical across clouds; admission control is cloud-neutral.
   The allowlist entries differ (ECR vs ACR vs Artifact Registry) but the control and
   signal are the same shape.
@@ -154,9 +162,14 @@ R2 some-controls / R3 full-controls arc.
 - **Peg:** ASI02 (Tool Misuse), ASI03 (Privilege Abuse). ATLAS Discovery / Collection.
 - **Agent tries:** grep the filesystem for the planted sauce recipe sentinel
   (`WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7`).
-- **Control:** Falco sensitive-file read rule.
-- **Signal:** Falco alert to Datadog with the file path.
-- **Round:** succeeds silently in R1; Falco visibility in R2; alert + response in R3.
+- **Control:** Falco sensitive-file read rule (detection); KubeArmor
+  `block-recipe-snoop` (prevention, inline in the kernel).
+- **Signal:** Falco alert to Datadog with the file path; KubeArmor's own alert once
+  the block is armed.
+- **Cluster:** succeeds silently on the Community cluster (no Falco; the KubeArmor
+  engine runs with no policy). On an attendee cluster it succeeds and Falco alerts,
+  until the student applies the KubeArmor policy, which blocks it. Blocked and
+  alerted from the start on an admin cluster.
 - **Per-cloud delta:** identical across clouds; node-level syscall visibility is
   cloud-neutral. Falco DaemonSet on every cloud.
 
@@ -167,7 +180,10 @@ R2 some-controls / R3 full-controls arc.
 - **Agent tries:** spawn processes without bound.
 - **Control:** per-pod PID cap (1024); Falco/Talon terminates in about 4s.
 - **Signal:** Falco process-spawn alert; pod termination event; PID-limit metric.
-- **Round:** cluster-killable in R1; PID cap in R2; cap + Talon terminate in R3.
+- **Cluster:** retired as a student challenge (#114; Challenge 4 is now
+  denial-of-wallet). The Community cluster stays uncapped (`pod_pids_limit=-1`) for an
+  instructor demo; every other cluster keeps the 1024 cap. Talon runs on admin
+  clusters only, because the `attendee` profile omits `falco-talon`.
 - **Per-cloud delta:** identical; the PID cap is a Kubernetes-level control on every
   cloud. Node instance shapes differ but the control does not.
 
@@ -178,7 +194,10 @@ R2 some-controls / R3 full-controls arc.
 - **Agent tries:** get a secret or sentinel into the response stream.
 - **Control:** guard-proxy output inspection; LLM Guard output Regex scrub.
 - **Signal:** guard-proxy scrub event; the two-act sanitize span in Datadog (PRD 22).
-- **Round:** leaks in R1; output scrub toggle in R2 (`/toggle?output=on`); full in R3.
+- **Cluster:** leaks on every kind of cluster at first, because every guard-proxy
+  guard starts off on all three profiles. Scrubbed once the output guard is on
+  (`/toggle?output=on`): turned on by the student on their own cluster, and by a
+  presenter on an admin cluster.
 - **Per-cloud delta:** the control is cloud-neutral (proxy sits in front of any
   model). **GCP** is where "I blocked egress" and "I blocked the leak" separate:
   egress to `restricted.googleapis.com` is required for the model, so egress control
@@ -191,8 +210,10 @@ R2 some-controls / R3 full-controls arc.
 - **Agent tries:** injected instruction or PII in the input.
 - **Control:** guard-proxy input blocklist (0 tokens), then input classifier.
 - **Signal:** guard-proxy input-block event; classifier decision in Datadog.
-- **Round:** unfiltered in R1; blocklist in R2 (`/toggle?input_blocklist=on`);
-  classifier in R3 (`/toggle?input_classifier=on`).
+- **Cluster:** unfiltered on every kind of cluster at first (guards start off).
+  The student turns on both input stages at once (`/toggle?input=on`); each stage
+  can also be flipped alone (`/toggle?input_blocklist=on`,
+  `/toggle?input_classifier=on`).
 - **Per-cloud delta:** cloud-neutral. The cost ladder (blocklist cheapest, classifier
   next) is model-priced per cloud but the control order is the same.
 
@@ -205,7 +226,9 @@ R2 some-controls / R3 full-controls arc.
 - **Control:** kagent `toolNames` allowlist; evil-mcp-shim stays dark unless armed.
 - **Signal:** the `execute_tool` / `gen_ai.tool.name` span chain in Datadog (PRD 22
   Beat 3).
-- **Round:** rogue tool callable in R1; `toolNames` allowlist in R2/R3.
+- **Cluster:** the rogue tools ship present on every profile, so the tool is
+  callable everywhere at first; the student narrows the `evil-mcp` `toolNames`
+  allowlist to `get_weather` on their own cluster.
 - **Per-cloud delta:** cloud-neutral; kagent tool scoping is above the cloud layer.
   The model differs (Claude/GPT/Gemini) but the tool-allowlist control and the span
   signal are identical.
@@ -220,7 +243,8 @@ R2 some-controls / R3 full-controls arc.
   (`OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`).
 - **Signal:** the before/after INTERNAL sanitize span (PRD 22 Beat 1); redaction
   visible in the collector pipeline.
-- **Round:** trap demonstrated in R3 as the observability lens beat.
+- **Cluster:** not one of the eight student challenges; a presenter observability
+  beat, not tied to one kind of cluster.
 - **Per-cloud delta:** cloud-neutral; the collector pipeline is the same on every
   cloud. The model provider attribute differs in the span, the redaction does not.
 
@@ -232,8 +256,9 @@ input blocklist (0 tokens) < input classifier < tool scoping < output inspection
 Kyverno admission.
 
 This ordering is model-priced per cloud (Bedrock/Azure OpenAI/Vertex token costs
-differ), but the ladder order does not change per cloud. It is why input controls
-(C6) come before output controls (C5) in the round arc.
+differ), but the ladder order does not change per cloud. It is why the input guard
+(C6) is the cheaper of the two guard-proxy content checks, even though the lab
+teaches the output guard (C5) first.
 
 ## 7. What this PRD contracts
 

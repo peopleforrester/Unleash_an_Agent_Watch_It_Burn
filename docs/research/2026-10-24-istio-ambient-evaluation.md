@@ -142,7 +142,7 @@ Istio's identity is the ServiceAccount: `spiffe://cluster.local/ns/<ns>/sa/<sa>`
 | A waypoint for guard-proxy, `istio.io/use-waypoint` on its Service | L7 policy is enforced only at the waypoint |
 | Let the student create it | `console-terminal` (`resources.yaml:825`) grants no write on `security.istio.io` |
 | A badge | guard-proxy's `/controls` reads what it is allowed to `get`. It would need the AuthorizationPolicy |
-| Live checks | that the model makes the `/toggle` call in R1; that the waypoint does not break A2A streaming or the SSE MCP connections; the waypoint's footprint |
+| Live checks | that the model actually makes the `/toggle` call when asked (section 2.1); that the waypoint does not break A2A streaming or the SSE MCP connections; the waypoint's footprint |
 
 ## 3. Keeping it without a challenge
 

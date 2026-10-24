@@ -192,9 +192,9 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 
 ---
 
-## P1 — demo correctness (the rounds and challenges must land)
+## P1 — demo correctness (the clusters and challenges must land)
 
-- [x] **R1 true burn**: R1 (burn) clusters run `podPidsLimit=-1`. The fork-bomb validation this line used
+- [x] **Community cluster true burn**: the Community cluster (`burn` profile) runs `podPidsLimit=-1`, from the roster's pids column. The fork-bomb validation this line used
       to demand is **no longer a delivery gate**: the fork bomb was retired as a beat (#114) because Nova
       refuses it in chat. C4 is now denial-of-wallet, verified live 2026-08-29 (spend froze at the cap, the
       blocked request cost zero). The PID cap is still deployed and still demonstrable from a terminal.
@@ -210,10 +210,10 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
       delivery wrappers (beat.md-style) and the C3 bait-file plant script do not exist yet.
 - [x] **whitney-att Datadog split** (done 2026-06-26): the attendee cluster reports to its own org
       (`ai-eng-wf-062626-01-002`) via the `whitney-attendee` branch ESO -> `watch-it-burn/datadog-admin-attendee`;
-      r2/r3 stay on the instructor org (`...-01-001`). Verified live (attendee secret api-key tail `79de0a`).
+      the instructor clusters of that time stayed on the instructor org (`...-01-001`). Verified live (attendee secret api-key tail `79de0a`).
       The 250-attendee fleet's per-attendee split is `distribute_datadog_keys.py`, still pending the AWS keys.
-- [ ] **The 9 instructor clusters** for live delivery: provision + bootstrap per round
-      (`fleet.sh instructors up`, now auto-bootstrapping), once the accounts are ready.
+- [ ] **The roster clusters** for live delivery: the Community cluster and one admin cluster per presenter
+      (`fleet.sh instructors up`, which bootstraps each by role and arms `admin`).
 
 ---
 

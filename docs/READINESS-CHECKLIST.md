@@ -9,8 +9,10 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 ---
 
 ## 1. Workshop logistics
-- ✅ Slot is **120 minutes** (DevOpsDays Portland, verified against pretalx 2026-08-23). The run-of-show is
-  rebuilt around it: 15 onboarding + tour, 20 instructor R1/R2, **60 hands-on**, 15 wrap, 10 slack (#123).
+- ✅ Slot is **120 minutes** (DevOpsDays Portland, verified against pretalx 2026-08-23). The August
+  run-of-show (`docs/RUN-OF-SHOW-2026-08.md`, now retired) was rebuilt around it (#123). The live run of
+  show is `/brief`: Phase 1 the whole room attacks the Community cluster, Phase 2 everyone claims a
+  cluster, Phase 3 the tour and the eight challenges on their own cluster.
 - 🔄 **250 attendees** (was 50), planned as **5 AWS accounts × ~50 clusters**. Pending: Michael acquiring the 4 extra accounts.
 - ✅ Default model **Amazon Nova Pro** (`bedrock-nova`, `us.amazon.nova-pro-v1:0`): the model that complies
   AND executes the attack beats. Haiku/Sonnet/Opus remain defined for the optional cost-race tier demo.
@@ -20,19 +22,22 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 
 ## 2. Provisioning & fleet
 - ✅ Cluster provisioning is Terraform (`infra/terraform/aws/cluster`), driven by `fleet.sh` (per-cluster state, parallel).
-- ✅ `fleet.sh instructors up|down [round]` encodes the 9 instructor clusters + round→account split.
-- ✅ Bootstrap: `deploy-full-idp.sh full|burn` (ArgoCD app-of-apps; `full` and `burn` profiles both exist).
+- ✅ `fleet.sh instructors up|down [role|owner]` builds the roster in `infra/terraform/fleet/roster.tsv`:
+  the Community cluster and one admin cluster per presenter, all in `WIB_DEFAULT_ACCOUNT`.
+- ✅ Bootstrap: `deploy-full-idp.sh burn|attendee|admin|full` (ArgoCD app-of-apps, one root per profile).
 - ⬜ **Per-account `lab-vpc`** apply for the 5-account model (each account needs its own VPC; `fleet.sh` prints the apply line but it is not automated).
 - ⬜ **Attendee fleet across 5 accounts** (the `up <count>` path is single-account today).
 - ⬜ **`aws-pool.csv` emit** (provision → IAM user/keys → CSV → `merge_pool.py`). Not built.
 
-## 3. Rounds (instructor clusters)
-- ✅ R1 bootstrap profile `burn` (`app-of-apps-burn.yaml`, no guardrail stack).
-- ✅ R2/R3 bootstrap profile `full`.
-- ⬜ **Per-round instructor setup script** (one command: provision + bootstrap + set the round's toggle state). Today bootstrap and toggles are separate manual steps. This is the "easily set up for instructors" gap you flagged.
-  - R1: full install via `burn` (guardrails off) — partially covered by `deploy-full-idp.sh burn`.
-  - R2: `full` + enable infra toggles (Kyverno enforce, NetworkPolicy, Falco, PID) — no single script sets this state.
-  - R3: `full` + AI guards off (attendee flips them) — no single script asserts this state.
+## 3. Cluster roles (Community, admin, attendee)
+- ✅ Community bootstrap profile `burn` (`app-of-apps-burn.yaml`, no guardrail stack; the roster gives it `pod_pids_limit=-1`).
+- ✅ Admin bootstrap profile `admin` (`app-of-apps-admin.yaml`, every challenge control armed).
+- ✅ Attendee bootstrap profile `attendee` (`app-of-apps-attendee.yaml`: the C1 and C3 controls omitted,
+  Kyverno in Audit, so the student installs each control).
+- ✅ **One-command roster setup**: `fleet.sh instructors up [role|owner]` provisions, bootstraps the profile
+  the roster names, and flips Kyverno to Deny on `admin` (`arm_infra_guardrails`). The guard-proxy guards
+  start off on every profile. `infra/setup-instructor-cluster.sh` predates the roster and still takes a
+  round number.
 
 ## 4. Challenges (C1–C7) — attack / defense / fallback / packaged
 | # | Challenge | Attack prompt | Defense + toggle | Fallback | Packaged? |
@@ -79,7 +84,10 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 
 ## Must fix before ready (the gaps)
 1. ✅ **C1, C3, C4 packaged as challenges** — `challenges/c1-exfil-s3/`, `challenges/c3-secret-grep/`, `challenges/c4-denial-of-wallet/` (attack prompt + README + fallback against the existing defenses).
-2. ✅ **Per-round instructor setup script** — `infra/setup-instructor-cluster.sh <name> <round>`: bootstrap (`burn`/`full`) + set the round toggle state (R1 none, R2 Kyverno Enforce, R3 infra-on + AI-off with the flip commands printed).
-3. ✅ **Per-round toggles**: the only runtime toggle is Kyverno Audit→Enforce; C1 egress / C3 Falco / C4 PID are profile-based (on in `full`, absent in `burn`), documented in each challenge README. Not a gap.
+2. ✅ **One-command roster setup** — `fleet.sh instructors up [role|owner]` (section 3).
+3. ✅ **Challenge controls by cluster**: `admin` arms the C1 NetworkPolicy, the C3 KubeArmor policy and
+   Kyverno Deny from the start; `attendee` starts without them and the student applies each one (and flips
+   `restrict-image-registries` to Deny for C2); `burn` has none, and no Kyverno to flip. Documented in each
+   challenge README and in `challenges/LAB-TEXT.md`. Not a gap.
 4. 🔄 **Multi-account fleet** (skipped by request): per-account VPC, attendee account targeting, `aws-pool.csv` emit, per-cluster Datadog secret naming, `routes.map` auto-population. Pending the 4 accounts.
 5. 🔄 **Observability finish** (skipped by request): Service Map edge confirmation, log/trace pivot, LLM Observability (#20 M7), weaver live-check. (`witb_cost_usd` retired; cost is now the standard `gen_ai.client.cost`.)

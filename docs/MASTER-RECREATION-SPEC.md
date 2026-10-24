@@ -50,12 +50,12 @@ The accepted abstract ("everything is instrumented, everything is enforced") rea
 ### Format and scale
 
 - Booked slot is the full 2 hours (the abstract's Format field reads "1 to 2 hours" as submitted). A later planning change targeted a 60-minute variant; build to the run-of-show, which is the authoritative delivery script.
-- Target audience size ~250 attendees. Capacity plan: 5 AWS accounts x 50 clusters = 250 take-home clusters, plus 9 instructor clusters (3 per round).
-- The whole attendee experience is one web storefront with a round dropdown; attendees never see a "challenges" list. The rounds repoint the backend cluster.
+- Target audience size ~250 attendees. Capacity plan: 5 AWS accounts x 50 clusters = 250 take-home clusters, plus the three-cluster roster (`infra/terraform/fleet/roster.tsv`): the Community cluster and one admin cluster per presenter.
+- Each attendee works in the BurritoBot storefront and the lab page on their own cluster; the Community cluster is a separate host. Nothing repoints a storefront at another cluster (see Part II).
 
 ---
 
-## Part II. The Three-Round Narrative and Run-of-Show
+## Part II. The Narrative and Run-of-Show
 
 The full presenter script (cold open, the grandma-exfil social-engineering bit, Webster's fork-bomb, the Phoenix Project framing, the menu-driven reveal, the why-gateway-not-langgraph aside, the FedEx anecdote, and the cost and feedback close) is `docs/RUN-OF-SHOW-2026-08.md` Part 0. The structural spine:
 
@@ -64,8 +64,8 @@ Rounds were retired fleet-wide (#290, #291). The fleet is three kinds of cluster
 | Cluster | Host | Profile | Guardrails | What it proves |
 |---|---|---|---|---|
 | **Community** | shared, no login (`attackme.agenticburn.com`) | `burn` (agent + cost proxy only; no Kyverno, no Falco, `podPidsLimit=-1`) | none at all | The burn. In Phase 1 the whole room attacks this one box at once, with no setup and nothing in the way. |
-| **Admin** | one per presenter (`<owner>-admin.agenticburn.com`) | `full`, every control on | all of them | The presenter's own fully-guarded cluster: the same attacks, stopped. |
-| **Attendee** | per-attendee, claimed by email (`provisioning.agenticburn.com`, idempotent, no email sent) | `full`, with the C1-C3 controls **uninstalled** | the student installs each control themselves | Hands-on, and the whole argument: the student performs the before and after rather than watching a toggle. |
+| **Admin** | one per presenter (`<owner>-admin.agenticburn.com`) | `admin`, every control on | all of them | The presenter's own fully-guarded cluster: the same attacks, stopped. |
+| **Attendee** | per-attendee, claimed by email (`provisioning.agenticburn.com`, idempotent, no email sent) | `attendee`: the full platform with the C1-C3 controls **uninstalled** (Kyverno in Audit) | the student installs each control themselves | Hands-on, and the whole argument: the student performs the before and after rather than watching a toggle. |
 
 There is **no round selector**. The Community cluster is its own host; a student's own BurritoBot talks to
 same-origin `/chat` on their own cluster. The deliberate architectural choice is **separate statically
@@ -121,7 +121,7 @@ These conventions are load-bearing; violating them is how most of the logged reg
 
 ### Purpose
 
-This subsystem provisions the AWS substrate: a disposable, multi-account EKS fleet sized to give each of ~250 attendees their own independent take-home cluster, plus 9 fixed instructor clusters (3 per round). It is three Terraform roots (a shared lab VPC, a parameterized per-attendee cluster, a Datadog-dashboards stub) driven by one bash fleet driver (`fleet.sh`) and one IDP bootstrap script (`deploy-full-idp.sh`). It optimizes for a 2-hour disposable lab on an AWS account shared with a co-tenant ("Packt") project: cluster isolation is in-cluster (NetworkPolicy/Kyverno), cost is held flat by sharing one VPC and one NAT per account, and every operation is tag-scoped and name-guarded so the fleet can never touch a co-tenant resource. Region is `us-west-2` throughout; EKS is pinned to 1.35.
+This subsystem provisions the AWS substrate: a disposable, multi-account EKS fleet sized to give each of ~250 attendees their own independent take-home cluster, plus the fixed roster of the Community cluster and one admin cluster per presenter. It is three Terraform roots (a shared lab VPC, a parameterized per-attendee cluster, a Datadog-dashboards stub) driven by one bash fleet driver (`fleet.sh`) and one IDP bootstrap script (`deploy-full-idp.sh`). It optimizes for a 2-hour disposable lab on an AWS account shared with a co-tenant ("Packt") project: cluster isolation is in-cluster (NetworkPolicy/Kyverno), cost is held flat by sharing one VPC and one NAT per account, and every operation is tag-scoped and name-guarded so the fleet can never touch a co-tenant resource. Region is `us-west-2` throughout; EKS is pinned to 1.35.
 
 ### Key Decisions
 
@@ -169,21 +169,21 @@ All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~
    ```
 3. **Provision clusters (auto-bootstraps the IDP):**
    ```bash
-   infra/terraform/fleet/fleet.sh up 50          # attendee-001..050 in this account, full profile, max 8 parallel
+   infra/terraform/fleet/fleet.sh up 50          # attendee-001..050 in this account, attendee profile, max 8 parallel
    infra/terraform/fleet/fleet.sh up-fleet 50     # 50 per account across all 5, concurrent, disjoint name ranges
-   infra/terraform/fleet/fleet.sh instructors up  # the 9 instructor clusters (R1 with pod_pids_limit=-1)
+   infra/terraform/fleet/fleet.sh instructors up  # the roster: community (burn, pod_pids_limit=-1) + one admin per presenter
    ```
    `WIB_NO_BOOTSTRAP=1` provisions bare. Each `up_one` runs `terraform -chdir=cluster apply -auto-approve -state=states/<name>.tfstate -var name=<name> -var vpc_id=<id> -var private_subnet_ids=<json>` then chains `deploy-full-idp.sh`.
 4. **(Manual single cluster) bootstrap** if bare:
    ```bash
    AWS_PROFILE=accen-dev aws eks update-kubeconfig --name watch-it-burn-attendee-001 --region us-west-2 --kubeconfig /tmp/c1.kubeconfig
-   KUBECONFIG=/tmp/c1.kubeconfig WITB_DD_API_KEY=... WITB_DD_APP_KEY=... bash infra/deploy-full-idp.sh full   # or 'burn'
+   KUBECONFIG=/tmp/c1.kubeconfig WITB_DD_API_KEY=... WITB_DD_APP_KEY=... bash infra/deploy-full-idp.sh attendee   # or 'admin' / 'burn'
    ```
 5. **Credential pool:** `WIB_APPLY=1 WIB_ACCESS_ENTRIES=1 fleet.sh aws-keys 50`; `fleet.sh harvest 50 > pool.csv`; `fleet.sh health 50`.
 6. **Cost reaping during the event:** `fleet.sh reap --keep claimed.txt` (DRY-RUN) then `WIB_APPLY=1 fleet.sh reap --keep claimed.txt`.
 7. **Teardown:** `fleet.sh down all` / `fleet.sh down-fleet 50`, then `terraform -chdir=infra/terraform/aws/network destroy` per account.
 
-Fleet env knobs: `WIB_ATTENDEE_ACCOUNTS` (default all 5), `WIB_DEFAULT_ACCOUNT=accen-dev` (the account whose lab VPC is in the default lab-vpc state), `WIB_NAME_OFFSET` (skip existing numbers; state keyed by name globally), `WIB_ACCOUNT_R1/R2/R3` (instructor round→account map), `WIB_REGION=us-west-2`, `MAX_PARALLEL=8`.
+Fleet env knobs: `WIB_ATTENDEE_ACCOUNTS` (default all 5), `WIB_DEFAULT_ACCOUNT=accen-dev` (the account whose lab VPC is in the default lab-vpc state), `WIB_NAME_OFFSET` (skip existing numbers; state keyed by name globally), `WIB_REGION=us-west-2`, `MAX_PARALLEL=8`.
 
 ### Gotchas & Verification
 
@@ -334,7 +334,7 @@ BurritoBot persona: a witchy burrito cantina ("Hex and Cauldron"), warm and a li
 2. Install kagent (CRDs + controller) and the OTel Operator + collector as earlier sync waves; apply the Instrumentation CR `watch-it-burn-python`.
 3. Apply the kustomize bundle `gitops/ai-layer/` (namespace `agent`, `disableNameSuffixHash: true`): `resources.yaml`, `instrumentation.yaml`, `agentgateway.yaml`, `argocd-managed-app.yaml`. The `configMapGenerator` mounts `proxy.py`, `server.py` (evil), `workshop-mcp-server.py` (keyed `server.py`), and the web assets; `secretGenerator` creates `llm-guard-auth`.
 4. Register `gitops/apps/ai-layer.yaml` at sync-wave 3 with selfHeal/prune/ServerSideApply and the three `ignoreDifferences`.
-5. ModelConfigs all defined; Agent defaults to `bedrock-sonnet`; R3 instructor clusters override `modelConfig` for the cost race.
+5. ModelConfigs all defined; Agent defaults to `bedrock-nova`; the Claude tiers stay defined so `modelConfig` can be switched for an optional cost race.
 6. The Agent's committed `toolNames` is the defended "on" state (`workshop-mcp`: `list_pods`, `apply_manifest` with `requireApproval`, `get_secret`); `evil-mcp` exists but is wired into the toolset only by the beat-3 toggle.
 7. Set guard-proxy `MODEL_TIER`/`MODEL_NAME`, `RATE_LIMIT_RPM`, `COST_CAP_USD`; start all guards `off`.
 
@@ -354,11 +354,11 @@ BurritoBot persona: a witchy burrito cantina ("Hex and Cauldron"), warm and a li
 
 ### Purpose
 
-The demonstrable payload: agent attack scenarios paired with the platform/AI guardrails that catch them, plus a two-tier verification harness that proves every before/after claim is actually true on a cluster before it is shown live. The rule throughout: the lesson is the GUARDRAIL, never the model. Every beat has a deterministic fallback path (curl/kubectl) that proves the control fires whether or not the model takes the bait, because LLM induction (especially on Haiku) is probabilistic and cannot be trusted on stage. Two vocabularies coexist: `challenges/01-cncf-wall`/`02-sanitization`/`03-bad-mcp-excessive-agency` are the three live beats; `challenges/c1-exfil-s3`/`c3-secret-grep`/`c4-denial-of-wallet` are the round-driven infra challenges; `games/` holds two scored variants. The directory was renamed `beats/` → `challenges/` (`5fe448a`).
+The demonstrable payload: agent attack scenarios paired with the platform/AI guardrails that catch them, plus a two-tier verification harness that proves every before/after claim is actually true on a cluster before it is shown live. The rule throughout: the lesson is the GUARDRAIL, never the model. Every beat has a deterministic fallback path (curl/kubectl) that proves the control fires whether or not the model takes the bait, because LLM induction (especially on Haiku) is probabilistic and cannot be trusted on stage. Two vocabularies coexist: `challenges/01-cncf-wall`/`02-sanitization`/`03-bad-mcp-excessive-agency` are the three live beats; `challenges/c1-exfil-s3`/`c3-secret-grep`/`c4-denial-of-wallet` are the infra challenges; `games/` holds two scored variants. The directory was renamed `beats/` → `challenges/` (`5fe448a`).
 
-### The Three Rounds
+### The three kinds of cluster
 
-(See Part II for the round table.) Profile selection is by bootstrap argument `deploy-full-idp.sh burn|full`: `burn` sets `podPidsLimit=-1` (R1 fork-bombable), `full` carries the cap. There is no single "set round state" script yet (a READINESS gap); `infra/setup-instructor-cluster.sh <name> <round>` is the intended one-command path.
+(See Part II for the cluster table; `challenges/LAB-TEXT.md` is what a student reads on each.) Profile selection is by bootstrap argument `deploy-full-idp.sh burn|attendee|admin`. `burn` is the Community cluster: no Kyverno, no Falco, no NetworkPolicy, no KubeArmor policy (the KubeArmor engine runs with none loaded), and the roster gives it `pod_pids_limit=-1`. `attendee` is every student cluster: the full platform with `network-policies` and `kubearmor-policies` omitted and Kyverno left in Audit, so C1 to C3 land until the student installs each control. `admin` is the presenters' clusters: every control armed, and `fleet.sh` flips Kyverno to Deny after bootstrap. `full` is still accepted; since #281 it also omits the C1 and C3 controls. `fleet.sh instructors up [role|owner]` is the one-command path for the roster (provision, bootstrap by role, arm `admin`). `infra/setup-instructor-cluster.sh` predates the roster and still takes a round number.
 
 ### Per-Beat Spec
 
@@ -369,7 +369,7 @@ The demonstrable payload: agent attack scenarios paired with the platform/AI gua
 | Admission | Kyverno `require-resource-limits` | Audit admits a no-limits Deployment; Enforce rejects it with a policy message | `toggle-kyverno-enforce.sh` (Audit↔Enforce) |
 | RBAC | the agent's scoped Role | `create clusterrolebinding ... cluster-admin` is FORBIDDEN | none (always on) |
 | GitOps ownership | Kyverno `block-argocd-drift` | direct `kubectl patch` of an ArgoCD-managed Deployment is DENIED; self-heal reverts | none (Enforce) |
-| Egress | NetworkPolicy default-deny + allowlist (R2/R3) | Bedrock reachable (in-VPC endpoint), S3 push denied | none (in `full`, absent in `burn`) |
+| Egress | NetworkPolicy default-deny + allowlist | Bedrock reachable (in-VPC endpoint), S3 push denied | none on admin (armed by the profile); the student applies `c1-network-policy.yaml` on attendee and Community clusters |
 
 Fixtures: `agent-prompt.txt`; `argocd-managed-app` Deployment (busybox on `docker.io/library`, planted into the ai-layer kustomize bundle so every cluster has a real drift target); `fallback.kubectl.sh` runs all walls deterministically as `system:serviceaccount:<ns>:agent-sa`. The toggle patches a ValidatingPolicy (not a managed Deployment/CM/Service, so block-argocd-drift does not apply). Egress allowlist scoped to `app.kubernetes.io/name: workshop-agent`: Bedrock returns `CONNECT 10.0.16.75`, S3 returns `DENIED(TimeoutError)`.
 
@@ -406,7 +406,7 @@ Every toggle does `kubectl exec deploy/guard-proxy -- python3 -c "...urlopen('ht
 | Beat-2 target is a non-credential recipe, not a password sentinel | a credential-shaped sentinel self-censors, making the before-state unprovable | `9a3971e` |
 | Remove the label selector from block-argocd-drift; gate on the annotation | this ArgoCD uses annotation tracking, so the label match never fired (policy INERT) | `9a3971e` |
 | Plant a real `argocd-managed-app` Deployment | wall-3 referenced a drift target nothing deployed | `9a3971e` |
-| Static three-cluster round selector over live on-stage toggling | live toggles fail for the whole room at once | RUN-OF-SHOW |
+| Separate statically pointed clusters over live on-stage toggling | live toggles fail for the whole room at once | RUN-OF-SHOW |
 | Every beat ships a deterministic curl/kubectl fallback | LLM induction is probabilistic; the lesson is the guardrail | agent-prompt reliability notes |
 | Live validation uses server-side dry-run patches as agent-sa | `sideEffects=NoneOnDryRun` means admission IS evaluated on dry-run; test a deny without persisting | DECISION-LOG 2026-06-27 |
 
@@ -594,9 +594,9 @@ The single ordered path from nothing to a live workshop. Each step assumes the o
 1. **Quotas (lead-time gate, file weeks ahead).** Per account, us-west-2: vCPU→800, ALB→100, NLB→100. No EIP increase.
 2. **Secrets staging.** Put Datadog pool(s) in accen-dev Secrets Manager (`watch-it-burn/datadog-pool[,-pool-2]`); confirm the 5 AWS profiles in `~/.aws` and creds in `~/secrets/aws/`.
 3. **lab VPC per account** (Terraform; Part V step 2). Confirm the Bedrock endpoint + private DNS.
-4. **Clusters + IDP** (`fleet.sh up-fleet 50` or per-account `up 50`; auto-bootstraps ArgoCD + app-of-apps). Instructor clusters via `fleet.sh instructors up` (R1 burn profile).
+4. **Clusters + IDP** (`fleet.sh up-fleet 50` or per-account `up 50`; auto-bootstraps ArgoCD + app-of-apps). Roster clusters via `fleet.sh instructors up` (Community on `burn`, the admin clusters on `admin`).
 5. **Wait for convergence:** `fleet.sh health <n>` until every ArgoCD app Synced+Healthy and no broken pods. Resolve the known races (ai-layer wave 3 already set; run `reinstrument-app-pods.sh` / `reload-datadog-consumers.sh` only if Datadog is empty).
-6. **Enable the AI-layer round state:** profile by intent (`burn` for R1, `full` for R2/R3); start all guards off; the round toggles flip their own control to show the "after".
+6. **Set the AI-layer start state:** the profile follows the role (`burn` for Community, `admin` for presenters, `attendee` for students); every guard-proxy guard starts off on all three; the student, or a presenter, flips each one to show the "after".
 7. **Credential pool:** `aws-keys`, `harvest`, `merge_pool.py`, `distribute_datadog_keys.py` → `pool.csv`.
 8. **Distribution:** deploy the Railway distributor + apex router + decks (Railpack); set domains + the two CNAMEs + TXT; regenerate `routes.map`.
 9. **Verify end to end:** `verify/run-tests.sh` (offline, 19) then `verify/run-all.sh <ctx> agent` (live beats) on a fresh spoke; the `READINESS-CHECKLIST.md` + `GO-LIVE-CHECKLIST.md` are the dress-rehearsal gates.
@@ -625,7 +625,7 @@ The decisions that span subsystems, with the one-line why. Full detail in each P
 | D13 | beat-2 exfil target is a non-credential recipe | a credential-shaped sentinel self-censors and is unprovable |
 | D14 | beat-3 control is kagent toolNames, not gateway authz | the agent dials MCP servers directly, bypassing the gateway |
 | D15 | Pod-delete, never rollout restart, for managed workloads | a restart patches the spec, which block-argocd-drift rejects |
-| D16 | Static three-cluster round selector | a live on-stage toggle fails for the whole room at once |
+| D16 | Separate statically pointed clusters, no selector | a live on-stage toggle fails for the whole room at once |
 | D17 | Every beat ships a deterministic curl/kubectl fallback | LLM induction is probabilistic; the lesson is the guardrail |
 | D18 | Central wildcard router on Railway; ACM at AWS-fleet scale | 250 per-cluster LE certs exceed the rate limit |
 | D19 | Per-attendee scoped IAM keys + own Datadog trial org | simplest for a 2-hour lab; metrics do not mix into the instructor org |
@@ -637,7 +637,7 @@ The decisions that span subsystems, with the one-line why. Full detail in each P
 
 ### Open items (from the B1 to B15 backlog and READINESS gaps)
 
-- **No single "set round state" script** (`infra/setup-instructor-cluster.sh <name> <round>` is intended). Bootstrap + toggles are separate manual steps.
+- **`infra/setup-instructor-cluster.sh` still takes a round number** (`<name> <round>`). The roster path, `fleet.sh instructors up`, bootstraps and arms by role instead; the script has not been brought in line.
 - **The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh`,** not GitOps (need a Pod Identity association and a concrete namespace). Materializing them into the app-of-apps is the open follow-up.
 - **agentgateway `mcpAuthorization` CEL path is unproven on the OSS build** (`BUILD-SPIKE.md` ships TODO); the deployed beat-3 control is the kagent `toolNames` allowlist. beat-03 stays on the recorded-fallback gate until the spike passes.
 - **The AWS Load Balancer Controller install** (the Pod Identity role exists) would replace the Classic ELB on `console` with an ip-target NLB and activate the inert party-app ALB Ingresses.

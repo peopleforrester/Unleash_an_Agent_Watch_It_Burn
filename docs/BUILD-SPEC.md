@@ -12,7 +12,7 @@ abstract (`docs/ABSTRACT.md`) and this file disagree on behavior, the abstract w
 is updated to match. The evolved design and decision log behind rev4 is `docs/DESIGN-DECISIONS.md`
 (from the Michael+Whitney planning transcript). Live-verification status is in `PROJECT_STATE.md`.
 
-> **rev4 CHANGE vs rev3:** the workshop is a **three-cluster (three-round) spectacle** with
+> **rev4 CHANGE vs rev3:** the workshop is a **three-cluster spectacle** (the June round model, since retired) with
 > **cost / wasted-token DoS** as a central theme, not a single aggregate beat. (The 120-minute framing in
 > this rev is superseded: content was cut to **60 minutes** on 2026-06-25.)
 > rev3's components are all live-verified on EKS and carried forward; the *structure* is new.

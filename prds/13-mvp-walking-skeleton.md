@@ -5,7 +5,7 @@
 **Priority**: High
 **Status**: Complete. M1-M4 live-verified on watch-it-burn-attendee-001 (PROGRESS.md 2026-06-25): datadog-secret created, datadog/connector wired, UST applied, Collector exporting metrics and traces to Datadog.
 
-> **Note on `challenges/` references:** The `challenges/` directory naming is being aligned with the Rounds + Challenges vocabulary adopted June 2026 (C1–C7 challenges across three cumulative rounds). When implementing, update any `challenges/` path references to the current challenge/round structure as you encounter them — no separate migration task is required.
+> **Note on `challenges/` references:** The `challenges/` directory naming follows the challenge vocabulary (C1–C8; the June 2026 rounds are retired). When implementing, update any `challenges/` path references to the current challenge structure as you encounter them — no separate migration task is required.
 
 ---
 

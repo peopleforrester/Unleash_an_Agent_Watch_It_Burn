@@ -392,8 +392,8 @@ AWS coupling. Per cloud:
 
 Added by the 2026-07-03 amendment. The rerun that session exposed that changing
 WHAT the fleet provisions requires editing `fleet.sh`: the instructor roster is a
-hardcoded array (trimmed by hand to run one cluster per round), cross-round
-concurrency was a code change, and node type/size are locked to the `cluster`
+hardcoded array (trimmed by hand to run a subset), concurrency across the roster
+was a code change, and node type/size are locked to the `cluster`
 module defaults because `fleet.sh` never forwards them. Model tier per cluster is
 worse, requiring a live `kubectl patch` of the ModelConfig that fights ArgoCD
 selfHeal. That is configuration-by-editing, and it belongs in M1 because M1
@@ -403,14 +403,16 @@ Parameterize four axes, keeping the existing bash + `|`-delimited style (no new
 yaml/yq dependency; the roster file is read with `while IFS='|' read`):
 
 1. **Roster as data.** Move the `INSTRUCTORS` array to an env-overridable
-   `|`-delimited profiles file with columns `name | round | tier | instance_type
-   | pids | bootstrap`. Subset selection via env (`WIB_ROUNDS`, `WIB_PER_ROUND`)
-   instead of trimming the array.
+   `|`-delimited profiles file (`WIB_ROSTER_FILE`, default
+   `infra/terraform/fleet/roster.tsv`). The columns are now `name | role | tier |
+   instance_type | pids | bootstrap | owner`: the round number this section first
+   planned became a role (community or admin) in #291. Subset selection is by role
+   or owner (`instructors up [role|owner]`) instead of trimming the array.
 2. **Size/type passthrough.** `fleet.sh` forwards `WIB_INSTANCE_TYPES`,
    `WIB_NODE_SIZE`, `WIB_DISK` to `up_one` as `-var`, the same way it already
    forwards `pod_pids_limit` and `dockerhub_auth_b64`. Empty falls back to the
    module defaults, so unset means no behavior change.
-3. **Cross-round concurrency by default.** The per-round subshell fan-out proven
+3. **Concurrency across the roster by default.** The parallel subshell fan-out proven
    in the rerun (isolated per-cluster `-state`, single shared `init`) becomes the
    default; a flag forces serial if ever needed.
 4. **Model tier at provision time.** Select the per-cluster ModelConfig via the
@@ -438,7 +440,7 @@ tests, lint).
   worth making to live AWS code before the next rerun (verify-at-build that Pod
   Identity still resolves).** **Also parameterizes fleet cluster shape per 4.6:
   roster as an env-overridable profiles file, instance-type/size/disk passthrough,
-  cross-round concurrency by default, and provision-time model tier, replacing
+  concurrency across the roster by default, and provision-time model tier, replacing
   configuration-by-editing.** Gate: `terraform validate` clean at the new AWS paths;
   offline verify suite green; `grep` sweep for stale
   `terraform/lab-vpc`/`terraform/cluster` refs returns zero outside log history;

@@ -24,16 +24,20 @@ present the moment the pod starts and cannot be missing because a seeding step d
 > directories named "DO NOT OPEN THIS DIRECTORY" and "definitely not this one". Nothing ever planted
 > those directories; a repo-wide search for either string matched only this file. That version was
 > retired in favour of the grep above, which is greppable, deterministic, and does not depend on the model
-> choosing to explore. Recorded here rather than deleted silently, because the rounds deck was written
+> choosing to explore. Recorded here rather than deleted silently, because the old slide deck was written
 > against the old description and anyone reconciling the two needs to know which one moved.
 
-| Round | Outcome | Why |
+| Cluster | Outcome | Why |
 |---|---|---|
-| R1 (no guardrails) | succeeds | the agent runs the grep and reads the recipe back |
-| R2 (infra on) | blocked **and** caught | KubeArmor blocks the read inline and raises its own alert for the denied attempt |
-| R3 | still walled | infra carries forward |
+| Community (`burn` profile) | succeeds, and nothing notices | KubeArmor's engine runs with no policy loaded, and Falco is not installed, so the only record is the Datadog trace |
+| Admin (`admin` profile) | blocked **and** caught | the `kubearmor-policies` app is armed: KubeArmor blocks the read inline and raises its own alert for the denied attempt |
+| Attendee, before the student applies the policy | succeeds, and Falco fires | the `attendee` profile omits `kubearmor-policies`; Falco's `Recipe Snoop` rule fires on the successful read |
+| Attendee, after `kubectl apply -f ~/challenges/c3-kubearmor-policy.yaml` | blocked | `Permission denied` from inside the tool container; Falco goes quiet because there is no successful read left |
 
-**Defense (deployed by the `full` profile, R2/R3):**
+On the Community cluster the student can apply the same KubeArmor policy and it works as written, because
+the engine is present; there is just no detection half to watch.
+
+**Defense (armed by the `admin` profile; applied by the student on an attendee cluster):**
 
 - **KubeArmor** `block-recipe-snoop` (`policies/kubearmor/block-recipe-snoop.yaml`) blocks reads under
   `/tmp/burrito-data/config/legacy/` inline, in the kernel via BPF-LSM, for pods labelled
@@ -70,8 +74,9 @@ That ordering is what the student-facing lab does under the attack-then-fix rest
 On the admin cluster, where the block is already armed (run-of-show segment 4), the detection half is
 KubeArmor's own alert, not Falco's (#497). It fires on the denied attempt, so one command shows both jobs.
 
-No per-attendee toggle. The KubeArmor policy and the Falco rule are on whenever the `full` profile is,
-which is R2 and R3.
+The Falco rule ships with Falco on the `admin`, `full` and `attendee` profiles. The KubeArmor policy is
+the challenge control: armed from the start only on the `admin` profile (the `full` and `attendee`
+profiles exclude `kubearmor-policies`, #281), and applied by the student everywhere else.
 
 ## Fallback
 

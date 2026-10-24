@@ -20,13 +20,13 @@ If the console doesn't load, tell a facilitator before trying anything else. The
 
 ## 3. Where the beats live
 
-Each round ("beat") has its own folder in the workshop repo on your cluster:
+Each beat has its own folder in the workshop repo on your cluster:
 
 - `challenges/01-cncf-wall/`: unleash the agent on the platform.
 - `challenges/02-sanitization/`: what goes in, what comes out.
 - `challenges/03-bad-mcp-excessive-agency/`: when the agent's tools turn on it.
 
-Each beat folder has a `beat.md` with the steps for that round. The facilitators drive the toggles; you drive your agent and watch what happens on your own cluster.
+Each beat folder has a `beat.md` with the steps for that beat. On your own cluster you install each control yourself, after the attack has worked, and watch what changes; the lab page on your cluster walks you through every challenge.
 
 > Every secret you'll see is **obviously fake** (it starts with `FAKE-`). Nothing real is ever in your cluster.
 

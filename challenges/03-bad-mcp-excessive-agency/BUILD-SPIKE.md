@@ -105,7 +105,8 @@ If RESULT = FAIL, do NOT run Beat 3 as a live toggle. Instead:
 
 ## Result log
 
-- 2026-06-26: the current toggle (evil-mcp wired in both states, ON = `[get_weather]`) was verified
-  live on round cluster r3: the attack lands with `--off` and the leak is blocked with `--on`
+- 2026-06-26: verified live on `watch-it-burn-whitney-r3`, a since-retired instructor cluster, with the
+  current toggle (evil-mcp wired in both states, ON = `[get_weather]`): the attack lands with `--off` and
+  the leak is blocked with `--on`
   (commit db57112; commands and timing in `FACILITATOR.md`).
 - RESULT for this build: **TODO** (run the spike on the build's cluster; fill the decision box above).

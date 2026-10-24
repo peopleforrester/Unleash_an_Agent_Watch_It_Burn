@@ -1,10 +1,10 @@
-*Facilitator-facing minute-by-minute runbook. **The primary run-of-show is `docs/RUN-OF-SHOW-2026-08.md`** (2 hours: 15 onboarding + tour, 20 instructor R1/R2, 60 hands-on, 15 wrap, 10 slack). This file is a supporting reference for toggles, fallbacks and hand-offs; where it disagrees with the primary run-of-show, the primary wins. Not attendee copy.*
+*Facilitator-facing minute-by-minute runbook. **The primary run of show is `/brief`** (`gitops/ai-layer/web/brief.html`; 2 hours: Phase 1 the whole room attacks the Community cluster, Phase 2 everyone claims a cluster, Phase 3 the tour and the eight challenges on their own cluster). `docs/RUN-OF-SHOW-2026-08.md` is the retired August version. This file is a supporting reference for toggles, fallbacks and hand-offs; where it disagrees with the primary run-of-show, the primary wins. Not attendee copy.*
 
 # Runbook, "Build a Platform, Unleash an Agent on it... and Watch it Burn!"
 
 DevOpsDays Portland 2026. Michael Forrester (Accenture) with Whitney Lee.
 
-**Slot:** **2 hours**. Date, time, room and venue live in conference-knowledge (`events/registry.yaml`, entry `devopsdays-portland-2026`). (The June World's Fair slot this file was written for is done; see `docs/RUN-OF-SHOW-2026-08.md` for the current sequence. The 60-minute table at the end is a cut-down for a shortened slot, not the plan.)
+**Slot:** **2 hours**. Date, time, room and venue live in conference-knowledge (`events/registry.yaml`, entry `devopsdays-portland-2026`). (The June World's Fair slot this file was written for is done; see `/brief` for the current sequence. The 60-minute table at the end is a cut-down for a shortened slot, not the plan.)
 
 Split: Michael owns architecture, the security thesis, and the cost argument. Whitney owns the live
 attack narration, the observability view, and the attendee experience. Every segment has an owner and

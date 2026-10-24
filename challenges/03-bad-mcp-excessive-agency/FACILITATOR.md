@@ -21,10 +21,10 @@ wires `evil-mcp` into the agent and sets its allow-list:
 
 ## Commands
 
-Set the kube-context for the round's cluster, then:
+Set the kube-context for the cluster you are demonstrating on, then:
 
 ```bash
-export CONTEXT=<kube-context>   # e.g. arn:aws:eks:us-west-2:<acct>:cluster/watch-it-burn-whitney-r3
+export CONTEXT=<kube-context>   # e.g. arn:aws:eks:us-west-2:<acct>:cluster/watch-it-burn-whitney-admin
 
 # Start vulnerable (the attack lands):
 CONTEXT="$CONTEXT" challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --off

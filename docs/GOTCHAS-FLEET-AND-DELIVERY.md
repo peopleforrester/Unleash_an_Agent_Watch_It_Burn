@@ -168,9 +168,9 @@ channel for anything in that env block**. Synced does not mean applied, for that
 
 1. `kubectl -n agent set env deploy/guard-proxy <VAR>=<value>` on the cluster. It sticks precisely because
    ArgoCD ignores that path.
-2. On any cluster with policies (R2 / R3 / attendee) that patch is **denied by Kyverno**
-   `block-argocd-drift` ("This resource is managed by ArgoCD. Change it in Git"). R1 burn clusters have no
-   policies and accept it directly. It is a Kyverno ValidatingPolicy (#206) and the enforcing field is
+2. On any cluster with policies (admin and attendee) that patch is **denied by Kyverno**
+   `block-argocd-drift` ("This resource is managed by ArgoCD. Change it in Git"). The Community cluster
+   (`burn` profile) has no policies and accepts it directly. It is a Kyverno ValidatingPolicy (#206) and the enforcing field is
    `spec.validationActions`.
 3. So: `kubectl patch validatingpolicy block-argocd-drift --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'`,
    apply the env change, then patch it straight back to `["Deny"]`. Allow a few

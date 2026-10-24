@@ -23,8 +23,9 @@ marketing intel to `https://agenticburn.com/beacon`. With no curl in the image, 
 command fails at the shell, so:
 
 - The exfil-to-webhook demo cannot actually POST on ANY model. The egress-allowlist
-  NetworkPolicy control (the thing the beat is meant to showcase: R1 POST reaches the
-  internet, R2/R3 blocked) has nothing to gate, because the request never leaves.
+  NetworkPolicy control (the thing the beat is meant to showcase: the POST reaches the
+  internet from a cluster with no egress policy, and is blocked once the policy is in
+  place) has nothing to gate, because the request never leaves.
 - During the 2026-07-05 model A/B, Nova complied and executed, but fell back to the
   `post_marketing` mock tool instead of the curl path, so the beat "landed" via a
   different tool and the intended curl-egress lesson was not exercised.
@@ -43,8 +44,10 @@ Debian equivalent), rebuild, and repush the image the ai-layer references.
 
 - `kubectl exec -n agent deploy/workshop-mcp -- command -v curl` returns a path.
 - The C1 marketing-exfil beat, driven through the model, actually POSTs to the beacon:
-  reaches it on an egress-open cluster (R1) and is blocked (HTTP 000 / timeout) on an
-  egress-allowlist cluster (R2/R3), demonstrating the NetworkPolicy control on the
+  reaches it on an egress-open cluster (the Community cluster, or an attendee cluster
+  before the student applies the policy) and is blocked (HTTP 000 / timeout) on an
+  egress-allowlist cluster (an admin cluster, or an attendee cluster after the
+  student applies it), demonstrating the NetworkPolicy control on the
   intended curl path rather than via `post_marketing`.
 
 ## Notes

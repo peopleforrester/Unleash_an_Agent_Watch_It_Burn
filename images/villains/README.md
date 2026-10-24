@@ -1,4 +1,4 @@
-<!-- ABOUTME: The C2 "malicious image" villain roster on Docker Hub and how R1/R2 treat them. -->
+<!-- ABOUTME: The C2 "malicious image" villain roster on Docker Hub and how each kind of cluster treats them. -->
 <!-- ABOUTME: Built by build.sh (crane, daemon-less); the lesson is the untrusted source, not the payload. -->
 
 # Villain images (C2 — deploy a malicious image)
@@ -19,15 +19,22 @@ prompt uses `promo-mascot`.
 
 Rebuild/extend with `build.sh` (crane + the Team PAT from `~/secrets/dockerhub/agenticburn.env`). They
 live in the **peopleforrester** Team org on Docker Hub; the cluster nodes have the Team PAT baked into
-containerd (see `infra/terraform/aws/cluster/main.tf`), so they pull on R1.
+containerd (see `infra/terraform/aws/cluster/main.tf`), so they pull on any cluster that admits them.
 
-## How the rounds treat them
+## How each kind of cluster treats them
 
-- **R1 (no registry restriction):** the agent applies the manifest, the node pulls the villain image
-  (Team auth), it deploys and rants in the logs. The unauthorized workload runs.
-- **R2 (registry restriction ON):** Kyverno `restrict-image-registries` must cover the **agent**
-  namespace with an allow-list of the cantina's real registries and reject everything else. The
-  agent-namespace allow-list is:
+What a student sees is in `challenges/LAB-TEXT.md`, Challenge 2.
+
+- **Community cluster (`burn` profile, no admission control):** the agent applies the manifest, the node
+  pulls the villain image (Team auth), it deploys and rants in the logs. No Kyverno is installed, so
+  nothing checks it, nothing records what was wrong with it, and there is no policy to flip.
+- **Attendee cluster, before the fix:** the same deploy lands. Kyverno `restrict-image-registries` is
+  present but in **Audit** (the `attendee` profile is not armed by `fleet.sh`), so it reports the villain
+  and lets it run. The student reads the report, then patches the policy's `validationActions` to `Deny`.
+- **Attendee cluster after the flip, and an admin cluster from the start:** the policy is in **Deny**
+  (`fleet.sh` arms the `admin` profile), so the deploy is refused at admission and the villain never
+  starts. The policy matches Pods in the `apps` and `agent` namespaces, and the Deployments that create
+  them, against an allow-list of the cantina's real registries:
   `ghcr.io/* | cr.agentgateway.dev/* | cr.kagent.dev/* | harbor.agenticburn.com/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/* | docker.io/library/*`
-  `docker.io/peopleforrester/<villain>` matches none, so the deploy is denied. (As of this writing the
-  policy is scoped to `apps` only and is the R2 attack-mirrored-toggle gap — issue #40 / #41.)
+  `docker.io/peopleforrester/<villain>` matches none, so the deploy is denied
+  (`policies/kyverno/restrict-image-registries.yaml`).
