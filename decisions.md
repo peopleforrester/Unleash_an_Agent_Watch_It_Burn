@@ -772,3 +772,20 @@ releases. vm2's only consumer is typescript-json-schema (Backstage CLI config sc
 - **elliptic** has no fixed release.
 - **Backstage plugins** (backend-defaults, catalog-, scaffolder-, techdocs-, kubernetes-, proxy-, search-backend,
   auth-node) need their own version bumps. Dependabot has opened a branch for each.
+## 2026-10-24 · #332 · question 637 · the Kyverno line in Challenge 2 gets no rationale
+
+**Question 637:** Challenge 2's fix card (`gitops/ai-layer/web/lab.html:445`/`:454`) names OPA Gatekeeper,
+Kubewarden and ValidatingAdmissionPolicy, then just says "This cluster runs Kyverno". Whitney took out the
+plain-YAML reason (cacf1db, #370), and #206 has since moved the policies to CEL ValidatingPolicy, which
+makes the YAML argument weaker still. Should that line get a reason, and which one?
+
+**Answer:** No rationale: keep Whitney's wording as it stands, since she asked for the alternatives named
+without dwelling on the differences. Close #332.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes:** no prose changes. The card keeps her wording. "Kyverno's rules are plain YAML, which
+is why we use it here" and the "Its policies are written in YAML" tail stay removed and are not to be
+restored, and no replacement claim (policy reports, signature verification, exceptions, CLI testing) is
+added. The capital "And" the issue mentions no longer exists: cacf1db replaced that sentence with "Some
+cluster-level policy functionality is also available natively in Kubernetes".
