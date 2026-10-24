@@ -1496,3 +1496,24 @@ who presents it and that it holds the build and not the record of the talk, or i
 talks-knowledge (register, abstracts, talk scripts) and conference-knowledge (event state). It reads the
 workshop title from the README heading and the submodule paths from `.gitmodules`, so neither is written down
 a second time in the test.
+## 2026-10-25 · #511 · question 716: /kubecon gets the apex router's roster-only gate now
+
+**Question 716:** should `/kubecon` get the apex router's roster-only 404 gate now, ahead of any attendee-pool
+event, rather than waiting until a 2-hour workshop with attendee clusters is booked? **Answer:** gate /kubecon
+in the router now. Decided by hecaton's research under Michael's standing rules, not by Michael.
+
+- **Why now.** `kubecon.html` ships in the console-src ConfigMap, so every cluster serves `/kubecon`. The
+  #501 entry above left it ungated only because the KubeCon breakout has no attendee pool, and said to gate
+  it the way `/brief` is gated once it is served alongside one. The first attendee pool would meet that
+  condition with nothing to remind anyone. Waiting rested on how close KubeCon is, and the change-cadence
+  rules in CLAUDE.md rule that out.
+- **Why it costs the KubeCon session nothing.** peopleforrester/apex-agenticburn#35 (staging `664b584`)
+  changed the router's roster matcher to `attackme` or `<owner>-admin` on agenticburn.com. The three KubeCon
+  clusters are exactly those hosts (`infra/terraform/fleet/roster.tsv`).
+- **What it changes.** In apex-agenticburn's `Caddyfile`, the `@brief_not_roster` matcher's path line goes
+  from `path /brief` to `path /brief /kubecon`. `tests/e2e/caddyfile.e2e.sh` gains a 200 on `/kubecon` for
+  attackme, michael-admin and whitney-admin, and a 404 for an attendee host. That edit lives in the sister
+  repo and is filed there as a follow-up of #511, because this repo cannot change it. A Caddyfile edit is image
+  state there, so it goes live when Railway deploys main, the same promotion #35 is already waiting on. Here,
+  the `/kubecon` comment in `gitops/ai-layer/console.conf` now names the gate. The retired numbered-round roster
+  names in the `/brief` comment beside it are now attackme and `<owner>-admin`. nginx behaviour is unchanged.
