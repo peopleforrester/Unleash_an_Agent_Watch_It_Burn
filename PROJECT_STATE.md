@@ -22,8 +22,9 @@ conference-knowledge `kubecon-na-2026`.
 The five Portland accounts in the same regions, `event=kubecon-na-2026` (`infra/terraform/fleet/event.sh`),
 and no Datadog pool until Whitney loads one the week of 2026-10-26: a logged gap (#500, #510). Details are
 in decisions.md, 2026-10-24 · #454. The 2026-10-24 bring-up of attackme and michael-admin in accen-dev,
-us-west-2, ran the #503 probe (#528, #530). Its teardown to zero (`verify/account-audit.sh` CLEAN) is not
-recorded here yet, and the probe's date, clusters and spend go on #509.
+us-west-2, ran the #503 probe: RED on both, about $0.05 of Bedrock. Its per-beat results are in
+`facilitation/kubecon-na-2026-run-of-show.md`, "Probe record" (#509); its findings #528, #529 and #530 are
+fixed on staging. Its teardown to zero (`verify/account-audit.sh` CLEAN) is not recorded here yet.
 
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
