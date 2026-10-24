@@ -1517,3 +1517,23 @@ in the router now. Decided by hecaton's research under Michael's standing rules,
   state there, so it goes live when Railway deploys main, the same promotion #35 is already waiting on. Here,
   the `/kubecon` comment in `gitops/ai-layer/console.conf` now names the gate. The retired numbered-round roster
   names in the `/brief` comment beside it are now attackme and `<owner>-admin`. nginx behaviour is unchanged.
+## 2026-10-25 · #515 · only the web terminal may edit agentgateway-c7-config live
+
+Step 2 of #496 rewrites the `# c7-rule` line of `agent/agentgateway-c7-config` (added by #514) from the web
+terminal of an admin cluster. Two guardrails would undo or refuse that edit, so this opens exactly that path
+before anything uses it:
+
+- **Argo CD ignores `.data["config.yaml"]` on that ConfigMap only** (`gitops/apps/ai-layer.yaml`).
+  agentgateway-config and the agentgateway Deployment keep no ignore, and RespectIgnoreDifferences stays on.
+  The cost: a committed change to agentgateway-c7-config reaches new clusters only; a running cluster keeps
+  its live copy until it is rebuilt.
+- **block-argocd-drift exempts one request shape** (`not-terminal-c7-rule`): an UPDATE of
+  agent/agentgateway-c7-config by `system:serviceaccount:agent:web-terminal`, written as a negated
+  conjunction with optional reads so a DELETE (empty object) does not error. agent-sa stays denied, so the
+  agent cannot switch off its own C7 guard; the terminal still cannot delete it or touch agentgateway-config.
+- **console-terminal is not widened.** Its existing rules already give get on everything (Argo CD
+  applications included) and patch on core resources (configmaps, pods).
+
+`verify/test_c7_gateway_toggle.py` (offline) checks the ignore, the exemption and the RBAC from the manifests;
+the toggle child of #496 extends it. `verify/test_kyverno_cel_policies.py` (E2E, Kyverno CLI 1.19.1) evaluates
+the four request shapes. The live proof is the #503 probe at bring-up.

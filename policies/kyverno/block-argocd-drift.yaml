@@ -79,6 +79,19 @@ spec:
     - name: not-kagent-controller
       expression: >-
         request.userInfo.username != 'system:serviceaccount:kagent:kagent-controller'
+    # C7's live gateway rule on an admin cluster (#496, #515). The terminal's guard-mcp-on / guard-mcp-off
+    # rewrite one line of the agentgateway-c7-config ConfigMap, which Argo CD manages (and ignores drift on).
+    # The exemption is an UPDATE of that one ConfigMap, and only by the terminal's own ServiceAccount: agent-sa
+    # and every other principal are still denied, so the agent cannot switch off its own C7 guard; the
+    # terminal still cannot delete it, nor touch agentgateway-config, which carries every other route. The
+    # optional reads keep a DELETE (whose object is an empty map) from erroring here.
+    - name: not-terminal-c7-rule
+      expression: >-
+        !(request.userInfo.username == 'system:serviceaccount:agent:web-terminal' &&
+        request.operation == 'UPDATE' &&
+        object.?kind.orValue('') == 'ConfigMap' &&
+        object.?metadata.?namespace.orValue('') == 'agent' &&
+        object.?metadata.?name.orValue('') == 'agentgateway-c7-config')
     # Built-in controllers and kubelet must keep the managed object healthy (kube-system service
     # accounts, nodes), and cluster admins can always intervene to fix things (system:masters).
     - name: not-system-or-admin
