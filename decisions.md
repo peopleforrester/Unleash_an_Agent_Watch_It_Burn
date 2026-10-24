@@ -1302,3 +1302,24 @@ cluster. Grafana reads env at start, so a public host rewritten later needs a Gr
 
 **Not measured live.** No cluster was available to this run. `verify/test_service_hosts_live.py` now reads
 Grafana's `appUrl` through its hostname and asserts no Grafana Ingress remains; run it on the next build.
+
+## 2026-10-25 · #502 · The KubeCon router table is the roster alone, and the live router is checked, not the repo
+
+The coordinator settled on #502 (2026-10-24) that the apex router and `/beacon` stay up for the breakout.
+`fleet.sh routes` wrote every attendee cluster with state on the machine, plus a stray
+`roundadmin.agenticburn.com`, so the table was not the three roster hosts the issue asks for.
+
+- **`routes roster`, not a second generator.** It is `cmd_routes` with the attendee loop skipped, so the
+  roster rows, the `:443` upstreams and the record-then-reload path stay one code path.
+- **The roster guard compares sets.** A roster run drops pool rows on purpose and lists them. It still refuses
+  when a published roster host would leave, even when the table grows, because gaining eight service hosts
+  while losing `whitney-admin` is a longer table and a dead URL on stage.
+- **The roundN alias is removed in every mode.** Rounds went with #291, the column it read became the role,
+  and it published `roundadmin`, a name nobody was given. The shrink guard discounts retired `round*` rows the
+  way it discounts `a-NNN` (#359), so the first run after this is not refused.
+- **`router-check` reads `start.agenticburn.com/roster.json`.** That is the router's view of the table on its
+  volume, rebuilt on every reload, so it catches a table pushed but not applied (2026-08-26), which the apex
+  repo cannot show. It is the read the ops view already treats as "routed" (#308).
+- **Left open for Michael:** the beacon and `/beacon/view` are forwarded by the router to the collector in
+  the provisioning app, so they are up only while that service runs, and #448 keeps the provisioning
+  distributor off. The run-of-show records this as its open question 9.
