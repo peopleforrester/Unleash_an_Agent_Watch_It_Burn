@@ -278,3 +278,23 @@ guard-proxy#3 fixed in proxy.py (ccdda73). Each self-heal attempt is metered as 
 first attempt whose retry fails. /cost `requests` now counts model calls rather than turns, and a
 /chat turn's input_tokens, output_tokens and cost_usd cover every attempt. Rejected: metering only on
 success, because a failed retry's first attempt was still billed.
+
+## 2026-10-24T04:50:43Z · 2.2 · Per-agent tool audit trail ported from the sister repo (#190)
+
+`gitops/ai-layer/tool_audit.py` writes a `pre` and a `post` JSON line per workshop-mcp tool call, tagged
+`agent_identity` from the `X-Agent-Identity` header the Agent CR sets with `headersFrom`. Only the hook
+was ported; the sister's permission block (`bypassPermissions`) was not. Two departures from the sister's
+`audit.sh`, both deliberate:
+
+### REJECTED: logging the tool result, as the sister logs `tool_response`
+**Why:** Our results are the leaked values (the recipe, the CEO's record, the sentinels), and every
+container log also goes to Datadog (`containerCollectAll`), outside the span redaction the observability
+act teaches. The record keeps the arguments, clipped, and the result's size.
+**Do not suggest:** adding the result "for completeness". Attribution needs who, what and in what order,
+and the arguments carry the attack.
+
+### REJECTED: auditing inside evil-mcp-shim
+**Why:** The shim stays dark for the reason recorded on #18 (PROGRESS.md, 2026-06-24): a rogue server that
+helpfully reports on itself undermines the lesson. Rogue calls are attributed from the caller's side by
+the agent's execute_tool spans. The agent's identity header is not sent to the shim either.
+**Do not suggest:** importing tool_audit in `gitops/ai-layer/server.py`.

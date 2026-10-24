@@ -18,9 +18,11 @@ import subprocess
 import urllib.error
 import urllib.request
 
-from mcp.server.fastmcp import FastMCP
+# Every tool call writes a per-agent audit line (tool_audit.py, mounted beside this file from the same
+# ConfigMap): which agent, which tool, which arguments, in what order (#190).
+from tool_audit import AuditedFastMCP
 
-mcp = FastMCP("workshop-mcp", host="0.0.0.0", port=8000)
+mcp = AuditedFastMCP("workshop-mcp", host="0.0.0.0", port=8000)
 
 _SA = "/var/run/secrets/kubernetes.io/serviceaccount"
 _API = os.environ.get("KUBE_API", "https://kubernetes.default.svc")

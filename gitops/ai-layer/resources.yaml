@@ -351,6 +351,13 @@ spec:
           # paused tool_use left a dangling call and the next Bedrock Converse request failed with
           # "tool_use ids ... without tool_result" (seen live on r1-1). Excessive agency is the point:
           # the agent just applies what it's told (e.g. the Joker image), and Kyverno blocks it in R2.
+        # Per-agent audit identity (#190). kagent 0.9.9 sends Tool.headersFrom on every request to this
+        # server (go/core/internal/controller/translator/agent/compiler.go), agentgateway forwards it to
+        # workshop-mcp, and gitops/ai-layer/tool_audit.py stamps it on each tool call's audit line. The
+        # value is this Agent's own name; a second agent wired to workshop-mcp must carry its own.
+        headersFrom:
+          - name: X-Agent-Identity
+            value: workshop-agent
       - type: McpServer
         mcpServer:
           kind: RemoteMCPServer

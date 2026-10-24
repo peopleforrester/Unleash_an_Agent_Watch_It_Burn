@@ -40,7 +40,11 @@ esac
 # adding the rogue tool NAMES to workshop-mcp's allowlist does nothing (a server cannot expose a tool it
 # does not serve, which is why the earlier version never let the attack land). The legit workshop-mcp
 # tools are present in both states.
-readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["lookup_customer_records","check_inventory","reorder_supply","get_order_history","search_web","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]}}'
+#
+# The merge patch REPLACES the tools array, so GOOD_TOOL is the whole committed workshop-mcp entry from
+# gitops/ai-layer/resources.yaml, headersFrom included: dropping X-Agent-Identity would turn every later
+# tool call into an `unattributed` audit line (#190). verify/test_tool_audit.py keeps the two identical.
+readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["lookup_customer_records","check_inventory","reorder_supply","get_order_history","get_marketing_intel","search_web","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]},"headersFrom":[{"name":"X-Agent-Identity","value":"workshop-agent"}]}'
 
 # evil-mcp (the look-alike supply-chain MCP) stays WIRED in both states; the control is its toolNames
 # allowlist. The benign get_weather is always present (it is the injection entrypoint), so the demo's

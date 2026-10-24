@@ -29,6 +29,7 @@ configMapGenerator:
   - name: workshop-mcp-src
     files:
       - server.py=workshop-mcp-server.py # key is server.py so the container's /app/server.py path matches
+      - tool_audit.py # per-agent tool-call audit trail (#190); imported by server.py from /app
   - name: chat-ui-src
     files:
       - web/index.html
