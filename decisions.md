@@ -1213,3 +1213,22 @@ and the two chips keyed `rbac` and `resource-quotas` are gone: those keys would 
 and the wave table in `docs/MASTER-RECREATION-SPEC.md` drop the two apps. `force_update_version` in
 `infra/terraform/aws/cluster/main.tf` stays: it is the right setting for disposable nodes whatever PDBs the
 charts ship, and its comment was left as written.
+## 2026-10-24 · #477 · The floor protects agent, security and datadog; agent's workloads stay deletable
+
+The minimal-floor's lists predated the namespace layout: Falco runs in `security` (`falco` holds only
+Talon), BurritoBot in `agent`, the Datadog operator and agent in `datadog`, and none of the three was
+protected. All three namespaces are now refused DELETE. Workloads in `security` and `datadog` are refused
+DELETE too. Workloads in `agent` are not: Challenge 2 has the student's terminal (the `web-terminal`
+ServiceAccount, not `system:masters`) run `kubectl -n agent delete deploy promo-mascot`, and the floor would
+refuse that cleanup. What Argo CD owns in `agent` is already refused to everyone else by
+`block-argocd-drift`, which is the policy the lab's "Try breaking a guardrail" step names.
+
+The Datadog operator's ServiceAccount (`system:serviceaccount:datadog:datadog-operator`) joins Argo CD and
+the kube-system controllers as a principal that may replace workloads: the operator, not Argo CD, owns the
+agent DaemonSet and cluster-agent Deployment and deletes them when a component is switched off, which is the
+#389 failure Argo CD hit in `kagent`. `verify/test_minimal_floor_namespaces.py` checks the lists against each
+platform Application's destination, and `verify/test_kyverno_cel_policies.py` checks the verdicts.
+
+Not done: the issue's optional point that `require-resource-limits` stays Audit on attendee and only produces
+PolicyReport noise there. Excluding it on attendee changes what kyverno-policies ships on that profile and
+the policy count `test_kyverno_cel_live.py` expects, so it stays as it is.

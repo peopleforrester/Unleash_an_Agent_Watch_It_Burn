@@ -49,6 +49,8 @@ USERS = {
                ["system:serviceaccounts", "system:serviceaccounts:argocd", "system:authenticated"]),
     "kagent": ("system:serviceaccount:kagent:kagent-controller",
                ["system:serviceaccounts", "system:serviceaccounts:kagent", "system:authenticated"]),
+    "datadog-operator": ("system:serviceaccount:datadog:datadog-operator",
+                         ["system:serviceaccounts", "system:serviceaccounts:datadog", "system:authenticated"]),
     "kube-controller": ("system:serviceaccount:kube-system:deployment-controller",
                         ["system:serviceaccounts", "system:serviceaccounts:kube-system", "system:authenticated"]),
     "admin": ("kubernetes-admin", ["system:masters", "system:authenticated"]),
@@ -222,6 +224,18 @@ expect("system:masters (teardown) may delete a platform namespace", g, "kagent",
 expect("system:masters may delete a platform workload", g, "kagent-controller", "ignored")
 g = run(FLOOR, [ns("kagent")], operation="UPDATE", user="agent-sa")
 expect("only DELETE is matched", g, "kagent", "ignored")
+# #477: Falco runs in security, BurritoBot in agent, the Datadog agent in datadog. None was protected.
+ds = lambda n, namespace: {**deploy(n, namespace, [c()]), "kind": "DaemonSet"}
+g = run(FLOOR, [ns("agent"), ns("security"), ns("datadog"), ds("falco", "security"),
+                ds("datadog-agent", "datadog"), deploy("promo-mascot", "agent", [c()])],
+        operation="DELETE", user="student")
+for n in ("agent", "security", "datadog"):
+    expect(f"the {n} namespace cannot be deleted", g, n, "fail", FLOOR_NS_MSG)
+expect("Falco's DaemonSet in security cannot be deleted", g, "falco", "fail", FLOOR_WL_MSG)
+expect("the Datadog agent DaemonSet cannot be deleted", g, "datadog-agent", "fail", FLOOR_WL_MSG)
+expect("the student can still clean up the villain in agent (Challenge 2)", g, "promo-mascot", "ignored")
+g = run(FLOOR, [ds("datadog-agent", "datadog")], operation="DELETE", user="datadog-operator")
+expect("the Datadog operator may replace the DaemonSet it owns", g, "datadog-agent", "pass")
 
 print("== the apps-namespace hygiene policies ==")
 good = c("x", readinessProbe={"httpGet": {"path": "/", "port": 80}}, livenessProbe={"httpGet": {"path": "/", "port": 80}})

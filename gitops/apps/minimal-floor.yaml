@@ -1,5 +1,5 @@
-# ABOUTME: ArgoCD Application for the minimal restriction floor (its own app so the burn cluster can
-# ABOUTME: keep the floor WITHOUT the enforcing Kyverno policies). Applies to all profiles.
+# ABOUTME: ArgoCD Application for the minimal restriction floor (policies/floor), its own app apart from
+# ABOUTME: kyverno-policies. Ships on attendee, full and admin; the burn cluster selects neither it nor kyverno.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

@@ -98,14 +98,14 @@ spec:
             hosts:
               - grafana.agenticburn.com
         # The operator's admission-webhook create/patch Jobs ship without resources and the
-        # require-resource-limits floor rejects them, which left the app OutOfSync on every
-        # full-profile cluster and the Grafana Service missing there (#234).
+        # require-resource-limits policy (kyverno-policies) rejects them, which left the app
+        # OutOfSync on every full-profile cluster and the Grafana Service missing there (#234).
         prometheusOperator:
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 512Mi }
           # The config-reloader sidecar the operator injects into the Prometheus pod: the chart default
-          # sets requests only, and the floor rejected the whole StatefulSet on it (#234).
+          # sets requests only, and require-resource-limits rejected the whole StatefulSet on it (#234).
           prometheusConfigReloader:
             resources:
               requests: { cpu: 50m, memory: 64Mi }

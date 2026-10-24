@@ -1,6 +1,6 @@
-# ABOUTME: Render gate for the Kyverno resource-limits floor: every container of every workload that any
-# ABOUTME: Helm or kustomize Application ships must carry CPU and memory limits, or Enforce denies it.
-# SUITE: e2e (needs helm and kubectl: the floor is judged on the rendered manifests)
+# ABOUTME: Render gate for Kyverno's require-resource-limits policy: every container of every workload
+# ABOUTME: that any Helm or kustomize Application ships must carry CPU and memory limits, or Enforce denies it.
+# SUITE: e2e (needs helm and kubectl: the policy is judged on the rendered manifests)
 #
 # Why. require-resource-limits is Enforce on the full profile from bootstrap. Three times on 2026-09-06 a
 # chart shipped a container without limits and the whole app was denied: Prometheus (operator, exporters,

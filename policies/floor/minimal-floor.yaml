@@ -1,7 +1,17 @@
 # ABOUTME: Minimal restriction floor so no cluster dies from one trivial prompt.
 # ABOUTME: Protects platform namespaces + ArgoCD/Kyverno/Falco/the agent from deletion; demo
-# ABOUTME: workloads stay deletable (the visible gradual burn). Cluster 1's ONLY restriction; a
-# ABOUTME: safety floor everywhere, incl. the instructor follow-along clusters.
+# ABOUTME: workloads stay deletable (the visible gradual burn). Ships on attendee, full and admin; the
+# ABOUTME: burn cluster (Cluster 1) has no floor at all, its selector includes neither kyverno nor this.
+#
+# Which namespace holds what (#477). Falco runs in `security` (gitops/apps/falco.yaml), and `falco` holds
+# only Talon. BurritoBot and the console run in `agent` (gitops/apps/ai-layer.yaml). The Datadog operator
+# and agent run in `datadog`. All three are on the namespace list.
+#
+# Workloads are protected in every platform namespace EXCEPT `agent`. The lab has the student's terminal
+# delete a Deployment there (Challenge 2's `kubectl -n agent delete deploy promo-mascot`, the villain they
+# talked BurritoBot into creating), and that cleanup must keep working. What Argo CD owns in `agent`
+# (guard-proxy, the console, the MCP servers) is already refused to everyone but Argo CD by
+# block-argocd-drift, which is also the policy the lab's "Try breaking a guardrail" step names.
 #
 # Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206).
 # The ClusterPolicy's two rules are the two validations below, each with its original message, so a
@@ -36,6 +46,9 @@ spec:
           - falco
           - monitoring
           - kagent
+          - agent
+          - security
+          - datadog
       - apiGroups: ["apps"]
         apiVersions: ["v1"]
         operations: ["DELETE"]
@@ -47,7 +60,8 @@ spec:
     - name: namespace-or-platform-workload
       expression: >-
         request.resource.resource == 'namespaces' ||
-        request.namespace in ['argocd', 'kyverno', 'falco', 'monitoring', 'kagent', 'kube-system']
+        request.namespace in ['argocd', 'kyverno', 'falco', 'security', 'monitoring', 'kagent', 'datadog',
+        'kube-system']
   variables:
     - name: isNamespace
       expression: "request.resource.resource == 'namespaces'"
@@ -61,10 +75,15 @@ spec:
     # same intent applied consistently rather than a hole in the floor.
     # The student-facing guardrail is untouched: a human at the terminal is not this subject,
     # and every other principal is still denied.
+    #
+    # The Datadog operator, not Argo CD, creates the agent DaemonSet and the cluster-agent Deployment in
+    # ns datadog from the DatadogAgent CR, and it deletes and recreates them when a component is turned
+    # off or a selector changes. Same reasoning as Argo CD: the owner of the workload may replace it.
     - name: platformController
       expression: >-
         'system:serviceaccounts:kube-system' in request.userInfo.?groups.orValue([]) ||
-        request.userInfo.username == 'system:serviceaccount:argocd:argocd-application-controller'
+        request.userInfo.username == 'system:serviceaccount:argocd:argocd-application-controller' ||
+        request.userInfo.username == 'system:serviceaccount:datadog:datadog-operator'
   validations:
     - expression: "!variables.isNamespace"
       message: "Protected platform namespace; deletion is not permitted (workshop floor)."
