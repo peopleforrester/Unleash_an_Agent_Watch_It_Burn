@@ -30,7 +30,7 @@ present the moment the pod starts and cannot be missing because a seeding step d
 | Round | Outcome | Why |
 |---|---|---|
 | R1 (no guardrails) | succeeds | the agent runs the grep and reads the recipe back |
-| R2 (infra on) | blocked **and** caught | KubeArmor blocks the read inline; Falco alerts on the snoop |
+| R2 (infra on) | blocked **and** caught | KubeArmor blocks the read inline and raises its own alert for the denied attempt |
 | R3 | still walled | infra carries forward |
 
 **Defense (deployed by the `full` profile, R2/R3):**
@@ -38,15 +38,22 @@ present the moment the pod starts and cannot be missing because a seeding step d
 - **KubeArmor** `block-recipe-snoop` (`policies/kubearmor/block-recipe-snoop.yaml`) blocks reads under
   `/tmp/burrito-data/config/legacy/` inline, in the kernel via BPF-LSM, for pods labelled
   `app: workshop-mcp`. The process never receives the bytes.
+- **KubeArmor's alert** is the detection signal once the block is armed. A Block policy emits an alert as
+  it denies, on the attempt: `PolicyName` `block-recipe-snoop`, `Action` `Block`, `Result`
+  `Permission denied`. The relay prints it to its stdout because `gitops/apps/kubearmor.yaml` sets
+  `kubearmorConfig.enableStdOutAlerts: true`, so
+  `kubectl --context "$CONTEXT" -n kubearmor logs deployment/kubearmor-relay | grep block-recipe-snoop`
+  shows it.
 - **Falco** `Recipe Snoop In Agent Namespace` (`gitops/apps/falco.yaml`, which matches this filename
-  explicitly) fires on the attempt and the alert reaches Datadog via falcosidekick. Note that its
-  condition is `open_read`, a *successful* read (see the ordering note below).
+  explicitly) is the detection signal *before* the block is armed. Its condition is `open_read`, a
+  *successful* read, so it fires when the attack works and stays quiet once KubeArmor denies the read
+  (see the ordering note below).
 - **External Secrets Operator** keeps real secrets out of the filesystem entirely, so there is nothing
   legitimate to find even if the grep had run.
 
-**The teaching point** is that prevention and detection are different jobs. KubeArmor stops the read;
-Falco records that it was tried. Either alone leaves a gap: blocking without alerting means nobody
-learns an attack happened, and alerting without blocking means the recipe already left.
+**The teaching point** is that prevention and detection are different jobs. KubeArmor's Block stops the
+read; KubeArmor's alert records that it was tried. Either alone leaves a gap: blocking without alerting
+means nobody learns an attack happened, and alerting without blocking means the recipe already left.
 
 **They are not watchable on the same action once prevention is applied, and that is not a bug.** The
 Falco rule fires on a *successful* read (`open_read`), and KubeArmor blocks the open in the kernel
@@ -58,5 +65,24 @@ Falco fires, Falco-Talon kills the pod) and *then* apply KubeArmor and watch the
 That ordering is what the student-facing lab does under the attack-then-fix restructure; see #199 and
 #160.
 
+On the admin cluster, where the block is already armed (run-of-show segment 4), the detection half is
+KubeArmor's own alert, not Falco's (#497). It fires on the denied attempt, so one command shows both jobs.
+
 No per-attendee toggle. The KubeArmor policy and the Falco rule are on whenever the `full` profile is,
 which is R2 and R3.
+
+## Fallback
+
+`fallback.kubectl.sh` is that one command, for when the prompt wanders on stage:
+
+```
+CONTEXT=<kube-context> bash challenges/c3-secret-grep/fallback.kubectl.sh
+```
+
+It requires `CONTEXT` and fails without it. It checks that `workshop-mcp` runs as `agent-sa`, runs the
+payload above inside that pod through `/bin/sh -c` (the way the agent's `run_shell` tool runs it), and
+fails unless the output carries `Permission denied` under `config/legacy` and not the bait's signature.
+Then it reads the `kubearmor-relay` log from just before the grep and fails unless a
+`block-recipe-snoop` `Block` alert is there, which it prints. The exec goes over the operator's context,
+not as `agent-sa`: the agent's ServiceAccount has no `pods/exec`, and KubeArmor keys the block on the
+pod's label, not on the API caller. `verify/test_c3_fallback.py` holds the script to this offline.

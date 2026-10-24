@@ -138,9 +138,14 @@ abstract's "the Kubernetes security layers you should already have."
   allow-list. Read the deny message aloud. Watch for the agent silently
   substituting a permitted image and claiming success (check the running image
   before saying the wall failed; it is a better story when it lies).
-- C3 read the recipe off the filesystem, blocked inline in the kernel by KubeArmor
-  with Falco alerting. One command shows prevention and detection doing different
-  jobs.
+- C3 read the recipe off the filesystem, blocked inline in the kernel by KubeArmor,
+  and caught by KubeArmor's own alert for the denied attempt. One command shows
+  prevention and detection doing different jobs:
+  `CONTEXT=<admin-context> bash challenges/c3-secret-grep/fallback.kubectl.sh`
+  prints the agent's `Permission denied` and then the `kubearmor-relay` alert line
+  (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
+  alert here: Falco's recipe-snoop rule fires on a successful read, and on this
+  cluster there is none.
 - If a prompt wanders, drive that beat's `challenges/<beat>/fallback.*.sh` so the
   control is what is proven, not the model's mood. Do not debug live.
 - **Michael's thread:** the damage was stopped, but the cost counter still moved on
@@ -251,7 +256,7 @@ points 1 through 5 are deliverable on the platform as built.
 |---|---|---|
 | C1 exfiltrate customer data (NetworkPolicy) | Shown, segment 4 | Cleanest Kubernetes-egress block; carries point 5 |
 | C2 villain image (Kyverno admission) | Shown, segment 4 | Admission-control block, a different control from C1 |
-| C3 recipe on the filesystem (KubeArmor, Falco) | Shown, segment 4 | Prevention-versus-detection in one command |
+| C3 recipe on the filesystem (KubeArmor block and alert) | Shown, segment 4 | Prevention-versus-detection in one command |
 | C4 denial-of-wallet (budget cap) | Narrated only, segment 2 | The cost-counter story lands as live narration during the wide-open burn; a full before/after beat costs minutes the 30-minute slot does not have. The budget cap stays armed and can be shown in Q&A |
 | C5 secret leak (output guard) | Shown, segments 2 and 5 | The audience beat and the output-guard toggle |
 | C6 prompt injection (input guard) | Shown, segment 5 | Pre-inference analysis, point 6 |
