@@ -83,6 +83,17 @@ infra/terraform/fleet/fleet.sh monitors --check              # the org holds exa
       window, so re-run with a corrected `--session` if the timing moves.
 
 ```bash
+# d3) the shared ops view (#308): per cluster, who claimed it, is it up, which challenges it has done.
+infra/terraform/fleet/fleet.sh ops                 # one-shot: exit 0 means every source was read
+infra/terraform/fleet/fleet.sh ops --watch 30      # during the session, on the instructor screen
+```
+
+- [ ] The one-shot run printed no `UNAVAILABLE` line. If one appears, the named source's cells read `?`;
+      fix the credential it names before the doors open.
+- [ ] Open `infra/terraform/fleet/logs/ops-view.html` on a presenter's screen, never the projector: it
+      names attendees by email.
+
+```bash
 # e) standing hygiene: advisories, pinned versions, orphaned AWS resources, slot-id leaks
 WIB_PROBE_EMAIL=<an address that already holds a claim> verify/fleet-hygiene.sh
 ```

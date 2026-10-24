@@ -459,6 +459,13 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       default; --apply validates every monitor with Datadog before writing any;
                       --check compares the live org with the repo. Run --apply once per event, after
                       the Datadog pool is loaded, with the session window in UTC.
+    ops [terms...] [--watch S] [--json]
+                      The shared ops view (#308): per cluster, who claimed it (provisioning), whether its
+                      console answers (apex table + /cost) and which challenges it has done (the
+                      leaderboard's queries in the instructor org). Read-only. Writes logs/ops-view.html
+                      (WIB_OPS_HTML to place it); terms filter by cluster, host or email. Names attendees:
+                      never on the projector.
+    hosts             The name table the ops view joins on: name, public host, kind. Offline.
 
     SELECTORS (every verb takes them): attendees | attendees:<n> | instructors | presenters |
                       <owner> (michael, whitney: their admin cluster) | all | names.
@@ -3993,6 +4000,40 @@ for x in acts:
     done
 }
 
+# The name table the ops view joins on (#308), as name<TAB>public host<TAB>kind: every roster cluster, then
+# every attendee slot the name grid covers. Claims and Datadog know a cluster by name and the apex routing
+# table knows it by host, so something has to say which is which, and public_host_for is the only thing
+# entitled to: a second copy of the grid in the ops view is the two-namers failure of #265 and #272.
+# Read-only and offline: no account, no cluster, no network.
+cmd_hosts() {
+    local entry name kind i total=$(( ${#WIB_ADJECTIVES[@]} * ${#WIB_ANIMALS[@]} ))
+    for entry in "${INSTRUCTORS[@]}"; do
+        name="${entry%%|*}"
+        if is_presenter_name "${name}"; then kind="presenter"; else kind="community"; fi
+        printf '%s\t%s\t%s\n' "${name}" "$(public_host_for "${name}")" "${kind}"
+    done
+    for (( i = 1; i <= total; i++ )); do
+        printf -v name '%s-%03d' "${NAME_PREFIX}" "${i}"
+        printf '%s\t%s\tattendee\n' "${name}" "$(public_host_for "${name}")"
+    done
+}
+
+# The shared ops view (#308): claims from provisioning, liveness from the apex table and each console, and
+# progress from the instructor org, one row per cluster. This resolves the one credential the operator would
+# otherwise have to fetch by hand (the provisioning admin token) and passes the account and region explicitly
+# (AGENTS.md rule 6); infra/ops-view/ops_view.py does the reading and the join.
+cmd_ops() {
+    local tok hosts="${LOG_DIR}/ops-hosts.tsv"
+    tok="$(resolve_admin_token)" \
+        || { log "ops: cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
+    mkdir -p "${LOG_DIR}"
+    cmd_hosts >"${hosts}"
+    WIB_ADMIN_TOKEN="${tok}" exec python3 "${INFRA_DIR}/ops-view/ops_view.py" \
+        --hosts "${hosts}" --provisioning-url "${WIB_PROVISIONING_URL}" \
+        --profile "${WIB_DEFAULT_ACCOUNT}" --region "${WIB_REGION}" \
+        --html "${WIB_OPS_HTML:-${LOG_DIR}/ops-view.html}" "$@"
+}
+
 main() {
     local cmd="${1:-}"; shift || true
     load_roster   # populate INSTRUCTORS for every command (routes/reap/hints), not just cmd_instructors
@@ -4004,6 +4045,8 @@ main() {
         monitors) exec python3 "${INFRA_DIR}/datadog-fleet/fleet_monitors.py" \
             --profile "${WIB_DEFAULT_ACCOUNT}" --region "${WIB_REGION}" "$@" ;;
         routes) cmd_routes "$@" ;;
+        ops) cmd_ops "$@" ;;
+        hosts) cmd_hosts ;;
         preflight) exec "${SCRIPT_DIR}/preflight.sh" "$@" ;;
         check-tls) exec "${SCRIPT_DIR}/check-tls.sh" "$@" ;;
         up-fleet) cmd_up_fleet "$@" ;;
