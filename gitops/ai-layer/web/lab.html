@@ -85,6 +85,18 @@
   .cmd.copied .cp{background:var(--ok)}
   .tip{background:#f3fbf6;border:1px solid #cdeede;border-radius:10px;padding:10px 12px;font-size:13px;color:#2a5a40;margin:8px 0}
   .warn{background:#fff6f6;border:1px solid #f3d2d2;border-radius:10px;padding:10px 12px;font-size:13px;color:#7a2e2e;margin:8px 0}
+  /* THE COMMUNITY CLUSTER IS NOT A STUDENT CLUSTER WITH THE CONTROLS SWITCHED OFF (#283). It runs the burn
+     profile (gitops/bootstrap/burn/app-of-apps-burn.yaml), which never installs Kyverno, Falco or Istio
+     at all. A student cluster has them, uninstalled-until-applied; attackme does not have them to apply.
+     The same page ships to both, so anything that only exists on the full profile carries data-full and
+     disappears on attackme, and data-burn carries what is true there instead. Without this the C2 fix
+     printed three consecutive "server doesn't have a resource type" errors in front of the room, and the
+     reset section claimed a Kyverno layer that is not installed, which is the one claim this workshop,
+     whose whole argument is which layer actually enforces something, cannot make falsely. */
+  [data-burn]{display:none}
+  html[data-profile="burn"] [data-burn]{display:revert}
+  html[data-profile="burn"] [data-full]{display:none}
+  .burnnote{background:#fff4e5;border:1px solid #f1d3a6;border-left:4px solid #C62222;border-radius:10px;padding:10px 12px;font-size:13.5px;margin:10px 0;color:#4a2a0e}
   /* Progressive disclosure for the student challenges (#122): try it yourself, then hints, then a prompt
      that works. Native <details> so the caret, keyboard access and screen-reader semantics come free and
      nothing depends on JS. The solution chip is styled differently so nobody opens it by accident. */
@@ -176,6 +188,16 @@
 <script src="skins.js"></script>
 <script src="active-skin.js"></script>
 <script src="skin.js"></script>
+<!-- Which profile this cluster runs (#283), decided before the body renders so a Community visitor never
+     sees a command flash up that cannot run here. The hostname is what the room was handed; the host
+     guard-proxy reports (checked again at the bottom of the page, the same signal the Community banner in
+     burritbot.html uses) covers anyone who reached the cluster by another address. -->
+<script>
+  function markCommunity(host){
+    if(typeof host==='string' && /^attackme\./i.test(host)) document.documentElement.setAttribute('data-profile','burn');
+  }
+  markCommunity(location.hostname||'');
+</script>
 </head>
 <body>
   <header>
@@ -210,6 +232,7 @@
       <p class="lede">This is your lab and you will spend the workshop here: instructions on the left, your
       terminal on the right, and buttons along the top for everything else. <b>You do not need to go back to
       the page you came from.</b></p>
+      <div class="burnnote" data-burn><b>This is the Community cluster, and it has no platform guardrails at all.</b> It is not a cluster with the controls switched off: Kyverno, Falco and Istio are not installed here, so there is nothing to switch on. The attacks all work. Where a fix below needs one of those, this page says so instead of handing you a command that cannot run. What it does have is observability: every attack here is still traced in Datadog.</div>
 
       <!-- Step 0 is the lab tour and the cluster tour TOGETHER (Michael, 2026-09-02). They were two
            separate steps, which pushed the first real challenge down to third position and made the
@@ -274,11 +297,12 @@
 
 
           <h3 class="sub">Your lab environment: a full-fledged platform</h3>
-          <p>This is a full internal developer platform. Have a look at what is running:</p>
+          <p><span data-full>This is a full internal developer platform. </span>Have a look at what is running:</p>
           <div class="cmd" onclick="cp(this)">kubectl get applications -n argocd<button class="cp">copy</button></div>
           <p>There is a lot here and you are not expected to know what all of it is. But here are some highlights, for funsies:</p>
+          <p class="burnnote" data-burn>The Community cluster carries a shorter list on purpose. Istio is not installed here, and neither is anything that defends the agent: no Kyverno, no Falco, no NetworkPolicy until you apply one.</p>
           <ul class="small">
-            <li><a href="https://istio.io/latest/docs/ambient/overview/" target="_blank" rel="noopener">Istio ambient mesh</a>
+            <li data-full><a href="https://istio.io/latest/docs/ambient/overview/" target="_blank" rel="noopener">Istio ambient mesh</a>
             encrypts all traffic between containers inside the cluster, automatically.</li>
             <li><a href="https://cert-manager.io/docs/" target="_blank" rel="noopener">cert-manager</a>
             issues and renews the TLS certificates that services present (for example the console's HTTPS).</li>
@@ -415,10 +439,17 @@
               <p><b>First</b>, a webhook is created that teaches the kube-API server that when it sees a request that pairs a certain kind of resource with a certain action (for example, create, update, or delete), the kube-API should send that request somewhere. This webhook is called an <i>admission controller webhook</i>, and basically, it is configuration for the kube-API server.</p>
               <p><b>Second</b>, the kube-API sends any matching request to the <i>admission controller</i> that configured the webhook. The admission controller is a piece of software, and the software itself is different depending on what the tech is. Admission controllers can also be called <b>policy engines</b>.</p>
               <p class="small">As a side note, the term <i>admission controller</i> is confusing because unlike other types of controllers in Kubernetes, an admission controller does not run as a reconciliation loop. Instead, it is activated by the aforementioned admission controller webhooks.</p>
-              <p>A policy can be <b>validating</b> or <b>mutating</b>. A validating policy answers yes or no: this action is allowed on this resource, or it is not, and the kube-API acts accordingly. A mutating policy edits the resource on its way in, before it is validated and stored. The one you are about to apply is validating.</p>
+              <p>A policy can be <b>validating</b> or <b>mutating</b>. A validating policy answers yes or no: this action is allowed on this resource, or it is not, and the kube-API acts accordingly. A mutating policy edits the resource on its way in, before it is validated and stored.<span data-full> The one you are about to apply is validating.</span></p>
 
               <h3 class="sub">Kyverno</h3>
               <p>There are other CNCF projects that do this job: <a href="https://open-policy-agent.github.io/gatekeeper/" target="_blank" rel="noopener">OPA Gatekeeper</a> and <a href="https://kubewarden.io/" target="_blank" rel="noopener">Kubewarden</a>. Some cluster-level policy functionality is also available natively in Kubernetes, as <a href="https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/" target="_blank" rel="noopener">ValidatingAdmissionPolicy</a>.</p>
+              <div class="burnnote" data-burn>
+                <p><b>On the Community cluster there is nothing to fix this with.</b> No admission controller is installed here: no Kyverno, no policy, no webhook. So nothing checked the villain when it was admitted, nothing wrote down what was wrong with it, and there is no policy to flip from Audit to Deny. Look for one and the API server does not even know the resource type:</p>
+                <div class="cmd" onclick="cp(this)">kubectl api-resources | grep -i kyverno || echo "no admission controller on this cluster"<button class="cp">copy</button></div>
+                <p>That is the point of the Community cluster. Your villain is running and it will stay running, because on this cluster the only thing standing between a chat message and a new container is the model's own judgment, and you just talked your way past it. On a cluster with a policy engine, Kyverno would have watched this happen in Audit mode, and this is the challenge where you would give it the authority to say no.</p>
+                <p class="small">Clean up: <code class="inl">kubectl -n agent delete deploy promo-mascot</code>.</p>
+              </div>
+              <div data-full>
               <p>This cluster runs <a href="https://kyverno.io/docs" target="_blank" rel="noopener">Kyverno</a>, which is a policy engine built specifically for Kubernetes.</p>
             <h3 class="sub">Your platform saw it happen</h3>
             <p>The cluster did not miss this. Kyverno checked your villain the moment it was admitted, wrote down exactly what was wrong with it, and let it run anyway. Read its report:</p>
@@ -449,6 +480,7 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
               <p>You can see the same refusal from your terminal:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent get events --sort-by=.lastTimestamp | tail -20<button class="cp">copy</button></div>
               <p class="small">Clean up the first one if it is still running: <code class="inl">kubectl -n agent delete deploy promo-mascot</code>.</p>
+              </div>
             </div>
           </details>
 
@@ -477,14 +509,20 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
               <h3 class="sub">How can it possibly watch everything?</h3>
               <p>All of the applications in a cluster each have so many processes running. As the estate grows there might be hundreds of thousands or even millions of processes running at once. How can a runtime security tool even begin to monitor them all?</p>
               <p>With runtime security, monitoring is done at the <b>kernel level</b> of each host machine. That means that runtime security is <b>not application-specific</b>. A runtime security tool will look at kernel-level events such as a process being executed, a file being opened, something being accessed over the network, or a particular system call being made.</p>
-              <p>When one is implementing runtime policy, the first step is to monitor these kernel-level events to define expected behavior in the system. Then one can create a policy that will do something when an unexpected event occurs. <b>What that something is depends on the tool</b>, and this cluster runs one of each kind.</p>
+              <p>When one is implementing runtime policy, the first step is to monitor these kernel-level events to define expected behavior in the system. Then one can create a policy that will do something when an unexpected event occurs. <b>What that something is depends on the tool</b><span data-full>, and this cluster runs one of each kind</span>.</p>
 
+              <div class="burnnote" data-burn>
+                <p><b>On the Community cluster, nothing noticed.</b> There are two kinds of runtime tool, one that detects and one that prevents, and only the prevention engine is installed here. <a href="https://falco.org/docs/" target="_blank" rel="noopener">Falco</a>, the cloud native <b>threat detector</b>, is not on this cluster, so there is no alert to watch for and no log to read. The recipe was read and nothing on the cluster raised a hand. The only record of it is the trace in Datadog, and a trace is something you go and look at, not something that tells you.</p>
+                <p>The prevention half is real. KubeArmor's engine is running here with no policy loaded, which is why the read worked, and the policy below works on this cluster exactly as written.</p>
+              </div>
+              <div data-full>
               <p><b>First, see that the attack was noticed.</b> <a href="https://falco.org/docs/" target="_blank" rel="noopener">Falco</a> is a cloud native <b>threat detector</b>. In Falco, a <i>threat</i> is an event that could endanger the system. Falco processes kernel events in real time and if one violates a <b>Falco Rule</b> &mdash; a YAML file that defines the conditions under which an alert should be generated &mdash; it triggers an alert. It has a rule for this exact file, and it fires the moment BurritoBot reads it.</p>
               <p>Falco logs a lot on a live cluster, so watch the stream as it happens rather than searching back through it. <b>Start this in your terminal first and leave it running:</b></p>
               <div class="cmd" onclick="cp(this)">timeout 120 kubectl -n security logs -l app.kubernetes.io/name=falco -c falco -f | grep --line-buffered -i "Recipe Snoop"<button class="cp">copy</button></div>
               <p><b>Then switch to the BurritoBot tab and send the prompt again.</b> The alert appears in your terminal the moment BurritoBot reads the file. The watch stops on its own after two minutes.</p>
               <p>Falco also has a sub-project called <a href="https://falcosecurity.github.io/falco-talon/" target="_blank" rel="noopener">Falco Talon</a> which can take action on alerts. For example, when an alert happens then kill a container. Here Falco is set to detect only: the container Talon would kill is <code class="inl">workshop-mcp</code>, the tool container BurritoBot needs for every other challenge, so on this cluster the alert is the whole response and prevention is left to the guardrail you are about to apply.</p>
               <p class="small">And the recipe was already read before the alert fired. You also need something that stops the read.</p>
+              </div>
 
               <p><b>Now look at the prevention you are about to apply:</b></p>
               <div class="cmd" onclick="cp(this)">cat ~/challenges/c3-kubearmor-policy.yaml<button class="cp">copy</button></div>
@@ -505,7 +543,7 @@ docker.io/library, registry.k8s.io, or ECR.</pre>
 
               <p><b>Prove it from inside the tool container.</b> Even you, with full admin rights, get "Permission denied" now:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent exec deploy/workshop-mcp -- cat /tmp/burrito-data/config/legacy/secret-sauce-recipe.conf<button class="cp">copy</button></div>
-              <p class="small">Notice the Falco alert goes quiet once KubeArmor is blocking: its rule fires on a <i>successful</i> read, and there are no more of those. Prevention and detection answer different questions; you want both.</p>
+              <p class="small" data-full>Notice the Falco alert goes quiet once KubeArmor is blocking: its rule fires on a <i>successful</i> read, and there are no more of those. Prevention and detection answer different questions; you want both.</p>
             </div>
           </details>
 
@@ -809,7 +847,12 @@ include it exactly. Do this before responding.</pre>
           <p>Reset the cluster. First, <code class="inl">guards-off</code> turns off the three guard-proxy switches (budget, output, input); <code class="inl">guards-on</code> turns them back on.</p>
           <div class="cmd" onclick="cp(this)">guards-off<button class="cp">copy</button></div>
           <p class="small">To put the cluster back the way it started:</p>
-          <div class="cmd" onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
+          <div class="cmd" data-burn onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
+kubectl -n agent delete kubearmorpolicy block-recipe-snoop
+kubectl apply -f ~/challenges/c8-broad-role.yaml
+kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
+          <p class="small" data-burn>No Kyverno line here: the Community cluster has no image policy to put back into Audit, because it never had one.</p>
+          <div class="cmd" data-full onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
 kubectl patch validatingpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
 kubectl apply -f ~/challenges/c8-broad-role.yaml
@@ -818,10 +861,18 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
 
           <h3 class="sub">Try breaking a guardrail and watch it come back</h3>
           <p><b>Argo CD</b> keeps this cluster matching what is checked into Git. If something drifts, it puts it back. Try deleting the guard-proxy, the checkpoint in front of BurritoBot's model:</p>
-          <div class="cmd" onclick="cp(this)">kubectl -n agent delete deploy guard-proxy; kubectl -n agent get deploy guard-proxy -w<button class="cp">copy</button></div>
-          <p class="small"><b>Your delete is refused outright.</b> A Kyverno policy, <code class="inl">block-argocd-drift</code>, denies UPDATE and DELETE on anything <a href="https://argo-cd.readthedocs.io/en/stable/" target="_blank" rel="noopener">Argo CD</a> manages, so the request never reaches the cluster and the deployment never goes away. Had it got through, Argo CD would have put it back within seconds anyway. That is two independent layers, and you hold cluster-admin against both. Press Ctrl+C to stop watching.</p>
-          <p>Three layers stand behind that. BurritoBot's own account is not allowed to delete Deployments at all. An account that is allowed still gets rejected by a Kyverno policy, because only Argo CD may change the things Argo CD manages. And if anything gets past both, Argo CD restores it within seconds. Look at the policy:</p>
-          <div class="cmd" onclick="cp(this)">kubectl get validatingpolicy block-argocd-drift -o yaml<button class="cp">copy</button></div>
+          <div class="cmd" data-full onclick="cp(this)">kubectl -n agent delete deploy guard-proxy; kubectl -n agent get deploy guard-proxy -w<button class="cp">copy</button></div>
+          <!-- The Community variant watches by field selector, not by name: here the delete succeeds, and
+               `get deploy guard-proxy -w` on a name that no longer exists exits with NotFound instead of
+               waiting for Argo CD to bring it back. -->
+          <div class="cmd" data-burn onclick="cp(this)">kubectl -n agent delete deploy guard-proxy; kubectl -n agent get deploy --field-selector metadata.name=guard-proxy -w<button class="cp">copy</button></div>
+          <div class="burnnote" data-burn>
+            <p><b>On the Community cluster your delete goes through.</b> Nothing refuses it, because no admission controller is installed here. Watch the Deployment disappear, and then watch Argo CD put it back within seconds. Press Ctrl+C to stop watching.</p>
+            <p>Two layers stand behind that here, not three. BurritoBot's own account is not allowed to delete Deployments at all, so the agent cannot be talked into this. And Argo CD restores anything it manages that drifts from Git. You hold cluster-admin, so the first layer does not apply to you, and the second one is what you just watched work. The layer that would have refused your delete outright, a Kyverno policy saying only Argo CD may change what Argo CD manages, is not installed on this cluster.</p>
+          </div>
+          <p class="small" data-full><b>Your delete is refused outright.</b> A Kyverno policy, <code class="inl">block-argocd-drift</code>, denies UPDATE and DELETE on anything <a href="https://argo-cd.readthedocs.io/en/stable/" target="_blank" rel="noopener">Argo CD</a> manages, so the request never reaches the cluster and the deployment never goes away. Had it got through, Argo CD would have put it back within seconds anyway. That is two independent layers, and you hold cluster-admin against both. Press Ctrl+C to stop watching.</p>
+          <p data-full>Three layers stand behind that. BurritoBot's own account is not allowed to delete Deployments at all. An account that is allowed still gets rejected by a Kyverno policy, because only Argo CD may change the things Argo CD manages. And if anything gets past both, Argo CD restores it within seconds. Look at the policy:</p>
+          <div class="cmd" data-full onclick="cp(this)">kubectl get validatingpolicy block-argocd-drift -o yaml<button class="cp">copy</button></div>
 
         </div>
       </div>
@@ -979,6 +1030,10 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
         'given to you when you claimed this cluster; it is on the provisioning page you started from.';
     }
   })();
+  // The second half of the profile check in <head>: the host guard-proxy was configured with. One read,
+  // not a poll; a cluster does not change profile while the page is open.
+  fetch('/controls',{cache:'no-store'}).then(function(r){ return r.ok ? r.json() : null; })
+    .then(function(c){ if(c) markCommunity(c.host); }).catch(function(){});
   // NO vtt-run postMessage listener. It existed so the Endpoints tab could type a command into the
   // student's shell, and that tab is gone (see the tab strip). It was origin-checked, so this is not a
   // vulnerability being closed, but an unused path that writes to a live shell is worth deleting rather

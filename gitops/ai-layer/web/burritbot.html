@@ -445,6 +445,7 @@
     // clusters would be worse than none at all.
     var ban=document.getElementById('communitybanner');
     if(ban){ ban.hidden = !(c && typeof c.host === 'string' && /^attackme\./.test(c.host)); }
+    var community = !!(ban && !ban.hidden);
     var strip=document.getElementById('badges'); if(!strip) return;
     var ai    = (c && c.ai)    ? c.ai    : (c || {});
     var infra = (c && c.infra) ? c.infra : {};
@@ -456,6 +457,10 @@
       // the empty start Whitney asked for (#211). It is the detection half of the C3 pair, so it appears
       // WITH KubeArmor (the prevention half the student installs), never alone.
       if(bd.pairWith) on = infra[bd.pairWith]===true;
+      // Except where Falco does not exist. The community cluster runs the burn profile, which installs
+      // no Falco at all (#283), but guard-proxy reports falco:true unconditionally, so applying the C3
+      // KubeArmor policy there would light a detection badge for a detector that is not on the cluster.
+      if(bd.key==='falco' && community) on = false;
       if(!on) return;                          // absent-until-installed
       shown++;
       var el=document.createElement('span');
