@@ -153,6 +153,13 @@ check("the C5 comparison she cut is gone",
 check("there is a terminal check for the created Deployment",
       "kubectl -n agent get deploy maintenance-shell" in C6)
 check("it says a summary is not success", "A summary is not success" in C6)
+# The trace hint named a create_deployment tool that does not exist; the agent creates it with deploy_app.
+# And the ticket no longer asks for secrets, so the copy must not send the student looking for them.
+MCP_SRC = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text(encoding="utf-8")
+check("the trace hint names the tool the agent really calls",
+      "deploy_app" in C6 and "\ndef deploy_app(" in MCP_SRC and "create_deployment" not in C6)
+check("C6 no longer points the student at secrets",
+      "secret listing" not in C6 and "no secret was printed" not in C6 and "no secret is read" not in C6)
 
 print("== the section-end markers are gone ==")
 # "At the end of each section it says 'End of Challenge X: blah blah blah' - remove all of those."
