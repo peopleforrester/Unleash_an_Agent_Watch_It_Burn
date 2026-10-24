@@ -2541,3 +2541,29 @@ cluster's own controller, as agent-sa, so a run on an attendee cluster shows the
   which raises `TypeError` (env given twice), so the suite stopped right after its prerequisites and never reached a
   pod. `container()` now takes the env list itself as well as a dict of literals.
 - **Not yet run on a cluster.** No attendee cluster was up for this run; the next build runs it with CONTEXT set.
+## 2026-10-24 · #480 · The #117 rug-pull spike: tool-pin, an ExtMCP processor on its own gateway bind, kept off the deployed path
+
+**What was built.** `images/tool-pin/tool_pin.py` is an agentgateway ExtMCP gRPC server. It hashes each
+tool's name, description and inputSchema on the `tools/list` response and strips (default) or denies the
+tools not in a pinned baseline. It refuses a `tools/call` for any tool the last list did not approve. The
+spike, its runbook and its measurements are in `docs/research/2026-10-24-tool-pin-spike/`.
+
+**Nothing deployed changes.** No Argo CD source references the spike, and `verify/test_tool_pin.py` fails
+if a `gitops/` manifest names tool-pin or bind 3003. The bind is rendered from the committed gateway config
+by `gateway_bind.py` and applied by hand in `live-check.sh`. Portland's C7 stays on `toolNames`.
+
+- **New dependency: grpcio 1.84.1** (PyPI, released 2026-10-22, the current release on 2026-10-24), only in
+  the new `images/tool-pin` image. A gRPC server needs HTTP/2 with trailers; nothing in the workshop-mcp
+  image provides that, and writing HTTP/2 plus HPACK by hand is not a spike's job. protobuf and generated
+  stubs are deliberately not added: the five messages are encoded by hand from `ext_mcp.proto` at the
+  v1.5.0 tag, which keeps the offline suite on stdlib plus PyYAML.
+- **Its own bind (3003), one target.** Measured on the local bed with the v1.5.0 binary: the tool names
+  stay unprefixed, a dead processor refuses only that bind, and a bad config reload keeps the old config
+  serving. A bad config at startup exits 1, so a separate bind does not contain a config typo after a restart.
+- **The `tools/call` phase was added because the bed showed it was needed.** A call to the stripped
+  `get_weather` was forwarded and answered. v1.5.0 returns that request-phase deny as JSON-RPC `-32001`,
+  not the `isError` tool result the "latest" docs describe.
+- **The validator moved** from `test_agentgateway_config.py` into `verify/agentgateway_schema.py` so the
+  spike's bind is checked by the same code; the committed config's checks are unchanged.
+- **Open:** the live kagent check (`live-check.sh`, not yet run; no cluster in this run) and the badge
+  decision, recommended in the spike README as "the badge reads the pin's wiring, not its verdicts".

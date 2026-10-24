@@ -142,6 +142,12 @@ What it costs, for the Barcelona design:
 - the same ArgoCD-scope and blast-radius questions as section 2, which a dedicated bind or instance
   answers.
 
+**Spiked in #480** (`2026-10-24-tool-pin-spike/README.md`). The processor works against the v1.5.0
+binary on a local bed: it strips or denies a rug-pulled `get_weather`, and on its own bind it fails closed
+without affecting the other binds. The bed also settled two of section 2's unknowns. The binary watches
+its config file, and it keeps the last good config when a reload is bad. It still exits on a bad config
+at startup. kagent's side is read from source and has not yet been checked live.
+
 ## Not changed by this evaluation
 
 - No manifest behaviour changed. The commit fixes four comments that stated the old routing: the
