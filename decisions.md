@@ -2122,3 +2122,17 @@ unchanged, and it still runs the tier tests during a cluster build, since they k
   10 s, the offline suite ran 140 tests green, and all 12 tier tests passed. Run one by one, the tier tests
   took about 6 minutes; test_iam_policy_structural (about 100 s) and test_terraform_lock_init (about 70 s)
   are the slowest.
+## 2026-10-24 · dev dependency · otelcol-contrib 0.160.0 for the E2E suite (#150)
+
+`verify/test_lab_pipeline_collector.py` runs the real collector binary, otelcol-contrib **0.160.0**: the
+`appVersion` of the opentelemetry-collector chart 0.173.1 that both collector Applications pin. It comes
+from the release tarball (github.com/open-telemetry/opentelemetry-collector-releases, v0.160.0,
+`otelcol-contrib_0.160.0_linux_amd64.tar.gz`, sha256 7bb60c58...b47b0c). Put it on PATH, or point
+`OTELCOL_CONTRIB` at it. `run-e2e.sh` reports it missing up front, with the other prerequisites.
+
+Why. The lab-marker pipeline (#150) adds a receiver, a connector and two OTTL processors to the collector
+config. A config the collector rejects CrashLoops the DaemonSet, which takes the student's own telemetry
+down with it, and YAML checks cannot tell a valid OTTL function from a typo. The route is also public, so
+the contract processors have to be shown to strip a forged payload, and only the real OTTL engine can show
+that. The test pins the chart version next to the binary version, so a chart bump fails the test until both
+move together. Rejected: a container image, because this machine has no Docker access.

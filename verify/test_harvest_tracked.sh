@@ -17,7 +17,7 @@ fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
 
 echo "== the code is present and tracked =="
-for f in run.sh 01-clusters.py 02-forensics.py 03-falco.py 04-argo-datadog.py 05-analyze.py; do
+for f in run.sh 01-clusters.py 02-forensics.py 03-falco.py 04-argo-datadog.py 05-analyze.py 06-lab-progress.py; do
     check "scripts/harvest/${f} exists" "[ -f '${REPO}/scripts/harvest/${f}' ]"
     check "scripts/harvest/${f} is NOT gitignored" \
           "! git -C '${REPO}' check-ignore -q 'scripts/harvest/${f}'"
@@ -30,8 +30,11 @@ check "no harvested data is tracked" \
 
 echo "== it is reusable, not hard-coded to one event =="
 check "the entry point takes an event name" "grep -q 'WIB_EVENT' '${REPO}/scripts/harvest/run.sh'"
+# Counted against the passes that exist, so adding a pass cannot leave this asserting a stale number.
 check "every pass honours WIB_EVENT" \
-      "[ \$(grep -lc 'WIB_EVENT' ${REPO}/scripts/harvest/0*.py | wc -l) -eq 5 ]"
+      "[ \$(grep -l 'WIB_EVENT' ${REPO}/scripts/harvest/0*.py | wc -l) -eq \$(ls ${REPO}/scripts/harvest/0*.py | wc -l) ]"
+check "run.sh runs every pass" \
+      "( for f in ${REPO}/scripts/harvest/0*.py; do grep -q \"\$(basename \$f)\" '${REPO}/scripts/harvest/run.sh' || exit 1; done )"
 check "run.sh refuses without an event name" \
       "! bash '${REPO}/scripts/harvest/run.sh' </dev/null >/dev/null 2>&1"
 

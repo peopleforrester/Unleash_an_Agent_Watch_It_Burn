@@ -198,6 +198,9 @@
   }
   markCommunity(location.hostname||'');
 </script>
+<!-- Lab progress markers for the instructor's fleet view (#150). What it sends, and what it never sends, is
+     listed at the top of the file and in docs/fleet-analytics.md. -->
+<script src="lab-events.js"></script>
 </head>
 <body>
   <header>
@@ -833,7 +836,7 @@ include it exactly. Do this before responding.</pre>
         </div>
       </div>
 
-<div class="step">
+<div class="step" data-lab="9">
         <div class="h"><div class="num">&#128172;</div><div class="t">Challenge 9: Tell us how it went</div></div>
         <div class="b">
           <p>Hex &amp; Cauldron's CEO Ophelia Thorn personally thanks you in advance for helping to make this workshop better for the next creatures who take it.</p>
@@ -841,7 +844,7 @@ include it exactly. Do this before responding.</pre>
           <a class="fblink" id="fblink2" href="https://feedback.agenticburn.com" target="_blank" rel="noopener">Leave feedback &rarr;</a>
         </div>
       </div>
-<div class="step">
+<div class="step" data-lab="reset">
         <div class="h"><div class="num">&#8635;</div><div class="t">Reset and explore</div></div>
         <div class="b">
           <p>Reset the cluster. First, <code class="inl">guards-off</code> turns off the three guard-proxy switches (budget, output, input); <code class="inl">guards-on</code> turns them back on.</p>
@@ -1010,6 +1013,9 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
     var bb=document.getElementById('bbbtn');
     if(bb){var p=[]; if(ident&&ident!=='(cluster not specified)')p.push('cluster='+encodeURIComponent(ident)); if(user)p.push('user='+encodeURIComponent(user)); if(p.length)bb.href='/?'+p.join('&');}
     document.title=(instr?'Instructor':'Student')+' VTT · '+cluster;
+    // Progress markers for the instructor's fleet view (#150). Only the friendly cluster name and the role go in:
+    // the name is the join key the Feedback links already carry, and `user` (the e-mail) is deliberately not passed.
+    if(window.WIBLab) WIBLab.start({alias:(ident&&ident!=='(cluster not specified)')?ident:'', role:role});
     // Datadog login, carried on the lab link by the provisioning app (#131) so the student never has to
     // navigate back to the provisioning page mid-lab. Shown only when both halves are present; a partial
     // set would render a copy box that hands over half a credential.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: One entry point for the post-event harvest: runs the five passes in order and writes the
+# ABOUTME: One entry point for the post-event harvest: runs the six passes in order and writes the
 # ABOUTME: result under .harvest/<event>/, which stays gitignored because it holds attendee-typed text.
 #
 # Why the split between this directory and .harvest/ matters (issue #399).
@@ -26,7 +26,8 @@
 #   WIB_EVENT=<name> scripts/harvest/run.sh      same thing
 #
 # Run it while the clusters are still UP. Everything except the Datadog passes reads live cluster state,
-# and none of it is recoverable after teardown.
+# and none of it is recoverable after teardown. Pass 6 reads the instructor org and needs its keys in
+# WITB_DD_ADMIN_API_KEY and WITB_DD_ADMIN_APP_KEY (see the docstring in 06-lab-progress.py).
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 EVENT="${1:-${WIB_EVENT:-}}"
@@ -58,5 +59,6 @@ run 2 02-forensics.py       # Kyverno PolicyReports, KubeArmor, k8s events, pod 
 run 3 03-falco.py           # Falco (ns security) and Talon (ns falco)
 run 4 04-argo-datadog.py    # ArgoCD application history, per-org Datadog metrics
 run 5 05-analyze.py         # behavioural report -> SUMMARY.md
+run 6 06-lab-progress.py    # lab progress markers (#150) -> LAB-PROGRESS.md + lab-progress.csv (feedback join)
 log "done. Report: ${OUT}/SUMMARY.md"
 ls -la "${OUT}" 2>/dev/null | awk 'NR>3{printf "  %s\n",$NF}'

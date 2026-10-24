@@ -14,6 +14,15 @@ config:
           endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
+    # Lab progress markers from the lab page (#150), via the console's /lab-events route. A receiver of its own
+    # so that a browser-reachable endpoint feeds ONE pipeline (traces/lab) that enforces a contract, and can
+    # never inject into the traces pipeline the student reads in Agent Observability. That pipeline lives in
+    # the Datadog overlay, so with no datadog-secret this receiver is unused and not started: /lab-events then
+    # answers 502 and the lab page, which never waits on it, is unaffected.
+    otlp/lab:
+      protocols:
+        http:
+          endpoint: 0.0.0.0:4319
   processors:
     memory_limiter:
       check_interval: 1s
@@ -206,6 +215,28 @@ config:
             # of the JSON key, which keeps a backslash out of a YAML scalar that is already fiddly.
             - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+    # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
+    # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
+    # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
+    # verify/test_lab_events.py keeps this list and the page's list identical.
+    filter/lab_contract:
+      error_mode: ignore
+      traces:
+        span:
+          - 'not IsMatch(name, "^lab[.][a-z]+([.][a-z]+)?$")'
+        spanevent:
+          - 'IsMatch(name, ".*")'
+    transform/lab_contract:
+      error_mode: ignore
+      trace_statements:
+        - context: resource
+          statements:
+            - 'keep_keys(attributes, ["service.name"])'
+            - 'set(attributes["service.name"], "burritobot-lab")'
+        - context: span
+          statements:
+            - 'keep_keys(attributes, ["session.id", "witb.lab.alias", "witb.lab.role", "witb.lab.challenge", "witb.lab.item", "witb.lab.kind", "witb.lab.control"])'
+            - 'truncate_all(attributes, 64)'
   exporters:
     prometheusremotewrite:
       endpoint: http://prometheus-kube-prometheus-prometheus.monitoring.svc.cluster.local:9090/api/v1/write
@@ -238,6 +269,21 @@ config:
     # deprecated alias slated for removal). add_resource_attributes is supported on contrib 0.158.2.
     span_metrics:
       add_resource_attributes: true
+    # Counts of lab markers, as metrics, for the instructor dashboard (#150). Metrics because a dashboard over
+    # a two-hour session needs every event, and metrics are kept whole where indexed spans are sampled.
+    # Arrives in Datadog as witb.lab.calls tagged span.name, kube_cluster_name and the dimensions below.
+    # session.id is deliberately NOT a dimension: one series per browser tab is cardinality for nothing.
+    # Used only by the lab pipelines in the Datadog overlay; unused (and not started) without it.
+    span_metrics/lab:
+      namespace: witb.lab
+      add_resource_attributes: true
+      metrics_flush_interval: 15s
+      dimensions:
+        - name: witb.lab.alias
+        - name: witb.lab.role
+        - name: witb.lab.challenge
+        - name: witb.lab.kind
+        - name: witb.lab.control
     # datadog/connector (APM trace.* metrics) is in the Datadog overlay below, with the exporter it feeds.
   service:
     telemetry:
@@ -287,6 +333,30 @@ config:
           - otlp_grpc/tempo # the fallback, and the only trace sink without Datadog
           - span_metrics  # feed the connector so it can derive metrics from these spans
           - debug
+      # Lab progress markers (#150). Defined here with their processors, exporting to debug only, so a cluster
+      # with no datadog-secret receives the markers and drops them. The Datadog overlay below adds the org they
+      # are for, the same way it does for traces and metrics.
+      traces/lab:
+        receivers:
+          - otlp/lab
+        processors:
+          - memory_limiter
+          - filter/lab_contract
+          - transform/lab_contract
+          - resource
+          - batch
+        exporters:
+          - span_metrics/lab
+          - debug
+      metrics/lab:
+        receivers:
+          - span_metrics/lab
+        processors:
+          - memory_limiter
+          - resource
+          - batch
+        exporters:
+          - debug
 
 # ---- Datadog, switched on by the presence of datadog-secret (#500) ----
 #
@@ -305,10 +375,12 @@ config:
 #
 #   kubectl -n monitoring logs ds/otel-collector-opentelemetry-collector-agent -c datadog-gate
 #
-# The collector replaces lists when it merges, so the overlay restates the two pipeline lists it changes in
-# full; the processors lists are not touched and come from relay.yaml. values-dual.yaml (attendee) restates
+# The collector replaces lists when it merges, so the overlay restates in full the exporter lists it changes
+# (traces, metrics, and the two lab pipelines, #150) and the metrics receivers; the processors lists are not
+# touched and come from relay.yaml. values-dual.yaml (attendee) restates
 # this ConfigMap with the instructor org added and Tempo taken out (the attendee profile has no Tempo, #475),
 # and values-burn.yaml (burn) with Tempo and Prometheus removed.
+
 extraManifests:
   - apiVersion: v1
     kind: ConfigMap
@@ -348,6 +420,19 @@ extraManifests:
                 - otlp_grpc/tempo # secondary / fallback
                 - span_metrics
                 - datadog/connector # feed the APM-stats connector (trace.* metrics); PRD #13 M2
+                - debug
+            # Lab progress markers (#150). relay.yaml has the two lab pipelines exporting to debug only; this adds
+            # Datadog, which on this profile (admin and full, the instructor clusters) IS the instructor org.
+            # values-dual.yaml adds datadog/admin instead, so on attendee clusters the markers reach the
+            # instructor's fleet view and never the student's own org.
+            traces/lab:
+              exporters:
+                - datadog
+                - span_metrics/lab
+                - debug
+            metrics/lab:
+              exporters:
+                - datadog
                 - debug
 initContainers:
   - name: datadog-gate
@@ -443,6 +528,12 @@ ports:
     enabled: true
     containerPort: 4318
     servicePort: 4318
+    protocol: TCP
+  # The otlp/lab receiver (#150): the console's /lab-events route proxies here.
+  otlp-lab:
+    enabled: true
+    containerPort: 4319
+    servicePort: 4319
     protocol: TCP
   metrics:
     enabled: true

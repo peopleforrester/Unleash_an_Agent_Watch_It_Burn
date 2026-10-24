@@ -85,6 +85,17 @@ extraManifests:
                 - span_metrics
                 - datadog/connector
                 - debug
+            # Lab progress markers (#150) go to the instructor org ONLY. They describe what the student did in the
+            # lab guide, for the instructor's fleet view; the student's org is for the student's own workload.
+            traces/lab:
+              exporters:
+                - datadog/admin
+                - span_metrics/lab
+                - debug
+            metrics/lab:
+              exporters:
+                - datadog/admin
+                - debug
 extraEnvs:
   - name: DD_API_KEY
     valueFrom:

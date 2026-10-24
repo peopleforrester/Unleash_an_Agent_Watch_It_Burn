@@ -39,6 +39,9 @@ command -v "${TERRAFORM:-terraform}" >/dev/null 2>&1 || missing+=("terraform is 
 command -v aws >/dev/null 2>&1 || missing+=("the aws CLI is not on PATH")
 [[ -n "${IAM_PIPELINE_PROFILE:-}" && -n "${IAM_PIPELINE_REGION:-}" ]] \
     || missing+=("IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION must name the AWS profile and region the policy pipeline's AWS checks run as")
+# test_lab_pipeline_collector.py runs the real collector at the chart's version (see OTELCOL_VERSION there).
+command -v "${OTELCOL_CONTRIB:-otelcol-contrib}" >/dev/null 2>&1 \
+    || missing+=("otelcol-contrib v0.160.0 is not on PATH (or set OTELCOL_CONTRIB): github.com/open-telemetry/opentelemetry-collector-releases/releases/tag/v0.160.0")
 if [[ -z "${CONTEXT:-}" ]]; then
     missing+=("CONTEXT is not set: name the kube-context of the test attendee cluster to run against")
 elif command -v kubectl >/dev/null 2>&1 \
