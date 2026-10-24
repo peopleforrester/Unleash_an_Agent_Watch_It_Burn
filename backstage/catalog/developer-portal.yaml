@@ -1,0 +1,46 @@
+# ABOUTME: The portal itself: Backstage and the Postgres it keeps its catalog in. The only platform piece in
+# ABOUTME: this catalog, because it is the page you are reading these entities on.
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: developer-portal
+  title: Developer portal
+  description: This Backstage. Every app on the cluster that is not infrastructure, who owns it, and its pods.
+spec:
+  owner: platform-team
+  domain: hex-and-cauldron
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: backstage
+  title: Backstage
+  description: >-
+    The catalog is read from files in git (backstage/catalog/), so nothing here needs a GitHub token. The
+    Kubernetes tab on each page reads this cluster with a read-only service account.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=backstage
+    backstage.io/kubernetes-namespace: backstage
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/backstage/
+spec:
+  type: website
+  lifecycle: production
+  owner: platform-team
+  system: developer-portal
+  dependsOn: [resource:backstage-postgres]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: backstage-postgres
+  title: Backstage Postgres
+  description: >-
+    The portal's database. Disposable by design: it lives on an emptyDir, and a restart costs only the few
+    seconds Backstage takes to read the catalog files again.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=backstage-postgres
+    backstage.io/kubernetes-namespace: backstage
+spec:
+  type: database
+  owner: platform-team
+  system: developer-portal

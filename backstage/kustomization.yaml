@@ -1,0 +1,34 @@
+# ABOUTME: What the `backstage` Argo CD application deploys: the portal, its Postgres and RBAC, plus two
+# ABOUTME: generated ConfigMaps, the catalog (catalog/*.yaml) and the cluster config (app-config.yaml).
+#
+# Explicit resource list: templates/ and k8s/templated-test-svc.yaml are scaffolder material, not part of
+# the running portal, and must not deploy (the test service targets the apps namespace).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - k8s/backstage-rbac.yaml
+  - k8s/postgres.yaml
+  - k8s/backstage.yaml
+
+# Generated names carry the content hash, so a catalog or config edit rolls the Backstage pod (the same
+# pattern as gitops/ai-layer, #252). Every file here must also be a catalog.locations target in
+# app-config.yaml; verify/test_backstage_catalog.py fails if the two lists disagree.
+configMapGenerator:
+  - name: backstage-catalog
+    namespace: backstage
+    files:
+      - catalog/org.yaml
+      - catalog/domains.yaml
+      - catalog/burritobot.yaml
+      - catalog/customer-data.yaml
+      - catalog/party-apps.yaml
+      - catalog/workshop.yaml
+      - catalog/developer-portal.yaml
+  - name: backstage-app-config
+    namespace: backstage
+    files:
+      - app-config.yaml
+
+generatorOptions:
+  disableNameSuffixHash: false

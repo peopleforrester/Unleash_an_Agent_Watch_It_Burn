@@ -29,7 +29,8 @@ ADMIN_API="${WITB_DD_ADMIN_API_KEY:-}"
 # student's terminal has cluster-wide read and where C1-C3 teach prompt-injecting the agent into running
 # shell commands. The verifier now takes it from the operator's environment. See #272.
 ADMIN_APP_UNUSED_ON_CLUSTER="${WITB_DD_ADMIN_APP_KEY:-}"
-readonly NAMESPACES="datadog monitoring agent"
+# backstage reads cluster-name to label this cluster on every Kubernetes tab (backstage/app-config.yaml).
+readonly NAMESPACES="datadog monitoring agent backstage"
 # WITB_PUBLIC_HOST: this cluster's public console hostname (fleet.sh public_host_for), printed by the
 # web terminal's catalogue so every address a student sees is complete. Empty on a manual run.
 PUBLIC_HOST="${WITB_PUBLIC_HOST:-}"

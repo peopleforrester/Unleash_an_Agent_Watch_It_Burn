@@ -110,7 +110,7 @@ watch-the-screen with an optional side quest on our box. Round 3 is heads-down a
 matter. Attendees will not guess which mode they are in, and a room half-watching and half-typing hears
 neither.
 
-**Nobody installs anything.** The full platform is already deployed on every cluster (40 Argo CD apps on an instructor cluster, 38 on an attendee cluster where the C1 and C3 controls start uninstalled, one
+**Nobody installs anything.** The full platform is already deployed on every cluster (41 Argo CD apps on an instructor cluster, 39 on an attendee cluster where the C1 and C3 controls start uninstalled, one
 bash script). The hands-on hour is about **manipulating** what is there, not building it.
 
 **Your prompts live on the instructor page, not in this doc.** Open **`/brief`** on whichever cluster you
@@ -211,7 +211,7 @@ also the segment that earns the abstract's claims.
 > one bash script. Let me show you what is actually running in there."
 
 ```bash
-kubectl get applications -n argocd          # 40 apps: 34 platform components, 5 demo apps, 1 app-of-apps (38 on an attendee cluster)
+kubectl get applications -n argocd          # 41 apps: 35 platform components, 5 demo apps, 1 app-of-apps (39 on an attendee cluster)
 kubectl get pods -A | head -40              # what that actually looks like running
 ```
 
@@ -229,6 +229,11 @@ Name the pieces they will touch today, and who owns each one:
 
 Land the point: **one column is the developer's, everything else is the platform team's.** Today's argument
 is that the second column is what actually stops an agent, and they are about to prove it themselves.
+
+The table has a real page behind it: BurritoBot's system page in Backstage,
+`https://backstage-<cluster>.agenticburn.com/catalog/default/system/burritobot`. The agent, workshop-mcp
+and the storefront are owned by the BurritoBot developers; guard-proxy, LLM Guard and agentgateway by
+the platform team; evil-mcp by an outside vendor. Each component's Kubernetes tab shows its live pods.
 
 ---
 

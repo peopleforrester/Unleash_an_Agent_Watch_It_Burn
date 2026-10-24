@@ -1,0 +1,94 @@
+# ABOUTME: Who owns what. Hex & Cauldron is the company in the workshop's story; the workshop crew sits
+# ABOUTME: outside it and owns only what exists to run the session (the terminal, provisioning, the router).
+#
+# The split that matters is burritobot-developers against platform-team. The tour's table says "one column
+# is the developer's, everything else is the platform team's" (docs/RUN-OF-SHOW-2026-08.md), and the
+# BurritoBot system page is where that table is a real page: the agent and its tools are owned by the
+# developers, and the guardrails around them by the platform team.
+#
+# No User entities: the portal signs everyone in as the guest user, so a member list would name people
+# nobody can sign in as.
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: hex-and-cauldron
+  title: Hex & Cauldron
+  description: The company that runs BurritoBot. Every team that builds on this cluster sits under it.
+spec:
+  type: organization
+  children: [burritobot-developers, platform-team, customer-data-team, party-planners]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: burritobot-developers
+  title: BurritoBot developers
+  description: >-
+    Build BurritoBot: the agent, its system prompt, its tool list and the storefront. Their column of the
+    tour table is the agent; everything that stops the agent misbehaving belongs to the platform team.
+spec:
+  type: team
+  parent: hex-and-cauldron
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: platform-team
+  title: Platform team
+  description: >-
+    Run the platform every team builds on, including the AI guardrails in front of BurritoBot: guard-proxy,
+    LLM Guard and agentgateway. Admission, network, runtime and delivery controls are theirs too, but those
+    are infrastructure and are not catalogued here.
+spec:
+  type: team
+  parent: hex-and-cauldron
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: customer-data-team
+  title: Customer data team
+  description: Own the customer record stream. Not BurritoBot's data, which is why Challenge 1 is a leak.
+spec:
+  type: team
+  parent: hex-and-cauldron
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: party-planners
+  title: Party planners
+  description: >-
+    The neighbours. Five ordinary web apps that share the cluster with BurritoBot, so the blast radius of a
+    misbehaving agent has something in it.
+spec:
+  type: team
+  parent: hex-and-cauldron
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: tool-vendor
+  title: Outside tool vendor
+  description: >-
+    Not part of Hex & Cauldron. Ships the evil-mcp tool server the developers pulled into BurritoBot. Nobody
+    inside the company wrote it or reviews it, which is the point of Challenge 7.
+spec:
+  type: vendor
+  children: []
+---
+apiVersion: backstage.io/v1alpha1
+kind: Group
+metadata:
+  name: workshop-crew
+  title: Watch It Burn workshop crew
+  description: >-
+    The people running the workshop. Outside the story: they own the attendee's terminal, the challenge
+    props, the provisioning app that hands out clusters and the router that gives each one its hostname.
+spec:
+  type: team
+  children: []

@@ -1,0 +1,33 @@
+# ABOUTME: Backstage developer portal (#244): every app on the cluster that is not infrastructure, who owns
+# ABOUTME: it and its live pods, at backstage-<cluster>.agenticburn.com. Deploys backstage/ via kustomize.
+#
+# On the attendee, full and admin profiles, which take every file here; the burn profile's include list
+# leaves it out. The image is ours and must be signed before its pod is admitted (verify/sign-images.sh).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backstage
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: backstage
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: backstage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

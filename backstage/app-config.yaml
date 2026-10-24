@@ -1,0 +1,85 @@
+# ABOUTME: The cluster's Backstage config, layered over the image's own app-config.yaml (passed second with
+# ABOUTME: --config, so every key here wins). Catalog from files, guest sign-in, this cluster in the k8s tab.
+#
+# The image's app-config.production.yaml is deliberately NOT loaded: it points the catalog at the
+# scaffold's example entities and reads the database from POSTGRES_* variables. Everything it would have
+# set is set here instead.
+
+app:
+  title: Watch It Burn developer portal
+  # ONE config serves every backstage-<cluster>.agenticburn.com. When app.baseUrl and backend.baseUrl
+  # share an origin, the frontend replaces both with the origin of the page it was loaded from (the
+  # "relative-resolver" in @backstage/frontend-defaults, read out of this image's bundle). So these two
+  # only have to agree with each other, not name the cluster.
+  baseUrl: https://backstage.agenticburn.com
+
+organization:
+  name: Hex & Cauldron
+
+backend:
+  baseUrl: https://backstage.agenticburn.com
+  listen:
+    port: 7007
+  database:
+    client: pg
+    connection:
+      host: backstage-postgres
+      port: 5432
+      user: backstage
+      # No password: Postgres runs with trust auth and a NetworkPolicy admits only the Backstage pod
+      # (k8s/postgres.yaml). A password committed here would protect nothing a NetworkPolicy does not.
+
+auth:
+  providers:
+    # Everyone is the guest user. There is nothing behind this portal that the cluster does not already
+    # show an attendee with kubectl, and a login would be one more credential to hand out on the day.
+    guest:
+      dangerouslyAllowOutsideDevelopment: true
+
+catalog:
+  rules:
+    - allow: [Component, System, Domain, API, Resource, Group, Location]
+  # Files mounted from the backstage-catalog ConfigMap (kustomization.yaml generates it from catalog/).
+  # verify/test_backstage_catalog.py fails if a file here is not in the ConfigMap, or the reverse.
+  locations:
+    - { type: file, target: /app/catalog/org.yaml }
+    - { type: file, target: /app/catalog/domains.yaml }
+    - { type: file, target: /app/catalog/burritobot.yaml }
+    - { type: file, target: /app/catalog/customer-data.yaml }
+    - { type: file, target: /app/catalog/party-apps.yaml }
+    - { type: file, target: /app/catalog/workshop.yaml }
+    - { type: file, target: /app/catalog/developer-portal.yaml }
+
+kubernetes:
+  serviceLocatorMethod:
+    type: multiTenant
+  # Exactly what k8s/backstage-rbac.yaml grants. Not configmaps (the default list has them): this portal
+  # is public, and that role is the boundary on what it shows. See the header of that file.
+  objectTypes:
+    - pods
+    - services
+    - deployments
+    - replicasets
+    - statefulsets
+    - daemonsets
+    - jobs
+    - cronjobs
+    - horizontalpodautoscalers
+    - ingresses
+  clusterLocatorMethods:
+    - type: config
+      clusters:
+        # The cluster Backstage runs on, read with its own service account. With no serviceAccountToken
+        # set, the plugin reads the pod's mounted token (ServiceAccountStrategy, checked in this image), so
+        # there is no long-lived token Secret to create or leak. Read-only RBAC: k8s/backstage-rbac.yaml.
+        - name: ${WIB_CLUSTER_NAME:-this-cluster}
+          url: https://kubernetes.default.svc
+          authProvider: serviceAccount
+          caFile: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+          skipMetricsLookup: true
+
+techdocs:
+  # Nothing in this catalog carries TechDocs, and the image's default would build docs in Docker.
+  builder: external
+  publisher:
+    type: local

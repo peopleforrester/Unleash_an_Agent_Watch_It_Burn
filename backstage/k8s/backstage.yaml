@@ -1,0 +1,118 @@
+# ABOUTME: The Backstage portal: our image (images/watch-it-burn-backstage/), the catalog and the cluster
+# ABOUTME: config mounted from ConfigMaps, published at backstage-<cluster>.agenticburn.com via the console.
+#
+# Plain manifests rather than the Backstage Helm chart. The chart takes the image as registry, repository
+# and tag in separate keys, so no `image:` line ever names it, and both things that keep our images honest
+# read `image:` lines: verify/test_image_pins.py (digest pin) and verify/sign-images.sh (the signing list).
+# The image must be SIGNED before this pod is admitted, in any namespace (verify-image-signatures).
+#
+# The image's own CMD loads app-config.production.yaml, which points the catalog at the scaffold's examples.
+# The command below loads the image's base app-config.yaml and then ours, and nothing else.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backstage
+  namespace: backstage
+  labels:
+    app.kubernetes.io/name: backstage
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  replicas: 1
+  # One pod at a time: every plugin runs its database migrations at startup, and two pods racing them is
+  # the failure the Backstage chart's own values warn about.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backstage
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backstage
+        app.kubernetes.io/part-of: watch-it-burn-idp
+    spec:
+      serviceAccountName: backstage
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000   # the image's `node` user
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: backstage
+          image: ghcr.io/peopleforrester/watch-it-burn:backstage@sha256:9e9756b0f1f88d22f37c719b2990da67db3f36f0d65433e784fff9e9986eb25c
+          command:
+            - node
+            - packages/backend
+            - --config
+            - app-config.yaml
+            - --config
+            - /app/config/app-config.yaml
+          env:
+            # --no-node-snapshot is the image's own setting (the scaffolder needs it on Node 20+); setting
+            # NODE_OPTIONS here replaces it, so it is repeated. The heap cap keeps V8 under the memory limit.
+            - name: NODE_OPTIONS
+              value: "--no-node-snapshot --max-old-space-size=640"
+            # Names this cluster on every Kubernetes tab. Written at bootstrap by
+            # infra/datadog-cluster-identity.sh; optional, and the config falls back to "this-cluster".
+            - name: WIB_CLUSTER_NAME
+              valueFrom: { configMapKeyRef: { name: cluster-identity, key: cluster-name, optional: true } }
+          ports:
+            - name: http
+              containerPort: 7007
+              protocol: TCP
+          startupProbe:
+            httpGet: { path: /.backstage/health/v1/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 36   # three minutes for migrations and the first catalog read
+          readinessProbe:
+            httpGet: { path: /.backstage/health/v1/readiness, port: http }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /.backstage/health/v1/liveness, port: http }
+            periodSeconds: 20
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: catalog, mountPath: /app/catalog, readOnly: true }
+            - { name: config, mountPath: /app/config, readOnly: true }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        # Both names are kustomize-generated (kustomization.yaml) and carry a content hash, so a catalog
+        # or config change rolls this pod through Argo CD with no manual restart.
+        - name: catalog
+          configMap: { name: backstage-catalog }
+        - name: config
+          configMap: { name: backstage-app-config }
+        - name: tmp
+          emptyDir: { sizeLimit: 256Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backstage
+  namespace: backstage
+  labels:
+    app.kubernetes.io/name: backstage
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: backstage
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

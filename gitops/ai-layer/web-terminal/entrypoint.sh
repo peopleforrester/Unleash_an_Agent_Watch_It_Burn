@@ -81,6 +81,7 @@ _h="${WIB_PUBLIC_HOST:-<the host in your address bar>}"
 echo "Everything installed on ${_cn:-your cluster}."
 
 b "OTHER PARTS OF YOUR CLUSTER WITH A WEB PAGE"
+row "Backstage" "https://backstage-${_h}   (every app, its owner and its pods)"
 row "kagent UI" "https://kagent-${_h}   (BurritoBot as its developer sees it)"
 row "Party apps" "https://unicorn-${_h}  (also hedgehog-, wombat-, spider-, mantis-shrimp-)"
 row "Grafana" "https://grafana-${_h}   (login: admin / $(sec monitoring prometheus-grafana admin-password 2>/dev/null || echo '<could not read secret>'))"

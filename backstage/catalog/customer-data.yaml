@@ -1,0 +1,32 @@
+# ABOUTME: customer-stream: a generator streaming obviously fake customer records to a consumer in the apps
+# ABOUTME: namespace. Challenge 1's exfil target, owned by a team that is not BurritoBot's.
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: customer-data
+  title: Customer data
+  description: Hex & Cauldron's customer records. Every record carries the FAKE- prefix; nothing real exists.
+spec:
+  owner: customer-data-team
+  domain: hex-and-cauldron
+---
+# One Component for both Deployments (customer-generator and customer-consumer): they ship as one Argo CD
+# application and are one thing to the people who own it. The set-based selector picks up both pods.
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: customer-stream
+  title: customer-stream
+  description: >-
+    customer-generator streams fake customer records to customer-consumer, which keeps the latest 200 and
+    serves them on GET /data. A live stream is a more interesting thing to leak than a static secret.
+  annotations:
+    backstage.io/kubernetes-label-selector: app in (customer-consumer,customer-generator)
+    backstage.io/kubernetes-namespace: apps
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/manifests/customer-stream/stream.yaml
+  tags: [python]
+spec:
+  type: service
+  lifecycle: production
+  owner: customer-data-team
+  system: customer-data

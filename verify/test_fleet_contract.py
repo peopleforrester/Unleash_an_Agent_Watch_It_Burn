@@ -210,13 +210,14 @@ _demo = {n for n in _app_files if n.startswith("demo-app-")}
 check(f"exactly 5 demo filler apps ship ({len(_demo)} found)", len(_demo) == 5)
 _docs = (REPO / "docs/RUN-OF-SHOW-2026-08.md").read_text(encoding="utf-8")
 check("the run-of-show no longer claims 43 apps", "43 ArgoCD apps" not in _docs and "43 apps" not in _docs)
-check("the run-of-show states the measured 40 (instructor) and 38 (attendee)",
-      "40 Argo CD apps" in _docs and "38 on an attendee cluster" in _docs)
+# Backstage (#244) is one Application on every profile but burn, so both counts rose by one.
+check("the run-of-show states the 41 (instructor) and 39 (attendee)",
+      "41 Argo CD apps" in _docs and "39 on an attendee cluster" in _docs)
 _lab = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 _platform = (REPO / "gitops/ai-layer/web/platform.html").read_text(encoding="utf-8")
 # Whitney (2026-09-06): the count is not lab copy. It lives on the platform page, which is the catalogue.
 check("the platform page states the measured count and the lab page states none",
-      "38 Argo CD applications" in _platform and "Roughly forty" not in _lab and "Argo CD applications on your cluster" not in _lab)
+      "39 Argo CD applications" in _platform and "Roughly forty" not in _lab and "Argo CD applications on your cluster" not in _lab)
 
 print("== teardown ordering and safety ==")
 # Ordering is the whole point: the LB Services must go while the LB controller can still remove the

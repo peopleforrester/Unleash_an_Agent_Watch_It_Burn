@@ -72,7 +72,7 @@
 </header>
 
 <main>
-  <p class="lede">Everything below is already running on <b id="cl">your cluster</b>: 38 Argo CD applications, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 40, because the Challenge 1 and 3 controls are already installed there). Nothing here needs installing.
+  <p class="lede">Everything below is already running on <b id="cl">your cluster</b>: 39 Argo CD applications, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 41, because the Challenge 1 and 3 controls are already installed there). Nothing here needs installing.
   This page exists so you never have to dump a ConfigMap or read a Service list to find out where something is.</p>
 
   <div class="open"><b>Fastest way to see all of it with live values:</b> run <code class="inl">platform</code> in your
@@ -135,6 +135,8 @@
       <p class="sub">Each has its own address on this cluster. These are what a platform team hosts for the people who build on it.</p>
       <table>
         <tr><th>Service</th><th>Where</th><th>Login</th></tr>
+        <tr><td class="svc">Backstage<small>The developer portal: every app on this cluster that is not infrastructure, which team owns it, and its live pods. BurritoBot's page shows the split the workshop is about: the agent and its tools are the developers', the guardrails around them are the platform team's.</small></td>
+            <td><a class="svchost" data-svc="backstage" href="#">backstage-…</a></td><td>none (you are the guest user)</td></tr>
         <tr><td class="svc">kagent UI<small>The developer's view of BurritoBot: its prompt, tools and model binding</small></td>
             <td><a class="svchost" data-svc="kagent" href="#">kagent-…</a></td><td>none</td></tr>
         <tr><td class="svc">The party apps<small>Ordinary workloads that share the cluster: hedgehog, wombat, unicorn, spider, mantis-shrimp</small></td>

@@ -1,0 +1,260 @@
+# ABOUTME: BurritoBot as a system: what the developers own (the agent, its tools, the storefront) and what
+# ABOUTME: the platform team owns around it (guard-proxy, LLM Guard, agentgateway). The tour's real page.
+#
+# Each Component finds its own pods with backstage.io/kubernetes-label-selector, matched against the
+# labels the manifests in gitops/ai-layer/ actually put on the pod template. The kagent Agent is the one
+# exception: kagent's operator creates that Deployment and labels its pod kagent=<agent name> (verified
+# live 2026-06-25, see the Falco rule in gitops/apps/falco.yaml). verify/test_backstage_catalog.py checks
+# every selector against the shipped manifests.
+#
+# The relations follow the request path as configured, not as described: console.conf proxies /chat to
+# guard-proxy, guard-proxy's AGENT_URL is agentgateway:3000 and its LLM_GUARD_URL is llm-guard:8000, the
+# workshop-mcp RemoteMCPServer points at agentgateway:3001/mcp, and evil-mcp points straight at
+# evil-mcp-shim. The default ModelConfig (bedrock-nova) calls Bedrock directly.
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: burritobot
+  title: BurritoBot
+  description: >-
+    The goth burrito-ordering chatbot under attack. The developers own the agent, its tools and the
+    storefront; the platform team owns the guardrails between the customer and the agent.
+  tags: [ai, agent]
+spec:
+  owner: burritobot-developers
+  domain: hex-and-cauldron
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: workshop-agent
+  title: BurritoBot agent
+  description: >-
+    The kagent Agent. Its system prompt, its model binding and its tool allow-list are all declarative,
+    and all three are the developer's. Challenge 7 edits the tool list; Challenge 8 scopes its Role.
+  annotations:
+    backstage.io/kubernetes-label-selector: kagent=workshop-agent
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/gitops/ai-layer/
+  tags: [kagent, bedrock]
+spec:
+  type: agent
+  lifecycle: production
+  owner: burritobot-developers
+  system: burritobot
+  providesApis: [workshop-agent-a2a]
+  consumesApis: [workshop-mcp-tools, evil-mcp-tools]
+  dependsOn: [component:agentgateway, resource:amazon-bedrock]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: workshop-mcp
+  title: workshop-mcp
+  description: >-
+    BurritoBot's real tools, served over MCP through agentgateway. One of them runs a command inside the
+    cluster, which is what Challenge 1 talks the agent into using.
+  annotations:
+    backstage.io/kubernetes-label-selector: app=workshop-mcp
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/workshop-mcp-server.py
+  tags: [mcp]
+spec:
+  type: mcp-server
+  lifecycle: production
+  owner: burritobot-developers
+  system: burritobot
+  providesApis: [workshop-mcp-tools]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: evil-mcp
+  title: evil-mcp
+  description: >-
+    A look-alike tool server from outside the company, carrying a poisoned tool description on purpose.
+    Its rogue tools are reachable until the student removes them from the agent's tool list (Challenge 7).
+  annotations:
+    backstage.io/kubernetes-label-selector: app=evil-mcp-shim
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/server.py
+  tags: [mcp, supply-chain]
+spec:
+  type: mcp-server
+  lifecycle: production
+  owner: tool-vendor
+  system: burritobot
+  providesApis: [evil-mcp-tools]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: console
+  title: BurritoBot storefront
+  description: >-
+    The front door: the BurritoBot chat page every customer uses, served by nginx. The same server also
+    carries the lab pages, the platform catalogue and every <service>-<cluster> hostname.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=console
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/gitops/ai-layer/web/
+  tags: [nginx]
+spec:
+  type: website
+  lifecycle: production
+  owner: burritobot-developers
+  system: burritobot
+  consumesApis: [burritobot-chat]
+  dependsOn: [component:guard-proxy]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: guard-proxy
+  title: guard-proxy
+  description: >-
+    The AI guardrails, and the cost meter. Input guard, output guard, tool authorization and the spend cap
+    all live here, between the storefront and the agent. Platform-owned: the developers do not get to
+    switch it off.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=guard-proxy
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/guard-proxy-agenticburn
+  tags: [guardrails]
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
+  system: burritobot
+  providesApis: [burritobot-chat]
+  consumesApis: [workshop-agent-a2a]
+  dependsOn: [component:llm-guard, component:agentgateway]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: llm-guard
+  title: LLM Guard
+  description: The scanners guard-proxy calls. Prompt-injection on the way in, sensitive data on the way out.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=llm-guard
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/images/llm-guard/
+  tags: [guardrails]
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
+  system: burritobot
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: agentgateway
+  title: agentgateway
+  description: >-
+    The L7 gateway in front of the agent and its real tools: guard-proxy reaches the agent through it over
+    A2A, and the agent reaches workshop-mcp through it.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=agentgateway
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/agentgateway.yaml
+  tags: [gateway]
+spec:
+  type: service
+  lifecycle: production
+  owner: platform-team
+  system: burritobot
+  dependsOn: [component:workshop-mcp]
+---
+apiVersion: backstage.io/v1alpha1
+kind: Resource
+metadata:
+  name: amazon-bedrock
+  title: Amazon Bedrock
+  description: The model behind BurritoBot (Nova Pro by default), reached over a private VPC endpoint.
+spec:
+  type: llm
+  owner: platform-team
+  system: burritobot
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: burritobot-chat
+  title: BurritoBot chat
+  description: What the storefront posts a customer's message to. Guarded and metered on the way through.
+spec:
+  type: openapi
+  lifecycle: production
+  owner: platform-team
+  system: burritobot
+  definition: |
+    openapi: 3.0.3
+    info: { title: BurritoBot chat, version: "1" }
+    paths:
+      /chat:
+        post:
+          summary: Send one customer message and get BurritoBot's reply
+          requestBody:
+            content:
+              application/json:
+                schema:
+                  type: object
+                  properties: { prompt: { type: string } }
+          responses:
+            "200":
+              description: The reply, whether a guard intervened, and the tokens it cost
+              content:
+                application/json:
+                  schema:
+                    type: object
+                    properties:
+                      reply: { type: string }
+                      guarded: { type: boolean }
+                      tokens: { type: integer }
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: workshop-agent-a2a
+  title: BurritoBot agent (A2A)
+  description: The agent's Agent2Agent endpoint, served by kagent and reached through agentgateway.
+spec:
+  type: a2a
+  lifecycle: production
+  owner: burritobot-developers
+  system: burritobot
+  definition: |
+    Agent2Agent (A2A) JSON-RPC over HTTP, served by kagent for the workshop-agent Agent.
+    In-cluster: http://agentgateway.agent.svc.cluster.local:3000
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: workshop-mcp-tools
+  title: workshop-mcp tools
+  description: The real tools, over MCP. The agent's tool allow-list decides which of them it may call.
+spec:
+  type: mcp
+  lifecycle: production
+  owner: burritobot-developers
+  system: burritobot
+  definition: |
+    Model Context Protocol (streamable HTTP).
+    In-cluster: http://agentgateway.agent:3001/mcp (RemoteMCPServer workshop-mcp)
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: evil-mcp-tools
+  title: evil-mcp tools
+  description: The outside vendor's tools, over MCP. One description is poisoned; read it before you trust it.
+spec:
+  type: mcp
+  lifecycle: production
+  owner: tool-vendor
+  system: burritobot
+  definition: |
+    Model Context Protocol (streamable HTTP).
+    In-cluster: http://evil-mcp-shim.agent:8000/mcp (RemoteMCPServer evil-mcp)
