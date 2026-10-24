@@ -12,11 +12,12 @@
   out what is on it, where it lives, and how to log in. The Packt workshop had a tab that listed every
   service, its URL and its credentials, plus what was installed at which phase. This is that.
 
-  HONEST ABOUT REACHABILITY. Only the console (this page, BurritoBot, the terminal) is exposed through a
-  LoadBalancer. Grafana, Argo CD, Prometheus, Loki and Tempo are all ClusterIP: there is no browser URL
-  that reaches them from outside the cluster, so this page does NOT print one. Instead each row carries
-  the exact port-forward that makes it reachable, and the exact command that prints its password. Both
-  were run on a live attendee cluster before being written here.
+  HONEST ABOUT REACHABILITY. Every link on this page is one a browser can open. Grafana, Argo CD, the
+  kagent UI and the party apps have their own <service>-<cluster>.agenticburn.com name (#233), filled in
+  from the address bar. Prometheus, Loki and Tempo have no login and stay unpublished, so their rows open
+  them through Grafana Explore, where each is already a data source. They used to carry a
+  `kubectl port-forward`, which listens inside the terminal pod and never reaches the attendee's browser:
+  that was the Loki "URL" that could not work (#381).
 -->
 <style>
   :root{--bg:#f7f5fb;--card:#fff;--ink:#1b1230;--mut:#6b6a80;--line:#e6dff5;--accent:#8A00D6;--dd:#632CA6;--ok:#2e9e5b}
@@ -88,11 +89,11 @@
     <div class="ph"><div class="w">Always</div><h3>Delivery</h3><p>Argo CD holds all of it to what Git says. Delete something and it comes back.</p></div>
   </div>
 
-  <div class="note"><b>Why there are no clickable links for most of these.</b> Only the console you are reading
-  now (this page, BurritoBot and your terminal) is published through a load balancer. Grafana, Argo CD,
-  Prometheus, Loki and Tempo are <b>ClusterIP</b>: they have no address reachable from your browser. Rather than
-  print a URL that cannot work, each row gives you the <b>port-forward</b> that makes it reachable and the
-  <b>exact command</b> for its password. Run the port-forward in your terminal, then open the localhost URL.</div>
+  <div class="note"><b>Every link below opens in your browser.</b> Grafana, Argo CD, the kagent UI and the
+  party apps each have their own address on this cluster: the service name, a dash, then your cluster's
+  address. Prometheus, Loki and Tempo have no login of their own, so they are not published on their own:
+  their links open them inside Grafana, where each one is already set up. A <code class="inl">kubectl
+  port-forward</code> would not help here, because it listens inside your terminal, not on your laptop.</div>
 
   <section class="layer">
     <h2>Consoles you can open right now</h2>
@@ -120,11 +121,11 @@
           <td><a class="svchost" data-svc="grafana" href="#">grafana-…</a></td>
           <td>user <code class="inl">admin</code><div class="cmd" onclick="cp(this)">kubectl -n monitoring get secret prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo<button class="cp">copy</button></div></td></tr>
       <tr><td class="svc">Prometheus<small>Metrics and alert rules</small></td>
-          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/prometheus-kube-prometheus-prometheus 9090:9090<button class="cp">copy</button></div>then <code class="inl">http://localhost:9090</code></td><td>none</td></tr>
+          <td><a class="svchost" data-svc="grafana" data-explore="prometheus" href="#">Prometheus, in Grafana Explore</a></td><td>Grafana's</td></tr>
       <tr><td class="svc">Loki<small>Log store behind Grafana</small></td>
-          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/loki 3100:3100<button class="cp">copy</button></div></td><td>none</td></tr>
+          <td><a class="svchost" data-svc="grafana" data-explore="loki" href="#">Loki, in Grafana Explore</a></td><td>Grafana's</td></tr>
       <tr><td class="svc">Tempo<small>Trace store behind Grafana</small></td>
-          <td><div class="cmd" onclick="cp(this)">kubectl -n monitoring port-forward svc/tempo 3200:3200<button class="cp">copy</button></div></td><td>none</td></tr>
+          <td><a class="svchost" data-svc="grafana" data-explore="tempo" href="#">Tempo, in Grafana Explore</a></td><td>Grafana's</td></tr>
       <tr><td class="svc">OTel Collector<small>Where every trace and metric is routed</small></td>
           <td>in-cluster only, <code class="inl">otel-collector-opentelemetry-collector:4317</code></td><td>none</td></tr>
     </table>
@@ -218,8 +219,13 @@
 <script>
   // Service hostnames (#233): <service>-<this cluster's host>. Computed from the address bar so the page
   // is right on every cluster without knowing its name; port-forward never worked from a browser terminal.
+  // data-explore names a Grafana data source uid (gitops/apps/prometheus.yaml): the link opens Explore on it
+  // and keeps its own label, because the hostname it points at is Grafana's, not the store's (#381).
   (function(){ var h=location.hostname; if(!/agenticburn\.com$/.test(h)) return;
-    document.querySelectorAll('a.svchost').forEach(function(a){ var u='https://'+a.dataset.svc+'-'+h+'/'; a.href=u; a.textContent=a.dataset.svc+'-'+h; a.target='_blank'; a.rel='noopener'; }); })();
+    document.querySelectorAll('a.svchost').forEach(function(a){ var u='https://'+a.dataset.svc+'-'+h+'/', ds=a.dataset.explore;
+      if(ds){ u+='explore?schemaVersion=1&orgId=1&panes='+encodeURIComponent(JSON.stringify({a:{datasource:ds,queries:[{refId:'A',datasource:{type:ds,uid:ds}}],range:{from:'now-1h',to:'now'}}})); }
+      else { a.textContent=a.dataset.svc+'-'+h; }
+      a.href=u; a.target='_blank'; a.rel='noopener'; }); })();
 </script>
 </body>
 </html>
