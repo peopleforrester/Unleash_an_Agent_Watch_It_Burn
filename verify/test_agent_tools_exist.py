@@ -60,6 +60,19 @@ for server, path in SERVERS.items():
     for tool in names or []:
         check(f"{server}.{tool} exists in {path.name}", tool in served)
 
+print("== the RemoteMCPServer description names only tools its server serves ==")
+# kagent shows this description beside the server. It listed list_pods, apply_manifest and get_secret long
+# after those tools were retired (#465), so a reader tracing the tool path read the wrong toolset.
+served_by = {s: set(re.findall(r"^def ([a-z][a-z0-9_]*)\(", p.read_text(encoding="utf-8"), re.M))
+             for s, p in SERVERS.items()}
+described = {d["metadata"]["name"]: set(re.findall(r"\b[a-z]+(?:_[a-z0-9]+)+\b", d["spec"].get("description", "")))
+             for d in RES if d and d.get("kind") == "RemoteMCPServer"}
+for name, named in described.items():
+    stale = sorted(named - served_by.get(name, set()))
+    check(f"{name}'s description names no tool {name} does not serve (stale: {stale})", not stale)
+missing = sorted(set(declared.get("workshop-mcp", [])) - described.get("workshop-mcp", set()))
+check(f"workshop-mcp's description names every tool the agent declares on it (missing: {missing})", not missing)
+
 print("== the rename that caused this cannot come back ==")
 check("get_recipe is declared nowhere", all("get_recipe" not in v for v in declared.values()))
 check("get_vault_entry IS declared, since Challenge 5 needs it",

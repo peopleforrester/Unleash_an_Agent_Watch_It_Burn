@@ -802,7 +802,7 @@ spec:
     spec:
       # Run as agent-sa so the tools have the agent's real namespaced RBAC (secrets get/list, pods,
       # configmaps/services/deployments). The MCP tools call the in-cluster API with this SA's token;
-      # this is the genuine excessive-agency surface (get_secret reads the REAL planted Secret, etc.).
+      # this is the genuine excessive-agency surface (get_vault_entry reads the REAL planted Secret, etc.).
       serviceAccountName: agent-sa
       containers:
         - name: shim
@@ -841,7 +841,7 @@ kind: RemoteMCPServer
 metadata:
   name: workshop-mcp
 spec:
-  description: "The good workshop MCP server (legit agent tools: list_pods, apply_manifest, get_secret)"
+  description: "The good workshop MCP server (BurritoBot's business tools: lookup_customer_records, check_inventory, reorder_supply, get_order_history, get_marketing_intel, search_web, post_marketing, get_vault_entry, list_services, deploy_app, run_shell)"
   protocol: STREAMABLE_HTTP
   # Routed THROUGH agentgateway (3001): agent -> agentgateway:3001/mcp -> workshop-mcp:8000/mcp.
   # agentgateway's mcp backend (gitops/ai-layer/agentgateway.yaml) targets workshop-mcp and its

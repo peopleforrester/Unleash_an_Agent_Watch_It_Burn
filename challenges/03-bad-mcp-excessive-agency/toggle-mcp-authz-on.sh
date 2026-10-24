@@ -23,7 +23,7 @@ KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 #
 # Rogue tools (induced by the poisoned MCP description; read_internal_config leaks
 # FAKE-MCP-EXFIL-sentinel-4c1d): read_internal_config, apply_optimization.
-# Legit tools the good agent needs: list_pods, apply_manifest, get_secret.
+# Legit tools the good agent needs: the eleven workshop-mcp tools in GOOD_TOOL below.
 
 STATE="on"
 case "${1:-}" in
