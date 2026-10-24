@@ -54,6 +54,12 @@ USERS = {
     "kube-controller": ("system:serviceaccount:kube-system:deployment-controller",
                         ["system:serviceaccounts", "system:serviceaccounts:kube-system", "system:authenticated"]),
     "admin": ("kubernetes-admin", ["system:masters", "system:authenticated"]),
+    "agentgateway": ("system:serviceaccount:agent:agentgateway",
+                     ["system:serviceaccounts", "system:serviceaccounts:agent", "system:authenticated"]),
+    "web-terminal": ("system:serviceaccount:agent:web-terminal",
+                     ["system:serviceaccounts", "system:serviceaccounts:agent", "system:authenticated"]),
+    "replicaset-controller": ("system:serviceaccount:kube-system:replicaset-controller",
+                              ["system:serviceaccounts", "system:serviceaccounts:kube-system", "system:authenticated"]),
 }
 
 TRACKED = {"argocd.argoproj.io/tracking-id": "ai-layer:apps/Deployment:agent/guard-proxy"}
@@ -302,6 +308,60 @@ expect("a pod NAMED like agentgateway gets no pass for the name (#333)", g, "age
 expect("guard-proxy as deployed passes on its own env, with no exemption", g, "guard-proxy-6d9f", "pass")
 expect("Deployments are not judged (Pods only, as the ClusterPolicy was)", g, "rogue-deploy", "ignored")
 expect("only the agent namespace is in scope", g, "other-ns", "ignored")
+
+print("== restrict-agent-spawned-workloads: the bypass deny-llm-endpoint-bypass cannot see (#490) ==")
+SPAWN = POL / "restrict-agent-spawned-workloads.yaml"
+AS_IDENTITY = "may not run as a ServiceAccount that holds Bedrock credentials"
+AS_CONSOLE = "may not carry a label that a NetworkPolicy opens to the internet"
+
+
+def runs_as(obj, sa, field="serviceAccountName"):
+    spec = obj["spec"]["template"]["spec"] if obj["kind"] == "Deployment" else obj["spec"]
+    spec[field] = sa
+    return obj
+
+
+CONSOLE = {"app.kubernetes.io/name": "console"}
+# No env var at all: the SDK's default endpoint (or Bedrock's default regional hostname) needs none.
+g = run(SPAWN, [runs_as(pod("as-agent-sa", "agent", [c()]), "agent-sa"),
+                runs_as(pod("as-agentgateway", "agent", [c()]), "agentgateway"),
+                runs_as(pod("as-web-terminal", "agent", [c()]), "web-terminal"),
+                runs_as(pod("as-agent-sa-deprecated", "agent", [c()]), "agent-sa", field="serviceAccount"),
+                runs_as(deploy("deploy-as-agent-sa", "agent", [c()]), "agent-sa"),
+                pod("console-impostor", "agent", [c()], labels=CONSOLE),
+                deploy("deploy-console-impostor", "agent", [c()], labels=CONSOLE),
+                pod("plain", "agent", [c()], labels={"app": "plain"}),
+                runs_as(pod("elsewhere", "apps", [c()]), "agent-sa")], user="agent-sa")
+expect("agent-sa may not start a pod as agent-sa (Bedrock over PrivateLink)", g, "as-agent-sa", "fail", AS_IDENTITY)
+expect("nor as agentgateway, the gateway's Bedrock identity", g, "as-agentgateway", "fail", AS_IDENTITY)
+expect("nor as web-terminal, the tutor's", g, "as-web-terminal", "fail", AS_IDENTITY)
+expect("the deprecated serviceAccount field is read too", g, "as-agent-sa-deprecated", "fail", AS_IDENTITY)
+expect("a Deployment is refused at the Deployment (autogen)", g, "deploy-as-agent-sa", "fail", AS_IDENTITY)
+expect("a pod labelled like the console is refused (its egress is open)", g, "console-impostor", "fail", AS_CONSOLE)
+expect("so is a Deployment whose template is labelled like it", g, "deploy-console-impostor", "fail", AS_CONSOLE)
+expect("a pod on the default ServiceAccount with ordinary labels passes", g, "plain", "pass")
+expect("outside the agent namespace no association exists, so it is not in scope", g, "elsewhere", "ignored")
+g = run(SPAWN, [kp.C2_MANIFEST], user="agent-sa")
+expect("C2's villain Deployment is not this policy's business (the registry wall stays the lesson)", g,
+       "promo-mascot", "pass")
+# An UPDATE is judged the same: a pod's images are mutable, so patching workshop-mcp's own pod is a new workload.
+g = run(SPAWN, [runs_as(pod("workshop-mcp-7c9d", "agent", [c()]), "agent-sa")], operation="UPDATE", user="agent-sa")
+expect("agent-sa may not change a pod that already runs as agent-sa", g, "workshop-mcp-7c9d", "fail", AS_IDENTITY)
+g = run(SPAWN, [runs_as(pod("as-agent-sa", "agent", [c()]), "agent-sa")], user="agentgateway")
+expect("any agent-namespace identity is held to it, not only agent-sa", g, "as-agent-sa", "fail", AS_IDENTITY)
+# The guarded path itself: the identities that really create these pods are not the agent's.
+for who, obj, label in (
+        ("replicaset-controller", runs_as(pod("workshop-agent-5f6b", "agent", [c()]), "agent-sa"),
+         "the ReplicaSet controller creating the agent's own pod"),
+        ("kagent", runs_as(deploy("workshop-agent", "agent", [c()]), "agent-sa"),
+         "the kagent controller writing the workshop-agent Deployment"),
+        ("argocd", runs_as(deploy("agentgateway", "agent", [c()], labels={"app.kubernetes.io/name": "agentgateway"}),
+                           "agentgateway"), "Argo CD syncing agentgateway"),
+        ("argocd", deploy("console", "agent", [c()], labels=CONSOLE), "Argo CD syncing the console"),
+        ("web-terminal", runs_as(pod("student-pod", "agent", [c()]), "agent-sa"), "the attendee's terminal"),
+        ("admin", runs_as(pod("operator-pod", "agent", [c()]), "agent-sa"), "the operator")):
+    g = run(SPAWN, [obj], user=who)
+    expect(f"{label} is not judged", g, obj["metadata"]["name"], "ignored")
 
 print("== verify-image-signatures: a real signed image, verified offline-capable with the workshop key ==")
 SIG = POL / "verify-image-signatures.yaml"

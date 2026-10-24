@@ -165,7 +165,7 @@ for kind, plural in (("ValidatingPolicy", "validatingpolicies"), ("ImageValidati
     for name in sorted(want[kind] & set(have)):
         status = (have[name].get("status") or {}).get("conditionStatus") or {}
         check(f"{kind} {name} is READY", status.get("ready") is True, json.dumps(status.get("conditions")))
-check("ten policies in all", sum(len(v) for v in want.values()) == 10,
+check("eleven policies in all", sum(len(v) for v in want.values()) == 11,
       f"the repo holds {sum(len(v) for v in want.values())}; update this check with the reason if that changed")
 
 print("== 3. the Applications settle with no drift ==")

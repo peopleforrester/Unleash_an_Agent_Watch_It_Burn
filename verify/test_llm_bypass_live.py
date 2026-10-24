@@ -1,5 +1,5 @@
-# ABOUTME: Live half of deny-llm-endpoint-bypass (#333): creates pods of the bypass shape in the agent namespace
-# ABOUTME: and reads the PolicyReport Kyverno writes for each, which a CLI run on fixtures cannot show.
+# ABOUTME: Live half of deny-llm-endpoint-bypass (#333) and restrict-agent-spawned-workloads (#490): creates pods of
+# ABOUTME: the bypass shapes in the agent namespace and reads what Kyverno and the NetworkPolicies make of each.
 # SUITE: e2e
 """Needs kubectl and CONTEXT naming a guarded cluster (Kyverno and the ai-layer). Every missing prerequisite
 is a failure with the reason, never a skip.
@@ -23,6 +23,19 @@ The pass case is what makes the fails mean something: a policy that failed every
 the four above. It also reads the reports of the running guard-proxy and agentgateway pods, which must
 pass: that is the precondition the policy's header names for ever promoting it to Deny.
 
+Why (#490). deny-llm-endpoint-bypass sees only a DECLARED public endpoint. The bypass an agent would actually
+use declares none, so these shapes are made AS the agent (impersonating agent-sa, which the agent runs as) and
+judged by the controls that do catch them:
+  * a Pod with no endpoint env at all, the SDK's default          -> admitted, and no egress to the internet
+  * a Pod reading the endpoint from a ConfigMap, by envFrom        -> admitted, and no egress to the internet
+  * a Pod reading it by valueFrom configMapKeyRef                  -> admitted, and no egress to the internet
+  * a Deployment whose pods run as agent-sa (Bedrock over PrivateLink with the agent's own credentials)
+                                                                   -> refused by restrict-agent-spawned-workloads
+  * a Pod running as agentgateway, the gateway's Bedrock identity -> refused
+  * a Pod labelled app.kubernetes.io/name=console, whose egress platform-console-egress opens -> refused
+"No egress to the internet" is read off the live NetworkPolicies: some Egress policy selects the pod, and no
+policy that selects it allows a peer outside private address space. No packet is sent.
+
 Before any of that, the policy on the cluster must be the one in policies/kyverno/: a result for a
 different expression says nothing about this repo's file.
 
@@ -30,6 +43,7 @@ Usage: CONTEXT=<kube-context> [NAMESPACE=agent] python3 verify/test_llm_bypass_l
 """
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import pathlib
@@ -45,6 +59,11 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 POLICY_FILE = REPO / "policies/kyverno/deny-llm-endpoint-bypass.yaml"
 POLICY = "deny-llm-endpoint-bypass"
 MESSAGE = "This pod sets an LLM endpoint pointing at a public API."
+SPAWN_FILE = REPO / "policies/kyverno/restrict-agent-spawned-workloads.yaml"
+SPAWN = "restrict-agent-spawned-workloads"
+AS_IDENTITY = "may not run as a ServiceAccount that holds Bedrock credentials"
+AS_CONSOLE = "may not carry a label that a NetworkPolicy opens to the internet"
+AGENT = "system:serviceaccount:agent:agent-sa"
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
 # The reports controller rescans every 30s (gitops/apps/kyverno.yaml); admission results land sooner.
@@ -70,7 +89,7 @@ def finish() -> None:
         for f in failures:
             print(f"  - {f}")
         sys.exit(1)
-    print("All live deny-llm-endpoint-bypass checks passed.")
+    print("All live deny-llm-endpoint-bypass and restrict-agent-spawned-workloads checks passed.")
 
 
 KUBECTL = shutil.which("kubectl")
@@ -124,6 +143,23 @@ check("live namespaceSelector is the repo's",
 status = (live.get("status") or {}).get("conditionStatus") or {}
 check("Kyverno reports the policy ready (webhook configured, reports controller may read pods)",
       status.get("ready") is True, json.dumps(status.get("conditions")))
+
+spawn = kjson("get", f"validatingpolicies.policies.kyverno.io/{SPAWN}")
+check(f"ValidatingPolicy {SPAWN} is installed", spawn is not None)
+if failures:
+    finish()
+want_spawn, have_spawn = yaml.safe_load(SPAWN_FILE.read_text())["spec"], spawn["spec"]
+for field in ("validationActions", "matchConditions", "variables"):
+    check(f"live {SPAWN} spec.{field} is the repo's",
+          (have_spawn.get(field) or []) == (want_spawn.get(field) or []), f"cluster: {have_spawn.get(field)!r}")
+check(f"live {SPAWN} validation expressions are the repo's",
+      [v.get("expression") for v in have_spawn.get("validations") or []]
+      == [v.get("expression") for v in want_spawn.get("validations") or []])
+status = (spawn.get("status") or {}).get("conditionStatus") or {}
+check(f"Kyverno reports {SPAWN} ready", status.get("ready") is True, json.dumps(status.get("conditions")))
+r = kubectl("auth", "can-i", "create", "pods", "-n", NS, f"--as={AGENT}")
+check("agent-sa may create pods in the namespace (else the shapes below are not the agent's to make)",
+      r.stdout.strip() == "yes", (r.stdout + r.stderr).strip())
 if failures:
     finish()
 
@@ -131,9 +167,9 @@ RUN = uuid.uuid4().hex[:6]
 RUN_LABEL = f"wib.test/run={RUN}"
 
 
-def container(name: str, env: dict[str, str]) -> dict:
+def container(name: str, env: dict[str, str], **extra) -> dict:
     return {"name": name, "image": IMAGE, "command": ["sleep", "600"],
-            "env": [{"name": k, "value": v} for k, v in env.items()],
+            "env": [{"name": k, "value": v} for k, v in env.items()], **extra,
             "resources": {"limits": {"cpu": "20m", "memory": "16Mi"}, "requests": {"cpu": "5m", "memory": "8Mi"}},
             "securityContext": {"allowPrivilegeEscalation": False, "runAsNonRoot": True, "runAsUser": 65534,
                                 "capabilities": {"drop": ["ALL"]}}}
@@ -183,6 +219,75 @@ objects = [
 ]
 
 
+# The #490 shapes, made as the agent. None declares a public endpoint as a literal, so the policy above passes
+# them all; what has to hold is the network for the first three and the refusal for the last three.
+ENDPOINTS = f"llm-endpoints-{RUN}"
+AGENT_OBJECTS = [
+    {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": ENDPOINTS, "namespace": NS, "labels": labels("cm")},
+     "data": {"OPENAI_BASE_URL": "https://api.openai.com/v1"}},
+    pod(f"llm-default-endpoint-{RUN}", "default-endpoint", pod_spec([container("c", {})])),
+    pod(f"llm-envfrom-{RUN}", "envfrom",
+        pod_spec([container("c", {}, envFrom=[{"configMapRef": {"name": ENDPOINTS}}])])),
+    pod(f"llm-valuefrom-{RUN}", "valuefrom", pod_spec([container("c", {}, env=[
+        {"name": "OPENAI_BASE_URL", "valueFrom": {"configMapKeyRef": {"name": ENDPOINTS, "key": "OPENAI_BASE_URL"}}}])])),
+]
+OPEN_SHAPES = ["default-endpoint", "envfrom", "valuefrom"]
+
+
+def as_sa(obj: dict, sa: str) -> dict:
+    spec = obj["spec"]["template"]["spec"] if obj["kind"] == "Deployment" else obj["spec"]
+    spec["serviceAccountName"] = sa
+    return obj
+
+
+def console_pod() -> dict:
+    p = pod(f"llm-console-impostor-{RUN}", "console-label", pod_spec([container("c", {})]))
+    p["metadata"]["labels"]["app.kubernetes.io/name"] = "console"
+    return p
+
+
+REFUSED = [  # (what it is, object, the refusal's message)
+    ("a Deployment whose pods run as agent-sa (Bedrock over PrivateLink, the agent's own credentials)",
+     as_sa(deployment(f"llm-bedrock-{RUN}", "bedrock-agent-sa", pod_spec([container("c", {})])), "agent-sa"),
+     AS_IDENTITY),
+    ("a Pod running as agentgateway, the gateway's Bedrock identity",
+     as_sa(pod(f"llm-bedrock-gw-{RUN}", "bedrock-agentgateway", pod_spec([container("c", {})])), "agentgateway"),
+     AS_IDENTITY),
+    ("a Pod labelled app.kubernetes.io/name=console, whose egress is open", console_pod(), AS_CONSOLE),
+]
+
+
+def selects(sel: dict, pod_labels: dict) -> bool:
+    if any(pod_labels.get(k) != v for k, v in (sel.get("matchLabels") or {}).items()):
+        return False
+    for e in sel.get("matchExpressions") or []:
+        k, op, vals = e["key"], e["operator"], e.get("values") or []
+        ok = {"In": k in pod_labels and pod_labels[k] in vals, "NotIn": pod_labels.get(k) not in vals,
+              "Exists": k in pod_labels, "DoesNotExist": k not in pod_labels}[op]
+        if not ok:
+            return False
+    return True
+
+
+def internet_paths(pod_labels: dict) -> list[str]:
+    """Why a pod with these labels could reach the internet, read off the live NetworkPolicies. Empty: it cannot."""
+    nps = (kjson("get", "networkpolicies.networking.k8s.io", "-n", NS) or {"items": []})["items"]
+    egress = [np for np in nps if "Egress" in (np["spec"].get("policyTypes") or [])
+              and selects(np["spec"].get("podSelector") or {}, pod_labels)]
+    if not egress:
+        return ["no Egress NetworkPolicy selects it, so its egress is unrestricted"]
+    out = []
+    for np in egress:
+        for rule in np["spec"].get("egress") or []:
+            if not rule.get("to"):
+                out.append(f"{np['metadata']['name']} allows egress to every destination")
+            for peer in rule.get("to") or []:
+                cidr = (peer.get("ipBlock") or {}).get("cidr")
+                if cidr and not ipaddress.ip_network(cidr, strict=False).is_private:
+                    out.append(f"{np['metadata']['name']} allows {cidr}")
+    return out
+
+
 def results_by_uid() -> dict[str, dict]:
     """This policy's result for every Pod in NS that has one, keyed by the Pod's UID."""
     reports = kjson("get", "policyreports.wgpolicyk8s.io", "-n", NS) or {"items": []}
@@ -229,6 +334,24 @@ try:
         ok = res is not None and res.get("result") == verdict and (verdict == "pass" or MESSAGE in res.get("message", ""))
         check(f"{what} is reported {verdict.upper()} ({name})", ok, got)
 
+    print("== the shapes deny-llm-endpoint-bypass cannot see, made as the agent (#490) ==")
+    r = kubectl("apply", f"--as={AGENT}", "-f", "-", stdin="\n---\n".join(json.dumps(o) for o in AGENT_OBJECTS))
+    check("agent-sa may create a pod with no endpoint env, and ones reading it from a ConfigMap",
+          r.returncode == 0, (r.stderr or r.stdout).strip())
+    for case in OPEN_SHAPES:
+        made = pod_uids(f"wib.test/run={RUN},wib.test/case={case}")
+        paths = internet_paths(labels(case))
+        check(f"the {case} pod exists and no NetworkPolicy lets it reach a public API", bool(made) and not paths,
+              "; ".join(paths) or "the pod was not created")
+    paths = internet_paths({**labels("console-label"), "app.kubernetes.io/name": "console"})
+    check("the console label really does open egress (why the policy refuses it)", bool(paths),
+          "no live NetworkPolicy opens egress for app.kubernetes.io/name=console; update the policy's egressLabels")
+    for what, obj, message in REFUSED:
+        r = kubectl("create", f"--as={AGENT}", "-f", "-", stdin=json.dumps(obj))
+        err = " ".join(((r.stderr or "") + " " + (r.stdout or "")).split())
+        check(f"{what} is refused by {SPAWN}",
+              r.returncode != 0 and f"Policy {SPAWN} failed:" in err and message in err, err or "it was admitted")
+
     print("== the guarded path itself passes (the precondition for ever promoting to Deny) ==")
     by_uid = results_by_uid()
     for app in ("guard-proxy", "agentgateway"):
@@ -239,7 +362,8 @@ try:
             check(f"{name} is reported PASS", res is not None and res.get("result") == "pass",
                   f"{res.get('result')}: {res.get('message', '')!r}" if res else "no result for this policy")
 finally:
-    r = kubectl("delete", "deployments,pods", "-n", NS, "-l", RUN_LABEL, "--ignore-not-found", "--wait=false")
+    r = kubectl("delete", "deployments,pods,configmaps", "-n", NS, "-l", RUN_LABEL, "--ignore-not-found",
+                "--wait=false")
     print(f"\n  cleanup ({RUN_LABEL}): {'done' if r.returncode == 0 else 'FAILED: ' + r.stderr.strip()}")
 
 finish()

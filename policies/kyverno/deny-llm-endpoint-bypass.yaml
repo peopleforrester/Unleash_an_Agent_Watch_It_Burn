@@ -1,22 +1,29 @@
 # ABOUTME: Admission control for the AI plane: a pod in the agent namespace may not point itself at a
 # ABOUTME: public LLM endpoint, which is how the guard-proxy gets routed around entirely.
 #
-# The hole this closes. Every AI guardrail in this workshop is a RUNTIME toggle on the path
+# What it sees, and what it does not. Every AI guardrail in this workshop is a RUNTIME toggle on the path
 # guard-proxy -> agentgateway -> kagent: input block-list, injection classifier, output scrubbing, MCP
-# tool authorization. The only structural control keeping traffic on that path is the egress
-# NetworkPolicy, and that policy is deliberately scoped to `app.kubernetes.io/name: workshop-agent`,
-# because the MCP servers pip-install from PyPI at startup and a namespace-wide deny stops them binding.
+# tool authorization. The agent, which by design can create Pods and Deployments in its namespace, can
+# stand up a second pod that talks to a model off that path. This policy reports one shape of that pod:
+# one that DECLARES a public model endpoint as a literal env value.
 #
-# The consequence is that ANY pod created in the agent namespace WITHOUT that label has unrestricted
-# egress, and the allowlist's in-VPC rule reaches the Bedrock PrivateLink endpoint directly. So the
-# agent, which by design can create Deployments, can stand up a second pod that talks to a model with
-# every guardrail bypassed, and nothing records that it happened. The thing the workshop is about can
-# route around the thing the workshop is demonstrating.
-#
-# This is the admission-layer answer: you may not declare a public model endpoint. It is not a complete
-# fix (the in-VPC Bedrock path is still reachable by an unlabelled pod) and it is not a substitute for
-# widening the NetworkPolicy; it closes the easiest route and makes the attempt visible in a policy
-# report instead of invisible.
+# It is a visibility signal, not the control (#490). A pod that bypasses the path needs no such env var:
+#   * an SDK used with its default endpoint, which already is the public API;
+#   * Bedrock over the in-VPC PrivateLink endpoint, with the AWS SDK's default regional hostname;
+#   * the endpoint read from a ConfigMap or Secret through envFrom or valueFrom, which CEL here cannot
+#     resolve.
+# All three pass this policy. The structural controls are elsewhere:
+#   * The network. agent-egress-allowlist selects EVERY pod in the namespace (#108), not just
+#     workshop-agent, so a pod cannot reach a public API at all, however its endpoint is configured.
+#     (The MCP servers' PyPI install at startup, which once kept it narrow, is baked into the image now.)
+#     The one way past it is a label: platform-console-egress opens egress to a pod labelled
+#     app.kubernetes.io/name=console.
+#   * Identity. The network must let the in-VPC Bedrock endpoint through, because workshop-agent and
+#     agentgateway call it there. A pod gets Bedrock credentials only through EKS Pod Identity, by running
+#     as a ServiceAccount with an association (agent-sa, agentgateway, web-terminal).
+# restrict-agent-spawned-workloads closes both: a workload the agent's identities create may not run as one
+# of those ServiceAccounts, nor wear the console label. verify/test_llm_bypass_live.py exercises all three
+# shapes above against it on a live cluster.
 #
 # SHIPS AS AUDIT, and is NOT flipped by the Beat-1 toggle. Two separate reasons, both deliberate:
 #

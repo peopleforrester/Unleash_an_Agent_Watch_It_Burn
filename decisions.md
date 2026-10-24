@@ -1232,3 +1232,53 @@ platform Application's destination, and `verify/test_kyverno_cel_policies.py` ch
 Not done: the issue's optional point that `require-resource-limits` stays Audit on attendee and only produces
 PolicyReport noise there. Excluding it on attendee changes what kyverno-policies ships on that profile and
 the policy count `test_kyverno_cel_live.py` expects, so it stays as it is.
+## 2026-10-24T21:45:00Z · #490 · The agent's bypass is closed by who asks, not by what the pod declares
+
+`deny-llm-endpoint-bypass` reports only a pod that declares a public model endpoint as a literal env value. The
+issue named three bypasses it cannot see: an SDK on its default endpoint, Bedrock over the in-VPC PrivateLink
+endpoint on the SDK's default regional hostname, and an endpoint read through envFrom or valueFrom. Matching
+better cannot fix that, because none of the three needs an endpoint env var at all.
+
+**What was already true.** The network option the issue proposed, an egress allowlist over every pod in
+`agent`, landed in #108 (`9096379`): `agent-egress-allowlist` has `podSelector: {}`, and the MCP servers' PyPI
+install at startup, which once kept it narrow, is baked into `images/workshop-mcp`. So that PyPI question is
+already settled. The policy's header still described the old narrow selector, and it has been rewritten.
+
+**What was still open, and how it is closed.** Two routes stayed open past that allowlist:
+- **Identity.** The allowlist has to pass 10.0.0.0/16:443, because workshop-agent and agentgateway call Bedrock
+  there, so the network cannot tell a bypass pod from them. Bedrock credentials come only from EKS Pod Identity,
+  to the ServiceAccounts associated in `infra/terraform/aws/cluster/main.tf` (agent-sa, agentgateway,
+  web-terminal), and creating a Pod needs no RBAC on the ServiceAccount it names. agent-sa may create Pods, so
+  the agent could run one as agent-sa.
+- **A label.** `platform-console-egress` gives `egress: [{}]` to any pod labelled
+  `app.kubernetes.io/name=console`, and the creator of a pod picks its labels.
+
+The new `restrict-agent-spawned-workloads` (ValidatingPolicy, **Deny**, admission only) refuses a pod, or by
+autogen any pod controller, created or changed by a ServiceAccount of `agent` other than web-terminal when it
+runs as one of those three accounts or carries that label. It keys on `request.userInfo`, which the API server
+authenticates. ArgoCD, the kagent controller and the kube controllers are not identities in `agent`, so the
+guarded path is not caught by it.
+
+**Choices made:**
+- **Deny, not Audit.** `deny-llm-endpoint-bypass` stays Audit because it matches on pod content and might match
+  guard-proxy. This policy matches only the agent's own requests, and nothing the agent legitimately makes (C2's
+  villain Deployment included) runs as those accounts or wears that label. A report of a bypass that has already
+  run is not a control.
+- **Every agent-namespace ServiceAccount but web-terminal**, not agent-sa alone, so a Role granted later to
+  another agent-plane account is covered from the day it lands. web-terminal is the attendee's terminal.
+- **UPDATE is judged too.** A pod's container images can be changed, so patching workshop-mcp's own pod would
+  give the agent a new workload under agent-sa.
+- **The two hand lists are held to their sources** by `verify/test_agent_bypass_shapes.py` (offline): the Pod
+  Identity associations in `agent`, and every label a NetworkPolicy in `agent` selects on, including the C1 fix
+  set in the challenge-fixes ConfigMap.
+- **Tests.** `verify/test_kyverno_cel_policies.py` gained 18 CLI cases, run here against Kyverno CLI v1.19.0;
+  emptying the identity list makes them fail. `verify/test_llm_bypass_live.py` now makes the issue's three
+  shapes as agent-sa, which it impersonates, and checks each against the live NetworkPolicies without sending
+  traffic. It also checks that the refusals carry this policy's message. It has not been run on a cluster yet.
+  `test_kyverno_cel_live.py` now counts eleven policies.
+
+**Not closed here (follow-ups):** two routes stay open. A pod the agent makes can call agentgateway's `:3002`
+model bind, or the agent's A2A port, directly over the intra-namespace allow, with no ingress restriction on
+either. And workshop-mcp's `run_shell` already runs as agent-sa, so it holds Bedrock credentials with no new
+pod. Closing either changes ingress on the chat path, or the identity that C8 is built around, and both need a
+live cluster to check.

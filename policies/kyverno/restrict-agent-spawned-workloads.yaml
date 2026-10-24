@@ -1,0 +1,101 @@
+# ABOUTME: Structural control on the AI plane's bypass (#490): a workload the agent creates in its own namespace
+# ABOUTME: may not borrow a Bedrock identity, nor wear the one label a NetworkPolicy opens to the internet.
+#
+# The bypass this closes. The agent (agent-sa, which both workshop-agent and workshop-mcp run as) can create
+# Pods and Deployments in `agent`. A pod it makes there can reach a model around every guard-proxy toggle by
+# two routes, and deny-llm-endpoint-bypass sees neither, because neither needs an endpoint env var:
+#
+#   * Bedrock, over the in-VPC PrivateLink endpoint, with the AWS SDK's default regional hostname. The
+#     egress allowlist has to let 10.0.0.0/16:443 through (workshop-agent and agentgateway call Bedrock on
+#     that path), so the network cannot tell this pod from them. What it CAN be told apart by is identity:
+#     Bedrock credentials come only from EKS Pod Identity, and only to the ServiceAccounts with an
+#     association (infra/terraform/aws/cluster/main.tf). Creating a Pod needs no RBAC on the ServiceAccount
+#     it names, so an agent that may create Pods may run one as agent-sa and inherit the agent's grant.
+#   * A public API, with the SDK's default endpoint or one read from a ConfigMap or Secret. The egress
+#     allowlist covers the whole namespace (#108), so an ordinary pod cannot get out. But NetworkPolicy
+#     allows are additive, and platform-console-egress (gitops/ai-layer/resources.yaml) gives `egress: [{}]`
+#     to any pod labelled app.kubernetes.io/name=console. A label is the creator's to choose.
+#
+# So the rule is on who asks, which the API server authenticates and the agent cannot forge: a request from
+# a ServiceAccount of the agent namespace may not create or change a pod (or, through autogen, a Deployment,
+# StatefulSet, DaemonSet, ReplicaSet, Job or CronJob) that runs as a Bedrock-bound ServiceAccount or carries
+# a label an egress allow selects. Nothing on the guarded path is caught by it: ArgoCD, the kagent controller
+# and the kube controllers that create the real pods are not agent-namespace identities. web-terminal is the
+# attendee's own terminal, not the agent's, and is left out on purpose.
+#
+# SHIPS AS DENY, unlike deny-llm-endpoint-bypass. That policy matches on pod content, so a wrong expression
+# could have failed guard-proxy itself; this one matches only requests from the agent's identities, and no
+# workload the agent legitimately makes (C2's villain Deployment included) runs as one of these accounts or
+# carries the console label. A report of a bypass that already ran is not a control.
+#
+# Not closed here, and filed as follow-ups: a shell the agent already has in a pod that runs as agent-sa
+# (workshop-mcp's run_shell) holds the same credentials with no new pod at all; and a pod this policy admits
+# can still call agentgateway's :3002 model bind, or the agent's A2A port, over the intra-namespace allow,
+# since nothing restricts ingress to either.
+#
+# Background evaluation is off: the rule reads request.userInfo, which exists only at admission.
+#
+# The two lists below are held to their sources by verify/test_agent_bypass_shapes.py: the Pod Identity
+# associations in namespace `agent`, and every label a NetworkPolicy in `agent` selects on. Fixture cases
+# run through the Kyverno CLI in verify/test_kyverno_cel_policies.py; the live shapes in
+# verify/test_llm_bypass_live.py.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: restrict-agent-spawned-workloads
+  annotations:
+    policies.kyverno.io/title: Restrict Agent-Spawned Workloads
+    policies.kyverno.io/category: Workshop / AI plane
+    policies.kyverno.io/description: >-
+      A workload the agent creates in its own namespace may not run as a ServiceAccount that holds Bedrock
+      credentials, and may not carry a label that a NetworkPolicy opens to the internet. Either one lets the
+      agent reach a model around guard-proxy.
+spec:
+  validationActions:
+    - Deny
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - agent
+  matchConditions:
+    # The agent's identities: every ServiceAccount in its namespace but the attendee's terminal. Wider than
+    # agent-sa alone, so a Role granted later to another agent-plane account is covered the day it lands.
+    - name: requested-by-an-agent-namespace-identity
+      expression: >-
+        request.userInfo.username.startsWith('system:serviceaccount:agent:') &&
+        request.userInfo.username != 'system:serviceaccount:agent:web-terminal'
+  variables:
+    # The ServiceAccounts with an EKS Pod Identity association in namespace `agent`.
+    - name: modelIdentities
+      expression: "['agent-sa', 'agentgateway', 'web-terminal']"
+    # Every label a NetworkPolicy in namespace `agent` selects pods on, with the values it matches.
+    - name: egressLabels
+      expression: "{'app.kubernetes.io/name': ['console']}"
+    - name: labels
+      expression: "object.metadata.?labels.orValue({})"
+  validations:
+    # serviceAccount is the deprecated alias; the API server defaults one from the other, but read both.
+    - expression: >-
+        !(object.spec.?serviceAccountName.orValue('') in variables.modelIdentities) &&
+        !(object.spec.?serviceAccount.orValue('') in variables.modelIdentities)
+      message: >-
+        A workload the agent creates may not run as a ServiceAccount that holds Bedrock credentials
+        (agent-sa, agentgateway, web-terminal). That pod could call the model directly, around guard-proxy.
+    - expression: >-
+        !variables.egressLabels.exists(k, k in variables.labels && variables.labels[k] in variables.egressLabels[k])
+      message: >-
+        A workload the agent creates may not carry a label that a NetworkPolicy opens to the internet
+        (app.kubernetes.io/name=console). That pod could reach a public model API, around guard-proxy.
