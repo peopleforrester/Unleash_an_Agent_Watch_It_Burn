@@ -1,0 +1,863 @@
+{
+  "title": "Watch It Burn: fleet progress (instructor)",
+  "description": "Instructor view across every attendee cluster: who is in the lab, how far each one got, where they asked for help, what the guardrails caught. Source: infra/terraform/dashboards/fleet-analytics.json (#150).",
+  "layout_type": "ordered",
+  "reflow_type": "auto",
+  "template_variables": [
+    {
+      "name": "cluster",
+      "prefix": "kube_cluster_name",
+      "available_values": [],
+      "default": "watch-it-burn-attendee-*"
+    },
+    {
+      "name": "role",
+      "prefix": "witb.lab.role",
+      "available_values": [
+        "student",
+        "instructor"
+      ],
+      "default": "*"
+    }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "type": "note",
+        "content": "**What the room actually did, across every cluster (#150).** Read it live during the session or afterwards.\n\nLab markers come from the lab page (`gitops/ai-layer/web/lab-events.js`) as `witb.lab.calls`, tagged `span.name`, `kube_cluster_name` and `witb.lab.alias` (the friendly name a student was given, which is also the `cluster` the feedback app records). A fix counts as installed when BurritoBot's `/controls` measured it ON, not when someone said so.\n\nNo typed text is in any of these widgets. The markers carry which guide step, hint or command block was opened, by number, and nothing a student wrote.\n\n**cluster** defaults to `watch-it-burn-attendee-*`, the attendees. Set it to `*` to include the Community, admin and presenter clusters; scope by cluster rather than **role**, because an admin cluster's lab opened without `?role=` reports itself as a student. Full field list and the post-event pass: `docs/fleet-analytics.md`.",
+        "background_color": "vivid_purple",
+        "font_size": "14",
+        "text_align": "left",
+        "show_tick": false,
+        "has_padding": true
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "title": "Who is here",
+        "layout_type": "ordered",
+        "background_color": "vivid_blue",
+        "show_title": true,
+        "widgets": [
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Labs open now (heartbeat in the last 5 min)",
+              "precision": 0,
+              "autoscale": true,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "count_nonzero(sum:witb.lab.calls{span.name:lab.heartbeat,$cluster,$role} by {kube_cluster_name}.as_count())",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ]
+                }
+              ],
+              "time": {
+                "live_span": "5m"
+              }
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Clusters that ever opened the lab",
+              "precision": 0,
+              "autoscale": true,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "count_nonzero(sum:witb.lab.calls{span.name:lab.session.start,$cluster,$role} by {kube_cluster_name}.as_count())",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "query_value",
+              "title": "Clusters running (Datadog Agent reporting)",
+              "precision": 0,
+              "autoscale": true,
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "count_nonzero(avg:datadog.agent.running{$cluster} by {kube_cluster_name})",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Labs with a visible tab, per minute",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "count_nonzero(sum:witb.lab.calls{span.name:lab.heartbeat,$cluster,$role} by {kube_cluster_name}.as_count().rollup(sum, 60))",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "display_type": "line"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "title": "How far they got",
+        "layout_type": "ordered",
+        "background_color": "vivid_green",
+        "show_title": true,
+        "widgets": [
+          {
+            "definition": {
+              "type": "query_table",
+              "title": "Fix installed, by attendee (C1 to C8; a number above 0 means measured ON at least once)",
+              "has_search_bar": "auto",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c1",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c2",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c3",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c4",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c5",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c6",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c7",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c8",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c1",
+                      "alias": "C1",
+                      "limit": {
+                        "count": 100,
+                        "order": "asc"
+                      }
+                    },
+                    {
+                      "formula": "c2",
+                      "alias": "C2"
+                    },
+                    {
+                      "formula": "c3",
+                      "alias": "C3"
+                    },
+                    {
+                      "formula": "c4",
+                      "alias": "C4"
+                    },
+                    {
+                      "formula": "c5",
+                      "alias": "C5"
+                    },
+                    {
+                      "formula": "c6",
+                      "alias": "C6"
+                    },
+                    {
+                      "formula": "c7",
+                      "alias": "C7"
+                    },
+                    {
+                      "formula": "c8",
+                      "alias": "C8"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "query_table",
+              "title": "Challenge opened, by attendee (how many times the step was expanded)",
+              "has_search_bar": "auto",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c1",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c2",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c3",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c4",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c5",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c6",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c7",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c8",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c1",
+                      "alias": "C1",
+                      "limit": {
+                        "count": 100,
+                        "order": "asc"
+                      }
+                    },
+                    {
+                      "formula": "c2",
+                      "alias": "C2"
+                    },
+                    {
+                      "formula": "c3",
+                      "alias": "C3"
+                    },
+                    {
+                      "formula": "c4",
+                      "alias": "C4"
+                    },
+                    {
+                      "formula": "c5",
+                      "alias": "C5"
+                    },
+                    {
+                      "formula": "c6",
+                      "alias": "C6"
+                    },
+                    {
+                      "formula": "c7",
+                      "alias": "C7"
+                    },
+                    {
+                      "formula": "c8",
+                      "alias": "C8"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Challenge opens over time (the room's pace)",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:witb.lab.calls{span.name:lab.step.open,$cluster,$role} by {witb.lab.challenge}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Fixes installed over time, by challenge",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.installed,$cluster,$role} by {witb.lab.challenge}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "display_type": "bars"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "title": "Where they got stuck",
+        "layout_type": "ordered",
+        "background_color": "vivid_orange",
+        "show_title": true,
+        "widgets": [
+          {
+            "definition": {
+              "type": "timeseries",
+              "title": "Hints and prompts revealed, by challenge",
+              "show_legend": true,
+              "legend_layout": "auto",
+              "requests": [
+                {
+                  "response_format": "timeseries",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,$cluster,$role} by {witb.lab.challenge,witb.lab.kind}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q"
+                    }
+                  ],
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "query_table",
+              "title": "Hints and prompts revealed, by attendee",
+              "has_search_bar": "auto",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "c1",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:1,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c2",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:2,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c3",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:3,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c4",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:4,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c5",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:5,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c6",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:6,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c7",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:7,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    },
+                    {
+                      "data_source": "metrics",
+                      "name": "c8",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,witb.lab.challenge:8,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "c1",
+                      "alias": "C1",
+                      "limit": {
+                        "count": 100,
+                        "order": "asc"
+                      }
+                    },
+                    {
+                      "formula": "c2",
+                      "alias": "C2"
+                    },
+                    {
+                      "formula": "c3",
+                      "alias": "C3"
+                    },
+                    {
+                      "formula": "c4",
+                      "alias": "C4"
+                    },
+                    {
+                      "formula": "c5",
+                      "alias": "C5"
+                    },
+                    {
+                      "formula": "c6",
+                      "alias": "C6"
+                    },
+                    {
+                      "formula": "c7",
+                      "alias": "C7"
+                    },
+                    {
+                      "formula": "c8",
+                      "alias": "C8"
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Most help asked for (hints + prompts revealed)",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:witb.lab.calls{span.name:lab.hint.open,$cluster,$role} by {witb.lab.alias}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Fixes switched back off (retrying, or lost)",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:witb.lab.calls{span.name:lab.control.removed,$cluster,$role} by {witb.lab.alias,witb.lab.challenge}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Feedback opened, by challenge",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:witb.lab.calls{span.name:lab.feedback.open,$cluster,$role} by {witb.lab.challenge}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "type": "group",
+        "title": "What their agents were asked, and what the guardrails caught",
+        "layout_type": "ordered",
+        "background_color": "vivid_pink",
+        "show_title": true,
+        "widgets": [
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Messages sent to BurritoBot, by cluster",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:traces.span.metrics.calls{service:burritobot,span.name:chat,$cluster} by {kube_cluster_name}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Command blocks tapped, by challenge and target",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "metrics",
+                      "name": "q",
+                      "query": "sum:witb.lab.calls{span.name:lab.command.send,$cluster,$role} by {witb.lab.challenge,witb.lab.kind}.as_count()",
+                      "aggregator": "sum"
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Guardrail catches (guard-proxy), by cluster and guard",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "logs",
+                      "name": "q",
+                      "indexes": [
+                        "*"
+                      ],
+                      "search": {
+                        "query": "kube_namespace:agent @event:(input_blocklist_hit OR input_classifier_block OR output_scrub) $cluster"
+                      },
+                      "compute": {
+                        "aggregation": "count"
+                      },
+                      "group_by": [
+                        {
+                          "facet": "kube_cluster_name",
+                          "limit": 60,
+                          "sort": {
+                            "aggregation": "count",
+                            "order": "desc"
+                          }
+                        },
+                        {
+                          "facet": "@event",
+                          "limit": 60,
+                          "sort": {
+                            "aggregation": "count",
+                            "order": "desc"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Fork bomb triggered, by cluster",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "logs",
+                      "name": "q",
+                      "indexes": [
+                        "*"
+                      ],
+                      "search": {
+                        "query": "kube_namespace:security @rule:\"Fork Bomb In Workload Container\" $cluster"
+                      },
+                      "compute": {
+                        "aggregation": "count"
+                      },
+                      "group_by": [
+                        {
+                          "facet": "kube_cluster_name",
+                          "limit": 60,
+                          "sort": {
+                            "aggregation": "count",
+                            "order": "desc"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "toplist",
+              "title": "Falco runtime rules tripped, by rule",
+              "requests": [
+                {
+                  "response_format": "scalar",
+                  "queries": [
+                    {
+                      "data_source": "logs",
+                      "name": "q",
+                      "indexes": [
+                        "*"
+                      ],
+                      "search": {
+                        "query": "kube_namespace:security @rule:* $cluster"
+                      },
+                      "compute": {
+                        "aggregation": "count"
+                      },
+                      "group_by": [
+                        {
+                          "facet": "@rule",
+                          "limit": 60,
+                          "sort": {
+                            "aggregation": "count",
+                            "order": "desc"
+                          }
+                        }
+                      ]
+                    }
+                  ],
+                  "formulas": [
+                    {
+                      "formula": "q",
+                      "limit": {
+                        "count": 60,
+                        "order": "desc"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "type": "note",
+              "content": "**Prompt text** is not on this dashboard. Attendee and presenter clusters dual-ship their traces here (#242), so it is in this org's Agent Observability, filterable by `kube_cluster_name`. Attendees are told their prompts may be shown on the instructor screen; how prompt text is kept and used after the session is a separate decision, recorded in `docs/fleet-analytics.md`.",
+              "background_color": "white",
+              "font_size": "14",
+              "text_align": "left",
+              "show_tick": false,
+              "has_padding": true
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

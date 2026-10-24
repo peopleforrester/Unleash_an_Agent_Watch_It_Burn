@@ -37,6 +37,7 @@ configMapGenerator:
       - web/console.js
       - web/burritbot.html # B1: the BurritoBot storefront, served by the console nginx as the front door
       - web/lab.html # B5/B12: round-3 student lab page (instructions left + ttyd terminal embedded right)
+      - web/lab-events.js # lab progress markers for the instructor's fleet view (#150)
       - web/brief.html # instructor brief for R1/R2: prompts VISIBLE, separate page from the student lab (#122)
       - web/kubecon.html # KubeCon NA 2026 breakout brief: demo beats by run-of-show segment, no provisioning (#501)
       - web/platform.html # the platform catalogue: every service, its URL and its login

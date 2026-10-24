@@ -29,3 +29,11 @@ provider "datadog" {
 # resource "datadog_dashboard_json" "wasted_tokens" {
 #   dashboard = file("${path.module}/wasted-tokens.json")
 # }
+
+# The instructor's fleet view (#150): who is in the lab, how far each attendee got, where they asked for help,
+# and what the guardrails caught, across every cluster at once. Apply it to the INSTRUCTOR org (the one attendee
+# clusters dual-ship to, #242), with that org's DD_API_KEY and DD_APP_KEY. In a student's own org it renders
+# empty by design: the lab markers it reads are only shipped to the instructor org.
+resource "datadog_dashboard_json" "fleet_analytics" {
+  dashboard = file("${path.module}/fleet-analytics.json")
+}

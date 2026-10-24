@@ -61,3 +61,14 @@ extraManifests:
                 - span_metrics
                 - datadog/connector
                 - debug
+            # Lab progress markers (#150), as on the instructor overlay. The Community cluster's lab is shared by the
+            # room, so the fleet dashboard leaves it out by default (its cluster filter is the attendee slots).
+            traces/lab:
+              exporters:
+                - datadog
+                - span_metrics/lab
+                - debug
+            metrics/lab:
+              exporters:
+                - datadog
+                - debug
