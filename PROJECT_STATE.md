@@ -10,6 +10,14 @@ section "Dates to hold (#447)". Build order with no forecast dates; for people: 
 platform is live, two timed run-throughs by 2026-11-08, delivery 2026-11-12. Slot and room:
 conference-knowledge `kubecon-na-2026`.
 
+## KubeCon delivery identity (#454)
+
+The five Portland accounts in the same regions, `event=kubecon-na-2026` (`infra/terraform/fleet/event.sh`),
+and no Datadog pool until Whitney loads one the week of 2026-10-26: a logged gap (#500, #510). Details are
+in decisions.md, 2026-10-24 · #454. The 2026-10-24 bring-up of attackme and michael-admin in accen-dev,
+us-west-2, ran the #503 probe (#528, #530). Its teardown to zero (`verify/account-audit.sh` CLEAN) is not
+recorded here yet, and the probe's date, clusters and spend go on #509.
+
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
 - **Supply chain closed (#413, #414, #415, #331).** The guard image is multi-stage, CPU-only and built

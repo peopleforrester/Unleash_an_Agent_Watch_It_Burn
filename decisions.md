@@ -881,3 +881,22 @@ shape, not on the platform. Each criterion of #530 had two ways out; these are t
   to answer harmless off-topic asks, and the community probe asks the linked-list question three times in
   fresh conversations and passes only on 3 of 3. That has not run on a cluster, so the run-of-show and
   `/kubecon` stop promising the answer until the Night Before probe shows it.
+## 2026-10-24 · #454 · KubeCon delivery identity: the five Portland accounts, event=kubecon-na-2026, no Datadog pool yet
+
+Michael's answers on #454, and where each one lands in the repo.
+
+- **Accounts and region (2026-10-23):** the KubeCon delivery and its rehearsals run on the five AWS
+  accounts the Portland fleet used, in the same regions. No dedicated account. The 2026-10-24 bring-up ran
+  in accen-dev, us-west-2 (#510, #526), which is also where the pinned model is checked (#453).
+- **Event tag (2026-10-23):** `event=kubecon-na-2026`, the coordinator default, which Michael may change.
+  It is set once in `infra/terraform/fleet/event.sh`, and neither Terraform root has a default, so an
+  apply without the tag fails (#494). KubeCon spend separates from other tenants on that tag (#392).
+- **Datadog org pool (2026-10-23):** none until Whitney sets one up, the week of 2026-10-26. A missing key
+  is a known, logged gap, not a stop. The admin profile runs without a key (#500), and `fleet.sh`
+  bootstraps roster clusters without one (#510). Datadog-dependent work (#264, #265, #320, #337, #382,
+  #443, abstract point 7) waits until 2026-10-30.
+- **Bring-up scope (2026-10-24):** the community cluster plus one admin cluster on those accounts, on the
+  smallest instances that run the demo, tagged as above. The #503 probe runs on both, and both clusters
+  come down in the same session with zero fleet resources verified. A second admin cluster is not part of
+  it. The run on attackme and michael-admin is recorded on #510, #526, #528 and #530. The teardown's zero
+  check (`verify/account-audit.sh` CLEAN) is not recorded in this repo yet.
