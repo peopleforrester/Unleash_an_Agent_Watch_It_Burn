@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-10-24 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `56a19a43cfda31df25c742474f624b43d475eae1` (the last commit to change lab.html, on 2026-10-24) |
-| Source blob | `ea926be05d4c010a104038e8db587dda39db000e` |
+| Source commit | `78afdb28cfbe44962d45aaf2cef58b139dd25d52` (the last commit to change lab.html, on 2026-10-25) |
+| Source blob | `55cd288826b2505dc275593fadd488272d12064c` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -104,7 +104,7 @@ There is a lot here and you are not expected to know what all of it is. But here
 
 *[Community cluster only]* The Community cluster carries a shorter list on purpose. Istio is not installed here, and neither is anything that defends the agent: no Kyverno, no Falco, no NetworkPolicy until you apply one.
 
-- *[Not on the Community cluster]* [Istio ambient mesh](https://istio.io/latest/docs/ambient/overview/) encrypts all traffic between containers inside the cluster, automatically.
+- *[Not on the Community cluster]* [Istio ambient mesh](https://istio.io/latest/docs/ambient/overview/) is installed, but no namespace is enrolled in it yet, so it is not encrypting anything. Run `kubectl get ns -L istio.io/dataplane-mode` and see.
 - [cert-manager](https://cert-manager.io/docs/) issues and renews the TLS certificates that services present (for example the console's HTTPS).
 - [OpenTelemetry](https://opentelemetry.io/docs/) collects the traces and metrics. We send them to Datadog, but OpenTelemetry is vendor neutral. You can send the collected data to any observability backend.
 - [External Secrets](https://external-secrets.io/latest/) pulls your Datadog keys out of AWS Secrets Manager, so no credential is committed anywhere.
