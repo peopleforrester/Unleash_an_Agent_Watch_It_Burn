@@ -668,3 +668,51 @@ recorded in the issue and here so it stops reading as a backlog item:
 `verify/test_mobile_titles_e2e.py`, which measures the boxes at 320 to 680px and 1280px. A CSS grep cannot
 say whether a title wraps. It is used only through `uv run --with playwright==1.64.1`, in the E2E suite,
 never installed into the offline suite's interpreter; `verify/test_mobile_titles.py` is the offline half.
+
+## 2026-10-24T16:56:53Z · #394 · The two IDPs never shared a base, and platform-baseline.yaml now says what became of each component
+
+#394 measured twenty components the sister platform (`peopleforrester/packt-agentic-devops`,
+`solution/platform/`) runs and this one does not, and asked three things: why they diverged, what the shared
+baseline is, and which of the twenty to adopt in what order.
+
+**Why they diverged: they were never one platform to diverge from.** The port commit that founded this IDP,
+`6880677`, says what it copied in its own message: "Copy the proven EKS IDP ... from kubeauto-ai-day; drop
+ecom/sample/load-gen", with Promtail swapped for Alloy. The source was KubeAuto AI Day
+(`_archive/events/kubeauto-ai-day`), not the Packt platform. KubeAuto's `gitops/apps`, as archived, holds
+29 Applications and none of the twenty: no OpenBao, no Argo Rollouts, Workflows or Events, no KEDA, no Gitea, no model
+serving. The port took that set almost whole. Nothing was left behind from the sister, because nothing was
+taken from it then. The sister's 38 are a separately designed set (its `components.yaml` was resolved on
+2026-06-15, three days before the port). What the two do share came across later and piece by piece:
+agentgateway, kagent, LLM Guard, and the Terraform fleet layout, which was modelled on the sister's on
+2026-06-21 (PROJECT_STATE.md). This corrects one premise of the 2026-09-17 Gitea entry, which compared the
+port against the sister: the port brought no Gitea because its source had none. The rejection itself stands
+on its own reasons.
+
+**The baseline is `platform-baseline.yaml`, and two tests keep it true.** One entry per component, the
+sister's 38 and this repo's own, each with a status (adopted, equivalent, disabled, rejected, proposed,
+local) and the field that status needs: what replaces it, which decision rejected it, or the tier, profile
+and cost of a proposal. Entries are keyed on the sister's directory names so the two lists compare
+mechanically. It carries no versions; those stay in VERSIONS.lock and the Application files, so it is not a
+third list to drift. `verify/test_platform_baseline.py` (offline) fails on an Application no entry claims,
+on a sister component claimed zero or two times, and on an entry missing what its status needs.
+`verify/test_platform_baseline_sister.py` (E2E) fails when the sister's `main` gains or loses a component,
+until this file says what we do about it. That is the drift #394 found, made into a failing check.
+
+**What happened to the twenty.** Four are already here in another form: cert-manager-issuers, ai-dashboards,
+ai-policies and demo-agent (the file says by what). Gitea and gitea-config stay rejected. Re-read for this
+work, the 2026-09-17 revisit condition (a challenge that needs in-cluster git) has not happened. The other
+fourteen are proposals, ranked by the rule that entry applied: a component earns its place on a 50-cluster
+fleet when a beat exercises it.
+
+- **Tier 1, on the fleet, with its beat:** OpenBao (the one with a recorded intent; `32a30e2` called it "the
+  right post-event on-cluster secret store", and ESO is installed with nothing to read) and Argo Rollouts
+  (with a canary that aborts an agent-authored bad deploy).
+- **Tier 2, opt-in profile only:** vLLM, the workload the `/local` route already points at. The sister measured
+  it at 4 CPU / 10Gi requested and a 12.52 GiB peak on the same t3.2xlarge.
+- **Tier 3, off the fleet until a beat needs it:** Argo Workflows, Argo Events, KEDA, KServe, llm-d, kgateway,
+  Gateway API and agent-service (which also needs Backstage, #244, and Gitea).
+
+**Not done in this change, deliberately.** No component is installed. Adding an Application is deploy
+configuration and waits for Michael. Every proposal's cost is `measured: false`, because the issue asks for
+build-time cost measured on this platform's own cold build, and that needs a cluster. Whether the sister
+should carry the same file, or both should read one, is open on peopleforrester/packt-agentic-devops#32.

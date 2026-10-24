@@ -8,32 +8,8 @@ ArgoCD-managed Kubernetes resources using the app-of-apps pattern.
 bootstrap/
   app-of-apps.yaml      # Root Application that manages all child apps
 
-apps/                    # 26 ArgoCD Application manifests
-  namespaces.yaml        # Namespace definitions (sync-wave: -10)
-  kyverno.yaml           # Policy engine
-  kyverno-policies.yaml  # Kyverno CEL ValidatingPolicies + ImageValidatingPolicy
-  falco.yaml             # Runtime security
-  falcosidekick.yaml     # Falco event forwarding
-  external-secrets.yaml  # ESO operator
-  eso-resources.yaml     # ClusterSecretStore + ExternalSecrets
-  rbac.yaml              # ClusterRoles + RoleBindings
-  network-policies.yaml  # Default-deny + allow rules
-  prometheus.yaml        # kube-prometheus-stack (Prometheus + Grafana)
-  otel-collector.yaml    # OpenTelemetry Collector
-  grafana-dashboards.yaml  # Platform Overview dashboard
-  tempo.yaml             # Distributed tracing
-  loki.yaml              # Log aggregation
-  promtail.yaml          # Log shipping
-  sample-app.yaml        # Flask demo app
-  backstage.yaml         # Developer portal
-  backstage-resources.yaml # Backstage RBAC + catalog ConfigMap
-  cert-manager.yaml      # TLS certificate management
-  resource-quotas.yaml   # ResourceQuota + PDBs
-  demo-app-unicorn.yaml     # Demo app (interactive)
-  ecom-frontend.yaml     # Demo app (e-commerce)
-  ecom-api.yaml          # Demo app (e-commerce API)
-  ecom-worker.yaml       # Demo app (e-commerce worker)
-  load-generator.yaml    # Traffic generation for observability
+apps/                    # One ArgoCD Application per file. What each is, and what the sister
+                         # platform runs that we do not, is ../platform-baseline.yaml
 
 argocd/
   values.yaml            # ArgoCD Helm chart values
@@ -88,6 +64,8 @@ Gaps between groups are reserved for future components.
 1. Create the Kubernetes manifests or identify the Helm chart
 2. Create a new `gitops/apps/<name>.yaml` ArgoCD Application manifest
 3. Set the appropriate sync wave annotation
-4. Commit and push, ArgoCD will detect and deploy within 30 seconds
+4. Give it an entry in `platform-baseline.yaml` at the repo root; `verify/test_platform_baseline.py`
+   fails on an Application no entry claims
+5. Commit and push, ArgoCD will detect and deploy within 30 seconds
 
 See [ADR-002](../docs/adr/ADR-002-gitops-engine.md) for the ArgoCD selection rationale.
