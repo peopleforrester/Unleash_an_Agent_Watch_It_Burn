@@ -22,8 +22,6 @@ apps/                    # 36 ArgoCD Application manifests
   otel-collector-burn.yaml  # The burn cluster's collector: Datadog only (no Prometheus or Tempo there)
   grafana-dashboards.yaml  # Platform Overview dashboard
   tempo.yaml             # Distributed tracing, plus its Grafana data source (tempo/); admin and full only (#475)
-  loki.yaml              # Log aggregation
-  promtail.yaml          # Log shipping
   sample-app.yaml        # Flask demo app
   backstage.yaml         # Developer portal
   backstage-resources.yaml # Backstage RBAC + catalog ConfigMap
@@ -75,8 +73,7 @@ Gaps between groups are reserved for future components.
 | -2   | Falcosidekick |
 | 1    | Prometheus (kube-prometheus-stack), cert-manager |
 | 2    | OTel Collector, cert-manager ClusterIssuers |
-| 3    | Grafana dashboards, Loki, Tempo |
-| 4    | Promtail |
+| 3    | Grafana dashboards, Tempo |
 | 5    | Sample app, Backstage resources (RBAC, catalog) |
 | 6    | Backstage |
 | 7    | Demo apps (Unicorn Party, E-commerce frontend/API/worker) |

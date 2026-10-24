@@ -42,7 +42,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 - [x] Unified Service Tagging via OTEL_RESOURCE_ATTRIBUTES on guard-proxy/agentgateway/kagent
   (service.name + service.version=cluster tier + deployment.environment.name); [~] kagent deployment.env honored
 - [x] Falcosidekick -> Datadog output (BYO secret; additive/swappable); [~] datadog-secret in security ns
-- [x] Prometheus/Grafana/Tempo/Loki/Alloy (analog fallback, swappable), slimmed; [~] live trace view
+- [x] Prometheus/Grafana/Tempo (analog fallback, swappable), slimmed; Loki/Alloy dropped, logs are Datadog-only (#474); [~] live trace view
 - [x] Cost counter (real metering) + Prometheus /metrics + agent-observability dashboard
 - [x] Datadog path SETTLED = HYBRID: OTel Collector stays the neutral primary (already wired); add a
   Datadog Agent DaemonSet for EKS infra auto-discovery + named integrations. Datadog stays swappable.

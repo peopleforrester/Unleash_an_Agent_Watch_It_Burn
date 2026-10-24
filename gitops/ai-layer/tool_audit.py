@@ -1,5 +1,5 @@
 # ABOUTME: Per-agent tool-invocation audit trail for workshop-mcp: one JSON line on stdout per tool call
-# ABOUTME: phase, tagged with the calling agent's identity. Alloy ships it to Loki with the pod logs.
+# ABOUTME: phase, tagged with the calling agent's identity. The Datadog Agent ships it with the pod logs.
 """Who called which tool, with what, in what order (#190).
 
 Ported from the sister repo's Claude Code audit hook (packt-agentic-devops `.claude/hooks/audit.sh`), which
@@ -29,8 +29,9 @@ Tool RESULTS are deliberately not logged, only their size. The results are the l
 Datadog, which would put them outside the span redaction the observability act teaches. Arguments are
 logged, clipped, because the arguments are the attack: the shell command, the manifest, the vault entry.
 
-Query (the bundled Alloy config labels each stream with namespace, pod, container and app; #464):
-    {namespace="agent", app="workshop-mcp"} |= "tool_invocation" | json | line_format "{{.ts}} {{.agent_identity}} {{.phase}} {{.tool_name}}"
+Query, in Datadog Log Explorer (the Agent collects every container's logs and tags them with namespace,
+deployment, pod and container; Datadog parses the JSON line into attributes; #474):
+    kube_namespace:agent kube_deployment:workshop-mcp @event:tool_invocation
 """
 from __future__ import annotations
 
@@ -89,7 +90,7 @@ def caller(ctx: Any) -> dict[str, Any]:
 
 def emit(record: dict[str, Any]) -> None:
     """One compact JSON line on stdout, flushed now: stdout is block-buffered in a container, and a line
-    still in the buffer when the pod dies is a line Loki never gets."""
+    still in the buffer when the pod dies is a line Datadog never gets."""
     sys.stdout.write(json.dumps(record, separators=(",", ":"), default=str) + "\n")
     sys.stdout.flush()
 

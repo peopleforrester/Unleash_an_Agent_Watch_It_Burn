@@ -64,20 +64,7 @@ spec:
           # The Tempo data source (uid tempo) is NOT here: it ships with Tempo itself, as a sidecar-labelled
           # ConfigMap in gitops/tempo/ that the tempo Application deploys (#475). The attendee profile leaves
           # tempo out, and the data source goes with it instead of pointing Grafana at a Service that is not
-          # there. Loki's TraceID link below still names uid tempo; on a cluster without Tempo it has no target.
-          additionalDataSources:
-            - name: Loki
-              type: loki
-              uid: loki
-              url: http://loki.monitoring:3100
-              access: proxy
-              isDefault: false
-              jsonData:
-                derivedFields:
-                  - datasourceUid: tempo
-                    matcherRegex: "traceID=(\\w+)"
-                    name: TraceID
-                    url: "$${__value.raw}"
+          # there. Loki is not here either (#474): no cluster runs it, and its logs are read in Datadog.
           resources:
             requests:
               cpu: 100m
