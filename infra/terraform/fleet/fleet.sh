@@ -699,12 +699,14 @@ datadog_keys_for() {
 # records what it did. The external actions are wrapped in one-line functions so the shim test can
 # replace them; the decisions stay in the code under test.
 run_identity_script()        { bash "${INFRA_DIR}/datadog-cluster-identity.sh"; }
+run_openbao_seed()           { KUBECONFIG="$1" CONTEXT="$2" WITB_DD_API_KEY="$3" WITB_DD_APP_KEY="$4" bash "${INFRA_DIR}/openbao-secrets.sh" seed; }
 reload_datadog_consumers()   { bash "${INFRA_DIR}/reload-datadog-consumers.sh" "$1" "$2"; }
 run_datadog_orgs_verify()    { bash "${INFRA_DIR}/../verify/datadog-orgs.sh" "$1" "$2"; }
 age_minutes()                { local now then; now="$(date +%s)"; then="$(date -d "$1" +%s 2>/dev/null || echo "${now}")"; echo $(( (now - then) / 60 )); }
 
 # Identity, admin secret and the cluster's own key must match what datadog_keys_for says. Repairs by
-# rewriting datadog-secret, re-running the identity script, and restarting the consumers.
+# re-seeding OpenBao (ESO then rewrites datadog-secret, #394), re-running the identity script, and
+# restarting the consumers.
 repair_datadog() {
     local name="$1" kcfg="$2" acct="$3" api app admin_api admin_app
     if ! read -r api app admin_api admin_app < <(datadog_keys_for "${name}"); then
@@ -724,16 +726,14 @@ repair_datadog() {
     [[ "${admin_present}" -eq "${want_admin}" ]] || reasons+=("admin-secret=${admin_present},want=${want_admin}")
     [[ "${#reasons[@]}" -gt 0 ]] || { log "  ${name}: datadog identity, keys and dual shipping match the repo"; return 0; }
     log "  ${name}: repairing datadog (${reasons[*]})"
-    local ns
-    for ns in datadog monitoring security; do
-        KUBECONFIG="${kcfg}" kubectl create namespace "${ns}" --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
-        KUBECONFIG="${kcfg}" kubectl -n "${ns}" create secret generic datadog-secret \
-            --from-literal=api-key="${api}" --from-literal=app-key="${app}" \
-            --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
-    done
+    local ctx; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
+    # The cluster's own key lives in OpenBao; ESO writes datadog-secret from it in all three namespaces.
+    if ! run_openbao_seed "${kcfg}" "${ctx}" "${api}" "${app}" 2>&1 | sed 's/^/    /' >&2; then
+        log "  ${name}: repair: seeding OpenBao failed; datadog-secret left as it was"
+        record_fail "${name}:openbao-seed"
+    fi
     KUBECONFIG="${kcfg}" CLUSTER_NAME="${name}" WITB_DD_API_KEY="${api}" WITB_PUBLIC_HOST="${want_host}" \
         WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" run_identity_script 2>&1 | sed 's/^/    /' >&2 || true
-    local ctx; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
     KUBECONFIG="${kcfg}" reload_datadog_consumers "${ctx}" "${acct}" >/dev/null 2>&1 || log "  ${name}: consumer reload failed; agents pick the change up on their next restart"
     log "  ${name}: datadog repaired"
 }
@@ -968,7 +968,8 @@ bootstrap_one() {
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
     provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
     # Datadog keys, read from the central pool on the PROVISIONING box (default account); deploy-full-idp
-    # injects them as a plain K8s Secret (the cluster's own account never touches Secrets Manager).
+    # seeds them into the cluster's OpenBao and ESO writes datadog-secret (#394). The cluster's own account
+    # never touches Secrets Manager.
     # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
     # merge_pool.py's row-position join over attendee-only orgs, so the in-cluster org is the SAME one the
     # provisioning page shows the student. Non-attendee (instructor) clusters use the shared workshop org.
@@ -1002,7 +1003,9 @@ bootstrap_one() {
         #            is nothing to arm for those either.
         #   burn     (instructor R1)    -> ships no policies at all; the unguarded spectacle.
         # Gating on the profile name keeps attendee and burn both unarmed without a round check.
-        [[ "${profile}" == "full" || "${profile}" == "admin" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
+        # local-inference (#394) is the full build plus vLLM, so it arms exactly as full does.
+        [[ "${profile}" == "full" || "${profile}" == "admin" || "${profile}" == "local-inference" ]] \
+            && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
     fi

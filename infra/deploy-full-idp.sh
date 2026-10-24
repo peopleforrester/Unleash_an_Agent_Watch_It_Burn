@@ -16,7 +16,11 @@ case "${PROFILE}" in
     # admin: the presenters' own cluster. The student build with every guardrail ARMED, so a control can be
     # shown already working rather than staged (#294). See gitops/bootstrap/admin/app-of-apps-admin.yaml.
     admin)    ROOT_APP="gitops/bootstrap/admin/app-of-apps-admin.yaml" ;;
-    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin]" >&2; exit 2 ;;
+    # local-inference: the full build plus a CPU vLLM serving Qwen3-1.7B behind agentgateway's /local route,
+    # for ONE instructor or demo cluster, never the fleet (#394, question 657). See
+    # gitops/bootstrap/local-inference/app-of-apps-local-inference.yaml.
+    local-inference) ROOT_APP="gitops/bootstrap/local-inference/app-of-apps-local-inference.yaml" ;;
+    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin|local-inference]" >&2; exit 2 ;;
 esac
 log() { printf '\n==> %s\n' "$*" >&2; }
 
@@ -66,10 +70,22 @@ stringData:
   enableOCI: "true"
 EOF
 
-log "[3.6] per-cluster secrets, created DIRECTLY in the cluster (no ESO / no Secrets Manager from the"
-log "      cluster, no cross-account). The secret exists BEFORE the app-of-apps, so consumers never"
-log "      crash-loop waiting on it. Datadog keys are passed in by the caller (fleet reads the pool on the"
-log "      provisioning box); a manual run falls back to the local Secrets Manager if this account can read it."
+# The cluster's bootstrap secrets live in OpenBao and ESO writes them out (#394, question 656). OpenBao,
+# ESO and ESO's store are applied HERE, before the root app-of-apps, and seeded before it too, so
+# datadog-secret exists before any reader starts, the guarantee the direct write gave (32a30e2). Argo CD
+# runs no health check on child Applications, so sync waves alone would only order their creation. The
+# root adopts these three Applications unchanged. They come up while the load balancer controller below
+# installs, so the wait in [3.7] is only what is left of their start time.
+CONTEXT="${CONTEXT:-$(kubectl config current-context)}"
+[[ -n "${CONTEXT}" ]] || { echo "could not determine the kube-context; set CONTEXT=" >&2; exit 1; }
+log "[3.4] OpenBao + ESO ahead of the app-of-apps: per-cluster root token, then the three Applications"
+CONTEXT="${CONTEXT}" bash "${SCRIPT_DIR}/openbao-secrets.sh" token
+kubectl --context "${CONTEXT}" apply -f "${REPO}/gitops/apps/external-secrets.yaml" \
+  -f "${REPO}/gitops/apps/eso-resources.yaml" -f "${REPO}/gitops/apps/openbao.yaml"
+
+# Datadog keys are passed in by the caller (fleet reads the pool on the provisioning box); a manual run
+# falls back to the local Secrets Manager if this account can read it. The cluster itself never reads
+# Secrets Manager.
 DD_API_KEY="${WITB_DD_API_KEY:-}"
 DD_APP_KEY="${WITB_DD_APP_KEY:-}"
 if [[ -z "${DD_API_KEY}" || -z "${DD_APP_KEY}" ]]; then
@@ -80,27 +96,6 @@ if [[ -z "${DD_API_KEY}" || -z "${DD_APP_KEY}" ]]; then
     DD_APP_KEY="$(jq -r '."app-key" // empty' <<<"${_dd}")"
   fi
 fi
-if [[ -n "${DD_API_KEY}" && -n "${DD_APP_KEY}" ]]; then
-  for ns in datadog monitoring security; do
-    kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-    kubectl -n "${ns}" create secret generic datadog-secret \
-      --from-literal=api-key="${DD_API_KEY}" --from-literal=app-key="${DD_APP_KEY}" \
-      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-  done
-  log "    datadog-secret created in datadog/monitoring/security (datadog agent + falcosidekick read it)"
-else
-  # A known gap, not a failure (#454, #500): every profile comes up without Datadog. Nothing below reads
-  # datadog-secret with a non-optional reference except the Datadog Agent, whose pods wait for it.
-  log "    WARN: no Datadog keys (WITB_DD_API_KEY/_APP_KEY unset, no readable local pool secret) — datadog-secret NOT created"
-  log "    KNOWN GAP until a Datadog key is loaded: the OTel Collector sends traces to Tempo and metrics to"
-  log "      Prometheus only (its datadog-gate init container logs which), falcosidekick runs without its"
-  log "      Datadog output (Talon and Prometheus unaffected), and the Datadog Agent does not start."
-  log "      To add Datadog later, on this same profile: write datadog-secret (fleet.sh converge, or re-run this"
-  log "      with WITB_DD_API_KEY/_APP_KEY) and restart the readers: infra/reload-datadog-consumers.sh <context>."
-fi
-# Per-cluster identity for Datadog plus, on attendee clusters, the instructor org's keys for
-# dual shipping (#242). fleet.sh passes WITB_DD_ADMIN_*; a manual run without them gets identity only.
-WITB_DD_API_KEY="${DD_API_KEY}" bash "${SCRIPT_DIR}/datadog-cluster-identity.sh"
 
 # Installed on BOTH profiles, burn included. A load balancer controller is plumbing, not a guardrail:
 # Round 1's premise is that nothing STOPS the agent, not that the cluster has no way to expose a
@@ -137,6 +132,26 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
 # Non-fatal: the controller reconciles Ingresses whenever it is ready; it must NOT gate the app-of-apps.
 kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
   || log "WARN: LB controller not ready yet; continuing. Ingresses reconcile once it is up."
+
+log "[3.7] Datadog keys into OpenBao; ESO writes datadog-secret before the app-of-apps starts its readers"
+if [[ -n "${DD_API_KEY}" && -n "${DD_APP_KEY}" ]]; then
+  CONTEXT="${CONTEXT}" WITB_DD_API_KEY="${DD_API_KEY}" WITB_DD_APP_KEY="${DD_APP_KEY}" \
+    bash "${SCRIPT_DIR}/openbao-secrets.sh" seed
+  log "    datadog-secret in datadog/monitoring/security from OpenBao (datadog agent + falcosidekick read it)"
+else
+  # A known gap, not a failure (#454, #500): every profile comes up without Datadog. Nothing below reads
+  # datadog-secret with a non-optional reference except the Datadog Agent, whose pods wait for it.
+  log "    WARN: no Datadog keys (WITB_DD_API_KEY/_APP_KEY unset, no readable local pool secret) — OpenBao not seeded, datadog-secret NOT created"
+  log "    KNOWN GAP until a Datadog key is loaded: the OTel Collector sends traces to Tempo and metrics to"
+  log "      Prometheus only (its datadog-gate init container logs which), falcosidekick runs without its"
+  log "      Datadog output (Talon and Prometheus unaffected), and the Datadog Agent does not start."
+  log "      To add Datadog later, on this same profile: seed OpenBao (fleet.sh converge, or"
+  log "      CONTEXT=<ctx> WITB_DD_API_KEY=.. WITB_DD_APP_KEY=.. infra/openbao-secrets.sh seed) and restart the"
+  log "      readers: infra/reload-datadog-consumers.sh <context>."
+fi
+# Per-cluster identity for Datadog plus, on attendee clusters, the instructor org's keys for
+# dual shipping (#242). fleet.sh passes WITB_DD_ADMIN_*; a manual run without them gets identity only.
+WITB_DD_API_KEY="${DD_API_KEY}" bash "${SCRIPT_DIR}/datadog-cluster-identity.sh"
 
 log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging), ArgoCD deploys the components"
 kubectl apply -f "${REPO}/${ROOT_APP}"

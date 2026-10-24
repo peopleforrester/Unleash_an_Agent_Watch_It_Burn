@@ -51,6 +51,7 @@ src() { # $1: snippet run after sourcing; the three external actions are replace
         mkdir -p \"\${LOG_DIR}\"  # record_fail writes here; the cmd_* callers create it, a fresh clone has none
         run_identity_script() { echo \"identity-script CLUSTER_NAME=\${CLUSTER_NAME} admin=\${WITB_DD_ADMIN_API_KEY}\" >>'${CALLS}'; }
         reload_datadog_consumers() { echo \"reload \$1 \$2\" >>'${CALLS}'; }
+        run_openbao_seed() { echo \"openbao-seed \$2 \$3 \$4\" >>'${CALLS}'; }
         run_datadog_orgs_verify() { echo \"verify \$1 \$2\" >>'${CALLS}'; return \${VERIFY_RC:-0}; }
         $1" 2>>"${T}/stderr" )
 }
@@ -71,7 +72,7 @@ echo "== repair_datadog =="
 : >"${CALLS}"; printf 'watch-it-burn-attendee-002' >"${T}/identity"; printf 'ROW2_API' >"${T}/live_key"; touch "${T}/admin_present"
 printf '%s' "$(src 'public_host_for watch-it-burn-attendee-002')" >"${T}/public_host"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
-check "a cluster that matches the repo is left alone (no identity script, no reload)" '! grep -q "identity-script\|reload" "${CALLS}"'
+check "a cluster that matches the repo is left alone (no seed, no identity script, no reload)" '! grep -q "openbao-seed\|identity-script\|reload" "${CALLS}"'
 : >"${CALLS}"; printf 'stale.agenticburn.com' >"${T}/public_host"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
 check "a wrong public-host is repaired through the identity script" 'grep -q "identity-script" "${CALLS}"'
@@ -82,8 +83,11 @@ check "missing identity: identity script runs with the cluster name and admin ke
   'grep -q "identity-script CLUSTER_NAME=watch-it-burn-attendee-002 admin=ADMIN_API" "${CALLS}" && grep -q "^reload ctx-test acct" "${CALLS}"'
 : >"${CALLS}"; printf 'watch-it-burn-attendee-002' >"${T}/identity"; printf 'STALE_JUNE_KEY' >"${T}/live_key"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
-check "key drift: datadog-secret rewritten in all three namespaces and consumers reloaded" \
-  '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ROW2_API" "${CALLS}")" -eq 3 ]] && grep -q "^reload" "${CALLS}"'
+# The key lives in OpenBao now (#394): the repair re-seeds it and ESO rewrites datadog-secret. Writing the
+# Secret directly would be overwritten from the stale store on ESO's next refresh.
+check "key drift: OpenBao re-seeded with the cluster's own key, on its context, and consumers reloaded" \
+  'grep -q "^openbao-seed ctx-test ROW2_API ROW2_APP" "${CALLS}" && grep -q "^reload" "${CALLS}"'
+check "key drift: datadog-secret is not written around OpenBao" '! grep -q "create secret generic datadog-secret" "${CALLS}"'
 : >"${CALLS}"; printf 'ROW2_API' >"${T}/live_key"; rm -f "${T}/admin_present"
 src 'repair_datadog watch-it-burn-attendee-002 /dev/null acct'
 check "attendee without the admin secret: repaired (dual shipping restored)" 'grep -q "identity-script" "${CALLS}"'

@@ -1,0 +1,82 @@
+# ABOUTME: OpenBao (Linux Foundation, MPL-2.0 fork of Vault) as the in-cluster secret store ESO reads. Dev
+# ABOUTME: mode: one unsealed in-memory pod, injector off, root token from a per-cluster Secret. #394, question 656.
+#
+# The sister platform's shape (packt-agentic-devops solution/platform/1-foundation/openbao), with two
+# departures, both because this cluster's agent is the thing the workshop teaches students to fear:
+#
+#   * The root token is NOT the chart's fixed "root". infra/openbao-secrets.sh generates one per cluster
+#     before anything is installed and writes it to openbao/openbao-root-token (read here) and
+#     platform/openbao-token (read by ESO's ClusterSecretStore, security/eso/cluster-secret-store.yaml).
+#     The chart has no secret-backed dev token, but it runs dev mode as `sh -ec "... bao server -dev
+#     <extraArgs>"`, so extraArgs can pass the flag from an env var the shell expands. The chart still
+#     sets VAULT_DEV_ROOT_TOKEN_ID from devRootToken; the explicit flag takes precedence over that env,
+#     and devRootToken is set to a value that says so rather than to a guessable one.
+#   * A NetworkPolicy admits port 8200 from the platform namespace (where ESO runs) and nothing else, so a
+#     pod the agent stands up cannot read the store over the network. The seed goes in through
+#     `kubectl exec`, which no NetworkPolicy sees.
+#
+# Dev mode is in-memory: a restarted pod comes back empty. The ExternalSecrets that read it use
+# deletionPolicy Retain, so the Secrets already written survive that; re-running
+# `infra/openbao-secrets.sh seed` (fleet.sh converge does) puts the data back.
+#
+# Installed BEFORE the root app-of-apps by infra/deploy-full-idp.sh, together with external-secrets and
+# eso-resources, so datadog-secret exists before any of its readers start, as it did when the deploy
+# script wrote it directly (32a30e2). The root then adopts this Application unchanged.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: openbao
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: openbao
+    repoURL: https://openbao.github.io/openbao-helm
+    targetRevision: "0.29.4"
+    helm:
+      valuesObject:
+        injector:
+          enabled: false
+        ui:
+          enabled: false
+        server:
+          dev:
+            enabled: true
+            devRootToken: "overridden-by-the-dev-root-token-id-flag"
+          extraArgs: '-dev-root-token-id="${OPENBAO_ROOT_TOKEN}"'
+          extraSecretEnvironmentVars:
+            - envName: OPENBAO_ROOT_TOKEN
+              secretName: openbao-root-token
+              secretKey: token
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 500m, memory: 256Mi }
+          networkPolicy:
+            enabled: true
+            ingress:
+              - from:
+                  - namespaceSelector:
+                      matchLabels:
+                        kubernetes.io/metadata.name: platform
+                ports:
+                  - port: 8200
+                    protocol: TCP
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: openbao
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

@@ -716,3 +716,81 @@ fleet when a beat exercises it.
 configuration and waits for Michael. Every proposal's cost is `measured: false`, because the issue asks for
 build-time cost measured on this platform's own cold build, and that needs a cluster. Whether the sister
 should carry the same file, or both should read one, is open on peopleforrester/packt-agentic-devops#32.
+
+## 2026-10-24 · question 656 · OpenBao now, behind the bootstrap Secrets; Argo Rollouts only once its beat is written (#394)
+
+**Answer:** OpenBao now (sister's dev-mode shape, ESO reads it, bootstrap Secrets move behind it); Argo
+Rollouts only once its beat is written.
+
+**Decided by hecaton's research under Michael's standing rules, not by Michael.** The sources it cited:
+Michael's own 32a30e2 ("OpenBao remains the right post-event on-cluster secret store; not introduced under
+the wire"), whose condition has passed now that the June event is over; the 2026-09-17 Gitea rule that a
+component no beat exercises stays off the 50-cluster fleet, which keeps Argo Rollouts out until its canary
+beat exists; and CLAUDE.md's change-cadence rules 1, 3 and 4.
+
+**What it changes.**
+
+- `gitops/apps/openbao.yaml`: OpenBao 2.6.2 (chart 0.29.4) in dev mode, injector and UI off, in a new
+  `openbao` namespace, on every profile (burn's include list now names it). Two departures from the sister.
+  The root token is generated per cluster instead of the chart's fixed `root`, because this cluster's agent
+  runs shell commands by design. A NetworkPolicy admits port 8200 from the `platform` namespace (ESO) only.
+- `security/eso/cluster-secret-store.yaml`: the store that pointed at AWS Secrets Manager, which nothing
+  had read since 32a30e2, is replaced by one named `openbao`.
+- `infra/openbao-secrets.sh`: `token` writes the root token to `openbao/openbao-root-token` and
+  `platform/openbao-token`, reusing one that exists. `seed` writes `secret/datadog` through `kubectl exec`,
+  with the keys on stdin. It then applies `security/openbao/datadog-externalsecrets.yaml` and waits until ESO
+  has written that key into `datadog-secret` in datadog, monitoring and security.
+- `infra/deploy-full-idp.sh` applies external-secrets, eso-resources and openbao **before** the root
+  app-of-apps and seeds before applying the root. The old direct write guaranteed that `datadog-secret`
+  existed before its readers started, and that guarantee holds. Sync waves alone could not provide it,
+  because this Argo CD runs no health check on child Applications. The load balancer controller installs
+  while OpenBao and ESO start.
+- `fleet.sh` converge repairs key drift by re-seeding OpenBao, where it used to rewrite the Secret. A
+  directly written Secret would be overwritten from the stale store on ESO's next refresh.
+- **The #500 switch is unchanged.** A cluster with no Datadog key gets no seed and no ExternalSecrets, so
+  `datadog-secret` is absent and Datadog stays off. The ExternalSecrets are applied by the seed, not by
+  Argo CD, so a keyless cluster does not carry three ExternalSecrets stuck at SecretSyncedError.
+- **Dev mode is in-memory.** A restarted OpenBao pod comes back empty. The ExternalSecrets use
+  `deletionPolicy: Retain`, so Secrets already written survive, and converge's seed puts the data back.
+- **Argo Rollouts stays `proposed`, tier 1** in platform-baseline.yaml, waiting for its beat.
+- **Not yet done: the timing.** No cold build has run with OpenBao in it, so neither the added wall-clock
+  nor a live seed has been seen. That cold build is the first thing to run on a cluster provisioned for it.
+
+Tests: `verify/test_openbao.py` checks that the five pieces agree on names. It checks that every profile
+takes the three pre-applied Applications and that the deploy seeds before the root. It also runs
+`openbao-secrets.sh` against a recording kubectl stand-in. `verify/test_fleet_converge_repairs.sh` now
+expects a re-seed on key drift.
+
+## 2026-10-24 · question 657 · A local-inference profile for one cluster, with a plain vLLM Deployment, then a timed cold build (#394)
+
+**Answer:** Yes: a new bootstrap profile for one cluster, plain vLLM Deployment, then time a cold build
+with it.
+
+**Decided by hecaton's research under Michael's standing rules, not by Michael.** The sources it cited:
+Michael's bd45449 (2026-09-17), which built the `/local` route and the `gateway-local-qwen3` ModelConfig so
+that a local model would be "a configuration choice", leaving only the workload; the sister's measured
+vLLM pod spec; platform-baseline.yaml's vllm and kserve entries; the Gitea rule that keeps a 4-CPU server off
+the fleet; and CLAUDE.md rules 3 and 4.
+
+**What it changes.**
+
+- `gitops/bootstrap/local-inference/app-of-apps-local-inference.yaml`: a fifth root. It takes the full
+  profile's gitops/apps selection unchanged and adds a third source, `gitops/opt-in/local-inference`.
+  `deploy-full-idp.sh local-inference` applies it, and `fleet.sh` arms it as it arms full. No roster row
+  uses it yet. Which cluster carries it, and on what node, is a roster choice.
+- `gitops/opt-in/local-inference/vllm-qwen3.yaml` deploys `gitops/manifests/vllm-qwen3/`, a Deployment and
+  Service in the `agent` namespace at the exact host, port and model name the `/local` route asks for. It
+  keeps the sister's pod spec: requests 4 CPU / 10Gi, limits 6 CPU / 16Gi, KV cache 2 GiB, SYS_NICE only,
+  a memory-backed /dev/shm, and tool calling on for kagent. The image is digest-pinned. KServe is not used.
+- The vLLM Application is deliberately **not** in gitops/apps. Every fleet root takes that directory by
+  glob, and one forgotten exclude would put the model server on fifty student nodes.
+  `verify/test_local_inference.py` fails if any root other than local-inference sources the opt-in directory.
+- The Agent stays on its committed modelConfig. Pointing it at `gateway-local-qwen3` is the switch.
+- platform-baseline.yaml gains an `opt-in` status, and vllm moves to it.
+- **Known gap, recorded rather than half-fixed.** Any pod in the agent namespace can call the vLLM Service
+  directly, around guard-proxy and agentgateway. A port-8000 ingress NetworkPolicy would close that, but once
+  the namespace is enrolled in the ambient mesh, pod traffic arrives on ztunnel's 15008 and the policy would
+  cut the gateway off too.
+- **Not yet done: the timed cold build.** The image alone is 4.95 GB compressed. Whether vLLM's 4-CPU
+  request fits beside this platform on one t3.2xlarge is unknown until a cold build runs. The
+  measured cost then goes into platform-baseline.yaml's vllm entry as `measured: true`.

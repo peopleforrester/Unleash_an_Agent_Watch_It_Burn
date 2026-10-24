@@ -82,3 +82,12 @@ metadata:
   name: datadog
   labels:
     app.kubernetes.io/part-of: watch-it-burn-idp
+---
+# OpenBao, the in-cluster secret store ESO reads (#394). infra/openbao-secrets.sh creates it first on a
+# fresh cluster, because OpenBao is installed before the root app-of-apps; this adopts it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: openbao
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp

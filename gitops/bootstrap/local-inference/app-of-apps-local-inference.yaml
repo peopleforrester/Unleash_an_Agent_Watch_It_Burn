@@ -1,0 +1,59 @@
+# ABOUTME: Root app-of-apps for the local-inference profile: the full instructor build plus a CPU vLLM serving
+# ABOUTME: Qwen3-1.7B behind agentgateway's /local route. One cluster, never the fleet (#394, question 657).
+#
+# Same selection as the full root, so this cluster is an instructor cluster in every other respect. The
+# third source is what this profile adds: gitops/opt-in/local-inference, which holds the vllm-qwen3
+# Application. It is kept out of gitops/apps on purpose, because every other root takes that directory by
+# glob and an exclude forgotten on one of them would put a 4-CPU model server on fifty student nodes.
+#
+# What it makes real: the gateway-local-qwen3 ModelConfig (gitops/ai-layer/resources.yaml) and the /local
+# route on agentgateway's :3002 bind already exist everywhere and resolve to nothing. Here they resolve to
+# vllm-qwen3.agent.svc.cluster.local:8000. The Agent stays on its committed modelConfig; pointing it at
+# gateway-local-qwen3 is the switch, and nothing else changes.
+#
+# To build one: deploy-full-idp.sh local-inference, or a roster.tsv row whose bootstrap_profile is
+# local-inference (its instance_types column can give that one cluster a larger node). The sister measured
+# vLLM at 4 CPU / 10Gi requested on a t3.2xlarge; whether it fits beside this platform on one is what the
+# cold build is for, and platform-baseline.yaml's vllm entry is where its measured cost goes.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: app-of-apps-local-inference
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+      targetRevision: staging
+      path: gitops/apps
+      directory:
+        # The full root's selection, unchanged (see gitops/bootstrap/full/app-of-apps.yaml for why each is out).
+        exclude: '{network-policies,kubearmor-policies,otel-collector-attendee}.yaml'
+    - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+      targetRevision: staging
+      path: gitops/bootstrap/local-inference
+    - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+      targetRevision: staging
+      path: gitops/opt-in/local-inference
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jsonPointers:
+        - /metadata/finalizers
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

@@ -23,6 +23,10 @@ PROFILES = {
     # -control apps that attendee and full drop, and takes the non-dual collector because it ships to the
     # shared presenter org as its primary (#296).
     "admin": {"name": "app-of-apps-admin", "exclude": "otel-collector-attendee.yaml"},
+    # local-inference (#394, question 657): the full selection, plus gitops/opt-in/local-inference as a third
+    # source for the vLLM it adds. test_local_inference.py holds that third source to this root alone.
+    "local-inference": {"name": "app-of-apps-local-inference",
+                        "exclude": "{network-policies,kubearmor-policies,otel-collector-attendee}.yaml"},
 }
 failures = []
 

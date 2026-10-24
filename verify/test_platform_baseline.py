@@ -29,6 +29,7 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 BASELINE = REPO / "platform-baseline.yaml"
 APPS = REPO / "gitops/apps"
 DISABLED = REPO / "gitops/apps-disabled"
+OPT_IN = REPO / "gitops/opt-in"
 DECISIONS = REPO / "decisions.md"
 
 # The twenty components #394 measured as missing here on 2026-09-17. Each must stay accounted for: the
@@ -39,7 +40,7 @@ ISSUE_394 = (
     "kgateway-crds", "gateway-api", "ai-dashboards", "ai-policies", "demo-agent", "agent-service",
 )
 
-STATUSES = {"adopted", "equivalent", "disabled", "rejected", "proposed", "local"}
+STATUSES = {"adopted", "equivalent", "disabled", "rejected", "proposed", "local", "opt-in"}
 TIER_PROFILE = {1: "fleet", 2: "opt-in", 3: "none"}
 
 failures: list[str] = []
@@ -51,8 +52,17 @@ def check(name: str, cond: bool) -> None:
         failures.append(name)
 
 
-def problems(baseline: dict, apps: set[str], disabled: set[str], headings: list[str]) -> list[str]:
-    """Everything wrong with a baseline, given the Application files on disk and the decisions.md headings."""
+def check_cost(name: str, cost, out: list[str]) -> None:
+    if not isinstance(cost, dict) or not isinstance(cost.get("measured"), bool) or not cost.get("known"):
+        out.append(f"{name}: needs cost.measured (true or false) and cost.known")
+    elif cost["measured"] and not (isinstance(cost.get("build_seconds"), (int, float)) and cost.get("requests")):
+        out.append(f"{name}: cost.measured is true, so it needs build_seconds and requests")
+
+
+def problems(baseline: dict, apps: set[str], disabled: set[str], headings: list[str],
+             opt_in: dict[str, set[str]]) -> list[str]:
+    """Everything wrong with a baseline, given the Application files on disk (gitops/apps, gitops/apps-disabled,
+    and gitops/opt-in/<profile> keyed by profile) and the decisions.md headings."""
     out: list[str] = []
     if baseline.get("schema_version") != 1:
         out.append(f"schema_version is {baseline.get('schema_version')!r}, this checker reads 1")
@@ -81,11 +91,23 @@ def problems(baseline: dict, apps: set[str], disabled: set[str], headings: list[
                 out.append(f"{name}: claims sister component {s!r}, which is not in the snapshot")
 
         entry_apps = c.get("apps", [])
-        claimed_apps.update(entry_apps)
-        home = disabled if status == "disabled" else apps
+        if status == "opt-in":
+            profile = c.get("profile", "")
+            home, where = opt_in.get(profile, set()), f"gitops/opt-in/{profile}"
+            claimed_apps.update(f"{profile}/{a}" for a in entry_apps)
+            if profile not in opt_in:
+                out.append(f"{name}: opt-in profile {profile!r} has no gitops/opt-in/{profile} or no root in gitops/bootstrap/{profile}")
+            if not entry_apps:
+                out.append(f"{name}: opt-in but names no apps")
+            if not c.get("why"):
+                out.append(f"{name}: opt-in with no why")
+            check_cost(name, c.get("cost"), out)
+        else:
+            claimed_apps.update(entry_apps)
+            home = disabled if status == "disabled" else apps
+            where = "gitops/apps-disabled" if status == "disabled" else "gitops/apps"
         for a in entry_apps:
             if a not in home:
-                where = "gitops/apps-disabled" if status == "disabled" else "gitops/apps"
                 out.append(f"{name}: claims {a}, which is not in {where}")
 
         if status in ("adopted", "local") and not entry_apps and not c.get("installed_by"):
@@ -118,17 +140,14 @@ def problems(baseline: dict, apps: set[str], disabled: set[str], headings: list[
                 out.append(f"{name}: tier {tier} goes with profile {TIER_PROFILE[tier]!r}, not {c.get('profile')!r}")
             if not c.get("recommendation"):
                 out.append(f"{name}: proposed with no recommendation")
-            cost = c.get("cost")
-            if not isinstance(cost, dict) or not isinstance(cost.get("measured"), bool) or not cost.get("known"):
-                out.append(f"{name}: proposed needs cost.measured (true or false) and cost.known")
-            elif cost["measured"] and not (isinstance(cost.get("build_seconds"), (int, float)) and cost.get("requests")):
-                out.append(f"{name}: cost.measured is true, so it needs build_seconds and requests")
+            check_cost(name, c.get("cost"), out)
 
     for s in sister_all:
         owners = claimed_sister.get(s, [])
         if len(owners) != 1:
             out.append(f"sister component {s!r} is claimed by {len(owners)} entries {owners}, needs exactly 1")
-    for a in sorted((apps | disabled) - claimed_apps):
+    on_disk = apps | disabled | {f"{p}/{a}" for p, files in opt_in.items() for a in files}
+    for a in sorted(on_disk - claimed_apps):
         out.append(f"{a} is an Application here that no baseline entry claims")
     for s in ISSUE_394:
         if s not in claimed_sister:
@@ -140,9 +159,12 @@ baseline = yaml.safe_load(BASELINE.read_text(encoding="utf-8"))
 apps = {p.name for p in APPS.glob("*.yaml")}
 disabled = {p.name for p in DISABLED.glob("*.yaml")}
 headings = [l for l in DECISIONS.read_text(encoding="utf-8").splitlines() if l.startswith("## ")]
+# An opt-in profile counts only when it has both halves: its Applications and a root that takes them.
+opt_in = {d.name: {p.name for p in d.glob("*.yaml")} for d in sorted(OPT_IN.glob("*"))
+          if d.is_dir() and (REPO / "gitops/bootstrap" / d.name).is_dir()}
 
 print("== the baseline describes this repo and the sister snapshot ==")
-found = problems(baseline, apps, disabled, headings)
+found = problems(baseline, apps, disabled, headings, opt_in)
 for p in found:
     print(f"        {p}")
 check(f"no problems ({len(found)} found)", not found)
@@ -150,6 +172,7 @@ snapshot = baseline["sister"]["snapshot"]
 check("the snapshot holds the sister's 38 components",
       sum(len(v) for v in snapshot.values()) == 38)
 check("there is something to check: Applications were found on disk", len(apps) > 0)
+check("and the local-inference opt-in profile was found", "vllm-qwen3.yaml" in opt_in.get("local-inference", set()))
 
 by_status: dict[str, int] = {}
 for c in baseline["components"]:
@@ -171,6 +194,14 @@ def proposal_without_cost(b: dict) -> None:
     entry(b, "argo-rollouts").pop("cost")
 
 
+def opt_in_without_cost(b: dict) -> None:
+    entry(b, "vllm").pop("cost")
+
+
+def opt_in_on_a_missing_profile(b: dict) -> None:
+    entry(b, "vllm")["profile"] = "no-such-profile"
+
+
 def measured_without_numbers(b: dict) -> None:
     entry(b, "vllm")["cost"]["measured"] = True
 
@@ -187,6 +218,8 @@ for label, mutate, extra_app in (
     ("an Application nobody claims is caught", lambda b: None, "new-thing.yaml"),
     ("a sister component nobody claims is caught", drop_sister_claim, None),
     ("a proposal with no cost is caught", proposal_without_cost, None),
+    ("an opt-in with no cost is caught", opt_in_without_cost, None),
+    ("an opt-in naming a profile that does not exist is caught", opt_in_on_a_missing_profile, None),
     ("measured: true with no numbers is caught", measured_without_numbers, None),
     ("a rejection with no decisions.md entry is caught", rejection_without_record, None),
     ("a disabled app claimed as live is caught", disabled_app_claimed_as_live, None),
@@ -194,7 +227,10 @@ for label, mutate, extra_app in (
     broken = copy.deepcopy(baseline)
     mutate(broken)
     on_disk = apps | {extra_app} if extra_app else apps
-    check(label, bool(problems(broken, on_disk, disabled, headings)))
+    check(label, bool(problems(broken, on_disk, disabled, headings, opt_in)))
+broken_opt_in = {**opt_in, "local-inference": opt_in.get("local-inference", set()) | {"unclaimed.yaml"}}
+check("an opt-in Application nobody claims is caught",
+      bool(problems(baseline, apps, disabled, headings, broken_opt_in)))
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

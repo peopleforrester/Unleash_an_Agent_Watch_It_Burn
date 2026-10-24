@@ -27,6 +27,8 @@
 #   proposed    not here and not decided. Carries `tier`, `profile`, `recommendation` and `cost`. A proposal
 #               is a recommendation for Michael, not a decision.
 #   local       runs here only; the sister has no counterpart. `why` says what it is for in this workshop.
+#   opt-in      runs only on one opt-in profile, never the fleet. `profile` names it (gitops/bootstrap/<profile>),
+#               `apps` names its Application files in gitops/opt-in/<profile>/, and `cost` says what it adds.
 #
 # Tiers, for proposed components only. Every component added here is paid fifty times per event in
 # provisioning wall-clock (15 to 25 minute budget, t3.2xlarge nodes), so the rule that ranks them is the one
@@ -35,7 +37,7 @@
 #   2  opt-in profile only (one instructor or demo cluster), not the fleet.
 #   3  no beat uses it here; stays off the fleet until one does.
 #
-# Cost. `cost.measured: false` means nobody has timed it on this platform's build. Measuring means a cold
+# Cost (proposed and opt-in entries). `cost.measured: false` means nobody has timed it on this platform's build. Measuring means a cold
 # build on a t3.2xlarge with and without the component, recording the wall-clock to Healthy and the pod
 # requests it adds. When an entry flips to `measured: true` it must carry `build_seconds` and `requests`.
 
@@ -138,9 +140,8 @@ components:
     status: adopted
     apps: [external-secrets.yaml, eso-resources.yaml]
     why: >
-      Installed with a ClusterSecretStore pointed at AWS Secrets Manager, but no ExternalSecret reads
-      through it: since 32a30e2 the workshop's Secrets are written per cluster at bootstrap. That unused
-      store is the gap the openbao entry below would fill.
+      Its ClusterSecretStore reads OpenBao (openbao entry below). It replaced a store pointed at AWS
+      Secrets Manager that nothing read after 32a30e2. ESO writes datadog-secret from OpenBao.
 
   - name: kube-prometheus-stack
     sister: [kube-prometheus-stack]
@@ -186,18 +187,15 @@ components:
 
   - name: openbao
     sister: [openbao, openbao-config]
-    status: proposed
-    tier: 1
-    profile: fleet
-    recommendation: >
-      Adopt in the sister's shape (dev mode, one unsealed in-memory pod, injector off, ESO reading it through
-      a vault-provider ClusterSecretStore) and move the bootstrap-written Secrets behind it. It is the one
-      component here with a recorded intent: 32a30e2 (2026-06-27) says "OpenBao remains the right post-event
-      on-cluster secret store; not introduced under the wire". It would also give the installed ESO
-      something to read.
-    cost:
-      measured: false
-      known: One pod in dev mode. The sister sets no resource requests on it, so the chart defaults apply.
+    status: adopted
+    apps: [openbao.yaml]
+    why: >
+      Adopted 2026-10-24 (question 656 on #394). The sister's dev-mode shape: one unsealed in-memory pod,
+      injector off, ESO reading it through a vault-provider ClusterSecretStore. Two departures: the root
+      token is generated per cluster rather than the chart's fixed one, and a NetworkPolicy admits only
+      ESO's namespace. The sister's openbao-config (store and seed) is security/eso plus
+      infra/openbao-secrets.sh here. The seed runs before the root app-of-apps, so datadog-secret still
+      exists before its readers start. Its build-time cost has not been timed yet.
 
   - name: argo-rollouts
     sister: [argo-rollouts]
@@ -205,8 +203,9 @@ components:
     tier: 1
     profile: fleet
     recommendation: >
-      Adopt together with the beat it exists for: an agent-authored bad deploy that a canary's analysis
-      aborts, so the platform visibly catches it. Without that beat it is a controller nothing uses. One
+      Decided 2026-10-24 (question 656 on #394): it waits for its beat. Adopt together with the beat it
+      exists for: an agent-authored bad deploy that a canary's analysis aborts, so the platform visibly
+      catches it. Without that beat it is a controller nothing uses. One
       controller Deployment; converting a party app to a Rollout is the only manifest change it forces.
     cost:
       measured: false
@@ -317,20 +316,20 @@ components:
 
   - name: vllm
     sister: [vllm]
-    status: proposed
-    tier: 2
-    profile: opt-in
-    recommendation: >
-      The workload the /local route already points at (hostOverride vllm-qwen3.agent.svc.cluster.local:8000).
-      Install it on one instructor or demo cluster, not the fleet, until a cold build with it has been timed.
-      A plain Deployment and Service is enough for the route; KServe is not required for it to work.
+    status: opt-in
+    profile: local-inference
+    apps: [vllm-qwen3.yaml]
+    why: >
+      Built 2026-10-24 (question 657 on #394). The workload the /local route already pointed at
+      (hostOverride vllm-qwen3.agent.svc.cluster.local:8000), as a plain Deployment and Service with the
+      sister's pod spec, on the local-inference profile only. KServe is not required for the route.
     cost:
       measured: false
       known: >
         Measured on the sister, on the same t3.2xlarge node type: requests 4 CPU / 10Gi, limits 6 CPU / 16Gi,
         memory peak 12.52 GiB with KVCACHE 2 (it OOMKilled at a 10Gi limit). The Qwen3-1.7B weights are baked
-        into ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b, so nothing downloads at start, but the
-        image pull is the build-time cost nobody has timed here.
+        into ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b, 4.95 GB compressed (read from the registry
+        2026-10-24), so nothing downloads at start, but that pull is the build-time cost nobody has timed here.
 
   - name: kserve
     sister: [kserve, kserve-crd]
@@ -338,7 +337,7 @@ components:
     tier: 3
     profile: none
     recommendation: >
-      A second controller and its CRDs to manage the one vLLM Deployment the opt-in profile needs. Earns a
+      A second controller and its CRDs to manage the one vLLM Deployment the local-inference profile runs. Earns a
       place only if that profile is meant to teach KServe; otherwise the plain Deployment does the job.
     cost:
       measured: false

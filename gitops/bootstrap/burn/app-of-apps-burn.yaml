@@ -40,10 +40,10 @@ spec:
         # traces together and finding someone's successful prompt by name (#303), and that is the moment
         # the observability half of the workshop earns its place. It also puts attackme into the single
         # shared presenter org alongside the admin clusters and the students' dual-shipped telemetry
-        # (#296). external-secrets and eso-resources come along because the Datadog key is pulled from
-        # AWS Secrets Manager; otel-operator and ai-layer-otel because the agent pod is only traced if
+        # (#296). external-secrets, eso-resources and openbao come along because the Datadog key is held in
+        # OpenBao and ESO writes datadog-secret from it (#394); otel-operator and ai-layer-otel because the agent pod is only traced if
         # the webhook injects it at admission.
-        include: '{namespaces,cert-manager,external-secrets,eso-resources,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,otel-operator,ai-layer-otel,otel-collector,datadog-operator,datadog-agent-cr,demo-app-unicorn,demo-app-hedgehog,demo-app-spider,demo-app-wombat,demo-app-mantis-shrimp}.yaml'
+        include: '{namespaces,cert-manager,external-secrets,eso-resources,openbao,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,otel-operator,ai-layer-otel,otel-collector,datadog-operator,datadog-agent-cr,demo-app-unicorn,demo-app-hedgehog,demo-app-spider,demo-app-wombat,demo-app-mantis-shrimp}.yaml'
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging
       path: gitops/bootstrap/burn

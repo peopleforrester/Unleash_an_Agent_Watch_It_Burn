@@ -13,8 +13,10 @@ network-policies/
   → see ../policies/network-policies/
 
 eso/
-  cluster-secret-store.yaml   # ClusterSecretStore pointing to AWS Secrets Manager
-  test-external-secret.yaml   # ExternalSecret syncing a test secret
+  cluster-secret-store.yaml   # ClusterSecretStore reading the in-cluster OpenBao (#394)
+
+openbao/
+  datadog-externalsecrets.yaml  # datadog-secret from OpenBao; applied by infra/openbao-secrets.sh seed
 
 falco/
   custom-rules.yaml      # 3 general rules (write to /etc, shell spawn, sensitive mount)

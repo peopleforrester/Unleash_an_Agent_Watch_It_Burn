@@ -1,0 +1,33 @@
+# ABOUTME: ArgoCD Application for the CPU vLLM that serves Qwen3-1.7B to agentgateway's /local route. Taken
+# ABOUTME: only by the local-inference root, never by a fleet profile (#394, question 657).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vllm-qwen3
+  namespace: argocd
+  annotations:
+    # After the ai-layer (wave 3) that holds the gateway and the ModelConfig it serves.
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: staging
+    path: gitops/manifests/vllm-qwen3
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
