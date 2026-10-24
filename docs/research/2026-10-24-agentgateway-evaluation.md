@@ -28,6 +28,17 @@ from 2026-09-05, on the issue.
 
 The decision is Michael's. Nothing above changes what Portland ships.
 
+**Update (#496, 2026-10-24).** Recommendation 2 holds for the 2-hour workshop and is superseded for the
+KubeCon admin cluster. Michael's #456 decision puts "mid-inference" between the agent's steps, so evil-mcp
+now goes through the gateway on its own bind (:3003), served by a second agentgateway container from its
+own ConfigMap (`agentgateway-c7-config`). On an admin cluster `guard-mcp-on` narrows that bind's
+`mcpAuthorization` rule to `get_weather`. That container answers the section 2 costs: Argo CD ignores
+drift on the C7 ConfigMap only, block-argocd-drift exempts only the terminal's UPDATE of it, and a bad edit
+reaches C7 alone. agentgateway v1.5.0 watches its config file and keeps the last good state on a failed
+reload (`crates/agentgateway/src/state_manager.rs`, `LocalClient`), so the flip needs no restart. The live
+reload delay is measured by `challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` on the cluster.
+Workshop clusters keep the `toolNames` toggle, and their gateway rule stays `'true'`.
+
 ## 1. What reaches the gateway today
 
 The issue said the gateway was on no challenge's path. Michael's comment on the issue corrected that:
@@ -39,7 +50,7 @@ lines in its first hour. The manifests agree, with one correction to the #236 au
 | 3000 | every chat message, guard-proxy to workshop-agent over A2A | **yes, always** | `resources.yaml` guard-proxy `AGENT_URL`; `agentgateway.yaml` bind 3000 |
 | 3001 | every workshop-mcp tool call (all of BurritoBot's real tools) | **yes, always** | `workshop-mcp` RemoteMCPServer `url: http://agentgateway.agent:3001/mcp` |
 | 3002 | model calls | **only if a cluster is switched** to `gateway-bedrock-nova` or `gateway-local-qwen3` | the Agent's committed `modelConfig` is `bedrock-nova`, `provider: Bedrock`, which calls Bedrock directly |
-| none | evil-mcp, C7's rogue tools | **no** | `evil-mcp` RemoteMCPServer `url: http://evil-mcp-shim.agent:8000/mcp` |
+| 3003 | evil-mcp, C7's rogue tools (since #496; this row read "none, no" when written) | **yes, always** | `evil-mcp` RemoteMCPServer `url: http://agentgateway.agent:3003/mcp`; the `agentgateway-c7` container |
 
 The #236 audit says "every model call: both kagent ModelConfigs, port 3002". The two gateway
 ModelConfigs exist, but nothing binds the agent to either of them: no script, overlay or bootstrap

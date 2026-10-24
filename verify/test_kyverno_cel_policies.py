@@ -52,6 +52,8 @@ USERS = {
     "kube-controller": ("system:serviceaccount:kube-system:deployment-controller",
                         ["system:serviceaccounts", "system:serviceaccounts:kube-system", "system:authenticated"]),
     "admin": ("kubernetes-admin", ["system:masters", "system:authenticated"]),
+    "terminal": ("system:serviceaccount:agent:web-terminal",
+                 ["system:serviceaccounts", "system:serviceaccounts:agent", "system:authenticated"]),
 }
 
 TRACKED = {"argocd.argoproj.io/tracking-id": "ai-layer:apps/Deployment:agent/guard-proxy"}
@@ -188,6 +190,19 @@ for op in ("UPDATE", "DELETE"):
         expect(f"{op} by {who} is let through", g, "guard-proxy", "ignored")
 g = run(DRIFT, [managed], operation="CREATE", user="agent-sa")
 expect("CREATE is not matched (UPDATE and DELETE only)", g, "guard-proxy", "ignored")
+# C7's live gateway rule (#496): the terminal may UPDATE agentgateway-c7-config, and nothing else changes.
+c7_cm = {"apiVersion": "v1", "kind": "ConfigMap",
+         "metadata": {"name": "agentgateway-c7-config", "namespace": "agent", "annotations": TRACKED}}
+gw_cm = {"apiVersion": "v1", "kind": "ConfigMap",
+         "metadata": {"name": "agentgateway-config", "namespace": "agent", "annotations": TRACKED}}
+g = run(DRIFT, [c7_cm, gw_cm], operation="UPDATE", user="terminal")
+expect("the terminal may UPDATE agentgateway-c7-config (guard-mcp-on/off)", g, "agentgateway-c7-config", "ignored")
+expect("but not agentgateway-config, which carries every other route", g, "agentgateway-config", "fail", DRIFT_MSG)
+g = run(DRIFT, [c7_cm], operation="DELETE", user="terminal")
+expect("nor DELETE agentgateway-c7-config", g, "agentgateway-c7-config", "fail", DRIFT_MSG)
+g = run(DRIFT, [c7_cm], operation="UPDATE", user="agent-sa")
+expect("and agent-sa may not UPDATE it (the agent cannot switch off its own C7 guard)", g,
+       "agentgateway-c7-config", "fail", DRIFT_MSG)
 
 FLOOR_NS_MSG = "Protected platform namespace; deletion is not permitted (workshop floor)."
 FLOOR_WL_MSG = "Protected platform workload; deletion is not permitted (workshop floor)."

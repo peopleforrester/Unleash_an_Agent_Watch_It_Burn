@@ -93,11 +93,13 @@ check("identity: another cluster's kube-context fails",
       not passes(kp.judge_identity(host, "whitney-admin.agenticburn.com", host)))
 check("identity: a missing cluster-identity fails", not passes(kp.judge_identity(host, None, host)))
 check("identity: HTTPS answering as another cluster fails", not passes(kp.judge_identity(host, host, "x")))
-armed = {"guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL),
+armed = {"guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL), "c7_rule": kp.C7_OPEN,
          "kyverno_actions": ["Deny"], "networkpolicy": True, "kubearmor_action": "Block"}
 check("start state: guards off and controls armed passes", passes(kp.judge_start_state(armed)))
 for name, change in [("an AI guard on", {"guards": {**armed["guards"], "budget": True}}),
                      ("the allow-list already narrowed", {"evil_tools": ["get_weather"]}),
+                     ("the C7 gateway rule already narrowed", {"c7_rule": kp.C7_NARROWED}),
+                     ("the C7 gateway rule unreadable", {"c7_rule": None}),
                      ("Kyverno in Audit", {"kyverno_actions": ["Audit"]}),
                      ("no egress NetworkPolicy", {"networkpolicy": False}),
                      ("KubeArmor policy missing", {"kubearmor_action": None}),
@@ -169,16 +171,35 @@ def helper(name: str) -> str:
     return terminal.split(f"cat > \"$HOME/{name}\" <<'EOS'\n", 1)[1].split("\nEOS\n", 1)[0]
 
 
+def terminal_rewrite(mode: str, rule: str) -> bool:
+    """Run the terminal's own .c7rule.py on the committed C7 config and compare its new config with the probe's."""
+    import yaml
+    gateway = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()) if d]
+    text = next(d for d in gateway if d.get("kind") == "ConfigMap"
+                and d["metadata"]["name"] == "agentgateway-c7-config")["data"]["config.yaml"]
+    cm = json.dumps({"metadata": {"resourceVersion": "1"}, "data": {"config.yaml": text}})
+    r = subprocess.run([sys.executable, "-I", "-c", helper(".c7rule.py"), mode], input=cm,
+                       capture_output=True, text=True)
+    return r.returncode == 0 and json.loads(r.stdout)[1]["value"] == kp.c7_config_with_rule(text, rule)
+
+
 off_body = helper("guards-off")
+guardlib = helper(".guardlib")
 check("guards-off sends exactly the terminal's /toggle queries, in order",
       kp.GUARDS_OFF == [ln for ln in re.findall(r'_px "([^"]+)"', off_body)])
-check("guards-off restores the terminal's full evil-mcp list",
-      f"_evil '{json.dumps(kp.EVIL_ALL).replace(' ', '')}'" in off_body)
+check("guards-off and guard-mcp-off both go through the terminal's _mcp, which carries the full evil-mcp list",
+      "_mcp off" in off_body and "_mcp off" in helper("guard-mcp-off")
+      and f"all='{json.dumps(kp.EVIL_ALL).replace(' ', '')}'" in guardlib)
+check("guard-mcp-on goes through the terminal's _mcp on", "_mcp on" in helper("guard-mcp-on"))
+check("on an admin cluster the terminal sets the gateway rule and leaves toolNames full (#496)",
+      re.search(r'0:on\)\s+_evil "\$all" && _c7rule on', guardlib) is not None
+      and re.search(r'0:off\)\s+_evil "\$all" && _c7rule off', guardlib) is not None)
+check("the probe's rule rewrite writes the same C7 config as the terminal's .c7rule.py, both ways",
+      all(terminal_rewrite(mode, rule) for mode, rule in (("on", kp.C7_NARROWED), ("off", kp.C7_OPEN))))
+check("guard-input-on is the terminal's query", f'_px "{kp.GUARD_INPUT_ON}"' in helper("guard-input-on"))
 check("guard-input-on is the terminal's query", f'_px "{kp.GUARD_INPUT_ON}"' in helper("guard-input-on"))
 check("guard-output-on is the terminal's query", f'_px "{kp.GUARD_OUTPUT_ON}"' in helper("guard-output-on"))
 check("guard-topic-on is the terminal's query", f'_pxkey "{kp.GUARD_TOPIC_ON}" topic' in helper("guard-topic-on"))
-check("guard-mcp-on narrows to the terminal's list",
-      f"_evil '{json.dumps(kp.EVIL_FIXED)}'" in helper("guard-mcp-on"))
 check("the probe patches the path the terminal's _evil patches",
       "/spec/declarative/tools/1/mcpServer/toolNames" in terminal)
 brief = (REPO / "gitops/ai-layer/web/brief.html").read_text()
@@ -234,6 +255,7 @@ class Fake:
         if not topic:
             del self.g["topic"]
         self.tools = list(kp.EVIL_ALL)
+        self.rule = kp.C7_OPEN
         self.c6 = False
         self.usd = 1.0
 
@@ -256,8 +278,11 @@ class Fake:
         return list(self.tools)
 
     def measure(self):
-        return {"guards": dict(self.g), "evil_tools": list(self.tools), "kyverno_actions": ["Deny"],
-                "networkpolicy": True, "kubearmor_action": "Block"}
+        return {"guards": dict(self.g), "evil_tools": list(self.tools), "c7_rule": self.rule,
+                "kyverno_actions": ["Deny"], "networkpolicy": True, "kubearmor_action": "Block"}
+
+    def c7_rule(self):
+        return self.rule
 
     def toggle(self, q):
         self.log.append(f"toggle {q}")
@@ -270,6 +295,10 @@ class Fake:
     def set_evil_tools(self, names):
         self.log.append(f"tools {names}")
         self.tools = list(names)
+
+    def set_c7_rule(self, rule):
+        self.log.append(f"rule {rule}")
+        self.rule = rule
 
     def kubectl_rc(self, *args, timeout=90):
         if "curl" in args:
@@ -303,7 +332,9 @@ class Fake:
         if p == kp.CEO_PROMPT:
             return chat(CEO_REDACTED if self.g["output"] else CEO_LEAK)
         if p == kp.MCP_PROMPT:
-            return chat(C7_DENIED if "read_internal_config" not in self.tools else C7_LEAK)
+            # the gateway refuses the rogue call when its rule is narrowed, and the allow-list hides it when narrowed
+            gone = self.rule != kp.C7_OPEN or "read_internal_config" not in self.tools
+            return chat(C7_DENIED if gone else C7_LEAK)
         if self.g.get("topic") and tc.phrase_verdict(p, tc.split_list(kp.ENV["TOPIC_OFF_LIST"]), []) == "off":
             return chat(kp.TOPIC_REFUSAL, True)
         if p == kp.OFF_TOPIC_PROMPT:
@@ -327,8 +358,13 @@ check("the beats run in run-of-show order (segments 3, 4, 5 as C6 C5 C7, 7, then
 check("a full admin run spends 12 model calls", f.calls == 12, str(f.calls))
 check("the cluster ends with every AI guard off and the rogue tools back",
       not any(f.g.values()) and f.tools == kp.EVIL_ALL)
+check("the C7 gateway rule is narrowed by the run and open again at the end",
+      f"rule {kp.C7_NARROWED}" in f.log and f.rule == kp.C7_OPEN)
+check("no beat narrows toolNames on an admin cluster: the gateway is what stops C7 (#496)",
+      f"tools {kp.EVIL_FIXED}" not in f.log)
 check("guards-off is the last thing done to the cluster",
-      f.log[-len(kp.GUARDS_OFF) - 1:] == [f"toggle {q}" for q in kp.GUARDS_OFF] + [f"tools {kp.EVIL_ALL}"])
+      f.log[-len(kp.GUARDS_OFF) - 2:] == [f"toggle {q}" for q in kp.GUARDS_OFF] + [f"tools {kp.EVIL_ALL}",
+                                                                              f"rule {kp.C7_OPEN}"])
 
 f = Fake()
 res = run_admin(f, max_calls=5)
