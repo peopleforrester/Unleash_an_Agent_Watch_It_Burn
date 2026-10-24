@@ -168,6 +168,19 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 - [ ] Per-cluster Datadog secret wiring: each attendee cluster's ESO points at that attendee's DD
       account (`distribute_datadog_keys.py`), so metrics land in the right org.
 - [ ] End-to-end attendee test: email at the URL -> cluster URL + working chat + Datadog metrics flowing.
+- [ ] **Size the pool for the attendees plus two** (#488). There is no presenter student cluster any more
+      (#295): Michael and Whitney each claim a pool cluster by email with their `+student` alias, so a pool
+      of exactly the attendee count leaves the last two attendees through the door with nothing.
+      `scheduled-up.sh <attendees>` adds the two itself (`WIB_SCHED_PRESENTER_SEATS`, default 2). `scale`
+      and `up-fleet` do not: pass `scale <attendees + 2>`, or `up-fleet ceil((attendees + 2) / accounts)`.
+- [ ] **A presenter dogfoods the claim on the morning of the workshop, before the room arrives** (#488).
+      Claim by email at the provisioning page with the `+student` alias, exactly as an attendee will. Then
+      open the console, the lab and the terminal from what the claim page hands back, and confirm the
+      Datadog org it names is receiving this cluster's data. This is the walk that would have caught the
+      #272 seams: 40 of 50 student clusters with no route, registration silently skipping every cluster
+      outside the default account, and a dual-shipping check that passed on a stale glob. Each one is in
+      the attendee's path and none in a presenter's own. The cluster claimed here is that presenter's seat
+      for the day; keep it.
 
 ### 3. Attendee access at the door
 - [ ] start.agenticburn.com / QR index reachable and points at the provisioning page.

@@ -21,11 +21,12 @@ usage() {
     cat >&2 <<EOF
 Usage: ${0##*/} [attendee-count]
 
-Brings up the nine instructor clusters (both owners, all rounds) and <attendee-count> attendee clusters
-(default 2), then runs the acceptance pass over everything. Each stage already ends in its own verify, so
-a stage that reports success has been checked, not assumed.
+Brings up the nine instructor clusters (both owners, all rounds) and a pool of <attendee-count> attendee
+clusters (default 2) plus one seat per presenter, then runs the acceptance pass over everything. Each stage
+already ends in its own verify, so a stage that reports success has been checked, not assumed.
 
   WIB_SCHED_ATTENDEES    attendee count when no argument is given (default 2)
+  WIB_SCHED_PRESENTER_SEATS  pool clusters added for the presenters' own claims (default 2, #488)
   WIB_SCHED_INSTRUCTORS  instructor selector (default 'both'; 'none' skips the roster entirely)
   AWS_PROFILE            account for the attendee pool (default accen-dev)
   WIB_CRON_SELF_REMOVE   1 = remove the one-shot ${CRON_TAG} line from the crontab after a clean run
@@ -87,6 +88,12 @@ run_stage() {
 
 # A one-shot schedule that leaves its line behind fires again next year on the same date. Removing it on
 # a clean run makes the schedule genuinely one-shot without needing anyone to remember.
+# The presenters have no dedicated student cluster any more (#295): Michael and Whitney each claim one from
+# the pool by email, as an attendee does. A pool sized to the attendee count alone is two short the moment
+# both presenters claim, and the last two attendees through the door are the ones with no cluster (#488).
+# So the count given here is ATTENDEES, and the pool built is that plus the presenter seats.
+pool_size() { printf '%s' "$(( $1 + $2 ))"; }
+
 remove_cron_line() {
     [[ "${WIB_CRON_SELF_REMOVE:-}" == "1" ]] || return 0
     local current
@@ -101,6 +108,9 @@ main() {
     [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]] && usage
     local attendees="${1:-${WIB_SCHED_ATTENDEES:-2}}"
     [[ "${attendees}" =~ ^[0-9]+$ ]] || usage
+    local seats="${WIB_SCHED_PRESENTER_SEATS:-2}"
+    [[ "${seats}" =~ ^[0-9]+$ ]] || usage
+    local pool; pool="$(pool_size "${attendees}" "${seats}")"
     local instructors="${WIB_SCHED_INSTRUCTORS:-both}"
 
     setup_env
@@ -115,14 +125,14 @@ main() {
         exit 1
     fi
 
-    log "scheduled bring-up starting: instructors='${instructors}', attendees=${attendees}"
+    log "scheduled bring-up starting: instructors='${instructors}', attendees=${attendees} + ${seats} presenter seat(s) = pool of ${pool}"
     preflight_env || exit 1
 
     [[ "${instructors}" == "none" ]] || run_stage "instructors" instructors up "${instructors}"
-    run_stage "attendees" scale "${attendees}"
+    run_stage "attendees" scale "${pool}"
     run_stage "verify" verify all
 
-    log "scheduled bring-up COMPLETE: instructor roster + ${attendees} attendee cluster(s), verified"
+    log "scheduled bring-up COMPLETE: instructor roster + ${pool} attendee cluster(s) (${attendees} attendees + ${seats} presenter seats), verified"
     remove_cron_line
 }
 

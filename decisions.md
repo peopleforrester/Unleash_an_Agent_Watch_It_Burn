@@ -1151,3 +1151,21 @@ the route one must take rather than one already taken. `verify/test_iam_policy_c
 - **Five boundary effect cases added** next to `organizations:DetachPolicy`: AttachPolicy, CreatePolicy,
   UpdatePolicy, DeletePolicy and DisablePolicyType, each `explicitDeny`. They run in `test_iam_policy_aws.py`
   (E2E), which has not yet run them against AWS.
+## 2026-10-24 · #488 · The event pool is the attendee count plus two presenter seats
+
+With the presenter student clusters retired (#295), Michael and Whitney each claim a pool cluster by email, so a
+pool built to the attendee count alone is two short once both claim.
+
+**Choices made:**
+- **`scheduled-up.sh` takes the ATTENDEE count and adds the seats.** `WIB_SCHED_PRESENTER_SEATS` (default 2)
+  is added before `scale`, and the start and completion lines print attendees, seats and pool, so the log says
+  why the pool is larger than the number typed. A count of 250 builds `scale 252`.
+- **`scale` and `up-fleet` are left as they are.** `scale <n>` is a desired total that `verify attendees:<n>`
+  and teardown also read, and `up-fleet <n>` is a per-account count; adding seats inside either would make the
+  same number mean two things. The runbook, the go-live checklist and `up-fleet`'s usage line give the
+  arithmetic instead: `scale <attendees + 2>`, `up-fleet ceil((attendees + 2) / accounts)`.
+- **The dogfood walk is a go-live checklist item**, on the morning of the workshop before the room arrives:
+  claim with the `+student` alias, open console, lab and terminal, and confirm the claimed Datadog org receives
+  data. The claimed cluster is that presenter's seat for the day.
+- **Tests:** `verify/test_scheduled_up.sh` holds the pool to attendees + 2 by default, 250 to 252, an override
+  of 0 and 1 seats, and a usage error on a non-numeric seat count.

@@ -50,8 +50,13 @@ text; the code is tracked.
 
 | Task | Command |
 |---|---|
-| Build at a set time | `scheduled-up.sh <n>` via cron |
+| Build at a set time | `scheduled-up.sh <attendees>` via cron (builds a pool of attendees + 2) |
 | Tear down at a set time | `scheduled-down.sh` via cron |
+
+The pool is always the attendee count plus two: Michael and Whitney each claim a pool cluster by email,
+as an attendee does (#295). `scheduled-up.sh` adds the two (`WIB_SCHED_PRESENTER_SEATS`, default 2);
+`scale <n>` and `up-fleet <n>` do not, so pass `attendees + 2` to `scale`, and to `up-fleet` the
+per-account count `ceil((attendees + 2) / accounts)`.
 
 Cron runs in the machine's local timezone, which on this box is Europe/Berlin and is neither UTC nor
 event time. Compute the fields rather than doing the arithmetic in your head.

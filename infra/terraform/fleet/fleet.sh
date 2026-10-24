@@ -476,6 +476,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     up <name...>      Provision the named attendee clusters. Refuses any other name.
     up-fleet <n>      Provision <n> clusters in EACH \${WIB_ATTENDEE_ACCOUNTS} account, all concurrent
                       (disjoint name ranges). Honors WIB_NAME_OFFSET to skip existing cluster numbers.
+                      Size the pool for attendees + 2: both presenters claim from it (#295, #488), so
+                      n = ceil((attendees + 2) / accounts). scheduled-up.sh adds the two itself.
     down-fleet <n>    Tear down an up-fleet run: SAME <n> + WIB_NAME_OFFSET, account-aware (each cluster
                       destroyed in its own account). Skips names with no state, so partial fleets are safe.
     down <count|all>  Destroy the first <count>, or all clusters with state. 'down all' also destroys

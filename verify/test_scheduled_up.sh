@@ -42,21 +42,32 @@ out="$(run 2)"
 calls="$(cat "${T}/calls" 2>/dev/null)"
 check "exits zero" 'grep -q "rc=0" <<<"$out"'
 check "stage 1 is the instructor roster, both owners" '[[ "$(sed -n 1p <<<"$calls")" == "instructors up both" ]]'
-check "stage 2 scales the attendee pool to the count given" '[[ "$(sed -n 2p <<<"$calls")" == "scale 2" ]]'
+check "stage 2 scales the pool to the attendees plus the two presenter seats" '[[ "$(sed -n 2p <<<"$calls")" == "scale 4" ]]'
 check "stage 3 verifies everything" '[[ "$(sed -n 3p <<<"$calls")" == "verify all" ]]'
 check "no fourth stage" '[[ "$(wc -l <<<"$calls")" == "3" ]]'
-check "reports completion with the count" 'grep -q "COMPLETE: instructor roster + 2 attendee cluster" <<<"$out"'
+check "reports completion with the pool and how it splits" \
+    'grep -q "COMPLETE: instructor roster + 4 attendee cluster(s) (2 attendees + 2 presenter seats)" <<<"$out"'
 
-echo "== the count is the argument, then the env, then 2 =="
-out="$(run 7)"; check "an argument wins" 'grep -qx "scale 7" "${T}/calls"'
-out="$(WIB_SCHED_ATTENDEES=5 run)"; check "the env is used when no argument is given" 'grep -qx "scale 5" "${T}/calls"'
-out="$(run)"; check "the default is 2" 'grep -qx "scale 2" "${T}/calls"'
+echo "== the attendee count is the argument, then the env, then 2, and the pool is that plus 2 =="
+out="$(run 7)"; check "an argument wins" 'grep -qx "scale 9" "${T}/calls"'
+out="$(WIB_SCHED_ATTENDEES=5 run)"; check "the env is used when no argument is given" 'grep -qx "scale 7" "${T}/calls"'
+out="$(run)"; check "the default is 2 attendees, a pool of 4" 'grep -qx "scale 4" "${T}/calls"'
 out="$(run twelve)"; check "a non-numeric count is a usage error, and builds nothing" \
+    'grep -q "rc=2" <<<"$out" && [[ ! -s "${T}/calls" ]]'
+
+echo "== the presenters' claims are seats on top of the attendee count (#295, #488) =="
+out="$(run 250)"
+check "250 attendees build a pool of 252" 'grep -qx "scale 252" "${T}/calls"'
+check "the start line names the attendees, the seats and the pool" \
+    'grep -q "attendees=250 + 2 presenter seat(s) = pool of 252" <<<"$out"'
+out="$(WIB_SCHED_PRESENTER_SEATS=0 run 3)"; check "the seats can be set to none" 'grep -qx "scale 3" "${T}/calls"'
+out="$(WIB_SCHED_PRESENTER_SEATS=1 run 3)"; check "the seats can be set to one" 'grep -qx "scale 4" "${T}/calls"'
+out="$(WIB_SCHED_PRESENTER_SEATS=two run 3)"; check "a non-numeric seat count is a usage error, and builds nothing" \
     'grep -q "rc=2" <<<"$out" && [[ ! -s "${T}/calls" ]]'
 
 echo "== the roster can be skipped =="
 out="$(WIB_SCHED_INSTRUCTORS=none run 2)"
-check "'none' builds attendees only" '! grep -q "instructors" "${T}/calls" && grep -qx "scale 2" "${T}/calls"'
+check "'none' builds attendees only" '! grep -q "instructors" "${T}/calls" && grep -qx "scale 4" "${T}/calls"'
 out="$(WIB_SCHED_INSTRUCTORS=whitney run 2)"
 check "an owner selector is passed through" 'grep -qx "instructors up whitney" "${T}/calls"'
 
