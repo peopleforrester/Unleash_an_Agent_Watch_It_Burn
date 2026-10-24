@@ -2757,3 +2757,25 @@ reached Datadog through the Agent's `containerCollectAll`. Dropping the pair sav
   excluding workshop-mcp's logs.
 - The deck line that names Loki (`facilitation/slides-outline.md`) is not changed: the issue leaves that
   prose to Michael.
+
+## 2026-10-24 · question 687 · Loki is dropped from the deck's list of what runs on the platform
+
+**Answer:** Drop Loki from the list.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**Background:** Issue #474 removes the Loki and Alloy Argo CD apps from every cluster, and the platform page
+no longer lists Loki. `facilitation/slides-outline.md` line 43 (slide 6, "The platform you get") still listed
+Loki as part of what attendees get, so the slide named a component no cluster runs. It was the only Loki
+mention in the repo's deck material. Michael's verified-stack record in talks-knowledge
+(`speaking/devopsdays-portland/stack-verified.md`, 2026-09-03) lists Loki under "Observability, fallback". That
+record is a dated snapshot that #474 makes stale. It is not edited here, since it lives in another repo.
+
+**Why this is a correction and not new prose:** earlier runs changed slides-outline.md facts directly (#417
+replaced a stale slot time with a pointer to conference-knowledge). New prose was kept as a draft for Michael
+(#466, the 2026-10-24 entry above). Cutting one component that no longer exists is a factual correction, and
+CLAUDE.md's "Bias to action" rule applies.
+
+**What it changes:** `facilitation/slides-outline.md` line 43 drops "Loki," from the list. Nothing else in the
+slide or the outline changes. The rest of the list is still Argo CD, Kyverno, Falco, Prometheus, Grafana,
+Tempo, cert-manager, External Secrets and Backstage.
