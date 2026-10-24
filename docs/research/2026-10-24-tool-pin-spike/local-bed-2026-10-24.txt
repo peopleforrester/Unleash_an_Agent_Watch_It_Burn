@@ -1,0 +1,37 @@
+== direct, no gateway: the processor's baseline must match what the upstream serves
+baseline.json matches the live evil-mcp: True
+== PIN_MODE=strip
+no processor (other bind)    :3001  tools ['get_weather', 'read_internal_config', 'apply_optimization']
+pinned, untouched            :3003  tools ['get_weather', 'read_internal_config', 'apply_optimization']
+pinned, rug-pulled           :3004  tools ['read_internal_config', 'apply_optimization']
+-- processor saw:
+{"event": "tool_pin_start", "port": 9001, "mode": "strip", "baseline": "<repo>/tmp/r7700/bed6/baseline.json"}
+{"changed": [], "event": "tool_pin", "kept": ["get_weather", "read_internal_config", "apply_optimization"], "mode": "strip", "service": "evil-mcp", "unpinned": [], "verdict": "pass"}
+{"changed": ["get_weather"], "event": "tool_pin", "kept": ["read_internal_config", "apply_optimization"], "mode": "strip", "service": "evil-mcp", "unpinned": [], "verdict": "mutated"}
+call the stripped tool       :3004  ERROR {"code": -32001, "message": "tool-pin: evil-mcp tool get_weather is not an approved definition", "data": null}
+== PIN_MODE=deny
+pinned, untouched            :3003  tools ['get_weather', 'read_internal_config', 'apply_optimization']
+pinned, rug-pulled           :3004  ERROR {"code": -32001, "message": "tool-pin: evil-mcp tool definitions refused (changed since approval: get_weather)", "data": null}
+-- processor saw:
+{"event": "tool_pin_start", "port": 9001, "mode": "deny", "baseline": "<repo>/tmp/r7700/bed6/baseline.json"}
+{"changed": [], "event": "tool_pin", "kept": ["get_weather", "read_internal_config", "apply_optimization"], "mode": "deny", "service": "evil-mcp", "unpinned": [], "verdict": "pass"}
+{"changed": ["get_weather"], "event": "tool_pin", "kept": ["read_internal_config", "apply_optimization"], "mode": "deny", "service": "evil-mcp", "unpinned": [], "verdict": "deny"}
+== processor down (failClosed)
+no processor (other bind)    :3001  tools ['get_weather', 'read_internal_config', 'apply_optimization']
+pinned, untouched            :3003  ERROR {"code": -32603, "message": "mcpGuardrails checkResponse failed: upstream call failed: Connect: Connection refused (os error 111)", "data": null}
+== re-approve: pin the rug-pulled definition by editing the baseline file, no restart
+pinned, rug-pull re-approved :3004  tools ['get_weather', 'read_internal_config', 'apply_optimization']
+== a bad edit to the gateway config while it runs (ConfigMap-style symlink swap)
+gateway still running after the bad edit
+no processor (other bind)    :3001  tools ['get_weather', 'read_internal_config', 'apply_optimization']
+== a good edit while it runs: add bind 3005, time until it serves
+bind 3005 serving 0.4s after the swap
+new bind, no processor       :3005  tools ['get_weather', 'read_internal_config', 'apply_optimization']
+-- gateway log, config lines:
+2026-10-24T21:25:45.329523Z info state_manager loaded config from File("cfg/config.yaml") 
+2026-10-24T21:25:45.330183Z info state_manager Watching config file: cfg/config.yaml 
+2026-10-24T21:25:53.053432Z error state_manager Failed to reload config: binds[0].listeners[0].routes[0].backends[0]: host or backend is required for MCP target backend configuration at line 1 column 134 
+2026-10-24T21:25:59.037210Z info state_manager loaded config from File("cfg/config.yaml") 
+-- gateway log, tools/list lines (route names the bind):
+route=default/unguarded route=default/evil-mcp-pinned route=default/rug-pulled route=default/evil-mcp-pinned route=default/rug-pulled mcp.error.code=-32001 route=default/unguarded route=default/evil-m
+cp-pinned mcp.error.code=-32603 route=default/rug-pulled route=default/unguarded route=default/added-live

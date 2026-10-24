@@ -1,0 +1,19 @@
+# ABOUTME: The #480 spike's processor bundle: tool-pin plus its pinned baseline, for live-check.sh to apply.
+# ABOUTME: Not an Argo CD source. The gateway's bind is rendered separately by gateway_bind.py.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agent
+
+resources:
+  - tool-pin.yaml
+
+configMapGenerator:
+  - name: tool-pin-baseline
+    files:
+      - baseline.json
+
+# A stable name, so the re-approval step can edit the ConfigMap in place and the processor's per-call
+# re-read is what picks it up, with no pod roll in between.
+generatorOptions:
+  disableNameSuffixHash: true
