@@ -1559,3 +1559,19 @@ so the install is a hecaton change. It is filed there as a follow-up with the pi
   `5def7d1b7e55d892f9a381bb2cb2081a685712464be0d36d5d706af0ac48d0d3`.
 - **Nothing changes in `run-e2e.sh`.** It already fails loudly on each missing tool. The kyverno and
   conftest tests check versions, and `KYVERNO_CLI`, `CONFTEST` and `TERRAFORM` accept a path.
+
+## 2026-10-25 · #524 · A test holds the E2E gate's Node 24 and yarn 4 pins, and runs run-e2e.sh's prerequisite check
+
+#440's yarn 4 depended on two Backstage pins no test read: `packageManager` in `package.json`, which corepack
+resolves, and `yarnPath` in `.yarnrc.yml`. `verify/test_e2e_toolchain.py` (offline suite) now checks that
+`packageManager` is an exact yarn 4, that `yarnPath` names that same release, and that the release file is
+committed and declares that version. It also checks that the Node major `run-e2e.sh` requires is 24, matches the
+Backstage image's `FROM node:` and is accepted by `engines`.
+
+The "run `run-e2e.sh` once" half was a one-time run. A past run cannot be tested, so the test runs the script
+itself with a PATH holding only `dirname` and stub tools, in an empty environment. With nothing on PATH it must
+exit 1 with "CANNOT RUN; this is a failure, not a skip" and list node, corepack and CONTEXT. With a stub Node 22
+on PATH it must name the version. With a stub Node 24 and corepack on PATH it must list neither, and must not ask
+for yarn. Because CONTEXT is unset, every case stops in the prerequisite check and no kubectl is ever called.
+Mutating each pin (yarn 3, a mismatched or missing `yarnPath`, a gate wanting Node 22, corepack dropped from the
+required tools) turns the test red.
