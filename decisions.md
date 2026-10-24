@@ -488,3 +488,22 @@ shipped in the console ConfigMap next to `active-skin.js`, and never edited into
   native libraries, and deterministic, so `verify/test_audience_page_e2e.py` can compare the committed SVG
   byte for byte. It is used only through `uv run --with segno==1.6.6`, never installed into the offline
   suite's interpreter. The offline suite reads the URL from the SVG's `<title>` instead.
+
+## 2026-10-24 · #486 · The Falco badge is measured, not claimed; the guard-proxy half is in its own repo
+
+`/controls` must report Falco the way it reports every other control, by reading the object, because the
+burn profile (the Community cluster) installs no Falco. What lands here, and what it waits on:
+
+- **RBAC:** `guard-proxy-reader` gets `get` on `apps/daemonsets/falco` on its **ClusterRole**, not a Role in
+  `security`. The ai-layer bundle sets `namespace: agent`, which would rewrite a Role written for `security`
+  into `agent`, where it grants nothing. The rule is still get-only on one name; the only DaemonSet called
+  `falco` is the chart's, in `security` (falco 9.1.0's `falco.fullname` with the release named `falco`).
+- **Measured means ready:** the proposed read is "the DaemonSet exists and `status.numberReady > 0`". A
+  DaemonSet with no ready pod detects nothing, so it does not light the badge.
+- **The page:** the Falco badge now needs `infra.falco` as well as KubeArmor. Before, the pairing replaced
+  the measured value with KubeArmor's, so a measured false would have been thrown away.
+- **Not done here, and what it blocks:** `read_controls()` is in guard-proxy-agenticburn `proxy.py` (pinned
+  at `ccdda73`), and the Go rewrite's `/controls` still answers 501. Until the pin moves to a commit that
+  reads `security/falco`, the hostname override in `burritbot.html` stays. `verify/test_falco_badge_measured.py`
+  ties the two together: it fails if the override goes before the pin moves, or stays after. Promote the
+  pin bump, the `checksum/proxy-py` bump and the override removal together.
