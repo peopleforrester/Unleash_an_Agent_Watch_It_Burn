@@ -39,7 +39,7 @@ provider "aws" {
 locals {
   fleet_tags = {
     project   = "watch-it-burn"
-    event     = "devopsdays-portland-2026"
+    event     = var.event
     Purpose   = "attendee-cluster"
     ManagedBy = "terraform"
     attendee  = var.name
@@ -49,6 +49,18 @@ locals {
 variable "region" {
   type    = string
   default = "us-west-2"
+}
+
+variable "event" {
+  type = string
+  # NO DEFAULT, on purpose (#494). Spend is split per event by this tag, and it used to be a literal here,
+  # so clusters built for the next event were still tagged with the last one and billed into its bucket.
+  # The value is set once, in fleet/event.sh, and the fleet driver passes it on every apply and destroy.
+  description = "Event this cluster is billed to (the event= tag), e.g. kubecon-na-2026. Set in fleet/event.sh."
+  validation {
+    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.event))
+    error_message = "event must be a lowercase-hyphenated slug such as kubecon-na-2026."
+  }
 }
 
 variable "profile" {

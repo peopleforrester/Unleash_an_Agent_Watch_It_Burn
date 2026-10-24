@@ -97,6 +97,10 @@ MAX_PARALLEL="${MAX_PARALLEL:-8}"
 # Defaults keep the existing SINGLE-account attendee flow unchanged (TF_PROFILE empty -> the cluster
 # module's default profile/region). Set the per-round account profiles when the 5-account fleet exists.
 WIB_REGION="${WIB_REGION:-us-west-2}"
+# The `event` cost-allocation tag, from its one setting in event.sh (env WIB_EVENT overrides). Passed to
+# both Terraform roots as -var event=, on apply and destroy alike, since neither root has a default.
+# shellcheck source=SCRIPTDIR/event.sh
+. "${SCRIPT_DIR}/event.sh"
 # Instructor clusters spread per round across separate accounts so no one account hits an EKS/VPC quota
 # wall ("overload"): Round 1 -> account 1, Round 2 -> account 2, Round 3 -> account 3. Switchable here.
 WIB_ACCOUNT_R1="${WIB_ACCOUNT_R1:-accen-dev}"
@@ -1256,12 +1260,12 @@ up_one() {
     local ns=(); [[ -n "${WIB_NODE_SIZE}" ]] && ns=(-var "node_min_size=${WIB_NODE_SIZE}" -var "node_max_size=${WIB_NODE_SIZE}" -var "node_desired_size=${WIB_NODE_SIZE}")
     local dk=(); [[ -n "${WIB_DISK}" ]] && dk=(-var "node_disk_size=${WIB_DISK}")
     if [[ -n "${WIB_DRY_RUN}" ]]; then
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
-        -var "name=${name}" -var "vpc_id=${VPC_ID}" \
+        -var "name=${name}" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
@@ -1582,7 +1586,7 @@ down_one() {
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
-        -var "name=${name}" -var "vpc_id=${VPC_ID}" \
+        -var "name=${name}" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
         >"${LOG_DIR}/${name}.destroy.log" 2>&1; then
         rm -f "${STATE_DIR}/${name}.tfstate" "$(membership_file "${name}")"; log "  ok: ${name}"
@@ -1813,7 +1817,7 @@ destroy_lab_vpc_for() {
     log "  ${acct}: destroying the lab VPC (${n} resources in state)"
     terraform -chdir="${LAB_VPC_DIR}" init -input=false >/dev/null 2>&1
     if AWS_PROFILE="${acct}" terraform -chdir="${LAB_VPC_DIR}" destroy -auto-approve -no-color \
-        -state="${state}" -var "profile=${acct}" -var "region=${WIB_REGION}" \
+        -state="${state}" -var "profile=${acct}" -var "region=${WIB_REGION}" -var "event=${WIB_EVENT}" \
         >"${LOG_DIR}/${acct}.lab-vpc-destroy.log" 2>&1; then
         log "  ${acct}: lab VPC destroyed"
     else
@@ -2079,7 +2083,7 @@ read_vpc_for() {
     if [[ ! -f "${state}" ]]; then
         log "no lab VPC for account '${profile}'. Apply it first:"
         log "  terraform -chdir=${LAB_VPC_DIR} apply -state=states/${profile}.tfstate \\"
-        log "    -var profile=${profile} -var region=${WIB_REGION}"
+        log "    -var profile=${profile} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
         exit 1
     fi
     VPC_ID="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${state}" -raw vpc_id 2>/dev/null || true)"

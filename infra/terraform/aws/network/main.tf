@@ -27,7 +27,7 @@ provider "aws" {
   default_tags {
     tags = {
       project   = "watch-it-burn"
-      event     = "devopsdays-portland-2026"
+      event     = var.event
       Purpose   = "lab-shared-vpc"
       ManagedBy = "terraform"
     }
@@ -37,6 +37,17 @@ provider "aws" {
 variable "region" {
   type    = string
   default = "us-west-2"
+}
+
+variable "event" {
+  type = string
+  # NO DEFAULT, on purpose (#494): the same rule and the same single setting (fleet/event.sh) as the
+  # cluster root. A literal here is how the KubeCon VPC was still tagged as Portland.
+  description = "Event this lab VPC is billed to (the event= tag), e.g. kubecon-na-2026. Set in fleet/event.sh."
+  validation {
+    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*$", var.event))
+    error_message = "event must be a lowercase-hyphenated slug such as kubecon-na-2026."
+  }
 }
 
 variable "profile" {
