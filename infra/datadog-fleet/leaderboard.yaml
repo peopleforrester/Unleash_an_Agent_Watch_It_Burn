@@ -1,0 +1,161 @@
+# ABOUTME: The challenge leaderboard (#307): a projector view in the instructor org, one row per cluster and one
+# ABOUTME: column per scored challenge, filled from signal the clusters already ship. Loaded with dashboard.yaml.
+#
+# Why here and not on the provisioning page. provisioning-agenticburn knows email to cluster and nothing else,
+# so it cannot tell when a challenge is finished. The clusters can: since #242 every attendee cluster
+# dual-ships its logs and metrics to the instructor org, and that is where the fleet dashboard (#267) already
+# lives. This is a second dashboard in the same org, loaded by the same fleet_monitors.py, from the same
+# per-cluster data. No exercise reports anything new for it.
+#
+# Cluster names, never people. The rows are kube_cluster_name and nothing resolves them to whoever claimed
+# them, so nobody in a fifty-person room is publicly stuck on Challenge 1 (the feedback form makes the same
+# call, feedback-agenticburn#6). The claim mapping stays behind the provisioning service's token-gated roster.
+#
+# What each column reads, so a renamed field is found here and not on the day. Every log query is filtered
+# to the fleet's clusters and grouped by kube_cluster_name, like the fleet dashboard's metric queries.
+#   C1 exfil      workshop-mcp's tool audit line (gitops/ai-layer/tool_audit.py, event tool_invocation): a
+#                 run_shell call whose command names the beacon. It marks the call reaching the tool, which
+#                 is the attack landing on an unpatched cluster; the provisioning service's /beacon/view
+#                 stays the room-wide count of POSTs that arrived, and it cannot say from which cluster.
+#   C2 villain    any log line from a villain image (images/villains/README.md), by short_image: the villain
+#                 is running on that cluster. Matched by name because the platform's own images share the
+#                 peopleforrester owner (ghcr.io/peopleforrester/watch-it-burn), so a wildcard would not do.
+#   C3 recipe     Falco's "Recipe Snoop In Agent Namespace" rule (gitops/apps/falco.yaml, json_output, so the
+#                 rule name is the @rule attribute). Absent on the Community cluster, which has no Falco.
+#   C4 bill       guard-proxy's gen_ai.client.cost gauge, the same number as the console's Cost counter. A
+#                 race rather than a tick: the biggest bill in the room is the score.
+#   C5 guarded    guard-proxy event output_scrub: the output guard is on and redacted a reply, which only
+#                 happens once the student has installed the fix and run the attack again.
+#   C6 blocked    guard-proxy events input_blocklist_hit / input_classifier_block: the input guard is on and
+#                 refused a prompt, the same "fix installed, attack re-run" moment.
+# Not scored. C7's rogue server writes no logs on purpose (#18: a rogue tool that audits itself undermines the
+# lesson), and C8 goes straight to the API server around everything that records; "there is no trace of it" is
+# what C8 teaches. Neither leaves a per-cluster signal in the org, and the note on the board says so.
+#
+# Datadog dashboard API body (v1, ordered layout) as YAML. fleet_monitors.py finds it by title and replaces it
+# in place, so its URL is stable within an org. The table covers the last 4 hours whatever the time picker
+# says: a session is 3.5 hours, and a projector nobody touches should not need its window set.
+title: "Watch It Burn: challenge leaderboard"
+description: "Which cluster has done which challenge. Managed by infra/datadog-fleet/fleet_monitors.py; edits in the UI are overwritten on the next apply."
+layout_type: ordered
+widgets:
+  - definition:
+      type: note
+      content: |
+        **Challenge leaderboard.** One row per cluster, by cluster name. A green cell means your platform saw you do it.
+        **1** the beacon call ran. **2** a villain is running. **3** Falco saw the recipe read. **4** your bill so far.
+        **5** the output guard redacted the CEO's address. **6** the input guard refused the poisoned ticket.
+        Challenges 7 and 8 are not on the board: the rogue tool server writes no logs on purpose, and Challenge 8 never
+        touches anything that records. That is the point of both.
+      background_color: purple
+      font_size: "16"
+      text_align: left
+      show_tick: false
+      has_padding: true
+
+  - definition:
+      type: query_table
+      title: Who has done what (last 4 hours)
+      time: { live_span: 4h }
+      has_search_bar: auto
+      requests:
+        - response_format: scalar
+          queries:
+            # Every reporting cluster gets a row, including one that has not scored yet.
+            - data_source: metrics
+              name: online
+              query: "max:datadog.agent.running{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              aggregator: last
+            - data_source: logs
+              name: c1
+              indexes: ["*"]
+              compute: { aggregation: count }
+              search:
+                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent kube_deployment:workshop-mcp @event:tool_invocation @phase:pre @tool_name:run_shell @tool_input.command:*beacon*"
+              group_by:
+                - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
+            - data_source: logs
+              name: c2
+              indexes: ["*"]
+              compute: { aggregation: count }
+              search:
+                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent short_image:(promo-mascot OR festival-promo OR loyalty-rewards OR joker OR gargamel OR skeletor OR mumm-ra OR shredder OR cobra-commander OR megatron)"
+              group_by:
+                - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
+            - data_source: logs
+              name: c3
+              indexes: ["*"]
+              compute: { aggregation: count }
+              search:
+                query: "kube_cluster_name:watch-it-burn-* kube_namespace:security @rule:\"Recipe Snoop In Agent Namespace\""
+              group_by:
+                - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
+            - data_source: metrics
+              name: c4
+              query: "max:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              aggregator: last
+            - data_source: logs
+              name: c5
+              indexes: ["*"]
+              compute: { aggregation: count }
+              search:
+                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent kube_deployment:guard-proxy @event:output_scrub"
+              group_by:
+                - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
+            - data_source: logs
+              name: c6
+              indexes: ["*"]
+              compute: { aggregation: count }
+              search:
+                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)"
+              group_by:
+                - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
+          # A done cell is solid green with the count hidden: the room reads ticks, not log volume.
+          formulas:
+            - formula: online
+              alias: online
+              conditional_formats:
+                - { comparator: "<", value: 1, palette: white_on_red }
+                - { comparator: ">=", value: 1, palette: white_on_green, hide_value: true }
+            - formula: c1
+              alias: 1 exfil
+              conditional_formats:
+                - { comparator: ">=", value: 1, palette: white_on_green, hide_value: true }
+            - formula: c2
+              alias: 2 villain
+              conditional_formats:
+                - { comparator: ">=", value: 1, palette: white_on_green, hide_value: true }
+            - formula: c3
+              alias: 3 recipe
+              conditional_formats:
+                - { comparator: ">=", value: 1, palette: white_on_green, hide_value: true }
+            - formula: c4
+              alias: 4 bill (USD)
+            - formula: c5
+              alias: 5 guarded
+              conditional_formats:
+                - { comparator: ">=", value: 1, palette: white_on_green, hide_value: true }
+            - formula: c6
+              alias: 6 blocked
+              conditional_formats:
+                - { comparator: ">=", value: 1, palette: white_on_green, hide_value: true }
+          # By cluster name, so a row does not jump around the projector every time somebody scores.
+          sort:
+            count: 500
+            order_by:
+              - { type: group, name: kube_cluster_name, order: asc }
+
+  - definition:
+      type: toplist
+      title: Challenge 4, the biggest bill in the room (USD)
+      time: { live_span: 4h }
+      requests:
+        - response_format: scalar
+          queries:
+            - data_source: metrics
+              name: bill
+              query: "max:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              aggregator: last
+          formulas:
+            - formula: bill
+              limit: { count: 10, order: desc }

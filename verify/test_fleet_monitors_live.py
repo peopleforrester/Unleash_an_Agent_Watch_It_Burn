@@ -1,5 +1,5 @@
-# ABOUTME: Live check that the instructor Datadog org holds exactly the fleet monitors and dashboard this
-# ABOUTME: repo defines (#267). Read-only. Fails when the org, the keys or AWS are unreachable.
+# ABOUTME: Live check that the instructor Datadog org holds exactly the fleet monitors and dashboards this
+# ABOUTME: repo defines (#267, #307). Read-only. Fails when the org, the keys or AWS are unreachable.
 # SUITE: e2e (needs AWS access to watch-it-burn/datadog and the live instructor Datadog org)
 #
 # The offline half (test_fleet_monitors.py) proves the definitions are right. This proves they are LOADED:
@@ -31,4 +31,4 @@ if rc != 0:
     print("FAIL: the instructor org does not hold the fleet monitors this repo defines. Load them with\n"
           "      infra/terraform/fleet/fleet.sh monitors --apply --session START/END", file=sys.stderr)
     sys.exit(1)
-print("The instructor org holds every fleet monitor and the fleet dashboard.")
+print("The instructor org holds every fleet monitor, the fleet dashboard and the challenge leaderboard.")

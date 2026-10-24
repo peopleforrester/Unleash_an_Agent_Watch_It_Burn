@@ -76,7 +76,10 @@ infra/terraform/fleet/fleet.sh monitors --check              # the org holds exa
 ```
 
 - [ ] The apply printed a `fleet dashboard:` URL. Open it on the instructor screen; every live cluster has
-      a row, and the agent and console columns are green. The no-traces monitor stays muted outside the
+      a row, and the agent and console columns are green.
+- [ ] It also printed a `challenge leaderboard:` URL (#307). Put it on the projector in TV mode once the
+      challenges start: every live cluster has a row with `online` green, and the challenge cells fill in
+      as the room works. The no-traces monitor stays muted outside the
       window, so re-run with a corrected `--session` if the timing moves.
 
 ```bash

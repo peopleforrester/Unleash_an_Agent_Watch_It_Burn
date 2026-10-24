@@ -1,19 +1,19 @@
-# ABOUTME: Load the fleet monitors and the fleet dashboard into the INSTRUCTOR Datadog org after validating
-# ABOUTME: every definition. Dry run by default, --apply writes, --check compares the live org (#267).
-"""Load the instructor-org fleet monitors and dashboard, deterministically.
+# ABOUTME: Load the fleet monitors, the fleet dashboard and the challenge leaderboard into the INSTRUCTOR Datadog
+# ABOUTME: org after validating every definition. Dry run by default, --apply writes, --check compares (#267, #307).
+"""Load the instructor-org fleet monitors and dashboards, deterministically.
 
-The definitions are monitors.yaml and dashboard.yaml next to this file. They are the source of truth: a
-monitor is found in the org by its wib-monitor:<key> tag and updated in place, a managed monitor that is no
-longer in the file is deleted, and the dashboard is found by its title and replaced. Nothing is edited by
-hand in the Datadog UI, because the next apply overwrites it.
+The definitions are monitors.yaml, dashboard.yaml and leaderboard.yaml next to this file. They are the source
+of truth: a monitor is found in the org by its wib-monitor:<key> tag and updated in place, a managed monitor
+that is no longer in the file is deleted, and each dashboard is found by its title and replaced. Nothing is
+edited by hand in the Datadog UI, because the next apply overwrites it.
 
 Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_datadog_pool.py, #256):
     dry run (default)  render and validate every definition offline; print the plan; touch nothing.
     --apply            read the instructor org keys, ask Datadog to validate EVERY monitor, and only if all
-                       of them pass write the dashboard, the monitors and the session downtimes. One bad
+                       of them pass write the dashboards, the monitors and the session downtimes. One bad
                        definition aborts the load before any write.
-    --check            read-only against the live org: every defined monitor and the dashboard exist with
-                       the queries in this repo. Prints each monitor's state. Exit 1 on any drift.
+    --check            read-only against the live org: every defined monitor and both dashboards exist, the
+                       monitors with the queries in this repo. Prints each monitor's state. Exit 1 on any drift.
 
 The keys are the instructor org's, from Secrets Manager watch-it-burn/datadog (the secret the pool loader
 writes the admin-instructor row to and fleet.sh reads for dual shipping). The APP key must be unscoped:
@@ -50,6 +50,9 @@ import yaml
 HERE = pathlib.Path(__file__).resolve().parent
 MONITORS_FILE = HERE / "monitors.yaml"
 DASHBOARD_FILE = HERE / "dashboard.yaml"
+LEADERBOARD_FILE = HERE / "leaderboard.yaml"
+# (label, file): the label is what the apply prints in front of each dashboard's URL.
+DASHBOARDS = (("fleet dashboard", DASHBOARD_FILE), ("challenge leaderboard", LEADERBOARD_FILE))
 SECRET_ID = "watch-it-burn/datadog"
 MANAGED_TAG = "managed-by:wib-fleet-monitors"
 KEY_TAG_PREFIX = "wib-monitor:"
@@ -68,6 +71,10 @@ def load_monitors(path: pathlib.Path = MONITORS_FILE) -> dict:
 
 def load_dashboard(path: pathlib.Path = DASHBOARD_FILE) -> dict:
     return yaml.safe_load(path.read_text(encoding="utf-8"))
+
+
+def load_dashboards() -> list[tuple[str, dict]]:
+    return [(label, load_dashboard(path)) for label, path in DASHBOARDS]
 
 
 def validate_monitors(defs: dict) -> list[str]:
@@ -119,6 +126,14 @@ def validate_monitors(defs: dict) -> list[str]:
     return problems
 
 
+def query_text(q: dict) -> str:
+    """The filter string of a dashboard query: a metric query carries it in `query`, a logs query in
+    `search.query`."""
+    if q.get("data_source", "metrics") == "metrics":
+        return q.get("query", "")
+    return (q.get("search") or {}).get("query", "")
+
+
 def validate_dashboard(dash: dict, cluster_filter: str) -> list[str]:
     problems: list[str] = []
     for k in ("title", "layout_type", "widgets"):
@@ -131,8 +146,10 @@ def validate_dashboard(dash: dict, cluster_filter: str) -> list[str]:
         for r in d.get("requests") or []:
             names = {q.get("name") for q in r.get("queries") or []}
             for q in r.get("queries") or []:
-                if cluster_filter and cluster_filter not in q.get("query", ""):
+                if cluster_filter and cluster_filter not in query_text(q):
                     problems.append(f"dashboard widget {i} query {q.get('name')}: not filtered to {cluster_filter}")
+                if q.get("data_source") == "logs" and GROUP_BY not in {g.get("facet") for g in q.get("group_by") or []}:
+                    problems.append(f"dashboard widget {i} query {q.get('name')}: logs query is not grouped by {GROUP_BY}")
             for f in r.get("formulas") or []:
                 refs = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", f.get("formula", ""))) - {"count_not_null"}
                 if not refs <= names:
@@ -309,7 +326,8 @@ def find_dashboard(dd: Datadog, title: str) -> dict | None:
     return hits[0] if hits else None
 
 
-def apply(dd: Datadog, defs: dict, dash: dict, notify: list[str], session, now: dt.datetime, say=print) -> int:
+def apply(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], notify: list[str], session, now: dt.datetime,
+          say=print) -> int:
     rendered = {m["key"]: render_monitor(m, notify) for m in defs["monitors"]}
     session_keys = [m["key"] for m in defs["monitors"] if m.get("session")]
 
@@ -326,15 +344,17 @@ def apply(dd: Datadog, defs: dict, dash: dict, notify: list[str], session, now: 
             say(f"  - {p}")
         return 1
 
-    # 2. The dashboard, found by title so its URL survives re-applies.
-    existing = find_dashboard(dd, dash["title"])
-    if existing:
-        out = dd.call("PUT", f"/api/v1/dashboard/{existing['id']}", dash)
-        say(f"  dashboard updated: {dash['title']}")
-    else:
-        out = dd.call("POST", "/api/v1/dashboard", dash)
-        say(f"  dashboard created: {dash['title']}")
-    url = f"https://app.{dd.site}{out.get('url') or '/dashboard/' + str(out.get('id'))}"
+    # 2. The dashboards, each found by title so its URL survives re-applies.
+    urls = []
+    for label, dash in dashes:
+        existing = find_dashboard(dd, dash["title"])
+        if existing:
+            out = dd.call("PUT", f"/api/v1/dashboard/{existing['id']}", dash)
+            say(f"  dashboard updated: {dash['title']}")
+        else:
+            out = dd.call("POST", "/api/v1/dashboard", dash)
+            say(f"  dashboard created: {dash['title']}")
+        urls.append((label, f"https://app.{dd.site}{out.get('url') or '/dashboard/' + str(out.get('id'))}"))
 
     # 3. Monitors: update in place by key, create what is new, delete what left the file.
     for action, k, mid, body in plan_monitors(rendered, managed_monitors(dd)):
@@ -358,11 +378,12 @@ def apply(dd: Datadog, defs: dict, dash: dict, notify: list[str], session, now: 
             e = "indefinitely" if w[1] is None else f"until {w[1]:%Y-%m-%dT%H:%MZ}"
             say(f"  session monitors ({', '.join(session_keys)}) muted from {s} {e}")
 
-    say(f"  fleet dashboard: {url}")
+    for label, url in urls:
+        say(f"  {label}: {url}")
     return 0
 
 
-def check(dd: Datadog, defs: dict, dash: dict, say=print) -> int:
+def check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], say=print) -> int:
     """Read-only: does the live org hold exactly what this repo defines? Exit 1 on any drift."""
     drift = 0
     live = {key_of(m): m for m in managed_monitors(dd) if key_of(m)}
@@ -379,12 +400,13 @@ def check(dd: Datadog, defs: dict, dash: dict, say=print) -> int:
     for k in live:
         say(f"  EXTRA    {k}: managed monitor no longer in monitors.yaml (the next apply deletes it)")
         drift += 1
-    d = find_dashboard(dd, dash["title"])
-    if d is None:
-        say(f"  MISSING  dashboard '{dash['title']}'")
-        drift += 1
-    else:
-        say(f"  OK       dashboard https://app.{dd.site}{d.get('url', '')}")
+    for label, dash in dashes:
+        d = find_dashboard(dd, dash["title"])
+        if d is None:
+            say(f"  MISSING  {label} '{dash['title']}'")
+            drift += 1
+        else:
+            say(f"  OK       {label} https://app.{dd.site}{d.get('url', '')}")
     return 1 if drift else 0
 
 
@@ -400,8 +422,10 @@ def main(argv=None, keys=read_keys, http=None, now=None) -> int:
                    help="a Datadog handle to page, e.g. @someone@example.com (repeatable; default: none)")
     a = p.parse_args(argv)
 
-    defs, dash = load_monitors(), load_dashboard()
-    problems = validate_monitors(defs) + validate_dashboard(dash, defs.get("cluster_filter", ""))
+    defs, dashes = load_monitors(), load_dashboards()
+    problems = validate_monitors(defs)
+    for _, dash in dashes:
+        problems += validate_dashboard(dash, defs.get("cluster_filter", ""))
     try:
         session = parse_session(a.session)
     except ValueError as e:
@@ -416,7 +440,8 @@ def main(argv=None, keys=read_keys, http=None, now=None) -> int:
         return 1
 
     label = "APPLY" if a.apply else "CHECK" if a.check else "DRY-RUN"
-    print(f"[{label}] {len(defs['monitors'])} monitor(s) and dashboard '{dash['title']}'")
+    print(f"[{label}] {len(defs['monitors'])} monitor(s) and dashboards "
+          + ", ".join(f"'{d['title']}'" for _, d in dashes))
     if not (a.apply or a.check):
         for m in defs["monitors"]:
             print(f"  P{m.get('priority', '-')} {m['key']:<22} {m['type']:<12} {m['name']}")
@@ -434,8 +459,8 @@ def main(argv=None, keys=read_keys, http=None, now=None) -> int:
         org = dd.call("GET", "/api/v1/org").get("orgs", [{}])[0].get("name", "?")
         print(f"  instructor org: {org} ({site}), keys from {SECRET_ID}")
         if a.check:
-            return check(dd, defs, dash)
-        return apply(dd, defs, dash, a.notify, session, now or dt.datetime.now(dt.timezone.utc))
+            return check(dd, defs, dashes)
+        return apply(dd, defs, dashes, a.notify, session, now or dt.datetime.now(dt.timezone.utc))
     except RuntimeError as e:
         print(f"FAILED: {e}", file=sys.stderr)
         return 1

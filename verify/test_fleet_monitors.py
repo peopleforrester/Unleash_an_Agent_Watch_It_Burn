@@ -218,7 +218,8 @@ class FakeOrg:
         if p == "/api/v1/dashboard" and method == "GET":
             return 200, {"dashboards": self.dashboards}
         if p == "/api/v1/dashboard" and method == "POST":
-            self.dashboards.append({"id": "abc-def-ghi", "title": data["title"], "url": "/dashboard/abc-def-ghi/fleet"})
+            did = ["abc-def-ghi", "lea-der-brd"][len(self.dashboards)]
+            self.dashboards.append({"id": did, "title": data["title"], "url": f"/dashboard/{did}/fleet"})
             return 200, self.dashboards[-1]
         if p.startswith("/api/v1/dashboard/"):
             return 200, {"id": p.rsplit("/", 1)[1], "url": f"/dashboard/{p.rsplit('/', 1)[1]}/fleet"}
@@ -264,7 +265,9 @@ rc, text = run(["--apply", "--session", "2026-09-08T16:00Z/2026-09-08T19:30Z"], 
 check("exit 0", rc == 0)
 check("six monitors created, all managed", len(org.monitors) == 6
       and all(fm.MANAGED_TAG in m["tags"] for m in org.monitors.values()))
-check("the dashboard was created and its URL printed", "https://app.datadoghq.com/dashboard/abc-def-ghi/fleet" in text)
+check("the dashboard was created and its URL printed", "fleet dashboard: https://app.datadoghq.com/dashboard/abc-def-ghi/fleet" in text)
+check("the leaderboard was created and its URL printed",
+      "challenge leaderboard: https://app.datadoghq.com/dashboard/lea-der-brd/fleet" in text)
 check("our previous downtime was cancelled", stale["attributes"]["status"] == "canceled")
 check("someone else's downtime was left alone", foreign["attributes"]["status"] == "active")
 new_dts = [d for d in org.downtimes if d["attributes"]["status"] == "active" and fm.ours(d)]
@@ -279,7 +282,7 @@ ids_before = set(org.monitors)
 rc, text = run(["--apply", "--session", "2026-09-08T16:00Z/2026-09-08T19:30Z"], org)
 check("exit 0", rc == 0)
 check("the same six monitor ids", set(org.monitors) == ids_before)
-check("the dashboard was updated, not duplicated", len(org.dashboards) == 1 and "dashboard updated" in text)
+check("both dashboards were updated, not duplicated", len(org.dashboards) == 2 and text.count("dashboard updated") == 2)
 check("exactly two of our mutes are active afterwards",
       len([d for d in org.downtimes if d["attributes"]["status"] == "active" and fm.ours(d)]) == 2)
 
@@ -293,7 +296,8 @@ rc, text = run(["--check"], org)
 check("a monitor edited in the UI is drift", rc == 1 and "DRIFT    console-unavailable" in text)
 check("check never writes", all(m == "GET" for m, _, _ in org.calls[-6:]))
 rc, text = run(["--check"], FakeOrg())
-check("an empty org fails the check, naming every monitor", rc == 1 and text.count("MISSING") == len(mons) + 1)
+check("an empty org fails the check, naming every monitor and both dashboards",
+      rc == 1 and text.count("MISSING") == len(mons) + 2 and "MISSING  challenge leaderboard" in text)
 
 print("== dry run touches nothing ==")
 def no_keys(*_):

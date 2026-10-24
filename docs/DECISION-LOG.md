@@ -828,3 +828,30 @@ Not done here: `monitoring.agenticburn.com` needs a handle in the apex router, w
 Until then the link is the dashboard URL the apply prints. The definitions have not been applied to a live
 org in this change; the first apply on the next event's instructor org is what proves the metric and tag
 names against real data, and `verify/test_fleet_monitors_live.py` (E2E) is the check.
+
+## 2026-10-24 · A challenge leaderboard in the instructor org, by cluster (#307)
+
+The ask was a view of who has finished which challenge, updating as the workshop runs. It is a second
+dashboard in the instructor org, `infra/datadog-fleet/leaderboard.yaml`, loaded by the same `fleet.sh
+monitors` as the fleet dashboard (#267), not a feature of the provisioning page. That page is a door an
+attendee uses once at minute zero, and the provisioning service knows email to cluster and nothing else;
+every completion signal is already in the instructor org, because the clusters dual-ship there (#242).
+
+The unit is the cluster name. Nothing on the board resolves a cluster to whoever claimed it, so a
+fifty-person room does not watch one named person stay stuck on Challenge 1. The feedback form made the
+same call (feedback-agenticburn#6). The provisioning roster stays the token-gated way to make that mapping,
+and the board does not need its JSON.
+
+Signal choices, each held by `verify/test_leaderboard.py` to the code that emits it: Challenge 1 is the
+workshop-mcp tool audit line (#190) for a `run_shell` naming the beacon, because the beacon collector records
+an IP and no cluster; Challenge 2 is log lines from the villain roster by `short_image`, because the
+platform's own images share the `peopleforrester` owner; Challenge 3 is Falco's recipe rule; Challenge 4 is
+the existing cost gauge, shown as a number, since the biggest bill is the score; Challenges 5 and 6 are the
+guard-proxy events written when the installed fix catches the re-run attack. Logs, not Kubernetes events:
+the Cluster Agent that collects events carries no additional endpoint for them, so the instructor org
+cannot be assumed to see them. Challenges 7 and 8 are deliberately unscored and the board says why: the
+rogue server is dark on purpose (#18), and Challenge 8's lesson is that it leaves no trace.
+
+Not done here: the board has not been applied to a live org in this change. The first apply on the next
+event's instructor org proves the log attribute names (`@tool_input.command`, `@rule`, `@event`) and the
+`short_image` tag against real data, and `verify/test_fleet_monitors_live.py` (E2E) checks it is loaded.

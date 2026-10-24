@@ -11,6 +11,7 @@ nothing looked at it. These files are what looks.
 |---|---|
 | `monitors.yaml` | Six monitors, each one alert group per `kube_cluster_name` |
 | `dashboard.yaml` | The fleet dashboard: one row per cluster, plus the alert list and the room's spend |
+| `leaderboard.yaml` | The challenge leaderboard (#307): one row per cluster, one green cell per challenge done |
 | `fleet_monitors.py` | The loader. Dry run by default, `--apply` writes, `--check` compares the live org |
 
 ## Loading
@@ -46,6 +47,32 @@ loader mutes it with downtimes until `--session` START and again from END (and i
 window is given), and cancels its own previous downtimes on every apply.
 
 A cluster torn down on purpose fires `cluster-silent` once. Resolve it from the monitor page.
+
+## The challenge leaderboard
+
+A projector view for the room, not a page each attendee opens: put it on the second screen once the
+challenges start. The apply prints its URL as `challenge leaderboard:`; Datadog's TV mode on that URL is
+the projector setting.
+
+It lives here, not on the provisioning page, because the provisioning service knows email to cluster and
+nothing else, and the clusters already ship everything a completion looks like to this org. No exercise
+reports anything new for it. Rows are cluster names and nothing resolves them to a person, so nobody in
+the room is publicly stuck on Challenge 1 (the same call as feedback-agenticburn#6).
+
+| Column | Green when the instructor org has seen, in the last 4 hours |
+|---|---|
+| 1 exfil | a workshop-mcp tool audit line: `run_shell` with a command naming the beacon |
+| 2 villain | any log line from a villain image on the roster in `images/villains/README.md` |
+| 3 recipe | Falco's `Recipe Snoop In Agent Namespace` alert (never on the Community cluster: no Falco) |
+| 4 bill (USD) | not a tick: the cluster's `gen_ai.client.cost`, with the room's top ten beside the table |
+| 5 guarded | guard-proxy `output_scrub`: the output guard is installed and redacted a reply |
+| 6 blocked | guard-proxy `input_blocklist_hit` or `input_classifier_block`: the input guard refused a prompt |
+
+Columns 1 to 3 go green when the attack lands, 5 and 6 when the fix is in and the attack has been run again
+against it. Challenges 7 and 8 have no column: the rogue tool server writes no logs on purpose (#18), and
+Challenge 8 goes around everything that records, which is what it teaches. Column 1 counts the call
+reaching the tool; `provisioning.agenticburn.com/beacon/view` stays the count of POSTs that landed, and it
+cannot say from which cluster.
 
 ## From outside
 
