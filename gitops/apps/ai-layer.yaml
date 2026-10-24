@@ -58,7 +58,7 @@ spec:
       jqPathExpressions:
         - '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
         # Per-cluster model tier (cost-race demo): setup-instructor-cluster.sh patches modelConfig to
-        # bedrock-haiku/sonnet/opus on the matching R3 instructor cluster. Ignore drift so selfHeal keeps
+        # bedrock-haiku/sonnet/opus on the matching instructor cluster. Ignore drift so selfHeal keeps
         # the per-cluster tier instead of reverting to the committed default (bedrock-sonnet).
         - '.spec.declarative.modelConfig'
     # C8 (#111 SA-token theft): agent-sa's Role ships BROAD (secrets get/list namespace-wide), the

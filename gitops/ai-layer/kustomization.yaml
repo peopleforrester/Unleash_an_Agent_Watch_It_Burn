@@ -9,7 +9,7 @@ resources:
   - resources.yaml
   # The OTel Instrumentation CR is NOT here. It lives in gitops/ai-layer-otel as its own Application,
   # because its CRD only exists where the OTel Operator (and behind it cert-manager) is installed. The
-  # burn profile ships neither, and one unsatisfiable resource fails the WHOLE app, which left Round 1
+  # burn profile ships neither, and one unsatisfiable resource fails the WHOLE app, which left the burn profile
   # clusters with no console at all. Do not move it back into this bundle.
   - agentgateway.yaml # OSS v1.3.0 L7 gateway: guard-proxy -> agentgateway -> workshop-agent (A2A) + MCP front
   - argocd-managed-app.yaml # Beat-1 wall-3 drift target (ArgoCD-managed; admission denies agent drift, self-heal reverts)
@@ -35,8 +35,8 @@ configMapGenerator:
       - web/console.html
       - web/console.js
       - web/burritbot.html # B1: the BurritoBot storefront, served by the console nginx as the front door
-      - web/lab.html # B5/B12: round-3 student lab page (instructions left + ttyd terminal embedded right)
-      - web/brief.html # instructor brief for R1/R2: prompts VISIBLE, separate page from the student lab (#122)
+      - web/lab.html # B5/B12: student lab page (instructions left + ttyd terminal embedded right)
+      - web/brief.html # instructor brief: prompts VISIBLE, separate page from the student lab (#122)
       - web/platform.html # the platform catalogue: every service, its URL and its login
       - web/diagram.html # VTT Blueprint tab: what was installed at which wave (ported from Packt, #153)
       - web/links.html # VTT Endpoints tab: every component, its address and its login (ported from Packt, #153)

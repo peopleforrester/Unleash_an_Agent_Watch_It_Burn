@@ -27,16 +27,39 @@ check("routes and ingest both derive the hostname from public_host_for()",
 check("the attendee URL handed out is https (the console terminates TLS)",
       'console_url="https://${pub_host}"' in src and 'arg cu "http://' not in src)
 
-# Both legacy aliases are gone: r1-1 with the round model (#142), a-NNN with #359. Every student is
-# given the memorable name, so a second hostname per cluster was a second thing to get wrong.
+# Every legacy alias is gone: r1-1 with the round model (#142), a-NNN with #359, the shared roundN with
+# #290. Every student is given the memorable name, so a second hostname per cluster was a second thing to
+# get wrong. Asserted on the code, not on a comment saying so: the roster loop emits public_host_for and
+# the service hosts derived from it, and nothing else.
+_routes = re.search(r"^cmd_routes\(\) \{\n(.*?)^\}", src, re.S | re.M)
+_routes_code = "\n".join(l for l in (_routes.group(1) if _routes else "").splitlines()
+                          if not l.lstrip().startswith("#"))
 check("the r1-1 alias is no longer emitted",
-      "The raw \"r1-1\" alias is NO LONGER emitted" in src)
+      bool(_routes) and "printf 'r%s-%s.agenticburn.com" not in _routes_code
+      and not re.search(r"printf '(round|r)[%0-9]", _routes_code))
 check("the a-NNN alias is no longer emitted",
       "printf 'a-%s.agenticburn.com" not in src)
 # Retiring a hostname must not read to the shrink guard as losing one, or it refuses every publish and
 # the only way past it is the flag that also switches the protection off.
-check("the shrink guard discounts the retired a-NNN rows",
-      "grep -vc '^a-[0-9]'" in src)
+check("the shrink guard discounts the retired rows through RETIRED_HOST_RE",
+      'grep -Evc "${RETIRED_HOST_RE}"' in src and 'grep -Ev "${RETIRED_HOST_RE}"' in src)
+# What counts as retired, asked of fleet.sh itself: the a-NNN and round* aliases, and no live host.
+_out = subprocess.run(
+    ["bash", "-c", f"source '{FLEET}' >/dev/null 2>&1; printf '%s\\n' \"$RETIRED_HOST_RE\"; "
+     "for i in $(seq 1 999); do friendly_attendee_name $i; echo; done"],
+    cwd=FLEET.parent, capture_output=True, text=True).stdout.splitlines()
+_retired_re = re.compile(_out[0]) if _out and _out[0] else None
+_memorable = [f"{n}.agenticburn.com" for n in _out[1:] if n]
+check("fleet.sh defines RETIRED_HOST_RE", _retired_re is not None)
+if _retired_re:
+    check("the a-NNN and round* aliases are retired",
+          all(_retired_re.search(h) for h in ("a-007.agenticburn.com", "round1.agenticburn.com",
+                                               "roundadmin.agenticburn.com")))
+    check("no live roster host is",
+          not any(_retired_re.search(h) for h in ("attackme.agenticburn.com", "michael-admin.agenticburn.com",
+                                                   "whitney-admin.agenticburn.com")))
+    check(f"no memorable attendee host is ({len(_memorable)} checked)",
+          len(_memorable) == 999 and not any(_retired_re.search(h) for h in _memorable))
 # A comment that still maps a slot to a-NNN is how four sources came to disagree (#359): the next reader
 # takes it as the name. The spec has to say the alias is retired, not leave it to a live curl sweep.
 check("no fleet.sh comment still maps a cluster to an a-NNN host",

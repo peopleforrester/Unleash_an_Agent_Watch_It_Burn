@@ -1,7 +1,7 @@
 # Instructor roster. Pipe-delimited:
 #   name|role|tier|instance_type|pids|bootstrap|owner
 #
-# ROLE replaced the old round number (#291). Rounds 1, 2 and 3 are gone: there is one Community cluster
+# ROLE replaced the old round number (#291), and the numbered sets are gone: there is one Community cluster
 # the whole room attacks together, and one admin cluster per presenter. The role decides the bootstrap
 # profile and the public hostname, so it is data here rather than a rule someone has to remember:
 #
@@ -15,7 +15,7 @@
 # suffix means Michael" is exactly the kind of rule that lives in one person's head and is wrong six
 # weeks later.
 #
-# Every roster cluster lives in WIB_DEFAULT_ACCOUNT. The per-round accounts went with the rounds.
+# Every roster cluster lives in WIB_DEFAULT_ACCOUNT. The separate instructor accounts are gone.
 #
 # Empty column = default: tier -> gitops default (Nova); instance_type -> cluster module default;
 # pids -> module default (1024).

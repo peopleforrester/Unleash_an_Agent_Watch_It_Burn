@@ -13,8 +13,8 @@ On 2026-09-03 two bugs reached a live demo and neither was detectable over HTTP:
    header, and the check treated a missing Origin as allowed. A guard that only fires for browsers cannot
    be validated without one.
 
-2. The round banner is computed client-side from the hostname. Attendee clusters carry themed names
-   (hexhen-zelda), which matched no round pattern and fell through to the round-1 default, so a student on
+2. The guardrail banner is computed client-side from the hostname. Attendee clusters carry themed names
+   (hexhen-zelda), which matched no instructor-name pattern and fell through to the unguarded default, so a student on
    a fully-guarded cluster was told "NO GUARDRAILS - you're talking straight to the model. Nothing is
    watching." The DOM was wrong while the HTTP response was perfect.
 

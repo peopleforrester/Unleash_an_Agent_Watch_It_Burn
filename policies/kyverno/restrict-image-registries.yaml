@@ -18,7 +18,7 @@ metadata:
     policies.kyverno.io/description: >-
       Only allow images from trusted registries in the apps and agent namespaces.
 spec:
-  # Audit by default so Round 1 still DEPLOYS the villain image (C2 "watch it burn"). Round 2/3 flip this
+  # Audit by default so the community cluster still DEPLOYS the villain image (C2 "watch it burn"). Armed clusters flip this
   # to Deny live (toggle-kyverno-enforce.sh; ArgoCD ignoreDifferences on /spec/validationActions keeps the
   # flip from being self-healed).
   validationActions:
@@ -44,7 +44,7 @@ spec:
   variables:
     # Allow-list covers EVERY real ai-layer image in the agent namespace (ghcr.io/peopleforrester,
     # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries. The C2 villain images
-    # (docker.io/peopleforrester/<villain>) match NONE of these, so Deny refuses them in R2/R3.
+    # (docker.io/peopleforrester/<villain>) match NONE of these, so Deny refuses them on armed clusters.
     # Harbor images are additionally signature-checked by verify-image-signatures.
     - name: allowedRegistries
       expression: >-

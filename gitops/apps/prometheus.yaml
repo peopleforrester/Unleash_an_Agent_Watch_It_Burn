@@ -50,7 +50,7 @@ spec:
           adminPassword: "watchitburn-admin"
           # Sidecar for dashboard provisioning from ConfigMaps
           sidecar:
-            # Every container needs limits under require-resource-limits (Enforce on round 2, #234).
+            # Every container needs limits under require-resource-limits (Enforce on armed clusters, #234).
             resources:
               requests: { cpu: 50m, memory: 64Mi }
               limits: { cpu: 200m, memory: 256Mi }

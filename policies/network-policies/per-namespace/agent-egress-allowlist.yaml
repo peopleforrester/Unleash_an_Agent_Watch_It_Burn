@@ -4,7 +4,7 @@
 #
 # This is the agent-namespace twin of apps-egress-allowlist.yaml. The AI layer (guard-proxy,
 # agentgateway, kagent/workshop-agent, workshop-mcp) runs in `agent`, NOT `apps`, so the apps-only
-# policies left agent egress wide open even under Round 2 — that was the C1 gap. Selecting agent pods
+# policies left agent egress wide open even on the armed clusters — that was the C1 gap. Selecting agent pods
 # with an Egress policy makes them default-deny-egress; the rules below are the only permitted egress.
 #
 # Bedrock reachability depends on the interface endpoint in infra/terraform/aws/network/main.tf

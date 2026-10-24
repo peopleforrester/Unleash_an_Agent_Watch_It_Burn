@@ -40,7 +40,8 @@ check("no ROUND heading survives", not re.search(r"ROUND\s*[123]", BRIEF))
 check("no round is named anywhere in the prose", not re.search(r"\bRound[- ][123]\b", BRIEF))
 for n, title in ((1, "Community"), (2, "Provisioning"), (3, "Their cluster")):
     check(f"PHASE {n} is {title}", f'>PHASE {n}</span> {title}' in BRIEF)
-check("each phase chip has a style", all(f".chip.r{n}{{" in BRIEF for n in (1, 2, 3)))
+check("each phase chip has a style", all(f".chip.p{n}{{" in BRIEF for n in (1, 2, 3)))
+check("and it is named for the phase, not a round", all(f'class="chip p{n}"' in BRIEF for n in (1, 2, 3)))
 
 print("== Phase 1 sends the room at the Community cluster, with nothing to hand out ==")
 check("it names the hostname", "attackme.agenticburn.com" in BRIEF)

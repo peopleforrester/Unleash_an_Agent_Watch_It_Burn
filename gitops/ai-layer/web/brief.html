@@ -1,4 +1,4 @@
-<!-- ABOUTME: Instructor brief for Rounds 1 and 2: the presenter-facing page, prompts VISIBLE and copy-ready.
+<!-- ABOUTME: Instructor brief: the presenter-facing run of show, prompts VISIBLE and copy-ready.
      ABOUTME: Deliberately a SEPARATE page from the student lab (#122), not a role-switched rendering of it. -->
 <!doctype html>
 <html lang="en">
@@ -19,16 +19,16 @@
   The prompts here are duplicated from lab.html on purpose. If you change a prompt, change it in both.
 -->
 <style>
-  :root{--bg:#0f1117;--card:#171a24;--ink:#f2f0f7;--mut:#a6adc3;--accent:#c77dff;--r1:#ff6b6b;--r2:#4f9dff;--ok:#4ade80;--line:#262b3a}
+  :root{--bg:#0f1117;--card:#171a24;--ink:#f2f0f7;--mut:#a6adc3;--accent:#c77dff;--p1:#ff6b6b;--p2:#4f9dff;--ok:#4ade80;--line:#262b3a}
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;font-size:17px;line-height:1.5}
   header{position:sticky;top:0;z-index:5;background:#0b0d13;border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
   header h1{font-size:17px;margin:0;font-weight:800;letter-spacing:.2px}
   .chip{font-size:12px;font-weight:800;padding:4px 10px;border-radius:999px;background:#2a2f3f;color:var(--mut)}
-  .chip.r1{background:var(--r1);color:#2a0d0d}.chip.r2{background:var(--r2);color:#04203f}
+  .chip.p1{background:var(--p1);color:#2a0d0d}.chip.p2{background:var(--p2);color:#04203f}
   /* Phase 3 is where the students work, so it gets its own colour rather than reusing a phase
      they have already left behind on the page. */
-  .chip.r3{background:#8ef0b8;color:#053a20}
+  .chip.p3{background:#8ef0b8;color:#053a20}
   header .sp{flex:1}
   header a{color:var(--accent);text-decoration:none;font-weight:700;font-size:14px;margin-left:14px}
   header a:hover{text-decoration:underline}
@@ -44,9 +44,9 @@
   .prompt .cp{position:absolute;top:7px;right:7px;background:var(--accent);color:#1a0b25;border:0;border-radius:6px;font-weight:800;font-size:11px;padding:3px 8px;cursor:pointer}
   .cmd{background:#0b0d13;border:1px solid #2f3547;border-radius:8px;padding:9px 12px;font-family:ui-monospace,monospace;font-size:14px;display:inline-block;margin:6px 0;cursor:pointer}
   .expect{border-left:3px solid var(--ok);padding:7px 12px;background:#12251a;border-radius:0 8px 8px 0;font-size:14.5px;margin:9px 0;color:#c9f5d9}
-  .control{border-left:3px solid var(--r2);padding:7px 12px;background:#0f1d2e;border-radius:0 8px 8px 0;font-size:14.5px;margin:9px 0;color:#cfe4ff}
+  .control{border-left:3px solid var(--p2);padding:7px 12px;background:#0f1d2e;border-radius:0 8px 8px 0;font-size:14.5px;margin:9px 0;color:#cfe4ff}
   .room{border-left:3px solid var(--accent);padding:7px 12px;background:#1d1430;border-radius:0 8px 8px 0;font-size:14.5px;margin:9px 0;color:#e8d8ff}
-  .warn{border-left:3px solid var(--r1);padding:7px 12px;background:#2a1414;border-radius:0 8px 8px 0;font-size:14.5px;margin:9px 0;color:#ffd6d6}
+  .warn{border-left:3px solid var(--p1);padding:7px 12px;background:#2a1414;border-radius:0 8px 8px 0;font-size:14.5px;margin:9px 0;color:#ffd6d6}
   .note{color:var(--mut);font-size:14px;margin:7px 0}
   code{background:#0b0d13;border:1px solid #2f3547;border-radius:5px;padding:1px 6px;font-size:13.5px}
   #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:#1a0b25;font-weight:800;padding:10px 18px;border-radius:999px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:20}
@@ -76,7 +76,7 @@
        they are retired fleet-wide (#290, #291). The shape changed with them: the guardrails-on contrast is
        no longer a demo the presenters perform, it is the thing each student does on their own cluster. -->
   <section class="round">
-    <h2><span class="chip r1">PHASE 1</span> Community &mdash; the whole room attacks one cluster</h2>
+    <h2><span class="chip p1">PHASE 1</span> Community &mdash; the whole room attacks one cluster</h2>
     <p class="premise">Everyone points at <b>attackme.agenticburn.com</b>. It runs with <b>no guardrails at all</b>, and nobody has their own cluster yet. One goal, nothing to hand out but the hostname: get BurritoBot to leak the CEO's home address into the chat.</p>
     <div class="note">Why this one: it needs no beacon URL, no terminal and no setup, so fifty people can start in the time it takes to read a hostname. It is also Challenge 5's shape, which leaves Challenge 1 genuinely new when they reach their own cluster.</div>
 
@@ -107,7 +107,7 @@
   </section>
 
   <section class="round">
-    <h2><span class="chip r2">PHASE 2</span> Provisioning &mdash; everyone gets a cluster</h2>
+    <h2><span class="chip p2">PHASE 2</span> Provisioning &mdash; everyone gets a cluster</h2>
     <p class="premise">Each attendee claims a cluster by email at the provisioning page. Presenters claim one the same way, from the same pool, so we are running the flow we are asking them to run.</p>
     <div class="beat">
       <h3>What to say while it runs</h3>
@@ -118,7 +118,7 @@
   </section>
 
   <section class="round">
-    <h2><span class="chip r3">PHASE 3</span> Their cluster &mdash; the tour, then the eight challenges</h2>
+    <h2><span class="chip p3">PHASE 3</span> Their cluster &mdash; the tour, then the eight challenges</h2>
     <p class="premise">The contrast that used to be a demo is now theirs to perform. Every cluster starts with the controls <b>uninstalled</b>: the student runs the attack, it works, and then they install the control themselves and watch the same attack fail.</p>
 
     <div class="beat">

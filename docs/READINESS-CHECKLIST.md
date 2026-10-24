@@ -79,7 +79,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 
 ## Must fix before ready (the gaps)
 1. ✅ **C1, C3, C4 packaged as challenges** — `challenges/c1-exfil-s3/`, `challenges/c3-secret-grep/`, `challenges/c4-denial-of-wallet/` (attack prompt + README + fallback against the existing defenses).
-2. ✅ **Per-round instructor setup script** — `infra/setup-instructor-cluster.sh <name> <round>`: bootstrap (`burn`/`full`) + set the round toggle state (R1 none, R2 Kyverno Enforce, R3 infra-on + AI-off with the flip commands printed).
+2. ✅ **Roster-cluster setup script** — `infra/setup-instructor-cluster.sh <roster-cluster-name>`: reads the role from the name and the profile from the role through fleet.sh (community → `burn`, no guardrails; `<owner>-admin` → `admin`, Kyverno flipped to Deny, AI guards left off with the flip commands printed). Refuses attendee and retired names (#290).
 3. ✅ **Per-round toggles**: the only runtime toggle is Kyverno Audit→Enforce; C1 egress / C3 Falco / C4 PID are profile-based (on in `full`, absent in `burn`), documented in each challenge README. Not a gap.
 4. 🔄 **Multi-account fleet** (skipped by request): per-account VPC, attendee account targeting, `aws-pool.csv` emit, per-cluster Datadog secret naming, `routes.map` auto-population. Pending the 4 accounts.
 5. 🔄 **Observability finish** (skipped by request): Service Map edge confirmation, log/trace pivot, LLM Observability (#20 M7), weaver live-check. (`witb_cost_usd` retired; cost is now the standard `gen_ai.client.cost`.)

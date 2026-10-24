@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ABOUTME: Round-2 live toggle — flips the CNCF admission policies Audit -> Deny (require-resource-limits
+# ABOUTME: Live toggle — flips the CNCF admission policies Audit -> Deny (require-resource-limits
 # ABOUTME: + restrict-image-registries, the C2 villain-image wall). Idempotent. Reverse with --audit.
 set -euo pipefail
 

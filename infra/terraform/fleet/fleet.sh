@@ -51,6 +51,11 @@ readonly LOG_DIR="${SCRIPT_DIR}/logs"
 # forked by run_pool inherit $$, so a run still sees all of its own.
 readonly FAIL_FILE="${LOG_DIR}/.failures.$$"
 readonly NAME_PREFIX="watch-it-burn-attendee"
+# Published hostnames that are RETIRED rather than lost: the a-NNN slot aliases (#359) and the shared
+# round* alias (#290). Nothing emits them now; the routes shrink guard discounts them, so dropping one
+# from the table is not mistaken for a console going missing. No memorable attendee name starts with
+# either (test_friendly_hostnames.py checks the whole name space).
+readonly RETIRED_HOST_RE='^(a-[0-9]|round[^.]*\.)'
 # The attendee pool, by name: watch-it-burn-attendee-NNN. Every cluster anybody claims by email is one of
 # these, the presenters' included (#295), so this is the class that takes a pool org and dual-ships.
 is_attendee_name() { [[ "$1" =~ ^${NAME_PREFIX}-[0-9]+$ ]]; }
@@ -95,13 +100,8 @@ MAX_PARALLEL="${MAX_PARALLEL:-8}"
 
 # --- Multi-account config (env-overridable) -----------------------------------------------------
 # Defaults keep the existing SINGLE-account attendee flow unchanged (TF_PROFILE empty -> the cluster
-# module's default profile/region). Set the per-round account profiles when the 5-account fleet exists.
+# module's default profile/region). Roster clusters all live in WIB_DEFAULT_ACCOUNT (account_for_role).
 WIB_REGION="${WIB_REGION:-us-west-2}"
-# Instructor clusters spread per round across separate accounts so no one account hits an EKS/VPC quota
-# wall ("overload"): Round 1 -> account 1, Round 2 -> account 2, Round 3 -> account 3. Switchable here.
-WIB_ACCOUNT_R1="${WIB_ACCOUNT_R1:-accen-dev}"
-WIB_ACCOUNT_R2="${WIB_ACCOUNT_R2:-accen-dev}"
-WIB_ACCOUNT_R3="${WIB_ACCOUNT_R3:-accen-dev}"
 # Attendee fleet accounts for `up-fleet` (comma-separated AWS profiles). up-fleet provisions every
 # account's slice CONCURRENTLY so the whole fleet comes up in one window. All FIVE accounts carry the
 # attendee fleet (250-cluster plan = 5 x 50). The four student accounts have a per-account lab-vpc in
@@ -119,12 +119,12 @@ WIB_DEFAULT_ACCOUNT="${WIB_DEFAULT_ACCOUNT:-accen-dev}"
 WIB_NAME_OFFSET="${WIB_NAME_OFFSET:-0}"
 
 # --- Instructor roster (§4.6): DATA, not a hardcoded array ---------------------------------------
-# The roster lives in roster.tsv as "name|round|tier|instance_type|pids|bootstrap" rows, so changing
+# The roster lives in roster.tsv as "name|role|tier|instance_type|pids|bootstrap|owner" rows, so changing
 # WHAT the fleet provisions (which clusters, which model tier, node type, PID cap) is config, not a
 # script edit. load_roster reads WIB_ROSTER_FILE; a built-in default keeps a bare checkout working.
-# Round behaviour (R1 wide open, R2 some guards, R3 full) stays a RUNTIME toggle; the roster's pids
-# column carries the one provision-time difference (R1 pids=-1 so the C4 fork bomb burns the node).
-# All clusters run the identical FULL build; the model default is Nova (gitops), tier column overrides.
+# The role picks the bootstrap profile (bootstrap_profile_for_role: community wide open, admin every
+# guardrail armed); the roster's pids column carries the one provision-time difference (community
+# pids=-1 so the C4 fork bomb burns the node). The model default is Nova (gitops), tier column overrides.
 INSTRUCTORS=()
 load_roster() {
     INSTRUCTORS=()
@@ -136,8 +136,8 @@ load_roster() {
             INSTRUCTORS+=("${line}")
         done < "${WIB_ROSTER_FILE}"
     fi
-    # The fallback MUST describe the same fleet as roster.tsv. It used to say every round was the full
-    # profile while the file said round 1 was burn, and it carried six columns where the file has seven,
+    # The fallback MUST describe the same fleet as roster.tsv. It used to say every cluster was the full
+    # profile while the file said the community cluster was burn, and it carried six columns where the file has seven,
     # so a checkout without the file would have built an armed community cluster with no owner and no
     # friendly hostname, silently (#284).
     [[ "${#INSTRUCTORS[@]}" -gt 0 ]] || INSTRUCTORS=(
@@ -155,9 +155,9 @@ load_roster() {
 TF_PROFILE="${WIB_DEFAULT_ACCOUNT}"
 
 # When non-empty, up_one passes -var pod_pids_limit=<this>. Empty = the cluster module default (1024,
-# the fork-bomb cap). Round 1 (burn) clusters set this to -1 (no per-pod cap) so the C4 fork bomb
-# actually exhausts node PIDs and takes the cluster down: that is the Round-1 "watch it burn" moment
-# the spec calls for. R2/R3 and attendee clusters keep the 1024 cap so the cap is the working control.
+# the fork-bomb cap). The community (burn) cluster sets this to -1 (no per-pod cap) so the C4 fork bomb
+# actually exhausts node PIDs and takes the cluster down: that is the community cluster's "watch it burn"
+# moment the spec calls for. Admin and attendee clusters keep the 1024 cap so the cap is the working control.
 TF_PIDS_LIMIT=""
 
 # When non-empty (burn|full), up_one chains deploy-full-idp.sh right after a successful apply, so a
@@ -192,7 +192,7 @@ WIB_INSTANCE_TYPES="${WIB_INSTANCE_TYPES:-}"     # comma list, e.g. "m5.2xlarge"
 WIB_NODE_SIZE="${WIB_NODE_SIZE:-}"               # node count -> min/max/desired
 WIB_DISK="${WIB_DISK:-}"                          # root disk GiB -> node_disk_size
 # Roster selection: the instructor roster is DATA (roster.tsv), not a hardcoded array. Override the file
-# path, or subset by round / per-round count, all without editing this script.
+# path, or subset by role / per-role count, all without editing this script.
 WIB_ROSTER_FILE="${WIB_ROSTER_FILE:-${SCRIPT_DIR}/roster.tsv}"
 # The web-terminal login. Deliberately short and speakable: it gets said out loud and typed by a room.
 # See bootstrap_terminal_auth for why a shared credential is the right call for single-use clusters.
@@ -212,11 +212,6 @@ WIB_STUDENT_PASSWORD="${WIB_STUDENT_PASSWORD:-agentic}"
 # meant a normal `instructors up` silently skipped registration and the clusters were invisible in
 # provisioning until someone noticed and re-ran ingest by hand.
 WIB_PROVISIONING_URL="${WIB_PROVISIONING_URL:-https://provisioning.agenticburn.com}"
-
-# Whose cluster the bare roundN.agenticburn.com alias points at. That alias is shared (the run-of-show
-# and the BurritoBot round selector both use it), so it has to resolve to one owner's cluster; binding
-# it explicitly keeps it stable instead of following whichever roster entry happened to render first.
-WIB_PRIMARY_OWNER="${WIB_PRIMARY_OWNER:-michael}"
 
 # Railway coordinates for that app, used to resolve its ADMIN_TOKEN automatically (see resolve_admin_token).
 readonly WIB_PROVISIONING_RW_PROJECT="859f9db0-bbda-4d3c-8026-767d0b9047a9"
@@ -255,9 +250,9 @@ resolve_admin_token() {
 }
 WIB_ROLES="${WIB_ROLES:-}"                        # comma list of roles to include, e.g. "admin" (empty = all)
 WIB_PER_ROLE="${WIB_PER_ROLE:-}"                  # max clusters per role (empty = all)
-# Rounds run CONCURRENTLY by default (each round its own subshell so per-round vars cannot clash; the
-# single shared terraform init + isolated per-cluster -state make it safe, same as run_pool within a
-# round). Set WIB_SERIAL=1 to force the old serial round loop.
+# Accounts run CONCURRENTLY by default (each account its own subshell so per-account vars cannot clash;
+# the single shared terraform init + isolated per-cluster -state make it safe, same as run_pool within an
+# account). Set WIB_SERIAL=1 to force the old serial loop.
 WIB_SERIAL="${WIB_SERIAL:-}"
 # Dry run: print the terraform apply each cluster WOULD run (and skip bootstrap) instead of provisioning.
 # Lets the roster / subset / var-building / concurrency logic be validated offline with no cloud spend.
@@ -339,8 +334,8 @@ friendly_attendee_name() {
 # attackme; a presenter's cluster on <owner>-admin; attendee clusters on their memorable name. One function
 # so `routes` (which publishes the name) and `ingest` (which tells provisioning what to hand the student)
 # cannot disagree. The owner comes from the NAME, by the same rule that recognises a presenter cluster:
-# a caller-supplied or fallen-back owner is how r1-2.agenticburn.com, a host the router never served, came
-# out of every caller that was not cmd_routes (#265). test_presenter_student_retired.sh holds the roster's
+# a caller-supplied or fallen-back owner is how a hostname the router never served came out of every
+# caller that was not cmd_routes (#265). test_presenter_student_retired.sh holds the roster's
 # owner column to the name, so the two cannot drift.
 public_host_for() {
     local name="$1"
@@ -405,11 +400,11 @@ require_apply() {
     return 1
 }
 
-# The round a roster cluster belongs to, from its own name. Lets a verb resolve the right account
+# The role a roster cluster plays, from its own name. Lets a verb resolve the right account
 # without the caller having to thread the roster through.
-# Returns the round, or nothing. ALWAYS exits 0: "this is not a roster cluster" is a normal answer,
+# Returns the role, or nothing. ALWAYS exits 0: "this is not a roster cluster" is a normal answer,
 # not a failure. Under `set -e` a helper that returns non-zero kills the caller at the assignment
-# `rnd="$(role_of_instructor_name ...)"`, with no message, which is exactly how `ingest <attendee-name>`
+# `role="$(role_of_instructor_name ...)"`, with no message, which is exactly how `ingest <attendee-name>`
 # silently did nothing at all.
 role_of_instructor_name() {
     if [[ "$1" == "watch-it-burn-community" ]]; then printf 'community'
@@ -418,8 +413,8 @@ role_of_instructor_name() {
     return 0
 }
 # Kept as the single place that answers "which account holds a roster cluster". Every roster cluster now
-# lives in the default account: the per-round accounts existed to spread three rounds of three, and there
-# are no rounds. Callers still ask rather than assuming, so moving one later is one edit here.
+# lives in the default account: the separate instructor accounts existed to spread nine clusters, and the
+# roster is three. Callers still ask rather than assuming, so moving one later is one edit here.
 account_for_role() {
     case "$1" in
         community|admin) printf '%s' "${WIB_DEFAULT_ACCOUNT}" ;;
@@ -427,9 +422,21 @@ account_for_role() {
     esac
 }
 
+# The bootstrap profile a roster role gets. ONE place, because two callers need it: cmd_instructors and
+# infra/setup-instructor-cluster.sh, which used to map its own round argument to a profile and so could
+# disagree with the fleet about what a cluster is. community is the unguarded spectacle; admin is the
+# student build with every guardrail armed (#294).
+bootstrap_profile_for_role() {
+    case "$1" in
+        community) printf 'burn' ;;
+        admin) printf 'admin' ;;
+        *) log "bad role: $1"; exit 1 ;;
+    esac
+}
+
 usage() {
     cat >&2 <<EOF
-Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
+Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|owner]]
 
   preflight <n>       BEFORE any run: assert every account resolves to its EXPECTED account id and has
                       vCPU/NLB/EKS/VPC/EIP headroom for <n> clusters each. Read-only; exits non-zero on
@@ -481,9 +488,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       'down-fleet' end with it.
     health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
-    converge instructors [round]
+    converge instructors [role]
                       Same repair loop, pointed at the roster instead of the attendee pool. These are the
-                      nine clusters the presenters drive from, so a console NLB that has not resolved
+                      clusters the presenters drive from, so a console NLB that has not resolved
                       here ends the workshop rather than costing one attendee a cluster.
     converge <name...>  Repair an explicit set, attendee or roster, mixed.
     converge <n>      Re-check an up-fleet run (SAME <n> + WIB_NAME_OFFSET) and REPAIR what is actually
@@ -520,8 +527,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
     Every roster cluster lives in \${WIB_DEFAULT_ACCOUNT}, which needs its lab-vpc applied to
     states/<profile>.tfstate first (the command prints the exact apply line if missing).
 
-Provisioning AUTO-BOOTSTRAPS the IDP after each cluster comes up (deploy-full-idp.sh): attendees +
-R2/R3 instructors with the 'full' profile, R1 instructors with 'burn'. The provision pool runs the
+Provisioning AUTO-BOOTSTRAPS the IDP after each cluster comes up (deploy-full-idp.sh): attendees with
+the 'attendee' profile, admin clusters with 'admin', the community cluster with 'burn'. The provision pool runs the
 provision and the bootstrap together, so a fleet 'up' self-completes. Set WIB_NO_BOOTSTRAP=1 to
 provision bare clusters only (then bootstrap manually; instructor hints print after a bare 'up').
 Per-branch clusters (a cluster tracking its own branch) are a manual case: bootstrap from that branch.
@@ -575,14 +582,14 @@ assert_ours() {
 record_fail() { echo "${1}" >>"${FAIL_FILE}"; }
 
 # Install the IDP on a freshly-provisioned cluster: pull an isolated kubeconfig (never the shared
-# ~/.kube/config) and run deploy-full-idp.sh with the round's profile. Runs inside up_one, so the
+# ~/.kube/config) and run deploy-full-idp.sh with the cluster's profile. Runs inside up_one, so the
 # concurrency pool provisions AND bootstraps each cluster in parallel.
-# Flip a round-2/3 cluster's infra guardrails to enforcing after bootstrap. Kyverno ships in Audit
-# (kyverno-policies.yaml), so wait for the ValidatingPolicy to sync then run the Audit->Deny toggle.
-# NetworkPolicy egress, Falco, and the PID cap come up enforcing from the full app-of-apps and need no
-# flip; R1 (burn profile) has no guardrails and never calls this. Mirrors the tail of
-# infra/setup-instructor-cluster.sh so a fleet 'up' self-arms (found 2026-07-10: provisioning deployed the
-# IDP but never armed the round, leaving Kyverno in Audit so R2 admission never blocked).
+# Flip an armed (admin or full profile) cluster's infra guardrails to enforcing after bootstrap. Kyverno
+# ships in Audit (kyverno-policies.yaml), so wait for the ValidatingPolicy to sync then run the
+# Audit->Deny toggle. NetworkPolicy egress, Falco, and the PID cap come up enforcing from the app-of-apps
+# and need no flip; the community cluster (burn profile) has no guardrails and never calls this. Mirrors
+# the tail of infra/setup-instructor-cluster.sh so a fleet 'up' self-arms (found 2026-07-10: provisioning
+# deployed the IDP but never armed the cluster, leaving Kyverno in Audit so admission never blocked).
 arm_infra_guardrails() {
     local name="$1" kcfg="$2" acct="$3" ctx i
     ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
@@ -620,7 +627,7 @@ arm_infra_guardrails() {
     # on watch-it-burn-r2-1 (2026-08-26) the toggle patched both policies and read them back as Enforce,
     # the run logged ENFORCING, and require-resource-limits was Audit again minutes later. ArgoCD had
     # reverted it despite ignoreDifferences and RespectIgnoreDifferences being set for that exact path.
-    # A half-armed Round 2 that reports success is worse than an honest failure, because the demo then
+    # A half-armed cluster that reports success is worse than an honest failure, because the demo then
     # fails in front of the room with nothing having warned anyone.
     #
     # So: confirm the live value AFTER a settling pause, and retry the flip if selfHeal won the race.
@@ -641,7 +648,7 @@ arm_infra_guardrails() {
         log "  ${name}: after attempt ${attempt}, require-resource-limits=${rl:-?} restrict-image-registries=${ri:-?}; retrying"
     done
     log "  ${name}: FAILED to arm Kyverno; live state require-resource-limits=${rl:-?} restrict-image-registries=${ri:-?}"
-    log "        (see ${LOG_DIR}/${name}.arm.log). This round will NOT block admission."
+    log "        (see ${LOG_DIR}/${name}.arm.log). This cluster will NOT block admission."
     record_fail "${name}:kyverno-not-armed rl=${rl:-?} ri=${ri:-?}"
     return 1
 }
@@ -945,7 +952,7 @@ prune_empty_states() {
 }
 
 bootstrap_one() {
-    local name="$1" profile="$2" round="${3:-}"
+    local name="$1" profile="$2"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
     provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
@@ -968,22 +975,24 @@ bootstrap_one() {
         log "  bootstrapped: ${name} (${profile})"
         bootstrap_student_aws "${name}" "${acct_profile}" "${kcfg}"
         bootstrap_terminal_auth "${name}" "${acct_profile}" "${kcfg}"
-        # Arm on the PROFILE, not the round. This was `round == 2 || round == 3`, and an attendee
-        # cluster has no round: cmd_up leaves that spec field empty. So every attendee cluster received
-        # all ten Kyverno policies from the full profile and none of them were ever flipped out of
-        # Audit. Measured 2026-09-03 across the whole attendee fleet, 7 of 7 sat at
-        # restrict-image-registries=Audit while r2/r3 were correctly Enforce, which means Challenge 2's
-        # villain image DEPLOYS on a student's own cluster: the control they are told stops it does
-        # nothing, on the one cluster where they run the challenge themselves.
+        # Arm on the PROFILE, never on the cluster's name or role. Arming used to be gated on the
+        # instructor cluster's number, and an attendee cluster has none: cmd_up leaves that spec field
+        # empty. So every attendee cluster received all ten Kyverno policies from the full profile and
+        # none of them were ever flipped out of Audit. Measured 2026-09-03 across the whole attendee
+        # fleet, 7 of 7 sat at restrict-image-registries=Audit while the armed instructor clusters were
+        # correctly Enforce, which means Challenge 2's villain image DEPLOYS on a student's own cluster:
+        # the control they are told stops it does nothing, on the one cluster where they run the
+        # challenge themselves.
         #
-        # ONLY "full" arms. That is now a three-way distinction, not two:
-        #   full     (instructor R2/R3) -> arm: restrict-image-registries flipped to Deny here.
-        #   attendee (the student pool) -> DO NOT arm: it ships kyverno-policies in Audit on purpose, so
+        # Only the armed profiles arm:
+        #   admin    (presenter clusters) -> arm: restrict-image-registries flipped to Deny here (#294).
+        #   full     (a hand-built armed cluster) -> arm, the same way.
+        #   attendee (the student pool)   -> DO NOT arm: it ships kyverno-policies in Audit on purpose, so
         #            C2's villain image deploys and the STUDENT flips it to Deny (#160). Its C1 and C3
         #            controls are omitted from the profile entirely (app-of-apps-attendee.yaml), so there
         #            is nothing to arm for those either.
-        #   burn     (instructor R1)    -> ships no policies at all; the unguarded spectacle.
-        # Gating on the profile name keeps attendee and burn both unarmed without a round check.
+        #   burn     (the community cluster) -> ships no policies at all; the unguarded spectacle.
+        # Gating on the profile name keeps attendee and burn both unarmed without a name check.
         [[ "${profile}" == "full" || "${profile}" == "admin" ]] && arm_infra_guardrails "${name}" "${kcfg}" "${acct_profile}"
     else
         log "  BOOTSTRAP FAILED: ${name} (see ${LOG_DIR}/${name}.bootstrap.log)"; record_fail "${name}"
@@ -1114,15 +1123,17 @@ bootstrap_student_aws() {
 # sibling of #161 that the single-cluster fix never reached.
 #
 # Spec format, pipe-delimited, mirroring roster.tsv so an instructor row maps across almost verbatim:
-#   account | bootstrap_profile | bootstrap_round | tier | instance_types | pod_pids_limit
+#   account | bootstrap_profile | role | tier | instance_types | pod_pids_limit
+# role is the roster role (community|admin), empty for the attendee pool. It is carried for whoever reads
+# the spec; the profile, not the role, is what bootstrap_one acts on.
 declare -gA PROVISION_SPEC
 
 # One cluster's provision, run inside a per-account run_pool worker where TF_PROFILE and the VPC are
 # already set. Applies only the per-cluster fields from the spec, then the shared up_one.
 _provision_worker() {
-    local name="$1" _acct bp bround tier itype pids
-    IFS='|' read -r _acct bp bround tier itype pids <<<"${PROVISION_SPEC[$name]}"
-    BOOTSTRAP_PROFILE="${bp}"; BOOTSTRAP_ROUND="${bround}"
+    local name="$1" _acct bp _role tier itype pids
+    IFS='|' read -r _acct bp _role tier itype pids <<<"${PROVISION_SPEC[$name]}"
+    BOOTSTRAP_PROFILE="${bp}"
     TF_TIER="${tier}"; TF_INSTANCE_TYPES="${itype}"; TF_PIDS_LIMIT="${pids}"
     up_one "${name}"
 }
@@ -1268,7 +1279,7 @@ up_one() {
         # Record which account this cluster was actually built in, so teardown never has to guess.
         record_membership "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
         # Auto-bootstrap the IDP unless this provision is bare-only.
-        [[ -n "${BOOTSTRAP_PROFILE}" ]] && bootstrap_one "${name}" "${BOOTSTRAP_PROFILE}" "${BOOTSTRAP_ROUND:-}"
+        [[ -n "${BOOTSTRAP_PROFILE}" ]] && bootstrap_one "${name}" "${BOOTSTRAP_PROFILE}"
     else
         log "  FAILED: ${name} (see ${LOG_DIR}/${name}.apply.log)"; record_fail "${name}"
     fi
@@ -1483,8 +1494,8 @@ sweep_orphan_volumes() {
 # matters for any reference the revoke missed.
 # EKS writes control-plane logs to /aws/eks/<cluster>/cluster, and that log group OUTLIVES the cluster.
 # Nothing in this teardown path ever deleted one, so they accumulated across every event: 107 groups and
-# roughly 111 GB were found orphaned on 2026-09-18, including groups for round-model clusters (r2-1,
-# r3-1, r3-2, pres-michael) retired long before the current naming existed.
+# roughly 111 GB were found orphaned on 2026-09-18, including groups for round-model and pres-* clusters
+# retired long before the current naming existed.
 #
 # The cost is small and permanent, which is the worst shape for a leak: never large enough to notice in a
 # bill, never going away, and growing by one group per cluster per event. At 50 clusters an event that is
@@ -1643,7 +1654,7 @@ resolve_selector() {
             local want="${sel#attendees:}"
             [[ "${want}" =~ ^[0-9]+$ ]] || { log "selector '${sel}': attendees:<count>"; return 2; }
             for n in $(seq 1 "${want}"); do printf '%s-%03d\n' "${NAME_PREFIX}" "${n}"; done ;;
-        instructors|rounds)
+        instructors)
             load_roster; local entry
             for entry in "${INSTRUCTORS[@]}"; do
                 nm="${entry%%|*}"; [[ -f "${STATE_DIR}/${nm}.tfstate" ]] && printf '%s\n' "${nm}"
@@ -1764,8 +1775,8 @@ cmd_up() {
         fi
     done
     declare -gA PROVISION_SPEC=()
-    # Attendee clusters are uniform: the default account, full bootstrap unless bare, no round, no
-    # per-cluster tier/instance-type/pids overrides. account|profile|round|tier|itype|pids
+    # Attendee clusters are uniform: the default account, the attendee bootstrap unless bare, no role,
+    # no per-cluster tier/instance-type/pids overrides. account|profile|role|tier|itype|pids
     for n in "${names[@]}"; do PROVISION_SPEC["${n}"]="${WIB_DEFAULT_ACCOUNT}|${bp}||||"; done
     log "provisioning ${#names[@]} clusters (max ${MAX_PARALLEL} parallel)..."
     _provision_spec_fleet "these clusters" _ingest_attendee_names "${names[@]}"
@@ -1976,10 +1987,10 @@ cmd_down() {
         log "ingest: ${#names[@]} cluster(s) not registered yet, retry ${attempt}/${WIB_INGEST_RETRIES:-8} in ${WIB_INGEST_BACKOFF:-45}s"
         sleep "${WIB_INGEST_BACKOFF:-45}"
         rm -f "${FAIL_FILE}"
-        local nm rnd acct
+        local nm role acct
         for nm in "${names[@]}"; do
-            rnd="$(role_of_instructor_name "${nm}")"
-            if [[ -n "${rnd}" ]]; then acct="$(account_for_role "${rnd}")"; else acct="$(read_membership "${nm}" 2>/dev/null || echo "${WIB_DEFAULT_ACCOUNT}")"; fi
+            role="$(role_of_instructor_name "${nm}")"
+            if [[ -n "${role}" ]]; then acct="$(account_for_role "${role}")"; else acct="$(read_membership "${nm}" 2>/dev/null || echo "${WIB_DEFAULT_ACCOUNT}")"; fi
             ingest_one "${nm}" "${acct}"
         done
     done
@@ -2202,7 +2213,7 @@ cmd_instructors() {
     # gone (#291); the roster carries a role instead, so "give me the community cluster" and "give me
     # Whitney's" are both one word, and neither is ambiguous. Parsed once for BOTH directions, so
     # `instructors down whitney` destroys exactly what `instructors up whitney` built (#88). Down used to
-    # parse its own argument as a round and loop rounds 1/2/3 after the rounds were retired, so it matched
+    # parse its own argument as a set number and loop the three numbered sets after they were retired, so it matched
     # no roster row and destroyed nothing, with or without a selector.
     local role_filter="" owner_filter=""
     case "${selector}" in
@@ -2221,11 +2232,9 @@ cmd_instructors() {
     for r in "${roles[@]}"; do
         acct="$(account_for_role "${r}")"
         # The profile follows the ROLE, not the roster's bp column, which an earlier loop ignored and left
-        # Kyverno stuck in Audit (2026-07-10). community is the unguarded spectacle; admin is the student
-        # build with everything armed (#294). A bare provision sets no profile so nothing bootstraps.
+        # Kyverno stuck in Audit (2026-07-10). A bare provision sets no profile so nothing bootstraps.
         if [[ -n "${WIB_NO_BOOTSTRAP:-}" ]]; then bp=""
-        elif [[ "${r}" == "community" ]]; then bp="burn"
-        else bp="admin"; fi
+        else bp="$(bootstrap_profile_for_role "${r}")"; fi
         n=0
         for entry in "${INSTRUCTORS[@]}"; do
             IFS='|' read -r name rr tier itype pidscol bpcol owner <<<"${entry}"
@@ -2242,7 +2251,7 @@ cmd_instructors() {
                     exit 2
                 fi
             fi
-            # account|profile|round|tier|itype|pids  -- per-cluster tier/itype/pids come from the roster
+            # account|profile|role|tier|itype|pids  -- per-cluster tier/itype/pids come from the roster
             PROVISION_SPEC["${name}"]="${acct}|${bp}|${r}|${tier}|${itype}|${pidscol}"
             n=$(( n + 1 ))
         done
@@ -2549,9 +2558,9 @@ _account_for_name() {
     # account, the state lookup finds nothing, and a destroy reports success having destroyed nothing.
     local recorded; recorded="$(read_membership "${name}")"
     [[ -n "${recorded}" ]] && { echo "${recorded}"; return 0; }
-    # A ROSTER cluster is not in the attendee numbering at all: watch-it-burn-r2-1 would parse as num=1
-    # and land in the first account regardless of which account round 2 actually lives in. Resolve it by
-    # round, the same way cmd_instructors does.
+    # A ROSTER cluster is not in the attendee numbering at all: its name carries no slot number to
+    # divide, so the arithmetic below would land it in whichever account index the parse produced. Resolve
+    # it by role, the same way cmd_instructors does.
     if is_instructor_name "${name}"; then
         account_for_role "$(role_of_instructor_name "${name}")"; return 0
     fi
@@ -2612,12 +2621,12 @@ cmd_converge() {
     # Accepts THREE forms, because the attendee numbering was the only thing it understood (#85):
     #
     #   converge <n>                 the attendee pool, n per account (the original, unchanged)
-    #   converge instructors [round] the roster, optionally one round
+    #   converge instructors [role]  the roster, optionally one role (community|admin)
     #   converge <name...>           any explicit set, attendee or roster, mixed
     #
-    # The roster is a separate name space (watch-it-burn-r<round>-<n>) provisioned from roster.tsv and
-    # split across accounts BY ROUND, not by the attendee offset arithmetic. So there was no way to
-    # converge the nine clusters the presenters actually drive from, which are the ones whose console NLB
+    # The roster is a separate name space (watch-it-burn-community, watch-it-burn-<owner>-admin)
+    # provisioned from roster.tsv and placed in accounts BY ROLE, not by the attendee offset arithmetic. So
+    # there was no way to converge the clusters the presenters actually drive from, which are the ones whose console NLB
     # not resolving in time ends the workshop rather than costing one attendee a cluster. The repair loop
     # existed and could not be pointed at them.
     local per_account="" all=() idx=0 acct start n
@@ -2626,17 +2635,17 @@ cmd_converge() {
     if [[ "${1:-}" == "instructors" ]]; then
         local role_filter="${2:-}"
         load_roster
-        local entry nm rnd
+        local entry nm role
         for entry in "${INSTRUCTORS[@]}"; do
-            nm="${entry%%|*}"; rnd="$(role_of_instructor_name "${nm}")"
-            [[ -z "${role_filter}" || "${rnd}" == "${role_filter}" ]] || continue
-            # A roster slot with no state was never provisioned (the unowned third slot per round); it
+            nm="${entry%%|*}"; role="$(role_of_instructor_name "${nm}")"
+            [[ -z "${role_filter}" || "${role}" == "${role_filter}" ]] || continue
+            # A roster slot with no state was never provisioned (a presenter who has not built theirs); it
             # is not an unreachable cluster and must not count against the verdict.
             [[ -f "${STATE_DIR}/${nm}.tfstate" ]] || { log "  ${nm}: not provisioned, skipping"; continue; }
             all+=("${nm}")
         done
         [[ "${#all[@]}" -gt 0 ]] || { log "converge: no roster clusters match role '${role_filter}'"; exit 2; }
-        # Roster clusters resolve their account by round, so the account list this run touches is theirs.
+        # Roster clusters resolve their account by role, so the account list this run touches is theirs.
         accounts=()
         for nm in "${all[@]}"; do
             acct="$(account_for_role "$(role_of_instructor_name "${nm}")")"
@@ -2659,7 +2668,7 @@ cmd_converge() {
             [[ " ${accounts[*]} " == *" ${acct} "* ]] || accounts+=("${acct}")
         done
     else
-        log "usage: converge <clusters-per-account> | converge instructors [round] | converge <name...>"
+        log "usage: converge <clusters-per-account> | converge instructors [role] | converge <name...>"
         exit 2
     fi
     command -v kubectl >/dev/null 2>&1 || { log "missing tool: kubectl"; exit 1; }
@@ -2821,9 +2830,9 @@ cmd_reap_lbs() {
         # liveness grep below, is logged as an orphan, and with WIB_APPLY=1 is deleted. The predicate
         # failed open, in the direction of deletion, on the one input it cannot afford to guess.
         #
-        # On 2026-09-03 at 13:20Z the console NLBs for watch-it-burn-r2-1 and r2-2 were deleted by this
-        # account's IAM user while both clusters were live and serving. michael-round2 and
-        # whitney-round2 returned 502 from the router afterwards, with healthy pods behind a load
+        # On 2026-09-03 at 13:20Z the console NLBs for two instructor clusters were deleted by this
+        # account's IAM user while both clusters were live and serving. Both presenters' hostnames
+        # returned 502 from the router afterwards, with healthy pods behind a load
         # balancer that no longer existed, five days before Portland. Whatever the misclassification
         # was, an unverified empty list must not be able to reach a delete.
         local live_rc=0
@@ -2974,7 +2983,7 @@ ingest_one() {
     # Datadog org resolution differs by cluster KIND, and getting this wrong is why instructor clusters
     # could not be ingested at all. An attendee cluster resolves by slot: watch-it-burn-attendee-007
     # takes the 7th NON-admin pool entry, matching bootstrap + merge_pool. An instructor cluster
-    # (watch-it-burn-r<round>-<n>) has no slot number in that sequence, so the sed below produced an
+    # (watch-it-burn-community, watch-it-burn-<owner>-admin) has no slot number in that sequence, so the sed below produced an
     # empty slot, the lookup was skipped, and the row went out with every Datadog field blank.
     # Instructor clusters all share the single admin-instructor org, so select it by ROLE, not index.
     local slot dd="{}"
@@ -3040,7 +3049,7 @@ ingest_one() {
          | ($site | if . == "datadoghq.com" or . == "datadoghq.eu" then "https://app." + . else "https://" + . end) as $ddurl
          | {name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,terminal_user:$tu,terminal_password:$tp,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:$site,datadog_dashboard_url:$ddurl}')"
     # Retry the POST. A single transient failure used to leave one cluster unregistered and everything
-    # else looking fine, which is how watch-it-burn-r3-1 ended up missing from provisioning on
+    # else looking fine, which is how one instructor cluster ended up missing from provisioning on
     # 2026-08-26 while the other five succeeded. One HTTP blip should not require a human to notice.
     local tok attempt code=""
     tok="$(resolve_admin_token || true)"
@@ -3078,16 +3087,16 @@ cmd_ingest() {
             done
         done
     else
-        # Named clusters. A roster cluster lives in its round's account, which is NOT necessarily the
-        # default one; passing WIB_DEFAULT_ACCOUNT for everything made `ingest watch-it-burn-r2-1` look
-        # up the wrong account and fail to find the cluster whenever the R1/R2/R3 split is in use.
-        local name rnd acct
+        # Named clusters. A roster cluster lives in its role's account (account_for_role), which need not
+        # be the default one; passing WIB_DEFAULT_ACCOUNT for everything made `ingest <roster-name>` look up
+        # the wrong account and fail to find the cluster whenever the roster sat in its own accounts.
+        local name role acct
         for name in "$@"; do
-            rnd="$(role_of_instructor_name "${name}")"
+            role="$(role_of_instructor_name "${name}")"
             # An attendee name resolves through its membership record for the same reason a roster name
-            # resolves through its round: neither is necessarily in the default account. The retry loop
+            # resolves through its role: neither is necessarily in the default account. The retry loop
             # at the bottom of this function already did this; this branch did not.
-            if [[ -n "${rnd}" ]]; then acct="$(account_for_role "${rnd}")"
+            if [[ -n "${role}" ]]; then acct="$(account_for_role "${role}")"
             else acct="$(read_membership "${name}" 2>/dev/null || true)"; [[ -n "${acct}" ]] || acct="${WIB_DEFAULT_ACCOUNT}"; fi
             ingest_one "${name}" "${acct}"
         done
@@ -3099,12 +3108,12 @@ cmd_ingest() {
 # the instructor set was to type six names, so in practice it never happened and the presenters' own
 # clusters were missing from provisioning entirely.
 cmd_ingest_instructors() {
-    local role_filter="${1:-}" entry name rnd
+    local role_filter="${1:-}" entry name role
     load_roster
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rnd _tier _it _pid _bp _owner <<<"${entry}"
-        [[ -n "${role_filter}" && "${rnd}" != "${role_filter}" ]] && continue
-        ingest_one "${name}" "$(account_for_role "${rnd}")"
+        IFS='|' read -r name role _tier _it _pid _bp _owner <<<"${entry}"
+        [[ -n "${role_filter}" && "${role}" != "${role_filter}" ]] && continue
+        ingest_one "${name}" "$(account_for_role "${role}")"
     done
 }
 
@@ -3132,10 +3141,10 @@ cmd_down_acct() {
 # cmd_instructors call this automatically after a provision; run standalone with 'fleet.sh routes'.
 # Friendly hosts: every one comes from public_host_for(), so a presenter cluster is <owner>-admin, the
 # community cluster attackme, and an attendee slot its memorable name (watch-it-burn-attendee-001 ->
-# bane-sabrina.agenticburn.com), plus roundN for the primary owner's cluster. That memorable name is the
-# ONE name a student has: the claim page shows its first label. There is no second alias per cluster:
-# r1-1 went with #142 and a-NNN with #359, so a stale link to either 404s instead of quietly landing on a
-# cluster under a name no student was given.
+# bane-sabrina.agenticburn.com). That memorable name is the ONE name a student has: the claim page shows
+# its first label. There is no second alias per cluster: the raw roster alias went with #142, a-NNN with
+# #359 and the shared numbered alias with #290, so a stale link to any of them 404s instead of quietly
+# landing on a cluster under a name nobody was given.
 cmd_routes() {
     require_tools
     prune_empty_states
@@ -3145,17 +3154,15 @@ cmd_routes() {
         echo "# ABOUTME: Host -> cluster LB routing for the agenticburn.com wildcard router."
         echo "# ABOUTME: AUTO-GENERATED by 'fleet.sh routes' from live cluster LBs. Do not hand-edit."
     } > "${tmp}"
-    local entry name rr bp acct h short n state
-    local -A round_done=()
+    local entry name role bp acct h short n state
     for entry in "${INSTRUCTORS[@]}"; do
-        IFS='|' read -r name rr _tier _it _pid bp owner <<<"${entry}"
-        acct="$(account_for_role "${rr}")"
+        IFS='|' read -r name role _tier _it _pid bp _owner <<<"${entry}"
+        acct="$(account_for_role "${role}")"
         provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
         h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
         [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
-        # The name a presenter actually reads: <owner>-round<N>.agenticburn.com. The r1-1 form is a
-        # provisioning artefact, not a name anyone can hold in their head mid-demo, and it says nothing
-        # about whose cluster it is.
+        # The name a presenter actually reads: attackme, or <owner>-admin.agenticburn.com. The cluster
+        # name is a provisioning artefact, not a name anyone can hold in their head mid-demo.
         #
         # Upstreams are :443 (#139). The cluster console terminates TLS with a cert-manager self-signed
         # certificate and the router connects with tls_insecure_skip_verify, so the Railway-to-AWS hop is
@@ -3166,25 +3173,21 @@ cmd_routes() {
         # provisioning/start/apex kept serving). TLS is declared statically in the apex Caddyfile transport
         # instead. The two sides must therefore move TOGETHER: :443 here requires the TLS transport there.
         # Single label, deliberately. The certificate is *.agenticburn.com, which covers exactly one
-        # level, so michael-round1.agenticburn.com validates and roundone.michael.agenticburn.com does
+        # level, so michael-admin.agenticburn.com validates and admin.michael.agenticburn.com does
         # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27.
         # EVERY roster row gets a host, including an unassigned one. An empty owner means a shared hot
         # spare, and a spare nobody can reach has not been proven to work: the point of holding one is to
         # swap it in mid-workshop, which is the worst moment to discover its console never served. It is
-        # published under the name public_host_for already gives it (r1-3.agenticburn.com), so the two
+        # published under the name public_host_for already gives it, so the two
         # functions that name a cluster agree. While they did not, the acceptance pass reported three
         # permanent failures for hosts the table was never asked to carry, which teaches everyone to read
         # past a red line.
         printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
         emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
-        # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
-        # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
-        # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one
-        # regex, so dropping the form it no longer sees breaks nothing.
-        # roundN is the shared, owner-less alias the run-of-show and the BurritoBot round selector use.
-        # Bind it to the FIRST owner's cluster so it is stable rather than whichever entry sorted first.
-        [[ -z "${round_done[$rr]:-}" && "${owner}" == "${WIB_PRIMARY_OWNER}" ]] && {
-            printf 'round%s.agenticburn.com  %s:443\n' "${rr}" "${h}" >> "${tmp}"; round_done[$rr]=1; }
+        # No other alias. A shared, owner-less one used to be emitted for the first owner's cluster of
+        # each role, built from the role column, and once the roster carried roles instead of numbers it
+        # came out as a host nobody was ever told (#290). Its only consumers, the run-of-show and
+        # BurritoBot's selector, went with the rounds.
     done
     # Attendee clusters (attendee-NNN, state in any pool account) -> their memorable name.
     if [[ -d "${STATE_DIR}" ]]; then
@@ -3221,20 +3224,21 @@ cmd_routes() {
     # and took two live round URLs down. The published table is the thing to compare against, not the
     # working copy, because the working copy may already be a bad render from a previous attempt.
     #
-    # The published table is discounted by the RETIRED a-NNN aliases (#359). They are no longer emitted,
-    # so a correct run legitimately produces a table two hosts shorter than the one on HEAD, and counting
-    # them would make this guard refuse every publish until someone overrode it with the very flag that
-    # also disables the protection. Retiring a hostname is not the same event as losing one.
+    # The published table is discounted by the RETIRED aliases, a-NNN (#359) and the shared round* one
+    # (#290), via RETIRED_HOST_RE. They are no longer emitted, so a correct run legitimately produces a
+    # table shorter than the one on HEAD, and counting them would make this guard refuse every publish
+    # until someone overrode it with the very flag that also disables the protection. Retiring a hostname
+    # is not the same event as losing one.
     local new_count old_count
     new_count="$(grep -c agenticburn.com "${tmp}" || true)"
     old_count="$(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null \
-        | grep agenticburn.com | grep -vc '^a-[0-9]' || true)"
+        | grep agenticburn.com | grep -Evc "${RETIRED_HOST_RE}" || true)"
     if [[ -z "${WIB_ROUTES_ALLOW_SHRINK:-}" && "${new_count}" -lt "${old_count}" ]]; then
         log "routes: REFUSING to publish ${new_count} host(s), down from ${old_count} already published."
         log "        Hosts that would be dropped:"
         comm -13 <(grep -o '^[^ ]*\.agenticburn\.com' "${tmp}" | sort) \
                  <(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null \
-                     | grep -v '^a-[0-9]' | grep -o '^[^ ]*\.agenticburn\.com' | sort) \
+                     | grep -Ev "${RETIRED_HOST_RE}" | grep -o '^[^ ]*\.agenticburn\.com' | sort) \
             | sed 's/^/          - /' >&2
         log "        Every one of those becomes a 404. If the shrink is intended (a teardown), re-run"
         log "        with WIB_ROUTES_ALLOW_SHRINK=1. Otherwise wait for the missing consoles and retry."

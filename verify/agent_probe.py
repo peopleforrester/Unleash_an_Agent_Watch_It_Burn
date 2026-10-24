@@ -14,7 +14,7 @@ run-of-show uses.
 Guard toggles need cluster access, so pass --context to let the harness flip them; without it the
 harness only probes whatever state the cluster is already in.
 
-    uv run --with nothing python verify/agent_probe.py michael-round3.agenticburn.com \\
+    uv run --with nothing python verify/agent_probe.py michael-admin.agenticburn.com \\
         --context arn:aws:eks:... --profile accen-dev
 
 THIS SPENDS REAL MONEY. Every probe is a Bedrock call. --max-calls is a hard ceiling (default 20) and
@@ -426,7 +426,7 @@ def run(cluster: Cluster, probes: list[Probe], max_calls: int, restore: bool,
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("host", help="cluster hostname, e.g. michael-round3.agenticburn.com")
+    ap.add_argument("host", help="cluster hostname, e.g. michael-admin.agenticburn.com")
     ap.add_argument("--context", help="kube context, needed to flip guards")
     ap.add_argument("--profile", help="AWS_PROFILE for kubectl")
     ap.add_argument("--only", help="comma-separated probe keys (default: all)")

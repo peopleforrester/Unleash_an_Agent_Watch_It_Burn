@@ -358,7 +358,7 @@ The demonstrable payload: agent attack scenarios paired with the platform/AI gua
 
 ### The Three Rounds
 
-(See Part II for the round table.) Profile selection is by bootstrap argument `deploy-full-idp.sh burn|full`: `burn` sets `podPidsLimit=-1` (R1 fork-bombable), `full` carries the cap. There is no single "set round state" script yet (a READINESS gap); `infra/setup-instructor-cluster.sh <name> <round>` is the intended one-command path.
+(See Part II for the round table.) Profile selection is by bootstrap argument `deploy-full-idp.sh burn|full`: `burn` sets `podPidsLimit=-1` (R1 fork-bombable), `full` carries the cap. `infra/setup-instructor-cluster.sh <roster-cluster-name>` is the one-command path for a roster cluster: it takes the role from the name and the profile from the role, both through fleet.sh (#290).
 
 ### Per-Beat Spec
 
@@ -635,7 +635,7 @@ The decisions that span subsystems, with the one-line why. Full detail in each P
 
 ### Open items (from the B1 to B15 backlog and READINESS gaps)
 
-- **No single "set round state" script** (`infra/setup-instructor-cluster.sh <name> <round>` is intended). Bootstrap + toggles are separate manual steps.
+- **Roster-cluster setup is one command** (`infra/setup-instructor-cluster.sh <roster-cluster-name>`, #290); `fleet.sh instructors up` does the same bootstrap and arming at provision time. The AI guards are still flipped by hand.
 - **The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh`,** not GitOps (need a Pod Identity association and a concrete namespace). Materializing them into the app-of-apps is the open follow-up.
 - **agentgateway `mcpAuthorization` CEL path is unproven on the OSS build** (`BUILD-SPIKE.md` ships TODO); the deployed beat-3 control is the kagent `toolNames` allowlist. beat-03 stays on the recorded-fallback gate until the spike passes.
 - **The AWS Load Balancer Controller install** (the Pod Identity role exists) would replace the Classic ELB on `console` with an ip-target NLB and activate the inert party-app ALB Ingresses.

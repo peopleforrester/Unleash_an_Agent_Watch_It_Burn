@@ -21,7 +21,7 @@ usage() {
     cat >&2 <<EOF
 Usage: ${0##*/} [attendee-count]
 
-Brings up the nine instructor clusters (both owners, all rounds) and <attendee-count> attendee clusters
+Brings up the roster (the community cluster and both admin clusters) and <attendee-count> attendee clusters
 (default 2), then runs the acceptance pass over everything. Each stage already ends in its own verify, so
 a stage that reports success has been checked, not assumed.
 

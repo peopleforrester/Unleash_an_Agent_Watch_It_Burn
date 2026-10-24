@@ -1,4 +1,4 @@
-<!-- ABOUTME: Round-3 student lab page (B5/B12). Katacoda/KodeKloud split: student instructions on the
+<!-- ABOUTME: Student lab page (B5/B12). Katacoda/KodeKloud split: student instructions on the
      ABOUTME: left, the in-browser <a href="https://github.com/tsl0922/ttyd" target="_blank" rel="noopener">ttyd</a> shell embedded on the right. Student audience only, no attack spoilers. -->
 <!doctype html>
 <html lang="en" data-vtt-page="lab">
@@ -10,7 +10,7 @@
 <style>
   :root{
     --dd:#632CA6;--acn:#A100FF;--accent:#8A00D6;--cream:#FDF6EE;--lav:#ECE3FB;--ink:#2b2230;--mid:#4A4A4A;--line:#e4d8f5;
-    --r3:#7a3ff2;--ok:#2e9e5b;--term:#0f1117;
+    --pill:#7a3ff2;--ok:#2e9e5b;--term:#0f1117;
   }
   *,*::before,*::after{box-sizing:border-box}
   /* Root size grows with the viewport so the whole page scales from one knob instead of a breakpoint per
@@ -28,13 +28,13 @@
   .aside{color:var(--accent);font-weight:600}
   /* A full stop at the end of a step, naming what just finished. Subordinate to every heading. */
   header .spacer{flex:1}
-  header .pill{background:var(--r3);font-size:12px;font-weight:800;letter-spacing:.3px;padding:5px 11px;border-radius:999px}
+  header .pill{background:var(--pill);font-size:12px;font-weight:800;letter-spacing:.3px;padding:5px 11px;border-radius:999px}
   header a.bb{color:#fff;text-decoration:none;font-weight:800;font-size:13px;background:rgba(255,255,255,.16);padding:7px 13px;border-radius:8px}
   header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap}
   header a.hb:hover{background:rgba(255,255,255,.28)}
   .crumb{flex:0 0 auto;background:#101A42;color:#dfe3f5;font-size:12.5px;padding:7px 16px;display:flex;gap:8px;align-items:center;border-bottom:1px solid rgba(255,255,255,.08)}
   .crumb b{color:#fff;font-family:ui-monospace,Menlo,Consolas,monospace}
-  .crumb .role{font-weight:800;text-transform:uppercase;letter-spacing:.4px;font-size:11px;background:var(--r3);color:#fff;padding:2px 8px;border-radius:999px}
+  .crumb .role{font-weight:800;text-transform:uppercase;letter-spacing:.4px;font-size:11px;background:var(--pill);color:#fff;padding:2px 8px;border-radius:999px}
   .split{flex:1;display:flex;min-height:0}
   /* FLUID TYPE + a guide column that uses a large display (#144). The guide was capped at 560px, so on a
      2560 or 3840 screen the instructions sat in a narrow ribbon beside an enormous terminal. The cap now
@@ -934,13 +934,14 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
     // Role comes from WHAT CLUSTER THIS IS, not from a query parameter that is easy to drop. The pill
     // used to default to student whenever ?role= was missing, so opening an instructor cluster's lab
     // page by typing its hostname showed STUDENT on a presenter console. The identity is already
-    // unambiguous from two directions: the roster name (watch-it-burn-r<round>-<n>, mirroring
-    // is_instructor_name in fleet.sh) and the published hostname (michael-round1, whitney-round2).
+    // unambiguous from two directions: the roster name (the community cluster or
+    // watch-it-burn-<owner>-admin, mirroring is_instructor_name in fleet.sh) and the published hostname
+    // (attackme, <owner>-admin, from public_host_for). verify/test_round_names_retired.py holds the two
+    // to the same answer for every kind of cluster: these patterns matched the retired round names for
+    // weeks after the rename, and every admin cluster's pill said STUDENT with nothing failing.
     // ?role= still wins when present, so an instructor previewing the student view keeps working.
-    var _rosterName=/^watch-it-burn-r[123]-\d+$/i;
-    // (^|-) so the BARE aliases round1/round2/round3 match too, not just michael-round1. Those are
-    // published routes the run-of-show drives from, and they point at instructor clusters.
-    var _rosterHost=/(^|-)round[123]$/i;
+    var _rosterName=/^watch-it-burn-(community|[a-z0-9-]+-admin)$/i;
+    var _rosterHost=/^(attackme|[a-z0-9-]+-admin)$/i;
     var _hostLabel=(location.hostname||'').split('.')[0];
     var _looksInstructor=_rosterName.test((cluster||'').trim()) || _rosterHost.test(_hostLabel);
     var _roleParam=(q.get('role')||'').trim().toLowerCase();
@@ -950,7 +951,7 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
     // Show the name the student was GIVEN, not the internal one. The provisioning link carries
     // cluster=watch-it-burn-attendee-001, which is a slot id: it is not the hostname they typed, not the
     // name on their claim page, and reading it aloud in a room helps nobody. The friendly name is already
-    // in the address bar (bane-agatha.agenticburn.com, michael-round1.agenticburn.com), so take it from
+    // in the address bar (bane-agatha.agenticburn.com, michael-admin.agenticburn.com), so take it from
     // there and keep the internal id in the tooltip for anyone debugging a specific slot.
     var host=(location.hostname||'').split('.')[0];
     var pretty=(host && host!=='localhost') ? host : cluster;

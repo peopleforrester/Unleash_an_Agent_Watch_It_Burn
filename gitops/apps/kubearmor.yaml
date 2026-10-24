@@ -15,9 +15,9 @@
 # a target, so the engine alone enforces nothing: the actual C3 deny is the KubeArmorPolicy shipped by the
 # kubearmor-policies app (policies/kubearmor/). Engine/policy split mirrors kyverno / kyverno-policies.
 #
-# ROUND GATING: the FULL app-of-apps (R2/R3/attendee) syncs gitops/apps wholesale, so it gets this engine.
-# The BURN app-of-apps (R1) uses an explicit include: list; adding 'kubearmor' there (engine only, NOT
-# kubearmor-policies) keeps the engine present on all three builds while R1 stays enforcement-free and
+# PROFILE GATING: the FULL app-of-apps (and the admin and attendee ones) syncs gitops/apps wholesale, so it gets this engine.
+# The BURN app-of-apps (community) uses an explicit include: list; adding 'kubearmor' there (engine only, NOT
+# kubearmor-policies) keeps the engine present on every build while the community cluster stays enforcement-free and
 # still burns. Wave -6 puts the engine up well before its policy (kubearmor-policies, wave 4).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
