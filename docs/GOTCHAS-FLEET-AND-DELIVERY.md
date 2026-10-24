@@ -170,10 +170,10 @@ channel for anything in that env block**. Synced does not mean applied, for that
    ArgoCD ignores that path.
 2. On any cluster with policies (R2 / R3 / attendee) that patch is **denied by Kyverno**
    `block-argocd-drift` ("This resource is managed by ArgoCD. Change it in Git"). R1 burn clusters have no
-   policies and accept it directly. The enforcing field is
-   `spec.rules[0].validate.failureAction` (the top-level `spec.validationFailureAction` reads `Audit` and
-   is NOT what is enforcing; do not be misled by it).
-3. So: flip that rule to `Audit`, apply the env change, flip it straight back to `Enforce`. Allow a few
+   policies and accept it directly. It is a Kyverno ValidatingPolicy (#206) and the enforcing field is
+   `spec.validationActions`.
+3. So: `kubectl patch validatingpolicy block-argocd-drift --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'`,
+   apply the env change, then patch it straight back to `["Deny"]`. Allow a few
    seconds after the policy patch for the webhook to pick it up, and retry the `set env` in a short loop:
    two of eight clusters raced it on the first pass and needed a retry.
 4. Changing env restarts the pod, which also remounts the ConfigMap, so a separate pod delete is only

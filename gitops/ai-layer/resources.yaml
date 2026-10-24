@@ -527,14 +527,15 @@ subjects:
     name: guard-proxy-reader
     namespace: agent
 ---
-# ClusterPolicy is cluster-scoped, so C2's read needs a ClusterRole. Still get-only on the one policy.
+# Kyverno's ValidatingPolicy is cluster-scoped, so C2's read needs a ClusterRole. Still get-only on the one
+# policy. The badge is armed when spec.validationActions contains Deny (#206; Audit does not block).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   name: guard-proxy-reader
 rules:
-  - apiGroups: ["kyverno.io"]
-    resources: ["clusterpolicies"]
+  - apiGroups: ["policies.kyverno.io"]
+    resources: ["validatingpolicies"]
     resourceNames: ["restrict-image-registries"]  # C2
     verbs: ["get"]
 ---
@@ -872,13 +873,14 @@ rules:
     verbs: ["create", "get"]
   # B5/B11: the ATTENDEE's terminal (distinct identity from agent-sa, which the beats test) drives the
   # round-3 guardrail toggles. It needs to patch the kagent Agent (beat-3 MCP authz) and the Kyverno
-  # ClusterPolicy (beat-1 enforce). Neither is a Deployment/ConfigMap/Service, so block-argocd-drift does
-  # not apply; the Agent has ArgoCD ignoreDifferences on .spec.declarative.tools so selfHeal will not fight it.
+  # ValidatingPolicy (beat-1 / C2 Audit -> Deny, #206). Neither is a Deployment/ConfigMap/Service, so
+  # block-argocd-drift does not apply; the Agent has ArgoCD ignoreDifferences on .spec.declarative.tools so
+  # selfHeal will not fight it.
   - apiGroups: ["kagent.dev"]
     resources: ["agents"]
     verbs: ["get", "list", "watch", "update", "patch"]
-  - apiGroups: ["kyverno.io"]
-    resources: ["clusterpolicies", "policies"]
+  - apiGroups: ["policies.kyverno.io"]
+    resources: ["validatingpolicies"]
     verbs: ["get", "list", "watch", "update", "patch"]
   # C3 under #160: the student INSTALLS the KubeArmorPolicy themselves (attendee clusters ship without
   # it). The blanket rule above only grants get/list/watch on kubearmor resources, so create/apply was

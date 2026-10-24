@@ -20,6 +20,9 @@ missing=()
 for tool in kubectl helm python3 node yarn; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
+# test_kyverno_cel_policies.py evaluates the policies with the Kyverno CLI, pinned to the deployed v1.19.0.
+command -v "${KYVERNO_CLI:-kyverno}" >/dev/null 2>&1 \
+    || missing+=("the kyverno CLI v1.19.0 is not on PATH (or set KYVERNO_CLI): github.com/kyverno/kyverno/releases/tag/v1.19.0")
 if [[ -z "${CONTEXT:-}" ]]; then
     missing+=("CONTEXT is not set: name the kube-context of the test attendee cluster to run against")
 elif command -v kubectl >/dev/null 2>&1 \

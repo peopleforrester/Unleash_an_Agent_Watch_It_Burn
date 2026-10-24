@@ -113,15 +113,12 @@ for fname, app in apps:
     check(f"{fname}: every container has cpu+memory limits" + (f" MISSING {miss}" if miss else ""), not miss)
 
 print("== every image comes from a registry restrict-image-registries allows ==")
-import fnmatch
-pol = next(d for d in yaml.safe_load_all((REPO / "policies/kyverno/restrict-image-registries.yaml").read_text()) if d)
-pattern = pol["spec"]["rules"][0]["validate"]["pattern"]["spec"]["containers"][0]["image"]
-globs = [g.strip() for g in pattern.split("|")]
+from registry_allowlist import allowed
 
 
 def image_ok(img):
     ref = img if "/" in img.split(":")[0] else f"docker.io/library/{img}"
-    return any(fnmatch.fnmatch(ref, g) for g in globs)
+    return allowed(ref)
 
 
 def images(docs):

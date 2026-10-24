@@ -5,7 +5,7 @@
 # OutOfSync on every fresh cluster for reasons that live in the manifests, not the clusters, so health
 # was permanently false and a real failure (customer-stream denied by require-labels, the C1 target
 # never deployed on attendee clusters) hid inside the noise. Each cause below is a manifest property.
-import pathlib, sys
+import pathlib, re, sys
 
 import yaml
 
@@ -38,22 +38,31 @@ for root in sorted((REPO / "gitops/bootstrap").glob("*/*.yaml")):
     check(f"{root.parent.name}: RespectIgnoreDifferences is set",
           "RespectIgnoreDifferences=true" in d["spec"]["syncPolicy"].get("syncOptions", []))
 
-print("== every Kyverno validate rule states the defaults the webhook writes back ==")
+print("== every Kyverno policy states the defaults its CRD schema fills in ==")
+# The kyverno-policies app diffs client-side, so a field the API server defaults and the manifest omits is
+# OutOfSync forever. On the legacy ClusterPolicy that was the webhook writing back skipBackgroundRequests and
+# allowExistingViolations; on the CEL types (#206) it is the CRD schema's own defaults, listed here.
+CEL_DEFAULTS = {
+    "ValidatingPolicy": [("evaluation", "admission", "enabled"), ("evaluation", "background", "enabled")],
+    "ImageValidatingPolicy": [("evaluation", "admission", "enabled"), ("evaluation", "background", "enabled"),
+                              ("validationConfigurations", "required"), ("validationConfigurations", "verifyDigest"),
+                              ("validationConfigurations", "mutateDigest")],
+}
 for pol in sorted(list((REPO / "policies/kyverno").glob("*.yaml")) + list((REPO / "policies/floor").glob("*.yaml"))):
     for d in docs(pol):
-        if d.get("kind") != "ClusterPolicy":
-            continue
-        for rule in d["spec"].get("rules", []):
-            if "validate" not in rule:
-                continue
-            check(f"{pol.name}/{rule['name']}: skipBackgroundRequests and allowExistingViolations present",
-                  rule.get("skipBackgroundRequests") is True and rule["validate"].get("allowExistingViolations") is True)
+        check(f"{pol.name}: a policies.kyverno.io/v1 CEL policy, not the deprecated kyverno.io ClusterPolicy",
+              d.get("apiVersion") == "policies.kyverno.io/v1" and d.get("kind") in CEL_DEFAULTS)
+        for path in CEL_DEFAULTS.get(d.get("kind"), []):
+            node = d["spec"]
+            for key in path:
+                node = node.get(key) if isinstance(node, dict) else None
+            check(f"{pol.name}: spec.{'.'.join(path)} is stated", isinstance(node, bool))
 
 print("== workloads in the apps namespace carry the labels require-labels demands ==")
 required = set()
 for d in docs(REPO / "policies/kyverno/require-labels.yaml"):
-    for rule in d["spec"]["rules"]:
-        required |= set(rule["validate"]["pattern"]["metadata"]["labels"].keys())
+    for v in d["spec"]["validations"]:
+        required |= set(re.findall(r"object\.metadata\.\?labels\.\?(\w+)", v["expression"]))
 check("require-labels demands app and version", required == {"app", "version"})
 for mf in sorted((REPO / "gitops/manifests").rglob("*.yaml")):
     for d in docs(mf):

@@ -89,7 +89,7 @@ b "DELIVERY"
 ap="$(sec argocd argocd-initial-admin-secret password)"
 row "Argo CD" "https://argocd-${_h}"
 row ""        "login: admin / ${ap:-<could not read secret>}"
-row "Kyverno" "no UI:  kubectl get clusterpolicy"
+row "Kyverno" "no UI:  kubectl get validatingpolicy"
 
 b "RUNTIME SECURITY"
 row "KubeArmor" "kubectl -n agent get kubearmorpolicy -o yaml     (inline block)"

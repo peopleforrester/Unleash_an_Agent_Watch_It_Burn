@@ -519,7 +519,7 @@ was involved."
 **Read the controls that stopped you.**
 
 ```bash
-kubectl get clusterpolicy                                    # Kyverno: what admission refuses
+kubectl get validatingpolicy                                 # Kyverno: what admission refuses
 kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml   # the inline block on the recipe file
 kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml # why the exfil could not leave
 kubectl -n agent get agent workshop-agent -o yaml            # the agent: its tools, its model binding

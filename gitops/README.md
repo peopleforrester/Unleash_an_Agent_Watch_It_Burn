@@ -11,7 +11,7 @@ bootstrap/
 apps/                    # 26 ArgoCD Application manifests
   namespaces.yaml        # Namespace definitions (sync-wave: -10)
   kyverno.yaml           # Policy engine
-  kyverno-policies.yaml  # 6 ClusterPolicies
+  kyverno-policies.yaml  # Kyverno CEL ValidatingPolicies + ImageValidatingPolicy
   falco.yaml             # Runtime security
   falcosidekick.yaml     # Falco event forwarding
   external-secrets.yaml  # ESO operator

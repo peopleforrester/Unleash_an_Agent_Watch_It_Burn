@@ -597,7 +597,7 @@ record_fail() { echo "${1}" >>"${FAIL_FILE}"; }
 # ~/.kube/config) and run deploy-full-idp.sh with the round's profile. Runs inside up_one, so the
 # concurrency pool provisions AND bootstraps each cluster in parallel.
 # Flip a round-2/3 cluster's infra guardrails to enforcing after bootstrap. Kyverno ships in Audit
-# (kyverno-policies.yaml), so wait for the ClusterPolicy to sync then run the Audit->Enforce toggle.
+# (kyverno-policies.yaml), so wait for the ValidatingPolicy to sync then run the Audit->Deny toggle.
 # NetworkPolicy egress, Falco, and the PID cap come up enforcing from the full app-of-apps and need no
 # flip; R1 (burn profile) has no guardrails and never calls this. Mirrors the tail of
 # infra/setup-instructor-cluster.sh so a fleet 'up' self-arms (found 2026-07-10: provisioning deployed the
@@ -605,10 +605,10 @@ record_fail() { echo "${1}" >>"${FAIL_FILE}"; }
 arm_infra_guardrails() {
     local name="$1" kcfg="$2" acct="$3" ctx i
     ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
-    log "  ${name}: waiting for Kyverno policy sync, then flipping Audit->Enforce"
+    log "  ${name}: waiting for Kyverno policy sync, then flipping Audit->Deny"
     for i in $(seq 1 40); do
         KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
-            get clusterpolicy require-resource-limits >/dev/null 2>&1 && break
+            get validatingpolicy require-resource-limits >/dev/null 2>&1 && break
         [[ "${i}" -eq 40 ]] && { log "  ${name}: TIMED OUT waiting for Kyverno sync; guardrails NOT armed"; return 1; }
         sleep 15
     done
@@ -620,7 +620,7 @@ arm_infra_guardrails() {
         sleep 10
     done
 
-    # Wait for Kyverno's admission webhook to have ENDPOINTS. Patching a ClusterPolicy goes THROUGH that
+    # Wait for Kyverno's admission webhook to have ENDPOINTS. Patching a Kyverno policy goes THROUGH that
     # webhook, so while the kyverno pods are still starting every patch fails with
     #   Internal error occurred: failed calling webhook "mutate-policy.kyverno.svc": no endpoints
     #   available for service "kyverno-svc"
@@ -650,10 +650,10 @@ arm_infra_guardrails() {
             >>"${LOG_DIR}/${name}.arm.log" 2>&1 || true
         sleep 20   # let any selfHeal reconciliation land before believing the result
         rl="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
-            get clusterpolicy require-resource-limits -o jsonpath='{.spec.rules[0].validate.failureAction}' 2>/dev/null)"
+            get validatingpolicy require-resource-limits -o jsonpath='{.spec.validationActions[0]}' 2>/dev/null)"
         ri="$(KUBECONFIG="${kcfg}" AWS_PROFILE="${acct}" kubectl --context "${ctx}" \
-            get clusterpolicy restrict-image-registries -o jsonpath='{.spec.rules[0].validate.failureAction}' 2>/dev/null)"
-        if [[ "${rl}" == "Enforce" && "${ri}" == "Enforce" ]]; then
+            get validatingpolicy restrict-image-registries -o jsonpath='{.spec.validationActions[0]}' 2>/dev/null)"
+        if [[ "${rl}" == "Deny" && "${ri}" == "Deny" ]]; then
             log "  ${name}: infra guardrails ENFORCING (Kyverno, verified)"
             return 0
         fi
@@ -999,9 +999,9 @@ bootstrap_one() {
         # nothing, on the one cluster where they run the challenge themselves.
         #
         # ONLY "full" arms. That is now a three-way distinction, not two:
-        #   full     (instructor R2/R3) -> arm: restrict-image-registries flipped to Enforce here.
+        #   full     (instructor R2/R3) -> arm: restrict-image-registries flipped to Deny here.
         #   attendee (the student pool) -> DO NOT arm: it ships kyverno-policies in Audit on purpose, so
-        #            C2's villain image deploys and the STUDENT flips it to Enforce (#160). Its C1 and C3
+        #            C2's villain image deploys and the STUDENT flips it to Deny (#160). Its C1 and C3
         #            controls are omitted from the profile entirely (app-of-apps-attendee.yaml), so there
         #            is nothing to arm for those either.
         #   burn     (instructor R1)    -> ships no policies at all; the unguarded spectacle.

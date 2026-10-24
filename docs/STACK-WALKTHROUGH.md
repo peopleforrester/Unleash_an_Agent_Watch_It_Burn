@@ -34,8 +34,8 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 |---|---|---|---|---|
 | Cluster | EKS + VPC-CNI | isolation, networking | `infra/terraform/` | independent per-attendee cluster (Terraform), shared VPC; CNI enforces NetworkPolicy |
 | GitOps | Argo CD v3.4.4 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
-| Admission | Kyverno v1.19.0 (chart 3.9.0, verified 2026-09-05) | block non-compliant workloads | `policies/kyverno/` | ClusterPolicy, rule-level `validate.failureAction` Audit to Enforce |
-| Supply chain | Kyverno verifyImages (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | `verifyImages` keyless attestor (Audit) [verify-at-build] |
+| Admission | Kyverno v1.19.0 (chart 3.9.0, verified 2026-09-05) | block non-compliant workloads | `policies/kyverno/` | CEL `ValidatingPolicy` (`policies.kyverno.io/v1`, #206), `spec.validationActions` Audit to Deny |
+| Supply chain | Kyverno ImageValidatingPolicy (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | cosign key attestor, Deny, verifies offline |
 | Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
 | Mesh | Istio 1.30.1 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |

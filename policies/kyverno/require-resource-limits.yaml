@@ -1,35 +1,46 @@
 # ABOUTME: Beat-1 target policy. Requires CPU+memory limits on pods.
-# ABOUTME: Starts in Audit (admits + reports); the beat-1 toggle flips it to Enforce.
-# verify-at-build: confirmed against Kyverno v1.19.0 (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)).
-# The action is RULE-LEVEL `validate.failureAction` (rule-level since Kyverno 1.13; the old top-level
-# spec.validationFailureAction is deprecated). The beat-1 toggle patches the path
-# /spec/rules/0/validate/failureAction from Audit to Enforce.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+# ABOUTME: Starts in Audit (admits + reports); the beat-1 toggle flips it to Deny.
+#
+# Kyverno's CEL ValidatingPolicy (policies.kyverno.io/v1), which replaced the deprecated kyverno.io/v1
+# ClusterPolicy (#206). Written against Kyverno v1.19.0. The action is the policy-level
+# spec.validationActions list; the beat-1 toggle (challenges/01-cncf-wall/toggle-kyverno-enforce.sh)
+# replaces /spec/validationActions, ["Audit"] <-> ["Deny"].
+#
+# Written against Pods; Kyverno generates the Deployment/StatefulSet/DaemonSet/ReplicaSet/Job/CronJob
+# rules itself (autogen), which is what makes `kubectl create deployment` fail at the Deployment in Beat 1.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: require-resource-limits
   annotations:
     policies.kyverno.io/title: Require Resource Limits
     policies.kyverno.io/category: Workshop / Beat 1
 spec:
-  background: true
-  rules:
-    - name: require-pod-resource-limits
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-      validate:
-        allowExistingViolations: true
-        failureAction: Audit
-        message: >-
-          CPU and memory resource limits are required on every container.
-        pattern:
-          spec:
-            containers:
-              - resources:
-                  limits:
-                    memory: "?*"
-                    cpu: "?*"
+  validationActions:
+    - Audit
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  variables:
+    - name: limitsSet
+      expression: >-
+        object.spec.containers.all(c,
+        'memory' in c.?resources.?limits.orValue({}) && 'cpu' in c.?resources.?limits.orValue({}))
+    # An UPDATE to a Pod that was already in violation is let through, so flipping to Deny never wedges a
+    # platform workload that predates the flip. A compliant Pod still cannot be updated into violation.
+    - name: alreadyViolating
+      expression: >-
+        request.?operation.orValue('') == 'UPDATE' && !oldObject.spec.containers.all(c,
+        'memory' in c.?resources.?limits.orValue({}) && 'cpu' in c.?resources.?limits.orValue({}))
+  validations:
+    - expression: "variables.limitsSet || variables.alreadyViolating"
+      message: >-
+        CPU and memory resource limits are required on every container.

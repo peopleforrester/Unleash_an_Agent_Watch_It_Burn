@@ -22,7 +22,7 @@ kagent                 chart 0.9.9 / app v0.9.9  (CRD group kagent.dev/v1alpha2;
                        crds ref:  oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds (confirm at deploy)
                        A2A usage metadata key is adk_usage_metadata (NOT kagent_usage_metadata) — research/14 §3a
 vcluster               REMOVED (architecture = separate EKS cluster per attendee)
-kyverno                app v1.18.1 / chart 3.8.1  (rule-level validate.failureAction)
+kyverno                app v1.18.1 / chart 3.8.1  (CEL ValidatingPolicy, spec.validationActions; #206)
 argocd                 v3.4.4  (chart argo-cd 9.6.0; was v3.4.3 / 9.5.21)
 falco                  0.44.1
 falco-talon            chart 0.4.1 / app v0.3.0  (resolves the prior UNKNOWN chart pin)

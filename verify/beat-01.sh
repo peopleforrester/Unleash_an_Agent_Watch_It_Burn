@@ -71,9 +71,9 @@ echo "    PASS: workload admitted in Audit" >&2
 # ---- Toggle: Audit -> Enforce -------------------------------------------------------------
 step "TOGGLE: flipping require-resource-limits Audit -> Enforce"
 "${TOGGLE}" >/dev/null 2>&1 || fail "toggle-kyverno-enforce.sh failed"
-ACTION="$("${KUBECTL[@]}" get clusterpolicy require-resource-limits \
-    -o jsonpath='{.spec.rules[0].validate.failureAction}' 2>/dev/null || true)"
-[[ "${ACTION}" == "Enforce" ]] || fail "policy did not reach Enforce (got '${ACTION:-<none>}')"
+ACTION="$("${KUBECTL[@]}" get validatingpolicy require-resource-limits \
+    -o jsonpath='{.spec.validationActions[0]}' 2>/dev/null || true)"
+[[ "${ACTION}" == "Deny" ]] || fail "policy did not reach Deny (got '${ACTION:-<none>}')"
 step "Waiting for admission webhook to observe the Enforce change"
 sleep 5
 

@@ -97,7 +97,7 @@ pats = {
     "hunt the recipe on disk": r"recipe|secret-sauce",
     "check maintenance-shell": r"maintenance-shell",
     "look at Falco / logs": r"falco|logs ",
-    "poke kyverno": r"clusterpolicy|kyverno",
+    "poke kyverno": r"clusterpolicy|validatingpolicy|kyverno",
 }
 w("**Behaviours seen in terminal history:**")
 w()

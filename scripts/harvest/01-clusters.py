@@ -88,8 +88,8 @@ def harvest(n, friendly, pool_by_key):
     ch = {}
     rc, out, _ = kc(kcfg, ctx, acct, "-n", "agent", "get", "networkpolicy", "-o", "name")
     ch["c1_networkpolicies_installed"] = len([l for l in out.splitlines() if l.strip()])
-    rc, out, _ = kc(kcfg, ctx, acct, "get", "clusterpolicy", "restrict-image-registries",
-                    "-o", "jsonpath={.spec.rules[0].validate.failureAction}{.spec.validationFailureAction}")
+    rc, out, _ = kc(kcfg, ctx, acct, "get", "validatingpolicy", "restrict-image-registries",
+                    "-o", "jsonpath={.spec.validationActions[0]}")
     ch["c2_kyverno_mode"] = out.strip() or ("absent" if rc else "")
     rc, out, _ = kc(kcfg, ctx, acct, "get", "deploy", "-A", "-o",
                     "jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name} {.spec.template.spec.containers[*].image}{\"\\n\"}{end}")

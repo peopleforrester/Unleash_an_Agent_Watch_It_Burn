@@ -2,6 +2,11 @@
 
 Kyverno admission policies and Kubernetes NetworkPolicies. Deployed via ArgoCD.
 
+The Kyverno policies are CEL `ValidatingPolicy` resources (`policies.kyverno.io/v1`), plus one
+`ImageValidatingPolicy` for signatures; the deprecated `ClusterPolicy` type is no longer used (#206).
+List them with `kubectl get validatingpolicy,imagevalidatingpolicy`. Their behaviour is checked against
+the Kyverno v1.19.0 CLI by `verify/test_kyverno_cel_policies.py`.
+
 ## Kyverno Policies
 
 All policies enforce in the `apps` namespace only. System namespaces

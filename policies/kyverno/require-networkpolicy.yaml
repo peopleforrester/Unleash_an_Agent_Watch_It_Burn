@@ -1,7 +1,9 @@
 # ABOUTME: Kyverno policy auditing NetworkPolicy existence for deployments.
 # ABOUTME: Audit mode only (not enforce) — informational check in apps namespace.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+#
+# Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: require-networkpolicy
   annotations:
@@ -11,22 +13,25 @@ metadata:
     policies.kyverno.io/description: >-
       Audit whether deployments in apps namespace have associated NetworkPolicies.
 spec:
-  background: true
-  rules:
-    - name: require-netpol
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Deployment
-              namespaces:
-                - apps
-      validate:
-        failureAction: Audit
-        allowExistingViolations: true
-        message: "A NetworkPolicy should exist for this application."
-        pattern:
-          metadata:
-            labels:
-              app: "?*"
+  validationActions:
+    - Audit
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["deployments"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - apps
+  validations:
+    - expression: "object.metadata.?labels.?app.orValue('') != ''"
+      message: "A NetworkPolicy should exist for this application."

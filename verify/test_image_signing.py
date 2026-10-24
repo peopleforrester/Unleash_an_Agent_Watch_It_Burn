@@ -38,22 +38,32 @@ def check(name: str, cond: bool) -> None:
 
 raw = POLICY.read_text(encoding="utf-8")
 policy = next(d for d in yaml.safe_load_all(raw) if d)
-rule = policy["spec"]["rules"][0]
-vi = rule["verifyImages"][0]
-entry = vi["attestors"][0]["entries"][0]
+spec = policy["spec"]
+vc = spec.get("validationConfigurations") or {}
+attestor = (spec.get("attestors") or [{}])[0]
+cosign = attestor.get("cosign") or {}
 
 print("== the policy enforces, rather than describing an intent ==")
-check("failureAction is Enforce", vi.get("failureAction") == "Enforce")
-check("a signature is required, not optional", vi.get("required") is True)
-check("the digest is verified", vi.get("verifyDigest") is True)
+# Kyverno's CEL ImageValidatingPolicy replaced the deprecated ClusterPolicy verifyImages rule (#206).
+check("it is an ImageValidatingPolicy, not the deprecated ClusterPolicy",
+      policy.get("apiVersion") == "policies.kyverno.io/v1" and policy.get("kind") == "ImageValidatingPolicy")
+check("validationActions is Deny", spec.get("validationActions") == ["Deny"])
+check("a signature is required, not optional", vc.get("required") is True)
+check("the digest is verified", vc.get("verifyDigest") is True)
+# The validation is what actually calls the verifier; the attestor alone is configuration.
+expr = " ".join(v.get("expression", "") for v in spec.get("validations") or [])
+check("a validation verifies the signature with the attestor",
+      f"verifyImageSignatures(image, [attestors.{attestor.get('name')}])" in expr)
+check("it covers init and ephemeral containers too, as verifyImages did",
+      all(f"images.{k}" in expr for k in ("containers", "initContainers", "ephemeralContainers")))
 # The header used to say Audit while the rule said Enforce. Whatever the file does, it has to say so.
 flat = " ".join(raw.split())
 check("the header does not claim Audit while the rule enforces",
       not ("Starts in Audit" in flat or "starts in Audit" in flat))
 
 print("== the attestor is a real key, not a placeholder ==")
-check("it is a keys attestor", "keys" in entry)
-check("it is NOT a keyless attestor", "keyless" not in entry)
+check("it is a cosign key attestor", "key" in cosign)
+check("it is NOT a keyless attestor", "keyless" not in cosign)
 # Tested against the PARSED policy, not the raw file: the header legitimately quotes the old
 # placeholder while explaining what was wrong with it, and a placeholder only does harm in a field.
 config = yaml.safe_dump(policy)
@@ -64,7 +74,7 @@ print("== the committed key and the policy's key are the same key ==")
 check("the public key file exists", PUBKEY.exists())
 if PUBKEY.exists():
     on_disk = PUBKEY.read_text(encoding="utf-8").strip()
-    in_policy = (entry.get("keys") or {}).get("publicKeys", "").strip()
+    in_policy = (cosign.get("key") or {}).get("data", "").strip()
     check("the policy embeds it verbatim", in_policy == on_disk)
     check("it is a PEM public key", on_disk.startswith("-----BEGIN PUBLIC KEY-----")
           and on_disk.endswith("-----END PUBLIC KEY-----"))
@@ -76,14 +86,15 @@ if PUBKEY.exists():
 print("== verification works on a cluster with no egress ==")
 # Challenge 1 has attendees apply default-deny egress. Anything Kyverno must fetch from the internet
 # after that point is a control that stops working halfway through the workshop.
-keys = entry.get("keys") or {}
-check("the transparency log is not consulted at admission",
-      (keys.get("rekor") or {}).get("ignoreTlog") is True)
-check("certificate-transparency SCT is not consulted either",
-      (keys.get("ctlog") or {}).get("ignoreSCT") is True)
+# In Kyverno 1.19 a key attestor with the tlog ignored skips TUF, Rekor and the CT log altogether.
+ctlog = cosign.get("ctlog") or {}
+check("the transparency log is not consulted at admission", ctlog.get("insecureIgnoreTlog") is True)
+check("certificate-transparency SCT is not consulted either", ctlog.get("insecureIgnoreSCT") is True)
+check("no TUF mirror or Rekor URL is configured", "tuf" not in cosign and "url" not in ctlog)
 
 print("== the scope catches our images and nothing else ==")
-refs = vi.get("imageReferences") or []
+refs = [m.get("glob") for m in spec.get("matchImageReferences") or []]
+check("every image reference is a glob (no CEL matcher to reason about)", all(refs))
 check(f"scoped to our registry ({refs})", f"{OUR_REGISTRY}*" in refs)
 check("not scoped to everything", "*" not in refs)
 # Carried over from the version of this file that this one replaced. That version asserted the policy
@@ -103,16 +114,17 @@ check("does demand one from our own registry",
 print("== it applies wherever our images run, not in one namespace ==")
 # The old rule was scoped to the `apps` namespace while the ai-layer runs in `agent`, so the control
 # could be sidestepped by deploying elsewhere.
-check("the rule is not namespace-scoped", "namespaces" not in str(rule.get("match")))
-check("it matches Pods", "Pod" in str(rule.get("match")))
+match = spec.get("matchConstraints") or {}
+check("the rule is not namespace-scoped", "namespaceSelector" not in match)
+check("it matches Pods", any("pods" in r.get("resources", []) for r in match.get("resourceRules", [])))
 
 print("== the registry allowlist and the signature rule agree ==")
 # Also carried over. A signature rule naming a registry the allowlist forbids can never fire, and an
 # allowlisted registry with no signature rule is an unguarded path.
 allow = yaml.safe_load((REPO / "policies/kyverno/restrict-image-registries.yaml").read_text(encoding="utf-8"))
-allow_pat = allow["spec"]["rules"][0]["validate"]["pattern"]["spec"]["containers"][0]["image"]
-check("the allowlist permits Harbor", "harbor.agenticburn.com/*" in allow_pat)
-check("the allowlist still permits the public demo registries", "docker.io/library/*" in allow_pat)
+allow_pat = next(v["expression"] for v in allow["spec"]["variables"] if v["name"] == "allowedRegistries")
+check("the allowlist permits Harbor", "'harbor.agenticburn.com/'" in allow_pat)
+check("the allowlist still permits the public demo registries", "'docker.io/library/'" in allow_pat)
 check("every registry the signature rule names is allowlisted",
       all(r.rstrip("*").split("/")[0] in allow_pat for r in refs))
 

@@ -317,3 +317,42 @@ work. The leftover talk content (opener, incident slides, citations, and the C2/
 notes) moves to one new deferred-barcelona issue. No slide or lab prose changes here: that content is
 still Michael's to write, and its dated facts get re-checked before they go on a slide.
 `docs/research/2026-08-28-challenge-currency-review.md` records the disposition.
+
+## 2026-10-24T09:30:00Z · #206 · Kyverno policies move from ClusterPolicy to CEL ValidatingPolicy
+
+**Why now:** Michael's 2026-09-04 decision deferred this "past Portland"; Portland is past, and the
+2026-09-07 review register records ClusterPolicy removal planned for Kyverno 1.20 (targeted October 2026).
+Scope follows that decision exactly: Kyverno's own `policies.kyverno.io/v1` types, not native
+ValidatingAdmissionPolicy. Nine `ValidatingPolicy` (the eight in `policies/kyverno/` plus
+`policies/floor/minimal-floor.yaml`) and one `ImageValidatingPolicy` (`verify-image-signatures`). Every
+policy keeps its name and every deny message is carried over word for word; Kyverno now prefixes it
+`Policy <name> failed: `, so the refusal still names the policy.
+
+**Choices made while porting:**
+- The live toggle value is `Deny` (the CEL types' word for Enforce). `toggle-kyverno-enforce.sh` keeps its
+  name and `--audit` flag; it replaces `/spec/validationActions`, which is also the ArgoCD ignoreDifferences
+  path now (group `policies.kyverno.io`, kind `ValidatingPolicy`).
+- `allowExistingViolations` has no CEL field. The pattern policies reproduce it in the expression: an
+  UPDATE passes when the stored object already violated. It is gated on `request.operation == 'UPDATE'`,
+  not on `oldObject != null`, because Kyverno 1.19 hands CEL an EMPTY MAP for a missing object (oldObject
+  on CREATE and in background scans, object on DELETE). Read off the CLI and the engine source.
+- Autogen stays on (it is the default) everywhere it was on before, which is what makes Beat 1's
+  `kubectl create deployment` and C2's `deploy_app` fail at the Deployment. `deny-llm-endpoint-bypass`
+  sets `autogen.podControllers.controllers: []`: the ClusterPolicy never had Deployment rules there
+  (Kyverno skips autogen when a rule excludes by name).
+- `minimal-floor` stays ONE policy with two validations, so the name the floor refuses with is unchanged.
+- The ECR allow-list entry is a host-anchored regex (`^[^/]+\.dkr\.ecr\.[^/]+\.amazonaws\.com/`). The old
+  wildcard `*.dkr.ecr.*.amazonaws.com/*` also admitted `evil.example/x.dkr.ecr.y.amazonaws.com/z`.
+
+**New dev dependency:** the Kyverno CLI **v1.19.0** (2026-08-20, the deployed engine's version), used by
+`verify/test_kyverno_cel_policies.py` (E2E suite; it fails loudly when the CLI is missing or a different
+version). Why: a YAML render check cannot say a CEL expression evaluates. The CLI runs Kyverno's own engine
+on fixture requests, with simulated users and UPDATE/DELETE, and verifies a real signed ghcr.io image
+against the workshop key (and fails it under a different key).
+
+**Not done here, and what it blocks:** guard-proxy's `/controls` C2 badge reads
+`/apis/kyverno.io/v1/clusterpolicies/restrict-image-registries` and checks `failureAction == Enforce`
+(guard-proxy-agenticburn `proxy.py`, pinned at `ccdda73`). That code is in the submodule's own repo. After
+this lands the badge reads False until guard-proxy reads `/apis/policies.kyverno.io/v1/validatingpolicies/
+restrict-image-registries` and tests `"Deny" in spec.validationActions`, and the pin is bumped. The
+guard-proxy-reader ClusterRole here already grants that read. Promote the two together.

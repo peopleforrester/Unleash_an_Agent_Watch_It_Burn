@@ -3,7 +3,7 @@
 #
 # This is Enforce, and it is scoped so that it can be. Two facts make that safe rather than reckless:
 #
-#   1. imageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*. Third-party images the
+#   1. matchImageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*. Third-party images the
 #      allowlist permits (docker.io/library/nginx, cr.agentgateway.dev, the OTel autoinstrumentation
 #      image) do not match this rule and are unaffected by it.
 #   2. All eight tags the manifests reference were signed and verified before this was flipped on.
@@ -23,14 +23,19 @@
 # The load-bearing reason is Challenge 1. Attendees apply a default-deny egress NetworkPolicy, so any
 # control that has to reach the internet at admission time AFTER that point is a control that stops
 # working halfway through the workshop. Key-based verification needs only the registry, and the
-# signature bundles carry an offline transparency-log inclusion proof, so rekor.ignoreTlog below is
-# what keeps this working on a cluster the students have just sealed. Signatures ARE uploaded to the
-# public Rekor log, because these are public images and the audit trail is worth having; admission
-# simply does not depend on reaching it.
+# signature bundles carry an offline transparency-log inclusion proof, so ctlog.insecureIgnoreTlog below
+# is what keeps this working on a cluster the students have just sealed. In Kyverno 1.19 a key attestor
+# with the transparency log ignored skips Sigstore's TUF, Rekor and CT log entirely, so nothing at
+# admission time needs the internet. Signatures ARE uploaded to the public Rekor log, because these
+# are public images and the audit trail is worth having; admission simply does not depend on reaching it.
+#
+# Kyverno's CEL ImageValidatingPolicy (policies.kyverno.io/v1), which replaced the deprecated
+# ClusterPolicy verifyImages rule (#206). Written against Kyverno v1.19.0. Like the ClusterPolicy it is
+# written against Pods and Kyverno generates the Deployment/StatefulSet/etc. rules itself (autogen).
 #
 # Signing procedure and key custody: policies/cosign/README.md. Render gate: verify/test_image_signing.py.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+apiVersion: policies.kyverno.io/v1
+kind: ImageValidatingPolicy
 metadata:
   name: verify-image-signatures
   annotations:
@@ -40,44 +45,53 @@ metadata:
       Requires a valid cosign signature on every image from ghcr.io/peopleforrester/watch-it-burn, in
       any namespace. Verification is key-based and needs no Sigstore network access.
 spec:
-  background: false
-  rules:
-    - name: require-signed-images
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-      verifyImages:
-        # Both registries we publish to, under ONE key. Deliberately NOT namespaced: an image of ours
-        # running in any namespace must be signed, so the control cannot be sidestepped by deploying
-        # somewhere else.
-        #
-        # Harbor is here because the version of this policy before this one enforced signatures on
-        # harbor.agenticburn.com and nothing else. Harbor is documented (infra/harbor/) and permitted by
-        # the registry allowlist but deployed nowhere, which is why that rule never fired. Rescoping to
-        # ghcr alone would have quietly dropped a requirement, so both are listed and both are signed
-        # with the key in policies/cosign/. infra/harbor/sign-and-push.sh signs with that key too.
-        - imageReferences:
-            - "ghcr.io/peopleforrester/watch-it-burn*"
-            - "harbor.agenticburn.com/*"
-          failureAction: Enforce
-          required: true
-          verifyDigest: true
-          mutateDigest: true
-          attestors:
-            - count: 1
-              entries:
-                - keys:
-                    publicKeys: |-
-                      -----BEGIN PUBLIC KEY-----
-                      MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY6GWxIIKvm+YJ5NBdShf0/tu5b12
-                      9xxmGEdvEIlFN+1+NN57nfI3u5Xi0k8ogOj2173Vzbvt+v9I2JnexTct5Q==
-                      -----END PUBLIC KEY-----
-                    rekor:
-                      # The bundle carries its own inclusion proof, so this verifies offline, which a
-                      # cluster running Challenge 1's default-deny egress requires.
-                      ignoreTlog: true
-                    ctlog:
-                      ignoreSCT: true
+  validationActions:
+    - Deny
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+  # Both registries we publish to, under ONE key. Deliberately NOT namespaced: an image of ours running in
+  # any namespace must be signed, so the control cannot be sidestepped by deploying somewhere else. Only
+  # images matching these globs are verified; every other image is left to restrict-image-registries.
+  #
+  # Harbor is here because the version of this policy before this one enforced signatures on
+  # harbor.agenticburn.com and nothing else. Harbor is documented (infra/harbor/) and permitted by the
+  # registry allowlist but deployed nowhere, which is why that rule never fired. Rescoping to ghcr alone
+  # would have quietly dropped a requirement, so both are listed and both are signed with the key in
+  # policies/cosign/. infra/harbor/sign-and-push.sh signs with that key too.
+  matchImageReferences:
+    - glob: "ghcr.io/peopleforrester/watch-it-burn*"
+    - glob: "harbor.agenticburn.com/*"
+  validationConfigurations:
+    required: true
+    verifyDigest: true
+    mutateDigest: true
+  attestors:
+    - name: workshopKey
+      cosign:
+        key:
+          data: |-
+            -----BEGIN PUBLIC KEY-----
+            MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEY6GWxIIKvm+YJ5NBdShf0/tu5b12
+            9xxmGEdvEIlFN+1+NN57nfI3u5Xi0k8ogOj2173Vzbvt+v9I2JnexTct5Q==
+            -----END PUBLIC KEY-----
+        ctlog:
+          # The bundle carries its own inclusion proof, so this verifies offline, which a cluster running
+          # Challenge 1's default-deny egress requires.
+          insecureIgnoreTlog: true
+          insecureIgnoreSCT: true
+  validations:
+    - expression: >-
+        (images.containers + images.initContainers + images.ephemeralContainers).all(image,
+        verifyImageSignatures(image, [attestors.workshopKey]) > 0)
+      message: >-
+        Images from ghcr.io/peopleforrester/watch-it-burn and harbor.agenticburn.com must carry a valid
+        cosign signature made with the workshop key (policies/cosign/watch-it-burn.pub).

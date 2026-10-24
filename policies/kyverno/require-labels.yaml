@@ -1,7 +1,11 @@
 # ABOUTME: Kyverno policy requiring app and version labels on pods.
 # ABOUTME: Enforced only in apps namespace to support service discovery and tracing.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+#
+# Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206).
+# The two ClusterPolicy rules are the two validations below, each with its original message. Autogen
+# checks a controller's POD TEMPLATE labels (object.metadata becomes object.spec.template.metadata).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: require-labels
   annotations:
@@ -11,39 +15,35 @@ metadata:
     policies.kyverno.io/description: >-
       Require all pods in the apps namespace to have app and version labels.
 spec:
-  background: true
-  rules:
-    - name: require-app-label
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - apps
-      validate:
-        failureAction: Enforce
-        allowExistingViolations: true
-        message: "The label 'app' is required on pods in apps namespace."
-        pattern:
-          metadata:
-            labels:
-              app: "?*"
-    - name: require-version-label
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - apps
-      validate:
-        failureAction: Enforce
-        allowExistingViolations: true
-        message: "The label 'version' is required on pods in apps namespace."
-        pattern:
-          metadata:
-            labels:
-              version: "?*"
+  validationActions:
+    - Deny
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - apps
+  variables:
+    - name: isUpdate
+      expression: "request.?operation.orValue('') == 'UPDATE'"
+  validations:
+    # Each also passes when the Pod being updated already lacked the label (pre-existing violation).
+    - expression: >-
+        object.metadata.?labels.?app.orValue('') != '' ||
+        (variables.isUpdate && oldObject.metadata.?labels.?app.orValue('') == '')
+      message: "The label 'app' is required on pods in apps namespace."
+    - expression: >-
+        object.metadata.?labels.?version.orValue('') != '' ||
+        (variables.isUpdate && oldObject.metadata.?labels.?version.orValue('') == '')
+      message: "The label 'version' is required on pods in apps namespace."

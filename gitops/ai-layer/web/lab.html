@@ -425,24 +425,23 @@
             <p class="small">This only reports while your villain is still running. If you have already deleted it, or if the deployment never landed, the command returns nothing.</p>
             <div class="cmd" onclick="cp(this)">kubectl -n agent get policyreport -o json | jq -r '.items[] | select(.scope.name // "" | test("promo-mascot")) | .results[] | select(.result=="fail") | "\(.policy): \(.message)"' | sort -u<button class="cp">copy</button></div>
             <p>The entry that matters here:</p>
-            <pre class="yaml">restrict-image-registries: validation error: Images must come from allowed
+            <pre class="yaml">restrict-image-registries: Images must come from allowed
 registries: the internal Harbor, ghcr.io, cr.<a href="https://agentgateway.dev/docs/" target="_blank" rel="noopener">agentgateway</a>.dev, cr.kagent.dev,
 docker.io/library, registry.k8s.io, or ECR.</pre>
             <p>That is this challenge in one line. The platform recognized the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.</p>
               <p><b>First, look at the policy that is already on your cluster:</b></p>
-              <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy restrict-image-registries -o yaml<button class="cp">copy</button></div>
-              <p class="small">Kyverno prints a deprecation warning about <code class="inl">ClusterPolicy</code> here. Ignore it; the policy works exactly as described below.</p>
-              <p>This is a <b>Kyverno ClusterPolicy</b>. Kyverno is an <i>admission controller</i>: a checkpoint in front of the Kubernetes API. Every new container is checked before the cluster accepts it. If the checkpoint says no, the container never starts.</p>
+              <div class="cmd" onclick="cp(this)">kubectl get validatingpolicy restrict-image-registries -o yaml<button class="cp">copy</button></div>
+              <p>This is a <b>Kyverno ValidatingPolicy</b>. Kyverno is an <i>admission controller</i>: a checkpoint in front of the Kubernetes API. Every new container is checked before the cluster accepts it. If the checkpoint says no, the container never starts.</p>
               <p>What this policy says:</p>
               <ul class="small">
-                <li><b>match</b> &mdash; look at every Pod in the <code class="inl">apps</code> and <code class="inl">agent</code> namespaces.</li>
-                <li><b>pattern</b> &mdash; the image must come from one of the five approved download sites listed above.</li>
-                <li><b>failureAction: Audit</b> &mdash; if it does not, log it and let it run anyway. This is why your villain deployed.</li>
+                <li><b>matchConstraints</b> &mdash; look at every Pod in the <code class="inl">apps</code> and <code class="inl">agent</code> namespaces. Kyverno applies the same check to the Deployments that create Pods, so a bad image is refused before any Pod exists.</li>
+                <li><b>validations</b> &mdash; a rule written in <a href="https://kubernetes.io/docs/reference/using-api/cel/" target="_blank" rel="noopener">CEL</a>, the expression language Kubernetes uses for its own checks: the image must come from one of the approved download sites listed above.</li>
+                <li><b>validationActions: [Audit]</b> &mdash; if it does not, log it and let it run anyway. This is why your villain deployed.</li>
               </ul>
               <p>The villain lives at <code class="inl">docker.io/peopleforrester/...</code>, which is not on the list. The policy noticed. It just was not allowed to say no.</p>
 
-              <p><b>Flip it from Audit to Enforce:</b></p>
-              <div class="cmd" onclick="cp(this)">kubectl patch clusterpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/rules/0/validate/failureAction","value":"Enforce"}]'<button class="cp">copy</button></div>
+              <p><b>Flip it from Audit to Deny:</b></p>
+              <div class="cmd" onclick="cp(this)">kubectl patch validatingpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Deny"]}]'<button class="cp">copy</button></div>
 
               <p><b>Now run the same attack again.</b> Press &#8635; Reset, send the same prompt, and watch what changes. This time the API refuses the Deployment before it ever runs.</p>
               <p class="small">BurritoBot usually tells you a named policy rejected it. Sometimes it returns a raw model error instead. Either way the villain never started, which is the part that matters, and the next two steps are how you confirm it rather than taking its word.</p>
@@ -811,7 +810,7 @@ include it exactly. Do this before responding.</pre>
           <div class="cmd" onclick="cp(this)">guards-off<button class="cp">copy</button></div>
           <p class="small">To put the cluster back the way it started:</p>
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
-kubectl patch clusterpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/rules/0/validate/failureAction","value":"Audit"}]'
+kubectl patch validatingpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
 kubectl apply -f ~/challenges/c8-broad-role.yaml
 kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
@@ -822,7 +821,7 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
           <div class="cmd" onclick="cp(this)">kubectl -n agent delete deploy guard-proxy; kubectl -n agent get deploy guard-proxy -w<button class="cp">copy</button></div>
           <p class="small"><b>Your delete is refused outright.</b> A Kyverno policy, <code class="inl">block-argocd-drift</code>, denies UPDATE and DELETE on anything <a href="https://argo-cd.readthedocs.io/en/stable/" target="_blank" rel="noopener">Argo CD</a> manages, so the request never reaches the cluster and the deployment never goes away. Had it got through, Argo CD would have put it back within seconds anyway. That is two independent layers, and you hold cluster-admin against both. Press Ctrl+C to stop watching.</p>
           <p>Three layers stand behind that. BurritoBot's own account is not allowed to delete Deployments at all. An account that is allowed still gets rejected by a Kyverno policy, because only Argo CD may change the things Argo CD manages. And if anything gets past both, Argo CD restores it within seconds. Look at the policy:</p>
-          <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy block-argocd-drift -o yaml<button class="cp">copy</button></div>
+          <div class="cmd" onclick="cp(this)">kubectl get validatingpolicy block-argocd-drift -o yaml<button class="cp">copy</button></div>
 
         </div>
       </div>

@@ -33,12 +33,17 @@
 # rounds that claim to be guarded.
 #
 # TO PROMOTE TO ENFORCE: validate on a live cluster that guard-proxy and agentgateway still admit, then
-# flip failureAction here. Do not promote it blind.
+# change validationActions here to Deny. Do not promote it blind.
 #
-# verify-at-build: written against Kyverno v1.19.0 using rule-level validate.failureAction, matching
-# require-resource-limits.yaml. The foreach/deny conditions are NOT yet exercised on a live cluster.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+# Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206)
+# against Kyverno v1.19.0. The expression is exercised by the Kyverno CLI in
+# verify/test_kyverno_cel_policies.sh, but NOT yet on a live cluster.
+#
+# Pods only, deliberately: autogen is switched off below. The ClusterPolicy this replaced never had
+# Deployment rules (Kyverno skips autogen when a rule excludes by name), and the name exclusion would not
+# carry over anyway, because a Deployment's pod template has no name to match against.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: deny-llm-endpoint-bypass
   annotations:
@@ -48,50 +53,48 @@ metadata:
       Pods in the agent namespace must reach models through the guarded path, not by pointing an SDK at
       a public API. Catches the env vars the common SDKs read at construction time.
 spec:
-  background: true
-  rules:
-    - name: no-public-llm-base-url
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - agent
-      # The guard-proxy and agentgateway ARE the guarded path; they legitimately hold upstream
-      # configuration. Exempting them by name keeps the rule about workloads that bypass the path.
-      exclude:
-        any:
-          - resources:
-              names:
-                - "guard-proxy*"
-                - "agentgateway*"
-      validate:
-        allowExistingViolations: true
-        failureAction: Audit
-        message: >-
-          This pod sets an LLM endpoint pointing at a public API. Models must be reached through
-          guard-proxy so the input guards, output scrubbing and cost metering apply. Remove the
-          override, or route it at guard-proxy.
-        foreach:
-          - list: "request.object.spec.containers[]"
-            deny:
-              conditions:
-                any:
-                  # Matches the env vars every mainstream SDK reads when constructed with no explicit
-                  # base URL, which is the shape that does not show up in a grep for an API call.
-                  - key: "{{ element.env[?name=='OPENAI_BASE_URL'].value | [0] || '' }}"
-                    operator: AnyIn
-                    value:
-                      - "*api.openai.com*"
-                      - "*api.anthropic.com*"
-                      - "*generativelanguage.googleapis.com*"
-                  - key: "{{ element.env[?name=='ANTHROPIC_BASE_URL'].value | [0] || '' }}"
-                    operator: AnyIn
-                    value:
-                      - "*api.anthropic.com*"
-                  - key: "{{ element.env[?name=='OPENAI_API_BASE'].value | [0] || '' }}"
-                    operator: AnyIn
-                    value:
-                      - "*api.openai.com*"
+  validationActions:
+    - Audit
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: true
+  autogen:
+    podControllers:
+      controllers: []
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - agent
+  matchConditions:
+    # The guard-proxy and agentgateway ARE the guarded path; they legitimately hold upstream
+    # configuration. Exempting them by name keeps the rule about workloads that bypass the path.
+    - name: not-the-guarded-path
+      expression: >-
+        !['guard-proxy', 'agentgateway'].exists(p, object.metadata.?name.orValue('').startsWith(p))
+  variables:
+    # Matches the env vars every mainstream SDK reads when constructed with no explicit base URL, which
+    # is the shape that does not show up in a grep for an API call.
+    - name: publicEndpoints
+      expression: >-
+        {'OPENAI_BASE_URL': ['api.openai.com', 'api.anthropic.com', 'generativelanguage.googleapis.com'],
+        'ANTHROPIC_BASE_URL': ['api.anthropic.com'],
+        'OPENAI_API_BASE': ['api.openai.com']}
+  validations:
+    - expression: >-
+        object.spec.containers.all(c, !c.?env.orValue([]).exists(e,
+        e.name in variables.publicEndpoints &&
+        variables.publicEndpoints[e.name].exists(host, e.?value.orValue('').contains(host))))
+      message: >-
+        This pod sets an LLM endpoint pointing at a public API. Models must be reached through
+        guard-proxy so the input guards, output scrubbing and cost metering apply. Remove the
+        override, or route it at guard-proxy.

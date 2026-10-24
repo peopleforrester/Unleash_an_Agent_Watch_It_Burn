@@ -2,92 +2,71 @@
 # ABOUTME: Protects platform namespaces + ArgoCD/Kyverno/Falco/the agent from deletion; demo
 # ABOUTME: workloads stay deletable (the visible gradual burn). Cluster 1's ONLY restriction; a
 # ABOUTME: safety floor everywhere, incl. the instructor follow-along clusters.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+#
+# Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206).
+# The ClusterPolicy's two rules are the two validations below, each with its original message, so a
+# refusal still names this policy and says which half of the floor it hit.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: minimal-floor
   annotations:
     policies.kyverno.io/title: Minimal Restriction Floor
     policies.kyverno.io/category: Workshop / Floor
 spec:
-  background: false
-  rules:
-    - name: protect-platform-namespaces
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Namespace
-              operations:
-                - DELETE
-              names:
-                - kube-system
-                - kube-public
-                - kube-node-lease
-                - argocd
-                - kyverno
-                - falco
-                - monitoring
-                - kagent
-      exclude:
-        any:
-          - subjects:
-              - kind: Group
-                name: system:masters # admins/teardown can still delete
-      validate:
-        allowExistingViolations: true
-        failureAction: Enforce
-        message: "Protected platform namespace; deletion is not permitted (workshop floor)."
-        deny:
-          conditions:
-            any:
-              - key: "true"
-                operator: Equals
-                value: "true"
-    - name: protect-platform-workloads
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Deployment
-                - StatefulSet
-                - DaemonSet
-              operations:
-                - DELETE
-              namespaces:
-                - argocd
-                - kyverno
-                - falco
-                - monitoring
-                - kagent
-                - kube-system
-      exclude:
-        any:
-          - subjects:
-              - kind: Group
-                name: system:masters
-              - kind: Group
-                name: system:serviceaccounts:kube-system # controllers
-              # Argo CD must be able to replace what it owns, or the platform cannot upgrade itself.
-              # Found upgrading kagent 0.9.9 to 0.10.1 (#389): the new chart replaces a Deployment in
-              # ns kagent, this rule denied the DELETE, and the sync retried forever while the app sat
-              # OutOfSync and the old version kept running. The companion block-argocd-drift rule already
-              # asserts that only Argo CD may change what Argo CD manages, so excluding it here is that
-              # same intent applied consistently rather than a hole in the floor.
-              # The student-facing guardrail is untouched: a human at the terminal is not this subject,
-              # and every other principal is still denied.
-              - kind: ServiceAccount
-                name: argocd-application-controller
-                namespace: argocd
-      validate:
-        allowExistingViolations: true
-        failureAction: Enforce
-        message: "Protected platform workload; deletion is not permitted (workshop floor)."
-        deny:
-          conditions:
-            any:
-              - key: "true"
-                operator: Equals
-                value: "true"
+  validationActions:
+    - Deny
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: false
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["DELETE"]
+        resources: ["namespaces"]
+        resourceNames:
+          - kube-system
+          - kube-public
+          - kube-node-lease
+          - argocd
+          - kyverno
+          - falco
+          - monitoring
+          - kagent
+      - apiGroups: ["apps"]
+        apiVersions: ["v1"]
+        operations: ["DELETE"]
+        resources: ["deployments", "statefulsets", "daemonsets"]
+  matchConditions:
+    - name: not-cluster-admin # admins/teardown can still delete
+      expression: "!('system:masters' in request.userInfo.?groups.orValue([]))"
+    # Workloads are protected only in the platform namespaces; demo workloads stay deletable.
+    - name: namespace-or-platform-workload
+      expression: >-
+        request.resource.resource == 'namespaces' ||
+        request.namespace in ['argocd', 'kyverno', 'falco', 'monitoring', 'kagent', 'kube-system']
+  variables:
+    - name: isNamespace
+      expression: "request.resource.resource == 'namespaces'"
+    # Workload deletes only. Built-in controllers (kube-system service accounts) must keep working.
+    #
+    # Argo CD must be able to replace what it owns, or the platform cannot upgrade itself.
+    # Found upgrading kagent 0.9.9 to 0.10.1 (#389): the new chart replaces a Deployment in
+    # ns kagent, this rule denied the DELETE, and the sync retried forever while the app sat
+    # OutOfSync and the old version kept running. The companion block-argocd-drift rule already
+    # asserts that only Argo CD may change what Argo CD manages, so excluding it here is that
+    # same intent applied consistently rather than a hole in the floor.
+    # The student-facing guardrail is untouched: a human at the terminal is not this subject,
+    # and every other principal is still denied.
+    - name: platformController
+      expression: >-
+        'system:serviceaccounts:kube-system' in request.userInfo.?groups.orValue([]) ||
+        request.userInfo.username == 'system:serviceaccount:argocd:argocd-application-controller'
+  validations:
+    - expression: "!variables.isNamespace"
+      message: "Protected platform namespace; deletion is not permitted (workshop floor)."
+    - expression: "variables.isNamespace || variables.platformController"
+      message: "Protected platform workload; deletion is not permitted (workshop floor)."

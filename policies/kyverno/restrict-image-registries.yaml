@@ -1,7 +1,14 @@
 # ABOUTME: Kyverno policy restricting container images to trusted registries.
-# ABOUTME: Enforced only in apps namespace; allows ghcr.io, docker.io/library, ECR.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+# ABOUTME: Applies in the apps and agent namespaces; allows Harbor, ghcr.io, the agentgateway/kagent registries, docker.io/library, registry.k8s.io, ECR.
+#
+# Kyverno's CEL ValidatingPolicy (policies.kyverno.io/v1), which replaced the deprecated kyverno.io/v1
+# ClusterPolicy (#206). Written against Kyverno v1.19.0.
+#
+# The policy is written against Pods. Kyverno generates the matching rules for Deployments, StatefulSets,
+# DaemonSets, ReplicaSets, Jobs and CronJobs on its own (autogen), so BurritoBot's deploy_app is refused
+# at the Deployment, before any Pod exists, and the refusal names this policy.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: restrict-image-registries
   annotations:
@@ -9,35 +16,56 @@ metadata:
     policies.kyverno.io/category: Security
     policies.kyverno.io/severity: high
     policies.kyverno.io/description: >-
-      Only allow images from trusted registries in the apps namespace.
+      Only allow images from trusted registries in the apps and agent namespaces.
 spec:
-  background: true
-  rules:
-    - name: validate-registries
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - apps
-                - agent # the ai-layer namespace where BurritoBot's deploy_app lands the C2 villain image
-      validate:
-        allowExistingViolations: true
-        # Audit by default so Round 1 still DEPLOYS the villain image (C2 "watch it burn"). Round 2/3
-        # flip this to Enforce live (toggle-kyverno-enforce.sh; ArgoCD ignoreDifferences on failureAction
-        # keeps the flip from being self-healed). rule-level since Kyverno 1.13 (on 1.19.0).
-        failureAction: Audit
-        message: >-
-          Images must come from allowed registries:
-          the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, docker.io/library,
-          registry.k8s.io, or ECR.
-        pattern:
-          spec:
-            containers:
-              # Allow-list covers EVERY real ai-layer image in the agent namespace (ghcr.io/peopleforrester,
-              # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries. The C2 villain images
-              # (docker.io/peopleforrester/<villain>) match NONE of these, so Enforce denies them in R2/R3.
-              # Harbor images are additionally signature-checked by verify-image-signatures.
-              - image: "harbor.agenticburn.com/* | ghcr.io/* | cr.agentgateway.dev/* | cr.kagent.dev/* | docker.io/library/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/*"
+  # Audit by default so Round 1 still DEPLOYS the villain image (C2 "watch it burn"). Round 2/3 flip this
+  # to Deny live (toggle-kyverno-enforce.sh; ArgoCD ignoreDifferences on /spec/validationActions keeps the
+  # flip from being self-healed).
+  validationActions:
+    - Audit
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - apps
+            - agent # the ai-layer namespace where BurritoBot's deploy_app lands the C2 villain image
+  variables:
+    # Allow-list covers EVERY real ai-layer image in the agent namespace (ghcr.io/peopleforrester,
+    # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries. The C2 villain images
+    # (docker.io/peopleforrester/<villain>) match NONE of these, so Deny refuses them in R2/R3.
+    # Harbor images are additionally signature-checked by verify-image-signatures.
+    - name: allowedRegistries
+      expression: >-
+        ['harbor.agenticburn.com/', 'ghcr.io/', 'cr.agentgateway.dev/', 'cr.kagent.dev/',
+        'docker.io/library/', 'registry.k8s.io/']
+    # ECR is any account in any region: <account>.dkr.ecr.<region>.amazonaws.com/<repo>.
+    - name: ecr
+      expression: "r'^[^/]+\\.dkr\\.ecr\\.[^/]+\\.amazonaws\\.com/'"
+    - name: imageAllowed
+      expression: >-
+        object.spec.containers.all(c,
+        variables.allowedRegistries.exists(r, c.image.startsWith(r)) || c.image.matches(variables.ecr))
+    # An UPDATE to a Pod that was already in violation is let through, so turning this to Deny never
+    # wedges a workload that predates the flip. A compliant Pod still cannot be updated into violation.
+    - name: alreadyViolating
+      expression: >-
+        request.?operation.orValue('') == 'UPDATE' && !oldObject.spec.containers.all(c,
+        variables.allowedRegistries.exists(r, c.image.startsWith(r)) || c.image.matches(variables.ecr))
+  validations:
+    - expression: "variables.imageAllowed || variables.alreadyViolating"
+      message: >-
+        Images must come from allowed registries:
+        the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, docker.io/library,
+        registry.k8s.io, or ECR.

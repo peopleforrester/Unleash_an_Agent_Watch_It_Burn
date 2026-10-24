@@ -1,7 +1,9 @@
 # ABOUTME: Kyverno policy disallowing privileged containers.
 # ABOUTME: Enforced only in apps namespace as defense-in-depth with PSS labels.
-apiVersion: kyverno.io/v1
-kind: ClusterPolicy
+#
+# Kyverno CEL ValidatingPolicy (policies.kyverno.io/v1), migrated from the deprecated ClusterPolicy (#206).
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
 metadata:
   name: disallow-privileged
   annotations:
@@ -11,26 +13,36 @@ metadata:
     policies.kyverno.io/description: >-
       Disallow privileged containers in the apps namespace.
 spec:
-  background: true
-  rules:
-    - name: disallow-privileged-containers
-      skipBackgroundRequests: true
-      match:
-        any:
-          - resources:
-              kinds:
-                - Pod
-              namespaces:
-                - apps
-      validate:
-        failureAction: Enforce
-        allowExistingViolations: true
-        message: "Privileged containers are not allowed in the apps namespace."
-        pattern:
-          spec:
-            containers:
-              - =(securityContext):
-                  =(privileged): false
-            =(initContainers):
-              - =(securityContext):
-                  =(privileged): false
+  validationActions:
+    - Deny
+  evaluation:
+    admission:
+      enabled: true
+    background:
+      enabled: true
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE", "UPDATE"]
+        resources: ["pods"]
+    namespaceSelector:
+      matchExpressions:
+        - key: kubernetes.io/metadata.name
+          operator: In
+          values:
+            - apps
+  variables:
+    - name: unprivileged
+      expression: >-
+        (object.spec.containers + object.spec.?initContainers.orValue([])).all(c,
+        !c.?securityContext.?privileged.orValue(false))
+    # Pre-existing violations may still be updated; a compliant Pod cannot be updated into one.
+    - name: alreadyViolating
+      expression: >-
+        request.?operation.orValue('') == 'UPDATE' &&
+        !(oldObject.spec.containers + oldObject.spec.?initContainers.orValue([])).all(c,
+        !c.?securityContext.?privileged.orValue(false))
+  validations:
+    - expression: "variables.unprivileged || variables.alreadyViolating"
+      message: "Privileged containers are not allowed in the apps namespace."

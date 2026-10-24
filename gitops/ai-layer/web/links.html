@@ -90,7 +90,7 @@
      cmd:'echo open https://argocd-<your console host>.agenticburn.com   # no port-forward needed',
      user:'admin', pw:"kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo"},
     {nm:'Kyverno', p:2, ns:'kyverno', desc:'Admission control. Refuses a workload before it runs: this is what denies the villain image in Challenge 2.',
-     cmd:'kubectl get clusterpolicy', auth:'No UI. Policies are CRDs.'},
+     cmd:'kubectl get validatingpolicy', auth:'No UI. Policies are CRDs.'},
     {nm:'NetworkPolicy', p:2, ns:'agent', desc:'Default-deny egress. This is why the exfil in Challenge 1 cannot leave the cluster.',
      cmd:'kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml', auth:'No UI.'},
     {nm:'KubeArmor', p:2, ns:'kubearmor', desc:'Inline runtime prevention (BPF-LSM). Blocks the action before it completes: it is what makes the recipe file unreadable.',

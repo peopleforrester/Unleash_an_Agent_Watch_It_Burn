@@ -123,9 +123,9 @@ print("== Challenge 2's audit section sits in the fix, before the Enforce flip =
 C2 = LAB[LAB.find("Challenge 2: Deploy"):LAB.find("Challenge 3: Get the secret")]
 i_fix = C2.find("How to fix rogue image deployments")
 i_audit = C2.find("Your platform saw it happen")
-i_enforce = C2.find("failureAction")
+i_enforce = C2.find("/spec/validationActions")  # the Audit-to-Deny flip command (#206)
 check("the audit section is inside the fix card", i_audit > i_fix > 0)
-check("and before the Audit-to-Enforce flip", i_enforce == -1 or i_audit < i_enforce)
+check("and before the Audit-to-Deny flip", 0 < i_audit < i_enforce)
 check("the success line still ends the attack half", C2.find("class=\"win\"") < i_fix)
 # She asked for the policy source to go: the prose says what the rule does and the student only has to apply it.
 check("the policy YAML is no longer printed in the fix card", "- name: validate-registries" not in LAB)

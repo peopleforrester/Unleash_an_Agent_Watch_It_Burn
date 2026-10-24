@@ -48,12 +48,12 @@ if [[ "${ROUND}" == "1" ]]; then
     exit 0
 fi
 
-# Round 2/3: wait for ArgoCD to materialize the controls, then flip Kyverno to Enforce. NetworkPolicy
+# Round 2/3: wait for ArgoCD to materialize the controls, then flip Kyverno to Deny. NetworkPolicy
 # egress, Falco/Talon, and the PID limit come up enforcing from the full app-of-apps (no runtime toggle).
-log "[3] wait for the Kyverno policy to sync, then set Enforce"
+log "[3] wait for the Kyverno policy to sync, then set Deny"
 for i in $(seq 1 40); do
     if KUBECONFIG="${KCFG}" AWS_PROFILE="${PROFILE}" kubectl --context "${CONTEXT}" \
-        get clusterpolicy require-resource-limits >/dev/null 2>&1; then break; fi
+        get validatingpolicy require-resource-limits >/dev/null 2>&1; then break; fi
     [[ "${i}" -eq 40 ]] && { echo "timed out waiting for Kyverno policy sync" >&2; exit 1; }
     sleep 15
 done

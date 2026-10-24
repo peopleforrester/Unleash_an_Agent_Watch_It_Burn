@@ -150,7 +150,7 @@
           <td><a class="svchost" data-svc="argocd" href="#">argocd-…</a></td>
           <td>user <code class="inl">admin</code><div class="cmd" onclick="cp(this)">kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo<button class="cp">copy</button></div></td></tr>
       <tr><td class="svc">Kyverno<small>Admission control: refuses a workload before it runs</small></td>
-          <td>no UI. <div class="cmd" onclick="cp(this)">kubectl get clusterpolicy<button class="cp">copy</button></div></td><td>n/a</td></tr>
+          <td>no UI. <div class="cmd" onclick="cp(this)">kubectl get validatingpolicy<button class="cp">copy</button></div></td><td>n/a</td></tr>
     </table>
   </section>
 

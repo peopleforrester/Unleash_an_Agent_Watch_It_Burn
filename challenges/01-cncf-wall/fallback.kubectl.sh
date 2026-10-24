@@ -14,16 +14,16 @@ AS=(--as="${SA}")
 echo "==> Beat 1, Step 1a: deploy a non-compliant workload (policy in Audit) — expect ADMIT"
 "${KCTL[@]}" "${AS[@]}" -n "${NS}" create deployment sample-web --image=nginx:latest
 
-echo "==> Toggle: switch the resource-limits policy to Enforce"
-"${KCTL[@]}" patch clusterpolicy require-resource-limits --type=json \
-  -p='[{"op":"replace","path":"/spec/rules/0/validate/failureAction","value":"Enforce"}]'
+echo "==> Toggle: switch the resource-limits policy to Deny"
+"${KCTL[@]}" patch validatingpolicy require-resource-limits --type=json \
+  -p='[{"op":"replace","path":"/spec/validationActions","value":["Deny"]}]'
 echo "    (waiting for the webhook to pick up the change)"
 sleep 5
 
 echo "==> Beat 1, Step 1b: redeploy the same non-compliant workload — expect REJECT (Kyverno)"
 "${KCTL[@]}" "${AS[@]}" -n "${NS}" delete deployment sample-web --ignore-not-found
 if "${KCTL[@]}" "${AS[@]}" -n "${NS}" create deployment sample-web --image=nginx:latest; then
-  echo "!! UNEXPECTED: workload admitted while policy is in Enforce" >&2
+  echo "!! UNEXPECTED: workload admitted while policy is in Deny" >&2
   exit 1
 fi
 

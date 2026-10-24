@@ -1,4 +1,4 @@
-# ABOUTME: ArgoCD Application for Kyverno ClusterPolicy deployment.
+# ABOUTME: ArgoCD Application for the Kyverno CEL policies (ValidatingPolicy, ImageValidatingPolicy).
 # ABOUTME: Syncs policies from policies/kyverno/ after Kyverno CRDs are available.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -17,26 +17,26 @@ spec:
     path: policies/kyverno
   destination:
     server: https://kubernetes.default.svc
-  # Beat-1 LIVE TOGGLE: the demo flips require-resource-limits validate.failureAction Audit<->Enforce
+  # Beat-1 LIVE TOGGLE: the demo flips require-resource-limits validationActions [Audit]<->[Deny]
   # via kubectl patch (challenges/01-cncf-wall/toggle-kyverno-enforce.sh). Without this, selfHeal reverts
   # the live toggle instantly. Ignore drift ONLY on that one field so selfHeal still corrects all
   # other drift (the live gate run on watch-it-burn-test caught this).
   ignoreDifferences:
-    - group: kyverno.io
-      kind: ClusterPolicy
+    - group: policies.kyverno.io
+      kind: ValidatingPolicy
       name: require-resource-limits
       jsonPointers:
-        - /spec/rules/0/validate/failureAction
+        - /spec/validationActions
     # Same live-toggle pattern for the R2 registry restriction (C2 villain image): default Audit in the
-    # manifest so R1 deploys, flipped to Enforce on R2/R3 via toggle-kyverno-enforce.sh.
-    - group: kyverno.io
-      kind: ClusterPolicy
+    # manifest so R1 deploys, flipped to Deny on R2/R3 via toggle-kyverno-enforce.sh.
+    - group: policies.kyverno.io
+      kind: ValidatingPolicy
       name: restrict-image-registries
       jsonPointers:
-        - /spec/rules/0/validate/failureAction
+        - /spec/validationActions
   syncPolicy:
     syncOptions:
-      # RespectIgnoreDifferences: honor the failureAction ignoreDifferences on SYNC too, not just on diff.
+      # RespectIgnoreDifferences: honor the validationActions ignoreDifferences on SYNC too, not just on diff.
       # Without it, any sync of this app re-applies the manifest's Audit and reverts the live
       # Audit->Enforce toggle (found 2026-07-10: R2 armed to Enforce then silently reverted to Audit during
       # ArgoCD's initial-sync churn, so admission stopped blocking and R2 "deployed freely").
