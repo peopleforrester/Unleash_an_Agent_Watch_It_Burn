@@ -625,6 +625,7 @@ It needs a second root (or a patched one) for the same profile, and the root rec
 (#253). Worse, a cluster brought up without keys would stay Datadog-free after the pool arrived, because
 `converge` writes the secret but never re-applies a root.
 ## 2026-10-24 · #501 · The KubeCon brief is its own page `/kubecon`, not a mode of `/brief`
+## 2026-10-24 · #501 · The KubeCon brief is its own page, `/kubecon`
 
 The 30-minute breakout drives from a demo-only brief laid out by run-of-show segment: for each shown beat
 (C1, C2, C3, C5, C6, C7, off-topic, on-topic) the prompt, who sends it, the admin-terminal toggle where one
@@ -632,17 +633,18 @@ applies, the success marker, and the deterministic fallback. It ships as `gitops
 routed at `/kubecon` (console.conf) and carried in the console-src ConfigMap, with the run-of-show linking
 it.
 
-**Own page, not a mode of `/brief`.** `/brief` is the 2-hour workshop: three phases, a provisioning step
-where each person claims a cluster by email, and eight student challenges the students install themselves.
-The breakout must carry none of that (the run-of-show says it stays off for this session). A role toggle on
-`brief.html` would still ship the provisioning and student-lab prose in the page source and one query-param
-away; a separate page cannot leak what it does not contain. `verify/test_instructor_brief.py` now holds both:
-the three-phase workshop brief unchanged, and the KubeCon brief's one-block-per-beat contract plus a
-body-level assertion that it carries no provisioning or claim content.
+**Why a separate page.** `/brief` is the 2-hour workshop: three phases, a
+provisioning step where each person claims a cluster by email, and eight student challenges the students
+install themselves. The breakout must carry none of that (the run-of-show says it stays off for this
+session). A role toggle on `brief.html` would still ship the provisioning and student-lab prose in the page
+source, one query parameter away. A separate page cannot show what it does not contain.
+`verify/test_instructor_brief.py` now holds both: the three-phase workshop brief unchanged, and the KubeCon
+brief's one-block-per-beat contract plus a body-level assertion that it carries no provisioning or claim
+content.
 
-**No apex-router gate on `/kubecon`, unlike `/brief`.** `/brief` is 404'd on non-roster clusters by the
-apex router (peopleforrester/apex-agenticburn `Caddyfile`, #152) because on a 2-hour workshop a student who
-guesses the path gets the presenters' timing. The breakout has no student pool — only the Community cluster
-and the two presenter admin clusters run this session — so there is nothing to spoil, and the gate is not
-added. If the page is ever served alongside an attendee pool, gate it in the router the same way `/brief`
-is; that change is in the sister repo (deploy configuration) and is filed as a follow-up.
+**No apex-router gate on `/kubecon`.** The apex router 404s `/brief` on non-roster clusters
+(peopleforrester/apex-agenticburn `Caddyfile`, #152), because in the 2-hour workshop a student who guesses
+the path gets the presenters' timing. The breakout has no student pool: only the Community cluster and the
+two presenter admin clusters run this session, so there is nothing to spoil and the gate is not added. If
+the page is ever served alongside an attendee pool, gate it in the router the same way `/brief` is. That
+change is in the sister repo (deploy configuration) and is filed as a follow-up.

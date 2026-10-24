@@ -115,7 +115,7 @@ print("== the KubeCon brief has one block per shown beat, each copy-ready ==")
 KUBECON = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
 ROS = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
 
-# The no-provisioning check reads the page BODY, not its source comments or its <script>: the comments
+# The no-provisioning check reads the page BODY, with its source comments and <script> removed: the comments
 # explain WHY provisioning content is kept off (so they name it on purpose), and the copy helper's own
 # comment mentions the student lab it shares a contract with. Neither is anything a presenter sees.
 _body = re.sub(r"<!--.*?-->", "", KUBECON, flags=re.S)
@@ -162,7 +162,7 @@ check("C6 marker is the zero-token block", "input_tokens: 0" in KUBECON and "mai
 check("C7 marker is the MCP sentinel", "FAKE-MCP-EXFIL-sentinel-4c1d" in KUBECON)
 check("on-topic marker is the burritos-only refusal", "I only talk burritos" in KUBECON)
 
-# Each shown beat names its deterministic fallback, so a wandering prompt proves the control, not the model.
+# Each shown beat names its deterministic fallback, so a wandering prompt still proves the control.
 for b in SHOWN_BEATS:
     has_fallback = any('class="fallback"' in blk for blk in beat_blocks.get(b, []))
     check(f"{b} names a fallback", has_fallback)
