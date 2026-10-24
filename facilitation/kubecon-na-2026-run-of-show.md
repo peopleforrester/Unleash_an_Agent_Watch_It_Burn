@@ -279,8 +279,14 @@ is merely slow rather than rebuilding:
 - [ ] **Hostnames serve over HTTPS and websocket:**
   `./fleet.sh check-tls attackme.agenticburn.com michael-admin.agenticburn.com whitney-admin.agenticburn.com`.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.
-- [ ] **The pinned model answers in the delivery region.** Reconcile the model pin
-  and the cost counter's `MODEL_TIER` per #453, then send one throwaway order to
+- [ ] **The pinned model answers in the delivery region.** From the repo root:
+  `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`. It
+  reads the pin from `gitops/ai-layer/resources.yaml` (Nova Pro,
+  `us.amazon.nova-pro-v1:0`, with `MODEL_TIER` `nova`), then checks against live
+  Bedrock that the inference profile is ACTIVE, that the model is not Legacy or
+  scheduled to go Legacy before 2026-11-12, that one Converse call answers, and that
+  the cross-region quota covers the room. It must end `MODEL PIN GREEN`; anything
+  else, stop and fix the pin before the day (#453). Then send one throwaway order to
   each bot and confirm it answers with a menu, not an empty reply (an empty reply
   means the MCP servers are down; see the workshop runbook's failure playbook).
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
@@ -366,11 +372,17 @@ written down rather than guessed.
    runtime-toggleable the way the AI guardrails are). Confirm that reading of "one
    demo platform," or say if both halves should run on a single cluster with only the
    AI guardrails toggled.
-6. **The model pin and cost counter (#453).** The repo lists several Bedrock
-   inference profiles, binds Haiku 4.5, and sets `MODEL_TIER` to `nova`. These must
-   be reconciled and confirmed served in the delivery region before the day, or the
-   cost counter prices the wrong model and the denial-of-wallet narration in segment
-   2 is wrong.
+6. **The model pin and cost counter (#453).** Reconciled: the deployed agent runs
+   Nova Pro (`bedrock-nova`, `us.amazon.nova-pro-v1:0`, us-west-2), and
+   guard-proxy's `MODEL_TIER` is `nova`, priced at $0.0008 in and $0.0032 out per
+   1K tokens. That price matches the AWS price list for us-west-2 (published
+   2026-10-16, read 2026-10-24). The Haiku files under `agent/` are pre-GitOps
+   copies that nothing applies. The public AWS pages read on 2026-10-24 (the Nova
+   Pro model card and Model lifecycle (Legacy)) list Nova Pro as Active, with no
+   legacy or end-of-life date. Still open: the live check in the delivery account,
+   `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`, has
+   not been run yet. It needs the accen-dev credentials. Record its date and output
+   on #453.
 7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized for a
    ballroom on one venue Wi-Fi NAT, verified on real phones. Not yet done; needs the
    live platform and two real devices.

@@ -83,13 +83,13 @@ spec:
 # The same scoped agent is run on escalating Claude tiers to show how differently each one
 # tries to escape its own jail, while the live cost counter makes the frontier-model burn
 # visible (the wasted-token-DoS thesis: a bigger model costs more per escape attempt).
-# The Agent below defaults to Haiku (cheap). Swap the tier per run by repointing the Agent's
-# `modelConfig` reference (commit + resync, or run a different tier on each instructor
-# Cluster 3 in parallel). Do NOT kubectl-patch it live: ArgoCD selfHeal reverts the change.
+# The Agent below is bound to bedrock-nova (Nova Pro), not a Claude tier. Swap the tier per run
+# by repointing the Agent's `modelConfig` reference (commit + resync, or run a different tier on
+# each instructor Cluster 3 in parallel). Do NOT kubectl-patch it live: ArgoCD selfHeal reverts the change.
 # Per-model gating (provisioning project): each model needs Bedrock model access enabled plus
 # the Anthropic use-case form. The inference-profile ids are verified below (the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`), confirmed
-# ACTIVE/SYSTEM_DEFINED via `aws bedrock list-inference-profiles` in us-west-2). Only Haiku is a
-# live CR here so the sync stays valid; uncomment a tier to make it selectable.
+# ACTIVE/SYSTEM_DEFINED via `aws bedrock list-inference-profiles` in us-west-2). All four tiers are
+# live CRs; only the one the Agent names is called.
 # NOTE: Sonnet 4.6 and Opus 4.8 do NOT support In-Region in us-west-2 - the `us.` Geo inference
 # profile (or `global.`) is mandatory; an In-Region model id will fail.
 apiVersion: kagent.dev/v1alpha2
@@ -102,7 +102,7 @@ spec:
   bedrock:
     region: us-west-2
 ---
-# All three tiers are defined so the cost-race demo can run; the WORKSHOP DEFAULT is bedrock-sonnet
+# All three Claude tiers are defined so the cost-race demo can run; the WORKSHOP DEFAULT is bedrock-nova
 # (set on the Agent below). The Round-3 tier-comparison instructor clusters (haiku/sonnet/opus) override
 # the Agent's modelConfig per-cluster. IDs verified ACTIVE in accen-dev/us-west-2 on 2026-06-26 via
 # `aws bedrock list-inference-profiles`. Sonnet 4.6 / Opus 4.8 need the `us.` Geo profile (no In-Region).
@@ -112,7 +112,7 @@ metadata:
   name: bedrock-sonnet
 spec:
   provider: Bedrock
-  model: us.anthropic.claude-sonnet-4-6 # Sonnet 4.6 (workshop default; verified ACTIVE 2026-06-26)
+  model: us.anthropic.claude-sonnet-4-6 # Sonnet 4.6 (cost-race tier; verified ACTIVE 2026-06-26)
   bedrock:
     region: us-west-2
 ---
@@ -623,8 +623,8 @@ spec:
             - { name: INPUT_CLASSIFIER, value: "off" }
             - { name: OUTPUT_GUARD, value: "off" }
             - { name: PROXY_FAIL_CLOSED, value: "true" }
-            # Cost-counter price tier. The whole fleet runs the workshop default (Sonnet 4.6), so this
-            # is sonnet everywhere; the old per-cluster haiku/opus tiers were dropped.
+            # Cost-counter price tier. The workshop-agent is bound to bedrock-nova (Nova Pro), so this is
+            # nova; verify/model_pin_check.py checks the pin answers live in the delivery region (#453).
             # MUST match the kagent ModelConfig the workshop-agent is bound to (spec.declarative.modelConfig),
             # or the on-screen cost counter prices the wrong model. Found live 2026-08-30: this said
             # "sonnet" while the agent ran bedrock-nova, overstating spend ~4x on the C4 headline visual.

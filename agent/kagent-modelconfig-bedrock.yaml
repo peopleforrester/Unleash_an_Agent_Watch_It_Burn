@@ -13,8 +13,8 @@ metadata:
   namespace: ATTENDEE_NAMESPACE # attendee agent namespace (independent per-attendee cluster)
 spec:
   provider: Bedrock
-  # NON-CANONICAL copy. The source of truth is gitops/ai-layer/resources.yaml (GitOps canonical).
-  # Aligned to Haiku 4.5 to match canonical; tier swaps + the comparison live in the canonical file.
+  # NON-CANONICAL copy that nothing applies. The source of truth is gitops/ai-layer/resources.yaml,
+  # where the workshop-agent is bound to bedrock-nova (us.amazon.nova-pro-v1:0), not this Haiku pin (#453).
   model: us.anthropic.claude-haiku-4-5-20251001-v1:0 # Haiku 4.5 inference profile (verified)
   bedrock:
     region: us-west-2
