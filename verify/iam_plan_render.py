@@ -24,6 +24,8 @@ import urllib.parse
 REPO = pathlib.Path(__file__).resolve().parents[1]
 CLUSTER = REPO / "infra/terraform/aws/cluster"
 BOUNDARY = REPO / "infra/org/boundary"
+# Every root the pipeline runs on (pipeline.ROOTS); test_iam_policy_coverage.py holds the two the same.
+ROOTS = {"cluster": CLUSTER, "boundary": BOUNDARY}
 ACCOUNT = "111122223333"
 BOUNDARY_NAME = "watch-it-burn-permissions-boundary"
 CLUSTER_NAME = "watch-it-burn-attendee-001"
@@ -123,7 +125,7 @@ def _plugin_cache() -> str:
 
 def render(root: str, edit=None) -> dict:
     """`terraform show -json` for 'cluster' or 'boundary'. edit(main_tf) -> main_tf mutates the copy first."""
-    src = {"cluster": CLUSTER, "boundary": BOUNDARY}[root]
+    src = ROOTS[root]
     tf = terraform_binary()
     server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), _Handler)
     threading.Thread(target=server.serve_forever, daemon=True).start()

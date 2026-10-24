@@ -69,9 +69,36 @@ boundary:
     action: iam:AttachRolePolicy
     resource: arn:aws:iam::${account_id}:role/any
     expect: explicitDeny
+  # Every write to an org policy, so the pipeline is the only path a bounded role has to one. The org-level
+  # SCP that denies these to everyone but the org-policies CI role waits on org access (#202).
   - name: a bounded role cannot detach an org policy
     identity: allow-all
     action: organizations:DetachPolicy
+    resource: "*"
+    expect: explicitDeny
+  - name: a bounded role cannot attach an org policy
+    identity: allow-all
+    action: organizations:AttachPolicy
+    resource: "*"
+    expect: explicitDeny
+  - name: a bounded role cannot create an org policy
+    identity: allow-all
+    action: organizations:CreatePolicy
+    resource: "*"
+    expect: explicitDeny
+  - name: a bounded role cannot edit an org policy
+    identity: allow-all
+    action: organizations:UpdatePolicy
+    resource: "*"
+    expect: explicitDeny
+  - name: a bounded role cannot delete an org policy
+    identity: allow-all
+    action: organizations:DeletePolicy
+    resource: "*"
+    expect: explicitDeny
+  - name: a bounded role cannot turn off a policy type for the org
+    identity: allow-all
+    action: organizations:DisablePolicyType
     resource: "*"
     expect: explicitDeny
   - name: a bounded role cannot create a cluster

@@ -1130,3 +1130,24 @@ measure with `kubectl top`, and that command fails there.
 - **Tests:** `test_backstage_footprint.py` runs the arithmetic on fixed kubelet, pod, node and tab responses, and
   checks that the script refuses to run without `CONTEXT`. The script was smoke-run against a stub kubectl and a
   mock Backstage (pass, an empty tab, an unreachable portal), not yet against a cluster.
+## 2026-10-24 · #470 · A test that nothing escapes the IAM policy pipeline, org policies included
+
+#207's org half still has no SCP to put through the pipeline (it waits on org access, #202), so the test holds
+the route one must take rather than one already taken. `verify/test_iam_policy_coverage.py` (offline) fails when:
+
+- a Terraform root outside `pipeline.ROOTS` gains an `aws_iam_*`, `aws_organizations_*` or policy resource, an
+  `aws_iam_policy_document` data source, or a module input whose name asks for IAM (`iam`, `polic`, `role`,
+  `permissions_boundary`, `flow_log`);
+- a resource carries a document `extract()` does not read: an IAM-shaped type it was not taught, or an inline
+  resource policy (`aws_vpc_endpoint.policy`, `aws_sqs_queue.policy` and the like);
+- an SCP or RCP stops reaching check 1 under its own Access Analyzer type, or check 3 in `pipeline.py` and
+  `iam.rego` alike, or an Organizations policy type with no check stops failing the run;
+- the boundary stops denying, or check 4 stops asking about, any org-policy write.
+
+**Choices made:**
+- **`pipeline.ROOTS` names the roots in one place.** The CLI's `--suite` choices and `iam_plan_render.ROOTS`
+  read from it, and the test holds `effect-tests.yaml`'s suites to the same set, so a new org-policy root must
+  join all four.
+- **Five boundary effect cases added** next to `organizations:DetachPolicy`: AttachPolicy, CreatePolicy,
+  UpdatePolicy, DeletePolicy and DisablePolicyType, each `explicitDeny`. They run in `test_iam_policy_aws.py`
+  (E2E), which has not yet run them against AWS.

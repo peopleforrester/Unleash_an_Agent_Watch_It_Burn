@@ -100,6 +100,11 @@ those tags on every session it issues.
 
 - `verify/test_iam_policy_pipeline.py` (offline): extraction, the exceptions table, the boundary, every role
   in `infra/` carrying it, the effect cases, and how each check reads AWS's answer.
+- `verify/test_iam_policy_coverage.py` (offline): nothing escapes the pipeline. Every IAM or Organizations
+  resource, policy data source and IAM-shaped module input sits in a root in `pipeline.ROOTS`; no resource
+  sets an inline policy the pipeline does not read; SCPs and RCPs reach check 1 under their own policy type
+  and check 3 in both `pipeline.py` and `iam.rego`; and the boundary, with a check 4 case for each,
+  explicitly denies every org-policy write.
 - `verify/test_iam_policy_structural.py` (E2E; conftest v0.71.1, terraform): Rego unit tests, then the
   repo's real cluster and boundary plans pass, and a plan with the agent's Condition removed fails at
   `Statement[0]`. `verify/iam_plan_render.py` renders those plans without an AWS account.

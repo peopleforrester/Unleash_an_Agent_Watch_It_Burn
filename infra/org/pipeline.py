@@ -39,6 +39,9 @@ BOUNDARY_TEMPLATE = ORG / "permissions-boundary.json.tftpl"
 EFFECT_TESTS = ORG / "effect-tests.yaml"
 # Keep in step with infra/org/boundary/main.tf and infra/terraform/aws/cluster/main.tf.
 BOUNDARY_NAME = "watch-it-burn-permissions-boundary"
+# The Terraform roots the pipeline runs on, by --suite. A root that creates an IAM or org policy document
+# goes here and gets a suite in effect-tests.yaml; verify/test_iam_policy_coverage.py fails on one that does not.
+ROOTS = {"boundary": ORG / "boundary", "cluster": ORG.parents[1] / "infra/terraform/aws/cluster"}
 
 # The kinds whose statements grant permission. Check 3's rules apply to these; trust and resource policies
 # (a role's assume-role policy, a KMS key policy) are checked by Access Analyzer only, because their Allow
@@ -446,7 +449,7 @@ def main(argv: list[str]) -> int:
             p.add_argument("--base", required=True)
             p.add_argument("--accept-new", action="append", default=[])
         if name in ("effect", "run"):
-            p.add_argument("--suite", required=True, choices=("boundary", "cluster"))
+            p.add_argument("--suite", required=True, choices=tuple(ROOTS))
     a = ap.parse_args(argv)
     try:
         show = _load(a.show)
