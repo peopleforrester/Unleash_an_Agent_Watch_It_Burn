@@ -20,9 +20,14 @@ workshop and they stay off for this session.
   (checkout `~/repos/agenticburn/rounds-agenticburn`). Issue rounds-agenticburn#38
   cuts that deck from this run-of-show, beat for beat.
 - The prompts the presenters send are not reproduced here. They live, copy-ready,
-  on `/brief` on each cluster (`gitops/ai-layer/web/brief.html`) and in
-  `challenges/PROMPT-CATALOG.md` with their verified results. Drive from `/brief`,
-  read the timing from this file.
+  on `/kubecon` on each cluster (`gitops/ai-layer/web/kubecon.html`): the demo-only
+  cut laid out by the segments below, with each beat's prompt, who sends it, the
+  admin-terminal toggle where one applies, the success marker and the deterministic
+  fallback, and no provisioning or student-lab content. The 2-hour workshop's own
+  brief is still at `/brief`; this session drives from `/kubecon`.
+  `challenges/PROMPT-CATALOG.md` carries the same prompts with their verified
+  results and ranked written fallbacks. Drive from `/kubecon`, read the timing from
+  this file.
 
 ## The one platform, and the two clusters on it
 
@@ -87,8 +92,8 @@ bot before it misbehaves.
 
 - BurritoBot answers as the burrito chain (menu, an order), then the room coaxes it
   off the rails: the weird off-topic asks the abstract invites, and the leak of the
-  fictional CEO's record. Prompts and verified results are on `/brief` (Community
-  phase) and in `challenges/PROMPT-CATALOG.md`.
+  fictional CEO's record. Prompts and verified results are on `/kubecon` (Segment 2)
+  and in `challenges/PROMPT-CATALOG.md`.
 - **Michael on cost:** keep the live cost counter on the bot visible. Narrate it
   climbing while the room hammers it. "Nothing crashed, nothing is red, and the
   bill is the attack." This is the denial-of-wallet point, delivered as narration
@@ -164,7 +169,7 @@ abstract's "the Kubernetes security layers you should already have."
 On the admin cluster the AI guardrails start off. Turn them on one at a time from
 the terminal and re-run the same ask each time, so the room watches one platform
 setting change the outcome. Prompts and verified both-direction results are on
-`/brief` and in `challenges/PROMPT-CATALOG.md`.
+`/kubecon` and in `challenges/PROMPT-CATALOG.md`.
 
 - C6 prompt injection hidden in a support ticket. Before: it rides in and spends
   tokens. `guard-input-on`: blocked upstream at zero tokens, the cost counter does
@@ -175,7 +180,7 @@ setting change the outcome. Prompts and verified both-direction results are on
 - C7 the under-protected MCP server. A poisoned tool description chains the agent
   into a rogue tool it was never asked to use. `guard-mcp-on`: the tool is gone
   from the allow-list and the call cannot happen.
-- Say the C6-versus-C7 line out loud after C7 (it is on `/brief`): both are the
+- Say the C6-versus-C7 line out loud after C7 (it is on `/kubecon`): both are the
   same class of attack stopped two different ways. One talks the model out of it;
   the other lets the model be fully persuaded and finds the capability gone. Only
   the second still holds when the next model is more persuadable.

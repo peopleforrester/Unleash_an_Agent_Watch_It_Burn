@@ -106,6 +106,80 @@ check("it says why capability removal is the durable one",
       "more persuadable than this one" in BRIEF_SRC)
 check("and the student lab does NOT carry it", "Challenge 6 and Challenge 7" not in LAB_SRC)
 
+# ---------------------------------------------------------------------------
+# The KubeCon NA 2026 breakout brief (#501). A SEPARATE page from the 2-hour brief above: the demo-only cut
+# laid out by run-of-show segment, with each shown beat's prompt, who sends it, the admin-terminal toggle
+# where one applies, and the success marker. The run-of-show drives from it, so a missing block or a beat
+# with no marker is a presenter on stage with nothing to read.
+print("== the KubeCon brief has one block per shown beat, each copy-ready ==")
+KUBECON = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
+ROS = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
+
+# The no-provisioning check reads the page BODY, not its source comments or its <script>: the comments
+# explain WHY provisioning content is kept off (so they name it on purpose), and the copy helper's own
+# comment mentions the student lab it shares a contract with. Neither is anything a presenter sees.
+_body = re.sub(r"<!--.*?-->", "", KUBECON, flags=re.S)
+_body = re.sub(r"<script>.*?</script>", "", _body, flags=re.S)
+
+# Every shown beat is a <article class="beat" data-beat="..." data-segment="...">. Collect the blocks per
+# beat key; a beat may be shown in more than one segment (C5 is the audience beat in 2 and the output-guard
+# toggle in 5), so key -> list of blocks.
+beat_blocks: dict[str, list[str]] = {}
+for m in re.finditer(
+    r'<article class="beat"\s+data-beat="([^"]+)"\s+data-segment="([^"]+)">(.*?)</article>',
+    KUBECON, re.S,
+):
+    beat_blocks.setdefault(m.group(1), []).append(m.group(3))
+
+SHOWN_BEATS = ("C1", "C2", "C3", "C5", "C6", "C7", "off-topic", "on-topic")
+for b in SHOWN_BEATS:
+    check(f"the KubeCon brief shows a {b} block", b in beat_blocks)
+
+# Each block carries a copy-ready prompt and a success marker.
+for b in SHOWN_BEATS:
+    for i, blk in enumerate(beat_blocks.get(b, [])):
+        check(f"{b} block {i} has a copy-ready prompt",
+              'class="prompt"' in blk and 'class="cp"' in blk)
+        check(f"{b} block {i} has a success marker", 'class="marker"' in blk)
+
+# The toggles, where one applies, on the admin terminal, each inside its beat's block (segment-5 order is
+# C6, C5, C7; the on-topic guard is segment 7). C1/C2/C3 and the segment-2 off-topic beat have no live
+# toggle on purpose: the Kubernetes controls start armed and the Community cluster is wide open.
+BEAT_TOGGLE = {"C6": "guard-input-on", "C5": "guard-output-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
+for b, cmd in BEAT_TOGGLE.items():
+    in_a_block = any(f'class="toggle"' in blk and cmd in blk for blk in beat_blocks.get(b, []))
+    check(f"{b} carries its toggle ({cmd}) inside the beat block", in_a_block)
+
+# The markers name the controls that actually fire (the dependencies this page was gated on): C1 egress,
+# C2 the Kyverno registry allow-list, C3 KubeArmor's block AND its own alert (#497), and the signatures the
+# guards scrub/produce.
+check("C1 marker names the beacon count holding", "beacon" in KUBECON and "does <b>not</b> move" in KUBECON)
+check("C2 marker names the admission policy", "restrict-image-registries" in KUBECON)
+check("C3 marker names KubeArmor's block AND its alert",
+      "block-recipe-snoop" in KUBECON and '"Action":"Block"' in KUBECON)
+check("C5 marker is the real CEO signature", "OPHELIA-THORN-TIBBY-TOP-SPIRE-No9" in KUBECON)
+check("C6 marker is the zero-token block", "input_tokens: 0" in KUBECON and "maintenance-shell" in KUBECON)
+check("C7 marker is the MCP sentinel", "FAKE-MCP-EXFIL-sentinel-4c1d" in KUBECON)
+check("on-topic marker is the burritos-only refusal", "I only talk burritos" in KUBECON)
+
+# Each shown beat names its deterministic fallback, so a wandering prompt proves the control, not the model.
+for b in SHOWN_BEATS:
+    has_fallback = any('class="fallback"' in blk for blk in beat_blocks.get(b, []))
+    check(f"{b} names a fallback", has_fallback)
+
+print("== it includes the projected feed and the observability surface, and no provisioning ==")
+check("segment 2 points at the projected prompt feed /display", "/display" in KUBECON)
+check("segment 6 points at the Datadog observability surface",
+      "app.datadoghq.com/llm/traces" in KUBECON)
+# No provisioning, claim-by-email or student-lab content on the demo page (run-of-show: it stays off).
+for banned in ("provision", "claim a cluster", "claims a cluster", "claim one",
+               "by email", "attendee", "student lab", "student challenge"):
+    check(f"the page body carries no {banned!r}", banned.lower() not in _body.lower())
+
+print("== the run-of-show links the page ==")
+check("the run-of-show drives from /kubecon", "/kubecon" in ROS)
+check("and names the page file", "gitops/ai-layer/web/kubecon.html" in ROS)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
