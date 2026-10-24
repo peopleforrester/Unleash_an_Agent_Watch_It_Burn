@@ -29,7 +29,9 @@ falco                  0.44.1
 falco-talon            chart 0.4.1 / app v0.3.0  (resolves the prior UNKNOWN chart pin)
 kube-prometheus-stack  chart 86.2.3  (optional bump to 86.3.2; app v0.91.0 unchanged)
 otel-collector         chart 0.158.2 / app 0.153.0 (contrib distro; the old v0.154.0 line below was stale)
-agentgateway           OSS v1.3.0  (GA 2026-06-17; was v1.2.1) chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
+agentgateway           OSS v1.5.0  (released 2026-08-27, GitHub releases agentgateway/agentgateway; pinned 2026-09-10 in 20aee62, recorded here 2026-10-24)
+                       image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339e... (digest pin in gitops/ai-layer/agentgateway.yaml, #415)
+                       chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
                        mcpAuthorization is allow-only CEL, implicit deny, NO action field; MCP config nests under mcp.{targets,policies} — research/14 §2
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (digest TODO at deploy; verdict envelope field is `scanners`, not `scores`)
 

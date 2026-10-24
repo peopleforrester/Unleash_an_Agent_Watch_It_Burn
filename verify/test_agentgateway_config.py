@@ -142,6 +142,18 @@ check(f"image is {SCHEMA_VERSION} (found {image_tag(image)})", image_tag(image) 
 # Pinning is asserted separately so a future bump cannot quietly drop the digest (#415).
 check("the gateway image is pinned by digest as well as tag", "@sha256:" in image)
 check("the vendored schema for that version exists", SCHEMA.exists())
+
+print("== every recorded version is the image we run ==")
+# The image went to v1.5.0 on 2026-09-10 while the span version, the version label and VERSIONS.lock
+# stayed at v1.3.0 for six weeks, so every gateway span reported the wrong version (#495).
+tag = image_tag(image)
+env = {e["name"]: e.get("value", "") for e in deployment["spec"]["template"]["spec"]["containers"][0].get("env", [])}
+attrs = dict(kv.split("=", 1) for kv in env.get("OTEL_RESOURCE_ATTRIBUTES", "").split(",") if "=" in kv)
+check(f"spans carry service.version={tag} (found {attrs.get('service.version')})", attrs.get("service.version") == tag)
+label = deployment["metadata"]["labels"].get("app.kubernetes.io/version")
+check(f"the Deployment's app.kubernetes.io/version label is {tag.lstrip('v')} (found {label})", label == tag.lstrip("v"))
+lock = next((l for l in (REPO / "VERSIONS.lock").read_text(encoding="utf-8").splitlines() if l.startswith("agentgateway ")), "")
+check(f"VERSIONS.lock records agentgateway {tag} (found {lock.split()[1:3]})", lock.split()[1:3] == ["OSS", tag])
 if not SCHEMA.exists():
     print(f"\nFAILED: {len(failures)} check(s)")
     sys.exit(1)

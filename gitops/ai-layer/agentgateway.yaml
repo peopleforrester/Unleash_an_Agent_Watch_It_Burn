@@ -1,4 +1,4 @@
-# ABOUTME: agentgateway OSS v1.3.0 (GA 2026-06-18) — the DEPLOYED gateway fronting the kagent agent (A2A)
+# ABOUTME: agentgateway OSS v1.5.0 (released 2026-08-27) — the DEPLOYED gateway fronting the kagent agent (A2A)
 # ABOUTME: and the workshop MCP server. Namespace is set by the ai-layer kustomization (agent).
 #
 # Config schema verified live against agentgateway.dev/docs/standalone/latest on 2026-06-25:
@@ -38,7 +38,7 @@ metadata:
   labels:
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/component: gateway
-    app.kubernetes.io/version: "1.3.0"
+    app.kubernetes.io/version: "1.5.0"
 spec:
   replicas: 1
   strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
@@ -66,9 +66,9 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: burritobot-gateway
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=burritobot-gateway,service.version=v1.3.0,deployment.environment.name=production" # one name family (#265)
+              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=production" # one name family (#265)
             # NOTE: tracing is configured in the config file's top-level `tracing` block (below), NOT via
-            # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emits ZERO spans on v1.3.0 (verified live: a targeted
+            # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emitted ZERO spans on the pre-v1.5.0 build (verified live 2026-06-26: a targeted
             # `service:agentgateway` Datadog span search returned 0). The config-file path is the working one.
           ports:
             - { name: proxy, containerPort: 3000 } # A2A reverse proxy -> workshop-agent
