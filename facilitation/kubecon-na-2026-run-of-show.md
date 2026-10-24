@@ -33,7 +33,9 @@ workshop and they stay off for this session.
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
-`infra/terraform/fleet/roster.tsv`, not the attendee pool:
+`infra/terraform/fleet/roster.tsv`, not the attendee pool. Two clusters, decided by
+Michael on 2026-10-24 (#448): the wide-open one the room attacks, and a guarded
+presenter cluster for the before and after.
 
 - **Community cluster**, `attackme.agenticburn.com`: no guardrails at all. This is
   what the room attacks from their phones, and where the wide-open start happens.
@@ -42,14 +44,20 @@ The session runs on the agenticburn fleet. For a demo that means the roster in
   armed, and the AI guardrails present but toggled off at the start so they can be
   turned on live. This is the guarded half of every before/after.
 
+All three hostnames, and C1's `https://agenticburn.com/beacon`, are served through
+the apex router, so it stays up for this session (#502). The attendee lab apps (the
+provisioning distributor and the feedback app) stay off.
+
 Terminal login on both is `sprouts` / `sprouts`. Read it off the cluster if in
 doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.
 
-Guard toggles on the admin cluster, from its terminal: `guards-off` and
-`guards-on` flip everything; `guard-output-on`, `guard-input-on`, `guard-mcp-on`
-and `guard-budget-on` flip one at a time. They go through the guard-proxy
-`/toggle` endpoint, which Argo CD does not revert and which keeps the cost counter
+Guard toggles on the admin cluster, from its terminal: `guard-output-on`,
+`guard-input-on`, `guard-mcp-on`, `guard-budget-on` and `guard-topic-on` flip one
+at a time. `guards-off` turns every one of them off, the on-topic guard included.
+`guards-on` turns on all but the on-topic guard, which it leaves off because it
+would refuse every challenge prompt; segment 7 turns it on alone. They go through
+the guard-proxy `/toggle` endpoint, which Argo CD does not revert and which keeps the cost counter
 alive, so never flip a guard with `kubectl set env`.
 
 ---
@@ -190,11 +198,16 @@ setting change the outcome. Prompts and verified both-direction results are on
   scripts, per beat" below. Do not debug live.
 - **Challenges shown live:** C6, C5, C7.
 - **Delivers:** point 2 (the under-protected MCP server, via C7) and point 6 (pre-
-  and mid-inference prompt analysis). See the open question on what "mid-inference"
-  means: the guard-proxy scans the request and the response at the gateway, and
-  whether a gateway response scan counts as mid-inference is an unsettled scope call
-  (#456, talks-knowledge#29). Do not claim streaming or token-by-token analysis
-  unless that is built and confirmed by the day.
+  and mid-inference prompt analysis). What the two words mean was decided by Michael
+  on 2026-10-24 (#456): pre-inference is the prompt check before the model (C6);
+  mid-inference is the check between the agent's steps, on its tool calls and on
+  what the MCP server returns before that reaches the model again (agentgateway MCP
+  authorization plus the guard-proxy output guard, shown on the C7 rogue MCP).
+  Streaming-response scanning is out of scope; do not claim it, or token-by-token
+  analysis, on stage. C7's toggle on `staging` today is `guard-mcp-on`, the tool
+  allow-list; routing evil-mcp through agentgateway and flipping its
+  `mcpAuthorization` rule live is #496, not yet merged. Name agentgateway on stage
+  only once #496 is on the cluster.
 - **Hand-off to Whitney:** "Every one of those fired where you can see it."
 
 ### Segment 6: GenAI observability on stage (3 min). Owner: Whitney.
@@ -238,17 +251,22 @@ BurritoBot, so that window is this session:
 
 ### Segment 7: The bot sells burritos only, then close (4 min). Owner: Michael and Whitney.
 
-Turn on the on-topic guardrail and re-send the weirdest off-topic asks from segment
-2 (the salsa-dance, hot-dog-party, karaoke kind). With it on, BurritoBot answers
-menu, hours and locations and redirects everything else back to the menu, politely.
-This is the abstract's ending: by the end the chatbot is selling burritos, nothing
-more.
+Turn on the on-topic guardrail with `guard-topic-on` on the admin cluster terminal
+and re-send the weirdest off-topic asks from segment 2 (the salsa-dance,
+hot-dog-party, karaoke kind). With it on, BurritoBot answers menu, hours and
+locations and redirects everything else back to the menu, politely. This is the
+abstract's ending: by the end the chatbot is selling burritos, nothing more.
 
-- **Delivers:** point 8 (ends selling burritos only). The on-topic guardrail does
-  not exist in this repo yet (#455 is open and MISSING); see the open questions.
-  Until it is built and verified, this segment cannot be shown live, and the talk
-  cannot deliver point 8 as written. This is the single biggest content risk in the
-  cut.
+- **Delivers:** point 8 (ends selling burritos only). This repo's half of the
+  on-topic guardrail is on `staging` (#455): the guard's settings on guard-proxy
+  (`TOPIC_GUARD` off at the start, the phrase lists, and a refusal that offers the
+  menu, hours and locations), hours and locations in the persona, and
+  `guard-topic-on` and `guard-topic-off` in the terminal. The guard itself is not:
+  the topic stage in `proxy.py` (guard-proxy-agenticburn) and the zero-shot BanTopics
+  model in the offline LLM Guard image (llm-guard-cpu-offline) are still to build,
+  and until both land and their pins are bumped here, `guard-topic-on` prints "This
+  guard-proxy has no on-topic guard, so nothing changed" and exits 1. Until then this segment cannot be shown live, and the talk cannot deliver
+  point 8 as written. This is the single biggest content risk in the cut.
 - **The close (Michael, the last ~2 min):** every attack today was a plausible
   request, not an exploit. The controls that stopped them were an egress policy, an
   admission rule, a kernel block, a tool allow-list, a budget, and a guardrail layer
@@ -267,19 +285,20 @@ verbatim text in `abstracts/recovered/sessionize-public-profile.md` section 5.
 
 | # | The abstract says | Segment | Delivered by the cut? |
 |---|---|---|---|
-| 1 | A chatbot for a fictional burrito chain | 2 (bot answers as the chain), 7 (sells burritos) | Yes, once #455 lands for point 8 |
+| 1 | A chatbot for a fictional burrito chain | 2 (bot answers as the chain, now with hours and locations), 7 (sells burritos) | Yes, once #455 lands for point 8 |
 | 2 | Connected to an under-protected MCP server | 5 (C7) | Yes |
 | 3 | Deployed on a full IDP | 3 (the tour) | Yes |
 | 4 | Starts wide open, the audience hacks it live | 2 (community bot, phones) | Yes |
 | 5 | The Kubernetes security layers you should already have | 4 (C1, C2, C3), before the LLM layer | Yes |
-| 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre, C5 and C7 at the gateway) | Partial. "Mid-inference" is an unsettled scope call (open question) |
+| 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre; C7 mid, between the agent's steps) | Pre yes. Mid, as defined on #456 (2026-10-24), is agentgateway MCP authorization plus the output guard on C7: the output guard is built, the agentgateway `mcpAuthorization` half needs #496 merged |
 | 7 | Good GenAI observability practices | 6 (Datadog, or the Grafana view) | Yes on the Grafana view without a pool (#500), once proven on a cluster at bring-up (#503); Datadog needs the pool (#454) |
-| 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail) | **At risk.** The on-topic guardrail does not exist yet (#455 MISSING) |
+| 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail, `guard-topic-on`) | **At risk.** Settings, persona and toggle are here (#455); the topic stage in `proxy.py` and the BanTopics model in the LLM Guard image are not built yet |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live half yes; recorded half needs #452 built |
 
 Points the cut cannot deliver today, marked so they are not presented as ready:
-point 8 (no on-topic guardrail yet, #455), point 6 "mid-inference" (unsettled
-definition, #456 and talks-knowledge#29), and the recorded half of point 9 (#452).
+point 8 (the on-topic guard has no topic stage in guard-proxy yet, #455), the
+agentgateway half of point 6's mid-inference (#496), and the recorded half of point
+9 (#452).
 The live-input half of point 9 and all of points 1 through 5 are deliverable on the
 platform as built. Point 7 no longer waits on the Datadog pool: the Grafana view
 carries it without a key (#500), and it has not yet been shown on a live cluster;
@@ -444,12 +463,20 @@ hosts at peak, down to 1 within three hours).
 ## Open questions for Michael and Whitney
 
 These are the things this run-of-show could not settle from a source. They are
-written down rather than guessed.
+written down rather than guessed. A question that has since been decided keeps its
+number and says who settled it and when, so references to it elsewhere still land.
 
-1. **The on-topic guardrail for point 8 does not exist yet (#455).** Segment 7, the
-   abstract's ending, cannot be shown live until it is built and verified. Is it
-   being built for this delivery, or is point 8 cut with Whitney's agreement (which
-   #456 allows)? This is the biggest content risk in the cut.
+1. **The on-topic guardrail for point 8 is half built (#455).** This repo's half is
+   on `staging`: the settings, the persona's hours and locations, and
+   `guard-topic-on`. The topic stage in `proxy.py` (guard-proxy-agenticburn) and the
+   BanTopics model in the offline LLM Guard image (llm-guard-cpu-offline) are not,
+   so segment 7, the abstract's ending, cannot be shown live until both land and
+   the probe's on-topic beats pass. If they do not land for this delivery, is point
+   8 cut with Whitney's agreement (which #456 allows)? Also open on #455: the hours
+   and locations BurritoBot will say on stage were invented in-world (every day 11am
+   to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
+   the Moonrise Pass drive-thru); keep them or replace them with Michael's and
+   Whitney's wording. This is the biggest content risk in the cut.
 2. **The recorded fallback is not built yet (#452).** The replayable prompt set, the
    per-segment videos, and the screenshots deck have no repo paths today. The
    rollback step and the Night Before step reference them; they need to exist before
@@ -458,17 +485,16 @@ written down rather than guessed.
    set one up the week of 2026-10-26. If it is not live, segment 6 shows the admin
    cluster's Grafana view (#500), so point 7 no longer waits on the pool. Still
    open: whether the pool is live by the day.
-4. **What "mid-inference" means for point 6 (#456, talks-knowledge#29).** The
-   guard-proxy scans request and response at the gateway. Is a gateway response scan
-   what the abstract means by mid-inference, or does it mean scanning during
-   generation (streaming)? The claim on stage depends on the answer, and streaming
-   is not built.
-5. **One cluster or two for the before/after.** This plan uses the community cluster
-   for the wide-open start and a presenter admin cluster for the guarded half, which
-   is the cleanest way to show the Kubernetes-layer contrast (those controls are not
-   runtime-toggleable the way the AI guardrails are). Confirm that reading of "one
-   demo platform," or say if both halves should run on a single cluster with only the
-   AI guardrails toggled.
+4. **Settled 2026-10-24: what "mid-inference" means for point 6 (#456,
+   talks-knowledge#29).** Michael decided it: mid-inference is checking between the
+   agent's steps, its tool calls and what the MCP server returns before that reaches
+   the model again (agentgateway MCP authorization plus the guard-proxy output
+   guard, shown on the C7 rogue MCP). Pre-inference is the prompt check before the
+   model. Streaming-response scanning is not in scope. Segment 5 says it that way.
+   What is left is a build, not a question: the agentgateway half is #496.
+5. **Settled 2026-10-24: two clusters for the before/after.** Michael decided it on
+   #448: the wide-open community cluster for the room to attack, and the guarded
+   presenter cluster for the before and after. This is the plan as written above.
 6. **The model pin and cost counter (#453).** Reconciled: the deployed agent runs
    Nova Pro (`bedrock-nova`, `us.amazon.nova-pro-v1:0`, us-west-2), and
    guard-proxy's `MODEL_TIER` is `nova`, priced at $0.0008 in and $0.0032 out per
