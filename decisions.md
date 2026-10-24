@@ -420,3 +420,30 @@ it in that case. The "developer's view of their agent" is already the real kagen
 - `display.html`/`display.js` moved into `console-src`. They had shipped only in `chat-ui-src`, which kept
   `/display` returning 404 on clusters even after #338 added its route. `verify/test_console_service_vhosts.py`
   now checks that every `try_files` page is packaged in `console-src`, not just that it has a location.
+
+## 2026-10-24T09:53:57Z · #244 · Backstage returns as plain manifests on our image, with a disposable Postgres
+
+- **Plain manifests, not the Backstage Helm chart.** The chart takes the image as separate registry,
+  repository and tag keys, so no `image:` line names it, and the digest-pin test and `verify/sign-images.sh`
+  both read `image:` lines. Its bundled Postgres pins `bitnami/postgresql:15.4.0-debian-11-r10`, which
+  answers 404 on Docker Hub now (only `bitnamilegacy/` has it). `backstage/` is one kustomize app.
+- **New dependency: `docker.io/library/postgres:18.6-alpine`**, pinned by digest (`sha256:898c60cb…`, the
+  current 18.x on 2026-10-24). Third-party, so it is outside the signature policy and deploys as is. It sits
+  on an emptyDir with trust auth: the catalog is read from git on every start, so the database only caches
+  it, and a NetworkPolicy admitting only the Backstage pod is the access control. A PVC or a committed
+  password would cost an EBS volume per cluster or a secret, and buy nothing.
+- **Guest sign-in, and RBAC as the boundary.** The portal is public with no login, and the permission policy
+  allows all, so the Kubernetes plugin's proxy can read whatever its service account can. No pod logs
+  (guard-proxy logs attendee prompts, and projecting those is STREAM_PROMPTS-gated everywhere else), no
+  ConfigMaps, no Secrets; `kubernetes.objectTypes` asks for exactly what is granted.
+- **The published image cannot show pods.** Measured 2026-10-24 by running it: its Node 24.17.0 makes
+  node-fetch 2.7.0 report "Premature close" on keep-alive chunked responses, which is how the Kubernetes
+  plugin reads the API server, so every Kubernetes tab errored (6/6 on 24.17.0; 6/6 and 4/4 pass on 24.22.0
+  and 24.22.1, same node-fetch files). The same bundle on Node 24.22 listed pods from a stand-in API server
+  and built its search index. The Dockerfile now pins `node:24.22.1-trixie-slim` by digest. The image has to
+  be rebuilt, pushed and signed before the pods tab works, and it must be signed before it is admitted at all.
+- **`backstage-<cluster>` is in `fleet.sh` WIB_SERVICE_HOSTS**, and `apex-agenticburn`'s `derive-roster.sh`
+  filter must learn `backstage-` before the next harvest. Otherwise `backstage-<label>` is scored like an
+  attendee name and wins the tie-break (it sorts first), renaming clusters on the instructor console.
+- **Rejected: `serviceAccountToken` from a token Secret.** With no token the plugin reads the pod's mounted
+  one (checked in the image's ServiceAccountStrategy), so the long-lived Secret was a credential nobody used.

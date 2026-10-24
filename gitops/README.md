@@ -25,8 +25,7 @@ apps/                    # 26 ArgoCD Application manifests
   loki.yaml              # Log aggregation
   promtail.yaml          # Log shipping
   sample-app.yaml        # Flask demo app
-  backstage.yaml         # Developer portal
-  backstage-resources.yaml # Backstage RBAC + catalog ConfigMap
+  backstage.yaml         # Developer portal: backstage/ (kustomize), its Postgres, RBAC and catalog
   cert-manager.yaml      # TLS certificate management
   resource-quotas.yaml   # ResourceQuota + PDBs
   demo-app-unicorn.yaml     # Demo app (interactive)
@@ -78,8 +77,8 @@ Gaps between groups are reserved for future components.
 | 2    | OTel Collector, cert-manager ClusterIssuers |
 | 3    | Grafana dashboards, resource quotas, Loki, Tempo |
 | 4    | Promtail |
-| 5    | Sample app, Backstage resources (RBAC, catalog) |
-| 6    | Backstage |
+| 5    | Sample app |
+| 6    | Backstage (portal, Postgres, RBAC, catalog) |
 | 7    | Demo apps (Unicorn Party, E-commerce frontend/API/worker) |
 | 8    | Load generator |
 

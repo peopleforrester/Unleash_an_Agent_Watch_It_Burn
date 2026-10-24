@@ -12,7 +12,13 @@
 # Alternatively, there is also a multi-stage Dockerfile documented here:
 # https://backstage.io/docs/deployment/docker#multi-stage-build
 
-FROM node:24-trixie-slim
+# Pinned, not node:24-trixie-slim (#244). The published 2026-06-22 build ran Node 24.17.0, where node-fetch
+# 2.7.0 reports "Premature close" on a keep-alive chunked response whose last chunk shares a segment with the
+# body. The Kubernetes plugin fetches the API server exactly that way (https.Agent keepAlive: true), so every
+# Kubernetes tab failed, and the search collators never built an index. Measured 2026-10-24: 6/6 failures on
+# 24.17.0, 6/6 passes on 24.22.0, 4/4 on 24.22.1, same node-fetch files. verify/test_backstage_catalog.py
+# fails if this drops below 24.22.
+FROM node:24.22.1-trixie-slim@sha256:43b9ba1142b8dcf33fa8f922ca1be85714adc444e0586c7cf7726daaeabc1bea
 
 # Set Python interpreter for `node-gyp` to use
 ENV PYTHON=/usr/bin/python3

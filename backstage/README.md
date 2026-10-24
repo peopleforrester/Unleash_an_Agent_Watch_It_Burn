@@ -1,61 +1,39 @@
 # Backstage
 
-Developer portal providing a service catalog and self-service templates.
-Deployed via ArgoCD using the Backstage Helm chart 2.6.3.
+The developer portal (#244): every app on the cluster that is not infrastructure, which team owns it, and
+its live pods. Public at `backstage-<cluster>.agenticburn.com` through the console's Host routing (#233);
+everyone signs in as the guest user.
 
-## Directory Structure
+Deployed by `gitops/apps/backstage.yaml` on the attendee, full and admin profiles (not burn), which builds
+this directory with kustomize:
 
 ```
-catalog/
-  catalog-info.yaml              # Root catalog file (System + Component refs)
-  systems/
-    sample-app.yaml              # System entity for the sample Flask app
-
-templates/
-  deploy-service/
-    template.yaml                # Self-service template: deploy a new service
-    skeleton/
-      deployment.yaml            # Kyverno-compliant Deployment scaffold
-      service.yaml               # Service scaffold
-  create-namespace/
-    template.yaml                # Self-service template: create a namespace
-    skeleton/
-      namespace.yaml             # Namespace scaffold with PSS labels
-
-k8s/
-  backstage-rbac.yaml            # RBAC for Backstage's K8s plugin
-  catalog-configmap.yaml         # ConfigMap mounting catalog files into Backstage
-  templated-test-svc.yaml        # Test service created from deploy-service template
+kustomization.yaml     what deploys, plus two hashed ConfigMaps (catalog, app-config)
+app-config.yaml        layered over the image's own app-config.yaml: catalog files, guest auth, k8s cluster
+catalog/               the entities, one file per system, plus org.yaml (groups) and domains.yaml
+k8s/backstage.yaml     Deployment + Service, image pinned by digest
+k8s/postgres.yaml      disposable Postgres on an emptyDir, trust auth, NetworkPolicy: Backstage only
+k8s/backstage-rbac.yaml  read-only ClusterRole for the Kubernetes plugin; no logs, ConfigMaps or Secrets
+templates/, k8s/templated-test-svc.yaml  scaffolder material, not deployed
 ```
 
-## Catalog Architecture
+The image is built from `images/watch-it-burn-backstage/`; its README has the rebuild, sign and pin steps.
+An unsigned image of ours is denied admission (`policies/kyverno/verify-image-signatures.yaml`).
 
-Backstage uses a static file catalog approach (no external providers):
+## The catalog
 
-1. Catalog YAML files are committed to this repo
-2. A ConfigMap mounts them into the Backstage pod
-3. Backstage reads the ConfigMap on startup
+Hex & Cauldron is the company in the workshop's story. Its teams own the systems: `burritobot-developers`
+own the agent, workshop-mcp and the storefront; `platform-team` owns guard-proxy, LLM Guard and
+agentgateway, which is the "one column is the developer's" table in the run-of-show as a real page.
+`tool-vendor` owns evil-mcp, `customer-data-team` customer-stream and `party-planners` the five party apps.
+`workshop-crew` sits outside the story and owns the terminal, the drift target, and the two external
+systems, the provisioning app and the apex router.
 
-This avoids needing GitHub App credentials for catalog discovery.
+Each Component finds its pods with `backstage.io/kubernetes-label-selector` and
+`backstage.io/kubernetes-namespace`. `verify/test_backstage_catalog.py` checks every selector against the
+labels the manifests put on each pod, so a new workload with no entity fails there.
 
-## Software Templates
+## Adding an entity
 
-Templates produce Kyverno-compliant resources:
-- Required labels (`app.kubernetes.io/name`, `app.kubernetes.io/version`)
-- Resource limits (CPU + memory)
-- Liveness and readiness probes
-- Targeted to the `apps` namespace
-
-## Authentication
-
-GitHub OAuth for user login. See [ADR-007](../docs/adr/ADR-007-auth-strategy.md).
-
-## Adding Catalog Entities
-
-1. Create a YAML entity in `catalog/` following the
-   [Backstage descriptor format](https://backstage.io/docs/features/software-catalog/descriptor-format)
-2. Reference it from `catalog/catalog-info.yaml`
-3. Update the ConfigMap in `k8s/catalog-configmap.yaml`
-4. Commit and push, ArgoCD deploys, Backstage picks up on next refresh
-
-See [ADR-006](../docs/adr/ADR-006-developer-portal.md) for Backstage selection rationale.
+Add it to the right file in `catalog/`. A new file must go in both `kustomization.yaml`
+(`backstage-catalog`) and `catalog.locations` in `app-config.yaml`; the test fails if the two lists disagree.

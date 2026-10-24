@@ -289,6 +289,11 @@
             <li>The <code class="inl">*-party</code> workloads (hedgehog, wombat, unicorn, spider,
             mantis-shrimp) are deliberate filler: ordinary apps so the cluster is not suspiciously empty.
             Never mind what the mantis shrimp is doing. <span class="em">&#129424;&#128165;</span> &#128578;</li>
+            <li><a href="https://backstage.io/docs/overview/what-is-backstage" target="_blank" rel="noopener">Backstage</a>
+            is the developer portal: every app on this cluster that is not infrastructure, which team owns it,
+            and its live pods. Open <a class="svchost" data-svc="backstage" href="#">your cluster's Backstage</a>
+            and look at BurritoBot's page: the agent and its tools belong to the developers, the guardrails
+            around them to the platform team. That split is what the rest of the workshop is about.</li>
           
           </ul>
 
@@ -1130,5 +1135,10 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
   }
 </script>
   <div style="text-align:center;padding:10px 0 18px"><span class="spons">Co-sponsored by <strong style="color:#632CA6">Datadog</strong> &amp; <strong style="color:#A100FF">Accenture</strong></span></div>
+<script>
+  // Service hostnames (#233), as on /platform: <service>-<this cluster's host>, from the address bar.
+  (function(){ var h=location.hostname; if(!/agenticburn\.com$/.test(h)) return;
+    document.querySelectorAll('a.svchost').forEach(function(a){ a.href='https://'+a.dataset.svc+'-'+h+'/'; a.target='_blank'; a.rel='noopener'; }); })();
+</script>
 </body>
 </html>
