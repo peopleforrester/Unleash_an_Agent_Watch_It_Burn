@@ -74,6 +74,12 @@ Challenge 8 goes around everything that records, which is what it teaches. Colum
 reaching the tool; `provisioning.agenticburn.com/beacon/view` stays the count of POSTs that landed, and it
 cannot say from which cluster.
 
+## Joined with the claims
+
+The leaderboard never says who holds a cluster, on purpose. The presenter-side view that does is
+`fleet.sh ops` (`infra/ops-view/`, #308): it sends the leaderboard's own queries and joins them with the
+provisioning claims and each console's liveness, one row per cluster, for the instructor screen only.
+
 ## From outside
 
 `verify/fleet-walkthrough.sh` (run by `fleet.sh verify`, and at the end of every `up` and `scale`) answers

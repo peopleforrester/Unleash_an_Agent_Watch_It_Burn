@@ -855,3 +855,39 @@ rogue server is dark on purpose (#18), and Challenge 8's lesson is that it leave
 Not done here: the board has not been applied to a live org in this change. The first apply on the next
 event's instructor org proves the log attribute names (`@tool_input.command`, `@rule`, `@event`) and the
 `short_image` tag against real data, and `verify/test_fleet_monitors_live.py` (E2E) checks it is loaded.
+
+## 2026-10-24 · One shared ops view: claims, liveness and progress by cluster (#308)
+
+The question in the room is one question about one cluster: who has it, is it up, where are they. It took
+three credentials and two URLs, and no page could answer more than its own third. `fleet.sh ops`
+(`infra/ops-view/ops_view.py`) joins the three by cluster name, as a terminal table, a self-reloading HTML
+page and JSON.
+
+It lives here, as a `fleet.sh` verb, because this repo is the only one that already talks to all three
+sources, and the boundary recorded in `provisioning-agenticburn/AGENTS.md` (2026-09-03) keeps each component
+to its own surface. Nothing new is asked of any component: claims are `GET /admin/export` (the CSV that
+exists), liveness is the apex `roster.json` plus each console's `/cost` (the probe `start.agenticburn.com`
+already makes), and progress is the challenge leaderboard's own queries (#307), sent unchanged to Datadog's
+scalar query API, so the ops view and the projector board cannot disagree about a column.
+
+Choices:
+- **The name-to-host table is fleet.sh's.** Claims and Datadog say `watch-it-burn-attendee-042`, the router
+  says a two-word host. `fleet.sh hosts` prints `public_host_for` for the roster and every slot of the grid,
+  and the view inverts it. A Python copy of the grid would be the two-namers failure of #265 and #272.
+- **Unknown is not no.** A failed source is named at the top and its cells read `?`, never `-` (unclaimed)
+  or `.` (not done), and a one-shot run exits 1. The rest of the view still renders, because in the room a
+  partial answer with its gap labelled beats no answer.
+- **The export, not a scrape of `/admin/roster`.** The roster page is HTML for a person. The export lists
+  claimed rows only, so free seats are counted from the routing table, and a provisioning-reserved seat counts
+  as free here. The roster page stays the authority at the door; a JSON roster would close the gap, and
+  provisioning offered it on #308. That request is a follow-up for that repo, not a change here.
+- **Local, not hosted.** It runs where `fleet.sh` runs, with the credentials every other verb already needs.
+  A hosted page would need its own deploy and its own authentication in front of a table that names attendees.
+- **Never on the projector.** It names attendees by email, unlike the leaderboard. The HTML is written 0600
+  under the gitignored `logs/`, and the page says so at the top.
+
+`verify/test_ops_view.py` holds the join, the unknown-is-not-no rule, the leaderboard's queries going out
+verbatim, and the token staying out of every output against fakes. Not done here: no live run, because this
+change had no provisioning token, AWS profile or instructor org. `verify/test_ops_view_live.py` (E2E) runs
+`fleet.sh ops --json` against the real sources and fails if any of them cannot be read. Its first run is
+what confirms the scalar API's response shape against the parser.
