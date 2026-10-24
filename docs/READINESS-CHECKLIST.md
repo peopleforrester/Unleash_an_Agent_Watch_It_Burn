@@ -84,7 +84,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 
 ## Must fix before ready (the gaps)
 1. ✅ **C1, C3, C4 packaged as challenges** — `challenges/c1-exfil-s3/`, `challenges/c3-secret-grep/`, `challenges/c4-denial-of-wallet/` (attack prompt + README + fallback against the existing defenses).
-2. ✅ **One-command roster setup** — `fleet.sh instructors up [role|owner]` (section 3).
+2. ✅ **One-command roster setup**: `fleet.sh instructors up [role|owner]` (section 3).
 3. ✅ **Challenge controls by cluster**: `admin` arms the C1 NetworkPolicy, the C3 KubeArmor policy and
    Kyverno Deny from the start; `attendee` starts without them and the student applies each one (and flips
    `restrict-image-registries` to Deny for C2); `burn` has none, and no Kyverno to flip. Documented in each

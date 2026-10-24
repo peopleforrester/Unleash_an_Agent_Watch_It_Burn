@@ -35,7 +35,7 @@ present the moment the pod starts and cannot be missing because a seeding step d
 | Attendee, after `kubectl apply -f ~/challenges/c3-kubearmor-policy.yaml` | blocked | `Permission denied` from inside the tool container; Falco goes quiet because there is no successful read left |
 
 On the Community cluster the student can apply the same KubeArmor policy and it works as written, because
-the engine is present; there is just no detection half to watch.
+the engine is present. There is no detection half to watch there.
 
 **Defense (armed by the `admin` profile; applied by the student on an attendee cluster):**
 

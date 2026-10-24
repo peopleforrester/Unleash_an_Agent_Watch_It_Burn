@@ -30,7 +30,7 @@ What a student sees is in `challenges/LAB-TEXT.md`, Challenge 2.
   nothing checks it, nothing records what was wrong with it, and there is no policy to flip.
 - **Attendee cluster, before the fix:** the same deploy lands. Kyverno `restrict-image-registries` is
   present but in **Audit** (the `attendee` profile is not armed by `fleet.sh`), so it reports the villain
-  and lets it run. The student reads the report, then patches the policy's `validationActions` to `Deny`.
+  and still admits it. The student reads the report, then patches the policy's `validationActions` to `Deny`.
 - **Attendee cluster after the flip, and an admin cluster from the start:** the policy is in **Deny**
   (`fleet.sh` arms the `admin` profile), so the deploy is refused at admission and the villain never
   starts. The policy matches Pods in the `apps` and `agent` namespaces, and the Deployments that create

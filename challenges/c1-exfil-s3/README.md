@@ -22,7 +22,7 @@ it does land, no cluster control stops it, because the data never leaves the clu
 |---|---|---|
 | Community (`burn` profile, no guardrails) | prints to screen if the model complies | nothing on the cluster is in the way |
 | Admin (`admin` profile, every control armed) | still prints to screen if the model complies | the egress wall stops an outbound *push*, but a screen leak never leaves the cluster |
-| Attendee, before and after the student applies the NetworkPolicy | the same either way | the lesson for a screen leak is agency scoping, not egress |
+| Attendee, before and after the student applies the NetworkPolicy | the same either way | a screen leak never crosses the egress wall, so the fix is agency scoping |
 
 ## C1 part 2: the outbound beacon (the NETWORK / infra attack)
 

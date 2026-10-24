@@ -192,7 +192,7 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 
 ---
 
-## P1 — demo correctness (the clusters and challenges must land)
+## P1: demo correctness (the clusters and challenges must land)
 
 - [x] **Community cluster true burn**: the Community cluster (`burn` profile) runs `podPidsLimit=-1`, from the roster's pids column. The fork-bomb validation this line used
       to demand is **no longer a delivery gate**: the fork bomb was retired as a beat (#114) because Nova
