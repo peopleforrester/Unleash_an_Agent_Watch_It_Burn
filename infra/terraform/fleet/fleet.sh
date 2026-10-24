@@ -2749,10 +2749,18 @@ cmd_health() {
 }
 
 # Harvest one cluster's student-facing access info (console NLB / grafana / etc.) as a pool CSV row.
+# The harvester maps the community and admin clusters to their hosts itself, but it cannot work out an
+# attendee's memorable two-word name from the cluster name (provisioning-agenticburn#14), so it reads that
+# from WIB_CONSOLE_HOST and otherwise falls back to the a-NNN route, then the raw NLB (#444). Pass it from
+# public_host_for, the same function `routes` publishes and `ingest` registers, so pool.csv's console_url
+# is the name the router serves. Set per call, and EMPTY for a non-attendee name, so a WIB_CONSOLE_HOST
+# left exported in the operator's shell cannot stamp one host onto every row of the harvest.
 harvest_one() {
     local name="$1"; assert_ours "${name}"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
-    AWS_PROFILE="${acct_profile}" bash "${HARVEST_SCRIPT}" "${name}" "${WIB_REGION}" 2>>"${LOG_DIR}/${name}.harvest.log" \
+    local console_host=""
+    if is_attendee_name "${name}"; then console_host="$(public_host_for "${name}")"; fi
+    WIB_CONSOLE_HOST="${console_host}" AWS_PROFILE="${acct_profile}" bash "${HARVEST_SCRIPT}" "${name}" "${WIB_REGION}" 2>>"${LOG_DIR}/${name}.harvest.log" \
         || { record_fail "${name}:harvest"; log "  ${name}: harvest FAILED (see ${LOG_DIR}/${name}.harvest.log)"; }
 }
 
@@ -3114,6 +3122,14 @@ cmd_reconcile_pool() {
 # as bootstrap + merge_pool). No CSV rebuild, no redeploy. POOL1/POOL2 are preloaded by cmd_ingest.
 ingest_one() {
     local name="$1" acct_profile="$2"
+    # Register only the two classes that exist: the attendee pool and the roster (community + <owner>-admin).
+    # A retired name (watch-it-burn-<owner>-student, #295; watch-it-burn-r<N>-<n>, #291) is one the app
+    # classifies as retired and never hands out, so importing it only adds a dead row to /admin/roster
+    # (#444). Names reach this from the command line and from WIB_ROSTER_FILE, so check here, once.
+    if ! is_attendee_name "${name}" && ! is_instructor_name "${name}"; then
+        log "  ingest ${name}: REFUSING, not an attendee pool or roster cluster (a retired name); not registered"
+        return 0
+    fi
     # A roster entry with no state file was never provisioned, so there is no console to wait for and
     # nothing to register. Say so and move on: without this, `ingest-instructors` over the full nine-entry
     # roster spends the whole LB wait budget on each of the clusters that do not exist.
