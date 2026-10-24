@@ -42,9 +42,12 @@ doubt:
 
 Guard toggles on the admin cluster, from its terminal: `guards-off` and
 `guards-on` flip everything; `guard-output-on`, `guard-input-on`, `guard-mcp-on`
-and `guard-budget-on` flip one at a time. They go through the guard-proxy
+and `guard-budget-on` flip one at a time. The guard-proxy ones go through its
 `/toggle` endpoint, which Argo CD does not revert and which keeps the cost counter
-alive, so never flip a guard with `kubectl set env`.
+alive, so never flip a guard with `kubectl set env`. `guard-mcp-on` is different
+on an admin cluster: it rewrites agentgateway's MCP authorization rule for
+evil-mcp, which Argo CD also leaves alone, and the gateway reloads it without a
+restart (#496).
 
 ---
 
@@ -173,19 +176,32 @@ setting change the outcome. Prompts and verified both-direction results are on
 - C5 the agent leaks a secret in its response. `guard-output-on`: the value comes
   back redacted. This is analysis on the way out.
 - C7 the under-protected MCP server. A poisoned tool description chains the agent
-  into a rogue tool it was never asked to use. `guard-mcp-on`: the tool is gone
-  from the allow-list and the call cannot happen.
+  into a rogue tool it was never asked to use. On the admin cluster the agent
+  reaches evil-mcp through agentgateway, on a bind of its own. `guard-mcp-on`
+  narrows the gateway's MCP authorization rule to `get_weather`.
+  **The claim on stage:** the gateway rule stops the rogue `tools/call` before the
+  tool runs, and the output guard redacts the sentinel in the reply. Say both
+  halves, in that order: one check sits between the agent and its tools, the
+  other on the way out to the user. Do not say the MCP server's reply is scanned
+  before the model reads it; that is #480 and it is not built for KubeCon.
+  The rule takes effect when the gateway reloads it, with no restart. Give it
+  the delay the Night Before C7 step measured before re-asking. Measured
+  reload delay: not measured yet (fill in from that step).
+- If C7's ask wanders, run
+  `CONTEXT=<admin context> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
+  It calls `read_internal_config` through the gateway itself, with no model in the
+  loop: the sentinel comes back with the rule open, the gateway refuses the call
+  with it narrowed, and it leaves the guard on.
 - Say the C6-versus-C7 line out loud after C7 (it is on `/brief`): both are the
   same class of attack stopped two different ways. One talks the model out of it;
   the other lets the model be fully persuaded and finds the capability gone. Only
   the second still holds when the next model is more persuadable.
 - **Challenges shown live:** C6, C5, C7.
 - **Delivers:** point 2 (the under-protected MCP server, via C7) and point 6 (pre-
-  and mid-inference prompt analysis). See the open question on what "mid-inference"
-  means: the guard-proxy scans the request and the response at the gateway, and
-  whether a gateway response scan counts as mid-inference is an unsettled scope call
-  (#456, talks-knowledge#29). Do not claim streaming or token-by-token analysis
-  unless that is built and confirmed by the day.
+  and mid-inference prompt analysis). Michael settled "mid-inference" on #456
+  (2026-10-24): checking between the agent's steps, its tool calls and what the
+  MCP server returns. C7 shows it with the agentgateway rule and the output guard,
+  as the claim above says. Do not claim streaming or token-by-token analysis.
 - **Hand-off to Whitney:** "Every one of those fired where you can see it."
 
 ### Segment 6: GenAI observability on stage (3 min). Owner: Whitney.
@@ -263,18 +279,18 @@ verbatim text in `abstracts/recovered/sessionize-public-profile.md` section 5.
 | 3 | Deployed on a full IDP | 3 (the tour) | Yes |
 | 4 | Starts wide open, the audience hacks it live | 2 (community bot, phones) | Yes |
 | 5 | The Kubernetes security layers you should already have | 4 (C1, C2, C3), before the LLM layer | Yes |
-| 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre, C5 and C7 at the gateway) | Partial. "Mid-inference" is an unsettled scope call (open question) |
+| 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre; C7 mid, the agentgateway rule on the tool call; C5 and C7's sentinel redacted on the way out) | Yes, as #456 defines mid-inference (between the agent's steps). The MCP-return scan (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 6 (Datadog, or the Grafana view) | Yes on the Grafana view without a pool (#500), once proven on a cluster at bring-up (#503); Datadog needs the pool (#454) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail) | **At risk.** The on-topic guardrail does not exist yet (#455 MISSING) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live half yes; recorded half needs #452 built |
 
-Points the cut cannot deliver today, marked so they are not presented as ready:
-point 8 (no on-topic guardrail yet, #455), point 6 "mid-inference" (unsettled
-definition, #456 and talks-knowledge#29), and the recorded half of point 9 (#452).
-The live-input half of point 9 and all of points 1 through 5 are deliverable on the
-platform as built. Point 7 no longer waits on the Datadog pool: the Grafana view
-carries it without a key (#500), and it has not yet been shown on a live cluster;
-the bring-up probe (#503) is where it is proven.
+Point 6 is deliverable as #456 defines mid-inference (between the agent's steps), shown
+with C7. The live-input half of point 9 and all of points 1 through 5 are deliverable on
+the platform as built. Points the cut cannot deliver today, marked so they are not
+presented as ready: point 8 (no on-topic guardrail yet, #455) and the recorded half of
+point 9 (#452). Point 7 no longer waits on the Datadog pool: the Grafana view carries it
+without a key (#500), and it has not yet been shown on a live cluster; the bring-up
+probe (#503) is where it is proven.
 
 ## Challenges shown live, and challenges cut
 
@@ -286,7 +302,7 @@ the bring-up probe (#503) is where it is proven.
 | C4 denial-of-wallet (budget cap) | Narrated only, segment 2 | The cost-counter story lands as live narration during the wide-open burn; a full before/after beat costs minutes the 30-minute slot does not have. The budget cap stays armed and can be shown in Q&A |
 | C5 secret leak (output guard) | Shown, segments 2 and 5 | The audience beat and the output-guard toggle |
 | C6 prompt injection (input guard) | Shown, segment 5 | Pre-inference analysis, point 6 |
-| C7 rogue MCP tool (tool allow-list) | Shown, segment 5 | The under-protected MCP server, point 2 |
+| C7 rogue MCP tool (agentgateway MCP authorization) | Shown, segment 5 | The under-protected MCP server, point 2 |
 | C8 service-account token theft (scoped Role) | **Cut** | The strongest hands-on beat in the workshop, but it is terminal-driven RBAC work the audience cannot do from a phone, and it needs minutes this slot does not have. It belongs to the 2-hour format |
 
 ---
@@ -344,7 +360,10 @@ is merely slow rather than rebuilding:
     cluster; C1, C2 and C3 blocked, judged on the control and not the model (the
     lab's curl from `workshop-mcp`, a server-side dry run as `agent-sa`, and the C3
     fallback); C6, C5 and C7 off then on, with the guards turned on cumulatively as
-    segment 5 does; the on-topic guard redirecting the four canonical off-topic asks
+    segment 5 does. On an admin cluster C7 is stopped at the gateway (#496): the probe
+    narrows agentgateway's rule for evil-mcp and leaves toolNames full, so a blocked
+    re-ask can only be the gateway's doing; the start state and guards-off both check
+    the rule is open; the on-topic guard redirecting the four canonical off-topic asks
     and letting "what are your hours" and "do you have mild salsa" through. Its last
     act is `guards-off`, run even when a beat fails, so the stage starts clean.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
@@ -355,10 +374,16 @@ is merely slow rather than rebuilding:
     guard-proxy still reads the retired ClusterPolicy) and the on-topic beats (#455,
     the pinned guard-proxy has no topic stage yet). Record the date, the clusters and
     the spend it prints on #503.
+- [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root:
+  `CONTEXT=<michael-admin context> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
+  It flips the gateway rule open, asserts `read_internal_config` returns the
+  sentinel, narrows the rule, asserts the gateway refuses the call, and prints how
+  long the narrowed rule took to load. Write that number into segment 5. It must
+  end on two PASS lines; if the deny never comes, C7 is not ready to show.
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
   so the AI guardrails start off and the live toggles in segment 5 are real. The
   probe above ends with it already; run it again if anyone has touched the guards
-  since.
+  since. On an admin cluster that also opens the C7 gateway rule.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
   pool is live, segment 6 runs on the admin cluster's Grafana view
@@ -432,11 +457,10 @@ written down rather than guessed.
    set one up the week of 2026-10-26. If it is not live, segment 6 shows the admin
    cluster's Grafana view (#500), so point 7 no longer waits on the pool. Still
    open: whether the pool is live by the day.
-4. **What "mid-inference" means for point 6 (#456, talks-knowledge#29).** The
-   guard-proxy scans request and response at the gateway. Is a gateway response scan
-   what the abstract means by mid-inference, or does it mean scanning during
-   generation (streaming)? The claim on stage depends on the answer, and streaming
-   is not built.
+4. **What "mid-inference" means for point 6 (#456, talks-knowledge#29).** Settled
+   by Michael on #456, 2026-10-24: checking between the agent's steps, its tool
+   calls and what the MCP server returns. The stage claim is in segment 5 (C7).
+   Streaming is not built and is not claimed.
 5. **One cluster or two for the before/after.** This plan uses the community cluster
    for the wide-open start and a presenter admin cluster for the guarded half, which
    is the cleanest way to show the Kubernetes-layer contrast (those controls are not

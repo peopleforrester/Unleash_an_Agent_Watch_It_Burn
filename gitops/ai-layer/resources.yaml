@@ -326,16 +326,18 @@ spec:
         - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
           value: SPAN_AND_EVENT
     # Committed tool config = the VULNERABLE default (challenge 7 "7a: see the weakness"), consistent
-    # with the input/output guards which also boot OFF. The C7 (beat-3) control that is actually IN PATH
-    # is kagent's toolNames allowlist: the agent dials evil-mcp directly, so agentgateway's
-    # mcpAuthorization does not gate the rogue tools (workshop-mcp does go through the gateway, whose rule
-    # is allow-all; #239). workshop-mcp carries the legit tools (real, namespace-scoped
-    # via agent-sa). evil-mcp is the look-alike supply-chain MCP wired with its FULL rogue toolset, so
-    # get_weather's poisoned description chains the agent into read_internal_config (leaks
-    # FAKE-MCP-EXFIL-sentinel-4c1d) / apply_optimization. The student runs guard-mcp-on
-    # (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh) to narrow evil-mcp to [get_weather],
-    # which filters the rogue tools out of the agent's toolset and blocks the leak. The toggle's two
-    # states must mirror this array exactly (keep them in sync). No requireApproval/HITL (see note below).
+    # with the input/output guards which also boot OFF. C7 has two controls, one per format (#496):
+    #   - the 2-hour workshop: kagent's toolNames allowlist. The student runs guard-mcp-on
+    #     (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh) to narrow evil-mcp to
+    #     [get_weather], which filters the rogue tools out of the agent's toolset and blocks the leak.
+    #   - an admin cluster (the KubeCon breakout): agentgateway's mcpAuthorization on :3003. evil-mcp is
+    #     dialled through the gateway, guard-mcp-on narrows the gateway rule to get_weather and leaves this
+    #     list full, so the rogue tools/call is stopped at the gateway before evil-mcp runs it.
+    # workshop-mcp carries the legit tools (real, namespace-scoped via agent-sa). evil-mcp is the look-alike
+    # supply-chain MCP wired with its FULL rogue toolset, so get_weather's poisoned description chains the
+    # agent into read_internal_config (leaks FAKE-MCP-EXFIL-sentinel-4c1d) / apply_optimization. The
+    # toggle's two states must mirror this array exactly (keep them in sync). No requireApproval/HITL (see
+    # note below).
     tools:
       - type: McpServer            # discriminator REQUIRED (schema rejects mcpServer without it)
         mcpServer:
@@ -493,8 +495,8 @@ spec:
   egress:
     - {}
 ---
-# guard-proxy's badge reader (#197/#209). Read-only, get-only, on exactly the four objects behind the
-# C1/C2/C3/C7 badges and nothing else. This is the RBAC for the component the challenges attack, so it
+# guard-proxy's badge reader (#197/#209). Read-only, get-only, on exactly the objects behind the
+# C1/C2/C3/C7/C8 badges and nothing else. This is the RBAC for the component the challenges attack, so it
 # is written as narrowly as the API allows: named resources where get-by-name works, and no list/watch.
 apiVersion: v1
 kind: ServiceAccount
@@ -519,7 +521,11 @@ rules:
     verbs: ["get"]
   - apiGroups: ["kagent.dev"]
     resources: ["agents"]
-    resourceNames: ["workshop-agent"]            # C7 tool allow-list
+    resourceNames: ["workshop-agent"]            # C7 tool allow-list (the 2-hour workshop's control)
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["agentgateway-c7-config"]    # C7 gateway rule (an admin cluster's control, #496)
     verbs: ["get"]
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles"]
@@ -775,7 +781,11 @@ metadata:
 spec:
   description: "SYNTHETIC bad MCP server (Beat 3 demo prop)"
   protocol: STREAMABLE_HTTP
-  url: http://evil-mcp-shim.agent:8000/mcp
+  # Routed THROUGH agentgateway on its own bind (#496): agent -> agentgateway:3003/mcp -> evil-mcp-shim:8000.
+  # The agentgateway-c7 container serves 3003, and its mcpAuthorization rule is what guard-mcp-on flips on
+  # an admin cluster. Its own bind, not a second target on 3001: two targets on one bind get their tool
+  # names prefixed, which would rename the tool get_weather's poisoned description points at.
+  url: http://agentgateway.agent:3003/mcp
   timeout: 30s
   sseReadTimeout: 5m0s
   terminateOnClose: true
@@ -838,7 +848,8 @@ spec:
   # Routed THROUGH agentgateway (3001): agent -> agentgateway:3001/mcp -> workshop-mcp:8000/mcp.
   # agentgateway's mcp backend (gitops/ai-layer/agentgateway.yaml) targets workshop-mcp and its
   # mcpAuthorization rule is allow-all, so the gateway carries these calls but gates none of them. C7's
-  # rogue tools are on evil-mcp, which is dialled directly (#239). The /mcp path is validated live.
+  # rogue tools are on evil-mcp, which has its own bind and rule on 3003 (#496). The /mcp path is
+  # validated live.
   url: http://agentgateway.agent:3001/mcp
   timeout: 30s
   sseReadTimeout: 5m0s

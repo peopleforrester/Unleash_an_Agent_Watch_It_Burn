@@ -9,7 +9,6 @@ readonly SCRIPT_DIR REPO_ROOT
 readonly BEAT_DIR="${REPO_ROOT}/challenges/03-bad-mcp-excessive-agency"
 readonly SPIKE_FILE="${BEAT_DIR}/BUILD-SPIKE.md"
 readonly FALLBACK="${BEAT_DIR}/fallback.curl.sh"
-readonly TOGGLE_MCP_AUTHZ_ON="${BEAT_DIR}/toggle-mcp-authz-on.sh"
 readonly RECORDINGS_DIR="${REPO_ROOT}/fallback/recordings"
 readonly SENTINEL="FAKE-MCP-EXFIL-sentinel-4c1d"
 
@@ -88,38 +87,15 @@ if spike_passed; then
     step "Phase-4b spike PASSED -> asserting the LIVE mcp-authz path"
     command -v kubectl >/dev/null 2>&1 || fail "kubectl not found on PATH (required for live path)"
     [[ -x "${FALLBACK}" ]]            || fail "missing model-independent driver: ${FALLBACK}"
-    [[ -x "${TOGGLE_MCP_AUTHZ_ON}" ]] || fail "missing toggle: ${TOGGLE_MCP_AUTHZ_ON}"
 
-    # fallback.curl.sh contract (Beat 3): drives the rogue tool call through the gateway and
-    # prints the response the caller would receive, independent of the model.
-    #   fallback.curl.sh <context> <ns>
-    run_call() { "${FALLBACK}" "${CONTEXT}" "${NS}" 2>/dev/null; }
-
-    # mcp-authz off is the workshop-start default; the toggle accepts --off to restore it.
-    # Reset to off at start and on EXIT so a repeated run sees the same before-state (idempotent).
-    reset_authz_off() { "${TOGGLE_MCP_AUTHZ_ON}" --off >/dev/null 2>&1 || true; }
-    trap reset_authz_off EXIT
-
-    step "Resetting mcp-authz to OFF (workshop-start default)"
-    reset_authz_off
-    sleep 3
-
-    step "mcp-authz OFF: driving the rogue tool call -- expect sentinel ${SENTINEL} to LEAK"
-    OFF_OUT="$(run_call)" || fail "fallback.curl.sh errored with mcp-authz off"
-    echo "${OFF_OUT}" | grep -qF "${SENTINEL}" \
-        || fail "sentinel did NOT leak with mcp-authz off (§2 before-state broken)"
-    echo "    PASS: rogue tool call leaks the sentinel while mcp-authz is off" >&2
-
-    step "TOGGLE: applying the mcp-authz CEL deny rule"
-    "${TOGGLE_MCP_AUTHZ_ON}" >/dev/null 2>&1 || fail "toggle-mcp-authz-on.sh failed"
-    sleep 3
-
-    step "mcp-authz ON: same call -- expect it BLOCKED; sentinel ABSENT"
-    ON_OUT="$(run_call)" || ON_OUT="BLOCKED_NONZERO_EXIT"
-    if echo "${ON_OUT}" | grep -qF "${SENTINEL}"; then
-        fail "sentinel STILL leaks with mcp-authz on (§2 after-state broken; deny rule not enforcing)"
-    fi
-    echo "    PASS: rogue tool call blocked; sentinel does not appear" >&2
+    # fallback.curl.sh contract (#496): CONTEXT and NS from the environment. With no flag it flips the
+    # gateway rule off, asserts the rogue tools/call leaks the sentinel, flips it on, asserts the gateway
+    # refuses the call, and leaves the guard on. It needs an admin cluster and says so on any other: there
+    # C7's control is the toolNames allow-list, and the gateway rule stays open.
+    step "Driving the rogue tool call through agentgateway :3003, rule open then narrowed"
+    NS="${NS}" SENTINEL="${SENTINEL}" "${FALLBACK}" >&2 \
+        || fail "fallback.curl.sh: the gateway rule did not allow then deny the rogue call"
+    echo "    PASS: the sentinel leaks with the rule open and the gateway refuses the call with it on" >&2
 
     echo "PASS [beat-03]: LIVE mcp-authz path behaves per §2 (spike passed)." >&2
     exit 0

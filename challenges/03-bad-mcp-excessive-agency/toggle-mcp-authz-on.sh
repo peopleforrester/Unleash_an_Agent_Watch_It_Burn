@@ -10,16 +10,16 @@ AGENT="${AGENT:-workshop-agent}"
 KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 
 # WHY this toggles toolNames and not the agentgateway config:
-#   The rogue tools are served by evil-mcp, and the `evil-mcp` RemoteMCPServer points DIRECT at
-#   evil-mcp-shim (gitops/ai-layer/resources.yaml). Only workshop-mcp is routed through agentgateway
-#   (:3001), so flipping agentgateway's mcpAuthorization would not gate the rogue tools. The in-path,
-#   deployed, deterministic control is the kagent toolNames allowlist on the Agent CRD, which kagent
-#   enforces when it renders the agent's tool set. This toggle patches that.
+#   This is the 2-hour workshop's C7 control, and it stays the kagent toolNames allowlist on the Agent
+#   CRD, which kagent enforces when it renders the agent's tool set. evil-mcp is now dialled through
+#   agentgateway's own bind (:3003, #496), but on a workshop cluster that bind's mcpAuthorization rule
+#   stays 'true', so this patch is what stops the rogue tools.
 #
-#   The gateway-enforced alternative (route evil-mcp through agentgateway too and flip a CEL rule) is
-#   weighed in docs/research/2026-10-24-agentgateway-evaluation.md (#239). It blocks the same tool
-#   names toolNames does and no more, so toolNames stays the control. The agent/gateway/mcp-authz-*
-#   overlays predate the gitops deploy and are not applied by anything.
+#   An admin cluster (the KubeCon breakout) uses the gateway rule instead: the terminal's guard-mcp-on
+#   narrows it to get_weather and leaves this list full, and fallback.curl.sh asserts allow then deny
+#   through that bind. Running this script there would hide the rogue tools before the gateway ever saw
+#   a call, which is not the stage claim. The agent/gateway/mcp-authz-* overlays predate the gitops
+#   deploy and are not applied by anything.
 #
 # Rogue tools (induced by the poisoned MCP description; read_internal_config leaks
 # FAKE-MCP-EXFIL-sentinel-4c1d): read_internal_config, apply_optimization.
@@ -67,4 +67,4 @@ echo "==> Setting MCP tool authorization: ${STATE} (evil-mcp $([[ "${STATE}" == 
 "${KCTL[@]}" patch agent "${AGENT}" --type=merge -p "${PATCH}"
 
 echo "==> Done. kagent reconciles the Agent; the rogue tools are $([[ "${STATE}" == on ]] && echo 'now excluded' || echo 'reachable again')."
-echo "==> Verify with: challenges/03-bad-mcp-excessive-agency/fallback.curl.sh --expect-$([[ "${STATE}" == on ]] && echo deny || echo allow)"
+echo "==> Re-ask the weather question to see it; the gateway check (fallback.curl.sh) is for admin clusters."

@@ -624,3 +624,78 @@ validates every defined component, used in a pipeline or not, so the pod would s
 It needs a second root (or a patched one) for the same profile, and the root reconciles its own spec from git
 (#253). Worse, a cluster brought up without keys would stay Datadog-free after the pool arrived, because
 `converge` writes the secret but never re-applies a root.
+## 2026-10-24 · #496 · C7 on an admin cluster is agentgateway's rule, served by a second gateway container
+
+evil-mcp now goes through agentgateway on its own bind, :3003, and the `evil-mcp` RemoteMCPServer points
+there on every cluster. On an admin cluster (the KubeCon breakout) `guard-mcp-on` / `guards-on` narrow that
+bind's `mcpAuthorization` rule to `mcp.tool.name == "get_weather"` and leave evil-mcp's `toolNames` full, so
+the rogue `tools/call` reaches the gateway and is refused before evil-mcp runs it. `guard-mcp-off` /
+`guards-off` put `'true'` back. Everywhere else the same commands still narrow `toolNames`, and the rule stays
+`'true'`: the 2-hour workshop's C7 is unchanged.
+
+- **The bind is served by a second container, `agentgateway-c7`, in the agentgateway pod, with its own
+  ConfigMap `agentgateway-c7-config`.** Same image and digest, same Service, port 3003. The toggle edits the
+  config live, and the config is one string. In its own ConfigMap, the Argo CD ignore and the
+  block-argocd-drift exemption cover the evil-mcp bind and nothing else. Admin, stats and readiness move off
+  the first container's 15000/15020/15021 (`adminAddr`/`statsAddr` off, readiness on 15022).
+- **No restart.** agentgateway v1.5.0 watches its config file and keeps the previous state when a reload fails
+  (`crates/agentgateway/src/state_manager.rs`, `LocalClient::watch_config_file`, read 2026-10-24). The
+  ConfigMap is a directory mount, never `subPath`, so the kubelet's update reaches the file. The toggle
+  annotates the gateway pod after the patch so the kubelet refreshes the volume now rather than on its next
+  periodic sync. **The reload delay is not measured yet.** `fallback.curl.sh` measures it on a live admin
+  cluster and the run-of-show's Night Before step writes it into segment 5.
+- **Which cluster is which:** an admin cluster is the one whose Argo CD root is `app-of-apps-admin`
+  (gitops/bootstrap/admin). The terminal already has cluster-wide get. A failed lookup fails the toggle; it
+  never falls back to the other control.
+- **Argo CD:** `ignoreDifferences` on `agentgateway-c7-config` `.data["config.yaml"]`, honoured on sync by the
+  existing `RespectIgnoreDifferences=true`. The cost: a committed change to that ConfigMap reaches new
+  clusters only. It holds only the evil-mcp bind.
+- **block-argocd-drift:** a matchCondition lets `system:serviceaccount:agent:web-terminal` UPDATE that one
+  ConfigMap. agent-sa is still denied, so the agent cannot switch off its own C7 guard, and the terminal still
+  cannot delete it or touch `agentgateway-config`.
+- **The rewrite** changes the one line marked `# c7-rule` and patches with a JSON-patch `test` on the
+  resourceVersion it read. `verify/test_c7_gateway_toggle.py` runs the real toggles against a fake kubectl.
+- **The stage claim** (coordinator, 2026-10-24): the gateway rule stops the rogue `tools/call` before the tool
+  runs, and the output guard redacts the sentinel in the reply. Scanning the MCP server's reply before the
+  model reads it is #480 and is not claimed.
+
+### REJECTED: a fourth bind in agentgateway-config
+**Why:** Argo CD can only ignore the whole `config.yaml` string, which would take the A2A, workshop-mcp and LLM
+routes out of GitOps on every cluster (the #349 lesson), and the drift exemption would hand the terminal the
+config every challenge rides on.
+
+### REJECTED: a second target on :3001
+**Why:** two targets on one bind are multiplexed and their tool names prefixed, which renames the tool
+get_weather's poisoned description points at (evaluation, section 2).
+
+### REJECTED: two static binds (open and narrowed) and a toggle that repoints the RemoteMCPServer url
+**Why:** no gateway rule changes, which is not the issue's ask, and a url change makes kagent restart the agent.
+
+**Not done here:** the `/controls` C7 badge in guard-proxy-agenticburn's `proxy.py` (read
+`configmaps/agentgateway-c7-config` on an admin cluster; the RBAC is in `resources.yaml` now), and the
+submodule bump once it lands.
+
+## 2026-10-24 · #496 · The rebase onto staging, and the #503 probe proves C7 at the gateway
+
+**The rebase failure.** The first promotion attempt rebased the branch onto staging at `ab41e27` and stopped on
+`verify/test_kube_safety.py`. The cause was two edits at the same place: #497 appended a `c3-secret-grep` entry to
+the `DEMO` list on the line my commit had just extended with `fallback.curl.sh`. A second conflict was in the
+run-of-show, where #500 and #503 changed the segment 6 and Night Before text my commit also changed. I resolved
+both by keeping both sides' content, and rebased the one commit onto the current `origin/staging` (`2cc31a4`).
+The commit is now the only one on top of staging.
+
+**Two things the clean merge hid.** #495 requires every agentgateway container to report the running tag in its
+span `service.version`, and my `agentgateway-c7` container still said v1.3.0. Fixed, and
+`verify/test_agentgateway_config.py` now checks every container, not only the first. The second is the probe.
+
+**The probe proves the gateway, not the allow-list.** #503's C7 beat narrowed the agent's `toolNames` itself,
+which on an admin cluster would pass through the allow-list and never touch the gateway rule this issue adds.
+The probe now mirrors the terminal's gateway branch on admin clusters: `toolNames` is set full, then the rule is
+narrowed (`set_c7_rule`, the same JSON patch as the terminal's `_c7rule`), and `guards-off` and the start state
+both require the rule open. The C7 re-ask fails the beat if `toolNames` lost the rogue tools, because then the
+gateway would not be what stopped it. `test_kubecon_probe.py` checks that the probe's rewrite of the committed
+config is byte-identical to the terminal's `.c7rule.py` output, for both states.
+
+**Known gap, not built here.** The `/controls` C7 badge still reads only `toolNames`, so after `guard-mcp-on` on an
+admin cluster it shows C7 unarmed while the gateway refuses the call. The probe's badge check runs before the C7
+beat, so it does not see this. It closes with the guard-proxy badge follow-up.

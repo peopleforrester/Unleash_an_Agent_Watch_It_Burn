@@ -288,7 +288,7 @@ AWS Bedrock (Claude: haiku / sonnet[default] / opus)
 MCP path (separate from the A2A chat path):
 kagent workshop-agent
   ├─ RemoteMCPServer "workshop-mcp" -> agentgateway:3001/mcp -> workshop-mcp:8000/mcp   (good tools)
-  └─ RemoteMCPServer "evil-mcp"     -> evil-mcp-shim.agent:8000/mcp                       (rogue tools, direct)
+  └─ RemoteMCPServer "evil-mcp"     -> agentgateway.agent:3003/mcp -> evil-mcp-shim:8000  (rogue tools, #496)
 ```
 
 Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`promptTokenCount`/`candidatesTokenCount`/`totalTokenCount`) and converts to USD with a per-tier table; exported as OTLP `gen_ai.client.cost` (USD, `gen_ai.request.model`, `gen_ai.provider.name=aws.bedrock`). Guarding stays on the guard-proxy (not native agentgateway guardrails) because those attach only to `llm.models[]` backends returning OpenAI chat bodies; the workshop-agent is an A2A backend, so agentgateway fronts it as a plain L7 hop.
@@ -302,7 +302,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 - **Cost metric uses the standard `gen_ai` namespace.** Dropped the custom `witb_cost_usd` metric and the Prometheus `/metrics` endpoint; cost is `gen_ai.client.cost` (the GenAI semconv defines no monetary metric, so cost is a project suffix under the standard namespace). Provider stamped `aws.bedrock` at source + a Collector OTTL net. (commits `f963550`, `d5c2bec`)
 - **agentgateway is the in-path A2A hop and MCP front.** Repointing creates the `guard-proxy → agentgateway → kagent` Service Map chain. OSS v1.3.0 (GA 2026-06-18), registry `cr.agentgateway.dev`. Tracing config under the top-level `config.tracing` key (bare `tracing` and `frontendPolicies.tracing` both crash the v1.3.0 binary). (commits `3831e3d`, `b64e7ea`, `17ee91e`)
 - **beat-2 exfil sentinel reframed from a credential to a recipe (2026-06-27).** A credential-shaped sentinel is self-censored by the model on the response path; reframed to BurritoBot's non-credential "bat spit amazing sauce" `WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7`, which the model echoes cleanly so the output Regex scanner has something real to redact. (commit `9a3971e`)
-- **beat-3 control is the kagent `toolNames` allowlist, not agentgateway `mcpAuthorization`.** The agent dials the rogue `evil-mcp` server directly, so flipping gateway authz does not gate it. An earlier toggle wired rogue tool names into `workshop-mcp`'s allowlist, but a server cannot expose tools it does not serve, so the attack landed in neither state. Fixed to wire the `evil-mcp` server: `--off` allowlists `[get_weather, read_internal_config, apply_optimization]` (attack lands), `--on` allowlists `[get_weather]` only. (`challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh`)
+- **beat-3 control is the kagent `toolNames` allowlist on a workshop cluster, and agentgateway `mcpAuthorization` on an admin cluster (#496).** evil-mcp is dialled through the gateway's own bind (:3003, the `agentgateway-c7` container); on an admin cluster `guard-mcp-on` narrows that bind's rule to `get_weather` and leaves `toolNames` full, everywhere else it narrows `toolNames` and the rule stays `'true'`. An earlier toggle wired rogue tool names into `workshop-mcp`'s allowlist, but a server cannot expose tools it does not serve, so the attack landed in neither state. Fixed to wire the `evil-mcp` server: `--off` allowlists `[get_weather, read_internal_config, apply_optimization]` (attack lands), `--on` allowlists `[get_weather]` only. (`challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh`)
 - **ArgoCD `ignoreDifferences` for the three live toggles** (guard-proxy `.env`, Agent `.spec.declarative.tools`, Agent `.spec.declarative.modelConfig`). **ai-layer is sync-wave 3.** **Fail-closed guard:** `PROXY_FAIL_CLOSED=true`; per-cluster `RATE_LIMIT_RPM` + `COST_CAP_USD` stop the cost demo from running up the real bill.
 
 ### Components & Versions
@@ -401,7 +401,7 @@ Every toggle does `kubectl exec deploy/guard-proxy -- python3 -c "...urlopen('ht
 |---|---|---|
 | Toggles `exec` the guard-proxy, never spawn a curl pod | Under Kyverno Enforce a no-limits `kubectl run` pod is rejected; exec spawns no pod and changes no spec | `e6cac43` |
 | Operational restarts use pod-delete | block-argocd-drift rejects a spec patch; deleting a child pod does not | `infra/reload-datadog-consumers.sh`, `reinstrument-app-pods.sh` |
-| Beat-3 control is kagent `toolNames`, not agentgateway authz | the Agent dials MCP servers directly, bypassing the gateway | `toggle-mcp-authz-on.sh`, `BUILD-SPIKE.md` |
+| Beat-3 control is kagent `toolNames` on a workshop cluster, agentgateway authz on an admin cluster | evil-mcp goes through the gateway's own bind (#496); the 2-hour workshop keeps the student's allow-list edit | `toggle-mcp-authz-on.sh`, `entrypoint.sh` `_mcp`, `fallback.curl.sh` |
 | Beat-3 toggle wires `evil-mcp`, not names into workshop-mcp | a server cannot expose a tool it does not serve | `c83a276` |
 | Beat-2 target is a non-credential recipe, not a password sentinel | a credential-shaped sentinel self-censors, making the before-state unprovable | `9a3971e` |
 | Remove the label selector from block-argocd-drift; gate on the annotation | this ArgoCD uses annotation tracking, so the label match never fired (policy INERT) | `9a3971e` |
