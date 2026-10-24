@@ -11,6 +11,10 @@ both people read.
 Every value below is verified against the code by `verify/test_challenge_assets.py`, so a rename that
 misses this file fails the build rather than misleading a presenter.
 
+The full student text for each challenge, with its attack prompts and fixes, is
+[`challenges/LAB-TEXT.md`](../challenges/LAB-TEXT.md). It is a dated copy of the lab page that
+`verify/export-lab-text.sh` generates, and `verify/test_lab_text_export.py` fails when it falls behind.
+
 | # | Challenge | The asset | Where it lives | The control that stops it | Visible proof |
 |---|---|---|---|---|---|
 | 1 | Exfiltrate the customer data | marketing intel | `get_marketing_intel` tool | five agent-namespace **NetworkPolicies** (`agent-egress-allowlist` and its DNS/otel/kagent allows) | the tool reports the command FAILED; the model span that received it is `status:error` |
