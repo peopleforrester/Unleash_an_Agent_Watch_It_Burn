@@ -15538,3 +15538,39 @@ The one red was `test_dispatched_runs_cause_comment.py`: GitHub answered its ano
 HTTP 403, "0 anonymous requests left this hour", since every run on the host shares the one anonymous quota. Run
 again alone once the quota had refilled, the test passed all its checks. A follow-up asks for that read to use a
 token, so the host's other runs cannot turn it red.
+
+## 2026-11-04 · #452 · The KubeCon recorded fallback: the replay and the screenshots deck, on the six-segment layout
+
+The breakout's point 9 needs a fallback for the room's live input. Run 7091's draft (`origin/agent/452-7091`,
+0023ac3b) built the replay half on 2026-10-24 and never reached staging; the owner's comment of 2026-10-27 found no
+branch then, and it was on origin by this run. `verify/prior-drafts.sh` called its drift two edits in place
+(`.gitignore`, the run-of-show) and a decisions.md append, but staging had since rewritten what the draft was
+built on, so most of it was made again on the current layout:
+
+- **Six segments, not seven.** The run-of-show went to six segments (#687, #776), so the videos are one per
+  segment, 1 to 6, each titled with its segment's heading. Segment 1 is in the set because the room's first
+  minute on the bot and the prompt wall are on screen in it. The draft had segments 2 to 7, a platform tour and
+  an observability segment the cut no longer has.
+- **The prompt set is `/kubecon`'s room prompts.** The draft copied its leak prompt from `/brief`, the workshop
+  page, and wrote its own off-topic asks. Now every prompt is the room's prompt on `/kubecon`, the page this
+  session drives from, word for word, with the segments the page shows it in; the offline test holds the two
+  sets equal both ways. `--segment N` replays the segment on stage. Challenge 2's Tron ask and its follow-up
+  share a `thread`, so they go out as one conversation; every other prompt has its own.
+- **The front door moved.** The public host is `attackme.burritobot.co` (the agenticburn.com name is its twin,
+  #651). guard-proxy's window is now 150 a minute (the draft paced under 120). The console nginx now holds each conversation to 10 a
+  minute, keyed on the `X-BurritoBot-Session` header, so the replay sends that header and a witch name as the
+  storefront does. The reply timeout is 300 s, over nginx's 285 s. The refusals it stops on are guard-proxy's
+  two rate limits, its cost cap ("The kitchen is closed"), its budget guard ("The kitchen tab is frozen", which
+  the draft had read as the cost cap) and nginx's own "Slow down"; the offline test provokes each on the real
+  handler, and reads nginx's from `console.conf`.
+- **The screenshots deck is captured on the live clusters as well as at the rehearsal.** The issue asks for the
+  videos from the first full rehearsal; it does not say where the screenshots come from. Most shots are a
+  prompt and its reply on one of the two clusters, so `scripts/capture-fallback-screenshots.py` takes them in
+  headless Chromium through the real storefront. Each shot names the `/controls` state it shows, and the script
+  refuses a shot whose cluster reads otherwise, so a guarded shot cannot be taken on an open bot. It never flips
+  a guard. Two shots stay by hand at the rehearsal: the signed-in Datadog trace and the `guardrails-on` terminal.
+- **`deck.html`'s lists are written from `assets.yaml`** by `check-fallback-assets.py --write-deck`, so the deck
+  and the manifest are edited in one place. The draft kept a hand-copied list and a hand-copied title map.
+- Kept from the draft: the required target, one session per prompt, pacing at most half the window, a guardrail
+  block and a missed marker reported but not failures, the asset checker, and the videos out of git by default
+  (Git LFS or a release asset instead is still open for Michael).
