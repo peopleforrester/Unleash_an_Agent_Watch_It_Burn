@@ -1,4 +1,4 @@
-<!-- ABOUTME: Attendee split-console: left = beat instructions, right = tabs {Terminal (ttyd), Agent chat}. -->
+<!-- ABOUTME: Attendee split-console: left = beat instructions, right = tabs {Terminal (ttyd), Agent chat (BurritoBot)}. -->
 <!-- ABOUTME: Cloud-Shell style. Cost counter polls the guard-proxy /cost. Served by the console frontend nginx. -->
 <!doctype html>
 <html lang="en" data-vtt-page="console">
@@ -70,7 +70,7 @@
         <button class="tab" data-pane="agent">Agent chat</button>
       </div>
       <div class="pane" data-pane-body="terminal"><iframe src="/terminal/" title="terminal"></iframe></div>
-      <div class="pane hidden" data-pane-body="agent"><iframe src="/chat/" title="agent chat"></iframe></div>
+      <div class="pane hidden" data-pane-body="agent"><iframe src="/burritbot" title="agent chat"></iframe></div>
     </div>
   </div>
   <script src="console.js"></script>

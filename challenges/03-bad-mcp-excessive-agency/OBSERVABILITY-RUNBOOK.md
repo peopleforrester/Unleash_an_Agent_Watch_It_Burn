@@ -79,7 +79,7 @@ AWS_PROFILE=accen-dev KUBECONFIG="$KCFG" kubectl --context "$CTX" -n agent \
   set env deploy/guard-proxy -c proxy OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=SPAN_ONLY
 AWS_PROFILE=accen-dev KUBECONFIG="$KCFG" kubectl --context "$CTX" -n agent \
   rollout status deploy/guard-proxy
-# Run a prompt through guard-proxy (chat-ui, or POST an A2A message/send to guard-proxy:8080).
+# Run a prompt through guard-proxy (BurritoBot at /, or POST an A2A message/send to guard-proxy:8080).
 ```
 
 **Expected in Datadog LLM Observability:** the `sanitize` span (`gen_ai.operation.name=chat`) shows

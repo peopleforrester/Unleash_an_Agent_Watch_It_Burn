@@ -23,7 +23,8 @@ def check(name, cond):
 
 
 pages = sorted(WEB.glob("*.html"))
-check("there are pages to check", len(pages) >= 9)
+# Eight since the retired chat-ui's index.html went (#240).
+check("there are pages to check", len(pages) >= 8)
 
 for p in pages:
     s = p.read_text()

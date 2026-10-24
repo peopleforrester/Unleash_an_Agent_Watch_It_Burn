@@ -30,12 +30,6 @@ configMapGenerator:
     files:
       - server.py=workshop-mcp-server.py # key is server.py so the container's /app/server.py path matches
       - tool_audit.py # per-agent tool-call audit trail (#190); imported by server.py from /app
-  - name: chat-ui-src
-    files:
-      - web/index.html
-      - web/app.js
-      - web/display.html
-      - web/display.js
   - name: console-src
     files:
       - web/console.html
@@ -46,6 +40,10 @@ configMapGenerator:
       - web/platform.html # the platform catalogue: every service, its URL and its login
       - web/diagram.html # VTT Blueprint tab: what was installed at which wave (ported from Packt, #153)
       - web/links.html # VTT Endpoints tab: every component, its address and its login (ported from Packt, #153)
+      # The side-screen prompt stream (#338). These two used to ship in chat-ui-src, so /display 404'd: this
+      # ConfigMap is mounted over the console's whole web root and was the only place nginx looked (#240).
+      - web/display.html
+      - web/display.js
       - web/skins.js # VTT skin layer: skin definitions (BurritoBot default + Accenture); see web/SKINS.md
       - web/active-skin.js # the one-line skin knob (switch skins here)
       - web/skin.js # applier: sets palette vars + brand text/title/favicon from the active skin

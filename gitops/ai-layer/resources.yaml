@@ -744,40 +744,6 @@ spec:
   sseReadTimeout: 5m0s
   terminateOnClose: true
 ---
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: chat-ui
-  labels: { app.kubernetes.io/name: chat-ui }
-spec:
-  replicas: 1
-  selector: { matchLabels: { app.kubernetes.io/name: chat-ui } }
-  template:
-    metadata: { labels: { app.kubernetes.io/name: chat-ui } }
-    spec:
-      automountServiceAccountToken: false
-      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
-      containers:
-        - name: nginx
-          image: ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0
-          ports: [{ name: http, containerPort: 8080 }]
-          securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
-          resources: { requests: { cpu: 25m, memory: 32Mi }, limits: { cpu: 100m, memory: 64Mi } }
-          volumeMounts: [{ name: web, mountPath: /usr/share/nginx/html, readOnly: true }]
-      volumes:
-        - name: web
-          configMap: { name: chat-ui-src }
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: chat-ui
-spec:
-  selector: { app.kubernetes.io/name: chat-ui }
-  ports:
-    - { name: http, port: 80, targetPort: http }
-    - { name: https, port: 443, targetPort: https }   # #139: TCP passthrough, nginx terminates
----
 # The GOOD workshop MCP: the legit tools the scoped agent is allowed to use. Counterpart to evil-mcp-shim.
 apiVersion: apps/v1
 kind: Deployment
@@ -844,8 +810,8 @@ spec:
 ---
 # ============================================================
 # Attendee console: web terminal (ttyd) + the split-console frontend.
-# The frontend serves console.html and path-routes /terminal/ -> ttyd, /chat/ -> chat-ui,
-# /a2a/ + /cost -> guard-proxy. It is the single attendee-facing Service (LB), fronted per-attendee
+# The frontend serves burritbot.html, console.html and the lab pages, and path-routes /terminal/ -> ttyd,
+# /chat + /a2a/ + /cost -> guard-proxy. It is the single attendee-facing Service (LB), fronted per-attendee
 # by the apex wildcard router (a-<id>.agenticburn.com).
 # ============================================================
 apiVersion: v1

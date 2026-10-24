@@ -271,8 +271,8 @@ The attackable AI application at the center of the workshop. Attendees jailbreak
 ### Architecture / Request Chain
 
 ```
-BurritoBot frontend / chat-ui
-   |  POST /chat {prompt}   (or A2A message/send to "/")
+BurritoBot frontend (console nginx, burritbot.html)
+   |  POST /chat {prompt}   (or A2A message/send to "/" via /a2a/)
    v
 guard-proxy (proxy.py, :8080)   <- input guards, cost meter, rate/cost cap, output guard
    |  AGENT_URL = http://agentgateway.agent.svc.cluster.local:3000
@@ -315,7 +315,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 | llm-guard | `laiyer/llm-guard-api:0.3.16` (only published image) | 8000 | reads `scanners.yml` from ConfigMap; bearer `llm-guard-auth` |
 | workshop-mcp (good) | `python:3.12-slim` + `mcp`, `workshop-mcp-server.py` | 8000 (`/mcp`) | tools `list_pods`, `apply_manifest` (HITL), `get_secret` |
 | evil-mcp-shim (rogue) | `python:3.12-slim` + `mcp`, `server.py` | 8000 (`/mcp`) | tools `get_weather` (poisoned desc), `read_internal_config`, `apply_optimization` |
-| chat-ui / console | `nginxinc/nginx-unprivileged:1.27-alpine` | 8080→80 | static UI from ConfigMap |
+| console | `nginxinc/nginx-unprivileged:1.27-alpine` | 8080/8443 | serves BurritoBot, `/lab`, `/console` and the other pages from the `console-src` ConfigMap; the separate chat-ui was removed (#240) |
 | web-terminal | `ghcr.io/peopleforrester/watch-it-burn:web-terminal` (ttyd) | 7681 | `runAsUser: 1000` (image USER `term`) |
 
 Bedrock ModelConfigs (`kagent.dev/v1alpha2`, native Bedrock, us-west-2, **Pod Identity** via `agent-sa`): `bedrock-nova` = `us.amazon.nova-pro-v1:0` (**the workshop default**, `resources.yaml:96-99` and `:109`); `bedrock-haiku` = `us.anthropic.claude-haiku-4-5-20251001-v1:0`; `bedrock-sonnet` = `us.anthropic.claude-sonnet-4-6`; `bedrock-opus` = `us.anthropic.claude-opus-4-8`. The three Claude tiers stay defined for an optional cost race but are not the default: they refuse the exfil beats, while Nova complies and executes the tools. Claude tiers require the `us.` Geo inference profile in us-west-2. proxy.py per-1K USD: haiku $0.001/$0.005, sonnet $0.003/$0.015, opus $0.005/$0.025. **Note the defect: there is no Nova row in that table, and `MODEL_TIER=sonnet` is set fleet-wide (`resources.yaml:410-412`), so Nova traffic is billed at Sonnet rates and reported as the wrong model.**

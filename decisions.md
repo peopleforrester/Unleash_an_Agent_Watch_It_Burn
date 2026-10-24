@@ -400,3 +400,23 @@ which fails loudly when conftest is missing or a different version.
 console-detach instructor beat all need org access we do not hold (#202). The OIDC `org-policies` GitHub
 environment is a CI workflow and waits for the owner. "CI can write state" and "Datadog can still assume in"
 have no subject: there is no CI role and no Datadog AWS role.
+
+## 2026-10-24 · #240 · chat-ui removed; the console's Agent tab loads BurritoBot
+
+chat-ui was not the kagent UI and not an A2A test client. It was a second nginx Deployment
+(`ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine`) serving the older `index.html`/`app.js`
+split-console chat, which posted A2A to `/a2a/` and polled `/cost`. Its only consumer was the "Agent
+chat" iframe on `/console` (via `console.conf`'s `/chat/` route). Nothing in the lab, the deck, the tour,
+the `platform` catalogue or the provisioning flow links `/console` or `/chat/`, and Michael measured zero
+requests on watch-it-burn-pres-michael on 2026-09-05. So it had no consumer, and the issue says to remove
+it in that case. The "developer's view of their agent" is already the real kagent UI, at
+`kagent-<cluster>.agenticburn.com`, which the `platform` catalogue lists under exactly that description
+(`platform.html:138`, `web-terminal/entrypoint.sh:84`). chat-ui showed none of that view.
+
+- Removed the Deployment, the Service, the `chat-ui-src` generator, the `/chat/` route, and `web/index.html`
+  plus `web/app.js`.
+- `/console` stays, and its Agent tab now iframes `/burritbot`, so the split view drives the same chat surface
+  students use. The runbook and the quickstart already describe the tab, so they stay accurate.
+- `display.html`/`display.js` moved into `console-src`. They had shipped only in `chat-ui-src`, which kept
+  `/display` returning 404 on clusters even after #338 added its route. `verify/test_console_service_vhosts.py`
+  now checks that every `try_files` page is packaged in `console-src`, not just that it has a location.

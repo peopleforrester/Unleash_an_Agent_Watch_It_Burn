@@ -80,6 +80,20 @@ WEB = REPO / "gitops/ai-layer/web"
 for name in ("burritbot", "lab", "brief", "platform", "diagram", "links", "console", "display"):
     check(f"/{name} has a location", f"/{name} " in CONF and (f"{name}.html" in CONF or name == "console.js"))
 
+# A location is only half of reachable: nginx answers from the console-src ConfigMap, mounted over its
+# whole web root, so a page routed here but packaged into another ConfigMap still 404s. That is how
+# /display stayed broken after #338 added its route: the files shipped in chat-ui-src (#240).
+import yaml  # noqa: E402
+
+KUST = yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text(encoding="utf-8"))
+console_src = next(g for g in KUST["configMapGenerator"] if g["name"] == "console-src")
+shipped = {pathlib.Path(f.split("=")[-1]).name for f in console_src["files"]}
+default_server = CONF[:CONF.index("map $http_upgrade")]
+for target in sorted(set(re.findall(r"try_files /(\S+?) =404;", default_server))):
+    check(f"{target} is in console-src, where the console serves from", target in shipped)
+# display.html fetches its script by relative path, so the script must ship beside it.
+check("display.js ships beside display.html", "display.js" in shipped)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

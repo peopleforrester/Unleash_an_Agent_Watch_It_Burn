@@ -60,7 +60,6 @@ for x in placeholders[:10]:
 # fail this test instead of failing on a cluster.
 VERIFIED_NUMERIC_USER = {
     # deployment -> (image tag, verified uid, how)
-    "chat-ui": ("nginx-1.27-alpine", 101, "docker image inspect .Config.User == '101', 2026-08-24"),
     "console": ("nginx-1.27-alpine", 101, "docker image inspect .Config.User == '101', 2026-08-24"),
 }
 missing_uid = []

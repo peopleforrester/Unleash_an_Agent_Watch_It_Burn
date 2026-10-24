@@ -48,7 +48,7 @@ exist on that profile.
 | Candidate | Verdict | Apps saved on attendee |
 |---|---|---|
 | `customer-stream` | **Remove.** Nothing reads it. C1's data comes from `workshop-mcp`, not from this stream | 1 |
-| `chat-ui` | **Remove.** A second chat front end, reachable only from `/console`, which nothing links | 0 (one Deployment, one Service) |
+| `chat-ui` | ~~**Remove.**~~ **Removed (#240).** A second chat front end, reachable only from `/console`, which nothing links | 0 (one Deployment, one Service) |
 | `loki` + `alloy` | **Remove, after re-pointing one E2E test** at Datadog Logs, which already receives the same lines | 2 |
 | `tempo` | **Remove from attendee, keep on admin**, where builders read raw spans | 1 |
 | `falco-talon` | **Remove from attendee, keep on admin/full.** Idle on attendee clusters | 1 |
@@ -184,6 +184,9 @@ into `chat-ui-src`, not `console-src` (`gitops/ai-layer/kustomization.yaml:33-38
 running nginx against the source `web/` directory, which does contain the file. On a cluster the page is
 reachable only as `/chat/display.html`. Moving the two files to `console-src` fixes `/display`, and it is
 also the step that frees `chat-ui` to be removed.
+
+**Done in #240:** the display files moved to `console-src`, `/console`'s Agent tab now loads BurritoBot, and
+chat-ui is gone. The list below is what that removal touched.
 
 Removing chat-ui touches: its Deployment and Service in `resources.yaml`, the `chat-ui-src` generator, the
 `/chat/` location, the second tab of `console.html` (or `/console` entirely), `verify/test_chat_ui.py`, and
