@@ -56,6 +56,10 @@ for sh in sorted(TF.rglob("*.sh")):
     for i, line in enumerate(lines):
         if not re.search(r"terraform -chdir=\S+ (apply|destroy)\b", line) or line.lstrip().startswith("#"):
             continue
+        # infra/org/boundary is neither root: one IAM policy per account that outlives every event, costs
+        # nothing to split, and declares no `event` variable, so -var event= would fail its apply (#526).
+        if re.search(r"terraform -chdir=\S*(BOUNDARY_DIR|org/boundary)\S* (apply|destroy)\b", line):
+            continue
         cmd, j = line, i
         # A continuation is a trailing backslash, or `\\"` where the command is a printed hint in a log.
         while cmd.rstrip().endswith(("\\", '\\\\"')) and j + 1 < len(lines):

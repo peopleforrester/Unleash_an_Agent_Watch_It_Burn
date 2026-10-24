@@ -437,7 +437,8 @@ usage() {
 Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
 
   preflight <n>       BEFORE any run: assert every account resolves to its EXPECTED account id and has
-                      vCPU/NLB/EKS/VPC/EIP headroom for <n> clusters each. Read-only; exits non-zero on
+                      vCPU/NLB/EKS/VPC/EIP headroom for <n> clusters each, its lab VPC, and the
+                      permissions boundary every cluster plan looks up. Read-only; exits non-zero on
                       anything that would block. A quota rejection found mid-build costs the window.
 
   check-tls <host...> BEFORE doors: per hostname assert https 200, a validating chain whose SAN covers

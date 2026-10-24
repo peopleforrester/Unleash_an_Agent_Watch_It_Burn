@@ -385,6 +385,13 @@ before doors (`notes/DEBRIEF.md` in the Portland repo).
 Run these from `infra/terraform/fleet/`, read the output, and repair anything that
 is merely slow rather than rebuilding:
 
+- [ ] **Permissions boundary in each delivery account.** Every cluster plan looks up
+  `watch-it-burn-permissions-boundary` by name, and an account without it fails both
+  roster clusters at plan with "no matching IAM Policy found" after the lab VPC is
+  already billing (#526). Apply it once per account, with that account's own state:
+  `terraform -chdir=../../org/boundary init && terraform -chdir=../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2`.
+  `./fleet.sh preflight 1` reports it per account, and on a FAIL prints this line for
+  the account that is missing it.
 - [ ] **Platform up on AWS.** Bring up the roster (the community cluster and both
   admin clusters) on the KubeCon delivery accounts and region:
   `./fleet.sh instructors up all`. The attendee pool is not provisioned for this

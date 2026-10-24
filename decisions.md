@@ -832,3 +832,17 @@ The archived BurritoBot repo's dated schedule (spec 001, BurritoBot#114, #121, #
   The delivery date stays, and must equal `DELIVERY_DATE` in `verify/model_pin_check.py`.
 - **Not done here:** the run-throughs (Michael and Whitney present them), bringing the platform up (#454),
   and repointing spec 001 at this repo, which is a personal-knowledge change.
+
+## 2026-10-24 · #526 · preflight checks the permissions boundary; the boundary root is outside the event-tag rule
+
+**Decision:** `fleet.sh preflight` runs `aws iam get-policy` for `watch-it-burn-permissions-boundary` in each
+account it checks. NoSuchEntity is a FAIL that prints that account's `infra/org/boundary` init and apply line
+(`-state=states/<acct>.tfstate`, the default account included). Any other error is a FAIL too, because an
+unreadable boundary is not a present one. The lab-VPC hints name the state `lab_vpc_state_for` uses:
+`terraform.tfstate` for WIB_DEFAULT_ACCOUNT, `states/<acct>.tfstate` for the rest. A stray
+`states/<default>.tfstate` gets a note, because fleet.sh reads it first and down-infra never destroys it.
+
+**On the event tag:** verify/test_event_tag.py requires `-var event=` on every apply or destroy of a root
+under infra/terraform. It now skips `infra/org/boundary` commands. That root declares no `event` variable, so
+passing one would fail the apply. Its single IAM policy per account outlives every event and costs nothing, so
+there is no spend to split by event.

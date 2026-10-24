@@ -22,12 +22,22 @@
 #      the check passed on four empty states for two months. It now reads the state's vpc_id output
 #      and confirms that VPC still exists in the account.
 #
-# Everything here is a read: sts, service-quotas, terraform output, and ec2 describe-vpcs. It never mutates.
+#   4. A permissions boundary that was never applied. The cluster root looks up
+#      watch-it-burn-permissions-boundary by name (infra/org/boundary, #207), so an account without it
+#      fails every cluster plan with "no matching IAM Policy found". At the KubeCon bring-up on
+#      2026-10-24 that is how both roster clusters in accen-dev failed, after the lab VPC was already
+#      billing (#526). It is one policy per account, applied once, and this checks it is there.
+#
+# Everything here is a read: sts, service-quotas, iam get-policy, terraform output, and ec2 describe-vpcs.
+# It never mutates.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 readonly LAB_VPC_DIR="${SCRIPT_DIR}/../aws/network"
+readonly BOUNDARY_DIR="${SCRIPT_DIR}/../../org/boundary"
+# Keep in step with local.boundary_name in infra/org/boundary/main.tf and the cluster root's lookup.
+readonly BOUNDARY_NAME="watch-it-burn-permissions-boundary"
 WIB_REGION="${WIB_REGION:-us-west-2}"
 # The `event` tag the apply hints below must pass: the network root has no default for it (#494).
 # shellcheck source=SCRIPTDIR/event.sh
@@ -72,6 +82,7 @@ Usage: ${0##*/} <clusters-per-account>
 Read-only preflight for a fleet run. Verifies, per account:
   * the profile resolves to the EXPECTED account id (hard failure on mismatch)
   * vCPU / NLB / EKS / VPC / EIP quota headroom for <clusters-per-account>
+  * the permissions boundary (${BOUNDARY_NAME}) exists; every cluster plan looks it up by name
   * the shared lab VPC exists: its id is read from the tfstate output AND confirmed live in the
     account (a file-existence test passes on a destroyed state, which once hid four missing VPCs)
 and, once, that the local tooling is present.
@@ -154,6 +165,19 @@ for acct in "${accounts[@]}"; do
         --quota-code "${Q_CLB}" --region "${WIB_REGION}" --query 'Quota.Value' --output text 2>/dev/null || true)"
     [[ -n "${clb}" && "${clb}" != "None" ]] && note "Classic LB quota ${clb%.*} (nothing should create one; a rise here means the NLB annotations regressed)"
 
+    # The boundary has its own per-account state under infra/org/boundary/states/, the default account
+    # included: it was never part of the lab VPC's single-account history.
+    boundary_apply="terraform -chdir=${BOUNDARY_DIR} init && terraform -chdir=${BOUNDARY_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION}"
+    if boundary_err="$(AWS_PROFILE="${acct}" aws iam get-policy \
+            --policy-arn "arn:aws:iam::${actual}:policy/${BOUNDARY_NAME}" \
+            --query 'Policy.PolicyName' --output text 2>&1 >/dev/null)"; then
+        ok "permissions boundary ${BOUNDARY_NAME} present"
+    elif [[ "${boundary_err}" == *NoSuchEntity* ]]; then
+        bad "permissions boundary ${BOUNDARY_NAME} MISSING in ${acct} — every cluster plan fails without it. Apply it first: ${boundary_apply}"
+    else
+        bad "permissions boundary ${BOUNDARY_NAME} could not be read in ${acct} (${boundary_err//$'\n'/ }) — verify by hand; if it is missing, apply: ${boundary_apply}"
+    fi
+
     # The lab VPC check reads the state's OUTPUT and then confirms the VPC still exists in the
     # account. A file-existence test is not enough and was actively misleading: `terraform destroy`
     # leaves the state file in place with resources=0 and no outputs, so the four student accounts
@@ -163,19 +187,31 @@ for acct in "${accounts[@]}"; do
     #
     # The live describe closes the other direction too: a state can carry a vpc_id for a VPC deleted
     # out of band (console, a co-tenant's cleanup sweep), which is just as silent and just as fatal.
+    #
+    # The state named in the apply hints is the one fleet.sh's lab_vpc_state_for uses, which is what
+    # down-infra destroys: the DEFAULT terraform.tfstate for WIB_DEFAULT_ACCOUNT, states/<acct>.tfstate
+    # for the rest. The hint used to say states/<acct>.tfstate for every account, so following it for
+    # the default account built a second VPC state that down-infra never destroys (#526).
     vpc_state="${LAB_VPC_DIR}/states/${acct}.tfstate"
-    if [[ ! -f "${vpc_state}" && "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
-        vpc_state="${LAB_VPC_DIR}/terraform.tfstate"
+    vpc_state_arg="states/${acct}.tfstate"
+    if [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
+        vpc_state_arg="terraform.tfstate"
+        if [[ -f "${vpc_state}" ]]; then
+            note "a stray ${vpc_state} exists: fleet.sh reads it before terraform.tfstate, and down-infra never destroys it"
+        else
+            vpc_state="${LAB_VPC_DIR}/terraform.tfstate"
+        fi
     fi
+    vpc_apply="terraform -chdir=${LAB_VPC_DIR} apply -state=${vpc_state_arg} -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
     if [[ ! -f "${vpc_state}" ]]; then
-        bad "no lab VPC state — apply it first: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+        bad "no lab VPC state — apply it first: ${vpc_apply}"
     else
         lab_vpc_id="$(terraform -chdir="${LAB_VPC_DIR}" output -state="${vpc_state}" -raw vpc_id 2>/dev/null || true)"
         if [[ -z "${lab_vpc_id}" || "${lab_vpc_id}" == "null" ]]; then
-            bad "lab VPC state is EMPTY (destroyed, never applied, or outputs missing) — apply it: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+            bad "lab VPC state is EMPTY (destroyed, never applied, or outputs missing) — apply it: ${vpc_apply}"
         elif ! AWS_PROFILE="${acct}" aws ec2 describe-vpcs --vpc-ids "${lab_vpc_id}" \
                 --region "${WIB_REGION}" --query 'Vpcs[0].VpcId' --output text >/dev/null 2>&1; then
-            bad "lab VPC ${lab_vpc_id} is in the state but DOES NOT EXIST in ${acct}/${WIB_REGION} — re-apply: terraform -chdir=${LAB_VPC_DIR} apply -state=states/${acct}.tfstate -var profile=${acct} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
+            bad "lab VPC ${lab_vpc_id} is in the state but DOES NOT EXIST in ${acct}/${WIB_REGION} — re-apply: ${vpc_apply}"
         else
             ok "lab VPC ${lab_vpc_id} present and live"
         fi
