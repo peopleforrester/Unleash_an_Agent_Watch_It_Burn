@@ -1108,3 +1108,25 @@ an instructor-box demo only (#114). The attendee root's exclude is now
   `test_observability.py` hold the attendee trace lists free of Tempo; `test_service_links.py` holds the page
   wording and finds the Tempo uid in `gitops/tempo/`; the live `test_service_hosts_live.py` expects no tempo
   data source on an attendee cluster. Not yet checked on a live cluster.
+## 2026-10-24 · #484 · The Backstage footprint is read from the kubelet summary, because there is no `kubectl top`
+
+**Nothing in this repo installs metrics-server.** The EKS addons in `infra/terraform/aws/cluster/main.tf` are
+vpc-cni, kube-proxy, coredns, the pod identity agent and the EBS CSI driver, and no Argo CD app deploys it, so
+the metrics API that `kubectl top` reads is absent on an attendee cluster. `infra/SIZING.md` still says to
+measure with `kubectl top`, and that command fails there.
+
+- **`verify/backstage-footprint.sh` measures the #484 numbers** with `CONTEXT` required and every kubectl call
+  carrying `--context`. It samples the kubelet summary API (`nodes/<node>/proxy/stats/summary`), the source
+  metrics-server itself would scrape, so no new component goes onto the cluster just to be measured. The
+  working set is the number `kubectl top` would show, and RSS is the "resident" figure the local #244 run
+  reported. It prints the last and peak readings beside each Backstage and Postgres request and limit. Then it
+  prints each node's allocatable against the requests of every live pod on it, counted as the scheduler counts
+  them (init containers, sidecars, overhead). Last, it calls the Kubernetes tab's own backend call
+  (`POST /api/kubernetes/services/<name>`), signed in as guest through a port-forward, for unicorn-party and
+  workshop-agent.
+- **Not wired into `run-e2e.sh`.** Backstage is still in `gitops/apps-disabled/` on main; the branch that turns
+  it on (#244) waits on the rebuilt, signed image (#483). Added to the live suite now, it would fail on every
+  cluster. Wire it in when #244 is promoted.
+- **Tests:** `test_backstage_footprint.py` runs the arithmetic on fixed kubelet, pod, node and tab responses, and
+  checks that the script refuses to run without `CONTEXT`. The script was smoke-run against a stub kubectl and a
+  mock Backstage (pass, an empty tab, an unreachable portal), not yet against a cluster.
