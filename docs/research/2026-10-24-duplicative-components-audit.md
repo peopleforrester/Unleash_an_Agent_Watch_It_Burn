@@ -50,8 +50,8 @@ exist on that profile.
 | `customer-stream` | **Remove.** Nothing reads it. C1's data comes from `workshop-mcp`, not from this stream | 1 |
 | `chat-ui` | ~~**Remove.**~~ **Removed (#240).** A second chat front end, reachable only from `/console`, which nothing links | 0 (one Deployment, one Service) |
 | `loki` + `alloy` | **Remove, after re-pointing one E2E test** at Datadog Logs, which already receives the same lines | 2 |
-| `tempo` | **Remove from attendee, keep on admin**, where builders read raw spans | 1 |
-| `falco-talon` | **Remove from attendee, keep on admin/full.** Idle on attendee clusters | 1 |
+| `tempo` | ~~**Remove from attendee, keep on admin**~~ **Removed from attendee (#475)**, kept on admin and full, where builders read raw spans | 1 |
+| `falco-talon` | ~~**Remove from attendee, keep on admin/full.**~~ **Removed from attendee (#475)**, kept on admin and full. Idle on attendee clusters | 1 |
 | `rbac` | **Remove.** Binds roles to groups no identity belongs to | 1 |
 | `resource-quotas` | **Remove or trim.** Quota nothing hits, PDBs for a disabled app | 1 |
 | Istio (five apps) | **Decide.** The mesh encrypts nothing as built: no namespace is enrolled | 5 |

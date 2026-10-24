@@ -307,7 +307,8 @@ config:
 #
 # The collector replaces lists when it merges, so the overlay restates the two pipeline lists it changes in
 # full; the processors lists are not touched and come from relay.yaml. values-dual.yaml (attendee) restates
-# this ConfigMap with the instructor org added, and values-burn.yaml (burn) with Tempo and Prometheus removed.
+# this ConfigMap with the instructor org added and Tempo taken out (the attendee profile has no Tempo, #475),
+# and values-burn.yaml (burn) with Tempo and Prometheus removed.
 extraManifests:
   - apiVersion: v1
     kind: ConfigMap

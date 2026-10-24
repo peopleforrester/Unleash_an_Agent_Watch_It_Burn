@@ -24,6 +24,9 @@ spec:
           # Falcosidekick runs in 'security' and Talon's Service lives in 'falco', so the address MUST be
           # the cross-namespace FQDN; a bare 'falco-talon' resolves in 'security' and fails with NXDOMAIN
           # (caught live on watch-it-burn-test: "lookup falco-talon ... no such host").
+          # Admin and full only in effect: the attendee profile leaves falco-talon out (#475), so there a
+          # CRITICAL event's Talon post finds no Service and Sidekick logs it as a failed output. The Datadog
+          # output is a separate output and is not affected; nothing on an attendee cluster needed Talon.
           talon:
             address: http://falco-talon.falco.svc.cluster.local:2803
             minimumpriority: critical

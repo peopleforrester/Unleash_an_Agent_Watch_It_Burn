@@ -98,14 +98,14 @@
      cmd:'kubectl -n agent get networkpolicy agent-egress-allowlist -o yaml', auth:'No UI.'},
     {nm:'KubeArmor', p:2, ns:'kubearmor', desc:'Inline runtime prevention (BPF-LSM). Blocks the action before it completes: it is what makes the recipe file unreadable.',
      cmd:'kubectl -n agent get kubearmorpolicy block-recipe-snoop -o yaml', auth:'No UI.'},
-    {nm:'Falco + Talon', p:2, ns:'falco', desc:'Detect, then respond. Falco sees it and Talon reacts. Detection after the fact, not prevention.',
-     cmd:'kubectl -n falco logs -l app.kubernetes.io/name=falco --tail=40', auth:'No UI.'},
+    {nm:'Falco', p:2, ns:'security', desc:'Detect, after the fact. Falco sees it and raises an alert, which also reaches Datadog as an event. Detection, not prevention. Falco Talon, which acts on an alert, runs on instructor clusters only.',
+     cmd:'kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=40', auth:'No UI.'},
     {nm:'Istio (ambient)', p:2, ns:'istio-system', desc:'Ambient mesh: ztunnel and the CNI, carrying the in-cluster traffic.',
      cmd:'kubectl -n istio-system get pods', auth:'No UI.'},
 
     // WAVE 3 - observability
     // Datadog FIRST. It is the telemetry story of this workshop and every challenge asks the student to
-    // look at a trace in it. The Grafana/Prometheus/Loki/Tempo stack is real and running, and is here for
+    // look at a trace in it. The Grafana/Prometheus/Loki stack (Tempo too, on instructor clusters) is real and running, and is here for
     // completeness rather than to compete for attention, so it sits below and says so.
     {nm:'Datadog', p:3, ns:'datadog', desc:'Where you watch what the agent actually did. Traces, logs, metrics and LLM Observability. This is the one to use.',
      cmd:'kubectl -n datadog get pods', auth:'Log in at app.datadoghq.com with the credentials on your lab page.'},
@@ -118,7 +118,7 @@
      svc:'grafana', explore:'prometheus', auth:'Opens in Grafana, with Grafana\'s login.'},
     {nm:'Loki', p:3, ns:'monitoring', desc:'Log store behind Grafana. Fallback only.',
      svc:'grafana', explore:'loki', auth:'Opens in Grafana, with Grafana\'s login.'},
-    {nm:'Tempo', p:3, ns:'monitoring', desc:'Trace store behind Grafana. Fallback only.',
+    {nm:'Tempo', p:3, ns:'monitoring', desc:'Trace store behind Grafana. Fallback only, and on instructor clusters only: an attendee cluster has no Tempo, and your traces are in Datadog.',
      svc:'grafana', explore:'tempo', auth:'Opens in Grafana, with Grafana\'s login.'},
 
     // WAVE 4 - the AI layer

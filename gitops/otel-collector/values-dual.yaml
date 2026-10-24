@@ -9,9 +9,9 @@
 # Since #500 the Datadog half of the collector config is not in values.yaml's `config` at all: it is the
 # otel-collector-datadog ConfigMap (extraManifests), which the datadog-gate init container loads as a second
 # collector config only when datadog-secret exists. So this file restates that ConfigMap, the single-org
-# overlay plus datadog/admin, rather than adding to `config`. verify/test_collector_no_datadog.py holds the two
-# overlays to each other: everything in the single-org one, in the same order, with datadog/admin after the
-# student's own org.
+# overlay plus datadog/admin and minus Tempo (below), rather than adding to `config`.
+# verify/test_collector_no_datadog.py holds the two overlays to each other: everything in the single-org one
+# except otlp_grpc/tempo, in the same order, with datadog/admin after the student's own org.
 #
 # Instructor clusters do NOT get this file (gitops/bootstrap/full/app-of-apps.yaml excludes the attendee
 # Application): they already ship to the instructor org, and a second exporter with the same key would
@@ -22,6 +22,21 @@
 # here: a cluster on this profile without the secret is a bootstrap bug and should fail loudly. The same goes
 # for the student's own datadog-secret, which is why both references below stay non-optional on this profile
 # while values.yaml makes DD_API_KEY optional for the instructor and admin clusters.
+#
+# No Tempo here (#475). The attendee profile does not install tempo (gitops/bootstrap/attendee/), so this file
+# takes otlp_grpc/tempo out of every trace exporter list: relay.yaml's (the `config` list below, which Helm
+# replaces rather than merges) and the Datadog overlay's. The exporter's own definition stays in values.yaml's
+# `config.exporters`, unused: the collector builds only what a pipeline names. A Helm null is not a safe way to
+# delete it, since Helm drops a null only for keys the chart's own defaults carry, and an exporter left as null
+# fails the collector's config validation (no endpoint). Traces on an attendee cluster go to both Datadog orgs,
+# which is where students read them.
+config:
+  service:
+    pipelines:
+      traces:
+        exporters:
+          - span_metrics
+          - debug
 extraManifests:
   - apiVersion: v1
     kind: ConfigMap
@@ -67,7 +82,6 @@ extraManifests:
               exporters:
                 - datadog      # the student's own org, primary
                 - datadog/admin # the instructor org, secondary
-                - otlp_grpc/tempo # secondary / fallback
                 - span_metrics
                 - datadog/connector
                 - debug

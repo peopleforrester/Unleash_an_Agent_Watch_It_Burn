@@ -46,7 +46,7 @@ TIMEOUT_S = 20
 APEX_UNKNOWN = "no cluster here yet"                       # apex-agenticburn site/unknown.html <title>
 CONSOLE_DEFAULT = "BurritoBot — agenticburn"               # gitops/ai-layer/web/burritbot.html <title>
 NOT_HERE = "That service is not running on this cluster"   # console.conf @wib_not_here
-# Grafana data sources the console pages open in Explore (platform.html, links.html).
+# Grafana data sources the console pages open in Explore (platform.html, links.html). tempo only where Tempo is.
 DATASOURCES = ("loki", "prometheus", "tempo")
 
 failures: list[str] = []
@@ -154,8 +154,21 @@ check("Grafana's /api/health answers through its hostname", status == 200 and '"
       f"HTTP {status}: {hop(status, body, 'monitoring/prometheus-grafana') or body[:160]}")
 gpw = secret("monitoring", "prometheus-grafana", "admin-password")
 check("the Grafana admin password is readable, as the platform page tells a student", bool(gpw))
+# The attendee profile installs no Tempo, and its data source ships with the tempo Application (#475), so on an
+# attendee cluster the right answer for uid tempo is "no such data source", not a healthy one.
+r = kubectl("-n", "argocd", "get", "applications.argoproj.io", "-o", "jsonpath={.items[*].metadata.name}")
+argo_apps = set(r.stdout.split())
+roots = argo_apps & {"app-of-apps", "app-of-apps-attendee", "app-of-apps-admin", "app-of-apps-burn"}
+check("exactly one root app-of-apps names this cluster's profile", len(roots) == 1, r.stderr.strip()[:160] or f"{sorted(roots)}")
+attendee = roots == {"app-of-apps-attendee"}
+check("the tempo Application is present on admin and full, absent on attendee", ("tempo" in argo_apps) != attendee,
+      f"roots={sorted(roots)} tempo={'tempo' in argo_apps}")
 for uid in DATASOURCES:
     status, body = fetch(f"https://grafana-{host}/api/datasources/uid/{uid}/health", auth=("admin", gpw))
+    if uid == "tempo" and attendee:
+        check("attendee: Grafana has no tempo data source, since the cluster has no Tempo", status == 404,
+              f"HTTP {status}: {body[:200]}")
+        continue
     try:
         ok = json.loads(body).get("status") == "OK"
     except ValueError:

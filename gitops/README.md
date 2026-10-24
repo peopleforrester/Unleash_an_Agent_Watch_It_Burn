@@ -22,7 +22,7 @@ apps/                    # 26 ArgoCD Application manifests
   otel-collector.yaml    # OpenTelemetry Collector
   otel-collector-burn.yaml  # The burn cluster's collector: Datadog only (no Prometheus or Tempo there)
   grafana-dashboards.yaml  # Platform Overview dashboard
-  tempo.yaml             # Distributed tracing
+  tempo.yaml             # Distributed tracing, plus its Grafana data source (tempo/); admin and full only (#475)
   loki.yaml              # Log aggregation
   promtail.yaml          # Log shipping
   sample-app.yaml        # Flask demo app

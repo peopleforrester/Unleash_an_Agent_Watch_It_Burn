@@ -51,7 +51,7 @@ def _app_values(app):
 _otel_vals = _app_values(otel)
 cfg = _otel_vals["config"]
 check("collector has an otlp receiver", "otlp" in cfg["receivers"])
-check("collector traces pipeline exports to Tempo", "otlp_grpc/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
+check("instructor collector traces pipeline exports to Tempo", "otlp_grpc/tempo" in cfg["service"]["pipelines"]["traces"]["exporters"])
 check("collector cluster.name is not the stale KubeAuto value",
       all(a.get("value") != "kubeauto-ai-day" for a in cfg["processors"]["resource"]["attributes"]))
 
@@ -61,7 +61,13 @@ check("collector cluster.name is not the stale KubeAuto value",
 dd_cfg = collector_config("instructor", datadog_secret=True)
 check("Datadog is the primary traces exporter", dd_cfg["service"]["pipelines"]["traces"]["exporters"][0] == "datadog")
 check("Datadog is the primary metrics exporter", dd_cfg["service"]["pipelines"]["metrics"]["exporters"][0] == "datadog")
-check("Grafana/Tempo kept as the secondary traces fallback", "otlp_grpc/tempo" in dd_cfg["service"]["pipelines"]["traces"]["exporters"])
+check("instructor: Grafana/Tempo kept as the secondary traces fallback", "otlp_grpc/tempo" in dd_cfg["service"]["pipelines"]["traces"]["exporters"])
+# The attendee profile installs no Tempo (#475): its collector names no Tempo exporter in any trace list, with
+# the Datadog overlay loaded (how an attendee collector always runs) or without it (relay.yaml alone).
+for _secret in (True, False):
+    _att = collector_config("attendee", datadog_secret=_secret)
+    check(f"attendee collector exports no traces to Tempo ({'with' if _secret else 'without'} the Datadog overlay)",
+          "otlp_grpc/tempo" not in _att["service"]["pipelines"]["traces"]["exporters"])
 check("Datadog API key is NOT hardcoded (env reference)", dd_cfg["exporters"]["datadog"]["api"]["key"].startswith("${env:"))
 _vals = _otel_vals
 _ddenv = {e["name"]: e for e in _vals.get("extraEnvs", [])}
@@ -72,7 +78,22 @@ pvals = _app_values(prom)
 check("alertmanager disabled (slim the per-attendee node)", pvals["alertmanager"]["enabled"] is False)
 check("prometheus retention trimmed to hours", pvals["prometheus"]["prometheusSpec"]["retention"].endswith("h"))
 ds = {d["name"]: d for d in pvals["grafana"]["additionalDataSources"]}
-check("Tempo datasource pinned with uid 'tempo'", ds.get("Tempo", {}).get("uid") == "tempo")
+check("Loki datasource pinned with uid 'loki'", ds.get("Loki", {}).get("uid") == "loki")
+# The Tempo data source ships with Tempo (#475), so a profile without the tempo app has no data source for it:
+# a sidecar-labelled ConfigMap in gitops/tempo/, which the tempo Application deploys beside the chart.
+check("prometheus.yaml no longer carries the Tempo datasource", "Tempo" not in ds and all(d.get("uid") != "tempo" for d in ds.values()))
+tempo_app = yaml.safe_load((REPO / "gitops" / "apps" / "tempo.yaml").read_text())
+_tempo_paths = [s.get("path") for s in tempo_app["spec"].get("sources", [])]
+check("the tempo Application deploys gitops/tempo beside its chart",
+      "gitops/tempo" in _tempo_paths and any(s.get("chart") == "tempo" for s in tempo_app["spec"].get("sources", [])))
+_ds_cm = yaml.safe_load((REPO / "gitops" / "tempo" / "grafana-datasource.yaml").read_text())
+check("the Tempo datasource ConfigMap is in Grafana's namespace with the sidecar's label",
+      _ds_cm["metadata"].get("namespace") == "monitoring"
+      and (_ds_cm["metadata"].get("labels") or {}).get(pvals["grafana"]["sidecar"].get("datasources", {}).get("label", "grafana_datasource")) == "1"
+      and pvals["grafana"]["sidecar"]["datasources"].get("enabled") is True)
+_tds = {d["uid"]: d for f in _ds_cm["data"].values() for d in (yaml.safe_load(f) or {}).get("datasources", [])}
+check("Tempo datasource pinned with uid 'tempo', at the Tempo service",
+      _tds.get("tempo", {}).get("type") == "tempo" and _tds["tempo"].get("url") == "http://tempo.monitoring:3100")
 
 # Dashboard: valid JSON with the cost + token + gen_ai trace panels.
 panels = {p["title"]: p for p in dashboard["panels"]}

@@ -16,7 +16,8 @@ only when datadog-secret exists. This checks the pieces offline:
   - the gate itself, run with sh in both branches, writes what the two configs below assume;
   - with the secret: the merged config is the Datadog config the collector ran before #500, and the overlay's
     lists cannot drift from relay.yaml's, because the collector replaces lists rather than merging them;
-  - attendee clusters still dual-ship and still fail loudly without their secrets.
+  - attendee clusters still dual-ship and still fail loudly without their secrets, and name no Tempo exporter,
+    because the attendee profile installs no Tempo (#475).
 
 The merged-config validity check is a reference check, not the collector's own validator. Both configs were also
 run through `otelcol-contrib validate` 0.160.0 (this chart's appVersion) against the real chart render when this
@@ -211,15 +212,27 @@ att_vals = helm_values("attendee")
 att_ov = datadog_overlay(att_vals)
 att = collector_config("attendee", datadog_secret=True)
 check(f"attendee config with both secrets names defined components {reference_problems(att)}", not reference_problems(att))
-check("attendee keeps Tempo", "otlp_grpc/tempo" in att["service"]["pipelines"]["traces"]["exporters"])
+# The attendee profile installs no Tempo (#475), so no attendee trace list may name it: neither the merged
+# config, nor relay.yaml's own list (what would run if the overlay were empty), nor the overlay's.
+att_relay = att_vals["config"]["service"]["pipelines"]
+check("attendee drops Tempo from the traces it runs with both secrets",
+      "otlp_grpc/tempo" not in att["service"]["pipelines"]["traces"]["exporters"])
+check("attendee drops Tempo from relay.yaml's traces list too", "otlp_grpc/tempo" not in att_relay["traces"]["exporters"])
+check("attendee relay.yaml still turns spans into metrics", "span_metrics" in att_relay["traces"]["exporters"])
+check("attendee still ships traces to both Datadog orgs",
+      att["service"]["pipelines"]["traces"]["exporters"][:2] == ["datadog", "datadog/admin"])
 check("the dual overlay's datadog exporter and connector are the single-org overlay's",
       att_ov["exporters"]["datadog"] == ov["exporters"]["datadog"] and att_ov["connectors"] == ov["connectors"])
 for sig, kind in (("metrics", "receivers"), ("metrics", "exporters"), ("traces", "exporters")):
     want = []
     for c in ovp[sig][kind]:
+        if c == "otlp_grpc/tempo":
+            continue
         want += [c, "datadog/admin"] if c == "datadog" else [c]
-    check(f"dual {sig}.{kind} is the single-org list with datadog/admin after the student's org",
+    check(f"dual {sig}.{kind} is the single-org list without Tempo, with datadog/admin after the student's org",
           att_ov["service"]["pipelines"][sig][kind] == want)
+    check(f"dual {sig}.{kind} is attendee relay.yaml's list plus both Datadog orgs, in the same order",
+          [c for c in att_ov["service"]["pipelines"][sig][kind] if not c.startswith("datadog")] == att_relay[sig][kind])
 att_env = {e["name"]: e for e in att_vals.get("extraEnvs") or []}
 for key in ("DD_API_KEY", "DD_ADMIN_API_KEY"):
     ref = (att_env.get(key, {}).get("valueFrom") or {}).get("secretKeyRef") or {}

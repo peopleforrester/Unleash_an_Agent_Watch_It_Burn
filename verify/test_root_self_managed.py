@@ -4,7 +4,7 @@
 # Why. On 2026-09-06 a change to the attendee root's exclude reached six live clusters only by re-applying
 # the root by hand, and applying the wrong root on one cluster created a second root over the same
 # children. A root that lists its own directory as a source reconciles its own spec on every sync.
-import pathlib, re, sys
+import fnmatch, pathlib, re, sys
 
 import yaml
 
@@ -16,7 +16,10 @@ PROFILES = {
     # must start a challenge where the room starts. It differs from attendee only in which collector
     # overlay it drops, because an instructor cluster already IS the instructor org.
     "full": {"name": "app-of-apps", "exclude": "{network-policies,kubearmor-policies,otel-collector-attendee,otel-collector-burn}.yaml"},
-    "attendee": {"name": "app-of-apps-attendee", "exclude": "{network-policies,kubearmor-policies,otel-collector,otel-collector-burn}.yaml"},
+    # attendee also drops tempo and falco-talon (#475): no challenge or tour step reads Tempo, and Talon has
+    # nothing to act on once the fork bomb is an instructor-box demo. admin and full keep both.
+    "attendee": {"name": "app-of-apps-attendee",
+                 "exclude": "{network-policies,kubearmor-policies,otel-collector,otel-collector-burn,tempo,falco-talon}.yaml"},
     "burn": {"name": "app-of-apps-burn", "include": True},
     # admin (#294): the presenters' own clusters. The student build with every guardrail ARMED, so a
     # control can be shown already working instead of being staged. It therefore keeps the two challenge
@@ -55,6 +58,32 @@ for profile, want in PROFILES.items():
     check("selfHeal and prune stay on", doc["spec"]["syncPolicy"]["automated"] == {"prune": True, "selfHeal": True})
     check("deploy-full-idp applies this root from the new path",
           re.search(rf'{profile}\)\s+ROOT_APP="gitops/bootstrap/{profile}/{manifests[0].name}"', deploy) is not None)
+
+print("== tempo and falco-talon: admin and full only (#475) ==")
+
+
+def deploys(profile: str, app_file: str) -> bool:
+    """Whether a profile's gitops/apps selection takes this file. Argo CD's glob, with its one {a,b} group."""
+    root = yaml.safe_load(next((BOOT / profile).glob("*.yaml")).read_text())
+    d = next(s for s in root["spec"]["sources"] if s.get("path") == "gitops/apps").get("directory", {})
+    globs = []
+    for g in filter(None, (d.get("include"), d.get("exclude"))):
+        m = re.fullmatch(r"(.*)\{(.*)\}(.*)", g)
+        globs.append([m.group(1) + p + m.group(3) for p in m.group(2).split(",")] if m else [g])
+    hit = [any(fnmatch.fnmatch(app_file, p) for p in ps) for ps in globs]
+    if d.get("include") and not hit[0]:
+        return False
+    return not (d.get("exclude") and hit[-1])
+
+
+for app_file in ("tempo.yaml", "falco-talon.yaml"):
+    check(f"{app_file} exists in gitops/apps", (REPO / "gitops/apps" / app_file).exists())
+    check(f"attendee does not deploy {app_file}", not deploys("attendee", app_file))
+    for profile in ("admin", "full"):
+        check(f"{profile} deploys {app_file}", deploys(profile, app_file))
+# The rest of the attendee observability path still deploys; only the Tempo store and Talon leave.
+for app_file in ("prometheus.yaml", "otel-collector-attendee.yaml", "falco.yaml", "falcosidekick.yaml"):
+    check(f"attendee still deploys {app_file}", deploys("attendee", app_file))
 
 print("== no root left at the old flat path ==")
 check("no app-of-apps*.yaml directly under gitops/bootstrap", not list(BOOT.glob("app-of-apps*.yaml")))

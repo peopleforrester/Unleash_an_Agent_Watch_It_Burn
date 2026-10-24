@@ -97,7 +97,7 @@ row "Kyverno" "no UI:  kubectl get validatingpolicy"
 
 b "RUNTIME SECURITY"
 row "KubeArmor" "kubectl -n agent get kubearmorpolicy -o yaml     (inline block)"
-row "Falco/Talon" "kubectl -n falco logs -l app.kubernetes.io/name=falco --tail=40"
+row "Falco" "kubectl -n security logs -l app.kubernetes.io/name=falco -c falco --tail=40"
 row "NetworkPolicy" "kubectl -n agent get networkpolicy"
 
 b "THE AI LAYER"

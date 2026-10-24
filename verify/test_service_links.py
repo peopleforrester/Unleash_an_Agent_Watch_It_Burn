@@ -86,12 +86,28 @@ uids = {d["uid"] for d in grafana.get("additionalDataSources", [])}
 ds_sidecar = grafana.get("sidecar", {}).get("datasources", {})
 if ds_sidecar.get("enabled") and ds_sidecar.get("uid", "prometheus") == "prometheus":
     uids.add("prometheus")
+# Tempo's data source ships with the tempo Application (gitops/tempo/), on the admin and full profiles only
+# (#475): on an attendee cluster the Tempo link has nothing behind it, and the pages say so.
+for f in sorted((REPO / "gitops/tempo").glob("*.yaml")):
+    cm = yaml.safe_load(f.read_text(encoding="utf-8"))
+    if ds_sidecar.get("enabled") and (cm.get("metadata", {}).get("labels") or {}).get("grafana_datasource") == "1":
+        uids |= {d["uid"] for v in cm["data"].values() for d in (yaml.safe_load(v) or {}).get("datasources", [])}
 page_ds = set(re.findall(r'data-explore="([a-z]+)"', PLATFORM))
 link_ds = set(re.findall(r"\bexplore:'([a-z]+)'", LINKS))
 want = {"loki", "prometheus", "tempo"}
 check("platform.html opens Loki, Prometheus and Tempo in Explore", page_ds == want, f"{sorted(page_ds)}")
 check("links.html opens Loki, Prometheus and Tempo in Explore", link_ds == want, f"{sorted(link_ds)}")
 check("each is a data source uid Grafana is provisioned with", want <= uids, f"uids={sorted(uids)}")
+print("== the pages are true on an attendee cluster, which has no Tempo and no Talon (#475) ==")
+for name, text in (("links.html", LINKS), ("platform.html", PLATFORM)):
+    tempo_row = re.search(r"(?s)Tempo<small>.*?</tr>", text) if name == "platform.html" else re.search(r"(?s)\{nm:'Tempo'.*?\}", text)
+    check(f"{name} says Tempo is on instructor clusters only", bool(tempo_row) and "instructor clusters only" in tempo_row.group(0))
+    check(f"{name} no longer says Talon reacts", "Talon reacts" not in text)
+    check(f"{name} says Talon runs on instructor clusters only",
+          re.search(r"Falco Talon, which acts on an alert, runs on instructor clusters only", text) is not None)
+    # Falco runs in `security`; `falco` holds only Talon, and on an attendee cluster it does not exist at all.
+    check(f"{name} reads Falco's logs where Falco runs (ns security)",
+          "kubectl -n security logs -l app.kubernetes.io/name=falco" in text and "kubectl -n falco logs" not in text)
 for name, text in (("links.html", LINKS), ("platform.html", PLATFORM)):
     check(f"{name} builds the Explore URL Grafana 10+ reads (schemaVersion 1, panes)",
           "explore?schemaVersion=1&orgId=1&panes=" in text and "encodeURIComponent(JSON.stringify(" in text)

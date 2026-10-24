@@ -1080,3 +1080,31 @@ down, the peak hosts, the workshop-only cost and all feedback. Michael's later "
   and roughly 400 load balancers has no record.
 - The `delivered/aiewf-2026` tag message says the delivery-day commits ran "from 10:27 to 12:51 Pacific".
   Their author timestamps, read in `America/Los_Angeles`, run 05:34 to 12:51: 40 commits.
+## 2026-10-24 · #475 · The attendee profile leaves out tempo and falco-talon; admin and full keep both
+
+**Nothing on an attendee cluster used either.** The #236 audit (`docs/research/2026-10-24-duplicative-components-audit.md`)
+found that no challenge or tour step reads Tempo (builders read raw spans out of it on admin clusters), and that
+Talon acts on nothing there: Sidekick forwards only CRITICAL to it, Recipe Snoop is WARNING, and the fork bomb is
+an instructor-box demo only (#114). The attendee root's exclude is now
+`{network-policies,kubearmor-policies,otel-collector,otel-collector-burn,tempo,falco-talon}.yaml`: two fewer apps, 36 instead of 38.
+
+- **The Tempo data source moved into the tempo Application.** It was in `prometheus.yaml`'s
+  `additionalDataSources`, which every profile deploys. It is now a ConfigMap labelled `grafana_datasource: "1"`
+  in `gitops/tempo/`, which the tempo Application deploys as a second source beside the chart; Grafana's
+  datasources sidecar loads it. A profile without tempo therefore has no data source pointing at a missing
+  Service, with no attendee copy of the prometheus Application. Loki's TraceID link still names uid tempo and
+  has no target on attendee clusters.
+- **The attendee collector names no Tempo exporter.** `values-dual.yaml` restates relay.yaml's traces exporter
+  list (`span_metrics`, `debug`) and drops `otlp_grpc/tempo` from the Datadog overlay's. The exporter's
+  definition stays in `values.yaml`, unused, because a Helm null is not a safe delete for a key the chart's
+  defaults do not carry.
+- **Sidekick keeps its Talon output on every profile.** On attendee clusters a CRITICAL event's Talon post
+  fails and is logged; the Datadog output is separate and unaffected. An attendee copy of the falcosidekick
+  Application only to silence that log was not worth a third profile-specific app.
+- **The console pages say what an attendee cluster has.** `platform.html` and `links.html` mark Tempo and Talon
+  as instructor-cluster only, no longer say "Talon reacts", and read Falco's logs from `security`, where Falco
+  runs (the old `-n falco` command found nothing on any profile). The terminal's `platform` table matches.
+- **Tests:** `test_root_self_managed.py` holds which profile deploys each app; `test_collector_no_datadog.py` and
+  `test_observability.py` hold the attendee trace lists free of Tempo; `test_service_links.py` holds the page
+  wording and finds the Tempo uid in `gitops/tempo/`; the live `test_service_hosts_live.py` expects no tempo
+  data source on an attendee cluster. Not yet checked on a live cluster.

@@ -1,6 +1,9 @@
 # ABOUTME: Falco Talon response engine. Falco detects the fork bomb -> Falcosidekick forwards (critical)
 # ABOUTME: -> Talon terminates the offending pod. This is the detect-and-RESPOND beat; the real BLOCK
 # ABOUTME: is the per-pod PID limit (infra/node-config/), since detect-to-act has latency a bomb outruns.
+# Admin and full only. The attendee profile leaves it out (#475): the fork bomb is an instructor-box demo
+# (#114), and Recipe Snoop is WARNING, below Sidekick's critical-only forward, so Talon has nothing to act on
+# there.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
