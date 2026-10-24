@@ -61,6 +61,10 @@ PROBE_WORKERS = 32
 LIVE_SPAN_RE = re.compile(r"^(\d+)([mhd])$")
 SPAN_SECONDS = {"m": 60, "h": 3600, "d": 86400}
 UNKNOWN = None
+# Exit statuses. A source that could not be read is EXIT_SOURCES; a run refused before it reads anything (no
+# token, an interval faster than the start page polls, no name table) is EXIT_USAGE, the argparse convention.
+EXIT_SOURCES = 1
+EXIT_USAGE = 2
 
 
 # ---- HTTP: one injectable seam, so the tests drive every source through fakes ----------------------------------
@@ -492,15 +496,15 @@ def main(argv=None, get=http_get, keys=fm.read_keys, dd_http=None, now=None, sle
     if not token:
         print("ops: WIB_ADMIN_TOKEN is not set. Run it as `fleet.sh ops`, which resolves the provisioning admin "
               "token, or export WIB_ADMIN_TOKEN for this one command.", file=sys.stderr)
-        return 2
+        return EXIT_USAGE
     if a.watch is not None and a.watch < 10:
         print("ops: --watch below 10s would poll every console faster than the start page does", file=sys.stderr)
-        return 2
+        return EXIT_USAGE
     try:
         hosts = load_hosts(pathlib.Path(a.hosts).read_text(encoding="utf-8"))
     except (OSError, SourceError) as e:
         print(f"ops: {e}", file=sys.stderr)
-        return 2
+        return EXIT_USAGE
     src = Sources(hosts, a.provisioning_url, token, a.roster_url, a.profile, a.region, get=get, keys=keys,
                   dd_http=dd_http)
     while True:
@@ -519,7 +523,7 @@ def main(argv=None, get=http_get, keys=fm.read_keys, dd_http=None, now=None, sle
                 out.write(f"html: {a.html}\n")
         out.flush()
         if a.watch is None:
-            return 1 if errors else 0
+            return EXIT_SOURCES if errors else 0
         sleep(a.watch)
 
 

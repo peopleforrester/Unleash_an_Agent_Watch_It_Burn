@@ -6,7 +6,7 @@
 # the export CSV's header, roster.json, the scalar query API's response for the leaderboard's own queries. It runs
 # `fleet.sh ops --json` the way a presenter does, so the token is resolved the normal way (railway login, the
 # secret store, or WIB_ADMIN_TOKEN) and the account and region are fleet.sh's explicit defaults, WIB_DEFAULT_ACCOUNT
-# and WIB_REGION. Nothing here skips: a source that cannot be read is a failure with its reason printed.
+# and WIB_REGION. Every source is required: one that cannot be read is a failure with its reason printed.
 import json
 import os
 import pathlib
