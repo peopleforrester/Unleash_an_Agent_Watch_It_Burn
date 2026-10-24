@@ -71,6 +71,15 @@ check("detection is still distinguished from prevention",
       "the recipe was already read before the alert fired" in C3
       and "You also need something that stops the read" in C3)
 
+print("== the C3 README does not repeat the claim either (#508) ==")
+# The lab page was corrected under #344 but the challenge README's ordering note kept "Falco-Talon kills
+# the pod" until #508. Pin the README to the same fact.
+README = (REPO / "challenges/c3-secret-grep/README.md").read_text(encoding="utf-8")
+README_FLAT = " ".join(README.split())
+check("the README does not say Talon kills the pod",
+      re.search(r"Talon\s+kill", README_FLAT, re.IGNORECASE) is None)
+check("the README says Talon is detect only here", "Falco-Talon is detect only here" in README_FLAT)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

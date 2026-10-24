@@ -61,7 +61,9 @@ before it succeeds, so with the KubeArmor policy in place there is never a read 
 Verified 2026-09-04 on a `full`-profile cluster: reading the bait file returns `Permission denied`
 with zero matching Falco alerts, while the container runs as root against a world-readable directory,
 so POSIX is not what denies it. To watch both, you have to see detection *first* (attack succeeds,
-Falco fires, Falco-Talon kills the pod) and *then* apply KubeArmor and watch the same attack blocked.
+Falco fires) and *then* apply KubeArmor and watch the same attack blocked. Falco-Talon is detect only
+here: its terminate action is not bound to the recipe-snoop rule, so the workshop-mcp pod is not
+killed (#344).
 That ordering is what the student-facing lab does under the attack-then-fix restructure; see #199 and
 #160.
 
