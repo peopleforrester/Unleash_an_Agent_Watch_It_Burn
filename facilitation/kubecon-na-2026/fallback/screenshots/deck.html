@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- ABOUTME: The worst-case screenshots deck for the KubeCon breakout (#452): opens from disk in any browser with
+     ABOUTME: no network, and steps through the rehearsal screenshots segment by segment. -->
+<!-- Open it straight from the checkout: file:///.../facilitation/kubecon-na-2026/fallback/screenshots/deck.html
+     Right arrow, space or a click goes forward; left arrow goes back; F toggles full screen.
+     The shot list below must match ../assets.yaml (verify/test_replay_prompts.py checks it). A shot that is
+     not on disk shows as a red MISSING card naming the file, so a gap is seen in rehearsal, not on stage. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BurritoBot Said Let's Dance, the Platform Said No: recorded fallback</title>
+<style>
+  html,body{margin:0;height:100%;background:#120d18;color:#f4ece4;font:20px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+  #slide{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer}
+  #slide img{max-width:96vw;max-height:84vh;object-fit:contain;box-shadow:0 0 30px #000}
+  #cap{margin-top:14px;font-size:24px;text-align:center;max-width:90vw}
+  #seg{position:fixed;top:10px;left:16px;font-size:16px;opacity:.7}
+  #num{position:fixed;bottom:10px;right:16px;font-size:16px;opacity:.7}
+  .title h1{font-size:48px;margin:0 0 12px;text-align:center}
+  .title p{opacity:.8;margin:4px;text-align:center}
+  .missing{background:#7a1010;border:4px solid #ff5050;padding:40px 60px;font-size:28px;text-align:center}
+</style>
+</head>
+<body>
+<div id="seg"></div>
+<div id="slide"></div>
+<div id="num"></div>
+<script type="application/json" id="shots">
+[
+  {"segment": 2, "file": "screenshots/02-1-menu-answer.png", "caption": "Community bot, wide open: it answers as the burrito chain."},
+  {"segment": 2, "file": "screenshots/02-2-off-topic.png", "caption": "The room's weirdest off-topic ask, answered in full."},
+  {"segment": 2, "file": "screenshots/02-3-ceo-record-leak.png", "caption": "The CEO's record leaks into the chat, signature line and all."},
+  {"segment": 2, "file": "screenshots/02-4-cost-counter.png", "caption": "Nothing crashed, nothing is red, and the bill is the attack."},
+  {"segment": 3, "file": "screenshots/03-1-argocd-apps.png", "caption": "The admin cluster: a real IDP, one Argo CD app-of-apps."},
+  {"segment": 3, "file": "screenshots/03-2-pods.png", "caption": "What that looks like running."},
+  {"segment": 4, "file": "screenshots/04-1-c1-egress-blocked.png", "caption": "C1: the egress NetworkPolicy holds; the beacon count does not move."},
+  {"segment": 4, "file": "screenshots/04-2-c2-kyverno-deny.png", "caption": "C2: the villain image is denied at admission."},
+  {"segment": 4, "file": "screenshots/04-3-c3-kubearmor-falco.png", "caption": "C3: KubeArmor blocks the read in the kernel; Falco says it happened."},
+  {"segment": 5, "file": "screenshots/05-1-c6-injection-lands.png", "caption": "C6, guards off: the injection rides in and spends tokens."},
+  {"segment": 5, "file": "screenshots/05-2-c6-input-guard.png", "caption": "C6, guard-input-on: blocked upstream at zero tokens."},
+  {"segment": 5, "file": "screenshots/05-3-c5-output-redacted.png", "caption": "C5, guard-output-on: the secret comes back redacted."},
+  {"segment": 5, "file": "screenshots/05-4-c7-rogue-tool.png", "caption": "C7, guards off: a poisoned tool description chains in a rogue tool."},
+  {"segment": 5, "file": "screenshots/05-5-c7-mcp-guard.png", "caption": "C7, guard-mcp-on: the tool is gone from the allow-list."},
+  {"segment": 6, "file": "screenshots/06-1-trace-blocked-injection.png", "caption": "The blocked injection's trace: zero tokens to the model."},
+  {"segment": 6, "file": "screenshots/06-2-trace-redacted-output.png", "caption": "The redacted reply and the rogue tool call that never fired."},
+  {"segment": 7, "file": "screenshots/07-1-on-topic-redirect.png", "caption": "On-topic guardrail on: off-topic asks come back to the menu."}
+]
+</script>
+<script>
+(function(){
+  var SEGMENTS={2:"Wide-open start, the audience hacks it live",3:"The platform you are attacking, the full IDP",
+    4:"The Kubernetes layers block it",5:"LLM-specific guardrails, turned on live",6:"GenAI observability on stage",
+    7:"The bot sells burritos only"};
+  var shots=JSON.parse(document.getElementById('shots').textContent);
+  var slide=document.getElementById('slide'), seg=document.getElementById('seg'), num=document.getElementById('num');
+  var i=0, total=shots.length+1;
+  function text(tag,t,cls){var e=document.createElement(tag);e.textContent=t;if(cls)e.className=cls;return e;}
+  function show(){
+    slide.replaceChildren();
+    num.textContent=(i+1)+' / '+total;
+    if(i===0){
+      seg.textContent='';
+      var t=document.createElement('div');t.className='title';
+      t.appendChild(text('h1',"BurritoBot Said Let's Dance, the Platform Said No"));
+      t.appendChild(text('p','Recorded at the rehearsal on the KubeCon clusters. Every screen here was live then.'));
+      t.appendChild(text('p','Michael Forrester and Whitney Lee'));
+      slide.appendChild(t);
+      return;
+    }
+    var s=shots[i-1];
+    seg.textContent='Segment '+s.segment+': '+(SEGMENTS[s.segment]||'');
+    var img=new Image();
+    img.alt=s.caption;
+    img.onerror=function(){img.replaceWith(text('div','MISSING: '+s.file,'missing'));};
+    img.src=s.file.replace(/^screenshots\//,'');
+    slide.appendChild(img);
+    slide.appendChild(text('div',s.caption,'')).id='cap';
+  }
+  function go(d){i=Math.max(0,Math.min(total-1,i+d));show();}
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key===' '||e.key==='PageDown'){e.preventDefault();go(1);}
+    else if(e.key==='ArrowLeft'||e.key==='PageUp'){e.preventDefault();go(-1);}
+    else if(e.key==='Home'){i=0;show();}
+    else if(e.key==='f'||e.key==='F'){if(document.fullscreenElement)document.exitFullscreen();else document.documentElement.requestFullscreen();}
+  });
+  slide.addEventListener('click',function(){go(1);});
+  show();
+})();
+</script>
+</body>
+</html>

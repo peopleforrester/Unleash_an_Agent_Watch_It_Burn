@@ -1,0 +1,38 @@
+# ABOUTME: Every recorded-fallback file the KubeCon breakout needs on the day (#452): one video per demo segment
+# ABOUTME: and the screenshots deck's shots. scripts/check-fallback-assets.py fails until each one is present.
+#
+# Paths are relative to this directory. All of these are recorded at the first full rehearsal on the
+# KubeCon clusters; none can be made before it. See README.md for how to record each.
+#
+# videos: MP4 (H.264), because every presenter laptop plays it with no network and no codec install.
+#   They are not committed (see .gitignore and README.md "Where the videos live"): a dead network is the
+#   case they cover, so they have to be on the laptop, at exactly these paths, before the session.
+# screenshots: PNG, committed, shown by screenshots/deck.html in a browser with no network. The list in
+#   deck.html must match this one; verify/test_replay_prompts.py holds them together.
+version: 1
+deck: screenshots/deck.html
+videos:
+  - { segment: 2, title: "Wide-open start, the audience hacks it live", path: videos/segment-2-wide-open-start.mp4 }
+  - { segment: 3, title: "The platform you are attacking, the full IDP", path: videos/segment-3-platform-tour.mp4 }
+  - { segment: 4, title: "The Kubernetes layers block it", path: videos/segment-4-kubernetes-layers.mp4 }
+  - { segment: 5, title: "LLM-specific guardrails, turned on live", path: videos/segment-5-ai-guardrails-live.mp4 }
+  - { segment: 6, title: "GenAI observability on stage", path: videos/segment-6-genai-observability.mp4 }
+  - { segment: 7, title: "The bot sells burritos only", path: videos/segment-7-burritos-only.mp4 }
+screenshots:
+  - { segment: 2, file: screenshots/02-1-menu-answer.png, caption: "Community bot, wide open: it answers as the burrito chain." }
+  - { segment: 2, file: screenshots/02-2-off-topic.png, caption: "The room's weirdest off-topic ask, answered in full." }
+  - { segment: 2, file: screenshots/02-3-ceo-record-leak.png, caption: "The CEO's record leaks into the chat, signature line and all." }
+  - { segment: 2, file: screenshots/02-4-cost-counter.png, caption: "Nothing crashed, nothing is red, and the bill is the attack." }
+  - { segment: 3, file: screenshots/03-1-argocd-apps.png, caption: "The admin cluster: a real IDP, one Argo CD app-of-apps." }
+  - { segment: 3, file: screenshots/03-2-pods.png, caption: "What that looks like running." }
+  - { segment: 4, file: screenshots/04-1-c1-egress-blocked.png, caption: "C1: the egress NetworkPolicy holds; the beacon count does not move." }
+  - { segment: 4, file: screenshots/04-2-c2-kyverno-deny.png, caption: "C2: the villain image is denied at admission." }
+  - { segment: 4, file: screenshots/04-3-c3-kubearmor-falco.png, caption: "C3: KubeArmor blocks the read in the kernel; Falco says it happened." }
+  - { segment: 5, file: screenshots/05-1-c6-injection-lands.png, caption: "C6, guards off: the injection rides in and spends tokens." }
+  - { segment: 5, file: screenshots/05-2-c6-input-guard.png, caption: "C6, guard-input-on: blocked upstream at zero tokens." }
+  - { segment: 5, file: screenshots/05-3-c5-output-redacted.png, caption: "C5, guard-output-on: the secret comes back redacted." }
+  - { segment: 5, file: screenshots/05-4-c7-rogue-tool.png, caption: "C7, guards off: a poisoned tool description chains in a rogue tool." }
+  - { segment: 5, file: screenshots/05-5-c7-mcp-guard.png, caption: "C7, guard-mcp-on: the tool is gone from the allow-list." }
+  - { segment: 6, file: screenshots/06-1-trace-blocked-injection.png, caption: "The blocked injection's trace: zero tokens to the model." }
+  - { segment: 6, file: screenshots/06-2-trace-redacted-output.png, caption: "The redacted reply and the rogue tool call that never fired." }
+  - { segment: 7, file: screenshots/07-1-on-topic-redirect.png, caption: "On-topic guardrail on: off-topic asks come back to the menu." }

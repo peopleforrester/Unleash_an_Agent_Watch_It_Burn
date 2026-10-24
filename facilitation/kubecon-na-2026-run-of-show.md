@@ -237,12 +237,13 @@ verbatim text in `abstracts/recovered/sessionize-public-profile.md` section 5.
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre, C5 and C7 at the gateway) | Partial. "Mid-inference" is an unsettled scope call (open question) |
 | 7 | Good GenAI observability practices | 6 (Datadog traces) | At risk. Needs a live Datadog pool (#454), not yet set up |
 | 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail) | **At risk.** The on-topic guardrail does not exist yet (#455 MISSING) |
-| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live half yes; recorded half needs #452 built |
+| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live half yes; the replay is built, the videos and screenshots wait for the first full rehearsal |
 
 Points the cut cannot deliver today, marked so they are not presented as ready:
 point 8 (no on-topic guardrail yet, #455), point 7 (no live Datadog pool yet,
 #454), point 6 "mid-inference" (unsettled definition, #456 and talks-knowledge#29),
-and the recorded half of point 9 (#452). The live-input half of point 9 and all of
+and the recorded videos and screenshots for point 9 (#452, recorded at the first
+full rehearsal; the prompt replay is built). The live-input half of point 9 and all of
 points 1 through 5 are deliverable on the platform as built.
 
 ## Challenges shown live, and challenges cut
@@ -289,11 +290,21 @@ is merely slow rather than rebuilding:
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
   pool is live, decide the Grafana or Tempo fallback for segment 6 and say so on the
   day.
-- [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
-  per-segment videos and screenshots deck must exist and be rehearsed once, so a
-  dead venue network does not end the session. The repo paths for these are not
-  built yet; see the open questions. The rollback step below names them once they
-  exist.
+- [ ] **Recorded fallback proven once (#452).** On each presenter laptop, from the
+  repo root, so a dead venue network does not end the session. What each file is
+  and how it was recorded: `facilitation/kubecon-na-2026/fallback/README.md`.
+  - Every segment video and screenshot is in place:
+    `python3 scripts/check-fallback-assets.py`. It exits 1 until the first full
+    rehearsal's captures are copied in (the videos are not in git; the README says
+    where they go).
+  - The replay, once, over the phone hotspot rather than the hotel network:
+    `python3 scripts/replay-prompts.py --target https://attackme.agenticburn.com`.
+    It sends `facilitation/kubecon-na-2026/fallback/prompts.yaml` paced under
+    guard-proxy's 120-a-minute window and stops at the first prompt that does not
+    land. Every line should end `ok`; read the replies against each prompt's
+    `expect`.
+  - Open `facilitation/kubecon-na-2026/fallback/screenshots/deck.html` from disk
+    with Wi-Fi off and step through it: no red MISSING card.
 - [ ] **Audience path and phones (#450, #451).** Confirm the room's rate limit and
   timeouts are sized for a ballroom and that the page, the projector QR, and the
   Feedback link work on a real iPhone and a real Android phone on venue-like
@@ -309,10 +320,16 @@ is merely slow rather than rebuilding:
    debug the model live.
 2. The venue network cannot carry the room: the presenters drive the audience
    beat themselves from the admin cluster and the room watches, rather than hacking
-   from phones.
-3. Nothing live works at all: play the recorded fallback (#452). Name the exact
-   path to the segment videos and the screenshots deck here once #452 has built them;
-   it is an open question today (see below).
+   from phones. The room's questions still go in: from a laptop on the phone
+   hotspot, replay them to the community bot:
+   `python3 scripts/replay-prompts.py --target https://attackme.agenticburn.com`.
+   If it stops, do not retry it; go to step 3.
+3. Nothing live works at all: play the recorded fallback (#452). The segment's
+   video is in `facilitation/kubecon-na-2026/fallback/videos/`
+   (`segment-<N>-*.mp4`, one each for segments 2 to 7, copied onto both laptops the
+   Night Before). If video will not play either, open the screenshots deck from
+   disk: `facilitation/kubecon-na-2026/fallback/screenshots/deck.html`, and narrate
+   over it.
 4. Any beat over its time budget by half: cut it to a sentence and move on. The room
    never watches unrehearsed troubleshooting.
 
@@ -348,10 +365,13 @@ written down rather than guessed.
    abstract's ending, cannot be shown live until it is built and verified. Is it
    being built for this delivery, or is point 8 cut with Whitney's agreement (which
    #456 allows)? This is the biggest content risk in the cut.
-2. **The recorded fallback is not built yet (#452).** The replayable prompt set, the
-   per-segment videos, and the screenshots deck have no repo paths today. The
-   rollback step and the Night Before step reference them; they need to exist before
-   the cold read, and this file should name their exact paths once they do.
+2. **The recorded fallback is half built (#452).** The replayable prompt set and its
+   replay script exist and are named in the Night Before and rollback steps, as are
+   the paths of the per-segment videos and the screenshots deck. The videos and the
+   screenshots themselves are recorded at the first full rehearsal on the KubeCon
+   clusters, and do not exist until then. Where the videos are stored is open: the
+   default keeps them out of git and on both laptops plus a USB stick
+   (`facilitation/kubecon-na-2026/fallback/README.md`).
 3. **The Datadog pool for segment 6 is not set up (#454).** Whitney is expected to
    set one up the week of 2026-10-26. If it is not live, what is the agreed fallback
    for showing point 7: Grafana, Tempo, or recorded traces?

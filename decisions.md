@@ -488,3 +488,28 @@ shipped in the console ConfigMap next to `active-skin.js`, and never edited into
   native libraries, and deterministic, so `verify/test_audience_page_e2e.py` can compare the committed SVG
   byte for byte. It is used only through `uv run --with segno==1.6.6`, never installed into the offline
   suite's interpreter. The offline suite reads the URL from the SVG's `<title>` instead.
+## 2026-10-24 · #452 · The KubeCon recorded fallback: replay built, recordings wait for the rehearsal
+
+The breakout's point 9 needs a fallback for the room's live input. Built offline: the prompt set
+(`facilitation/kubecon-na-2026/fallback/prompts.yaml`), `scripts/replay-prompts.py` that sends it, the
+asset manifest and its checker (`assets.yaml`, `scripts/check-fallback-assets.py`), and the offline deck
+viewer (`screenshots/deck.html`). The six segment videos and the screenshots are recorded at the first full
+rehearsal on the KubeCon clusters, so they do not exist yet. The run-of-show names every path.
+
+- **Target is required.** The replay has no default site, the same rule as the kube-context: a replay that
+  guessed could spend the room's prompts on the wrong cluster.
+- **One session per prompt**, not one for the whole set (the archived sister design, BurritoBot#103, sent
+  one "browser token"). Fifty phones are fifty sessions; one session would thread every off-topic ask into
+  the same history, grow its token cost with each turn, and put the whole set behind one per-session
+  budget cap.
+- **Paced against guard-proxy's single 120/min window** (#450): one at a time, 6 seconds start to start by
+  default, never faster than one a second (half the window), because the presenters' own asks share it.
+- **"Failure" means the prompt did not reach the bot and come back as its reply.** guard-proxy answers its
+  rate limit and its cost cap with HTTP 200 and a canned reply, so the replay matches those replies, and
+  the offline test provokes both on the real proxy.py handler so a wording change cannot slip past. A
+  guardrail block and a missed marker are not failures: the first is the demo working, the second is the
+  model's mood (PROMPT-CATALOG.md has the next prompt).
+- **Videos are kept out of git by default** (`.gitignore`): hundreds of megabytes every clone would carry,
+  and useless as a link when the network is the thing that died. They go onto both presenter laptops at
+  the paths in `assets.yaml`, plus a USB stick. Screenshots are committed, as the issue asks. Git LFS or a
+  release asset instead is open for Michael.
