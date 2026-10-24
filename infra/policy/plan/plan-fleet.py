@@ -13,6 +13,7 @@
 # caller is dropped, so even a call that escaped the endpoint override would reach real AWS unsigned by
 # any real key and be refused. Nothing is applied; there is no state to apply from.
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -32,6 +33,7 @@ REPO = Path(__file__).resolve().parents[3]
 ROOTS = {"network": REPO / "infra/terraform/aws/network", "cluster": REPO / "infra/terraform/aws/cluster"}
 REGION = "us-west-2"
 CLUSTER_NAME = "watch-it-burn-attendee-001"
+EVENT_SH = REPO / "infra/terraform/fleet/event.sh"
 
 # What the stub answers. Plausible values only: no policy reads them, they only have to let the plan finish.
 ADDON_VERSIONS = {
@@ -96,16 +98,37 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
-def ec2(endpoint: str, **params: str) -> str:
-    """One EC2 Query API call against moto, which reads the service and region from the credential scope."""
-    data = urllib.parse.urlencode({**params, "Version": "2016-11-15"}).encode()
+def query(endpoint: str, service: str, version: str, region: str = REGION, **params: str) -> str:
+    """One AWS Query API call against moto, which reads the service and region from the credential scope."""
+    data = urllib.parse.urlencode({**params, "Version": version}).encode()
     req = urllib.request.Request(endpoint, data=data, headers={
         "Content-Type": "application/x-www-form-urlencoded",
-        "Authorization": f"AWS4-HMAC-SHA256 Credential=testing/20261024/{REGION}/ec2/aws4_request, "
+        "Authorization": f"AWS4-HMAC-SHA256 Credential=testing/20261024/{region}/{service}/aws4_request, "
                          "SignedHeaders=host, Signature=stub",
     })
     with urllib.request.urlopen(req, timeout=30) as resp:
         return resp.read().decode()
+
+
+def ec2(endpoint: str, **params: str) -> str:
+    return query(endpoint, "ec2", "2016-11-15", **params)
+
+
+def fleet_event() -> str:
+    """The `event` both roots require, read the way fleet.sh reads it: by sourcing fleet/event.sh."""
+    proc = subprocess.run(["bash", "-c", 'source "$1" && printf %s "${WIB_EVENT:?}"', "_", str(EVENT_SH)],
+                          capture_output=True, text=True)
+    if proc.returncode != 0 or not proc.stdout:
+        sys.exit(f"could not read WIB_EVENT from {EVENT_SH}: {proc.stderr.strip()}")
+    return proc.stdout
+
+
+def boundary_pipeline():
+    """infra/org/pipeline.py, for the boundary's name and its rendered document (one source for both)."""
+    spec = importlib.util.spec_from_file_location("org_pipeline", REPO / "infra/org/pipeline.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def main() -> None:
@@ -145,6 +168,13 @@ def main() -> None:
                                  ec2(moto_url, Action="CreateSubnet", VpcId=vpc, CidrBlock=cidr,
                                      AvailabilityZone=az))[1]
                        for cidr, az in (("10.0.0.0/18", f"{REGION}a"), ("10.0.64.0/18", f"{REGION}b"))]
+            # The cluster root looks the per-account permissions boundary up by name (#207), as infra/org/boundary
+            # leaves it in every account before any cluster. Created here from the same template that root applies.
+            org = boundary_pipeline()
+            account = re.search(r"<Account>([^<]+)</Account>",
+                                query(moto_url, "sts", "2011-06-15", Action="GetCallerIdentity"))[1]
+            query(moto_url, "iam", "2010-05-08", region="us-east-1", Action="CreatePolicy",
+                  PolicyName=org.BOUNDARY_NAME, PolicyDocument=json.dumps(org.render_boundary(account)))
 
             (work / "credentials").write_text("[plan-fleet]\naws_access_key_id = testing\n"
                                               "aws_secret_access_key = testing\n")
@@ -159,9 +189,10 @@ def main() -> None:
                 "AWS_ENDPOINT_URL_SSM": stub_url,
                 "TF_IN_AUTOMATION": "1",
             })
+            event = fleet_event()
             tfvars = {
-                "network": {"profile": "plan-fleet"},
-                "cluster": {"profile": "plan-fleet", "name": CLUSTER_NAME, "vpc_id": vpc,
+                "network": {"profile": "plan-fleet", "event": event},
+                "cluster": {"profile": "plan-fleet", "event": event, "name": CLUSTER_NAME, "vpc_id": vpc,
                             "private_subnet_ids": subnets},
             }
             for root, src in ROOTS.items():

@@ -85,6 +85,12 @@ could never be on the self-hosted runner (llm-coding-workflow#145). It plans `aw
 `aws/cluster`, the two roots `fleet.sh` applies. A new root under `infra/terraform/` is only checked
 once it is added to `plan-fleet.py`.
 
+Before planning, `plan-fleet.py` puts into the mock what a real account already has when `fleet.sh`
+runs: the lab VPC and its two subnets, and the `watch-it-burn-permissions-boundary` policy that the
+cluster root looks up by name (#207). It renders that policy with `infra/org/pipeline.py`, from the
+template `infra/org/boundary` applies. Both roots get `event` from `infra/terraform/fleet/event.sh`,
+the way `fleet.sh` passes it (#494).
+
 ## Parallel with admission (#204)
 
 C8's admission policy on a `Bucket` kind should use the same `publicAcls` and `publicGrantees` lists as

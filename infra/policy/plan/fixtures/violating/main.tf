@@ -100,6 +100,8 @@ resource "aws_iam_role_policy" "any_bucket" {
 # which is a different place in the plan from a policy resource.
 resource "aws_iam_role" "not_action" {
   name = "watch-it-burn-fixture-not-action"
+  # Bounded like every role in infra/ (#207), so the only thing wrong with this role is the NotAction below.
+  permissions_boundary = "arn:aws:iam::123456789012:policy/watch-it-burn-permissions-boundary"
   assume_role_policy = jsonencode({
     Version   = "2012-10-17"
     Statement = [{ Effect = "Allow", Action = "sts:AssumeRole", Principal = { Service = "ec2.amazonaws.com" } }]
