@@ -4,6 +4,10 @@
 #
 # Usage: CONTEXT=<kube-context> [NAMESPACE=agent] bash verify/run-e2e.sh
 #
+# The AWS-plane drift check (test_drift_aws_live.py) also needs DRIFT_PROFILE (an operator profile in
+# WIB_ATTENDEE_ACCOUNTS whose account has infra/terraform/aws/audit applied) and ATTENDEE_CLUSTER (a cluster
+# whose attendee key is in infra/terraform/fleet/aws-pool/), and fails without them like everything else here.
+#
 # The target cluster is never guessed. CONTEXT is required and is passed explicitly to every kubectl call;
 # the current-context is never read (see AGENTS.md, Kube-context safety). KUBECONFIG may be set for this
 # one command to point at an isolated kubeconfig.

@@ -61,6 +61,10 @@ cd ../lab-vpc && terraform destroy
 - **Multi-cloud seam:** `cluster/` is the swappable unit. A GKE/AKS port reimplements just this module
   (the three controls map: GKE `pod_pids_limit` + Dataplane-V2 + Workload Identity; AKS `podMaxPids`
   + Azure/Calico NP + Workload Identity). `lab-vpc/`, `fleet/`, and the entire `gitops/` layer are reused.
+- **Drift:** nothing reconciles this plane, so `drift/drift-report.py` runs a refresh-only plan of every
+  state and lists the S3 buckets and EKS clusters that are in no state. `drift/scheduled-drift.sh` is its
+  daily cron wrapper. `aws/audit/` is the per-account AWS Config and CloudTrail record. What is left
+  unmanaged on purpose, and why, is in `docs/floor.md`.
 - **Per-cluster ceiling:** ~60 concurrent on the `/18` subnets. For more, widen `lab-vpc` subnets and
   raise `MAX_PARALLEL` + AWS API limits. EC2 vCPU quota (L-1216C47A) is the deliberate increase to request.
 

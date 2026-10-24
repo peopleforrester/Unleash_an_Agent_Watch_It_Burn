@@ -1,0 +1,29 @@
+# ABOUTME: The AWS half of the unmanaged register: S3 buckets and EKS clusters the fleet accounts are EXPECTED to
+# ABOUTME: hold outside every Terraform state. drift-report.py lists anything else as a finding. Prose: docs/floor.md.
+#
+# An entry names a resource kind, the accounts it applies to ("*" for every fleet account), and either a
+# `name` (shell glob) or a `tag` (every key/value must match). `made_by` says what creates it and `why` says
+# why it is not in Terraform; an entry nobody can explain is not one to add. When the drift report finds a
+# resource that belongs here, add it here in the same commit that says who made it.
+#
+# Kinds: s3-bucket, eks-cluster.
+entries:
+  - kind: s3-bucket
+    name: watch-it-burn-exfil-hoop
+    accounts: ["*"]
+    made_by: games/eso-s3-exfil/s3-hoop-setup.sh
+    why: >-
+      The optional ESO exfil game's target bucket, made by a setup script on the day and removed by
+      games/eso-s3-exfil/teardown.sh. It is tagged project=watch-it-burn but no Terraform root owns it.
+  - kind: s3-bucket
+    tag: { Workshop: packt }
+    accounts: [accen-dev]
+    made_by: the Packt project (co-tenant in accen-dev)
+    why: >-
+      accen-dev is shared with Packt, who tag their resources Workshop=packt (infra/terraform/aws/network/main.tf).
+      Theirs, in their own state; we never touch them.
+  - kind: eks-cluster
+    tag: { Workshop: packt }
+    accounts: [accen-dev]
+    made_by: the Packt project (co-tenant in accen-dev)
+    why: Same co-tenant rule as their buckets.
