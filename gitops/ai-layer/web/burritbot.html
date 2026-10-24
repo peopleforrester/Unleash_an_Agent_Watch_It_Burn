@@ -533,13 +533,25 @@
   // Whitespace-tolerant as well as case-insensitive. Nova varies the tag (<Thinking>, </thinking >), and
   // a variant that does not match renders RAW to the student, which is the #100 symptom returning by a
   // side door. Matching loosely costs nothing here: the only thing between these markers is scratchpad.
-  const THINK_RE=/<\s*thinking\s*>([\s\S]*?)<\s*\/\s*thinking\s*>/gi;
-  function botReply(t){
+  // A block Nova never closes runs to the end of the reply, and a tag left over on its own is dropped, so
+  // no "<thinking>" text reaches the bubble (#530). When folding leaves nothing to read, the reasoning IS
+  // the reply and is shown untagged, as guard-proxy does for a reasoning-only answer. verify/kubecon_probe.py
+  // reads these two patterns off this page to judge what the room sees; keep them one line each.
+  const THINK_RE=/<\s*thinking\s*>([\s\S]*?)(?:<\s*\/\s*thinking\s*>|$)/gi;
+  const THINK_TAG_RE=/<\s*\/?\s*thinking\s*>/gi;
+  function splitThinking(t){
     t=String(t==null?'':t);
     const thoughts=[]; let m;
     THINK_RE.lastIndex=0;
-    while((m=THINK_RE.exec(t))!==null){ if(m[1].trim()) thoughts.push(m[1].trim()); }
-    const visible=t.replace(THINK_RE,'\n').replace(/\n{3,}/g,'\n\n').trim();
+    while((m=THINK_RE.exec(t))!==null){
+      const th=m[1].replace(THINK_TAG_RE,' ').trim(); if(th) thoughts.push(th);
+    }
+    let visible=t.replace(THINK_RE,'\n').replace(THINK_TAG_RE,' ').replace(/\n{3,}/g,'\n\n').trim();
+    if(!visible && thoughts.length){ visible=thoughts.join('\n\n'); thoughts.length=0; }
+    return {visible:visible, thoughts:thoughts};
+  }
+  function botReply(t){
+    const split=splitThinking(t), visible=split.visible, thoughts=split.thoughts;
     const d=bubble(visible||'…','bot');
     thoughts.forEach(function(th){
       const det=document.createElement('details'); det.className='think';

@@ -158,8 +158,14 @@ bot before it misbehaves.
 
 - BurritoBot answers as the burrito chain (menu, an order), then the room coaxes it
   off the rails: the weird off-topic asks the abstract invites, and the leak of the
-  fictional CEO's record. Prompts and verified results are on `/kubecon` (Segment 2)
+  fictional CEO's record (her home address; the signature line only when the model
+  keeps it, #530). Prompts and verified results are on `/kubecon` (Segment 2)
   and in `challenges/PROMPT-CATALOG.md`.
+- **The off-topic answer is not promised (#530).** On 2026-10-24 the Community bot
+  turned the linked-list ask away. The persona now tells it to answer harmless
+  off-topic asks, which is unproven live. Say the bot will answer them only once the
+  Night Before probe's off-topic beat is 3 of 3 on the Community cluster; until then
+  the room tries them and the presenters do not say what it will do.
 - **Michael on cost:** keep the live cost counter on the bot visible. Narrate it
   climbing while the room hammers it. "Nothing crashed, nothing is red, and the
   bill is the attack." This is the denial-of-wallet point, delivered as narration
@@ -350,7 +356,7 @@ verbatim text in `abstracts/recovered/sessionize-public-profile.md` section 5.
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre; C7 mid, between the agent's steps) | Pre yes. Mid, as defined on #456 (2026-10-24), is agentgateway MCP authorization plus the output guard on C7: the output guard is built, the agentgateway `mcpAuthorization` half needs #496 merged |
 | 7 | Good GenAI observability practices | 6 (Datadog, or the Grafana view) | Yes on the Grafana view without a pool (#500), once proven on a cluster at bring-up (#503); Datadog needs the pool (#454) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail, `guard-topic-on`) | **At risk.** Settings, persona and toggle are here (#455); the topic stage in `proxy.py` and the BanTopics model in the LLM Guard image are not built yet |
-| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live half yes; recorded half needs #452 built |
+| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the bot answering is not promised until the probe's off-topic beat is 3 of 3 (#530); recorded half needs #452 built |
 
 Points the cut cannot deliver today, marked so they are not presented as ready:
 point 8 (the on-topic guard has no topic stage in guard-proxy yet, #455), the
@@ -415,7 +421,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 20): a community run makes 3 model calls, an admin run 12. Pull each
+  (default 20): a community run makes 5 model calls, an admin run 12. Pull each
   admin cluster's credentials into its own kubeconfig first; the probe passes it per
   command and never touches `~/.kube/config`.
 
@@ -428,8 +434,11 @@ is merely slow rather than rebuilding:
   ```
 
   - Community (segment 2): the wide-open start, a burrito order answered, the CEO
-    record leaking with the `/brief` prompt, the linked-list ask answered, the cost
-    counter moving, and the projected feed on.
+    record leaking with the `/brief` prompt (her address in the reply the room reads,
+    or the signature), the linked-list ask answered 3 of 3, the cost counter moving,
+    and the projected feed on. Each beat is judged on what the console shows, with
+    Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
+    300 characters of the reply.
   - Admin: the kube-context and the hostname are the same cluster (if not, it stops
     before flipping anything); the start state (every AI guard off; Kyverno Deny,
     NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
