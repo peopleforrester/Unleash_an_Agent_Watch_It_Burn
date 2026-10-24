@@ -29,8 +29,8 @@ Tool RESULTS are deliberately not logged, only their size. The results are the l
 Datadog, which would put them outside the span redaction the observability act teaches. Arguments are
 logged, clipped, because the arguments are the attack: the shell command, the manifest, the vault entry.
 
-Query (the bundled Alloy config labels every stream with only job="loki.source.kubernetes.pods"):
-    {job=~".+"} |= "tool_invocation" | json | line_format "{{.ts}} {{.agent_identity}} {{.phase}} {{.tool_name}}"
+Query (the bundled Alloy config labels each stream with namespace, pod, container and app; #464):
+    {namespace="agent", app="workshop-mcp"} |= "tool_invocation" | json | line_format "{{.ts}} {{.agent_identity}} {{.phase}} {{.tool_name}}"
 """
 from __future__ import annotations
 

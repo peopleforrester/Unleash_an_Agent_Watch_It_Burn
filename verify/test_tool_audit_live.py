@@ -13,7 +13,8 @@ Live half, one link of the chain per check:
 1. the Agent CR on the cluster carries X-Agent-Identity on its workshop-mcp entry;
 2. kagent rendered it into the agent's config Secret, which is what the ADK runtime sends on every MCP request;
 3. a tools/call sent through agentgateway with a unique identity comes out of Loki with that identity, which
-   proves agentgateway forwards the header, workshop-mcp audits it and Alloy ships it.
+   proves agentgateway forwards the header, workshop-mcp audits it and Alloy ships it on a stream labelled
+   with its namespace, app, pod and container.
 The model is not asked to call a tool: whether it does is up to the model, and a check that depends on it
 would be measuring the model, not the trail.
 
@@ -230,8 +231,11 @@ sent = kubectl("run", f"toolaudit-{uuid.uuid4().hex[:6]}", "--rm", "-i", "--rest
 check("the tools/call through agentgateway was answered", sent.returncode == 0 and "NO_SESSION" not in sent.stdout
       and '"result"' in sent.stdout)
 
-query = '{job=~".+"} |= "%s" | json' % ident
+# Selected by stream, not by line-filtering every stream: Alloy's discovery.relabel puts namespace and app on
+# each stream (#464). A config that loses the relabel finds nothing here, since every stream is then only job.
+query = '{namespace="%s", app="workshop-mcp"} |= "%s" | json' % (NS, ident)
 found: list[dict] = []
+labels: list[dict] = []
 deadline = time.time() + 120
 while time.time() < deadline and len(found) < 2:
     start = str(int((time.time() - 900) * 1e9))
@@ -241,6 +245,7 @@ while time.time() < deadline and len(found) < 2:
     if got.returncode == 0:
         streams = json.loads(got.stdout).get("data", {}).get("result", [])
         found = [json.loads(v[1]) for s in streams for v in s.get("values", [])]
+        labels = [s.get("stream", {}) for s in streams]
     if len(found) < 2:
         time.sleep(10)
 check("Loki has the call's pre and post lines", [r.get("phase") for r in found] == ["pre", "post"])
@@ -248,5 +253,7 @@ check("both carry the identity the caller declared, through agentgateway",
       bool(found) and all(r.get("agent_identity") == ident for r in found))
 check("both name the tool and the server", bool(found) and all(
     r.get("tool_name") == "check_inventory" and r.get("mcp_server") == "workshop-mcp" for r in found))
+check("their stream is labelled with the pod and container that wrote them", bool(labels) and all(
+    lb.get("pod", "").startswith("workshop-mcp-") and lb.get("container") == "shim" for lb in labels))
 
 finish()

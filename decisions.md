@@ -952,3 +952,24 @@ mints no new key and gives that user an EKS access entry with cluster admin agai
 - **Audit:** `audit-zero` fails on any `wib-*` user whose cluster is not live (`zero:<acct>:iam-users`), so it
   is no longer only about billable things. `verify/account-audit.sh` counts our IAM users beside the roles
   and policies.
+
+## 2026-10-24 · #464 · Alloy labels every Loki stream with namespace, pod, container and app
+
+**Before, every stream was `{job="loki.source.kubernetes.pods"}`.** `gitops/apps/alloy.yaml` handed the
+discovery.kubernetes targets straight to loki.source.kubernetes, which drops every `__meta_` label and adds
+only `job`, so the #190 audit query had to line-filter every stream: `{job=~".+"} |= "tool_invocation"`.
+
+- **A discovery.relabel sits between them** and copies `namespace`, `pod` and `container` from the pod's
+  metadata. It keeps the `__meta_` labels: loki.source.kubernetes needs them to find the pod, and drops them
+  itself before the push.
+- **`app` is app.kubernetes.io/name, else the `app` pod label.** The issue named app.kubernetes.io/name, but
+  workshop-mcp and evil-mcp-shim carry only `app` (llm-guard, guard-proxy, web-terminal and console carry
+  app.kubernetes.io/name), so a label from app.kubernetes.io/name alone would leave the audit trail's own pod
+  without one. The second rule has regex `(.+)` so a pod without
+  app.kubernetes.io/name keeps its `app` value instead of being blanked.
+- **`job` is left as the component id.** Changing it would buy nothing a query needs and would break any
+  saved `{job=...}` selector.
+- The audit query is now `{namespace="agent", app="workshop-mcp"} |= "tool_invocation" | json`
+  (tool_audit.py, test_tool_audit_live.py). `verify/test_alloy_labels.py` holds the wiring offline. The
+  relabel's output was checked against Alloy v1.19.2 (chart 1.12.1's appVersion) with `alloy validate` and
+  a local `alloy run` on static targets; the Loki end is the live half of test_tool_audit_live.py.

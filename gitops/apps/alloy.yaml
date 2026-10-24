@@ -24,11 +24,40 @@ spec:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 512Mi }
           # verify-at-build: confirm Alloy config syntax against chart 1.10.0 before deploy.
+          # loki.source.kubernetes drops every __meta_ label and adds only job, so without the relabel every
+          # stream is {job="loki.source.kubernetes.pods"} and a query has to line-filter all of them (#464).
+          # The relabel keeps the __meta_ labels the source needs to find the pod, and copies the ones a
+          # query selects on into stream labels. app is the pod's app.kubernetes.io/name, else its app label
+          # (workshop-mcp and evil-mcp-shim carry only app).
           configMap:
             content: |
               discovery.kubernetes "pods" { role = "pod" }
+              discovery.relabel "pods" {
+                targets = discovery.kubernetes.pods.targets
+                rule {
+                  source_labels = ["__meta_kubernetes_namespace"]
+                  target_label  = "namespace"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_name"]
+                  target_label  = "pod"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_container_name"]
+                  target_label  = "container"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_label_app"]
+                  target_label  = "app"
+                }
+                rule {
+                  source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+                  regex         = "(.+)"
+                  target_label  = "app"
+                }
+              }
               loki.source.kubernetes "pods" {
-                targets    = discovery.kubernetes.pods.targets
+                targets    = discovery.relabel.pods.output
                 forward_to = [loki.write.default.receiver]
               }
               loki.write "default" {
