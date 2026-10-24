@@ -154,6 +154,18 @@ check("Grafana's /api/health answers through its hostname", status == 200 and '"
       f"HTTP {status}: {hop(status, body, 'monitoring/prometheus-grafana') or body[:160]}")
 gpw = secret("monitoring", "prometheus-grafana", "admin-password")
 check("the Grafana admin password is readable, as the platform page tells a student", bool(gpw))
+# Grafana builds absolute links (Share, alert links) from root_url, which the frontend gets as appUrl. With the
+# old ALB Ingress it was http://grafana.agenticburn.com:3000/ on every cluster (#493).
+status, body = fetch(f"https://grafana-{host}/api/frontend/settings", auth=("admin", gpw))
+try:
+    app_url = json.loads(body).get("appUrl")
+except ValueError:
+    app_url = None
+check(f"Grafana's root_url is its own hostname, https://grafana-{host}/", app_url == f"https://grafana-{host}/",
+      f"HTTP {status}: appUrl={app_url!r}" if app_url is not None else f"HTTP {status}: {body[:160]}")
+r = kubectl("-n", "monitoring", "get", "ingress", "-o", "jsonpath={.items[*].metadata.name}")
+check("Grafana has no Ingress of its own (no ALB for it)", r.returncode == 0 and "grafana" not in r.stdout,
+      r.stderr.strip()[:160] or r.stdout)
 # The attendee profile installs no Tempo, and its data source ships with the tempo Application (#475), so on an
 # attendee cluster the right answer for uid tempo is "no such data source", not a healthy one.
 r = kubectl("-n", "argocd", "get", "applications.argoproj.io", "-o", "jsonpath={.items[*].metadata.name}")

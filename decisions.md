@@ -1282,3 +1282,23 @@ model bind, or the agent's A2A port, directly over the intra-namespace allow, wi
 either. And workshop-mcp's `run_shell` already runs as agent-sa, so it holds Bedrock credentials with no new
 pod. Closing either changes ingress on the chat path, or the identity that C8 is built around, and both need a
 live cluster to check.
+## 2026-10-24 · #493 · Grafana loses its ALB Ingress; root_url comes from cluster-identity
+
+**What went.** The kube-prometheus-stack Grafana Ingress (`ingressClassName: alb`, group
+`watch-it-burn-ingress`, host `grafana.agenticburn.com`). Since #233 Grafana is reached at
+`grafana-<cluster>.agenticburn.com` through the apex router and the console LB, and `routes.map` never had a row
+for the fixed host, so it answered 404 on every cluster. On a live cluster Argo CD prunes the Ingress; the
+load balancer controller deletes the ALB once no other Ingress holds the group (the five party-app Ingresses
+in `gitops/manifests/demo-app-*/ingress.yaml` use the same group and are left for their own issue).
+
+**How root_url is set.** #233 asked for root_url per host. Grafana reads `WIB_PUBLIC_HOST` from the
+`cluster-identity` ConfigMap's `public-host` key (written in `monitoring` by `infra/datadog-cluster-identity.sh`
+before the app-of-apps, the same source the guard-proxy and web terminal use), and `grafana.ini` sets
+`server.domain: grafana-$__env{WIB_PUBLIC_HOST}` and `root_url: https://grafana-$__env{WIB_PUBLIC_HOST}/`.
+Grafana's own `$__env{}` expansion was chosen over a Kubernetes `$(VAR)` reference so the rendered
+`prometheus-grafana` ConfigMap shows where the value comes from, and so it does not depend on the chart's
+env ordering. The reference is optional: without the ConfigMap Grafana still starts, with links that name no
+cluster. Grafana reads env at start, so a public host rewritten later needs a Grafana pod restart.
+
+**Not measured live.** No cluster was available to this run. `verify/test_service_hosts_live.py` now reads
+Grafana's `appUrl` through its hostname and asserts no Grafana Ingress remains; run it on the next build.

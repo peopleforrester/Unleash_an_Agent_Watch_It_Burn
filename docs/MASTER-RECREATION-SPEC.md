@@ -512,7 +512,7 @@ The hard problem is N independent EKS clusters, each with its own LoadBalancer, 
 | Service | Exposure | Reachability | Pool field |
 |---|---|---|---|
 | console (chat + terminal + agent) | per-cluster `type: LoadBalancer` in ns `agent`; raw `*.elb.amazonaws.com` | UNIQUE per cluster, works with NO DNS. The reliable front door | `console_url` |
-| grafana | ALB Ingress, host-routed (`grafana.agenticburn.com`) | needs DNS to THIS cluster's ALB; DNS-fragile | `grafana_url`, optional |
+| grafana | no Ingress; `grafana-<cluster>.agenticburn.com` through the apex router to the console LB, fanned out on Host by the console's nginx (#233, #493) | per cluster, no extra LB; root_url is `https://grafana-<public-host>/` from cluster-identity | `grafana_url`, optional |
 | argocd | ClusterIP, not exposed | no URL until an Ingress is added | `argocd_url`, blank |
 | burritbot | not yet deployed (#38) | blank until it lands | `burritbot_url`, optional |
 

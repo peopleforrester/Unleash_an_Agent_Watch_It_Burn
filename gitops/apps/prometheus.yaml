@@ -85,18 +85,26 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          # No Ingress (#493). Grafana is reached at grafana-<cluster>.agenticburn.com, which the apex router
+          # sends to the console LB and the console's nginx fans out on Host (#233, console.conf). The old ALB
+          # Ingress claimed grafana.agenticburn.com, one host for every cluster that routes.map never had a row
+          # for, so it cost an internet-facing ALB per cluster for a 404, gave the access harvester a wrong URL,
+          # and fed the chart's default server.domain, which made Grafana believe it lived at
+          # http://grafana.agenticburn.com:3000/ and broke every absolute link it builds (Share, alert links).
           ingress:
-            enabled: true
-            ingressClassName: alb
-            annotations:
-              alb.ingress.kubernetes.io/scheme: internet-facing
-              alb.ingress.kubernetes.io/target-type: ip
-              alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
-              alb.ingress.kubernetes.io/backend-protocol: HTTP
-              alb.ingress.kubernetes.io/healthcheck-path: /api/health
-              alb.ingress.kubernetes.io/group.name: watch-it-burn-ingress
-            hosts:
-              - grafana.agenticburn.com
+            enabled: false
+          # root_url per host, as #233 asked: this cluster's own grafana-<public-host>. The public host is the
+          # cluster-identity ConfigMap that infra/datadog-cluster-identity.sh writes before the app-of-apps
+          # (the same source the guard-proxy and the web terminal read, #292). Grafana expands $__env{} in
+          # grafana.ini itself, so the rendered ConfigMap shows where the value comes from. Optional, so a
+          # cluster without the ConfigMap still starts Grafana; its absolute links then name no cluster.
+          envValueFrom:
+            WIB_PUBLIC_HOST:
+              configMapKeyRef: { name: cluster-identity, key: public-host, optional: true }
+          grafana.ini:
+            server:
+              domain: grafana-$__env{WIB_PUBLIC_HOST}
+              root_url: https://grafana-$__env{WIB_PUBLIC_HOST}/
         # The operator's admission-webhook create/patch Jobs ship without resources and the
         # require-resource-limits policy (kyverno-policies) rejects them, which left the app
         # OutOfSync on every full-profile cluster and the Grafana Service missing there (#234).
