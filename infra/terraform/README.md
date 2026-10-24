@@ -73,6 +73,14 @@ cd ../aws/network && terraform destroy -var profile=<profile> -var event="${WIB_
 - **Per-cluster ceiling:** ~60 concurrent on the `/18` subnets. For more, widen `lab-vpc` subnets and
   raise `MAX_PARALLEL` + AWS API limits. EC2 vCPU quota (L-1216C47A) is the deliberate increase to request.
 
+## Plan-time policy
+
+Before an apply, a plan of these roots can be checked against the plan-time policies in
+[`infra/policy/plan/`](../policy/plan/README.md): no public S3 ACL, no public EKS endpoint, no IAM `*`,
+no unencrypted RDS. The check runs Kyverno in JSON mode, Checkov and Trivy over `terraform show -json`
+output. `plan-fleet.py` there plans `aws/network` and `aws/cluster` against a local AWS API, so the fleet
+can be checked without an AWS account (#200).
+
 ## Post-provision
 
 After a cluster is up, deploy the IDP onto it the same cloud-agnostic way as before:

@@ -1,0 +1,30 @@
+# ABOUTME: Which Checkov and Trivy findings fail the plan check, each mapped to the starter policy it re-checks.
+# ABOUTME: Read by check-plan.py. Every other scanner finding is printed as advisory and does not fail the check.
+#
+# The scanners are a second, independently written implementation of the same four rules the Kyverno
+# policies in policies/ enforce, so a bug in our CEL does not silently pass a public bucket. They are not
+# gated on their whole catalogues: Checkov's fails a private, encrypted bucket for having no cross-region
+# replication, and an exception list that long stops being read. Everything they find is still printed on
+# every run under ADVISORY, so nothing is hidden; promoting a check into the gate is one line here, plus
+# a row in exceptions.md for each finding the fleet already has.
+#
+# Gaps, recorded rather than papered over (both measured on the fixtures 2026-10-24):
+#   - Trivy 0.76.1 evaluates no IAM document from a plan (AWS-0057 never fires), so no-iam-wildcard has
+#     no Trivy gate. Kyverno and Checkov cover it.
+#   - Trivy AWS-0079 fails an Aurora cluster with storage_encrypted = true unless it also names a KMS key,
+#     which is a stronger rule than no-unencrypted-rds. It stays advisory; AWS-0080 (instances) gates.
+
+checkov:
+  CKV_AWS_20: no-public-s3-acl        # ACL allows public READ
+  CKV_AWS_57: no-public-s3-acl        # ACL allows public WRITE
+  CKV_AWS_39: no-public-eks-endpoint  # EKS public endpoint enabled
+  CKV_AWS_62: no-iam-wildcard         # full "*-*" admin policy
+  CKV_AWS_63: no-iam-wildcard         # "*" as a statement's action
+  CKV_AWS_355: no-iam-wildcard        # "*" as a statement's resource for restrictable actions
+  CKV_AWS_16: no-unencrypted-rds      # RDS instance not encrypted at rest
+  CKV_AWS_96: no-unencrypted-rds      # Aurora cluster not encrypted at rest
+
+trivy:
+  AWS-0092: no-public-s3-acl          # bucket publicly accessible through ACL
+  AWS-0040: no-public-eks-endpoint    # EKS public access enabled
+  AWS-0080: no-unencrypted-rds        # RDS instance encryption not enabled

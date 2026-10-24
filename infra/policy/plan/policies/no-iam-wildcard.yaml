@@ -1,0 +1,72 @@
+# ABOUTME: Plan-time policy: no IAM policy may Allow the "*" action or the "*" resource.
+# ABOUTME: Kyverno ValidatingPolicy in JSON mode, evaluated against `terraform show -json` plan output.
+#
+# The document is read from the plan, so a policy built by a module from aws_iam_policy_document data is
+# checked in its final form, after every source and override document is merged.
+#
+# What counts as a wildcard, per Allow statement:
+#   - Action "*" or "*:*", or any NotAction: an Allow on everything except a list is still everything else.
+#   - Resource "*", or any NotResource, for the same reason.
+# A "*" inside an ARN (arn:aws:s3:::bucket/*) is scoped and is not caught. Deny statements are not grants.
+#
+# Documents the plan cannot read yet (a policy that embeds the ARN of a resource created in the same
+# apply) are rejected rather than waved through. When that is the only reason, the address goes in
+# exceptions.md with what the module source says the document contains.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: no-iam-wildcard
+  annotations:
+    policies.kyverno.io/title: No IAM wildcard action or resource
+    policies.kyverno.io/severity: high
+spec:
+  evaluation:
+    mode: JSON
+  variables:
+    # Addresses excused from this policy. Every entry needs a matching row in ../exceptions.md, and
+    # verify/test_plan_policy.py fails the build when the two disagree.
+    - name: exempt
+      expression: >-
+        ['module.eks.aws_iam_policy.cluster_encryption[0]',
+         'module.ebs_csi_pod_identity.aws_iam_policy.ebs_csi[0]',
+         'module.aws_lb_controller_pod_identity.aws_iam_policy.lb_controller[0]',
+         'module.eso_pod_identity.aws_iam_policy.external_secrets[0]']
+    - name: policyTypes
+      expression: "['aws_iam_policy', 'aws_iam_role_policy', 'aws_iam_user_policy', 'aws_iam_group_policy']"
+    - name: changes
+      expression: >-
+        object.?resource_changes.orValue([]).filter(rc,
+          rc.mode == 'managed' && rc.change.after != null && !(rc.address in variables.exempt))
+    # One entry per document: the address and the parsed JSON. aws_iam_role carries its inline policies
+    # as a list of blocks, each with its own document.
+    - name: documents
+      expression: >-
+        variables.changes.filter(rc,
+          rc.type in variables.policyTypes && rc.change.after.?policy.orValue('') != ''
+        ).map(rc, {'address': dyn(rc.address), 'doc': dyn(json.unmarshal(string(rc.change.after.policy)))}) +
+        variables.changes.filter(rc, rc.type == 'aws_iam_role').map(rc,
+          rc.change.after.?inline_policy.orValue([]).filter(ip, ip.?policy.orValue('') != '').map(ip,
+            {'address': dyn(rc.address + ' inline_policy ' + ip.?name.orValue('')),
+             'doc': dyn(json.unmarshal(string(ip.policy)))})
+        ).flatten()
+    - name: unknownDocuments
+      expression: >-
+        variables.changes.filter(rc,
+          rc.type in variables.policyTypes && rc.change.?after_unknown.?policy.orValue(false) == true
+        ).map(rc, rc.address + ' (policy document unknown at plan time)')
+    - name: wildcardGrants
+      expression: >-
+        variables.documents.filter(d,
+          (type(d.doc.Statement) == list ? d.doc.Statement : [d.doc.Statement]).exists(s,
+            s.?Effect.orValue('') == 'Allow' && (
+              has(s.NotAction) || has(s.NotResource) ||
+              (type(s.?Action.orValue([])) == string ? [s.Action] : s.?Action.orValue([])).exists(a, a in ['*', '*:*']) ||
+              (type(s.?Resource.orValue([])) == string ? [s.Resource] : s.?Resource.orValue([])).exists(r, r == '*')))
+        ).map(d, d.address)
+    - name: offenders
+      expression: "variables.wildcardGrants + variables.unknownDocuments"
+  validations:
+    - expression: "size(variables.offenders) == 0"
+      messageExpression: >-
+        'no-iam-wildcard: an Allow on "*" (action or resource) grants more than anything here needs: ' +
+        variables.offenders.join(', ')

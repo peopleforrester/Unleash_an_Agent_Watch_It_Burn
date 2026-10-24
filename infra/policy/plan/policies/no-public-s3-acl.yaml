@@ -1,0 +1,68 @@
+# ABOUTME: Plan-time policy: no S3 bucket may be given a public canned ACL or a grant to everyone.
+# ABOUTME: Kyverno ValidatingPolicy in JSON mode, evaluated against `terraform show -json` plan output.
+#
+# Reads the plan's resource_changes, not the HCL, so it judges what will actually be applied, module
+# internals included, and reads an OpenTofu plan the same way (`tofu show -json` emits the same format).
+#
+# Two ways to make a bucket public by ACL, and both are checked: on aws_s3_bucket itself (`acl`, the
+# acceptance case in #200, or a legacy `grant` block) and on the separate aws_s3_bucket_acl resource,
+# either as a canned ACL or as an explicit grant to the AllUsers / AuthenticatedUsers groups.
+#
+# What this cannot see: an ACL whose value comes from another resource's attribute that is only known
+# after apply. Both ACL arguments are provider-computed, so the plan marks an unset ACL "unknown" exactly
+# as it marks a computed one, and rejecting unknowns here would reject every bucket. Set ACLs from
+# literals or variables, which the plan shows.
+#
+# Parallel with the admission side (#204): `publicAcls` and `publicGrantees` are the lists a cluster
+# admission policy on a Bucket kind uses, so the same request reads the same at both layers.
+apiVersion: policies.kyverno.io/v1
+kind: ValidatingPolicy
+metadata:
+  name: no-public-s3-acl
+  annotations:
+    policies.kyverno.io/title: No public S3 ACLs
+    policies.kyverno.io/severity: high
+spec:
+  evaluation:
+    mode: JSON
+  variables:
+    # Addresses excused from this policy. Every entry needs a matching row in ../exceptions.md, and
+    # verify/test_plan_policy.py fails the build when the two disagree.
+    - name: exempt
+      expression: "[]"
+    - name: publicAcls
+      expression: "['public-read', 'public-read-write', 'authenticated-read']"
+    - name: publicGrantees
+      expression: >-
+        ['http://acs.amazonaws.com/groups/global/AllUsers',
+         'http://acs.amazonaws.com/groups/global/AuthenticatedUsers']
+    # Every managed resource the plan leaves in place: create, update, replace and no-op. Only a pure
+    # delete has no `after`, and a resource that is going away cannot be public afterwards.
+    - name: changes
+      expression: >-
+        object.?resource_changes.orValue([]).filter(rc,
+          rc.mode == 'managed' && rc.change.after != null && !(rc.address in variables.exempt))
+    - name: cannedPublic
+      expression: >-
+        variables.changes.filter(rc,
+          rc.type in ['aws_s3_bucket', 'aws_s3_bucket_acl'] &&
+          rc.change.after.?acl.orValue('') in variables.publicAcls
+        ).map(rc, rc.address + ' (acl = ' + rc.change.after.acl + ')')
+    - name: grantPublic
+      expression: >-
+        variables.changes.filter(rc,
+          rc.type == 'aws_s3_bucket_acl' &&
+          rc.change.after.?access_control_policy.orValue([]).exists(acp,
+            acp.?grant.orValue([]).exists(g,
+              g.?grantee.orValue([]).exists(ge, ge.?uri.orValue('') in variables.publicGrantees)))
+        ).map(rc, rc.address + ' (grant to a public group)') +
+        variables.changes.filter(rc,
+          rc.type == 'aws_s3_bucket' &&
+          rc.change.after.?grant.orValue([]).exists(g, g.?uri.orValue('') in variables.publicGrantees)
+        ).map(rc, rc.address + ' (grant to a public group)')
+    - name: offenders
+      expression: "variables.cannedPublic + variables.grantPublic"
+  validations:
+    - expression: "size(variables.offenders) == 0"
+      messageExpression: >-
+        'no-public-s3-acl: a public ACL would expose the bucket to anyone: ' + variables.offenders.join(', ')

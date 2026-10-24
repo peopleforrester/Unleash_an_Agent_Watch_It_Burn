@@ -952,3 +952,37 @@ mints no new key and gives that user an EKS access entry with cluster admin agai
 - **Audit:** `audit-zero` fails on any `wib-*` user whose cluster is not live (`zero:<acct>:iam-users`), so it
   is no longer only about billable things. `verify/account-audit.sh` counts our IAM users beside the roles
   and policies.
+
+## 2026-10-24T05:37:40Z · 2.2 · Plan-time policy toolchain for the fleet Terraform (#200)
+
+**New dependencies, pinned 2026-10-24 to the current release of each** (`infra/policy/plan/tools.yaml`,
+installed by `install-tools.py`, binaries checked against the sha256 each project publishes):
+
+- **Kyverno CLI 1.19.2.** Runs the four starter `ValidatingPolicy` files in JSON mode. The brief wanted
+  1.18 or later for the `--json` nil-pointer fix; 1.19.2 is the current patch on the 1.19 line the brief
+  named. 1.19 has no `kyverno json` subcommand: the JSON-mode path is `kyverno apply <policies> --json
+  <payload>`, which is what `check-plan.py` calls. The standalone kyverno-json binary is not used.
+- **Checkov 3.3.30 and Trivy 0.76.1.** The brief pinned 3.2.x and 0.70.x on 2026-09-03; both lines have
+  moved on since. tfsec (merged into Trivy) and Terrascan (archived 2025-11-20) are not added.
+- **Trivy comes from its release tarball, not `aquasecurity/trivy-action`.** The brief asked for the
+  action to be pinned to a commit SHA, because its release infrastructure was compromised in March 2026.
+  A checksum on the binary is the stronger pin, and it makes the action unnecessary.
+- **Terraform 1.17.0 and OpenTofu 1.13.2.** These are for the e2e suite only. It plans the same fixtures
+  and the fleet with both binaries, to prove the checks read an OpenTofu plan natively. The build host's
+  Terraform pin in VERSIONS.lock is unchanged.
+- **moto 5.2.4.** A local AWS API. `plan-fleet.py` plans the real `aws/network` and `aws/cluster` roots
+  against it, with no AWS account: the module logic runs as it does for real, and only API-sourced values
+  (account id, subnet ids, AMI and addon versions) are made up. moto lacks EKS DescribeAddonVersions and
+  SSM GetParameter, so a small in-process stub answers those two calls.
+
+**Scope of the scanner gate.** Checkov and Trivy fail the check only on the rules in `gates.yaml`, which
+re-check the four starter policies. Everything else they find is printed as advisory on every run.
+Gating on their whole catalogues would fail a private, encrypted bucket for having no cross-region
+replication, and an exception list that long stops being read. To promote a check, add one line to
+`gates.yaml`, plus an `exceptions.md` row for each finding the fleet already has.
+
+**Exceptions came from a plan of the real fleet, not from reading HCL.** A Checkov scan of the HCL
+reported findings in module blocks that `count` disables (appmesh, velero, cluster-autoscaler policies the
+fleet never creates). Reading the module source gave the wrong addresses too: `custom[0]`, where the
+modules actually create `ebs_csi[0]`, `lb_controller[0]` and `external_secrets[0]`. Each row in `exceptions.md` matches a
+finding on the mock-AWS plan, and the e2e suite fails when one stops matching.
