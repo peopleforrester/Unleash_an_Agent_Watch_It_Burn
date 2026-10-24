@@ -10,15 +10,15 @@ AGENT="${AGENT:-workshop-agent}"
 KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 
 # WHY this toggles toolNames and not the agentgateway config:
-#   The rogue tools are served by evil-mcp, and the `evil-mcp` RemoteMCPServer goes through agentgateway
-#   on its own bind, :3003 (gitops/ai-layer/resources.yaml, #514). That bind's mcpAuthorization rule is
-#   committed 'true' and nothing flips it, so it does not gate the rogue tools. The in-path,
-#   deployed, deterministic control is the kagent toolNames allowlist on the Agent CRD, which kagent
-#   enforces when it renders the agent's tool set. This toggle patches that.
+#   This is a workshop cluster's C7 control: the kagent toolNames allowlist on the Agent CRD, which kagent
+#   enforces when it renders the agent's tool set. The rogue tools are served by evil-mcp, and the `evil-mcp`
+#   RemoteMCPServer goes through agentgateway on its own bind, :3003 (gitops/ai-layer/resources.yaml, #514),
+#   but on a workshop cluster that bind's mcpAuthorization rule stays 'true', so this patch is what stops them.
 #
-#   The gateway-enforced alternative (flip that bind's CEL rule, the line marked `# c7-rule`) is
-#   weighed in docs/research/2026-10-24-agentgateway-evaluation.md (#239). It blocks the same tool
-#   names toolNames does and no more, so toolNames stays the control. The pre-gitops
+#   An admin cluster (the KubeCon breakout) uses the gateway rule instead (#496): the web terminal's
+#   guard-mcp-on rewrites that bind's CEL rule, the line marked `# c7-rule`, to get_weather and leaves this
+#   list full. Running this script there would hide the rogue tools before the gateway saw a call, which is
+#   not what the stage shows. The pre-gitops
 #   agent/gateway/mcp-authz-* overlays that once held a gateway allowlist were deleted in #479.
 #
 # Rogue tools (induced by the poisoned MCP description; read_internal_config leaks

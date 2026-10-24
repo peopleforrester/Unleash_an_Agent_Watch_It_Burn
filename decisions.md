@@ -1575,3 +1575,25 @@ on PATH it must name the version. With a stub Node 24 and corepack on PATH it mu
 for yarn. Because CONTEXT is unset, every case stops in the prerequisite check and no kubectl is ever called.
 Mutating each pin (yarn 3, a mismatched or missing `yarnPath`, a gate wanting Node 22, corepack dropped from the
 required tools) turns the test red.
+## 2026-10-25 · #516 · On an admin cluster the C7 toggles flip agentgateway's rule, and fail rather than guess
+
+Steps 2 and 3 of #496. The web terminal's guard-mcp-on/off and guards-on/off ask Argo CD which cluster they
+are on: when the Application `app-of-apps-admin` exists (gitops/bootstrap/admin), C7's control is the
+`# c7-rule` line of agentgateway-c7-config; anywhere else it stays the kagent toolNames list, unchanged.
+
+- **On is `mcp.tool.name == "get_weather"`, off is `'true'`, and toolNames stays full on an admin cluster.**
+  A blocked rogue call can then only be the gateway's doing. Off restores the committed config byte for byte.
+- **The rule is written with a JSON patch that tests the resourceVersion it read.** A ConfigMap that changed
+  between read and write is refused, not written over.
+- **The rule goes first, toolNames second.** A refused patch (a stale read) then leaves both controls as they
+  were. When Argo CD cannot be asked, nothing is touched. Either way the command exits non-zero and says C7
+  did not switch; guards-on/off say so too, instead of claiming every guard flipped.
+- **No restart.** agentgateway v1.5.0 reloads the watched mount. The toggle only annotates the gateway pod so
+  the kubelet refreshes the volume sooner; it never deletes, restarts or rolls the pod. The reload delay is
+  measured live at the #503 bring-up.
+- **The KubeCon probe flips C7 the same way.** Its guard-mcp-on beat narrows the rule and fails if toolNames
+  lost the rogue tools; start-state and guards-off require the rule open. `verify/test_kubecon_probe.py` holds
+  its rewrite equal to the terminal's `.c7rule.py` in both directions.
+
+`verify/test_c7_gateway_toggle.py` runs the entrypoint's real toggles against a fake kubectl for the admin,
+workshop, unreachable and stale-read cases, and checks the two entrypoint copies are byte-identical.

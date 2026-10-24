@@ -337,13 +337,15 @@ spec:
         - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
           value: SPAN_AND_EVENT
     # Committed tool config = the VULNERABLE default (challenge 7 "7a: see the weakness"), consistent
-    # with the input/output guards which also boot OFF. The C7 (beat-3) control that is actually IN PATH
-    # is kagent's toolNames allowlist: the agent dials evil-mcp through agentgateway :3003 (#514), but that
-    # bind's mcpAuthorization rule is committed 'true', so it does not gate the rogue tools (workshop-mcp's
-    # :3001 rule is allow-all too; #239). workshop-mcp carries the legit tools (real, namespace-scoped
+    # with the input/output guards which also boot OFF. C7 (beat-3) has one control per cluster (#496). On a
+    # workshop cluster it is kagent's toolNames allowlist below. On an admin cluster (the KubeCon breakout) it
+    # is the mcpAuthorization rule on agentgateway :3003, the bind the agent dials evil-mcp through (#514):
+    # guard-mcp-on narrows that rule to get_weather and leaves this list full, so the rogue call is refused at
+    # the gateway (the rule is committed 'true'; workshop-mcp's :3001 rule is allow-all; #239).
+    # workshop-mcp carries the legit tools (real, namespace-scoped
     # via agent-sa). evil-mcp is the look-alike supply-chain MCP wired with its FULL rogue toolset, so
     # get_weather's poisoned description chains the agent into read_internal_config (leaks
-    # FAKE-MCP-EXFIL-sentinel-4c1d) / apply_optimization. The student runs guard-mcp-on
+    # FAKE-MCP-EXFIL-sentinel-4c1d) / apply_optimization. On a workshop cluster the student runs guard-mcp-on
     # (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh) to narrow evil-mcp to [get_weather],
     # which filters the rogue tools out of the agent's toolset and blocks the leak. The toggle's two
     # states must mirror this array exactly (keep them in sync). No requireApproval/HITL (see note below).

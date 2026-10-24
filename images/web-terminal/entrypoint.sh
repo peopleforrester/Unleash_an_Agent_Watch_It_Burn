@@ -48,8 +48,11 @@ fi
 
 # Round-3 self-serve guardrail toggles (B5/B11). Each prints PLAIN-LANGUAGE confirmation of what changed
 # (not raw JSON) so a student can see what the guard does. Output/input guards flip via the guard-proxy
-# /toggle (no new pod, ArgoCD-safe, the cost counter survives). The MCP guard patches the kagent Agent's
-# toolNames allow-list; the ai-layer app ignores drift on .spec.declarative.tools so the toggle persists.
+# /toggle (no new pod, ArgoCD-safe, the cost counter survives). The MCP guard (C7) has one control per
+# format (#496). On a workshop cluster it patches the kagent Agent's evil-mcp toolNames allow-list. On an
+# admin cluster (the KubeCon breakout) it rewrites agentgateway's mcpAuthorization rule for evil-mcp and
+# leaves the allow-list full, so the rogue call reaches the gateway and is refused there. The ai-layer app
+# ignores drift on both, so either toggle persists.
 #
 # _px <query> : hit the guard-proxy /toggle endpoint, swallow the JSON, return its exit code.
 # _pxkey <query> <key> : the same, then print what the proxy now reports for <key>: True, False, or missing
@@ -63,6 +66,54 @@ _pxkey() { kubectl -n agent exec deploy/guard-proxy -- python3 -c \
 # (index 0, the real BurritoBot tools) is never touched, so the recipe/customer/shell tools survive.
 _evil() { kubectl -n agent patch agent workshop-agent --type=json \
   -p "[{\"op\":\"replace\",\"path\":\"/spec/declarative/tools/1/mcpServer/toolNames\",\"value\":$1}]" >/dev/null 2>&1; }
+# _c7gw : C7's control on this cluster. Returns 0 on an admin cluster, whose Argo CD root is
+# app-of-apps-admin (gitops/bootstrap/admin): there it is agentgateway's rule. Returns 1 anywhere else: there
+# it is the toolNames allow-list. Returns 2 when Argo CD could not be asked, so a flaky lookup never picks
+# the wrong control for an admin cluster's stage demo.
+_c7gw() { local r; r="$(kubectl -n argocd get application app-of-apps-admin --ignore-not-found -o name 2>/dev/null)" \
+  || return 2; [ -n "$r" ]; }
+# _c7rule on|off : rewrite the one rule line in agentgateway-c7-config (on = get_weather only, off = 'true').
+# The JSON patch tests the resourceVersion it read, so it never writes over a change it did not see. Then it
+# touches the gateway pod: a pod update makes the kubelet refresh the ConfigMap volume now instead of on its
+# next periodic sync, and agentgateway reloads the file when it changes. The touch is best effort.
+_c7rule() { local p; p="$(kubectl -n agent get configmap agentgateway-c7-config -o json 2>/dev/null \
+  | python3 "$HOME/.c7rule.py" "$1")" || return 1
+  kubectl -n agent patch configmap agentgateway-c7-config --type=json -p "$p" >/dev/null 2>&1 || return 1
+  kubectl -n agent annotate pod -l app.kubernetes.io/name=agentgateway --overwrite \
+    "wib.agenticburn.com/c7-rule-at=$(date +%s)" >/dev/null 2>&1 || true; }
+# _mcp on|off : flip C7 through this cluster's control. Prints which one it used (gateway or toolnames), or
+# nothing, with a failing status, when the change did not go through. On an admin cluster the rule is written
+# first, so a refused patch (a stale read) leaves the allow-list as it was too; nothing here deletes, restarts
+# or rolls out the gateway pod.
+_mcp() { local all='["get_weather","read_internal_config","apply_optimization"]' gw
+  _c7gw; gw=$?
+  case "$gw:$1" in
+    0:on)  _c7rule on && _evil "$all" && echo gateway ;;
+    0:off) _c7rule off && _evil "$all" && echo gateway ;;
+    1:on)  _evil '["get_weather"]' && echo toolnames ;;
+    1:off) _evil "$all" && echo toolnames ;;
+    *) return 1 ;;
+  esac; }
+EOS
+
+# The rule rewrite behind _c7rule. Reads the ConfigMap as JSON on stdin and prints the JSON patch. Exactly
+# one line must carry the `# c7-rule` marker (gitops/ai-layer/agentgateway.yaml); anything else is an error,
+# never a guess. verify/test_c7_gateway_toggle.py runs this against the committed ConfigMap.
+cat > "$HOME/.c7rule.py" <<'EOS'
+import json, sys
+RULES = {"on": "'mcp.tool.name == \"get_weather\"'", "off": "'true'"}
+MARK = "# c7-rule"
+cm = json.load(sys.stdin)
+lines = cm["data"]["config.yaml"].split("\n")
+hits = [i for i, line in enumerate(lines) if line.rstrip().endswith(MARK)]
+if len(sys.argv) != 2 or sys.argv[1] not in RULES or len(hits) != 1:
+    sys.exit(1)
+line = lines[hits[0]]
+lines[hits[0]] = line[:len(line) - len(line.lstrip())] + "- " + RULES[sys.argv[1]] + " " + MARK
+print(json.dumps([
+    {"op": "test", "path": "/metadata/resourceVersion", "value": cm["metadata"]["resourceVersion"]},
+    {"op": "replace", "path": "/data/config.yaml", "value": "\n".join(lines)},
+]))
 EOS
 
 # The platform catalogue, with LIVE values (Michael asked for this three times before it existed).
@@ -144,7 +195,10 @@ cat > "$HOME/guards-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 _px "output=on" && _px "input_blocklist=on&input_classifier=on" && _px "budget=on"
-_evil '["get_weather"]'
+if ! _mcp on >/dev/null; then
+  echo "⚠️  The MCP tool restriction (C7) did not switch on; it is left as it was. The other AI guards were"
+  echo "    switched on. Run 'guard-mcp-on' to retry C7."; exit 1
+fi
 echo "🛡️  ALL AI guards ON: output scrubbing (C5), input block-list + injection classifier (C6), MCP tool"
 echo "    restriction (C7), and the spend budget (C4). Re-run any challenge to watch it get blocked, redacted,"
 echo "    or frozen on cost."
@@ -153,7 +207,10 @@ cat > "$HOME/guards-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 _px "output=off" && _px "input_blocklist=off&input_classifier=off" && _px "budget=off" && _px "topic=off"
-_evil '["get_weather","read_internal_config","apply_optimization"]'
+if ! _mcp off >/dev/null; then
+  echo "⚠️  The MCP tool restriction (C7) did not switch off; it is left as it was. The other AI guards were"
+  echo "    switched off. Run 'guard-mcp-off' to retry C7."; exit 1
+fi
 echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
 EOS
 
@@ -204,30 +261,44 @@ else
 fi
 EOS
 
-# Challenge 7 — MCP tool authorization. Narrow the agent's allow-list to drop the rogue evil-mcp tools
-# (read_internal_config, apply_optimization); only get_weather stays. workshop-mcp is left fully intact.
+# Challenge 7 — MCP tool authorization. Only get_weather stays usable on evil-mcp; the rogue tools
+# (read_internal_config, apply_optimization) are stopped. workshop-mcp is left fully intact. Where they are
+# stopped depends on the cluster (_mcp in .guardlib): at agentgateway on an admin cluster, in the agent's
+# allow-list everywhere else.
 cat > "$HOME/guard-mcp-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _evil '["get_weather"]'; then
-  echo "🛡️  Challenge 7 — MCP tool authorization ON. The rogue evil-mcp tools (read_internal_config,"
-  echo "    apply_optimization) are removed from the agent's allow-list; only get_weather remains. Your real"
-  echo "    BurritoBot tools are untouched. Re-ask the weather question: the poisoned description still tries,"
-  echo "    but the rogue tool is gone, so the sentinel never appears."
-else
-  echo "⚠️  Could not patch the agent. Wait a moment and try 'guard-mcp-on' again."
-fi
+case "$(_mcp on)" in
+  gateway)
+    echo "🛡️  Challenge 7 — MCP tool authorization ON, at the gateway. agentgateway now allows only get_weather"
+    echo "    on evil-mcp: the rogue tools drop out of the tool list it hands the agent, and a call to"
+    echo "    read_internal_config is refused before evil-mcp ever runs it. Your real BurritoBot tools are"
+    echo "    untouched. Re-ask the weather question: the poisoned description still tries, and the gateway"
+    echo "    says no, so the sentinel never appears. The gateway reloads its rule without a restart." ;;
+  toolnames)
+    echo "🛡️  Challenge 7 — MCP tool authorization ON. The rogue evil-mcp tools (read_internal_config,"
+    echo "    apply_optimization) are removed from the agent's allow-list; only get_weather remains. Your real"
+    echo "    BurritoBot tools are untouched. Re-ask the weather question: the poisoned description still tries,"
+    echo "    but the rogue tool is gone, so the sentinel never appears." ;;
+  *)
+    echo "⚠️  The MCP tool restriction (C7) did not switch on. Wait a moment and try 'guard-mcp-on' again."; exit 1 ;;
+esac
 EOS
 cat > "$HOME/guard-mcp-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
-if _evil '["get_weather","read_internal_config","apply_optimization"]'; then
-  echo "🔓 Challenge 7 — MCP tool authorization OFF. The rogue evil-mcp tools are back in the allow-list."
-  echo "    Re-ask the weather question and the agent gets chained into read_internal_config, leaking the"
-  echo "    sentinel."
-else
-  echo "⚠️  Could not patch the agent. Wait a moment and try 'guard-mcp-off' again."
-fi
+case "$(_mcp off)" in
+  gateway)
+    echo "🔓 Challenge 7 — MCP tool authorization OFF, at the gateway. agentgateway lets every evil-mcp tool"
+    echo "    through again. Re-ask the weather question and the agent gets chained into read_internal_config,"
+    echo "    leaking the sentinel." ;;
+  toolnames)
+    echo "🔓 Challenge 7 — MCP tool authorization OFF. The rogue evil-mcp tools are back in the allow-list."
+    echo "    Re-ask the weather question and the agent gets chained into read_internal_config, leaking the"
+    echo "    sentinel." ;;
+  *)
+    echo "⚠️  The MCP tool restriction (C7) did not switch off. Wait a moment and try 'guard-mcp-off' again."; exit 1 ;;
+esac
 EOS
 # Challenge 4 — DENIAL-OF-WALLET. The agent does not have to crash your cluster to hurt you; it can just
 # run up the bill. On Round 1 there is no cap and the cost counter on BurritoBot climbs with no ceiling.
