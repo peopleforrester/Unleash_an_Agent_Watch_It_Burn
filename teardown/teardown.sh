@@ -20,6 +20,7 @@
 #   tag audit          absorbed here, runs across every attendee account before the sweeps
 #   log groups         sweep_orphan_log_group, per cluster
 #   security groups    sweep_orphan_sgs, per cluster
+#   attendee IAM users sweep_attendee_iam_user per cluster, then sweep_orphan_iam_users per account
 #   lab VPC            cmd_down_infra, chained unless WIB_KEEP_VPC=1
 #   audit              audit_zero
 #

@@ -7,7 +7,7 @@
 # `fleet.sh audit-zero` answers "is anything BILLABLE left", scoped to EKS, EC2, load balancers, target
 # groups, volumes, NAT gateways, addresses and ENIs. That scope is correct for its name and is why it
 # reported ZERO on five accounts that were each holding 105 orphaned security groups, which cost nothing
-# and block the lab VPC from ever being deleted. It also says nothing about log groups, secrets, IAM,
+# and block the lab VPC from ever being deleted. It also says nothing about log groups, secrets, IAM roles,
 # SSM, S3, ACM, snapshots, launch templates or key pairs.
 #
 # On 2026-09-18 a hand-written sweep found 107 orphaned log groups holding ~111 GB, four lab VPC shells,
@@ -95,7 +95,11 @@ audit_account() {
     local iam pol
     iam="$(aws_q "$p" iam list-roles --query "length(Roles[?contains(RoleName,'${OURS}')||contains(RoleName,'${OURS_ALT}')])" --output text)"
     pol="$(aws_q "$p" iam list-policies --scope Local --query "length(Policies[?contains(PolicyName,'${OURS}')||contains(PolicyName,'${OURS_ALT}')])" --output text)"
+    # The per-attendee users from generate_attendee_aws.py, each holding a live access key (#458).
+    local usr
+    usr="$(aws_q "$p" iam list-users --query "length(Users[?starts_with(UserName,'${OURS_ALT}-')||contains(UserName,'${OURS}')])" --output text)"
     [[ "${iam:-0}" == "0" ]] && ok "IAM roles 0" || finding "${p}: ${iam} IAM role(s)"
+    [[ "${usr:-0}" == "0" ]] && ok "IAM users 0" || finding "${p}: ${usr} IAM user(s) with access keys"
     [[ "${pol:-0}" == "0" ]] && ok "IAM policies 0" || finding "${p}: ${pol} IAM policy(ies)"
 
     local ecr ssm snap cfn

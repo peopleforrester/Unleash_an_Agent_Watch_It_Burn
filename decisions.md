@@ -930,3 +930,25 @@ the recorded text against the cut tables as they stand at upload time.
   the talk title, a page error or a failed request.
 - **The PDF itself is exported last**, once rounds-agenticburn#38 is on its `main`, the deck is 16:9, and #456
   has settled what is cut. The upload is the presenters'.
+
+## 2026-10-24 · #458 · Teardown deletes each cluster's attendee IAM user and its keys; audit-zero names any left
+
+**Nothing deleted them.** `generate_attendee_aws.py` (run by `fleet.sh aws-keys` and by `bootstrap_student_aws`
+on every build) makes one IAM user per cluster, `wib-<name less watch-it-burn->`, tagged `project=watch-it-burn`
+and `cluster=<name>`, with an inline policy and one live access key. No code in this repo or in
+provisioning-agenticburn removed one, and the fleet accounts are reused across events rather than closed, so
+every attendee key outlived its cluster. A cluster rebuilt under the same name finds the user already there,
+mints no new key and gives that user an EKS access entry with cluster admin again.
+
+- **Per cluster:** `down_one` calls `sweep_attendee_iam_user` after the destroy, in both branches like the
+  other sweeps. It deletes only when `describe-cluster` answers ResourceNotFoundException (any other error
+  leaves the user and records `iam-user-leak:`) and only a user tagged `cluster=<that name>`. It removes the
+  keys, inline and attached policies and any login profile, then the user, then `aws-pool/<name>.csv`, the
+  persisted copy of a key that no longer exists.
+- **Per account:** `down all` and the new `reap-iam-users [accts]` (dry run unless `WIB_APPLY=1`) run
+  `sweep_orphan_iam_users`: every `wib-*` user tagged `project=watch-it-burn` whose cluster is not in
+  `eks list-clusters`. That covers users `aws-keys` minted by range for clusters that had no state, and the
+  ones that leaked before this. An unread live list stops the account, as in `reap-lbs`.
+- **Audit:** `audit-zero` fails on any `wib-*` user whose cluster is not live (`zero:<acct>:iam-users`), so it
+  is no longer only about billable things. `verify/account-audit.sh` counts our IAM users beside the roles
+  and policies.

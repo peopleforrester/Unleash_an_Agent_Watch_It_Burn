@@ -477,6 +477,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       fast rebuild.
     down-infra [accts]  Destroy ONLY the lab VPC in each account (default: every attendee account).
                       Refuses per account while any cluster is still live there.
+    reap-iam-users [accts]  Delete every attendee IAM user (wib-*, tagged project=watch-it-burn) and its
+                      access keys whose cluster no longer exists. 'down all' runs it and 'down' deletes
+                      each destroyed cluster's own user. DRY-RUN unless WIB_APPLY=1.
     reap-secrets [accts]  Force-delete every watch-it-burn/* secret. NOT part of 'down all': the Datadog
                       pool secret is what the next 'up' provisions against.
     down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
@@ -486,7 +489,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       (a ghost the admin page still counts), and with WIB_APPLY=1 deregister them.
                       'down all' and 'down-fleet' end with it. Non-zero while a ghost remains.
     audit-zero        Assert every fleet account holds nothing billable beyond its lab VPC's NAT, its
-                      address and the Bedrock endpoint ENIs; names anything else. 'down all' and
+                      address and the Bedrock endpoint ENIs; names anything else, attendee IAM users
+                      whose cluster is gone included. 'down all' and
                       'down-fleet' end with it.
     health <n>        Sweep IDP health of an up-fleet run (SAME <n> + WIB_NAME_OFFSET): per cluster,
                       assert every ArgoCD app Synced+Healthy and no broken pods. Non-zero if any degraded.
@@ -947,6 +951,17 @@ audit_zero_account() {
     if [[ -n "$(echo ${sgleft})" ]]; then
         log "  ${acct}: orphaned k8s security groups still present (they block VPC deletion): $(echo ${sgleft} | wc -w)"
         record_fail "zero:${acct}:sg"; bad=1
+    fi
+    # Attendee IAM users cost nothing and are the one leftover an outsider can use: each holds a live
+    # access key that a rebuilt cluster of the same name grants admin again (#458). A user whose cluster
+    # is still live is accounted for by the eks line above; the rest are named.
+    local iamleft="" u
+    for u in $(_audit_ids "${acct}" iam list-users --query "Users[?starts_with(UserName,'wib-')].UserName"); do
+        [[ " ${found[eks]} " == *" watch-it-burn-${u#wib-} "* ]] || iamleft+="${u} "
+    done
+    if [[ -n "${iamleft}" ]]; then
+        log "  ${acct}: attendee IAM users with live keys and no cluster: ${iamleft% }"
+        record_fail "zero:${acct}:iam-users"; bad=1
     fi
     [[ "${bad}" -eq 0 ]] && log "  ${acct}: ZERO (only the lab VPC's NAT, its address and the endpoint ENIs remain)"
     return "${bad}"
@@ -1586,6 +1601,130 @@ sweep_orphan_log_group() {
     return 0
 }
 
+# Per-attendee IAM users (#458). generate_attendee_aws.py makes one IAM user per cluster, wib-<name less
+# its watch-it-burn- prefix>, tagged project=watch-it-burn and cluster=<name>, with an inline policy and
+# one live access key. It runs from `fleet.sh aws-keys` and from bootstrap_student_aws on every build, so
+# every cluster that ever booted has one. Nothing ever deleted them: the fleet accounts are reused event
+# after event rather than closed, and audit-zero counted compute, so every key handed to an attendee
+# stayed valid after their cluster was gone.
+#
+# A stale key looked harmless because its policy only reaches its own cluster ARN. It is not: a cluster
+# rebuilt under the same name finds the user already there, mints no new key, and gives that same user
+# an EKS access entry with cluster admin. Last event's attendee then holds admin on this event's cluster.
+#
+# Name rule kept in step with user_for() in generate_attendee_aws.py.
+iam_user_for() { local t="${1#watch-it-burn-}"; t="wib-${t}"; printf '%s' "${t:0:64}"; }
+
+# Delete one user and what blocks its deletion: access keys, inline policies, attached policies, a
+# console password. Returns non-zero if the user is still there.
+delete_attendee_iam_user() {
+    local user="$1" acct="$2" id
+    for id in $(AWS_PROFILE="${acct}" aws iam list-access-keys --user-name "${user}" \
+                --query 'AccessKeyMetadata[].AccessKeyId' --output text 2>/dev/null); do
+        AWS_PROFILE="${acct}" aws iam delete-access-key --user-name "${user}" --access-key-id "${id}" >/dev/null 2>&1 || true
+    done
+    for id in $(AWS_PROFILE="${acct}" aws iam list-user-policies --user-name "${user}" \
+                --query 'PolicyNames[]' --output text 2>/dev/null); do
+        AWS_PROFILE="${acct}" aws iam delete-user-policy --user-name "${user}" --policy-name "${id}" >/dev/null 2>&1 || true
+    done
+    for id in $(AWS_PROFILE="${acct}" aws iam list-attached-user-policies --user-name "${user}" \
+                --query 'AttachedPolicies[].PolicyArn' --output text 2>/dev/null); do
+        AWS_PROFILE="${acct}" aws iam detach-user-policy --user-name "${user}" --policy-arn "${id}" >/dev/null 2>&1 || true
+    done
+    AWS_PROFILE="${acct}" aws iam delete-login-profile --user-name "${user}" >/dev/null 2>&1 || true
+    AWS_PROFILE="${acct}" aws iam delete-user --user-name "${user}" >/dev/null 2>&1
+}
+
+# The tag value the generator wrote, or nothing. Fails when the user cannot be read, and says why on
+# stdout: "NoSuchEntity" when there is no such user.
+_iam_user_tag() {   # $1 user, $2 account, $3 tag key
+    AWS_PROFILE="$2" aws iam list-user-tags --user-name "$1" \
+        --query "Tags[?Key=='$3'].Value" --output text 2>&1
+}
+
+# Per cluster, from down_one, after the cluster is gone. Only on proof that it is gone: describe-cluster
+# failing for any other reason (an expired token, a throttle) is not that proof, and deleting a live
+# cluster's user cuts its student's kubectl off mid-workshop.
+sweep_attendee_iam_user() {
+    local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" user out rc=0
+    user="$(iam_user_for "${name}")"
+    out="$(AWS_PROFILE="${acct}" aws eks describe-cluster --name "${name}" --region "${WIB_REGION}" 2>&1 >/dev/null)" || rc=$?
+    if [[ "${rc}" -eq 0 ]]; then
+        log "  ${name}: cluster still exists, leaving IAM user ${user} in place"
+        return 0
+    fi
+    if [[ "${out}" != *ResourceNotFoundException* ]]; then
+        log "  ${name}: could not confirm the cluster is gone, leaving IAM user ${user} in place"
+        record_fail "iam-user-leak:${name}"; return 0
+    fi
+    rc=0; out="$(_iam_user_tag "${user}" "${acct}" cluster)" || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        [[ "${out}" == *NoSuchEntity* ]] && return 0
+        log "  ${name}: could not read IAM user ${user}"; record_fail "iam-user-leak:${name}"; return 0
+    fi
+    # A user of that name tagged for some other cluster, or not at all, was not made for this one.
+    if [[ "${out}" != "${name}" ]]; then
+        log "  ${name}: IAM user ${user} is not tagged cluster=${name}, leaving it"
+        return 0
+    fi
+    if delete_attendee_iam_user "${user}" "${acct}"; then
+        # The persisted copy of a key that no longer exists; the next build of this name mints afresh.
+        rm -f "${AWS_POOL_DIR}/${name}.csv"
+        log "  ${name}: deleted IAM user ${user} and its access keys"
+    else
+        log "  ${name}: could not delete IAM user ${user}; its access key is still live"
+        record_fail "iam-user-leak:${name}"
+    fi
+    return 0
+}
+
+# Every account-wide wib-* user tagged project=watch-it-burn whose cluster is not live: the users
+# made by `aws-keys` for clusters that were never built, and every one that leaked before
+# sweep_attendee_iam_user existed. 'down all' runs it; `reap-iam-users` runs it on its own. DRY-RUN
+# unless WIB_APPLY=1. The live list fails closed, as in reap-lbs: an unread list would make every
+# user look orphaned.
+sweep_orphan_iam_users() {
+    local acct="$1" live users user cluster project rc=0 n=0
+    live="$(AWS_PROFILE="${acct}" aws eks list-clusters --region "${WIB_REGION}" \
+            --query 'clusters[]' --output text | tr '\t' '\n')" || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        log "  ${acct}: could not list its EKS clusters; no IAM user swept"
+        record_fail "iam-users:list-clusters-failed:${acct}"; return 0
+    fi
+    users="$(AWS_PROFILE="${acct}" aws iam list-users \
+             --query "Users[?starts_with(UserName,'wib-')].UserName" --output text)" || {
+        log "  ${acct}: could not list IAM users"; record_fail "iam-users:list-users-failed:${acct}"; return 0; }
+    for user in ${users}; do
+        project="$(_iam_user_tag "${user}" "${acct}" project)" || continue
+        cluster="$(_iam_user_tag "${user}" "${acct}" cluster)" || continue
+        [[ "${project}" == "watch-it-burn" && "${cluster}" == watch-it-burn-* ]] || continue
+        grep -qxF "${cluster}" <<<"${live}" && continue
+        n=$(( n + 1 ))
+        if [[ -z "${WIB_APPLY:-}" ]]; then
+            log "  ${acct}: would delete IAM user ${user} (cluster ${cluster} is gone)"
+        elif delete_attendee_iam_user "${user}" "${acct}"; then
+            rm -f "${AWS_POOL_DIR}/${cluster}.csv"
+            log "  ${acct}: deleted IAM user ${user} (cluster ${cluster} is gone)"
+        else
+            log "  ${acct}: could not delete IAM user ${user}; its access key is still live"
+            record_fail "iam-user-leak:${acct}:${user}"
+        fi
+    done
+    log "  ${acct}: ${n} orphaned attendee IAM user(s)$([[ -n "${WIB_APPLY:-}" ]] || printf ' (dry run)')"
+    return 0
+}
+
+cmd_reap_iam_users() {
+    require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
+    local accounts acct; IFS=',' read -ra accounts <<<"${1:-${WIB_ATTENDEE_ACCOUNTS}}"
+    [[ -n "${WIB_APPLY:-}" ]] || log "reap-iam-users: DRY-RUN (set WIB_APPLY=1 to delete)"
+    for acct in "${accounts[@]}"; do
+        acct="${acct// /}"; [[ -n "${acct}" ]] || continue
+        sweep_orphan_iam_users "${acct}"
+    done
+    report_failures
+}
+
 sweep_orphan_sgs() {
     local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" found=0 survived=0
     local squashed sgs sg
@@ -1666,6 +1805,7 @@ down_one() {
     sweep_orphan_volumes "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     sweep_orphan_sgs "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     sweep_orphan_log_group "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
+    sweep_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     # Also in BOTH branches: a half-destroyed cluster is not one a student may claim either.
     deregister_one "${name}"
 }
@@ -2032,6 +2172,14 @@ cmd_down() {
             done
             log "tag audit: ran across ${#_ta[@]} account(s)"
         fi
+        # The users of clusters this run never had state for (aws-keys mints by range) or that leaked
+        # before down_one deleted them (#458). WIB_APPLY is set: require_apply let this run through.
+        local _iam_accts _iam_a
+        IFS=',' read -ra _iam_accts <<<"${WIB_ATTENDEE_ACCOUNTS}"
+        for _iam_a in "${_iam_accts[@]}"; do
+            _iam_a="${_iam_a// /}"; [[ -n "${_iam_a}" ]] || continue
+            sweep_orphan_iam_users "${_iam_a}"
+        done
         if [[ -n "${WIB_KEEP_VPC:-}" ]]; then
             log "WIB_KEEP_VPC set: leaving the lab VPCs up (NAT + address still bill)"
         else
@@ -3866,6 +4014,7 @@ main() {
         down-fleet) cmd_down_fleet "$@" ;;
         down-infra) cmd_down_infra "$@" ;;
         reap-secrets) cmd_reap_secrets "$@" ;;
+        reap-iam-users) cmd_reap_iam_users "$@" ;;
         health) cmd_health "$@" ;;
         converge) cmd_converge "$@" ;;
         restart-agent) cmd_restart_agent "$@" ;;

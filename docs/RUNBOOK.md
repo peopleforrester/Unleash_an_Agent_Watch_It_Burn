@@ -15,11 +15,12 @@ Every operation, the command that does it. If something here needs an agent, it 
 | Tear down named clusters | `WIB_APPLY=1 fleet.sh down <name>...` |
 | Destroy only the lab VPCs | `WIB_APPLY=1 fleet.sh down-infra [accounts]` |
 | Delete our Secrets Manager entries | `WIB_APPLY=1 fleet.sh reap-secrets [accounts]` |
+| Delete attendee IAM users whose cluster is gone | `WIB_APPLY=1 fleet.sh reap-iam-users [accounts]` |
 | Repair drifted live state | `WIB_APPLY=1 fleet.sh converge` |
 | Republish the routing table | `fleet.sh routes` |
 
-`down all` includes the tag audit, per-cluster log groups, orphaned security groups, the lab VPCs and a
-final audit. `teardown/teardown.sh` is a wrapper over it and adds nothing.
+`down all` includes the tag audit, per-cluster log groups, orphaned security groups, the attendee IAM
+users and their access keys, the lab VPCs and a final audit. `teardown/teardown.sh` is a wrapper over it and adds nothing.
 
 Secrets are NOT reaped by `down all`, on purpose: the Datadog pool is what the next `up` provisions
 against.

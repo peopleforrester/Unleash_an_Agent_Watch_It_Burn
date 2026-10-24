@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ABOUTME: Behavioural tests for the zero audit (#255): a clean account passes with the lab VPC's
 # ABOUTME: allowances, and any leftover cluster, instance, load balancer, target group, volume, extra NAT,
-# ABOUTME: unmatched Elastic IP or foreign ENI fails by id. Offline; aws is a shim.
+# ABOUTME: unmatched Elastic IP, foreign ENI or attendee IAM user with no cluster fails by id. Offline; aws is a shim.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 FLEET="${HERE}/../infra/terraform/fleet/fleet.sh"
@@ -14,7 +14,7 @@ cat >"${SHIM}/aws" <<'S'
 case "$*" in
   *"list-clusters"*) f=eks ;; *"describe-instances"*) f=ec2 ;; *"describe-load-balancers"*) f=elbv2 ;;
   *"describe-target-groups"*) f=tg ;; *"describe-volumes"*) f=vol ;; *"describe-nat-gateways"*) f=nat ;;
-  *"describe-addresses"*) f=eip ;; *"describe-network-interfaces"*) f=eni ;; *) f=none ;;
+  *"describe-addresses"*) f=eip ;; *"describe-network-interfaces"*) f=eni ;; *"iam list-users"*) f=iam ;; *) f=none ;;
 esac
 cat "${T}/${AWS_PROFILE}.${f}" 2>/dev/null; exit 0
 S
@@ -39,6 +39,11 @@ clean; printf 'eipalloc-1\neipalloc-orphan\n' >"${T}/acct-a.eip"; out="$(src 'au
 check "an Elastic IP beyond the NAT count fails" 'grep -q "rc=1" <<<"$out" && grep -q "2 Elastic IP(s) for 1 NAT" <<<"$out"'
 clean; printf 'eni-1\tInterface for NAT Gateway nat-1\neni-9\tELB app/k8s-agent/abc\n' >"${T}/acct-a.eni"; out="$(src 'audit_zero; echo rc=$?')"
 check "an ENI that is not the NAT or the endpoint fails by id" 'grep -q "rc=1" <<<"$out" && grep -q "beyond the NAT and the Bedrock endpoint: eni-9" <<<"$out"'
+
+clean; printf 'wib-attendee-004\twib-attendee-005\n' >"${T}/acct-a.iam"; out="$(src 'audit_zero; echo rc=$?; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"')"
+check "an attendee IAM user whose cluster is gone fails by name (#458)" 'grep -q "rc=1" <<<"$out" && grep -q "live keys and no cluster: wib-attendee-004 wib-attendee-005" <<<"$out" && grep -q "zero:acct-a:iam-users" <<<"$out"'
+clean; printf 'watch-it-burn-attendee-004\n' >"${T}/acct-a.eks"; printf 'wib-attendee-004\n' >"${T}/acct-a.iam"; out="$(src 'audit_zero; echo rc=$?; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"')"
+check "a live cluster's user is the eks finding, not an IAM one" 'grep -q "eks NOT zero" <<<"$out" && ! grep -q "iam-users" <<<"$out"'
 
 echo "== every account is audited =="
 clean; printf 'nat-b\n' >"${T}/acct-b.nat"; printf 'eipalloc-b\n' >"${T}/acct-b.eip"; printf 'i-0bad\n' >"${T}/acct-b.ec2"
