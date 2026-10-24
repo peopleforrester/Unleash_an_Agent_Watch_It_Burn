@@ -962,11 +962,11 @@ saying the same thing.
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 2 to 5 (each challenge's trace, shown right after its live attack) | Yes once the traces are pre-seeded (#648); Challenge 2 has no seed yet (#843), so segment 3 shows its live trace in the `burritobot-private` tab; the Grafana view carries it without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes for asks with a listed word; a paraphrase is not promised (llm-guard-cpu-offline#2) |
-| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
+| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the replay and the screenshots deck are built, the segment videos wait for the first full rehearsal |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
 ready: the pre-seeded traces (#648) and
-the recorded half of point 9 (#452).
+the segment videos of point 9 (#452).
 
 ## Challenges shown live, and challenges cut
 
@@ -1229,11 +1229,23 @@ is merely slow rather than rebuilding:
   (`https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`): open it, run
   the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the
   "Traces" row shows a row. Say on the day which surface is shown.
-- [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
-  per-segment videos and screenshots deck must exist and be rehearsed once, so a
-  dead venue network does not end the session. The repo paths for these are not
-  built yet; see the open questions. The rollback step below names them once they
-  exist.
+- [ ] **Recorded fallback proven once (#452).** On each presenter laptop, from the
+  repo root, so a dead venue network does not end the session. What each file is
+  and how it is made: `facilitation/kubecon-na-2026/fallback/README.md`.
+  - The replay, once, over the phone hotspot rather than the hotel network:
+    `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment 1`.
+    It sends segment 1's prompts from `facilitation/kubecon-na-2026/fallback/prompts.yaml`
+    (the order and the four off-topic asks, five model calls, nothing that deploys
+    or reads a Secret), paced under guard-proxy's 150-a-minute window, and stops at
+    the first prompt that does not land. Every line should end `ok`, then `DONE: 5 of 5
+    delivered`; read the replies against each prompt's `expect`. Run it before the
+    community bot's last `reset-bot`, so its five turns are off the counter.
+  - Every segment video and screenshot is in place:
+    `python3 scripts/check-fallback-assets.py`. It exits 1 until the rehearsal's
+    videos are copied in (they are not in git; the README says where they go) and
+    the deck's by-hand shots are committed.
+  - Open `facilitation/kubecon-na-2026/fallback/screenshots/deck.html` from disk
+    with Wi-Fi off and step through it: no red MISSING card.
 - [ ] **Audience path and phones (#450, #451).** Confirm the room's rate limit and
   timeouts are sized for a ballroom and that the page, the projector QR, and the
   Feedback link work on a real iPhone and a real Android phone on venue-like
@@ -1302,10 +1314,16 @@ is merely slow rather than rebuilding:
    below so the guardrail is what is proven. Do not debug the model live.
 2. The venue network cannot carry the room: the presenters drive the audience
    beat themselves from the admin cluster and the room watches, rather than hacking
-   from phones.
-3. Nothing live works at all: play the recorded fallback (#452). Name the exact
-   path to the segment videos and the screenshots deck here once #452 has built them;
-   it is an open question today (see below).
+   from phones. The room's prompts still reach the public bot and the wall: from a
+   laptop on the phone hotspot, replay the segment on stage,
+   `python3 scripts/replay-prompts.py --target https://attackme.burritobot.co --segment <N>`.
+   If it stops, do not retry it; go to step 3.
+3. Nothing live works at all: play the recorded fallback (#452). The segment's
+   video is in `facilitation/kubecon-na-2026/fallback/videos/`
+   (`segment-<N>-*.mp4`, one for each of segments 1 to 6, copied onto both laptops
+   the Night Before). If video will not play either, open the screenshots deck from
+   disk, `facilitation/kubecon-na-2026/fallback/screenshots/deck.html`, and narrate
+   over it.
 4. Any beat over its time budget by half: cut it to a sentence and move on. The room
    never watches unrehearsed troubleshooting.
 
@@ -1376,10 +1394,14 @@ number and says who settled it and when, so references to it elsewhere still lan
    to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
    the Moonrise Pass drive-thru); keep them or replace them with Michael's and
    Whitney's wording. This is the biggest content risk in the cut.
-2. **The recorded fallback is not built yet (#452).** The replayable prompt set, the
-   per-segment videos, and the screenshots deck have no repo paths today. The
-   rollback step and the Night Before step reference them; they need to exist before
-   the cold read, and this file should name their exact paths once they do.
+2. **The recorded fallback is half recorded (#452).** The replayable prompt set,
+   its replay script, the screenshots deck and its capture script are in
+   `facilitation/kubecon-na-2026/fallback/` and `scripts/`, and the Night Before and
+   rollback steps name them. The six segment videos, and the deck's two by-hand shots
+   (a signed-in Datadog trace and the `guardrails-on` terminal), are recorded at the
+   first full rehearsal and do not exist until then. Where the videos are kept is
+   open: the default keeps them out of git and on both laptops plus a USB stick
+   (`facilitation/kubecon-na-2026/fallback/README.md`).
 3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
    per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
    still owed is in the people table above: her write application key, the fleet
