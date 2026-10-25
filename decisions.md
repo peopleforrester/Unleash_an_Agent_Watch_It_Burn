@@ -1974,15 +1974,17 @@ inline, so a cluster switched to `gateway-bedrock-nova` billed untagged again.
   live env and the running pod's, and makes one 5-token call through :3002 from the workshop-agent pod: a 200 is
   what confirms Bedrock takes the escaped ARN. Not run on a cluster here.
 ## 2026-10-25 · #557 · The re-filed "Declare an E2E command for the heavy gate" gets the #543 answer: no line
+## 2026-10-25 · #557 · No E2E command is declared for the re-filed heavy gate issue, as for #543
 
-Hecaton filed the same request again. The 2026-10-24 #543 entry above is the standing answer and still holds:
-this repo's tests against real services (`verify/run-e2e.sh`: the beat harness on a live attendee cluster, the
-`# SUITE: e2e` checks, the AWS policy pipeline and Backstage Playwright) cannot run on the promotion gate, so
-AGENTS.md declares no `E2E command:` line and the issue closes as not applicable.
+Hecaton filed the request again. The answer is the one the 2026-10-24 #543 entry above gives. This repo's
+tests against real services are in `verify/run-e2e.sh`: the beat scripts on a live attendee cluster, the
+`# SUITE: e2e` checks, the AWS policy pipeline and Backstage Playwright. The promotion gate cannot run them,
+so AGENTS.md declares no `E2E command:` line and the issue closes as not applicable.
 
-Rechecked on the dispatch host on 2026-10-25: kubectl, helm, the kyverno CLI, conftest, terraform and the aws
-CLI are not on PATH, and no CONTEXT or IAM pipeline profile and region are set. `bash verify/run-e2e.sh` exits
-1 with "E2E SUITE CANNOT RUN" listing all of them. Declaring it would hold main red, as it did before #543.
+Checked on the dispatch host on 2026-10-25: kubectl, helm, the kyverno CLI, conftest, terraform and the aws
+CLI are not on PATH, and CONTEXT and the IAM pipeline profile and region are unset. `bash verify/run-e2e.sh`
+exits 1 with "E2E SUITE CANNOT RUN" and lists each of them. Declared as the E2E command, it would keep main
+red, as it did before #543.
 
-- **Revisit** when hecaton's toolchain carries the #523 tools and the gate can reach a cluster and AWS, or when
-  a cluster-free E2E tier exists to declare; `verify/test_gate_commands.py` forbids only run-e2e.sh on the line.
+- **Revisit** when hecaton's toolchain has the #523 tools and the gate can reach a cluster and AWS, or when
+  there is an E2E tier that needs no cluster. `verify/test_gate_commands.py` forbids only run-e2e.sh on the line.
