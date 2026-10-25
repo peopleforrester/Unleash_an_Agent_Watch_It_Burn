@@ -2304,3 +2304,29 @@ ai-layer Application ignores the Agent's `.spec.declarative.modelConfig` and gua
 - **Test:** `verify/test_recreation_spec_tier_swap.py` reads the ignores and the sync option from
   `gitops/apps/ai-layer.yaml`, and fails if the spec calls a tier swap commit + resync, forbids the live patch on
   a tier line, or stops naming both routes. It failed 7 checks on the old spec line. No cluster was touched.
+## 2026-10-25 · #594 · datadog-secret-fields.sh is PRD #13 Milestone 1's verification command
+
+#594 is PRD #13 Milestone 1: `datadog-secret` with the trial org's credentials, in the namespace the collector
+reads it from, and a command that shows its fields without their values. Creating the secret is already
+automated: `infra/deploy-full-idp.sh` step 3.6 and `fleet.sh`'s `repair_datadog` write it, with `api-key` and
+`app-key`, in `datadog`, `monitoring` and `security`. It was first created by hand on watch-it-burn-attendee-001
+on 2026-06-25 (PROGRESS.md). That cluster was torn down long ago. This run had no cluster, no AWS and no Datadog
+credentials, so it did not create the secret anywhere. It added the verification command instead.
+
+- **Names only.** `verify/datadog-secret-fields.sh <kube-context>` reads the secret through a go-template that
+  runs inside kubectl and emits `<key>=set` or `<key>=empty`. jsonpath, yaml, json and describe all bring the value
+  back to the shell. The PRD's rule is that no credential value is ever printed, and this keeps the value out of
+  the script's own process too. `datadog-pool-check.sh` still decodes keys to validate them against Datadog,
+  which is a different job.
+- **All three readers.** It checks the namespaces the Agent, the collector and falcosidekick read from, not
+  only `monitoring`. A missing secret, an absent key or an empty value each fail with the namespace named.
+  It needs the context as an argument and has no current-context fallback (CLAUDE.md).
+- **The key list is held to gitops/.** `verify/test_datadog_secret_fields.py` (offline) collects every
+  `secretKeyRef`/`keyName` to `datadog-secret` under `gitops/`. The issue named `gitops/apps/otel-collector.yaml`,
+  but since #500 those references live in `gitops/otel-collector/values*.yaml`. The test fails when a reference
+  names a key that `REQUIRED_KEYS` does not list, and it runs the script against a kubectl shim.
+  `verify/test_datadog_secret_fields_render.py` (tools tier) has the pinned kubectl render the template over
+  client-side Secrets holding sentinel values, and checks that neither value nor its base64 appears in the output.
+
+Not run on a cluster here. The issue's first criterion, the secret existing in a cluster, is met only by the
+next cluster build with keys, when this command passes against that build's context.

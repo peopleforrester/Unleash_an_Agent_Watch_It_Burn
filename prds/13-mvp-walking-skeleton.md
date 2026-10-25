@@ -74,7 +74,7 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
      -n <namespace> --context <context>
    ```
    Replace `<key1>`, `<key2>` with the exact names from step 2. Populate values from the credentials Whitney provides. Never store or print the values in any file or terminal output.
-5. Verify the secret exists: `kubectl get secret datadog-secret -n <namespace> --context <context>` (show metadata only — do not show the decoded values).
+5. Verify the secret exists: `kubectl get secret datadog-secret -n <namespace> --context <context>` (show metadata only — do not show the decoded values). `bash verify/datadog-secret-fields.sh <context>` does this for all three namespaces that read the secret (`datadog`, `monitoring`, `security`), checks every key a `gitops/` reference names, and prints key names only (#594).
 
 **Done when:**
 - [ ] `datadog-secret` K8s secret exists in the target namespace
