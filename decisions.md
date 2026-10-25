@@ -2286,3 +2286,21 @@ open until that check has passed on a cluster.
 
 It was run only against a stub `kubectl` and a stub Datadog, outside the repo, where every check passed. Not
 run on a cluster here.
+
+## 2026-10-25 · #598 · MASTER-RECREATION-SPEC says how a tier reaches a cluster
+
+The spec's Key Decisions bullet on the workshop default model said "Tier swaps by repointing the Agent
+`modelConfig` (commit + resync), never `kubectl patch` live." That is not how a tier reaches a cluster. The
+ai-layer Application ignores the Agent's `.spec.declarative.modelConfig` and guard-proxy's `MODEL_TIER` env, with
+`RespectIgnoreDifferences=true`, so a commit plus resync changes neither on a running cluster, and the
+2026-07-07 §4.6-d entry above recommends the live patch the spec forbade.
+
+- **The sentence now says both routes.** A fresh cluster gets the committed default when Argo first creates the
+  Agent and the Deployment. A running cluster takes the live patch: Agent `workshop-agent` to `bedrock-<tier>`,
+  then `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>` behind the Kyverno flip in
+  `docs/GOTCHAS-FLEET-AND-DELIVERY.md`, both together so the counter prices the model that answers. It matches
+  the Deferred item in `docs/GO-LIVE-CHECKLIST.md`, says no script applies a tier yet, and that the live patch is
+  not validated live.
+- **Test:** `verify/test_recreation_spec_tier_swap.py` reads the ignores and the sync option from
+  `gitops/apps/ai-layer.yaml`, and fails if the spec calls a tier swap commit + resync, forbids the live patch on
+  a tier line, or stops naming both routes. It failed 7 checks on the old spec line. No cluster was touched.
