@@ -624,6 +624,34 @@ for fake, label, why in ((ToolsNarrowed(), "toolNames lost the rogue tools", "to
 check("a gateway rule left open lets the sentinel out, so c7-on fails on a cluster whose rule never narrows",
       res["c7-on"]["verdict"] == kp.FAIL, str(res["c7-on"]))
 
+
+class RuleNeverOpens(Fake):
+    """A cluster where the gateway rule narrows but never opens again: guards-off's patch back to C7_OPEN lands
+    nowhere, so the next run would start with C7 already stopped at the gateway."""
+
+    def set_c7_rule(self, rule):
+        self.log.append(f"rule {rule}")
+        if rule != kp.C7_OPEN:
+            self.rule = rule
+
+
+f = RuleNeverOpens()
+res = {r["key"]: r for r in run_admin(f)}
+check("the beats before guards-off pass on a cluster whose rule never opens again",
+      all(r["verdict"] == kp.PASS for k, r in res.items() if k != "guards-off"),
+      str([(k, r["note"]) for k, r in res.items() if k != "guards-off" and r["verdict"] != kp.PASS]))
+check("guards-off fails when the C7 gateway rule is left narrowed, with every AI guard off and the rogue tools back",
+      res["guards-off"]["verdict"] == kp.FAIL and f"C7 rule {kp.C7_NARROWED!r}" in res["guards-off"]["note"]
+      and not any(f.g.values()) and f.tools == kp.EVIL_ALL and f.rule == kp.C7_NARROWED,
+      str(res["guards-off"]))
+
+f = Fake()
+f.rule = kp.C7_NARROWED
+res = {r["key"]: r for r in run_admin(f)}
+check("start-state fails on a cluster whose C7 gateway rule is already narrowed",
+      res["start-state"]["verdict"] == kp.FAIL
+      and f"C7 gateway rule is {kp.C7_NARROWED!r}" in res["start-state"]["note"], str(res["start-state"]))
+
 f = Fake()
 res = run_admin(f, max_calls=5)
 check("the call ceiling is never passed", f.calls <= 5, str(f.calls))
