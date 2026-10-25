@@ -21,7 +21,9 @@ terraform-modules      EKS ~> 21.29.0 · VPC ~> 5.21.0 · eks-pod-identity ~> 1.
 kagent                 chart 0.10.1 / app v0.10.1  (CRD group kagent.dev/v1alpha2; Bedrock native; kagent and kagent-crds moved from 0.9.9 on 2026-09-10 in 20aee62)
                        chart ref: oci://ghcr.io/kagent-dev/kagent/helm/kagent (CONFIRMED reachable 2026-06-16)
                        crds ref:  oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds (confirm at deploy)
-                       A2A usage metadata key is adk_usage_metadata (NOT kagent_usage_metadata) — research/14 §3a
+                       A2A usage metadata key is kagent_usage_metadata (NOT adk_usage_metadata): live on 0.9.9 (2026-06-21, PROJECT_STATE.md);
+                       re-checked in the v0.10.1 source 2026-10-25 (#578): the default Python runtime emits kagent_<key>, only runtime: go emits adk_<key>;
+                       the workshop-agent sets no runtime, so Python. guard-proxy record_usage() reads kagent_ first, adk_ as fallback
 vcluster               REMOVED (architecture = separate EKS cluster per attendee)
 kyverno                app v1.19.1 / chart 3.9.1  (CEL ValidatingPolicy, spec.validationActions; #206)
 argocd                 v3.4.4  (chart argo-cd 9.6.0; was v3.4.3 / 9.5.21)
