@@ -12,6 +12,11 @@ archives and log each call, and `uname`, `sha256sum` and `unzip` stubbed so the 
 host. A good lock installs every binary, a second run downloads nothing, and a missing artifact or a
 checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e2e-tools.sh stops on a
 failed fetch or a missing prerequisite before any test runs.
+
+run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
+the gate's binaries. Its scratch copy is run with a fixture lock of the five tools: the fetched kubectl, not one
+already on PATH, is what checks the cluster, and a failed fetch is listed as missing with no kubectl run at all.
+Some prerequisite is always left missing there, so the run stops before any check or cluster call.
 """
 from __future__ import annotations
 
@@ -173,6 +178,13 @@ FIXTURES = {
     "beta_linux_amd64.zip": zipped("beta", b"#!/bin/sh\necho beta\n"),
     "gamma-linux-amd64": b"#!/bin/sh\necho gamma\n",
 }
+# run-e2e.sh's five tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
+FIVE = ("kyverno", "conftest", "terraform", "kubectl", "helm")
+for _tool in FIVE:
+    FIXTURES[f"{_tool}-linux-amd64"] = (
+        b'#!/bin/sh\necho "fetched $*" >>"$KUBECTL_LOG"\nexit 1\n' if _tool == "kubectl" else b"#!/bin/sh\nexit 0\n")
+FIVE_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} https://fixture.invalid/{t}-linux-amd64 -\n"
+                    for t in FIVE)
 GOOD_LOCK = (
     "# fixture lock\n"
     f"alpha v1 {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
@@ -284,6 +296,62 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and "node v22.11.0 is on PATH; the node harnesses run on Node 24" in r.stderr
           and not curl_calls(tmp), r.stderr)
     check("no test ran", "== " not in r.stdout, r.stdout)
+
+print("== run-e2e.sh fetches the same tools and runs them first on PATH (#585) ==")
+RUN_E2E = VERIFY / "run-e2e.sh"
+live = "\n".join(line for line in RUN_E2E.read_text().splitlines() if not line.lstrip().startswith("#"))
+check("run-e2e.sh runs fetch-e2e-tools.sh", 'bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"' in live)
+check("run-e2e.sh fetches into the directory the tier runs from", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
+check("run-e2e.sh puts the fetched tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
+for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform")):
+    check(f"run-e2e.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
+# The host's kubectl logs as "host": if it is ever what runs, the fetched one was not first on PATH.
+HOST_KUBECTL = '#!/bin/sh\necho "host $*" >>"$KUBECTL_LOG"\nexit 1\n'
+
+
+def run_live(tmp: pathlib.Path, vdir: pathlib.Path) -> subprocess.CompletedProcess:
+    env = {"PATH": f"{tmp / 'bin'}:{os.environ['PATH']}", "HOME": str(tmp), "KUBECONFIG": "/dev/null",
+           "CONTEXT": "wib-fixture", "CURL_LOG": str(tmp / "curl.log"), "FIXTURES": str(tmp / "fixtures"),
+           "KUBECTL_LOG": str(tmp / "kubectl.log")}
+    return subprocess.run([BASH, str(vdir / RUN_E2E.name)], capture_output=True, text=True, timeout=120, env=env)
+
+
+def kubectl_calls(tmp: pathlib.Path) -> list[str]:
+    log = tmp / "kubectl.log"
+    return log.read_text().splitlines() if log.exists() else []
+
+
+LIVE_CANNOT_RUN = "E2E SUITE CANNOT RUN; this is a failure, not a skip"
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, FIVE_LOCK, (FETCH, RUN_E2E))
+    make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL})
+    r = run_live(tmp, vdir)
+    check(f"run-e2e.sh stops in its prerequisite check (exit {r.returncode})",
+          r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
+          r.stdout + r.stderr)
+    check("it fetched all five tools into its .tools/bin",
+          all(os.access(vdir / ".tools" / "bin" / tool, os.X_OK) for tool in FIVE), r.stdout + r.stderr)
+    check("a good fetch is not listed as missing", "could not be fetched" not in r.stderr
+          and "were not fetched" not in r.stderr, r.stderr)
+    check("the fetched kubectl checks the cluster, with the explicit context",
+          kubectl_calls(tmp) == ["fetched --context wib-fixture --request-timeout=15s get --raw /readyz"],
+          str(kubectl_calls(tmp)))
+    check("the unreachable cluster is listed as missing",
+          "cluster for context 'wib-fixture' is not reachable" in r.stderr, r.stderr)
+
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, BAD_LOCK, (FETCH, RUN_E2E))
+    make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL})
+    r = run_live(tmp, vdir)
+    check(f"a failed fetch fails run-e2e.sh in its prerequisite check (exit {r.returncode})",
+          r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
+          r.stdout + r.stderr)
+    check("it lists the failed fetch as missing",
+          "  - the pinned kyverno, conftest, terraform, kubectl and helm could not be fetched" in r.stderr, r.stderr)
+    check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
+    check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

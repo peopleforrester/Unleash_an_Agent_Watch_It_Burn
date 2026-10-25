@@ -2204,3 +2204,23 @@ and `gitops/bootstrap` for round wording (retired cluster and host names, and da
 pass), pins the usage text, the knobs and the role-to-profile map, and runs the setup script with failing
 `aws`/`kubectl` shims. The rest of the repo's non-markdown round wording (the ai-layer, policies, challenges
 and images) is out of this issue's scope and filed as a follow-up. Not run on a cluster here.
+
+## 2026-10-25 · #585 · run-e2e.sh fetches its kyverno, conftest, terraform, kubectl and helm through fetch-e2e-tools.sh
+
+`verify/run-e2e.sh`, the by-hand live suite, no longer asks for the five pinned tools on PATH. Its prerequisite
+check runs `verify/fetch-e2e-tools.sh` (#572), puts `verify/.tools/bin` first on PATH and points KYVERNO_CLI,
+CONFTEST and TERRAFORM at the fetched binaries, as `run-e2e-tools.sh` does. A cluster build therefore runs the
+same pinned, checksum-verified binaries as the gate. The cluster reachability check uses the fetched kubectl.
+
+- **Required, with no host fallback.** A failed fetch is listed among the missing prerequisites, and the run
+  exits 1 before any check. A KYVERNO_CLI, CONFTEST or TERRAFORM already set in the environment is overridden,
+  so a host tool never runs in place of the pinned one. The lock pins linux/x86_64 artifacts only, so
+  run-e2e.sh now fails loudly on any other host. Before this change it ran there with tools installed by hand.
+- **The fetch's own prerequisites.** curl, tar, unzip and sha256sum are now required. Without them the fetch is
+  not attempted, and that is listed as missing too. otelcol-contrib and the aws CLI are not in the lock and are
+  still taken from PATH.
+- **Held offline.** `verify/test_e2e_toolchain.py` no longer expects any of the five tools to be listed as
+  missing from PATH. `verify/test_e2e_tools_tier.py` runs a scratch run-e2e.sh against a stubbed fetch: the
+  fetched kubectl, not one on PATH, checks the cluster, and a failed fetch is listed with no kubectl run.
+  `verify/test_kyverno_version_pins.py` checks that e2e-tools.lock's kyverno is the deployed version, in place
+  of run-e2e.sh's install message. Not run on a cluster here.

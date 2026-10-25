@@ -1,5 +1,5 @@
 # ABOUTME: Every place that names the deployed Kyverno agrees: the chart gitops/apps/kyverno.yaml pins, both
-# ABOUTME: VERSIONS.lock lines, the Datadog version tag, the CLI version the policy test and run-e2e.sh demand,
+# ABOUTME: VERSIONS.lock lines, the Datadog version tag, the CLI version the policy test and e2e-tools.lock pin,
 # ABOUTME: and the working docs that state the deployed chart and app.
 #
 # Why (#491). The chart went to 3.9.1 (Kyverno v1.19.1) in #389 and nothing else moved: VERSIONS.lock still
@@ -68,9 +68,15 @@ def cli_lines(text):
 install = cli_lines(cli_test)
 check(f"test_kyverno_cel_policies.py's install instructions name only {deployed}",
       "releases/tag" in install and not other_versions(install), install)
-e2e = cli_lines((REPO / "verify/run-e2e.sh").read_text())
-check(f"run-e2e.sh's kyverno CLI message names only {deployed}",
-      "releases/tag" in e2e and not other_versions(e2e), e2e)
+# run-e2e.sh no longer asks for a kyverno CLI on PATH (#585): it runs the one fetch-e2e-tools.sh installs from
+# e2e-tools.lock, so that lock's kyverno line is the copy that has to name the deployed version.
+e2e = (REPO / "verify/run-e2e.sh").read_text()
+check("run-e2e.sh points KYVERNO_CLI at the fetched kyverno", 'KYVERNO_CLI="${TOOLS_BIN}/kyverno"' in e2e)
+check(f"run-e2e.sh names no kyverno version but {deployed}", not other_versions(cli_lines(e2e)), cli_lines(e2e))
+tools_lock = re.search(r"^kyverno\s+(v\S+)\s+\S+\s+(\S+)", (REPO / "verify/e2e-tools.lock").read_text(), re.M)
+check(f"e2e-tools.lock fetches the kyverno CLI {deployed}",
+      tools_lock is not None and tools_lock.group(1) == deployed and f"/{deployed}/" in tools_lock.group(2),
+      f"got {tools_lock.groups() if tools_lock else None!r}")
 readme = (REPO / "policies/README.md").read_text()
 cli_ref = re.search(r"Kyverno (v\d+\.\d+\.\d+) CLI", readme)
 check(f"policies/README.md names the {deployed} CLI", cli_ref is not None and cli_ref.group(1) == deployed,
