@@ -1906,3 +1906,18 @@ mention it were left as written.
 holds each party app to a Service, no Ingress and a `console.conf` row, and holds the gitops copy of the
 Argo CD values gone; against the base it fails eight checks. `verify/test_service_hosts_live.py` now checks
 that `apps` has no Ingress. Not run on a cluster here.
+
+## 2026-10-25 · #563 · Six working docs stop saying the agent dials evil-mcp directly
+
+#514 routed the `evil-mcp` RemoteMCPServer through agentgateway's own :3003 bind but corrected only its file
+list. The issue named five lines that still said the hop was direct; `docs/READINESS-CHECKLIST.md:59` said it
+too and is fixed with them. Each now says evil-mcp goes through :3003, that its rule is committed `'true'`, and
+that the C7 control is kagent's `toolNames` on a workshop cluster and the gateway rule on an admin cluster
+(#516). Dated research notes, including the duplicative-components audit, are records and were left as written.
+
+- **KUBECON-ABSTRACT-READINESS row 6 keeps PARTIAL.** Its Open cell now says the agentgateway half is on
+  `staging` (#514 to #518), not yet proven on a cluster (#503), and that the scan of the MCP server's reply
+  before the model (#480) is not built. Whether the row moves to READY, as the run-of-show's point 6 "Yes"
+  suggests, changes the tally and the verdict, so it is left for its own issue.
+- **Held offline.** `verify/test_agentgateway_path.py` fails if a line naming evil-mcp in any of the six says
+  it is dialled direct; against the base it fails all six.

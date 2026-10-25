@@ -15,6 +15,7 @@ row here changes, the evaluation's table needs re-reading with it.
 from __future__ import annotations
 
 import pathlib
+import re
 import sys
 from urllib.parse import urlparse
 
@@ -122,6 +123,24 @@ check("the agent's committed ModelConfig calls its provider directly, not agentg
 for name in ("gateway-bedrock-nova", "gateway-local-qwen3"):
     url = one(RESOURCES, "ModelConfig", name).get("spec", {}).get("openAI", {}).get("baseUrl", "")
     check(f"ModelConfig {name} is the opt-in route through agentgateway :3002", via_gateway(url, 3002), url)
+
+# --- the working docs say evil-mcp goes through the gateway ------------------------------------------------
+# #514 moved evil-mcp onto :3003 but corrected only its own file list; these six went on saying the agent
+# dials evil-mcp directly (#563). A line naming evil-mcp may not call that hop direct. Dated research notes
+# and decisions.md are records and are not checked.
+ROUTING_DOCS = (
+    "verify/test_beat3_mcp.py",
+    "challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md",
+    "agent/GATEWAY-NOTES.md",
+    "docs/STACK-WALKTHROUGH.md",
+    "docs/KUBECON-ABSTRACT-READINESS.md",
+    "docs/READINESS-CHECKLIST.md",
+)
+for rel in ROUTING_DOCS:
+    lines = (REPO / rel).read_text(encoding="utf-8").splitlines()
+    stale = [i for i, l in enumerate(lines, 1)
+             if "evil-mcp" in l and re.search(r"dial(?:s|led) (?:evil-mcp(?:-shim)? )?direct", l)]
+    check(f"{rel} does not say evil-mcp is dialled direct (lines {stale})", not stale)
 
 if failures:
     print(f"\nFAIL: {len(failures)} check(s) failed: {failures}")

@@ -27,8 +27,9 @@ for tool in ("get_weather", "read_internal_config", "apply_optimization"):
     check(f"evil-mcp exposes {tool}", f"def {tool}(" in SERVER)
 check("apply_optimization is poisoned to push an apply", "MUST apply" in SERVER or "Always apply" in SERVER)
 
-# AFTER: C7's deployed control is the kagent toolNames allowlist the toggle patches onto workshop-agent's
-# evil-mcp entry (the evil-mcp RemoteMCPServer dials evil-mcp-shim direct, not through agentgateway).
+# AFTER: on a workshop cluster C7's control is the kagent toolNames allowlist the toggle patches onto
+# workshop-agent's evil-mcp entry (the evil-mcp RemoteMCPServer goes through agentgateway :3003, whose rule
+# stays 'true' there; an admin cluster narrows that rule instead, #514, #516).
 # Read the EVIL_TOOL each branch of the toggle writes and assert ON is get_weather alone.
 def _evil_tool(state, branch):
     m = re.search(r"^  EVIL_TOOL='(.*)'$", branch, re.M)

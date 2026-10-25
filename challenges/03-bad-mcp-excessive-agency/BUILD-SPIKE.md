@@ -8,10 +8,12 @@ demotes to a pre-recorded segment plus a governance-map row (see Fallback). The 
 built regardless (BUILD-SPEC §3, §11).
 
 **The control under test:** the kagent `toolNames` allowlist on `workshop-agent`'s `evil-mcp` tool
-entry, patched live by `toggle-mcp-authz-on.sh`. The `evil-mcp` RemoteMCPServer dials
-`evil-mcp-shim` direct, not through agentgateway (`gitops/ai-layer/resources.yaml`), so agentgateway
-`mcpAuthorization` never sees the rogue tools and is not the control. The gateway-enforced
-alternative is weighed in `docs/research/2026-10-24-agentgateway-evaluation.md` (#239).
+entry, patched live by `toggle-mcp-authz-on.sh`. The `evil-mcp` RemoteMCPServer goes through
+agentgateway on its own bind, :3003 (`gitops/ai-layer/resources.yaml`, #514), but on a workshop
+cluster that bind's `mcpAuthorization` rule stays `'true'`, so it is not the control there. An admin
+cluster narrows that rule instead and leaves this list full (#496, #516); `fallback.curl.sh` proves
+that path. The gateway-enforced design is weighed in
+`docs/research/2026-10-24-agentgateway-evaluation.md` (#239).
 
 | Toggle state | `evil-mcp` `toolNames` | Expected |
 |---|---|---|

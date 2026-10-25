@@ -58,11 +58,12 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 4. **guard-proxy caps:** rate-limit + cost-cap reject before spend if the room is hammering the agent.
 5. Allowed requests forward to the **kagent agent**, which calls **Bedrock**. Tokens are spent; kagent
    reports usage back, and the proxy **meters cost** from it (the live counter).
-6. The agent may call **tools / MCP servers**. The kagent **toolNames** allow-list on the Agent CR is
-   the control (it is what Challenge 7 patches; an EMPTY list means every tool, measured 2026-09-05).
-   agentgateway fronts the workshop-mcp server on the path but its **mcpAuthorization** is not used as
-   a control (#239); evil-mcp is dialled directly on purpose. Mutating tools carry **requireApproval**
-   (HITL), never exercised as a beat. kgateway is not installed (#245).
+6. The agent may call **tools / MCP servers**. On a workshop cluster the kagent **toolNames** allow-list
+   on the Agent CR is the control (it is what Challenge 7 patches; an EMPTY list means every tool,
+   measured 2026-09-05). agentgateway fronts both MCP servers on the path: workshop-mcp on :3001 and
+   evil-mcp on its own bind, :3003 (#514). Its **mcpAuthorization** rule for evil-mcp is committed
+   `'true'`; on an admin cluster `guard-mcp-on` narrows it and that is the C7 control (#496, #516).
+   Mutating tools carry **requireApproval** (HITL), never exercised as a beat. kgateway is not installed (#245).
 7. The response returns through the **guard-proxy output guard**: LLM Guard **Regex** redacts/blocks the
    planted `FAKE-` sentinels before the reply reaches the browser.
 8. Every step emits OTel spans/metrics to the collector, which exports to **Datadog (primary)** and

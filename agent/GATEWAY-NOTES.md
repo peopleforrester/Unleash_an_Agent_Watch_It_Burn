@@ -65,13 +65,16 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   (`list_tools`, `call_tool`). Rules OR together; any match grants access. Disallowed tools are
   **auto-filtered out of `list_tools`**, so the agent never sees a tool it cannot call. Server
   allowlisting is structural via the `targets` list. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §4.)
-- **Beat-3 control is NOT this.** The `evil-mcp` RemoteMCPServer dials evil-mcp-shim direct, not
-  through agentgateway, so `mcpAuthorization` never sees the rogue tools. C7's deployed control is the
+- **Beat-3 control on a workshop cluster is NOT this.** The `evil-mcp` RemoteMCPServer goes through
+  agentgateway on its own bind, :3003 (the `agentgateway-c7` container, #514), but there its rule stays
+  `'true'`, so `mcpAuthorization` refuses nothing. C7's control there is the
   kagent `toolNames` allowlist on the Agent's `evil-mcp` entry, patched by
   `challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh`: OFF = `get_weather,
   read_internal_config, apply_optimization` (the "before", the sentinel `FAKE-MCP-EXFIL-sentinel-4c1d`
-  leaks), ON = `get_weather` only (the "after"). Routing evil-mcp through the gateway instead is weighed
-  in `docs/research/2026-10-24-agentgateway-evaluation.md` (#239).
+  leaks), ON = `get_weather` only (the "after"). On an admin cluster this IS the control: the web
+  terminal's `guard-mcp-on` narrows the `# c7-rule` line of `agentgateway-c7-config` to `get_weather`
+  and leaves the list full (#496, #516). The design is weighed in
+  `docs/research/2026-10-24-agentgateway-evaluation.md` (#239).
 - **No native human-in-the-loop.** MCP policy is allow/deny/filter via CEL only, do NOT promise HITL;
   narrate it as a gap if the talk needs it. (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §"Unverified".)
 - **Files:** `gitops/ai-layer/agentgateway.yaml`. The pre-gitops `gateway/agentgateway.yaml` and

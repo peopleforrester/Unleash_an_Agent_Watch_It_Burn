@@ -56,7 +56,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 - ✅ **agentgateway** deployed and in the live path (guard-proxy → agentgateway → workshop-agent); tracing fixed (`config.tracing`, schema-correct, in the manifest).
 - ✅ guard-proxy + LLM Guard (input/output); CLIENT span + JSON logging (PRD #27 M2).
 - ✅ workshop-mcp + evil-mcp-shim.
-- ✅ C7's control is the kagent `toolNames` allowlist (`toggle-mcp-authz-on.sh`). `evil-mcp` dials evil-mcp-shim direct, not through agentgateway, so agentgateway `mcpAuthorization` does not gate it; the gateway-enforced alternative is weighed in `docs/research/2026-10-24-agentgateway-evaluation.md`.
+- ✅ On a workshop cluster C7's control is the kagent `toolNames` allowlist (`toggle-mcp-authz-on.sh`). `evil-mcp` goes through agentgateway on its own bind, :3003 (#514), whose `mcpAuthorization` rule stays `'true'` there; on an admin cluster `guard-mcp-on` narrows that rule instead and it is the control (#496, #516). The design is weighed in `docs/research/2026-10-24-agentgateway-evaluation.md`.
 
 ## 6. Observability
 - ✅ OTel Collector → Datadog; guard-proxy, agentgateway, kagent spans all in Datadog (verified, queries cited in `DECISION-LOG.md`).
