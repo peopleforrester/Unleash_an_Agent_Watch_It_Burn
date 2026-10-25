@@ -46,9 +46,12 @@ for root in ("boundary", "cluster"):
     check(f"{root}: passes the structural check", msgs == [], "\n        ".join(msgs))
     check(f"{root}: has documents to check", len(ext["documents"]) > 0)
     if root == "cluster":
-        check("cluster: every role it creates is in the plan, and all carry the boundary",
-              len(ext["roles"]) == 5 and all(r["permissions_boundary"].endswith(f":policy/{p.BOUNDARY_NAME}") for r in ext["roles"]),
-              ext["roles"])
+        check("cluster: every role it creates, and the attendee user, is in the plan, and all carry the boundary",
+              len(ext["roles"]) == 6 and all(r["permissions_boundary"].endswith(f":policy/{p.BOUNDARY_NAME}") for r in ext["roles"])
+              and "aws_iam_user.attendee" in {r["address"] for r in ext["roles"]}, ext["roles"])
+        check("cluster: the attendee user's inline policy is a document the checks read (#549)",
+              any(d["address"] == "aws_iam_user_policy.attendee_eks" and d["kind"] == "identity" for d in ext["documents"]),
+              sorted(d["address"] for d in ext["documents"]))
 
 
 print("a plan that breaks the rules")
@@ -69,7 +72,11 @@ def break_rules(tf):
     start = tf.index('resource "aws_iam_policy" "tutor_bedrock_invoke"')
     r0 = tf.index("      Resource = [", start)
     r1 = tf.index("      ]\n", r0) + len("      ]\n")
-    return tf[:r0] + '      Resource = "*"\n' + tf[r1:]
+    tf = tf[:r0] + '      Resource = "*"\n' + tf[r1:]
+    # 4. The attendee user loses its boundary (#549).
+    start = tf.index('resource "aws_iam_user" "attendee"')
+    line = tf.index("  permissions_boundary", start)
+    return tf[:line] + tf[tf.index("\n", line) + 1:]
 
 
 msgs = p.structural(p.extract(iam_plan_render.render("cluster", edit=break_rules)))
@@ -77,11 +84,13 @@ print("    " + "\n    ".join(msgs))
 check("an Allow without a Condition fails, naming the address and the statement index",
       "aws_iam_policy.bedrock_invoke: Statement[0] is an Allow with no Condition [allow-without-condition]" in msgs)
 check("a role without the boundary fails",
-      "module.eso_pod_identity.aws_iam_role.this[0] has no permissions_boundary; every role carries "
+      "module.eso_pod_identity.aws_iam_role.this[0] has no permissions_boundary; every role and user carries "
       f"{p.BOUNDARY_NAME} [role-boundary]" in msgs)
 check("Resource \"*\" outside exceptions.md fails",
       'aws_iam_policy.tutor_bedrock_invoke: Statement[0] allows Resource "*" (or uses NotResource) [resource-star]' in msgs)
-check("nothing else fails: the waivers in exceptions.md still hold", len(msgs) == 3, msgs)
+check("a user without the boundary fails",
+      f"aws_iam_user.attendee has no permissions_boundary; every role and user carries {p.BOUNDARY_NAME} [role-boundary]" in msgs)
+check("nothing else fails: the waivers in exceptions.md still hold", len(msgs) == 4, msgs)
 
 print(f"\n{len(failures)} failure(s)")
 sys.exit(1 if failures else 0)

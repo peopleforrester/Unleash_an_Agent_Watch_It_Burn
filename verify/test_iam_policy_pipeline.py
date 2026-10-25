@@ -1,11 +1,11 @@
 # ABOUTME: Offline gate for the IAM policy pipeline (#207): extraction from `terraform show -json`, the
-# ABOUTME: exceptions table, the canonical boundary, every role carrying it, and how each check reads AWS's answer.
+# ABOUTME: exceptions table, the canonical boundary, every role and user carrying it, and how each check reads AWS's answer.
 #
 # Why. The pipeline's four checks run with conftest and against AWS, which this suite has neither of; those
 # runs are verify/test_iam_policy_structural.py and verify/test_iam_policy_aws.py in the E2E suite. What can
 # be decided here is everything around them: that a plan's documents are all found and none is silently
 # dropped, that a document known only after apply stops the run, that a waiver needs a reason, that no
-# role in infra/ is written without the boundary, and that each check fails on the answers that should fail it.
+# role or user in infra/ is written without the boundary, and that each check fails on the answers that should fail it.
 import json, pathlib, re, sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
@@ -55,6 +55,9 @@ PLAN = {
             res("aws_iam_role_policy.inline", "aws_iam_role_policy", policy=doc(ALLOW)),
             res("aws_organizations_policy.scp", "aws_organizations_policy", type="SERVICE_CONTROL_POLICY", content=doc(ALLOW)),
             res("aws_s3_bucket.b", "aws_s3_bucket", bucket="b"),
+            res("aws_iam_user.attendee", "aws_iam_user", name="wib-c1", permissions_boundary=BARN),
+            res("aws_iam_user_policy.attendee_eks", "aws_iam_user_policy", name="eks-own-cluster", user="wib-c1",
+                policy=doc(ALLOW)),
         ],
         "child_modules": [{"address": "module.x", "resources": [
             res("module.x.aws_iam_role.this[0]", "aws_iam_role", name="c1-x", assume_role_policy=doc(TRUST),
@@ -79,6 +82,7 @@ check("every document in root and nested modules is found", kinds == {
     ("aws_iam_policy.bedrock_invoke", "policy"): "identity",
     ("aws_iam_policy.permissions_boundary", "policy"): "boundary",
     ("aws_iam_role_policy.inline", "policy"): "identity",
+    ("aws_iam_user_policy.attendee_eks", "policy"): "identity",
     ("aws_organizations_policy.scp", "content"): "scp",
     ("module.x.aws_iam_role.this[0]", "assume_role_policy"): "trust",
     ("module.x.aws_iam_role.this[0]", "inline_policy[0].policy"): "identity",
@@ -87,9 +91,14 @@ check("every document in root and nested modules is found", kinds == {
 }, json.dumps(sorted(kinds.items()), indent=1))
 check("documents are parsed, not passed on as strings",
       all(isinstance(d["document"], dict) for d in ext["documents"]))
-check("every role is listed with its boundary, a missing one as empty",
-      ext["roles"] == [{"address": "module.x.aws_iam_role.this[0]", "name": "c1-x", "permissions_boundary": BARN},
-                       {"address": "module.x.aws_iam_role.bare[0]", "name": "c1-bare", "permissions_boundary": ""}])
+check("every role and user is listed with its boundary, a missing one as empty",
+      ext["roles"] == [{"address": "aws_iam_user.attendee", "name": "wib-c1", "permissions_boundary": BARN},
+                       {"address": "module.x.aws_iam_role.this[0]", "name": "c1-x", "permissions_boundary": BARN},
+                       {"address": "module.x.aws_iam_role.bare[0]", "name": "c1-bare", "permissions_boundary": ""}], ext["roles"])
+bare_user = json.loads(json.dumps(PLAN))
+bare_user["planned_values"]["root_module"]["resources"][5]["values"]["permissions_boundary"] = None
+check("a user with no boundary is listed with an empty one, for check 3 to fail (#549)",
+      {"address": "aws_iam_user.attendee", "name": "wib-c1", "permissions_boundary": ""} in p.extract(bare_user)["roles"])
 check("a fully known plan has nothing unknown", ext["unknown"] == [])
 check("data sources are not documents", not any(d["address"].startswith("data.") for d in ext["documents"]))
 
@@ -168,7 +177,7 @@ names = {
 check("the boundary has one name in all three places", len(set(names.values())) == 1, names)
 
 
-print("every role carries the boundary")
+print("every role and user carries the boundary")
 
 
 def blocks(text, header_re):
@@ -192,6 +201,12 @@ for f in tf_files:
     rel = f.relative_to(REPO)
     for header, body in blocks(text, r'^resource "aws_iam_role" "[^"]+" \{'):
         check(f"{rel}: {header[:-2]} sets permissions_boundary", re.search(r"^\s*permissions_boundary\s*=", body, re.M) is not None)
+    users = blocks(text, r'^resource "aws_iam_user" "[^"]+" \{')
+    if rel.as_posix() == "infra/terraform/aws/cluster/main.tf":
+        check(f"{rel}: the attendee IAM user is created here, where the pipeline plans it (#549)", len(users) == 1)
+    for header, body in users:
+        check(f"{rel}: {header[:-2]} carries the canonical boundary",
+              re.search(rf"^  permissions_boundary\s*=\s*{re.escape(BOUNDARY_REF)}\s*$", body, re.M) is not None)
     for header, body in blocks(text, r'^module "[^"]+" \{'):
         if "terraform-aws-modules/eks-pod-identity/aws" in body:
             check(f"{rel}: {header[:-2]} passes the canonical boundary",
@@ -211,7 +226,7 @@ for f in tf_files:
 print("effect-tests.yaml")
 spec = yaml.safe_load((REPO / "infra/org/effect-tests.yaml").read_text(encoding="utf-8"))
 cluster_tf = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
-declared = {f"aws_iam_policy.{n}" for n in re.findall(r'^resource "aws_iam_policy" "([^"]+)"', cluster_tf, re.M)}
+declared = {f"{t}.{n}" for t, n in re.findall(r'^resource "(aws_iam_policy|aws_iam_user_policy)" "([^"]+)"', cluster_tf, re.M)}
 check("both suites are present and non-empty", all(spec.get(s) for s in ("boundary", "cluster")))
 for suite, cases in spec.items():
     for c in cases:

@@ -20,8 +20,10 @@ On a workstation they are expected as siblings of this repo (e.g. `~/repos/agent
 ## The one remaining coupling: fleet -> provisioning
 
 `infra/terraform/fleet/fleet.sh` still runs the provisioning **harvester scripts** during
-`ingest` (`harvest_cluster_access.sh`, `generate_attendee_aws.py`, `push_vtt_aws_creds.sh`,
-and `merge_pool.py` / `distribute_datadog_keys.py`). Those scripts moved with the app into
+`ingest` (`harvest_cluster_access.sh`, `push_vtt_aws_creds.sh`, and `merge_pool.py` /
+`distribute_datadog_keys.py`). It no longer runs `generate_attendee_aws.py`: the attendee IAM
+user, its inline policy and its EKS access entry are in the cluster Terraform root, where the
+IAM policy pipeline checks them, and `fleet.sh` mints only the access key (#549). Those scripts moved with the app into
 `provisioning-agenticburn/scripts/`. `fleet.sh` finds them via **`WIB_PROVISION_DIR`**
 (default `${REPO_ROOT}/../provisioning-agenticburn`); override the env var if the sibling
 checkout lives elsewhere. The runtime data population is otherwise decoupled: the real

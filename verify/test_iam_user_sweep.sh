@@ -2,8 +2,8 @@
 # ABOUTME: Behavioural test for the attendee IAM user teardown (#458): a destroyed cluster's wib-* user and
 # ABOUTME: its access keys are deleted, a live or unconfirmed cluster's user is not, and audit-zero names leftovers.
 #
-# Why this exists. generate_attendee_aws.py makes one IAM user with a live access key per cluster, and
-# nothing ever deleted one. The fleet accounts are reused event after event, so every key handed to an
+# Why this exists. Every cluster has one IAM user with a live access key (made by generate_attendee_aws.py
+# until #549, by the cluster root since), and nothing ever deleted one. The fleet accounts are reused event after event, so every key handed to an
 # attendee outlived their cluster, and a cluster rebuilt under the same name gives that user cluster admin
 # again. audit-zero counted compute and passed. These checks pin what the deletion may and may not touch.
 #
@@ -60,7 +60,7 @@ user_of() { mkdir -p "${T}/tags"; printf '%s' "$2" >"${T}/tags/$1.cluster"; prin
 reset() { : >"${CALLS}"; rm -f "${T}"/tags/* "${T}/pool"/* "${T}/live" "${T}/users" "${T}/list-fails" "${T}/delete-fails"; echo gone >"${T}/describe"; }
 deletes() { grep -c 'aws iam delete-\(user\|access-key\|user-policy\) ' "${CALLS}"; }
 
-echo "== the user name is the generator's =="
+echo "== the user name is the cluster root's (and was the generator's) =="
 check "attendee cluster -> wib-attendee-001" '[[ "$(iam_user_for watch-it-burn-attendee-001)" == "wib-attendee-001" ]]'
 check "presenter cluster -> wib-michael-admin" '[[ "$(iam_user_for watch-it-burn-michael-admin)" == "wib-michael-admin" ]]'
 

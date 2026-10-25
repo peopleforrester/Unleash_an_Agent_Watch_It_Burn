@@ -110,7 +110,7 @@ def _parse_doc(address: str, attribute: str, text) -> dict:
 
 
 def extract(show: dict) -> dict:
-    """Every policy document and every role in the plan, plus whatever is known only after apply."""
+    """Every policy document and every role and user in the plan, plus whatever is known only after apply."""
     unknown_by_addr = _after_unknown(show)
     documents, roles, unknown = [], [], []
 
@@ -141,6 +141,13 @@ def extract(show: dict) -> dict:
             if au.get("permissions_boundary") is True:
                 unknown.append(f"{res['address']}.permissions_boundary")
             roles.append({"address": res["address"], "name": v.get("name") or v.get("name_prefix"),
+                          "permissions_boundary": v.get("permissions_boundary") or ""})
+        elif t == "aws_iam_user":
+            # A user holds no document of its own (its inline policy is an aws_iam_user_policy, above), but it
+            # carries the boundary like a role does (#549), so it is listed with the roles for check 3's rule.
+            if au.get("permissions_boundary") is True:
+                unknown.append(f"{res['address']}.permissions_boundary")
+            roles.append({"address": res["address"], "name": v.get("name"),
                           "permissions_boundary": v.get("permissions_boundary") or ""})
         elif t == "aws_kms_key":
             add(res, "policy", "kms-key", v.get("policy"), au.get("policy"))

@@ -179,7 +179,7 @@ All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~
    AWS_PROFILE=accen-dev aws eks update-kubeconfig --name watch-it-burn-attendee-001 --region us-west-2 --kubeconfig /tmp/c1.kubeconfig
    KUBECONFIG=/tmp/c1.kubeconfig WITB_DD_API_KEY=... WITB_DD_APP_KEY=... bash infra/deploy-full-idp.sh attendee   # or 'admin' / 'burn'
    ```
-5. **Credential pool:** `WIB_APPLY=1 WIB_ACCESS_ENTRIES=1 fleet.sh aws-keys 50`; `fleet.sh harvest 50 > pool.csv`; `fleet.sh health 50`.
+5. **Credential pool:** `WIB_APPLY=1 fleet.sh aws-keys 50` (keys for the built clusters; the users and access entries are the cluster root's, #549); `fleet.sh harvest 50 > pool.csv`; `fleet.sh health 50`.
 6. **Cost reaping during the event:** `fleet.sh reap --keep claimed.txt` (DRY-RUN) then `WIB_APPLY=1 fleet.sh reap --keep claimed.txt`.
 7. **Teardown:** `fleet.sh down all` / `fleet.sh down-fleet 50`, then `terraform -chdir=infra/terraform/aws/network destroy` per account.
 
@@ -530,7 +530,7 @@ Steps render conditionally so a sparse pool row degrades gracefully. A single op
 
 ### Harvester & Pool Schema
 
-`pool.csv` joins two halves by row position. AWS half from `generate_attendee_aws.py`: `name,region,access_key,secret_key`. Datadog half from Secrets Manager: `datadog_org,datadog_email,datadog_password,datadog_api_key,datadog_app_key,datadog_site,datadog_dashboard_url`. `merge_pool.py` zips them into the v2 header:
+`pool.csv` joins two halves by row position. AWS half from `fleet.sh aws-keys` (or each build's own mint): `name,region,access_key,secret_key`. Datadog half from Secrets Manager: `datadog_org,datadog_email,datadog_password,datadog_api_key,datadog_app_key,datadog_site,datadog_dashboard_url`. `merge_pool.py` zips them into the v2 header:
 
 ```
 name,region,access_key,secret_key,console_url,
@@ -543,7 +543,7 @@ The access harvester (`harvest_cluster_access.sh`) is the later-binding source f
 name,region,console_url,burritbot_url,grafana_url,grafana_password,argocd_url,argocd_password
 ```
 
-console (ns `agent` LB hostname); grafana (`prometheus-grafana` Ingress host; static demo password `watchitburn-admin`); argocd only if an Ingress exists (else blank); burritbot when a Service matching `burritbot` is deployed. It refuses any name not prefixed `watch-it-burn-`. `generate_attendee_aws.py` creates a per-cluster IAM user (`wib-<tail>`) with an inline policy granting only `eks:DescribeCluster` on that cluster's ARN (+ `eks:ListClusters` on `*`); `--access-entries` adds the EKS access entry + `AmazonEKSClusterAdminPolicy`; dry-run by default, idempotent, tags `project=watch-it-burn,cluster=<name>`, secrets only to the CSV. `distribute_datadog_keys.py` writes each attendee's Datadog keys into THAT cluster's own account Secrets Manager as `watch-it-burn/datadog`, dry-run by default, isolated boto3 session per row.
+console (ns `agent` LB hostname); grafana (`prometheus-grafana` Ingress host; static demo password `watchitburn-admin`); argocd only if an Ingress exists (else blank); burritbot when a Service matching `burritbot` is deployed. It refuses any name not prefixed `watch-it-burn-`. The cluster Terraform root creates a per-cluster IAM user (`wib-<tail>`) under the permissions boundary, with an inline policy granting only `eks:DescribeCluster` on that cluster's ARN (+ `eks:ListClusters`, both held to the cluster's region), the EKS access entry and `AmazonEKSClusterAdminPolicy`, tagged `project=watch-it-burn,cluster=<name>`, so the IAM policy pipeline checks the policy (#549). `fleet.sh` mints only the access key (dry-run by default in `aws-keys`, idempotent, secrets only to the CSV). `generate_attendee_aws.py` did all of it by API call before #549 and is no longer run. `distribute_datadog_keys.py` writes each attendee's Datadog keys into THAT cluster's own account Secrets Manager as `watch-it-burn/datadog`, dry-run by default, isolated boto3 session per row.
 
 ### Key Decisions
 
@@ -565,11 +565,11 @@ console (ns `agent` LB hostname); grafana (`prometheus-grafana` Ingress host; st
 - **Public sites:** `railway/walkthrough/` + `railway/rounds-walkthrough/` (nginx 1.27-alpine static reveal.js decks; rounds binds `$PORT` via an envsubst template); `apex/site/` (`index.html`, `start.html` instructor console with live cost + merged prompt feed, `unknown.html`). All carry `burrito.png`.
 - **BurritoBot storefront** (`railway/burritobot/`, planned per `docs/burritobot-preview.md`): static witchy Chipotle storefront with the chat widget lower-right and a Twitch-style spectator left rail (live cost from `/cost`, tokens from `gen_ai.client.token.usage`, SSE prompt stream from `/stream`, system prompt from `/config`).
 - **Mockups** (`mockups/`): `b1-round-selector-burritbot.html`, `b4-provisioning-gated-flow.html` (became `success.html`), `b7-instructor-view.html`. The design loop is mockup → build.
-- **Scripts** (`lab-distribution/scripts/`): `generate_attendee_aws.py`, `merge_pool.py`, `harvest_cluster_access.sh`, `distribute_datadog_keys.py`.
+- **Scripts** (`lab-distribution/scripts/`): `merge_pool.py`, `harvest_cluster_access.sh`, `distribute_datadog_keys.py` (`generate_attendee_aws.py` too, no longer run since #549).
 
 ### Recreation Steps
 
-1. AWS half: `uv run --with boto3 python scripts/generate_attendee_aws.py --count <N> --profile accen-dev --out ../aws-pool.csv --access-entries --apply` (confirm dry-run first).
+1. AWS half: after the clusters are built, `WIB_APPLY=1 infra/terraform/fleet/fleet.sh aws-keys <N>` mints each built cluster's key into `aws-pool/<account>.csv` (confirm dry-run first). The users themselves come from the cluster root's apply.
 2. Datadog half: mint trial orgs with Datadog's learning-center tooling within ~10 days of the event; load into Secrets Manager `watch-it-burn/datadog-pool[,-pool-2]` (split if > 64 KB).
 3. Join: `uv run --with boto3 python scripts/merge_pool.py --aws ../aws-pool.csv --out pool.csv`. Per cluster append a harvester row and feed it back through the join so `console_url`/grafana/argocd land.
 4. Push Datadog keys into each cluster: `distribute_datadog_keys.py --pool pool.csv --apply`.

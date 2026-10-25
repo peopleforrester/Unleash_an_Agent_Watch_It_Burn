@@ -36,7 +36,15 @@ case " $* " in
 esac
 exit 0
 S
-for c in aws jq; do printf '#!/usr/bin/env bash\nexit 0\n' >"${SHIM}/${c}"; done
+# aws: an account with no attendee IAM user in it, so the pre-apply adoption (#549) has nothing to do.
+cat >"${SHIM}/aws" <<'S'
+#!/usr/bin/env bash
+case "$*" in
+  *"iam list-user-tags"*) echo "An error occurred (NoSuchEntity) when calling the ListUserTags operation" >&2; exit 254 ;;
+esac
+exit 0
+S
+printf '#!/usr/bin/env bash\nexit 0\n' >"${SHIM}/jq"
 chmod +x "${SHIM}"/*
 export T PATH="${SHIM}:${PATH}"
 

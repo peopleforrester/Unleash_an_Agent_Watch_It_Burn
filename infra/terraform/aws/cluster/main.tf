@@ -656,6 +656,76 @@ module "tutor_bedrock_pod_identity" {
   }
 }
 
+# --- Attendee IAM user ------------------------------------------------------------------------------
+#
+# The student's own AWS identity: one IAM user per cluster, whose access key the fleet driver mints after
+# apply and hands to the web terminal and the pool row. Its inline policy reaches this cluster and nothing
+# else, so `aws eks update-kubeconfig` works for theirs and no one else's. The access entry below is what
+# makes kubectl work once the kubeconfig is written.
+#
+# It used to be made by provisioning-agenticburn's generate_attendee_aws.py with put_user_policy, so the
+# policy pipeline never saw the document and the user carried no boundary (#549). Here it is planned like
+# every other grant: checks 1 to 4 read it from the plan, and the boundary caps the user as it caps the roles.
+locals {
+  # Kept in step with iam_user_for() in fleet/fleet.sh, which finds this user to mint its key and to sweep it.
+  # IAM caps a user name at 64; substr returns the whole string when it is shorter.
+  attendee_user = substr("wib-${trimprefix(var.name, "watch-it-burn-")}", 0, 64)
+}
+
+resource "aws_iam_user" "attendee" {
+  name                 = local.attendee_user
+  permissions_boundary = data.aws_iam_policy.permissions_boundary.arn
+  # The access key is minted outside Terraform (its secret would otherwise sit in the state file), so a
+  # destroy must be able to delete a user that still holds one.
+  force_destroy = true
+  # cluster= is what fleet.sh's teardown sweeps match on (#458); project= comes from default_tags.
+  tags = { cluster = var.name }
+}
+
+resource "aws_iam_user_policy" "attendee_eks" {
+  name = "eks-own-cluster"
+  user = aws_iam_user.attendee.name
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "DescribeOwnCluster"
+      Effect   = "Allow"
+      Action   = ["eks:DescribeCluster"]
+      Resource = "arn:aws:eks:${var.region}:${data.aws_caller_identity.current.account_id}:cluster/${var.name}"
+      # Restates the ARN's region. It is here because check 3 asks every Allow for a scoping key (#207).
+      Condition = { StringEquals = { "aws:RequestedRegion" = var.region } }
+      }, {
+      Sid    = "ListClusters"
+      Effect = "Allow"
+      Action = ["eks:ListClusters"]
+      # ListClusters takes no resource ARN (waived in infra/org/exceptions.md); the region is what scopes it.
+      Resource  = "*"
+      Condition = { StringEquals = { "aws:RequestedRegion" = var.region } }
+    }]
+  })
+}
+
+resource "aws_eks_access_entry" "attendee" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_iam_user.attendee.arn
+  type          = "STANDARD"
+}
+
+# Cluster admin on their own cluster is the workshop's premise: the student is the platform team.
+resource "aws_eks_access_policy_association" "attendee_admin" {
+  cluster_name  = module.eks.cluster_name
+  principal_arn = aws_iam_user.attendee.arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+  access_scope {
+    type = "cluster"
+  }
+  depends_on = [aws_eks_access_entry.attendee]
+}
+
+output "attendee_iam_user" {
+  value = aws_iam_user.attendee.name
+}
+
 output "tutor_bedrock_role_arn" {
   value = module.tutor_bedrock_pod_identity.iam_role_arn
 }

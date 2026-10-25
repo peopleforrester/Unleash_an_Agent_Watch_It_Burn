@@ -1,5 +1,5 @@
 # ABOUTME: Offline gate that org policies, the boundary and every IAM change go through the policy pipeline
-# ABOUTME: (#207, #470): no policy document outside the roots it runs on, SCPs and RCPs routed to checks 1 and 3.
+# ABOUTME: (#207, #470, #549): no policy document outside the roots it runs on, SCPs and RCPs routed to checks 1 and 3.
 #
 # Why. test_iam_policy_pipeline.py proves each check reads a document correctly once the pipeline has it. This
 # proves the pipeline gets all of them. It fails when a Terraform root the pipeline does not run on gains an
@@ -88,12 +88,19 @@ for t, values in TAUGHT.items():
     if p.extract(plan)["documents"]:
         extracted.add(t)
 check("extract() reads a document from every type it is said to", extracted == set(TAUGHT), sorted(set(TAUGHT) - extracted))
+user_plan = {"planned_values": {"root_module": {"resources": [
+    {"address": "aws_iam_user.x", "mode": "managed", "type": "aws_iam_user", "name": "x", "values": {"name": "x"}}]}}}
+check("extract() lists every IAM user with the roles, so check 3 holds it to the boundary (#549)",
+      p.extract(user_plan)["roles"] == [{"address": "aws_iam_user.x", "name": "x", "permissions_boundary": ""}])
 
 # Types an IAM- or policy-shaped name would flag that hold no document of their own. The attachments name a
 # policy by ARN, and that policy is checked where it is created; the boundary caps the role whatever it holds.
+# A user's grant is its aws_iam_user_policy, read above; the user itself is held to the boundary (below). An
+# EKS access policy association names an AWS-managed Kubernetes access policy by ARN: RBAC, not an IAM document.
 NO_DOCUMENT = {
     "aws_iam_role_policy_attachment", "aws_iam_user_policy_attachment", "aws_iam_group_policy_attachment",
     "aws_iam_policy_attachment", "aws_iam_instance_profile", "aws_organizations_policy_attachment",
+    "aws_iam_user", "aws_eks_access_policy_association",
 }
 # Policy in the name, but not an IAM grant.
 NOT_IAM = {"aws_autoscaling_policy", "aws_appautoscaling_policy", "aws_ecr_lifecycle_policy", "aws_dlm_lifecycle_policy"}
@@ -138,6 +145,39 @@ for f in sorted(tf_files):
             asks = sorted(a for a in top_level_args(body) if IAM_INPUT.search(a))
             check(f"{rel}: module.{m.group(1)} asks for no IAM outside the pipeline's roots", not asks, asks)
 check("the scan read resources, roots outside the pipeline among them", seen["resource"] > 0 and seen["outside"] > 0, seen)
+
+print("no script writes an IAM policy by API call")
+# A policy written by the aws CLI or boto3 is in no plan, so none of the four checks ever sees it. That is how
+# the attendee users' inline policy escaped until #549: provisioning-agenticburn's generate_attendee_aws.py
+# called put_user_policy, run from fleet.sh. Grants are Terraform's, in a pipeline root; a script may mint a
+# key or delete what teardown finds, but not write a grant or a role. Tests are left out: their shims answer
+# these calls, they do not make them.
+IAM_WRITE = re.compile(
+    r"\biam\s+(put-(user|role|group)-policy|create-policy(-version)?|attach-(user|role|group)-policy|create-role"
+    r"|update-assume-role-policy|put-(user|role)-permissions-boundary|create-user)\b"
+    r"|\b(put_(user|role|group)_policy|create_policy(_version)?|attach_(user|role|group)_policy|create_role"
+    r"|update_assume_role_policy|put_(user|role)_permissions_boundary|create_user)\s*\(")
+code = [REPO / f for f in subprocess.run(["git", "-C", str(REPO), "ls-files", "--cached", "--others", "--exclude-standard"],
+                                         capture_output=True, text=True, check=True).stdout.split()
+        if not f.endswith((".tf", ".md", ".lock.hcl")) and not f.startswith(("verify/test_", "tmp/"))]
+writes, scanned = [], 0
+for f in code:
+    if not f.is_file():
+        continue
+    try:
+        text = f.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        continue
+    scanned += 1
+    for n, line in enumerate(text.splitlines(), 1):
+        s = line.strip()
+        if s.startswith(("#", "//")):
+            continue
+        if IAM_WRITE.search(s) or (f.suffix in (".sh", ".py") and "generate_attendee_aws" in s):
+            writes.append(f"{f.relative_to(REPO)}:{n}: {s[:120]}")
+check("the scan read the repo's scripts", scanned > 100, scanned)
+check("no script creates an IAM user, role or policy, or runs generate_attendee_aws.py, outside Terraform",
+      not writes, "\n        ".join(writes))
 
 print("org policies and the boundary are routed to the checks that judge them")
 rego = (p.POLICY_DIR / "iam.rego").read_text(encoding="utf-8")

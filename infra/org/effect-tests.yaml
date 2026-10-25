@@ -238,3 +238,39 @@ cluster:
       aws:ResourceTag/attendee: ${cluster_name}
       aws:ResourceTag/consumer: agent
     expect: implicitDeny
+  # The attendee's own IAM user (#549): its key reaches its own cluster and no other, and the boundary it now
+  # carries stops it from minting itself more access.
+  - name: the attendee user can describe its own cluster
+    identity: [aws_iam_user_policy.attendee_eks]
+    action: eks:DescribeCluster
+    resource: arn:aws:eks:${region}:${account_id}:cluster/${cluster_name}
+    context: {aws:RequestedRegion: "${region}"}
+    expect: allowed
+  - name: the attendee user cannot describe another attendee's cluster
+    identity: [aws_iam_user_policy.attendee_eks]
+    action: eks:DescribeCluster
+    resource: arn:aws:eks:${region}:${account_id}:cluster/watch-it-burn-attendee-999
+    context: {aws:RequestedRegion: "${region}"}
+    expect: implicitDeny
+  - name: the attendee user can list the clusters in its region
+    identity: [aws_iam_user_policy.attendee_eks]
+    action: eks:ListClusters
+    resource: "*"
+    context: {aws:RequestedRegion: "${region}"}
+    expect: allowed
+  - name: the attendee user cannot list clusters in another region
+    identity: [aws_iam_user_policy.attendee_eks]
+    action: eks:ListClusters
+    resource: "*"
+    context: {aws:RequestedRegion: ap-southeast-2}
+    expect: implicitDeny
+  - name: the attendee user cannot mint itself another access key
+    identity: [aws_iam_user_policy.attendee_eks]
+    action: iam:CreateAccessKey
+    resource: arn:aws:iam::${account_id}:user/wib-any
+    expect: denied
+  - name: the attendee user cannot grant itself access to another cluster
+    identity: [aws_iam_user_policy.attendee_eks]
+    action: eks:CreateAccessEntry
+    resource: arn:aws:eks:${region}:${account_id}:cluster/watch-it-burn-attendee-999
+    expect: denied

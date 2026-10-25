@@ -40,7 +40,6 @@ readonly WIB_PROVISION_DIR="${WIB_PROVISION_DIR:-$(_sibling_repo provisioning-ag
 readonly WIB_APEX_DIR="${WIB_APEX_DIR:-$(_sibling_repo apex-agenticburn)}"
 readonly HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_cluster_access.sh"
 readonly TERMINAL_HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_terminal_credential.sh"
-readonly GEN_AWS_SCRIPT="${WIB_PROVISION_DIR}/scripts/generate_attendee_aws.py"
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${WIB_AWS_POOL_DIR:-${SCRIPT_DIR}/aws-pool}"   # gitignored: holds live access keys; WIB_AWS_POOL_DIR for the shim tests
 readonly CLUSTER_DIR="${PROVISION_DIR}/${PROVIDER_CLUSTER_SUBDIR}"
@@ -543,8 +542,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       (\${WIB_PROVISION_DIR}/scripts/harvest_terminal_credential.sh). 'pool' re-ingests
                       every row the live pool holds, claimed ones included, so a corrected login reaches
                       students who already have a cluster.
-    aws-keys <n>     Generate per-attendee scoped IAM user+key per cluster in its OWN account (SAME <n>
-                      + offset). DRY-RUN unless WIB_APPLY=1; WIB_ACCESS_ENTRIES=1 maps users into clusters.
+    aws-keys <n>     Mint the access key of each built cluster's attendee IAM user, in its OWN account (SAME
+                      <n> + offset), into per-account CSVs. The cluster root makes the user, its policy and
+                      its access entry (#549); a name with no user is skipped. DRY-RUN unless WIB_APPLY=1.
     reap-lbs          Find load balancers, target groups and volumes tagged for a cluster that no longer
                       exists, in every account, and delete them. The standing net for #157: a teardown
                       that could not reach the cluster API strands them and nothing else looks for them.
@@ -1210,17 +1210,14 @@ bootstrap_terminal_auth() {
     fi
 }
 
-# Mint this cluster's scoped IAM key and inject it as the `student-aws-creds` secret so the VTT's aws CLI
-# is pre-configured at boot, with NO per-cluster manual step. generate_attendee_aws is idempotent: if the
-# user already has a key it skips (the secret was created on the first boot), so re-runs are safe.
+# Mint this cluster's attendee key and inject it as the `student-aws-creds` secret so the VTT's aws CLI
+# is pre-configured at boot, with NO per-cluster manual step. The IAM user, its inline policy and its EKS
+# access entry come from the cluster root's apply (#549); only the key is made here. mint_attendee_key skips
+# a user that already holds a key (the secret was created on the first boot), so re-runs are safe.
 bootstrap_student_aws() {
     local name="$1" acct_profile="$2" kcfg="$3"
-    command -v uv >/dev/null 2>&1 || { log "  WARN: uv missing; cannot mint student AWS creds for ${name}"; return; }
     local awscsv; awscsv="$(mktemp -t "${name}.aws.XXXX")"
-    if uv run --with boto3 python "${GEN_AWS_SCRIPT}" \
-        --clusters "${name}" --apply --access-entries \
-        --profile "${acct_profile}" --region "${WIB_REGION}" \
-        --out "${awscsv}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+    if mint_attendee_key "${name}" "${acct_profile}" "${awscsv}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         local ak sk
         ak="$(tail -n +2 "${awscsv}" 2>/dev/null | head -1 | cut -d, -f3)"
         sk="$(tail -n +2 "${awscsv}" 2>/dev/null | head -1 | cut -d, -f4)"
@@ -1264,7 +1261,7 @@ bootstrap_student_aws() {
             fi
         fi
     else
-        log "  WARN: AWS key mint failed for ${name}; the VTT aws CLI will be unconfigured"
+        log "  WARN: AWS key mint failed for ${name} (see ${LOG_DIR}/${name}.bootstrap.log); the VTT aws CLI will be unconfigured"
     fi
     rm -f "${awscsv}"
 }
@@ -1430,10 +1427,14 @@ up_one() {
         log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
+    local tfvars=(-var "name=${name}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
+                  "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}")
+    # An IAM user of this cluster's name made before #549 would fail the apply on EntityAlreadyExists.
+    if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then
+        log "  FAILED: ${name} (its attendee IAM user is in the way of the apply)"; record_fail "${name}"; return 0
+    fi
     if terraform -chdir="${CLUSTER_DIR}" apply -auto-approve -no-color \
-        -state="${STATE_DIR}/${name}.tfstate" \
-        -var "name=${name}" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
-        -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}" \
+        -state="${STATE_DIR}/${name}.tfstate" -var "event=${WIB_EVENT}" "${tfvars[@]}" \
         >"${LOG_DIR}/${name}.apply.log" 2>&1; then
         log "  ok: ${name}"
         # Record which account this cluster was actually built in, so teardown never has to guess.
@@ -1686,19 +1687,44 @@ sweep_orphan_log_group() {
     return 0
 }
 
-# Per-attendee IAM users (#458). generate_attendee_aws.py makes one IAM user per cluster, wib-<name less
-# its watch-it-burn- prefix>, tagged project=watch-it-burn and cluster=<name>, with an inline policy and
-# one live access key. It runs from `fleet.sh aws-keys` and from bootstrap_student_aws on every build, so
-# every cluster that ever booted has one. Nothing ever deleted them: the fleet accounts are reused event
+# Per-attendee IAM users (#458). Each cluster has one IAM user, wib-<name less its watch-it-burn- prefix>,
+# tagged project=watch-it-burn and cluster=<name>, with an inline policy and one live access key. The
+# cluster root creates the user, the policy and the EKS access entry (#549); bootstrap_student_aws and
+# `fleet.sh aws-keys` mint the key. Before #549 provisioning-agenticburn's generate_attendee_aws.py made
+# all of it by API call on every build, and nothing ever deleted them: the fleet accounts are reused event
 # after event rather than closed, and audit-zero counted compute, so every key handed to an attendee
-# stayed valid after their cluster was gone.
+# stayed valid after their cluster was gone. A terraform destroy now deletes the user and its key; the
+# sweeps below remain for the users made before, and for any destroy that fails.
 #
 # A stale key looked harmless because its policy only reaches its own cluster ARN. It is not: a cluster
 # rebuilt under the same name finds the user already there, mints no new key, and gives that same user
 # an EKS access entry with cluster admin. Last event's attendee then holds admin on this event's cluster.
 #
-# Name rule kept in step with user_for() in generate_attendee_aws.py.
+# Name rule kept in step with local.attendee_user in the cluster root (infra/terraform/aws/cluster/main.tf).
 iam_user_for() { local t="${1#watch-it-burn-}"; t="wib-${t}"; printf '%s' "${t:0:64}"; }
+
+# Mint the access key of this cluster's attendee IAM user. Only the key is made here, so its secret never
+# sits in a Terraform state file. Writes the CSV header and one name,region,access_key,secret_key row to $3
+# when it mints. A user that already holds a key gets none, since AWS returns a secret only once: $3 gets no
+# row and the caller falls back to the persisted copy. The secret goes to $3 alone, never to the output.
+# Non-zero when the user cannot be read or the key cannot be made.
+mint_attendee_key() {   # $1 cluster, $2 account profile, $3 output CSV
+    local name="$1" acct="$2" out="$3" user n key ak sk
+    user="$(iam_user_for "${name}")"
+    n="$(AWS_PROFILE="${acct}" aws iam list-access-keys --user-name "${user}" \
+        --query 'length(AccessKeyMetadata)' --output text 2>/dev/null)" || { log "  ${name}: cannot read the keys of IAM user ${user}"; return 1; }
+    [[ "${n}" =~ ^[0-9]+$ ]] || { log "  ${name}: unreadable key count for IAM user ${user}: ${n}"; return 1; }
+    if [[ "${n}" -gt 0 ]]; then
+        log "  ${name}: IAM user ${user} already holds an access key; not minting another"
+        return 0
+    fi
+    key="$(AWS_PROFILE="${acct}" aws iam create-access-key --user-name "${user}" \
+        --query 'AccessKey.[AccessKeyId,SecretAccessKey]' --output text 2>/dev/null)" || { log "  ${name}: create-access-key failed for ${user}"; return 1; }
+    read -r ak sk <<<"${key}"
+    [[ -n "${ak}" && -n "${sk}" ]] || { log "  ${name}: create-access-key gave no key for ${user}"; return 1; }
+    ( umask 077; printf 'name,region,access_key,secret_key\n%s,%s,%s,%s\n' "${name}" "${WIB_REGION}" "${ak}" "${sk}" >"${out}" )
+    log "  ${name}: minted an access key for IAM user ${user}"
+}
 
 # Delete one user and what blocks its deletion: access keys, inline policies, attached policies, a
 # console password. Returns non-zero if the user is still there.
@@ -1763,9 +1789,72 @@ sweep_attendee_iam_user() {
     return 0
 }
 
-# Every account-wide wib-* user tagged project=watch-it-burn whose cluster is not live: the users
-# made by `aws-keys` for clusters that were never built, and every one that leaked before
-# sweep_attendee_iam_user existed. 'down all' runs it; `reap-iam-users` runs it on its own. DRY-RUN
+# The cluster root owns each cluster's IAM user since #549. Before that generate_attendee_aws.py made it by
+# API call, and an apply that meets one of those users fails on EntityAlreadyExists. So before each apply a
+# user of this cluster's name that the state does not hold is dealt with. If its cluster is gone, it is a
+# leftover from an earlier build and is deleted (the #458 rule: last event's key must not reach this event's
+# cluster). If its cluster is live and its state is here, the user, its inline policy and its access entry are
+# imported, so the student's key keeps working and the apply puts the user under the boundary. Anything else
+# stops this cluster's apply, by name. Returns 0 when the apply may go ahead.
+adopt_attendee_iam_user() {   # $1 cluster, $2 account, rest: the -var arguments the apply passes
+    local name="$1" acct="$2"; shift 2
+    local user state="${STATE_DIR}/${name}.tfstate" out rc=0
+    user="$(iam_user_for "${name}")"
+    if [[ -f "${state}" ]] && terraform -chdir="${CLUSTER_DIR}" state list -state="${state}" 2>/dev/null \
+        | grep -qx 'aws_iam_user.attendee'; then
+        return 0
+    fi
+    out="$(_iam_user_tag "${user}" "${acct}" cluster)" || rc=$?
+    if [[ "${rc}" -ne 0 ]]; then
+        [[ "${out}" == *NoSuchEntity* ]] && return 0
+        log "  ${name}: could not read IAM user ${user}, so the apply cannot tell whether it would collide with it"
+        return 1
+    fi
+    if [[ "${out}" != "${name}" ]]; then
+        log "  ${name}: IAM user ${user} exists and is not tagged cluster=${name}; the apply would fail on it"
+        return 1
+    fi
+    rc=0; out="$(AWS_PROFILE="${acct}" aws eks describe-cluster --name "${name}" --region "${WIB_REGION}" 2>&1 >/dev/null)" || rc=$?
+    if [[ "${rc}" -ne 0 && "${out}" == *ResourceNotFoundException* ]]; then
+        sweep_attendee_iam_user "${name}" "${acct}"
+        rc=0; out="$(_iam_user_tag "${user}" "${acct}" cluster)" || rc=$?
+        [[ "${rc}" -ne 0 && "${out}" == *NoSuchEntity* ]] && return 0
+        log "  ${name}: the leftover IAM user ${user} is still there"
+        return 1
+    fi
+    if [[ "${rc}" -ne 0 ]]; then
+        log "  ${name}: could not tell whether the cluster is live, so its IAM user ${user} is left alone"
+        return 1
+    fi
+    if [[ ! -f "${state}" ]]; then
+        log "  ${name}: the cluster is live but its state is not here, so IAM user ${user} cannot be adopted"
+        return 1
+    fi
+    local arn admin="arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy" adopt_log="${LOG_DIR}/${name}.adopt.log"
+    arn="$(AWS_PROFILE="${acct}" aws iam get-user --user-name "${user}" --query User.Arn --output text 2>/dev/null)" \
+        || { log "  ${name}: could not read the ARN of IAM user ${user}"; return 1; }
+    local imports=(aws_iam_user.attendee "${user}") i
+    if AWS_PROFILE="${acct}" aws iam get-user-policy --user-name "${user}" --policy-name eks-own-cluster >/dev/null 2>&1; then
+        imports+=(aws_iam_user_policy.attendee_eks "${user}:eks-own-cluster")
+    fi
+    if AWS_PROFILE="${acct}" aws eks describe-access-entry --cluster-name "${name}" --principal-arn "${arn}" \
+        --region "${WIB_REGION}" >/dev/null 2>&1; then
+        imports+=(aws_eks_access_entry.attendee "${name}:${arn}")
+        out="$(AWS_PROFILE="${acct}" aws eks list-associated-access-policies --cluster-name "${name}" --principal-arn "${arn}" \
+            --region "${WIB_REGION}" --query "associatedAccessPolicies[?policyArn=='${admin}'] | length(@)" --output text 2>/dev/null)"
+        [[ "${out}" == "1" ]] && imports+=(aws_eks_access_policy_association.attendee_admin "${name}#${arn}#${admin}")
+    fi
+    for ((i = 0; i < ${#imports[@]}; i += 2)); do
+        terraform -chdir="${CLUSTER_DIR}" import -no-color -input=false -state="${state}" "$@" \
+            "${imports[i]}" "${imports[i + 1]}" >>"${adopt_log}" 2>&1 \
+            || { log "  ${name}: import of ${imports[i]} failed (see ${adopt_log})"; return 1; }
+    done
+    log "  ${name}: adopted IAM user ${user} into the cluster's state"
+}
+
+# Every account-wide wib-* user tagged project=watch-it-burn whose cluster is not live: the users the old
+# generator made by range (`aws-keys`, before #549) for clusters that were never built, and every one that
+# leaked before sweep_attendee_iam_user existed. 'down all' runs it; `reap-iam-users` runs it on its own. DRY-RUN
 # unless WIB_APPLY=1. The live list fails closed, as in reap-lbs: an unread list would make every
 # user look orphaned.
 sweep_orphan_iam_users() {
@@ -3073,39 +3162,59 @@ cmd_harvest() {
     report_failures >&2 || true
 }
 
-# Generate the per-attendee AWS half of the pool across the fleet: one scoped IAM user + access key per
-# cluster, in the cluster's OWN account (mirrors up-fleet's account/range scheme). DRY-RUN by default;
-# set WIB_APPLY=1 to actually create. WIB_ACCESS_ENTRIES=1 also maps each user into its cluster (needs
-# the cluster to exist). Per-account CSVs land in aws-pool/ (gitignored, live keys). Feed them to
-# merge_pool.py. This is the 250-key go-live step (issue: per-attendee AWS creds / B14).
+# Mint the per-attendee AWS half of the pool across the fleet: the access key of each cluster's attendee IAM
+# user, in the cluster's OWN account (mirrors up-fleet's account/range scheme). The user, its inline policy
+# and its EKS access entry are the cluster root's (#549), so a name whose cluster was never built has no user
+# and is skipped: nothing here creates one, or writes a policy. DRY-RUN by default; WIB_APPLY=1 mints. New
+# rows are appended to aws-pool/<account>.csv, and each also to aws-pool/<name>.csv as bootstrap writes it
+# (gitignored, live keys). Feed them to merge_pool.py. This is the 250-key go-live step (B14).
 cmd_aws_keys() {
     local per_account="${1:-}"
     [[ "${per_account}" =~ ^[0-9]+$ && "${per_account}" -gt 0 ]] || { log "usage: aws-keys <clusters-per-account>"; exit 2; }
-    [[ -f "${GEN_AWS_SCRIPT}" ]] || { log "missing generator: ${GEN_AWS_SCRIPT}"; exit 1; }
-    command -v uv >/dev/null 2>&1 || { log "need uv (the generator runs 'uv run --with boto3')"; exit 1; }
-    mkdir -p "${AWS_POOL_DIR}"
-    local apply=() entries=()
-    [[ -n "${WIB_APPLY:-}" ]] && apply=(--apply) || log "DRY-RUN (set WIB_APPLY=1 to actually create IAM users/keys)"
-    [[ -n "${WIB_ACCESS_ENTRIES:-}" ]] && entries=(--access-entries)
+    command -v aws >/dev/null 2>&1 || { log "need the aws CLI"; exit 1; }
+    mkdir -p "${AWS_POOL_DIR}" "${LOG_DIR}"
+    [[ -n "${WIB_APPLY:-}" ]] || log "DRY-RUN (set WIB_APPLY=1 to actually mint access keys)"
     local accounts; IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
     log "aws-keys: ${#accounts[@]} account(s) x ${per_account} clusters (offset ${WIB_NAME_OFFSET})"
-    local idx=0 acct start n names
+    local idx=0 acct start n name user out rc one csv
     for acct in "${accounts[@]}"; do
         acct="${acct// /}"; [[ -n "${acct}" ]] || continue
         start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
         idx=$(( idx + 1 ))
-        names=""
-        for n in $(seq "${start}" $(( start + per_account - 1 ))); do
-            names+="$(printf '%s-%03d' "${NAME_PREFIX}" "${n}"),"
-        done
-        names="${names%,}"
+        csv="${AWS_POOL_DIR}/${acct}.csv"
         log "  account '${acct}': $(printf '%s-%03d' "${NAME_PREFIX}" "${start}") .. $(printf '%s-%03d' "${NAME_PREFIX}" $(( start + per_account - 1 )))"
-        uv run --with boto3 python "${GEN_AWS_SCRIPT}" \
-            --clusters "${names}" --profile "${acct}" --region "${WIB_REGION}" \
-            --out "${AWS_POOL_DIR}/${acct}.csv" "${apply[@]}" "${entries[@]}" \
-            || { record_fail "aws-keys:${acct}"; log "  ${acct}: aws-keys FAILED"; }
+        for n in $(seq "${start}" $(( start + per_account - 1 ))); do
+            name="$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")"; user="$(iam_user_for "${name}")"
+            rc=0; out="$(_iam_user_tag "${user}" "${acct}" cluster)" || rc=$?
+            if [[ "${rc}" -ne 0 ]]; then
+                if [[ "${out}" == *NoSuchEntity* ]]; then
+                    log "    ${name}: no IAM user ${user} (the cluster is not built); skipping"
+                else
+                    log "    ${name}: could not read IAM user ${user}"; record_fail "aws-keys:${name}"
+                fi
+                continue
+            fi
+            if [[ "${out}" != "${name}" ]]; then
+                log "    ${name}: IAM user ${user} is not tagged cluster=${name}; skipping"; continue
+            fi
+            if [[ -z "${WIB_APPLY:-}" ]]; then
+                log "    would mint a key for ${user} (${name}), unless it already holds one"; continue
+            fi
+            one="$(mktemp -t "${name}.aws.XXXX")"
+            if mint_attendee_key "${name}" "${acct}" "${one}"; then
+                if [[ -s "${one}" ]]; then
+                    ( umask 077
+                      [[ -s "${csv}" ]] || head -1 "${one}" >"${csv}"
+                      tail -n +2 "${one}" >>"${csv}"
+                      cp "${one}" "${AWS_POOL_DIR}/${name}.csv" )
+                fi
+            else
+                record_fail "aws-keys:${name}"
+            fi
+            rm -f "${one}"
+        done
     done
-    [[ -n "${WIB_APPLY:-}" ]] && log "per-account CSVs in ${AWS_POOL_DIR}/ (live keys, gitignored) — feed to merge_pool.py"
+    [[ -n "${WIB_APPLY:-}" ]] && log "per-account CSVs in ${AWS_POOL_DIR}/ (live keys, gitignored); feed them to merge_pool.py"
     report_failures >&2 || true
 }
 

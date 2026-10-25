@@ -12,7 +12,7 @@
 #   action-star              no Allow of Action "*" (or NotAction, which is wider)
 #   resource-star            no Allow on Resource "*" (or NotResource)
 # Each can be waived for one statement by a row in exceptions.md, with the reason. The role rule cannot:
-#   every aws_iam_role carries the canonical permissions boundary.
+#   every aws_iam_role and aws_iam_user carries the canonical permissions boundary (input.roles lists both).
 package iam
 
 import rego.v1
@@ -139,7 +139,7 @@ canonical_boundary(arn) if regex.match(sprintf(`^arn:aws[a-z-]*:iam::[0-9]{12}:p
 deny contains msg if {
 	some role in input.roles
 	role.permissions_boundary == ""
-	msg := sprintf("%s has no permissions_boundary; every role carries %s [role-boundary]", [role.address, input.boundary_name])
+	msg := sprintf("%s has no permissions_boundary; every role and user carries %s [role-boundary]", [role.address, input.boundary_name])
 }
 
 deny contains msg if {

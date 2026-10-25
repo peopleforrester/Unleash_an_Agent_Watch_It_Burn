@@ -95,7 +95,8 @@ audit_account() {
     local iam pol
     iam="$(aws_q "$p" iam list-roles --query "length(Roles[?contains(RoleName,'${OURS}')||contains(RoleName,'${OURS_ALT}')])" --output text)"
     pol="$(aws_q "$p" iam list-policies --scope Local --query "length(Policies[?contains(PolicyName,'${OURS}')||contains(PolicyName,'${OURS_ALT}')])" --output text)"
-    # The per-attendee users from generate_attendee_aws.py, each holding a live access key (#458).
+    # The per-attendee users (the cluster root's since #549, generate_attendee_aws.py's before), each holding a
+    # live access key (#458).
     local usr
     usr="$(aws_q "$p" iam list-users --query "length(Users[?starts_with(UserName,'${OURS_ALT}-')||contains(UserName,'${OURS}')])" --output text)"
     [[ "${iam:-0}" == "0" ]] && ok "IAM roles 0" || finding "${p}: ${iam} IAM role(s)"

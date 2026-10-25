@@ -94,10 +94,14 @@ test_role_with_canonical_boundary_passes if {
 }
 
 test_role_without_boundary_fails if {
-	deny == {"aws_iam_role.r has no permissions_boundary; every role carries watch-it-burn-permissions-boundary [role-boundary]"} with input as roles([{"address": "aws_iam_role.r", "permissions_boundary": ""}])
+	deny == {"aws_iam_role.r has no permissions_boundary; every role and user carries watch-it-burn-permissions-boundary [role-boundary]"} with input as roles([{"address": "aws_iam_role.r", "permissions_boundary": ""}])
 }
 
 test_role_with_other_boundary_fails if {
 	deny == {"aws_iam_role.r has permissions_boundary arn:aws:iam::111122223333:policy/watch-it-burn-permissions-boundary-v2, not the canonical watch-it-burn-permissions-boundary [role-boundary]"} with input as roles([{"address": "aws_iam_role.r",
 		"permissions_boundary": "arn:aws:iam::111122223333:policy/watch-it-burn-permissions-boundary-v2"}])
+}
+
+test_user_without_boundary_fails if {
+	deny == {"aws_iam_user.attendee has no permissions_boundary; every role and user carries watch-it-burn-permissions-boundary [role-boundary]"} with input as roles([{"address": "aws_iam_user.attendee", "permissions_boundary": ""}])
 }

@@ -36,6 +36,7 @@ CLUSTER_TARGETS = [
     "module.ebs_csi_pod_identity", "module.aws_lb_controller_pod_identity", "module.eso_pod_identity",
     "module.agent_bedrock_pod_identity", "module.tutor_bedrock_pod_identity",
     "aws_iam_policy.bedrock_invoke", "aws_iam_policy.tutor_bedrock_invoke",
+    "aws_iam_user.attendee", "aws_iam_user_policy.attendee_eks",
 ]
 
 

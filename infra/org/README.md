@@ -47,7 +47,9 @@ terraform -chdir=infra/org/boundary apply -state=states/<profile>.tfstate -var p
 tagging the policy with a stale event (#507).
 
 Roles that carry it: the EKS cluster role, the node role, and the EBS CSI, Load Balancer Controller, ESO,
-agent Bedrock and tutor Bedrock Pod Identity roles (`infra/terraform/aws/cluster/main.tf`).
+agent Bedrock and tutor Bedrock Pod Identity roles (`infra/terraform/aws/cluster/main.tf`). So does the one IAM
+user each cluster creates, the attendee's (`aws_iam_user.attendee`, #549), whose inline policy reaches only its
+own cluster.
 
 ## Running the pipeline
 
@@ -88,13 +90,15 @@ example) cannot be checked, so the run fails and lists it. Plan against an appli
 3. **Structural.** `conftest` with `policy/iam.rego`, on identity policies, the boundary, SCPs and RCPs.
    Every Allow carries a Condition, and at least one of its keys is on the rule file's allow-list of
    scoping keys. No Allow of `Action: "*"` or `Resource: "*"`. A rule is waived only by a row in
-   `exceptions.md`. Every `aws_iam_role` carries the canonical boundary, with no waiver. Each failure names
+   `exceptions.md`. Every `aws_iam_role` and `aws_iam_user` carries the canonical boundary, with no waiver. Each failure names
    the plan address and the statement index, for example:
    `aws_iam_policy.bedrock_invoke: Statement[0] is an Allow with no Condition [allow-without-condition]`.
 4. **Effect.** `aws iam simulate-custom-policy` with the plan's own documents and the rendered boundary,
    for each case in `effect-tests.yaml`. Covered: the agent can invoke its models only from its own
    namespace on its own cluster; the agent cannot CreateRole or CreateCluster; no bounded role can make
-   S3 public, create an unbounded role, strip the boundary, or touch org policies.
+   S3 public, create an unbounded role, strip the boundary, or touch org policies; the attendee user can
+   describe its own cluster and list its region's, and cannot describe another cluster, mint itself a key or
+   create an access entry.
 
 Both Bedrock grants are held to the Pod Identity session tags (`aws:PrincipalTag/eks-cluster-name`,
 `aws:PrincipalTag/kubernetes-namespace`, and the tutor's ServiceAccount too). EKS Pod Identity sets
@@ -106,7 +110,8 @@ those tags on every session it issues.
   in `infra/` carrying it, the effect cases, and how each check reads AWS's answer.
 - `verify/test_iam_policy_coverage.py` (offline): nothing escapes the pipeline. Every IAM or Organizations
   resource, policy data source and IAM-shaped module input sits in a root in `pipeline.ROOTS`; no resource
-  sets an inline policy the pipeline does not read; SCPs and RCPs reach check 1 under their own policy type
+  sets an inline policy the pipeline does not read; no script creates an IAM user, role or policy by API call
+  (the attendee users' policy escaped that way until #549); SCPs and RCPs reach check 1 under their own policy type
   and check 3 in both `pipeline.py` and `iam.rego`; and the boundary, with a check 4 case for each,
   explicitly denies every org-policy write.
 - `verify/test_iam_policy_structural.py` (E2E; conftest v0.71.1, terraform): Rego unit tests, then the

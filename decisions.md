@@ -1796,3 +1796,39 @@ committed Agent tools with the real toggle, rolls them out after a fake kagent d
 agent with whatever toolset was last rolled out. It covers these cases: guarded, found narrowed, output guard
 on, a list that does not hold, a model that never chains, an agent that stops answering, a kagent that never
 rolls, and an empty list.
+
+## 2026-10-25 · #549 · The attendee IAM user and its inline policy move into the cluster Terraform root
+
+Each cluster's attendee user (`wib-<name less watch-it-burn->`) got its inline policy from
+provisioning-agenticburn's `generate_attendee_aws.py`, which fleet.sh ran on every build, by `put_user_policy`.
+No plan held the document, so none of the pipeline's four checks saw it, and the user carried no boundary. Of
+the two options #549 named, this takes the second, because it also puts the user under the boundary and leaves
+no rendered copy to drift from what is applied:
+
+- **The cluster root creates the user, its policy and its access entry.** `aws_iam_user.attendee` carries the
+  canonical boundary, `force_destroy` (the key is minted outside Terraform) and `cluster=<name>` for the #458
+  sweeps. `aws_iam_user_policy.attendee_eks` keeps the same name and actions: DescribeCluster on the cluster's
+  own ARN and ListClusters, both now held to `aws:RequestedRegion`, which check 3 asks of every Allow.
+  ListClusters takes no resource ARN, so its `resource-star` is waived in `exceptions.md`. The EKS access entry
+  and the `AmazonEKSClusterAdminPolicy` association, which the generator's `--access-entries` made, are
+  resources too: the generator could not keep the entry without also writing the policy.
+- **fleet.sh mints only the key**, with `aws iam create-access-key` (`mint_attendee_key`), from
+  `bootstrap_student_aws` and from `aws-keys`. The secret never enters a state file. `aws-keys` no longer
+  creates users by range: it mints for clusters that are built, skips names with no user, appends to the
+  account CSV instead of overwriting it, and keeps the per-cluster copy bootstrap keeps. `WIB_ACCESS_ENTRIES`
+  is gone. fleet.sh no longer runs the generator.
+- **The first apply after this hands over users the generator made** (`adopt_attendee_iam_user`, before every
+  apply). If the cluster is gone, the leftover user is deleted, as #458 asks. If the cluster is live and its
+  state is here, the user, policy, entry and association are imported, so the student's key keeps working.
+  Anything else stops that cluster's apply, naming why.
+- **Check 3 holds users to the boundary as it holds roles.** `extract()` lists `aws_iam_user` with the roles,
+  and the role-boundary message now reads "every role and user". Check 4 gained six cases for the user. Check 2
+  sees a new identity policy, so the first pipeline run after this needs `--accept-new aws_iam_user_policy.attendee_eks`.
+- **Tests.** `verify/test_attendee_iam_user.sh` (offline) covers the mint, the hand-over and `aws-keys`.
+  `test_iam_policy_coverage.py` now also fails on any script that creates an IAM user, role or policy by API
+  call, or runs `generate_attendee_aws.py`; against the old fleet.sh it fails on the generator line.
+  `test_iam_policy_pipeline.py` and `test_iam_policy_structural.py` (E2E) hold the user's boundary and policy.
+- **Not yet seen live.** No terraform, conftest or AWS here, so the plan, the structural and effect checks, the
+  imports and the access entry's IAM propagation retry (the provider's, for a user created in the same apply)
+  are next checked on a cluster build, with `run-e2e.sh`. The generator stays in provisioning-agenticburn,
+  unused by this repo; retiring it there is that repo's change.
