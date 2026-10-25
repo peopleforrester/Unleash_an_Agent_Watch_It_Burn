@@ -49,8 +49,24 @@ bad()  { fail=$((fail+1)); rows="${rows}\n  FAIL ${1}: ${2}"; }
 
 # fleet.sh's STATE_DIR, so WIB_STATE_DIR moves the walkthrough with the verbs that call it.
 mapfile -t names < <(find "${STATE_DIR}" -name '*.tfstate' -exec basename {} .tfstate \; 2>/dev/null | sort)
-[[ -n "${ONLY}" ]] && mapfile -t names < <(printf '%s\n' "${names[@]}" | grep -E "$(echo "${ONLY}" | tr ',' '|')")
+# A cluster named in --only that matches no state file is a failure, not a silent omission. When every
+# apply failed before writing state (the 2026-10-24 KubeCon bring-up), the list narrowed to nothing and
+# the walk reported "0 healthy, 0 with problems, out of 0" and exited 0 (#570).
+missing=()
+if [[ -n "${ONLY}" ]]; then
+    IFS=',' read -ra wanted <<<"${ONLY}"
+    for w in "${wanted[@]}"; do
+        [[ -n "${w}" ]] || continue
+        printf '%s\n' "${names[@]}" | grep -qE -- "${w}" || missing+=("${w}")
+    done
+    mapfile -t names < <(printf '%s\n' "${names[@]}" | grep -E "$(echo "${ONLY}" | tr ',' '|')")
+fi
 echo "walking ${#names[@]} cluster(s)"
+for w in "${missing[@]}"; do
+    bad "${w}" "no-state"; note "${w}" "FAIL no-state (no ${STATE_DIR}/${w}.tfstate)"
+    [[ -z "${JSON}" ]] || printf '%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "${w}" "$(public_host_for "${w}")" \
+        fail no-state "" "" "" "" "" >> "${JSON}.tsv"
+done
 chat_done=0
 for name in "${names[@]}"; do
     host="$(public_host_for "${name}")"
@@ -132,5 +148,5 @@ PY2
     rm -f "${JSON}.tsv"; echo "  report: ${JSON}"
 fi
 echo
-echo "  ${pass} healthy, ${fail} with problems, out of ${#names[@]}"
+echo "  ${pass} healthy, ${fail} with problems, out of $(( ${#names[@]} + ${#missing[@]} ))"
 [[ "${fail}" -eq 0 ]] || { printf '%b\n' "${rows}"; exit 1; }
