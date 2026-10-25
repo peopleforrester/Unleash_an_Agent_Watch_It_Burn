@@ -1265,10 +1265,14 @@ bootstrap_terminal_auth() {
     # Set WIB_TERMINAL_USER / WIB_TERMINAL_PASSWORD to change it for a run.
     #
     # This is a deliberate trade, decided 2026-08-26. These are single-use clusters that live for the
-    # length of one workshop and are destroyed after; the URLs are not published; and the shell behind
-    # the credential is an unprivileged user with a scoped ClusterRole, not cluster-admin. The purpose
-    # of the credential is to stop a stranger wandering into somebody else's terminal, which it does.
-    # It is not protecting anything that outlives the session.
+    # length of one workshop and are destroyed after; and the URLs are not published. The purpose of the
+    # credential is to stop a stranger wandering into somebody else's terminal, which it does. It is not
+    # protecting anything that outlives the session.
+    #
+    # Since #584 the shell behind it also holds the attendee's AWS key, which has EKS cluster-admin (#549),
+    # and the agent can learn this shared password and log in through the console like any attendee
+    # (#593). That route is kept on purpose (question 782): the agent keeps its access so the clusters can
+    # be data-mined once the workshop is done. Do not "fix" it with a random password or a NetworkPolicy.
     # Role-split (#109): instructor clusters get sprouts, the attendee pool gets agentic.
     local cred; cred="$(terminal_creds_for "${name}")"
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl create secret generic terminal-auth \

@@ -2355,3 +2355,23 @@ hostname and wrote no pool file.
   apply and destroy of the cluster root in fleet.sh to passing it, checks the validation regex against every host
   `fleet.sh hosts` lists, and dry-runs `up` and `instructors up all` to see each cluster's host. No cluster was
   touched.
+## 2026-10-25 · #593 · question 782 · The agent keeps its route to the student's terminal
+
+**Question 782:** should attendee clusters get their own random terminal password, kept outside namespace agent
+(in student-creds, which #584 created), so the workshop agent cannot log in to the student's terminal?
+
+**Answer:** "Huh? No the agent should retake n access so we can data mine the clusters once done." Decided by
+Michael. Read as: no random password; the agent should retain its access, so the clusters can be data-mined
+once the workshop is done.
+
+**What it changes:**
+- **The takeover route stays open on purpose.** Attendee clusters keep the shared `agentic:agentic` login
+  in `agent/terminal-auth`. No ingress NetworkPolicy is added on web-terminal or the console. The agent can
+  read the Secret under C8's broad Role, or the password off `/brief`, and reach ttyd directly on `:7681` or
+  through the console. The terminal holds the attendee's cluster-admin AWS key (#549, #584) and is exempt from
+  restrict-agent-spawned-workloads. This is intended, not an open defect.
+- **The 2026-08-26 speakable-password trade stands.** Its comment in fleet.sh's `bootstrap_terminal_auth`
+  said the shell was "not cluster-admin". That has not been true since #584. The comment now says the shell
+  holds the cluster-admin key and the agent's route is kept, citing this question, so nobody closes it by mistake.
+- **Nothing else changes.** The provisioning harvester, brief.html, the run-of-show and the drift audit
+  are untouched. Not run on a cluster.
