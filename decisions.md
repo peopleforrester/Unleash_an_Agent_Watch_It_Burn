@@ -2068,3 +2068,19 @@ PARTIAL and left the tally for its own issue. Row 6 now reads READY, and the tal
 - **Row 2 and PROJECT_STATE.md follow.** Row 2's Open cell said the run-of-show listed no admin-cluster C7
   fallback; it now names `fallback.curl.sh`, in the run-of-show's fallback table. PROJECT_STATE.md's copy of
   the tally is updated with it.
+## 2026-10-25 · #569 · A test holds #516's wording on C7's control
+
+`verify/test_c7_control_comments.py` holds the last criterion of #516: no comment in its files, in
+resources.yaml's Agent tools comment or in toggle-mcp-authz-on.sh names toolNames as C7's only control.
+
+- **A comment block that calls toolNames a control must name the admin cluster's gateway rule too.** So must
+  one that says "the C7 control is" or "the control is" about C7's tools. The phrasings #516 removed ("actually
+  IN PATH", "nothing flips it", "toolNames stays the control", "The MCP guard patches") and "only control" are
+  refused outright. Code files are read for comments and docstrings, resources.yaml for its Agent tools
+  comment only, and decisions.md for #516's entry only, read as one block because its opening paragraph names
+  both controls for the bullets below it.
+- **Two comments in toggle-mcp-authz-on.sh reworded.** Below the WHY block it still said "the C7 control is
+  whether `evil-mcp` is wired" and "the control is its toolNames allowlist" with no word of the admin
+  cluster. Both now say this is the script's control, C7's on a workshop cluster, and point at the gateway rule.
+- **Held offline.** The pre-#516 comments are fixtures the check must refuse. Against the files as they were
+  before #516 it fails four checks, and against the toggle script as #516 left it, one.
