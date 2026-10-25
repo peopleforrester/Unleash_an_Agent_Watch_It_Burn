@@ -479,15 +479,24 @@ is merely slow rather than rebuilding:
   roster clusters at plan with "no matching IAM Policy found" after the lab VPC is
   already billing (#526). Apply it once per account, with that account's own state:
   `. ./event.sh && terraform -chdir=../../org/boundary init && terraform -chdir=../../org/boundary apply -state=states/accen-dev.tfstate -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}"`.
-  `./fleet.sh preflight 1` reports it per account, and on a FAIL prints this line for
-  the account that is missing it.
+  The preflight in the next step reports it per account, and on a FAIL prints this
+  line for the account that is missing it.
+- [ ] **Accounts and quota resolve, before anything is brought up (#534):**
+  `WIB_ATTENDEE_ACCOUNTS=accen-dev ./fleet.sh preflight 3`. It is read-only, so it
+  runs before the bring-up commits any money. It must end `PREFLIGHT GREEN`; on a
+  FAIL, fix what it names (it prints the apply line for a missing boundary or lab
+  VPC) and run it again. It is scoped to accen-dev because every roster cluster lives
+  in that one account (`roster.tsv`); the default account list also names the four
+  student accounts, which have no lab VPC for this session, so the unscoped form
+  fails on them. The count is clusters per account, and the roster is three
+  clusters, so the quota check covers all three. It also prints the `event` tag this
+  run bills to.
 - [ ] **Platform up on AWS.** Bring up the roster (the community cluster and both
   admin clusters) on the KubeCon delivery accounts and region:
   `./fleet.sh instructors up all`. The attendee pool is not provisioned for this
   session. Delivery identity (which AWS accounts, region, and the `event` tag) is
   settled on #454; confirm it is the KubeCon value, not the Portland one, before
   bringing anything up.
-- [ ] **Accounts and quota resolve:** `./fleet.sh preflight 1`.
 - [ ] **The router carries the roster, and only the roster (#502).** `instructors up`
   already wrote the routes table, but with every attendee cluster that has state on
   this machine. Write it again with the roster alone, then read the live router's own
