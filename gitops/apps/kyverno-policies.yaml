@@ -27,8 +27,9 @@ spec:
       name: require-resource-limits
       jsonPointers:
         - /spec/validationActions
-    # Same live-toggle pattern for the R2 registry restriction (C2 villain image): default Audit in the
-    # manifest so R1 deploys, flipped to Deny on R2/R3 via toggle-kyverno-enforce.sh.
+    # Same live-toggle pattern for the registry restriction (C2 villain image): default Audit in the
+    # manifest so the image deploys until someone flips it, the student on an attendee cluster and
+    # fleet.sh on an admin cluster, both via toggle-kyverno-enforce.sh.
     - group: policies.kyverno.io
       kind: ValidatingPolicy
       name: restrict-image-registries
@@ -38,8 +39,9 @@ spec:
     syncOptions:
       # RespectIgnoreDifferences: honor the validationActions ignoreDifferences on SYNC too, not just on diff.
       # Without it, any sync of this app re-applies the manifest's Audit and reverts the live
-      # Audit->Enforce toggle (found 2026-07-10: R2 armed to Enforce then silently reverted to Audit during
-      # ArgoCD's initial-sync churn, so admission stopped blocking and R2 "deployed freely").
+      # Audit->Enforce toggle (found 2026-07-10: an armed instructor cluster flipped to Enforce then silently
+      # reverted to Audit during ArgoCD's initial-sync churn, so admission stopped blocking and the cluster
+      # "deployed freely").
       - RespectIgnoreDifferences=true
     automated:
       prune: true

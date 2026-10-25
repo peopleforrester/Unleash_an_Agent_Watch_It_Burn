@@ -26,8 +26,10 @@ current workshop in its own table, so only the numbered names are held against i
 from __future__ import annotations
 
 import pathlib
-import re
 import sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from round_shapes import DATED, NUMBERED_SHAPES, ROUND_SHAPES  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 
@@ -44,20 +46,14 @@ EXEMPT = {
 # Routed recordings, kept verbatim: they say what was said on the day, rounds included.
 TRANSCRIPTS = "transcripts/"
 
-# The vocabulary that must not describe the current workshop: the numbered names, then the shorthand. The
-# bare R1/R2/R3 is matched in capitals only, so a CSS variable like `--r3` or a cluster suffix stays out of it.
-NUMBERED = r"\b(?:Rounds?\s*[123]\b|round-[123]\b|watch-it-burn-r[0-9]|round[123]\.agenticburn)"
-SHORTHAND = (r"(?-i:\bR[123]\b)|\br[123](?:/r[123])+\b|\bthree[- ]rounds?\b|\bper-round\b|\bcross-round\b"
-             r"|\bround (?:table|toggles?|state)\b|\bround-toggle\b")
-ROUND_SHAPES = re.compile(f"{NUMBERED}|{SHORTHAND}", re.I)
-NUMBERED_SHAPES = re.compile(NUMBERED, re.I)
+# The vocabulary that must not describe the current workshop: the numbered names, then the shorthand. It
+# lives in round_shapes.py, which test_round_names_retired.py holds the fleet scripts and gitops to as well.
 
 # Public prose held to the numbered names only (see the docstring).
 PUBLIC_PROSE = {"docs/ABSTRACT.md"}
 
 # A dated measurement or verification is a historical fact even inside a current doc, so a line that
-# carries a date is allowed to name the cluster it was measured on.
-DATED = re.compile(r"\b20[0-9]{2}-[01][0-9]-[0-3][0-9]\b")
+# carries a date is allowed to name the cluster it was measured on (DATED).
 
 failures: list[str] = []
 

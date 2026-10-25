@@ -36,8 +36,8 @@ The headline gaps are at the bottom under **"Must fix before ready."**
   Kyverno in Audit, so the student installs each control).
 - ✅ **One-command roster setup**: `fleet.sh instructors up [role|owner]` provisions, bootstraps the profile
   the roster names, and flips Kyverno to Deny on `admin` (`arm_infra_guardrails`). The guard-proxy guards
-  start off on every profile. `infra/setup-instructor-cluster.sh` predates the roster and still takes a
-  round number.
+  start off on every profile. `infra/setup-instructor-cluster.sh <roster-cluster-name>` bootstraps and arms
+  one roster cluster that was provisioned bare, asking `fleet.sh` for its role and profile (#560).
 
 ## 4. Challenges (C1–C7) — attack / defense / fallback / packaged
 | # | Challenge | Attack prompt | Defense + toggle | Fallback | Packaged? |

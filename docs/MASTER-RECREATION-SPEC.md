@@ -359,7 +359,7 @@ The demonstrable payload: agent attack scenarios paired with the platform/AI gua
 
 ### The three kinds of cluster
 
-(See Part II for the cluster table; `challenges/LAB-TEXT.md` is what a student reads on each.) Profile selection is by bootstrap argument `deploy-full-idp.sh burn|attendee|admin`. `burn` is the Community cluster: no Kyverno, no Falco, no NetworkPolicy, no KubeArmor policy (the KubeArmor engine runs with none loaded), and the roster gives it `pod_pids_limit=-1`. `attendee` is every student cluster: the full platform with `network-policies` and `kubearmor-policies` omitted and Kyverno left in Audit, so C1 to C3 land until the student installs each control. `admin` is the presenters' clusters: every control armed, and `fleet.sh` flips Kyverno to Deny after bootstrap. `full` is still accepted; since #281 it also omits the C1 and C3 controls. `fleet.sh instructors up [role|owner]` is the one-command path for the roster (provision, bootstrap by role, arm `admin`). `infra/setup-instructor-cluster.sh` predates the roster and still takes a round number.
+(See Part II for the cluster table; `challenges/LAB-TEXT.md` is what a student reads on each.) Profile selection is by bootstrap argument `deploy-full-idp.sh burn|attendee|admin`. `burn` is the Community cluster: no Kyverno, no Falco, no NetworkPolicy, no KubeArmor policy (the KubeArmor engine runs with none loaded), and the roster gives it `pod_pids_limit=-1`. `attendee` is every student cluster: the full platform with `network-policies` and `kubearmor-policies` omitted and Kyverno left in Audit, so C1 to C3 land until the student installs each control. `admin` is the presenters' clusters: every control armed, and `fleet.sh` flips Kyverno to Deny after bootstrap. `full` is still accepted; since #281 it also omits the C1 and C3 controls. `fleet.sh instructors up [role|owner]` is the one-command path for the roster (provision, bootstrap by role, arm `admin`). `infra/setup-instructor-cluster.sh <roster-cluster-name>` does the bootstrap and arming for one roster cluster that was provisioned bare, asking `fleet.sh` for its role and profile.
 
 ### Per-Beat Spec
 
@@ -638,7 +638,6 @@ The decisions that span subsystems, with the one-line why. Full detail in each P
 
 ### Open items (from the B1 to B15 backlog and READINESS gaps)
 
-- **`infra/setup-instructor-cluster.sh` still takes a round number** (`<name> <round>`). The roster path, `fleet.sh instructors up`, bootstraps and arms by role instead; the script has not been brought in line.
 - **The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh`,** not GitOps (need a Pod Identity association and a concrete namespace). Materializing them into the app-of-apps is the open follow-up.
 - **agentgateway `mcpAuthorization` CEL path is unproven on the OSS build** (`BUILD-SPIKE.md` ships TODO); the deployed beat-3 control is the kagent `toolNames` allowlist. beat-03 stays on the recorded-fallback gate until the spike passes.
 - **The AWS Load Balancer Controller install** (the Pod Identity role exists) would replace the Classic ELB on `console` with an ip-target NLB and activate the inert party-app ALB Ingresses.

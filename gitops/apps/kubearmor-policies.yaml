@@ -4,8 +4,9 @@
 #
 # Wave 4: after the KubeArmor operator + CRDs (kubearmor app, wave -6), the agent namespace (namespaces,
 # wave -10), and the workshop-mcp workload (ai-layer, wave 3). ServerSideApply + retry tolerate the CRD/pod
-# not being ready on the first reconcile. Only the FULL app-of-apps pulls this directory; BURN (R1) omits
-# it, so R1 gets no C3 enforcement even if the KubeArmor engine is present.
+# not being ready on the first reconcile. Only the ADMIN app-of-apps pulls this app. The attendee and full
+# profiles exclude it, because it is the C3 control a student installs as the fix (#281), and BURN (the
+# community cluster) omits it, so that cluster gets no C3 enforcement even though the KubeArmor engine runs.
 #
 # This is the SOLE C3 inline-prevention block since Tetragon was retired 2026-08-30. KubeArmor's enforcer
 # was proven to engage on our AL2023/containerd nodes (2026-07-18 and 2026-08-30, both live). Enforcement

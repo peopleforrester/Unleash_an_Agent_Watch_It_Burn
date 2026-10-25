@@ -1,5 +1,5 @@
 # ABOUTME: ArgoCD Application for the AI layer's OTel Instrumentation CR (gitops/ai-layer-otel).
-# ABOUTME: Full profile only; the burn (Round 1) app-of-apps omits it by not listing it in its include.
+# ABOUTME: Every profile pulls it; the burn app-of-apps, which syncs an explicit include list, names it there.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

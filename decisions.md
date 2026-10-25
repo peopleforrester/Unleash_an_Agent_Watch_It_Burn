@@ -2177,3 +2177,30 @@ without this exact sentence in the warning. Collecting more, or changing the wor
 and a change to both in the same commit. The sentence also covers the prompts that attendee clusters have
 sent to the instructor org since #242, which the warning did not mention before. "To improve it" names the
 purpose the kept prompts are used for.
+## 2026-10-25 · #560 · fleet.sh, setup-instructor-cluster.sh and the gitops Applications describe roles, not rounds
+
+**setup-instructor-cluster.sh was kept and made to take a roster cluster, not retired.** `fleet.sh instructors
+up [role|owner]` provisions, bootstraps and arms in one step, but a roster cluster provisioned bare
+(`WIB_NO_BOOTSTRAP=1`) or whose bootstrap failed still needs the bootstrap and the Kyverno flip on their own,
+and that is what the script does. It now takes `<roster-cluster-name> [aws-profile]` and asks `fleet.sh` for
+the role (`role_of_instructor_name`), the profile (the new `bootstrap_profile_for_role`, which
+`cmd_instructors` also uses) and the default account (`account_for_role`), so it cannot disagree with the
+fleet. It refuses an attendee name, a non-fleet name and a bare number second (the old round argument, which
+would otherwise be read as an AWS profile named "2") before touching AWS.
+
+**fleet.sh.** The usage text says attendees bootstrap `attendee`, the community cluster `burn` and each admin
+cluster `admin`. `WIB_ACCOUNT_R1..R3`, which nothing read, the `rounds` selector alias, the unused round
+parameter of `bootstrap_one` and the `BOOTSTRAP_ROUND` spec field (now the role column) are gone. Comments
+that described a cluster as a round now say community or admin. Comments that record where something was
+measured keep the cluster name of the day, and the converge loop's retry rounds are not the round model.
+
+**The gitops Application comments** that said R1 or round 2 now name the community or admin cluster, and two
+that were wrong were corrected: `ai-layer-otel` is pulled by every profile, burn included, and
+`kubearmor-policies` by the admin profile only (full and attendee exclude it since #281).
+
+**Tests.** The shapes `verify/test_docs_current.py` held the markdown to moved into `verify/round_shapes.py`.
+`verify/test_round_names_retired.py` sweeps fleet.sh, the setup script and every file under `gitops/apps`
+and `gitops/bootstrap` for round wording (retired cluster and host names, and dated lines, are history and
+pass), pins the usage text, the knobs and the role-to-profile map, and runs the setup script with failing
+`aws`/`kubectl` shims. The rest of the repo's non-markdown round wording (the ai-layer, policies, challenges
+and images) is out of this issue's scope and filed as a follow-up. Not run on a cluster here.
