@@ -102,10 +102,11 @@ The provisioning process will attach public URLs to each cluster:
 1. Provision a `watch-it-burn-*` cluster (tagged per above).
 2. Expose the demo Service as `type: LoadBalancer` with the LB tag annotation above.
 3. Read the LB hostname: `kubectl --context <ctx> -n <ns> get svc <svc> -o jsonpath='{.status.loadBalancer.ingress[0].hostname}'`.
-4. Point a subdomain at it via the existing tool:
-   `python3 infra/dns/set-demo-dns.py --apply burn=<lb-host> wall=<lb-host> haiku=<lb-host> ...`
-   (CNAME `*.agenticburn.com` -> the AWS ELB hostname; the tool merges so the apex/parking
-   records survive. Mutation needs Michael's go per the namecheap-api rule.)
+4. Point a host at it with a line in the apex router's `routes.map` (`<host>  http://<lb-host>`),
+   not a DNS record: every `<name>.agenticburn.com` reaches the router through the one
+   `*.agenticburn.com` wildcard. `infra/dns/set-demo-dns.py` writes the zone's own records (the
+   wildcard, `_acme-challenge`, Railway service domains); mutation needs Michael's go per the
+   namecheap-api rule.
 
 The cluster -> LB-hostname -> `*.agenticburn.com` mapping is the linkage; the
 automation that runs steps 3-4 per cluster is the deferred provisioning work.

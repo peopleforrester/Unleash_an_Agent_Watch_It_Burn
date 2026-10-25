@@ -1,44 +1,67 @@
-<!-- ABOUTME: Demo-URL DNS for the workshop on agenticburn.com (Namecheap). Cluster URLs now; student -->
-<!-- ABOUTME: provisioning deferred. Records are written post-provision via set-demo-dns.py (--apply). -->
+<!-- ABOUTME: DNS records on agenticburn.com (Namecheap) and the tool that writes them, set-demo-dns.py. -->
+<!-- ABOUTME: Cluster hosts need no record; the tool is for the wildcard and Railway service domains. -->
 
-# Demo DNS (agenticburn.com)
+# DNS on agenticburn.com
 
-The workshop's facilitator-driven cluster URLs live on **agenticburn.com** (Namecheap). Student
-self-provisioning DNS is **deferred**; this covers the demo/instructor clusters only.
+agenticburn.com is on Namecheap DNS. Its mail is Namecheap email forwarding: MX resolves to
+`eforward1-5.registrar-servers.com` (dig, 2026-10-08), which Namecheap synthesizes from the zone's
+`EmailType` rather than keeping as host records.
 
-## URL scheme (CNAME -> the cluster's AWS LoadBalancer hostname)
+## What needs a record
 
-| URL | Points at |
-|---|---|
-| `burn.agenticburn.com` | the active Cluster 1 (no-guardrails) spare; repoint as spares rotate |
-| `wall.agenticburn.com` | Cluster 2 (CNCF controls on) |
-| `haiku.agenticburn.com` | instructor Cluster 3, Haiku tier |
-| `sonnet.agenticburn.com` | instructor Cluster 3, Sonnet tier |
-| `opus.agenticburn.com` | instructor Cluster 3, Opus tier |
+Cluster hosts need none. `<name>.agenticburn.com` for every cluster, and `grafana-<name>` beside it, is a
+line in the apex router's `routes.map` (Caddy on Railway, `peopleforrester/apex-agenticburn`), reached
+through the one `*.agenticburn.com` wildcard. See `docs/external-apps.md` and
+`docs/MASTER-RECREATION-SPEC.md` (Recreation Steps 6 and 7).
 
-Each is a CNAME to the EKS LoadBalancer hostname (an AWS `*.elb.<region>.amazonaws.com` name), which
-only exists after the cluster is provisioned. Until then there is nothing to point at.
+Records are written only for what Railway serves under its own custom domain: the apex and wildcard, the
+`_acme-challenge` CNAME that lets Railway issue the wildcard certificate, and a service such as
+`monitoring` or `provisioning`. Railway needs a CNAME **and** its `_railway-verify.<label>` TXT for each;
+with only the CNAME the domain resolves and returns 404.
 
-## How to write the records (post-provision, with Michael's go)
+## How to write records (with Michael's go)
 
 ```bash
-# dry-run (default): prints the exact record set, changes nothing
-python3 infra/dns/set-demo-dns.py burn=<lb-host> wall=<lb-host> haiku=<lb-host>
+# dry run (default): reads the zone, prints what it would replace and the full record set, changes nothing
+python3 infra/dns/set-demo-dns.py monitoring=<service>.up.railway.app \
+    TXT:_railway-verify.monitoring=<railway token>
 # write it (mutation; only with Michael's explicit go, per the namecheap-api rule)
-python3 infra/dns/set-demo-dns.py --apply burn=<lb-host> ...
+python3 infra/dns/set-demo-dns.py --apply monitoring=<service>.up.railway.app \
+    TXT:_railway-verify.monitoring=<railway token>
 ```
 
-The tool reads the current records first and **merges**, so the existing parking/apex records survive
-(`setHosts` replaces the whole record set, so a naive write would wipe them). Credentials come from
-`~/secrets/dns/namecheap.env`; nothing is hardcoded.
+Each argument is `[TYPE:]name=value`. TYPE is `CNAME` (the default), `A` or `TXT`; name is relative to the
+domain, `*` for the wildcard. `--domain` picks another Namecheap domain (default `agenticburn.com`).
+
+An upsert replaces what would conflict at that name: a CNAME replaces every record there, an A replaces A
+and CNAME records, a TXT replaces TXT and CNAME records. The dry run lists each record it would replace.
+The tool refuses the apex (`@`, which holds the router, SPF and mail) and refuses to replace an MX record;
+edit those by hand.
+
+## Why the write is shaped like this
+
+`setHosts` replaces every record in the zone; anything not sent is deleted. `--apply` therefore follows the
+namecheap skill's `dns-safety.md`, and refuses to write if it cannot do any step (#581):
+
+1. It reads the zone with `getHosts` immediately before the write and saves that response to
+   `~/secrets/dns/backups/agenticburn.com-<UTC time>-getHosts.xml` (mode 0600) before sending anything.
+2. It sends every existing record back verbatim, MX records with their `MXPref`, and sends the zone's
+   `EmailType` back as read. An omitted EmailType resets the mail configuration, which on agenticburn.com
+   would turn forwarding off. A zone whose `getHosts` shows no EmailType is not written.
+3. It writes with a url-encoded POST, never a GET query string.
+4. It reads the zone again and fails, naming the backup, if any record was lost, a new one is missing, or
+   EmailType changed. It checks MX with `dig` against `dns1.registrar-servers.com` before the write and
+   again once the new records are published there, and fails if MX changed. With forwarding, MX is not in
+   the host list, so only `dig` sees it.
+
+Credentials come from `~/secrets/dns/namecheap.env` (`--env-file` to override); nothing is hardcoded.
 
 ## Gotchas / verify-at-build
 
 - **IP allowlist:** the `ClientIp` must be a Namecheap-whitelisted IP that matches where the call runs
-  (the netcup VPS `152.53.192.39` and Michael's laptop are whitelisted). Run from there.
-- **TLS:** once a URL resolves to the LB, issue certs with cert-manager + Let's Encrypt (HTTP-01 per
-  host is simplest; DNS-01 via a Namecheap webhook solver is the wildcard option). Not wired yet.
+  (the netcup VPS `152.53.192.39` and Michael's laptop are whitelisted). Run from there. `dig` must be
+  installed there too.
+- **Propagation:** Namecheap publishes a minute or two after the write; the tool waits up to
+  `--publish-timeout` seconds (default 300) for the new records on the authoritative server. Check with
+  `dig +short <host> @dns1.registrar-servers.com`, not a public resolver, which caches the old answer.
 - **Mutation safety:** `--apply` changes live DNS; per the namecheap-api rule it needs explicit go.
-- **Tag the LB too:** when the demo Service is exposed as `type: LoadBalancer`, add the
-  `aws-load-balancer-additional-resource-tags: project=watch-it-burn,...` annotation so the ELB is
-  tagged ours in the shared account. See `infra/TAGGING.md` (the full naming/tagging convention).
