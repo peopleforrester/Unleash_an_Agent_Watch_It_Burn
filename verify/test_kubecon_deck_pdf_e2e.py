@@ -1,6 +1,7 @@
 # ABOUTME: Runs scripts/kubecon-deck-pdf.py in Playwright's Chromium against throwaway reveal.js decks: a 16:9
 # ABOUTME: deck exports and checks clean, and a stale, non-16:9, cut-naming or untitled deck is refused (#449).
 # SUITE: e2e
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The rendered half of verify/test_kubecon_deck_pdf.py.
 
 Each case is a small git repo shaped like a rounds-agenticburn checkout (origin set to that repo,

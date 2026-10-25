@@ -2084,3 +2084,41 @@ resources.yaml's Agent tools comment or in toggle-mcp-authz-on.sh names toolName
   cluster. Both now say this is the script's control, C7's on a workshop cluster, and point at the gateway rule.
 - **Held offline.** The pre-#516 comments are fixtures the check must refuse. Against the files as they were
   before #516 it fails four checks, and against the toggle script as #516 left it, one.
+## 2026-10-25 · #572 · The gate's E2E command is a cluster-free tier with pinned tools fetched into verify/.tools
+
+The 2026-10-25 #557 entry above said to revisit the E2E line once there was an E2E tier that needs no
+cluster. There is one now. AGENTS.md declares `E2E command: \`bash verify/run-e2e-tools.sh\``. That script
+checks its prerequisites, fetches the pinned binaries, runs the offline suite, then runs every test marked
+`# E2E TIER: tools`. Hecaton's heavy gate runs the E2E command instead of the Test command, so the offline
+suite runs inside it and main is still gated on everything it was gated on before. run-e2e.sh is
+unchanged, and it still runs the tier tests during a cluster build, since they keep their `# SUITE: e2e` line.
+
+- **Pinned tools, a new dev dependency.** `verify/e2e-tools.lock` pins the linux/x86_64 kyverno CLI v1.19.1,
+  conftest v0.71.1, terraform v1.15.6, kubectl v1.36.2 and helm v4.2.1. Those are VERSIONS.lock's versions,
+  and kyverno is the deployed v1.19.1, not the issue's v1.19.0 (see the #523 entry). Each SHA-256 was
+  checked against the release's own checksum file on 2026-10-25. `verify/fetch-e2e-tools.sh` downloads them
+  into `verify/.tools`, which git ignores, and refuses any download whose checksum does not match. It
+  reuses a cached download only while its checksum still matches. Any failed download, mismatch or other
+  platform exits 1 and names every failure. A run cannot install into hecaton's root-owned toolchain
+  (#523), so the tier fetches the tools itself.
+- **The tier is 12 tests.** test_kyverno_cel_policies, test_iam_policy_structural, test_terraform_lock_init,
+  test_service_naming_render, test_ai_layer_rollout and test_enforce_floor use the fetched binaries, with
+  network to ghcr.io, registry.terraform.io and the chart repositories. test_audience_page_e2e,
+  test_party_refresh_rate and test_storefront_thinking_e2e use the host's Node 24. test_mobile_titles_e2e,
+  test_kubecon_deck_pdf_e2e and test_topic_classifier get Playwright, segno and llm-guard pinned through uv.
+  The other `# SUITE: e2e` tests need CONTEXT, AWS or Datadog, and stay by hand.
+- **No cluster can be reached.** Each tier test runs with CONTEXT, IAM_PIPELINE_*, AWS_PROFILE and the AWS
+  key variables unset and KUBECONFIG=/dev/null. KYVERNO_CLI, CONFTEST and TERRAFORM point at the fetched
+  binaries, and those binaries come first on PATH.
+- **Held offline.** `verify/test_e2e_tools_tier.py` checks that the pins match VERSIONS.lock and the tests'
+  wanted versions, that verify/.tools is ignored and untracked, and that every tier test is also
+  `# SUITE: e2e` and reads no CONTEXT, IAM_PIPELINE_* or Datadog key. It then runs the fetch with a stubbed
+  curl: matching artifacts install, a second run downloads nothing, a tampered cache is fetched again, and
+  a mismatch or missing artifact exits 1 with both reasons and no binary left behind. run-e2e-tools.sh is
+  also shown to stop before any test on a failed fetch or a Node other than 24. Removing the checksum
+  comparison, or the stop on a failed fetch, turns it red. `verify/test_gate_commands.py` now requires that
+  exact E2E line, and still forbids run-e2e.sh on it.
+- **Run on the dispatch host, 2026-10-25.** `bash verify/run-e2e-tools.sh` exited 0: the fetch took about
+  10 s, the offline suite ran 140 tests green, and all 12 tier tests passed. Run one by one, the tier tests
+  took about 6 minutes; test_iam_policy_structural (about 100 s) and test_terraform_lock_init (about 70 s)
+  are the slowest.

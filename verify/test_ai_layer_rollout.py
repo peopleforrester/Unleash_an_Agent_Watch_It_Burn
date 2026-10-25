@@ -1,6 +1,7 @@
 # ABOUTME: Render gate for #252: every generated ConfigMap and Secret in gitops/ai-layer carries a content
 # ABOUTME: hash, every workload reference resolves to it, and a content change changes the workload spec.
 # SUITE: e2e (needs kubectl: every check reads the `kubectl kustomize` render of gitops/ai-layer)
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why. A change to lab.html, console.conf or proxy.py used to reach a running cluster only after someone
 # deleted the pod by hand (four consoles cycled by hand on 2026-09-06). With the hash suffix, kustomize

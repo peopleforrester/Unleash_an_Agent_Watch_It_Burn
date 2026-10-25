@@ -1,6 +1,7 @@
 # ABOUTME: Every AI-layer Deployment that names its service in OTEL_RESOURCE_ATTRIBUTES also pins it in
 # ABOUTME: OTEL_SERVICE_NAME, checked on the kustomize render. The source checks are in test_service_naming.py.
 # SUITE: e2e (needs kubectl: the pin is checked on the `kubectl kustomize` render of gitops/ai-layer)
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why. OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel operator injects
 # it from the Deployment name at admission. Without the pin the rename is applied, synced, running, and

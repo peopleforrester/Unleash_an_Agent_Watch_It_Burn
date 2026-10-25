@@ -1,6 +1,7 @@
 # ABOUTME: Runs the storefront's own splitThinking in node on Nova's recorded replies, so the reply the console
 # ABOUTME: bubble shows is proven to carry no <thinking> text, not just pattern-matched in Python (#530).
 # SUITE: e2e
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The executed half of the console checks in verify/test_kubecon_probe.py.
 
 The page's real THINK_RE, THINK_TAG_RE and splitThinking, cut from burritbot.html, run in a node vm. Each

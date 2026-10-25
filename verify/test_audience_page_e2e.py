@@ -1,6 +1,7 @@
 # ABOUTME: Runs the storefront's own init code in node against event.js, and re-renders the projector QR
 # ABOUTME: with the pinned segno, so the Feedback href and the QR are proven, not just pattern-matched (#451).
 # SUITE: e2e
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The executed half of verify/test_audience_event.py.
 
 1. The page's real `(function init(){...})();` block, cut from burritbot.html, runs in a node vm with a

@@ -1,6 +1,7 @@
 # ABOUTME: Runs every Kyverno CEL policy through the Kyverno CLI against fixture requests: the villain image,
 # ABOUTME: Beat 1's limit-less Deployment, drift by agent-sa, the floor, and a real signed image on ghcr.io.
 # SUITE: e2e (needs the kyverno CLI v1.19.1 on PATH, and network to ghcr.io for the signature check)
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why (#206). The policies moved from kyverno.io/v1 ClusterPolicy patterns to CEL ValidatingPolicy and
 # ImageValidatingPolicy. A YAML render check can say a field is present; it cannot say an expression

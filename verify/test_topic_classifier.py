@@ -1,6 +1,7 @@
 # ABOUTME: Runs LLM Guard's real BanTopics scanner (llm-guard 0.3.16, the image's version) over every ask the
 # ABOUTME: on-topic guard's phrase step leaves to it (#455): off-topic paraphrases must refuse, vague menu asks pass.
 # SUITE: e2e
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The executed half of verify/test_topic_guard.py.
 
 The phrase lists decide the canonical asks. Everything with neither an off nor an on phrase goes to BanTopics,

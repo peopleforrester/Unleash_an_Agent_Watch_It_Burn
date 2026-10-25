@@ -1,6 +1,7 @@
 # ABOUTME: Renders burritbot.html in headless Chromium at phone widths and measures the title bar and the
 # ABOUTME: chat card title, so "the stacking of the title" (#387) is proven by geometry, not by a CSS grep.
 # SUITE: e2e
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The rendered half of verify/test_mobile_titles.py.
 
 At each width the page is loaded from the file with every network request aborted (only layout is under

@@ -1,6 +1,7 @@
 # ABOUTME: Every party page moves at the same speed on a 60 Hz screen and a 144 Hz one, measured by running
 # ABOUTME: each page's script in verify/party-refresh-rate.js. The structural checks are in test_party_apps.py.
 # SUITE: e2e (needs node: the measurement runs each page's script)
+# E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why (#393). Positions advanced by a fixed `vx` per FRAME, so speed was a function of the viewer's refresh
 # rate: two creatures that start together ended 236 px apart after three simulated seconds. After the fix,

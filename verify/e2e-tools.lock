@@ -1,0 +1,12 @@
+# ABOUTME: The pinned linux/x86_64 binaries the cluster-free E2E tier fetches into verify/.tools (#572), each with
+# ABOUTME: the SHA-256 of the artifact as the release publishes it. Versions are VERSIONS.lock's; a test holds that.
+#
+# One tool per line: name, version, SHA-256 of the downloaded file, URL, and the archive member that is the
+# binary ("-" when the URL is the binary itself). Checked against each release's own checksum file on
+# 2026-10-25: kyverno checksums.txt, conftest checksums.txt, terraform_1.15.6_SHA256SUMS, kubectl.sha256 and
+# helm-v4.2.1-linux-amd64.tar.gz.sha256sum.
+kyverno    v1.19.1  b38228f367fc0fdc2b08f4c83ea50ac5f16c60ff8d62d76a66157c33c47b70ae  https://github.com/kyverno/kyverno/releases/download/v1.19.1/kyverno-cli_v1.19.1_linux_x86_64.tar.gz  kyverno
+conftest   v0.71.1  c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985  https://github.com/open-policy-agent/conftest/releases/download/v0.71.1/conftest_0.71.1_Linux_x86_64.tar.gz  conftest
+terraform  v1.15.6  a7150d3b0e1b5c466ad42e8c499954a3c54645f8b56b385fa025d34f7e88faa9  https://releases.hashicorp.com/terraform/1.15.6/terraform_1.15.6_linux_amd64.zip  terraform
+kubectl    v1.36.2  1e9045ec32bea85da43de85f0065358529ea7c7a152eca78154fba5b58c27d82  https://dl.k8s.io/release/v1.36.2/bin/linux/amd64/kubectl  -
+helm       v4.2.1   479dca836e5b45e8bd222400c5591b0e3a647378f03ff96597180db97c17fdae  https://get.helm.sh/helm-v4.2.1-linux-amd64.tar.gz  linux-amd64/helm
