@@ -1597,3 +1597,17 @@ are on: when the Application `app-of-apps-admin` exists (gitops/bootstrap/admin)
 
 `verify/test_c7_gateway_toggle.py` runs the entrypoint's real toggles against a fake kubectl for the admin,
 workshop, unreachable and stale-read cases, and checks the two entrypoint copies are byte-identical.
+
+## 2026-10-25 · #527 · A provisioning verb fails when any cluster's build failed, whatever the verify tail finds
+
+At the KubeCon bring-up on 2026-10-24 `instructors up all` failed terraform apply on both roster clusters and
+exited 0. `_provision_spec_fleet` read the failure ledger with `report_failures || true`, which left the exit
+code to the verify pass, and the walkthrough, finding no state file for either cluster, reported "0 with
+problems, out of 0". The ledger after the build now sets the return value, and the routes, registration and
+verify tail still runs for the clusters that did build. The ledger also holds bootstrap failures and an
+account slice skipped because its lab VPC is missing, and each of those now fails the verb too, since the
+fleet did not come up either way. The function is shared, so `up`, `scale` and `up-fleet` get the same
+contract as `instructors up`. One result of this is that `scheduled-up.sh` now stops at its instructors stage
+when a roster apply fails, rather than going on to build the attendee pool. The offline
+`verify/test_fleet_apply_failure_exit.sh` uses the real `run_pool`/`up_one` with a terraform shim whose apply
+fails, and checks the exit code with the tail on and with it off.

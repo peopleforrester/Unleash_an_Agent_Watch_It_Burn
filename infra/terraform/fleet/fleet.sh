@@ -1324,11 +1324,17 @@ _provision_spec_fleet() {
         [[ -n "${WIB_SERIAL}" ]] && wait
     done
     wait
-    report_failures || true
+    # A cluster that failed its apply or bootstrap, or an account slice skipped for want of a VPC, means
+    # the fleet did not come up, and the return value has to say so whatever the tail below finds. This
+    # used to be `|| true`, leaving the exit code to the verify pass alone. At the KubeCon bring-up on
+    # 2026-10-24 every apply failed before writing state, the walkthrough found "0 with problems, out of
+    # 0", and `instructors up` exited 0 (#527). The tail still runs for the clusters that did build.
+    local _spec_rc=0
+    report_failures || { _spec_rc=1; log "provision: FAILURES above; the fleet is NOT up"; }
     # The clusters this run built are PROVISION_SPEC's keys. "$@" is the registration argument list,
     # which for 'instructors up <owner>' is an owner name, not a cluster: the first live run after #251
     # waited ten minutes for a console named "" and then verified a cluster called "michael".
-    local built=("${!PROVISION_SPEC[@]}") _spec_rc=0
+    local built=("${!PROVISION_SPEC[@]}")
     if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
         wait_for_console_lbs "${built[@]}" || true
         cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
