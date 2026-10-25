@@ -42,7 +42,9 @@ spec:
     # Beat-3 (C7) LIVE TOGGLE: challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh patches
     # the kagent Agent's MCP toolNames allowlist (ON excludes the rogue tools, --off lets them back in).
     # Ignore drift on the Agent's tools so selfHeal does not revert the live toggle, same as the
-    # guard-proxy env toggles above. The committed default (resources.yaml) is the defended "on" list.
+    # guard-proxy env toggles above. The committed default (resources.yaml) is the vulnerable "off" list:
+    # evil-mcp is wired with its full rogue toolset, and the toggle or the web terminal's guard-mcp-on
+    # narrows it live. On an admin cluster guard-mcp-on narrows the gateway rule instead (#496).
     #
     # NARROWED to the evil-mcp entry only (#349). Ignoring `.spec.declarative.tools` wholesale also stopped
     # OUR changes reaching a cluster, silently: when get_recipe was renamed to get_vault_entry the manifest
