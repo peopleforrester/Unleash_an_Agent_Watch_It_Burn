@@ -59,8 +59,9 @@ def expected_lit(controls: dict) -> int:
     infra = controls.get("infra") or {}
     src = {"ai": ai, "infra": infra}
     n = sum(1 for s, k in BADGE_FIELDS if k != "falco" and src[s].get(k) is True)
-    # Falco is the detection half of the C3 pair and only renders WITH KubeArmor (#211), never alone.
-    if infra.get("kubearmor") is True:
+    # Falco is the detection half of the C3 pair and only renders WITH KubeArmor (#211), never alone,
+    # and only where /controls measured it on the cluster (#486).
+    if infra.get("kubearmor") is True and infra.get("falco") is True:
         n += 1
     return n
 

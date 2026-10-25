@@ -446,11 +446,11 @@
   // One badge per control the student installs, each naming the real tool, lit when that control is
   // measured ON. Ordered by challenge number so the strip reads left to right the way the lab does.
   //   src 'infra' -> read from /controls.infra (a real cluster object: NetworkPolicy, Kyverno enforce,
-  //                  KubeArmor, the always-on Falco, the MCP tool allow-list).
+  //                  KubeArmor, Falco, the MCP tool allow-list).
   //   src 'ai'    -> read from /controls.ai (the guard-proxy toggles: C4 budget, C5 output, C6 input).
   // C3 is TWO badges on purpose (Michael, 2026-09-04): KubeArmor prevents and Falco detects, which is
-  // the point of the challenge. Falco is always engaged, so its badge is always lit; it is the one badge
-  // that is not a thing the student turns on.
+  // the point of the challenge. Falco is the one badge that is not a thing the student turns on: it is
+  // installed with the cluster, or (the burn profile) not at all, and /controls reports which (#486).
   const BADGES = [
     {src:'infra', key:'networkpolicy',  label:'NetworkPolicy'},
     {src:'infra', key:'kyverno',        label:'Kyverno'},
@@ -482,13 +482,14 @@
     strip.innerHTML='';
     BADGES.forEach(function(bd){
       var on = ((bd.src==='infra') ? infra[bd.key] : ai[bd.key]) === true;
-      // Falco is always running, so on its own it would light a lone badge on a fresh cluster and break
+      // Falco runs from the start, so on its own it would light a lone badge on a fresh cluster and break
       // the empty start Whitney asked for (#211). It is the detection half of the C3 pair, so it appears
-      // WITH KubeArmor (the prevention half the student installs), never alone.
-      if(bd.pairWith) on = infra[bd.pairWith]===true;
-      // Except where Falco does not exist. The community cluster runs the burn profile, which installs
-      // no Falco at all (#283), but guard-proxy reports falco:true unconditionally, so applying the C3
-      // KubeArmor policy there would light a detection badge for a detector that is not on the cluster.
+      // WITH KubeArmor (the prevention half the student installs), never alone, and only where /controls
+      // measured Falco on the cluster.
+      if(bd.pairWith) on = on && infra[bd.pairWith]===true;
+      // The community cluster runs the burn profile, which installs no Falco at all (#283). The guard-proxy
+      // pinned here still reports falco:true unconditionally, so until the pin moves to the commit that
+      // measures the DaemonSet (#486), the badge is forced off there too. Drop this line with that bump.
       if(bd.key==='falco' && community) on = false;
       if(!on) return;                          // absent-until-installed
       shown++;

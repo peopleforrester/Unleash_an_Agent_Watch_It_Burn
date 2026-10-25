@@ -571,7 +571,8 @@ subjects:
     namespace: agent
 ---
 # Kyverno's ValidatingPolicy is cluster-scoped, so C2's read needs a ClusterRole. Still get-only on the one
-# policy. The badge is armed when spec.validationActions contains Deny (#206; Audit does not block).
+# policy. The badge is armed when spec.validationActions contains Deny (#206; Audit does not block). The
+# Falco read below lives here too, for the reason given beside it.
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -580,6 +581,14 @@ rules:
   - apiGroups: ["policies.kyverno.io"]
     resources: ["validatingpolicies"]
     resourceNames: ["restrict-image-registries"]  # C2
+    verbs: ["get"]
+  # C3 detection: is Falco on this cluster at all? The burn profile (the Community cluster) installs none
+  # (#283, #486), so /controls measures the security/falco DaemonSet instead of claiming it. This sits on
+  # the ClusterRole, not a Role in `security`, because this bundle's `namespace: agent` would rewrite a
+  # Role's namespace to agent. Still get-only, on the one DaemonSet name the Falco chart creates.
+  - apiGroups: ["apps"]
+    resources: ["daemonsets"]
+    resourceNames: ["falco"]
     verbs: ["get"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -630,9 +639,9 @@ spec:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
         checksum/proxy-py: "0715ba9fb852"
     spec:
-      # A dedicated ServiceAccount with a mounted token, so /controls can read the four badge objects
+      # A dedicated ServiceAccount with a mounted token, so /controls can read the badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
-      # because that read is the whole point; the RBAC bound to guard-proxy-reader is get-only on four
+      # because that read is the whole point; the RBAC bound to guard-proxy-reader is get-only on a few
       # named objects (see the Role/ClusterRole above), which is the narrowest grant that answers "is
       # this control installed" without letting the attacked component do anything else.
       serviceAccountName: guard-proxy-reader
