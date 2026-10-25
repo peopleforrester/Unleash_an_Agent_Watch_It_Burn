@@ -41,7 +41,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | Mesh | Istio 1.30.1 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
 | Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs; creds via EKS Pod Identity |
 | Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
-| Agent | kagent 0.9.9 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
+| Agent | kagent 0.10.1 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
 | Model | Bedrock Amazon Nova Pro (default; Claude tiers kept for the optional cost race) | the LLM | same | native `ModelConfig` provider: Bedrock, over a PrivateLink endpoint in the VPC |
 | AI gateway | agentgateway v1.5.0 | fronts the workshop-mcp tool server (every real tool call passes through it); NOT the C7 control | `gitops/ai-layer/resources.yaml` (RemoteMCPServer url agentgateway.agent:3001) | `mcpAuthorization` is present but unexercised (#239); the tool allow-list that C7 flips is kagent `toolNames` |
 | Guard glue | guard-proxy (stdlib) | input/output guards, cost meter, caps | `gitops/ai-layer/guard-proxy/proxy.py` (submodule: `guard-proxy-agenticburn`) | A2A reverse proxy; runtime `/toggle` |

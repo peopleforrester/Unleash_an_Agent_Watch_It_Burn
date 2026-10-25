@@ -228,9 +228,9 @@ Child apps are `argoproj.io/v1alpha1` `Application` objects in `argocd`, `projec
 | istio-base / istio-cni | -6 | helm (istio-release) | 1.30.1 | istio-system |
 | istiod / kyverno | -5 | helm | istio 1.30.1 / kyverno chart 3.8.1 (app v1.18.1) | istio-system / kyverno |
 | ztunnel / kyverno-policies / network-policies / external-secrets / minimal-floor | -4 | helm + git | ztunnel 1.30.1, ESO chart 2.6.0 | varies |
-| istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.1.0 (app 0.44.1), kagent 0.9.9 | varies |
+| istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.1.0 (app 0.44.1), kagent 0.10.1 | varies |
 | falco-talon / falcosidekick | -2 | helm | talon chart 0.4.1 (app 0.3.0), falcosidekick 0.14.0 | falco / security |
-| cert-manager / kagent / prometheus | 1 | helm | cert-manager v1.20.2, kagent 0.9.9, kube-prometheus-stack 86.2.3 | varies |
+| cert-manager / kagent / prometheus | 1 | helm | cert-manager v1.20.2, kagent 0.10.1, kube-prometheus-stack 86.2.3 | varies |
 | otel-operator / otel-collector / customer-stream | 2 | git + helm | otel-operator 0.117.0, otel-collector 0.158.2 | varies |
 | ai-layer / datadog-operator / loki / tempo | 3 | git + helm | datadog-operator chart 2.23.2 (app 1.27.1) | varies |
 | alloy / datadog-agent-cr | 4 | helm + git | alloy 1.10.0 | monitoring / datadog |
@@ -297,7 +297,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 
 - **Runtime guard toggle via `GET /toggle`, not `kubectl set env`.** A `set env` restarts the pod (resets the in-memory cost counter) and is reverted by selfHeal. A runtime toggle mutates an in-process `GUARDS` dict (env-seeded), changes no managed spec, so the counter survives and the flip sticks. Toggle scripts `kubectl exec ... curl` against the proxy (no new pod), which also passes Kyverno Enforce. (commit `80c9e5f`)
 - **Input guard is two independently-toggled stages.** Stage 1 deterministic block-list (pre-LLM, zero tokens, flatlines the cost counter on a blocked destructive prompt); stage 2 model-based prompt-injection classifier. Never call the combined input guard "deterministic" once stage 2 is in path. (commit `14b53d6`)
-- **Cost key is `kagent_usage_metadata`, not `adk_usage_metadata`.** The live kagent 0.9.9 controller emits the former; the proxy accepts both (kagent first) so a re-key never silently zeroes the counter. (commit `638ffcd`)
+- **Cost key is `kagent_usage_metadata`, not `adk_usage_metadata`.** The live kagent controller emits the former (observed on 0.9.9; not yet re-checked on 0.10.1); the proxy accepts both (kagent first) so a re-key never silently zeroes the counter. (commit `638ffcd`)
 - **Workshop default model is Sonnet 4.6; all three tiers defined for the cost race.** Tier swaps by repointing the Agent `modelConfig` (commit + resync), never `kubectl patch` live. Fable 5 retired. (commits `3646a30`, `ff341bd`, `a3d0081`)
 - **Cost metric uses the standard `gen_ai` namespace.** Dropped the custom `witb_cost_usd` metric and the Prometheus `/metrics` endpoint; cost is `gen_ai.client.cost` (the GenAI semconv defines no monetary metric, so cost is a project suffix under the standard namespace). Provider stamped `aws.bedrock` at source + a Collector OTTL net. (commits `f963550`, `d5c2bec`)
 - **agentgateway is the in-path A2A hop and MCP front.** Repointing creates the `guard-proxy → agentgateway → kagent` Service Map chain. OSS v1.5.0 (released 2026-08-27; moved from v1.3.0 in `20aee62`, 2026-09-10), registry `cr.agentgateway.dev`, image pinned by tag and digest. Tracing config under the top-level `config.tracing` key (bare `tracing` and `frontendPolicies.tracing` both crashed the v1.3.0 binary; the config is validated offline against the vendored v1.5.0 schema). (commits `3831e3d`, `b64e7ea`, `17ee91e`, `20aee62`)
@@ -311,7 +311,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 |---|---|---|---|
 | guard-proxy | `python:3.12-slim` running `proxy.py` from ConfigMap | 8080 | stdlib only; OTel SDK injected by Operator annotation |
 | agentgateway | `cr.agentgateway.dev/agentgateway:v1.5.0` (digest-pinned) | 3000 A2A, 3001 MCP, 15021 readiness | `config.tracing` → OTLP/HTTP 4318; TCP probes (no `/healthz`) |
-| kagent workshop-agent | controller 0.9.9 (CRD `kagent.dev/v1alpha2`); ADK >=1.17 | 8080 | `OTEL_SERVICE_NAME=kagent`; `..._CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` |
+| kagent workshop-agent | controller 0.10.1 (CRD `kagent.dev/v1alpha2`); ADK >=1.17 | 8080 | `OTEL_SERVICE_NAME=kagent`; `..._CAPTURE_MESSAGE_CONTENT=EVENT_ONLY` |
 | llm-guard | `laiyer/llm-guard-api:0.3.16` (only published image) | 8000 | reads `scanners.yml` from ConfigMap; bearer `llm-guard-auth` |
 | workshop-mcp (good) | `python:3.12-slim` + `mcp`, `workshop-mcp-server.py` | 8000 (`/mcp`) | BurritoBot's tools: mocked from local files `lookup_customer_records`, `check_inventory`, `reorder_supply`, `get_order_history`, `get_marketing_intel`, `search_web`, `post_marketing`; real `get_vault_entry` (reads a Secret), `list_services`, `deploy_app` (server-side apply), `run_shell`; no HITL |
 | evil-mcp-shim (rogue) | `python:3.12-slim` + `mcp`, `server.py` | 8000 (`/mcp`) | tools `get_weather` (poisoned desc), `read_internal_config`, `apply_optimization` |

@@ -18,7 +18,7 @@ provisioning           Terraform — infra/terraform/ (aws/network + aws/cluster
 terraform-modules      EKS ~> 21.29.0 · VPC ~> 5.21.0 · eks-pod-identity ~> 1.12.0 · aws provider ~> 6.0 (locked 6.70.0 in cluster/, #468)
 
 ## Component versions (research-grounded; RE-PINNED to current GA 2026-06-20, research/11 + research/14)
-kagent                 chart 0.9.9 / app v0.9.9  (CRD group kagent.dev/v1alpha2; Bedrock native; was 0.9.7)
+kagent                 chart 0.10.1 / app v0.10.1  (CRD group kagent.dev/v1alpha2; Bedrock native; kagent and kagent-crds moved from 0.9.9 on 2026-09-10 in 20aee62)
                        chart ref: oci://ghcr.io/kagent-dev/kagent/helm/kagent (CONFIRMED reachable 2026-06-16)
                        crds ref:  oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds (confirm at deploy)
                        A2A usage metadata key is adk_usage_metadata (NOT kagent_usage_metadata) — research/14 §3a
