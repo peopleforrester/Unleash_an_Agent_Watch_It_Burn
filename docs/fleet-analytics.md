@@ -4,12 +4,14 @@ Issue #150. Every other signal in this repo is per attendee, so a student can wa
 is the instructor's side: one view across the whole attendee pool, readable live during the session and
 again afterwards. It is the "did" half that `feedback-agenticburn`'s "said" half joins against.
 
-> **The lab progress markers are OFF.** Michael decided on question 693 (2026-10-25, `decisions.md`) to keep
-> them off until the lab's privacy warning has wording that tells attendees what is recorded. Everything
-> below is built and tested, but `lab-events.js` ships with `var ENABLED = false;`. Until it is turned on,
-> the lab widgets on the dashboard and harvest pass 6 have nothing to read. The guardrail, fork-bomb and
-> message-count widgets read other data and work regardless. To turn the markers on, change that line and
-> the warning in `lab.html` in the same commit, and update the pin in `verify/test_lab_events.py`.
+> **Attendees are told.** The markers are on with the disclosure Michael approved on question 753
+> (2026-10-25, `decisions.md`). On question 693 he had kept them off until that wording existed. It is in
+> the BurritoBot warning on the lab page (`lab.html`), after the sentence about the instructor screen:
+>
+> "The lab also records which steps, hints and commands you open (never what you type), and the instructors keep your prompts after the workshop to improve it."
+>
+> `verify/test_lab_events.py` fails if the markers are on without that sentence, so the switch and the
+> wording change together.
 
 ## Which question is answered where
 
@@ -68,9 +70,10 @@ since the route forwards none; hover, mouse or scroll tracking. A browser sendin
 Do Not Track sends nothing at all. `verify/test_lab_events.py` and `verify/test_lab_events_behaviour.py`
 assert each of these.
 
-**The switch:** `var ENABLED = …;` at the top of `lab-events.js`. It is `false` today (question 693). With
-it off the page sends nothing, and the pipeline is idle. The tests arm it in their harness, so the sending
-code stays tested while it is off.
+**The switch:** `var ENABLED = …;` at the top of `lab-events.js`. It is `true` (question 753). With it set to
+`false` the page sends nothing and the pipeline is idle. The tests arm it in their harness, so the sending
+code stays tested whichever way it is set. Turning it off needs no change to the warning, but the warning
+would then claim more than is collected, so remove the sentence in the same commit.
 
 ## Joining with the feedback app
 
@@ -101,10 +104,9 @@ does not need the clusters to still be up.
 The dashboard carries no prompt text. Separately from this path, attendee and presenter clusters
 dual-ship their traces to the instructor org (#242). Those traces include the conversation
 (`gen_ai.input.messages`), so prompt text is already in the instructor org's Agent Observability, and
-harvest pass 1 extracts it into `.harvest/`. The lab guide tells attendees that their prompts may be shown
-on the instructor screen during the workshop. The disclosure does not say that prompts are kept and
-analysed afterwards, and it does not mention the lab progress markers. That wording is Michael's call. On
-question 693 he decided the markers stay off until it is settled; the wording itself is still open on #150.
+harvest pass 1 extracts it into `.harvest/`. The lab guide tells attendees both things: that their prompts
+may be shown on the instructor screen during the workshop, and, since question 753, that the instructors
+keep them afterwards to improve the workshop. The same sentence tells them which lab actions are recorded.
 
 ## Validating on a cluster
 

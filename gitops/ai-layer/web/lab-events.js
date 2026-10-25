@@ -34,10 +34,11 @@
 
   // The one knob. false = the page sends nothing at all.
   //
-  // OFF by Michael's decision on question 693 (2026-10-25, decisions.md): the markers stay off until the lab's
-  // privacy warning has wording that tells attendees what is recorded. Turn this back on in the same change as
-  // that wording, never before it. verify/test_lab_events.py pins it off until then.
-  var ENABLED = false;
+  // ON with the disclosure Michael approved on question 753 (2026-10-25, decisions.md), which is now in the lab's
+  // privacy warning (lab.html). Question 693 had kept the markers off until that wording existed. The switch and
+  // the sentence travel together: verify/test_lab_events.py fails if this is on without the sentence, so changing
+  // what is collected means changing what attendees are told in the same commit.
+  var ENABLED = true;
   var ENDPOINT = '/lab-events';
   var FLUSH_MS = 10000;
   var HEARTBEAT_MS = 60000;
