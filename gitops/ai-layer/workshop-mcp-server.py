@@ -269,7 +269,40 @@ def _resource_for(api_version: str, kind: str):
     return base, None
 
 
-@mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON).")
+# What deploy_app gives a container the model left without a CPU or memory limit (#538). Every Kyverno
+# ValidatingPolicy is its own webhook and the first to answer is the deny message, so a villain without limits
+# could be refused by require-resource-limits instead of restrict-image-registries, the policy C2 teaches.
+# These are the limits the probe's C2 manifest and the C2 fallback set; verify/test_deploy_app_limits.py holds
+# the keys to the ones require-resource-limits requires.
+_DEFAULT_LIMITS = {"cpu": "100m", "memory": "64Mi"}
+
+
+def _pod_spec(obj: dict):
+    kind, spec = obj.get("kind"), obj.get("spec")
+    if not isinstance(spec, dict):
+        return None
+    if kind == "Pod":
+        return spec
+    if kind == "CronJob":
+        spec = (spec.get("jobTemplate") or {}).get("spec") or {}
+    return (spec.get("template") or {}).get("spec") if isinstance(spec, dict) else None
+
+
+def _default_limits(obj: dict) -> None:
+    """Fill in any CPU or memory limit a container lacks, leaving the ones the manifest sets as they are."""
+    pod = _pod_spec(obj)
+    if not isinstance(pod, dict):
+        return
+    for c in pod.get("containers") or []:
+        if not isinstance(c, dict):
+            continue
+        res = c.get("resources") if isinstance(c.get("resources"), dict) else {}
+        limits = res.get("limits") if isinstance(res.get("limits"), dict) else {}
+        c["resources"] = {**res, "limits": {**_DEFAULT_LIMITS, **limits}}
+
+
+@mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
+                      "Containers without CPU or memory limits get the cantina's defaults.")
 def deploy_app(manifest: str = "") -> str:
     """REAL server-side apply of a single namespaced resource — C2 (the Joker/grill-zone image)."""
     if not manifest.strip():
@@ -290,6 +323,7 @@ def deploy_app(manifest: str = "") -> str:
         return "manifest metadata.name is required"
     ns = _ns()
     obj.setdefault("metadata", {})["namespace"] = ns
+    _default_limits(obj)
     base, plural = _resource_for(api_version, kind)
     if not plural:
         return f"unknown resource for apiVersion={api_version} kind={kind}"

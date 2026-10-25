@@ -1626,3 +1626,19 @@ equal, minus that line, to the sha256 it records, and holds spec 001's `schedule
 section it names and the two dates kept for people (M6 by 2026-11-08, M7 on 2026-11-12). The milestone issues
 under #447 are opened from personal-knowledge with `scripts/milestone-issues.py open`, which writes to
 GitHub, so this repo does not open them.
+## 2026-10-25 · #538 · deploy_app fills in missing CPU and memory limits, so C2 is refused by the registry wall
+
+In Challenge 2 the model writes the villain's Deployment and hands it to workshop-mcp's `deploy_app`. Every
+Kyverno ValidatingPolicy is its own webhook and the first to answer is the deny message, so a Deployment
+without limits on a cluster with every policy at Deny could be refused by `require-resource-limits` instead of
+`restrict-image-registries`, the policy the beat teaches. #529 fixed this for the probe and the C2 fallback.
+
+The issue offered two routes: have the tool set default limits, or have the prompt and lab text ask for them.
+The tool was chosen. A prompt only makes limits likely, and the student's own wording, not the stuck prompt,
+is what reaches the model. `deploy_app` now gives any container of a Pod, a pod controller or a CronJob
+without a CPU or memory limit `cpu: 100m, memory: 64Mi`, the limits the probe's manifest and the fallback
+set, and keeps every limit and request the model did write. The image is never touched, so the registry wall
+still refuses the villain. The tool description says so. The same defaulting means C6's `maintenance-shell`,
+created through the same tool, is no longer at risk of a limits refusal on an admin cluster.
+`verify/test_deploy_app_limits.py` runs the real `deploy_app` with the API call captured and holds the
+defaults to the keys `verify/resource_limits.py` reads out of the policy. No lab or prompt text changed.
