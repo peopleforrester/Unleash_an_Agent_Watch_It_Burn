@@ -20,6 +20,6 @@ KCTL=(kubectl --context "${CONTEXT}")
 
 echo "==> input guard -> ${STATE} (runtime, via guard-proxy.${NS}:8080/toggle)" >&2
 # exec the guard-proxy to hit its OWN /toggle (localhost): spawns no new pod, so Kyverno
-# require-resource-limits (Enforce in R2/R3) cannot reject it. python3 ships in the image.
+# require-resource-limits (Enforce once armed) cannot reject it. python3 ships in the image.
 "${KCTL[@]}" -n "${NS}" exec deploy/guard-proxy -- python3 -c \
   "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/toggle?input_blocklist=${STATE}', timeout=10).read().decode())"

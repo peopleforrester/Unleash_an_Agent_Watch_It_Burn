@@ -1,4 +1,4 @@
-<!-- ABOUTME: Round-3 student lab page (B5/B12). Katacoda/KodeKloud split: student instructions on the
+<!-- ABOUTME: Student lab page (B5/B12). Katacoda/KodeKloud split: student instructions on the
      ABOUTME: left, the in-browser <a href="https://github.com/tsl0922/ttyd" target="_blank" rel="noopener">ttyd</a> shell embedded on the right. Student audience only, no attack spoilers. -->
 <!doctype html>
 <html lang="en" data-vtt-page="lab">
@@ -906,10 +906,10 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
              is healthy, and two dead tabs at that moment cost more than the content was worth.
              The pages themselves still serve at /diagram and /links for anyone who wants them. -->
         <button class="ttab active" data-i="0" onclick="showTerm(0)">Terminal 1</button>
-        <!-- VS Code and Notebook tabs HIDDEN for Portland (#105): no round uses them, and an unexplained
+        <!-- VS Code and Notebook tabs HIDDEN for Portland (#105): no challenge uses them, and an unexplained
              IDE/notebook is get-lost surface (the same failure mode as the removed Tutor tab) in a tight
              2-hour slot. The processes still run in the pod; re-enable by restoring these two buttons and
-             their panes below if a future round needs them. -->
+             their panes below if a future challenge needs them. -->
         <button class="tadd" onclick="addTerm()" title="New terminal">+</button>
         <button class="trecon" id="trecon" onclick="reconnectTerm()" title="Reload this pane with a fresh connection">&#8635; Reconnect</button>
       </div>
@@ -918,7 +918,7 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
         <iframe class="tpane active" data-i="0" src="/terminal/" title="Terminal 1"></iframe>
         <!-- IDE (/ide/) and Notebook (/jupyter/) panes HIDDEN for Portland (#105) along with their tabs
              above. They lazy-loaded on first click, so they cost nothing here; they are removed because no
-             round uses them and they are get-lost surface. Restore with the two tab buttons above. -->
+             challenge uses them and they are get-lost surface. Restore with the two tab buttons above. -->
         <!-- <iframe class="tpane" data-i="ide" data-src="/ide/" title="Browser IDE"></iframe> -->
         <!-- <iframe class="tpane" data-i="jupyter" data-src="/jupyter/" title="Notebook"></iframe> -->
       </div>
@@ -937,15 +937,18 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
     // Role comes from WHAT CLUSTER THIS IS, not from a query parameter that is easy to drop. The pill
     // used to default to student whenever ?role= was missing, so opening an instructor cluster's lab
     // page by typing its hostname showed STUDENT on a presenter console. The identity is already
-    // unambiguous from two directions: the roster name (watch-it-burn-r<round>-<n>, mirroring
-    // is_instructor_name in fleet.sh) and the published hostname (michael-round1, whitney-round2).
+    // unambiguous from two directions: the roster name (the community cluster's, or a presenter's
+    // watch-it-burn-<owner>-admin, mirroring is_instructor_name in fleet.sh) and the published hostname
+    // (attackme or <owner>-admin, mirroring public_host_for). Both are tried on both inputs, because the
+    // nav links carry the FRIENDLY name in ?cluster= (#383), so ?cluster= may hold either form. An
+    // attendee's memorable name (soot-sabrina) is a menu word then a witch, so it never ends in -admin.
     // ?role= still wins when present, so an instructor previewing the student view keeps working.
-    var _rosterName=/^watch-it-burn-r[123]-\d+$/i;
-    // (^|-) so the BARE aliases round1/round2/round3 match too, not just michael-round1. Those are
-    // published routes the run-of-show drives from, and they point at instructor clusters.
-    var _rosterHost=/(^|-)round[123]$/i;
+    var _rosterName=/^watch-it-burn-(community|[a-z0-9-]+-admin)$/i;
+    var _rosterHost=/^(attackme|[a-z0-9-]+-admin)$/i;
     var _hostLabel=(location.hostname||'').split('.')[0];
-    var _looksInstructor=_rosterName.test((cluster||'').trim()) || _rosterHost.test(_hostLabel);
+    var _looksInstructor=[(cluster||'').trim(), _hostLabel].some(function(v){
+      return _rosterName.test(v) || _rosterHost.test(v);
+    });
     var _roleParam=(q.get('role')||'').trim().toLowerCase();
     var role=_roleParam || (_looksInstructor ? 'instructor' : 'student');
     var dd=q.get('dd'), prov=q.get('prov');
@@ -985,7 +988,7 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
     function addq(el){ if(!el||!q2.length)return; el.href+=(el.href.indexOf('?')>=0?'&':'?')+q2.join('&'); }
     var fb=document.getElementById('fbbtn'); addq(fb);
     // The in-guide feedback link carries the same identity as the top-bar one, so a response can be tied
-    // to a cluster and a round without the attendee typing anything.
+    // to a cluster without the attendee typing anything.
     var fb2=document.getElementById('fblink2'); addq(fb2);
     // Keep page= on the Feedback button pointed at the challenge the student is actually looking at, so
     // a mid-lab note lands segmented without the student choosing anything. The challenge number comes

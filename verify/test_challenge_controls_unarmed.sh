@@ -4,10 +4,10 @@
 #
 # Why (#281). network-policies and kubearmor-policies are the Challenge 1 and Challenge 3 controls. The
 # attendee profile has always excluded them, which is why a student's attack lands and their fix arms it.
-# The full profile shipped them, so on rounds 2 and 3 the first attack was pre-blocked, and both apps run
-# selfHeal with no ignoreDifferences: deleting the policies to stage the attack restored them in about a
-# second (measured on r3-3). The presenter was left with a dead demo and no visible cause, on the first
-# challenge, in front of the room.
+# The full profile shipped them, so on the guarded instructor clusters the first attack was pre-blocked,
+# and both apps run selfHeal with no ignoreDifferences: deleting the policies to stage the attack restored
+# them in about a second (measured on r3-3). The presenter was left with a dead demo and no visible cause,
+# on the first challenge, in front of the room.
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="${HERE}/.."

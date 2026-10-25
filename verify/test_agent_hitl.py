@@ -29,7 +29,7 @@ check("rogue clown tool NOT in allowlist (apply_optimization)", "apply_optimizat
 # requireApproval is DELIBERATELY absent. The HITL approval round-trip is not wired to the chat UI, so
 # a paused tool_use left a dangling call and the next Bedrock Converse request failed with "tool_use ids
 # ... without tool_result" (seen live on r1-1). Excessive agency is also the point of the exercise: the
-# agent applies what it is told and Kyverno blocks it in R2. Asserting approval here contradicted the
+# agent applies what it is told and Kyverno blocks it once armed. Asserting approval here contradicted the
 # manifest for as long as the suite has been red. The invariant that still matters is the one below:
 # whatever IS in requireApproval must be a subset of toolNames, or kagent's CEL constraint rejects it.
 check("requireApproval stays deliberately empty (documented: breaks the Bedrock tool_use round-trip)",

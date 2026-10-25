@@ -175,7 +175,8 @@ check("the metric name matches the connector namespace",
       "witb.lab.calls" in blob and CFG["connectors"]["span_metrics/lab"]["namespace"] == "witb.lab")
 tv = {t["name"]: t["prefix"] for t in dash["template_variables"]}
 check("cluster and role template variables", tv == {"cluster": "kube_cluster_name", "role": "witb.lab.role"})
-# By cluster NAME: an admin cluster's lab opened without ?role= reports role=student.
+# By cluster NAME, not by role: before #588 an admin cluster's lab opened without ?role= reported
+# role=student, and those spans are still in the window.
 check("it defaults to the attendee clusters",
       next(t["default"] for t in dash["template_variables"] if t["name"] == "cluster") == "watch-it-burn-attendee-*")
 queries = re.findall(r'"query": "([^"]+)"', blob)

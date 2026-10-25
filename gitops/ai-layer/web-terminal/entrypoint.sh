@@ -59,7 +59,7 @@ CFG
 fi
 unset STUDENT_AK STUDENT_SK STUDENT_REGION
 
-# Round-3 self-serve guardrail toggles (B5/B11). Each prints PLAIN-LANGUAGE confirmation of what changed
+# Self-serve guardrail toggles (B5/B11). Each prints PLAIN-LANGUAGE confirmation of what changed
 # (not raw JSON) so a student can see what the guard does. Output/input guards flip via the guard-proxy
 # /toggle (no new pod, ArgoCD-safe, the cost counter survives). The MCP guard (C7) has one control per
 # format (#496). On a workshop cluster it patches the kagent Agent's evil-mcp toolNames allow-list. On an
@@ -314,9 +314,9 @@ case "$(_mcp off)" in
 esac
 EOS
 # Challenge 4 — DENIAL-OF-WALLET. The agent does not have to crash your cluster to hurt you; it can just
-# run up the bill. On Round 1 there is no cap and the cost counter on BurritoBot climbs with no ceiling.
-# The control is a per-agent budget at the gateway: once this cluster's spend crosses its cap, further
-# requests are refused BEFORE the model is called, so a blocked request costs nothing.
+# run up the bill. On the community cluster there is no cap and the cost counter on BurritoBot climbs
+# with no ceiling. The control is a per-agent budget at the gateway: once this cluster's spend crosses
+# its cap, further requests are refused BEFORE the model is called, so a blocked request costs nothing.
 cat > "$HOME/guard-budget-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"

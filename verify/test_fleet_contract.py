@@ -309,16 +309,18 @@ print("== a full-profile cluster arms its Kyverno guardrails ==")
 # Kyverno ships in Audit and bootstrap flips it to Enforce. That flip was gated on `round == 2 || 3`,
 # and an ATTENDEE cluster has no round (cmd_up leaves the spec field empty), so every attendee cluster
 # received all ten policies and none were ever armed. Measured 2026-09-03: 7 of 7 attendee clusters sat
-# at restrict-image-registries=Audit while r2/r3 were correctly Enforce. Challenge 2's villain image
-# therefore DEPLOYED on the student's own cluster, which is the one cluster where they run it themselves.
+# at restrict-image-registries=Audit while the armed roster clusters were correctly Enforce. Challenge 2's
+# villain image therefore DEPLOYED on the student's own cluster, which is the one cluster where they run it
+# themselves.
 #
 # The condition that matters is the PROFILE, because "full" is what ships the policies. Burn ships none
-# and must never arm (R1 is the unguarded spectacle), which the profile test excludes naturally.
+# and must never arm (the community cluster is the unguarded spectacle), which the profile test excludes
+# naturally.
 _boot = FLEET_SH[FLEET_SH.index("bootstrap_one() {"):]
 _boot = _boot[:_boot.index("\narm_infra_guardrails")] if "\narm_infra_guardrails" in _boot else _boot[:6000]
 check("guardrail arming is keyed on the full profile, not on a round number",
       '"${profile}" == "full"' in _boot)
-check("arming is NOT gated on round 2/3 (attendee clusters have no round)",
+check("arming is NOT gated on a cluster number (attendee clusters never carried one)",
       '"${round}" == "2" || "${round}" == "3" ]] && arm_infra_guardrails' not in FLEET_SH)
 
 print("== Bedrock access is scoped to the models the workshop actually binds ==")
@@ -407,8 +409,8 @@ check("converge accepts an explicit set of names", "all=(\"$@\")" in _conv)
 check("roster clusters resolve their account by role, not by the attendee arithmetic",
       "account_for_role" in _conv)
 # watch-it-burn-r2-1 parses as num=1 under the attendee arithmetic and would land in the first account
-# regardless of which account round 2 lives in; and a caller with no pool size divides by zero.
-check("_account_for_name resolves roster names by round",
+# regardless of which account its role lives in; and a caller with no pool size divides by zero.
+check("_account_for_name resolves roster names by role",
       "is_instructor_name" in FLEET_SH[FLEET_SH.index("_account_for_name() {"):][:1400])
 check("_account_for_name cannot divide by zero on a caller with no pool geometry",
       '"${per_account}" -le 0' in FLEET_SH[FLEET_SH.index("_account_for_name() {"):][:1400])
@@ -489,11 +491,11 @@ check("jupyter-collaboration pinned to 5.x (a bare pin resolves it backwards)",
 check("code-server pinned to an exact version", bool(re.search(r"CODE_SERVER_VERSION=\d+\.\d+\.\d+", DOCKERFILE)))
 
 print("== our own manifests must survive our own enforced policies ==")
-# Round 2 flips require-resource-limits and restrict-image-registries to Enforce. Any container we ship
-# without limits is therefore denied admission ON THE GUARDED ROUNDS ONLY, which is the worst possible
-# place for it: Round 1 looks fine, and the rounds that exist to demonstrate guardrails working are the
-# ones where the platform quietly loses pods. Found live 2026-08-27, when both MCP servers were absent
-# from r2-1 and r3-1 and the agent had no tools at all on those clusters.
+# Arming flips require-resource-limits and restrict-image-registries to Enforce. Any container we ship
+# without limits is therefore denied admission ON THE GUARDED CLUSTERS ONLY, which is the worst possible
+# place for it: the community cluster looks fine, and the clusters that exist to demonstrate guardrails
+# working are the ones where the platform quietly loses pods. Found live 2026-08-27, when both MCP servers
+# were absent from r2-1 and r3-1 and the agent had no tools at all on those clusters.
 import yaml
 _missing = []
 for _p in (REPO / "gitops").rglob("*.yaml"):

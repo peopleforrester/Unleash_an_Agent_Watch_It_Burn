@@ -18,15 +18,17 @@ def check(n, c):
 
 check("it is a Kyverno CEL ValidatingPolicy, not the deprecated ClusterPolicy (#206)",
       pol["apiVersion"] == "policies.kyverno.io/v1" and pol["kind"] == "ValidatingPolicy")
-# Audit is CORRECT by default, not a regression. Round 1 has to actually deploy the villain image
-# (that is the "watch it burn" beat); Round 2/3 flip this to Deny live via toggle-kyverno-enforce.sh,
+# Audit is CORRECT by default, not a regression. An attendee cluster has to actually deploy the villain
+# image before the student's C2 fix (that is the "watch it burn" beat); the student flips this to Deny live,
+# and fleet.sh flips an admin cluster at bootstrap via toggle-kyverno-enforce.sh,
 # with an ArgoCD ignoreDifferences on /spec/validationActions so the flip is not self-healed away. Install
 # first, enforce last: a guardrail set to Deny before the thing it guards exists rejects that thing's own
 # pods. The real invariant is that the policy ships as Audit AND the live flip exists.
-check("registry policy ships as Audit so Round 1 can burn", spec.get("validationActions") == ["Audit"])
+check("registry policy ships as Audit so the villain deploys before the C2 fix",
+      spec.get("validationActions") == ["Audit"])
 _toggle = REPO / "challenges/01-cncf-wall/toggle-kyverno-enforce.sh"
 _tt = _toggle.read_text() if _toggle.exists() else ""
-check("a live toggle to Deny exists for Round 2/3",
+check("a live toggle to Deny exists for the guarded clusters",
       "validatingpolicy" in _tt and "/spec/validationActions" in _tt and '"Deny"' in _tt.replace('\\"', '"'))
 check("registry policy scoped to apps namespace", "apps" in ns_values)
 check("and to agent, where deploy_app lands the villain", "agent" in ns_values)

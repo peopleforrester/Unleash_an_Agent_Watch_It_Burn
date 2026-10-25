@@ -3,7 +3,7 @@
 """The shapes the round model left behind (#290, #291, #498, #560).
 
 `test_docs_current.py` holds the current-description markdown to `ROUND_SHAPES`. `test_round_names_retired.py`
-holds the fleet scripts and the gitops Applications to `CODE_SHAPES`, which is the same vocabulary less the
+holds every tracked non-markdown file to `CODE_SHAPES` (#588), which is the same vocabulary less the
 cluster and host names. A comment in code records where something was measured or what a hostname used to
 be, often on the line after its date, so the name of a retired cluster (`watch-it-burn-r2-1`,
 `michael-round2`) is history there. What must not survive is wording that describes a cluster as a round.

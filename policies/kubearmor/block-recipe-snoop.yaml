@@ -13,8 +13,9 @@
 # namespace-resolution bug still reproduces on AL2023 -> KubeArmor is not viable here and the fix is a
 # Bottlerocket node group (AWS's supported KubeArmor-on-EKS substrate), not an AL2023 change.
 #
-# This app (kubearmor-policies) is included ONLY by the FULL app-of-apps (R2/R3/attendee). R1 (burn) omits
-# it, so R1 has no C3 enforcement regardless of whether the KubeArmor engine is present.
+# This app (kubearmor-policies) is included ONLY by the admin app-of-apps. The full and attendee profiles
+# exclude it (#281), so a student arms it in C3; the burn profile omits it too, so the community cluster has
+# no C3 enforcement regardless of whether the KubeArmor engine is present.
 apiVersion: security.kubearmor.com/v1
 kind: KubeArmorPolicy
 metadata:

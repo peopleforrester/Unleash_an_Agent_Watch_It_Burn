@@ -36,8 +36,8 @@
 #     reports the violation without that risk, which is the larger half of the value here anyway: the
 #     bypass becomes visible in a policy report instead of invisible.
 #
-# Round 1 is unaffected either way; the burn profile ships no Kyverno at all, so this exists only on the
-# rounds that claim to be guarded.
+# The community cluster is unaffected either way; the burn profile ships no Kyverno at all, so this exists
+# only on the clusters that claim to be guarded, the attendee and admin ones.
 #
 # TO PROMOTE TO ENFORCE: run verify/test_llm_bypass_live.py on a live cluster (it reads the PolicyReports of
 # the running guard-proxy and agentgateway pods and needs a pass on each), then change validationActions

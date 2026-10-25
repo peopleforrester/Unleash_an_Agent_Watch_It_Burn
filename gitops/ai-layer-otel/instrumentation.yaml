@@ -7,9 +7,9 @@
 # the pod templates.
 #
 # This file is deliberately NOT part of the gitops/ai-layer bundle. Its CRD exists only where the OTel
-# Operator is installed, and the Operator needs cert-manager; the burn (Round 1) profile ships neither.
+# Operator is installed, and the Operator needs cert-manager; the burn profile (community) ships neither.
 # Because ArgoCD fails an entire sync when one resource is invalid, keeping it in that bundle made the
-# whole AI layer unsyncable on Round 1 clusters, so they came up with no console and no reachable URL.
+# whole AI layer unsyncable on burn clusters, so they came up with no console and no reachable URL.
 # See gitops/ai-layer-otel/kustomization.yaml for the full write-up. Do not fold it back in.
 #
 # The OTel Operator injects the full Python SDK into any pod annotated

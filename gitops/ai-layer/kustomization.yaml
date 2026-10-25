@@ -9,8 +9,8 @@ resources:
   - resources.yaml
   # The OTel Instrumentation CR is NOT here. It lives in gitops/ai-layer-otel as its own Application,
   # because its CRD only exists where the OTel Operator (and behind it cert-manager) is installed. The
-  # burn profile ships neither, and one unsatisfiable resource fails the WHOLE app, which left Round 1
-  # clusters with no console at all. Do not move it back into this bundle.
+  # burn profile ships neither, and one unsatisfiable resource fails the WHOLE app, which left the burn
+  # (community) clusters with no console at all. Do not move it back into this bundle.
   - agentgateway.yaml # OSS v1.5.0 L7 gateway: guard-proxy -> agentgateway -> workshop-agent (A2A) + MCP front
   - chat-path-ingress.yaml # #552: agentgateway :3000/:3002 and workshop-agent :8080 admit only the hop before them
   - argocd-managed-app.yaml # Beat-1 wall-3 drift target (ArgoCD-managed; admission denies agent drift, self-heal reverts)
@@ -36,9 +36,9 @@ configMapGenerator:
       - web/console.html
       - web/console.js
       - web/burritbot.html # B1: the BurritoBot storefront, served by the console nginx as the front door
-      - web/lab.html # B5/B12: round-3 student lab page (instructions left + ttyd terminal embedded right)
+      - web/lab.html # B5/B12: student lab page (instructions left + ttyd terminal embedded right)
       - web/lab-events.js # lab progress markers for the instructor's fleet view (#150)
-      - web/brief.html # instructor brief for R1/R2: prompts VISIBLE, separate page from the student lab (#122)
+      - web/brief.html # instructor brief: prompts VISIBLE, separate page from the student lab (#122)
       - web/kubecon.html # KubeCon NA 2026 breakout brief: demo beats by run-of-show segment, no provisioning (#501)
       - web/platform.html # the platform catalogue: every service, its URL and its login
       - web/diagram.html # VTT Blueprint tab: what was installed at which wave (ported from Packt, #153)

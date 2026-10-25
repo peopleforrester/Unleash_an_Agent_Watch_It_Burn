@@ -14,7 +14,7 @@
 <style>
   :root{
     --dd:#632CA6;--acn:#A100FF;--accent:#8A00D6;--cream:#FDF6EE;--lav:#ECE3FB;--ink:#2b2230;--mid:#4A4A4A;--line:#e4d8f5;
-    --r1:#d23b3b;--r2:#2f6fed;--r3:#1f9d57; /* R1 red (no guardrails), R2 blue (+AI), R3 green (your cluster) */
+    --r3:#1f9d57; /* green: a control measured ON (the badges and the infra panel) */
   }
   *,*::before,*::after{box-sizing:border-box}
   /* FLUID TYPE (#144). Everything below was fixed pixels, so a 4K display rendered the same 14px chat
@@ -424,10 +424,9 @@
 <script src="event.js"></script>
 <script>
   // Every cluster's BurritoBot talks to its OWN same-origin /chat. The agenticburn.com router proxies the
-  // whole host+path (e.g. r2-1.agenticburn.com/chat) to that cluster's console, so same-origin reaches the
-  // right backend with NO cross-origin call (a cross-origin POST triggers a CORS preflight the backend
-  // returns 501 on -> the browser blocks it -> "couldn't reach the kitchen"). The round is for DISPLAY
-  // (the banner); the backend is always this cluster.
+  // whole host+path (e.g. michael-admin.agenticburn.com/chat) to that cluster's console, so same-origin
+  // reaches the right backend with NO cross-origin call (a cross-origin POST triggers a CORS preflight the
+  // backend returns 501 on -> the browser blocks it -> "couldn't reach the kitchen").
   // The backend is always this cluster's own console, same-origin, so there is one endpoint. The round
   // selector is gone (#213): students only ever use their own cluster and "rounds" is admin jargon.
   const CHAT_ENDPOINT = "/chat";

@@ -14,9 +14,9 @@ On 2026-09-03 two bugs reached a live demo and neither was detectable over HTTP:
    be validated without one.
 
 2. The round banner is computed client-side from the hostname. Attendee clusters carry themed names
-   (hexhen-zelda), which matched no round pattern and fell through to the round-1 default, so a student on
-   a fully-guarded cluster was told "NO GUARDRAILS - you're talking straight to the model. Nothing is
-   watching." The DOM was wrong while the HTTP response was perfect.
+   (hexhen-zelda), which matched no round pattern and fell through to the no-guardrails default, so a
+   student on a fully-guarded cluster was told "NO GUARDRAILS - you're talking straight to the model.
+   Nothing is watching." The DOM was wrong while the HTTP response was perfect.
 
 Both are the same class: the failure lives in what the browser does with the response, not in the
 response. So this drives Chrome, sends a real prompt through the page's own fetch, and reads the rendered
