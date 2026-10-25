@@ -323,16 +323,18 @@ spec:
     deployment:
       serviceAccountName: agent-sa
       # OTel Operator injects the Python SDK + OTLP endpoint into the ADK agent pod (PRD #20 M2/M3); ADK
-      # (>=1.17, bundled by kagent 0.9.9) then emits gen_ai.* spans natively (invoke_agent -> chat ->
-      # execute_tool). The Agent CRD supports pod annotations (kubectl explain agent.spec.declarative.deployment).
+      # (>=1.17, bundled by the kagent chart gitops/apps/kagent.yaml pins) then emits gen_ai.* spans natively
+      # (invoke_agent -> chat -> execute_tool). The Agent CRD supports pod annotations (kubectl explain
+      # agent.spec.declarative.deployment).
       annotations: { instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python" }
       # Unified Service Tagging for Datadog correlation on the kagent agent pod (same scheme as
       # guard-proxy / agentgateway). UST vocabulary locked in PRD #13: service.version is the component's
       # real software version (NOT a model-tier label); the model dimension for the cost race comes from
       # gen_ai.request.model (OTel GenAI semconv, captured in M2), not from service.version.
       # deployment.environment.name is the SDLC env (production), not the project name. verify-at-build:
-      # confirm the v1alpha2 Agent `deployment.env` field is honored on kagent chart 0.9.9; if not, set
-      # OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template instead.
+      # confirm the v1alpha2 Agent `deployment.env` field is honored on the kagent chart
+      # gitops/apps/kagent.yaml pins; if not, set OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template
+      # instead. service.version below is that chart's version; verify/test_observability.py holds it there.
       env:
         # OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel Operator
         # auto-sets it from the deployment name (workshop-agent) at injection. Pin it to the locked UST
@@ -341,7 +343,7 @@ spec:
         - name: OTEL_SERVICE_NAME
           value: burritobot-agent
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "service.name=burritobot-agent,service.version=v0.9.9,deployment.environment.name=production"
+          value: "service.name=burritobot-agent,service.version=v0.10.1,deployment.environment.name=production"
         # Capture gen_ai message content on ADK spans (the agent waterfall input/output). SPAN_AND_EVENT,
         # NOT "true" (invalid under gen_ai_latest_experimental, silently collects nothing). SPAN_AND_EVENT
         # (not bare EVENT_ONLY) so the content lands as gen_ai.input.messages / gen_ai.output.messages SPAN
@@ -388,7 +390,7 @@ spec:
           # paused tool_use left a dangling call and the next Bedrock Converse request failed with
           # "tool_use ids ... without tool_result" (seen live on r1-1). Excessive agency is the point:
           # the agent just applies what it's told (e.g. the Joker image), and Kyverno blocks it in R2.
-        # Per-agent audit identity (#190). kagent 0.9.9 sends Tool.headersFrom on every request to this
+        # Per-agent audit identity (#190). kagent sends Tool.headersFrom on every request to this
         # server (go/core/internal/controller/translator/agent/compiler.go), agentgateway forwards it to
         # workshop-mcp, and gitops/ai-layer/tool_audit.py stamps it on each tool call's audit line. The
         # value is this Agent's own name; a second agent wired to workshop-mcp must carry its own.

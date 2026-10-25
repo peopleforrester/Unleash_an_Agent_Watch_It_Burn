@@ -151,7 +151,15 @@ _UST = {
     "agentgateway": ("gitops/ai-layer/agentgateway.yaml", "service.name=burritobot-gateway", "service.version=v1.5.0"),
 }
 _ust_targets = [(n, _container_env(p, n).get("OTEL_RESOURCE_ATTRIBUTES", ""), s, v) for n, (p, s, v) in _UST.items()]
-_ust_targets.append(("kagent", _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", ""), "service.name=burritobot-agent", "service.version=v0.9.9"))
+# kagent's span version follows the chart the cluster runs, read from the Application rather than written
+# here: the chart went 0.9.9 -> 0.10.1 on 2026-09-10 while the span version stayed v0.9.9 (#586), the same
+# drift #495 fixed for agentgateway by deriving its version from the image tag.
+_kagent_chart = str(yaml.safe_load((REPO / "gitops/apps/kagent.yaml").read_text())["spec"]["source"]["targetRevision"])
+_kagent_ver = f"v{_kagent_chart}"
+_kagent_attrs = dict(kv.split("=", 1) for kv in _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", "").split(",") if "=" in kv)
+check(f"kagent spans carry service.version={_kagent_ver}, the chart gitops/apps/kagent.yaml pins "
+      f"(found {_kagent_attrs.get('service.version')})", _kagent_attrs.get("service.version") == _kagent_ver)
+_ust_targets.append(("kagent", _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", ""), "service.name=burritobot-agent", f"service.version={_kagent_ver}"))
 for _name, _ust, _svc, _ver in _ust_targets:
     check(f"{_name} carries locked UST (service.name + real service.version + env=production)",
           _svc in _ust and _ver in _ust and "deployment.environment.name=production" in _ust

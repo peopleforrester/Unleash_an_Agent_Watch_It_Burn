@@ -44,7 +44,7 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
 | `service.name` for agentgateway | `agentgateway` |
 | `service.name` for guard-proxy | `guard-proxy` |
 | `service.name` for evil-mcp-shim | `evil-mcp-shim` |
-| `service.version` for kagent | `v0.9.9` |
+| `service.version` for kagent | `v0.10.1` (the kagent chart `gitops/apps/kagent.yaml` pins; was `v0.9.9` until the 2026-09-10 chart bump, #586) |
 | `service.version` for agentgateway | `v1.3.0` |
 | `service.version` for guard-proxy | `1.0.0` |
 | `service.version` for evil-mcp-shim | `1.0.0` |
@@ -141,7 +141,7 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
 6. Commit and let ArgoCD reconcile. Confirm all four pods restart cleanly.
 
 **Done when:**
-- [ ] kagent pod has `service.name=kagent`, `service.version=v0.9.9`, `deployment.environment.name=production`
+- [ ] kagent pod has `service.name=kagent`, `service.version=v0.10.1`, `deployment.environment.name=production`
 - [ ] agentgateway pod has `service.name=agentgateway`, `service.version=v1.3.0`, `deployment.environment.name=production`
 - [ ] guard-proxy pod has `service.name=guard-proxy`, `service.version=1.0.0`, `deployment.environment.name=production`
 - [ ] evil-mcp-shim pod has `service.name=evil-mcp-shim`, `service.version=1.0.0`, `deployment.environment.name=production`
