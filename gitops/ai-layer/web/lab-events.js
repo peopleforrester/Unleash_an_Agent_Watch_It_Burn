@@ -33,7 +33,11 @@
   'use strict';
 
   // The one knob. false = the page sends nothing at all.
-  var ENABLED = true;
+  //
+  // OFF by Michael's decision on question 693 (2026-10-25, decisions.md): the markers stay off until the lab's
+  // privacy warning has wording that tells attendees what is recorded. Turn this back on in the same change as
+  // that wording, never before it. verify/test_lab_events.py pins it off until then.
+  var ENABLED = false;
   var ENDPOINT = '/lab-events';
   var FLUSH_MS = 10000;
   var HEARTBEAT_MS = 60000;

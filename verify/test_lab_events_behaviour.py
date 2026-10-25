@@ -99,6 +99,10 @@ sent = {k for _, a in ev for k in a}
 check(f"every attribute it sends survives the collector's keep-list {sorted(sent)}", all(f'"{k}"' in keep for k in sent))
 
 print("== the off switches ==")
+# The file as committed: the switch is off (question 693, decisions.md), so a page load sends and schedules
+# nothing. Every other run here arms the switch, so the sending code stays tested while it is off.
+s = run("shipped")
+check("as shipped (ENABLED = false): nothing is sent and nothing is scheduled", s["posts"] == [] and s["intervals"] == [])
 o = run("optout")
 check("Global Privacy Control: nothing is sent and nothing is scheduled", o["posts"] == [] and o["intervals"] == [])
 p = d["pure"]
