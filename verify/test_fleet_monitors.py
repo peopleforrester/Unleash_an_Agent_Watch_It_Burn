@@ -271,6 +271,13 @@ check("six monitors created, all managed", len(org.monitors) == 6
 check("the dashboard was created and its URL printed", "fleet dashboard: https://app.datadoghq.com/dashboard/abc-def-ghi/fleet" in text)
 check("the leaderboard was created and its URL printed",
       "challenge leaderboard: https://app.datadoghq.com/dashboard/lea-der-brd/fleet" in text)
+check("the railway command that points monitoring.agenticburn.com at the fleet dashboard is printed (#550)",
+      "railway variables --service watch-it-burn-apex --set "
+      "WIB_MONITORING_URL='https://app.datadoghq.com/dashboard/abc-def-ghi/fleet'" in text)
+check("only the fleet dashboard gets a railway command", text.count("railway variables") == 1)
+check("the reminder says the variable redeploys the apex router, so run it in setup, not in a session",
+      "redeploys watch-it-burn-apex, which restarts the router" in text
+      and "during event setup, not during a session" in text)
 check("our previous downtime was cancelled", stale["attributes"]["status"] == "canceled")
 check("someone else's downtime was left alone", foreign["attributes"]["status"] == "active")
 new_dts = [d for d in org.downtimes if d["attributes"]["status"] == "active" and fm.ours(d)]

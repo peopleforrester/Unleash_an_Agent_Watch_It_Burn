@@ -89,5 +89,9 @@ every alert names the `fleet.sh verify <cluster>` command for the cluster it is 
 ## Not here yet
 
 - `monitoring.agenticburn.com` lives in the apex router (`peopleforrester/apex-agenticburn`, Caddyfile),
-  which is a separate repo. Until it has a handle, the link is the `fleet dashboard:` URL the apply prints.
+  which is a separate repo. Since apex-agenticburn#34 it is a 302 to `WIB_MONITORING_URL` on the
+  `watch-it-burn-apex` Railway service, and a 503 until that is set. The dashboard URL changes every event,
+  so the apply prints the `railway variables --service watch-it-burn-apex --set WIB_MONITORING_URL='<url>'`
+  command after the `fleet dashboard:` URL (#550). Running it stays a manual step, during event setup:
+  changing a Railway variable redeploys the apex service and restarts the router.
 - The per-attendee orgs get none of this; each student's org sees only their own cluster.

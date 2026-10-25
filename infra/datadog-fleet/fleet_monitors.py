@@ -53,6 +53,9 @@ DASHBOARD_FILE = HERE / "dashboard.yaml"
 LEADERBOARD_FILE = HERE / "leaderboard.yaml"
 # (label, file): the label is what the apply prints in front of each dashboard's URL.
 DASHBOARDS = (("fleet dashboard", DASHBOARD_FILE), ("challenge leaderboard", LEADERBOARD_FILE))
+# The dashboard monitoring.agenticburn.com redirects to, and the apex Railway service that holds the target.
+MONITORING_LABEL = "fleet dashboard"
+APEX_SERVICE = "watch-it-burn-apex"
 SECRET_ID = "watch-it-burn/datadog"
 MANAGED_TAG = "managed-by:wib-fleet-monitors"
 KEY_TAG_PREFIX = "wib-monitor:"
@@ -380,6 +383,15 @@ def apply(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], notify: list[
 
     for label, url in urls:
         say(f"  {label}: {url}")
+    # monitoring.agenticburn.com is a 302 to WIB_MONITORING_URL on the apex Railway service
+    # (apex-agenticburn#34), and answers 503 until it is set. Setting it is deploy configuration, so the
+    # apply only prints the command (#550).
+    for label, url in urls:
+        if label == MONITORING_LABEL:
+            say("  point monitoring.agenticburn.com at it (by hand):")
+            say(f"    railway variables --service {APEX_SERVICE} --set WIB_MONITORING_URL='{url}'")
+            say(f"  changing a Railway variable redeploys {APEX_SERVICE}, which restarts the router:"
+                " run it during event setup, not during a session.")
     return 0
 
 
