@@ -76,7 +76,7 @@
     "protobufjs": "7.6.5",
     "shell-quote": "1.11.0",
     "svgo": "2.8.4",
-    "multer": "2.4.0",
+    "multer": "2.5.0",
     "react-router-dom": "6.30.6",
     "webpack-dev-server": "5.2.6",
     "vm2": "3.12.2",

@@ -68,7 +68,7 @@ def tracked_markdown() -> list[pathlib.Path]:
     out = []
     for p in sorted(REPO.rglob("*.md")):
         rel = p.relative_to(REPO).as_posix()
-        if rel.startswith((".git/", "node_modules/", ".venv/")) or "/.feedback/" in f"/{rel}":
+        if rel.startswith((".git/", ".venv/")) or "/.feedback/" in f"/{rel}" or "/node_modules/" in f"/{rel}":
             continue
         if rel in EXEMPT or rel.startswith(TRANSCRIPTS):
             continue

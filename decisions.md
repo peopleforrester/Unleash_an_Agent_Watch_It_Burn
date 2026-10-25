@@ -2394,3 +2394,34 @@ burn profile (the Community cluster) installs no Falco. What lands here, and wha
   reads `security/falco`, the hostname override in `burritbot.html` stays. `verify/test_falco_badge_measured.py`
   ties the two together: it fails if the override goes before the pin moves, or stays after. Promote the
   pin bump, the `checksum/proxy-py` bump and the override removal together.
+
+## 2026-10-25 · #421 · Backstage plugins move to their security backports, not to a newer release
+
+The Backstage backend plugins in `images/watch-it-burn-backstage` had open advisories, one critical:
+scaffolder-backend's sensitive information exposure (fixed in 4.0.3). Each plugin moves to a patched release
+in the line it was already on, and the app stays on the Backstage 1.52.0 line (`backstage.json`): backend-defaults
+0.17.8, auth-node 0.7.7, catalog-backend 3.9.2, kubernetes-backend 0.21.12, proxy-backend 0.6.19,
+scaffolder-backend 4.1.0, scaffolder-backend-module-github 0.9.13, search-backend 2.1.8, techdocs-backend 2.2.5
+and techdocs-node 1.15.6. This covers what Dependabot PRs #424 to #433 asked for. Bumping to release 1.56 would
+have meant catalog-backend 4, techdocs-node 2 and scaffolder-backend-module-github 0.10, and none of those
+majors is needed for a fix. scaffolder-backend and techdocs-backend take `~` ranges, because `^` resolves to
+4.2.x and 2.4.x, which come from release 1.56 and pull in techdocs-node 2. A lock refresh moves
+catalog-backend-module-logs' `^3.8.0` onto 3.9.2.
+
+`.yarnrc.yml`'s three-day age gate let in body-parser 1.20.9/2.4.0 and multer 2.5.0 today. Multer's resolution
+goes to 2.5.0, since express-openapi-validator pins 2.4.0 exactly. Express 4.22.3 takes `qs ~6.16.0`, which
+clears both qs advisories.
+
+Checks: `yarn install --immutable`, `yarn tsc`, `CI=true yarn test`, `yarn build:backend` and
+`backstage-cli config:check --lax` pass. A dev `yarn workspace backend start` initialized all twelve plugins.
+`yarn npm audit --all --recursive` still lists only these:
+
+- **Fixed only in a new major:** zod 3.25.76 (fixed in 4.6.6), react-router 6 (7.18), @azure/msal-node 5
+  through @azure/identity 4.13 (7.1; even @azure/identity 4.14 asks for `^6`), and postcss-selector-parser 6
+  (7.1.6). All four come in through Backstage 1.52 or its build tooling, so they wait for a Backstage release
+  that moves them.
+- **No fixed release:** node-forge 1.4.0 (see the 2026-10-24 #421 entry) and elliptic 6.6.1.
+
+`verify/test_docs_current.py` skipped only a top-level `node_modules/`. Once this image's dependencies were
+installed, it scanned `images/watch-it-burn-backstage/node_modules` and failed on typebox's readme. It now
+skips a `node_modules` directory at any depth.
