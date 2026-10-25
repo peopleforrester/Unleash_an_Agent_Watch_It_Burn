@@ -64,12 +64,38 @@ and seconds (`mm:ss`). The demo is segments 2 to 6. Every finding is an issue in
 this repo, and its number goes in the Findings row, so nothing that broke lives
 only in this table.
 
+**Reset the community bot before each run (#539).** A fresh bring-up starts
+everything at zero; two runs on one bring-up do not. guard-proxy keeps attackme's
+cost counter, the cluster-wide tally its $25 `COST_CAP_USD` cap is measured
+against, the per-session budgets and the projected feed in memory, so run 2 would
+open on run 1's dollars and prompts. Before run 1, before run 2 and before the
+delivered session, from `infra/terraform/fleet/`:
+
+```bash
+./fleet.sh reset-bot watch-it-burn-community
+curl -fsS https://attackme.agenticburn.com/cost
+```
+
+`reset-bot` writes its own kubeconfig for the cluster and refuses unless its
+context is that cluster. It deletes the guard-proxy pod and waits for the
+Deployment's replacement to go Ready. That is a pod delete, never a
+`kubectl rollout restart` or `kubectl set env`: the spec Argo CD owns is not
+touched, so the app stays Synced and self-heal has nothing to revert. It then reads
+`/cost` through the router and exits non-zero unless the counter reads
+`$0.0000 over 0 requests`. The curl is the same read by eye: `"usd": 0.0` and
+`"requests": 0`. To zero the admin clusters' counters as well, add their names
+(`watch-it-burn-michael-admin`, `watch-it-burn-whitney-admin`), then run
+`guards-off` on each admin terminal: the restart puts guard-proxy's own toggles back
+to the repo's values (all off), but the C7 tool allow-list and gateway rule live
+outside guard-proxy, and only `guards-off` puts them back.
+
 | | Run-through 1 | Run-through 2 | Delivered |
 |---|---|---|---|
 | Date | not yet run | not yet run | not yet run |
 | Presenters | | | |
 | Platform (clusters on stage, brought up with `fleet.sh` that session?) | | | |
 | Deck (rounds-agenticburn commit) | | | |
+| Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
 | Whole slot (target 30:00) | | | |
 | Demo, segments 2 to 6 (target 24:00) | | | |
 | Segment 1 (target 2:00) | | | |
@@ -593,6 +619,15 @@ is merely slow rather than rebuilding:
   The QR on the slide is `facilitation/kubecon-na-2026-audience-qr.svg`, and the
   Feedback button opens the session survey, both set in
   `gitops/ai-layer/web/event.js`.
+- [ ] **Reset the community bot, last (#539).** The probe, the phone check and any
+  rehearsal all spend on attackme, and guard-proxy keeps that spend in memory. Once
+  nothing else will touch attackme before the session, from `infra/terraform/fleet/`:
+  `./fleet.sh reset-bot watch-it-burn-community`. It restarts guard-proxy by a pod
+  delete, which Argo CD does not revert, and must end `counter at zero` on
+  `https://attackme.agenticburn.com/cost`, so the room's counter opens at `$0.0000`
+  with the whole $25 `COST_CAP_USD` window ahead of it. Anything else, run it again;
+  if it still does not read zero, read the guard-proxy pod's logs before the day.
+  The same reset runs before each run-through ("Run-through record" above).
 
 ## Rollback on the day
 

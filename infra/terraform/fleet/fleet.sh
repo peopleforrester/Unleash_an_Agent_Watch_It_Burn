@@ -520,6 +520,12 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [round]]
                       delete, never a rollout restart, which the drift policy refuses.
     restart-console <name...>
                       The same for the console pod.
+    reset-bot <name...>
+                      Reset BurritoBot's in-memory state between two run-throughs on one bring-up (#539):
+                      delete the guard-proxy pod, wait for a Ready replacement, then read the cluster's
+                      public /cost and fail unless the counter is \$0 over 0 requests. The fresh process
+                      also starts the COST_CAP_USD window, the per-session budgets, the rate window and
+                      the projected feed empty, and its guards from the repo's env.
     terminal-password <name...>
                       Re-issue the terminal login: rewrite terminal-auth with the credential the
                       cluster's role is handed, then restart the terminal so ttyd reads it.
@@ -3903,6 +3909,7 @@ apply_routes_table() {
 readonly AGENT_POD_SELECTOR="app.kubernetes.io/name=workshop-agent"
 readonly CONSOLE_POD_SELECTOR="app.kubernetes.io/name=console"
 readonly TERMINAL_POD_SELECTOR="app.kubernetes.io/name=web-terminal"
+readonly GUARD_PROXY_POD_SELECTOR="app.kubernetes.io/name=guard-proxy"
 readonly RESTART_WAIT="${WIB_RESTART_WAIT:-180}"              # seconds for a replacement pod to go Ready
 readonly RESTART_INTERVAL="${WIB_RESTART_INTERVAL:-5}"
 readonly ACTIONS_POLL="${WIB_ACTIONS_POLL:-10}"               # seconds between queue polls
@@ -3955,6 +3962,38 @@ print(sum(1 for p in items if not p["metadata"].get("deletionTimestamp") and p["
 restart_agent_one()   { restart_pods "$1" "$2" "$3" agent "${AGENT_POD_SELECTOR}"; }
 restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTOR}"; }
 
+# Reset BurritoBot between two run-throughs on one bring-up (#539). guard-proxy keeps the cost counter,
+# the cluster-wide COST_CAP_USD tally, the per-session budgets, the rate window and the projected feed in
+# memory, and its guards as runtime toggles, so the second run would open on the first run's dollars.
+# A new process starts every one of them from zero and the guards from the repo's env. The restart is a
+# pod delete, like the others above, so Argo CD's spec is untouched and the drift policy has nothing to
+# refuse. A restart is not taken as proof: the counter is read back from the public /cost the room sees,
+# and anything but $0 over 0 requests inside RESTART_WAIT fails (the old pod can answer for a moment
+# while it terminates).
+reset_bot_one() {
+    local name="$1" kcfg="$2" ctx="$3" host url body verdict waited=0
+    restart_pods "${name}" "${kcfg}" "${ctx}" agent "${GUARD_PROXY_POD_SELECTOR}" || return 1
+    host="$(public_host_for "${name}")"; url="https://${host}/cost"
+    while :; do
+        body="$(curl -fsS --max-time 10 "${url}" 2>/dev/null || true)"
+        verdict="$(python3 -c '
+import json, sys
+try:
+    c = json.loads(sys.argv[1])
+    usd, req = float(c["usd"]), int(c["requests"])
+except (ValueError, KeyError, TypeError):
+    print("unreadable"); sys.exit()
+print(("zero " if usd == 0 and req == 0 else "") + f"${usd:.4f} over {req} requests")' "${body}" 2>/dev/null)"
+        if [[ "${verdict}" == zero* ]]; then
+            log "  ${name}: counter at zero on ${url} (${verdict#zero })"; return 0
+        fi
+        [[ "${waited}" -ge "${RESTART_WAIT}" ]] && break
+        sleep "${RESTART_INTERVAL}"; waited=$(( waited + RESTART_INTERVAL ))
+    done
+    log "  ${name}: guard-proxy restarted, but ${url} still reads ${verdict:-nothing} after ${RESTART_WAIT}s"
+    return 1
+}
+
 # Re-issue the terminal login: write the credential this cluster's role is handed (terminal_creds_for, the
 # same function the bootstrap and the provisioning bundle use) and restart the terminal, because ttyd
 # reads it once at startup. It restores the expected credential rather than minting a new one: the login
@@ -3999,6 +4038,7 @@ _admin_each() {   # $1 verb (for messages), $2 per-cluster function, rest: clust
 }
 cmd_restart_agent()     { _admin_each restart-agent restart_agent_one "$@"; }
 cmd_restart_console()   { _admin_each restart-console restart_console_one "$@"; }
+cmd_reset_bot()         { _admin_each reset-bot reset_bot_one "$@"; }
 cmd_terminal_password() { _admin_each terminal-password terminal_password_one "$@"; }
 
 # One field of a JSON object, empty when absent.
@@ -4201,6 +4241,7 @@ main() {
         converge) cmd_converge "$@" ;;
         restart-agent) cmd_restart_agent "$@" ;;
         restart-console) cmd_restart_console "$@" ;;
+        reset-bot) cmd_reset_bot "$@" ;;
         terminal-password) cmd_terminal_password "$@" ;;
         serve-actions) cmd_serve_actions "$@" ;;
         harvest) cmd_harvest "$@" ;;
