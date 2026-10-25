@@ -2030,3 +2030,22 @@ also holds that the name is the ConfigMap with the one `# c7-rule` line the C7 b
   check; it now describes the old hop without repeating it. That check itself is unchanged.
 - **Held offline.** Against the files as they were before #514 the test fails 14 checks, all of them on the
   grant or the wording.
+
+## 2026-10-25 · #565 · The console now sees its public hostname; the /brief gate stays in the router
+
+The #152 comment above `location = /brief` in `gitops/ai-layer/console.conf` said the console never learns its
+own public hostname, because the apex router forwarded Host as the load balancer address. That stopped being
+true at #233, when the router began passing `header_up Host {host}`. The service-host server in console.conf
+matches `grafana-<cluster>` and the other names only because of it, and #233 recorded all eight service hosts
+answering 200 on a live cluster. The 2026-10-24 #451 entry above repeats the old claim. Its knob does not
+depend on it.
+
+- **Re-checked 2026-10-25, not live.** The fleet was torn down: the router's roster was empty and every roster
+  host got its unknown-host page. The router hop was run locally under caddy with the shipped
+  reverse_proxy options and a TLS stub answering `/whoami` the way nginx does. It gave
+  `host=attackme.agenticburn.com`. `verify/test_service_hosts_live.py` (E2E) asserts the live `/whoami` at
+  the next cluster build.
+- **The gate stays in the router.** A gate in nginx would read Host one hop later and hold only while the router
+  passes it, and if that ever stopped, the brief would 404 on the roster clusters again, the #152 failure. The
+  roster rule also stays in one place: the router's `@brief_not_roster` matcher, which also takes `/kubecon`
+  (#511), with the apex E2Es testing it. nginx behaviour is unchanged.
