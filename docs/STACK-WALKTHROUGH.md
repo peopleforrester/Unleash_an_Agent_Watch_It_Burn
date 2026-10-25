@@ -34,7 +34,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 |---|---|---|---|---|
 | Cluster | EKS + VPC-CNI | isolation, networking | `infra/terraform/` | independent per-attendee cluster (Terraform), shared VPC; CNI enforces NetworkPolicy |
 | GitOps | Argo CD v3.4.4 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
-| Admission | Kyverno v1.19.0 (chart 3.9.0, verified 2026-09-05) | block non-compliant workloads | `policies/kyverno/` | CEL `ValidatingPolicy` (`policies.kyverno.io/v1`, #206), `spec.validationActions` Audit to Deny |
+| Admission | Kyverno v1.19.1 (chart 3.9.1, moved from 3.9.0 on 2026-09-10) | block non-compliant workloads | `policies/kyverno/` | CEL `ValidatingPolicy` (`policies.kyverno.io/v1`, #206), `spec.validationActions` Audit to Deny |
 | Supply chain | Kyverno ImageValidatingPolicy (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | cosign key attestor, Deny, verifies offline |
 | Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |

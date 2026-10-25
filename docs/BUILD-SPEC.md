@@ -232,7 +232,7 @@ Versions are live-verified on EKS as of 2026-06-17 (`PROJECT_STATE.md`, `VERSION
 - **MCP restriction:** kagent `toolNames` allowlist (native, confirmed) as primary; MCP
   registry/gateway/AI-gateway as the enterprise story. The malicious MCP shim (`evil-mcp-shim`) is the
   "clown file → Argo" demo.
-- **Platform:** ArgoCD `v3.4.3`, Kyverno `v1.18.1` (rule-level `validate.failureAction`), Falco
+- **Platform:** ArgoCD `v3.4.3`, Kyverno `v1.19.1` (CEL `ValidatingPolicy`, `spec.validationActions`), Falco
   `0.44.1`, kube-prometheus-stack `86.2.3`, OTel Collector `v0.154.0` → Tempo/Grafana. EBS CSI driver +
   default gp3 StorageClass are required on every cluster (EKS ships neither).
 
@@ -253,7 +253,7 @@ tools, and the cost counter makes the economic argument the control plane can't 
 
 Pins (live-verified 2026-06-17, re-pinned to current GA 2026-06-20):
 kagent chart `0.10.1` (moved from `0.9.9` on 2026-09-10) / CRD `v1alpha2`;
-Argo CD `v3.4.4` / chart `9.6.0`; Kyverno app `v1.18.1` / chart `3.8.1`; Falco `0.44.1`;
+Argo CD `v3.4.4` / chart `9.6.0`; Kyverno app `v1.19.1` / chart `3.9.1` (moved from `3.8.1` in #389); Falco `0.44.1`;
 kube-prometheus-stack `86.2.3`; OTel Collector chart `0.158.2` / app `0.153.0`;
 agentgateway OSS `v1.5.0` (released 2026-08-27, moved from `v1.3.0` on 2026-09-10; deployed as the
 manifest `gitops/ai-layer/agentgateway.yaml`, image pinned by digest); Tempo chart `2.2.3` @

@@ -1,10 +1,15 @@
 # ABOUTME: Every place that names the deployed Kyverno agrees: the chart gitops/apps/kyverno.yaml pins, both
-# ABOUTME: VERSIONS.lock lines, the Datadog version tag, and the CLI version the policy test and run-e2e.sh demand.
+# ABOUTME: VERSIONS.lock lines, the Datadog version tag, the CLI version the policy test and run-e2e.sh demand,
+# ABOUTME: and the working docs that state the deployed chart and app.
 #
 # Why (#491). The chart went to 3.9.1 (Kyverno v1.19.1) in #389 and nothing else moved: VERSIONS.lock still
 # said v1.18.1 / chart 3.8.1 twice, the admission controller's tags.datadoghq.com/version said v1.18.1, and the
 # CLI test demanded v1.19.0 as "the deployed engine". The CLI pin only means something if it is the version
 # the cluster runs, so a bump that leaves one copy behind fails here, before any cluster is built.
+#
+# The working docs drifted the same way (#579): six weeks after 3.9.1 the build spec and the recreation spec still
+# said chart 3.8.1 / app v1.18.1 and the stack walkthrough said 3.9.0 / v1.19.0. They are held here as kagent's
+# are in test_kagent_version_pins.py.
 #
 # VERSIONS.lock is the record of which app version a chart installs; this test does not look it up. It holds
 # the lock to the chart the Application pins, and every other copy to the lock's app version.
@@ -70,6 +75,38 @@ readme = (REPO / "policies/README.md").read_text()
 cli_ref = re.search(r"Kyverno (v\d+\.\d+\.\d+) CLI", readme)
 check(f"policies/README.md names the {deployed} CLI", cli_ref is not None and cli_ref.group(1) == deployed,
       f"got {cli_ref.group(1) if cli_ref else None!r}")
+
+print("== the working docs name the Kyverno we deploy ==")
+# Each of these states the deployed Kyverno. decisions.md, the PRDs, UPGRADE-INVENTORY.md (a superseded dated
+# inventory) and the research notes are records and are not checked.
+CURRENT_DOCS = (
+    "docs/BUILD-SPEC.md",
+    "docs/MASTER-RECREATION-SPEC.md",
+    "docs/STACK-WALKTHROUGH.md",
+)
+VERSION = re.compile(r"(\bfrom\s+`?)?\bv?(\d+\.\d+\.\d+)\b")
+
+
+def kyverno_phrases(text):
+    """Each mention of Kyverno up to the next table cell, list separator or comma, with the line it is on.
+
+    The phrase is where a doc pins a version ("Kyverno app `v1.19.1` / chart `3.9.1`", "kyverno v1.19.1, falco
+    ...", "kyverno chart 3.9.1 (app v1.19.1) |"); cutting at the separator keeps the next component's version out.
+    """
+    for i, line in enumerate(text.splitlines(), 1):
+        for m in re.finditer(r"kyverno", line, re.I):
+            yield i, re.split(r"[|;,]", line[m.end():], maxsplit=1)[0]
+
+
+for rel in CURRENT_DOCS:
+    phrases = list(kyverno_phrases((REPO / rel).read_text(encoding="utf-8")))
+    named = [(i, [(h, v) for h, v in VERSION.findall(p)]) for i, p in phrases]
+    check(f"{rel} names Kyverno app {deployed} and chart {chart} together",
+          any({deployed.lstrip("v"), chart} <= {v for _, v in vs} for _, vs in named))
+    # Kyverno's app is on the 1.x line and its chart on the 3.x line. A version after "from" is history.
+    wrong = [(i, v) for i, vs in named for h, v in vs if not h and (
+        (v.startswith("1.") and v != deployed.lstrip("v")) or (v.startswith("3.") and v != chart))]
+    check(f"{rel} names no other Kyverno app or chart as current (found {wrong})", not wrong)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
