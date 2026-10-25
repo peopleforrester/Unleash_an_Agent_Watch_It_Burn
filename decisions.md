@@ -2122,6 +2122,7 @@ unchanged, and it still runs the tier tests during a cluster build, since they k
   10 s, the offline suite ran 140 tests green, and all 12 tier tests passed. Run one by one, the tier tests
   took about 6 minutes; test_iam_policy_structural (about 100 s) and test_terraform_lock_init (about 70 s)
   are the slowest.
+
 ## 2026-10-24 · dev dependency · otelcol-contrib 0.160.0 for the E2E suite (#150)
 
 `verify/test_lab_pipeline_collector.py` runs the real collector binary, otelcol-contrib **0.160.0**: the
@@ -2131,11 +2132,12 @@ from the release tarball (github.com/open-telemetry/opentelemetry-collector-rele
 `OTELCOL_CONTRIB` at it. `run-e2e.sh` reports it missing up front, with the other prerequisites.
 
 Why. The lab-marker pipeline (#150) adds a receiver, a connector and two OTTL processors to the collector
-config. A config the collector rejects CrashLoops the DaemonSet, which takes the student's own telemetry
-down with it, and YAML checks cannot tell a valid OTTL function from a typo. The route is also public, so
-the contract processors have to be shown to strip a forged payload, and only the real OTTL engine can show
-that. The test pins the chart version next to the binary version, so a chart bump fails the test until both
-move together. Rejected: a container image, because this machine has no Docker access.
+config. A config the collector rejects puts the DaemonSet in CrashLoopBackOff, which takes the student's own
+telemetry down with it, and YAML checks cannot tell a valid OTTL function from a typo. The route is also
+public, so the contract processors have to be shown to remove the fields of a forged payload, and only the
+real OTTL engine can show that. The test pins the chart version next to the binary version, so a chart bump
+fails the test until both move together. Rejected: a container image, because this machine has no Docker
+access.
 
 ## 2026-10-25 · question 693 · lab progress markers stay off until the disclosure wording is settled (#150)
 
@@ -2145,16 +2147,16 @@ their BurritoBot prompts after the workshop. The options were: extend the warnin
 keep the markers on and leave the warning as it is; or turn the markers off until the wording is settled.
 
 Answer: **Turn the markers off until the wording is settled.** Decided by Michael. The run had recommended
-extending the warning; this overrides that recommendation.
+extending the warning; this answer replaced that recommendation.
 
-What it changes. `gitops/ai-layer/web/lab-events.js` ships with `var ENABLED = false;`, so the lab page sends
-no progress markers, and the instructor dashboard's lab widgets and harvest pass 6 have nothing to read.
-The route, the collector pipeline, the dashboard and the harvest pass stay in place, unchanged and tested.
-The test harness arms the switch, so the sending code stays covered while it is off.
-`verify/test_lab_events.py` pins the switch off. Turning the markers back on is one commit that changes
-that line, the warning in `gitops/ai-layer/web/lab.html` (once Michael has settled its wording) and the
-pin, together. The decision does not touch the prompts that attendee clusters already dual-ship to the
-instructor org since #242. Nothing in the warning about those has changed either.
+What it changes. `gitops/ai-layer/web/lab-events.js` is committed with `var ENABLED = false;`, so the lab
+page sends no progress markers, and the instructor dashboard's lab widgets and harvest pass 6 have nothing
+to read. The route, the collector pipeline, the dashboard and the harvest pass stay in place, unchanged and
+tested. The behaviour test turns the switch on in its own copy, so the sending code stays covered while the
+committed file has it off. `verify/test_lab_events.py` pins the switch off. Turning the markers back on is
+one commit that changes that line, the warning in `gitops/ai-layer/web/lab.html` (once Michael has settled
+its wording) and the pin, together. The decision does not touch the prompts that attendee clusters have
+sent to the instructor org since #242, and the warning still says nothing about them.
 
 ## 2026-10-25 · question 753 · the lab warning carries the disclosure, and the progress markers are back on (#150)
 
@@ -2167,11 +2169,11 @@ Answer: **Use the proposed sentence and turn the markers on.** Decided by Michae
 What it changes. The BurritoBot warning in `gitops/ai-layer/web/lab.html` now reads, after the sentence about
 the instructor screen: "The lab also records which steps, hints and commands you open (never what you type),
 and the instructors keep your prompts after the workshop to improve it." `gitops/ai-layer/web/lab-events.js`
-ships with `var ENABLED = true;`, so the instructor dashboard's progress widgets and harvest pass 6 have data
-again. This ends the "off until the wording is settled" state set by question 693 (entry above).
+is committed with `var ENABLED = true;`, so the instructor dashboard's progress widgets and harvest pass 6
+have data again. This ends the off state that question 693 set (entry above).
 
-The switch and the sentence are now tied together. `verify/test_lab_events.py` fails if the markers are on
-without this exact sentence in the warning. Collecting more, or changing the wording, therefore means a new
-decision and a change to both in the same commit. The sentence also covers the prompts that attendee clusters
-dual-ship to the instructor org since #242, which the warning did not mention before. "To improve it" states
-the purpose the kept prompts are used for.
+The switch and the sentence are tied together. `verify/test_lab_events.py` fails if the markers are on
+without this exact sentence in the warning. Collecting more, or changing the wording, needs a new decision
+and a change to both in the same commit. The sentence also covers the prompts that attendee clusters have
+sent to the instructor org since #242, which the warning did not mention before. "To improve it" names the
+purpose the kept prompts are used for.
