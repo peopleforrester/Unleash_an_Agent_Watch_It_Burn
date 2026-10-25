@@ -1611,3 +1611,18 @@ contract as `instructors up`. One result of this is that `scheduled-up.sh` now s
 when a roster apply fails, rather than going on to build the attendee pool. The offline
 `verify/test_fleet_apply_failure_exit.sh` uses the real `run_pool`/`up_one` with a terraform shim whose apply
 fails, and checks the exit code with the tail on and with it off.
+
+## 2026-10-25 · #536 · The spec copy lives at specs/ with one header line added, and is never edited here
+
+personal-knowledge sent spec talks/burritobot/001 again at sha256:4e127440568a (its #174), the version whose
+milestone dates follow Michael's 2026-10-24 revision on #447. It replaces the versions sent as #459
+(a9239a63e8ec) and #462 (dc49df429c73), neither of which had landed a copy here. The copy is
+`specs/001-ready-by-11-08-delivered-11-12.md`, flat under `specs/` as in the cncf-bingo and aws-management
+copies. It is the source text with one line, `source: personal-knowledge <file> @ sha256:<x>`, added after
+`spec:`, the header personal-knowledge's `scripts/spec-drift.py` reads (the issue writes "(at)" for "@" so
+GitHub does not take it for a mention). There is no local Corrections note: a change to the spec goes back to
+personal-knowledge and is sent down again. `verify/test_spec_copies.py` holds every copy under `specs/`
+equal, minus that line, to the sha256 it records, and holds spec 001's `schedule:` line to the run-of-show
+section it names and the two dates kept for people (M6 by 2026-11-08, M7 on 2026-11-12). The milestone issues
+under #447 are opened from personal-knowledge with `scripts/milestone-issues.py open`, which writes to
+GitHub, so this repo does not open them.
