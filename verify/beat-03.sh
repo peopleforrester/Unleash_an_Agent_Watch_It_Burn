@@ -9,9 +9,7 @@ readonly SCRIPT_DIR REPO_ROOT
 readonly BEAT_DIR="${REPO_ROOT}/challenges/03-bad-mcp-excessive-agency"
 readonly SPIKE_FILE="${BEAT_DIR}/BUILD-SPIKE.md"
 readonly FALLBACK="${BEAT_DIR}/fallback.curl.sh"
-readonly TOGGLE_MCP_AUTHZ_ON="${BEAT_DIR}/toggle-mcp-authz-on.sh"
 readonly RECORDINGS_DIR="${REPO_ROOT}/fallback/recordings"
-readonly SENTINEL="FAKE-MCP-EXFIL-sentinel-4c1d"
 
 usage() {
     cat >&2 <<'EOF'
@@ -22,9 +20,10 @@ Usage: beat-03.sh <kube-context> <attendee-namespace>
 
 Asserts Beat 3's §2 outcome. The beat is SPIKE-GATED (§2, Phase 4b):
 
-  IF challenges/03-.../BUILD-SPIKE.md contains a PASS marker -> assert the LIVE path:
-    mcp-authz OFF -> the rogue tool call leaks FAKE-MCP-EXFIL-sentinel-4c1d
-    mcp-authz ON  -> the call is BLOCKED; the sentinel does not appear
+  IF challenges/03-.../BUILD-SPIKE.md contains a PASS marker -> assert the LIVE path with
+    CONTEXT=<kube-context> fallback.curl.sh (admin clusters only; it refuses a workshop cluster):
+    rule open (guard-mcp-off)    -> read_internal_config via :3003 leaks FAKE-MCP-EXFIL-sentinel-4c1d
+    rule narrowed (guard-mcp-on) -> agentgateway refuses the call; the rule is put back after
 
   ELSE (spike not passed / no marker) -> assert the recorded fallback artifact
     exists under fallback/recordings/ (Beat 3's recording is mandatory until the
@@ -85,43 +84,24 @@ recorded_artifact_exists() {
 step "Spoke context=${CONTEXT} namespace=${NS}"
 
 if spike_passed; then
-    step "Phase-4b spike PASSED -> asserting the LIVE mcp-authz path"
+    step "Phase-4b spike PASSED -> asserting the LIVE gateway-rule path"
     command -v kubectl >/dev/null 2>&1 || fail "kubectl not found on PATH (required for live path)"
     [[ -x "${FALLBACK}" ]]            || fail "missing model-independent driver: ${FALLBACK}"
-    [[ -x "${TOGGLE_MCP_AUTHZ_ON}" ]] || fail "missing toggle: ${TOGGLE_MCP_AUTHZ_ON}"
 
-    # fallback.curl.sh contract (Beat 3): drives the rogue tool call through the gateway and
-    # prints the response the caller would receive, independent of the model.
-    #   fallback.curl.sh <context> <ns>
-    run_call() { "${FALLBACK}" "${CONTEXT}" "${NS}" 2>/dev/null; }
-
-    # mcp-authz off is the workshop-start default; the toggle accepts --off to restore it.
-    # Reset to off at start and on EXIT so a repeated run sees the same before-state (idempotent).
-    reset_authz_off() { "${TOGGLE_MCP_AUTHZ_ON}" --off >/dev/null 2>&1 || true; }
-    trap reset_authz_off EXIT
-
-    step "Resetting mcp-authz to OFF (workshop-start default)"
-    reset_authz_off
-    sleep 3
-
-    step "mcp-authz OFF: driving the rogue tool call -- expect sentinel ${SENTINEL} to LEAK"
-    OFF_OUT="$(run_call)" || fail "fallback.curl.sh errored with mcp-authz off"
-    echo "${OFF_OUT}" | grep -qF "${SENTINEL}" \
-        || fail "sentinel did NOT leak with mcp-authz off (§2 before-state broken)"
-    echo "    PASS: rogue tool call leaks the sentinel while mcp-authz is off" >&2
-
-    step "TOGGLE: applying the mcp-authz CEL deny rule"
-    "${TOGGLE_MCP_AUTHZ_ON}" >/dev/null 2>&1 || fail "toggle-mcp-authz-on.sh failed"
-    sleep 3
-
-    step "mcp-authz ON: same call -- expect it BLOCKED; sentinel ABSENT"
-    ON_OUT="$(run_call)" || ON_OUT="BLOCKED_NONZERO_EXIT"
-    if echo "${ON_OUT}" | grep -qF "${SENTINEL}"; then
-        fail "sentinel STILL leaks with mcp-authz on (§2 after-state broken; deny rule not enforcing)"
+    # fallback.curl.sh contract (Beat 3, #517): CONTEXT is its only input. It flips the C7 rule with the web
+    # terminal's guard-mcp-off and guard-mcp-on, calls read_internal_config through agentgateway :3003 each way,
+    # puts the rule back as it found it, and ends with "C7 PROVEN" (exit 0) or "C7 NOT PROVEN" (exit 1). It
+    # refuses (exit 2) a cluster without app-of-apps-admin, whose C7 is toggle-mcp-authz-on.sh's toolNames list.
+    step "Running ${FALLBACK} on ${CONTEXT}"
+    rc=0
+    OUT="$(CONTEXT="${CONTEXT}" "${FALLBACK}" 2>&1)" || rc=$?
+    echo "${OUT}" >&2
+    [[ "${rc}" -ne 2 ]] || fail "fallback.curl.sh refused ${CONTEXT}: not an admin cluster, so no gateway rule to prove"
+    if [[ "${rc}" -ne 0 ]] || ! grep -qF "C7 PROVEN" <<<"${OUT}"; then
+        fail "fallback.curl.sh did not prove the gateway rule (exit ${rc}; see its FAIL lines)"
     fi
-    echo "    PASS: rogue tool call blocked; sentinel does not appear" >&2
 
-    echo "PASS [beat-03]: LIVE mcp-authz path behaves per §2 (spike passed)." >&2
+    echo "PASS [beat-03]: LIVE gateway-rule path behaves per §2 (spike passed)." >&2
     exit 0
 fi
 

@@ -1,4 +1,4 @@
-# ABOUTME: Offline check of the C1, C2, C5 and C6 fallback scripts: each requires CONTEXT, aims at the deployed
+# ABOUTME: Offline check of the C1, C2, C5, C6 and C7 fallback scripts: each requires CONTEXT, aims at the deployed
 # ABOUTME: service names, writes nothing to /tmp, and reads PASS on a guarded cluster and FAIL on an open one.
 """The run-of-show's rollback step 1 sends a presenter to a beat's fallback when a prompt wanders (#499).
 
@@ -9,7 +9,9 @@ host:port flags for an LLM Guard sidecar and an agentgateway phase, and C2 had n
 No cluster here. Each script runs against a stub kubectl and curl on PATH that answer the way the deployed
 cluster does, built from the deployed sources rather than written down: the Kyverno allow-list decides the
 C2 admission, LLM Guard's deployed Regex pattern does the C5 redaction, and the CEO record is the Secret
-in resources.yaml. The stub refuses any kubectl call without the expected --context. A "guarded" cluster
+in resources.yaml. For C7 the stub's web terminal runs the script's own MCP exchange against a fake :3003 gateway
+that serves the committed rule and evil-mcp's own tool output (#517). The stub refuses any kubectl call without the
+expected --context. A "guarded" cluster
 must read PASS and exit 0; an "open" one must read FAIL and exit 1. Whether the real cluster answers this
 way is the bring-up probe's job (#503), not this file's.
 """
@@ -21,6 +23,8 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import yaml
 
@@ -30,8 +34,9 @@ import resource_limits as rl  # noqa: E402
 C1 = "challenges/c1-exfil-s3/fallback.kubectl.sh"
 C2 = "challenges/c2-villain-image/fallback.kubectl.sh"
 C56 = "challenges/02-sanitization/fallback.curl.sh"
+C7 = "challenges/03-bad-mcp-excessive-agency/fallback.curl.sh"
 # (beat, script, argv)
-BEATS = [("C1", C1, []), ("C2", C2, []), ("C5", C56, ["output"]), ("C6", C56, ["input"])]
+BEATS = [("C1", C1, []), ("C2", C2, []), ("C5", C56, ["output"]), ("C6", C56, ["input"]), ("C7", C7, [])]
 CONTEXT = "arn:aws:eks:us-west-2:000000000000:cluster/watch-it-burn-michael-admin"
 
 failures = []
@@ -63,6 +68,26 @@ _policy = yaml.safe_load((REPO / "policies/kyverno/restrict-image-registries.yam
 _allowed_expr = next(v["expression"] for v in _policy["spec"]["variables"] if v["name"] == "allowedRegistries")
 ALLOWED = re.findall(r"'([^']+)'", _allowed_expr)
 PROXY_PY = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()
+# C7: the rule agentgateway serves for evil-mcp on :3003, what evil-mcp's tools return, and the terminal's toggles.
+_gateway_docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()) if d]
+C7_CONFIG = next(d for d in _gateway_docs if d.get("kind") == "ConfigMap"
+                 and d["metadata"]["name"] == "agentgateway-c7-config")["data"]["config.yaml"]
+C7_OPEN, C7_NARROWED = "true", 'mcp.tool.name == "get_weather"'
+EVIL_URL = obj("RemoteMCPServer", "evil-mcp")["spec"]["url"]
+SHIM_PY = (REPO / "challenges/03-bad-mcp-excessive-agency/evil-mcp-shim/server.py").read_text()
+MCP_SENTINEL = re.search(r'"FAKE_MCP_SENTINEL", "([^"]+)"', SHIM_PY).group(1)
+WEATHER = re.search(r'def get_weather\(\).*?return "([^"]+)"', SHIM_PY, re.S).group(1)
+ENTRY = (REPO / "gitops/ai-layer/web-terminal/entrypoint.sh").read_text()
+
+
+def terminal_says(cmd):
+    """What the terminal's <cmd> prints when it switched C7 at the gateway: the echo lines of its gateway) branch."""
+    body = re.search(rf"cat > \"\$HOME/{cmd}\" <<'EOS'\n(.*?)\nEOS\n", ENTRY, re.S)
+    branch = re.search(r"^\s*gateway\)\n(.*?);;", body.group(1) if body else "", re.M | re.S)
+    return "\n".join(re.findall(r'echo "(.*)"', branch.group(1))) if branch else ""
+
+
+TERMINAL_SAYS = {c: terminal_says(c) for c in ("guard-mcp-on", "guard-mcp-off")}
 
 print("== the fallbacks aim at what is deployed ==")
 check("workshop-mcp is deployed with a container named shim, as agent-sa",
@@ -86,16 +111,34 @@ check("the C2 villain registry is not on the allow-list (else Deny could never f
 check("the deployed CEO record carries the signature and the address the C5 fallback asserts on",
       all(s in RECORD for s in ("OPHELIA-THORN-TIBBY-TOP-SPIRE-No9", "6509 Cat's Claw Way",
                                 "Castle Hanging Off The Cliff Lane", "Tibby Top Spire")))
+check("web-terminal is deployed with a container named ttyd, as the web-terminal ServiceAccount",
+      "ttyd" in containers("web-terminal")
+      and obj("Deployment", "web-terminal")["spec"]["template"]["spec"].get("serviceAccountName") == "web-terminal")
+check("the evil-mcp RemoteMCPServer dials agentgateway's :3003 bind", EVIL_URL == "http://agentgateway.agent:3003/mcp")
+_c7_marked = [line.strip() for line in C7_CONFIG.split("\n") if line.rstrip().endswith("# c7-rule")]
+check("agentgateway-c7-config serves 3003 to evil-mcp, with one '# c7-rule' line committed 'true'",
+      "port: 3003" in C7_CONFIG and "name: evil-mcp" in C7_CONFIG and _c7_marked == ["- 'true' # c7-rule"], _c7_marked)
+check("the terminal's rule rewrite narrows to the rule the C7 fallback expects",
+      """RULES = {"on": "'mcp.tool.name == \\"get_weather\\"'", "off": "'true'"}""" in ENTRY)
+check("guard-mcp-on and guard-mcp-off say 'at the gateway' when they switched the rule (the C7 fallback reads it)",
+      all("at the gateway" in t for t in TERMINAL_SAYS.values()), TERMINAL_SAYS)
+_drift = (REPO / "policies/kyverno/block-argocd-drift.yaml").read_text()
+check("block-argocd-drift lets the web terminal edit agentgateway-c7-config",
+      "system:serviceaccount:agent:web-terminal" in _drift and "agentgateway-c7-config" in _drift)
+check("the C7 sentinel is the one evil-mcp returns", MCP_SENTINEL == "FAKE-MCP-EXFIL-sentinel-4c1d")
 _beacon = re.search(r'^BEACON = "([^"]+)"', (REPO / "verify/c1-winrate.py").read_text(), re.M).group(1)
 check("C1 posts to the beacon the C1 beat uses", f'BEACON="{_beacon}"' in (REPO / C1).read_text())
 
-TEXT = {s: (REPO / s).read_text() for s in (C1, C2, C56)}
+TEXT = {s: (REPO / s).read_text() for s in (C1, C2, C56, C7)}
 for s, needles in ((C1, ['NS="agent"', 'POD="deploy/workshop-mcp"', 'CONTAINER="shim"']),
                    (C2, ['NS="agent"', 'agent-sa', 'POLICY="restrict-image-registries"',
                          'docker.io/peopleforrester/']),
                    (C56, ['NS="agent"', 'POD="deploy/guard-proxy"', 'CONTAINER="proxy"',
                           'RECORD_SECRET="ceo-personal-record"', 'output=on',
-                          'input_blocklist=on&input_classifier=on'])):
+                          'input_blocklist=on&input_classifier=on']),
+                   (C7, ['NS="agent"', 'POD="deploy/web-terminal"', 'CONTAINER="ttyd"', f'GATEWAY="{EVIL_URL}"',
+                         f'SENTINEL="{MCP_SENTINEL}"', 'C7_CONFIGMAP="agentgateway-c7-config"', 'app-of-apps-admin',
+                         'bash "${TERMINAL_HOME}/$1"', 'toggle guard-mcp-off', 'toggle guard-mcp-on'])):
     check(f"{s} names {', '.join(needles)}", all(n in TEXT[s] for n in needles))
 
 print("\n== no scratch outside the repo's tmp/, kube context explicit ==")
@@ -110,7 +153,7 @@ for s, t in TEXT.items():
 
 # --- The stub cluster -----------------------------------------------------------------------------------
 STUB_KUBECTL = r'''#!/usr/bin/env python3
-import base64, json, os, re, sys
+import base64, json, os, re, subprocess, sys
 from urllib.parse import parse_qs
 import yaml
 args = sys.argv[1:]
@@ -171,7 +214,34 @@ if "exec" in args:
                 body = {"reply": "Summary: the user cannot list pods.", "guarded": False,
                         "input_tokens": 3512, "output_tokens": 80}
             print(json.dumps(body)); sys.exit(0)
+    if (ns, target, container) == ("agent", "deploy/web-terminal", "ttyd"):
+        if cmd[:2] != ["env", "HOME=/home/student"]:  # the terminal's commands read their kubeconfig from HOME
+            sys.stderr.write("stub kubectl: the terminal's commands need HOME=/home/student\n"); sys.exit(1)
+        cmd = cmd[2:]
+        if cmd == ["true"]:
+            sys.exit(0)
+        if cmd in (["bash", "/home/student/guard-mcp-on"], ["bash", "/home/student/guard-mcp-off"]):
+            name = cmd[1].rsplit("/", 1)[1]
+            state["toggles"].append(name)
+            rule = fixture["narrowed"] if name == "guard-mcp-on" else fixture["open"]
+            if state["rule"] != rule:
+                state["rule"], state["rule_at"] = rule, state["clock"]
+            save()
+            print(fixture["terminal_says"][name]); sys.exit(0)
+        if cmd[:2] == ["python3", "-c"]:
+            # The script's own MCP exchange, run against the fake :3003 gateway instead of the pod's.
+            if cmd[3] != fixture["gateway"]:
+                sys.stderr.write("stub kubectl: %r is not the evil-mcp url\n" % cmd[3]); sys.exit(1)
+            p = subprocess.run([sys.executable, "-I", "-c", cmd[2], fixture["fake_gateway"], *cmd[4:]],
+                               capture_output=True, text=True, timeout=30)
+            sys.stdout.write(p.stdout); sys.stderr.write(p.stderr); sys.exit(p.returncode)
     sys.stderr.write("stub kubectl: exec target not deployed: %r\n" % args); sys.exit(1)
+if ns == "argocd" and args[4:7] == ["get", "application", "app-of-apps-admin"]:
+    print("" if scenario == "workshop" else "application.argoproj.io/app-of-apps-admin"); sys.exit(0)
+if ns == "agent" and args[4:7] == ["get", "configmap", "agentgateway-c7-config"] and flag("-o") == "json":
+    text = re.sub(r"- '.*' # c7-rule$", lambda m: "- '%s' # c7-rule" % state["rule"], fixture["c7_config"], flags=re.M)
+    print(json.dumps({"metadata": {"name": "agentgateway-c7-config", "resourceVersion": "4711"},
+                      "data": {"config.yaml": text}})); sys.exit(0)
 if ns == "agent" and args[4:6] == ["auth", "can-i"]:
     yes = flag("--as") == "system:serviceaccount:agent:agent-sa" and "deployments.apps" in args
     print("yes" if yes else "no"); sys.exit(0 if yes else 1)
@@ -211,31 +281,113 @@ rows = "".join("<td class=\"body\">%s</td>" % html.escape(b) for b in state["bea
 print('<div class="big" id="beacon-count" data-count="%d">%d</div>%s' % (n, n, rows))
 '''
 
+# A fake clock, so the C7 fallback's waits cost no real time: sleep advances it, `date +%s` reads it.
+STUB_SLEEP = r'''#!/usr/bin/env python3
+import json, os, sys
+path = os.environ["STUB_STATE"]
+state = json.load(open(path))
+state["clock"] += float(sys.argv[1])
+json.dump(state, open(path, "w"))
+'''
+STUB_DATE = r'''#!/usr/bin/env python3
+import json, os, sys
+if sys.argv[1:] == ["+%%s"]:
+    print(1800000000 + int(json.load(open(os.environ["STUB_STATE"]))["clock"])); sys.exit(0)
+os.execv(%r, ["date", *sys.argv[1:]])
+''' % shutil.which("date")
+
+# The fake :3003 gateway the C7 exchange talks to: streamable HTTP with a session, answers as event streams, and
+# mcpAuthorization as agentgateway documents it, allow-only, so a narrowed rule refuses every tool but get_weather.
+# A new rule is served RELOAD fake seconds after the terminal wrote it, on a "guarded" cluster. An "open" one never
+# reloads, so the deny never comes; a "down" one stops answering once it serves the narrowed rule.
+RELOAD = 6
+SESSION = "stub-session-1"
+GATEWAY = {}  # the current run's state file and scenario
+
+
+class FakeGateway(BaseHTTPRequestHandler):
+    def log_message(self, *_):
+        pass
+
+    def reply(self, code, body=b"", ctype="text/plain", sid=None):
+        self.send_response(code)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        if sid:
+            self.send_header("Mcp-Session-Id", sid)
+        self.end_headers()
+        self.wfile.write(body)
+
+    def stream(self, msg_id, payload, sid=None):
+        msg = json.dumps({"jsonrpc": "2.0", "id": msg_id, **payload})
+        self.reply(200, f"event: message\ndata: {msg}\n\n".encode(), "text/event-stream", sid)
+
+    def do_POST(self):
+        path = pathlib.Path(GATEWAY["state"])
+        state = json.loads(path.read_text())
+        if GATEWAY["scenario"] in ("guarded", "down") and state["clock"] - state["rule_at"] >= RELOAD:
+            state["served"] = state["rule"]
+        msg = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        name = (msg.get("params") or {}).get("name")
+        state["gateway"].append([self.path, msg.get("method"), name, state["served"]])
+        path.write_text(json.dumps(state))
+        if self.path != "/mcp":
+            return self.reply(404)
+        if GATEWAY["scenario"] == "down" and state["served"] == C7_NARROWED:
+            return self.reply(503, b"upstream connect error or disconnect/reset before headers")
+        if msg.get("method") == "initialize":
+            return self.stream(msg["id"], {"result": {"protocolVersion": "2025-03-26", "capabilities": {"tools": {}},
+                                                      "serverInfo": {"name": "agentgateway", "version": "1.5.0"}}},
+                               SESSION)
+        if "id" not in msg:
+            return self.reply(202)
+        if self.headers.get("Mcp-Session-Id") != SESSION:
+            return self.reply(400, b"Session not found")
+        if msg.get("method") != "tools/call":
+            return self.reply(400, b"unexpected method")
+        if state["served"] == C7_NARROWED and name != "get_weather":
+            return self.stream(msg["id"], {"error": {"code": -32602, "message": f"Unknown tool: {name}"}})
+        text = {"get_weather": WEATHER,
+                "read_internal_config": f"internal-config:\n  exfil_target_token: {MCP_SENTINEL}\n"}.get(name)
+        if text is None:
+            return self.stream(msg["id"], {"error": {"code": -32602, "message": f"Unknown tool: {name}"}})
+        return self.stream(msg["id"], {"result": {"content": [{"type": "text", "text": text}], "isError": False}})
+
+
+FAKE = ThreadingHTTPServer(("127.0.0.1", 0), FakeGateway)
+threading.Thread(target=FAKE.serve_forever, daemon=True).start()
+FAKE_URL = f"http://127.0.0.1:{FAKE.server_address[1]}/mcp"
+
 SCRATCH = REPO / "tmp" / f"test-challenge-fallbacks-{os.getpid()}"
 
 
-def run(script, argv, scenario, with_context=True):
-    """Runs one fallback against a fresh stub cluster. Returns (rc, output, log, state, tmpdir files)."""
+def run(script, argv, scenario, with_context=True, rule=C7_OPEN):
+    """Runs one fallback against a fresh stub cluster, whose C7 rule starts as <rule>.
+    Returns (rc, output, log, state, tmpdir files)."""
     work = SCRATCH / f"run-{len(list(SCRATCH.glob('run-*')))}"
     (work / "bin").mkdir(parents=True)
     (work / "tmpdir").mkdir()
-    for name, src in (("kubectl", STUB_KUBECTL), ("curl", STUB_CURL)):
+    for name, src in (("kubectl", STUB_KUBECTL), ("curl", STUB_CURL), ("sleep", STUB_SLEEP), ("date", STUB_DATE)):
         p = work / "bin" / name
         p.write_text(src)
         p.chmod(0o755)
     (work / "fixture.json").write_text(json.dumps({
         "beacon": _beacon, "view": "https://provisioning.agenticburn.com/beacon/view",
-        "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED}))
+        "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED,
+        "gateway": EVIL_URL, "fake_gateway": FAKE_URL, "c7_config": C7_CONFIG, "open": C7_OPEN,
+        "narrowed": C7_NARROWED, "terminal_says": TERMINAL_SAYS}))
     (work / "state.json").write_text(json.dumps({
         "beacons": ["earlier-cluster"], "guards": {"input_blocklist": False, "input_classifier": False,
                                                     "output": False, "budget": False},
-        "chats": 0, "deployments": [], "created_images": [], "created_manifests": []}))
+        "chats": 0, "deployments": [], "created_images": [], "created_manifests": [],
+        "rule": rule, "served": rule, "rule_at": -1000, "clock": 0, "toggles": [], "gateway": []}))
     (work / "log").write_text("")
     env = {"PATH": f"{work / 'bin'}:{os.environ['PATH']}", "HOME": str(work), "TMPDIR": str(work / "tmpdir"),
            "STUB_LOG": str(work / "log"), "STUB_STATE": str(work / "state.json"),
            "STUB_FIXTURE": str(work / "fixture.json"), "STUB_SCENARIO": scenario, "STUB_CONTEXT": CONTEXT}
     if with_context:
         env["CONTEXT"] = CONTEXT
+    GATEWAY.update(state=str(work / "state.json"), scenario=scenario)
     p = subprocess.run(["bash", str(REPO / script), *argv], env=env, cwd=str(work), capture_output=True,
                        text=True, timeout=120)
     log = [json.loads(line) for line in (work / "log").read_text().splitlines()]
@@ -298,7 +450,50 @@ try:
                   not state["guards"]["input_blocklist"] and not state["guards"]["input_classifier"])
             check("C6 does not send the injection when the input guards will not turn on",
                   state_open["chats"] == 0, state_open)
+        if beat == "C7":
+            execs = [c for c in log if "exec" in c]
+            check("C7 runs every command in the web terminal's ttyd container in agent",
+                  execs and all(c[c.index("exec") + 1:c.index("exec") + 4] == ["deploy/web-terminal", "-c", "ttyd"]
+                                and c[c.index("-n") + 1] == "agent" for c in execs), execs)
+            others = [c for c in log if "exec" not in c]
+            check("C7 never calls the model: from the laptop it only reads app-of-apps-admin and the rule, no curl",
+                  all(c[2:7] in (["-n", "argocd", "get", "application", "app-of-apps-admin"],
+                                 ["-n", "agent", "get", "configmap", "agentgateway-c7-config"]) for c in others),
+                  others)
+            check("C7 flips the rule with the terminal's guard-mcp-off, then guard-mcp-on, then puts it back",
+                  state["toggles"] == ["guard-mcp-off", "guard-mcp-on", "guard-mcp-off"], state["toggles"])
+            calls = [g for g in state["gateway"] if g[1] == "tools/call"]
+            check("C7 calls only read_internal_config and get_weather, on the gateway's /mcp path",
+                  calls and {g[2] for g in calls} == {"read_internal_config", "get_weather"}
+                  and all(g[0] == "/mcp" for g in state["gateway"]), state["gateway"])
+            check("C7 reads the sentinel with the rule open and the gateway's refusal with it narrowed",
+                  f"  PASS  with the rule open, read_internal_config through :3003 returns {MCP_SENTINEL}" in out
+                  and "  PASS  with the rule narrowed, the gateway refuses read_internal_config" in out, out)
+            delay = re.search(r"the narrowed rule took effect after (\d+) s", out)
+            check(f"C7 prints the reload delay (this stub gateway serves a new rule after {RELOAD} s)",
+                  delay is not None and RELOAD <= int(delay.group(1)) < RELOAD + 3, out)
+            check("C7 leaves the rule as it found it ('true')",
+                  state["rule"] == C7_OPEN and "  PASS  the rule is left as it was found ('true'" in out)
+            check("C7 on an open cluster names the call the gateway never refused",
+                  "  FAIL  with the rule narrowed, the gateway refuses read_internal_config: after 120 s, the "
+                  "sentinel came back" in out_open, out_open)
+            check("C7 on an open cluster still puts the rule back",
+                  state_open["rule"] == C7_OPEN and state_open["toggles"][-1:] == ["guard-mcp-off"], state_open)
+            rc_n, out_n, _, state_n, _ = run(script, argv, "guarded", rule=C7_NARROWED)
+            check("C7 on a cluster it found narrowed: PROVEN, and the rule is narrowed again after",
+                  rc_n == 0 and "C7 PROVEN" in out_n and state_n["rule"] == C7_NARROWED
+                  and state_n["toggles"] == ["guard-mcp-off", "guard-mcp-on", "guard-mcp-on"], out_n)
+            rc_d, out_d, _, state_d, _ = run(script, argv, "down")
+            check("C7 does not count a gateway that stops answering as a refusal",
+                  rc_d == 1 and "did not answer" in out_d and "  PASS  with the rule narrowed" not in out_d
+                  and state_d["rule"] == C7_OPEN, out_d)
+            rc_w, out_w, log_w, state_w, _ = run(script, argv, "workshop")
+            check("C7 refuses a cluster without app-of-apps-admin and points at toggle-mcp-authz-on.sh",
+                  rc_w == 2 and "app-of-apps-admin" in out_w and "toggle-mcp-authz-on.sh" in out_w, out_w)
+            check("C7 touches nothing on that cluster",
+                  state_w["toggles"] == [] and not [c for c in log_w if "exec" in c], log_w)
 finally:
+    FAKE.shutdown()
     shutil.rmtree(SCRATCH, ignore_errors=True)
 tmp_after = sorted(p.name for p in (REPO / "tmp").iterdir()) if (REPO / "tmp").exists() else []
 check("the repo's tmp/ is left as it was found", tmp_before == tmp_after, (tmp_before, tmp_after))

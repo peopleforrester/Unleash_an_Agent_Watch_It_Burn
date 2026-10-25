@@ -3,17 +3,17 @@
 import pathlib, re, sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
 claude = (REPO / "CLAUDE.md").read_text()
-DEMO = [
- "challenges/02-sanitization/toggle-output-guard-on.sh","challenges/02-sanitization/toggle-input-guard-on.sh",
- "challenges/02-sanitization/toggle-input-classifier-on.sh","challenges/01-cncf-wall/toggle-kyverno-enforce.sh",
- "challenges/01-cncf-wall/fallback.kubectl.sh","challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh",
- "challenges/c3-secret-grep/fallback.kubectl.sh",
- "challenges/c1-exfil-s3/fallback.kubectl.sh","challenges/c2-villain-image/fallback.kubectl.sh",
- "challenges/02-sanitization/fallback.curl.sh",
-]
+# The demo scripts are found, not listed: every toggle and every fallback under challenges/. A hand-kept list here
+# took an appended line from each new fallback, and two promotion rebases failed on that one line (#517).
+DEMO_GLOBS = ("challenges/*/toggle-*.sh", "challenges/*/fallback*.sh")
+DEMO = sorted({str(p.relative_to(REPO)) for g in DEMO_GLOBS for p in REPO.glob(g)})
 failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
+
+for g in DEMO_GLOBS:
+    check(f"the glob {g} finds demo scripts", any(REPO.glob(g)))
+check("the glob covers the C7 fallback", "challenges/03-bad-mcp-excessive-agency/fallback.curl.sh" in DEMO)
 
 check("CLAUDE.md documents the kube-context safety rule", "Kube-context safety" in claude and "use-context" in claude)
 # No global current-context mutation in any HOST script. The rule targets the shared host
@@ -43,6 +43,6 @@ for s in DEMO:
     bare = bool(re.search(r'(^|if |then |&& |\|\| )kubectl ', txt, re.M)) and "command -v kubectl" in txt
     # bare allowed only for the `command -v kubectl` probe
     bad = [l for l in txt.splitlines() if re.search(r'(^|if |then |&& |\|\| )kubectl ', l) and "command -v" not in l]
-    check(f"requires CONTEXT + no bare kubectl: {pathlib.Path(s).name}", ok and not bad)
+    check(f"requires CONTEXT + no bare kubectl: {s}", ok and not bad)
 if failures: print(f"\nFAILED: {len(failures)}"); sys.exit(1)
 print("\nAll kube-context-safety checks passed.")

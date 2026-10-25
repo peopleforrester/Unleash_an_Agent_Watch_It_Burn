@@ -1642,3 +1642,34 @@ still refuses the villain. The tool description says so. The same defaulting mea
 created through the same tool, is no longer at risk of a limits refusal on an admin cluster.
 `verify/test_deploy_app_limits.py` runs the real `deploy_app` with the API call captured and holds the
 defaults to the keys `verify/resource_limits.py` reads out of the policy. No lab or prompt text changed.
+## 2026-10-25 · #517 · The C7 fallback proves the gateway rule from the web terminal, allow then deny
+
+Step 5 of #496. `challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` now takes CONTEXT and nothing else,
+in the shape #499 set for C1, C2, C5 and C6. Everything runs in the web-terminal pod through kubectl exec:
+`guard-mcp-off`, `guard-mcp-on`, and an MCP exchange (initialize, then tools/call) to
+`http://agentgateway.agent:3003/mcp`, the evil-mcp RemoteMCPServer's own url. No model is called and no scratch
+file is written.
+
+- **The terminal's own toggles, not a rewrite of the rule.** The web terminal is the one principal
+  block-argocd-drift lets edit agentgateway-c7-config (#515). So the fallback flips the rule exactly as a
+  presenter does, and it passes only when each toggle says it switched C7 at the gateway and the ConfigMap
+  then reads the expected rule.
+- **Allow first, then deny.** With the rule open the call must return `FAKE-MCP-EXFIL-sentinel-4c1d`.
+  Otherwise there is no deny check, because a gateway that refuses everything would pass it. With the rule
+  narrowed, it counts as a refusal only when the gateway opened a session and then answered the call with an
+  error and no sentinel. `get_weather` must still answer after that, so an outage cannot pass as the rule.
+- **The reload delay is measured, not assumed.** Both waits poll every 3 s for up to 120 s. The seconds from
+  `guard-mcp-on` to the first refused call are printed for the Night Before step.
+- **The rule goes back the way it was found**, with whichever toggle writes that rule: `guard-mcp-off` for
+  'true', `guard-mcp-on` for the narrowed rule. Any other rule is left alone and fails the run. An EXIT trap
+  does the same when the script dies part way.
+- **A cluster without app-of-apps-admin is refused, exit 2.** Its :3003 rule stays 'true' and its control is
+  toggle-mcp-authz-on.sh's toolNames list, so no gateway deny can be asserted there. `verify/beat-03.sh`'s
+  live branch now runs the fallback with CONTEXT alone and reads that exit. The toggle's last line no longer
+  points at --expect flags.
+
+`verify/test_challenge_fallbacks.py` runs C7 against its stub cluster. The stub's terminal runs the script's
+real pod-side exchange against a fake :3003 gateway, and a fake clock keeps the waits from costing real time.
+It covers guarded, open, found-narrowed, gateway-down and workshop clusters. `verify/test_kube_safety.py` now
+globs `challenges/*/toggle-*.sh` and `challenges/*/fallback*.sh` instead of keeping a list that every new
+fallback appended to, and it fails if either glob matches nothing.
