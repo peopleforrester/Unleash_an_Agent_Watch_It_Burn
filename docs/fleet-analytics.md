@@ -4,6 +4,13 @@ Issue #150. Every other signal in this repo is per attendee, so a student can wa
 is the instructor's side: one view across the whole attendee pool, readable live during the session and
 again afterwards. It is the "did" half that `feedback-agenticburn`'s "said" half joins against.
 
+> **The lab progress markers are OFF.** Michael decided on question 693 (2026-10-25, `decisions.md`) to keep
+> them off until the lab's privacy warning has wording that tells attendees what is recorded. Everything
+> below is built and tested, but `lab-events.js` ships with `var ENABLED = false;`. Until it is turned on,
+> the lab widgets on the dashboard and harvest pass 6 have nothing to read. The guardrail, fork-bomb and
+> message-count widgets read other data and work regardless. To turn the markers on, change that line and
+> the warning in `lab.html` in the same commit, and update the pin in `verify/test_lab_events.py`.
+
 ## Which question is answered where
 
 | Question | Live (instructor dashboard) | After the event (harvest pass 6) |
@@ -61,8 +68,9 @@ since the route forwards none; hover, mouse or scroll tracking. A browser sendin
 Do Not Track sends nothing at all. `verify/test_lab_events.py` and `verify/test_lab_events_behaviour.py`
 assert each of these.
 
-**To turn it off:** set `var ENABLED = false;` at the top of `lab-events.js`. The page then sends nothing,
-and the pipeline is idle.
+**The switch:** `var ENABLED = …;` at the top of `lab-events.js`. It is `false` today (question 693). With
+it off the page sends nothing, and the pipeline is idle. The tests arm it in their harness, so the sending
+code stays tested while it is off.
 
 ## Joining with the feedback app
 
@@ -95,8 +103,8 @@ dual-ship their traces to the instructor org (#242). Those traces include the co
 (`gen_ai.input.messages`), so prompt text is already in the instructor org's Agent Observability, and
 harvest pass 1 extracts it into `.harvest/`. The lab guide tells attendees that their prompts may be shown
 on the instructor screen during the workshop. The disclosure does not say that prompts are kept and
-analysed afterwards, and it does not mention the lab progress markers. That wording is a decision for the
-presenters, and is open on #150.
+analysed afterwards, and it does not mention the lab progress markers. That wording is Michael's call. On
+question 693 he decided the markers stay off until it is settled; the wording itself is still open on #150.
 
 ## Validating on a cluster
 

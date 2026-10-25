@@ -2136,3 +2136,22 @@ down with it, and YAML checks cannot tell a valid OTTL function from a typo. The
 the contract processors have to be shown to strip a forged payload, and only the real OTTL engine can show
 that. The test pins the chart version next to the binary version, so a chart bump fails the test until both
 move together. Rejected: a container image, because this machine has no Docker access.
+
+## 2026-10-25 · question 693 · lab progress markers stay off until the disclosure wording is settled (#150)
+
+Question 693 asked whether the student lab page's privacy warning should be extended to tell attendees
+two things: that the lab records which guide steps and hints they open, and that the instructors keep
+their BurritoBot prompts after the workshop. The options were: extend the warning and keep the markers on;
+keep the markers on and leave the warning as it is; or turn the markers off until the wording is settled.
+
+Answer: **Turn the markers off until the wording is settled.** Decided by Michael. The run had recommended
+extending the warning; this overrides that recommendation.
+
+What it changes. `gitops/ai-layer/web/lab-events.js` ships with `var ENABLED = false;`, so the lab page sends
+no progress markers, and the instructor dashboard's lab widgets and harvest pass 6 have nothing to read.
+The route, the collector pipeline, the dashboard and the harvest pass stay in place, unchanged and tested.
+The test harness arms the switch, so the sending code stays covered while it is off.
+`verify/test_lab_events.py` pins the switch off. Turning the markers back on is one commit that changes
+that line, the warning in `gitops/ai-layer/web/lab.html` (once Michael has settled its wording) and the
+pin, together. The decision does not touch the prompts that attendee clusters already dual-ship to the
+instructor org since #242. Nothing in the warning about those has changed either.

@@ -76,6 +76,11 @@ check("it never reads element text other than a step number",
 check("no hover or pointer tracking", not re.search(r"mouse(over|move|enter)|pointer(move|over)|'hover'", CODE))
 check("Global Privacy Control and Do Not Track switch it off", "globalPrivacyControl" in CODE and "doNotTrack" in CODE)
 check("it has a single off switch", re.search(r"^\s*var ENABLED = (true|false);", JS, re.M) is not None)
+# Question 693 (decisions.md, 2026-10-25): Michael decided the markers stay OFF until the lab's privacy warning
+# tells attendees what is recorded. Turning them on is a change to this line AND to the warning, together, so
+# whoever flips it also updates this check with the wording that was agreed.
+check("the markers are OFF until the disclosure wording is settled (question 693)",
+      re.search(r"^\s*var ENABLED = false;", JS, re.M) is not None)
 check("the service is in the BurritoBot family", "'burritobot-lab'" in CODE)
 
 print("== every badge control maps to its challenge ==")

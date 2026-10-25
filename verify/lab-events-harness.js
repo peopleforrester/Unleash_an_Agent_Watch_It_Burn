@@ -1,14 +1,26 @@
 // ABOUTME: Runs gitops/ai-layer/web/lab-events.js against a minimal fake lab page under node and prints what it
 // ABOUTME: would POST, so test_lab_events_behaviour.py can assert the wire format and what is (not) in it.
 //
-// Usage: node verify/lab-events-harness.js <path to lab-events.js> [optout]
+// Usage: node verify/lab-events-harness.js <path to lab-events.js> [armed|optout|shipped]
+//   armed (default)  the ENABLED switch forced on, so the sending code itself is exercised
+//   optout           armed, in a browser sending Global Privacy Control
+//   shipped          the file exactly as committed, switch and all
 // Prints one JSON object: {posts: [<OTLP payloads sent to /lab-events>], pure: {...}}.
 'use strict';
 const fs = require('fs');
 const vm = require('vm');
 
-const src = fs.readFileSync(process.argv[2], 'utf8');
-const optout = process.argv[3] === 'optout';
+const mode = process.argv[3] || 'armed';
+const optout = mode === 'optout';
+let src = fs.readFileSync(process.argv[2], 'utf8');
+if (mode !== 'shipped') {
+  const SWITCH = /^(\s*var ENABLED = )(true|false);/m;
+  if (!SWITCH.test(src)) {
+    process.stderr.write('lab-events.js has no `var ENABLED = true|false;` line to arm; the harness cannot run it\n');
+    process.exit(2);
+  }
+  src = src.replace(SWITCH, '$1true;');
+}
 
 function classList(el) {
   return {
