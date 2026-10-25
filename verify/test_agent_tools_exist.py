@@ -73,6 +73,32 @@ for name, named in described.items():
 missing = sorted(set(declared.get("workshop-mcp", [])) - described.get("workshop-mcp", set()))
 check(f"workshop-mcp's description names every tool the agent declares on it (missing: {missing})", not missing)
 
+print("== the recreation spec describes the toolset the agent declares ==")
+# MASTER-RECREATION-SPEC is what a rebuild reads. It went on listing list_pods, apply_manifest (HITL) and
+# get_secret, with the defended list as the committed default, after both had changed (#542). Its
+# Components row for each server, and recreation step 6, must name the tools as declared here.
+SPEC = (REPO / "docs/MASTER-RECREATION-SPEC.md").read_text(encoding="utf-8").splitlines()
+TOOL = re.compile(r"`([a-z]+(?:_[a-z0-9]+)+)`")
+for server, label in (("workshop-mcp", "| workshop-mcp (good) |"), ("evil-mcp", "| evil-mcp-shim (rogue) |")):
+    row = next((l for l in SPEC if l.startswith(label)), "")
+    check(f"the spec has a Components row for {server}", bool(row))
+    named = set(TOOL.findall(row))
+    stale = sorted(named - served_by[server])
+    check(f"the spec's {server} row names no tool {server} does not serve (stale: {stale})", not stale)
+    missing = sorted(set(declared.get(server, [])) - named)
+    check(f"the spec's {server} row names every tool the agent declares on it (missing: {missing})", not missing)
+step6 = next((l for l in SPEC if l.startswith("6. The Agent's committed")), "")
+check("the spec has recreation step 6 on the Agent's committed tool config", bool(step6))
+named = set(TOOL.findall(step6))
+all_declared = {t for names in declared.values() for t in names}
+check(f"step 6 names every declared tool (missing: {sorted(all_declared - named)})", all_declared <= named)
+check(f"step 6 names no undeclared tool (stale: {sorted(named - all_declared)})", named <= all_declared)
+check("step 6 keeps the vulnerable default, as the manifest does", "vulnerable default" in step6
+      and "defended" not in step6)
+approve = [e["mcpServer"].get("requireApproval") for e in agent["spec"]["declarative"]["tools"] if e.get("mcpServer")]
+check("step 6 says no requireApproval, and the manifest sets none",
+      "no `requireApproval`" in step6 and not any(approve))
+
 print("== the rename that caused this cannot come back ==")
 check("get_recipe is declared nowhere", all("get_recipe" not in v for v in declared.values()))
 check("get_vault_entry IS declared, since Challenge 5 needs it",
