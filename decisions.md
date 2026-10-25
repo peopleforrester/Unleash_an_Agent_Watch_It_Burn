@@ -2568,6 +2568,7 @@ by `gateway_bind.py` and applied by hand in `live-check.sh`. Portland's C7 stays
 - **Open:** the live kagent check (`live-check.sh`, not yet run; no cluster in this run) and the badge
   decision, recommended in the spike README as "the badge reads the pin's wiring, not its verdicts".
 ## 2026-10-25 · #588 · The rest of the repo's code names the community, admin and attendee clusters, not rounds
+## 2026-10-25 · #588 · The rest of the repo's code names the community, admin and attendee clusters
 
 **lab.html recognises today's roster.** Its instructor test matched the retired names only
 (`watch-it-burn-r<n>-<m>`, `michael-round1`, the bare `round1`), so on attackme, michael-admin and whitney-admin a
@@ -2577,21 +2578,22 @@ name (`watch-it-burn-community`, `watch-it-burn-<owner>-admin`, as `is_instructo
 because #383's nav links carry the friendly name in `?cluster=`. The community cluster counts as an instructor
 cluster, as it does for fleet.sh's terminal login and the router's `/brief` gate. An attendee's memorable name is
 a menu word and a witch, so none of the 720 slots ends in `-admin`. The fleet-analytics dashboard already filters
-by cluster name, so older admin-cluster spans that say `student` stay out of the attendee view.
+by cluster name, so older admin-cluster spans with `role=student` stay out of the attendee view.
 
 **The wording.** Comments in the ai-layer, ai-layer-otel, the Datadog manifest, the Kyverno, KubeArmor and
 NetworkPolicy policies, the challenge prompts and toggles, the web-terminal and workshop-mcp images, infra and
-the verify helpers that said R1, R2/R3, Round N or round-2/3 now say which cluster they mean: community (burn, no
-guardrails), attendee (controls unarmed until the student applies them) or admin (armed at bootstrap). Two were
-wrong as well as worded by round: block-recipe-snoop.yaml said the full profile includes kubearmor-policies (only
-admin does, since #281), and scheduled-up.sh's usage said it brings up nine instructor clusters (it brings up the
-three roster clusters). burritbot.html drops the unused `--r1`/`--r2` colours. The agent prompts' instructions
-are unchanged; only the `#` notes beside them changed.
+the verify helpers used R1, R2/R3, Round N or round-2/3. Each now names the cluster it means: community (burn, no
+guardrails), attendee (controls unarmed until the student applies them) or admin (armed at bootstrap). Three
+comments were also wrong on the facts and are corrected. block-recipe-snoop.yaml said the full profile includes
+kubearmor-policies; only admin does, since #281. scheduled-up.sh's usage said it brings up nine instructor
+clusters; it brings up the three roster clusters. resources.yaml said the tier-comparison clusters override the
+Agent's modelConfig; that override was deferred (2026-07-07, §4.6-d), and roster.tsv's tier column is read but
+never applied (#589). burritbot.html drops the unused `--r1`/`--r2` colours. The agent prompts' instructions are
+unchanged; only the `#` notes beside them changed.
 
-**Tests.** `verify/test_round_names_retired.py` now sweeps every tracked non-markdown file (`git ls-files`), not
-four paths, and names what it leaves alone with a reason: `mockups/` (round-era design mockups no cluster
-serves), the vendored Yarn release, and the four verify files whose fixtures are the retired vocabulary. Symlinks
-and submodules are skipped, because their files belong to their own repos. The guard-proxy submodule's
-proxy.py still says "Round 1" and "round-2/round-3" and is filed as a follow-up there. The test also extracts
-lab.html's two regexes and checks them against the roster, fleet.sh's hostnames and all 720 attendee slots.
-Not run on a cluster here.
+**Tests.** `verify/test_round_names_retired.py` sweeps every tracked non-markdown file (`git ls-files`). It names
+each path it leaves alone with a reason: `mockups/` (round-era design mockups no cluster serves), the vendored Yarn
+release, and the four verify files whose fixtures are the retired vocabulary. Symlinks and submodules are skipped,
+because their files belong to their own repos. The guard-proxy submodule's proxy.py still says "Round 1" and
+"round-2/round-3", and is filed as a follow-up there. The test also extracts lab.html's two regexes and checks
+them against the roster, fleet.sh's hostnames and all 720 attendee slots. Not run on a cluster here.

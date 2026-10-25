@@ -120,8 +120,9 @@ spec:
     region: us-west-2
 ---
 # All three Claude tiers are defined so the cost-race demo can run; the WORKSHOP DEFAULT is bedrock-nova
-# (set on the Agent below). A roster row's tier column (infra/terraform/fleet/roster.tsv) overrides the
-# Agent's modelConfig per cluster, which is how a tier comparison runs haiku/sonnet/opus side by side.
+# (set on the Agent below). Every cluster runs Nova: the per-cluster tier override a haiku/sonnet/opus
+# comparison needs was deferred (decisions.md, 2026-07-07, §4.6-d), and roster.tsv's tier column is not
+# applied.
 # IDs verified ACTIVE in accen-dev/us-west-2 on 2026-06-26 via `aws bedrock list-inference-profiles`.
 # Sonnet 4.6 / Opus 4.8 need the `us.` Geo profile (no In-Region).
 apiVersion: kagent.dev/v1alpha2
