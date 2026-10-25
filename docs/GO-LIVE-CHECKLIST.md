@@ -201,11 +201,6 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 - [x] **C7 MCP authorization enforcement**: the kagent `toolNames` allow-list is the ratified mechanism and
       the `guard-mcp-on` toggle is live. Measured on Nova 2026-08-30: the sentinel leaks 4/5 with the guard
       off and never appears with it on (`challenges/PROMPT-CATALOG.md`).
-- [ ] **Model-tier override** live-validate on the haiku/sonnet/opus instructor clusters (the cost race).
-      NOTE: the workshop default is now **Nova Pro**, and `MODEL_TIER` on the guard-proxy must match the
-      bound ModelConfig or the counter prices the wrong model. Argo CD `ignoreDifferences` excludes that env
-      block, so it is a live `kubectl set env` behind a Kyverno flip; see docs/GOTCHAS-FLEET-AND-DELIVERY.md.
-      Mechanism is in code (ignoreDifferences + setup-instructor-cluster.sh patch), not yet validated live.
 - [ ] **C1/C3/C4 runbooks** packaged: attendee + facilitator instructions. Defenses are validated; the
       delivery wrappers (beat.md-style) and the C3 bait-file plant script do not exist yet.
 - [x] **whitney-att Datadog split** (done 2026-06-26): the attendee cluster reports to its own org
@@ -235,6 +230,17 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 - Istio ambient waypoint for L7 mTLS in the exfil challenge (#25).
 - AWS Load Balancer Controller -> ip-target NLB + activating the party-app ALB Ingresses (console NLB is
   fine via the in-tree annotation; the controller install is in deploy-full-idp.sh).
+- The per-cluster model-tier override for the optional cost race (Michael deferred it 2026-07-07; see
+  decisions.md, "§4.6-d (per-cluster model tier) deferred"). Every cluster runs the gitops default, Nova
+  Pro, and nothing applies another tier: fleet.sh reads the roster's tier column and shows it in a dry
+  run but does not apply it, and no script patches the Agent's `modelConfig`. The haiku/sonnet/opus
+  instructor clusters this was meant for are gone too; the roster is the Community cluster and one admin
+  cluster per presenter. What is in place is the hook for the live patch decisions.md recommends: the
+  ai-layer Application's `ignoreDifferences` covers the Agent's `.spec.declarative.modelConfig` and the
+  guard-proxy's `MODEL_TIER` env, so a cluster switched by hand keeps its tier. To switch one, change
+  both together, or the counter prices the wrong model: patch Agent `workshop-agent` to `bedrock-<tier>`,
+  then `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>` behind the Kyverno flip in
+  docs/GOTCHAS-FLEET-AND-DELIVERY.md. Not validated live.
 
 ---
 

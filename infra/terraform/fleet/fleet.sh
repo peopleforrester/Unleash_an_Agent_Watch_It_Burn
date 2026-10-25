@@ -124,7 +124,8 @@ WIB_NAME_OFFSET="${WIB_NAME_OFFSET:-0}"
 # The role decides the bootstrap profile (bootstrap_profile_for_role): community gets burn, wide open;
 # admin gets the student build with every guardrail armed. The roster's pids column carries the one
 # provision-time difference (community pids=-1 so the C4 fork bomb burns the node). The model default
-# is Nova (gitops); the tier column overrides it.
+# is Nova (gitops). The tier column is read and shown in a dry run but not applied: the per-cluster tier
+# was deferred (decisions.md, 2026-07-07, §4.6-d).
 INSTRUCTORS=()
 load_roster() {
     INSTRUCTORS=()

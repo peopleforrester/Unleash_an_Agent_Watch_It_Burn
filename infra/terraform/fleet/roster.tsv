@@ -18,7 +18,8 @@
 # Every roster cluster lives in WIB_DEFAULT_ACCOUNT. The per-round accounts went with the rounds.
 #
 # Empty column = default: tier -> gitops default (Nova); instance_type -> cluster module default;
-# pids -> module default (1024).
+# pids -> module default (1024). The tier column is not applied yet: every cluster runs Nova whatever it
+# says (decisions.md, 2026-07-07, §4.6-d).
 watch-it-burn-community|community|||-1|burn|
 watch-it-burn-michael-admin|admin||||admin|michael
 watch-it-burn-whitney-admin|admin||||admin|whitney
