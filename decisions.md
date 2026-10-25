@@ -2155,3 +2155,23 @@ The test harness arms the switch, so the sending code stays covered while it is 
 that line, the warning in `gitops/ai-layer/web/lab.html` (once Michael has settled its wording) and the
 pin, together. The decision does not touch the prompts that attendee clusters already dual-ship to the
 instructor org since #242. Nothing in the warning about those has changed either.
+
+## 2026-10-25 · question 753 · the lab warning carries the disclosure, and the progress markers are back on (#150)
+
+Question 753 asked which exact sentence the student lab page's privacy warning should carry so that the lab
+progress markers could be switched back on. The options were: the proposed sentence with the markers on; a
+shorter sentence with the markers on; or the markers off for good.
+
+Answer: **Use the proposed sentence and turn the markers on.** Decided by Michael.
+
+What it changes. The BurritoBot warning in `gitops/ai-layer/web/lab.html` now reads, after the sentence about
+the instructor screen: "The lab also records which steps, hints and commands you open (never what you type),
+and the instructors keep your prompts after the workshop to improve it." `gitops/ai-layer/web/lab-events.js`
+ships with `var ENABLED = true;`, so the instructor dashboard's progress widgets and harvest pass 6 have data
+again. This ends the "off until the wording is settled" state set by question 693 (entry above).
+
+The switch and the sentence are now tied together. `verify/test_lab_events.py` fails if the markers are on
+without this exact sentence in the warning. Collecting more, or changing the wording, therefore means a new
+decision and a change to both in the same commit. The sentence also covers the prompts that attendee clusters
+dual-ship to the instructor org since #242, which the warning did not mention before. "To improve it" states
+the purpose the kept prompts are used for.
