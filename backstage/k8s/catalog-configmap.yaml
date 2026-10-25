@@ -1061,7 +1061,7 @@ data:
 
               Next steps:
               1. Add the User entity to backstage/k8s/catalog-configmap.yaml
-              2. Add the RBAC line to gitops/argocd/values.yaml
+              2. Add the RBAC line to infra/argocd-values.yaml (configs.rbac.policy.csv)
               3. Add the username to the Group members list
               4. Commit and push — ArgoCD will sync automatically
 

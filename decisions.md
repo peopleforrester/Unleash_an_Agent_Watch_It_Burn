@@ -1882,3 +1882,27 @@ every pod in `agent`, and neither target restricted ingress.
 (#238) records. An agent-made pod can also reach the kagent controller, which proxies A2A to the agent around
 guard-proxy. Before C1 nothing limits egress from `agent`, and after it `agent-allow-kagent-egress` opens the
 whole `kagent` namespace. That route is filed as a follow-up.
+
+## 2026-10-25 · #554 · The party apps lose their ALB Ingresses, and the unused gitops/argocd/values.yaml goes
+
+**What went.** `gitops/manifests/demo-app-{hedgehog,wombat,unicorn,spider,mantis-shrimp}/ingress.yaml`: five
+internet-facing ALB Ingresses in group `watch-it-burn-ingress`, each for a fixed `<app>.agenticburn.com`, the
+same host on every cluster. Since #233 the party apps are reached at `<app>-<cluster>.agenticburn.com`, which
+the apex router sends to the console LB and `console.conf` fans out to each app's Service, so the Ingresses
+served nothing and kept alive the ALB that #493 meant to remove with Grafana's. On a live cluster Argo CD
+prunes them (the five Applications have `prune: true`) and the load balancer controller then deletes the ALB.
+The Services, the `apps` NetworkPolicy's port 80 (the console's path in) and the LB controller (the console
+NLB) stay.
+
+**gitops/argocd/values.yaml was deleted, not edited.** It carried a third ALB Ingress, for
+`argocd.agenticburn.com`, plus Dex and an RBAC block, but nothing installs it: `deploy-full-idp.sh` installs
+Argo CD from `infra/argocd-values.yaml` (as PRD #33 already noted), and no Application or script names the
+gitops copy. The two live pointers to it, step 3 of `docs/MASTER-RECREATION-SPEC.md` and the Backstage
+onboarding template's next steps, now name `infra/argocd-values.yaml`. Dated research and PRD notes that
+mention it were left as written.
+
+**Tests.** `verify/test_party_app_hosts.py` (offline) fails on any deployable manifest or Helm values under
+`gitops/` (outside `apps-disabled`) that asks for `ingressClassName: alb` or joins `watch-it-burn-ingress`,
+holds each party app to a Service, no Ingress and a `console.conf` row, and holds the gitops copy of the
+Argo CD values gone; against the base it fails eight checks. `verify/test_service_hosts_live.py` now checks
+that `apps` has no Ingress. Not run on a cluster here.

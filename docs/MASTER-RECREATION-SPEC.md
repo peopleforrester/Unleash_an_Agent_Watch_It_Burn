@@ -145,7 +145,7 @@ This subsystem provisions the AWS substrate: a disposable, multi-account EKS fle
 
 **Per-cluster Datadog secret injected directly at bootstrap (no ESO/Secrets-Manager-from-cluster, no cross-account).** The fleet reads the Datadog keys from the central pool on the provisioning box (default account's Secrets Manager) and passes them into `deploy-full-idp.sh`, which creates a plain `datadog-secret` K8s Secret in `datadog`, `monitoring`, and `security` BEFORE the app-of-apps. The cluster's own (student) account never touches Secrets Manager (commit `a811323`).
 
-**The provisioning wall at 50 to 60 clusters/account is ELB-per-Region, not Elastic IPs.** Each full cluster provisions 1 internet-facing ALB + 1 internal NLB; both `Application Load Balancers per Region` (L-53DA6B97) and `Network Load Balancers per Region` (L-69A177A2) default to 50. Required increases per account (all adjustable): ALB→100, NLB→100, EC2 vCPU "Running On-Demand Standard" (L-1216C47A)→800. No EIP increase (verified 2026-06-26/27).
+**The provisioning wall at 50 to 60 clusters/account is ELB-per-Region, not Elastic IPs.** Each full cluster provisioned 1 internet-facing ALB (the Grafana and party-app Ingresses, gone since #493 and #554) + 1 internal NLB; both `Application Load Balancers per Region` (L-53DA6B97) and `Network Load Balancers per Region` (L-69A177A2) default to 50. Required increases per account (all adjustable): ALB→100, NLB→100, EC2 vCPU "Running On-Demand Standard" (L-1216C47A)→800. No EIP increase (verified 2026-06-26/27).
 
 ### Components & Versions
 
@@ -244,7 +244,7 @@ Kyverno CEL ValidatingPolicies (`policies/kyverno/`, `policies.kyverno.io/v1`, #
 
 1. Provision the EKS cluster + IAM out-of-band (Terraform; the ESO SA `platform:external-secrets` and agent SA Bedrock Pod-Identity associations are NOT GitOps-able).
 2. Pre-seed `datadog-secret` (keys `api-key`, `app-key`) directly in `datadog`, `monitoring`, AND `security` (Falcosidekick reads it from `security`) before the app-of-apps.
-3. Install ArgoCD in-cluster (Helm; `gitops/argocd/values.yaml`). This and the secret pre-seed are the only imperative steps.
+3. Install ArgoCD in-cluster (Helm; `infra/argocd-values.yaml`). This and the secret pre-seed are the only imperative steps.
 4. `kubectl apply -f gitops/bootstrap/full/app-of-apps.yaml` (full) OR `app-of-apps-burn.yaml` (the bare burn subset).
 5. Wave ordering takes over: namespaces → Istio/Kyverno → policies/network/ESO/floor/ztunnel → Falco/kagent-CRDs/mesh-config → talon/falcosidekick → cert-manager/kagent/prometheus → issuers/OTel/customer-stream → ai-layer/datadog-operator/loki/tempo → alloy/datadog-agent → party targets.
 6. The scoped Agent CR, Bedrock ModelConfig, and guard-proxy/evil-MCP still deploy via `infra/cluster3-setup.sh` (need a Pod Identity association and a concrete namespace); materializing them into GitOps is the open follow-up.

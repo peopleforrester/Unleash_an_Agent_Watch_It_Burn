@@ -166,6 +166,10 @@ check(f"Grafana's root_url is its own hostname, https://grafana-{host}/", app_ur
 r = kubectl("-n", "monitoring", "get", "ingress", "-o", "jsonpath={.items[*].metadata.name}")
 check("Grafana has no Ingress of its own (no ALB for it)", r.returncode == 0 and "grafana" not in r.stdout,
       r.stderr.strip()[:160] or r.stdout)
+# The party apps had ALB Ingresses at a fixed <app>.agenticburn.com in the same group until #554.
+r = kubectl("-n", "apps", "get", "ingress", "-o", "jsonpath={.items[*].metadata.name}")
+check("the party apps have no Ingress (no ALB for them)", r.returncode == 0 and not r.stdout.strip(),
+      r.stderr.strip()[:160] or r.stdout)
 # The attendee profile installs no Tempo, and its data source ships with the tempo Application (#475), so on an
 # attendee cluster the right answer for uid tempo is "no such data source", not a healthy one.
 r = kubectl("-n", "argocd", "get", "applications.argoproj.io", "-o", "jsonpath={.items[*].metadata.name}")

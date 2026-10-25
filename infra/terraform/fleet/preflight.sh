@@ -59,7 +59,7 @@ declare -A EXPECTED_ACCOUNT=(
 
 # Per-cluster resource cost, used to scale the quota checks by the run size.
 readonly VCPU_PER_CLUSTER=8       # one t3.2xlarge node
-readonly NLB_PER_CLUSTER=1        # the console Service; party Ingresses share an ALB when present
+readonly NLB_PER_CLUSTER=1        # the console Service; nothing deployed asks for an ALB (#554)
 readonly EKS_PER_CLUSTER=1
 
 # Service Quotas codes. Names are not stable across regions; codes are.

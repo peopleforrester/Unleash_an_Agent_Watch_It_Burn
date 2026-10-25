@@ -114,7 +114,7 @@ WITB_DD_API_KEY="${DD_API_KEY}" bash "${SCRIPT_DIR}/datadog-cluster-identity.sh"
 # The IAM side already supported this: the Pod Identity association for
 # kube-system/aws-load-balancer-controller is created by Terraform for EVERY cluster
 # (infra/terraform/aws/cluster/main.tf), so only the Helm install was missing.
-log "[3.5] AWS Load Balancer Controller (NLB for the console Service, ALB for the party Ingresses)"
+log "[3.5] AWS Load Balancer Controller (NLB for the console Service)"
 # Pod Identity supplies the AWS creds (no IMDS needed for auth).
 # clusterName/region/vpcId are passed EXPLICITLY: the controller otherwise auto-discovers vpcId from
 # IMDS, which the pod cannot reach on these nodes (IMDS hop limit), so it CrashLoops with "failed to
@@ -134,9 +134,9 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set vpcId="${VPC_ID}" \
   --set serviceAccount.create=true \
   --set serviceAccount.name=aws-load-balancer-controller
-# Non-fatal: the controller reconciles Ingresses whenever it is ready; it must NOT gate the app-of-apps.
+# Non-fatal: the controller reconciles the console Service whenever it is ready; it must NOT gate the app-of-apps.
 kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
-  || log "WARN: LB controller not ready yet; continuing. Ingresses reconcile once it is up."
+  || log "WARN: LB controller not ready yet; continuing. The console Service reconciles once it is up."
 
 log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging), ArgoCD deploys the components"
 kubectl apply -f "${REPO}/${ROOT_APP}"
