@@ -1004,10 +1004,10 @@ spec:
             initialDelaySeconds: 30
             periodSeconds: 20
             failureThreshold: 3
-          # The student's own AWS keys, mounted as the DEFAULT profile inside the VTT so `aws` works with
-          # no flags. Created per-cluster by the bootstrap (outside git); optional so clusters without it run.
+          # The student's own AWS keys are NOT mounted here (#584). They hold EKS cluster-admin, and a Secret
+          # in `agent` is one the agent's broad Role can read, so they live in namespace student-creds and
+          # the entrypoint reads them at boot with this pod's own token. See images/web-terminal/entrypoint.sh.
           envFrom:
-            - secretRef: { name: student-aws-creds, optional: true }
             # TTYD_CREDENTIAL ("user:password"). Created per-cluster by the provisioning bootstrap with a
             # random password; ttyd enforces it itself. Optional so a cluster without the Secret still
             # runs, but the entrypoint logs a loud warning when it is absent, because the terminal is
@@ -1170,8 +1170,8 @@ data:
   c8-scoped-role.yaml: |
     # Challenge 8 fix (#111): scope agent-sa's Role so the token can no longer dump every Secret.
     # Keeps the workload verbs C1/C2 use, but replaces blanket secrets get/list with get on the ONE
-    # CEO record Secret by name. C5's get_vault_entry still works; listing all Secrets or reading the AWS creds
-    # and terminal password via the API now returns Forbidden. This REPLACES the broad Role.
+    # CEO record Secret by name. C5's get_vault_entry still works; listing all Secrets or reading the terminal
+    # password via the API now returns Forbidden. This REPLACES the broad Role.
     apiVersion: rbac.authorization.k8s.io/v1
     kind: Role
     metadata:

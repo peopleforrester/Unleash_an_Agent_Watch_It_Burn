@@ -29,22 +29,35 @@ else
   echo "WARNING: no in-cluster ServiceAccount token found; kubectl is not auto-configured." > "$HOME/.motd"
 fi
 
-# Pre-configure the AWS CLI with the student's OWN keys (mounted as the optional `student-aws-creds`
-# secret -> env). Written as the DEFAULT profile so `aws` works with no --profile inside the VTT. On a
-# cluster without the secret, aws is installed but unconfigured; kubectl still works via the SA above.
-if [[ -n "${AWS_ACCESS_KEY_ID:-}" && -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+# Pre-configure the AWS CLI with the student's OWN keys. Written as the DEFAULT profile so `aws` works with
+# no --profile inside the VTT. On a cluster without the secret, aws is installed but unconfigured; kubectl
+# still works via the SA above.
+#
+# The keys are read here, with this pod's token, from the `student-aws-creds` Secret in namespace
+# student-creds (#584), not mounted from `agent`. The key holds EKS cluster-admin on this cluster. In `agent`
+# the agent's broad Role (the state Challenge 8 starts in) could read it, presign an EKS token and act as
+# cluster-admin, an identity restrict-agent-spawned-workloads does not match. This terminal's ClusterRole
+# reads Secrets in every namespace; no agent identity holds any grant in student-creds.
+STUDENT_AWS_NS=student-creds
+_student_aws() { kubectl -n "$STUDENT_AWS_NS" get secret student-aws-creds -o "jsonpath={.data.$1}" 2>/dev/null \
+  | base64 -d 2>/dev/null || true; }
+STUDENT_AK="$(_student_aws AWS_ACCESS_KEY_ID)"
+STUDENT_SK="$(_student_aws AWS_SECRET_ACCESS_KEY)"
+STUDENT_REGION="$(_student_aws AWS_DEFAULT_REGION)"
+if [[ -n "${STUDENT_AK}" && -n "${STUDENT_SK}" ]]; then
   cat > "$HOME/.aws/credentials" <<CREDS
 [default]
-aws_access_key_id = ${AWS_ACCESS_KEY_ID}
-aws_secret_access_key = ${AWS_SECRET_ACCESS_KEY}
+aws_access_key_id = ${STUDENT_AK}
+aws_secret_access_key = ${STUDENT_SK}
 CREDS
   cat > "$HOME/.aws/config" <<CFG
 [default]
-region = ${AWS_DEFAULT_REGION:-us-west-2}
+region = ${STUDENT_REGION:-us-west-2}
 output = json
 CFG
   chmod 600 "$HOME/.aws/credentials"
 fi
+unset STUDENT_AK STUDENT_SK STUDENT_REGION
 
 # Round-3 self-serve guardrail toggles (B5/B11). Each prints PLAIN-LANGUAGE confirmation of what changed
 # (not raw JSON) so a student can see what the guard does. Output/input guards flip via the guard-proxy

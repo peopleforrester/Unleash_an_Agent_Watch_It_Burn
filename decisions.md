@@ -2224,3 +2224,35 @@ same pinned, checksum-verified binaries as the gate. The cluster reachability ch
   fetched kubectl, not one on PATH, checks the cluster, and a failed fetch is listed with no kubectl run.
   `verify/test_kyverno_version_pins.py` checks that e2e-tools.lock's kyverno is the deployed version, in place
   of run-e2e.sh's install message. Not run on a cluster here.
+## 2026-10-25 · #584 · The attendee's AWS key moves out of namespace agent, into student-creds
+
+fleet.sh's `bootstrap_student_aws` pushed the attendee's IAM key into the `student-aws-creds` Secret in namespace
+agent, and the web terminal mounted it with `envFrom`. Since #549 that key's user has an EKS access entry with
+`AmazonEKSClusterAdminPolicy`. Under the broad `workshop-agent` Role, the state Challenge 8 starts in, `run_shell`
+could read the Secret with workshop-mcp's token, presign an EKS token with no AWS call and act as cluster-admin, an
+identity `restrict-agent-spawned-workloads` does not match, so it could start a pod as agent-sa. Of the issue's two
+options this takes the first. The second, the scoped Role's posture for this one Secret, is not something RBAC can
+express while C8 keeps blanket `list`: a `list` grant returns every Secret in the namespace.
+
+**Choices made:**
+- **A `student-creds` namespace** in `gitops/namespaces/namespaces.yaml`, holding only that Secret. Nothing grants
+  any agent identity anything in it, and a pod can only mount Secrets from its own namespace.
+- **The terminal reads the key at boot** with its own token (`console-terminal` already reads Secrets in every
+  namespace), so the Deployment no longer mounts it. Both entrypoint copies change; the image needs no rebuild,
+  because gitops mounts its copy over the image's.
+- **fleet.sh's new `push_student_aws`** deletes any copy an older bootstrap left in agent, waits for student-creds,
+  calls the provisioning repo's `push_vtt_aws_creds.sh` with `--namespace student-creds`, and restarts the terminal
+  in agent itself, because that script restarts terminal pods in the namespace it is given. The provisioning repo
+  is unchanged.
+- **The cluster-admin grant stays.** It is the take-home premise ("the student is the platform team"), and the
+  student has the key on their laptop from the pool row.
+- **C8's lab text drops "the AWS keys"** from what the dump reveals, in three sentences, because the Secret is no
+  longer there to dump. The terminal password, the TLS key and the rest of agent's Secrets still are. LAB-TEXT.md
+  is re-exported.
+- **Tests:** `verify/test_student_aws_creds_namespace.py` holds the namespace, the entrypoints, the Deployment, the
+  bindings (no agent-namespace account but the terminal reads Secrets cluster-wide) and the lab text.
+  `verify/test_student_aws_push.sh` runs `push_student_aws` against kubectl and push-script shims. Not yet seen
+  live: the next cluster build's terminal `aws sts get-caller-identity` is the check. A cluster built before this
+  keeps the old copy until it is bootstrapped again.
+- **Left open:** C8 also dumps `terminal-auth`. From that password and the cluster network, the agent could log in
+  to ttyd and drive the student's terminal, which holds this key and is exempt from the policy. Filed as a follow-up.

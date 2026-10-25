@@ -76,6 +76,18 @@ metadata:
     app.kubernetes.io/part-of: watch-it-burn
     app.kubernetes.io/component: ai-layer
 ---
+# Holds one Secret, student-aws-creds: the attendee's own IAM key, which fleet.sh bootstrap_student_aws pushes
+# here and the web terminal reads at boot (#584). The key carries EKS cluster-admin on its cluster, so it must
+# not sit in `agent`, where the agent's broad Role (the state Challenge 8 starts in) reads every Secret. No
+# agent identity holds any grant in this namespace, and a pod can only mount Secrets from its own namespace.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: student-creds
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn
+    app.kubernetes.io/component: attendee-credentials
+---
 apiVersion: v1
 kind: Namespace
 metadata:

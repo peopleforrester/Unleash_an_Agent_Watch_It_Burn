@@ -1285,6 +1285,35 @@ bootstrap_terminal_auth() {
     fi
 }
 
+# The namespace the attendee's key lives in (#584), declared in gitops/namespaces/namespaces.yaml. NOT `agent`:
+# the key holds EKS cluster-admin, and the agent's broad Role (the state Challenge 8 starts in) reads every
+# Secret in `agent`, so a key there let the agent's shell presign an EKS token and act as cluster-admin,
+# around restrict-agent-spawned-workloads. The web terminal reads it from here at boot with its own token.
+readonly STUDENT_AWS_NS="student-creds"
+
+# Push one key pair into student-aws-creds in ${STUDENT_AWS_NS}, then restart the terminal so its entrypoint
+# rewrites ~/.aws. The push script restarts web-terminal pods in the namespace it is given, which here holds
+# none, so the restart in `agent` is done here. A copy left in `agent` by a bootstrap from before #584 is
+# deleted first, whatever the push does: the terminal no longer reads it, and the agent still could.
+push_student_aws() {
+    local name="$1" acct_profile="$2" kcfg="$3" ak="$4" sk="$5"
+    local ctx i rc=0; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
+    [[ -n "${ctx}" ]] || { log "  WARN: ${name}: no context in ${kcfg}; student-aws-creds not pushed"; return 1; }
+    KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl --context "${ctx}" -n agent delete secret \
+        student-aws-creds --ignore-not-found >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1 || rc=1
+    for i in $(seq 1 40); do  # wait for the namespace (ArgoCD's namespaces app creates it async)
+        KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl --context "${ctx}" get ns "${STUDENT_AWS_NS}" \
+            >/dev/null 2>&1 && break; sleep 6
+    done
+    KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" bash "${PUSH_VTT_SCRIPT}" \
+        --context "${ctx}" --access-key "${ak}" --secret-key "${sk}" --region "${WIB_REGION}" \
+        --namespace "${STUDENT_AWS_NS}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1 || return 1
+    # Pod delete, not rollout restart, as the push script does it: ArgoCD-safe, no template drift.
+    KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl --context "${ctx}" -n agent delete pod \
+        -l app.kubernetes.io/name=web-terminal >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1 || true
+    return "${rc}"
+}
+
 # Mint this cluster's attendee key and inject it as the `student-aws-creds` secret so the VTT's aws CLI
 # is pre-configured at boot, with NO per-cluster manual step. The IAM user, its inline policy and its EKS
 # access entry come from the cluster root's apply (#549); only the key is made here. mint_attendee_key skips
@@ -1300,13 +1329,7 @@ bootstrap_student_aws() {
             # Persist this cluster's creds so `fleet.sh ingest` can push the full pool row later (the mint
             # only returns the secret once). Re-runs skip minting, so the first-boot file survives.
             mkdir -p "${AWS_POOL_DIR}"; cp "${awscsv}" "${AWS_POOL_DIR}/${name}.csv"
-            local ctx i; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
-            for i in $(seq 1 40); do  # wait for the agent namespace (ArgoCD creates it async)
-                KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get ns agent >/dev/null 2>&1 && break; sleep 6
-            done
-            if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" bash "${PUSH_VTT_SCRIPT}" \
-                --context "${ctx}" --access-key "${ak}" --secret-key "${sk}" --region "${WIB_REGION}" \
-                >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+            if push_student_aws "${name}" "${acct_profile}" "${kcfg}" "${ak}" "${sk}"; then
                 log "  student-aws-creds injected: ${name}"
             else
                 log "  WARN: student-aws-creds inject failed: ${name}"
@@ -1320,13 +1343,8 @@ bootstrap_student_aws() {
             if [[ -f "${pf}" ]]; then
                 pak="$(tail -n +2 "${pf}" | head -1 | cut -d, -f3 | tr -d '[:space:]')"
                 psk="$(tail -n +2 "${pf}" | head -1 | cut -d, -f4 | tr -d '[:space:]')"
-                local ctx i; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null)"
-                for i in $(seq 1 40); do
-                    KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" kubectl get ns agent >/dev/null 2>&1 && break; sleep 6
-                done
-                if [[ -n "${pak}" && -n "${psk}" ]] && KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
-                    bash "${PUSH_VTT_SCRIPT}" --context "${ctx}" --access-key "${pak}" --secret-key "${psk}" \
-                    --region "${WIB_REGION}" >>"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
+                if [[ -n "${pak}" && -n "${psk}" ]] \
+                    && push_student_aws "${name}" "${acct_profile}" "${kcfg}" "${pak}" "${psk}"; then
                     log "  ${name}: AWS key pre-existed; re-pushed student-aws-creds from the pool CSV"
                 else
                     log "  WARN: ${name}: AWS key pre-existed and pool CSV re-push failed; VTT aws CLI may be unconfigured"
