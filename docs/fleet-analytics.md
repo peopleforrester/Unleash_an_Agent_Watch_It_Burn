@@ -142,3 +142,22 @@ What has not been run against a live cluster or the instructor org yet:
    minute, and nothing named `burritobot-lab` appears in the student's own org.
 4. Apply the dashboard and confirm every widget renders. The log widgets assume guard-proxy's JSON `event`
    field and Falco's JSON `rule` field are parsed as `@event` and `@rule`.
+5. Run harvest pass 6 over the window, and the markers come back as a `lab-progress.csv` row.
+
+`verify/test_lab_pipeline_live.py` (E2E, in `run-e2e.sh`, #587) checks steps 1 to 3 and 5. It also checks the
+dashboard step, after the dashboard has been applied. Run it against a fresh attendee cluster that dual-ships,
+with the instructor org's `WITB_DD_ADMIN_API_KEY` and `WITB_DD_ADMIN_APP_KEY`:
+
+```
+CONTEXT=<kube-context> WITB_DD_ADMIN_API_KEY=... WITB_DD_ADMIN_APP_KEY=... python3 verify/test_lab_pipeline_live.py
+```
+
+It runs the shipped `lab-events.js` under node, gives the markers a fresh alias (`verify-<hex>`), and posts them
+to the cluster's public `/lab-events`. It then waits up to five minutes for every one of them in the instructor
+org, by `span.name` and tagged with the cluster's `kube_cluster_name`, and checks that the student's org has no
+`witb.lab.calls` and no `burritobot-lab` spans for them. The dashboard in the instructor org must match
+`fleet-analytics.json`. With this cluster selected, Datadog must accept every widget query, and the queries
+these markers fall under must return data. Last, pass 6 runs over the window and must write a row for the alias
+with the fixes the page measured on. It deletes that synthetic `.harvest/` output afterwards. It does not apply
+the dashboard: apply `infra/terraform/dashboards` with the instructor org's keys first. It also does not look at
+the widgets in a browser, so the `@event`/`@rule` parsing in step 4 is still checked by eye.

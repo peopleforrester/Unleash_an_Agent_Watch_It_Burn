@@ -2256,3 +2256,33 @@ express while C8 keeps blanket `list`: a `list` grant returns every Secret in th
   keeps the old copy until it is bootstrapped again.
 - **Left open:** C8 also dumps `terminal-auth`. From that password and the cluster network, the agent could log in
   to ttyd and drive the student's terminal, which holds this key and is exempt from the policy. Filed as a follow-up.
+
+## 2026-10-25 · #587 · test_lab_pipeline_live.py holds the fleet-analytics path on a live attendee cluster
+
+#587 asks for the lab progress markers (#150) to be validated on a live attendee cluster. This run had no
+cluster, no AWS and no Datadog keys, so it could not do that. It added the check that the next cluster build
+runs instead, `verify/test_lab_pipeline_live.py` (`# SUITE: e2e`, so it is in `run-e2e.sh`). The issue stays
+open until that check has passed on a cluster.
+
+- **The page's own payload.** The markers are what the committed `lab-events.js` sends, run under node by
+  `lab-events-harness.js` in its `shipped` mode. Only `witb.lab.alias` is replaced, with a fresh
+  `verify-<hex>`, so every series the check finds belongs to this run and to no student. The alias is a
+  metric tag, so each run adds a handful of series to the instructor org.
+- **Through the public route.** The check posts to `https://<public-host>/lab-events`, using the host
+  `cluster-identity` records, as a browser on the lab page would. It also checks that a GET answers 403.
+- **Checked, not applied.** The dashboard is compared with `fleet-analytics.json` in the instructor org, and
+  every widget query is run with this cluster selected. Applying `infra/terraform/dashboards` stays an
+  operator step with the instructor org's keys, because a test that rewrites a shared org's dashboard has
+  side effects. A dashboard that was never applied, or that has drifted from the file, fails the check.
+- **Pass 6 for real.** `06-lab-progress.py` runs as a subprocess over the run's window and must write a CSV
+  row for the alias. Its `.harvest/` output is deleted afterwards, because it is synthetic and not an
+  event's data.
+- **Prerequisites.** The check fails by itself, listing what is missing, when node, kubectl, CONTEXT or the
+  instructor org's `WITB_DD_ADMIN_API_KEY`/`WITB_DD_ADMIN_APP_KEY` are absent. Those keys are not added to
+  `run-e2e.sh`'s up-front list: `verify/test_gate_commands.py` would then need the E2E paragraph in
+  `AGENTS.md`/`CLAUDE.md` to name them, and that paragraph is Michael's to change. The check reads the
+  student org's keys from `datadog-secret` on the cluster, and fails unless that org differs from the
+  instructor org.
+
+It was run only against a stub `kubectl` and a stub Datadog, outside the repo, where every check passed. Not
+run on a cluster here.
