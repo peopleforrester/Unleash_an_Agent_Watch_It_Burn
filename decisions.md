@@ -2049,3 +2049,22 @@ depend on it.
   passes it, and if that ever stopped, the brief would 404 on the roster clusters again, the #152 failure. The
   roster rule also stays in one place: the router's `@brief_not_roster` matcher, which also takes `/kubecon`
   (#511), with the apex E2Es testing it. nginx behaviour is unchanged.
+
+## 2026-10-25 · #571 · KUBECON-ABSTRACT-READINESS row 6 moves to READY
+
+#563 rewrote row 6's Open cell once #514 to #518 put evil-mcp behind agentgateway :3003 on `staging`, but kept
+PARTIAL and left the tally for its own issue. Row 6 now reads READY, and the tally is 7 READY, 2 PARTIAL,
+0 MISSING, matching the run-of-show's point 6 "Yes, as #456 defines mid-inference".
+
+- **READY, not PARTIAL until the #503 probe.** The legend's READY is "everything this repo builds for the
+  point is on `staging`", and it keeps the Live column apart on purpose. Point 7 is READY with nothing shown
+  live yet. Waiting for the live proof would put that proof in the status and the Live column both. The
+  Live cell says C7 at the gateway has not run live, and names the probe and `fallback.curl.sh` ending
+  `C7 PROVEN` at the next bring-up.
+- **#480 does not hold the row back.** #456's definition shows mid-inference as agentgateway MCP
+  authorization plus the output guard on C7, and #496 and #518 took the scan of the MCP reply before the
+  model (#480) out of KubeCon's scope. The row's Evidence cell now names both halves' files and their offline
+  tests; its Open cell says #480 is not built and not claimed.
+- **Row 2 and PROJECT_STATE.md follow.** Row 2's Open cell said the run-of-show listed no admin-cluster C7
+  fallback; it now names `fallback.curl.sh`, in the run-of-show's fallback table. PROJECT_STATE.md's copy of
+  the tally is updated with it.
