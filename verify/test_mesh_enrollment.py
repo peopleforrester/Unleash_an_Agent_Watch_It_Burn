@@ -115,8 +115,9 @@ for name in ("console", "llm-guard", "evil-mcp-shim"):
     account = sa("Deployment", name)
     check(f"{name} runs as the namespace default ServiceAccount", account == "default",
           f"{account}: the identity table in section 2.3 of {EVALUATION} has changed")
-check("workshop-agent and workshop-mcp share agent-sa",
-      sa("Agent", "workshop-agent") == "agent-sa" and sa("Deployment", "workshop-mcp") == "agent-sa")
+check("workshop-agent runs as agent-sa, and workshop-mcp as its own workshop-mcp (#553)",
+      sa("Agent", "workshop-agent") == "agent-sa" and sa("Deployment", "workshop-mcp") == "workshop-mcp",
+      f"the identity table in section 2.3 of {EVALUATION} has changed")
 check("guard-proxy runs as guard-proxy-reader", sa("Deployment", "guard-proxy") == "guard-proxy-reader")
 
 # --- section 3: why enrolling `agent` and `apps` is a build, not a label --------------------------------------

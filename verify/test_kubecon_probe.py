@@ -187,7 +187,7 @@ DENIED = ('error: failed to create deployment: admission webhook "vpol.validate.
 check("C2: denied by restrict-image-registries passes", passes(kp.judge_admission_denied(1, DENIED)))
 check("C2: admitted fails", not passes(kp.judge_admission_denied(0, "deployment.apps/promo-mascot (server dry run)")))
 check("C2: refused by RBAC instead fails", not passes(kp.judge_admission_denied(
-    1, 'error: deployments.apps is forbidden: User "system:serviceaccount:agent:agent-sa" cannot create')))
+    1, 'error: deployments.apps is forbidden: User "system:serviceaccount:agent:workshop-mcp" cannot create')))
 C3_OK = ("BLOCKED (prevention): KubeArmor denied the read in the kernel; the recipe never left the file\n"
          'DETECTED (KubeArmor alert): {"PolicyName":"block-recipe-snoop","Action":"Block"}\n')
 check("C3: the fallback's block and alert passes", passes(kp.judge_c3_fallback(0, C3_OK)))

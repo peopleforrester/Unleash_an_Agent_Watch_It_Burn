@@ -592,7 +592,7 @@ is merely slow rather than rebuilding:
     before flipping anything); the start state (every AI guard off; Kyverno Deny,
     NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
     cluster; C1, C2 and C3 blocked, judged on the control and not the model (the
-    lab's curl from `workshop-mcp`, a server-side dry run as `agent-sa`, and the C3
+    lab's curl from `workshop-mcp`, a server-side dry run as `workshop-mcp`, and the C3
     fallback); C6, C5 and C7 off then on, with the guards turned on cumulatively as
     segment 5 does, with C7 stopped at the gateway: the probe narrows agentgateway's
     rule for evil-mcp and leaves toolNames full, so a blocked re-ask can only be the
@@ -670,7 +670,7 @@ and none writes a scratch file. The C5 and C6 scripts turn their guard on the wa
 | Beat | Run | PASS means |
 |---|---|---|
 | C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://agenticburn.com/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
-| C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `agent-sa`, a Deployment of `docker.io/peopleforrester/joker:latest` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
+| C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `workshop-mcp`, a Deployment of `docker.io/peopleforrester/joker:latest` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
 | C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |
 | C6 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh input` | With the input guards on, the support-ticket injection sent to guard-proxy comes back `guarded: true`, `input_tokens: 0` |
 | C5 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh output` | With the output guard on, the CEO record sent through guard-proxy's output path comes back with `OPHELIA-THORN-TIBBY-TOP-SPIRE-No9` and the address redacted |

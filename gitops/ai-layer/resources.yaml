@@ -9,6 +9,18 @@ metadata:
   name: agent-sa
   # verify-at-build: bootstrap adds eks.amazonaws.com/role-arn for Bedrock IRSA
 ---
+# workshop-mcp's own identity (#553). Its tools need the agent's RBAC, and C8 is about exactly that Role, so
+# the RoleBinding below binds this account to it alongside agent-sa. What it must NOT have is agent-sa's EKS
+# Pod Identity association (infra/terraform/aws/cluster/main.tf, agent_bedrock_pod_identity): run_shell is a
+# shell, and a shell running as agent-sa could call Bedrock over the in-VPC endpoint, around guard-proxy,
+# with no new pod for restrict-agent-spawned-workloads to refuse. Pod Identity is keyed on namespace and
+# ServiceAccount, so an account with no association gets no AWS credentials at all.
+# verify/test_agent_bypass_shapes.py holds this account out of the terraform's associations.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workshop-mcp
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
@@ -35,6 +47,8 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: agent-sa
+  - kind: ServiceAccount
+    name: workshop-mcp
 ---
 # --- Inference behind the gateway (issue #394) ------------------------------------------------------
 # These two are the toggle. Both speak OpenAI to kagent and differ only in which backend agentgateway
@@ -813,10 +827,11 @@ spec:
   template:
     metadata: { labels: { app: workshop-mcp } }
     spec:
-      # Run as agent-sa so the tools have the agent's real namespaced RBAC (secrets get/list, pods,
-      # configmaps/services/deployments). The MCP tools call the in-cluster API with this SA's token;
-      # this is the genuine excessive-agency surface (get_vault_entry reads the REAL planted Secret, etc.).
-      serviceAccountName: agent-sa
+      # Its own ServiceAccount, bound to the agent's Role, so the tools have the agent's real namespaced RBAC
+      # (secrets get/list, pods, configmaps/services/deployments). The MCP tools call the in-cluster API with
+      # this SA's token; this is the genuine excessive-agency surface (get_vault_entry reads the REAL planted
+      # Secret, etc.). Not agent-sa, because agent-sa holds Bedrock credentials and run_shell is a shell (#553).
+      serviceAccountName: workshop-mcp
       containers:
         - name: shim
           image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # built from images/workshop-mcp/ (deps baked in, no egress needed at start)

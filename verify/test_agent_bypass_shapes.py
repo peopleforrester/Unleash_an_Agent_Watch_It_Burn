@@ -111,6 +111,46 @@ check("the attendee's terminal is left out", "'system:serviceaccount:agent:web-t
 check("autogen is not switched off (a Deployment is refused at the Deployment)",
       (spec.get("autogen") or {}).get("podControllers", {}).get("controllers") != [])
 
+print("== the agent's shell holds no Bedrock identity (#553) ==")
+# run_shell is a shell in workshop-mcp. If that pod ran as a Bedrock-bound account, the shell could call the model
+# over the in-VPC endpoint with no new pod, and this policy, which judges pod creation, would never see it.
+AI = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if isinstance(d, dict)]
+
+
+def ai(kind: str, name: str) -> dict:
+    found = [d for d in AI if d.get("kind") == kind and d["metadata"]["name"] == name]
+    return found[0] if len(found) == 1 else {}
+
+
+mcp_sa = ai("Deployment", "workshop-mcp").get("spec", {}).get("template", {}).get("spec", {})
+mcp_sa = mcp_sa.get("serviceAccountName") or mcp_sa.get("serviceAccount") or "default"
+check("workshop-mcp runs as its own ServiceAccount, workshop-mcp", mcp_sa == "workshop-mcp", mcp_sa)
+check("that ServiceAccount is declared", bool(ai("ServiceAccount", "workshop-mcp")))
+check("it has no Pod Identity association in main.tf", mcp_sa not in associated,
+      f"main.tf associates {sorted(associated)}")
+check("and no IRSA role annotation either",
+      "eks.amazonaws.com/role-arn" not in (ai("ServiceAccount", "workshop-mcp").get("metadata", {}).get("annotations") or {}))
+binding = ai("RoleBinding", "workshop-agent")
+check("it is bound to the agent's Role alongside agent-sa, so C8's token theft and fix still apply to the tool pod",
+      binding.get("roleRef", {}).get("name") == "workshop-agent"
+      and {s["name"] for s in binding.get("subjects", []) if s.get("kind") == "ServiceAccount"} >= {"agent-sa", mcp_sa},
+      repr(binding.get("subjects")))
+check("its requests are an agent-namespace identity's, so it may not start a pod as agent-sa either",
+      mcp_sa != "web-terminal" and mcp_sa not in listed)
+# A token for agent-sa could still be minted or borrowed through the API. The Role the shell carries, as shipped and
+# as both C8 files apply it, must not grant either.
+fixes = ai("ConfigMap", "challenge-fixes").get("data") or {}
+roles = [("shipped", ai("Role", "workshop-agent"))] + [
+    (key, yaml.safe_load(fixes[key])) for key in ("c8-broad-role.yaml", "c8-scoped-role.yaml") if key in fixes]
+check("the agent's Role is found as shipped and in both C8 files", len(roles) == 3 and all(r for _, r in roles),
+      repr([k for k, _ in roles]))
+for where, role in roles:
+    grants = [(res, verb) for rule in role.get("rules") or [] for res in rule.get("resources") or []
+              for verb in rule.get("verbs") or []]
+    check(f"{where}: the agent's Role cannot mint or borrow another account's token",
+          not any(res in ("serviceaccounts", "serviceaccounts/token", "*") or verb in ("impersonate", "*")
+                  for res, verb in grants), repr(grants))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

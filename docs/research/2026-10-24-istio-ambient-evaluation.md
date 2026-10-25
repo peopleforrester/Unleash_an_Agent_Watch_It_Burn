@@ -118,15 +118,17 @@ Istio's identity is the ServiceAccount: `spiffe://cluster.local/ns/<ns>/sa/<sa>`
 | ServiceAccount | Workloads |
 |---|---|
 | `default` | `console`, `llm-guard`, **`evil-mcp-shim`** |
-| `agent-sa` | `workshop-agent` (the Agent CR's `serviceAccountName`), **`workshop-mcp`** |
+| `agent-sa` | `workshop-agent` (the Agent CR's `serviceAccountName`) |
+| `workshop-mcp` | **`workshop-mcp`** (its own account since #553, bound to the same Role as `agent-sa`) |
 | `guard-proxy-reader` | `guard-proxy` |
 | `web-terminal` | `web-terminal` |
 | `agentgateway` | `agentgateway` |
 
 - "Allow only the console's identity" would also let in `evil-mcp-shim`, C7's rogue server, because both
   run as `default`. Any identity rule first needs a ServiceAccount for the console.
-- The issue's second candidate, "mTLS identity in the trace as the who-called-whom evidence", cannot tell
-  BurritoBot from its tool pod, because both are `agent-sa`. It also would not appear in the trace: no
+- The issue's second candidate, "mTLS identity in the trace as the who-called-whom evidence", could not
+  tell BurritoBot from its tool pod when this was written, because both were `agent-sa`. Since #553 the
+  tool pod has its own account, so the identities now differ. It also would not appear in the trace: no
   span carries a SPIFFE ID. It appears in ztunnel's access log as `src.identity=` and `dst.identity=`
   ([ztunnel troubleshooting](https://istio.io/latest/docs/ambient/usage/troubleshoot-ztunnel/)), which
   Datadog collects with every container log. The OTel spans already show who called whom by service name.

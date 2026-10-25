@@ -4,7 +4,8 @@
 
 **The attack:** talk BurritoBot into deploying a villain, `docker.io/peopleforrester/<villain>:latest`
 (`joker`, `gargamel`, `skeletor` and the rest; see `games/villain-apps/`). Its `deploy_app` tool runs in
-workshop-mcp as `agent-sa` and applies the Deployment in the `agent` namespace. It fills in CPU and memory
+workshop-mcp as that pod's own `workshop-mcp` ServiceAccount, bound to the agent's Role, and applies the
+Deployment in the `agent` namespace. It fills in CPU and memory
 limits on any container the model left without them (#538), so the registry allow-list is the only policy the
 villain breaks and the refusal names it. The prompts are on `/brief`
 and in `challenges/PROMPT-CATALOG.md`.

@@ -86,10 +86,11 @@ profiles exclude `kubearmor-policies`, #281), and applied by the student everywh
 CONTEXT=<kube-context> bash challenges/c3-secret-grep/fallback.kubectl.sh
 ```
 
-It requires `CONTEXT` and fails without it. It checks that `workshop-mcp` runs as `agent-sa`, runs the
+It requires `CONTEXT` and fails without it. It checks that `workshop-mcp` runs as its own `workshop-mcp`
+ServiceAccount (bound to the agent's Role, without `agent-sa`'s Bedrock credentials, #553), runs the
 payload above inside that pod through `/bin/sh -c` (the way the agent's `run_shell` tool runs it), and
 fails unless the output carries `Permission denied` under `config/legacy` and not the bait's signature.
 Then it reads the `kubearmor-relay` log from just before the grep and fails unless a
 `block-recipe-snoop` `Block` alert is there, which it prints. The exec goes over the operator's context,
-not as `agent-sa`: the agent's ServiceAccount has no `pods/exec`, and KubeArmor keys the block on the
+not as the tool pod's account: the agent's Role has no `pods/exec`, and KubeArmor keys the block on the
 pod's label, not on the API caller. `verify/test_c3_fallback.py` holds the script to this offline.

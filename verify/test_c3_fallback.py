@@ -60,7 +60,7 @@ def check(name: str, cond: bool) -> None:
         failures.append(name)
 
 
-def run(*, context: str | None = "kind-c3-test", sa: str = "agent-sa", exec_out: str = DENIED,
+def run(*, context: str | None = "kind-c3-test", sa: str = "workshop-mcp", exec_out: str = DENIED,
         exec_rc: int = 2, logs: str = ALERT) -> tuple[int, str, list[str]]:
     with tempfile.TemporaryDirectory() as tmp:
         d = pathlib.Path(tmp)
@@ -124,8 +124,12 @@ check("fails when there is no Permission denied at all", rc != 0)
 rc, out, _ = run(exec_out="error: unable to upgrade connection: container not found", exec_rc=1)
 check("fails when the exec itself fails (no denial proven)", rc != 0)
 rc, out, calls = run(sa="default")
-check("fails when workshop-mcp does not run as agent-sa", rc != 0 and "agent-sa" in out)
+check("fails when workshop-mcp does not run as its own ServiceAccount", rc != 0 and "workshop-mcp" in out)
 check("stops before the grep when the identity is wrong", not any(" exec " in f" {c} " for c in calls))
+# #553: agent-sa holds Bedrock credentials, so a tool pod running as it is the regression, not the agent's context.
+rc, out, calls = run(sa="agent-sa")
+check("fails when workshop-mcp runs as agent-sa (Bedrock credentials in a shell, #553)",
+      rc != 0 and not any(" exec " in f" {c} " for c in calls))
 
 print("== the detection half is asserted ==")
 rc, out, _ = run(logs="")

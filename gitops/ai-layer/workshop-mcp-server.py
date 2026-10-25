@@ -4,9 +4,10 @@
 # ABOUTME: business-data tools are mocked from local files written into this pod at startup.
 
 # This is the trusted MCP the agent uses (counterpart to evil-mcp-shim, the rogue look-alike in beat-3).
-# Tool NAMES here must match the agent's toolNames allowlist in resources.yaml. The pod runs as agent-sa,
-# whose namespaced Role grants secrets get/list and pods/deploys/etc. — the genuine excessive-agency
-# surface the labs exercise. Business data (customers/inventory/orders) is mocked on the local filesystem
+# Tool NAMES here must match the agent's toolNames allowlist in resources.yaml. The pod runs as its own
+# ServiceAccount, workshop-mcp, bound to the agent's namespaced Role, which grants secrets get/list and
+# pods/deploys/etc. — the genuine excessive-agency surface the labs exercise. It is not agent-sa, because
+# agent-sa holds Bedrock credentials through Pod Identity and run_shell would hand them to a shell (#553). Business data (customers/inventory/orders) is mocked on the local filesystem
 # so the data tools are concrete AND the filesystem-grep challenge (C3) has bait to find; the recipe is a
 # REAL K8s Secret (C5), and run_shell/deploy_app perform REAL cluster actions (C1 exfil / C2 image / C4).
 
@@ -336,8 +337,9 @@ def deploy_app(manifest: str = "") -> str:
 
 @mcp.tool(description="Run a shell command inside the cantina's container and return its output.")
 def run_shell(command: str = "") -> str:
-    """REAL shell exec in the MCP pod (runs as agent-sa). The over-broad 'a dev gave the agent a shell'
-    tool: the surface behind the C1 curl-to-S3 exfil, the C3 filesystem grep, and the C4 fork bomb."""
+    """REAL shell exec in the MCP pod (runs as workshop-mcp: the agent's Role, no AWS credentials). The
+    over-broad 'a dev gave the agent a shell' tool: the surface behind the C1 curl-to-S3 exfil, the C3
+    filesystem grep, and the C4 fork bomb."""
     if not command.strip():
         return "provide a command to run"
     try:

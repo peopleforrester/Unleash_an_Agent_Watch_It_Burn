@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# ABOUTME: C2 fallback: as agent-sa, create a Deployment of a villain image from a registry the allow-list
+# ABOUTME: C2 fallback: as workshop-mcp, create a Deployment of a villain image from a registry the allow-list
 # ABOUTME: does not carry, and prove Kyverno's restrict-image-registries refuses it at admission. No model.
 #
 # Usage: CONTEXT=<admin-cluster kube-context> challenges/c2-villain-image/fallback.kubectl.sh
 #
-# BurritoBot's deploy_app runs in workshop-mcp as agent-sa and applies a Deployment in the agent namespace,
-# so this creates one the same way: as agent-sa, in agent, with docker.io/peopleforrester/<villain>:latest.
+# BurritoBot's deploy_app runs in workshop-mcp, as that pod's own ServiceAccount (workshop-mcp, bound to the
+# agent's Role; not agent-sa, #553), and applies a Deployment in the agent namespace. So this creates one the
+# same way: as workshop-mcp, in agent, with docker.io/peopleforrester/<villain>:latest.
 # The Deployment carries limits, so the only policy it breaks is the registry allow-list and the denial
 # message can only be that one. challenges/01-cncf-wall/fallback.kubectl.sh is the retired workshop Beat 1
 # (resource limits, nginx) and is not this beat (#499).
@@ -18,7 +19,7 @@ CONTEXT="${CONTEXT:?set CONTEXT to the admin cluster kube-context}"
 command -v kubectl >/dev/null 2>&1 || { echo "kubectl not found on PATH" >&2; exit 1; }
 
 readonly NS="agent"
-readonly SA="system:serviceaccount:${NS}:agent-sa"
+readonly SA="system:serviceaccount:${NS}:workshop-mcp"
 readonly POLICY="restrict-image-registries"
 readonly VILLAIN="joker"
 readonly IMAGE="docker.io/peopleforrester/${VILLAIN}:latest"
@@ -36,7 +37,7 @@ check() {
     fi
 }
 
-# agent-sa has no delete verb, so the cleanup is the caller's own identity. Runs on every exit, so a
+# The agent's Role has no delete verb, so the cleanup is the caller's own identity. Runs on every exit, so a
 # Deployment that was wrongly admitted never keeps a villain running.
 cleanup() { kc delete deployment "${NAME}" --ignore-not-found --wait=false >/dev/null 2>&1 || true; }
 trap cleanup EXIT
@@ -47,9 +48,9 @@ cleanup
 
 can="$(kc auth can-i create deployments.apps --as="${SA}" 2>/dev/null || true)"
 if [[ "${can}" == "yes" ]]; then
-    check "agent-sa may create Deployments in ${NS} (so a refusal is admission, not RBAC)" ok
+    check "workshop-mcp may create Deployments in ${NS} (so a refusal is admission, not RBAC)" ok
 else
-    check "agent-sa may create Deployments in ${NS}" fail "can-i said '${can:-nothing}'; a refusal would be RBAC"
+    check "workshop-mcp may create Deployments in ${NS}" fail "can-i said '${can:-nothing}'; a refusal would be RBAC"
 fi
 
 rc=0

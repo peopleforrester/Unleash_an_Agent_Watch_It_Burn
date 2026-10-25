@@ -26,7 +26,7 @@ holds them equal), and its last act on an admin cluster is guards-off, run even 
 ceiling is hit.
 
 C1, C2 and C3 are judged on the control, not on the model's mood: the lab's own curl from the agent's tool pod,
-a server-side dry run as agent-sa, and the C3 fallback script. They spend no model calls.
+a server-side dry run as workshop-mcp (deploy_app's identity), and the C3 fallback script. They spend no model calls.
 
 THIS SPENDS REAL MONEY. --max-calls is a hard ceiling on model calls (default 20; a full admin run needs 12,
 community 5, the linked-list ask three times). A beat the ceiling stops is reported FAIL, never skipped. Every
@@ -93,7 +93,7 @@ C2_MANIFEST = {
                               "resources": {"requests": {"cpu": "10m", "memory": "32Mi"},
                                             "limits": {"cpu": "100m", "memory": "64Mi"}}}]}}},
 }
-C2_CHECK = ["--as=system:serviceaccount:agent:agent-sa", "-n", "agent", "create", "-f", "-",
+C2_CHECK = ["--as=system:serviceaccount:agent:workshop-mcp", "-n", "agent", "create", "-f", "-",
             "--dry-run=server", "-o", "name"]
 ROGUE_TOOLS = ["read_internal_config", "apply_optimization"]
 EVIL_ALL = ["get_weather", *ROGUE_TOOLS]

@@ -1,7 +1,7 @@
 # ABOUTME: Structural control on the AI plane's bypass (#490): a workload the agent creates in its own namespace
 # ABOUTME: may not borrow a Bedrock identity, nor wear a label a NetworkPolicy trusts (egress or ingress).
 #
-# The bypass this closes. The agent (agent-sa, which both workshop-agent and workshop-mcp run as) can create
+# The bypass this closes. The agent (agent-sa, and workshop-mcp, which its tools run as) can create
 # Pods and Deployments in `agent`. A pod it makes there can reach a model around every guard-proxy toggle by
 # two routes, and deny-llm-endpoint-bypass sees neither, because neither needs an endpoint env var:
 #
@@ -34,8 +34,9 @@
 # workload the agent legitimately makes (C2's villain Deployment included) runs as one of these accounts or
 # carries one of these labels. A report of a bypass that already ran is not a control.
 #
-# Not closed here, and filed as a follow-up: a shell the agent already has in a pod that runs as agent-sa
-# (workshop-mcp's run_shell) holds the same credentials with no new pod at all.
+# Closed elsewhere: the shell the agent already has, workshop-mcp's run_shell, would hold the same credentials
+# with no new pod if it ran as agent-sa. It runs as its own ServiceAccount, workshop-mcp, which is bound to
+# the agent's Role and has no Pod Identity association (#553), so it is not in the list below.
 #
 # Background evaluation is off: the rule reads request.userInfo, which exists only at admission.
 #

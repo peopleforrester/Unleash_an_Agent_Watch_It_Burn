@@ -1988,3 +1988,29 @@ red, as it did before #543.
 
 - **Revisit** when hecaton's toolchain has the #523 tools and the gate can reach a cluster and AWS, or when
   there is an E2E tier that needs no cluster. `verify/test_gate_commands.py` forbids only run-e2e.sh on the line.
+## 2026-10-25 · #553 · workshop-mcp runs as its own ServiceAccount, so run_shell holds no Bedrock credentials
+
+#490 left one route to the model open with no new pod: workshop-mcp ran as agent-sa, agent-sa has the Bedrock
+Pod Identity association (`agent_bedrock_pod_identity` in `infra/terraform/aws/cluster/main.tf`), and the egress
+allowlist passes the in-VPC Bedrock endpoint, so `run_shell` could call Bedrock around guard-proxy. Of the
+issue's two options this takes the first.
+
+**Choices made:**
+- **A `workshop-mcp` ServiceAccount, bound to the agent's Role.** The `workshop-agent` RoleBinding now has two
+  subjects, agent-sa and workshop-mcp, so the tools keep exactly the agent's RBAC. C8 keeps its lesson: the chat
+  vector's `cat` of the pod token now returns workshop-mcp's token, which lists every Secret under the broad
+  Role and is Forbidden under the scoped one, the same as agent-sa. C8's terminal commands still impersonate
+  agent-sa, which still runs BurritoBot and is still bound to the same Role, so the lab text is unchanged.
+- **No IAM change.** Pod Identity is keyed on namespace and ServiceAccount, and the new account has no
+  association, so it gets no AWS credentials. Nothing under `infra/` changes, so there is nothing for the #207
+  policy pipeline to check. The PrincipalTag/kubernetes-pod-name alternative was not taken: pod names follow
+  Deployment names, which the agent chooses (#333).
+- **The C2 fallback and the kubecon probe's C2 dry run impersonate workshop-mcp,** the identity `deploy_app`
+  now holds. The C3 fallback asserts the tool pod runs as workshop-mcp and refuses agent-sa.
+- **restrict-agent-spawned-workloads is unchanged.** Its match is every agent-namespace ServiceAccount but
+  web-terminal, so the new account may not start a pod as agent-sa either. Its comment now says the run_shell
+  route is closed here rather than open.
+- **Tests:** `verify/test_agent_bypass_shapes.py` holds workshop-mcp to its own account, with no association in
+  main.tf and no IRSA annotation, bound to the agent's Role, and checks that the Role (as shipped and in both C8
+  files) grants no `serviceaccounts`, `serviceaccounts/token` or `impersonate`, so the shell cannot mint or
+  borrow agent-sa's token. Not yet seen live: the next cluster's C1 to C3 and C8 beats are the check.

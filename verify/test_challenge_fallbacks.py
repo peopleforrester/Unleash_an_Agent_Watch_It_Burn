@@ -93,19 +93,19 @@ def terminal_says(cmd):
 TERMINAL_SAYS = {c: terminal_says(c) for c in ("guard-mcp-on", "guard-mcp-off")}
 
 print("== the fallbacks aim at what is deployed ==")
-check("workshop-mcp is deployed with a container named shim, as agent-sa",
+check("workshop-mcp is deployed with a container named shim, as its own workshop-mcp ServiceAccount (#553)",
       "shim" in containers("workshop-mcp")
-      and obj("Deployment", "workshop-mcp")["spec"]["template"]["spec"].get("serviceAccountName") == "agent-sa")
+      and obj("Deployment", "workshop-mcp")["spec"]["template"]["spec"].get("serviceAccountName") == "workshop-mcp")
 _proxy = containers("guard-proxy").get("proxy", {})
 check("guard-proxy is deployed with a container named proxy running /app/proxy.py on 8080",
       _proxy.get("command") == ["python", "/app/proxy.py"]
       and any(p.get("containerPort") == 8080 for p in _proxy.get("ports", [])))
 check("guard-proxy's code has the routes and the output path the C5/C6 fallback calls",
       all(r in PROXY_PY for r in ('"/guards"', '"/toggle"', '"/chat"', "def output_scrub(")))
-check("agent-sa is bound to a Role that may create Deployments",
+check("agent-sa and workshop-mcp are bound to a Role that may create Deployments",
       any(r.get("resources") == ["deployments"] and "create" in r["verbs"]
           for r in obj("Role", "workshop-agent")["rules"])
-      and obj("RoleBinding", "workshop-agent")["subjects"][0]["name"] == "agent-sa")
+      and {s["name"] for s in obj("RoleBinding", "workshop-agent")["subjects"]} == {"agent-sa", "workshop-mcp"})
 check("restrict-image-registries is the deployed policy's name, and agent is in its namespaces",
       _policy["metadata"]["name"] == "restrict-image-registries"
       and "agent" in str(_policy["spec"]["matchConstraints"]["namespaceSelector"]))
@@ -134,7 +134,7 @@ check("C1 posts to the beacon the C1 beat uses", f'BEACON="{_beacon}"' in (REPO 
 
 TEXT = {s: (REPO / s).read_text() for s in (C1, C2, C56, C7)}
 for s, needles in ((C1, ['NS="agent"', 'POD="deploy/workshop-mcp"', 'CONTAINER="shim"']),
-                   (C2, ['NS="agent"', 'agent-sa', 'POLICY="restrict-image-registries"',
+                   (C2, ['NS="agent"', 'SA="system:serviceaccount:${NS}:workshop-mcp"', 'POLICY="restrict-image-registries"',
                          'docker.io/peopleforrester/']),
                    (C56, ['NS="agent"', 'POD="deploy/guard-proxy"', 'CONTAINER="proxy"',
                           'RECORD_SECRET="ceo-personal-record"', 'output=on',
@@ -280,12 +280,12 @@ if ns == "agent" and args[4:7] == ["get", "configmap", "agentgateway-c7-config"]
     print(json.dumps({"metadata": {"name": "agentgateway-c7-config", "resourceVersion": "4711"},
                       "data": {"config.yaml": text}})); sys.exit(0)
 if ns == "agent" and args[4:6] == ["auth", "can-i"]:
-    yes = flag("--as") == "system:serviceaccount:agent:agent-sa" and "deployments.apps" in args
+    yes = flag("--as") == "system:serviceaccount:agent:workshop-mcp" and "deployments.apps" in args
     print("yes" if yes else "no"); sys.exit(0 if yes else 1)
 if "create" in args and flag("-f") == "-":
     d = yaml.safe_load(sys.stdin.read())
-    if ns != "agent" or flag("--as") != "system:serviceaccount:agent:agent-sa":
-        sys.stderr.write("stub kubectl: not as agent-sa in agent\n"); sys.exit(1)
+    if ns != "agent" or flag("--as") != "system:serviceaccount:agent:workshop-mcp":
+        sys.stderr.write("stub kubectl: not as workshop-mcp in agent\n"); sys.exit(1)
     images = [c["image"] for c in d["spec"]["template"]["spec"]["containers"]]
     state["created_images"] += images
     state["created_manifests"].append(d)
@@ -535,7 +535,7 @@ try:
             check("C1 on an open cluster names the moved count", "does not move" in out_open
                   and "  FAIL  the beacon count does not move" in out_open, out_open)
         if beat == "C2":
-            check("C2 creates docker.io/peopleforrester/<villain>:latest as agent-sa",
+            check("C2 creates docker.io/peopleforrester/<villain>:latest as workshop-mcp",
                   state["created_images"] == ["docker.io/peopleforrester/joker:latest"])
             # #529: on an admin cluster with every policy at Deny, a limit-less Deployment is also refused by
             # require-resource-limits, and whichever webhook answers first is the deny message the room hears.
