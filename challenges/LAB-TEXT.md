@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-10-25 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `411e408d7c1a0a29f6b9c6c0d6e50c4130a404d5` (the last commit to change lab.html, on 2026-10-25) |
-| Source blob | `368260ed8238d2f3fccd9b12edf6fe711079613d` |
+| Source commit | `6c11b1fdf16603f107fd14861c160c3c8a1bdbdf` (the last commit to change lab.html, on 2026-10-25) |
+| Source blob | `9b386a1f9ff713b5cfaf41ecc60b83684556ca93` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -807,7 +807,7 @@ Every Secret in the namespace, listed by a credential that was never meant to be
 kubectl get secret ceo-personal-record -n agent --as=system:serviceaccount:agent:agent-sa -o jsonpath='{.data.record}' | base64 -d
 ```
 
-**Success!** The CEO's home address, in plain text, with none of the guardrails in the path. Every other Secret on that list reads back the same way, including the AWS keys and the terminal password.
+**Success!** The CEO's home address, in plain text, with none of the guardrails in the path. Every other Secret on that list reads back the same way, including the terminal password.
 
 Want the whole wall of base64 the agent would see? `kubectl get secrets -n agent -o yaml --as=system:serviceaccount:agent:agent-sa`. It is long, which is rather the point.
 
@@ -835,7 +835,7 @@ Want the whole wall of base64 the agent would see? `kubectl get secrets -n agent
 >
 > You want RBAC scoped tightly because the question is never "is this workload trustworthy". It is "what could anyone holding this credential do". Those are different questions, and the second one is the one you just answered from your terminal.
 >
-> Kubernetes attaches a ServiceAccount to every pod, and if the developer names none it attaches the namespace default. That attachment is the whole vulnerability. It projects a bearer token into the container at `/var/run/secrets/kubernetes.io/serviceaccount/token`, and anything that can read that file can act as the agent, which is what makes the `cat` in the chat version a theft rather than a diagnostic. The account was allowed to read *any* Secret in the namespace, and to `list` all of them. It only needs one (the CEO record, for Challenge 5). The extra reach is what let it dump the AWS keys and the terminal password.
+> Kubernetes attaches a ServiceAccount to every pod, and if the developer names none it attaches the namespace default. That attachment is the whole vulnerability. It projects a bearer token into the container at `/var/run/secrets/kubernetes.io/serviceaccount/token`, and anything that can read that file can act as the agent, which is what makes the `cat` in the chat version a theft rather than a diagnostic. The account was allowed to read *any* Secret in the namespace, and to `list` all of them. It only needs one (the CEO record, for Challenge 5). The extra reach is what let it dump the terminal password.
 >
 > The base64 is not encryption and is not protection; the API returns Secret values that way and anyone can decode them. It is, however, why the output guard from Challenge 5 stayed silent: that guard matches readable text, and there was none to match.
 >
@@ -871,7 +871,7 @@ Want the whole wall of base64 the agent would see? `kubectl get secrets -n agent
 >
 > The `secrets` row has changed. `list` is gone, and `get` is now qualified by a resource name. Compare it with what you wrote down. That is the entire fix, measured rather than described, and it is the clearest before-and-after in the workshop: one command, two answers, nothing to interpret.
 >
-> **Now run the same attack again.** Listing the Secrets returns `Forbidden`, and so does reading the AWS creds or the terminal password by name. BurritoBot can still fetch `ceo-personal-record` by name, so Challenge 5 still works.
+> **Now run the same attack again.** Listing the Secrets returns `Forbidden`, and so does reading the terminal password by name. BurritoBot can still fetch `ceo-personal-record` by name, so Challenge 5 still works.
 >
 > OWASP, a security standards group, calls this Identity and Privilege Abuse (ASI03). Whatever the credential can reach, the attacker can reach. Shrink it to exactly what the job needs.
 
