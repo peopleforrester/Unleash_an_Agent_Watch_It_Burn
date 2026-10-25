@@ -261,7 +261,8 @@ data:
 # the c7-rule marker comment. 'true' is off (every tool allowed); 'mcp.tool.name == "get_weather"' is on (mcpAuthorization
 # is allow-only and OR-combined, so the gateway drops the rogue tools from tools/list and refuses a
 # tools/call to them before evil-mcp runs it). Committed state is 'true': C7 starts open, like every other
-# guard, and nothing flips it yet. Keep this ConfigMap to the evil-mcp bind.
+# guard. On an admin cluster the web terminal's guard-mcp-on/guard-mcp-off and guards-on/guards-off flip it,
+# through _c7rule in gitops/ai-layer/web-terminal/entrypoint.sh. Keep this ConfigMap to the evil-mcp bind.
 apiVersion: v1
 kind: ConfigMap
 metadata:
