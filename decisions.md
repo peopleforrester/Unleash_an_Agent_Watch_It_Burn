@@ -1697,3 +1697,29 @@ submission. Decided by Michael.
   own-cluster workshop is submitted, its text says a laptop is needed for the hands-on part and that BurritoBot
   itself works on a phone. That sentence belongs only in the formats where attendees get their own cluster.
   Phone-room formats like the KubeCon breakout and the AI DevWorld 2027 15-minute draft do not get it.
+
+## 2026-10-25 · #518 · The C7 stage claim is the gateway rule, then the output guard, and nothing about the MCP reply
+
+Step 6 of #496. Michael's #456 decision (2026-10-24) defines mid-inference as checking between the agent's
+steps, its tool calls and what the MCP server returns. Run-of-show segment 5, the /kubecon brief's C7 block and
+the recreation spec now say C7 in one order: agentgateway's rule for evil-mcp stops the rogue `tools/call`
+before the tool runs, and the output guard redacts the sentinel in the reply. One check sits between the agent
+and its tools, the other on the way out to the user.
+
+- **No claim that the MCP server's reply is scanned before the model reads it.** That is #480 and is not built
+  for KubeCon. The segment 5 "Delivers" lines and open question 4 dropped "before that reaches the model
+  again", which said it.
+- **Per-format control.** toolNames on a workshop cluster, the gateway rule on an admin cluster (#516). The
+  spec's beat-3 bullet, decision row and D14 say so.
+- **The reload delay is a Night Before number.** Segment 5 reads "not measured yet" until the Night Before C7
+  step runs `fallback.curl.sh` against the admin cluster and copies the delay it prints. The brief points at
+  that line rather than carrying a number of its own, and names the same command as the run-of-show's
+  fallback table, with no flags.
+- **Point 6 reads Yes, pending the bring-up probe (#503)**, the same wording point 7 uses. Its "Partial" and
+  "unsettled" wording is gone from the points table and the points-not-ready paragraph.
+- **The output guard's half is pinned offline.** `verify/test_c7_output_guard.py` reads the llm-guard Regex
+  from `gitops/ai-layer/resources.yaml`, checks it is one `match_type: all` alternation with redact on, and
+  runs it over a reply carrying `FAKE-MCP-EXFIL-sentinel-4c1d` twice, the value evil-mcp-shim serves.
+
+`docs/KUBECON-ABSTRACT-READINESS.md` row 6 still reads PARTIAL with "#496 not promoted". It was outside this
+issue's file list, so it is left for a follow-up.
