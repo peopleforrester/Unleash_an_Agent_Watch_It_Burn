@@ -1673,3 +1673,27 @@ real pod-side exchange against a fake :3003 gateway, and a fake clock keeps the 
 It covers guarded, open, found-narrowed, gateway-down and workshop clusters. `verify/test_kube_safety.py` now
 globs `challenges/*/toggle-*.sh` and `challenges/*/fallback*.sh` instead of keeping a list that every new
 fallback appended to, and it fails if either glob matches nothing.
+## 2026-10-25 · #512 · question 717: no laptop line in the lab or the presenter brief
+
+**Question 717:** should the opening material carry a laptop line, both written in Section 0 of
+`gitops/ai-layer/web/lab.html` and spoken as a cue in Phase 1 of `gitops/ai-layer/web/brief.html`?
+**Answer, in substance:** no. The only delivery coming up is the 30-minute KubeCon breakout. People there will
+use their phones or their laptops, nobody gets their own cluster, and nobody cares which device they use.
+His words are in the issue (#512, comment 6390996043). Decided by Michael.
+
+- **What it changes.** No copy change. `lab.html` keeps its small-screen footnote ("A laptop is the better
+  experience") as its only device note, and `brief.html` gets no device cue. Whitney's Section 0 wording and
+  `verify/test_section0_wording.py` are untouched. The KubeCon breakout material (`web/kubecon.html`, the
+  KubeCon run-of-show) gets no laptop line either, because that room is phone-or-laptop by design (#387).
+
+## 2026-10-25 · #512 · question 718: the abstract's laptop line waits for the next workshop submission
+
+**Question 718:** should the laptop line go into the 2-hour workshop's abstract drafts in talks-knowledge now,
+given that no published listing of the workshop is live? **Answer:** wait and write it into the next
+submission. Decided by Michael.
+
+- **What it changes.** Nothing is written now. `docs/ABSTRACT.md` stays verbatim, the KubeCon breakout's
+  Sessionize listing is not touched, and the talks-knowledge drafts are not edited. The next time the 2-hour,
+  own-cluster workshop is submitted, its text says a laptop is needed for the hands-on part and that BurritoBot
+  itself works on a phone. That sentence belongs only in the formats where attendees get their own cluster.
+  Phone-room formats like the KubeCon breakout and the AI DevWorld 2027 15-minute draft do not get it.
