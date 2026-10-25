@@ -1921,3 +1921,20 @@ that the C7 control is kagent's `toolNames` on a workshop cluster and the gatewa
   suggests, changes the tally and the verdict, so it is left for its own issue.
 - **Held offline.** `verify/test_agentgateway_path.py` fails if a line naming evil-mcp in any of the six says
   it is dialled direct; against the base it fails all six.
+## 2026-10-25 · #562 · The next build checks that BurritoBot answers through its tagged profile, by script
+
+#513 (one tagged Bedrock application profile per tier per cluster) was built and tested offline only. #562
+asks the next bring-up to confirm it. Three of its five checks already had a live check:
+`model_pin_check.py` and `test_model_pin_live.py` (the pinned tier's copies, as the operator's profile) and
+`test_iam_policy_aws.py` (the effect cases in `infra/org/effect-tests.yaml`). Nothing asked the cluster what
+the agent calls, or checked the attendee and consumer tags or the other four profiles.
+
+**`verify/bedrock_profile_check.py`** does that for one cluster, named by `--context`: all five
+`<cluster>-<tier>` profiles are ACTIVE, each agent tier routes like its system profile, and all five carry
+project, event, attendee and consumer. Every committed Bedrock ModelConfig's live `.spec.model` is this
+cluster's ARN for its tier. kagent's `workshop-agent` config Secret names the bound one's ARN, and each running
+agent pod started after the Secret last changed. Without that last check, a pod still holding the system id
+would answer and look like a pass. Then one `[[wib-probe]]` chat turn goes to guard-proxy on localhost
+through `kubectl exec`. A reply there, with the config naming the ARN, is the tag-conditioned grant honoured
+at invoke time. `test_bedrock_profile_live.py` runs it in the E2E suite. `test_bedrock_profile_check.py`
+(offline) checks the judges and whole runs against a stand-in aws and kubectl. Not run on a cluster here.
