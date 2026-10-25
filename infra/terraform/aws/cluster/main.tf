@@ -43,6 +43,7 @@ locals {
     Purpose   = "attendee-cluster"
     ManagedBy = "terraform"
     attendee  = var.name
+    hostname  = var.hostname
   }
 }
 
@@ -75,6 +76,20 @@ variable "profile" {
 variable "name" {
   type        = string
   description = "Unique cluster name, one per attendee (e.g. watch-it-burn-attendee-001)."
+}
+
+variable "hostname" {
+  type = string
+  # NO DEFAULT, on purpose (#602). lab-platform's `labctl harvest` finds the fleet by its project and event
+  # tags and reads each cluster's attendee hostname from this tag (--host-tag hostname); it does not derive
+  # one from the cluster name. The name is assigned upstream, by fleet.sh's public_host_for from the roster
+  # and the slot grid, and the fleet driver passes it on every apply and destroy. A default would tag a
+  # cluster with a host the router does not serve for it, which harvest would then hand to a student.
+  description = "Public hostname this cluster is reached on (the hostname= tag), e.g. soot-sabrina.agenticburn.com, attackme.agenticburn.com or michael-admin.agenticburn.com. Set by fleet.sh's public_host_for."
+  validation {
+    condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$", var.hostname))
+    error_message = "hostname must be a lowercase DNS name such as soot-sabrina.agenticburn.com, without a scheme."
+  }
 }
 
 variable "kubernetes_version" {

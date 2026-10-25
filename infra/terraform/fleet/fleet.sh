@@ -1517,11 +1517,14 @@ up_one() {
     fi
     local ns=(); [[ -n "${WIB_NODE_SIZE}" ]] && ns=(-var "node_min_size=${WIB_NODE_SIZE}" -var "node_max_size=${WIB_NODE_SIZE}" -var "node_desired_size=${WIB_NODE_SIZE}")
     local dk=(); [[ -n "${WIB_DISK}" ]] && dk=(-var "node_disk_size=${WIB_DISK}")
+    # The hostname= tag lab-platform's harvest reads the attendee host from (#602). Same function as routes
+    # and ingest, so the tag cannot name a host the router does not serve for this cluster.
+    local host; host="$(public_host_for "${name}")"
     if [[ -n "${WIB_DRY_RUN}" ]]; then
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
-    local tfvars=(-var "name=${name}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
+    local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
                   "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}")
     # An IAM user of this cluster's name made before #549 would fail the apply on EntityAlreadyExists.
     if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then
@@ -2060,7 +2063,7 @@ down_one() {
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
-        -var "name=${name}" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
+        -var "name=${name}" -var "hostname=$(public_host_for "${name}")" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
         >"${LOG_DIR}/${name}.destroy.log" 2>&1; then
         rm -f "${STATE_DIR}/${name}.tfstate" "$(membership_file "${name}")"; log "  ok: ${name}"

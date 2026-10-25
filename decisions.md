@@ -2330,3 +2330,28 @@ credentials, so it did not create the secret anywhere. It added the verification
 
 Not run on a cluster here. The issue's first criterion, the secret existing in a cluster, is met only by the
 next cluster build with keys, when this command passes against that build's context.
+## 2026-10-25 · #602 · Each cluster carries its attendee hostname as the hostname= tag
+
+lab-platform's `labctl harvest` (lab-platform#84) finds a workshop's EKS clusters by tag (`project` and `event`
+for this fleet) and reads each one's attendee hostname from a tag the operator names with `--host-tag`. It does
+not derive a host from a cluster name. The fleet carried no such tag, so harvest found every cluster with no
+hostname and wrote no pool file.
+
+- **The tag is `hostname`, in `fleet_tags`.** The cluster root (`infra/terraform/aws/cluster/main.tf`) adds
+  `hostname = var.hostname` beside `attendee`, so the provider's default_tags put it on the cluster and every
+  resource, and the mechanisms default_tags does not reach (node launch templates, CNI ENIs, the Bedrock
+  application profiles) carry it too. Harvest is run with `--host-tag hostname`.
+- **The value is `public_host_for`, the roster's assignment.** `fleet.sh` passes `-var hostname=` from the same
+  function routes and ingest use: `attackme.agenticburn.com` for the community cluster,
+  `<owner>-admin.agenticburn.com` for a presenter's, and the slot's two-word name for an attendee's. A second
+  derivation would be the two-namers failure of #265, so there is none.
+- **No default, validated.** As with `event` (#494), an apply that forgets the host fails rather than tagging a
+  cluster with a host the router does not serve for it. The variable must be a lowercase DNS name without a
+  scheme. `down_one` passes it on destroy, and the adopt step's imports get it through the apply's `tfvars`.
+- **A running cluster gets the tag on its next apply.** `up` skips a healthy cluster, so one built before this
+  is tagged only by `WIB_FORCE_UP=1 fleet.sh up <name>` or a rebuild. That apply also changes the node launch
+  template's tags, which gives the managed node group a new launch template version and rolls its node.
+- **Test:** `verify/test_hostname_tag.py` (offline) reads the tag and the variable from the root, holds every
+  apply and destroy of the cluster root in fleet.sh to passing it, checks the validation regex against every host
+  `fleet.sh hosts` lists, and dry-runs `up` and `instructors up all` to see each cluster's host. No cluster was
+  touched.

@@ -29,6 +29,7 @@ ROOTS = {"cluster": CLUSTER, "boundary": BOUNDARY}
 ACCOUNT = "111122223333"
 BOUNDARY_NAME = "watch-it-burn-permissions-boundary"
 CLUSTER_NAME = "watch-it-burn-attendee-001"
+CLUSTER_HOST = "bane-sabrina.agenticburn.com"  # public_host_for of CLUSTER_NAME in fleet.sh
 IAM_NS = "https://iam.amazonaws.com/doc/2010-05-08/"
 STS_NS = "https://sts.amazonaws.com/doc/2011-06-15/"
 
@@ -148,12 +149,13 @@ def render(root: str, edit=None) -> dict:
             r = run("init", "-input=false", "-no-color")
             if r.returncode:
                 raise SystemExit(f"FAIL: terraform init of {root} failed:\n{r.stderr or r.stdout}")
-            # event has no default in either root (#494, #507).
+            # event has no default in either root (#494, #507), nor the cluster root's hostname (#602).
             args = ["plan", "-input=false", "-no-color", "-refresh=false", "-out=render.tfplan", "-var", "profile=render",
                     "-var", "event=render"]
             if root == "cluster":
                 args += [f"-target={t}" for t in CLUSTER_TARGETS]
-                args += ["-var", f"name={CLUSTER_NAME}", "-var", "vpc_id=vpc-render", "-var", 'private_subnet_ids=["subnet-render"]']
+                args += ["-var", f"name={CLUSTER_NAME}", "-var", f"hostname={CLUSTER_HOST}",
+                         "-var", "vpc_id=vpc-render", "-var", 'private_subnet_ids=["subnet-render"]']
             r = run(*args)
             if r.returncode:
                 raise SystemExit(f"FAIL: terraform plan of {root} failed:\n{r.stderr or r.stdout}")
