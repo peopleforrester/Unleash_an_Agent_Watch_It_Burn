@@ -3,7 +3,7 @@
 """#545 retargeted C7's fallback.curl.sh and verify/beat-03.sh at the toolNames toggle (#576).
 
 Before it, fallback.curl.sh proved only the admin cluster's agentgateway :3003 rule and refused any other cluster
-with exit 2, and beat-03.sh, which runs against an attendee's (workshop) cluster, read that exit 2 as "not an admin
+with status 2, and beat-03.sh, which runs against an attendee's (workshop) cluster, read that status as "not an admin
 cluster, so no gateway rule to prove". Its live branch could never pass where it runs. test_challenge_fallbacks.py
 holds fallback.curl.sh's workshop branch; this file holds beat-03.sh's half.
 
@@ -47,13 +47,18 @@ _proven_echo = re.search(r'^\s*echo "(==> C7 PROVEN: )\$\{PROVEN\}"\n\s*exit 0$'
 _not_proven = re.search(r'^\s*echo "(==> C7 NOT PROVEN:[^"]*)" >&2\n\s*exit 1$', FALLBACK_SRC, re.M)
 _workshop_proven = next((m.group(1) for m in re.finditer(r'^\s*PROVEN="([^"]+)"$', FALLBACK_SRC, re.M)
                          if "toolNames" in m.group(1)), None)
-_usage_exit = re.search(r'^\[\[ \$# -eq 0 \]\] \|\| \{ echo "([^"]+)" >&2; exit 2; \}$', FALLBACK_SRC, re.M)
+# Bad usage ends both scripts with this status. Before #545 beat-03.sh read it from fallback.curl.sh as "not an admin
+# cluster", because that was also how the fallback refused a workshop cluster.
+USAGE_RC = 2
+_exit_usage = rf"exit {USAGE_RC}"
+_usage_exit = re.search(r'^\[\[ \$# -eq 0 \]\] \|\| \{ echo "([^"]+)" >&2; ' + _exit_usage + r'; \}$',
+                        FALLBACK_SRC, re.M)
 check("fallback.curl.sh ends a proof with '==> C7 PROVEN: ${PROVEN}' and exit 0", _proven_echo is not None)
 check("fallback.curl.sh ends a failed proof with '==> C7 NOT PROVEN:' and exit 1", _not_proven is not None)
 check("fallback.curl.sh has a workshop-branch PROVEN sentence about evil-mcp's toolNames list",
       _workshop_proven is not None and "toggle-mcp-authz-on.sh" in (_workshop_proven or ""))
-check("fallback.curl.sh's only exit 2 is its usage refusal (it no longer refuses a workshop cluster)",
-      _usage_exit is not None and len(re.findall(r"\bexit 2\b", FALLBACK_SRC)) == 1)
+check(f"fallback.curl.sh's only status {USAGE_RC} is its usage refusal (it no longer refuses a workshop cluster)",
+      _usage_exit is not None and len(re.findall(rf"\b{_exit_usage}\b", FALLBACK_SRC)) == 1)
 if failures:
     print(f"\nFAILED: {len(failures)} check(s) — the stub below cannot speak for fallback.curl.sh")
     sys.exit(1)
@@ -67,7 +72,7 @@ ENDINGS = {
     "proven": (f"    PASS  with the list narrowed to get_weather, 3 weather questions are answered\n{PROVEN_LINE}", "", 0),
     "not-proven": ("", f"    FAIL  with evil-mcp's toolNames list full, the weather question returns {SENTINEL}\n"
                        f"{NOT_PROVEN_LINE}", 1),
-    "usage": ("", USAGE_LINE, 2),
+    "usage": ("", USAGE_LINE, USAGE_RC),
     "silent-zero": ("", "", 0),
     "not-proven-zero": (NOT_PROVEN_LINE, "", 0),
 }
@@ -138,7 +143,7 @@ check("beat-03.sh never calls kubectl itself (the fallback is its only driver)",
 
 print("== on a workshop cluster, beat-03.sh fails when the toolNames list is not proven ==")
 for mode, why in (("not-proven", "fallback.curl.sh reads C7 NOT PROVEN, exit 1"),
-                  ("usage", "fallback.curl.sh refuses with exit 2"),
+                  ("usage", f"fallback.curl.sh refuses with status {USAGE_RC}"),
                   ("silent-zero", "fallback.curl.sh exits 0 without '==> C7 PROVEN'"),
                   ("not-proven-zero", "fallback.curl.sh exits 0 but reads C7 NOT PROVEN")):
     rc, out, calls, direct = run_beat(mode)
@@ -157,7 +162,7 @@ check("with BUILD-SPIKE.md not marked PASS, beat-03.sh asserts the recording and
 print("== beat-03.sh's usage describes both C7 controls, the workshop one first ==")
 p = subprocess.run(["bash", str(BEAT03), "--help"], capture_output=True, text=True, timeout=30)
 helptext = p.stdout + p.stderr
-check("--help exits 2 and prints the usage", p.returncode == 2 and "Usage: beat-03.sh" in helptext, helptext[:200])
+check(f"--help ends with status {USAGE_RC} and prints the usage", p.returncode == USAGE_RC and "Usage: beat-03.sh" in helptext, helptext[:200])
 _workshop_at = helptext.find("workshop cluster")
 _admin_at = helptext.find("admin cluster")
 check("the usage names the workshop cluster's control, the kagent toolNames list via toggle-mcp-authz-on.sh",
@@ -170,8 +175,8 @@ check("the usage gives the gateway rule as the admin cluster's control, after th
 check("the usage no longer says the fallback refuses a workshop cluster",
       "refuses a workshop cluster" not in helptext and "admin clusters only" not in helptext, helptext)
 _src = BEAT03.read_text()
-check("beat-03.sh no longer special-cases the fallback's exit 2",
-      re.search(r'rc\}?"?\s*-(ne|eq)\s*2\b', _src) is None, "an rc == 2 branch is back")
+check(f"beat-03.sh no longer special-cases the fallback's status {USAGE_RC}",
+      re.search(rf'rc\}}?"?\s*-(ne|eq)\s*{USAGE_RC}\b', _src) is None, f"an rc == {USAGE_RC} branch is back")
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
