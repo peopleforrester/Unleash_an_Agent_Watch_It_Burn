@@ -125,9 +125,9 @@ for name in ("gateway-bedrock-nova", "gateway-local-qwen3"):
     check(f"ModelConfig {name} is the opt-in route through agentgateway :3002", via_gateway(url, 3002), url)
 
 # --- the working docs say evil-mcp goes through the gateway ------------------------------------------------
-# #514 moved evil-mcp onto :3003 but corrected only its own file list; these six went on saying the agent
-# dials evil-mcp directly (#563). A line naming evil-mcp may not call that hop direct. Dated research notes
-# and decisions.md are records and are not checked.
+# #514 moved evil-mcp onto :3003 but corrected only its own file list; these six went on describing the old,
+# gateway-less hop (#563). A line naming that server may not say it is dialled without the gateway. Dated
+# research notes and decisions.md are records and are not checked. #514's own files: test_c7_gateway_reader.py.
 ROUTING_DOCS = (
     "verify/test_beat3_mcp.py",
     "challenges/03-bad-mcp-excessive-agency/BUILD-SPIKE.md",

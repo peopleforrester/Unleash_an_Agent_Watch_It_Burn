@@ -2014,3 +2014,19 @@ issue's two options this takes the first.
   main.tf and no IRSA annotation, bound to the agent's Role, and checks that the Role (as shipped and in both C8
   files) grants no `serviceaccounts`, `serviceaccounts/token` or `impersonate`, so the shell cannot mint or
   borrow agent-sa's token. Not yet seen live: the next cluster's C1 to C3 and C8 beats are the check.
+## 2026-10-25 · #564 · A test holds #514's reader grant and its wording
+
+`verify/test_c7_gateway_reader.py` holds the last criterion of #514. guard-proxy-reader's Role has exactly one
+rule that reaches ConfigMaps, and it is `get` on `configmaps/agentgateway-c7-config` by name: list or watch,
+which ignore `resourceNames`, a missing or changed name, or a ConfigMap grant on the ClusterRole fails it. It
+also holds that the name is the ConfigMap with the one `# c7-rule` line the C7 badge reads.
+
+- **The wording check reads prose, not code.** In #514's eight files it fails a sentence that names evil-mcp
+  and calls its hop direct, says it bypasses or skips the gateway, or says it is not through it. Code files
+  are read for comments and docstrings only, docs in full, and decisions.md for #514's entry only, since the
+  entries before it record what was true then. The evaluation's table row and the spec's path diagram said it
+  without the word "direct", so each has its own check.
+- **One comment reworded.** `verify/test_agentgateway_path.py` quoted the old phrase while describing #563's
+  check; it now describes the old hop without repeating it. That check itself is unchanged.
+- **Held offline.** Against the files as they were before #514 the test fails 14 checks, all of them on the
+  grant or the wording.
