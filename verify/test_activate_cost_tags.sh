@@ -95,6 +95,9 @@ check "made no aws call" '[[ ! -s "${CALLS}" ]]'
 echo "== cost-report.sh help names the real default tag and the activation script =="
 help="$(bash "${REPORT}" --help)"
 check "default key is project" 'grep -q "default: project" <<<"${help}"'
+check "help never names workshop as the default key (#580)" '! grep -q "default: workshop" <<<"${help}"'
+check "header comment names project, not workshop, as the default key (#580)" \
+  '! grep -q "\"workshop\")" "${REPORT}" && grep -q "^# project=watch-it-burn) so all" "${REPORT}"'
 check "points at activate-cost-tags.sh" 'grep -q "activate-cost-tags.sh" <<<"${help}"'
 
 echo

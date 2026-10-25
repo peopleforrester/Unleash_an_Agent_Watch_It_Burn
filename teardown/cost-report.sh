@@ -3,8 +3,8 @@
 # ABOUTME: over the run window and prints the actual dollar number - never estimated or hardcoded.
 #
 # Reports the REAL AWS cost for the workshop run for Accenture expensing (BUILD-SPEC Phase 9).
-# Uses `aws ce get-cost-and-usage`. Costs are attributed by cost-allocation tag (default key
-# "workshop") so all watch-it-burn clusters tagged with that key are summed. No figure is estimated
+# Uses `aws ce get-cost-and-usage`. Costs are attributed by cost-allocation tag (default
+# project=watch-it-burn) so all watch-it-burn clusters carrying that tag are summed. No figure is estimated
 # or baked into this script; it reports whatever Cost Explorer returns for the window.
 
 set -euo pipefail
