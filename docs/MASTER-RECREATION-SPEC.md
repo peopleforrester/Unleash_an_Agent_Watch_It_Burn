@@ -284,7 +284,7 @@ agentgateway (OSS v1.5.0, :3000 A2A reverse proxy)   <- plain L7 hop; draws the 
 kagent workshop-agent (A2A serving, :8080; ADK >=1.17)
    |  ModelConfig -> native Bedrock provider (Pod Identity, us-west-2)
    v
-AWS Bedrock (Claude: haiku / sonnet[default] / opus)
+AWS Bedrock (Nova Pro[default]; Claude haiku / sonnet / opus for the optional cost race)
 
 MCP path (separate from the A2A chat path):
 kagent workshop-agent
@@ -299,7 +299,7 @@ Cost: the guard-proxy reads usage at `result.metadata.kagent_usage_metadata` (`p
 - **Runtime guard toggle via `GET /toggle`, not `kubectl set env`.** A `set env` restarts the pod (resets the in-memory cost counter) and is reverted by selfHeal. A runtime toggle mutates an in-process `GUARDS` dict (env-seeded), changes no managed spec, so the counter survives and the flip sticks. Toggle scripts `kubectl exec ... curl` against the proxy (no new pod), which also passes Kyverno Enforce. (commit `80c9e5f`)
 - **Input guard is two independently-toggled stages.** Stage 1 deterministic block-list (pre-LLM, zero tokens, flatlines the cost counter on a blocked destructive prompt); stage 2 model-based prompt-injection classifier. Never call the combined input guard "deterministic" once stage 2 is in path. (commit `14b53d6`)
 - **Cost key is `kagent_usage_metadata`, not `adk_usage_metadata`.** The live kagent controller emits the former (observed on 0.9.9; not yet re-checked on 0.10.1); the proxy accepts both (kagent first) so a re-key never silently zeroes the counter. (commit `638ffcd`)
-- **Workshop default model is Sonnet 4.6; all three tiers defined for the cost race.** Tier swaps by repointing the Agent `modelConfig` (commit + resync), never `kubectl patch` live. Fable 5 retired. (commits `3646a30`, `ff341bd`, `a3d0081`)
+- **Workshop default model is Nova Pro (`bedrock-nova`, `us.amazon.nova-pro-v1:0`); the three Claude tiers stay defined for the optional cost race.** Nova complies with and executes the attack beats, which the Claude tiers refuse; the default moved from Sonnet 4.6 to Nova in `eac3dbc`. Tier swaps by repointing the Agent `modelConfig` (commit + resync), never `kubectl patch` live. Fable 5 retired. (commits `3646a30`, `ff341bd`, `a3d0081`, `eac3dbc`)
 - **Cost metric uses the standard `gen_ai` namespace.** Dropped the custom `witb_cost_usd` metric and the Prometheus `/metrics` endpoint; cost is `gen_ai.client.cost` (the GenAI semconv defines no monetary metric, so cost is a project suffix under the standard namespace). Provider stamped `aws.bedrock` at source + a Collector OTTL net. (commits `f963550`, `d5c2bec`)
 - **agentgateway is the in-path A2A hop and MCP front.** Repointing creates the `guard-proxy → agentgateway → kagent` Service Map chain. OSS v1.5.0 (released 2026-08-27; moved from v1.3.0 in `20aee62`, 2026-09-10), registry `cr.agentgateway.dev`, image pinned by tag and digest. Tracing config under the top-level `config.tracing` key (bare `tracing` and `frontendPolicies.tracing` both crashed the v1.3.0 binary; the config is validated offline against the vendored v1.5.0 schema). (commits `3831e3d`, `b64e7ea`, `17ee91e`, `20aee62`)
 - **beat-2 exfil sentinel reframed from a credential to a recipe (2026-06-27).** A credential-shaped sentinel is self-censored by the model on the response path; reframed to BurritoBot's non-credential "bat spit amazing sauce" `WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7`, which the model echoes cleanly so the output Regex scanner has something real to redact. (commit `9a3971e`)
