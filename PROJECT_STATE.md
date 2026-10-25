@@ -6,7 +6,7 @@ Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guar
 ## KubeCon NA 2026 abstract readiness (#456)
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
-Sessionize 1249553). As of staging `73072af` (2026-10-25): 7 READY, 2 PARTIAL (8 the topic stage #455, 9
+Sessionize 1249553). As of staging `73072af` (2026-10-25): 7 READY, 2 PARTIAL (8 the topic stage #455, built on guard-proxy-agenticburn's `staging` but not promoted or pinned here, and the BanTopics model image, 9
 ballroom sizing #450, phones #451 and the recorded fallback #452), 0 MISSING, and no point yet green on a live
 cluster (#509). Row 6 moved to READY once mid-inference's agentgateway half (#496) was promoted (#571). Update its rows and its record as fixes land.
 
