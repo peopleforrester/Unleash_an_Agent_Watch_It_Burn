@@ -31,7 +31,8 @@ The per-attendee cluster module reads the VPC id + private subnet ids straight f
 state, no manual id substitution.
 
 1. Provision the shared VPC + subnets + NAT ONCE, up front, before any cluster:
-   `cd infra/terraform/aws/network && terraform init && terraform apply`.
+   `. infra/terraform/fleet/event.sh && cd infra/terraform/aws/network && terraform init && terraform apply -var profile=<profile> -var event="${WIB_EVENT}"`
+   (`event` has no default, #494; `fleet/event.sh` is its one setting).
 2. The fleet driver (`infra/terraform/fleet/fleet.sh`) reads `vpc_id` and `private_subnet_ids` from
    the lab-vpc outputs and passes them to each attendee cluster as `-var`. Nothing to copy by hand.
 3. The cluster module creates only the cluster INTO the shared VPC; it does not create a VPC, NAT,

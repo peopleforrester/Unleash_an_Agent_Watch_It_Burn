@@ -9,6 +9,9 @@
 #
 # The permissions-boundary root (infra/org/boundary) follows the same rule since #507. Its one IAM policy
 # per account costs nothing, so a stale tag there is a label only, but it was the last Portland literal.
+#
+# Since #558 the documented lab-VPC applies and destroys in every Markdown file are held to it as well:
+# the specs and READMEs outside infra/terraform still showed them bare, and those are what people copy.
 import os, pathlib, re, stat, subprocess, sys, tempfile
 REPO = pathlib.Path(__file__).resolve().parents[1]
 TF = REPO / "infra" / "terraform"
@@ -92,6 +95,34 @@ check(f"each document has its boundary apply line ({len(doc_lines)} found)",
 undocumented = [f"{d.relative_to(REPO)}:{n}" for d, n, l in doc_lines if '-var event="${WIB_EVENT}"' not in l]
 check(f"every documented boundary apply passes -var event=\"${{WIB_EVENT}}\" (missing: {undocumented})",
       not undocumented)
+
+# The documented lab-VPC applies and destroys, in any Markdown file in the repo (#558): the specs and the
+# shared-vpc and attendee-cluster READMEs showed them bare, which prompts or fails since the network root
+# lost its default. Each passes the variable, and its document sources fleet/event.sh before the first one.
+def repo_docs():
+    skip = {".git", ".terraform", "node_modules"}
+    return sorted(p for p in REPO.rglob("*.md") if p.is_file() and not skip & set(p.relative_to(REPO).parts))
+tf_cmd = re.compile(r"\bterraform(?: -chdir=\S+)? (apply|destroy)\b")
+net_lines, net_bad = [], []
+for d in repo_docs():
+    lines = d.read_text(errors="ignore").splitlines()
+    sourced = False
+    for n, l in enumerate(lines):
+        if re.search(r"(^|[`\s])\. \S*fleet/event\.sh\b", l):
+            sourced = True
+        if "aws/network" not in l or not tf_cmd.search(l):
+            continue
+        where = f"{d.relative_to(REPO)}:{n + 1}"
+        net_lines.append(where)
+        if '-var event="${WIB_EVENT}"' not in l or not sourced:
+            net_bad.append(where)
+net_docs = {w.rsplit(":", 1)[0] for w in net_lines}
+expected = {"docs/MASTER-RECREATION-SPEC.md", "docs/BUILD-SPEC.md", "infra/shared-vpc/README.md",
+            "infra/attendee-cluster/README.md", "infra/terraform/README.md"}
+check(f"found the documented lab-VPC applies/destroys ({len(net_lines)} in {sorted(net_docs)})",
+      expected <= net_docs and len(net_lines) >= 8)
+check(f"each passes -var event=\"${{WIB_EVENT}}\" after sourcing fleet/event.sh (missing: {net_bad})",
+      not net_bad)
 
 # The dry run shows the tag each cluster would be built with, and the env override reaches it.
 def dry_run(extra_env):

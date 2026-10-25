@@ -151,7 +151,7 @@ This subsystem provisions the AWS substrate: a disposable, multi-account EKS fle
 
 All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~> 6.0`.
 
-- **lab-vpc root** (`infra/terraform/aws/network/main.tf`): module `terraform-aws-modules/vpc/aws ~> 5.21.0`. `watch-it-burn-lab-vpc`, CIDR `10.0.0.0/16`, 2 AZs. `private_subnets=["10.0.0.0/18","10.0.64.0/18"]`, `public_subnets=["10.0.128.0/24","10.0.129.0/24"]`, `enable_nat_gateway=true`, `single_nat_gateway=true`. Subnet role tags only (`kubernetes.io/role/elb=1`, `.../internal-elb=1`); no per-cluster cluster tag. `aws_vpc_endpoint.bedrock_runtime`: `com.amazonaws.us-west-2.bedrock-runtime`, Interface, private subnets, `private_dns_enabled=true`, SG tcp/443 from `vpc_cidr_block`. Outputs `vpc_id`, `private_subnet_ids`, `bedrock_vpce_id`, `region`. Default tags `project=watch-it-burn`, `event=ai-engineer-worldsfair-2026`.
+- **lab-vpc root** (`infra/terraform/aws/network/main.tf`): module `terraform-aws-modules/vpc/aws ~> 5.21.0`. `watch-it-burn-lab-vpc`, CIDR `10.0.0.0/16`, 2 AZs. `private_subnets=["10.0.0.0/18","10.0.64.0/18"]`, `public_subnets=["10.0.128.0/24","10.0.129.0/24"]`, `enable_nat_gateway=true`, `single_nat_gateway=true`. Subnet role tags only (`kubernetes.io/role/elb=1`, `.../internal-elb=1`); no per-cluster cluster tag. `aws_vpc_endpoint.bedrock_runtime`: `com.amazonaws.us-west-2.bedrock-runtime`, Interface, private subnets, `private_dns_enabled=true`, SG tcp/443 from `vpc_cidr_block`. Outputs `vpc_id`, `private_subnet_ids`, `bedrock_vpce_id`, `region`. Default tags `project=watch-it-burn`, `event=var.event` (no default since #494; the one setting is `infra/terraform/fleet/event.sh`).
 - **cluster root** (`infra/terraform/aws/cluster/main.tf`): module `terraform-aws-modules/eks/aws ~> 21.29.0`, `kubernetes_version="1.35"`, `endpoint_public_access=true`, `enable_cluster_creator_admin_permissions=true`, **`enable_irsa=false`** (`main.tf:199`, which removes the per-cluster OIDC endpoint entirely), `create_cloudwatch_log_group=false`. Vars: `name` (required), `instance_types=["t3.2xlarge"]`, node min/max/desired `1`, `pod_pids_limit=1024`, `node_disk_size=100`, `region=us-west-2`, `profile=accen-dev`. Addons `vpc-cni` (before_compute, `enableNetworkPolicy="true"`, prefix delegation), `kube-proxy`, `coredns`, `eks-pod-identity-agent`, `aws-ebs-csi-driver` (**Pod Identity**, `main.tf:229-231`). Managed nodegroup `default`: AL2023_x86_64_STANDARD, `force_update_version=true`, gp3 100 GiB encrypted root via `block_device_mappings.xvda`, `cloudinit_pre_nodeadm` NodeConfig with `maxPods:110` + `podPidsLimit:${pod_pids_limit}`. Pod-identity modules (`terraform-aws-modules/eks-pod-identity/aws ~> 1.12.0`) x3: LB controller (`kube-system:aws-load-balancer-controller`), ESO (`platform:external-secrets`, scoped `arn:aws:secretsmanager:*:*:secret:watch-it-burn/*`), agent Bedrock (`agent:agent-sa`, `bedrock:InvokeModel*`/`Converse*`). Module name capped at 38 chars (hence `${name}-bedrock`). Outputs `cluster_name`, `agent_bedrock_role_arn`, `kubeconfig_command`.
 - **dashboards root** (`infra/terraform/dashboards/main.tf`): provider `DataDog/datadog ~> 3.0`; a stub (OOTB dashboards auto-install via Agent checks; 4 custom dashboards are commented placeholders pending live telemetry).
 - **IDP bootstrap** (`infra/deploy-full-idp.sh`): ArgoCD chart `9.6.0` (app v3.4.x) installed WITHOUT `--wait` (hangs on EKS), then explicit rollout waits on the three core components; registers the private repo (token from `gh auth token`) + ghcr OCI helm for kagent. Full profile also installs AWS Load Balancer Controller chart `1.14.0` (controller v2.14.x) with `clusterName`/`region`/`vpcId` passed explicitly (the controller cannot reach IMDS). Applies `gitops/bootstrap/full/app-of-apps.yaml` (full) or `app-of-apps-burn.yaml` (burn), both `targetRevision: staging`.
@@ -162,9 +162,10 @@ All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~
 1. **Per-account AWS quota increases (file first, lead-time gate).** Each account, us-west-2: EC2 vCPU L-1216C47A→800, ALB L-53DA6B97→100, NLB L-69A177A2→100. No EIP increase.
 2. **Apply the shared lab VPC per account** (accen-dev uses the default state; students use per-account state files):
    ```bash
+   . infra/terraform/fleet/event.sh   # WIB_EVENT: `event` has no default in any root (#494)
    terraform -chdir=infra/terraform/aws/network init
-   terraform -chdir=infra/terraform/aws/network apply -var profile=accen-dev -var region=us-west-2
-   terraform -chdir=infra/terraform/aws/network apply -state=states/aws1-student31.tfstate -var profile=aws1-student31 -var region=us-west-2
+   terraform -chdir=infra/terraform/aws/network apply -var profile=accen-dev -var region=us-west-2 -var event="${WIB_EVENT}"
+   terraform -chdir=infra/terraform/aws/network apply -state=states/aws1-student31.tfstate -var profile=aws1-student31 -var region=us-west-2 -var event="${WIB_EVENT}"
    # repeat for student32/33/34
    ```
 3. **Provision clusters (auto-bootstraps the IDP):**
@@ -181,7 +182,7 @@ All `us-west-2`. Terraform `>= 1.10` (run 1.15.x), AWS provider `hashicorp/aws ~
    ```
 5. **Credential pool:** `WIB_APPLY=1 fleet.sh aws-keys 50` (keys for the built clusters; the users and access entries are the cluster root's, #549); `fleet.sh harvest 50 > pool.csv`; `fleet.sh health 50`.
 6. **Cost reaping during the event:** `fleet.sh reap --keep claimed.txt` (DRY-RUN) then `WIB_APPLY=1 fleet.sh reap --keep claimed.txt`.
-7. **Teardown:** `fleet.sh down all` / `fleet.sh down-fleet 50`, then `terraform -chdir=infra/terraform/aws/network destroy` per account.
+7. **Teardown:** `fleet.sh down all` / `fleet.sh down-fleet 50`, then `. infra/terraform/fleet/event.sh && terraform -chdir=infra/terraform/aws/network destroy -var profile=<profile> -var region=us-west-2 -var event="${WIB_EVENT}"` per account (students add `-state=states/<profile>.tfstate`).
 
 Fleet env knobs: `WIB_ATTENDEE_ACCOUNTS` (default all 5), `WIB_DEFAULT_ACCOUNT=accen-dev` (the account whose lab VPC is in the default lab-vpc state), `WIB_NAME_OFFSET` (skip existing numbers; state keyed by name globally), `WIB_REGION=us-west-2`, `MAX_PARALLEL=8`.
 
@@ -650,6 +651,6 @@ The big spend is the clusters (5x t3.2xlarge nodes + 5 EKS control planes), then
 
 1. `fleet.sh down-fleet <n>` (or `down all` per account) destroys the EKS clusters.
 2. **Orphan sweep across all accounts** (Terraform does not track the in-cluster-controller LBs): delete all ELBv2 LBs + target groups, detached EBS volumes, the freed NLB EIPs, free ENIs.
-3. `terraform -chdir=infra/terraform/aws/network destroy` per account. It fails on the VPC with `DependencyViolation` because EKS-created security groups orphan outside terraform state (15 on accen-dev, 3 each on students): revoke their rules, delete the SGs, re-run destroy.
+3. `. infra/terraform/fleet/event.sh && terraform -chdir=infra/terraform/aws/network destroy -var profile=<profile> -var region=us-west-2 -var event="${WIB_EVENT}"` per account (students add `-state=states/<profile>.tfstate`). It fails on the VPC with `DependencyViolation` because EKS-created security groups orphan outside terraform state (15 on accen-dev, 3 each on students): revoke their rules, delete the SGs, re-run destroy.
 
 After teardown the target is every account at `eks=0 ec2=0 LB=0 vols=0 NAT=0 EIP=0 labVPC=0`. KMS cluster-encryption keys land in PendingDeletion (auto-delete ~30 days, not billed). The full fleet was destroyed to this state on 2026-06-27; rebuild is Part XI.
