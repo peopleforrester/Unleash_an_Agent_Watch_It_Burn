@@ -1,5 +1,5 @@
 # ABOUTME: Render gate for #516's last criterion: no comment in #516's files, in resources.yaml's Agent tools comment
-# ABOUTME: or in toggle-mcp-authz-on.sh still names toolNames as C7's only control (#569).
+# ABOUTME: or in toggle-mcp-authz-on.sh, nor C7's FACILITATOR.md control section, names toolNames as C7's only control (#569, #575).
 """Why this exists (#569).
 
 #516 gave C7 one control per cluster (#496): on a workshop cluster the kagent toolNames allow-list on
@@ -215,6 +215,28 @@ check("it names the admin cluster's gateway rule beside toolNames",
 entry = decision_516((REPO / "decisions.md").read_text(encoding="utf-8"))
 bad = [f"{line}: {why}" for line, text in entry if (why := wrong(text))]
 check("decisions.md's #516 entry does not name toolNames as C7's only control", bool(entry) and not bad, "; ".join(bad))
+
+
+# --- FACILITATOR.md's control section (#575) ------------------------------------------------------------------
+# The runbook said the agent dials its MCP servers directly, so agentgateway was not in the path. Since #514 the
+# evil-mcp RemoteMCPServer's url is agentgateway's :3003 bind, so the section is held to the same per-cluster
+# reading as the comments, and to naming that bind.
+print("\nFACILITATOR.md's control section")
+FACILITATOR = "challenges/03-bad-mcp-excessive-agency/FACILITATOR.md"
+DIRECT = re.compile(r"\bdials (?:\w+ ){0,3}\**directly\b|\bnot agentgateway\b", re.I)
+PRE_575 = ("The agent (kagent `Agent` CRD, `workshop-agent`) dials its MCP servers **directly**, so the in-path "
+           "control is the **kagent `toolNames` allow-list on the Agent**, not agentgateway.")
+check("refused: the pre-#575 control section", bool(DIRECT.search(PRE_575)) and bool(wrong(PRE_575)))
+m = re.search(r"^## The control\b.*?(?=^## )", (REPO / FACILITATOR).read_text(encoding="utf-8"), re.S | re.M)
+section = " ".join(m.group(0).split()) if m else ""
+check(f"{FACILITATOR} has a control section that names toolNames", bool(TOOLNAMES.search(section)))
+check("it does not say the agent dials its MCP servers directly", not DIRECT.search(section),
+      (DIRECT.search(section) or [""])[0])
+check("it does not name toolNames as C7's only control", not wrong(section), wrong(section))
+check("it names evil-mcp's :3003 bind and its `# c7-rule` line",
+      "agentgateway.agent:3003/mcp" in section and "# c7-rule" in section)
+check("it says the :3003 rule stays 'true' on a workshop cluster",
+      bool(re.search(r"workshop cluster\*{0,2}[^.]*\brule stays `'true'`", section)))
 
 if failures:
     print(f"\nFAIL: {len(failures)} check(s) failed: {failures}")
