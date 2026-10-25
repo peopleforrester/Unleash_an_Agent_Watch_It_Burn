@@ -551,7 +551,12 @@ is merely slow rather than rebuilding:
   `curl -fsS -o /dev/null -w '%{http_code}\n' https://agenticburn.com/beacon/view`
   must print `200`. Anything else means the provisioning service, which stays up
   for this session as the beacon collector (open question 9), is down; bring it back
-  before the day.
+  before the day. The router 404s `/kubecon` on any host outside the roster (#511),
+  so confirm the gate lets the stage through: for each of attackme,
+  michael-admin and whitney-admin,
+  `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.agenticburn.com/kubecon`
+  must print `200`. A `404` means the router's roster matcher does not know that
+  host, and the presenters have nothing to drive from.
 - [ ] **Hostnames serve over HTTPS and websocket:**
   `./fleet.sh check-tls attackme.agenticburn.com michael-admin.agenticburn.com whitney-admin.agenticburn.com`.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.

@@ -2425,3 +2425,27 @@ Checks: `yarn install --immutable`, `yarn tsc`, `CI=true yarn test`, `yarn build
 `verify/test_docs_current.py` skipped only a top-level `node_modules/`. Once this image's dependencies were
 installed, it scanned `images/watch-it-burn-backstage/node_modules` and failed on typebox's readme. It now
 skips a `node_modules` directory at any depth.
+
+## 2026-10-26 · #511 · the console 404s /brief.html and /kubecon.html, so the router's gate has no side door
+
+The router half of question 716 landed: peopleforrester/apex-agenticburn#37 (staging `2972bd7`) made the
+`@brief_not_roster` matcher `path /brief /kubecon`. It goes live when Railway deploys apex-agenticburn main.
+That matcher is an exact path match. The console's default server has a `root` over the whole console-src
+ConfigMap and no catch-all location, so nginx also serves each page by its file name, and the gate never sees
+that name.
+
+- **Measured, not inferred (2026-10-26).** nginx 1.27-alpine (the console's image line) ran this
+  `console.conf` behind Caddy v2.11.4 (the router's pin, sha512 checked against the release) with the #37
+  matcher. On an attendee host, `bane-sabrina`, `/kubecon` and `/brief` were 404, but `/kubecon.html`,
+  `/brief.html` and `/kubecon.%68tml` were 200 with the page. `//kubecon`, `/./kubecon`, `/x/../kubecon`
+  and `/%6Bubecon` were already 404, because Caddy normalizes the path before it matches.
+- **The fix is on the console, not a longer router matcher.** `location = /brief.html` and
+  `location = /kubecon.html` return 404, so each gated page has one name and the router's matcher stays the
+  one roster rule (#565). This repo can change the console; the router is a sister repo. Exact locations
+  beat every other kind in nginx, so a later catch-all cannot reopen them. `try_files` serves the file inside
+  `location = /brief` and `location = /kubecon` without a new lookup, so those two still serve the page.
+  After the change, the same rig gave 200 on `/kubecon` and `/brief` for attackme and michael-admin, and 404
+  on every `.html` name for every host. No page links to the `.html` names.
+- **Held by** `verify/test_gated_page_names.py`, which fails on the previous `console.conf`. The KubeCon
+  run-of-show's router step now curls `/kubecon` on the three roster hosts and expects 200, so a router
+  matcher that does not know a stage host shows up the night before, not on stage.
