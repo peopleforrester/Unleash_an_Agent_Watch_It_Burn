@@ -2,10 +2,10 @@
 # ABOUTME: workshop that exists: three phases, the Community cluster, and the student installing controls.
 """Pins the presenter brief to the current run of show (#298, #327).
 
-The brief was two rounds and a handoff: Round 1 with nothing on, Round 2 with the same prompts and the
-guardrails flipped, then "hand off to Round 3". Every part of that is now wrong. Rounds are retired
-fleet-wide, and the guardrails-on contrast is no longer a demo the presenters perform: it is the thing each
-student does on their own cluster, one control at a time.
+The brief was two numbered passes and a handoff: the first with nothing on, the second with the same
+prompts and the guardrails flipped, then a hand-off to the students. Every part of that is now wrong.
+Rounds are retired fleet-wide, and the guardrails-on contrast is no longer a demo the presenters perform: it
+is the thing each student does on their own cluster, one control at a time.
 
 This is the one page where being stale is most expensive. A student reading an out-of-date lab page is
 confused; a presenter reading an out-of-date brief says the wrong thing out loud, to the room, with the

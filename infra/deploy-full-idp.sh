@@ -103,12 +103,12 @@ fi
 WITB_DD_API_KEY="${DD_API_KEY}" bash "${SCRIPT_DIR}/datadog-cluster-identity.sh"
 
 # Installed on BOTH profiles, burn included. A load balancer controller is plumbing, not a guardrail:
-# Round 1's premise is that nothing STOPS the agent, not that the cluster has no way to expose a
+# The community cluster's premise is that nothing STOPS the agent, not that the cluster has no way to expose a
 # Service. While this was gated on "full", the burn console Service sat in <pending> forever, because
 # the in-tree service-controller picked it up instead and cannot associate the public subnets on this
 # shared, untagged-per-cluster VPC (the same root cause documented on the console Service in
 # gitops/ai-layer/resources.yaml). The visible effect was that round1.agenticburn.com never had an
-# upstream to route to, so Round 1 had no reachable console, BurritoBot or terminal at all.
+# upstream to route to, so the burn cluster had no reachable console, BurritoBot or terminal at all.
 # Observed on watch-it-burn-r1-1, 2026-08-26: `EnsuringLoadBalancer` from service-controller and no
 # hostname after 11 minutes, against seconds on the full-profile clusters.
 # The IAM side already supported this: the Pod Identity association for

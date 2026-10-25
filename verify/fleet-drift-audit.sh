@@ -18,7 +18,7 @@
 #   lab_tour=1  lab_hints=9  lab_ddcreds=2  lab_whereami=1  lab_nopoller=0
 #   bb_logo=1   bb_caprow=1  bb_greet=1     brief=1
 #   tetragon_apps=0   ka_annot=enabled
-#   c3=READABLE on burn (R1) clusters, c3=DENIED everywhere else
+#   c3=READABLE on burn (community) clusters, c3=DENIED everywhere else
 #
 # lab_nopoller MUST be 0: a non-zero count means the focus-stealing terminal poller is back.
 set -uo pipefail

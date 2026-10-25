@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# ABOUTME: Round-2 live toggle — flips the CNCF admission policies Audit -> Deny (require-resource-limits
-# ABOUTME: + restrict-image-registries, the C2 villain-image wall). Idempotent. Reverse with --audit.
+# ABOUTME: Guardrail arming toggle, which fleet.sh runs on admin clusters — flips the CNCF admission policies
+# ABOUTME: Audit -> Deny (require-resource-limits + restrict-image-registries, the C2 villain-image wall).
+# ABOUTME: Idempotent. Reverse with --audit.
 set -euo pipefail
 
 # Kube-context safety (see CLAUDE.md): target an explicit context; never the global current-context.

@@ -16,7 +16,8 @@
 #   2. Security. Installing at startup means the pods MUST reach the public internet to boot, so they
 #      could not be covered by the agent's default-deny egress policy. That hole is exactly what
 #      Challenge 1 escapes through: the exfil POST is made by the MCP pod, not the agent pod, so
-#      Round 2 did not block it (issue #108). The control was real and pointed at the wrong pod.
+#      the guarded clusters did not block it (issue #108). The control was real and pointed at the
+#      wrong pod.
 #
 # Baking the deps fixes both. The image is pinned, reproducible, and the pods need no egress at all,
 # which lets the NetworkPolicy cover them without breaking startup.
@@ -42,7 +43,8 @@ RUN pip install --no-cache-dir --root-user-action=ignore \
 # write, so the seed failed (silently, `except OSError: pass`) and the file never existed on enforced
 # clusters. C3 then showed "no such file" instead of "permission denied". Baking it into a read-only
 # image layer means it pre-exists, no runtime write is needed, and the policy denies the agent's READ
-# (EPERM) which is the correct C3 story. On R1 (no policy) the file is readable and the recipe leaks.
+# (EPERM) which is the correct C3 story. On the community cluster (no policy) the file is
+# readable and the recipe leaks.
 # Content is byte-identical to the old runtime seed; the recipe/ingredients/signature MUST match the
 # canonical Secret in gitops/ai-layer/resources.yaml (bat-spit-amazing-awesome-sauce).
 RUN mkdir -p /tmp/burrito-data/config/legacy \

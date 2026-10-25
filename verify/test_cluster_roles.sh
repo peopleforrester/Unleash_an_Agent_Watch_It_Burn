@@ -2,7 +2,7 @@
 # ABOUTME: The fleet has three kinds of cluster and no rounds: community (attackme), admin (one per
 # ABOUTME: presenter), and the numbered attendee pool. Naming, profile and Datadog org all follow the role.
 #
-# Why (#291, #296). Rounds 1/2/3 were a provisioning artefact that leaked into hostnames, accounts, the
+# Why (#291, #296). The numbered rounds were a provisioning artefact that leaked into hostnames, accounts, the
 # bootstrap profile and the run-of-show. They are replaced by a role the roster states outright. Three
 # separate bugs this year came from two places disagreeing about what a cluster is called (#265, #272,
 # #284), so the naming rules get a test rather than a convention.
@@ -62,8 +62,9 @@ check "an owner selects only that presenter's cluster" '[[ "$(spec whitney | wc 
 check "both selects all three" '[[ "$(spec both | wc -l)" == "3" ]]'
 
 echo "== teardown takes the same selector as the build (#88) =="
-# After rounds were retired, `instructors down` still looped rounds 1/2/3, matched no roster row and
-# destroyed nothing. The workers are stubbed: run_pool prints the names it would hand to down_one.
+# After rounds were retired, `instructors down` still looped the three numbered clusters, matched no
+# roster row and destroyed nothing. The workers are stubbed: run_pool prints the names it would hand to
+# down_one.
 down() { q "require_tools() { :; }; terraform() { :; }; report_failures() { :; }
             read_vpc_for() { VPC_ID=vpc-test; SUBNETS_JSON='[]'; }
             run_pool() { shift; printf '%s\n' \"\$@\"; }

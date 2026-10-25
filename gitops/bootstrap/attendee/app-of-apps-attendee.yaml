@@ -26,8 +26,8 @@
 #       WARNING and never reaches it. On an attendee cluster Talon acts on nothing. Falco still detects and
 #       Sidekick still forwards to Datadog; its Talon output has no Service to post to here.
 #
-# Round/instructor clusters keep the "full" profile (app-of-apps.yaml), where these controls are present
-# and armed, because those are the guarded-state demos.
+# A presenter's admin cluster takes the "admin" profile (app-of-apps-admin.yaml), where these controls are
+# present and armed, because that is the guarded-state demo.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

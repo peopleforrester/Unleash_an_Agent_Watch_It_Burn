@@ -21,9 +21,10 @@ usage() {
     cat >&2 <<EOF
 Usage: ${0##*/} [attendee-count]
 
-Brings up the nine instructor clusters (both owners, all rounds) and a pool of <attendee-count> attendee
-clusters (default 2) plus one seat per presenter, then runs the acceptance pass over everything. Each stage
-already ends in its own verify, so a stage that reports success has been checked, not assumed.
+Brings up the three roster clusters (the community cluster and both presenters' admin clusters) and a pool
+of <attendee-count> attendee clusters (default 2) plus one seat per presenter, then runs the acceptance
+pass over everything. Each stage already ends in its own verify, so a stage that reports success has been
+checked, not assumed.
 
   WIB_SCHED_ATTENDEES    attendee count when no argument is given (default 2)
   WIB_SCHED_PRESENTER_SEATS  pool clusters added for the presenters' own claims (default 2, #488)
