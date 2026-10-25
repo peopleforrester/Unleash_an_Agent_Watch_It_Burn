@@ -1723,3 +1723,18 @@ and its tools, the other on the way out to the user.
 
 `docs/KUBECON-ABSTRACT-READINESS.md` row 6 still reads PARTIAL with "#496 not promoted". It was outside this
 issue's file list, so it is left for a follow-up.
+
+## 2026-10-25 · #543 · A test holds the gate split: Test command is the offline suite, run-e2e.sh is never the E2E command
+
+The 2026-10-24 #543 entry above moved `bash verify/run-e2e.sh` off the `E2E command:` line, and AGENTS.md
+already carried the change, but nothing held it. `verify/test_gate_commands.py` (offline suite) reads
+AGENTS.md the way hecaton's gate does: a declared line starts the line, names the label, a colon, then the
+command in backticks, and the first such line wins. It checks that the `Test command:` is
+`bash verify/run-tests.sh`, that no declared `E2E command:` runs run-e2e.sh, and that the by-hand paragraph
+names every env var run-e2e.sh's prerequisite check requires (CONTEXT, IAM_PIPELINE_PROFILE,
+IAM_PIPELINE_REGION), read from the script so the two cannot drift. Adding the old E2E line back, or
+dropping a variable from the paragraph, turns it red.
+
+- **A cluster-free E2E tier stays possible.** The test forbids run-e2e.sh on the E2E line, not any E2E
+  line, so the #543 follow-up (kyverno CLI, conftest, kustomize and node checks with pinned tools) can still
+  be declared there.
