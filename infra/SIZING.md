@@ -33,7 +33,22 @@ Each cluster runs the full per-student stack:
 
 ## Node sizing, T3 burstable by default
 
-**Decision: T3 burstable. The planning default was `t3.xlarge`; the shipped default in `aws/cluster/main.tf` is `t3.2xlarge`** (the World's Fair fleet ran 259 of them, and `WIB_INSTANCE_TYPES` / the roster's per-cluster type override it), in unlimited credit mode. This is a 2-hour intermittent lab, not production. Start conservative; measure one live cluster (`kubectl top` plus CloudWatch `CPUCreditBalance`) before pinning the fleet; scale only if a real 2-hour run actually chokes.
+**Decision: T3 burstable. The planning default was `t3.xlarge`; the shipped default in `aws/cluster/main.tf` is `t3.2xlarge`** (the World's Fair fleet ran 259 of them, and `WIB_INSTANCE_TYPES` / the roster's per-cluster type override it), in unlimited credit mode. This is a 2-hour intermittent lab, not production. Start conservative; measure one live cluster (node usage from the kubelet summary API plus CloudWatch `CPUCreditBalance`, see below) before pinning the fleet; scale only if a real 2-hour run actually chokes.
+
+### Measuring one live cluster
+
+`kubectl top` does not work on an attendee cluster: it reads the metrics API, which metrics-server serves, and nothing in this repo installs metrics-server (the EKS addons in `aws/cluster/main.tf` are vpc-cni, kube-proxy, coredns, eks-pod-identity-agent and aws-ebs-csi-driver, and no Argo CD app deploys it), so it fails with "Metrics API not available". Read the kubelet summary API instead. It is the source metrics-server itself scrapes: `cpu.usageNanoCores` is the CPU rate `top` shows and `memory.workingSetBytes` is its memory figure, and nothing new goes onto the cluster just to be measured (decisions.md, 2026-10-24, #484). Per node, during a real run:
+
+```bash
+for node in $(KUBECONFIG="$KCFG" kubectl --context "$CONTEXT" get nodes -o jsonpath='{.items[*].metadata.name}'); do
+  KUBECONFIG="$KCFG" kubectl --context "$CONTEXT" get --raw "/api/v1/nodes/${node}/proxy/stats/summary" \
+    | python3 -c 'import json, sys; n = json.load(sys.stdin)["node"]; print("%s %.0fm CPU %.0fMi working set" % (n["nodeName"], n["cpu"]["usageNanoCores"] / 1e6, n["memory"]["workingSetBytes"] / 2**20))'
+done
+```
+
+The same response carries per-pod and per-container readings under `pods[]`. `verify/backstage-footprint.sh` (#484) samples it repeatedly for a last and a peak and prints each node's allocatable against everything scheduled on it; use it, or the loop above, rather than `top`. Pair the readings with the node's credit balance, region and profile named on the command: `AWS_PROFILE=<profile> aws cloudwatch get-metric-statistics --region <region> --namespace AWS/EC2 --metric-name CPUCreditBalance --dimensions Name=InstanceId,Value=<instance-id> --start-time <start> --end-time <end> --period 300 --statistics Minimum`.
+
+If a live `kubectl top` is wanted during the workshop itself, that means adding the `metrics-server` EKS addon to `aws/cluster/main.tf`, a new component on every cluster; it is not there today.
 
 Cost delta to weigh (one node times 60 clusters times 3 hours, compute only):
 
@@ -87,5 +102,5 @@ File quota-increase requests **well ahead of the event**; AWS approval is not in
 
 - **Hard ceiling for N**, open decision owned by Michael (BUILD-SPEC §10.1). Default working number is 25; the ceiling drives node count, cost, quota requests, and provisioning parallelism.
 - **Median provision time per cluster, Phase-2 TODO.** Not yet measured. BUILD-SPEC Phase 2 records the median provision time for a parallel set; that number lands here once measured on real EKS clusters. Until then, the parallel pre-provision window before doors is unknown, measure it in Phase 2 and update this file.
-- **T3 fleet validation**, whether a real 2-hour run on `t3.xlarge` unlimited holds up, or whether the measured fallback to M-series is needed. Measure one live cluster (`kubectl top` + `CPUCreditBalance`) before pinning the fleet.
+- **T3 fleet validation**, whether a real 2-hour run on `t3.xlarge` unlimited holds up, or whether the measured fallback to M-series is needed. Measure one live cluster (kubelet summary API + `CPUCreditBalance`, see "Measuring one live cluster") before pinning the fleet.
 - **`Sensitive` opt-in decision**, whether to accept the N× NER RAM cost, trim it with lazy-load, or run a shared LLM Guard service. Decide before recording.

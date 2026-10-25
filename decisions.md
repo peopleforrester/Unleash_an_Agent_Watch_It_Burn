@@ -1738,3 +1738,26 @@ dropping a variable from the paragraph, turns it red.
 - **A cluster-free E2E tier stays possible.** The test forbids run-e2e.sh on the E2E line, not any E2E
   line, so the #543 follow-up (kyverno CLI, conftest, kustomize and node checks with pinned tools) can still
   be declared there.
+
+## 2026-10-25 · #547 · SIZING.md measures a live cluster from the kubelet summary, not `kubectl top`
+
+`infra/SIZING.md` said to measure one live cluster with `kubectl top` plus CloudWatch `CPUCreditBalance`. The
+2026-10-24 #484 entry above found that nothing in this repo installs metrics-server, so `top` fails on an
+attendee cluster with "Metrics API not available". Of the two ways out #547 named, the doc now takes the first:
+
+- **The doc points at the kubelet summary API.** A new "Measuring one live cluster" section says why `top`
+  fails, gives a per-node loop over `nodes/<node>/proxy/stats/summary` (every kubectl call with `--context`,
+  the kubeconfig passed per command) that prints CPU in millicores and the working set in Mi, names
+  `verify/backstage-footprint.sh` for repeated sampling and allocatable against requests, and gives the
+  `CPUCreditBalance` query with region and profile on the command. The decision line and the "T3 fleet
+  validation" open item both point at it.
+- **No metrics-server addon.** It would be one more component on every cluster only to be measured, which the
+  #484 entry already chose against, and nothing in the workshop reads the metrics API (no lab step, terminal
+  page or agent tool calls `top` or `metrics.k8s.io`). The section says the addon is the route if a live `top`
+  is ever wanted during the workshop.
+- **Tests:** `verify/test_sizing_measure.py` (offline suite) reads the addons map out of
+  `aws/cluster/main.tf` and the gitops manifests. While neither installs metrics-server, every SIZING.md line
+  naming `kubectl top` must also name metrics-server (the line explaining why not), the doc must name the
+  summary path and the footprint script, and its kubectl commands must carry `--context`. Against the old
+  SIZING.md it fails on lines 36 and 90. The documented one-liner was run on a sample summary response, not
+  yet on a cluster.
