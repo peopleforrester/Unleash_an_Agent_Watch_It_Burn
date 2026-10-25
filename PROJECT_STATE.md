@@ -784,7 +784,7 @@ full section-by-section reconciliation of the spec is still pending.
       provision spokes, run Phase 4b spikes, fill VERSIONS.lock, record fallbacks,
       merge `staging` → `main` only after verify/run-all.sh passes.
 - [ ] Resolve build placeholders surfaced by the build wave: egress-proxy sidecar
-      image (agent/gateway/llm-guard-sidecar.yaml), Bedrock model id + region, LLM Guard
+      image (now guard-proxy in gitops/ai-layer/resources.yaml; the old sidecar overlay was deleted in #546), Bedrock model id + region, LLM Guard
       image digest (laiyer/llm-guard-api:0.3.16), region (us-west-2 placeholder).
 
 ## Research corrections that MUST flow into rev2 (source of truth: research/*.md)

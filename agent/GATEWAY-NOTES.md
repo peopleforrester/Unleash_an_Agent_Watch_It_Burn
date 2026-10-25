@@ -20,14 +20,19 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
 - **Stage 1, deterministic block-list (default, cheapest):** the guard-proxy matches a block-list
   (e.g. "delete" intent) and hard-rejects **before** the LLM, so zero tokens are spent and the cost
   counter flatlines. This stage IS deterministic.
-- **Stage 2, classifier (toggle on as needed):** agentgateway request-phase `webhook` to an
-  LLM-Guard-backed wrapper running the input **`PromptInjection`** scanner, DeBERTa
-  (`ProtectAI/deberta-v3-base-prompt-injection-v2`); the request phase supports **`RejectAction`**
-  (hard block + `status_code`). This stage is **model-based, NOT deterministic**, never call the
-  combined guard "deterministic" in attendee copy once stage 2 is in the path (spec §3).
-- **Files:** baseline in `gitops/ai-layer/agentgateway.yaml` (the deployed gateway); toggles
-  `gateway/input-guard-off.yaml` (default) / `gateway/input-guard-on.yaml`.
-- **Verdict wiring:** the wrapper calls LLM Guard `/analyze/prompt`; flagged → `RejectAction 403`.
+- **Stage 2, classifier (toggle on as needed):** guard-proxy sends the prompt to LLM Guard's input
+  **`PromptInjection`** scanner, DeBERTa (`ProtectAI/deberta-v3-base-prompt-injection-v2`), and
+  hard-rejects a flagged prompt before it reaches the agent. It is not an agentgateway request-phase
+  webhook: agentgateway prompt-guards attach only to `llm.models[]` LLM-provider backends, not to the
+  A2A backend (header of `gitops/ai-layer/agentgateway.yaml`). This stage is **model-based, NOT
+  deterministic**, never call the combined guard "deterministic" in attendee copy once stage 2 is in
+  the path (spec §3).
+- **Files:** guard-proxy and LLM Guard (Deployments `guard-proxy`, `llm-guard`, ConfigMap
+  `llm-guard-scanners`) in `gitops/ai-layer/resources.yaml`; proxy source is the
+  `gitops/ai-layer/guard-proxy` submodule. Toggles are runtime flips of guard-proxy's `/toggle`:
+  `challenges/02-sanitization/toggle-input-guard-on.sh` (stage 1, `input_blocklist`) and
+  `toggle-input-classifier-on.sh` (stage 2, `input_classifier`), each with `--off`. The pre-gitops
+  `gateway/input-guard-{on,off}.yaml` agentgateway overlays were never applied and were deleted in #546.
 
 ### 2. Output exfil guard, LLM Guard reverse-proxy SIDECAR (PRIMARY; hard block)
 - **What:** a reverse-proxy sidecar in front of the agent's serving container. It captures the
@@ -44,8 +49,14 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   returning OpenAI chat-completion bodies, **unverified** against a kagent A2A endpoint. The sidecar
   removes both unknowns and gives the hard block the "blocked" copy needs.
   (`the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §2/§5.)
-- **Files:** `gateway/llm-guard-sidecar.yaml` (authoritative sidecar spec);
-  toggles `gateway/output-guard-off.yaml` (default) / `gateway/output-guard-on.yaml`.
+- **As deployed:** the reverse proxy is guard-proxy, its own Deployment in front of agentgateway
+  (`AGENT_URL` = `agentgateway:3000`), not a sidecar in the agent pod. One proxy carries both the
+  input stages and this output guard.
+- **Files:** guard-proxy and LLM Guard in `gitops/ai-layer/resources.yaml` (output `Regex` patterns in
+  ConfigMap `llm-guard-scanners`); toggle `challenges/02-sanitization/toggle-output-guard-on.sh`
+  (guard-proxy `/toggle?output=`, `--off` to disable). The pre-gitops `gateway/llm-guard-sidecar.yaml`,
+  `gateway/llm-guard-service.yaml` and `gateway/output-guard-{on,off}.yaml` were never applied and
+  were deleted in #546.
 - **Fail-closed:** `PROXY_FAIL_CLOSED=true`, if LLM Guard is unreachable the sidecar blocks, never
   passes the raw response (Michael's no-silent-fallback rule; `the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`)` §Risks.4).
 
@@ -116,7 +127,8 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   committed config is validated offline against the vendored v1.5.0 schema
   (`verify/test_agentgateway_config.py`); MCP config nests under `mcp.{targets,policies}` and mcpAuthorization is
   allow-only CEL with implicit deny (no `action` field) — the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2.
-- **Egress-proxy sidecar image:** a real thin reverse proxy (NOT a mock) calling `/analyze/output`.
-  It is a `PLACEHOLDER_EGRESS_PROXY_IMAGE` until built and pinned, ship no placeholder to the event.
+- **Egress-proxy image:** a real thin reverse proxy (NOT a mock) calling `/analyze/output`. Resolved
+  as guard-proxy: `proxy.py` on the digest-pinned `watch-it-burn:python-3.12-slim` image in
+  `gitops/ai-layer/resources.yaml` (baking `proxy.py` into the image is #411/#412).
 - **Default toggle states at workshop start:** input-guard OFF, output-guard OFF, mcp-authz OFF
   (default Allow). Each beat flips its toggle on for the "after".
