@@ -38,8 +38,8 @@ LAB_QUERY = ("sum:witb.lab.calls{*} by "
 AGENT_QUERY = "max:datadog.agent.running{*} by {kube_cluster_name}.rollup(max, 300)"
 # An attendee's cluster, as fleet.sh names them (watch-it-burn-attendee-042). The cluster NAME decides who is an
 # attendee, not the witb.lab.role tag: the lab page infers its role from the hostname, and an admin cluster's lab
-# opened without ?role= reports itself as a student. The Community cluster, the <owner>-admin clusters and the
-# presenters' own <owner>-student clusters are all left out.
+# opened without ?role= reports itself as a student. The Community cluster and the <owner>-admin clusters are
+# left out. A presenter's student cluster is a claimed attendee slot since #295, so it counts as one.
 STUDENT_CLUSTER = re.compile(r"-attendee-\d+$")
 CHALLENGES = [str(n) for n in range(1, 9)]
 ABANDON_MINUTES = 10

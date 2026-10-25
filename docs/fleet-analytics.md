@@ -47,10 +47,17 @@ lab page (lab-events.js) --POST /lab-events--> console nginx --> collector otlp/
   own. That pipeline drops any span not named `lab.*` and drops span events. It resets the resource to
   `service.name=burritobot-lab`, keeps only the documented attributes, and truncates their values to 64
   characters. A modified page cannot use it to forge BurritoBot traces or send anything wider.
-- **Where it lands.** On attendee and presenter clusters both lab pipelines export to `datadog/admin`
-  only (`gitops/otel-collector/values-dual.yaml`), so the markers reach the instructor org (#242) and
-  never the student's own. The student's org is for the student's workload, and one more unfamiliar
-  service there is noise. On instructor clusters `datadog` already is the instructor org.
+- **Where it lands.** The two lab pipelines are in the collector's base config (`relay.yaml`, from
+  `gitops/otel-collector/values.yaml`) and export to `debug` only. So a cluster with no `datadog-secret`
+  receives the markers and drops them. The Datadog overlay that the `datadog-gate` loads when the secret
+  exists (#500) adds the org, the same way it does for traces and metrics:
+  - On attendee clusters, `values-dual.yaml` adds `datadog/admin` only, so the markers reach the
+    instructor org (#242) and never the student's own. The student's org is for the student's workload,
+    and one more unfamiliar service there is noise. A presenter's student cluster is a claimed attendee
+    cluster since #295, so the same applies to it.
+  - On instructor clusters (admin and full), `datadog` already is the instructor org.
+  - On the Community cluster (burn), `datadog` is that cluster's org. The room shares that cluster, so
+    the dashboard leaves it out by default.
 - **Metrics, not just spans**, because indexed spans are sampled and a two-hour session needs every
   event. `span_metrics/lab` turns the spans into `witb.lab.calls`, tagged with `span.name`,
   `kube_cluster_name`, `witb.lab.alias`, `witb.lab.role`, `witb.lab.challenge`, `witb.lab.kind` and
@@ -87,7 +94,8 @@ That is by construction, and nothing in this path tries to recover it.
 `infra/terraform/dashboards/fleet-analytics.json`, managed by the `fleet_analytics` resource in
 `infra/terraform/dashboards/main.tf`. Apply it with the **instructor org's** `DD_API_KEY` and `DD_APP_KEY`.
 In a student's org it renders empty by design. The `cluster` template variable defaults to
-`watch-it-burn-attendee-*`; set it to `*` to include the Community, admin and presenter clusters. Scope by
+`watch-it-burn-attendee-*`; set it to `*` to include the Community and admin clusters. A presenter's student
+cluster is a claimed attendee slot (#295), so it is inside the default scope. Scope by
 cluster name, not by `role`. The lab infers its role from the hostname, so an admin cluster's lab opened
 without `?role=` reports itself as a student.
 
@@ -101,7 +109,7 @@ does not need the clusters to still be up.
 
 ## Prompt content
 
-The dashboard carries no prompt text. Separately from this path, attendee and presenter clusters
+The dashboard carries no prompt text. Separately from this path, attendee clusters
 dual-ship their traces to the instructor org (#242). Those traces include the conversation
 (`gen_ai.input.messages`), so prompt text is already in the instructor org's Agent Observability, and
 harvest pass 1 extracts it into `.harvest/`. The lab guide tells attendees both things: that their prompts
@@ -115,9 +123,10 @@ What is checked without a cluster:
 - `verify/test_lab_events.py` and `verify/test_lab_progress_harvest.py` (offline) check the contract
   across the five files and the harvest reducer.
 - `verify/test_lab_events_behaviour.py` (E2E, node) runs the emitter against a fake lab page.
-- `verify/test_lab_pipeline_collector.py` (E2E, otelcol-contrib 0.160.0) validates both shipped collector
-  configs with the real binary. It then feeds the lab pipeline the page's own payload and a forged one,
-  and asserts that only the contract comes out.
+- `verify/test_lab_pipeline_collector.py` (E2E, otelcol-contrib 0.160.0) validates every profile's collector
+  config (instructor, attendee and burn, each with and without `datadog-secret`, rendered by
+  `verify/collector_render.py`) with the real binary. It then feeds the lab pipeline the page's own
+  payload and a forged one, and asserts that only the contract comes out.
 - On 2026-10-24 the console's nginx config was also run under nginx 1.26 (Debian 13), with the
   cluster-local upstreams pointed at loopback, in front of that collector pipeline. `nginx -t` passed. A
   real payload answered 200 and arrived as spans. A GET answered 403, a 20k body 413, and a burst of 40
