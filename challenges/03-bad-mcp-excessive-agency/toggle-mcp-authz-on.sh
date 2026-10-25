@@ -67,4 +67,4 @@ echo "==> Setting MCP tool authorization: ${STATE} (evil-mcp $([[ "${STATE}" == 
 "${KCTL[@]}" patch agent "${AGENT}" --type=merge -p "${PATCH}"
 
 echo "==> Done. kagent reconciles the Agent; the rogue tools are $([[ "${STATE}" == on ]] && echo 'now excluded' || echo 'reachable again')."
-echo "==> Verify by re-asking the weather question. fallback.curl.sh proves the admin cluster's gateway rule, not this list."
+echo "==> Verify by re-asking the weather question once deploy/${AGENT} has rolled out. fallback.curl.sh asks it both ways and puts the list back."

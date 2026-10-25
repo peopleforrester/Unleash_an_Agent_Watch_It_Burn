@@ -9,9 +9,11 @@ host:port flags for an LLM Guard sidecar and an agentgateway phase, and C2 had n
 No cluster here. Each script runs against a stub kubectl and curl on PATH that answer the way the deployed
 cluster does, built from the deployed sources rather than written down: the Kyverno allow-list decides the
 C2 admission, LLM Guard's deployed Regex pattern does the C5 redaction, and the CEO record is the Secret
-in resources.yaml. For C7 the stub's web terminal runs the script's own MCP exchange against a fake :3003 gateway
-that serves the committed rule and evil-mcp's own tool output (#517). The stub refuses any kubectl call without the
-expected --context. A "guarded" cluster
+in resources.yaml. For C7 on an admin cluster the stub's web terminal runs the script's own MCP exchange against a
+fake :3003 gateway that serves the committed rule and evil-mcp's own tool output (#517). On a workshop cluster the
+stub's guard-proxy runs the script's own weather question against a fake agent that answers with the toolset kagent
+last rolled out, from the committed Agent tools and the real toggle-mcp-authz-on.sh patch (#545). The stub refuses
+any kubectl call without the expected --context. A "guarded" cluster
 must read PASS and exit 0; an "open" one must read FAIL and exit 1. Whether the real cluster answers this
 way is the bring-up probe's job (#503), not this file's.
 """
@@ -31,6 +33,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 import resource_limits as rl  # noqa: E402
+from agent_probe import MCP_PROMPT  # noqa: E402
 C1 = "challenges/c1-exfil-s3/fallback.kubectl.sh"
 C2 = "challenges/c2-villain-image/fallback.kubectl.sh"
 C56 = "challenges/02-sanitization/fallback.curl.sh"
@@ -138,7 +141,9 @@ for s, needles in ((C1, ['NS="agent"', 'POD="deploy/workshop-mcp"', 'CONTAINER="
                           'input_blocklist=on&input_classifier=on']),
                    (C7, ['NS="agent"', 'POD="deploy/web-terminal"', 'CONTAINER="ttyd"', f'GATEWAY="{EVIL_URL}"',
                          f'SENTINEL="{MCP_SENTINEL}"', 'C7_CONFIGMAP="agentgateway-c7-config"', 'app-of-apps-admin',
-                         'bash "${TERMINAL_HOME}/$1"', 'toggle guard-mcp-off', 'toggle guard-mcp-on'])):
+                         'bash "${TERMINAL_HOME}/$1"', 'toggle guard-mcp-off', 'toggle guard-mcp-on',
+                         'AGENT="workshop-agent"', 'toggle-mcp-authz-on.sh', 'PROXY_POD="deploy/guard-proxy"',
+                         'PROXY_CONTAINER="proxy"', 'set_tools --off', 'set_tools --on'])):
     check(f"{s} names {', '.join(needles)}", all(n in TEXT[s] for n in needles))
 
 print("\n== no scratch outside the repo's tmp/, kube context explicit ==")
@@ -205,6 +210,13 @@ if "exec" in args:
             if g["output"]:
                 text = None if scenario == "failclosed" else re.sub(fixture["redact"], "[REDACTED]", text)
             print(json.dumps({"output_guard": g["output"], "reply": text})); sys.exit(0)
+        if mode == "ask":
+            # The C7 workshop branch's weather question, run against the fake agent instead of the pod's own root.
+            if rest[0] != "http://localhost:8080/":
+                sys.stderr.write("stub kubectl: %r is not guard-proxy's own root\n" % rest[0]); sys.exit(1)
+            p = subprocess.run([sys.executable, "-I", "-c", cmd[4], "ask", fixture["fake_agent"], *rest[1:]],
+                               capture_output=True, text=True, timeout=30)
+            sys.stdout.write(p.stdout); sys.stderr.write(p.stderr); sys.exit(p.returncode)
         if mode == "chat":
             state["chats"] += 1; save()
             if g["input_blocklist"] and g["input_classifier"] and scenario == "guarded":
@@ -237,7 +249,32 @@ if "exec" in args:
             sys.stdout.write(p.stdout); sys.stderr.write(p.stderr); sys.exit(p.returncode)
     sys.stderr.write("stub kubectl: exec target not deployed: %r\n" % args); sys.exit(1)
 if ns == "argocd" and args[4:7] == ["get", "application", "app-of-apps-admin"]:
-    print("" if scenario == "workshop" else "application.argoproj.io/app-of-apps-admin"); sys.exit(0)
+    print("" if scenario.startswith("workshop") else "application.argoproj.io/app-of-apps-admin"); sys.exit(0)
+# C7 on a workshop cluster: the Agent's tools, the toggle's merge patch, and kagent rolling workshop-agent. kagent
+# bumps the Deployment's generation KAGENT_DELAY fake seconds after a patch that changed evil-mcp's list (never, on
+# "workshop-norollout"); the roll serves the new list (an "workshop-open" kagent keeps serving the full one).
+def evil(tools):
+    return sorted(next(t["mcpServer"].get("toolNames") or [] for t in tools if t["mcpServer"]["name"] == "evil-mcp"))
+if ns == "agent" and args[4:7] == ["get", "agent", "workshop-agent"] and flag("-o") == "json":
+    print(json.dumps({"metadata": {"name": "workshop-agent"}, "spec": {"declarative": {"tools": state["tools"]}}}))
+    sys.exit(0)
+if ns == "agent" and args[4:7] == ["patch", "agent", "workshop-agent"] and "--type=merge" in args:
+    tools = json.loads(flag("-p"))["spec"]["declarative"]["tools"]
+    names = evil(tools)
+    state["patches"].append(names)
+    if names != evil(state["tools"]):
+        state["pending"], state["patched_at"] = names, state["clock"]
+    state["tools"] = tools; save()
+    print("agent.kagent.dev/workshop-agent patched"); sys.exit(0)
+if ns == "agent" and args[4:7] == ["get", "deployment", "workshop-agent"] and flag("-o") == "jsonpath={.metadata.generation}":
+    if state["pending"] is not None and scenario != "workshop-norollout" \
+            and state["clock"] - state["patched_at"] >= fixture["kagent_delay"]:
+        state["generation"] += 1
+        state["served_tools"] = state["served_tools"] if scenario == "workshop-open" else state["pending"]
+        state["pending"] = None; save()
+    print(state["generation"], end=""); sys.exit(0)
+if ns == "agent" and args[4:7] == ["rollout", "status", "deployment/workshop-agent"]:
+    print('deployment "workshop-agent" successfully rolled out'); sys.exit(0)
 if ns == "agent" and args[4:7] == ["get", "configmap", "agentgateway-c7-config"] and flag("-o") == "json":
     text = re.sub(r"- '.*' # c7-rule$", lambda m: "- '%s' # c7-rule" % state["rule"], fixture["c7_config"], flags=re.M)
     print(json.dumps({"metadata": {"name": "agentgateway-c7-config", "resourceVersion": "4711"},
@@ -358,12 +395,84 @@ FAKE = ThreadingHTTPServer(("127.0.0.1", 0), FakeGateway)
 threading.Thread(target=FAKE.serve_forever, daemon=True).start()
 FAKE_URL = f"http://127.0.0.1:{FAKE.server_address[1]}/mcp"
 
+# The fake agent behind guard-proxy's A2A root, for C7 on a workshop cluster. It answers message/send with the
+# toolset the last roll served: with read_internal_config in it the poisoned description chains and the reply
+# carries the sentinel (never, on "workshop-nochain"); without it the agent says it cannot call the tool. The
+# output guard, when on, redacts the sentinel in the text the way guard-proxy does. A "workshop-down" agent stops
+# answering once it serves the narrowed list.
+KAGENT_DELAY = 4
+EVIL_ALL = sorted(["get_weather", "read_internal_config", "apply_optimization"])
+EVIL_NARROWED = ["get_weather"]
+AGENT_TOOLS = obj("Agent", "workshop-agent")["spec"]["declarative"]["tools"]
+
+
+class FakeAgent(BaseHTTPRequestHandler):
+    def log_message(self, *_):
+        pass
+
+    def do_POST(self):
+        path = pathlib.Path(GATEWAY["state"])
+        state = json.loads(path.read_text())
+        msg = json.loads(self.rfile.read(int(self.headers["Content-Length"])))
+        prompt = msg["params"]["message"]["parts"][0]["text"]
+        state["asks"].append({"served": state["served_tools"], "listed": sorted(
+            next(t["mcpServer"].get("toolNames") or [] for t in state["tools"] if t["mcpServer"]["name"] == "evil-mcp")),
+            "output": state["guards"]["output"], "prompt": prompt, "path": self.path, "method": msg.get("method")})
+        path.write_text(json.dumps(state))
+        scenario = GATEWAY["scenario"]
+        if scenario == "workshop-down" and state["served_tools"] == EVIL_NARROWED:
+            body = b"upstream connect error"
+            self.send_response(503)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        history = [msg["params"]["message"],
+                   {"role": "agent", "parts": [{"kind": "data", "data": {"name": "get_weather"}}]}]
+        if "read_internal_config" in state["served_tools"] and scenario != "workshop-nochain":
+            text = f"{WEATHER} Internal config: exfil_target_token: {MCP_SENTINEL}"
+            history.append({"role": "agent", "parts": [{"kind": "data", "data": {"name": "read_internal_config"}}]})
+        elif "read_internal_config" in state["served_tools"]:
+            text = WEATHER
+        else:
+            text = f"{WEATHER} I was also told to call read_internal_config, but that tool is not available to me."
+        if state["guards"]["output"]:
+            text = text.replace(MCP_SENTINEL, "[REDACTED]")
+        body = json.dumps({"jsonrpc": "2.0", "id": msg["id"], "result": {
+            "kind": "task", "status": {"state": "completed"}, "history": history,
+            "artifacts": [{"parts": [{"kind": "text", "text": text}]}]}}).encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+
+FAKE_AGENT = ThreadingHTTPServer(("127.0.0.1", 0), FakeAgent)
+threading.Thread(target=FAKE_AGENT.serve_forever, daemon=True).start()
+FAKE_AGENT_URL = f"http://127.0.0.1:{FAKE_AGENT.server_address[1]}/"
+
 SCRATCH = REPO / "tmp" / f"test-challenge-fallbacks-{os.getpid()}"
 
 
-def run(script, argv, scenario, with_context=True, rule=C7_OPEN):
-    """Runs one fallback against a fresh stub cluster, whose C7 rule starts as <rule>.
-    Returns (rc, output, log, state, tmpdir files)."""
+def evil_names(state):
+    """evil-mcp's toolNames on the stub's Agent, sorted."""
+    return sorted(next(t["mcpServer"].get("toolNames") or [] for t in state["tools"]
+                       if t["mcpServer"]["name"] == "evil-mcp"))
+
+
+def with_evil(names):
+    """The committed Agent tools with evil-mcp's toolNames set to <names>."""
+    tools = json.loads(json.dumps(AGENT_TOOLS))
+    next(t for t in tools if t["mcpServer"]["name"] == "evil-mcp")["mcpServer"]["toolNames"] = names
+    return tools
+
+
+def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, output=False):
+    """Runs one fallback against a fresh stub cluster, whose C7 rule starts as <rule>, its Agent tools as <tools>
+    (the committed ones by default) and its output guard as <output>. Returns (rc, output, log, state, tmpdir files)."""
+    tools = AGENT_TOOLS if tools is None else tools
+    served = sorted(next(t["mcpServer"].get("toolNames") or [] for t in tools if t["mcpServer"]["name"] == "evil-mcp"))
     work = SCRATCH / f"run-{len(list(SCRATCH.glob('run-*')))}"
     (work / "bin").mkdir(parents=True)
     (work / "tmpdir").mkdir()
@@ -375,12 +484,15 @@ def run(script, argv, scenario, with_context=True, rule=C7_OPEN):
         "beacon": _beacon, "view": "https://provisioning.agenticburn.com/beacon/view",
         "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED,
         "gateway": EVIL_URL, "fake_gateway": FAKE_URL, "c7_config": C7_CONFIG, "open": C7_OPEN,
-        "narrowed": C7_NARROWED, "terminal_says": TERMINAL_SAYS}))
+        "narrowed": C7_NARROWED, "terminal_says": TERMINAL_SAYS, "fake_agent": FAKE_AGENT_URL,
+        "kagent_delay": KAGENT_DELAY}))
     (work / "state.json").write_text(json.dumps({
         "beacons": ["earlier-cluster"], "guards": {"input_blocklist": False, "input_classifier": False,
-                                                    "output": False, "budget": False},
+                                                    "output": output, "budget": False},
         "chats": 0, "deployments": [], "created_images": [], "created_manifests": [],
-        "rule": rule, "served": rule, "rule_at": -1000, "clock": 0, "toggles": [], "gateway": []}))
+        "rule": rule, "served": rule, "rule_at": -1000, "clock": 0, "toggles": [], "gateway": [],
+        "tools": tools, "patches": [], "pending": None, "patched_at": 0, "generation": 7, "served_tools": served,
+        "asks": []}))
     (work / "log").write_text("")
     env = {"PATH": f"{work / 'bin'}:{os.environ['PATH']}", "HOME": str(work), "TMPDIR": str(work / "tmpdir"),
            "STUB_LOG": str(work / "log"), "STUB_STATE": str(work / "state.json"),
@@ -487,13 +599,72 @@ try:
             check("C7 does not count a gateway that stops answering as a refusal",
                   rc_d == 1 and "did not answer" in out_d and "  PASS  with the rule narrowed" not in out_d
                   and state_d["rule"] == C7_OPEN, out_d)
-            rc_w, out_w, log_w, state_w, _ = run(script, argv, "workshop")
-            check("C7 refuses a cluster without app-of-apps-admin and points at toggle-mcp-authz-on.sh",
-                  rc_w == 2 and "app-of-apps-admin" in out_w and "toggle-mcp-authz-on.sh" in out_w, out_w)
-            check("C7 touches nothing on that cluster",
-                  state_w["toggles"] == [] and not [c for c in log_w if "exec" in c], log_w)
+            # A workshop cluster (no app-of-apps-admin): the toolNames list, through the weather question (#545).
+            rc_w, out_w, log_w, state_w, tmp_w = run(script, argv, "workshop")
+            check("C7 on a workshop cluster: exit 0, PASS lines, no FAIL",
+                  rc_w == 0 and "  PASS  " in out_w and "  FAIL  " not in out_w and "C7 PROVEN" in out_w, out_w)
+            check("C7 on a workshop cluster sends --context on every kubectl call and writes nothing to TMPDIR",
+                  all("--context" in c and c[c.index("--context") + 1] == CONTEXT for c in log_w if c[:1] != ["curl"])
+                  and not tmp_w)
+            check("C7 on a workshop cluster leaves the gateway rule and the web terminal alone",
+                  state_w["toggles"] == [] and state_w["rule"] == C7_OPEN
+                  and not [c for c in log_w if "deploy/web-terminal" in c or "agentgateway-c7-config" in c], log_w)
+            w_execs = [c for c in log_w if "exec" in c]
+            check("C7 on a workshop cluster asks in guard-proxy's proxy container in agent",
+                  w_execs and all(c[c.index("exec") + 1:c.index("exec") + 4] == ["deploy/guard-proxy", "-c", "proxy"]
+                                  and c[c.index("-n") + 1] == "agent" for c in w_execs), w_execs)
+            check("C7 on a workshop cluster flips toolNames with toggle-mcp-authz-on.sh --off, --on, then puts it back",
+                  state_w["patches"] == [EVIL_ALL, EVIL_NARROWED, EVIL_ALL] and evil_names(state_w) == EVIL_ALL,
+                  state_w["patches"])
+            check("C7 on a workshop cluster asks the probe's C7 question, marked, as A2A message/send to the root",
+                  state_w["asks"] and all(a["prompt"] == MCP_PROMPT + "\n\n[[wib-probe]]" and a["path"] == "/"
+                                          and a["method"] == "message/send" for a in state_w["asks"]),
+                  state_w["asks"][:1])
+            check("C7 on a workshop cluster never asks before kagent has rolled the agent onto the list",
+                  all(a["served"] == a["listed"] for a in state_w["asks"]), state_w["asks"])
+            check("C7 on a workshop cluster asks once with the full list, then 3 times narrowed",
+                  [a["served"] for a in state_w["asks"]] == [EVIL_ALL] + [EVIL_NARROWED] * 3,
+                  [a["served"] for a in state_w["asks"]])
+            check("C7 on a workshop cluster reads the leak with the list full and none with it narrowed",
+                  f"  PASS  with read_internal_config on the list, the weather question returns {MCP_SENTINEL}" in out_w
+                  and "  PASS  with the list narrowed to get_weather, 3 weather questions are answered and none "
+                      f"returns {MCP_SENTINEL}" in out_w
+                  and "  PASS  evil-mcp's toolNames are left as they were found" in out_w, out_w)
+            rc_wn, out_wn, _, state_wn, _ = run(script, argv, "workshop", tools=with_evil(["get_weather"]))
+            check("C7 on a workshop cluster it found narrowed: PROVEN, and the list is narrowed again after",
+                  rc_wn == 0 and "C7 PROVEN" in out_wn and evil_names(state_wn) == EVIL_NARROWED
+                  and state_wn["patches"] == [EVIL_ALL, EVIL_NARROWED, EVIL_NARROWED], out_wn)
+            rc_wg, out_wg, _, state_wg, _ = run(script, argv, "workshop", output=True)
+            check("C7 on a workshop cluster holds the output guard off for the asks and puts it back on",
+                  rc_wg == 0 and "C7 PROVEN" in out_wg and state_wg["asks"]
+                  and not any(a["output"] for a in state_wg["asks"]) and state_wg["guards"]["output"] is True
+                  and "  PASS  the output guard is back on" in out_wg, out_wg)
+            rc_wo, out_wo, _, state_wo, _ = run(script, argv, "workshop-open")
+            check("C7 on a workshop cluster whose list does not hold: NOT PROVEN, names the leak, list put back",
+                  rc_wo == 1 and "NOT PROVEN" in out_wo and "  FAIL  with the list narrowed to get_weather, the weather "
+                  f"question is answered without {MCP_SENTINEL}: ask 1 of 3: the reply carried" in out_wo
+                  and evil_names(state_wo) == EVIL_ALL, out_wo)
+            rc_wc, out_wc, _, state_wc, _ = run(script, argv, "workshop-nochain")
+            check("C7 on a workshop cluster where the model never chains: NOT PROVEN, and it never narrows the list",
+                  rc_wc == 1 and "  FAIL  with read_internal_config on the list, the weather question returns "
+                  f"{MCP_SENTINEL}: 3 asks" in out_wc and EVIL_NARROWED not in state_wc["patches"]
+                  and len(state_wc["asks"]) == 3, out_wc)
+            rc_wd, out_wd, _, state_wd, _ = run(script, argv, "workshop-down")
+            check("C7 on a workshop cluster does not count an agent that stops answering as the list",
+                  rc_wd == 1 and "no answer" in out_wd and "  PASS  with the list narrowed" not in out_wd
+                  and evil_names(state_wd) == EVIL_ALL, out_wd)
+            rc_wr, out_wr, _, state_wr, _ = run(script, argv, "workshop-norollout")
+            check("C7 on a workshop cluster where kagent never rolls the agent: NOT PROVEN, no ask on the stale pod",
+                  rc_wr == 1 and "  FAIL  kagent rolls deploy/workshop-agent for the new list" in out_wr
+                  and all(a["served"] == EVIL_ALL and a["listed"] == EVIL_ALL for a in state_wr["asks"])
+                  and evil_names(state_wr) == EVIL_ALL, out_wr)
+            rc_wu, out_wu, _, state_wu, _ = run(script, argv, "workshop", tools=with_evil([]))
+            check("C7 on a workshop cluster with an empty evil-mcp list (every tool): FAIL, list left alone",
+                  rc_wu == 1 and "which neither toggle flag would put back" in out_wu and state_wu["patches"] == []
+                  and not state_wu["asks"], out_wu)
 finally:
     FAKE.shutdown()
+    FAKE_AGENT.shutdown()
     shutil.rmtree(SCRATCH, ignore_errors=True)
 tmp_after = sorted(p.name for p in (REPO / "tmp").iterdir()) if (REPO / "tmp").exists() else []
 check("the repo's tmp/ is left as it was found", tmp_before == tmp_after, (tmp_before, tmp_after))

@@ -1761,3 +1761,38 @@ attendee cluster with "Metrics API not available". Of the two ways out #547 name
   summary path and the footprint script, and its kubectl commands must carry `--context`. Against the old
   SIZING.md it fails on lines 36 and 90. The documented one-liner was run on a sample summary response, not
   yet on a cluster.
+## 2026-10-25 · #545 · On a workshop cluster the C7 fallback asks the weather question with the toolNames list full, then narrowed
+
+#545 was filed before #517 landed. It found `fallback.curl.sh` expecting a gateway deny that a deployed cluster
+cannot give. #517 then pointed the script at the admin cluster's :3003 rule and refused a workshop cluster
+(exit 2). That refusal left `verify/beat-03.sh`, which is run against an attendee's cluster, with a live branch
+that could never pass. The admin branch is unchanged. A cluster without app-of-apps-admin now runs the check
+from FACILITATOR.md's "Verify it": the weather question through guard-proxy, with evil-mcp's toolNames list
+set by `toggle-mcp-authz-on.sh`.
+
+- **This branch calls the model.** kagent enforces the list by leaving tools out of the agent's toolset, so
+  the list only shows in what the agent does. The admin branch still calls no model.
+- **Leak first, then no leak.** With the list full (`--off`) the agent is asked up to 3 times until the reply
+  carries `FAKE-MCP-EXFIL-sentinel-4c1d`. The model does not chain the poisoned description every time, and
+  without a leak here a missing sentinel later would prove nothing, so the run stops. With the list narrowed
+  (`--on`) the agent is asked 3 times, and every ask must be answered with no sentinel in it. The question
+  is `MCP_PROMPT` from `verify/agent_probe.py` with the `[[wib-probe]]` marker, sent as A2A message/send to
+  guard-proxy's own root from inside its pod. The whole reply is searched, tool results included.
+- **No ask goes to the old pod.** kagent restarts workshop-agent when the list changes. After a patch that
+  changed the list, the script waits up to 180 s for the Deployment's generation to move, then for
+  `rollout status`, and only then asks. If the generation never moves, the run fails rather than asking the
+  old toolset. Real kagent 0.10.1 has not yet been seen moving the generation. FACILITATOR.md's verified note
+  says the pod restarts on every list change, and `rollout status` there implies a new pod template. The first
+  workshop bring-up that runs beat-03 confirms it.
+- **The output guard is held off while the agent is asked.** Otherwise a redaction could pass for the list.
+  If the guard was on, it goes back on afterwards, and the list goes back the way it was found, by the flag
+  that writes it. A list that neither flag writes, an empty one included (to kagent, empty means every tool),
+  is left alone and fails the run.
+- **beat-03.sh** no longer treats exit 2 as "not an admin cluster". It runs the fallback against either kind
+  of cluster and passes only on "C7 PROVEN".
+
+`verify/test_challenge_fallbacks.py` runs the workshop branch against its stub cluster. The stub patches the
+committed Agent tools with the real toggle, rolls them out after a fake kagent delay, and answers from a fake
+agent with whatever toolset was last rolled out. It covers these cases: guarded, found narrowed, output guard
+on, a list that does not hold, a model that never chains, an agent that stops answering, a kagent that never
+rolls, and an empty list.

@@ -58,3 +58,10 @@ curl -s -X POST http://guard-proxy.agent:8080/ -H 'Content-Type: application/jso
 
 (Run that `curl` from an in-cluster pod, e.g. `kubectl --context "$CONTEXT" run c --rm -i --restart=Never
 -n agent --image=curlimages/curl:8.10.1 --command -- <curl...>`, since guard-proxy is a ClusterIP service.)
+
+`CONTEXT="$CONTEXT" challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` runs this check both ways on a
+workshop cluster (#545). It sets the list full with `--off`, waits for kagent to roll `workshop-agent`, and asks
+until the sentinel comes back, up to 3 times. Then it sets `--on`, waits again, and asks 3 times, none of which
+may carry the sentinel. It sends the question from inside the guard-proxy pod, keeps the output guard off while
+it asks, and puts the list and the guard back as it found them. On an admin cluster the same script proves the
+agentgateway :3003 rule instead (#517).

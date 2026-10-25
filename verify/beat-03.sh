@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Phase-6 abstract-truth gate for Beat 3 (excessive agency via a bad MCP server) against one attendee spoke.
-# ABOUTME: If the Phase-4b spike PASSED, asserts the live mcp-authz toggle; otherwise asserts the recorded fallback artifact exists.
+# ABOUTME: If the Phase-4b spike PASSED, asserts C7's live control via fallback.curl.sh; otherwise asserts the recorded fallback exists.
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,9 +21,13 @@ Usage: beat-03.sh <kube-context> <attendee-namespace>
 Asserts Beat 3's §2 outcome. The beat is SPIKE-GATED (§2, Phase 4b):
 
   IF challenges/03-.../BUILD-SPIKE.md contains a PASS marker -> assert the LIVE path with
-    CONTEXT=<kube-context> fallback.curl.sh (admin clusters only; it refuses a workshop cluster):
-    rule open (guard-mcp-off)    -> read_internal_config via :3003 leaks FAKE-MCP-EXFIL-sentinel-4c1d
-    rule narrowed (guard-mcp-on) -> agentgateway refuses the call; the rule is put back after
+    CONTEXT=<kube-context> fallback.curl.sh, against whichever C7 control the cluster has (#496):
+    workshop cluster (an attendee's), the kagent toolNames list, via toggle-mcp-authz-on.sh:
+      list full (--off)            -> the weather question through guard-proxy leaks FAKE-MCP-EXFIL-sentinel-4c1d
+      list narrowed (--on)         -> the same question, asked 3 times, never does; the list is put back after
+    admin cluster (app-of-apps-admin), agentgateway's :3003 rule, via the terminal's toggles:
+      rule open (guard-mcp-off)    -> read_internal_config via :3003 leaks FAKE-MCP-EXFIL-sentinel-4c1d
+      rule narrowed (guard-mcp-on) -> agentgateway refuses the call; the rule is put back after
 
   ELSE (spike not passed / no marker) -> assert the recorded fallback artifact
     exists under fallback/recordings/ (Beat 3's recording is mandatory until the
@@ -84,24 +88,26 @@ recorded_artifact_exists() {
 step "Spoke context=${CONTEXT} namespace=${NS}"
 
 if spike_passed; then
-    step "Phase-4b spike PASSED -> asserting the LIVE gateway-rule path"
+    step "Phase-4b spike PASSED -> asserting the LIVE C7 control (toolNames list, or the gateway rule on an admin cluster)"
     command -v kubectl >/dev/null 2>&1 || fail "kubectl not found on PATH (required for live path)"
     [[ -x "${FALLBACK}" ]]            || fail "missing model-independent driver: ${FALLBACK}"
 
-    # fallback.curl.sh contract (Beat 3, #517): CONTEXT is its only input. It flips the C7 rule with the web
-    # terminal's guard-mcp-off and guard-mcp-on, calls read_internal_config through agentgateway :3003 each way,
-    # puts the rule back as it found it, and ends with "C7 PROVEN" (exit 0) or "C7 NOT PROVEN" (exit 1). It
-    # refuses (exit 2) a cluster without app-of-apps-admin, whose C7 is toggle-mcp-authz-on.sh's toolNames list.
+    # fallback.curl.sh contract (Beat 3, #517, #545): CONTEXT is its only input, and it always works in namespace
+    # agent. It asks Argo CD which control the cluster has. On a workshop cluster it runs toggle-mcp-authz-on.sh
+    # --off and --on, waits for kagent to roll workshop-agent each time, and asks the weather question through
+    # guard-proxy: the sentinel must come back with the list full and never with it narrowed. On an admin cluster it
+    # flips the :3003 rule with the web terminal's guard-mcp-off and guard-mcp-on and calls read_internal_config
+    # through agentgateway each way. Either way it puts the control back as it found it and ends with "C7 PROVEN"
+    # (exit 0) or "C7 NOT PROVEN" (exit 1).
     step "Running ${FALLBACK} on ${CONTEXT}"
     rc=0
     OUT="$(CONTEXT="${CONTEXT}" "${FALLBACK}" 2>&1)" || rc=$?
     echo "${OUT}" >&2
-    [[ "${rc}" -ne 2 ]] || fail "fallback.curl.sh refused ${CONTEXT}: not an admin cluster, so no gateway rule to prove"
     if [[ "${rc}" -ne 0 ]] || ! grep -qF "C7 PROVEN" <<<"${OUT}"; then
-        fail "fallback.curl.sh did not prove the gateway rule (exit ${rc}; see its FAIL lines)"
+        fail "fallback.curl.sh did not prove C7's control on ${CONTEXT} (exit ${rc}; see its FAIL lines)"
     fi
 
-    echo "PASS [beat-03]: LIVE gateway-rule path behaves per §2 (spike passed)." >&2
+    echo "PASS [beat-03]: LIVE C7 control behaves per §2 (spike passed)." >&2
     exit 0
 fi
 
