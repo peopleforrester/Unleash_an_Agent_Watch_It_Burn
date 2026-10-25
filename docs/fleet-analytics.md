@@ -58,7 +58,7 @@ lab page (lab-events.js) --POST /lab-events--> console nginx --> collector otlp/
   - On instructor clusters (admin and full), `datadog` already is the instructor org.
   - On the Community cluster (burn), `datadog` is that cluster's org. The room shares that cluster, so
     the dashboard leaves it out by default.
-- **Metrics, not just spans**, because indexed spans are sampled and a two-hour session needs every
+- **Metrics as well as spans**, because indexed spans are sampled and a two-hour session needs every
   event. `span_metrics/lab` turns the spans into `witb.lab.calls`, tagged with `span.name`,
   `kube_cluster_name`, `witb.lab.alias`, `witb.lab.role`, `witb.lab.challenge`, `witb.lab.kind` and
   `witb.lab.control`. `session.id` is kept on the span but is not a metric tag, because one series per
@@ -78,9 +78,9 @@ Do Not Track sends nothing at all. `verify/test_lab_events.py` and `verify/test_
 assert each of these.
 
 **The switch:** `var ENABLED = …;` at the top of `lab-events.js`. It is `true` (question 753). With it set to
-`false` the page sends nothing and the pipeline is idle. The tests arm it in their harness, so the sending
-code stays tested whichever way it is set. Turning it off needs no change to the warning, but the warning
-would then claim more than is collected, so remove the sentence in the same commit.
+`false` the page sends nothing and the pipeline is idle. The behaviour test forces it on in its own copy of
+the file, so the sending code stays tested whichever way it is set. Turning it off needs no change to the
+warning, but the warning would then claim more than is collected, so remove the sentence in the same commit.
 
 ## Joining with the feedback app
 
