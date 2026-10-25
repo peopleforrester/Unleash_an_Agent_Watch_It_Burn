@@ -12,6 +12,7 @@ resources:
   # burn profile ships neither, and one unsatisfiable resource fails the WHOLE app, which left Round 1
   # clusters with no console at all. Do not move it back into this bundle.
   - agentgateway.yaml # OSS v1.5.0 L7 gateway: guard-proxy -> agentgateway -> workshop-agent (A2A) + MCP front
+  - chat-path-ingress.yaml # #552: agentgateway :3000/:3002 and workshop-agent :8080 admit only the hop before them
   - argocd-managed-app.yaml # Beat-1 wall-3 drift target (ArgoCD-managed; admission denies agent drift, self-heal reverts)
   - kubearmor-ordering-gate.yaml # PreSync hook: wait for KubeArmor webhook Ready so workshop-mcp is admitted+annotated for enforcement
   - otel-ordering-gate.yaml # PreSync hook: wait for the OTel operator webhook + Instrumentation so BurritoBot is admitted instrumented

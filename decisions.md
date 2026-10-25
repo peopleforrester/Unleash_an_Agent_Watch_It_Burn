@@ -1832,3 +1832,53 @@ no rendered copy to drift from what is applied:
   imports and the access entry's IAM propagation retry (the provider's, for a user created in the same apply)
   are next checked on a cluster build, with `run-e2e.sh`. The generator stays in provisioning-agenticburn,
   unused by this repo; retiring it there is that repo's change.
+## 2026-10-25 · #552 · The chat path's ports admit only the hop before them
+
+#490 left two routes around guard-proxy open. A pod the agent may still create (default ServiceAccount,
+ordinary labels) reached agentgateway's `:3002` bind, which signs Bedrock calls with agentgateway's own Pod
+Identity credentials. It also reached the agent over A2A, through agentgateway `:3000` or workshop-agent
+`:8080`, with guard-proxy's input and output guards left out. `agent-allow-intra-namespace` opens egress to
+every pod in `agent`, and neither target restricted ingress.
+
+`gitops/ai-layer/chat-path-ingress.yaml` adds two Ingress NetworkPolicies:
+- **agentgateway-ingress.** `:3000` admits pods labelled `app.kubernetes.io/name=guard-proxy`, and `:3002` admits
+  `app.kubernetes.io/name=workshop-agent`. `:3001` and `:3003`, the MCP fronts, and `:15021` and `:15022`, the
+  readiness listeners, are open to every pod. The MCP fronts stay open because the kagent controller lists
+  tools from them and C7's fallback calls `:3003` from the web terminal. A tool call does not reach a model.
+  `:15020` (stats) has no scraper and is closed.
+- **workshop-agent-ingress.** `:8080` admits agentgateway's pods and the `kagent` namespace, because the
+  controller's A2A proxy sits behind the kagent UI.
+
+**Choices made:**
+- **In the ai-layer bundle, not `policies/network-policies/`.** The attendee profile leaves that directory
+  out, so that C1 lands. These rules are the shape of the chat path, not a challenge's control, so they ship
+  on every profile, the burn cluster included. Nothing a challenge does calls these three ports from another
+  pod. The beats ask through guard-proxy, from inside its own pod.
+- **No rule for the kubelet's probes.** agentgateway's readiness probe is a TCP check on `:3000`. Under VPC CNI
+  pods take VPC addresses, so an ipBlock for the nodes would admit every pod too. The VPC CNI's policy agent
+  admits node-sourced probe traffic by itself (AWS re:Post, "Troubleshooting Kubernetes network policies
+  enforcing policies in Amazon EKS"), and Kubernetes documents that a NetworkPolicy cannot block a pod's own
+  node.
+- **Every trusted label joins `egressLabels`.** Those labels are agentgateway, guard-proxy and workshop-agent,
+  next to console. A label is its creator's to choose, so a rule that trusts one is only as good as the
+  agent's inability to wear it. The variable keeps its name because
+  `verify/test_agent_bypass_shapes.py` reads it. The refusal now says "a label that a NetworkPolicy
+  trusts".
+
+**Tests.**
+- `verify/test_chat_path_ingress.py` is offline. It reads each caller from where it is decided: guard-proxy's
+  `AGENT_URL`, the gateway-* ModelConfigs, both RemoteMCPServer urls, the agentgateway `:3000` backend, the C7
+  fallback's `GATEWAY` and fleet.sh's agent-pod selector. It then evaluates the rules for each caller and for
+  the bypass pod. A mutation that opened `:3000` to every pod failed four checks.
+- `verify/test_kyverno_cel_policies.py` gained three impostor-label cases. They are in the E2E suite and were
+  not run here, because no Kyverno CLI was on the box.
+- `verify/test_llm_bypass_live.py` now creates the three impostors as agent-sa and expects refusals. It reads
+  the live ingress rules for the plain pod and for each real peer, and times a bare `GET /` from the plain
+  pod to each guarded port. That request matches no model route. It also connects guard-proxy to `:3000` and
+  needs agentgateway and the agent Ready. None of this has run on a cluster yet. The next cluster build runs
+  it through `verify/run-e2e.sh`.
+
+**Still open.** Every pod in `agent` can reach guard-proxy's `/toggle`, as the Istio ambient evaluation
+(#238) records. An agent-made pod can also reach the kagent controller, which proxies A2A to the agent around
+guard-proxy. Before C1 nothing limits egress from `agent`, and after it `agent-allow-kagent-egress` opens the
+whole `kagent` namespace. That route is filed as a follow-up.

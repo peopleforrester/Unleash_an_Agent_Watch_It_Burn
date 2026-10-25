@@ -325,7 +325,7 @@ expect("only the agent namespace is in scope", g, "other-ns", "ignored")
 print("== restrict-agent-spawned-workloads: the bypass deny-llm-endpoint-bypass cannot see (#490) ==")
 SPAWN = POL / "restrict-agent-spawned-workloads.yaml"
 AS_IDENTITY = "may not run as a ServiceAccount that holds Bedrock credentials"
-AS_CONSOLE = "may not carry a label that a NetworkPolicy opens to the internet"
+AS_LABEL = "may not carry a label that a NetworkPolicy trusts"
 
 
 def runs_as(obj, sa, field="serviceAccountName"):
@@ -335,6 +335,8 @@ def runs_as(obj, sa, field="serviceAccountName"):
 
 
 CONSOLE = {"app.kubernetes.io/name": "console"}
+# The peers gitops/ai-layer/chat-path-ingress.yaml trusts (#552): each one opens a port on the chat path around guard-proxy.
+TRUSTED = ("guard-proxy", "workshop-agent", "agentgateway")
 # No env var at all: the SDK's default endpoint (or Bedrock's default regional hostname) needs none.
 g = run(SPAWN, [runs_as(pod("as-agent-sa", "agent", [c()]), "agent-sa"),
                 runs_as(pod("as-agentgateway", "agent", [c()]), "agentgateway"),
@@ -343,6 +345,7 @@ g = run(SPAWN, [runs_as(pod("as-agent-sa", "agent", [c()]), "agent-sa"),
                 runs_as(deploy("deploy-as-agent-sa", "agent", [c()]), "agent-sa"),
                 pod("console-impostor", "agent", [c()], labels=CONSOLE),
                 deploy("deploy-console-impostor", "agent", [c()], labels=CONSOLE),
+                *[pod(f"{name}-impostor", "agent", [c()], labels={"app.kubernetes.io/name": name}) for name in TRUSTED],
                 pod("plain", "agent", [c()], labels={"app": "plain"}),
                 runs_as(pod("elsewhere", "apps", [c()]), "agent-sa")], user="agent-sa")
 expect("agent-sa may not start a pod as agent-sa (Bedrock over PrivateLink)", g, "as-agent-sa", "fail", AS_IDENTITY)
@@ -350,8 +353,14 @@ expect("nor as agentgateway, the gateway's Bedrock identity", g, "as-agentgatewa
 expect("nor as web-terminal, the tutor's", g, "as-web-terminal", "fail", AS_IDENTITY)
 expect("the deprecated serviceAccount field is read too", g, "as-agent-sa-deprecated", "fail", AS_IDENTITY)
 expect("a Deployment is refused at the Deployment (autogen)", g, "deploy-as-agent-sa", "fail", AS_IDENTITY)
-expect("a pod labelled like the console is refused (its egress is open)", g, "console-impostor", "fail", AS_CONSOLE)
-expect("so is a Deployment whose template is labelled like it", g, "deploy-console-impostor", "fail", AS_CONSOLE)
+expect("a pod labelled like the console is refused (its egress is open)", g, "console-impostor", "fail", AS_LABEL)
+expect("so is a Deployment whose template is labelled like it", g, "deploy-console-impostor", "fail", AS_LABEL)
+expect("a pod labelled like guard-proxy is refused (agentgateway :3000 admits it: the agent, unguarded)", g,
+       "guard-proxy-impostor", "fail", AS_LABEL)
+expect("a pod labelled like workshop-agent is refused (agentgateway :3002 admits it: the model, unguarded)", g,
+       "workshop-agent-impostor", "fail", AS_LABEL)
+expect("a pod labelled like agentgateway is refused (workshop-agent :8080 admits it)", g,
+       "agentgateway-impostor", "fail", AS_LABEL)
 expect("a pod on the default ServiceAccount with ordinary labels passes", g, "plain", "pass")
 expect("outside the agent namespace no association exists, so it is not in scope", g, "elsewhere", "ignored")
 g = run(SPAWN, [kp.C2_MANIFEST], user="agent-sa")

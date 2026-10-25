@@ -1,5 +1,5 @@
 # ABOUTME: Structural control on the AI plane's bypass (#490): a workload the agent creates in its own namespace
-# ABOUTME: may not borrow a Bedrock identity, nor wear the one label a NetworkPolicy opens to the internet.
+# ABOUTME: may not borrow a Bedrock identity, nor wear a label a NetworkPolicy trusts (egress or ingress).
 #
 # The bypass this closes. The agent (agent-sa, which both workshop-agent and workshop-mcp run as) can create
 # Pods and Deployments in `agent`. A pod it makes there can reach a model around every guard-proxy toggle by
@@ -16,22 +16,26 @@
 #     allows are additive, and platform-console-egress (gitops/ai-layer/resources.yaml) gives `egress: [{}]`
 #     to any pod labelled app.kubernetes.io/name=console. A label is the creator's to choose.
 #
+# A third route ran through the platform's own pods (#552): agentgateway's :3002 bind signs Bedrock calls with
+# its own credentials, and agentgateway :3000 and workshop-agent :8080 are the agent over A2A without
+# guard-proxy's guards. gitops/ai-layer/chat-path-ingress.yaml now admits those ports only from the hop before
+# them, by label: guard-proxy to agentgateway, agentgateway to workshop-agent, workshop-agent to agentgateway.
+# Those labels are as forgeable as the console's, so they are refused the same way.
+#
 # So the rule is on who asks, which the API server authenticates and the agent cannot forge: a request from
 # a ServiceAccount of the agent namespace may not create or change a pod (or, through autogen, a Deployment,
 # StatefulSet, DaemonSet, ReplicaSet, Job or CronJob) that runs as a Bedrock-bound ServiceAccount or carries
-# a label an egress allow selects. Nothing on the guarded path is caught by it: ArgoCD, the kagent controller
+# a label a NetworkPolicy selects. Nothing on the guarded path is caught by it: ArgoCD, the kagent controller
 # and the kube controllers that create the real pods are not agent-namespace identities. web-terminal is the
 # attendee's own terminal, not the agent's, and is left out on purpose.
 #
 # SHIPS AS DENY, unlike deny-llm-endpoint-bypass. That policy matches on pod content, so a wrong expression
 # could have failed guard-proxy itself; this one matches only requests from the agent's identities, and no
 # workload the agent legitimately makes (C2's villain Deployment included) runs as one of these accounts or
-# carries the console label. A report of a bypass that already ran is not a control.
+# carries one of these labels. A report of a bypass that already ran is not a control.
 #
-# Not closed here, and filed as follow-ups: a shell the agent already has in a pod that runs as agent-sa
-# (workshop-mcp's run_shell) holds the same credentials with no new pod at all; and a pod this policy admits
-# can still call agentgateway's :3002 model bind, or the agent's A2A port, over the intra-namespace allow,
-# since nothing restricts ingress to either.
+# Not closed here, and filed as a follow-up: a shell the agent already has in a pod that runs as agent-sa
+# (workshop-mcp's run_shell) holds the same credentials with no new pod at all.
 #
 # Background evaluation is off: the rule reads request.userInfo, which exists only at admission.
 #
@@ -48,8 +52,8 @@ metadata:
     policies.kyverno.io/category: Workshop / AI plane
     policies.kyverno.io/description: >-
       A workload the agent creates in its own namespace may not run as a ServiceAccount that holds Bedrock
-      credentials, and may not carry a label that a NetworkPolicy opens to the internet. Either one lets the
-      agent reach a model around guard-proxy.
+      credentials, and may not carry a label that a NetworkPolicy trusts. Either one lets the agent reach a
+      model around guard-proxy.
 spec:
   validationActions:
     - Deny
@@ -81,9 +85,10 @@ spec:
     # The ServiceAccounts with an EKS Pod Identity association in namespace `agent`.
     - name: modelIdentities
       expression: "['agent-sa', 'agentgateway', 'web-terminal']"
-    # Every label a NetworkPolicy in namespace `agent` selects pods on, with the values it matches.
+    # Every label a NetworkPolicy in namespace `agent` selects pods on, with the values it matches: console for
+    # platform-console-egress, the other three for chat-path-ingress (a peer it trusts, or a pod it guards).
     - name: egressLabels
-      expression: "{'app.kubernetes.io/name': ['console']}"
+      expression: "{'app.kubernetes.io/name': ['agentgateway', 'console', 'guard-proxy', 'workshop-agent']}"
     - name: labels
       expression: "object.metadata.?labels.orValue({})"
   validations:
@@ -97,5 +102,7 @@ spec:
     - expression: >-
         !variables.egressLabels.exists(k, k in variables.labels && variables.labels[k] in variables.egressLabels[k])
       message: >-
-        A workload the agent creates may not carry a label that a NetworkPolicy opens to the internet
-        (app.kubernetes.io/name=console). That pod could reach a public model API, around guard-proxy.
+        A workload the agent creates may not carry a label that a NetworkPolicy trusts
+        (app.kubernetes.io/name=agentgateway, app.kubernetes.io/name=console, app.kubernetes.io/name=guard-proxy,
+        app.kubernetes.io/name=workshop-agent). That pod could reach a public model API, agentgateway's model
+        bind or the agent itself, around guard-proxy.

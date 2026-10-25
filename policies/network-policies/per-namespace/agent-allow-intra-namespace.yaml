@@ -3,7 +3,9 @@
 #
 # Egress-only on purpose: the agent-egress-allowlist makes agent pods default-deny-egress, which would
 # otherwise block the in-namespace hops above (agentgateway's 3000/3001 are not in the in-VPC port set).
-# Ingress to the agent layer is left untouched so the entry path (web UI / port-forward) keeps working.
+# Ingress to the agent layer is not this file's business. The chat path's own ports (agentgateway :3000 and
+# :3002, workshop-agent :8080) admit only the hop before them, on every profile, by
+# gitops/ai-layer/chat-path-ingress.yaml (#552); everything else in the namespace stays reachable.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:

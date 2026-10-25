@@ -1,0 +1,70 @@
+# ABOUTME: Ingress on the chat path (#552): agentgateway's A2A and model binds, and the agent's A2A port, admit only
+# ABOUTME: the hop before them, so a pod the agent creates cannot reach the model or the agent around guard-proxy.
+#
+# The bypass this closes. agent-allow-intra-namespace lets every pod in `agent` reach every pod there on any port,
+# and until now nothing restricted ingress to agentgateway or workshop-agent. A pod restrict-agent-spawned-workloads
+# admits (default ServiceAccount, ordinary labels) could therefore:
+#   * POST to agentgateway :3002/bedrock, which signs the call with agentgateway's own Pod Identity credentials:
+#     a model with no guard at all;
+#   * send A2A to agentgateway :3000, or to workshop-agent :8080 directly, which is BurritoBot with guard-proxy's
+#     input and output guards out of the path.
+#
+# So each of those ports admits only the hop that is meant to call it:
+#   guard-proxy --:3000--> agentgateway --:8080--> workshop-agent --:3002--> agentgateway (gateway-* ModelConfigs)
+#   kagent namespace --:8080--> workshop-agent (the controller's A2A proxy behind the kagent UI)
+# The other agentgateway binds stay open to every pod, because their callers are wider than one label:
+#   * :3001 and :3003 are the MCP fronts. workshop-agent calls them, the kagent controller lists their tools from
+#     the RemoteMCPServer urls, and C7's fallback (challenges/03-bad-mcp-excessive-agency/fallback.curl.sh) calls
+#     :3003 from the web terminal. A tool call reaches a tool server, not a model.
+#   * :15021 and :15022 are the two containers' readiness listeners (the liveness probes' ports).
+# Kubelet probes come from the node, which the VPC CNI's policy agent admits by itself, so :3000's readiness probe
+# needs no rule here. Any port not named below is closed: agentgateway's stats (:15020) has no scraper.
+#
+# Each label these rules trust is one the agent could otherwise put on a pod of its own, so every one of them is
+# in restrict-agent-spawned-workloads' egressLabels, and the agent is refused a pod wearing it.
+# verify/test_agent_bypass_shapes.py holds that list to these selectors; verify/test_chat_path_ingress.py holds the
+# rules to the callers named above; verify/test_llm_bypass_live.py reads them off a live cluster.
+#
+# Ingress only, and in the ai-layer bundle rather than policies/network-policies/: this is the shape of the chat
+# path, not a challenge's control, so it ships on every profile and is never the student's to apply.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentgateway-ingress
+  labels: { app.kubernetes.io/name: agentgateway }
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: agentgateway }
+  policyTypes: [Ingress]
+  ingress:
+    # A2A: every chat message, from guard-proxy only (its AGENT_URL).
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: guard-proxy } }
+      ports: [{ protocol: TCP, port: 3000 }]
+    # Inference: the gateway-* ModelConfigs, from the agent's own pod only.
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: workshop-agent } }
+      ports: [{ protocol: TCP, port: 3002 }]
+    # The MCP fronts and the readiness listeners, from anywhere.
+    - ports:
+        - { protocol: TCP, port: 3001 }
+        - { protocol: TCP, port: 3003 }
+        - { protocol: TCP, port: 15021 }
+        - { protocol: TCP, port: 15022 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: workshop-agent-ingress
+  labels: { app.kubernetes.io/name: workshop-agent }
+spec:
+  # The label kagent puts on the agent's pod, the one fleet.sh finds it by (AGENT_POD_SELECTOR).
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: workshop-agent }
+  policyTypes: [Ingress]
+  ingress:
+    # A2A, from agentgateway's :3000 route and from the kagent controller. Nothing else in `agent` calls the agent.
+    - from:
+        - podSelector: { matchLabels: { app.kubernetes.io/name: agentgateway } }
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kagent } }
+      ports: [{ protocol: TCP, port: 8080 }]

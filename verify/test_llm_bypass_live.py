@@ -34,7 +34,16 @@ judged by the controls that do catch them:
   * a Pod running as agentgateway, the gateway's Bedrock identity -> refused
   * a Pod labelled app.kubernetes.io/name=console, whose egress platform-console-egress opens -> refused
 "No egress to the internet" is read off the live NetworkPolicies: some Egress policy selects the pod, and no
-policy that selects it allows a peer outside private address space. No packet is sent.
+policy that selects it allows a peer outside private address space. No packet is sent for that.
+
+Why (#552). A pod the policy admits could still reach the model through agentgateway's :3002 bind, or the agent
+over A2A through agentgateway :3000 or workshop-agent :8080, all around guard-proxy. chat-path-ingress admits those
+ports only from the hop before them, by label, so:
+  * a Pod labelled like guard-proxy, workshop-agent or agentgateway (the peers it trusts) -> refused
+  * the plain pod above, on the default ServiceAccount, is admitted to none of the three ports, read off the live
+    policies, and its TCP connection to each times out (a bare GET /, which matches no model route)
+  * guard-proxy still connects to agentgateway :3000, the agent and the gateway are Ready (their probes get in),
+    and the live policies admit workshop-agent to :3002 and agentgateway and the kagent namespace to :8080
 
 Before any of that, the policy on the cluster must be the one in policies/kyverno/: a result for a
 different expression says nothing about this repo's file.
@@ -62,7 +71,7 @@ MESSAGE = "This pod sets an LLM endpoint pointing at a public API."
 SPAWN_FILE = REPO / "policies/kyverno/restrict-agent-spawned-workloads.yaml"
 SPAWN = "restrict-agent-spawned-workloads"
 AS_IDENTITY = "may not run as a ServiceAccount that holds Bedrock credentials"
-AS_CONSOLE = "may not carry a label that a NetworkPolicy opens to the internet"
+AS_LABEL = "may not carry a label that a NetworkPolicy trusts"
 AGENT = "system:serviceaccount:agent:agent-sa"
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
@@ -240,9 +249,9 @@ def as_sa(obj: dict, sa: str) -> dict:
     return obj
 
 
-def console_pod() -> dict:
-    p = pod(f"llm-console-impostor-{RUN}", "console-label", pod_spec([container("c", {})]))
-    p["metadata"]["labels"]["app.kubernetes.io/name"] = "console"
+def labelled_pod(app: str) -> dict:
+    p = pod(f"llm-{app}-impostor-{RUN}", f"{app}-label", pod_spec([container("c", {})]))
+    p["metadata"]["labels"]["app.kubernetes.io/name"] = app
     return p
 
 
@@ -253,8 +262,14 @@ REFUSED = [  # (what it is, object, the refusal's message)
     ("a Pod running as agentgateway, the gateway's Bedrock identity",
      as_sa(pod(f"llm-bedrock-gw-{RUN}", "bedrock-agentgateway", pod_spec([container("c", {})])), "agentgateway"),
      AS_IDENTITY),
-    ("a Pod labelled app.kubernetes.io/name=console, whose egress is open", console_pod(), AS_CONSOLE),
+    ("a Pod labelled app.kubernetes.io/name=console, whose egress is open", labelled_pod("console"), AS_LABEL),
+    ("a Pod labelled like guard-proxy, which agentgateway :3000 admits", labelled_pod("guard-proxy"), AS_LABEL),
+    ("a Pod labelled like workshop-agent, which agentgateway :3002 admits", labelled_pod("workshop-agent"), AS_LABEL),
+    ("a Pod labelled like agentgateway, which workshop-agent :8080 admits", labelled_pod("agentgateway"), AS_LABEL),
 ]
+# The chat path's guarded ports (#552): (target app, port, the peer chat-path-ingress admits there).
+GUARDED_PORTS = [("agentgateway", 3000, "guard-proxy"), ("agentgateway", 3002, "workshop-agent"),
+                 ("workshop-agent", 8080, "agentgateway")]
 
 
 def selects(sel: dict, pod_labels: dict) -> bool:
@@ -286,6 +301,57 @@ def internet_paths(pod_labels: dict) -> list[str]:
                 if cidr and not ipaddress.ip_network(cidr, strict=False).is_private:
                     out.append(f"{np['metadata']['name']} allows {cidr}")
     return out
+
+
+def admitted(target: dict, port: int, peer_labels: dict, peer_ns: str = NS) -> list[str]:
+    """The live ingress rules that let a pod with peer_labels in peer_ns reach the target Pod on port. With no
+    Ingress policy selecting the target, everything is admitted, which is said too."""
+    tlabels = target["metadata"].get("labels") or {}
+    named = {p.get("name"): p["containerPort"] for c in target["spec"]["containers"] for p in c.get("ports") or []}
+    nps = (kjson("get", "networkpolicies.networking.k8s.io", "-n", NS) or {"items": []})["items"]
+    ingress = [np for np in nps if "Ingress" in (np["spec"].get("policyTypes") or [])
+               and selects(np["spec"].get("podSelector") or {}, tlabels)]
+    if not ingress:
+        return ["no Ingress NetworkPolicy selects it, so every pod is admitted"]
+    peer_ns_labels = ((kjson("get", "namespace", peer_ns) or {}).get("metadata") or {}).get("labels") or {}
+    out = []
+    for np in ingress:
+        for i, rule in enumerate(np["spec"].get("ingress") or []):
+            ports = rule.get("ports")
+            if ports and not any(named.get(p.get("port"), p.get("port")) == port and p.get("protocol", "TCP") == "TCP"
+                                 for p in ports):
+                continue
+            peers = rule.get("from")
+            for peer in peers or [{}]:
+                if not peers:
+                    ok = True
+                elif "ipBlock" in peer:
+                    ok = True  # an address range admits pods by IP, whatever their labels
+                else:
+                    ns_ok = (selects(peer["namespaceSelector"], peer_ns_labels) if "namespaceSelector" in peer
+                             else peer_ns == NS)
+                    ok = ns_ok and selects(peer.get("podSelector") or {}, peer_labels)
+                if ok:
+                    out.append(f"{np['metadata']['name']} ingress[{i}]")
+                    break
+    return out
+
+
+def connects(where: list[str], url: str) -> tuple[bool | None, str]:
+    """Run a bare GET from inside a pod. True: the port answered (any HTTP answer, 404 included, or a refusal,
+    which also means the packet got there). False: it timed out, which is a NetworkPolicy drop on the VPC CNI.
+    None: the probe itself did not run, or failed some other way (DNS, exec), which proves neither."""
+    r = kubectl("-n", NS, "exec", *where, "--", *(
+        ["python3", "-c", "import sys,urllib.request,urllib.error\n"
+                          "try: urllib.request.urlopen(sys.argv[1],timeout=5)\n"
+                          "except urllib.error.HTTPError: pass\n", url]
+        if "deploy/guard-proxy" in where else ["wget", "-T", "5", "-q", "-O", "/dev/null", url]))
+    out = " ".join((r.stderr + " " + r.stdout).split())
+    if r.returncode == 0 or "server returned error" in out or "refused" in out.lower():
+        return True, out
+    if "timed out" in out.lower():
+        return False, out
+    return None, out
 
 
 def results_by_uid() -> dict[str, dict]:
@@ -346,6 +412,38 @@ try:
     paths = internet_paths({**labels("console-label"), "app.kubernetes.io/name": "console"})
     check("the console label really does open egress (why the policy refuses it)", bool(paths),
           "no live NetworkPolicy opens egress for app.kubernetes.io/name=console; update the policy's egressLabels")
+
+    print("== the chat path admits only the hop before it (#552) ==")
+    plain = f"llm-default-endpoint-{RUN}"
+    r = kubectl("-n", NS, "wait", "--for=condition=Ready", f"pod/{plain}", "--timeout=120s")
+    plain_ready = r.returncode == 0
+    check(f"the plain pod {plain} is Ready (default ServiceAccount, ordinary labels)", plain_ready,
+          (r.stderr or r.stdout).strip())
+    targets = {}
+    for app in ("agentgateway", "workshop-agent", "guard-proxy"):
+        pods = (kjson("get", "pods", "-n", NS, "-l", f"app.kubernetes.io/name={app}") or {"items": []})["items"]
+        ready = [p for p in pods if any(c.get("type") == "Ready" and c.get("status") == "True"
+                                        for c in (p.get("status") or {}).get("conditions") or [])]
+        check(f"{app} has a Ready pod (its probes get through its ingress policy)", bool(ready),
+              f"{len(pods)} pod(s), none Ready")
+        if ready:
+            targets[app] = ready[0]
+    for app, port, peer in GUARDED_PORTS:
+        if app not in targets:
+            continue
+        via = admitted(targets[app], port, labels("default-endpoint"))
+        check(f"the live policies admit the plain pod to {app} :{port} by no rule", not via, "; ".join(via))
+        via = admitted(targets[app], port, targets[peer]["metadata"]["labels"]) if peer in targets else []
+        check(f"they admit {peer}'s pod to {app} :{port}", bool(via), "no ingress rule admits it")
+        if plain_ready:
+            ok, out = connects([plain, "-c", "c"], f"http://{app}.{NS}.svc.cluster.local:{port}/")
+            check(f"the plain pod's connection to {app} :{port} is dropped", ok is False, out or "it connected")
+    if "workshop-agent" in targets:
+        via = admitted(targets["workshop-agent"], 8080, {}, peer_ns="kagent")
+        check("they admit the kagent namespace (the controller's A2A proxy) to workshop-agent :8080", bool(via),
+              "no ingress rule admits it")
+    ok, out = connects(["deploy/guard-proxy", "-c", "proxy"], f"http://agentgateway.{NS}.svc.cluster.local:3000/")
+    check("guard-proxy still connects to agentgateway :3000", ok is True, out)
     for what, obj, message in REFUSED:
         r = kubectl("create", f"--as={AGENT}", "-f", "-", stdin=json.dumps(obj))
         err = " ".join(((r.stderr or "") + " " + (r.stdout or "")).split())
