@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| Copied out | 2026-10-24 |
+| Copied out | 2026-10-25 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `78afdb28cfbe44962d45aaf2cef58b139dd25d52` (the last commit to change lab.html, on 2026-10-25) |
-| Source blob | `55cd288826b2505dc275593fadd488272d12064c` |
+| Source commit | `411e408d7c1a0a29f6b9c6c0d6e50c4130a404d5` (the last commit to change lab.html, on 2026-10-25) |
+| Source blob | `368260ed8238d2f3fccd9b12edf6fe711079613d` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -62,7 +62,7 @@ This is your lab and you will spend the workshop here: instructions on the left,
 
 **▸ Open BurritoBot**
 
-> ⚠ The prompts you send BurritoBot may be shown on the instructor screen during the workshop, so the room can get inspiration from what other folks are attempting. Please do not tell BurritoBot anything personal or confidential.
+> ⚠ The prompts you send BurritoBot may be shown on the instructor screen during the workshop, so the room can get inspiration from what other folks are attempting. The lab also records which steps, hints and commands you open (never what you type), and the instructors keep your prompts after the workshop to improve it. Please do not tell BurritoBot anything personal or confidential.
 >
 > There is a BurritoBot button at the top right of this page. Press it.
 >
