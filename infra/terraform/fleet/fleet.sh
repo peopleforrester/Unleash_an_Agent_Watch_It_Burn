@@ -914,6 +914,12 @@ PYEOF
 # pin, and this points the live .spec.model at the cluster's ARN for that id. ai-layer ignores that one
 # field on Bedrock ModelConfigs, so selfHeal keeps the ARN.
 #
+# The gateway path too (#561). The opt-in gateway-* ModelConfigs speak OpenAI to agentgateway and name a
+# backend, not a model; the bedrock backend reads its model from an env var of the agentgateway container
+# (`model: ${VAR}` in agentgateway-config), which commits the system id the same way. That env entry gets
+# the cluster's ARN here and is ignored by name in ai-layer, so a cluster switched to gateway-bedrock-nova
+# bills tagged too.
+#
 # Re-derived from the committed id every time, so a model change in git reaches the cluster on the next
 # bootstrap or converge. A committed id with no profile in the state (a new model, or a cluster applied
 # before #513) is a failure, not a pass: leaving the system id in place is exactly the untagged spend.
@@ -926,44 +932,105 @@ for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
 PYEOF
 }
 
+# "<env var> <model>" for each bedrock backend in agentgateway-config, the model being the committed value of
+# the agentgateway container's env var that `model: ${VAR}` names. A backend that names its model inline
+# prints "- <model>", and one whose variable the container does not set prints "<var> -": both fail the pin.
+bedrock_gateway_models() {
+    python3 - "${REPO_ROOT}/gitops/ai-layer/agentgateway.yaml" <<'PYEOF'
+import re, sys, yaml
+docs = [d for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")) if d]
+cm = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == "agentgateway-config")
+dep = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "agentgateway")
+env = {e["name"]: e.get("value") or "-" for c in dep["spec"]["template"]["spec"]["containers"]
+       if c["name"] == "agentgateway" for e in c.get("env", [])}
+for b in yaml.safe_load(cm["data"]["config.yaml"]).get("binds", []):
+    for listener in b.get("listeners", []):
+        for route in listener.get("routes", []):
+            for backend in route.get("backends", []):
+                bedrock = ((backend.get("ai") or {}).get("provider") or {}).get("bedrock")
+                if bedrock is None:
+                    continue
+                model = str(bedrock.get("model") or "-")
+                ref = re.fullmatch(r"\$\{(\w+)\}", model)
+                print(ref.group(1), env.get(ref.group(1), "-")) if ref else print("-", model)
+PYEOF
+}
+
+# The live model of one pin target, and setting it. $2 is modelconfig (the Bedrock ModelConfig named $3) or
+# gateway (the agentgateway container's env var $3).
+_live_bedrock_model() {
+    local kcfg="$1" kind="$2" target="$3"
+    if [[ "${kind}" == modelconfig ]]; then
+        KUBECONFIG="${kcfg}" kubectl -n agent get modelconfig "${target}" -o jsonpath='{.spec.model}' 2>/dev/null || true
+    else
+        KUBECONFIG="${kcfg}" kubectl -n agent get deployment agentgateway -o \
+            jsonpath="{.spec.template.spec.containers[?(@.name==\"agentgateway\")].env[?(@.name==\"${target}\")].value}" \
+            2>/dev/null || true
+    fi
+}
+_set_bedrock_model() {
+    local kcfg="$1" kind="$2" target="$3" arn="$4"
+    if [[ "${kind}" == modelconfig ]]; then
+        KUBECONFIG="${kcfg}" kubectl -n agent patch modelconfig "${target}" --type merge \
+            -p "$(jq -cn --arg a "${arn}" '{spec: {model: $a}}')" >/dev/null 2>&1
+    else
+        # A pod-template change, so the gateway rolls (maxUnavailable 0) and the new pod reads the ARN.
+        KUBECONFIG="${kcfg}" kubectl -n agent set env deployment/agentgateway -c agentgateway \
+            "${target}=${arn}" >/dev/null 2>&1
+    fi
+}
+
 pin_bedrock_profiles() {
-    local name="$1" kcfg="$2" map configs cfg model arn live bad=0 deadline
+    local name="$1" kcfg="$2" map targets gateway kind target model label arn live bad=0 deadline
     map="$(terraform -chdir="${CLUSTER_DIR}" output -state="${STATE_DIR}/${name}.tfstate" \
         -json bedrock_application_profiles 2>/dev/null || true)"
     if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<<"${map}"; then
         log "  ${name}: ${name}.tfstate has no bedrock_application_profiles; re-apply the cluster so its Bedrock spend is tagged"
         record_fail "${name}:bedrock-profiles"; return 1
     fi
-    configs="$(bedrock_modelconfigs 2>/dev/null || true)"
-    if [[ -z "${configs}" ]]; then
+    targets="$(bedrock_modelconfigs 2>/dev/null | sed 's/^/modelconfig /' || true)"
+    if [[ -z "${targets}" ]]; then
         log "  ${name}: no Bedrock ModelConfig read from gitops/ai-layer/resources.yaml"
         record_fail "${name}:bedrock-profiles"; return 1
     fi
-    while read -r cfg model; do
+    gateway="$(bedrock_gateway_models 2>/dev/null | sed 's/^/gateway /' || true)"
+    if [[ -z "${gateway}" ]]; then
+        log "  ${name}: no bedrock backend read from agentgateway-config in gitops/ai-layer/agentgateway.yaml"
+        record_fail "${name}:bedrock-profiles"; return 1
+    fi
+    while read -r kind target model; do
+        if [[ "${kind}" == modelconfig ]]; then label="ModelConfig ${target}"; else label="agentgateway's ${target}"; fi
+        if [[ "${target}" == "-" ]]; then
+            log "  ${name}: agentgateway's bedrock backend names ${model} inline, so it cannot be pinned; read it from a container env var"
+            bad=1; continue
+        fi
+        if [[ "${model}" == "-" ]]; then
+            log "  ${name}: agentgateway's bedrock backend reads ${target}, which the agentgateway container does not set"
+            bad=1; continue
+        fi
         arn="$(jq -r --arg m "${model}" '.[$m] // empty' <<<"${map}")"
         if [[ -z "${arn}" ]]; then
-            log "  ${name}: ModelConfig ${cfg} pins ${model}, which has no application profile on this cluster"
+            log "  ${name}: ${label} pins ${model}, which has no application profile on this cluster"
             bad=1; continue
         fi
         # Argo creates the ModelConfigs a few minutes into a bootstrap; wait for them rather than fail.
         deadline=$(( SECONDS + ${WIB_MODELCONFIG_WAIT:-300} ))
-        live="$(KUBECONFIG="${kcfg}" kubectl -n agent get modelconfig "${cfg}" -o jsonpath='{.spec.model}' 2>/dev/null || true)"
+        live="$(_live_bedrock_model "${kcfg}" "${kind}" "${target}")"
         while [[ -z "${live}" ]] && (( SECONDS < deadline )); do
             sleep "${WIB_MODELCONFIG_POLL:-10}"
-            live="$(KUBECONFIG="${kcfg}" kubectl -n agent get modelconfig "${cfg}" -o jsonpath='{.spec.model}' 2>/dev/null || true)"
+            live="$(_live_bedrock_model "${kcfg}" "${kind}" "${target}")"
         done
         [[ "${live}" == "${arn}" ]] && continue
         if [[ -z "${live}" ]]; then
-            log "  ${name}: ModelConfig ${cfg} never appeared in agent; its tagged profile is not pinned"
+            log "  ${name}: ${label} never appeared in agent; its tagged profile is not pinned"
             bad=1; continue
         fi
-        if KUBECONFIG="${kcfg}" kubectl -n agent patch modelconfig "${cfg}" --type merge \
-            -p "$(jq -cn --arg a "${arn}" '{spec: {model: $a}}')" >/dev/null 2>&1; then
-            log "  ${name}: ModelConfig ${cfg} now calls ${arn} (tagged copy of ${model})"
+        if _set_bedrock_model "${kcfg}" "${kind}" "${target}" "${arn}"; then
+            log "  ${name}: ${label} now calls ${arn} (tagged copy of ${model})"
         else
-            log "  ${name}: could not point ModelConfig ${cfg} at ${arn}"; bad=1
+            log "  ${name}: could not point ${label} at ${arn}"; bad=1
         fi
-    done <<<"${configs}"
+    done <<<"${targets}"$'\n'"${gateway}"
     [[ "${bad}" -eq 0 ]] || { record_fail "${name}:bedrock-profiles"; return 1; }
 }
 

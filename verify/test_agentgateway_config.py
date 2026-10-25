@@ -260,6 +260,46 @@ c7_bind_ports = {b["port"] for b in (yaml.safe_load(c7_text) or {}).get("binds",
 check("the C7 container declares its bind and its readiness port, and nothing the first one holds",
       c7_ports == c7_bind_ports | {ready_port} and not (c7_ports & main_ports))
 
+print("== the bedrock backend's model is pinned through the container env (#561) ==")
+# agentgateway v1.5.0 runs the whole config file through shellexpand::full before parsing it
+# (crates/agentgateway/src/config.rs, parse_config), so a $VAR or ${VAR} its container does not set fails the
+# whole config at startup, comments included. That is what lets the model come from the env, and why every
+# reference has to resolve.
+import re  # noqa: E402
+
+REF = re.compile(r"\$\{?([A-Za-z_][A-Za-z0-9_]*)")
+containers = {c["name"]: c for c in deployment["spec"]["template"]["spec"]["containers"]}
+for cm_name, container in (("agentgateway-config", "agentgateway"), ("agentgateway-c7-config", "agentgateway-c7")):
+    text = next(d for d in docs if d["kind"] == "ConfigMap" and d["metadata"]["name"] == cm_name)["data"]["config.yaml"]
+    cenv = {e["name"] for e in containers.get(container, {}).get("env", [])}
+    refs = set(REF.findall(text))
+    check(f"every variable {cm_name} reads is set on the {container} container ({sorted(refs - cenv)} unset)",
+          refs <= cenv)
+bedrock_backends = [be["ai"]["provider"]["bedrock"] for b in config["binds"] for l in b["listeners"] for r in l["routes"]
+                    for be in r["backends"] if "bedrock" in (be.get("ai") or {}).get("provider", {})]
+check(f"there is one bedrock backend ({len(bedrock_backends)})", len(bedrock_backends) == 1)
+main_env = {e["name"]: e.get("value", "") for e in containers["agentgateway"].get("env", [])}
+tiers = re.search(r"bedrock_tiers\s*=\s*\{(.*?)\}", (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8"), re.S)
+tier_ids = set(re.findall(r'=\s*"([^"]+)"', tiers.group(1))) if tiers else set()
+for bedrock in bedrock_backends:
+    model = str(bedrock.get("model", ""))
+    ref = re.fullmatch(r"\$\{(\w+)\}", model)
+    # Inline, the model is a system profile, which cannot be tagged, and fleet.sh has nothing to set.
+    check(f"its model is a ${{VAR}} reference, not an inline id (found {model!r})", ref is not None)
+    committed = main_env.get(ref.group(1), "") if ref else ""
+    check(f"the variable is committed to a system profile id the cluster root copies into a tagged profile "
+          f"(found {committed!r})", committed in tier_ids)
+    # Live the variable holds an application profile ARN. The provider puts it into the URL path and escapes
+    # its '/' as %2F (crates/llm/src/bedrock.rs, get_path_for_route, read at tag v1.5.0); that is a property
+    # of the binary, confirmed live by a call through gateway-bedrock-nova, not something this file can test.
+    arn = "arn:aws:bedrock:us-west-2:111122223333:application-inference-profile/abcd1234efgh"
+    expanded = yaml.safe_load(cm["data"]["config.yaml"].replace(model, arn))
+    try:
+        validate(expanded, root, root)
+        check("the config validates with the ARN in place", True)
+    except Invalid as e:
+        check(f"the config validates with the ARN in place ({e})", False)
+
 print("== the inference bind is what the toggle switches between ==")
 bind = next((b for b in config["binds"] if b["port"] == 3002), None)
 check("there is an inference bind on :3002", bind is not None)

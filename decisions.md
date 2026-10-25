@@ -1938,3 +1938,38 @@ would answer and look like a pass. Then one `[[wib-probe]]` chat turn goes to gu
 through `kubectl exec`. A reply there, with the config naming the ARN, is the tag-conditioned grant honoured
 at invoke time. `test_bedrock_profile_live.py` runs it in the E2E suite. `test_bedrock_profile_check.py`
 (offline) checks the judges and whole runs against a stand-in aws and kubectl. Not run on a cluster here.
+## 2026-10-25 · #561 · agentgateway's bedrock backend calls the cluster's tagged profile, through a container env var
+
+#513 tagged Bedrock spend on the direct path and left the gateway path out: the opt-in gateway-* ModelConfigs
+name an agentgateway backend, and the bedrock-nova backend named the system profile `us.amazon.nova-pro-v1:0`
+inline, so a cluster switched to `gateway-bedrock-nova` billed untagged again.
+
+- **The model comes from the env, not the config text.** The backend reads `model: ${BEDROCK_NOVA_MODEL}`, and
+  the agentgateway container commits `BEDROCK_NOVA_MODEL=us.amazon.nova-pro-v1:0`, the pin. agentgateway v1.5.0
+  runs the whole config file through `shellexpand::full` before parsing it (`crates/agentgateway/src/config.rs`,
+  `parse_config`), and an unset variable fails the config. Read at tag v1.5.0 on 2026-10-25.
+- **`pin_bedrock_profiles` sets it.** It now pins the Bedrock ModelConfigs and agentgateway's env in one pass,
+  from the same `bedrock_application_profiles` output, with the same wait, and fails the cluster the same ways:
+  no tagged copy for the committed id, a bedrock backend that names its model inline, or a variable the container
+  does not set. Setting it is `kubectl set env` on the agentgateway container, which rolls the gateway
+  (maxUnavailable 0). It only sets it when the live value differs, so converge does not roll the gateway each time.
+- **One env entry is ignored, by name.** ai-layer ignores the `BEDROCK_NOVA_MODEL` entry of the agentgateway
+  container and nothing else of the Deployment. A separate ConfigMap for the inference bind, as C7 has (#514), was
+  the other shape. It would have put the whole LLM route config out of GitOps on every cluster, because Argo can
+  only ignore a ConfigMap's config string whole. A ConfigMap that fleet.sh creates outside git would leave the
+  gateway unable to start until fleet.sh runs, and that would take the A2A and workshop-mcp hops down with it.
+- **The ARN in the URL path.** The bedrock provider builds `/model/{model}/converse` and percent-encodes only `/`
+  and `%` in the model (`crates/llm/src/bedrock.rs`, `get_path_for_route`), so the ARN goes out as
+  `arn:aws:bedrock:<region>:<acct>:application-inference-profile%2F<id>`. Upstream's own tests send an
+  application-profile ARN in exactly that form, and the request model is replaced by the provider's `model`
+  (`override_model` in `crates/agentgateway/src/llm/mod.rs`). Signing uses the aws-sigv4 defaults, as it already
+  does for the colon in the system id.
+- **IAM needs nothing new.** The agentgateway ServiceAccount already has the agent's Bedrock role (#394), and
+  that role's #513 statement allows this cluster's `consumer=agent` application profiles.
+- **Tests.** `verify/test_pin_bedrock_profiles.sh` now pins the gateway env on a fresh cluster, leaves it alone
+  when it is already pinned, and fails on a missing env, an inline model and an unset variable.
+  `verify/test_agentgateway_config.py` holds the backend to a `${VAR}` reference that resolves on its container,
+  committed to an id the cluster root copies. `verify/test_c7_gateway_toggle.py` allows that one env ignore on
+  the agentgateway Deployment and nothing else of it. `verify/test_gateway_bedrock_tagged_live.py` (E2E) reads the
+  live env and the running pod's, and makes one 5-token call through :3002 from the workshop-agent pod: a 200 is
+  what confirms Bedrock takes the escaped ARN. Not run on a cluster here.

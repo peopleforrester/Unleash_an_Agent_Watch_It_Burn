@@ -443,8 +443,8 @@ locals {
 #
 # One per tier per cluster. The ARN ends in an id Bedrock picks, so the gitops ModelConfigs cannot name it:
 # they keep the system profile id, which stays the pin (model_pin_check.py, guard-proxy's MODEL_TIER), and
-# fleet.sh pin_bedrock_profiles points each live Bedrock ModelConfig at this cluster's ARN from the output
-# below. `consumer` keeps the agent's grant off the tutor's profile and the other way round.
+# fleet.sh pin_bedrock_profiles points each live Bedrock ModelConfig, and agentgateway's bedrock backend
+# (#561), at this cluster's ARN from the output below. `consumer` keeps the agent's grant off the tutor's profile and the other way round.
 resource "aws_bedrock_inference_profile" "agent" {
   for_each = local.bedrock_tiers
 

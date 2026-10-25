@@ -56,7 +56,9 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
   tier (`aws_bedrock_inference_profile.agent`, `<cluster>-nova` and so on, plus `<cluster>-tutor`),
   copied from the system profile and tagged with the fleet tags plus `consumer=agent|tutor`.
   `fleet.sh` points the live Bedrock ModelConfigs at those ARNs on bootstrap and converge
-  (`pin_bedrock_profiles`). The `project` and `event` tags only split the bill once they are activated
+  (`pin_bedrock_profiles`), and agentgateway's bedrock backend with them: its model is the
+  `BEDROCK_NOVA_MODEL` env of the agentgateway container, which gets the cluster's nova ARN, so a cluster
+  switched to the gateway-* ModelConfigs bills tagged too (#561). The `project` and `event` tags only split the bill once they are activated
   as cost-allocation tags in Billing (#392).
 - **S3 buckets** - `aws s3api put-bucket-tagging` in `games/eso-s3-exfil/s3-hoop-setup.sh`.
 - **Secrets Manager** - `--tags` on `create-secret` in `games/eso-s3-exfil/plant-trophy.sh`.

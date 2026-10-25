@@ -20,7 +20,8 @@
 #   - :3001 every workshop-mcp tool call: the workshop-mcp RemoteMCPServer url is agentgateway:3001/mcp.
 #     Measured live 2026-09-05 (386 request log lines in the first hour on a fresh attendee cluster).
 #   - :3002 model calls ONLY when the Agent is switched to a gateway-* ModelConfig. The committed default
-#     (bedrock-nova) calls Bedrock directly.
+#     (bedrock-nova) calls Bedrock directly. Either way the spend is tagged: the bedrock backend calls the
+#     cluster's application profile through BEDROCK_NOVA_MODEL, as the ModelConfigs do (#561).
 #   - :3003 every evil-mcp tool call (#514): the evil-mcp RemoteMCPServer url is agentgateway:3003/mcp, so
 #     C7's rogue tools are reached through the gateway. That bind is served by the agentgateway-c7 container
 #     from its own ConfigMap (see both below for why). Its mcpAuthorization rule is committed 'true', so it
@@ -68,6 +69,13 @@ spec:
               value: burritobot-gateway
             - name: OTEL_RESOURCE_ATTRIBUTES
               value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=production" # one name family (#265)
+            # The model the bedrock-nova backend calls; agentgateway-config reads it as ${BEDROCK_NOVA_MODEL}
+            # (#561). The value below is the system profile id, the pin. A system profile cannot be tagged, so
+            # fleet.sh pin_bedrock_profiles sets the live value to this cluster's tagged application profile
+            # ARN on bootstrap and converge, the same way it sets each Bedrock ModelConfig's .spec.model, and
+            # ai-layer ignores this one env entry so selfHeal keeps the ARN.
+            - name: BEDROCK_NOVA_MODEL
+              value: us.amazon.nova-pro-v1:0
             # NOTE: tracing is configured in the config file's top-level `tracing` block (below), NOT via
             # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emitted ZERO spans on the pre-v1.5.0 build (verified live 2026-06-26: a targeted
             # `service:agentgateway` Datadog span search returned 0). The config-file path is the working one.
@@ -202,7 +210,14 @@ data:
               name: bedrock-nova
               provider:
                 bedrock:
-                  model: us.amazon.nova-pro-v1:0
+                  # From the container env, not inline (#561): agentgateway v1.5.0 runs the whole config
+                  # file through shellexpand::full before parsing it (crates/agentgateway/src/config.rs,
+                  # parse_config), and an undefined variable fails the config. Live, it is this cluster's
+                  # application profile ARN. The provider puts the model into the URL path and escapes
+                  # only '/' and '%' in it (crates/llm/src/bedrock.rs, get_path_for_route), so the ARN's
+                  # one '/' goes out as %2F, the form Bedrock takes; upstream's own tests send an
+                  # application-inference-profile ARN that way. Read at tag v1.5.0 on 2026-10-25.
+                  model: ${BEDROCK_NOVA_MODEL}
                   # Required by the bedrock provider; omitting it fails the whole config at startup
                   # with "missing field `region`". Matches WIB_REGION and the cluster's own region.
                   region: us-west-2
