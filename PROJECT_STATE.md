@@ -24,7 +24,14 @@ and no Datadog pool until Whitney loads one the week of 2026-10-26: a logged gap
 in decisions.md, 2026-10-24 · #454. The 2026-10-24 bring-up of attackme and michael-admin in accen-dev,
 us-west-2, ran the #503 probe: RED on both, about $0.05 of Bedrock. Its per-beat results are in
 `facilitation/kubecon-na-2026-run-of-show.md`, "Probe record" (#509); its findings #528, #529 and #530 are
-fixed on staging. Its teardown to zero (`verify/account-audit.sh` CLEAN) is not recorded here yet.
+fixed on staging. Both clusters and the lab VPC came down the same day: `./fleet.sh audit-zero` read ZERO in
+all five accounts at 20:08Z, about $2.30 in all (#454, comment 6388980495).
+
+## KubeCon platform for a rehearsal (spec 001 M1, #610)
+
+Not up. Every finding from the 2026-10-24 bring-up (#510, #526 to #531) is closed on staging, and the
+permissions boundary it applied by hand stays in accen-dev. The bring-up is a deploy to AWS, so a session
+with Michael's go runs it; Whitney's cold read (#611) waits on it.
 
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
