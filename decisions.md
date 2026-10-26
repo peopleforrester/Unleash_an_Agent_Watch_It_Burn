@@ -2681,3 +2681,28 @@ The dated finding is `docs/spike-llm-guard-2026-10-26.md`. In short:
 `protectai/deberta-v3-base-prompt-injection-v2` at `90c9989b1a342275dd0d1a95aad283c04e075671` (2026-07-09,
 Apache-2.0), the revision the offline image mirrors, downloaded from Hugging Face on the first run. llm-guard 0.3.16
 and torch 2.14.0+cpu are the pins `verify/test_topic_classifier.py` already records (2026-10-24 entry above).
+
+## 2026-10-26 · question 674 · #457: the 10-26 cold-read event points at this repo's run of show
+
+**Question 674:** Repoint the description of the Mon 2026-10-26 10:00 to 16:00 Central cold-read event on
+Michael's primary calendar (event `ia767ji9f7ik5pimaqsogc2hg8`) at this repo. Its description still told
+Whitney to run BurritoBot's RUNBOOK.md and file issues in peopleforrester/Kubecon-NA-2026-Whitney-BurritoBot,
+which is archived, so no issue can be filed there. A calendar write is Michael's to make, so the question
+offered replacement text.
+
+**Answer:** Michael pastes the suggested text into the event description.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes:** the edit is on the calendar, not in this repo. A coordinator comment on #457
+(2026-10-26) says the event now carries the suggested text, and this run read it back on 2026-10-26: the
+event was updated at 11:23 UTC and its description is word for word "Whitney reads
+facilitation/kubecon-na-2026-run-of-show.md cold against the live platform, from Night Before through
+Teardown, and files one issue in peopleforrester/Unleash_an_Agent_Watch_It_Burn for every stop or guess. Log
+it under Run-through record. The read waits for the platform to be live (Watch_It_Burn#447, #454); no paper
+read." The event's title still reads "BurritoBot runbook cold read (Whitney reads, live cluster, file an
+issue per stop)"; BurritoBot is the talk's name, not the archived repo, so it is left as it is. The run of
+show's "Dates to hold" row already sends the read here and logs it under "Run-through record", so nothing in
+the repo changes. The second half of #457, whether the Wed 2026-10-28 09:00 to 12:00 Central "PREP: BurritoBot
+rehearsal with Whitney" block stays or goes, is not decided: it is still on the calendar with Whitney's reply
+at needsAction, and the run asks it again as one decision.
