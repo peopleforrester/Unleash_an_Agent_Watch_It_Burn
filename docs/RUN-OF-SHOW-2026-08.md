@@ -109,7 +109,7 @@ watch-the-screen with an optional side quest on our box. Round 3 is heads-down a
 matter. Attendees will not guess which mode they are in, and a room half-watching and half-typing hears
 neither.
 
-**Nobody installs anything.** The full platform is already deployed on every cluster (38 Argo CD apps on an instructor cluster, 34 on an attendee cluster where the C1 and C3 controls start uninstalled and Tempo and Falco Talon are left out, one
+**Nobody installs anything.** The full platform is already deployed on every cluster (36 Argo CD apps on an instructor cluster, 32 on an attendee cluster where the C1 and C3 controls start uninstalled and Tempo and Falco Talon are left out, one
 bash script). The hands-on hour is about **manipulating** what is there, not building it.
 
 **Your prompts live on the instructor page, not in this doc.** Open **`/brief`** on whichever cluster you
@@ -210,7 +210,7 @@ also the segment that earns the abstract's claims.
 > one bash script. Let me show you what is actually running in there."
 
 ```bash
-kubectl get applications -n argocd          # 38 apps: 32 platform components, 5 demo apps, 1 app-of-apps (34 on an attendee cluster)
+kubectl get applications -n argocd          # 36 apps: 30 platform components, 5 demo apps, 1 app-of-apps (32 on an attendee cluster)
 kubectl get pods -A | head -40              # what that actually looks like running
 ```
 
@@ -223,7 +223,7 @@ Name the pieces they will touch today, and who owns each one:
 | Network | **NetworkPolicy** default-deny egress, **Istio** ambient mesh | platform |
 | Runtime | **KubeArmor** (inline block), **Falco + Talon** (detect and respond) | platform |
 | AI guardrails | **guard-proxy** + **LLM Guard**: input, output, tool-authz, budget | platform |
-| Observability | **Datadog**, OpenTelemetry, Prometheus, Grafana, Loki, Tempo | platform |
+| Observability | **Datadog**, OpenTelemetry, Prometheus, Grafana, Tempo | platform |
 | Delivery | **Argo CD** app-of-apps, **Terraform** underneath | platform |
 
 Land the point: **one column is the developer's, everything else is the platform team's.** Today's argument

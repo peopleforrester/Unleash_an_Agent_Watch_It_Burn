@@ -2692,3 +2692,22 @@ references. No upstream change was reverted.
 
 **Checked:** `bash verify/run-tests.sh` passes (117 tests). The E2E checks were not run, because no cluster is
 provisioned in this run.
+
+## 2026-10-26 · #474 · The stated Argo CD app counts drop by two with Loki and Alloy
+
+**Why:** the approved #474 branch (draft `7c0e800`) conflicted with staging in `docs/DESIGN-GLANCE.md`, so the
+change is made again on current staging. Since that draft, #551 made `verify/test_fleet_contract.py` count the
+attendee profile's Applications from the manifests and hold the docs to the number. Loki and Alloy are one
+Application each and every profile but burn selected both, so the counts fall by two.
+
+**What it changes:**
+
+- Attendee clusters run 32 Argo CD Applications, the app-of-apps included, down from 34. Instructor clusters
+  run 36, down from 38: 30 platform components, 5 demo apps and the root. `docs/DESIGN-GLANCE.md`,
+  `docs/RUN-OF-SHOW-2026-08.md`, `platform.html` and the fleet-contract checks say so. `gitops/README.md`
+  counts 34 manifest files in `gitops/apps`, down from 36.
+- The glance paragraph's observability clause reads "Prometheus and Grafana, with pod logs going to Datadog
+  only", keeping staging's "Falco Talon and Tempo run on instructor clusters only".
+- The run-of-show's layer table drops Loki from the observability row.
+- `docs/ABSTRACT.md` is not changed. It is the working copy of published listings and already says to leave
+  the number out.

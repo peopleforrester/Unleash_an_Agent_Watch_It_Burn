@@ -8,7 +8,7 @@ ArgoCD-managed Kubernetes resources using the app-of-apps pattern.
 bootstrap/
   app-of-apps.yaml      # Root Application that manages all child apps
 
-apps/                    # 36 ArgoCD Application manifests
+apps/                    # 34 ArgoCD Application manifests
   namespaces.yaml        # Namespace definitions (sync-wave: -10)
   kyverno.yaml           # Policy engine
   kyverno-policies.yaml  # Kyverno CEL ValidatingPolicies + ImageValidatingPolicy

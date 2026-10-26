@@ -211,28 +211,29 @@ check(f"exactly 5 demo filler apps ship ({len(_demo)} found)", len(_demo) == 5)
 _docs = (REPO / "docs/RUN-OF-SHOW-2026-08.md").read_text(encoding="utf-8")
 check("the run-of-show no longer claims 43 apps", "43 ArgoCD apps" not in _docs and "43 apps" not in _docs)
 # 38 became 36 when the attendee profile dropped tempo and falco-talon (#475); 40 and 36 became 38 and 34
-# when every profile but burn dropped rbac and resource-quotas (#478).
-check("the run-of-show states the measured 38 (instructor) and 34 (attendee)",
-      "38 Argo CD apps" in _docs and "34 on an attendee cluster" in _docs)
+# when every profile but burn dropped rbac and resource-quotas (#478); 38 and 34 became 36 and 32 when
+# every profile dropped loki and alloy (#474).
+check("the run-of-show states the measured 36 (instructor) and 32 (attendee)",
+      "36 Argo CD apps" in _docs and "32 on an attendee cluster" in _docs)
 _lab = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 _platform = (REPO / "gitops/ai-layer/web/platform.html").read_text(encoding="utf-8")
 # Whitney (2026-09-06): the count is not lab copy. It lives on the platform page, which is the catalogue.
 check("the platform page states the measured count and the lab page states none",
-      "34 Argo CD applications" in _platform and "Roughly forty" not in _lab and "Argo CD applications on your cluster" not in _lab)
+      "32 Argo CD applications" in _platform and "Roughly forty" not in _lab and "Argo CD applications on your cluster" not in _lab)
 # The glance paragraph heads the compiled design Doc and said "about 39" with Talon and Tempo long after
 # #475 and #478 took them off the attendee profile (#551).
 _glance = (REPO / "docs/DESIGN-GLANCE.md").read_text(encoding="utf-8")
-# Counted from the manifests, so the stated 34 cannot outlive a change to the attendee selection: every
+# Counted from the manifests, so the stated 32 cannot outlive a change to the attendee selection: every
 # Application document in gitops/apps the attendee root does not exclude, plus the root itself.
 _attendee_root = (REPO / "gitops/bootstrap/attendee/app-of-apps-attendee.yaml").read_text(encoding="utf-8")
 _excluded = set(re.search(r"exclude: '\{([^}]*)\}\.yaml'", _attendee_root).group(1).split(","))
 _attendee_apps = 1 + sum(len(re.findall(r"(?m)^kind: Application$", p.read_text(encoding="utf-8")))
                          for p in (REPO / "gitops/apps").glob("*.yaml") if p.stem not in _excluded)
-check(f"the attendee root selects 34 Applications, the root included ({_attendee_apps} found)",
-      _attendee_apps == 34)
+check(f"the attendee root selects 32 Applications, the root included ({_attendee_apps} found)",
+      _attendee_apps == 32)
 check("the attendee root leaves out tempo and falco-talon", {"tempo", "falco-talon"} <= _excluded)
-check("the design glance states 34 attendee applications and puts Talon and Tempo on instructor clusters only",
-      "34 applications on the attendee profile" in _glance and "about 39" not in _glance
+check("the design glance states 32 attendee applications and puts Talon and Tempo on instructor clusters only",
+      "32 applications on the attendee profile" in _glance and "about 39" not in _glance
       and "Falco with Talon" not in _glance and "Talon and Tempo run on instructor clusters only" in _glance)
 
 print("== teardown ordering and safety ==")
