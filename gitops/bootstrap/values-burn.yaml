@@ -1,0 +1,54 @@
+# ABOUTME: The BURN profile (the community cluster, the "no guardrails" spectacle). Deliberately bare: NO
+# ABOUTME: admission control at all (no Kyverno, no floor), no RBAC scoping app, no GitOps-drift block.
+# Just the agent + cost-meter proxy and the party burn targets. It is meant to die in one prompt; the
+# facilitator rotates ~10 disposable C1 spares from SSH.
+# NOTE: the agent still needs Bedrock IRSA per cluster (IAM, not GitOps) — see infra/cluster3-setup.sh / deploy.
+#
+# Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
+# observability stores/backstage. Just the agent + ai-layer (cost meter) + burn targets, plus
+# cert-manager for the console certificate (see below).
+# cert-manager is included because the community cluster still needs the console's TLS certificate
+# (#139): the burn profile means NO GUARDRAILS, not no infrastructure. Without it the Certificate CRD
+# is absent, the ai-layer app cannot sync, and the console Deployment (which mounts the cert) would
+# never start. It issues a self-signed cert and enforces nothing, so it does not soften the burn.
+# kubearmor (ENGINE only, NOT kubearmor-policies) is included so the runtime-enforcement engine is
+# present on every build per the uniform-build goal; with no KubeArmorPolicy it enforces nothing,
+# so the community cluster stays guardrail-free and the C3 snoop still succeeds. kubearmor-policies
+# is OMITTED here (the KubeArmorPolicy ships armed only in the admin profile); Tetragon was retired
+# 2026-08-30.
+# OBSERVABILITY IS NOT A GUARDRAIL. This profile is the one with nothing defending the agent:
+# no Kyverno, no NetworkPolicies, no KubeArmor policy, no Falco. That stays exactly as it is.
+# What it gains here is the ability to SEE what happens, which it had none of: it shipped no
+# collector and had zero pods in the datadog namespace (#283), so the whole room could attack it
+# and there would be nothing to look at afterwards. The Community phase ends by pulling up the
+# traces together and finding someone's successful prompt by name (#303), and that is the moment
+# the observability half of the workshop earns its place. It also puts attackme into the single
+# shared presenter org alongside the admin clusters and the students' dual-shipped telemetry
+# (#296). external-secrets and eso-resources come along because the Datadog key is pulled from
+# AWS Secrets Manager; otel-operator and ai-layer-otel because the agent pod is only traced if
+# the webhook injects it at admission. The collector is otel-collector-burn, not
+# otel-collector: Datadog is its only sink, because this profile installs neither Prometheus
+# nor Tempo and the shared values export to both (#476).
+#
+# Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
+# profile until a line here names it, and a name with no file fails the render.
+apps:
+  - ai-layer-otel
+  - ai-layer
+  - cert-manager
+  - customer-stream
+  - datadog-agent-cr
+  - datadog-operator
+  - demo-app-hedgehog
+  - demo-app-mantis-shrimp
+  - demo-app-spider
+  - demo-app-unicorn
+  - demo-app-wombat
+  - eso-resources
+  - external-secrets
+  - kagent-crds
+  - kagent
+  - kubearmor
+  - namespaces
+  - otel-collector-burn
+  - otel-operator

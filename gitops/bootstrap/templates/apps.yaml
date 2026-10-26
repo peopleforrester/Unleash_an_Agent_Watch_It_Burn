@@ -1,0 +1,17 @@
+{{- /*
+ABOUTME: Renders each app the profile's values file lists from apps/<name>.yaml, through tpl so every Unleashed
+ABOUTME: source takes .Values.revision. A name with no file fails the render, so a missing app is named, not skipped.
+*/ -}}
+{{- $revision := required "revision is the commit the root is pinned at" .Values.revision }}
+{{- if not .Values.apps }}
+{{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
+{{- end }}
+{{- range .Values.apps }}
+{{- $file := printf "apps/%s.yaml" . }}
+{{- $body := $.Files.Get $file }}
+{{- if not $body }}
+{{- fail (printf "the values name app %s, and the chart has no %s" . $file) }}
+{{- end }}
+---
+{{ tpl $body $ }}
+{{- end }}

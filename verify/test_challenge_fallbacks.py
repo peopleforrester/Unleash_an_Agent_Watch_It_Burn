@@ -140,7 +140,7 @@ for s, needles in ((C1, ['NS="agent"', 'POD="deploy/workshop-mcp"', 'CONTAINER="
                           'RECORD_SECRET="ceo-personal-record"', 'output=on',
                           'input_blocklist=on&input_classifier=on']),
                    (C7, ['NS="agent"', 'POD="deploy/web-terminal"', 'CONTAINER="ttyd"', f'GATEWAY="{EVIL_URL}"',
-                         f'SENTINEL="{MCP_SENTINEL}"', 'C7_CONFIGMAP="agentgateway-c7-config"', 'app-of-apps-admin',
+                         f'SENTINEL="{MCP_SENTINEL}"', 'C7_CONFIGMAP="agentgateway-c7-config"', 'get application lab-bootstrap',
                          'bash "${TERMINAL_HOME}/$1"', 'toggle guard-mcp-off', 'toggle guard-mcp-on',
                          'AGENT="workshop-agent"', 'toggle-mcp-authz-on.sh', 'PROXY_POD="deploy/guard-proxy"',
                          'PROXY_CONTAINER="proxy"', 'set_tools --off', 'set_tools --on'])):
@@ -248,8 +248,10 @@ if "exec" in args:
                                capture_output=True, text=True, timeout=30)
             sys.stdout.write(p.stdout); sys.stderr.write(p.stderr); sys.exit(p.returncode)
     sys.stderr.write("stub kubectl: exec target not deployed: %r\n" % args); sys.exit(1)
-if ns == "argocd" and args[4:7] == ["get", "application", "app-of-apps-admin"]:
-    print("" if scenario.startswith("workshop") else "application.argoproj.io/app-of-apps-admin"); sys.exit(0)
+# Which profile the cluster's root, lab-bootstrap, was applied with: its lab-platform/profile label (#609).
+if ns == "argocd" and args[4:7] == ["get", "application", "lab-bootstrap"] \
+        and "jsonpath={.metadata.labels.lab-platform/profile}" in args:
+    sys.stdout.write("attendee" if scenario.startswith("workshop") else "admin"); sys.exit(0)
 # C7 on a workshop cluster: the Agent's tools, the toggle's merge patch, and kagent rolling workshop-agent. kagent
 # bumps the Deployment's generation KAGENT_DELAY fake seconds after a patch that changed evil-mcp's list (never, on
 # "workshop-norollout"); the roll serves the new list (an "workshop-open" kagent keeps serving the full one).
@@ -568,8 +570,8 @@ try:
                   execs and all(c[c.index("exec") + 1:c.index("exec") + 4] == ["deploy/web-terminal", "-c", "ttyd"]
                                 and c[c.index("-n") + 1] == "agent" for c in execs), execs)
             others = [c for c in log if "exec" not in c]
-            check("C7 never calls the model: from the laptop it only reads app-of-apps-admin and the rule, no curl",
-                  all(c[2:7] in (["-n", "argocd", "get", "application", "app-of-apps-admin"],
+            check("C7 never calls the model: from the laptop it only reads lab-bootstrap's profile and the rule, no curl",
+                  all(c[2:7] in (["-n", "argocd", "get", "application", "lab-bootstrap"],
                                  ["-n", "agent", "get", "configmap", "agentgateway-c7-config"]) for c in others),
                   others)
             check("C7 flips the rule with the terminal's guard-mcp-off, then guard-mcp-on, then puts it back",
@@ -599,7 +601,7 @@ try:
             check("C7 does not count a gateway that stops answering as a refusal",
                   rc_d == 1 and "did not answer" in out_d and "  PASS  with the rule narrowed" not in out_d
                   and state_d["rule"] == C7_OPEN, out_d)
-            # A workshop cluster (no app-of-apps-admin): the toolNames list, through the weather question (#545).
+            # A workshop cluster (lab-bootstrap's profile is not admin): the toolNames list, through the weather question (#545).
             rc_w, out_w, log_w, state_w, tmp_w = run(script, argv, "workshop")
             check("C7 on a workshop cluster: exit 0, PASS lines, no FAIL",
                   rc_w == 0 and "  PASS  " in out_w and "  FAIL  " not in out_w and "C7 PROVEN" in out_w, out_w)

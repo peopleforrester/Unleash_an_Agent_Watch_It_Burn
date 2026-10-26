@@ -23,7 +23,7 @@
 #       execute_tool read_internal_config span under it. The panel beside it lists the calls that DID reach
 #       the rogue tool, so the run with guard-mcp off appears there and the run after guard-mcp-on does not.
 # The negated ancestor operator (!<<) carries C6 and C7. Every query here was run against Tempo 3.0.3, the
-# version gitops/apps/tempo.yaml deploys, on synthetic traces of these shapes, and returned only the trace it
+# version gitops/bootstrap/apps/tempo.yaml deploys, on synthetic traces of these shapes, and returned only the trace it
 # names.
 #
 # "One session" is the time window. guard-proxy does not stamp the browser session id on its spans, and a C6

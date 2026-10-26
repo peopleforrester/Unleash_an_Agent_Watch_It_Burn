@@ -11,8 +11,8 @@ from collector_render import collector_config  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 
-otel = yaml.safe_load((REPO / "gitops" / "apps" / "otel-collector.yaml").read_text())
-prom = yaml.safe_load((REPO / "gitops" / "apps" / "prometheus.yaml").read_text())
+otel = yaml.safe_load((REPO / "gitops" / "bootstrap" / "apps" / "otel-collector.yaml").read_text())
+prom = yaml.safe_load((REPO / "gitops" / "bootstrap" / "apps" / "prometheus.yaml").read_text())
 dash_cm = yaml.safe_load((REPO / "observability-idp" / "grafana" / "dashboards" / "agent-observability.yaml").read_text())
 dashboard = json.loads(dash_cm["data"]["agent-observability.json"])
 
@@ -82,7 +82,7 @@ check("Loki datasource pinned with uid 'loki'", ds.get("Loki", {}).get("uid") ==
 # The Tempo data source ships with Tempo (#475), so a profile without the tempo app has no data source for it:
 # a sidecar-labelled ConfigMap in gitops/tempo/, which the tempo Application deploys beside the chart.
 check("prometheus.yaml no longer carries the Tempo datasource", "Tempo" not in ds and all(d.get("uid") != "tempo" for d in ds.values()))
-tempo_app = yaml.safe_load((REPO / "gitops" / "apps" / "tempo.yaml").read_text())
+tempo_app = yaml.safe_load((REPO / "gitops" / "bootstrap" / "apps" / "tempo.yaml").read_text())
 _tempo_paths = [s.get("path") for s in tempo_app["spec"].get("sources", [])]
 check("the tempo Application deploys gitops/tempo beside its chart",
       "gitops/tempo" in _tempo_paths and any(s.get("chart") == "tempo" for s in tempo_app["spec"].get("sources", [])))
@@ -154,10 +154,10 @@ _ust_targets = [(n, _container_env(p, n).get("OTEL_RESOURCE_ATTRIBUTES", ""), s,
 # kagent's span version follows the chart the cluster runs, read from the Application rather than written
 # here: the chart went 0.9.9 -> 0.10.1 on 2026-09-10 while the span version stayed v0.9.9 (#586), the same
 # drift #495 fixed for agentgateway by deriving its version from the image tag.
-_kagent_chart = str(yaml.safe_load((REPO / "gitops/apps/kagent.yaml").read_text())["spec"]["source"]["targetRevision"])
+_kagent_chart = str(yaml.safe_load((REPO / "gitops/bootstrap/apps/kagent.yaml").read_text())["spec"]["source"]["targetRevision"])
 _kagent_ver = f"v{_kagent_chart}"
 _kagent_attrs = dict(kv.split("=", 1) for kv in _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", "").split(",") if "=" in kv)
-check(f"kagent spans carry service.version={_kagent_ver}, the chart gitops/apps/kagent.yaml pins "
+check(f"kagent spans carry service.version={_kagent_ver}, the chart gitops/bootstrap/apps/kagent.yaml pins "
       f"(found {_kagent_attrs.get('service.version')})", _kagent_attrs.get("service.version") == _kagent_ver)
 _ust_targets.append(("kagent", _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", ""), "service.name=burritobot-agent", f"service.version={_kagent_ver}"))
 for _name, _ust, _svc, _ver in _ust_targets:
@@ -192,12 +192,12 @@ def _pod_annotations(path, *navkeys, doc_name=None):
 
 # (component, service, version, podAnnotations) — istio has two pods (control plane + data plane).
 _PLATFORM_UST = [
-    ("cert-manager", "cert-manager", "v1.20.2", _pod_annotations("gitops/apps/cert-manager.yaml")),
-    ("falco", "falco", "0.44.1", _pod_annotations("gitops/apps/falco.yaml")),
-    ("kyverno", "kyverno", "v1.19.1", _pod_annotations("gitops/apps/kyverno.yaml", "admissionController")),
+    ("cert-manager", "cert-manager", "v1.20.2", _pod_annotations("gitops/bootstrap/apps/cert-manager.yaml")),
+    ("falco", "falco", "0.44.1", _pod_annotations("gitops/bootstrap/apps/falco.yaml")),
+    ("kyverno", "kyverno", "v1.19.1", _pod_annotations("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
     ("argocd", "argocd", "v3.4.4", _pod_annotations("infra/argocd-values.yaml", "server")),
-    ("istio-ztunnel", "istio", "1.30.1", _pod_annotations("gitops/apps/istio.yaml", doc_name="ztunnel")),
-    ("istiod", "istio", "1.30.1", _pod_annotations("gitops/apps/istio.yaml", "pilot", doc_name="istiod")),
+    ("istio-ztunnel", "istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
+    ("istiod", "istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
 ]
 for _name, _svc, _ver, _ann in _PLATFORM_UST:
     check(f"{_name} carries platform UST (tags.datadoghq.com service={_svc} env=production version={_ver})",
@@ -206,7 +206,7 @@ for _name, _svc, _ver, _ann in _PLATFORM_UST:
           and str(_ann.get("tags.datadoghq.com/version")) == _ver)
 
 # Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.
-fvals = _app_values(yaml.safe_load((REPO / "gitops" / "apps" / "falcosidekick.yaml").read_text()))
+fvals = _app_values(yaml.safe_load((REPO / "gitops" / "bootstrap" / "apps" / "falcosidekick.yaml").read_text()))
 check("falcosidekick has a Datadog output", "datadog" in fvals["config"])
 # falcosidekick chart 0.14.0 reads env from config.extraEnv (NOT top-level extraEnv) — see
 # PRD #23 M2 fix (commit c7f4e7b). Assert against that path.

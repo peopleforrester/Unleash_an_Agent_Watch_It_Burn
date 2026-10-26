@@ -26,7 +26,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 RES = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if isinstance(d, dict)]
-FALCO_APP = yaml.safe_load((REPO / "gitops/apps/falco.yaml").read_text())
+FALCO_APP = yaml.safe_load((REPO / "gitops/bootstrap/apps/falco.yaml").read_text())
 BB = (REPO / "gitops/ai-layer/web/burritbot.html").read_text(encoding="utf-8")
 SMOKE = (REPO / "verify/browser-smoke.py").read_text(encoding="utf-8")
 PROXY = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text(encoding="utf-8")

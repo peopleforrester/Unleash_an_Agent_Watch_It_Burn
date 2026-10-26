@@ -25,7 +25,11 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parent.parent
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 BB = (REPO / "gitops/ai-layer/web/burritbot.html").read_text(encoding="utf-8")
-BURN = yaml.safe_load((REPO / "gitops/bootstrap/burn/app-of-apps-burn.yaml").read_text(encoding="utf-8"))
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import APPS, app_names  # noqa: E402
+
+AI_LAYER = yaml.safe_load((APPS / "ai-layer.yaml").read_text(encoding="utf-8"))
+DEPLOY = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
 
 failures: list[str] = []
 
@@ -37,8 +41,7 @@ def check(name: str, cond: bool) -> None:
 
 
 # --- the profile the notes describe ---------------------------------------------------------------------
-include = next(s["directory"]["include"] for s in BURN["spec"]["sources"] if s.get("path") == "gitops/apps")
-apps = set(re.sub(r"^\{|\}\.yaml$", "", include).split(","))
+apps = set(app_names("burn"))
 
 print("== the burn profile lacks exactly what the Community notes say it lacks ==")
 # If the burn profile ever gains one of these, the notes become the false claim, so this fails first.
@@ -47,8 +50,10 @@ for absent in ("kyverno", "kyverno-policies", "falco", "falco-talon", "falcoside
     check(f"{absent} is not installed on the Community cluster", absent not in apps)
 check("the KubeArmor engine is (so the C3 prevention fix still works there)", "kubearmor" in apps)
 check("the ai-layer is (so the guard-proxy Argo CD restores exists there)", "ai-layer" in apps)
-check("the burn root self-heals, so Argo CD restoring a deleted guard-proxy is true there",
-      BURN["spec"]["syncPolicy"]["automated"].get("selfHeal") is True)
+check("the ai-layer Application self-heals, so Argo CD restoring a deleted guard-proxy is true there",
+      AI_LAYER["spec"]["syncPolicy"]["automated"].get("selfHeal") is True)
+check("and so does the lab-bootstrap root deploy-full-idp.sh applies over it",
+      "name: lab-bootstrap" in DEPLOY and "      selfHeal: true\n" in DEPLOY[DEPLOY.index("name: lab-bootstrap"):])
 
 
 # --- parse the page, remembering which data-full / data-burn region each piece of text sits in -----------

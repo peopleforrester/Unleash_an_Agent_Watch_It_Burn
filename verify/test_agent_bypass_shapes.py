@@ -18,6 +18,8 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import is_template  # noqa: E402
 POLICY = REPO / "policies/kyverno/restrict-agent-spawned-workloads.yaml"
 TERRAFORM = REPO / "infra/terraform/aws/cluster/main.tf"
 NS = "agent"
@@ -53,6 +55,8 @@ def network_policies() -> list[tuple[str, dict]]:
     out = []
     for root in ("gitops", "policies"):
         for f in sorted((REPO / root).rglob("*.y*ml")):
+            if is_template(f):  # the root chart's Go templates (#609): a repository Secret, no NetworkPolicy
+                continue
             default_ns = NS if f.parent == REPO / "gitops/ai-layer" else None
             for doc in yaml.safe_load_all(f.read_text()):
                 if not isinstance(doc, dict):

@@ -29,10 +29,14 @@ MANIFEST_DIRS = [
     REPO / "games",
     REPO / "security",
 ]
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import is_template  # noqa: E402
+
+# The root chart's templates are Go template text, not YAML (#609); what they render is test_bootstrap_chart_render.py's.
 manifests = sorted(
     p for d in MANIFEST_DIRS if d.is_dir()
     for p in d.rglob("*.yaml")
-    if "__pycache__" not in p.parts
+    if "__pycache__" not in p.parts and not is_template(p)
 )
 check("found manifests to audit", len(manifests) > 0)
 blobs = [(p, p.read_text()) for p in manifests]

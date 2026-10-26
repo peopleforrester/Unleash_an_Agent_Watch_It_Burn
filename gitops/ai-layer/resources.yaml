@@ -326,7 +326,7 @@ spec:
     deployment:
       serviceAccountName: agent-sa
       # OTel Operator injects the Python SDK + OTLP endpoint into the ADK agent pod (PRD #20 M2/M3); ADK
-      # (>=1.17, bundled by the kagent chart gitops/apps/kagent.yaml pins) then emits gen_ai.* spans natively
+      # (>=1.17, bundled by the kagent chart gitops/bootstrap/apps/kagent.yaml pins) then emits gen_ai.* spans natively
       # (invoke_agent -> chat -> execute_tool). The Agent CRD supports pod annotations (kubectl explain
       # agent.spec.declarative.deployment).
       annotations: { instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python" }
@@ -336,7 +336,7 @@ spec:
       # gen_ai.request.model (OTel GenAI semconv, captured in M2), not from service.version.
       # deployment.environment.name is the SDLC env (production), not the project name. verify-at-build:
       # confirm the v1alpha2 Agent `deployment.env` field is honored on the kagent chart
-      # gitops/apps/kagent.yaml pins; if not, set OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template
+      # gitops/bootstrap/apps/kagent.yaml pins; if not, set OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template
       # instead. service.version below is that chart's version; verify/test_observability.py holds it there.
       env:
         # OTEL_SERVICE_NAME wins over service.name in OTEL_RESOURCE_ATTRIBUTES, and the OTel Operator

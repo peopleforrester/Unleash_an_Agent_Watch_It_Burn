@@ -1,4 +1,4 @@
-# ABOUTME: Every place that names the deployed kagent agrees: the chart gitops/apps/kagent.yaml and kagent-crds.yaml
+# ABOUTME: Every place that names the deployed kagent agrees: the chart gitops/bootstrap/apps/kagent.yaml and kagent-crds.yaml
 # ABOUTME: pin, the VERSIONS.lock kagent line, the working docs that state the current version, the manifests' comments,
 # ABOUTME: and PRD #13's locked kagent service.version.
 #
@@ -25,9 +25,9 @@ def target_revision(rel):
 
 
 print("== the controller and its CRDs are one version ==")
-chart = target_revision("gitops/apps/kagent.yaml")
-crds = target_revision("gitops/apps/kagent-crds.yaml")
-check(f"gitops/apps/kagent-crds.yaml pins {chart}, the chart gitops/apps/kagent.yaml deploys (found {crds})",
+chart = target_revision("gitops/bootstrap/apps/kagent.yaml")
+crds = target_revision("gitops/bootstrap/apps/kagent-crds.yaml")
+check(f"gitops/bootstrap/apps/kagent-crds.yaml pins {chart}, the chart gitops/bootstrap/apps/kagent.yaml deploys (found {crds})",
       crds == chart)
 
 print("== VERSIONS.lock records the chart we deploy ==")
@@ -64,7 +64,7 @@ print("== the manifests' comments name the version we deploy ==")
 # #586: these comments went on calling kagent 0.9.9 the chart the cluster runs, and kagent-crds.yaml's
 # targetRevision comment went on calling 0.10.1 the "current GA (2026-06" after the pin had moved under it.
 # Only the comments are read: a value pinned to some other component's 0.9.x is not a claim about kagent.
-COMMENTED_MANIFESTS = ("gitops/ai-layer/resources.yaml", "gitops/apps/kagent-crds.yaml")
+COMMENTED_MANIFESTS = ("gitops/ai-layer/resources.yaml", "gitops/bootstrap/apps/kagent-crds.yaml")
 
 
 def comment(line):
@@ -87,15 +87,15 @@ for rel in COMMENTED_MANIFESTS:
              if STALE.search(comment(l)) and not re.search(rf"\b{re.escape(chart)}\b", comment(l))]
     check(f"{rel} comments name 0.9.x only beside {chart} (lines {stale})", not stale)
 
-crds_lines = [l for l in (REPO / "gitops/apps/kagent-crds.yaml").read_text(encoding="utf-8").splitlines()
+crds_lines = [l for l in (REPO / "gitops/bootstrap/apps/kagent-crds.yaml").read_text(encoding="utf-8").splitlines()
               if re.match(r"^\s*targetRevision:", l)]
-check("gitops/apps/kagent-crds.yaml has one targetRevision line", len(crds_lines) == 1, f"{crds_lines}")
+check("gitops/bootstrap/apps/kagent-crds.yaml has one targetRevision line", len(crds_lines) == 1, f"{crds_lines}")
 crds_comment = comment(crds_lines[0]) if crds_lines else ""
 # A dated "current GA" goes stale the day kagent ships again; the comment ties the pin to the controller's chart.
-check(f"gitops/apps/kagent-crds.yaml targetRevision comment does not call the pin the current GA ({crds_comment!r})",
+check(f"gitops/bootstrap/apps/kagent-crds.yaml targetRevision comment does not call the pin the current GA ({crds_comment!r})",
       not re.search(r"current\s+GA", crds_comment, re.I))
-check(f"gitops/apps/kagent-crds.yaml targetRevision comment names gitops/apps/kagent.yaml ({crds_comment!r})",
-      "gitops/apps/kagent.yaml" in crds_comment)
+check(f"gitops/bootstrap/apps/kagent-crds.yaml targetRevision comment names gitops/bootstrap/apps/kagent.yaml ({crds_comment!r})",
+      "gitops/bootstrap/apps/kagent.yaml" in crds_comment)
 
 print("== PRD #13 locks kagent's service.version to the chart we deploy ==")
 # #599: PRD #13 locks the UST values every AI-layer pod emits, and #586 moved its two kagent lines to v0.10.1

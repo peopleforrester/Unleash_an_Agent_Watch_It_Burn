@@ -162,11 +162,11 @@ TF_PROFILE="${WIB_DEFAULT_ACCOUNT}"
 TF_PIDS_LIMIT=""
 
 # When non-empty (burn|full), up_one chains deploy-full-idp.sh right after a successful apply, so a
-# provision auto-installs the IDP (ArgoCD + the app-of-apps tracking staging) instead of a separate
+# provision auto-installs the IDP (ArgoCD + the lab-bootstrap root tracking staging) instead of a separate
 # manual bootstrap. This is what makes a fleet provision self-complete; at 250 clusters you do not
 # hand-bootstrap each one. Set WIB_NO_BOOTSTRAP=1 to provision bare clusters only. Per-branch clusters
 # (a cluster that tracks its own branch, e.g. an experiment branch) are a manual case: bootstrap from
-# that branch's checkout, since this default path points the app-of-apps at staging.
+# that branch's checkout, since this default path points lab-bootstrap at staging.
 BOOTSTRAP_PROFILE=""
 
 # Docker Hub Team auth for node-level containerd, sourced from ~/secrets (mrf-secrets), NEVER committed.
@@ -633,7 +633,7 @@ record_fail() { echo "${1}" >>"${FAIL_FILE}"; }
 
 # Flip an admin cluster's infra guardrails to enforcing after bootstrap. Kyverno ships in Audit
 # (kyverno-policies.yaml), so wait for the ValidatingPolicy to sync then run the Audit->Deny toggle.
-# NetworkPolicy egress, Falco, and the PID cap come up enforcing from the admin app-of-apps and need no
+# NetworkPolicy egress, Falco, and the PID cap come up enforcing from the admin profile and need no
 # flip; the community cluster (burn profile) has no guardrails and never calls this. Mirrors the tail of
 # infra/setup-instructor-cluster.sh so a fleet 'up' self-arms (found 2026-07-10: provisioning deployed the
 # IDP but never armed the cluster, leaving Kyverno in Audit so its admission never blocked).
@@ -1190,7 +1190,7 @@ bootstrap_one() {
         #            is still accepted and arms the same way.
         #   attendee (the student pool) -> DO NOT arm: it ships kyverno-policies in Audit on purpose, so
         #            C2's villain image deploys and the STUDENT flips it to Deny (#160). Its C1 and C3
-        #            controls are omitted from the profile entirely (app-of-apps-attendee.yaml), so there
+        #            controls are omitted from the profile entirely (values-attendee.yaml), so there
         #            is nothing to arm for those either.
         #   burn     (community)        -> ships no policies at all; the unguarded spectacle.
         # Gating on the profile name keeps attendee and burn both unarmed without a role check.
@@ -1500,7 +1500,7 @@ up_one() {
     local name="$1"; assert_ours "${name}"
     # Skip a cluster that already exists AND already passes health. Without this, re-running `up` to
     # grow a fleet or to retry a partial run re-entered the full bootstrap chain for every healthy
-    # cluster: helm-install ArgoCD, re-register the repo, re-apply the app-of-apps, re-mint credentials.
+    # cluster: helm-install ArgoCD, re-apply the lab-bootstrap root, re-mint credentials.
     # Bootstrap is the expensive phase and the one with fixed internal timeouts, so doing it fleet-wide
     # and unnecessarily is how host contention turns into spurious failures. This is what makes `up`
     # safe to re-run, so growing 5 -> 50 -> 250 is the same verb rather than three different ones.
@@ -2869,7 +2869,7 @@ readonly PLATFORM_NAMESPACES="${WIB_PLATFORM_NAMESPACES:-argocd agent}"
 
 # Read the Applications, and tell the three "no applications" cases apart, because they need different
 # answers: CRDs absent means nothing was ever bootstrapped; CRDs present with an empty list means the
-# root app-of-apps was never applied; an unreadable API server means the cluster, not the platform.
+# root, lab-bootstrap, was never applied; an unreadable API server means the cluster, not the platform.
 # Prints the JSON on success, or a one-word reason on failure.
 read_argo_apps() {
     local kcfg="$1" out rc
@@ -2905,7 +2905,7 @@ platform_floor() {
 
 # Per-cluster IDP health: the REAL "is the platform up" gate (cmd_status only reports EKS control-plane
 # state). Pulls an ISOLATED kubeconfig per cluster (never ~/.kube/config) with the account's profile, then
-# asserts the ArgoCD app-of-apps is fully converged (every Application Synced AND Healthy) plus a pod
+# asserts the ArgoCD lab-bootstrap root is fully converged (every Application Synced AND Healthy) plus a pod
 # sanity backstop (no Pending/Failed pods). If all apps are Healthy the workloads they manage are up.
 health_one() {
     local name="$1"; assert_ours "${name}"

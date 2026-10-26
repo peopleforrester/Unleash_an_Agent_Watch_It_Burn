@@ -75,7 +75,7 @@ for path in sorted((REPO / "gitops").rglob("*.yaml")):
 required = bash_array("REQUIRED_KEYS")
 namespaces = bash_array("NAMESPACES")
 check("the reference scan found the collector, falcosidekick and Datadog Agent references",
-      {"gitops/otel-collector/values.yaml", "gitops/apps/falcosidekick.yaml",
+      {"gitops/otel-collector/values.yaml", "gitops/bootstrap/apps/falcosidekick.yaml",
        "gitops/manifests/datadog/datadog-agent.yaml"} <= set(files_with_refs))
 check(f"REQUIRED_KEYS {required} covers every key gitops/ reads from datadog-secret {sorted(referenced)}",
       bool(required) and referenced <= set(required))

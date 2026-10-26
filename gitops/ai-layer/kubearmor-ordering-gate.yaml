@@ -3,7 +3,7 @@
 # ABOUTME: and gets the kubearmor-policy=enabled annotation (validated 2026-07-18: enforcement needs this).
 #
 # WHY: KubeArmor annotates pods for ENFORCEMENT at admission via its controller's mutating webhook.
-# gitops/apps/kubearmor.yaml is sync-wave -6, but the operator (autoDeploy) creates the daemonset +
+# gitops/bootstrap/apps/kubearmor.yaml is sync-wave -6, but the operator (autoDeploy) creates the daemonset +
 # controller ASYNC after its Application reports Healthy, so ai-layer (wave 3) otherwise races ahead and
 # workshop-mcp comes up un-annotated -> KubeArmor observes but does not block (proven live). A manual
 # `kubectl rollout restart` is NOT an option on armed clusters: Kyverno block-argocd-drift denies it.

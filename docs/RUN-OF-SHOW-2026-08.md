@@ -210,7 +210,7 @@ also the segment that earns the abstract's claims.
 > one bash script. Let me show you what is actually running in there."
 
 ```bash
-kubectl get applications -n argocd          # 38 apps: 32 platform components, 5 demo apps, 1 app-of-apps (34 on an attendee cluster)
+kubectl get applications -n argocd          # 38 apps: 32 platform components, 5 demo apps, 1 app-of-apps root, lab-bootstrap (34 on an attendee cluster)
 kubectl get pods -A | head -40              # what that actually looks like running
 ```
 

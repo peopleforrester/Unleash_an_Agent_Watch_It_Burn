@@ -66,8 +66,8 @@ observability became an exfil path. The two acts show the leak, then close it at
 - **Act 2 (the Collector redaction) is GitOps-only.** The cluster's kyverno `block-argocd-drift`
   policy rejects direct edits to the ArgoCD-managed Collector ConfigMap (`This resource is managed by
   ArgoCD. Change it in Git, not in the cluster.`). So the OTTL redaction toggle must go through Git:
-  add the `transform/redact_sentinel` processor to `gitops/apps/otel-collector.yaml` and let ArgoCD
-  sync. Canonical source for the processor is `gitops/apps/otel-collector-act2-overlay.yaml`. Commit
+  add the `transform/redact_sentinel` processor to `gitops/bootstrap/apps/otel-collector.yaml` and let ArgoCD
+  sync. Canonical source for the processor is `gitops/otel-collector/otel-collector-act2-overlay.yaml`. Commit
   to flip to Act 2; revert the commit to return to Act 1.
 
 ### Act 1: arm capture, show the leak
@@ -94,7 +94,7 @@ Verified 2026-06-25 (trace `97d2eef4003e3eba4adf56cdd59433e`): both attributes c
 Flip the toggle in Git (the only allowed path), then let ArgoCD sync:
 
 ```bash
-# In gitops/apps/otel-collector.yaml, add transform/redact_sentinel to processors AND to the
+# In gitops/bootstrap/apps/otel-collector.yaml, add transform/redact_sentinel to processors AND to the
 # traces pipeline processors (last, before exporters); see otel-collector-act2-overlay.yaml.
 git commit -am "flip re-leak-trap to Act 2" && git push origin staging
 AWS_PROFILE=accen-dev KUBECONFIG="$KCFG" kubectl --context "$CTX" -n argocd \

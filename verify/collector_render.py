@@ -21,10 +21,10 @@ import pathlib
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-APPS = REPO / "gitops/apps"
+APPS = REPO / "gitops/bootstrap/apps"
 # The Application that installs the collector on each profile. admin and full take the instructor one; their
-# roots exclude the attendee and burn ones (test_root_self_managed.py holds the excludes, and
-# test_collector_backends.py checks each root selects exactly one of these).
+# values files list neither the attendee nor the burn one (test_bootstrap_chart.py holds the lists, and
+# test_collector_backends.py checks each profile lists exactly one of these).
 PROFILE_APP = {"instructor": APPS / "otel-collector.yaml", "attendee": APPS / "otel-collector-attendee.yaml",
                "burn": APPS / "otel-collector-burn.yaml"}
 

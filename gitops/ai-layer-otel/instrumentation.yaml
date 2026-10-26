@@ -1,8 +1,8 @@
 # ABOUTME: Shared OTel Operator Instrumentation CR for the custom Python pods in the AI layer (PRD #20 M2).
 # ABOUTME: Sets cluster-wide OTLP endpoint/protocol + semconv opt-in; per-pod UST stays in each workload's env.
 #
-# STATUS: LIVE on the full profile, via its own Application (gitops/apps/ai-layer-otel.yaml, wave 2).
-# Both original prerequisites have landed: the OTel Operator is deployed (gitops/apps/otel-operator.yaml,
+# STATUS: LIVE on the full profile, via its own Application (gitops/bootstrap/apps/ai-layer-otel.yaml, wave 2).
+# Both original prerequisites have landed: the OTel Operator is deployed (gitops/bootstrap/apps/otel-operator.yaml,
 # which owns the opentelemetry.io/v1alpha1 Instrumentation CRD), and the inject-python annotation is on
 # the pod templates.
 #

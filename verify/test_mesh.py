@@ -2,7 +2,7 @@
 # ABOUTME: (whose certs are SPIFFE identities). Structural, no cluster needed.
 import pathlib, sys, yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
-apps = [d for d in yaml.safe_load_all((REPO/"gitops/apps/istio.yaml").read_text()) if d]
+apps = [d for d in yaml.safe_load_all((REPO/"gitops/bootstrap/apps/istio.yaml").read_text()) if d]
 pa = [d for d in yaml.safe_load_all((REPO/"security/istio/peer-authentication.yaml").read_text()) if d]
 byname = {a["metadata"]["name"]: a for a in apps}
 failures = []
@@ -12,7 +12,7 @@ for n in ("istio-base", "istio-cni", "istiod", "ztunnel", "istio-mesh-config"):
     check(f"app present: {n}", n in byname)
 helm_apps = [a for a in apps if a["spec"]["source"].get("chart")]
 # The version lives here as a single constant rather than four literals. Bumping istio means editing
-# this line and gitops/apps/istio.yaml, and the check below catches the case that actually breaks a
+# this line and gitops/bootstrap/apps/istio.yaml, and the check below catches the case that actually breaks a
 # mesh: base, cni, istiod and ztunnel drifting apart from each other.
 ISTIO_VERSION = "1.30.4"
 _revs = {a["spec"]["source"]["targetRevision"] for a in helm_apps}

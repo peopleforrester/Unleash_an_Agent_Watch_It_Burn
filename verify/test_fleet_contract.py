@@ -200,10 +200,10 @@ print("== the stated component count matches what is actually shipped ==")
 # The abstract said 34 in one sentence and 35 in another, the run-of-show said 43, and the lab page said
 # "roughly forty" (#121). A technical audience counts, and three numbers for one platform is worse than a
 # wrong one. Measured on a live full-profile cluster 2026-09-03: 41 Argo CD Applications, of which one is
-# the app-of-apps and five are demo filler, leaving 35 platform components. So 35 was right all along and
+# the app-of-apps root and five are demo filler, leaving 35 platform components. So 35 was right all along and
 # the other numbers were drift. This asserts the shipped manifests still add up to what the docs claim,
 # so the next component added fails here instead of being discovered on stage.
-_app_files = {p.stem for p in (REPO / "gitops/apps").glob("*.yaml")}
+_app_files = {p.stem for p in (REPO / "gitops/bootstrap/apps").glob("*.yaml")}
 _demo = {n for n in _app_files if n.startswith("demo-app-")}
 # Not every file is one Application: istio and cert-manager each ship several, which is why the live
 # count (41) exceeds the file count (38). The invariant we can assert statically is the demo split.
@@ -223,14 +223,15 @@ check("the platform page states the measured count and the lab page states none"
 # #475 and #478 took them off the attendee profile (#551).
 _glance = (REPO / "docs/DESIGN-GLANCE.md").read_text(encoding="utf-8")
 # Counted from the manifests, so the stated 34 cannot outlive a change to the attendee selection: every
-# Application document in gitops/apps the attendee root does not exclude, plus the root itself.
-_attendee_root = (REPO / "gitops/bootstrap/attendee/app-of-apps-attendee.yaml").read_text(encoding="utf-8")
-_excluded = set(re.search(r"exclude: '\{([^}]*)\}\.yaml'", _attendee_root).group(1).split(","))
-_attendee_apps = 1 + sum(len(re.findall(r"(?m)^kind: Application$", p.read_text(encoding="utf-8")))
-                         for p in (REPO / "gitops/apps").glob("*.yaml") if p.stem not in _excluded)
-check(f"the attendee root selects 34 Applications, the root included ({_attendee_apps} found)",
+# Application document in the gitops/bootstrap/apps files values-attendee.yaml lists, plus the root itself.
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import APPS, app_names  # noqa: E402
+_attendee = set(app_names("attendee"))
+_attendee_apps = 1 + sum(len(re.findall(r"(?m)^kind: Application$", (APPS / f"{n}.yaml").read_text(encoding="utf-8")))
+                         for n in _attendee)
+check(f"the attendee profile renders 34 Applications, the root included ({_attendee_apps} found)",
       _attendee_apps == 34)
-check("the attendee root leaves out tempo and falco-talon", {"tempo", "falco-talon"} <= _excluded)
+check("the attendee profile leaves out tempo and falco-talon", not {"tempo", "falco-talon"} & _attendee)
 check("the design glance states 34 attendee applications and puts Talon and Tempo on instructor clusters only",
       "34 applications on the attendee profile" in _glance and "about 39" not in _glance
       and "Falco with Talon" not in _glance and "Talon and Tempo run on instructor clusters only" in _glance)

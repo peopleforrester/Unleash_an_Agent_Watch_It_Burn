@@ -2,7 +2,7 @@
 # ABOUTME: because the burn profile installs neither Prometheus nor Tempo. Layered over values.yaml (#476).
 #
 # values.yaml exports metrics to prometheusremotewrite and traces to otlp_grpc/tempo, in relay.yaml and in the
-# Datadog overlay both. The burn root (gitops/bootstrap/burn/app-of-apps-burn.yaml) selects neither
+# Datadog overlay both. The burn profile (gitops/bootstrap/values-burn.yaml) lists neither
 # prometheus.yaml nor tempo.yaml, so on attackme every batch went to two endpoints with nothing behind them and
 # was retried, while Datadog got its copy. This file takes the two exporters out of every pipeline list. Their
 # definitions stay in values.yaml's `exporters` map (Helm merges maps, and deleting a key with null is not

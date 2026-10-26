@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
-# ABOUTME: Deploy the full Watch It Burn IDP onto a fresh cluster via the ArgoCD app-of-apps.
-# ABOUTME: Installs ArgoCD, registers the (private) repo + ghcr OCI, applies app-of-apps; ArgoCD syncs the rest.
+# ABOUTME: Deploy the full Watch It Burn IDP onto a fresh cluster through the lab-bootstrap root Application.
+# ABOUTME: Installs ArgoCD, applies lab-bootstrap (gitops/bootstrap at staging, the profile's values); ArgoCD syncs the rest.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_URL="https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
-# Profile selects which root app-of-apps to apply: "full" (Cluster 2/3) or "burn" (Cluster 1).
+# Profile selects which values file of the gitops/bootstrap chart the root reads (#609); lab-platform.yaml lists
+# the same four. Each file's header says what its profile is for.
 PROFILE="${1:-full}"
 case "${PROFILE}" in
-    full)     ROOT_APP="gitops/bootstrap/full/app-of-apps.yaml" ;;
-    burn)     ROOT_APP="gitops/bootstrap/burn/app-of-apps-burn.yaml" ;;
+    # full: Cluster 2/3, instructor and round clusters.
+    full)     VALUES="values-full.yaml" ;;
+    # burn: Cluster 1, the community cluster with no guardrails.
+    burn)     VALUES="values-burn.yaml" ;;
     # attendee: full platform minus the C1-C3 challenge controls, so the student installs each one
-    # themselves (RUN-OF-SHOW-2026-08, #160). See gitops/bootstrap/attendee/app-of-apps-attendee.yaml.
-    attendee) ROOT_APP="gitops/bootstrap/attendee/app-of-apps-attendee.yaml" ;;
+    # themselves (RUN-OF-SHOW-2026-08, #160).
+    attendee) VALUES="values-attendee.yaml" ;;
     # admin: the presenters' own cluster. The student build with every guardrail ARMED, so a control can be
-    # shown already working rather than staged (#294). See gitops/bootstrap/admin/app-of-apps-admin.yaml.
-    admin)    ROOT_APP="gitops/bootstrap/admin/app-of-apps-admin.yaml" ;;
+    # shown already working rather than staged (#294).
+    admin)    VALUES="values-admin.yaml" ;;
     *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin]" >&2; exit 2 ;;
 esac
+[[ -f "${REPO}/gitops/bootstrap/${VALUES}" ]] || { echo "gitops/bootstrap/${VALUES} is missing" >&2; exit 1; }
 log() { printf '\n==> %s\n' "$*" >&2; }
 
 log "[1] default gp3 StorageClass"
@@ -38,36 +42,15 @@ kubectl -n argocd rollout status statefulset/argocd-application-controller --tim
 kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=180s
 kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
 
-log "[3] register the private repo (token from gh) + ghcr OCI helm for kagent"
-GH_TOKEN="$(gh auth token)"
-kubectl apply -f - <<EOF
-apiVersion: v1
-kind: Secret
-metadata:
-  name: witb-repo
-  namespace: argocd
-  labels: { argocd.argoproj.io/secret-type: repository }
-stringData:
-  type: git
-  url: ${REPO_URL}
-  username: peopleforrester
-  password: ${GH_TOKEN}
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ghcr-kagent-oci
-  namespace: argocd
-  labels: { argocd.argoproj.io/secret-type: repository }
-stringData:
-  type: helm
-  name: kagent-oci
-  url: ghcr.io/kagent-dev/kagent/helm
-  enableOCI: "true"
-EOF
+# [3] No repository Secret (#609). The repo is public and Argo CD reads it anonymously, as labctl does, so no
+# credential is written here; this step used to write the operator's own `gh auth token` into witb-repo on every
+# cluster, attendee clusters included. A cluster built before that change still holds it, so it is removed. The
+# credential-free ghcr-kagent-oci repository Secret kagent needs is now a template of the gitops/bootstrap chart.
+log "[3] no repository credential: remove any witb-repo Secret an earlier build wrote"
+kubectl -n argocd delete secret witb-repo --ignore-not-found
 
 log "[3.6] per-cluster secrets, created DIRECTLY in the cluster (no ESO / no Secrets Manager from the"
-log "      cluster, no cross-account). The secret exists BEFORE the app-of-apps, so consumers never"
+log "      cluster, no cross-account). The secret exists BEFORE lab-bootstrap, so consumers never"
 log "      crash-loop waiting on it. Datadog keys are passed in by the caller (fleet reads the pool on the"
 log "      provisioning box); a manual run falls back to the local Secrets Manager if this account can read it."
 DD_API_KEY="${WITB_DD_API_KEY:-}"
@@ -134,12 +117,63 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set vpcId="${VPC_ID}" \
   --set serviceAccount.create=true \
   --set serviceAccount.name=aws-load-balancer-controller
-# Non-fatal: the controller reconciles the console Service whenever it is ready; it must NOT gate the app-of-apps.
+# Non-fatal: the controller reconciles the console Service whenever it is ready; it must NOT gate lab-bootstrap.
 kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
   || log "WARN: LB controller not ready yet; continuing. The console Service reconciles once it is up."
 
-log "[4] apply the ${PROFILE} app-of-apps (${ROOT_APP}, targetRevision: staging), ArgoCD deploys the components"
-kubectl apply -f "${REPO}/${ROOT_APP}"
+# [4] One root on every profile, named and shaped like the one labctl creates (lab-platform docs/talk-config.md
+# section 5): the gitops/bootstrap chart with this profile's values file and revision=staging, so every child
+# follows staging as before. It is not self-managed: nothing the chart renders sources gitops/bootstrap.
+# A cluster built before #609 has one of the four old roots instead. Applying lab-bootstrap over it would be the
+# two-roots failure of 2026-09-06, two roots over the same children, so the old root is deleted first WITHOUT
+# cascading: its resources-finalizer is what makes Argo CD delete the children, so it is stripped before the
+# delete, and the children stay for lab-bootstrap to adopt.
+log "[4] apply lab-bootstrap (gitops/bootstrap, ${VALUES}, revision staging), ArgoCD deploys the components"
+for old in app-of-apps app-of-apps-attendee app-of-apps-burn app-of-apps-admin; do
+  if [[ -n "$(kubectl -n argocd get application "${old}" --ignore-not-found -o name)" ]]; then
+    log "    replacing the old root ${old}: finalizer removed, deleted without its children"
+    kubectl -n argocd patch application "${old}" --type merge -p '{"metadata":{"finalizers":null}}'
+    kubectl -n argocd delete application "${old}" --wait=true
+  fi
+done
+kubectl apply -f - <<EOF
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lab-bootstrap
+  namespace: argocd
+  labels:
+    lab-platform/profile: ${PROFILE}
+spec:
+  project: default
+  source:
+    repoURL: ${REPO_URL}
+    targetRevision: staging
+    path: gitops/bootstrap
+    helm:
+      valueFiles:
+        - ${VALUES}
+      parameters:
+        - name: revision
+          value: staging
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  # Charts such as Kyverno's add finalizers to the Applications the root renders, which git can never match,
+  # so the root would report OutOfSync for ever (#265). Ignored, and RespectIgnoreDifferences so a sync does
+  # not try to strip them either.
+  ignoreDifferences:
+    - group: argoproj.io
+      kind: Application
+      jsonPointers:
+        - /metadata/finalizers
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - RespectIgnoreDifferences=true
+EOF
 
 log "Deploy issued. Watch sync with: kubectl get applications -n argocd"
 log "NOTE: agent Bedrock access is provisioned by Terraform (infra/terraform/aws/cluster) as an EKS Pod"

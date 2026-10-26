@@ -2,7 +2,7 @@
 
 Grafana dashboards and visualization resources. The core observability stack
 (Prometheus, Grafana, OTel Collector, Tempo, Loki, Promtail) is deployed via
-ArgoCD Application manifests in `gitops/apps/`.
+ArgoCD Application manifests in `gitops/bootstrap/apps/`.
 
 ## Directory Structure
 
@@ -16,12 +16,12 @@ grafana/
 
 | Component | Purpose | Deployed Via |
 |-----------|---------|-------------|
-| Prometheus | Metrics collection + alerting | `gitops/apps/prometheus.yaml` (kube-prometheus-stack 82.1.0) |
+| Prometheus | Metrics collection + alerting | `gitops/bootstrap/apps/prometheus.yaml` (kube-prometheus-stack 82.1.0) |
 | Grafana | Dashboards + visualization | Bundled with kube-prometheus-stack |
-| OTel Collector | Trace/metric pipeline | `gitops/apps/otel-collector.yaml` (contrib 0.145.0) |
-| Tempo | Distributed tracing backend | `gitops/apps/tempo.yaml` |
-| Loki | Log aggregation | `gitops/apps/loki.yaml` |
-| Promtail | Log shipping | `gitops/apps/promtail.yaml` |
+| OTel Collector | Trace/metric pipeline | `gitops/bootstrap/apps/otel-collector.yaml` (contrib 0.145.0) |
+| Tempo | Distributed tracing backend | `gitops/bootstrap/apps/tempo.yaml` |
+| Loki | Log aggregation | `gitops/bootstrap/apps/loki.yaml` |
+| Promtail | Log shipping | `gitops/bootstrap/apps/promtail.yaml` |
 
 ## Data Flow
 
@@ -42,7 +42,7 @@ namespace is picked up and loaded.
 ## Alert Rules
 
 Four custom PrometheusRules are defined inline in the kube-prometheus-stack
-values (`gitops/apps/prometheus.yaml`):
+values (`gitops/bootstrap/apps/prometheus.yaml`):
 
 | Alert | Severity | Condition |
 |-------|----------|-----------|

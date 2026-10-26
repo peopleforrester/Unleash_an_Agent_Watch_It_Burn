@@ -18,7 +18,7 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-PROM_APP = yaml.safe_load((REPO / "gitops/apps/prometheus.yaml").read_text(encoding="utf-8"))
+PROM_APP = yaml.safe_load((REPO / "gitops/bootstrap/apps/prometheus.yaml").read_text(encoding="utf-8"))
 IDENTITY = (REPO / "infra/datadog-cluster-identity.sh").read_text(encoding="utf-8")
 DEPLOY = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
 CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
@@ -69,9 +69,9 @@ check(f"datadog-cluster-identity.sh writes cluster-identity into Grafana's names
 check("and writes the public-host key", "--from-literal=public-host=" in IDENTITY)
 # Grafana reads env once, at pod start: the identity must already be there when Argo CD first starts it.
 ident_at = DEPLOY.find("datadog-cluster-identity.sh")
-root_at = DEPLOY.find('kubectl apply -f "${REPO}/${ROOT_APP}"')
-check("deploy-full-idp.sh writes the identity before it applies the app-of-apps",
-      0 <= ident_at < root_at, f"identity at {ident_at}, app-of-apps at {root_at}")
+root_at = DEPLOY.find("  name: lab-bootstrap\n")
+check("deploy-full-idp.sh writes the identity before it applies the lab-bootstrap root",
+      0 <= ident_at < root_at, f"identity at {ident_at}, lab-bootstrap at {root_at}")
 
 print()
 if failures:

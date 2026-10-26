@@ -15,7 +15,7 @@ them reaches guard-proxy's /toggle. It also pins that every route to guard-proxy
 from a short list, so a new prefix route to guard-proxy fails here before it can be probed.
 
 "Rendered": what reaches the pod is the console-conf ConfigMap, generated as default.conf from this one
-file, in the ai-layer bundle that both the admin and the community (burn) app-of-apps deploy. Those links
+file, in the ai-layer bundle that both the admin and the community (burn) profiles deploy. Those links
 are checked too, so a per-profile override cannot bring the route back unseen.
 
 The live half is verify/test_console_no_toggle_live.py (E2E suite).
@@ -28,6 +28,9 @@ import re
 import sys
 
 import yaml
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from bootstrap_chart import deploys, values_path  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 AI = REPO / "gitops/ai-layer"
@@ -182,20 +185,16 @@ check("console-conf is generated as default.conf from console.conf",
       gens.get("console-conf", {}).get("files") == ["default.conf=console.conf"], f"{gens.get('console-conf')}")
 check("no kustomize patch rewrites console-conf",
       "console-conf" not in yaml.safe_dump({k: v for k, v in kust.items() if k != "configMapGenerator"}))
-app = yaml.safe_load((REPO / "gitops/apps/ai-layer.yaml").read_text(encoding="utf-8"))
+app = yaml.safe_load((REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text(encoding="utf-8"))
 srcs = app["spec"].get("sources") or [app["spec"].get("source", {})]
 check("the ai-layer Application deploys gitops/ai-layer", any(s.get("path") == "gitops/ai-layer" for s in srcs),
       f"{srcs}")
-for profile, rel in (("admin", "gitops/bootstrap/admin/app-of-apps-admin.yaml"),
-                     ("community", "gitops/bootstrap/burn/app-of-apps-burn.yaml")):
-    spec = yaml.safe_load((REPO / rel).read_text(encoding="utf-8"))["spec"]
-    apps = [s for s in spec.get("sources", []) if s.get("path") == "gitops/apps"]
-    d = apps[0].get("directory", {}) if apps else {}
-    included = bool(apps) and ("ai-layer" in d.get("include", "ai-layer")) and "ai-layer.yaml" not in d.get("exclude", "")
-    check(f"the {profile} profile deploys the ai-layer Application from gitops/apps", included, f"{d}")
-    # Comments are exempt: the burn bootstrap explains in one why the console needs cert-manager.
-    extra = [p.name for p in (REPO / rel).parent.glob("*.y*ml")
-             if re.search(r"console[-.]conf|guard-proxy", strip_comments(p.read_text(encoding="utf-8")))]
+for profile, chart_profile in (("admin", "admin"), ("community", "burn")):
+    check(f"the {profile} profile deploys the ai-layer Application from gitops/bootstrap/apps",
+          deploys(chart_profile, "ai-layer.yaml"))
+    # Comments are exempt: the burn values file explains in one why the console needs cert-manager.
+    vf = values_path(chart_profile)
+    extra = [vf.name] if re.search(r"console[-.]conf|guard-proxy", strip_comments(vf.read_text(encoding="utf-8"))) else []
     check(f"the {profile} profile carries no console-conf or guard-proxy override of its own", not extra, f"{extra}")
 
 print("== the students' toggles do not depend on the console ==")

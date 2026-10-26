@@ -1,0 +1,72 @@
+# ABOUTME: ArgoCD Application for KubeArmor (CNCF Sandbox LSM-based runtime enforcement) via the
+# ABOUTME: kubearmor-operator Helm chart. This is THE C3 inline-prevention engine (Tetragon retired).
+#
+# KubeArmor enforces inline at LSM hooks (BPF-LSM preferred). BPF-LSM is active on our AL2023 nodes
+# (2026-07-16: /sys/kernel/security/lsm contains bpf on kernel 6.12). The historical blocker (KubeArmor
+# v1.7.x could not resolve container namespaces against EKS AL2023 containerd 2.x, enforcer reported
+# mntns=0 / "task not found") is OBSOLETE on our current containerd: KubeArmor resolves containers and
+# blocks. Proven live 2026-07-18 (r3-1, Tetragon rule removed, bait read denied by KubeArmor) and again
+# 2026-08-30 (r3-2, Tetragon policy deleted, the annotated pod still could not create the legacy dir).
+# Tetragon was retired 2026-08-30 as the redundant second prevention engine (Michael's ruling, see
+# docs/DECISION-LOG.md). See the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`).
+#
+# autoDeploy=true has the operator create the default KubeArmorConfig, which brings up the enforcement
+# DaemonSet + relay with no second manifest. Default posture is audit/allow until a KubeArmorPolicy names
+# a target, so the engine alone enforces nothing: the actual C3 deny is the KubeArmorPolicy shipped by the
+# kubearmor-policies app (policies/kubearmor/). Engine/policy split mirrors kyverno / kyverno-policies.
+#
+# PROFILE GATING: every profile's values file (gitops/bootstrap/values-<profile>.yaml) lists this engine. The
+# BURN profile (the community cluster) lists 'kubearmor' (engine only, NOT kubearmor-policies), which keeps the
+# engine present on every build while the community cluster stays enforcement-free and still burns.
+# Wave -6 puts the engine up well before its policy (kubearmor-policies, wave 4).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kubearmor
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: kubearmor-operator
+    repoURL: https://kubearmor.github.io/charts
+    targetRevision: "1.7.4"
+    helm:
+      releaseName: kubearmor-operator
+      valuesObject:
+        # Operator auto-creates the default KubeArmorConfig -> deploys the enforcement DaemonSet + relay.
+        autoDeploy: true
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        kubearmorOperator:
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 300m, memory: 256Mi }
+        # C3's detection signal (#497). A Block policy emits a KubeArmor alert as it denies, on the attempt,
+        # unlike Falco's open_read rule, which never fires because the read never succeeds. The relay only
+        # prints those alerts to its stdout with this on (chart default false), and that stdout is where
+        # challenges/c3-secret-grep/fallback.kubectl.sh and the segment 4 beat read the alert with
+        # `kubectl logs deployment/kubearmor-relay`. Only this key is set; Helm merges the rest of
+        # kubearmorConfig from the chart defaults. Alerts only: enableStdOutLogs would flood the relay log
+        # with every process event.
+        kubearmorConfig:
+          enableStdOutAlerts: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kubearmor
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      - ServerSideApply=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m

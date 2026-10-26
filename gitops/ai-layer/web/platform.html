@@ -219,7 +219,7 @@
 <script>
   // Service hostnames (#233): <service>-<this cluster's host>. Computed from the address bar so the page
   // is right on every cluster without knowing its name; port-forward never worked from a browser terminal.
-  // data-explore names a Grafana data source uid (gitops/apps/prometheus.yaml): the link opens Explore on it
+  // data-explore names a Grafana data source uid (gitops/bootstrap/apps/prometheus.yaml): the link opens Explore on it
   // and keeps its own label, because the hostname it points at is Grafana's, not the store's (#381).
   (function(){ var h=location.hostname; if(!/agenticburn\.com$/.test(h)) return;
     document.querySelectorAll('a.svchost').forEach(function(a){ var u='https://'+a.dataset.svc+'-'+h+'/', ds=a.dataset.explore;

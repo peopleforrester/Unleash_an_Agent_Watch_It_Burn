@@ -1,34 +1,33 @@
-# ABOUTME: Every exporter a profile's collector names has its backend in that profile's root selection (#476),
+# ABOUTME: Every exporter a profile's collector names has its backend in that profile's app list (#476),
 # ABOUTME: with and without datadog-secret, and the burn overlay is values.yaml minus Tempo and Prometheus.
 """Why this exists (#476).
 
-The burn root installed otel-collector.yaml, values.yaml alone, whose metrics and traces pipelines export to
-prometheusremotewrite and otlp_grpc/tempo. The burn root selects neither prometheus.yaml nor tempo.yaml, so on
+The burn profile installed otel-collector.yaml, values.yaml alone, whose metrics and traces pipelines export to
+prometheusremotewrite and otlp_grpc/tempo. The burn profile lists neither prometheus.yaml nor tempo.yaml, so on
 attackme every batch went to two endpoints with nothing behind them and was retried; only Datadog's copy
 landed. Nothing caught it because every collector check read the instructor or attendee render, and no check
 asked whether a sink the config names is installed on the profile that runs it.
 
-This one does, for every root under gitops/bootstrap:
+This one does, for every profile of gitops/bootstrap (its values-<profile>.yaml app list, #609):
 
-  - the root selects exactly one collector Application, and collector_render.py knows how to render it;
-  - every exporter in every pipeline of the collector the root selects, with datadog-secret and without, is
-    either an in-cluster sink whose Application the root selects (and whose namespace the endpoint names) or
+  - the profile lists exactly one collector Application, and collector_render.py knows how to render it;
+  - every exporter in every pipeline of the collector the profile lists, with datadog-secret and without, is
+    either an in-cluster sink whose Application the profile lists (and whose namespace the endpoint names) or
     a sink that needs nothing in the cluster. An exporter in neither table fails, so a new sink is placed;
   - the burn overlay changes the exporters lists and nothing else, and they are values.yaml's lists with the
     two absent sinks removed, in the same order, so a later change to values.yaml cannot leave burn behind.
 
-Offline: reads the roots and the value files, nothing else.
+Offline: reads the profile values files and the collector value files, nothing else.
 """
 from __future__ import annotations
 
-import fnmatch
 import pathlib
-import re
 import sys
 
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from bootstrap_chart import app_files, profiles as chart_profiles  # noqa: E402
 from collector_render import APPS, PROFILE_APP, REPO, collector_config, datadog_overlay, helm_values  # noqa: E402
 
 failures: list[str] = []
@@ -40,32 +39,19 @@ def check(name: str, cond: bool) -> None:
         failures.append(name)
 
 
-# Exporters whose backend runs in the cluster: the gitops/apps Application that installs it.
+# Exporters whose backend runs in the cluster: the gitops/bootstrap/apps Application that installs it.
 IN_CLUSTER = {"prometheusremotewrite": "prometheus.yaml", "otlp_grpc/tempo": "tempo.yaml"}
 # Exporters that need nothing installed: Datadog is SaaS, debug writes to the collector's own log.
 NO_BACKEND = {"datadog", "datadog/admin", "debug"}
 
 
-def globs(pattern: str) -> list[str]:
-    """Argo CD's directory glob with one brace group, expanded the way the roots write it."""
-    m = re.fullmatch(r"(.*)\{(.*)\}(.*)", pattern)
-    return [m.group(1) + p + m.group(3) for p in m.group(2).split(",")] if m else [pattern]
-
-
 def selected(profile: str) -> set[str]:
-    """The gitops/apps files the profile's root deploys."""
-    root = next((REPO / "gitops/bootstrap" / profile).glob("*.yaml"))
-    doc = yaml.safe_load(root.read_text(encoding="utf-8"))
-    d = next(s for s in doc["spec"]["sources"] if s.get("path") == "gitops/apps").get("directory") or {}
-    files = sorted(p.name for p in APPS.glob("*.yaml"))
-    inc = globs(d["include"]) if d.get("include") else ["*"]
-    exc = globs(d["exclude"]) if d.get("exclude") else []
-    return {f for f in files
-            if any(fnmatch.fnmatch(f, g) for g in inc) and not any(fnmatch.fnmatch(f, g) for g in exc)}
+    """The gitops/bootstrap/apps files the profile's values file lists."""
+    return app_files(profile)
 
 
 def applications(f: str) -> list[dict]:
-    """The Applications in a gitops/apps file; some files hold more than one document."""
+    """The Applications in a gitops/bootstrap/apps file; some files hold more than one document."""
     return [d for d in yaml.safe_load_all((APPS / f).read_text(encoding="utf-8"))
             if d and d.get("kind") == "Application"]
 
@@ -88,8 +74,8 @@ def pipeline_exporters(cfg: dict) -> set[str]:
 
 
 RENDERS = {path.name: key for key, path in PROFILE_APP.items()}
-profiles = sorted(p.name for p in (REPO / "gitops/bootstrap").iterdir() if p.is_dir())
-check(f"there are roots to check {profiles}", "burn" in profiles and len(profiles) > 1)
+profiles = chart_profiles()
+check(f"there are profiles to check {profiles}", "burn" in profiles and len(profiles) > 1)
 
 for profile in profiles:
     sel = selected(profile)
@@ -111,7 +97,7 @@ for profile in profiles:
             check(f"{profile} {label}: {exp} is a known sink (add it to IN_CLUSTER or NO_BACKEND)", app is not None)
             if app is None:
                 continue
-            check(f"{profile} {label}: {exp} has its backend {app} in the {profile} root's selection", app in sel)
+            check(f"{profile} {label}: {exp} has its backend {app} in the {profile} profile's list", app in sel)
             endpoint = (cfg["exporters"].get(exp) or {}).get("endpoint", "")
             check(f"{profile} {label}: {exp} points into {app}'s namespace ({endpoint})",
                   f".{app_namespace(app)}.svc.cluster.local:" in endpoint)

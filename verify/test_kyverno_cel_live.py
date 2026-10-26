@@ -56,7 +56,7 @@ TOGGLED = ("require-resource-limits", "restrict-image-registries")
 APPS = ("kyverno-policies", "minimal-floor")
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
-# The reports controller rescans every 30s (gitops/apps/kyverno.yaml); four rescans covers a busy controller.
+# The reports controller rescans every 30s (gitops/bootstrap/apps/kyverno.yaml); four rescans covers a busy controller.
 REPORT_TIMEOUT_S = 150
 # How long the flip must hold after the hard refresh: long enough for a refresh, a diff and a selfHeal sync.
 HOLD_S = 90

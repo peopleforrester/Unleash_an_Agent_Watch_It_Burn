@@ -153,7 +153,7 @@
   // platform.html uses. These cards used to send `echo open https://grafana-<your console host>...` to the
   // terminal, where bash reads `<your` as an input redirect and prints an error instead of an address, and
   // Loki, Prometheus and Tempo sent a port-forward, which listens inside the terminal pod where no browser
-  // can reach it. explore opens Grafana Explore on that data source uid (gitops/apps/prometheus.yaml).
+  // can reach it. explore opens Grafana Explore on that data source uid (gitops/bootstrap/apps/prometheus.yaml).
   function svcUrl(e){
     var h = location.hostname;
     if (!/agenticburn\.com$/.test(h)) return '';

@@ -22,7 +22,10 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
-BURN = (REPO / "gitops/bootstrap/burn/app-of-apps-burn.yaml").read_text(encoding="utf-8")
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import app_names  # noqa: E402
+
+BURN = app_names("burn")
 
 failures: list[str] = []
 
@@ -62,11 +65,10 @@ check("it gives them a command to tell the difference", "kubectl get pods -A" in
 
 print("== the burn profile really does omit these, so the page is telling the truth ==")
 check("no prometheus in the burn profile", "prometheus" not in BURN)
-check("no grafana in the burn profile", "grafana" not in BURN)
-check("no argocd app in the burn profile include list",
-      re.search(r"include: '\{[^}]*\bargocd\b[^}]*\}", BURN) is None)
+check("no grafana in the burn profile", not any("grafana" in a for a in BURN))
+check("no argocd app in the burn profile's list", not any("argocd" in a for a in BURN))
 check("but Datadog IS there, or the page would be sending them nowhere",
-      "datadog-agent-cr" in BURN and "otel-collector" in BURN)
+      "datadog-agent-cr" in BURN and any(a.startswith("otel-collector") for a in BURN))
 
 print("== every page that ships is actually routed (#338) ==")
 # display.html shipped in the image and was asserted by test_brand_skin, but console.conf had no location

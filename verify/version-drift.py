@@ -167,7 +167,7 @@ def main() -> int:
 
     # Components that are not Helm charts need their own sources.
     for name, pin_hint, getter in (
-        ("kagent", "gitops/apps/kagent.yaml", lambda: gh_latest("kagent-dev/kagent")),
+        ("kagent", "gitops/bootstrap/apps/kagent.yaml", lambda: gh_latest("kagent-dev/kagent")),
         ("agentgateway", "gitops/ai-layer/agentgateway.yaml", lambda: gh_latest("agentgateway/agentgateway")),
         ("llm-guard", "images/llm-guard", lambda: pypi_latest("llm-guard")),
         ("eks-control-plane", "infra/terraform/aws/cluster/main.tf", eks_versions),

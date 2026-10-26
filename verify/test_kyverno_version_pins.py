@@ -1,4 +1,4 @@
-# ABOUTME: Every place that names the deployed Kyverno agrees: the chart gitops/apps/kyverno.yaml pins, both
+# ABOUTME: Every place that names the deployed Kyverno agrees: the chart gitops/bootstrap/apps/kyverno.yaml pins, both
 # ABOUTME: VERSIONS.lock lines, the Datadog version tag, the CLI version the policy test and e2e-tools.lock pin,
 # ABOUTME: and the working docs that state the deployed chart and app.
 #
@@ -27,7 +27,7 @@ def check(n, c, detail=""):
         failures.append(n)
 
 
-app = yaml.safe_load((REPO / "gitops/apps/kyverno.yaml").read_text())
+app = yaml.safe_load((REPO / "gitops/bootstrap/apps/kyverno.yaml").read_text())
 chart = str(app["spec"]["source"]["targetRevision"])
 values = app["spec"]["source"]["helm"]["valuesObject"]
 dd_version = str(values["admissionController"]["podAnnotations"]["tags.datadoghq.com/version"])
@@ -40,7 +40,7 @@ for line in lock_lines:
     a = re.search(r"\bapp (v\S+)", line)
     lock.append((c.group(1) if c else None, a.group(1) if a else None))
 check("VERSIONS.lock lists kyverno twice (component versions and IDP foundation)", len(lock) == 2, f"{lock_lines}")
-check(f"every VERSIONS.lock kyverno line pins chart {chart}, the chart gitops/apps/kyverno.yaml deploys",
+check(f"every VERSIONS.lock kyverno line pins chart {chart}, the chart gitops/bootstrap/apps/kyverno.yaml deploys",
       lock and all(c == chart for c, _ in lock), f"{lock}")
 apps = {a for _, a in lock}
 check("the VERSIONS.lock kyverno lines name one app version", len(apps) == 1 and None not in apps, f"{lock}")

@@ -1,7 +1,7 @@
 # ABOUTME: Grafana's Tempo data source (uid tempo), shipped by the tempo Application so it exists exactly where
 # ABOUTME: Tempo does: admin and full clusters. The attendee profile leaves tempo out, and this with it (#475).
 #
-# It used to be in gitops/apps/prometheus.yaml's grafana.additionalDataSources, which every profile deploys, so
+# It used to be in gitops/bootstrap/apps/prometheus.yaml's grafana.additionalDataSources, which every profile deploys, so
 # an attendee cluster without Tempo would have carried a data source pointing at a Service that does not exist.
 # Grafana's datasources sidecar (kube-prometheus-stack: sidecar.datasources.enabled, label grafana_datasource,
 # value "1", watching its own namespace, monitoring) loads every labelled ConfigMap there and calls Grafana's

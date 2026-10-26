@@ -468,15 +468,16 @@ finish() {
     exit 1
 }
 
-# One control per cluster (#496): an admin cluster's terminal flips the gateway rule (gitops/bootstrap/admin),
-# anywhere else C7 is the toolNames list. Asked the way the terminal asks.
+# One control per cluster (#496): an admin cluster's terminal flips the gateway rule (its root, lab-bootstrap, is
+# labelled lab-platform/profile=admin), anywhere else C7 is the toolNames list. Asked the way the terminal asks.
 admin="" rc=0
-admin="$(kc -n argocd get application app-of-apps-admin --ignore-not-found -o name 2>/dev/null)" || rc=$?
+admin="$(kc -n argocd get application lab-bootstrap --ignore-not-found \
+    -o jsonpath='{.metadata.labels.lab-platform/profile}' 2>/dev/null)" || rc=$?
 if [[ "${rc}" -ne 0 ]]; then
     check "Argo CD answers whether this is an admin cluster" fail "kubectl exit ${rc}; nothing was touched"
     finish
 fi
-[[ -n "${admin}" ]] || workshop
+[[ "${admin}" == "admin" ]] || workshop
 
 KIND="admin"
 echo "==> C7 gateway rule: read_internal_config through ${GATEWAY}, from ${POD} (container ${CONTAINER}) in ${NS} on ${CONTEXT}"
