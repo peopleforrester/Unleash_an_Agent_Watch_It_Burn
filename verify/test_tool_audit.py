@@ -206,8 +206,9 @@ mcp_dep = next((d for d in RES if d.get("kind") == "Deployment" and d["metadata"
 annotations = (mcp_dep.get("spec", {}).get("template", {}).get("metadata", {}).get("annotations") or {})
 check("workshop-mcp's pod carries no Datadog annotation that excludes or reroutes its logs",
       bool(mcp_dep) and not [k for k in annotations if k.startswith("ad.datadoghq.com/") and k.endswith((".logs", "exclude"))])
+APPS = REPO / "gitops/bootstrap/apps"
 check("no Loki or Alloy app is left to read the trail from (#474)",
-      not (REPO / "gitops/apps/loki.yaml").exists() and not (REPO / "gitops/apps/alloy.yaml").exists())
+      APPS.is_dir() and not (APPS / "loki.yaml").exists() and not (APPS / "alloy.yaml").exists())
 
 print()
 if failures:

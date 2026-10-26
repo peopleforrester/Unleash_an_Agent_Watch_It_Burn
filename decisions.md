@@ -2817,10 +2817,32 @@ Application each and every profile but burn selected both, so the counts fall by
 
 - Attendee clusters run 32 Argo CD Applications, the app-of-apps included, down from 34. Instructor clusters
   run 36, down from 38: 30 platform components, 5 demo apps and the root. `docs/DESIGN-GLANCE.md`,
-  `docs/RUN-OF-SHOW-2026-08.md`, `platform.html` and the fleet-contract checks say so. `gitops/README.md`
-  counts 34 manifest files in `gitops/apps`, down from 36.
+  `docs/RUN-OF-SHOW-2026-08.md`, `platform.html` and the fleet-contract checks say so.
 - The glance paragraph's observability clause reads "Prometheus and Grafana, with pod logs going to Datadog
   only", keeping staging's "Falco Talon and Tempo run on instructor clusters only".
 - The run-of-show's layer table drops Loki from the observability row.
 - `docs/ABSTRACT.md` is not changed. It is the working copy of published listings and already says to leave
   the number out.
+
+## 2026-10-26 · #474 · Loki and Alloy leave the bootstrap chart's profile lists
+
+**Why:** the approved #474 draft (`afea397` on `agent/474-9586`) conflicted with staging after #609 moved
+`gitops/apps/` into the `lab-bootstrap` Helm chart at `gitops/bootstrap/apps/`, with each profile an explicit
+list in `values-<profile>.yaml`. The change is made again on that layout, keeping the approved design.
+
+**What it changes beyond the approved draft:**
+
+- `gitops/bootstrap/apps/loki.yaml` and `alloy.yaml` are deleted, and `loki` and `alloy` leave
+  `values-attendee.yaml`, `values-admin.yaml` and `values-full.yaml` (burn never listed them). The chart fails a
+  render on a listed name with no file, so the lists and the files go together. The 2026-10-24 entry's "every
+  app-of-apps profile reads `gitops/apps` as a directory" is how it was then; now `lab-bootstrap` stops
+  rendering the two Applications and its sync prunes them, with the same PVC caveat.
+- `verify/test_bootstrap_chart.py` holds the lists at attendee 27, burn 19, admin 31 and full 29, down two
+  each but burn, and checks that no profile names loki or alloy.
+- `verify/test_tool_audit.py`'s "no Loki or Alloy app is left" check looks in `gitops/bootstrap/apps/`; on
+  the old path it would have passed whatever that directory held.
+- Staging's text is kept everywhere else: `gitops/README.md`'s chart layout (it no longer states a manifest
+  count), the run-of-show's `kubectl get applications` comment (now 36 apps, 32 on an attendee cluster, with
+  staging's "1 app-of-apps root, lab-bootstrap"), `MASTER-RECREATION-SPEC.md`'s step 4, and the
+  `gitops/bootstrap/apps/` paths in `STACK-WALKTHROUGH.md`, `links.html` and `observability-idp/README.md`. Only
+  Loki, Alloy and Promtail are removed from them.
