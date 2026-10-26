@@ -2520,3 +2520,24 @@ ServiceAccount could read `terminal-auth`, and no workshop policy refused it. Th
   Deployment and an UPDATE likewise; workshop-mcp is held to it. Every route to `ceo-personal-record`, a ConfigMap
   volume and an imagePullSecret pass all eleven policies, and web-terminal, the operator and the ReplicaSet
   controller are not judged. The same test against the previous policy fails 25 checks.
+
+## 2026-10-26 · #607 · the live suite asks the deployed admission controller the #606 question
+
+#606 measured the Secret rule with the pinned Kyverno CLI v1.19.1. `verify/test_llm_bypass_live.py` now asks the
+cluster's own controller, as agent-sa, so a run on an attendee cluster shows the two engines agree.
+
+- **Server-side dry run, as the issue asks.** Each request passes authorization and every admission webhook and
+  stores nothing, so no Secret has to exist and nothing needs cleaning up. Kyverno judges dry-run requests: the
+  kubecon probe's C2 check (`verify/kubecon_probe.py`) already relies on a dry-run refusal.
+- **Three shapes, each on the default ServiceAccount with the signed busybox the suite already uses:** terminal-auth
+  as a secret volume (expects the mount message), terminal-auth by env `secretKeyRef` (expects the env message), and
+  ceo-personal-record both ways (expects `(server dry run)`, admitted). Mount and env are split so each message is
+  checked on its own; #606's CLI test takes either message for a pod that reads one Secret both ways.
+- **Same verdicts from the CLI first.** The three objects the test builds, run through all eleven policies with the
+  pinned CLI as agent-sa on 2026-10-26: only restrict-agent-spawned-workloads fails the two terminal-auth pods, each
+  with its message, and every policy that matches the ceo-personal-record pod passes it. So a different live answer
+  is the controller's, not the fixture's.
+- **A crash fixed on the way.** Since #490 (2026-10-24) the valuefrom shape called `container("c", {}, env=[...])`,
+  which raises `TypeError` (env given twice), so the suite stopped right after its prerequisites and never reached a
+  pod. `container()` now takes the env list itself as well as a dict of literals.
+- **Not yet run on a cluster.** No attendee cluster was up for this run; the next build runs it with CONTEXT set.

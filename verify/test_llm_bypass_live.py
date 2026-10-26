@@ -45,6 +45,14 @@ ports only from the hop before them, by label, so:
   * guard-proxy still connects to agentgateway :3000, the agent and the gateway are Ready (their probes get in),
     and the live policies admit workshop-agent to :3002 and agentgateway and the kagent namespace to :8080
 
+Why (#607). #606 refused the agent a pod that reads a Secret its scoped Role does not (the kubelet resolves a mounted
+Secret with the node's credentials), and verify/test_c8_pod_secret_mount.py showed it with the pinned Kyverno CLI.
+These show the deployed admission controller reaching the same verdict. Each is a server-side dry run as agent-sa of
+a pod on the default ServiceAccount, so nothing lands and no Secret has to exist:
+  * a Pod mounting terminal-auth as a secret volume                  -> refused, on the mount
+  * a Pod reading terminal-auth through an env secretKeyRef          -> refused, on the env var
+  * a Pod mounting ceo-personal-record and reading it by secretKeyRef -> admitted
+
 Before any of that, the policy on the cluster must be the one in policies/kyverno/: a result for a
 different expression says nothing about this repo's file.
 
@@ -72,6 +80,8 @@ SPAWN_FILE = REPO / "policies/kyverno/restrict-agent-spawned-workloads.yaml"
 SPAWN = "restrict-agent-spawned-workloads"
 AS_IDENTITY = "may not run as a ServiceAccount that holds Bedrock credentials"
 AS_LABEL = "may not carry a label that a NetworkPolicy trusts"
+AS_SECRET_VOLUME = "may not mount a Secret other than ceo-personal-record"
+AS_SECRET_ENV = "may not take an env var from a Secret other than ceo-personal-record"
 AGENT = "system:serviceaccount:agent:agent-sa"
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
@@ -176,9 +186,10 @@ RUN = uuid.uuid4().hex[:6]
 RUN_LABEL = f"wib.test/run={RUN}"
 
 
-def container(name: str, env: dict[str, str], **extra) -> dict:
+def container(name: str, env: dict[str, str] | list[dict], **extra) -> dict:
+    # env is literal values by name, or the env list itself (for valueFrom entries).
     return {"name": name, "image": IMAGE, "command": ["sleep", "600"],
-            "env": [{"name": k, "value": v} for k, v in env.items()], **extra,
+            "env": env if isinstance(env, list) else [{"name": k, "value": v} for k, v in env.items()], **extra,
             "resources": {"limits": {"cpu": "20m", "memory": "16Mi"}, "requests": {"cpu": "5m", "memory": "8Mi"}},
             "securityContext": {"allowPrivilegeEscalation": False, "runAsNonRoot": True, "runAsUser": 65534,
                                 "capabilities": {"drop": ["ALL"]}}}
@@ -237,7 +248,7 @@ AGENT_OBJECTS = [
     pod(f"llm-default-endpoint-{RUN}", "default-endpoint", pod_spec([container("c", {})])),
     pod(f"llm-envfrom-{RUN}", "envfrom",
         pod_spec([container("c", {}, envFrom=[{"configMapRef": {"name": ENDPOINTS}}])])),
-    pod(f"llm-valuefrom-{RUN}", "valuefrom", pod_spec([container("c", {}, env=[
+    pod(f"llm-valuefrom-{RUN}", "valuefrom", pod_spec([container("c", [
         {"name": "OPENAI_BASE_URL", "valueFrom": {"configMapKeyRef": {"name": ENDPOINTS, "key": "OPENAI_BASE_URL"}}}])])),
 ]
 OPEN_SHAPES = ["default-endpoint", "envfrom", "valuefrom"]
@@ -270,6 +281,25 @@ REFUSED = [  # (what it is, object, the refusal's message)
 # The chat path's guarded ports (#552): (target app, port, the peer chat-path-ingress admits there).
 GUARDED_PORTS = [("agentgateway", 3000, "guard-proxy"), ("agentgateway", 3002, "workshop-agent"),
                  ("workshop-agent", 8080, "agentgateway")]
+
+
+# The #606 shapes (#607): a pod on the default ServiceAccount reading a Secret, by mount or by env.
+def secret_pod(case: str, secret: str, key: str, mount: bool, env: bool) -> dict:
+    extra = {"volumeMounts": [{"name": "s", "mountPath": "/s", "readOnly": True}]} if mount else {}
+    spec = pod_spec([container("c", [{"name": "S", "valueFrom": {"secretKeyRef": {"name": secret, "key": key}}}]
+                               if env else {}, **extra)])
+    if mount:
+        spec["volumes"] = [{"name": "s", "secret": {"secretName": secret}}]
+    return as_sa(pod(f"llm-c8-{case}-{RUN}", case, spec), "default")
+
+
+SECRET_REFUSED = [  # (what it is, object, the refusal's message)
+    ("a Pod mounting terminal-auth as a secret volume",
+     secret_pod("terminal-auth-volume", "terminal-auth", "TTYD_CREDENTIAL", mount=True, env=False), AS_SECRET_VOLUME),
+    ("a Pod reading terminal-auth through an env secretKeyRef",
+     secret_pod("terminal-auth-keyref", "terminal-auth", "TTYD_CREDENTIAL", mount=False, env=True), AS_SECRET_ENV),
+]
+SECRET_ADMITTED = secret_pod("ceo-personal-record", "ceo-personal-record", "record", mount=True, env=True)
 
 
 def selects(sel: dict, pod_labels: dict) -> bool:
@@ -449,6 +479,19 @@ try:
         err = " ".join(((r.stderr or "") + " " + (r.stdout or "")).split())
         check(f"{what} is refused by {SPAWN}",
               r.returncode != 0 and f"Policy {SPAWN} failed:" in err and message in err, err or "it was admitted")
+
+    print("== the deployed controller reads Secrets as the Kyverno CLI does (#606, #607) ==")
+    # Server-side dry run: the request goes through authorization and every admission webhook, and nothing is
+    # stored. RBAC is asked first, so a Forbidden here is the Role, not the policy, and fails the check.
+    for what, obj, message in SECRET_REFUSED:
+        r = kubectl("create", "--dry-run=server", f"--as={AGENT}", "-f", "-", stdin=json.dumps(obj))
+        err = " ".join(((r.stderr or "") + " " + (r.stdout or "")).split())
+        check(f"{what}, as agent-sa on the default ServiceAccount, is refused by {SPAWN}",
+              r.returncode != 0 and f"Policy {SPAWN} failed:" in err and message in err, err or "it was admitted")
+    r = kubectl("create", "--dry-run=server", f"--as={AGENT}", "-f", "-", stdin=json.dumps(SECRET_ADMITTED))
+    out = " ".join(((r.stdout or "") + " " + (r.stderr or "")).split())
+    check("a Pod mounting ceo-personal-record and reading it by secretKeyRef, the Secret the scoped Role reads, "
+          "is admitted", r.returncode == 0 and "(server dry run)" in out, out)
 
     print("== the guarded path itself passes (the precondition for ever promoting to Deny) ==")
     by_uid = results_by_uid()
