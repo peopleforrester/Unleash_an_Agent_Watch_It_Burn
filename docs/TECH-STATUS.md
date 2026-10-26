@@ -59,7 +59,7 @@ Legend: **[x] built+tested** (manifests/code + offline render-gate green) | **[~
 
 ## Infra + ops
 
-- [x] Terraform cluster configs (1.35, EBS CSI, Pod Identity): independent per-student clusters
+- [x] Terraform cluster configs (1.36, EBS CSI, Pod Identity): independent per-student clusters
   (`watch-it-burn-attendee-<id>`) sharing one up-front VPC (10.0.0.0/16, two private /18 subnets),
   each self-reconciled by its own in-cluster ArgoCD; t3.xlarge unlimited default; [~] live provision +
   T3 fleet sizing (measure one cluster before pinning, infra/SIZING.md)

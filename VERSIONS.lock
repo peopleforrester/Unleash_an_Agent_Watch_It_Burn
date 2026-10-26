@@ -43,7 +43,8 @@ llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `
 
 ## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
 ## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.
-eks-kubernetes         1.35   (Terraform-provisioned; full IDP fits 1x t3.2xlarge — 38% CPU / 19% mem)
+eks-kubernetes         1.35   at this validation (Terraform-provisioned; full IDP fits 1x t3.2xlarge — 38% CPU / 19% mem);
+                       the fleet has built 1.36 since 2026-09-10, see "Kubernetes version" below (#605)
 aws-ebs-csi-driver     EKS addon via IRSA (the only remaining IRSA use); default gp3 StorageClass
 agent-bedrock          EKS Pod Identity association on agent:agent-sa (NOT IRSA; no SA annotation)
 LIVE RESULT: full verify GREEN on EKS — beat-cost (Bedrock spend via Pod Identity), beat-02
@@ -72,6 +73,9 @@ grafana-alloy          chart 1.10.0      app v1.17.0   (REPLACES deprecated/EOL 
 opentelemetry-collector chart 0.158.2    app 0.153.0   (was 0.145.0)
 backstage              chart 2.8.2                     (was 2.6.3)
 
-## Kubernetes version (2026-06-18)
-eks-kubernetes         1.35  (current standard-support GA, valid through 2027-03-27; chosen for certainty).
-                       EKS 1.36 released 2026-06-02 now holds newest/recommended; 1.35 stays pinned for the event. All cluster configs pinned.
+## Kubernetes version (2026-06-18; moved to 1.36 on 2026-09-10)
+eks-kubernetes         1.36  (newest version EKS offers and its default; standard support through 2027-08-02).
+                       infra/terraform/aws/cluster/main.tf defaults kubernetes_version to 1.36 and fleet.sh does not override it.
+                       Moved from 1.35 on 2026-09-10 in 2f885d1 (PRD #389 tier 3); EKS does not offer 1.37 (CreateCluster rejects it).
+                       1.35 was the pin from 2026-06-18, chosen for certainty (standard support through 2027-03-27); this line said 1.35
+                       until #605, after the fleet had already built 1.36 clusters on 2026-09-19 and 2026-10-24.

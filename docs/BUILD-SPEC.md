@@ -257,7 +257,7 @@ Argo CD `v3.4.4` / chart `9.6.0`; Kyverno app `v1.19.1` / chart `3.9.1` (moved f
 kube-prometheus-stack `86.2.3`; OTel Collector chart `0.158.2` / app `0.153.0`;
 agentgateway OSS `v1.5.0` (released 2026-08-27, moved from `v1.3.0` on 2026-09-10; deployed as the
 manifest `gitops/ai-layer/agentgateway.yaml`, image pinned by digest); Tempo chart `2.2.3` @
-`grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.35`;
+`grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.36` (moved from `1.35` in #389);
 aws-ebs-csi-driver addon + gp3 default SC; Bedrock models
 `us.anthropic.claude-haiku-4-5-20251001-v1:0` (Haiku), `us.anthropic.claude-sonnet-4-6` (Sonnet),
 `us.anthropic.claude-opus-4-8` (Opus) - Sonnet/Opus need the `us.` Geo profile (no In-Region in
