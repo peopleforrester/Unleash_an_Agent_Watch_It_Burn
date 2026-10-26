@@ -1181,6 +1181,8 @@ data:
     # Keeps the workload verbs C1/C2 use, but replaces blanket secrets get/list with get on the ONE
     # CEO record Secret by name. C5's get_vault_entry still works; listing all Secrets or reading the terminal
     # password via the API now returns Forbidden. This REPLACES the broad Role.
+    # The pods it may still create cannot mount or env-read any other Secret either: the kubelet would read it
+    # with the node's credentials, so restrict-agent-spawned-workloads refuses that pod at admission (#606).
     apiVersion: rbac.authorization.k8s.io/v1
     kind: Role
     metadata:

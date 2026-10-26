@@ -2492,3 +2492,31 @@ the `resourceNames` on the scoped Role's get does nothing to a mount.
   is item 4 of general-knowledge's `ai-security/2026-10-26_infrastructure-enforced-guardrails.md` note
   (general-knowledge#108); a follow-up on #604 asks for the Kyverno or ValidatingAdmissionPolicy rule that
   would close it.
+
+## 2026-10-26 · #606 · restrict-agent-spawned-workloads refuses the agent a pod that references any Secret but ceo-personal-record
+
+#604 measured that Challenge 8's scoped Role closes agent-sa's API read of other Secrets but not the pod mount: the
+kubelet reads a mounted Secret with the node's credentials, so a pod agent-sa created on the default
+ServiceAccount could read `terminal-auth`, and no workshop policy refused it. This closes that at admission.
+
+- **Where.** Two new validations on `restrict-agent-spawned-workloads`, not a new policy. It already matches the
+  identities the issue names (every ServiceAccount of `agent` but web-terminal), ships Deny with background off
+  because it reads `request.userInfo`, and autogen already carries it to Deployments and the other pod
+  controllers. A second policy would repeat that match and the reasoning behind it.
+- **The line is the scoped Role's.** The policy's `readableSecrets` is `['ceo-personal-record']`, the scoped Role's
+  `resourceNames`, and `verify/test_c8_pod_secret_mount.py` holds the two equal. Refused: a `secret` volume, a
+  `projected` volume's `secret` source, an env `secretKeyRef` and an `envFrom` `secretRef`, in containers, init
+  containers and ephemeral containers. The projected source is in on purpose: leaving it out is a one-line bypass.
+  `imagePullSecrets` is left alone, because the kubelet uses it to pull and the pod never sees it.
+- **Always on, not only after the C8 fix.** Under the broad Role the agent reads every Secret through the API
+  anyway, so the rule takes nothing from a challenge. No workload the agent legitimately makes mounts a Secret: C2's
+  villain Deployment reads none, and every platform workload in `agent` that does (the console with `console-tls`,
+  web-terminal with `terminal-auth`, guard-proxy and llm-guard with `llm-guard-auth`) is already refused to the
+  agent on its label, its ServiceAccount, or by `block-argocd-drift`.
+- **The Secrets a pod in `agent` can mount** are `terminal-auth`, `console-tls` and `llm-guard-auth` (the last
+  from ai-layer's kustomization secretGenerator; #604's list missed it). All three are refused by every route.
+- **Measured 2026-10-26 with the pinned Kyverno CLI v1.19.1.** #604's pod is now refused by this policy alone, on
+  the Secret; each route to each of the three Secrets fails with its message; a Deployment is refused at the
+  Deployment and an UPDATE likewise; workshop-mcp is held to it. Every route to `ceo-personal-record`, a ConfigMap
+  volume and an imagePullSecret pass all eleven policies, and web-terminal, the operator and the ReplicaSet
+  controller are not judged. The same test against the previous policy fails 25 checks.

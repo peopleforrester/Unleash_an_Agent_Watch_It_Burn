@@ -38,12 +38,23 @@
 # with no new pod if it ran as agent-sa. It runs as its own ServiceAccount, workshop-mcp, which is bound to
 # the agent's Role and has no Pod Identity association (#553), so it is not in the list below.
 #
+# A fourth route ran around Challenge 8's scoped Role (#604, #606): it limits agent-sa's API read of Secrets to get
+# on ceo-personal-record, but keeps create on pods, and the kubelet reads a mounted Secret with the node's
+# credentials, so the creator's RBAC is never asked about the mount. A pod on the default ServiceAccount could
+# mount terminal-auth, console-tls or llm-guard-auth and print it. So a workload the agent creates may reference
+# no Secret but ceo-personal-record: not as a secret volume, a projected volume's secret source, an env
+# secretKeyRef or an envFrom secretRef, in any container, init container or ephemeral container. That is the
+# scoped Role's line drawn again at admission. Under the broad Role the agent reads every Secret through the API
+# anyway, so the rule takes nothing from a challenge; no workload the agent legitimately makes mounts a Secret.
+# imagePullSecrets is left alone: the kubelet uses it to pull, and the pod never sees it.
+#
 # Background evaluation is off: the rule reads request.userInfo, which exists only at admission.
 #
 # The two lists below are held to their sources by verify/test_agent_bypass_shapes.py: the Pod Identity
 # associations in namespace `agent`, and every label a NetworkPolicy in `agent` selects on. Fixture cases
 # run through the Kyverno CLI in verify/test_kyverno_cel_policies.py; the live shapes in
-# verify/test_llm_bypass_live.py.
+# verify/test_llm_bypass_live.py. readableSecrets is held to the scoped Role's resourceNames, and the Secret
+# routes run through the Kyverno CLI, in verify/test_c8_pod_secret_mount.py.
 apiVersion: policies.kyverno.io/v1
 kind: ValidatingPolicy
 metadata:
@@ -54,7 +65,8 @@ metadata:
     policies.kyverno.io/description: >-
       A workload the agent creates in its own namespace may not run as a ServiceAccount that holds Bedrock
       credentials, and may not carry a label that a NetworkPolicy trusts. Either one lets the agent reach a
-      model around guard-proxy.
+      model around guard-proxy. Nor may it mount or read through env any Secret but ceo-personal-record, the one
+      the agent's scoped Role reads, because the kubelet resolves a mounted Secret with the node's credentials.
 spec:
   validationActions:
     - Deny
@@ -92,6 +104,13 @@ spec:
       expression: "{'app.kubernetes.io/name': ['agentgateway', 'console', 'guard-proxy', 'workshop-agent']}"
     - name: labels
       expression: "object.metadata.?labels.orValue({})"
+    # The one Secret c8-scoped-role.yaml lets agent-sa read (get, by name). Mounting it reads nothing more.
+    - name: readableSecrets
+      expression: "['ceo-personal-record']"
+    - name: containers
+      expression: >-
+        object.spec.?containers.orValue([]) + object.spec.?initContainers.orValue([]) +
+        object.spec.?ephemeralContainers.orValue([])
   validations:
     # serviceAccount is the deprecated alias; the API server defaults one from the other, but read both.
     - expression: >-
@@ -107,3 +126,22 @@ spec:
         (app.kubernetes.io/name=agentgateway, app.kubernetes.io/name=console, app.kubernetes.io/name=guard-proxy,
         app.kubernetes.io/name=workshop-agent). That pod could reach a public model API, agentgateway's model
         bind or the agent itself, around guard-proxy.
+    - expression: >-
+        !object.spec.?volumes.orValue([]).exists(v,
+          (has(v.secret) && !(v.secret.?secretName.orValue('') in variables.readableSecrets)) ||
+          (has(v.projected) && v.projected.?sources.orValue([]).exists(s,
+            has(s.secret) && !(s.secret.?name.orValue('') in variables.readableSecrets))))
+      message: >-
+        A workload the agent creates may not mount a Secret other than ceo-personal-record, as a secret volume or a
+        projected volume's secret source. The kubelet reads a mounted Secret with the node's credentials, so the pod
+        would read a Secret the agent's Role does not let it read.
+    - expression: >-
+        !variables.containers.exists(c,
+          c.?env.orValue([]).exists(e, has(e.valueFrom) && has(e.valueFrom.secretKeyRef) &&
+            !(e.valueFrom.secretKeyRef.?name.orValue('') in variables.readableSecrets)) ||
+          c.?envFrom.orValue([]).exists(f, has(f.secretRef) &&
+            !(f.secretRef.?name.orValue('') in variables.readableSecrets)))
+      message: >-
+        A workload the agent creates may not take an env var from a Secret other than ceo-personal-record, through
+        secretKeyRef or envFrom secretRef. The kubelet resolves it with the node's credentials, so the pod would
+        read a Secret the agent's Role does not let it read.
