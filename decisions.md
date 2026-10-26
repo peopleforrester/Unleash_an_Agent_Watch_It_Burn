@@ -2541,3 +2541,26 @@ cluster's own controller, as agent-sa, so a run on an attendee cluster shows the
   which raises `TypeError` (env given twice), so the suite stopped right after its prerequisites and never reached a
   pod. `container()` now takes the env list itself as well as a dict of literals.
 - **Not yet run on a cluster.** No attendee cluster was up for this run; the next build runs it with CONTEXT set.
+
+## 2026-10-26 · #610 · question 846 · The rehearsal platform is two clusters: one the audience uses, one for the speakers
+
+**Question 846:** may a session with AWS access bring the KubeCon platform up with fleet.sh in accen-dev,
+us-west-2, and keep it running until Whitney's cold read (#611) is done?
+
+**Answer:** "I think we are supposed to have two clusters no? one for consumptions and one for the speakers
+yes?" Decided by Michael (verdict: overridden; none of the three options was chosen).
+
+**What it changes.**
+- **The shape is two clusters, which is the plan already written.** The run-of-show's "The one platform, and
+  the two clusters on it" (settled on #448, 2026-10-24) says the same thing: `watch-it-burn-community`
+  (`attackme.agenticburn.com`, burn profile, wide open) is what the room uses, and a presenter admin cluster
+  (admin profile, every control armed) is the speakers'. The 2026-10-24 bring-up had exactly those two. So
+  the M1 rehearsal brings up the community cluster and one speaker cluster,
+  `watch-it-burn-michael-admin`, with `WIB_PER_ROLE=1 ./fleet.sh instructors up all`, not the roster's
+  third cluster, `watch-it-burn-whitney-admin`.
+- **It is not yet a go to deploy and hold.** The answer settles the shape, not the spend, so no session
+  has been told to bring the two clusters up and leave them running (about $1 an hour, about $24 a day,
+  before Bedrock). That go is asked again on #610, with the two clusters named.
+- **Unchanged:** the delivery's own cluster list in the run-of-show, which still names whitney-admin in the
+  Night Before checks. M1 is the rehearsal, so this entry does not decide whether Whitney gets her own
+  cluster on the day.

@@ -29,9 +29,12 @@ all five accounts at 20:08Z, about $2.30 in all (#454, comment 6388980495).
 
 ## KubeCon platform for a rehearsal (spec 001 M1, #610)
 
-Not up. Every finding from the 2026-10-24 bring-up (#510, #526 to #531) is closed on staging, and the
-permissions boundary it applied by hand stays in accen-dev. The bring-up is a deploy to AWS, so a session
-with Michael's go runs it; Whitney's cold read (#611) waits on it.
+Not up. It is two clusters (question 846, decisions.md 2026-10-26): `watch-it-burn-community`, which the
+audience uses, and one speaker cluster, `watch-it-burn-michael-admin`, the same pair as the 2026-10-24
+bring-up (`WIB_PER_ROLE=1 ./fleet.sh instructors up all`). Every finding from that bring-up (#510, #526 to
+#531) is closed on staging, and the permissions boundary it applied by hand stays in accen-dev. The bring-up
+is a deploy to AWS, so a session with Michael's go runs it; that go is still open on #610, and Whitney's
+cold read (#611) waits on it.
 
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
