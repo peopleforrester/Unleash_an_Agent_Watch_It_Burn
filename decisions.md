@@ -2450,30 +2450,30 @@ that name.
   run-of-show's router step now curls `/kubecon` on the three roster hosts and expects 200, so a router
   matcher that does not know a stage host shows up the night before, not on stage.
 
-## 2026-10-26 · #604 · Challenge 8's scoped Role stops the API read of Secrets, not the pod-mount read
+## 2026-10-26 · #604 · agent-sa under the scoped C8 Role can still read Secrets in agent through a pod
 
-Spike for #604 (child of peopleforrester/general-knowledge#108 gap item 4; feeds the deep dive in
-mrf-engagement-orchestrator#76). Question: under `c8-scoped-role.yaml` can `agent-sa` still read Secrets
-other than `ceo-personal-record` by creating a pod, and does any workshop admission policy refuse it?
+Spike for #604, a child of peopleforrester/general-knowledge#108 (gap item 4) that also feeds the deep dive
+in mrf-engagement-orchestrator#76. The question: under `c8-scoped-role.yaml`, can `agent-sa` read a Secret
+other than `ceo-personal-record` by creating a pod, and does any workshop admission policy refuse that pod?
 
-**Measured, not inferred (2026-10-26), with the Kyverno CLI v1.19.1 — the same engine the admission
-controller runs, pinned to the deployed version (`verify/e2e-tools.lock`).** Held by
-`verify/test_c8_pod_secret_mount.py` (`# E2E TIER: tools`), run with `bash verify/run-e2e-tools.sh`.
+Measured on 2026-10-26 with the Kyverno CLI v1.19.1, which is the engine the admission controller runs,
+pinned to the deployed version in `verify/e2e-tools.lock`. `verify/test_c8_pod_secret_mount.py`
+(`# E2E TIER: tools`) holds the result and runs under `bash verify/run-e2e-tools.sh`.
 
-- **The RBAC half is structural.** `c8-scoped-role.yaml` (`gitops/ai-layer/resources.yaml`) replaces the
-  broad Role's blanket `get`/`list` on Secrets with `get` on `ceo-personal-record` by name, and KEEPS
-  `create, get, list, patch` on pods. The scoping shrinks the agent's API read of Secrets and does nothing
-  to its power to create a pod. Kubernetes' RBAC good-practices page
-  (https://kubernetes.io/docs/concepts/security/rbac-good-practices/, read 2026-10-26): "Permission to
+- **RBAC.** `c8-scoped-role.yaml` (in `gitops/ai-layer/resources.yaml`) replaces the broad Role's `get` and
+  `list` on all Secrets with `get` on `ceo-personal-record` by name. It keeps `create, get, list, patch` on
+  pods. Kubernetes' RBAC good-practices page
+  (https://kubernetes.io/docs/concepts/security/rbac-good-practices/, read 2026-10-26) says: "Permission to
   create workloads ... in a namespace implicitly grants access to many other resources in that namespace,
-  such as Secrets ... that can be mounted in Pods." The kubelet reads a mounted Secret on the pod's behalf
-  at start, authorized by the pod existing, not by the creator's RBAC on the Secret — so `agent-sa`, denied
-  the terminal password through the API under the scoped Role, can still read it by mounting it in a pod.
+  such as Secrets ... that can be mounted in Pods." The kubelet reads a mounted Secret for the pod when it
+  starts. The creator's RBAC on that Secret is never checked. So `agent-sa` gets Forbidden when it reads the
+  terminal password through the API, and can still read it by mounting it in a pod it creates.
 
-- **The admission half was run.** For each policy the harness built the same exploit pod — a Secret volume
-  for `terminal-auth` plus a `secretKeyRef` env, on an allowed+signed image, with CPU+memory limits, the
-  `default` ServiceAccount (not a Bedrock identity), an ordinary label (`app: maintenance`, not one a
-  NetworkPolicy trusts), and no public-LLM endpoint env — and ran, as `agent-sa`:
+- **Admission.** One test pod was run through each policy as `agent-sa`. It mounts `terminal-auth` as a
+  volume and reads it again through a `secretKeyRef` env var. Everything else about it passes the content
+  checks: an allowed, signed image; CPU and memory limits; the `default` ServiceAccount, which has no Bedrock
+  credentials; the label `app: maintenance`, which no NetworkPolicy selects; and no public LLM endpoint env.
+  The command, once per policy:
 
   ```
   kyverno apply <policy>.yaml --resource <exploit-pod.yaml> \
@@ -2482,7 +2482,7 @@ controller runs, pinned to the deployed version (`verify/e2e-tools.lock`).** Hel
   # user.yaml:   userInfo.username=system:serviceaccount:agent:agent-sa
   ```
 
-  Verdicts (2026-10-26):
+  Verdicts on 2026-10-26:
 
   | policy | verdict |
   | --- | --- |
@@ -2494,26 +2494,25 @@ controller runs, pinned to the deployed version (`verify/e2e-tools.lock`).** Hel
   | block-argocd-drift | ignored (CREATE not matched) |
   | minimal-floor | ignored (DELETE only) |
 
-  **No workshop admission policy refuses the pod on account of the Secret it mounts.** (`require-labels`,
-  `require-probes`, `disallow-privileged` and `require-networkpolicy` are scoped to the `apps` namespace and
-  never see an `agent` pod at all.) The controls prove the engine is live and that the Secret mount is never
-  the lever: the SAME pod flips to a denial the instant it runs as `agent-sa` (`...may not run as a
-  ServiceAccount that holds Bedrock credentials`) or wears a NetworkPolicy label (`...may not carry a label
-  that a NetworkPolicy trusts`) — `restrict-agent-spawned-workloads` (#490) keys only on creator identity
-  and trusted labels, not on Secret volumes or `secretKeyRef`.
+  No workshop admission policy refuses the pod for the Secret it mounts. `require-labels`, `require-probes`,
+  `disallow-privileged` and `require-networkpolicy` match only the `apps` namespace, so they never see an
+  `agent` pod. Two control cases show the policies are evaluating the pod: the same pod is denied when it
+  runs as `agent-sa` ("may not run as a ServiceAccount that holds Bedrock credentials") and when it carries
+  `app.kubernetes.io/name: console` ("may not carry a label that a NetworkPolicy trusts").
+  `restrict-agent-spawned-workloads` (#490) checks the pod's ServiceAccount and labels; it does not look at
+  Secret volumes or `secretKeyRef`.
 
-- **The issue's example is already out of reach, but the gap is real.** The AWS credentials Secret #604
-  names is no longer in namespace `agent`: #584 moved the attendee key to namespace `student-creds`, and a
-  pod's Secret volumes are namespace-local. The in-namespace Secrets this still exposes are the ones the
-  scoped Role is meant to protect — `terminal-auth` (the shared terminal login, created by `fleet.sh` in
-  `agent`) and `console-tls` (the console's TLS private key, issued by cert-manager in `agent`). The C8 lab
-  teaches that under the scoped Role "reading the terminal password via the API now returns Forbidden"; the
-  pod-mount route reads it anyway.
+- **Which Secrets this reaches.** The AWS credentials Secret the issue gives as an example is no longer in
+  namespace `agent`: #584 moved the attendee key to `student-creds`, and a pod can mount Secrets only from
+  its own namespace. Two Secrets in `agent` are still readable this way. `terminal-auth` holds the shared
+  terminal login (`fleet.sh` creates it in `agent`). `console-tls` holds the console's TLS private key
+  (cert-manager issues it in `agent`). The C8 lab tells the student that under the scoped Role "reading the
+  terminal password via the API now returns Forbidden"; a pod mount still reads it.
 
-- **What would close it (follow-up, not this spike).** A Kyverno `ValidatingPolicy` (or a native
-  `ValidatingAdmissionPolicy`) that refuses, for a CREATE/UPDATE pod requested by an agent-namespace
-  identity, any Secret `volume` or `secretKeyRef`/`envFrom.secretRef` other than `ceo-personal-record` —
-  the same request-identity match `restrict-agent-spawned-workloads` already uses, extended to Secret
-  references. The design belongs in the mrf-engagement-orchestrator#76 deep dive; filed as the #604
-  follow-up. If `test_c8_pod_secret_mount.py`'s "no policy denies" assertions ever flip, that control has
-  landed and the assertions move to its test.
+- **The fix, filed as the #604 follow-up.** A Kyverno `ValidatingPolicy` or a native
+  `ValidatingAdmissionPolicy` that denies a CREATE or UPDATE of a pod, requested by an agent-namespace
+  ServiceAccount, when the pod references any Secret other than `ceo-personal-record` through a `secret`
+  volume, a `secretKeyRef` or an `envFrom.secretRef`. It can match on the requester the same way
+  `restrict-agent-spawned-workloads` does. Its design belongs to the deep dive in
+  mrf-engagement-orchestrator#76. When it lands, the "no policy denies" checks in
+  `test_c8_pod_secret_mount.py` will fail, and they move to the new policy's test.

@@ -25,11 +25,11 @@
 # mounts and the secretKeyRef env it reads, and every policy still passes it.
 #
 # SECOND: which admission policy refuses it? None. The agent-namespace policies are run one by one below and
-# every verdict is PASS or IGNORED. The control cases are the clincher: the SAME secret-mounting pod flips to
-# a denial the instant it runs as a Bedrock ServiceAccount or wears a NetworkPolicy label, which proves the
-# engine is live and judging the pod -- and that the Secret mount itself is never the reason for any deny.
+# every verdict is PASS or IGNORED. Two control cases show the policies are evaluating the pod: the same
+# Secret-mounting pod is denied when it runs as a Bedrock ServiceAccount or carries a NetworkPolicy label.
+# The Secret mount itself is never the reason for a denial.
 #
-# If this test's "no policy denies the Secret mount" assertions ever flip to a denial, the closing control
+# If this test's "no policy denies the Secret mount" assertions start failing, the closing control
 # (a ValidatingPolicy or ValidatingAdmissionPolicy that refuses Secret volumes and secretKeyRef for pods
 # created by an agent-namespace identity, bar ceo-personal-record) has landed; move these assertions to its
 # test. That control is the #604 follow-up, not this measurement.
@@ -161,7 +161,7 @@ check("it keeps create/get/list/patch on pods (the create verb is untouched by t
       pods_rule is not None and "create" in pods_rule.get("verbs", []),
       f"pods rule: {pods_rule}")
 secrets_rule = rules.get(("secrets",))
-check("and it scopes Secrets to `get` on ceo-personal-record by name -- no blanket get, no list",
+check("and it scopes Secrets to `get` on ceo-personal-record by name (no blanket get, no list)",
       secrets_rule is not None and secrets_rule.get("verbs") == ["get"]
       and secrets_rule.get("resourceNames") == ["ceo-personal-record"],
       f"secrets rule: {secrets_rule}")
@@ -205,19 +205,19 @@ check("NO admission policy refuses the pod on account of the Secret it mounts (t
       not denied_by, f"denied by: {denied_by}")
 
 # --------------------------------------------------------------------------------------------------------
-print("\n== the controls: the engine IS judging the pod, and the Secret mount is never the lever ==")
+print("\n== the controls: the policies evaluate the pod, and only identity or labels cause a denial ==")
 SPAWN = POL / "restrict-agent-spawned-workloads.yaml"
 AS_IDENTITY = "may not run as a ServiceAccount that holds Bedrock credentials"
 AS_LABEL = "may not carry a label that a NetworkPolicy trusts"
 got = run(SPAWN, [exploit_pod(name="as-agent-sa", sa="agent-sa")])
 result, msg = verdict(got, "as-agent-sa")
-check("the SAME pod flips to a denial when it runs as agent-sa (identity, not the Secret)",
+check("the same pod is denied when it runs as agent-sa (for its identity)",
       result == "fail" and AS_IDENTITY in msg, f"{result}: {msg}")
 got = run(SPAWN, [exploit_pod(name="as-console", labels={"app.kubernetes.io/name": "console"})])
 result, msg = verdict(got, "as-console")
-check("and when it wears a NetworkPolicy label (label, not the Secret)",
+check("and when it carries a NetworkPolicy label (for its label)",
       result == "fail" and AS_LABEL in msg, f"{result}: {msg}")
-# The exploit pod as written -- default SA, ordinary label -- passes that same policy, so the only thing the
+# The exploit pod as written (default SA, ordinary label) passes that same policy, so the only thing the
 # controls key on is identity/label; the terminal-auth volume and secretKeyRef are invisible to all of them.
 got = run(SPAWN, [exploit_pod()])
 result, _ = verdict(got, "secret-harvester")
