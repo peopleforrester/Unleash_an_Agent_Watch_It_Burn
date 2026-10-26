@@ -1,0 +1,71 @@
+# ABOUTME: The ADMIN profile: the presenters' own cluster. The student build with every guardrail ARMED,
+# ABOUTME: so a control can be shown already working instead of being staged first.
+#
+# The three cluster types differ only in where they sit on one axis, how much of the platform is already
+# defending the agent:
+#
+#   community (burn)  no guardrails at all. The room attacks it together and nothing stops them.
+#   attendee          the platform is present, the C1-C3 controls are NOT applied. The student runs each
+#                     attack, then installs the control themselves and watches it work.
+#   admin (this one)  everything applied and enforcing from the first minute.
+#
+# Why admin is not just "full". The full profile used to ship the challenge controls armed, and that made
+# a presenter's first attack bounce with no fix left to apply. Worse, network-policies and
+# kubearmor-policies run selfHeal with no ignoreDifferences, so deleting the policies to stage an attack
+# restored them in about a second, measured on r3-3 (#281). A presenter was left with a dead demo and no
+# visible cause. That is why full no longer arms them.
+#
+# This profile arms them deliberately, and the selfHeal trap does not apply, because an admin cluster is
+# used to demonstrate a control ALREADY WORKING rather than to stage an attack against it. If a demo ever
+# needs the attack to land, it belongs on the community cluster or on a claimed student cluster, not here.
+# Do not merge this profile back into attendee to "reduce duplication": the difference between them is the
+# entire point.
+#
+# Everything, INCLUDING network-policies and kubearmor-policies: this cluster is the armed one. Only the
+# attendee collector overlay is dropped, because an admin cluster ships to the shared presenter org as its
+# PRIMARY destination rather than dual-shipping to it as a second one (#296). otel-collector-burn is the
+# burn cluster's Datadog-only collector (#476), under the same Application name, so it is dropped too.
+#
+# Datadog is NOT left out, with or without a Datadog key (#500). What switches it is whether
+# datadog-secret exists on the cluster, not this file: the collector's datadog-gate adds the Datadog
+# exporter only when it does, and falcosidekick's key reference is optional, so with no key the
+# collector ships to Tempo and Prometheus only, falcosidekick forwards to Talon only, and the
+# Datadog Agent waits for the secret, which deploy-full-idp.sh logs as a known gap. When the pool
+# arrives, writing the secret and restarting the readers adds Datadog with no change here.
+#
+# Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
+# profile until a line here names it, and a name with no file fails the render.
+apps:
+  - ai-layer-otel
+  - ai-layer
+  - alloy
+  - cert-manager
+  - customer-stream
+  - datadog-agent-cr
+  - datadog-operator
+  - demo-app-hedgehog
+  - demo-app-mantis-shrimp
+  - demo-app-spider
+  - demo-app-unicorn
+  - demo-app-wombat
+  - eso-resources
+  - external-secrets
+  - falco-talon
+  - falco
+  - falcosidekick
+  - grafana-dashboards
+  - istio
+  - kagent-crds
+  - kagent
+  - kubearmor-policies
+  - kubearmor
+  - kyverno-policies
+  - kyverno
+  - loki
+  - minimal-floor
+  - namespaces
+  - network-policies
+  - otel-collector
+  - otel-operator
+  - prometheus
+  - tempo

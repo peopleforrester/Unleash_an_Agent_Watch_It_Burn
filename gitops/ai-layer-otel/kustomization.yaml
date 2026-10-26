@@ -2,7 +2,7 @@
 # ABOUTME: Split out of gitops/ai-layer so the burn profile (community) can deploy the AI layer without it.
 #
 # WHY THIS IS A SEPARATE BUNDLE. The Instrumentation CR is an opentelemetry.io kind, so it can only be
-# applied where the OTel Operator has installed that CRD. The Operator (gitops/apps/otel-operator.yaml,
+# applied where the OTel Operator has installed that CRD. The Operator (gitops/bootstrap/apps/otel-operator.yaml,
 # wave 2) in turn needs cert-manager (wave 1) for its admission webhook cert. The burn profile
 # deliberately ships neither, so on the community cluster the CRD never arrives.
 #

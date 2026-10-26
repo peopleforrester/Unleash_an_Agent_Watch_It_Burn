@@ -20,7 +20,7 @@
 #   C2 villain    any log line from a villain image (images/villains/README.md), by short_image: the villain
 #                 is running on that cluster. Matched by name because the platform's own images share the
 #                 peopleforrester owner (ghcr.io/peopleforrester/watch-it-burn), so a wildcard would not do.
-#   C3 recipe     Falco's "Recipe Snoop In Agent Namespace" rule (gitops/apps/falco.yaml, json_output, so the
+#   C3 recipe     Falco's "Recipe Snoop In Agent Namespace" rule (gitops/bootstrap/apps/falco.yaml, json_output, so the
 #                 rule name is the @rule attribute). Absent on the Community cluster, which has no Falco.
 #   C4 bill       guard-proxy's gen_ai.client.cost gauge, the same number as the console's Cost counter. A
 #                 race rather than a tick: the biggest bill in the room is the score.

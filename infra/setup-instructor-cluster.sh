@@ -17,7 +17,7 @@ Bootstraps an ALREADY-PROVISIONED roster cluster (infra/terraform/fleet/roster.t
                                  cluster the whole room attacks).
   watch-it-burn-<owner>-admin    admin role, admin profile: the student build with every guardrail
                                  ARMED. Kyverno is flipped to Deny here; NetworkPolicy/Falco/PID come up
-                                 enforcing from the admin app-of-apps. The AI guards stay OFF to flip live.
+                                 enforcing from the admin profile. The AI guards stay OFF to flip live.
 
 The role is read from the cluster's NAME by fleet.sh (role_of_instructor_name), and the profile and the
 default account from the role (bootstrap_profile_for_role, account_for_role), so this script cannot
@@ -70,7 +70,7 @@ if [[ "${ROLE}" == "community" ]]; then
 fi
 
 # Admin: wait for ArgoCD to materialize the controls, then flip Kyverno to Deny. NetworkPolicy egress,
-# Falco/Talon, and the PID limit come up enforcing from the admin app-of-apps (no runtime toggle).
+# Falco/Talon, and the PID limit come up enforcing from the admin profile (no runtime toggle).
 log "[3] wait for the Kyverno policy to sync, then set Deny"
 for i in $(seq 1 40); do
     if KUBECONFIG="${KCFG}" AWS_PROFILE="${PROFILE}" kubectl --context "${CONTEXT}" \

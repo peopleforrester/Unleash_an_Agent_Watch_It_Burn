@@ -1,9 +1,9 @@
 # ABOUTME: Render-gate check for the fork-bomb defense: PID-limit is the block, Falco->Talon is response.
 import pathlib, sys, yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
-falco = yaml.safe_load((REPO/"gitops/apps/falco.yaml").read_text())
-sidekick = yaml.safe_load((REPO/"gitops/apps/falcosidekick.yaml").read_text())
-talon = yaml.safe_load((REPO/"gitops/apps/falco-talon.yaml").read_text())
+falco = yaml.safe_load((REPO/"gitops/bootstrap/apps/falco.yaml").read_text())
+sidekick = yaml.safe_load((REPO/"gitops/bootstrap/apps/falcosidekick.yaml").read_text())
+talon = yaml.safe_load((REPO/"gitops/bootstrap/apps/falco-talon.yaml").read_text())
 # Provisioning is Terraform: the PID cap is delivered by the per-attendee cluster module's node
 # cloudinit_pre_nodeadm NodeConfig (eksctl delivered it via overrideBootstrapCommand previously).
 cluster_tf = (REPO/"infra/terraform/aws/cluster/main.tf").read_text()

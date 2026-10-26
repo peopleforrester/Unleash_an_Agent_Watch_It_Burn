@@ -113,7 +113,7 @@ short = {re.split(r"[:@]", i.rsplit("/", 1)[-1])[0] for i in platform_images}
 check("C2: no platform image shares a short name with a villain, so a running platform never scores",
       not (short & roster))
 
-falco = (REPO / "gitops/apps/falco.yaml").read_text()
+falco = (REPO / "gitops/bootstrap/apps/falco.yaml").read_text()
 check("C3: Falco has the rule the query names", "- rule: Recipe Snoop In Agent Namespace" in falco
       and '@rule:"Recipe Snoop In Agent Namespace"' in search.get("c3", ""))
 check("C3: Falco logs JSON, so the rule name is an attribute", "json_output: true" in falco)

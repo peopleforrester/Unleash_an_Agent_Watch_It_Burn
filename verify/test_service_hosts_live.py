@@ -174,11 +174,18 @@ check("the party apps have no Ingress (no ALB for them)", r.returncode == 0 and 
 # attendee cluster the right answer for uid tempo is "no such data source", not a healthy one.
 r = kubectl("-n", "argocd", "get", "applications.argoproj.io", "-o", "jsonpath={.items[*].metadata.name}")
 argo_apps = set(r.stdout.split())
-roots = argo_apps & {"app-of-apps", "app-of-apps-attendee", "app-of-apps-admin", "app-of-apps-burn"}
-check("exactly one root app-of-apps names this cluster's profile", len(roots) == 1, r.stderr.strip()[:160] or f"{sorted(roots)}")
-attendee = roots == {"app-of-apps-attendee"}
+# One root on every profile since #609, lab-bootstrap, labelled with the profile it was applied with.
+old_roots = argo_apps & {"app-of-apps", "app-of-apps-attendee", "app-of-apps-admin", "app-of-apps-burn"}
+check("the root is lab-bootstrap and no pre-#609 root is left", "lab-bootstrap" in argo_apps and not old_roots,
+      r.stderr.strip()[:160] or f"{sorted(old_roots)}")
+p = kubectl("-n", "argocd", "get", "application", "lab-bootstrap", "-o",
+            "jsonpath={.metadata.labels.lab-platform/profile}")
+profile = p.stdout.strip()
+check("lab-bootstrap names this cluster's profile", profile in {"attendee", "admin", "full", "burn"},
+      p.stderr.strip()[:160] or repr(profile))
+attendee = profile == "attendee"
 check("the tempo Application is present on admin and full, absent on attendee", ("tempo" in argo_apps) != attendee,
-      f"roots={sorted(roots)} tempo={'tempo' in argo_apps}")
+      f"profile={profile} tempo={'tempo' in argo_apps}")
 for uid in DATASOURCES:
     status, body = fetch(f"https://grafana-{host}/api/datasources/uid/{uid}/health", auth=("admin", gpw))
     if uid == "tempo" and attendee:

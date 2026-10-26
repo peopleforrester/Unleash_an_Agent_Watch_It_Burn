@@ -182,30 +182,19 @@ channel for anything in that env block**. Synced does not mean applied, for that
 Always verify after: `kubectl -n agent exec deploy/guard-proxy -- sh -c 'echo $MODEL_TIER'` and confirm
 the drift guard is back on `Enforce`.
 
-## Editing app-of-apps-burn.yaml in git does nothing to a live cluster
+## Changing a profile's app list: it reaches a cluster at the root's revision, not before
 
-**Symptom:** you change the `directory.include` list in `gitops/bootstrap/burn/app-of-apps-burn.yaml`, push,
-promote, hard-refresh the app, and the live Application's include list is unchanged. Argo CD even reports
-`app-of-apps-burn` as **Synced at your new commit**, which makes it look like the change landed.
+**Since #609** each profile is the `apps` list in `gitops/bootstrap/values-<profile>.yaml`, and the one root,
+`lab-bootstrap`, reads that file from git at its own revision. On a cluster `infra/deploy-full-idp.sh` built,
+the revision is `staging`, so a merged change to the list reaches it on the next sync. On a cluster lab-platform
+built, the revision is the event's pinned commit, so the change reaches it only when labctl re-pins. A name with
+no `gitops/bootstrap/apps/<name>.yaml` fails the root's render, and the root reports the missing file.
 
-**Cause:** the `app-of-apps-burn` Application is a **bootstrap artifact**. It is applied once by the
-install script and is not itself managed by any Argo CD app, so nothing reconciles the file into the
-live resource. What "Synced" means there is that the apps it *generates* match git, not that the
-Application's own spec does.
-
-**Fix:** patch the live Application directly. It is safe precisely because nothing will revert it:
-
-```bash
-kubectl -n argocd patch app app-of-apps-burn --type merge \
-  -p '{"spec":{"source":{"directory":{"include":"{namespaces,cert-manager,...}.yaml"}}}}'
-```
-
-Then update the file in git too, so a rebuilt cluster gets it from bootstrap.
-
-**Caught 2026-08-31** adding cert-manager to the burn profile for the console TLS certificate (#139). The
-full-profile clusters were unaffected: `app-of-apps.yaml` syncs `gitops/apps` wholesale with no include
-list, so a new app file is picked up automatically. Only the burn profile has this hazard, because only it
-uses an explicit include.
+**History.** Before #253 the burn root, `app-of-apps-burn`, was a bootstrap artifact applied once by the install
+script and managed by nothing, so editing its `directory.include` in git changed nothing live while Argo CD
+reported it Synced at the new commit (caught 2026-08-31 adding cert-manager for the console certificate, #139).
+#253 made each root list its own directory as a second source; #609 replaced the four roots with the chart, so
+the selection is a values file the root renders rather than the root's own spec.
 
 ## Flipping the router hop to TLS: the two sides move together, and no scheme in routes.map
 

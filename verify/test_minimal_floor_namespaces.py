@@ -12,7 +12,7 @@ import pathlib, re, sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-APPS = REPO / "gitops/apps"
+APPS = REPO / "gitops/bootstrap/apps"
 FLOOR = REPO / "policies/floor/minimal-floor.yaml"
 failures = []
 
@@ -80,11 +80,11 @@ pc = {v["name"]: v["expression"] for v in floor["spec"]["variables"]}.get("platf
 check(f"{sa} may replace the workloads it owns", f"'{sa}'" in pc)
 
 print("== the burn cluster has no floor, as the floor's comments say ==")
-burn = yaml.safe_load((REPO / "gitops/bootstrap/burn/app-of-apps-burn.yaml").read_text())
-include = burn["spec"]["sources"][0]["directory"]["include"]
-picked = set(re.findall(r"[\w-]+", include.replace(".yaml", "")))
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import app_names  # noqa: E402
+picked = set(app_names("burn"))
 for absent in ("minimal-floor", "kyverno"):
-    check(f"the burn selector does not include {absent}", absent not in picked)
+    check(f"the burn profile does not list {absent}", absent not in picked)
 
 print(f"\n{'FAILED: ' + str(len(failures)) if failures else 'All minimal-floor namespace checks passed.'}")
 sys.exit(1 if failures else 0)

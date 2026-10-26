@@ -159,7 +159,7 @@ check "bootstrap_one pins after the IDP is installed" \
   'sed -n "/^bootstrap_one() {/,/^}/p" <<<"${src}" | grep -q "pin_bedrock_profiles \"\${name}\" \"\${kcfg}\""'
 check "converge's repair_one pins too" \
   'sed -n "/^repair_one() {/,/^}/p" <<<"${src}" | grep -q "pin_bedrock_profiles \"\${name}\" \"\${kcfg}\""'
-app="$(cat "${REPO}/gitops/apps/ai-layer.yaml")"
+app="$(cat "${REPO}/gitops/bootstrap/apps/ai-layer.yaml")"
 check "Argo ignores .spec.model on Bedrock ModelConfigs, so selfHeal keeps the ARN" \
   'grep -qF ".spec | select(.provider == \"Bedrock\") | .model" <<<"${app}"'
 check "Argo ignores agentgateway's BEDROCK_NOVA_MODEL env entry by name, so selfHeal keeps the ARN" \

@@ -24,7 +24,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 SCRIPT = REPO / "challenges/c3-secret-grep/fallback.kubectl.sh"
-KUBEARMOR_APP = REPO / "gitops/apps/kubearmor.yaml"
+KUBEARMOR_APP = REPO / "gitops/bootstrap/apps/kubearmor.yaml"
 RUN_OF_SHOW = REPO / "facilitation/kubecon-na-2026-run-of-show.md"
 
 SIGNATURE = "WITCH-HAZEL-GHOST-PEPPER-BAT-SPIT-No7"

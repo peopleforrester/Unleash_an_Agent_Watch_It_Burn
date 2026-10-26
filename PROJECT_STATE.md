@@ -3,6 +3,14 @@
 Phase: 2.2 Implement (PRD #412 M3: budgets; M0 to M2 done)
 Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guard-proxy Go rewrite
 
+## Bootstrap handed to lab-platform (#609)
+
+Every cluster now has one root, `lab-bootstrap`: the `gitops/bootstrap` chart, a profile's
+`values-<profile>.yaml` and `revision` (a pinned commit from labctl, `staging` from `deploy-full-idp.sh`).
+`lab-platform.yaml` presents it to lab-platform (#190). No repository credential goes onto a cluster. Clusters
+built before it need `infra/deploy-full-idp.sh <profile>` again, which replaces the old `app-of-apps*` root
+without touching its children. Not yet run on a cluster; details in decisions.md, 2026-10-26 · #609.
+
 ## KubeCon NA 2026 abstract readiness (#456)
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,

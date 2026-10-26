@@ -119,7 +119,7 @@ print("== the ai-layer ignoreDifferences never covers a renamed reference ==")
 # ai-layer ignores drift on the proxy env so live toggles survive selfHeal. Run the committed jq
 # expressions against the rendered guard-proxy Deployment: whatever they select is invisible to
 # Argo CD, so no selected entry may carry valueFrom (a Secret/ConfigMap reference the hash renames).
-app = yaml.safe_load((REPO / "gitops/apps/ai-layer.yaml").read_text())
+app = yaml.safe_load((REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text())
 gp = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "guard-proxy")
 import json
 for ig in app["spec"].get("ignoreDifferences", []):

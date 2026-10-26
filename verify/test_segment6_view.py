@@ -49,10 +49,11 @@ chat = chat[:chat.index("def log_message")]
 
 print("== the dashboard ships to the admin cluster's Grafana ==")
 check("the dashboard ConfigMap carries the sidecar label", cm["metadata"]["labels"].get("grafana_dashboard") == "1")
-apps = yaml.safe_load((REPO / "gitops/apps/grafana-dashboards.yaml").read_text(encoding="utf-8"))
+apps = yaml.safe_load((REPO / "gitops/bootstrap/apps/grafana-dashboards.yaml").read_text(encoding="utf-8"))
 check("grafana-dashboards syncs this directory", apps["spec"]["source"]["path"] == "observability-idp/grafana/dashboards")
-admin = (REPO / "gitops/bootstrap/admin/app-of-apps-admin.yaml").read_text(encoding="utf-8")
-check("the admin root does not exclude it", "grafana-dashboards" not in admin.split("exclude:", 1)[1].split("\n", 1)[0])
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import deploys  # noqa: E402
+check("the admin profile lists it", deploys("admin", "grafana-dashboards.yaml"))
 
 print("== one Tempo panel per beat ==")
 for t, p in beat.items():

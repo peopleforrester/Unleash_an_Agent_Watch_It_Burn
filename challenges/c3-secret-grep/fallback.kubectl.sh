@@ -5,7 +5,7 @@
 # Why KubeArmor's alert and not Falco's: the Falco rule "Recipe Snoop In Agent Namespace" fires on
 # open_read, a SUCCESSFUL read, and with block-recipe-snoop in place there is never one (verified
 # 2026-09-04: Permission denied, zero Falco alerts). A KubeArmor Block policy emits its own alert as it
-# denies, on the attempt. The relay prints those alerts to its stdout because gitops/apps/kubearmor.yaml
+# denies, on the attempt. The relay prints those alerts to its stdout because gitops/bootstrap/apps/kubearmor.yaml
 # sets kubearmorConfig.enableStdOutAlerts; that log is where this script reads the detection line.
 #
 # Identity: the grep runs inside the workshop-mcp pod through /bin/sh -c, the same way the agent's
@@ -61,7 +61,7 @@ for _ in $(seq 1 "${ALERT_TRIES}"); do
 done
 if [[ -z "${alert}" ]]; then
   echo "!! NO DETECTION: no block-recipe-snoop Block alert in the kubearmor-relay log." >&2
-  echo "   Check that the relay has ENABLE_STDOUT_ALERTS=true (gitops/apps/kubearmor.yaml) and that" >&2
+  echo "   Check that the relay has ENABLE_STDOUT_ALERTS=true (gitops/bootstrap/apps/kubearmor.yaml) and that" >&2
   echo "   alert throttling has not muted it (maxAlertPerSec 10, throttleSec 30): wait 30s and re-run." >&2
   exit 1
 fi

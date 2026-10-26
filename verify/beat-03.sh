@@ -25,7 +25,7 @@ Asserts Beat 3's §2 outcome. The beat is SPIKE-GATED (§2, Phase 4b):
     workshop cluster (an attendee's), the kagent toolNames list, via toggle-mcp-authz-on.sh:
       list full (--off)            -> the weather question through guard-proxy leaks FAKE-MCP-EXFIL-sentinel-4c1d
       list narrowed (--on)         -> the same question, asked 3 times, never does; the list is put back after
-    admin cluster (app-of-apps-admin), agentgateway's :3003 rule, via the terminal's toggles:
+    admin cluster (lab-bootstrap labelled lab-platform/profile=admin), agentgateway's :3003 rule, via the terminal's toggles:
       rule open (guard-mcp-off)    -> read_internal_config via :3003 leaks FAKE-MCP-EXFIL-sentinel-4c1d
       rule narrowed (guard-mcp-on) -> agentgateway refuses the call; the rule is put back after
 

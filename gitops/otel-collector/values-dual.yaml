@@ -13,7 +13,7 @@
 # verify/test_collector_no_datadog.py holds the two overlays to each other: everything in the single-org one
 # except otlp_grpc/tempo, in the same order, with datadog/admin after the student's own org.
 #
-# Instructor clusters do NOT get this file (gitops/bootstrap/full/app-of-apps.yaml excludes the attendee
+# Instructor clusters do NOT get this file (gitops/bootstrap/values-full.yaml does not list the attendee
 # Application): they already ship to the instructor org, and a second exporter with the same key would
 # double-count every metric there.
 #
@@ -23,7 +23,7 @@
 # for the student's own datadog-secret, which is why both references below stay non-optional on this profile
 # while values.yaml makes DD_API_KEY optional for the instructor and admin clusters.
 #
-# No Tempo here (#475). The attendee profile does not install tempo (gitops/bootstrap/attendee/), so this file
+# No Tempo here (#475). The attendee profile does not install tempo (gitops/bootstrap/values-attendee.yaml), so this file
 # takes otlp_grpc/tempo out of every trace exporter list: relay.yaml's (the `config` list below, which Helm
 # replaces rather than merges) and the Datadog overlay's. The exporter's own definition stays in values.yaml's
 # `config.exporters`, unused: the collector builds only what a pipeline names. A Helm null is not a safe way to

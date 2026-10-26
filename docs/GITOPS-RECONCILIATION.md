@@ -17,7 +17,7 @@ the revised BUILD-SPEC / SIZING. The rest of this doc is retained as the record 
 GitOps is the single source of truth. The canonical deployment is the app-of-apps:
 
 ```
-gitops/bootstrap/full/app-of-apps.yaml  ->  gitops/apps/*.yaml  ->  { policies/, security/, gitops/, backstage/k8s, observability-idp/ }
+lab-bootstrap (gitops/bootstrap, values-<profile>.yaml)  ->  gitops/bootstrap/apps/*.yaml  ->  { policies/, security/, gitops/, backstage/k8s, observability-idp/ }
 ```
 
 ArgoCD owns every resource. Nothing the cluster needs at steady state is applied by an
@@ -42,7 +42,7 @@ The canonical files were corrected by porting the better content out of `platfor
 | File | What changed | Why |
 |---|---|---|
 | `policies/kyverno/require-resource-limits.yaml` | Replaced with the rule-level `validate.failureAction: Audit` version | The old canonical copy used the deprecated top-level `spec.validationFailureAction` and lacked the `/spec/rules/0/validate/failureAction` path that the Beat-1 toggle (`challenges/01-cncf-wall/toggle-kyverno-enforce.sh`) patches. The live Audit to Enforce demo would have failed against it. |
-| `gitops/apps/falco.yaml` | Added a `workshop-agent-rules.yaml` entry to `customRules` (shell/exec in agent pod, unexpected outbound, planted FAKE- sentinel reads) | The canonical Falco app had generic + EKS rules but none of the workshop agent-pod detections that lived only in `platform/falco/rules-workshop.yaml`. |
+| `gitops/bootstrap/apps/falco.yaml` | Added a `workshop-agent-rules.yaml` entry to `customRules` (shell/exec in agent pod, unexpected outbound, planted FAKE- sentinel reads) | The canonical Falco app had generic + EKS rules but none of the workshop agent-pod detections that lived only in `platform/falco/rules-workshop.yaml`. |
 
 Byte-identical duplicates needed no port: `minimal-floor.yaml` and `block-argocd-drift.yaml`.
 
@@ -65,7 +65,7 @@ project. Before `platform/` can be deleted, that project must:
 
 Until then, `platform/` stays in place so Model B does not break, but it is non-canonical.
 If a policy needs to change, change the canonical copy under `policies/` or `security/` or
-`gitops/apps/`, never the `platform/` copy.
+`gitops/bootstrap/apps/`, never the `platform/` copy.
 
 ## Resolved: model tier
 

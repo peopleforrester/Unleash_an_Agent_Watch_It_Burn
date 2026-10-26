@@ -24,15 +24,15 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 - ✅ Cluster provisioning is Terraform (`infra/terraform/aws/cluster`), driven by `fleet.sh` (per-cluster state, parallel).
 - ✅ `fleet.sh instructors up|down [role|owner]` builds the roster in `infra/terraform/fleet/roster.tsv`:
   the Community cluster and one admin cluster per presenter, all in `WIB_DEFAULT_ACCOUNT`.
-- ✅ Bootstrap: `deploy-full-idp.sh burn|attendee|admin|full` (ArgoCD app-of-apps, one root per profile).
+- ✅ Bootstrap: `deploy-full-idp.sh burn|attendee|admin|full` (ArgoCD app-of-apps: one root, `lab-bootstrap`, and one values file per profile, #609).
 - ⬜ **Per-account `lab-vpc`** apply for the 5-account model (each account needs its own VPC; `fleet.sh` prints the apply line but it is not automated).
 - ⬜ **Attendee fleet across 5 accounts** (the `up <count>` path is single-account today).
 - ⬜ **`aws-pool.csv` emit** (provision → IAM user/keys → CSV → `merge_pool.py`). Not built.
 
 ## 3. Cluster roles (Community, admin, attendee)
-- ✅ Community bootstrap profile `burn` (`app-of-apps-burn.yaml`, no guardrail stack; the roster gives it `pod_pids_limit=-1`).
-- ✅ Admin bootstrap profile `admin` (`app-of-apps-admin.yaml`, every challenge control armed).
-- ✅ Attendee bootstrap profile `attendee` (`app-of-apps-attendee.yaml`: the C1 and C3 controls omitted,
+- ✅ Community bootstrap profile `burn` (`values-burn.yaml`, no guardrail stack; the roster gives it `pod_pids_limit=-1`).
+- ✅ Admin bootstrap profile `admin` (`values-admin.yaml`, every challenge control armed).
+- ✅ Attendee bootstrap profile `attendee` (`values-attendee.yaml`: the C1 and C3 controls omitted,
   Kyverno in Audit, so the student installs each control).
 - ✅ **One-command roster setup**: `fleet.sh instructors up [role|owner]` provisions, bootstraps the profile
   the roster names, and flips Kyverno to Deny on `admin` (`arm_infra_guardrails`). The guard-proxy guards

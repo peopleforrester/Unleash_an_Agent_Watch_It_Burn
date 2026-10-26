@@ -2615,3 +2615,43 @@ two cannot disagree again. The spike is still not run on a cluster.
 **The tracker itself.** The approved #290 change (draft 4ed027a) is already on staging. #560 and #588 landed
 the code and wording sweep, and #502 removed the roundN alias. All six children (#291 to #296) are closed, so
 this run adds no #290 code.
+
+## 2026-10-26 · #609 · one root chart at a pinned revision, for lab-platform
+
+lab-platform (peopleforrester/lab-platform#190) builds an event's clusters from this repo at one 40-digit commit.
+It reads `lab-platform.yaml` at the root, creates one root Application per cluster, `lab-bootstrap`, sourcing
+`gitops/bootstrap` with `values-<profile>.yaml` and `revision=<commit>`, and fails a cluster on any Unleashed source
+at another revision. This repo now presents exactly that.
+
+- **`lab-platform.yaml`** is the handoff's section 2 text, byte for byte: `burn` lab, branch `staging`, parameter
+  `revision`, profiles attendee, burn, admin and full, each root `gitops/bootstrap` with its values file.
+- **The layout is the handoff's section 4.** `gitops/apps/` moved to `gitops/bootstrap/apps/`, because Helm reads
+  files only inside the chart; `templates/apps.yaml` renders each listed app through `tpl` and fails on a name with
+  no file; `values.yaml` holds only `revision: ""`, so a render without the parameter fails by name. Each of the 21
+  Unleashed sources says `targetRevision: "{{ .Values.revision }}"`, quoted so the file still parses as YAML for the
+  verify scripts. Prometheus' six `{{ $labels.* }}` alert lines are escaped with backticks and render unchanged.
+- **Each profile is an explicit list**, copied from what its brace glob selected at b1fcb0e: attendee 29, burn 19,
+  admin 33, full 31. The handoff counted burn at 18 because `external-secrets.yaml` was missing from its read; it
+  exists here. The act 2 OTTL overlay is not an Application and moved to `gitops/otel-collector/`.
+- **No self-source, one name.** The four roots and their `#253` second source are gone. `deploy-full-idp.sh` applies
+  `lab-bootstrap` in labctl's shape at `staging` with `revision=staging`, labelled `lab-platform/profile`. Before it
+  does, an old `app-of-apps*` root is stripped of its resources-finalizer and deleted, so its children stay for
+  `lab-bootstrap` to adopt instead of a second root sitting over them. labctl's root has no `retry`, so this one has
+  none either: the workshop path and the event path run the same root.
+- **No token on any cluster.** Step [3] no longer writes `witb-repo` with the operator's `gh auth token`; the repo is
+  public (`gh repo view`, 2026-10-26) and Argo CD reads it anonymously. It deletes a `witb-repo` an earlier build left.
+  `ghcr-kagent-oci`, credential-free, is a chart template at sync wave -10, below kagent-crds' -3.
+- **An admin cluster is told by its root's label.** The web terminal's `_c7gw` and the C7 fallback asked whether
+  `app-of-apps-admin` existed; with one root name they read `lab-bootstrap`'s `lab-platform/profile` label, which
+  labctl and `deploy-full-idp.sh` both set. The terminal's ClusterRole already reads every resource.
+- **Clusters built before this need `deploy-full-idp.sh <profile>` again.** Once this is on `staging`, an old root's
+  sources (`gitops/apps`, its own directory) no longer exist, so Argo CD reports a comparison error and syncs nothing:
+  the children keep following `staging` and nothing is pruned, but the terminal sees no `lab-bootstrap`, so an old
+  admin cluster's C7 toggle takes the workshop path until it is re-bootstrapped.
+- **Tests.** `verify/test_root_self_managed.py` became `verify/test_bootstrap_chart.py` (the file, the chart, the
+  lists, every source's revision, no second root, the deploy root); `verify/test_bootstrap_chart_render.py` renders
+  every profile with the pinned Helm v4.2.1 at a 40-digit commit and runs the pin check on the result; the tests that
+  expanded root globs read the lists through `verify/bootstrap_chart.py`.
+- **Not yet run on a cluster.** No cluster was up for this run. The first build after it should run
+  `deploy-full-idp.sh` on a fresh cluster and on one built before, and lab-platform's
+  `LAB_TALK_LIVE=1 go test -tags live -run TestTalkConfigLive ./internal/talkconfig` once this reaches `staging`.

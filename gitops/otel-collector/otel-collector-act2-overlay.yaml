@@ -1,0 +1,49 @@
+# ABOUTME: Re-leak-trap beat, Act 2 (PRD #22 M2). The OTTL transform that replaces the captured sanitize
+# ABOUTME: span content with [DEMO-REDACTED] before the Datadog export, so the leak is shown then fixed.
+#
+# THE TWO-ACT BEAT (PRD #22): Act 1 (baseline `otel-collector.yaml` only) arms guard-proxy content capture
+# (OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY) so the original prompt appears as the
+# `sanitize`/`chat` span's gen_ai.content.prompt EVENT (and the reply as gen_ai.content.completion) in
+# Datadog LLM Observability. That is the leak: observability itself became an exfil channel. Act 2 applies
+# this redaction at the Collector boundary, re-runs the beat, and Datadog now shows [DEMO-REDACTED]: the
+# secret never reaches the observability platform. NOTE: Datadog renders the INPUT/OUTPUT panels from the
+# span EVENTS, not from gen_ai.input.messages span attributes, so the redaction below operates in the
+# `spanevent` context on each event's "content" attribute.
+#
+# DEPLOYMENT RECONCILIATION (verify-at-build): the Collector is Helm-deployed via the ArgoCD Application in
+# `otel-collector.yaml` (config under spec.source.helm.valuesObject.config). It is NOT a raw Collector
+# manifest, so the instructor cannot `kubectl apply -f` a standalone config to toggle Act 2. Apply Act 2 by
+# ONE of:
+#   (a) GitOps toggle (recommended, reversible, audited): add the `transform/redact_sentinel` processor
+#       below to the otel-collector.yaml valuesObject `processors:` block, and add `transform/redact_sentinel`
+#       to the traces pipeline processors list, positioned LAST (after batch/resource, before export). Commit
+#       to flip to Act 2; revert the commit (or ArgoCD app rollback) to return to Act 1.
+#   (b) Live demo toggle: `kubectl -n monitoring edit` the rendered Collector ConfigMap to add the processor
+#       + pipeline entry, then restart the Collector. ArgoCD selfHeal reverts it (that IS the Act-1 reset).
+#
+# This file is the canonical source of the redaction config; it is intentionally NOT wired into ArgoCD (so
+# Act 2 is never the default startup state, per the PRD decision: the base config is Act 1). It sits beside the
+# collector's value files, not in gitops/bootstrap/apps, which holds only the Applications the root chart renders
+# (#609); in the old gitops/apps directory every profile's exclude glob matched it without meaning to.
+---
+# The OTTL transform processor (paste into the Collector `processors:` block for Act 2).
+processors:
+  transform/redact_sentinel:
+    error_mode: ignore
+    trace_statements:
+      # Content lives in gen_ai SPAN EVENTS (gen_ai.content.prompt / gen_ai.content.completion, each with a
+      # "content" body attribute) because that is what Datadog LLM Observability renders. Redact in the
+      # `spanevent` context on the event's "content" attribute; replace (not delete) so the event stays
+      # visible as redacted. (The guard-proxy sanitize/chat span is the only one carrying these events.)
+      - context: spanevent
+        statements:
+          - set(attributes["content"], "[DEMO-REDACTED]") where name == "gen_ai.content.prompt"
+          - set(attributes["content"], "[DEMO-REDACTED]") where name == "gen_ai.content.completion"
+
+# The traces pipeline for Act 2 (transform/redact_sentinel added LAST, before the exporters run):
+# service:
+#   pipelines:
+#     traces:
+#       receivers: [otlp]
+#       processors: [memory_limiter, batch, resource, transform/redact_sentinel]
+#       exporters: [datadog, otlp/tempo, spanmetrics, datadog/connector, debug]

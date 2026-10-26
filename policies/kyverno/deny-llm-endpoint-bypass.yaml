@@ -48,7 +48,7 @@
 #   * verify/test_kyverno_cel_policies.py runs the expression through the Kyverno CLI on fixture requests.
 #   * verify/test_llm_bypass_live.py (#333) creates pods of the bypass shape on a cluster and reads the
 #     PolicyReport Kyverno writes for each. First run 2026-10-24 against Kyverno v1.19.1 (chart 3.9.1, the
-#     version gitops/apps/kyverno.yaml deploys) on a local kube-apiserver 1.35.9 with the chart's own
+#     version gitops/bootstrap/apps/kyverno.yaml deploys) on a local kube-apiserver 1.35.9 with the chart's own
 #     controller args: a bare Pod and a Deployment's Pod each got `fail` with the message below, through
 #     both the admission webhook and the background scan.
 #

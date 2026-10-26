@@ -85,7 +85,7 @@ AS_SECRET_ENV = "may not take an env var from a Secret other than ceo-personal-r
 AGENT = "system:serviceaccount:agent:agent-sa"
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
-# The reports controller rescans every 30s (gitops/apps/kyverno.yaml); admission results land sooner.
+# The reports controller rescans every 30s (gitops/bootstrap/apps/kyverno.yaml); admission results land sooner.
 # Four rescans covers a busy controller and a Deployment whose Pod takes a moment to be created.
 REPORT_TIMEOUT_S = 150
 # Signed, so verify-image-signatures (Deny) admits it; on ghcr.io/peopleforrester, so the registry wall does.

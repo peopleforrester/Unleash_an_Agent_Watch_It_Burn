@@ -1,0 +1,12 @@
+# ABOUTME: The one root chart every cluster bootstraps from (#609): renders the profile's apps/*.yaml Applications
+# ABOUTME: with every Unleashed source at .Values.revision, the commit lab-platform pins or deploy-full-idp's branch.
+#
+# lab-platform.yaml at the repo root names this directory as the root of every profile. labctl creates one
+# Application per cluster, lab-bootstrap, sourcing this chart at the pinned commit with values-<profile>.yaml
+# and the parameter revision=<commit>. infra/deploy-full-idp.sh applies the same root at staging. Nothing this
+# chart renders sources gitops/bootstrap itself: lab-bootstrap is the only root.
+apiVersion: v2
+name: lab-bootstrap
+description: Watch It Burn's root app-of-apps, one profile per values file, every source at one revision.
+type: application
+version: 1.0.0

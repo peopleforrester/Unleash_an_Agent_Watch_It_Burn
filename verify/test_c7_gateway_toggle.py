@@ -31,7 +31,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 GATEWAY = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()) if d]
 RESOURCES = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
-APP = yaml.safe_load((REPO / "gitops/apps/ai-layer.yaml").read_text())
+APP = yaml.safe_load((REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text())
 DRIFT = yaml.safe_load((REPO / "policies/kyverno/block-argocd-drift.yaml").read_text())
 TERMINAL_SA = "system:serviceaccount:agent:web-terminal"
 
@@ -115,7 +115,7 @@ def grants(group: str, resource: str, verb: str, name: str | None = None) -> boo
 
 
 check("console-terminal may get Argo CD applications (the admin-cluster test)",
-      grants("argoproj.io", "applications", "get", "app-of-apps-admin"))
+      grants("argoproj.io", "applications", "get", "lab-bootstrap"))
 check("console-terminal may get configmaps", grants("", "configmaps", "get", "agentgateway-c7-config"))
 check("console-terminal may patch configmaps", grants("", "configmaps", "patch", "agentgateway-c7-config"))
 check("console-terminal may patch pods (the kubelet nudge)", grants("", "pods", "patch"))
@@ -141,8 +141,10 @@ def done(rc=0):
 if "get" in args and "application" in args:
     if state["cluster"] == "unreachable":
         done(1)
-    if state["cluster"] == "admin":
-        print("application.argoproj.io/app-of-apps-admin")
+    # The root's lab-platform/profile label, as kubectl's jsonpath prints it: no newline (#609).
+    if args[args.index("application") + 1] == "lab-bootstrap" and "-o" in args \
+            and args[args.index("-o") + 1] == "jsonpath={.metadata.labels.lab-platform/profile}":
+        sys.stdout.write("admin" if state["cluster"] == "admin" else "attendee")
     done()
 if "get" in args and "configmap" in args:
     print(json.dumps({"metadata": {"name": "agentgateway-c7-config", "resourceVersion": str(state["rv"])},

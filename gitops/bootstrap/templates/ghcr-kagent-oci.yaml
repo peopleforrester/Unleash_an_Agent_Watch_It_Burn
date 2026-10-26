@@ -1,0 +1,21 @@
+{{- /*
+ABOUTME: Registers ghcr.io/kagent-dev/kagent/helm with Argo CD as an OCI Helm repository, holding no credential.
+ABOUTME: kagent.yaml and kagent-crds.yaml name it without an oci:// scheme, so it must exist before wave -3.
+*/ -}}
+# Moved here from infra/deploy-full-idp.sh step [3] (#609), so a cluster labctl builds has it too. It is talk
+# content Argo CD applies, not a repository credential: the chart is public and nothing here authenticates.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ghcr-kagent-oci
+  namespace: argocd
+  labels:
+    argocd.argoproj.io/secret-type: repository
+  annotations:
+    # Below kagent-crds (-3) and with the earliest app, namespaces (-10).
+    argocd.argoproj.io/sync-wave: "-10"
+stringData:
+  type: helm
+  name: kagent-oci
+  url: ghcr.io/kagent-dev/kagent/helm
+  enableOCI: "true"

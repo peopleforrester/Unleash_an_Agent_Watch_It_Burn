@@ -6,8 +6,10 @@ docs = [d for d in yaml.safe_load_all((REPO/"gitops/manifests/customer-stream/st
 deps = {d["metadata"]["name"]: d for d in docs if d.get("kind") == "Deployment"}
 cm = next(d for d in docs if d.get("kind") == "ConfigMap")
 gen = cm["data"]["generator.py"]
-burn = (REPO/"gitops/bootstrap/burn/app-of-apps-burn.yaml").read_text()
-app = yaml.safe_load((REPO/"gitops/apps/customer-stream.yaml").read_text())
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import app_names  # noqa: E402
+burn = app_names("burn")
+app = yaml.safe_load((REPO/"gitops/bootstrap/apps/customer-stream.yaml").read_text())
 failures = []
 def check(n, c):
     print(f"  {'PASS' if c else 'FAIL'}  {n}");  failures.append(n) if not c else None
@@ -25,6 +27,6 @@ _blocked = [i for i in imgs if not allowed(i)]
 check(f"target runs on a registry the policy ALLOWS so it is not itself blocked ({len(_blocked)} blocked)",
       not _blocked)
 check("customer-stream ArgoCD app targets apps", app["spec"]["destination"]["namespace"] == "apps")
-check("exfil target present on Cluster 1 (in the burn include)", "customer-stream" in burn)
+check("exfil target present on Cluster 1 (in the burn list)", "customer-stream" in burn)
 if failures: print(f"\nFAILED: {len(failures)}"); sys.exit(1)
 print("\nAll customer-stream (attack-1 target) checks passed.")

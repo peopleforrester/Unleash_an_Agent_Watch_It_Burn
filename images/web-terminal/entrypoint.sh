@@ -79,12 +79,12 @@ _pxkey() { kubectl -n agent exec deploy/guard-proxy -- python3 -c \
 # (index 0, the real BurritoBot tools) is never touched, so the recipe/customer/shell tools survive.
 _evil() { kubectl -n agent patch agent workshop-agent --type=json \
   -p "[{\"op\":\"replace\",\"path\":\"/spec/declarative/tools/1/mcpServer/toolNames\",\"value\":$1}]" >/dev/null 2>&1; }
-# _c7gw : C7's control on this cluster. Returns 0 on an admin cluster, whose Argo CD root is
-# app-of-apps-admin (gitops/bootstrap/admin): there it is agentgateway's rule. Returns 1 anywhere else: there
+# _c7gw : C7's control on this cluster. Returns 0 on an admin cluster, whose Argo CD root lab-bootstrap is
+# labelled lab-platform/profile=admin (gitops/bootstrap/values-admin.yaml): there it is agentgateway's rule. Returns 1 anywhere else: there
 # it is the toolNames allow-list. Returns 2 when Argo CD could not be asked, so a flaky lookup never picks
 # the wrong control for an admin cluster's stage demo.
-_c7gw() { local r; r="$(kubectl -n argocd get application app-of-apps-admin --ignore-not-found -o name 2>/dev/null)" \
-  || return 2; [ -n "$r" ]; }
+_c7gw() { local r; r="$(kubectl -n argocd get application lab-bootstrap --ignore-not-found \
+  -o jsonpath='{.metadata.labels.lab-platform/profile}' 2>/dev/null)" || return 2; [ "$r" = admin ]; }
 # _c7rule on|off : rewrite the one rule line in agentgateway-c7-config (on = get_weather only, off = 'true').
 # The JSON patch tests the resourceVersion it read, so it never writes over a change it did not see. Then it
 # touches the gateway pod: a pod update makes the kubelet refresh the ConfigMap volume now instead of on its

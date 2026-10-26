@@ -74,7 +74,7 @@ def missing_limits(docs):
 
 
 apps = []
-for f in sorted((REPO / "gitops/apps").glob("*.yaml")):
+for f in sorted((REPO / "gitops/bootstrap/apps").glob("*.yaml")):
     for d in yaml.safe_load_all(f.read_text()):
         if isinstance(d, dict) and d.get("kind") == "Application":
             apps.append((f.name, d))

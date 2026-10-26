@@ -202,7 +202,7 @@ def test_service_map_edges():
 
 
 # Platform components that carry Unified Service Tagging (PRD #28). Service-tag values match the
-# tags.datadoghq.com/service annotations on their pods (gitops/apps/*, infra/argocd-values.yaml).
+# tags.datadoghq.com/service annotations on their pods (gitops/bootstrap/apps/*, infra/argocd-values.yaml).
 PLATFORM_COMPONENTS = ["argocd", "kyverno", "falco", "cert-manager", "istio"]
 
 

@@ -44,11 +44,11 @@ the engine is present. There is no detection half to watch there.
   `app: workshop-mcp`. The process never receives the bytes.
 - **KubeArmor's alert** is the detection signal once the block is armed. A Block policy emits an alert as
   it denies, on the attempt: `PolicyName` `block-recipe-snoop`, `Action` `Block`, `Result`
-  `Permission denied`. The relay prints it to its stdout because `gitops/apps/kubearmor.yaml` sets
+  `Permission denied`. The relay prints it to its stdout because `gitops/bootstrap/apps/kubearmor.yaml` sets
   `kubearmorConfig.enableStdOutAlerts: true`, so
   `kubectl --context "$CONTEXT" -n kubearmor logs deployment/kubearmor-relay | grep block-recipe-snoop`
   shows it.
-- **Falco** `Recipe Snoop In Agent Namespace` (`gitops/apps/falco.yaml`, which matches this filename
+- **Falco** `Recipe Snoop In Agent Namespace` (`gitops/bootstrap/apps/falco.yaml`, which matches this filename
   explicitly) is the detection signal *before* the block is armed. Its condition is `open_read`, a
   *successful* read, so it fires when the attack works and stays quiet once KubeArmor denies the read
   (see the ordering note below).

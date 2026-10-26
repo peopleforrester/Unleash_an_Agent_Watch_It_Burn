@@ -86,7 +86,7 @@
   .tip{background:#f3fbf6;border:1px solid #cdeede;border-radius:10px;padding:10px 12px;font-size:13px;color:#2a5a40;margin:8px 0}
   .warn{background:#fff6f6;border:1px solid #f3d2d2;border-radius:10px;padding:10px 12px;font-size:13px;color:#7a2e2e;margin:8px 0}
   /* THE COMMUNITY CLUSTER IS NOT A STUDENT CLUSTER WITH THE CONTROLS SWITCHED OFF (#283). It runs the burn
-     profile (gitops/bootstrap/burn/app-of-apps-burn.yaml), which never installs Kyverno, Falco or Istio
+     profile (gitops/bootstrap/values-burn.yaml), which never installs Kyverno, Falco or Istio
      at all. A student cluster has them, uninstalled-until-applied; attackme does not have them to apply.
      The same page ships to both, so anything that only exists on the full profile carries data-full and
      disappears on attackme, and data-burn carries what is true there instead. Without this the C2 fix

@@ -1,0 +1,6 @@
+# ABOUTME: The only value every profile shares: the revision each Unleashed source is read at. Empty on purpose,
+# ABOUTME: so a render without the parameter fails by name instead of producing Applications pointing at nothing.
+#
+# labctl sets it to the 40-digit commit it pins (lab-platform.yaml's bootstrap.revision_parameter);
+# infra/deploy-full-idp.sh sets it to staging. Each profile's app list is in its own values-<profile>.yaml.
+revision: ""

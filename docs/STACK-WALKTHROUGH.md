@@ -15,8 +15,8 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
    the default-deny). `infra/terraform/{lab-vpc,cluster,fleet}/`.
 2. **Kubernetes + GitOps.** Each cluster runs its **own in-cluster Argo CD** (app-of-apps + sync-waves)
    that reconciles the cluster from Git, destination the local cluster `kubernetes.default.svc`. No hub,
-   no central ArgoCD managing other clusters. `gitops/bootstrap/full/app-of-apps.yaml` (full) and
-   `app-of-apps-burn.yaml` (Cluster 1, bare).
+   no central ArgoCD managing other clusters. `gitops/bootstrap` with `values-full.yaml` (full) and
+   `values-burn.yaml` (Cluster 1, bare).
 3. **CNCF security floor (the "80%").** Kyverno (admission), Falco (runtime), NetworkPolicy
    (default-deny), External Secrets Operator, cert-manager, scoped RBAC, cosign image signing.
 4. **Agent runtime.** **kagent** (a CRD-defined agent) running **Claude on AWS Bedrock** via a native
@@ -25,7 +25,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
    cost meter, rate-limit/cost-cap), **LLM Guard** (the scanner engine), **agentgateway** (fronts A2A +
    MCP, MCP authorization), and kagent's **toolNames** allowlist + **requireApproval** HITL.
 6. **Observability.** OTel Collector to **Datadog (primary)** and to **Tempo / Prometheus / Loki +
-   Grafana (analog fallback)**. `gitops/apps/otel-collector.yaml`.
+   Grafana (analog fallback)**. `gitops/bootstrap/apps/otel-collector.yaml`.
 7. **Attendee surface.** Browser chat UI (`gitops/ai-layer/web/`) + a web terminal. No local install.
 
 ## Layer by layer: role, where it is wired, the mechanism
@@ -36,9 +36,9 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | GitOps | Argo CD v3.4.4 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
 | Admission | Kyverno v1.19.1 (chart 3.9.1, moved from 3.9.0 on 2026-09-10) | block non-compliant workloads | `policies/kyverno/` | CEL `ValidatingPolicy` (`policies.kyverno.io/v1`, #206), `spec.validationActions` Audit to Deny |
 | Supply chain | Kyverno ImageValidatingPolicy (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | cosign key attestor, Deny, verifies offline |
-| Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
+| Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/bootstrap/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
-| Mesh | Istio 1.30.1 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
+| Mesh | Istio 1.30.1 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/bootstrap/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
 | Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs; creds via EKS Pod Identity |
 | Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
 | Agent | kagent 0.10.1 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
@@ -46,7 +46,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | AI gateway | agentgateway v1.5.0 | fronts the workshop-mcp tool server (every real tool call passes through it); NOT the C7 control | `gitops/ai-layer/resources.yaml` (RemoteMCPServer url agentgateway.agent:3001) | `mcpAuthorization` is present but unexercised (#239); the tool allow-list that C7 flips is kagent `toolNames` |
 | Guard glue | guard-proxy (stdlib) | input/output guards, cost meter, caps | `gitops/ai-layer/guard-proxy/proxy.py` (submodule: `guard-proxy-agenticburn`) | A2A reverse proxy; runtime `/toggle` |
 | Scanner | LLM Guard 0.3.16 | the actual scanning engine | `gitops/ai-layer/resources.yaml` | `/analyze/prompt` (PromptInjection), `/analyze/output` (Regex) |
-| Observability | OTel + Datadog + Grafana | the narration surface | `gitops/apps/otel-collector.yaml` | OTLP in; Datadog primary, Tempo/Prom fallback |
+| Observability | OTel + Datadog + Grafana | the narration surface | `gitops/bootstrap/apps/otel-collector.yaml` | OTLP in; Datadog primary, Tempo/Prom fallback |
 
 ## The request path, end to end (a prompt's journey)
 

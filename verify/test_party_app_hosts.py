@@ -18,6 +18,8 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 GITOPS = REPO / "gitops"
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import is_template  # noqa: E402
 CONF = (GITOPS / "ai-layer/console.conf").read_text(encoding="utf-8")
 DEPLOY = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
 PARTY = ["hedgehog", "wombat", "unicorn", "spider", "mantis-shrimp"]
@@ -44,7 +46,9 @@ def walk(node):
 
 
 # gitops/apps-disabled holds Applications no root installs; everything else under gitops/ can reach a cluster.
-deployable = [p for p in sorted(GITOPS.rglob("*.yaml")) if "apps-disabled" not in p.relative_to(GITOPS).parts]
+# The root chart's templates are Go template text, not YAML (#609); none of them is an Ingress.
+deployable = [p for p in sorted(GITOPS.rglob("*.yaml"))
+              if "apps-disabled" not in p.relative_to(GITOPS).parts and not is_template(p)]
 alb, grouped = [], []
 for p in deployable:
     for doc in yaml.safe_load_all(p.read_text(encoding="utf-8")):

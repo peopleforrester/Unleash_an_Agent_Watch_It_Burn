@@ -1,0 +1,327 @@
+# ABOUTME: ArgoCD Application for Falco runtime security DaemonSet.
+# ABOUTME: Deploys Falco with modern_ebpf driver and custom rules to security namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: falco
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-3"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    chart: falco
+    repoURL: https://falcosecurity.github.io/charts
+    targetRevision: "9.1.0"
+    helm:
+      valuesObject:
+        # Datadog Agent Autodiscovery: the `falco` named integration scrapes Falco's metrics endpoint
+        # (PRD #26 M2). Key uses the real container name `falco`. Port 8765 is Falco's webserver/metrics.
+        podAnnotations:
+          # Datadog Unified Service Tagging (PRD #28): puts Falco on the service catalog / map as a
+          # first-class platform component. env locked to production; version = deployed Falco appVersion.
+          tags.datadoghq.com/service: falco
+          tags.datadoghq.com/env: production
+          tags.datadoghq.com/version: "0.44.1"
+          ad.datadoghq.com/falco.checks: |
+            {"falco":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8765/metrics"}]}}
+        # Enable Falco's native Prometheus metrics (PRD #26 M4 fix): without this the webserver exposes
+        # /healthz only, NOT /metrics, so the Datadog `falco` check scraping :8765/metrics gets a refused
+        # connection (verified live: check [ERROR]). The chart's metrics toggle turns on the falco.yaml
+        # metrics block AND webserver.prometheus_metrics_enabled. interval 1m keeps the demo counters fresh.
+        metrics:
+          enabled: true
+          interval: 1m
+        driver:
+          kind: modern_ebpf
+        tty: true
+        falcosidekick:
+          enabled: false
+          fullfqdn: falcosidekick.security.svc.cluster.local
+        falco:
+          http_output:
+            enabled: true
+            url: "http://falcosidekick.security.svc.cluster.local:2801"
+          json_output: true
+          log_stderr: true
+          log_syslog: false
+          priority: notice
+          rules_files:
+            - /etc/falco/falco_rules.yaml
+            - /etc/falco/falco_rules.local.yaml
+            - /etc/falco/rules.d
+        # Custom rules loaded via ConfigMap
+        customRules:
+          custom-rules.yaml: |
+            # Custom Falco rules for Watch It Burn IDP
+            # Detects exec-into-pod, sensitive file access, unexpected outbound connections
+
+            - list: allowed_outbound_ports
+              items: [53, 443, 6443, 8080, 8443, 9090, 4317, 4318]
+
+            - list: sensitive_file_paths
+              items:
+                - /etc/shadow
+                - /etc/kubernetes/pki
+                - /var/run/secrets/kubernetes.io/serviceaccount/token
+                - /root/.kube/config
+                - /root/.aws/credentials
+
+            - macro: in_apps_namespace
+              condition: k8s.ns.name = "apps"
+
+            - rule: Exec Into Pod Detected
+              desc: >
+                Detect when someone runs kubectl exec or equivalent to get a shell
+                in a running container.
+              condition: >
+                spawned_process and
+                container and
+                k8s.ns.name != "" and
+                proc.pname in (runc:[2:INIT], cri-o, containerd-shim) and
+                proc.name in (bash, sh, dash, zsh, csh, fish, tcsh)
+              output: >
+                Shell spawned in container
+                (user=%user.name pod=%k8s.pod.name ns=%k8s.ns.name
+                 container=%container.name shell=%proc.name parent=%proc.pname
+                 cmdline=%proc.cmdline image=%container.image.repository)
+              priority: WARNING
+              tags: [container, shell, mitre_execution]
+              source: syscall
+
+            - rule: Sensitive File Read in Container
+              desc: >
+                Detect when a process inside a container reads sensitive files
+                such as service account tokens, shadow files, or cloud credentials.
+              condition: >
+                open_read and
+                container and
+                fd.name pmatch (sensitive_file_paths) and
+                not proc.name in (kubelet, kube-proxy, coredns)
+              output: >
+                Sensitive file read in container
+                (user=%user.name file=%fd.name pod=%k8s.pod.name ns=%k8s.ns.name
+                 container=%container.name image=%container.image.repository
+                 cmdline=%proc.cmdline)
+              priority: CRITICAL
+              tags: [container, filesystem, mitre_credential_access]
+              source: syscall
+
+            - rule: Unexpected Outbound Connection from Apps
+              desc: >
+                Detect outbound network connections from the apps namespace to
+                ports not in the allowed list.
+              condition: >
+                outbound and
+                container and
+                in_apps_namespace and
+                not fd.sport in (allowed_outbound_ports)
+              output: >
+                Unexpected outbound connection from apps namespace
+                (pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name
+                 image=%container.image.repository connection=%fd.name
+                 dest_port=%fd.sport cmdline=%proc.cmdline)
+              priority: WARNING
+              tags: [container, network, mitre_exfiltration]
+              source: syscall
+
+          eks-aware-rules.yaml: |
+            # Falco rules specific to EKS runtime environment
+            # Covers EC2 metadata access and config tampering
+
+            - rule: Container Accessing EC2 Metadata
+              desc: >
+                Detect when a container tries to reach the EC2 instance metadata
+                service (169.254.169.254). On EKS with Pod Identity, containers
+                should not need direct IMDS access.
+              condition: >
+                outbound and
+                container and
+                fd.sip = "169.254.169.254"
+              output: >
+                Container accessing EC2 metadata service (IMDS)
+                (pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name
+                 image=%container.image.repository cmdline=%proc.cmdline)
+              priority: CRITICAL
+              tags: [container, network, aws, mitre_credential_access]
+              source: syscall
+
+            # The first clause is open_write, NOT evt.dir. `evt.dir = <` matches the return direction of
+            # any syscall yielding an fd, so READS fired this rule while its name, desc and
+            # mitre_persistence tag all promise writes. Measured cost on a live cluster: the datadog-agent
+            # container opening /etc/passwd to resolve uid to name produced ~104 events/sec, 3,744 of the
+            # last 3,992 Falco log lines, which cut the retrievable buffer to about 36 seconds and buried
+            # the C3 detection step the lab tells students to watch for. open_write is a stock macro from
+            # falco_rules.yaml, which rules_files (above) loads before /etc/falco/rules.d, so it is defined
+            # by the time this override parses.
+            - rule: Write Below Etc in Container
+              desc: >
+                Detect file writes under /etc inside a container. Legitimate
+                containers rarely modify /etc.
+              condition: >
+                open_write and
+                fd.name startswith /etc/ and
+                container and
+                not proc.name in (sed, tee) and
+                not k8s.ns.name in (kube-system, kyverno, argocd, monitoring, security)
+              output: >
+                Write below /etc in container
+                (user=%user.name file=%fd.name pod=%k8s.pod.name ns=%k8s.ns.name
+                 container=%container.name image=%container.image.repository)
+              priority: WARNING
+              tags: [container, filesystem, mitre_persistence]
+              source: syscall
+
+          workshop-agent-rules.yaml: |
+            # Workshop agent-pod runtime detections (canonical home: these rules live inline here).
+            # Defense-in-depth on each Cluster 3: shell/exec in the agent pod, unexpected outbound
+            # from the agent pod, and reads of the planted FAKE- sentinel secrets.
+            # verify-at-build: the agent pod selector + namespace prefix below must match the real
+            # kagent agent deployment; confirm on a live cluster before relying on these rules.
+
+            - macro: agent_pod
+              condition: (k8s.pod.label[kagent] = "workshop-agent")   # the kagent operator labels the agent pod kagent=<agent-name> (app=kagent, NOT app=workshop-agent); verified live 2026-06-25
+
+            - macro: agent_namespace
+              condition: (k8s.ns.name startswith "attendee-")     # verify-at-build: confirm per-attendee ns prefix
+
+            - macro: in_agent_container
+              condition: (container.id != host and agent_pod)
+
+            - list: workshop_shell_binaries
+              items: [bash, sh, ash, dash, zsh, ksh, csh, tcsh]
+
+            - list: agent_expected_egress_ports
+              items: [443, 4317, 4318]   # 443 Bedrock/HTTPS tools, 4317/4318 OTLP to the spoke collector
+
+            - macro: outbound_from_agent
+              condition: >
+                outbound
+                and in_agent_container
+
+            - macro: agent_egress_is_expected
+              condition: >
+                (fd.sport in (agent_expected_egress_ports) or fd.rport in (agent_expected_egress_ports))
+                and not fd.rip in ("0.0.0.0")
+
+            - rule: Shell or Exec In Workshop Agent Pod
+              desc: An interactive shell or exec was spawned inside the scoped workshop agent container.
+              condition: >
+                spawned_process
+                and in_agent_container
+                and proc.name in (workshop_shell_binaries)
+              output: >
+                Shell spawned in workshop agent pod
+                (proc=%proc.name cmdline=%proc.cmdline parent=%proc.pname
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name image=%container.image.repository)
+              priority: WARNING
+              tags: [workshop, agent, shell, mitre_execution]
+              source: syscall
+
+            - rule: Unexpected Outbound From Workshop Agent Pod
+              desc: The scoped workshop agent opened an outbound connection to an unexpected destination/port.
+              condition: >
+                outbound_from_agent
+                and not agent_egress_is_expected
+              output: >
+                Unexpected outbound connection from workshop agent pod
+                (proc=%proc.name connection=%fd.name dest_ip=%fd.rip dest_port=%fd.rport
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+              priority: WARNING
+              tags: [workshop, agent, network, exfil, mitre_exfiltration]
+              source: syscall
+
+            - rule: Sensitive File Access
+              desc: A file whose name carries the FAKE-...-sentinel marker was opened inside the agent container.
+              condition: >
+                open_read
+                and in_agent_container
+                and (fd.name contains "FAKE-PROD-DB-PASSWORD-sentinel"
+                     or fd.name contains "FAKE-MCP-EXFIL-sentinel")
+              output: >
+                Planted fake-secret material read inside workshop agent pod
+                (file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+              priority: NOTICE
+              tags: [workshop, agent, secret, mitre_credential_access]
+              source: syscall
+
+            # C3 (filesystem snoop): the planted house-sauce recipe config is read. The snoop runs via the
+            # agent's run_shell tool, which exec's in the workshop-MCP pod (NOT the kagent agent pod), so
+            # this matches the whole `agent` namespace, not in_agent_container. Narrowly scoped to the bait
+            # file/path so it cannot fire on normal operations. Falco-Talon terminates the offending pod on
+            # this rule (the hard-block; see gitops/bootstrap/apps/falco-talon.yaml).
+            - rule: Recipe Snoop In Agent Namespace
+              desc: The planted Bat Spit Amazing Awesome Sauce recipe config was read inside the agent namespace.
+              condition: >
+                open_read
+                and container.id != host
+                and k8s.ns.name = "agent"
+                and (fd.name endswith "secret-sauce-recipe.conf"
+                     or fd.name contains "/config/legacy/")
+              output: >
+                House-sauce recipe file read in agent ns (C3 snoop)
+                (file=%fd.name proc=%proc.name cmdline=%proc.cmdline
+                 pod=%k8s.pod.name ns=%k8s.ns.name container=%container.name)
+              priority: WARNING
+              tags: [workshop, agent, recipe-snoop, mitre_credential_access]
+              source: syscall
+
+          # NOTE the 00- prefix: Falco fires only the FIRST matching rule per event, and rules.d
+          # files load alphabetically. The generic "Exec Into Pod Detected" (custom-rules.yaml) also
+          # matches the fork-bomb entry-shell execve, so without sorting this file first it would
+          # shadow the fork-bomb rule and nothing would route to Talon (caught live on watch-it-burn-test).
+          00-workshop-forkbomb-rules.yaml: |
+            # Detection for the Beat 3 fork bomb. This is the DETECT-and-RESPOND beat (Falco -> Talon);
+            # the real BLOCK is the per-pod PID limit (kubelet podPidsLimit, see infra/node-config/).
+            # The classic bomb is `:(){ :|:& };:`; match its cmdline signature in a workload container.
+            - macro: workload_container
+              condition: (container and k8s.ns.name in (apps))
+
+            - rule: Fork Bomb In Workload Container
+              desc: A fork-bomb-style self-replicating process pattern ran in a workload container.
+              condition: >
+                spawned_process and workload_container
+                and (proc.cmdline contains ":|:&"
+                     or proc.cmdline contains ":(){"
+                     or proc.cmdline contains ":() { :|:")
+              output: >
+                Fork bomb detected in workload container
+                (cmdline=%proc.cmdline proc=%proc.name pod=%k8s.pod.name ns=%k8s.ns.name
+                 container=%container.name image=%container.image.repository)
+              priority: CRITICAL
+              tags: [workshop, availability, forkbomb, mitre_impact]
+              source: syscall
+        tolerations:
+          - effect: NoSchedule
+            operator: Exists
+        resources:
+          requests:
+            cpu: 100m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
+        # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
+        # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
+        falcoctl:
+          artifact:
+            install:
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 256Mi }
+            follow:
+              resources:
+                requests: { cpu: 50m, memory: 64Mi }
+                limits: { cpu: 300m, memory: 256Mi }
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: security
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

@@ -1,0 +1,37 @@
+# ABOUTME: ArgoCD Application for OpenTelemetry Collector DaemonSet.
+# ABOUTME: BURN profile: Datadog only, because burn installs neither Prometheus nor Tempo (#476).
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: otel-collector
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  sources:
+    - repoURL: https://open-telemetry.github.io/opentelemetry-helm-charts
+      chart: opentelemetry-collector
+      targetRevision: "0.173.1"
+      helm:
+        # Same Application name and chart as otel-collector.yaml, one overlay file different
+        # (gitops/otel-collector/values-burn.yaml), as otel-collector-attendee.yaml is. Only the burn root
+        # selects this file; every other root excludes it. Argo CD multi-source: the second source is a
+        # ref, never deployed, only read for the value files.
+        valueFiles:
+          - $values/gitops/otel-collector/values.yaml
+          - $values/gitops/otel-collector/values-burn.yaml
+    - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+      targetRevision: "{{ .Values.revision }}"
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false

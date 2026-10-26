@@ -3,8 +3,8 @@
 # ABOUTME: workloads stay deletable (the visible gradual burn). Ships on attendee, full and admin; the
 # ABOUTME: burn cluster (Cluster 1) has no floor at all, its selector includes neither kyverno nor this.
 #
-# Which namespace holds what (#477). Falco runs in `security` (gitops/apps/falco.yaml), and `falco` holds
-# only Talon. BurritoBot and the console run in `agent` (gitops/apps/ai-layer.yaml). The Datadog operator
+# Which namespace holds what (#477). Falco runs in `security` (gitops/bootstrap/apps/falco.yaml), and `falco` holds
+# only Talon. BurritoBot and the console run in `agent` (gitops/bootstrap/apps/ai-layer.yaml). The Datadog operator
 # and agent run in `datadog`. All three are on the namespace list.
 #
 # Workloads are protected in every platform namespace EXCEPT `agent`. The lab has the student's terminal

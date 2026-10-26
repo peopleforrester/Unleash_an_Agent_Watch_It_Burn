@@ -1,0 +1,21 @@
+# ABOUTME: What this talk presents to lab-platform: the labs it is the content for, and the root
+# ABOUTME: ArgoCD chart of each bootstrap profile, read at the commit an event pins.
+format: lab-platform/v1
+labs:
+  - burn
+branch: staging
+bootstrap:
+  revision_parameter: revision
+  profiles:
+    - name: attendee
+      root: gitops/bootstrap
+      values: values-attendee.yaml
+    - name: burn
+      root: gitops/bootstrap
+      values: values-burn.yaml
+    - name: admin
+      root: gitops/bootstrap
+      values: values-admin.yaml
+    - name: full
+      root: gitops/bootstrap
+      values: values-full.yaml

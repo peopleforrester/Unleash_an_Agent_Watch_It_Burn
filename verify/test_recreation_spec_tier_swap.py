@@ -1,4 +1,4 @@
-# ABOUTME: docs/MASTER-RECREATION-SPEC.md says how a model tier reaches a cluster the way gitops/apps/ai-layer.yaml
+# ABOUTME: docs/MASTER-RECREATION-SPEC.md says how a model tier reaches a cluster the way gitops/bootstrap/apps/ai-layer.yaml
 # ABOUTME: delivers it: the committed default on a fresh cluster, a live patch of the Agent and MODEL_TIER on a running one.
 #
 # Why (#598). The spec's Key Decisions bullet said "Tier swaps by repointing the Agent modelConfig (commit + resync),
@@ -11,7 +11,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 SPEC = "docs/MASTER-RECREATION-SPEC.md"
-APP = "gitops/apps/ai-layer.yaml"
+APP = "gitops/bootstrap/apps/ai-layer.yaml"
 failures = []
 
 

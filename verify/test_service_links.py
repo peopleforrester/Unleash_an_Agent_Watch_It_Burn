@@ -29,7 +29,7 @@ CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
 WEB = REPO / "gitops/ai-layer/web"
 LINKS = (WEB / "links.html").read_text(encoding="utf-8")
 PLATFORM = (WEB / "platform.html").read_text(encoding="utf-8")
-PROM_APP = yaml.safe_load((REPO / "gitops/apps/prometheus.yaml").read_text(encoding="utf-8"))
+PROM_APP = yaml.safe_load((REPO / "gitops/bootstrap/apps/prometheus.yaml").read_text(encoding="utf-8"))
 
 failures: list[str] = []
 

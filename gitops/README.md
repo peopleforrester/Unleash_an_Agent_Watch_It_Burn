@@ -5,34 +5,17 @@ ArgoCD-managed Kubernetes resources using the app-of-apps pattern.
 ## Directory Structure
 
 ```
-bootstrap/
-  app-of-apps.yaml      # Root Application that manages all child apps
-
-apps/                    # 36 ArgoCD Application manifests
-  namespaces.yaml        # Namespace definitions (sync-wave: -10)
-  kyverno.yaml           # Policy engine
-  kyverno-policies.yaml  # Kyverno CEL ValidatingPolicies + ImageValidatingPolicy
-  falco.yaml             # Runtime security
-  falcosidekick.yaml     # Falco event forwarding
-  external-secrets.yaml  # ESO operator
-  eso-resources.yaml     # ClusterSecretStore + ExternalSecrets
-  network-policies.yaml  # Default-deny + allow rules
-  prometheus.yaml        # kube-prometheus-stack (Prometheus + Grafana)
-  otel-collector.yaml    # OpenTelemetry Collector
-  otel-collector-burn.yaml  # The burn cluster's collector: Datadog only (no Prometheus or Tempo there)
-  grafana-dashboards.yaml  # Platform Overview dashboard
-  tempo.yaml             # Distributed tracing, plus its Grafana data source (tempo/); admin and full only (#475)
-  loki.yaml              # Log aggregation
-  promtail.yaml          # Log shipping
-  sample-app.yaml        # Flask demo app
-  backstage.yaml         # Developer portal
-  backstage-resources.yaml # Backstage RBAC + catalog ConfigMap
-  cert-manager.yaml      # TLS certificate management
-  demo-app-unicorn.yaml     # Demo app (interactive)
-  ecom-frontend.yaml     # Demo app (e-commerce)
-  ecom-api.yaml          # Demo app (e-commerce API)
-  ecom-worker.yaml       # Demo app (e-commerce worker)
-  load-generator.yaml    # Traffic generation for observability
+bootstrap/               # The root chart, lab-bootstrap: one Helm chart for every profile (#609)
+  Chart.yaml
+  values.yaml            # revision: "" (the commit, or branch, every Unleashed source is read at)
+  values-attendee.yaml   # apps: the attendee profile's list
+  values-burn.yaml       # apps: the burn (community) profile's list
+  values-admin.yaml      # apps: the admin profile's list
+  values-full.yaml       # apps: the full (instructor) profile's list
+  templates/
+    apps.yaml            # renders each listed apps/<name>.yaml, its Unleashed sources at .Values.revision
+    ghcr-kagent-oci.yaml # the credential-free OCI Helm repository Secret kagent's chart needs
+  apps/                  # the ArgoCD Application manifests, one or more per file
 
 argocd/
   values.yaml            # ArgoCD Helm chart values
@@ -50,16 +33,24 @@ namespaces/
 
 ## App-of-Apps Pattern
 
-The root `bootstrap/app-of-apps.yaml` is applied once manually:
+Every cluster has one root Application, `lab-bootstrap`, sourcing the `gitops/bootstrap` chart with its
+profile's `values-<profile>.yaml` and the Helm parameter `revision`. `lab-platform.yaml` at the repo root
+presents the four profiles to lab-platform, whose labctl creates the root at a pinned 40-digit commit with
+`revision` set to that commit. `infra/deploy-full-idp.sh <profile>` applies the same root at `staging` with
+`revision=staging`, so clusters it builds follow `staging`:
 
 ```bash
-kubectl apply -f gitops/bootstrap/full/app-of-apps.yaml
+bash infra/deploy-full-idp.sh attendee   # or burn, admin, full
 ```
 
 After this, ArgoCD manages everything. No more `kubectl apply` is needed.
 
-The root app watches `gitops/apps/` and creates child Applications for each YAML file.
-Each child app points to either a Helm chart (external) or a directory in this repo.
+The chart renders the Applications its values file lists from `bootstrap/apps/`. Each child app points to
+either a Helm chart at one exact version or a directory in this repo at `{{ .Values.revision }}`. A profile
+is an explicit list: adding an app to a profile is one line in its values file, and a name with no file
+fails the render. Nothing the chart renders sources `gitops/bootstrap` itself, so `lab-bootstrap` is the only
+root. Prometheus' own `{{ ... }}` alert text is escaped in `apps/prometheus.yaml`, because the chart renders
+each app file as a template.
 
 ## Sync Wave Ordering
 
@@ -85,8 +76,10 @@ Gaps between groups are reserved for future components.
 ## Adding a New Application
 
 1. Create the Kubernetes manifests or identify the Helm chart
-2. Create a new `gitops/apps/<name>.yaml` ArgoCD Application manifest
+2. Create a new `gitops/bootstrap/apps/<name>.yaml` ArgoCD Application manifest; a source in this repo says
+   `targetRevision: "{{ .Values.revision }}"`, a chart one exact version
 3. Set the appropriate sync wave annotation
-4. Commit and push, ArgoCD will detect and deploy within 30 seconds
+4. Add `<name>` to the `apps` list of each profile that should install it (`gitops/bootstrap/values-<profile>.yaml`)
+5. Commit and push. Clusters following `staging` pick it up; a lab-platform event takes it at its next pin
 
 See [ADR-002](../docs/adr/ADR-002-gitops-engine.md) for the ArgoCD selection rationale.

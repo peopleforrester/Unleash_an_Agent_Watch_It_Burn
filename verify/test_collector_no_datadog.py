@@ -26,7 +26,6 @@ out of the offline suite.
 """
 from __future__ import annotations
 
-import fnmatch
 import os
 import pathlib
 import re
@@ -37,6 +36,7 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from bootstrap_chart import deploys  # noqa: E402
 from collector_render import REPO, collector_config, datadog_overlay, deep_merge, helm_values  # noqa: E402
 
 failures: list[str] = []
@@ -94,11 +94,7 @@ inits = {c["name"]: c for c in vals.get("initContainers") or []}
 gate = inits.get("datadog-gate", {})
 
 print("== the admin profile installs the instructor collector and keeps Datadog in the profile ==")
-admin = yaml.safe_load((REPO / "gitops/bootstrap/admin/app-of-apps-admin.yaml").read_text(encoding="utf-8"))
-excl = next(s for s in admin["spec"]["sources"] if s.get("path") == "gitops/apps")["directory"].get("exclude", "")
-m = re.fullmatch(r"\{(.*)\}(.*)", excl)
-patterns = [p + m.group(2) for p in m.group(1).split(",")] if m else [excl]
-excluded = lambda f: any(fnmatch.fnmatch(f, p) for p in patterns if p)  # noqa: E731
+excluded = lambda f: not deploys("admin", f)  # noqa: E731
 check("admin takes otel-collector.yaml, not the attendee overlay",
       excluded("otel-collector-attendee.yaml") and not excluded("otel-collector.yaml"))
 check("admin keeps falcosidekick and the Datadog apps (the secret switches Datadog, not the profile)",
@@ -112,7 +108,7 @@ for name, c in sorted(inits.items()):
           not blocking_refs(c.get("env"), ABSENT))
 check("no envFrom on the collector that could name a missing secret", not vals.get("extraEnvsFrom"))
 check("no secret volume on the collector", not any("secret" in v for v in vals.get("extraVolumes") or []))
-fsk_app = yaml.safe_load((REPO / "gitops/apps/falcosidekick.yaml").read_text(encoding="utf-8"))
+fsk_app = yaml.safe_load((REPO / "gitops/bootstrap/apps/falcosidekick.yaml").read_text(encoding="utf-8"))
 fsk = fsk_app["spec"]["source"]["helm"]["valuesObject"]
 check(f"falcosidekick env: no blocking secret reference {blocking_refs(fsk['config'].get('extraEnv'), ABSENT)}",
       not blocking_refs(fsk["config"].get("extraEnv"), ABSENT))

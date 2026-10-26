@@ -114,7 +114,7 @@ print("== Kyverno reports arrive while the student is still looking (#323) ==")
 # Measured on watch-it-burn-michael-admin, 2026-09-08, policy in Audit and the villain running:
 #   at 1h default   no report for the pod after 2 minutes, while every older pod had one
 #   at 30s          restrict-image-registries: validation error: Images must come from allowed registries...
-KYV = (REPO / "gitops/apps/kyverno.yaml").read_text(encoding="utf-8")
+KYV = (REPO / "gitops/bootstrap/apps/kyverno.yaml").read_text(encoding="utf-8")
 check("the scan interval is set", "backgroundScanInterval: 30s" in KYV)
 # The key path is the trap. reportsController.extraArgs is a real key, applies cleanly, syncs Healthy and
 # does nothing, because the chart already emits the flag from its own value and the duplicate is ignored.

@@ -5,7 +5,7 @@
 # credentials uses apiSecret + **appSecret** (NOT "appKeySecret" — that field does not exist in this CRD,
 # despite some docs/examples; `kubectl explain ...credentials` confirms apiSecret/appSecret). spec.override is a
 # map keyed by component name (nodeAgent/processAgent/clusterAgent). APM off: OTel traces reach Datadog APM via
-# the Collector path (gitops/apps/otel-collector.yaml), so the Agent's APM port is unused here.
+# the Collector path (gitops/bootstrap/apps/otel-collector.yaml), so the Agent's APM port is unused here.
 apiVersion: datadoghq.com/v2alpha1
 kind: DatadogAgent
 metadata:

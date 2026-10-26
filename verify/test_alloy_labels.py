@@ -1,5 +1,5 @@
 # ABOUTME: Alloy puts namespace, pod, container and app on every Loki stream (#464), so the #190 audit trail
-# ABOUTME: is selectable by stream; checks the relabel wiring in gitops/apps/alloy.yaml and the queries that rely on it.
+# ABOUTME: is selectable by stream; checks the relabel wiring in gitops/bootstrap/apps/alloy.yaml and the queries that rely on it.
 """Offline. loki.source.kubernetes drops every __meta_ label and adds only job, so a config that forwards
 discovery.kubernetes straight to it gives every stream the one label {job="loki.source.kubernetes.pods"}. A
 query then cannot select the agent namespace or one pod and has to line-filter every stream in Loki.
@@ -51,7 +51,7 @@ def attrs(body: str) -> dict[str, str]:
     return {k: v.strip() for k, v in re.findall(r"^\s*(\w+)\s*=\s*(.+?)\s*$", body, re.M)}
 
 
-app = yaml.safe_load((REPO / "gitops/apps/alloy.yaml").read_text(encoding="utf-8"))
+app = yaml.safe_load((REPO / "gitops/bootstrap/apps/alloy.yaml").read_text(encoding="utf-8"))
 config = app["spec"]["source"]["helm"]["valuesObject"]["alloy"]["configMap"]["content"]
 
 print("== the pod targets go through discovery.relabel before loki.source.kubernetes ==")

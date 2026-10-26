@@ -292,7 +292,7 @@ not a chatbot on a laptop.
 
 ```bash
 # on the admin cluster terminal
-kubectl get applications -n argocd      # the app-of-apps and its components
+kubectl get applications -n argocd      # lab-bootstrap, the root app-of-apps, and its components
 kubectl get pods -A | head -40          # what that looks like running
 ```
 

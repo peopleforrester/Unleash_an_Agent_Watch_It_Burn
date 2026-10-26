@@ -61,7 +61,7 @@ EXEMPT = {
 }
 # The directories #560 and #588 named. Each must still contribute files, so a broken listing cannot pass by
 # sweeping nothing.
-NAMED = ("infra/terraform/fleet/", "infra/setup-instructor-cluster.sh", "gitops/apps/", "gitops/bootstrap/",
+NAMED = ("infra/terraform/fleet/", "infra/setup-instructor-cluster.sh", "gitops/bootstrap/apps/", "gitops/bootstrap/",
          "gitops/ai-layer/", "gitops/ai-layer-otel/", "gitops/manifests/datadog/", "policies/kyverno/",
          "policies/kubearmor/", "policies/network-policies/", "challenges/", "images/web-terminal/",
          "images/workshop-mcp/", "infra/deploy-full-idp.sh", "infra/terraform/aws/cluster/", "verify/")

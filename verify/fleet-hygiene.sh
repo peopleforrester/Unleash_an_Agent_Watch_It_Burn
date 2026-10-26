@@ -70,13 +70,14 @@ echo
 echo "== pinned platform versions (compare against each project's advisories) =="
 python3 - "${REPO}" <<'PY'
 import re, sys, pathlib
-apps = pathlib.Path(sys.argv[1], "gitops/apps")
+apps = pathlib.Path(sys.argv[1], "gitops/bootstrap/apps")
 rows = []
 for f in sorted(apps.glob("*.yaml")):
     t = f.read_text(encoding="utf-8", errors="replace")
     m = re.search(r'targetRevision:\s*"?([^"\s]+)"?', t)
     c = re.search(r'chart:\s*"?([^"\s]+)"?', t)
-    if m and c and m.group(1) not in ("staging", "HEAD", "main"):
+    # An Unleashed source says "{{ .Values.revision }}" (#609): the root chart's revision, not a chart pin.
+    if m and c and m.group(1) not in ("staging", "HEAD", "main") and not m.group(1).startswith("{{"):
         rows.append((c.group(1), m.group(1)))
 for chart, ver in sorted(set(rows)):
     print(f"    {chart:<34} {ver}")

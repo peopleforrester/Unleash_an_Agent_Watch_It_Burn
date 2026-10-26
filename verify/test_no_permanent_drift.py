@@ -23,19 +23,23 @@ def docs(path):
     return [d for d in yaml.safe_load_all(path.read_text()) if d]
 
 
-print("== roots carry no default the API server strips ==")
-for root in sorted((REPO / "gitops/bootstrap").glob("*/*.yaml")):
-    d = docs(root)[0]
-    dirs = [s.get("directory", {}) for s in d["spec"]["sources"]]
-    check(f"{root.parent.name}: no 'recurse: false' (default; live never carries it)", all("recurse" not in x for x in dirs))
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import deploy_root, profiles  # noqa: E402
 
-print("== every root ignores the finalizers a chart adds to its child Applications ==")
-for root in sorted((REPO / "gitops/bootstrap").glob("*/*.yaml")):
-    d = docs(root)[0]
+print("== the root carries no default the API server strips ==")
+for profile in profiles():
+    d = deploy_root(profile)
+    src = d.get("spec", {}).get("source", {})
+    check(f"{profile}: lab-bootstrap's source has no 'directory' (it is a Helm chart; no 'recurse: false')",
+          bool(src) and "directory" not in src)
+
+print("== the root ignores the finalizers a chart adds to its child Applications ==")
+for profile in profiles():
+    d = deploy_root(profile)
     ign = d["spec"].get("ignoreDifferences", [])
-    check(f"{root.parent.name}: ignores Application /metadata/finalizers",
+    check(f"{profile}: ignores Application /metadata/finalizers",
           any(i.get("kind") == "Application" and "/metadata/finalizers" in i.get("jsonPointers", []) for i in ign))
-    check(f"{root.parent.name}: RespectIgnoreDifferences is set",
+    check(f"{profile}: RespectIgnoreDifferences is set",
           "RespectIgnoreDifferences=true" in d["spec"]["syncPolicy"].get("syncOptions", []))
 
 print("== every Kyverno policy states the defaults its CRD schema fills in ==")
@@ -86,7 +90,7 @@ for mf in sorted((REPO / "gitops/manifests").rglob("*.yaml")):
         check(f"{mf.relative_to(REPO)} {d['metadata']['name']}: target ports {sorted(ports)} allowed by allow-ingress-controller", ports <= allowed)
 
 print("== the kyverno app ignores the CRD labels its chart renders empty ==")
-k = docs(REPO / "gitops/apps/kyverno.yaml")[0]
+k = docs(REPO / "gitops/bootstrap/apps/kyverno.yaml")[0]
 ign = k["spec"].get("ignoreDifferences", [])
 check("ignoreDifferences covers CustomResourceDefinition /metadata/labels",
       any(i.get("kind") == "CustomResourceDefinition" and "/metadata/labels" in i.get("jsonPointers", []) for i in ign))
