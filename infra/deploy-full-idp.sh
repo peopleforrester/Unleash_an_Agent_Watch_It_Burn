@@ -9,7 +9,7 @@ REPO_URL="https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
 # the same four. Each file's header says what its profile is for.
 PROFILE="${1:-full}"
 case "${PROFILE}" in
-    # full: Cluster 2/3, instructor and round clusters.
+    # full: Cluster 2/3, the guarded instructor clusters.
     full)     VALUES="values-full.yaml" ;;
     # burn: Cluster 1, the community cluster with no guardrails.
     burn)     VALUES="values-burn.yaml" ;;
