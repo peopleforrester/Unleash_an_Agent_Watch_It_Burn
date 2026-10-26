@@ -2620,7 +2620,7 @@ this run adds no #290 code.
 
 lab-platform (peopleforrester/lab-platform#190) builds an event's clusters from this repo at one 40-digit commit.
 It reads `lab-platform.yaml` at the root, creates one root Application per cluster, `lab-bootstrap`, sourcing
-`gitops/bootstrap` with `values-<profile>.yaml` and `revision=<commit>`, and fails a cluster on any Unleashed source
+`gitops/bootstrap` with `values-<profile>.yaml` and `revision=<commit>`, and fails a cluster on any source from this repo
 at another revision. This repo now presents exactly that.
 
 - **`lab-platform.yaml`** is the handoff's section 2 text, byte for byte: `burn` lab, branch `staging`, parameter
@@ -2628,7 +2628,7 @@ at another revision. This repo now presents exactly that.
 - **The layout is the handoff's section 4.** `gitops/apps/` moved to `gitops/bootstrap/apps/`, because Helm reads
   files only inside the chart; `templates/apps.yaml` renders each listed app through `tpl` and fails on a name with
   no file; `values.yaml` holds only `revision: ""`, so a render without the parameter fails by name. Each of the 21
-  Unleashed sources says `targetRevision: "{{ .Values.revision }}"`, quoted so the file still parses as YAML for the
+  sources from this repo says `targetRevision: "{{ .Values.revision }}"`, quoted so the file still parses as YAML for the
   verify scripts. Prometheus' six `{{ $labels.* }}` alert lines are escaped with backticks and render unchanged.
 - **Each profile is an explicit list**, copied from what its brace glob selected at b1fcb0e: attendee 29, burn 19,
   admin 33, full 31. The handoff counted burn at 18 because `external-secrets.yaml` was missing from its read; it
