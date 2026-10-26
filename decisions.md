@@ -2449,3 +2449,46 @@ that name.
 - **Held by** `verify/test_gated_page_names.py`, which fails on the previous `console.conf`. The KubeCon
   run-of-show's router step now curls `/kubecon` on the three roster hosts and expects 200, so a router
   matcher that does not know a stage host shows up the night before, not on stage.
+
+## 2026-10-26 · #604 · c8-scoped-role.yaml closes the API read of other Secrets, and the pod mount stays open
+
+Challenge 8's fix scopes agent-sa's Role so the token can no longer dump every Secret: get and list on
+`secrets` become get on `ceo-personal-record` by name (`gitops/ai-layer/resources.yaml`, the
+`c8-scoped-role.yaml` key of the `challenge-fixes` ConfigMap). The Role keeps create, get, list and patch on
+pods and deployments. Measuring #604: agent-sa can still read any Secret in namespace `agent` by mounting it
+into a pod it creates, and no workshop admission policy refuses that pod.
+
+The reason is RBAC together with the kubelet. A pod creator needs only create on pods. The kubelet reads a
+mounted Secret on the pod's behalf with the node's credentials, so the creator's own RBAC is never consulted
+for the mount. The Kubernetes RBAC good-practices page (read 2026-10-26,
+`https://kubernetes.io/docs/concepts/security/rbac-good-practices/`) states this directly: permission to
+create workloads in a namespace implicitly grants access to the Secrets that can be mounted in Pods there. So
+the `resourceNames` on the scoped Role's get does nothing to a mount.
+
+- **Measured 2026-10-26, cluster-free, with the pinned Kyverno CLI v1.19.1** (the engine the admission
+  controller runs, #572). Part 1, read from the Role: it keeps create on pods and scopes the Secret read to
+  get on `ceo-personal-record`, so agent-sa may create a pod and its API read of `terminal-auth` returns
+  Forbidden. Part 2, run through every policy under `policies/kyverno/` and `policies/floor/` (ten Kyverno
+  policies and the floor): a pod on the default ServiceAccount, with `docker.io/library/busybox:1.36` (an
+  allowed image), resource limits and an ordinary label, mounting `terminal-auth` as a volume and through a
+  `secretKeyRef` env var, is refused by none of them. The five that evaluate it (`restrict-image-registries`,
+  `verify-image-signatures`, `require-resource-limits`, `restrict-agent-spawned-workloads` and
+  `deny-llm-endpoint-bypass`) return pass; the other six do not match a default-ServiceAccount pod in `agent`.
+  None of the five looks at Secret volumes or `secretKeyRef`. The pod reads `terminal-auth`, the shared
+  web-terminal credential.
+- **What the one agent-pod policy checks.** `restrict-agent-spawned-workloads` (a Kyverno ValidatingPolicy,
+  Deny) is the only policy written against pods agent-sa creates. It refuses a pod that runs as a
+  Bedrock-bound ServiceAccount or carries a NetworkPolicy-trusted label (#490). The same `terminal-auth`
+  mount running as agent-sa, or labelled `app.kubernetes.io/name=console`, is denied, on the identity and on
+  the label, with no mention of the Secret. On the default ServiceAccount with an ordinary label it passes.
+- **Admission draws no line between Secrets.** A pod mounting `ceo-personal-record`, the one Secret the scoped
+  Role still reads through the API, is handled identically to the `terminal-auth` pod by all eleven policies.
+  The admission plane has no way to know which Secret the RBAC allows.
+- **The AWS example #604 names is out of reach.** #584 moved `student-aws-creds` to namespace `student-creds`,
+  and a pod mounts only Secrets from its own namespace, so a pod in `agent` cannot mount it. The Secrets a pod
+  in `agent` can mount are `terminal-auth` and `console-tls`.
+- **Held by** `verify/test_c8_pod_secret_mount.py`, in the E2E tools tier (it needs the Kyverno CLI). No
+  policy refusing Secret volumes and `secretKeyRef` env vars for pods created by agent-sa exists yet. The gap
+  is item 4 of general-knowledge's `ai-security/2026-10-26_infrastructure-enforced-guardrails.md` note
+  (general-knowledge#108); a follow-up on #604 asks for the Kyverno or ValidatingAdmissionPolicy rule that
+  would close it.
