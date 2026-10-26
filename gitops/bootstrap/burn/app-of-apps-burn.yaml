@@ -46,7 +46,7 @@ spec:
         # the webhook injects it at admission. The collector is otel-collector-burn.yaml, not
         # otel-collector.yaml: Datadog is its only sink, because this profile installs neither Prometheus
         # nor Tempo and the shared values export to both (#476).
-        include: '{namespaces,cert-manager,external-secrets,eso-resources,kagent-crds,kagent,ai-layer,customer-stream,kubearmor,otel-operator,ai-layer-otel,otel-collector-burn,datadog-operator,datadog-agent-cr,demo-app-unicorn,demo-app-hedgehog,demo-app-spider,demo-app-wombat,demo-app-mantis-shrimp}.yaml'
+        include: '{namespaces,cert-manager,external-secrets,eso-resources,kagent-crds,kagent,ai-layer,kubearmor,otel-operator,ai-layer-otel,otel-collector-burn,datadog-operator,datadog-agent-cr,demo-app-unicorn,demo-app-hedgehog,demo-app-spider,demo-app-wombat,demo-app-mantis-shrimp}.yaml'
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: staging
       path: gitops/bootstrap/burn

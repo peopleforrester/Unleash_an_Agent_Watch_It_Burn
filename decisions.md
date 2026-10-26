@@ -2615,3 +2615,20 @@ two cannot disagree again. The spike is still not run on a cluster.
 **The tracker itself.** The approved #290 change (draft 4ed027a) is already on staging. #560 and #588 landed
 the code and wording sweep, and #502 removed the roundN alias. All six children (#291 to #296) are closed, so
 this run adds no #290 code.
+
+## 2026-10-26 · #473 · The customer-stream app is removed
+
+**What went.** `gitops/apps/customer-stream.yaml`, `gitops/manifests/customer-stream/` (a ConfigMap, a
+generator and a consumer Deployment, and a Service in `apps`), its entry in the burn root's include selector,
+and `verify/test_customer_stream.py`. The #236 audit (`docs/research/2026-10-24-duplicative-components-audit.md`)
+found nothing reads the stream: C1's humans-versus-vampires answer comes from `get_marketing_intel`, which
+reads `marketing.json` inside `workshop-mcp`, and the stream predates the switch from the S3 push to the chat
+leak. Git history keeps the manifests. On a live cluster the roots prune the child Application and its
+resources-finalizer removes what it created.
+
+**The counts.** The app selected on every profile, so each cluster runs one fewer Application. An instructor
+cluster now shows 37 Argo CD applications and an attendee cluster 33, down from the 38 and 34 that #478 set.
+The platform page, the run-of-show, the design glance and `verify/test_fleet_contract.py` carry the new
+numbers. Like #478's, they are the measured counts less one, not a fresh measurement on a live cluster. The
+recreation spec and readiness checklist no longer list the app, and the drift test's comment describes the
+require-labels failure without naming it.
