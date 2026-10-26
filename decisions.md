@@ -2623,3 +2623,20 @@ The dated finding is `docs/spike-llm-guard-2026-10-26.md`. In short:
 `protectai/deberta-v3-base-prompt-injection-v2` at `90c9989b1a342275dd0d1a95aad283c04e075671` (2026-07-09,
 Apache-2.0), the revision the offline image mirrors, downloaded from Hugging Face on the first run. llm-guard 0.3.16
 and torch 2.14.0+cpu are the pins `verify/test_topic_classifier.py` already records (2026-10-24 entry above).
+
+## 2026-10-27 · #128 · the #480 tool-pin spike's cluster bind moves from 3003 to 3006
+
+Found when the gate failed #128's run on `verify/test_tool_pin.py` after `staging` moved under it. It was not
+caused by #128. The #480 spike chose 3003 for its pinned evil-mcp bind before #514 reached its base. #514
+had already given 3003 to the `agentgateway-c7` container in the same Deployment, which is the same network
+namespace. So the spike's bind could never have opened there. `live-check.sh` found 3003 already on the Service,
+skipped its patch, and would have dialled C7's gateway instead of tool-pin. The test's "nothing deployed names
+bind 3003" check then failed on #514's own manifests.
+
+- **3006, for the cluster only.** It is free on every container and on the Service. The local bed keeps 3003 and
+  3004, because it runs on its own with no c7 container, and its recorded output stays as measured.
+- **`live-check.sh` reads one `PINNED_PORT`** for the Service patch, the reload message and the RemoteMCPServer
+  url.
+- **`verify/test_tool_pin.py` now checks the pod, not just the config string.** The pinned port must be unused by
+  every container in the agentgateway Deployment and by every Service port. `live-check.sh` must carry the same
+  port, and no `gitops/` manifest may name it. Put back to 3003, it fails all three checks.

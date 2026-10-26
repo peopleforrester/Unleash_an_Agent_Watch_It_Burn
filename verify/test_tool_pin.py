@@ -23,6 +23,8 @@ import pathlib
 import sys
 import tempfile
 
+import yaml
+
 REPO = pathlib.Path(__file__).resolve().parents[1]
 SPIKE = REPO / "docs/research/2026-10-24-tool-pin-spike"
 sys.path.insert(0, str(REPO / "images/tool-pin"))
@@ -185,6 +187,18 @@ route = bind["listeners"][0]["routes"][0]
 targets = route["backends"][0]["mcp"]["targets"]
 check("the pinned bind is a port no committed bind uses",
       bind["port"] == gateway_bind.PINNED_PORT and bind["port"] not in [b["port"] for b in committed["binds"]])
+# The pod is one network namespace, so a port another container listens on is taken too: agentgateway-c7
+# serves C7's evil-mcp bind on 3003 from its own ConfigMap (#514), which the committed config never shows.
+gw_docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()) if d]
+deploy = next(d for d in gw_docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "agentgateway")
+svc = next(d for d in gw_docs if d["kind"] == "Service" and d["metadata"]["name"] == "agentgateway")
+taken = {p["containerPort"] for c in deploy["spec"]["template"]["spec"]["containers"] for p in c.get("ports", [])}
+taken |= {p["port"] for p in svc["spec"]["ports"]}
+check(f"no container in the agentgateway pod and no Service port already uses it (taken: {sorted(taken)})",
+      gateway_bind.PINNED_PORT not in taken)
+live = (SPIKE / "live-check.sh").read_text()
+check("live-check.sh adds and dials the same port",
+      f"PINNED_PORT={gateway_bind.PINNED_PORT}\n" in live and "agentgateway.agent:${PINNED_PORT}/mcp" in live)
 check("it has evil-mcp as its only target, so no prefix renames the tools",
       [t["name"] for t in targets] == ["evil-mcp"])
 proc = route["policies"]["mcpGuardrails"]["processors"][0]
@@ -215,7 +229,8 @@ check("every phase the bind uses is one the schema lists",
 
 print("== nothing in the deployed bundle points at the spike ==")
 gitops = "\n".join(p.read_text(encoding="utf-8") for p in (REPO / "gitops").rglob("*.yaml"))
-check("no gitops manifest names tool-pin or bind 3003", "tool-pin" not in gitops and ":3003" not in gitops)
+check(f"no gitops manifest names tool-pin or bind {gateway_bind.PINNED_PORT}",
+      "tool-pin" not in gitops and f":{gateway_bind.PINNED_PORT}" not in gitops)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

@@ -2,7 +2,7 @@
 # ABOUTME: tool-pin processor on its tools/list response. Same function for the local bed and the cluster.
 """The pinned bind, kept in one place so the local bed and the cluster check run the same shape.
 
-    python gateway_bind.py cluster  > agentgateway-config.yaml   # the committed ConfigMap plus bind 3003
+    python gateway_bind.py cluster  > agentgateway-config.yaml   # the committed ConfigMap plus bind 3006
     python gateway_bind.py local    > local.yaml                 # the local bed's gateway config
 
 The bind is its own port with one MCP target, so:
@@ -21,7 +21,10 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[3]
 GATEWAY = REPO / "gitops/ai-layer/agentgateway.yaml"
 
-PINNED_PORT = 3003
+# Not 3003: that is the agentgateway-c7 container's evil-mcp bind (#514), in the same pod and so the same
+# network namespace, and a second listener there would fail to open. 3006 is free on every container and
+# the Service. The local bed keeps 3003 and 3004; it runs on its own and has no c7 container.
+PINNED_PORT = 3006
 TARGET = "evil-mcp"
 
 
