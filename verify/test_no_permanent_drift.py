@@ -3,8 +3,8 @@
 #
 # Why. converge can only declare a cluster converged when every Application is Synced. Five apps were
 # OutOfSync on every fresh cluster for reasons that live in the manifests, not the clusters, so health
-# was permanently false and a real failure (customer-stream denied by require-labels, the C1 target
-# never deployed on attendee clusters) hid inside the noise. Each cause below is a manifest property.
+# was permanently false and a real failure (an apps-namespace Deployment denied by require-labels, never
+# deployed on attendee clusters) hid inside the noise. Each cause below is a manifest property.
 import pathlib, re, sys
 
 import yaml

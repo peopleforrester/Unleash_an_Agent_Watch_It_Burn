@@ -40,7 +40,6 @@ apps:
   - ai-layer
   - alloy
   - cert-manager
-  - customer-stream
   - datadog-agent-cr
   - datadog-operator
   - demo-app-hedgehog

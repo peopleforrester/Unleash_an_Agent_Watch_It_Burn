@@ -2728,3 +2728,24 @@ reply still reads needsAction. No issue for a cold-read stop was filed here on 1
 and writing the block's purpose into its description are calendar and personal actions, so they are left to
 Michael. With this, both halves of #457 are settled: the 10-26 event points here (question 674, entry above)
 and the 10-28 block stays.
+
+## 2026-10-26 · #473 · The customer-stream app is removed
+
+**What went.** `gitops/bootstrap/apps/customer-stream.yaml`, `gitops/manifests/customer-stream/` (a ConfigMap,
+a generator and a consumer Deployment, and a Service in `apps`), its line in each of the four profile lists
+(`gitops/bootstrap/values-{attendee,burn,admin,full}.yaml`, which since #609 replace the burn root's include
+selector), and `verify/test_customer_stream.py`. The #236 audit
+(`docs/research/2026-10-24-duplicative-components-audit.md`) found nothing reads the stream: C1's
+humans-versus-vampires answer comes from `get_marketing_intel`, which reads `marketing.json` inside
+`workshop-mcp`, and the stream predates the switch from the S3 push to the chat leak. Git history keeps the
+manifests. On a live cluster the root prunes the child Application and its resources-finalizer removes what it
+created.
+
+**The counts.** Every profile listed the app, so each cluster runs one fewer Application. An instructor cluster
+now shows 37 Argo CD applications and an attendee cluster 33, down from the 38 and 34 that #478 set. The
+platform page, the run-of-show, the design glance and `verify/test_fleet_contract.py` carry the new numbers.
+Like #478's, they are the measured counts less one, not a fresh measurement on a live cluster. The profile
+lengths `verify/test_bootstrap_chart.py` holds drop by one each: attendee 28, burn 18, admin 32, full 30. The
+recreation spec and readiness checklist no longer list the app, and the drift test's comment describes the
+require-labels failure without naming it. This is the approved draft a8fc6ff (redone as ac363f5), made again on
+staging after #609's chart conflicted with it.
