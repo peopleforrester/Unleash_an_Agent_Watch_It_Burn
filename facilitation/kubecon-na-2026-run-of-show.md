@@ -436,16 +436,17 @@ hot-dog-party, karaoke kind). With it on, BurritoBot answers menu, hours and
 locations and redirects everything else back to the menu, politely. This is the
 abstract's ending: by the end the chatbot is selling burritos, nothing more.
 
-- **Delivers:** point 8 (ends selling burritos only). This repo's half of the
-  on-topic guardrail is on `staging` (#455): the guard's settings on guard-proxy
-  (`TOPIC_GUARD` off at the start, the phrase lists, and a refusal that offers the
-  menu, hours and locations), hours and locations in the persona, and
-  `guard-topic-on` and `guard-topic-off` in the terminal. The guard itself is not:
-  the topic stage in `proxy.py` (guard-proxy-agenticburn) and the zero-shot BanTopics
-  model in the offline LLM Guard image (llm-guard-cpu-offline) are still to build,
-  and until both land and their pins are bumped here, `guard-topic-on` prints "This
-  guard-proxy has no on-topic guard, so nothing changed" and exits 1. Until then this segment cannot be shown live, and the talk cannot deliver
-  point 8 as written. This is the single biggest content risk in the cut.
+- **Delivers:** point 8 (ends selling burritos only). The on-topic guardrail's
+  settings are on `staging` (#455): `TOPIC_GUARD` off at the start, the phrase
+  lists, and a refusal that offers the menu, hours and locations. So are the hours
+  and locations in the persona, and `guard-topic-on` and `guard-topic-off` in the
+  terminal. guard-proxy is pinned at the topic stage (guard-proxy-agenticburn#7,
+  #612), so `guard-topic-on` turns the guard on. The four canonical asks are refused
+  on a phrase and every menu, hours and locations ask passes on one, so this beat
+  needs no model. Still missing is the zero-shot BanTopics model in the offline LLM
+  Guard image (llm-guard-cpu-offline#2). Until it lands, an ask with neither an off
+  nor an on phrase gets through, so re-send the canonical asks here, not the
+  room's own paraphrases. Not yet run on a live cluster.
 - **The close (Michael, the last ~2 min):** every attack today was a plausible
   request, not an exploit. The controls that stopped them were an egress policy, an
   admission rule, a kernel block, a tool allow-list, a budget, and a guardrail layer
@@ -474,12 +475,13 @@ saying the same thing.
 | 5 | The Kubernetes security layers you should already have | 4 (C1, C2, C3), before the LLM layer | Yes |
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 5 (C6 pre; C7 mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24): the agentgateway rule stops C7's rogue `tools/call` and the output guard redacts its sentinel, once proven on a cluster at bring-up (#503). The MCP-return scan before the model (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 6 (Datadog, or the Grafana view) | Yes on the Grafana view without a pool (#500), once proven on a cluster at bring-up (#503); Datadog needs the pool (#454) |
-| 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail, `guard-topic-on`) | **At risk.** Settings, persona and toggle are here (#455); the topic stage in `proxy.py` and the BanTopics model in the LLM Guard image are not built yet |
+| 8 | By the end the chatbot is selling burritos, nothing more | 7 (on-topic guardrail, `guard-topic-on`) | **Partly.** Settings, persona and toggle are here (#455), and guard-proxy is pinned at the topic stage, so the canonical asks are refused on a phrase (#612). The BanTopics model is not in the LLM Guard image yet (llm-guard-cpu-offline#2), so paraphrases that dodge the off list get through. Not yet run live (#503) |
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 (live, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the bot answering is not promised until the probe's off-topic beat is 3 of 3 (#530); recorded half needs #452 built |
 
 Points the cut cannot deliver today, marked so they are not presented as ready:
-point 8 (the on-topic guard has no topic stage in guard-proxy yet, #455) and the
-recorded half of point 9 (#452).
+the classifier half of point 8 (the BanTopics model is not in the LLM Guard image
+yet, llm-guard-cpu-offline#2; the phrase half is pinned, #612) and the recorded
+half of point 9 (#452).
 The live-input half of point 9 and all of points 1 through 5 are deliverable on the
 platform as built. Point 7 no longer waits on the Datadog pool: the Grafana view
 carries it without a key (#500), and it has not yet been shown on a live cluster;
@@ -609,9 +611,10 @@ is merely slow rather than rebuilding:
     up in the feed the room sees.
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
     fallback for before the day, not something to find out on stage. Two are
-    expected to fail until their fixes land: the Kyverno badge (#487, the pinned
-    guard-proxy still reads the retired ClusterPolicy) and the on-topic beats (#455,
-    the pinned guard-proxy has no topic stage yet). Record the date, the clusters,
+    expected to fail until its fix lands: the Kyverno badge (#487, the pinned
+    guard-proxy still reads the retired ClusterPolicy). The on-topic beats are
+    expected to pass from the guard-proxy pin of #612, because every probe ask is
+    decided by a phrase. Record the date, the clusters,
     each beat's result and the spend it prints under "Probe record" above.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
@@ -711,13 +714,15 @@ These are the things this run-of-show could not settle from a source. They are
 written down rather than guessed. A question that has since been decided keeps its
 number and says who settled it and when, so references to it elsewhere still land.
 
-1. **The on-topic guardrail for point 8 is half built (#455).** This repo's half is
-   on `staging`: the settings, the persona's hours and locations, and
-   `guard-topic-on`. The topic stage in `proxy.py` (guard-proxy-agenticburn) and the
-   BanTopics model in the offline LLM Guard image (llm-guard-cpu-offline) are not,
-   so segment 7, the abstract's ending, cannot be shown live until both land and
-   the probe's on-topic beats pass. If they do not land for this delivery, is point
-   8 cut with Whitney's agreement (which #456 allows)? Also open on #455: the hours
+1. **The on-topic guardrail for point 8 has its phrase half, not its classifier
+   half (#455).** The settings, the persona's hours and locations and
+   `guard-topic-on` are on `staging`. guard-proxy is pinned at the topic stage
+   (#612). The BanTopics model in the offline LLM Guard image
+   (llm-guard-cpu-offline#2) is not built yet. Segment 7's canonical asks can be
+   shown once the probe's on-topic beats pass live, but an off-topic paraphrase from
+   the room gets through until the model lands. If it does not land for this
+   delivery, is the classifier half cut with Whitney's agreement (which #456
+   allows)? Also open on #455: the hours
    and locations BurritoBot will say on stage were invented in-world (every day 11am
    to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
    the Moonrise Pass drive-thru); keep them or replace them with Michael's and

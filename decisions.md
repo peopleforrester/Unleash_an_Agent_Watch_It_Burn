@@ -2728,3 +2728,28 @@ reply still reads needsAction. No issue for a cold-read stop was filed here on 1
 and writing the block's purpose into its description are calendar and personal actions, so they are left to
 Michael. With this, both halves of #457 are settled: the 10-26 event points here (question 674, entry above)
 and the 10-28 block stays.
+## 2026-10-26 · #612 · guard-proxy is pinned at the topic stage before the BanTopics model ships
+
+Step 3 of the #455 entry bumps both pins together. The two halves landed at different speeds. The topic stage
+is on guard-proxy-agenticburn's `staging` at `52e9c2a` (guard-proxy-agenticburn#7, closed 2026-10-24). The
+BanTopics model is still open as llm-guard-cpu-offline#2, which needs a container runtime and a publish to ship
+the image. So `gitops/ai-layer/guard-proxy` moves alone, from `ccdda73` to `52e9c2a`, and `checksum/proxy-py`
+moves to `4fb86411e7c0`, the first 12 hex digits of the new proxy.py's sha256.
+
+- **Safe without the model.** The LLM Guard API drops suppressed scanners by class name
+  (`images/llm-guard/src/app/app.py`), so naming a scanner that is not configured filters nothing. With no
+  BanTopics in `llm-guard-scanners`, the injection stage's `scanners_suppress: ["BanTopics"]` changes nothing.
+  The topic stage's classifier call, which suppresses PromptInjection, runs no scanner and passes. `TOPIC_GUARD`
+  is off at boot, and `guards-on` leaves it off.
+- **What it buys.** `guard-topic-on` now flips the guard instead of exiting 1. With the deployed phrase lists,
+  the four canonical asks are refused on an off phrase, and "what are your hours" and "do you have mild salsa"
+  pass on an on phrase. All six were checked against `proxy.phrase_verdict` at this pin, so the probe's
+  on-topic beats need no model.
+- **What it does not buy.** An ask with neither phrase, such as an off-topic paraphrase from the room, is
+  answered until BanTopics is configured. Readiness row 8 stays PARTIAL for that reason.
+- **The other commits it brings.** guard-proxy's `staging` since `ccdda73` also carries the /controls C7 badge
+  reading `agentgateway-c7-config` (its reader grant is already here, #564), session and guard-decision span
+  attributes, a case-insensitive feed mask, three fixes to reasoning-only replies and one to a non-string /chat
+  session. It does not fix the C2 Kyverno badge, which is still #487. The pin is on a branch of the remote, as
+  #521 requires. guard-proxy's `main` stays at `ccdda73` until its heavy gate promotes `staging`.
+- `verify/test_proxy_guards.py` now holds the five-key GUARDS set, with `topic` off by default.

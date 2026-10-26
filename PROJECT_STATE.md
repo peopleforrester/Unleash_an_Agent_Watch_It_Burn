@@ -17,6 +17,10 @@ without touching its children. Not yet run on a cluster; details in decisions.md
 Sessionize 1249553). As of staging `73072af` (2026-10-25): 7 READY, 2 PARTIAL (8 the topic stage #455, 9
 ballroom sizing #450, phones #451 and the recorded fallback #452), 0 MISSING, and no point yet green on a live
 cluster (#509). Row 6 moved to READY once mid-inference's agentgateway half (#496) was promoted (#571). Update its rows and its record as fixes land.
+2026-10-26 (#612): guard-proxy is pinned at `52e9c2a`, the topic stage on guard-proxy-agenticburn's
+staging, so `guard-topic-on` works on the phrase lists. Row 8 stays PARTIAL until the BanTopics model ships in
+the LLM Guard image (llm-guard-cpu-offline#2). M3 closes after that, after row 9's #450, #451 and #452, and
+after its reading.
 
 ## KubeCon NA 2026 dates (#447)
 

@@ -19,8 +19,9 @@ def check(name, cond):
 
 
 # Two-stage progressive input guard: independent block-list and classifier toggles.
-check("GUARDS has two independent input stages, output, and the C4 budget guard",
-      set(proxy.GUARDS) == {"input_blocklist", "input_classifier", "output", "budget"})
+check("GUARDS has two independent input stages, output, the C4 budget guard and the on-topic guard (#455)",
+      set(proxy.GUARDS) == {"input_blocklist", "input_classifier", "output", "budget", "topic"})
+check("the on-topic guard starts off (TOPIC_GUARD unset)", proxy.GUARDS["topic"] is False)
 
 # Rate limit: a sliding 60s window capped at RATE_LIMIT_RPM.
 proxy.RATE_LIMIT_RPM = 2
