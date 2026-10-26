@@ -1,8 +1,12 @@
 {{- /*
 ABOUTME: Renders each app the profile's values file lists from apps/<name>.yaml, through tpl so every Unleashed
-ABOUTME: source takes .Values.revision. A name with no file fails the render, so a missing app is named, not skipped.
+ABOUTME: source takes .Values.revision and every lab-platform image .Values.imageRegistry. A missing app is named.
 */ -}}
 {{- $revision := required "revision is the commit the root is pinned at" .Values.revision }}
+{{- $registry := default "" .Values.imageRegistry }}
+{{- if or (not $registry) (contains "://" $registry) (hasSuffix "/" $registry) }}
+{{- fail (printf "imageRegistry is the registry path lab-platform's images are pulled from, with no scheme and no trailing slash, or unset for the chart default (got %q)" $registry) }}
+{{- end }}
 {{- if not .Values.apps }}
 {{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
 {{- end }}

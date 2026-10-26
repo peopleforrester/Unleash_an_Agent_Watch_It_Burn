@@ -2728,3 +2728,28 @@ reply still reads needsAction. No issue for a cold-read stop was filed here on 1
 and writing the block's purpose into its description are calendar and personal actions, so they are left to
 Michael. With this, both halves of #457 are settled: the 10-26 event points here (question 674, entry above)
 and the 10-28 block stays.
+
+## 2026-10-26 · #622 · lab-platform's images take their registry from lab-bootstrap's `imageRegistry`
+
+lab-platform's packages on ghcr.io are private, so each workshop cluster pulls them through its AWS account's ECR
+pull-through cache, and lab-platform's bootstrap passes the cache path to `lab-bootstrap` as the Helm value
+`imageRegistry` (peopleforrester/lab-platform#214), shaped
+`<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/lab-platform`. A containerd mirror for ghcr.io
+cannot carry ECR's credential, so the cache works only if the image reference names the cache path.
+
+- **The value.** `gitops/bootstrap/values.yaml` sets `imageRegistry: ghcr.io/peopleforrester/lab-platform`, which a
+  root that passes nothing gets: `infra/deploy-full-idp.sh`, and an account with no cache. `templates/apps.yaml`
+  fails the render by name on an empty value, one with a scheme or one with a trailing slash, since no image can be
+  named under any of them.
+- **Where a reference goes.** An app file in `gitops/bootstrap/apps/` names a lab-platform image in its Helm values
+  as `"{{ .Values.imageRegistry }}/<path>:<tag>"`, which `tpl` fills in like the revision. A plain manifest a
+  directory source applies cannot take the value, so a lab-platform image never goes there.
+- **Nothing names one yet.** At this commit no file names `ghcr.io/peopleforrester/lab-platform`; the mirror/
+  copies of lab-platform's `deploy/mirror/copies.tsv` are lab-platform#183, still open. Pointing the charts at them
+  is that issue's work, done through this value.
+- **Tests.** `verify/test_image_registry.py` (offline) fails on the literal anywhere the root deploys from (all of
+  `gitops/`, and every other path an app file sources from this repo) except the default, and on the template
+  text outside `apps/`. `verify/test_image_registry_render.py` (E2E tools tier, Helm v4.2.1) renders every profile
+  unset, at the default and at a cache path: unset equals the default, the cache render names no
+  `ghcr.io/peopleforrester` and is today's render with only the registry changed. A fixture app in a copy of the
+  chart names a KubeArmor mirror copy in `valuesObject` and in a `values` block, and is checked both ways.

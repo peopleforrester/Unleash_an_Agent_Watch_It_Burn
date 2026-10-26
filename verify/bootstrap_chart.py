@@ -22,6 +22,10 @@ CONFIG = REPO / "lab-platform.yaml"
 REPO_URL = "https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
 # What every Unleashed source in an app file says instead of a branch: the revision the root passes down.
 REVISION = "{{ .Values.revision }}"
+# What an app file says instead of ghcr.io/peopleforrester/lab-platform: the registry the root passes down (#622).
+IMAGE_REGISTRY = "{{ .Values.imageRegistry }}"
+# The chart's default for it, which infra/deploy-full-idp.sh and an account with no pull-through cache get.
+LAB_PLATFORM_GHCR = "ghcr.io/peopleforrester/lab-platform"
 
 
 def profiles() -> list[str]:

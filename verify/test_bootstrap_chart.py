@@ -16,8 +16,8 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import (APPS, CHART, CONFIG, REPO, REPO_URL, REVISION, TEMPLATES, app_names,  # noqa: E402
-                             deploy_root, deploys, profiles, values_path)
+from bootstrap_chart import (APPS, CHART, CONFIG, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL,  # noqa: E402
+                             REVISION, TEMPLATES, app_names, deploy_root, deploys, profiles, values_path)
 
 failures = []
 
@@ -72,8 +72,10 @@ print("== gitops/bootstrap is the one root chart ==")
 chart = yaml.safe_load((CHART / "Chart.yaml").read_text(encoding="utf-8"))
 check("gitops/bootstrap/Chart.yaml is a Helm v2 application chart",
       chart.get("apiVersion") == "v2" and chart.get("type") == "application" and bool(chart.get("version")))
-check("values.yaml shares only an empty revision, so a render without the parameter fails",
-      yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")) == {"revision": ""})
+check("values.yaml shares an empty revision, so a render without the parameter fails, and imageRegistry at "
+      f"{LAB_PLATFORM_GHCR}, so a root that passes none pulls from ghcr.io as before (#622)",
+      yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
+      == {"revision": "", "imageRegistry": LAB_PLATFORM_GHCR})
 check("the chart holds apps/, templates/ and no other directory (the four old root directories are gone)",
       sorted(d.name for d in CHART.iterdir() if d.is_dir()) == ["apps", "templates"])
 check("gitops/apps is gone: its files are the chart's apps/", not (REPO / "gitops/apps").exists())
@@ -83,6 +85,9 @@ tpl = (TEMPLATES / "apps.yaml").read_text(encoding="utf-8")
 check("apps.yaml requires revision by name", 'required "revision is the commit the root is pinned at" .Values.revision' in tpl)
 check("apps.yaml fails on an app name with no file", "fail (printf \"the values name app %s, and the chart has no %s\"" in tpl)
 check("apps.yaml renders each listed file through tpl", "{{ tpl $body $ }}" in tpl and '$.Files.Get $file' in tpl)
+check("apps.yaml fails an empty imageRegistry, one with a scheme and one with a trailing slash, by name",
+      '{{- if or (not $registry) (contains "://" $registry) (hasSuffix "/" $registry) }}' in tpl
+      and 'fail (printf "imageRegistry is the registry path' in tpl)
 
 print("== each profile is an explicit list of files that exist ==")
 app_files = sorted(p.name for p in APPS.glob("*.yaml"))
@@ -116,9 +121,12 @@ print("== every Unleashed source takes the revision; no source is the chart itse
 SEMVER = re.compile(r"v?\d+\.\d+\.\d+")
 for f in app_files:
     raw = (APPS / f).read_text(encoding="utf-8")
-    # tpl renders the whole file, so the only template text is the revision and Prometheus' own, escaped.
-    stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw)) if m != REVISION]
-    check(f"{f}: no template text but the revision (Prometheus' {{{{ }}}} escaped) {stray}", not stray)
+    # tpl renders the whole file, so the only template text is the revision, the lab-platform image registry
+    # (#622) and Prometheus' own, escaped.
+    stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw))
+             if m not in (REVISION, IMAGE_REGISTRY)]
+    check(f"{f}: no template text but the revision and the image registry (Prometheus' {{{{ }}}} escaped) {stray}",
+          not stray)
     docs = [d for d in yaml.safe_load_all(raw) if d]
     check(f"{f}: every document is an Application", bool(docs) and all(d.get("kind") == "Application" for d in docs))
     for d in docs:

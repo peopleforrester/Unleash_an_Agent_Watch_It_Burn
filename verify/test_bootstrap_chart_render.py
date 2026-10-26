@@ -20,7 +20,8 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import APPS, CHART, REPO_URL, REVISION, app_names, profiles, values_path  # noqa: E402
+from bootstrap_chart import (APPS, CHART, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO_URL, REVISION,  # noqa: E402
+                             app_names, profiles, values_path)
 
 failures: list[str] = []
 
@@ -67,10 +68,12 @@ for profile in profiles():
     rest = [(d.get("kind"), d["metadata"]["name"]) for d in docs if d.get("kind") != "Application"]
     check(f"{profile}: besides the Applications it renders only the ghcr-kagent-oci Secret {rest}",
           rest == [("Secret", "ghcr-kagent-oci")])
-    # Each listed file, rendered, is the file as written with the revision filled in: tpl changes nothing else.
+    # Each listed file, rendered, is the file as written with the revision and the default image registry filled
+    # in: tpl changes nothing else.
     want = []
     for n in app_names(profile):
-        raw = (APPS / f"{n}.yaml").read_text(encoding="utf-8").replace(REVISION, COMMIT)
+        raw = (APPS / f"{n}.yaml").read_text(encoding="utf-8").replace(REVISION, COMMIT) \
+            .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
         want += [d for d in yaml.safe_load_all(raw) if d]
     check(f"{profile}: the Applications are exactly the {len(app_names(profile))} listed files, as written",
