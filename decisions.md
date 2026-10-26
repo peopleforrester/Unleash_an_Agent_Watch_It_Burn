@@ -2655,3 +2655,29 @@ at another revision. This repo now presents exactly that.
 - **Not yet run on a cluster.** No cluster was up for this run. The first build after it should run
   `deploy-full-idp.sh` on a fresh cluster and on one built before, and lab-platform's
   `LAB_TALK_LIVE=1 go test -tags live -run TestTalkConfigLive ./internal/talkconfig` once this reaches `staging`.
+
+## 2026-10-26 · #128 · keep LLM Guard and its scanner config; no replacement is named
+
+The dated finding is `docs/spike-llm-guard-2026-10-26.md`. In short:
+
+- **Keep LLM Guard.** It is archived (0.3.16, 2025-05-19, read live 2026-10-26) and the classifier's weights date
+  from 2024-04-23, but no self-hostable alternative has been shown to do C6 better, and C5's output guard is our own
+  regex, which does not age.
+- **LlamaFirewall's AlignmentCheck is dropped as a candidate.** It is an LLM judge defaulting to Llama 4 Maverick on
+  api.together.xyz with `TOGETHER_API_KEY`: a vendor account and egress, against #128's first constraint. This
+  reverses the 2026-09-03 comment on the issue that recommended prototyping it.
+- **The candidate to measure is Llama Prompt Guard 2 86M**, behind the same `/analyze/prompt` call. Its weights are
+  gated on Hugging Face (manual approval), so that measurement waits for someone to be granted them.
+- **Scanner config unchanged** (`PromptInjection`, threshold 0.5, match_type `full`). Measured on one core: the
+  threshold changes no verdict (scores sit at 1.0 or below 0.0); `full` misses a payload past the 512-token window;
+  `chunks` and `sentence` catch it but take 11 s and 16 s on a 4,000-character prompt, past the 10 s
+  `scan_prompt_timeout`, which guard-proxy turns into a fail-closed refusal of any long prompt.
+- **New gate:** `verify/test_injection_classifier.py` (E2E tools tier) runs the real scanner with the deployed params
+  over C6's ticket, input-guard.sh's injection, the ticket without its payload, and every on-topic ask in
+  `topic_cases`. A threshold of 1.0 fails it on both attacks. `verify/injection_config_matrix.py` re-runs the
+  measurement; it is a tool, not a test.
+
+**New dev dependency, fetched only by those two scripts through `uv run`, never installed into the offline suite:**
+`protectai/deberta-v3-base-prompt-injection-v2` at `90c9989b1a342275dd0d1a95aad283c04e075671` (2026-07-09,
+Apache-2.0), the revision the offline image mirrors, downloaded from Hugging Face on the first run. llm-guard 0.3.16
+and torch 2.14.0+cpu are the pins `verify/test_topic_classifier.py` already records (2026-10-24 entry above).

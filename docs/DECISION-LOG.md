@@ -891,3 +891,22 @@ verbatim, and the token staying out of every output against fakes. Not done here
 change had no provisioning token, AWS profile or instructor org. `verify/test_ops_view_live.py` (E2E) runs
 `fleet.sh ops --json` against the real sources and fails if any of them cannot be read. Its first run is
 what confirms the scalar API's response shape against the parser.
+
+## 2026-10-26 · LLM Guard re-evaluated: keep it, keep its config, name no replacement (#128)
+
+Full finding, with the commands and the measurement: `docs/spike-llm-guard-2026-10-26.md`.
+
+- **Upstream, read live 2026-10-26:** `protectai/llm-guard` archived (last push 2026-07-08T23:58:40Z); PyPI's
+  0.3.16 (2025-05-19) is final; the classifier's ONNX weights are unchanged since 2024-04-23 (same LFS oid at
+  `89b085cd` and `90c9989b`, the revision we mirror).
+- **Kept,** because no self-hostable alternative has been shown to do C6 better, and C5's output guard is our own
+  regex. **LlamaFirewall's AlignmentCheck is out:** it defaults to Llama 4 Maverick on api.together.xyz with
+  `TOGETHER_API_KEY`, a vendor account and egress. **Llama Prompt Guard 2 86M** is the candidate to measure, once
+  its gated Hugging Face weights are granted.
+- **Config unchanged.** Measured on one core: threshold 0.5 against 0.92 changes no verdict; `full` misses a
+  payload past the 512-token window; `chunks` and `sentence` catch it but take 11 s and 16 s on 4,000 characters,
+  past the 10 s scan timeout, which guard-proxy fails closed. A reworded payload passed every configuration.
+- **Correction:** the 2026-09-03 comment on #128 called threshold 0.5 "the llm-guard default". The library and the
+  API's shipped `scanners.yml` both default to 0.92; 0.5 is the docs example.
+- **Held by** `verify/test_injection_classifier.py` (E2E tools tier): the real scanner, the deployed params, C6's
+  ticket and input-guard.sh's injection refused, the clean ticket and 31 menu asks passed.
