@@ -2706,3 +2706,25 @@ show's "Dates to hold" row already sends the read here and logs it under "Run-th
 the repo changes. The second half of #457, whether the Wed 2026-10-28 09:00 to 12:00 Central "PREP: BurritoBot
 rehearsal with Whitney" block stays or goes, is not decided: it is still on the calendar with Whitney's reply
 at needsAction, and the run asks it again as one decision.
+
+## 2026-10-26 · question 845 · #457: the 10-28 rehearsal block with Whitney stays
+
+**Question 845:** Should the Wednesday 2026-10-28 09:00 to 12:00 Central block "PREP: BurritoBot rehearsal
+with Whitney" stay on Michael's calendar, or be cancelled? mrf-engagement-orchestrator, Michael's engagement
+scheduler, created it on 2026-10-19 as the cold read "moved" (conference-knowledge#119), but the Monday 10-26
+cold read stayed on the calendar too, and the block was not one of #447's dates. It asks again question 673,
+which was withdrawn unanswered.
+
+**Answer:** Keep the 10-28 block.
+
+**Decided by:** Michael.
+
+**What it changes:** the run of show's "Dates to hold (#447)" table gains a row for it: Michael and Whitney,
+the calendar hold Wed 2026-10-28 09:00 to 12:00 Central. If the cold read has not yet run against the live
+platform, it runs there; otherwise the block is run-through 1. Either way it is logged under "Run-through
+record". `verify/test_kubecon_dates.py` holds the row. Nothing on the calendar changes. Read on 2026-10-26,
+the event (`ut2drd1on015dlqapkr71gocc4`) is unchanged since 2026-10-19, has no description, and Whitney's
+reply still reads needsAction. No issue for a cold-read stop was filed here on 10-26. Confirming with Whitney
+and writing the block's purpose into its description are calendar and personal actions, so they are left to
+Michael. With this, both halves of #457 are settled: the 10-26 event points here (question 674, entry above)
+and the 10-28 block stays.

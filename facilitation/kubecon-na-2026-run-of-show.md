@@ -50,6 +50,7 @@ Dates are for people only:
 | Step | Who | When | Done when |
 |---|---|---|---|
 | Cold read of this run-of-show | Whitney | Once the platform is live. The calendar holds Mon 2026-10-26, 10:00 to 16:00 Central | She reads this file cold against the live platform, not on paper, and each stop is filed as an issue here. Record it under "Run-through record" below |
+| Rehearsal with Whitney | Michael and Whitney | The calendar holds Wed 2026-10-28, 09:00 to 12:00 Central (kept by Michael, question 845 on #457) | If the cold read has not yet run against the live platform, it runs here; otherwise this is run-through 1. Either way it goes under "Run-through record" below |
 | Datadog org pool (abstract point 7) | Whitney | The week of 2026-10-26 | The pool is loaded and `./fleet.sh monitors --apply` has run (#454) |
 | Two timed run-throughs | Michael and Whitney | By 2026-11-08 | Two full runs, demo included, each timed against the 30-minute slot, with the timings in the record below and what broke filed as issues here |
 | Delivered | Michael and Whitney | 2026-11-12 | The session runs live. Its slot and room are in conference-knowledge (`kubecon-na-2026`, `schedule`) |

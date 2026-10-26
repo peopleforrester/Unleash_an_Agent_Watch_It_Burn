@@ -4,7 +4,8 @@
 
 The dates moved here from the archived BurritoBot repo. Michael's revision of 2026-10-24 keeps dates only for
 people: the cold read once the platform is live, the Datadog pool the week of 10-26, two timed run-throughs by
-11-08, delivery on 11-12. Everything agents build is listed in order, with no forecast date.
+11-08, delivery on 11-12. The 10-28 rehearsal with Whitney is kept too (question 845 on #457): the cold read's
+slot if it has not run live by then, otherwise run-through 1. Everything agents build is listed in order, with no forecast date.
 
 The record's targets are derived from the segment table, not typed twice: if a segment's minutes change, the
 whole-slot and demo targets have to change with them, and this test says so. The delivery date is the same
@@ -80,6 +81,12 @@ check("cold read: the calendar hold, Mon 2026-10-26 10:00 to 16:00 Central",
       len(cold) == 4 and "2026-10-26, 10:00 to 16:00 Central" in cold[2])
 check("cold read: against the live platform, each stop filed as an issue",
       len(cold) == 4 and "live platform" in cold[3] and "issue" in cold[3])
+reh = people.get("Rehearsal with Whitney", [])
+check("rehearsal: the calendar hold Michael kept, Wed 2026-10-28 09:00 to 12:00 Central (#457)",
+      len(reh) == 4 and reh[1] == "Michael and Whitney"
+      and "2026-10-28, 09:00 to 12:00 Central" in reh[2] and "question 845" in reh[2])
+check("rehearsal: the cold read if it has not run live yet, otherwise run-through 1",
+      len(reh) == 4 and "cold read" in reh[3] and "run-through 1" in reh[3] and "Run-through record" in reh[3])
 dd = people.get("Datadog org pool (abstract point 7)", [])
 check("Datadog pool: Whitney, the week of 2026-10-26",
       len(dd) == 4 and dd[1] == "Whitney" and "2026-10-26" in dd[2])
