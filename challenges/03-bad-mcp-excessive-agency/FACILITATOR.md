@@ -10,21 +10,30 @@ toolset, so the injection fires but has nothing to call.
 
 ## The control (what actually enforces it)
 
-The agent (kagent `Agent` CRD, `workshop-agent`) dials its MCP servers **directly**, so the in-path
-control is the **kagent `toolNames` allow-list on the Agent**, not agentgateway. The rogue tools
-(`read_internal_config`, `apply_optimization`) and the `get_weather` injection entrypoint are served by
-**evil-mcp-shim** via the `evil-mcp` RemoteMCPServer; the legit tools are on `workshop-mcp`. The toggle
-wires `evil-mcp` into the agent and sets its allow-list:
+The agent (kagent `Agent` CRD, `workshop-agent`) dials both its MCP servers **through agentgateway**
+(#514). The rogue tools (`read_internal_config`, `apply_optimization`) and the `get_weather` injection
+entrypoint are served by **evil-mcp-shim** via the `evil-mcp` RemoteMCPServer, whose url is
+`http://agentgateway.agent:3003/mcp`, a bind of its own; the legit tools are on `workshop-mcp`, through the
+allow-all `:3001` bind (gitops/ai-layer/resources.yaml). The :3003 bind's `mcpAuthorization` rule, the line of
+`agentgateway-c7-config` marked `# c7-rule` (gitops/ai-layer/agentgateway.yaml), is committed `'true'`.
 
-- **Vulnerable:** `evil-mcp` allow-list = `get_weather, read_internal_config, apply_optimization`.
-- **Defended:** `evil-mcp` allow-list = `get_weather` only (rogue tools filtered).
+C7 has one control per cluster (#496, #516):
+
+- **On a workshop cluster** the control is the **kagent `toolNames` allow-list on the Agent**, and the :3003
+  rule stays `'true'`, so the gateway carries the rogue calls but gates none of them. The toggle below keeps
+  `evil-mcp` wired into the agent and sets its allow-list:
+  - **Vulnerable:** `evil-mcp` allow-list = `get_weather, read_internal_config, apply_optimization`.
+  - **Defended:** `evil-mcp` allow-list = `get_weather` only (rogue tools filtered from the agent's toolset).
+- **On an admin cluster** (the KubeCon breakout) the control is the **agentgateway :3003 rule**. The web
+  terminal's `guard-mcp-on` narrows it to `mcp.tool.name == "get_weather"` and `guard-mcp-off` puts `'true'`
+  back; the `toolNames` list stays full, so a refused rogue call can only be the gateway's doing.
 
 ## Commands
 
-Set the kube-context for the cluster you are demonstrating on, then:
+On a workshop cluster, set the kube-context for the cluster you are demonstrating on, then:
 
 ```bash
-export CONTEXT=<kube-context>   # e.g. arn:aws:eks:us-west-2:<acct>:cluster/watch-it-burn-whitney-admin
+export CONTEXT=<kube-context>   # e.g. arn:aws:eks:us-west-2:<acct>:cluster/watch-it-burn-attendee-001
 
 # Start vulnerable (the attack lands):
 CONTEXT="$CONTEXT" challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --off
@@ -33,11 +42,16 @@ CONTEXT="$CONTEXT" challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh
 CONTEXT="$CONTEXT" challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh --on
 ```
 
+On an admin cluster, run `guard-mcp-off` and `guard-mcp-on` in the web terminal instead. Do not run the
+toggle script there: it would take the rogue tools out of the agent's toolset before the gateway saw a call,
+which is not what the stage shows.
+
 ## Timing and gotchas (verified)
 
 - **kagent restarts the agent pod on every toolNames change** (~30-60s). After a toggle, wait for
   `kubectl --context "$CONTEXT" -n agent rollout status deploy/workshop-agent` before re-demoing, or the
-  attendee hits the old toolset.
+  attendee hits the old toolset. An admin cluster's gateway rule needs no restart: agentgateway reloads
+  its watched config mount.
 - The toggle is **not** blocked by the `block-argocd-drift` Kyverno guardrail: the Agent has ArgoCD
   `ignoreDifferences` on `.spec.declarative.tools`, so the live `kubectl patch` sticks and is not reverted.
 - The attack is an **injection chain**, not a direct ask. Demo it by asking the agent for the **weather**
