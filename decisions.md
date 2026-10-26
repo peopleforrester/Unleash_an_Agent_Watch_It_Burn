@@ -2597,3 +2597,21 @@ release, and the four verify files whose fixtures are the retired vocabulary. Sy
 because their files belong to their own repos. The guard-proxy submodule's proxy.py still says "Round 1" and
 "round-2/round-3", and is filed as a follow-up there. The test also extracts lab.html's two regexes and checks
 them against the roster, fleet.sh's hostnames and all 720 attendee slots. Not run on a cluster here.
+## 2026-10-26 · #290 · The tool-pin spike's cluster bind moves to :3004, because #514 took :3003 in the same pod
+
+**Found while closing the #290 tracker.** The offline suite was red on staging: `verify/test_tool_pin.py` failed its
+check that no `gitops/` manifest names bind 3003. The #480 spike chose :3003 for its pinned evil-mcp bind on
+2026-10-24. #514 then put evil-mcp behind agentgateway on :3003 the next day, served by the `agentgateway-c7`
+container. That container shares the pod's network namespace with the first container, which is where
+`live-check.sh` adds the spike's bind. Run as written, the spike's bind would have collided with C7's, and
+repointing the RemoteMCPServer at `agentgateway:3003` would have reached C7's gateway, not tool-pin.
+
+**The change.** `gateway_bind.PINNED_PORT` and `live-check.sh` use :3004 on the cluster. The local bed keeps its
+3001/3003/3004 layout and its 2026-10-24 record, because nothing else listens there. `test_tool_pin.py` now
+checks that the pinned port is not used by any container port, Service port or ConfigMap bind in
+`gitops/ai-layer/agentgateway.yaml`. The gitops check reads the port from `gateway_bind.PINNED_PORT`, so the
+two cannot disagree again. The spike is still not run on a cluster.
+
+**The tracker itself.** The approved #290 change (draft 4ed027a) is already on staging. #560 and #588 landed
+the code and wording sweep, and #502 removed the roundN alias. All six children (#291 to #296) are closed, so
+this run adds no #290 code.

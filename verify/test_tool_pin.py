@@ -23,6 +23,8 @@ import pathlib
 import sys
 import tempfile
 
+import yaml
+
 REPO = pathlib.Path(__file__).resolve().parents[1]
 SPIKE = REPO / "docs/research/2026-10-24-tool-pin-spike"
 sys.path.insert(0, str(REPO / "images/tool-pin"))
@@ -185,6 +187,19 @@ route = bind["listeners"][0]["routes"][0]
 targets = route["backends"][0]["mcp"]["targets"]
 check("the pinned bind is a port no committed bind uses",
       bind["port"] == gateway_bind.PINNED_PORT and bind["port"] not in [b["port"] for b in committed["binds"]])
+# The pod shares one network namespace, so a port taken by any of its containers, a bind in any of its
+# ConfigMaps or the Service collides too: #514 gave agentgateway-c7 :3003, the spike's first choice.
+taken: set[int] = set()
+for doc in yaml.safe_load_all(gateway_bind.GATEWAY.read_text(encoding="utf-8")):
+    kind = (doc or {}).get("kind")
+    if kind == "Deployment":
+        taken |= {p["containerPort"] for c in doc["spec"]["template"]["spec"]["containers"] for p in c.get("ports", [])}
+    elif kind == "Service":
+        taken |= {p["port"] for p in doc["spec"]["ports"]}
+    elif kind == "ConfigMap" and "config.yaml" in doc.get("data", {}):
+        taken |= {b["port"] for b in yaml.safe_load(doc["data"]["config.yaml"]).get("binds", [])}
+check(f"the pinned bind's port is free in the agentgateway pod and Service (taken: {sorted(taken)})",
+      3003 in taken and gateway_bind.PINNED_PORT not in taken)
 check("it has evil-mcp as its only target, so no prefix renames the tools",
       [t["name"] for t in targets] == ["evil-mcp"])
 proc = route["policies"]["mcpGuardrails"]["processors"][0]
@@ -215,7 +230,9 @@ check("every phase the bind uses is one the schema lists",
 
 print("== nothing in the deployed bundle points at the spike ==")
 gitops = "\n".join(p.read_text(encoding="utf-8") for p in (REPO / "gitops").rglob("*.yaml"))
-check("no gitops manifest names tool-pin or bind 3003", "tool-pin" not in gitops and ":3003" not in gitops)
+check(f"no gitops manifest names tool-pin or the pinned bind {gateway_bind.PINNED_PORT}",
+      "tool-pin" not in gitops and f":{gateway_bind.PINNED_PORT}" not in gitops
+      and f"port: {gateway_bind.PINNED_PORT}" not in gitops)
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")

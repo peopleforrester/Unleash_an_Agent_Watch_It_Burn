@@ -6,7 +6,7 @@
 # measured. Expect to fix things the first time through, and record what you saw in README.md.
 #
 # Usage: CONTEXT=<kube-context> [IMAGE=<tool-pin image@digest>] live-check.sh <phase>
-#   setup     pause Argo CD auto-sync on the root and ai-layer, deploy tool-pin, add bind 3003 to the
+#   setup     pause Argo CD auto-sync on the root and ai-layer, deploy tool-pin, add bind 3004 to the
 #             gateway, and repoint the evil-mcp RemoteMCPServer at it
 #   observe   print the evidence: the RemoteMCPServer's status, tool-pin's verdicts, and the gateway's
 #             tools/list lines with the caller's pod named (kagent controller or the agent)
@@ -25,7 +25,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 NS=agent
 KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 ARGO=(kubectl --context "${CONTEXT}" -n argocd)
-PINNED_URL="http://agentgateway.agent:3003/mcp"
+# Not 3003: that is agentgateway-c7's evil-mcp bind since #514, in the same pod.
+PINNED_URL="http://agentgateway.agent:3004/mcp"
 
 roots() { "${ARGO[@]}" get applications -o name | grep '/app-of-apps' || true; }
 
@@ -42,13 +43,13 @@ setup)
     loads() { "${KCTL[@]}" logs deploy/agentgateway | grep -c 'loaded config' || true; }
     before="$(loads)"
     python3 "${HERE}/gateway_bind.py" cluster | "${KCTL[@]}" apply -f -
-    if ! "${KCTL[@]}" get svc agentgateway -o jsonpath='{.spec.ports[*].port}' | grep -qw 3003; then
+    if ! "${KCTL[@]}" get svc agentgateway -o jsonpath='{.spec.ports[*].port}' | grep -qw 3004; then
         "${KCTL[@]}" patch svc agentgateway --type json \
-            -p '[{"op":"add","path":"/spec/ports/-","value":{"name":"evil-mcp-pinned","port":3003,"targetPort":3003}}]'
+            -p '[{"op":"add","path":"/spec/ports/-","value":{"name":"evil-mcp-pinned","port":3004,"targetPort":3004}}]'
     fi
     # The binary watches its file and reloads in under a second (local bed); the wait is kubelet's
     # ConfigMap volume sync, up to about a minute.
-    echo "waiting for the gateway to reload with bind 3003..."
+    echo "waiting for the gateway to reload with bind 3004..."
     for _ in $(seq 40); do [[ "$(loads)" -gt "${before}" ]] && break; sleep 5; done
     [[ "$(loads)" -gt "${before}" ]] || { echo "the gateway never reloaded; check its log" >&2; exit 1; }
     "${KCTL[@]}" logs deploy/agentgateway | grep -E 'Failed to reload' | tail -1 || true

@@ -19,7 +19,7 @@ written but has not been run.
 | `images/tool-pin/tool_pin.py` | The processor. It is a gRPC `agentgateway.dev.ext_mcp.ExtMcp` server that hashes each tool and strips or denies the ones not in the baseline. It also refuses a `tools/call` for any tool the last list did not approve |
 | `images/tool-pin/Dockerfile` | Its image: python:3.12-slim plus grpcio 1.84.1. Not built yet; no Docker access on the run host |
 | `baseline.json` | The pin: evil-mcp's three tools as it serves them today. Each entry is the hash plus the description and input schema it covers |
-| `gateway_bind.py` | Renders the bind: the committed `agentgateway-config` plus bind 3003, with evil-mcp as its only target and tool-pin on its `tools/list` and `tools/call` |
+| `gateway_bind.py` | Renders the bind: the committed `agentgateway-config` plus bind 3004 (3003 on the local bed; on the cluster 3003 is the `agentgateway-c7` container's since #514), with evil-mcp as its only target and tool-pin on its `tools/list` and `tools/call` |
 | `tool-pin.yaml`, `kustomization.yaml` | The processor's Deployment, Service and baseline ConfigMap, for `live-check.sh`. No Argo CD Application points here |
 | `probe.py` | An MCP client (mcp 1.29.1, the workshop-mcp image's pin) that lists tools, or calls one, and prints the outcome as JSON |
 | `local-bed.sh` | The local bed (see "Reproduce") |
@@ -107,7 +107,7 @@ A background read of `kagent-dev/kagent` at v0.9.9 (file and line references in 
   approval: get_weather"). With strip, the only sign in kagent is a tool missing from `discoveredTools`.
   For a lesson, deny's condition is the better teaching surface. That is worth confirming live before
   choosing.
-- **What the student configures can be one field.** The gateway config, bind 3003 included, can stay in
+- **What the student configures can be one field.** The gateway config, bind 3004 included, can stay in
   GitOps. The student's action would be repointing evil-mcp's RemoteMCPServer `spec.url` at the pinned
   bind, which is the same shape as C7's `toolNames` patch. `ignoreDifferences` then covers that one
   field, not the whole `config.yaml` string that section 2 of the evaluation worried about. A typo in it
