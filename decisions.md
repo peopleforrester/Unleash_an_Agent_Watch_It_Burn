@@ -2541,3 +2541,23 @@ cluster's own controller, as agent-sa, so a run on an attendee cluster shows the
   which raises `TypeError` (env given twice), so the suite stopped right after its prerequisites and never reached a
   pod. `container()` now takes the env list itself as well as a dict of literals.
 - **Not yet run on a cluster.** No attendee cluster was up for this run; the next build runs it with CONTEXT set.
+
+## 2026-10-26 · #116 · C1 Round 2b DNS-exfil beat — design captured, build held for Barcelona
+
+#116 (C1 two-stage: naive NetworkPolicy defeated by DNS exfil, FQDN policy holds) is `deferred-barcelona`
+by Michael's 2026-09-07 decision (the Portland set of eight is closed; see Question 575 and
+`docs/research/2026-08-28-challenge-currency-review.md`), kept open because the design work is still wanted.
+
+- **What this run did.** Captured the engineering design in
+  `docs/research/2026-10-26-c1-dns-exfil-beat.md`: the Round 2b attack (marketing intel base32-encoded into
+  subdomain labels, shipped over the 53-to-kube-system allow in `agent-allow-dns.yaml` that Round 2's
+  `agent-egress-allowlist.yaml` cannot inspect), the authoritative-DNS collector (sibling of the beacon
+  collector), and the three fix options with their costs — A Cilium `toFQDNs` (a fleet CNI migration off
+  VPC-CNI), B a forced egress proxy, and C a resolver lockdown (CoreDNS no arbitrary upstream) as the
+  required floor under either.
+- **What this run did NOT do, on purpose.** No student lab prose, no facilitation/run-of-show, no deploy
+  config, no CNI change, and no live beat. The build needs a cluster (option A needs a Cilium cluster) and
+  is scoped out of Portland; for Portland, Round 2b stays a narrated slide.
+- **Open decision, parked.** Which FQDN control (A/B over the C floor) is a fleet networking/architecture
+  call left to Michael and to the build being scheduled for the next event. The run reports `wait` (michael)
+  so the issue is held rather than re-dispatched.
