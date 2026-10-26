@@ -2728,3 +2728,38 @@ reply still reads needsAction. No issue for a cold-read stop was filed here on 1
 and writing the block's purpose into its description are calendar and personal actions, so they are left to
 Michael. With this, both halves of #457 are settled: the 10-26 event points here (question 674, entry above)
 and the 10-28 block stays.
+
+## 2026-10-26 · question 843 · The IMDS credential-theft challenge is built as a genuinely vulnerable cluster (for Barcelona)
+
+**Question 843:** For the IMDS credential-theft challenge proposed in #113 — the agent in a compromised pod reaches
+the AWS Instance Metadata Service (IMDS) at the link-local address 169.254.169.254, steals the EC2 node's
+instance-role credentials and calls AWS from inside the pod, which maps to ASI03 Identity & Privilege Abuse (the
+AI-security category for identity and privilege abuse) — should it be built as Option 1 "Demonstrate the control"
+(the agent tries and the IMDSv2 one-hop pin visibly refuses it, nothing breaks) or Option 2 "Make a cluster
+genuinely vulnerable" (one throwaway cluster is left exploitable so the theft actually succeeds and `aws sts
+get-caller-identity` returns a node role)?
+
+**Answer:** Make a cluster genuinely vulnerable (Option 2).
+
+**Decided by:** Michael.
+
+**What it changes:** Only the design-version gate is settled. The build itself stays deferred to Barcelona, as
+Michael ruled on #113 (2026-09-07) and as question 575 (2026-10-24) reaffirmed when it closed tracker #110, so
+nothing is built here. When the Barcelona build starts it targets the deliberately-vulnerable version, with these
+findings carried so they are not re-derived:
+
+- `infra/terraform/aws/cluster/main.tf` (lines 325-329) already pins the node group to `http_tokens = required`
+  and `http_put_response_hop_limit = 1` (the IMDSv2-required, one-hop setting that stops a pod reaching node
+  metadata, landed as PRD 35 §3.7-A, f65c17d). So the naive attack already fails on every cluster and the
+  vulnerable-versus-hardened contrast will not appear on its own. The agent reaches Bedrock through EKS Pod Identity
+  (the `169.254.170.23` container-credentials endpoint, not IMDS), so the pin does not break it.
+- The issue's Option 2 premise is stale. Rounds 1/2/3 were retired (#291), so there is no "R1 roster entry" to
+  flip, and `infra/terraform/fleet/roster.tsv` carries no hop-limit column (its columns are
+  `name|role|tier|instance_type|pids|bootstrap|owner`, and only `pids` is plumbed through `fleet.sh` to a Terraform
+  variable). So Option 2 is no longer "just a roster column": it needs a new hop-limit roster column, `fleet.sh`
+  plumbing, a Terraform variable on `metadata_options`, and a deliberately narrowly-scoped node role so a leaked
+  credential is genuinely uninteresting.
+- The natural home for the deliberately-vulnerable cluster is the existing `community` cluster
+  (`watch-it-burn-community`, described in the roster as "no guardrails at all, the unguarded spectacle", already
+  `pids=-1` so Challenge 4's fork bomb can burn an uncapped node, reachable at attackme.agenticburn.com), which
+  already plays the unguarded-spectacle role; the per-presenter `admin` clusters stay hardened and refuse the theft.
