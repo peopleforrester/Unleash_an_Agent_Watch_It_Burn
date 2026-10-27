@@ -641,7 +641,7 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "431082817ab4"
+        checksum/proxy-py: "0cca4692acab"
     spec:
       # A dedicated ServiceAccount with a mounted token, so /controls can read the badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
@@ -711,8 +711,12 @@ spec:
             # or the on-screen cost counter prices the wrong model. Found live 2026-08-30: this said
             # "sonnet" while the agent ran bedrock-nova, overstating spend ~4x on the C4 headline visual.
             - { name: MODEL_TIER, value: "nova" }
-            # Protect the demo from itself (0 = disabled). verify-at-build: set to room size + budget.
-            - { name: RATE_LIMIT_RPM, value: "120" }
+            # Protect the demo from itself (0 = disabled). A ballroom shares this bot (#450): 10 turns a minute per
+            # conversation, so one phone cannot spend the room's window, under 150 a minute for the cluster, which
+            # at two model calls a turn is 300 of the account's 500 cross-region Nova Pro requests a minute
+            # (verify/model_pin_check.py holds it to the live quota) and leaves the admin cluster its share.
+            - { name: RATE_LIMIT_RPM, value: "150" }
+            - { name: RATE_LIMIT_SESSION_RPM, value: "10" }
             - { name: COST_CAP_USD, value: "25" }
             # Optional side-screen prompt stream; ON only once moderation is confirmed (code of conduct).
             # ON for Portland (Michael, 2026-09-03), so the instructor feed at start.agenticburn.com
