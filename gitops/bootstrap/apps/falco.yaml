@@ -14,7 +14,7 @@ spec:
   source:
     chart: falco
     repoURL: https://falcosecurity.github.io/charts
-    targetRevision: "9.1.0"
+    targetRevision: "9.2.1"
     helm:
       valuesObject:
         # Datadog Agent Autodiscovery: the `falco` named integration scrapes Falco's metrics endpoint
@@ -24,7 +24,7 @@ spec:
           # first-class platform component. env locked to production; version = deployed Falco appVersion.
           tags.datadoghq.com/service: burritobot-falco
           tags.datadoghq.com/env: burritobot-kubecon-na-26
-          tags.datadoghq.com/version: "0.44.1"
+          tags.datadoghq.com/version: "0.45.1"
           ad.datadoghq.com/falco.checks: |
             {"falco":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8765/metrics"}]}}
         # Enable Falco's native Prometheus metrics (PRD #26 M4 fix): without this the webserver exposes

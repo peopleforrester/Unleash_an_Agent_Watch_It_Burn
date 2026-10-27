@@ -176,7 +176,7 @@ for _name, _ust, _svc, _ver in _ust_targets:
 # Service Map as first-class components. Unlike the AI layer (OTEL_RESOURCE_ATTRIBUTES env), these are
 # Helm-values podAnnotations on the Datadog-Agent-scraped pods. env is DD_ENV, and each service starts with
 # burritobot- so it cannot collide with another project's in the shared org (#629); version is
-# the real deployed software version (NOT a chart version where they differ, e.g. falco app 0.44.1).
+# the real deployed software version (NOT a chart version where they differ, e.g. falco app 0.45.1).
 def _pod_annotations(path, *navkeys, doc_name=None):
     """Return the podAnnotations dict at valuesObject + navkeys for a manifest.
 
@@ -199,7 +199,7 @@ def _pod_annotations(path, *navkeys, doc_name=None):
 # (component, service, version, podAnnotations) — istio has two pods (control plane + data plane).
 _PLATFORM_UST = [
     ("cert-manager", "burritobot-cert-manager", "v1.20.2", _pod_annotations("gitops/bootstrap/apps/cert-manager.yaml")),
-    ("falco", "burritobot-falco", "0.44.1", _pod_annotations("gitops/bootstrap/apps/falco.yaml")),
+    ("falco", "burritobot-falco", "0.45.1", _pod_annotations("gitops/bootstrap/apps/falco.yaml")),
     ("kyverno", "burritobot-kyverno", "v1.19.1", _pod_annotations("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
     ("argocd", "burritobot-argocd", "v3.4.4", _pod_annotations("infra/argocd-values.yaml", "server")),
     ("istio-ztunnel", "burritobot-istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
