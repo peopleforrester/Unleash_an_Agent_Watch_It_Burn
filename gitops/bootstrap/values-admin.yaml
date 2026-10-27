@@ -38,7 +38,6 @@
 apps:
   - ai-layer-otel
   - ai-layer
-  - alloy
   - cert-manager
   - datadog-agent-cr
   - datadog-operator
@@ -60,7 +59,6 @@ apps:
   - kubearmor
   - kyverno-policies
   - kyverno
-  - loki
   - minimal-floor
   - namespaces
   - network-policies

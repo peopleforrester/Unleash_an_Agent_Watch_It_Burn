@@ -1,8 +1,10 @@
 # Observability
 
 Grafana dashboards and visualization resources. The core observability stack
-(Prometheus, Grafana, OTel Collector, Tempo, Loki, Promtail) is deployed via
-ArgoCD Application manifests in `gitops/bootstrap/apps/`.
+(Prometheus, Grafana, OTel Collector, Tempo) is deployed via ArgoCD Application
+manifests in `gitops/bootstrap/apps/`. Pod logs go to Datadog only, collected by the
+Datadog Agent (`gitops/manifests/datadog/datadog-agent.yaml`); Loki and its
+shipper were removed in #474.
 
 ## Directory Structure
 
@@ -20,17 +22,15 @@ grafana/
 | Grafana | Dashboards + visualization | Bundled with kube-prometheus-stack |
 | OTel Collector | Trace/metric pipeline | `gitops/bootstrap/apps/otel-collector.yaml` (contrib 0.145.0) |
 | Tempo | Distributed tracing backend | `gitops/bootstrap/apps/tempo.yaml` |
-| Loki | Log aggregation | `gitops/bootstrap/apps/loki.yaml` |
-| Promtail | Log shipping | `gitops/bootstrap/apps/promtail.yaml` |
 
 ## Data Flow
 
 ```
 Apps → OTel Collector → Tempo (traces)
                       → Prometheus (metrics via remote write)
-Apps → Promtail → Loki (logs)
+Apps → Datadog Agent → Datadog Logs (logs)
 Prometheus ← scrape ← ServiceMonitors (metrics)
-Grafana ← query ← Prometheus + Tempo + Loki
+Grafana ← query ← Prometheus + Tempo
 ```
 
 ## Dashboards

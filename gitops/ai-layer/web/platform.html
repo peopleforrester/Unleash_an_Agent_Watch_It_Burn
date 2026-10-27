@@ -14,10 +14,10 @@
 
   HONEST ABOUT REACHABILITY. Every link on this page is one a browser can open. Grafana, Argo CD, the
   kagent UI and the party apps have their own <service>-<cluster>.agenticburn.com name (#233), filled in
-  from the address bar. Prometheus, Loki and Tempo have no login and stay unpublished, so their rows open
+  from the address bar. Prometheus and Tempo have no login and stay unpublished, so their rows open
   them through Grafana Explore, where each is already a data source. They used to carry a
   `kubectl port-forward`, which listens inside the terminal pod and never reaches the attendee's browser:
-  that was the Loki "URL" that could not work (#381).
+  that was the Loki "URL" that could not work (#381). Loki itself is gone (#474): the pod logs are in Datadog.
 -->
 <style>
   :root{--bg:#f7f5fb;--card:#fff;--ink:#1b1230;--mut:#6b6a80;--line:#e6dff5;--accent:#8A00D6;--dd:#632CA6;--ok:#2e9e5b}
@@ -73,7 +73,7 @@
 </header>
 
 <main>
-  <p class="lede">Everything below is already running on <b id="cl">your cluster</b>: 33 Argo CD applications, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 37: the Challenge 1 and 3 controls are already installed there, and so are Tempo and Falco Talon). Nothing here needs installing.
+  <p class="lede">Everything below is already running on <b id="cl">your cluster</b>: 31 Argo CD applications, five of them the party apps and one the app-of-apps that manages the rest (an instructor cluster shows 35: the Challenge 1 and 3 controls are already installed there, and so are Tempo and Falco Talon). Nothing here needs installing.
   This page exists so you never have to dump a ConfigMap or read a Service list to find out where something is.</p>
 
   <div class="open"><b>Fastest way to see all of it with live values:</b> run <code class="inl">platform</code> in your
@@ -84,14 +84,14 @@
   <div class="phases">
     <div class="ph"><div class="w">Wave 1</div><h3>Foundation</h3><p>Namespaces, cert-manager, External Secrets.</p></div>
     <div class="ph"><div class="w">Wave 2</div><h3>Platform controls</h3><p>Kyverno admission, NetworkPolicy, Istio ambient mesh, KubeArmor, Falco.</p></div>
-    <div class="ph"><div class="w">Wave 3</div><h3>Observability</h3><p>OpenTelemetry Collector, Prometheus, Grafana, Loki, the Datadog Agent.</p></div>
+    <div class="ph"><div class="w">Wave 3</div><h3>Observability</h3><p>OpenTelemetry Collector, Prometheus, Grafana, the Datadog Agent.</p></div>
     <div class="ph"><div class="w">Wave 4</div><h3>The AI layer</h3><p>kagent on Bedrock, MCP tool servers, guard-proxy + LLM Guard, BurritoBot, your terminal.</p></div>
     <div class="ph"><div class="w">Always</div><h3>Delivery</h3><p>Argo CD holds all of it to what Git says. Delete something and it comes back.</p></div>
   </div>
 
   <div class="note"><b>Every link below opens in your browser.</b> Grafana, Argo CD, the kagent UI and the
   party apps each have their own address on this cluster: the service name, a dash, then your cluster's
-  address. Prometheus and Loki have no login of their own, so they are not published on their own:
+  address. Prometheus and Tempo have no login of their own, so they are not published on their own:
   their links open them inside Grafana, where each one is already set up. A <code class="inl">kubectl
   port-forward</code> would not help here, because it listens inside your terminal, not on your laptop.</div>
 
@@ -114,16 +114,14 @@
 
   <section class="layer">
     <h2>Observability, in-cluster</h2>
-    <p class="sub">Grafana has its own address on this cluster, filled in below from your address bar. Prometheus and Loki have no login of their own and stay in-cluster behind it. Datadog is the primary lens for the workshop; these are here because a real platform has them.</p>
+    <p class="sub">Grafana has its own address on this cluster, filled in below from your address bar. Prometheus and Tempo have no login of their own and stay in-cluster behind it. Datadog is the primary lens for the workshop; these are here because a real platform has them.</p>
     <table>
       <tr><th>Service</th><th>Reach it</th><th>Login</th></tr>
-      <tr><td class="svc">Grafana<small>Dashboards over Prometheus and Loki</small></td>
+      <tr><td class="svc">Grafana<small>Dashboards over Prometheus and Tempo</small></td>
           <td><a class="svchost" data-svc="grafana" href="#">grafana-…</a></td>
           <td>user <code class="inl">admin</code><div class="cmd" onclick="cp(this)">kubectl -n monitoring get secret prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo<button class="cp">copy</button></div></td></tr>
       <tr><td class="svc">Prometheus<small>Metrics and alert rules</small></td>
           <td><a class="svchost" data-svc="grafana" data-explore="prometheus" href="#">Prometheus, in Grafana Explore</a></td><td>Grafana's</td></tr>
-      <tr><td class="svc">Loki<small>Log store behind Grafana</small></td>
-          <td><a class="svchost" data-svc="grafana" data-explore="loki" href="#">Loki, in Grafana Explore</a></td><td>Grafana's</td></tr>
       <tr><td class="svc">Tempo<small>Trace store behind Grafana, on instructor clusters only</small></td>
           <td><a class="svchost" data-svc="grafana" data-explore="tempo" href="#">Tempo, in Grafana Explore</a><br><small>Not installed on an attendee cluster: your traces are in Datadog.</small></td><td>Grafana's</td></tr>
       <tr><td class="svc">OTel Collector<small>Where every trace and metric is routed</small></td>

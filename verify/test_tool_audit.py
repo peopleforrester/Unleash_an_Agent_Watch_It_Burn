@@ -1,6 +1,6 @@
 # ABOUTME: The per-agent tool audit trail (#190): every workshop-mcp tool call writes pre and post JSON lines
 # ABOUTME: tagged with the agent's identity, and the Agent CR, the toggle and the bundle all carry that identity.
-"""Offline half of the #190 audit-trail checks. The real-library and live-Loki half is test_tool_audit_live.py.
+"""Offline half of the #190 audit-trail checks. The real-library and live-Datadog-Logs half is test_tool_audit_live.py.
 
 The workshop is about attributing damage to an agent, and before #190 nothing recorded which agent called
 which tool in what order. tool_audit.py is that record. What breaks it is mostly not the module but the
@@ -9,7 +9,9 @@ wiring around it, each of which fails silently:
 - the server builds a plain FastMCP again, so nothing is written;
 - tool_audit.py drops out of the ConfigMap, so the import fails and workshop-mcp CrashLoops;
 - the Agent's workshop-mcp entry loses its X-Agent-Identity header, so every line says `unattributed`;
-- Challenge 7's toggle, which replaces the whole tools array, writes the entry back without the header.
+- Challenge 7's toggle, which replaces the whole tools array, writes the entry back without the header;
+- the Datadog Agent stops collecting every container's logs, so the lines are written and read by nobody.
+  Datadog is the only log store since #474 removed Loki and Alloy.
 
 The module itself is exercised here against a stand-in FastMCP, since the offline suite has no `mcp`.
 """
@@ -191,6 +193,22 @@ m = re.search(r"^readonly GOOD_TOOL='(.*)'$", TOGGLE, re.M)
 check("the toggle defines GOOD_TOOL", m is not None)
 toggle_good = json.loads(m.group(1)) if m else {}
 check("the toggle's workshop-mcp entry is identical to the committed one, header included", toggle_good == good)
+
+print("== the trail reaches Datadog Logs, the only log store ==")
+DDA = yaml.safe_load((REPO / "gitops/manifests/datadog/datadog-agent.yaml").read_text(encoding="utf-8"))
+logs = DDA["spec"]["features"].get("logCollection") or {}
+check("the Datadog Agent collects every container's logs (logCollection, containerCollectAll)",
+      logs.get("enabled") is True and logs.get("containerCollectAll") is True)
+env = [e.get("name") for c in DDA["spec"].get("override", {}).values() for e in c.get("env") or []]
+check("no DD_CONTAINER_EXCLUDE* setting can drop workshop-mcp's logs",
+      not [n for n in env if n.startswith("DD_CONTAINER_EXCLUDE")])
+mcp_dep = next((d for d in RES if d.get("kind") == "Deployment" and d["metadata"]["name"] == "workshop-mcp"), {})
+annotations = (mcp_dep.get("spec", {}).get("template", {}).get("metadata", {}).get("annotations") or {})
+check("workshop-mcp's pod carries no Datadog annotation that excludes or reroutes its logs",
+      bool(mcp_dep) and not [k for k in annotations if k.startswith("ad.datadoghq.com/") and k.endswith((".logs", "exclude"))])
+APPS = REPO / "gitops/bootstrap/apps"
+check("no Loki or Alloy app is left to read the trail from (#474)",
+      APPS.is_dir() and not (APPS / "loki.yaml").exists() and not (APPS / "alloy.yaml").exists())
 
 print()
 if failures:

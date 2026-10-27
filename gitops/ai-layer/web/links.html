@@ -105,7 +105,7 @@
 
     // WAVE 3 - observability
     // Datadog FIRST. It is the telemetry story of this workshop and every challenge asks the student to
-    // look at a trace in it. The Grafana/Prometheus/Loki stack (Tempo too, on instructor clusters) is real and running, and is here for
+    // look at a trace in it. The Grafana/Prometheus stack (Tempo too, on instructor clusters) is real and running, and is here for
     // completeness rather than to compete for attention, so it sits below and says so.
     {nm:'Datadog', p:3, ns:'datadog', desc:'Where you watch what the agent actually did. Traces, logs, metrics and LLM Observability. This is the one to use.',
      cmd:'kubectl -n datadog get pods', auth:'Log in at app.datadoghq.com with the credentials on your lab page.'},
@@ -116,8 +116,6 @@
      user:'admin', pw:"kubectl -n monitoring get secret prometheus-grafana -o jsonpath='{.data.admin-password}' | base64 -d; echo"},
     {nm:'Prometheus', p:3, ns:'monitoring', desc:'Metrics store behind Grafana. Fallback only.',
      svc:'grafana', explore:'prometheus', auth:'Opens in Grafana, with Grafana\'s login.'},
-    {nm:'Loki', p:3, ns:'monitoring', desc:'Log store behind Grafana. Fallback only.',
-     svc:'grafana', explore:'loki', auth:'Opens in Grafana, with Grafana\'s login.'},
     {nm:'Tempo', p:3, ns:'monitoring', desc:'Trace store behind Grafana. Fallback only, and on instructor clusters only: an attendee cluster has no Tempo, and your traces are in Datadog.',
      svc:'grafana', explore:'tempo', auth:'Opens in Grafana, with Grafana\'s login.'},
 
@@ -152,7 +150,7 @@
   // A browser address on this cluster (#233, #381): <service>-<this host>, from the address bar, the rule
   // platform.html uses. These cards used to send `echo open https://grafana-<your console host>...` to the
   // terminal, where bash reads `<your` as an input redirect and prints an error instead of an address, and
-  // Loki, Prometheus and Tempo sent a port-forward, which listens inside the terminal pod where no browser
+  // Prometheus and Tempo sent a port-forward, which listens inside the terminal pod where no browser
   // can reach it. explore opens Grafana Explore on that data source uid (gitops/bootstrap/apps/prometheus.yaml).
   function svcUrl(e){
     var h = location.hostname;

@@ -111,12 +111,15 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
       and (REPO / "gitops/otel-collector/otel-collector-act2-overlay.yaml").is_file())
 
 # The selections the four globs made at b1fcb0e, less the overlay the excludes matched without meaning to,
-# and less customer-stream, which every profile listed until #473 removed it.
+# less customer-stream, which every profile listed until #473 removed it,
+# and less loki and alloy, which #474 dropped from attendee, admin and full.
 WANT = {
-    "attendee": 28, "burn": 18, "admin": 32, "full": 30,
+    "attendee": 26, "burn": 18, "admin": 30, "full": 28,
 }
 for profile, n in WANT.items():
-    check(f"{profile} lists {n} apps, the old root's selection", len(app_names(profile)) == n)
+    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474", len(app_names(profile)) == n)
+for profile in WANT:
+    check(f"{profile} lists neither loki nor alloy (#474)", not {"loki", "alloy"} & set(app_names(profile)))
 
 print("== every Unleashed source takes the revision; no source is the chart itself ==")
 SEMVER = re.compile(r"v?\d+\.\d+\.\d+")

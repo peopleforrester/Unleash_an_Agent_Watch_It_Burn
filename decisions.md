@@ -2774,3 +2774,121 @@ lengths `verify/test_bootstrap_chart.py` holds drop by one each: attendee 28, bu
 recreation spec and readiness checklist no longer list the app, and the drift test's comment describes the
 require-labels failure without naming it. This is the approved draft a8fc6ff (redone as ac363f5), made again on
 staging after #609's chart conflicted with it.
+
+## 2026-10-24 · #474 · Loki and Alloy are dropped; the #190 audit trail is read from Datadog Logs
+
+**Why:** the #236 audit of duplicate components found that no student surface reads Loki, and its one
+consumer was the live half of `verify/test_tool_audit_live.py`. The same workshop-mcp audit lines already
+reached Datadog through the Agent's `containerCollectAll`. Dropping the pair saves two Argo CD apps and a
+5Gi gp2 volume on every cluster.
+
+**What it changes:**
+
+- `gitops/apps/loki.yaml` and `gitops/apps/alloy.yaml` are deleted. Every app-of-apps profile reads
+  `gitops/apps` as a directory with `prune: true`, so Argo CD removes both apps from a live cluster on the
+  next sync. A StatefulSet's PVC outlives the StatefulSet, so on a cluster that already ran Loki the 5Gi
+  volume stays until the cluster is rebuilt or the PVC in `monitoring` is deleted by hand.
+- Grafana loses its Loki data source and Tempo's trace-to-logs link to it (`gitops/apps/prometheus.yaml`).
+  The Loki row leaves `platform.html`, `links.html` and `diagram.html`. The Backstage catalog loses its
+  Loki entry and a Promtail entry that had been stale since Alloy replaced Promtail.
+- The live half of `test_tool_audit_live.py` now searches Datadog Logs (`POST /api/v2/logs/events/search`)
+  in the cluster's own org, with the keys the Agent itself ships with (`datadog/datadog-secret`), on the
+  site the DatadogAgent CR names. It selects by tag (`kube_namespace`, `kube_deployment:workshop-mcp`) and
+  matches the identity in the test, so it does not depend on `agent_identity` being a facet in a fresh
+  trial org. The stream-label check becomes a tag check: `pod_name:workshop-mcp-*` and
+  `kube_container_name:shim`. Datadog's timestamps are milliseconds, so pre-before-post is checked on the
+  line's own `ts`, not on result order.
+- `verify/test_alloy_labels.py` (#464) is deleted with the config it checked. `test_tool_audit.py` now holds
+  offline the wiring the trail depends on instead: log collection on, `containerCollectAll` on, nothing
+  excluding workshop-mcp's logs.
+- The deck line that names Loki (`facilitation/slides-outline.md`) is not changed: the issue leaves that
+  prose to Michael.
+
+## 2026-10-24 · question 687 · Loki is dropped from the deck's list of what runs on the platform
+
+**Answer:** Drop Loki from the list.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**Background:** Issue #474 removes the Loki and Alloy Argo CD apps from every cluster, and the platform page
+no longer lists Loki. `facilitation/slides-outline.md` line 43 (slide 6, "The platform you get") still listed
+Loki as part of what attendees get, so the slide named a component no cluster runs. It was the only Loki
+mention in the repo's deck material. Michael's verified-stack record in talks-knowledge
+(`speaking/devopsdays-portland/stack-verified.md`, 2026-09-03) lists Loki under "Observability, fallback". That
+record is a dated snapshot that #474 makes stale. It is not edited here, since it lives in another repo.
+
+**Why this is a correction and not new prose:** earlier runs changed slides-outline.md facts directly (#417
+replaced a stale slot time with a pointer to conference-knowledge). New prose was kept as a draft for Michael
+(#466, the 2026-10-24 entry above). Cutting one component that no longer exists is a factual correction, and
+CLAUDE.md's "Bias to action" rule applies.
+
+**What it changes:** `facilitation/slides-outline.md` line 43 drops "Loki," from the list. Nothing else in the
+slide or the outline changes. The rest of the list is still Argo CD, Kyverno, Falco, Prometheus, Grafana,
+Tempo, cert-manager, External Secrets and Backstage.
+
+## 2026-10-25 · #474 · The Tempo-to-Loki trace link goes too, and the branch is rebased onto staging
+
+**Why:** the first attempt at this branch failed to rebase onto `origin/staging` (run 7819, `rebase-conflict`).
+Upstream had moved the Tempo data source out of `gitops/apps/prometheus.yaml` into `gitops/tempo/` (#475), and
+replaced the Grafana ALB Ingress with per-cluster hostnames (#493). Both changes touched the same lines this
+branch edited. The conflicts were resolved by taking upstream's side of each hunk and removing only the Loki
+references. No upstream change was reverted.
+
+**What it changes:**
+
+- `gitops/tempo/grafana-datasource.yaml` no longer carries `tracesToLogsV2` pointing at uid `loki`. Without it,
+  Tempo's trace view would offer a log link to a data source that no longer exists. It was missed in the first
+  pass of #474 and is found only on rebase.
+- `verify/test_observability.py` read `pvals["grafana"]["additionalDataSources"]` directly. That key no longer
+  exists in `prometheus.yaml`, so the test would have raised KeyError rather than failed cleanly. It now reads
+  the key with a default, and asserts that no Loki data source remains and that Tempo's data source links to
+  no Loki.
+- Upstream's wording on `platform.html`, `links.html`, `gitops/README.md`, `docs/MASTER-RECREATION-SPEC.md`,
+  `verify/test_service_hosts_live.py` and `verify/test_service_links.py` is kept. Only the Loki entries are
+  removed. Tempo's "instructor clusters only" wording stays as upstream wrote it.
+- The Loki and Alloy reference in `verify/test_service_hosts_live.py` is removed. Its Tempo handling on attendee
+  clusters (#475) is unchanged.
+
+**Checked:** `bash verify/run-tests.sh` passes (117 tests). The E2E checks were not run, because no cluster is
+provisioned in this run.
+
+## 2026-10-26 · #474 · The stated Argo CD app counts drop by two with Loki and Alloy
+
+**Why:** the approved #474 branch (draft `7c0e800`) conflicted with staging in `docs/DESIGN-GLANCE.md`, so the
+change is made again on current staging. Since that draft, #551 made `verify/test_fleet_contract.py` count the
+attendee profile's Applications from the manifests and hold the docs to the number. Loki and Alloy are one
+Application each and every profile but burn selected both, so the counts fall by two.
+
+**What it changes:**
+
+- Attendee clusters run 32 Argo CD Applications, the app-of-apps included, down from 34. Instructor clusters
+  run 36, down from 38: 30 platform components, 5 demo apps and the root. `docs/DESIGN-GLANCE.md`,
+  `docs/RUN-OF-SHOW-2026-08.md`, `platform.html` and the fleet-contract checks say so.
+- The glance paragraph's observability clause reads "Prometheus and Grafana, with pod logs going to Datadog
+  only", keeping staging's "Falco Talon and Tempo run on instructor clusters only".
+- The run-of-show's layer table drops Loki from the observability row.
+- `docs/ABSTRACT.md` is not changed. It is the working copy of published listings and already says to leave
+  the number out.
+
+## 2026-10-26 · #474 · Loki and Alloy leave the bootstrap chart's profile lists
+
+**Why:** the approved #474 draft (`afea397` on `agent/474-9586`) conflicted with staging after #609 moved
+`gitops/apps/` into the `lab-bootstrap` Helm chart at `gitops/bootstrap/apps/`, with each profile an explicit
+list in `values-<profile>.yaml`. The change is made again on that layout, keeping the approved design.
+
+**What it changes beyond the approved draft:**
+
+- `gitops/bootstrap/apps/loki.yaml` and `alloy.yaml` are deleted, and `loki` and `alloy` leave
+  `values-attendee.yaml`, `values-admin.yaml` and `values-full.yaml` (burn never listed them). The chart fails a
+  render on a listed name with no file, so the lists and the files go together. The 2026-10-24 entry's "every
+  app-of-apps profile reads `gitops/apps` as a directory" is how it was then; now `lab-bootstrap` stops
+  rendering the two Applications and its sync prunes them, with the same PVC caveat.
+- `verify/test_bootstrap_chart.py` holds the lists at attendee 27, burn 19, admin 31 and full 29, down two
+  each but burn, and checks that no profile names loki or alloy.
+- `verify/test_tool_audit.py`'s "no Loki or Alloy app is left" check looks in `gitops/bootstrap/apps/`; on
+  the old path it would have passed whatever that directory held.
+- Staging's text is kept everywhere else: `gitops/README.md`'s chart layout (it no longer states a manifest
+  count), the run-of-show's `kubectl get applications` comment (now 36 apps, 32 on an attendee cluster, with
+  staging's "1 app-of-apps root, lab-bootstrap"), `MASTER-RECREATION-SPEC.md`'s step 4, and the
+  `gitops/bootstrap/apps/` paths in `STACK-WALKTHROUGH.md`, `links.html` and `observability-idp/README.md`. Only
+  Loki, Alloy and Promtail are removed from them.
