@@ -110,9 +110,10 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
       not (APPS / "otel-collector-act2-overlay.yaml").exists()
       and (REPO / "gitops/otel-collector/otel-collector-act2-overlay.yaml").is_file())
 
-# The selections the four globs made at b1fcb0e, less the overlay the excludes matched without meaning to.
+# The selections the four globs made at b1fcb0e, less the overlay the excludes matched without meaning to,
+# and less customer-stream, which every profile listed until #473 removed it.
 WANT = {
-    "attendee": 29, "burn": 19, "admin": 33, "full": 31,
+    "attendee": 28, "burn": 18, "admin": 32, "full": 30,
 }
 for profile, n in WANT.items():
     check(f"{profile} lists {n} apps, the old root's selection", len(app_names(profile)) == n)

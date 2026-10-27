@@ -42,7 +42,7 @@ The headline gaps are at the bottom under **"Must fix before ready."**
 ## 4. Challenges (C1–C7) — attack / defense / fallback / packaged
 | # | Challenge | Attack prompt | Defense + toggle | Fallback | Packaged? |
 |---|---|---|---|---|---|
-| C1 | Exfil to S3 | ⬜ | substrate built (egress, customer-stream, Istio); ⬜ NetworkPolicy enable toggle | ⬜ | ⬜ **not packaged** |
+| C1 | Exfil to S3 | ⬜ | substrate built (egress, Istio); ⬜ NetworkPolicy enable toggle | ⬜ | ⬜ **not packaged** |
 | C2 | Malicious deploy | ✅ `challenges/01-cncf-wall/agent-prompt.txt` | ✅ `toggle-kyverno-enforce.sh` | ✅ `challenges/c2-villain-image/fallback.kubectl.sh` | ✅ |
 | C3 | Planted-secret grep | ⬜ (breadcrumb files exist) | planted-file exists; ⬜ Falco filesystem-snoop rule + enable toggle | ⬜ | ⬜ **not packaged** |
 | C4 | Denial-of-wallet | ✅ `challenges/c4-denial-of-wallet/agent-prompt.txt` | ✅ gateway budget cap, runtime `guard-budget-on` toggle | ✅ verified live 2026-08-29 (froze at the cap, zero-cost block) | ✅ |
