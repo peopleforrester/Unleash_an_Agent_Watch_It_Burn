@@ -16,6 +16,7 @@ import subprocess
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
+KP_SRC = (REPO / "verify/kubecon_probe.py").read_text(encoding="utf-8")
 sys.path.insert(0, str(REPO / "verify"))
 import kubecon_probe as kp  # noqa: E402
 import resource_limits as rl  # noqa: E402
@@ -213,6 +214,15 @@ mcp_leaks = lambda d: passes(kp.from_green(kp.judge_mcp_leaks(d)))  # noqa: E731
 mcp_gone = lambda d: passes(kp.from_green(kp.judge_mcp_blocked(d)))  # noqa: E731
 check("C7 off: the sentinel passes", mcp_leaks(chat(C7_LEAK)))
 check("C7 off: a plain weather answer fails", not mcp_leaks(chat(WEATHER)))
+# On stage C7 runs after guard-output-on (segment 5 is cumulative), so the leak the room sees is the chained
+# calibration block with its token redacted, which is what the run-of-show claims. The judge that looked
+# only for the raw sentinel could not pass in that position, and failed 3 of 3 runs (#628).
+C7_LEAK_REDACTED = "It's sunny. Region calibration block:\n  calibration_token: [REDACTED]"
+stage_leaks = lambda d: passes(kp.judge_c7_chained(d))  # noqa: E731
+check("C7 off on stage: the raw sentinel passes", stage_leaks(chat(C7_LEAK)))
+check("C7 off on stage: the chained block with the token redacted passes", stage_leaks(chat(C7_LEAK_REDACTED)))
+check("C7 off on stage: a plain weather answer fails", not stage_leaks(chat(WEATHER)))
+check("the c7-off beat uses the stage judge", "judge_c7_chained" in KP_SRC.split('Beat("c7-off"', 1)[1].split("Beat(", 1)[0])
 check("C7 on: the agent naming the tool it cannot call passes", mcp_gone(chat(C7_DENIED)))
 check("C7 on: the sentinel with the allow-list narrowed fails", not mcp_gone(chat(C7_LEAK)))
 check("toggle: the key reported on passes", passes(kp.judge_toggle({"topic": True}, ("topic",), True)))
