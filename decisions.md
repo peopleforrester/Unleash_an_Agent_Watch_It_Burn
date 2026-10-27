@@ -2892,3 +2892,65 @@ list in `values-<profile>.yaml`. The change is made again on that layout, keepin
   staging's "1 app-of-apps root, lab-bootstrap"), `MASTER-RECREATION-SPEC.md`'s step 4, and the
   `gitops/bootstrap/apps/` paths in `STACK-WALKTHROUGH.md`, `links.html` and `observability-idp/README.md`. Only
   Loki, Alloy and Promtail are removed from them.
+
+## 2026-10-24T05:37:40Z · 2.2 · Plan-time policy toolchain for the fleet Terraform (#200)
+
+**New dependencies, pinned 2026-10-24 to the current release of each** (`infra/policy/plan/tools.yaml`,
+installed by `install-tools.py`, binaries checked against the sha256 each project publishes):
+
+- **Kyverno CLI 1.19.2.** Runs the four starter `ValidatingPolicy` files in JSON mode. The brief wanted
+  1.18 or later for the `--json` nil-pointer fix; 1.19.2 is the current patch on the 1.19 line the brief
+  named. 1.19 has no `kyverno json` subcommand: the JSON-mode path is `kyverno apply <policies> --json
+  <payload>`, which is what `check-plan.py` calls. The standalone kyverno-json binary is not used.
+- **Checkov 3.3.30 and Trivy 0.76.1.** The brief pinned 3.2.x and 0.70.x on 2026-09-03; both lines have
+  moved on since. tfsec (merged into Trivy) and Terrascan (archived 2025-11-20) are not added.
+- **Trivy comes from its release tarball, not `aquasecurity/trivy-action`.** The brief asked for the
+  action to be pinned to a commit SHA, because its release infrastructure was compromised in March 2026.
+  A checksum on the binary is the stronger pin, and it makes the action unnecessary.
+- **Terraform 1.17.0 and OpenTofu 1.13.2.** These are for the e2e suite only. It plans the same fixtures
+  and the fleet with both binaries, to prove the checks read an OpenTofu plan natively. The build host's
+  Terraform pin in VERSIONS.lock is unchanged.
+- **moto 5.2.4.** A local AWS API. `plan-fleet.py` plans the real `aws/network` and `aws/cluster` roots
+  against it, with no AWS account: the module logic runs as it does for real, and only API-sourced values
+  (account id, subnet ids, AMI and addon versions) are made up. moto lacks EKS DescribeAddonVersions and
+  SSM GetParameter, so a small in-process stub answers those two calls.
+
+**Scope of the scanner gate.** Checkov and Trivy fail the check only on the rules in `gates.yaml`, which
+re-check the four starter policies. Everything else they find is printed as advisory on every run.
+Gating on their whole catalogues would fail a private, encrypted bucket for having no cross-region
+replication, and an exception list that long stops being read. To promote a check, add one line to
+`gates.yaml`, plus an `exceptions.md` row for each finding the fleet already has.
+
+**Exceptions came from a plan of the real fleet, not from reading HCL.** A Checkov scan of the HCL
+reported findings in module blocks that `count` disables (appmesh, velero, cluster-autoscaler policies the
+fleet never creates). Reading the module source gave the wrong addresses too: `custom[0]`, where the
+modules actually create `ebs_csi[0]`, `lb_controller[0]` and `external_secrets[0]`. Each row in `exceptions.md` matches a
+finding on the mock-AWS plan, and the e2e suite fails when one stops matching.
+
+## 2026-10-24T17:12:43Z · question 592 · The plan-policy check runs on GitHub-hosted runners, against the AWS mock
+
+**Question 592:** #200's plan-policy check is built and proven locally, but no CI workflow runs it yet.
+Where should it run on PRs that touch infra/terraform/** or infra/policy/plan/**? This repo is public,
+and llm-coding-workflow#145 rules out fork-PR code on the netcup runner. plan-fleet.py can now plan the
+real fleet roots against a local AWS mock, so a CI plan no longer needs AWS credentials.
+
+**Answer:** GitHub-hosted ubuntu-latest, with the fleet planned by plan-fleet.py against the mock. CI
+holds no AWS credentials or secrets, fork PRs are checked safely, and Actions minutes on a public repo
+are not metered (llm-coding-workflow#194). This matches the draft rule in llm-coding-workflow#202 that
+public repos taking fork PRs use hosted runners.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**What it changes:** `.github/workflows/plan-policy.yml` is added. On every PR, and every push to
+staging or main, that touches infra/terraform/**, infra/policy/plan/**, the plan-policy tests or the
+workflow, it:
+
+1. installs the pinned toolchain with install-tools.py;
+2. plans aws/network and aws/cluster with plan-fleet.py;
+3. fails on any unexcused finding or stale exception (`check-plan.py --require-all-exceptions-used`);
+4. runs the Terraform and OpenTofu self-test (verify/test_plan_policy_e2e.py).
+
+actions/checkout and actions/setup-python are pinned to commit SHAs (v7.0.1 3d3c42e5, v7.1.0 6d4fd22b,
+read from their release tags 2026-10-24). PyYAML is pinned at 6.0.3 for the job. The workflow is not on
+the netcup runner and takes no OIDC role. A real-account plan (#201's pipeline role) stays a separate
+decision.

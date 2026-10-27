@@ -61,7 +61,9 @@ check("a module without a version is found as unpinned",
       registry_modules('module "x" {\n  source = "terraform-aws-modules/vpc/aws"\n}\n') == [("x", "terraform-aws-modules/vpc/aws", None)])
 
 tracked = subprocess.run(["git", "-C", str(REPO), "ls-files", "*.tf"], capture_output=True, text=True, check=True).stdout.split()
-roots = sorted({str(pathlib.Path(f).parent) for f in tracked if not f.startswith(("images/", "gitops/"))})
+# infra/policy/plan/fixtures are plan-policy test inputs (#200), planned in a scratch copy, not roots.
+roots = sorted({str(pathlib.Path(f).parent) for f in tracked
+                if not f.startswith(("images/", "gitops/", "infra/policy/plan/fixtures/"))})
 check("found the Terraform roots", {"infra/terraform/aws/cluster", "infra/terraform/aws/network"} <= set(roots), roots)
 
 for root in roots:

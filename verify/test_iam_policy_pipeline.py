@@ -194,7 +194,10 @@ def blocks(text, header_re):
 
 
 BOUNDARY_REF = "data.aws_iam_policy.permissions_boundary.arn"
-tf_files = sorted((REPO / "infra").rglob("*.tf"))
+# infra/policy/plan/fixtures holds deliberately violating plans for the plan-policy tests (#200), and
+# .terraform is a local provider and module cache, so neither is Terraform this repo deploys.
+tf_files = sorted(p for p in (REPO / "infra").rglob("*.tf")
+                  if ".terraform" not in p.parts and "infra/policy/plan/fixtures" not in p.as_posix())
 check("infra/ has Terraform to look at", len(tf_files) > 0)
 for f in tf_files:
     text = f.read_text(encoding="utf-8")

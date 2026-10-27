@@ -119,7 +119,9 @@ IAM_INPUT = re.compile(r"iam|polic|role|permissions_boundary|flow_log")
 
 listed = subprocess.run(["git", "-C", str(REPO), "ls-files", "--cached", "--others", "--exclude-standard", "*.tf"],
                         capture_output=True, text=True, check=True).stdout.split()
-tf_files = [REPO / f for f in listed if (REPO / f).is_file()]
+# infra/policy/plan/fixtures holds deliberately violating plans for the plan-policy tests (#200), not IAM
+# anything applies.
+tf_files = [REPO / f for f in listed if (REPO / f).is_file() and not f.startswith("infra/policy/plan/fixtures/")]
 check("the repo has Terraform to look at", len(tf_files) > 0)
 seen = {"resource": 0, "outside": 0}
 for f in sorted(tf_files):
