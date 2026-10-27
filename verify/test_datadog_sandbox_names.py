@@ -1,5 +1,5 @@
 # ABOUTME: Holds the KubeCon clusters to Whitney's Datadog sandbox rules (#629): one env tag, and a distinct
-# ABOUTME: burritobot-<role> cluster name per cluster that the Agents, the collector and the fleet queries agree on.
+# ABOUTME: burritobot-public or burritobot-private cluster name that the Agents, the collector and the fleet queries agree on.
 """Pins #629.
 
 The sandbox org holds other projects' data, so BurritoBot's is separated by the env tag and by cluster
@@ -51,8 +51,12 @@ def identity_literals(cluster: str) -> list[str]:
 
 
 print("== the identity script derives a distinct burritobot-<role> name per cluster ==")
-for eks, want in (("watch-it-burn-community", "burritobot-community"),
-                  ("watch-it-burn-michael-admin", "burritobot-michael-admin")):
+# Named for what the audience sees on the Datadog screen: the bot the room hacks is public, the presenters'
+# cluster is private. A second presenter cluster keeps its owner so the names stay unique.
+for eks, want in (("watch-it-burn-community", "burritobot-public"),
+                  ("watch-it-burn-michael-admin", "burritobot-private"),
+                  ("watch-it-burn-whitney-admin", "burritobot-private-whitney"),
+                  ("watch-it-burn-attendee-007", "burritobot-attendee-007")):
     made = identity_literals(eks)
     check(f"{eks} -> {want} in every cluster-identity it writes ({len(made)})",
           bool(made) and all(f"--from-literal={KEY}={want}" in c for c in made), "\n        ".join(made))
