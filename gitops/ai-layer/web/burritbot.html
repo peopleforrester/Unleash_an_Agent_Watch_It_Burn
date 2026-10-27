@@ -473,7 +473,6 @@
     // clusters would be worse than none at all.
     var ban=document.getElementById('communitybanner');
     if(ban){ ban.hidden = !(c && typeof c.host === 'string' && /^attackme\./.test(c.host)); }
-    var community = !!(ban && !ban.hidden);
     var strip=document.getElementById('badges'); if(!strip) return;
     var ai    = (c && c.ai)    ? c.ai    : (c || {});
     var infra = (c && c.infra) ? c.infra : {};
@@ -486,10 +485,6 @@
       // WITH KubeArmor (the prevention half the student installs), never alone, and only where /controls
       // measured Falco on the cluster.
       if(bd.pairWith) on = on && infra[bd.pairWith]===true;
-      // The community cluster runs the burn profile, which installs no Falco at all (#283). The guard-proxy
-      // pinned here still reports falco:true unconditionally, so until the pin moves to the commit that
-      // measures the DaemonSet (#486), the badge is forced off there too. Drop this line with that bump.
-      if(bd.key==='falco' && community) on = false;
       if(!on) return;                          // absent-until-installed
       shown++;
       var el=document.createElement('span');

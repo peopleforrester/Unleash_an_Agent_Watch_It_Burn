@@ -167,8 +167,11 @@ check("the host guard-proxy reports is checked too", re.search(r"fetch\('/contro
 check("the page hardcodes no cluster name", "watch-it-burn-community" not in re.sub(r"<!--.*?-->", "", LAB, flags=re.S))
 
 print("== the BurritoBot badge strip does not light Falco where Falco does not exist ==")
-check("the Falco badge is forced off on the Community cluster",
-      "if(bd.key==='falco' && community) on = false;" in BB)
+# guard-proxy measures the security/falco DaemonSet (#486), so /controls reports false on the Community
+# cluster's burn profile and the page keeps that value; test_falco_badge_measured.py holds the details.
+check("the Falco badge keeps the measured value from /controls",
+      "if(bd.pairWith) on = on && infra[bd.pairWith]===true;" in BB)
+check("no hostname override forces it instead", "if(bd.key==='falco' && community)" not in BB)
 
 print()
 if failures:
