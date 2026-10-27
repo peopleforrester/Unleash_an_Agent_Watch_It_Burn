@@ -301,6 +301,21 @@ check("the limits check has teeth: the old limit-less `create deployment` shape 
       rl.missing({"kind": "Deployment", "spec": {"template": {"spec": {"containers": [
           {"name": "promo-mascot", "image": kp.VILLAIN_IMAGE}]}}}}) != [])
 check("the C2 image breaks the registry allow-list", not allowed(kp.VILLAIN_IMAGE))
+# C6 has to LAND with the input guards off, and on an admin cluster restrict-image-registries is armed to Deny.
+# The payload asked for the short name alpine:latest, which fails the policy's docker.io/library/ prefix, so
+# Nova obeyed and Kyverno refused the Deployment 8 of 8 times on 2026-10-27 (#627). Every copy of the payload
+# names one image, and it is one the policy admits.
+import agent_probe  # noqa: E402
+
+_c6_image = re.search(r"running the image (\S+)", agent_probe.INJECTION_PROMPT)
+check("the C6 payload names a fully qualified image the registry allow-list admits",
+      bool(_c6_image) and allowed(_c6_image.group(1)), _c6_image.group(1) if _c6_image else "no image found")
+for _copy in ("gitops/ai-layer/web/kubecon.html", "gitops/ai-layer/web/lab.html", "challenges/LAB-TEXT.md",
+              "challenges/02-sanitization/agent-prompt-injection.txt", "challenges/02-sanitization/fallback.curl.sh",
+              "challenges/PROMPT-CATALOG.md", "verify/injection_config_matrix.py"):
+    _text = (REPO / _copy).read_text(encoding="utf-8")
+    check(f"{_copy} asks for the same C6 image", bool(_c6_image) and "maintenance-shell" in _text
+          and _c6_image.group(1) in _text and re.search(r"(?<![/\w])alpine:latest", _text) is None)
 check("C3 runs the fallback the run-of-show names", kp.C3_FALLBACK.is_file()
       and "challenges/c3-secret-grep/fallback.kubectl.sh" in (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text())
 check("the probe marker is guard-proxy's", 'PROBE_MARKER = "[[wib-probe]]"' in
