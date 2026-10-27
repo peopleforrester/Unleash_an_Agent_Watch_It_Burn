@@ -52,9 +52,16 @@ def is_state(p):
     rel = p.relative_to(REPO).parts
     return ".terraform" in rel or "states" in rel or p.name.endswith((".tfstate", ".tfstate.backup"))
 def tree_files(pattern):
-    return sorted(p for top in (TF, ORG) for p in top.rglob(pattern) if p.is_file() and not is_state(p))
+    # What git would commit, not every file on disk: fleet/logs/*.apply.log are gitignored run logs, and the
+    # machine that ran Portland holds about 120 of them naming its tag, which turned this suite red there (#631).
+    listed = subprocess.run(["git", "-C", str(REPO), "ls-files", "--cached", "--others", "--exclude-standard",
+                             "--", str(TF.relative_to(REPO)), str(ORG.relative_to(REPO))],
+                            capture_output=True, text=True, check=True).stdout.split()
+    return sorted(p for p in (REPO / f for f in listed)
+                  if p.is_file() and p.match(pattern) and not is_state(p))
 stale = [str(p.relative_to(REPO)) for p in tree_files("*") if "devopsdays-portland-2026" in p.read_text(errors="ignore")]
 check(f"no literal devopsdays-portland-2026 under infra/terraform or infra/org (found: {stale})", not stale)
+check("the scan skips gitignored run logs", not any("/logs/" in str(p) and p.suffix == ".log" for p in tree_files("*")))
 
 # Every terraform apply/destroy of any root, in any script under infra/terraform or infra/org, passes event:
 # the variable has no default, so one that does not is a teardown or a build that fails on the night. The
