@@ -397,6 +397,17 @@ check("the tutor's model has a tagged copy too, with consumer = tutor",
       "inference-profile/${var.tutor_model}" in _tutor_profile and 'consumer = "tutor"' in _tutor_profile)
 check("the tutor may call only the tutor's copy",
       '"aws:ResourceTag/consumer"                    = "tutor"' in _tutor_invoke)
+# CreateInferenceProfile rejects a description outside this pattern with a 400, which plan does not catch:
+# a comma in the text failed every profile on the 2026-10-27 KubeCon bring-up. Fill the interpolations
+# with real values and hold the result to the pattern the API enforces.
+_BEDROCK_DESCRIPTION = re.compile(r"([0-9a-zA-Z:.][ _-]?)+")
+_sample = {"var.name": "watch-it-burn-community", "each.value": "us.amazon.nova-pro-v1:0",
+           "var.tutor_model": "us.anthropic.claude-haiku-4-5-20251001-v1:0"}
+for _label, _block in (("agent", _agent_profile), ("tutor", _tutor_profile)):
+    _desc = re.search(r'description\s*=\s*"([^"]*)"', _block)
+    _text = re.sub(r"\$\{([^}]+)\}", lambda m: _sample.get(m.group(1), "x"), _desc.group(1)) if _desc else ""
+    check(f"the {_label} profile's description satisfies Bedrock's pattern ({_text!r})",
+          bool(_text) and _BEDROCK_DESCRIPTION.fullmatch(_text) is not None)
 
 print("== the repair loop can reach the clusters the presenters drive from ==")
 # converge built its work set from the ATTENDEE numbering only (#85), so there was no way to point it at

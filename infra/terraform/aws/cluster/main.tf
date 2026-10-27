@@ -464,7 +464,7 @@ resource "aws_bedrock_inference_profile" "agent" {
   for_each = local.bedrock_tiers
 
   name        = "${var.name}-${each.key}"
-  description = "Watch It Burn agent on ${var.name}: ${each.value}, tagged for cost allocation."
+  description = "Watch It Burn agent on ${var.name}: ${each.value} tagged for cost allocation."
   model_source {
     copy_from = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${each.value}"
   }
@@ -645,7 +645,7 @@ variable "tutor_model" {
 # not var.tutor_model, or its spend lands untagged again.
 resource "aws_bedrock_inference_profile" "tutor" {
   name        = "${var.name}-tutor"
-  description = "Watch It Burn workshop tutor on ${var.name}: ${var.tutor_model}, tagged for cost allocation."
+  description = "Watch It Burn workshop tutor on ${var.name}: ${var.tutor_model} tagged for cost allocation."
   model_source {
     copy_from = "arn:aws:bedrock:${var.region}:${data.aws_caller_identity.current.account_id}:inference-profile/${var.tutor_model}"
   }
