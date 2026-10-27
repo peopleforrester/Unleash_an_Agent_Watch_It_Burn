@@ -766,6 +766,37 @@ check("the persona tells the wide-open bot to answer a harmless off-topic ask",
       "Never refuse or redirect a harmless question because it is not about burritos" in " ".join(persona.split())
       and "reverse a linked list" in " ".join(persona.split()))
 
+print("== the C7 rule is written as the web terminal, the identity block-argocd-drift exempts ==")
+# agentgateway-c7-config is Argo CD managed, so block-argocd-drift denies an update from anyone but the
+# web-terminal service account. The operator's EKS access entry is not in system:masters, so on
+# 2026-10-27 guard-mcp-on and guards-off were denied when the probe patched it as the operator.
+_calls: list[list[str]] = []
+
+
+class _Proc:
+    def __init__(self, out: str) -> None:
+        self.returncode, self.stdout, self.stderr = 0, out, ""
+
+
+def _fake_run(cmd, **_kw):
+    _calls.append(cmd)
+    if "get" in cmd and kp.C7_CONFIGMAP in cmd:
+        return _Proc(json.dumps({"metadata": {"resourceVersion": "7"},
+                                 "data": {"config.yaml": "x: 1  # c7-rule\n"}}))
+    return _Proc("")
+
+
+_orig_rule = kp.c7_config_with_rule
+kp.c7_config_with_rule = lambda text, rule: text
+try:
+    kp.KubeconCluster("h", "ctx", None, None, 5, runner=_fake_run).set_c7_rule(kp.C7_NARROWED)
+finally:
+    kp.c7_config_with_rule = _orig_rule
+_patches = [c for c in _calls if "patch" in c and kp.C7_CONFIGMAP in c]
+check("set_c7_rule patches the ConfigMap once", len(_patches) == 1, str(_calls))
+check("...as system:serviceaccount:agent:web-terminal",
+      bool(_patches) and "--as=system:serviceaccount:agent:web-terminal" in _patches[0], str(_patches))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

@@ -101,6 +101,7 @@ EVIL_FIXED = ["get_weather"]
 # C7 on an admin cluster is agentgateway's rule for evil-mcp, on its own bind (#496). The rule is one line of
 # agentgateway-c7-config, marked "# c7-rule"; the terminal's guard-mcp-on writes C7_NARROWED, guard-mcp-off C7_OPEN.
 C7_CONFIGMAP = "agentgateway-c7-config"
+TERMINAL_SA = "system:serviceaccount:agent:web-terminal"
 C7_OPEN = "true"
 C7_NARROWED = 'mcp.tool.name == "get_weather"'
 # The terminal's helpers, as /toggle queries (gitops/ai-layer/web-terminal/entrypoint.sh).
@@ -521,7 +522,10 @@ class KubeconCluster(Cluster):
             {"op": "test", "path": "/metadata/resourceVersion", "value": cm["metadata"]["resourceVersion"]},
             {"op": "replace", "path": "/data/config.yaml",
              "value": c7_config_with_rule(cm["data"]["config.yaml"], rule)}])
-        self._kubectl("-n", "agent", "patch", "configmap", C7_CONFIGMAP, "--type=json", "-p", patch)
+        # As the terminal: block-argocd-drift exempts only its service account from editing this Argo CD
+        # managed ConfigMap, so this also proves the identity the stage uses may make the change.
+        self._kubectl("-n", "agent", "patch", "configmap", C7_CONFIGMAP, "--type=json", "-p", patch,
+                      f"--as={TERMINAL_SA}")
         self.kubectl_rc("-n", "agent", "annotate", "pod", "-l", "app.kubernetes.io/name=agentgateway", "--overwrite",
                         f"wib.agenticburn.com/c7-rule-at={int(time.time())}")
 
