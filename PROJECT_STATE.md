@@ -34,6 +34,34 @@ us-west-2, ran the #503 probe: RED on both, about $0.05 of Bedrock. Its per-beat
 `facilitation/kubecon-na-2026-run-of-show.md`, "Probe record" (#509); its findings #528, #529 and #530 are
 fixed on staging. Its teardown to zero (`verify/account-audit.sh` CLEAN) is not recorded here yet.
 
+## KubeCon platform up (2026-10-27)
+
+`watch-it-burn-community` (attackme) and `watch-it-burn-michael-admin` are running in accen-dev, us-west-2,
+at about $24 a day, the two clusters Michael chose on #610 (question 846). On staging `5285204` the KubeCon
+probe is GREEN on both: community 6/6, admin 24/24, with four more admin repeats queued (#627, #628). The
+probe record is in the run-of-show. The 10-24 teardown was recorded on #454 (audit-zero); this bring-up is up.
+
+Fixed today:
+- the Bedrock profile description comma (#610)
+- the guard-proxy re-pin to 96f3203 (#487, #519, #486, #455)
+- the probe writing the C7 rule as the web terminal
+- the C6 image named in full (#627)
+- the probe judging C7 as the stage shows it (#628)
+- Falco 0.45.1 for kernel 6.18 (#626)
+- the event-tag test (#631)
+
+Merged on Michael's approval: customer-stream removal (#473), Loki and Alloy removal (#474), and the
+plan-time policy (#200).
+
+Next, in order:
+- [ ] Datadog sandbox (#629): repo side done (`57ad24d`). Michael accepts Whitney's invite and creates the
+  `burritobot` API and application keys; they go in `watch-it-burn/datadog` (accen-dev), then
+  `fleet.sh converge` and a live trace check. A draft reply asks Whitney to confirm per-cluster names.
+- [ ] One admin cluster or two (#632): Whitney's call, then the run-of-show and roster.
+- [ ] Rebuild the ballroom limits (#450) and the recorded fallback (#452); their branches were lost.
+- [ ] Deck PDF to Sessionize by 11-04 (#449), blocked on rounds-agenticburn#41.
+- [ ] Cold read and two timed run-throughs with Whitney (#611, #615); the first is the 10-28 rehearsal.
+
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
 - **Supply chain closed (#413, #414, #415, #331).** The guard image is multi-stage, CPU-only and built
