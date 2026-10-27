@@ -212,6 +212,11 @@ $0.0305 over 12 model calls, and guards-off left the start state clean.
 Outside the probe: Falco crash-loops on michael-admin because modern_ebpf fails the
 verifier on kernel 6.18 (#626). The probe's C3 judges KubeArmor, so it still passed.
 
+Later on 2026-10-27, after the fixes: the C6 image named in full (`37da27b`, #627), the C7
+judge reading the redacted calibration block (`5285204`, #628) and Falco 0.45.1 (`89fce6a`,
+#626). Admin then ran 24 PASS, 0 FAIL in five consecutive runs. Community ran 6 PASS three
+times, the last on guard-proxy `000f57e` with the per-conversation rate limit (#450).
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
