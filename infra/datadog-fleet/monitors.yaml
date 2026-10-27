@@ -6,7 +6,7 @@
 # org is the one place that can answer "is cluster 37 alive" for the whole room. The per-attendee orgs only
 # ever see one cluster each and get none of this.
 #
-# Every query is filtered to kube_cluster_name:watch-it-burn-* and grouped by kube_cluster_name, so each
+# Every query is filtered to kube_cluster_name:burritobot-* and grouped by kube_cluster_name, so each
 # cluster alerts on its own and a dead cluster is named in the alert rather than averaged into the room.
 # The bare "watch-it-burn" name (the DatadogAgent literal a cluster reports before its cluster-identity
 # ConfigMap exists) is deliberately outside the filter: it is not a cluster anybody can be sent to.
@@ -27,14 +27,14 @@
 #
 # session: true marks a monitor that only means something while students are at their keyboards. Outside
 # the declared session window the script mutes it with a downtime (see fleet_monitors.py, --session).
-cluster_filter: "kube_cluster_name:watch-it-burn-*"
+cluster_filter: "kube_cluster_name:burritobot-*"
 
 monitors:
   - key: cluster-silent
     priority: 1
     name: "[WIB fleet] Cluster stopped reporting"
     type: metric alert
-    query: "max(last_5m):max:datadog.agent.running{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name} < 1"
+    query: "max(last_5m):max:datadog.agent.running{kube_cluster_name:burritobot-*} by {kube_cluster_name} < 1"
     message: |
       {{#is_alert}}{{kube_cluster_name.name}}: the Datadog Agent heartbeat is at zero.{{/is_alert}}
       {{#is_no_data}}{{kube_cluster_name.name}} has sent nothing to the instructor org for 5 minutes. The node,
@@ -51,7 +51,7 @@ monitors:
     priority: 1
     name: "[WIB fleet] Console Deployment unavailable"
     type: metric alert
-    query: "max(last_5m):max:kubernetes_state.deployment.replicas_available{kube_cluster_name:watch-it-burn-*,kube_namespace:agent,kube_deployment:console} by {kube_cluster_name} < 1"
+    query: "max(last_5m):max:kubernetes_state.deployment.replicas_available{kube_cluster_name:burritobot-*,kube_namespace:agent,kube_deployment:console} by {kube_cluster_name} < 1"
     message: |
       {{kube_cluster_name.name}}: the console Deployment (namespace agent) has had no available replica for 5 minutes.
       The student's link serves a 502: no lab page, no BurritoBot, no terminal.
@@ -66,7 +66,7 @@ monitors:
     name: "[WIB fleet] BurritoBot agent pod not ready"
     type: metric alert
     # kagent runs the Agent workshop-agent (gitops/ai-layer/resources.yaml) as a Deployment of the same name.
-    query: "max(last_5m):max:kubernetes_state.deployment.replicas_available{kube_cluster_name:watch-it-burn-*,kube_namespace:agent,kube_deployment:workshop-agent} by {kube_cluster_name} < 1"
+    query: "max(last_5m):max:kubernetes_state.deployment.replicas_available{kube_cluster_name:burritobot-*,kube_namespace:agent,kube_deployment:workshop-agent} by {kube_cluster_name} < 1"
     message: |
       {{kube_cluster_name.name}}: the BurritoBot agent (kagent Agent workshop-agent, namespace agent) has had no ready pod for 5 minutes.
       The console loads but every chat fails.
@@ -80,7 +80,7 @@ monitors:
     priority: 2
     name: "[WIB fleet] guard-proxy erroring"
     type: log alert
-    query: 'logs("kube_cluster_name:watch-it-burn-* kube_namespace:agent kube_deployment:guard-proxy status:error").index("*").rollup("count").by("kube_cluster_name").last("5m") > 2'
+    query: 'logs("kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy status:error").index("*").rollup("count").by("kube_cluster_name").last("5m") > 2'
     message: |
       {{kube_cluster_name.name}}: guard-proxy logged {{value}} errors in 5 minutes. A forward_error means the agent behind it
       did not answer, so the student sees "BurritoBot's kitchen isn't answering".
@@ -93,7 +93,7 @@ monitors:
     priority: 2
     name: "[WIB fleet] Node NotReady"
     type: metric alert
-    query: "max(last_5m):max:kubernetes_state.node.by_condition{kube_cluster_name:watch-it-burn-*,condition:ready,!status:true} by {kube_cluster_name} > 0"
+    query: "max(last_5m):max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready,!status:true} by {kube_cluster_name} > 0"
     message: |
       {{kube_cluster_name.name}}: a node has reported Ready=false or Ready=unknown for 5 minutes. Pods on it stop being scheduled
       and its DaemonSets (the Datadog Agent among them) stop reporting.
@@ -108,7 +108,7 @@ monitors:
     session: true
     name: "[WIB fleet] No traces from a cluster for 10 minutes"
     type: metric alert
-    query: "sum(last_10m):sum:traces.span.metrics.calls{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}.as_count() < 1"
+    query: "sum(last_10m):sum:traces.span.metrics.calls{kube_cluster_name:burritobot-*} by {kube_cluster_name}.as_count() < 1"
     message: |
       {{kube_cluster_name.name}}: not one span has reached the collector in 10 minutes of the session.
       Either nobody is using this cluster (walk over and look) or the trace path is broken: BurritoBot uninstrumented

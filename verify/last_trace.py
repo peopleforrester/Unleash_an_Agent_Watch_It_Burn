@@ -26,7 +26,7 @@ import urllib.parse
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1] / "infra" / "datadog-fleet"))
 from fleet_monitors import GROUP_BY, Datadog, read_keys  # noqa: E402
 
-QUERY = ("sum:traces.span.metrics.calls{kube_cluster_name:watch-it-burn-*} "
+QUERY = ("sum:traces.span.metrics.calls{kube_cluster_name:burritobot-*} "
          "by {kube_cluster_name}.as_count()")
 
 

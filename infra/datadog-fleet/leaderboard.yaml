@@ -64,14 +64,14 @@ widgets:
             # Every reporting cluster gets a row, including one that has not scored yet.
             - data_source: metrics
               name: online
-              query: "max:datadog.agent.running{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              query: "max:datadog.agent.running{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
             - data_source: logs
               name: c1
               indexes: ["*"]
               compute: { aggregation: count }
               search:
-                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent kube_deployment:workshop-mcp @event:tool_invocation @phase:pre @tool_name:run_shell @tool_input.command:*beacon*"
+                query: "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:workshop-mcp @event:tool_invocation @phase:pre @tool_name:run_shell @tool_input.command:*beacon*"
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
             - data_source: logs
@@ -79,7 +79,7 @@ widgets:
               indexes: ["*"]
               compute: { aggregation: count }
               search:
-                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent short_image:(promo-mascot OR festival-promo OR loyalty-rewards OR joker OR gargamel OR skeletor OR mumm-ra OR shredder OR cobra-commander OR megatron)"
+                query: "kube_cluster_name:burritobot-* kube_namespace:agent short_image:(promo-mascot OR festival-promo OR loyalty-rewards OR joker OR gargamel OR skeletor OR mumm-ra OR shredder OR cobra-commander OR megatron)"
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
             - data_source: logs
@@ -87,19 +87,19 @@ widgets:
               indexes: ["*"]
               compute: { aggregation: count }
               search:
-                query: "kube_cluster_name:watch-it-burn-* kube_namespace:security @rule:\"Recipe Snoop In Agent Namespace\""
+                query: "kube_cluster_name:burritobot-* kube_namespace:security @rule:\"Recipe Snoop In Agent Namespace\""
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
             - data_source: metrics
               name: c4
-              query: "max:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
             - data_source: logs
               name: c5
               indexes: ["*"]
               compute: { aggregation: count }
               search:
-                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent kube_deployment:guard-proxy @event:output_scrub"
+                query: "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy @event:output_scrub"
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
             - data_source: logs
@@ -107,7 +107,7 @@ widgets:
               indexes: ["*"]
               compute: { aggregation: count }
               search:
-                query: "kube_cluster_name:watch-it-burn-* kube_namespace:agent kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)"
+                query: "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)"
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
           # A done cell is solid green with the count hidden: the room reads ticks, not log volume.
@@ -154,7 +154,7 @@ widgets:
           queries:
             - data_source: metrics
               name: bill
-              query: "max:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
           formulas:
             - formula: bill

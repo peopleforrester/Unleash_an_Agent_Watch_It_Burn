@@ -13,7 +13,7 @@ metadata:
   namespace: datadog
 spec:
   global:
-    clusterName: watch-it-burn
+    clusterName: burritobot
     credentials:
       apiSecret:
         secretName: datadog-secret
@@ -70,7 +70,9 @@ spec:
       # optional: an instructor cluster has no admin secret and simply ships once.
       env:
         - name: DD_CLUSTER_NAME
-          valueFrom: { configMapKeyRef: { name: cluster-identity, key: cluster-name, optional: true } }
+          valueFrom: { configMapKeyRef: { name: cluster-identity, key: datadog-cluster-name, optional: true } }
+        - name: DD_ENV
+          value: burritobot-kubecon-na-26
         - name: DD_ADDITIONAL_ENDPOINTS
           valueFrom: { secretKeyRef: { name: datadog-admin-secret, key: additional-endpoints, optional: true } }
         - name: DD_PROCESS_CONFIG_ADDITIONAL_ENDPOINTS
@@ -112,7 +114,9 @@ spec:
       replicas: 1
       env:
         - name: DD_CLUSTER_NAME
-          valueFrom: { configMapKeyRef: { name: cluster-identity, key: cluster-name, optional: true } }
+          valueFrom: { configMapKeyRef: { name: cluster-identity, key: datadog-cluster-name, optional: true } }
+        - name: DD_ENV
+          value: burritobot-kubecon-na-26
         - name: DD_ORCHESTRATOR_EXPLORER_ORCHESTRATOR_ADDITIONAL_ENDPOINTS
           valueFrom: { secretKeyRef: { name: datadog-admin-secret, key: orchestrator-additional-endpoints, optional: true } }
       containers:

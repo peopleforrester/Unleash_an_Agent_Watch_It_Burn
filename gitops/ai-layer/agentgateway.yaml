@@ -68,7 +68,7 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: burritobot-gateway
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=production" # one name family (#265)
+              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
             # The model the bedrock-nova backend calls; agentgateway-config reads it as ${BEDROCK_NOVA_MODEL}
             # (#561). The value below is the system profile id, the pin. A system profile cannot be tagged, so
             # fleet.sh pin_bedrock_profiles sets the live value to this cluster's tagged application profile
@@ -112,7 +112,7 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: burritobot-gateway
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=production" # one name family (#265)
+              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
           ports:
             - { name: mcp-c7, containerPort: 3003 }   # MCP front -> evil-mcp-shim (C7)
             - { name: ready-c7, containerPort: 15022 }

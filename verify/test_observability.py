@@ -136,9 +136,12 @@ def _container_env(path, name):
     return {e["name"]: e.get("value", "") for e in c.get("env", [])}
 
 
-# Locked UST vocabulary (PRD #13): deployment.environment.name=production (the SDLC env, NOT the project
-# name), and service.version is the component's real software version (NOT a model-tier label). The model
+# Datadog env for the KubeCon delivery (#629): Whitney's sandbox org holds other projects, and this env tag is
+# what keeps BurritoBot's data separate there. It replaced PRD #13's production. service.version is the component's real software version (NOT a model-tier label). The model
 # dimension for the cost race comes from gen_ai.request.model (M2), not service.version.
+DD_ENV = "burritobot-kubecon-na-26"
+
+
 def _kagent_env():
     docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
     agent = next(d for d in docs if d.get("kind") == "Agent")
@@ -163,15 +166,16 @@ check(f"kagent spans carry service.version={_kagent_ver}, the chart gitops/boots
       f"(found {_kagent_attrs.get('service.version')})", _kagent_attrs.get("service.version") == _kagent_ver)
 _ust_targets.append(("kagent", _kagent_env().get("OTEL_RESOURCE_ATTRIBUTES", ""), "service.name=burritobot-agent", f"service.version={_kagent_ver}"))
 for _name, _ust, _svc, _ver in _ust_targets:
-    check(f"{_name} carries locked UST (service.name + real service.version + env=production)",
-          _svc in _ust and _ver in _ust and "deployment.environment.name=production" in _ust
+    check(f"{_name} carries UST (service.name + real service.version + env={DD_ENV})",
+          _svc in _ust and _ver in _ust and f"deployment.environment.name={DD_ENV}" in _ust
           and "CLUSTER_TIER" not in _ust and "deployment.environment.name=watch-it-burn" not in _ust)
 
 
 # Platform-component Unified Service Tagging (PRD #28): the five platform controls carry the Datadog
 # UST pod annotations (tags.datadoghq.com/{service,env,version}) so they appear on the Service Catalog /
 # Service Map as first-class components. Unlike the AI layer (OTEL_RESOURCE_ATTRIBUTES env), these are
-# Helm-values podAnnotations on the Datadog-Agent-scraped pods. env is locked to production; version is
+# Helm-values podAnnotations on the Datadog-Agent-scraped pods. env is DD_ENV, and each service starts with
+# burritobot- so it cannot collide with another project's in the shared org (#629); version is
 # the real deployed software version (NOT a chart version where they differ, e.g. falco app 0.44.1).
 def _pod_annotations(path, *navkeys, doc_name=None):
     """Return the podAnnotations dict at valuesObject + navkeys for a manifest.
@@ -194,17 +198,17 @@ def _pod_annotations(path, *navkeys, doc_name=None):
 
 # (component, service, version, podAnnotations) — istio has two pods (control plane + data plane).
 _PLATFORM_UST = [
-    ("cert-manager", "cert-manager", "v1.20.2", _pod_annotations("gitops/bootstrap/apps/cert-manager.yaml")),
-    ("falco", "falco", "0.44.1", _pod_annotations("gitops/bootstrap/apps/falco.yaml")),
-    ("kyverno", "kyverno", "v1.19.1", _pod_annotations("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
-    ("argocd", "argocd", "v3.4.4", _pod_annotations("infra/argocd-values.yaml", "server")),
-    ("istio-ztunnel", "istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
-    ("istiod", "istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
+    ("cert-manager", "burritobot-cert-manager", "v1.20.2", _pod_annotations("gitops/bootstrap/apps/cert-manager.yaml")),
+    ("falco", "burritobot-falco", "0.44.1", _pod_annotations("gitops/bootstrap/apps/falco.yaml")),
+    ("kyverno", "burritobot-kyverno", "v1.19.1", _pod_annotations("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
+    ("argocd", "burritobot-argocd", "v3.4.4", _pod_annotations("infra/argocd-values.yaml", "server")),
+    ("istio-ztunnel", "burritobot-istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
+    ("istiod", "burritobot-istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
 ]
 for _name, _svc, _ver, _ann in _PLATFORM_UST:
-    check(f"{_name} carries platform UST (tags.datadoghq.com service={_svc} env=production version={_ver})",
+    check(f"{_name} carries platform UST (tags.datadoghq.com service={_svc} env={DD_ENV} version={_ver})",
           _ann.get("tags.datadoghq.com/service") == _svc
-          and _ann.get("tags.datadoghq.com/env") == "production"
+          and _ann.get("tags.datadoghq.com/env") == DD_ENV
           and str(_ann.get("tags.datadoghq.com/version")) == _ver)
 
 # Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.

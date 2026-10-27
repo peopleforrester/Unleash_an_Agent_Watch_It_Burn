@@ -45,7 +45,7 @@ print("== the definitions are well-formed ==")
 check("monitors.yaml validates clean", fm.validate_monitors(defs) == [])
 check("dashboard.yaml validates clean", fm.validate_dashboard(dash, FILTER) == [])
 check("the cluster filter is the fleet's own name prefix",
-      FILTER == "kube_cluster_name:watch-it-burn-*")
+      FILTER == "kube_cluster_name:burritobot-*")
 fleet_src = (REPO / "infra/terraform/fleet/fleet.sh").read_text()
 check("fleet.sh names every cluster watch-it-burn-<something>",
       re.search(r'NAME_PREFIX="?\$\{NAME_PREFIX:-watch-it-burn-|NAME_PREFIX="watch-it-burn-', fleet_src) is not None)
@@ -137,7 +137,7 @@ def broken(**over):
     d["monitors"][1].update(over)
     return fm.validate_monitors(d)
 check("an unfiltered query", any("not filtered" in p for p in broken(query="max(last_5m):max:x{*} by {kube_cluster_name} < 1")))
-check("an ungrouped query", any("not grouped" in p for p in broken(query="max(last_5m):max:x{kube_cluster_name:watch-it-burn-*} < 1")))
+check("an ungrouped query", any("not grouped" in p for p in broken(query="max(last_5m):max:x{kube_cluster_name:burritobot-*} < 1")))
 check("a threshold that disagrees with the query", any("!=" in p for p in broken(options={"thresholds": {"critical": 3}})))
 check("a message that does not name the cluster", any("name the cluster" in p for p in broken(message="down")))
 check("a duplicate key", any("duplicate" in p for p in broken(key="cluster-silent")))

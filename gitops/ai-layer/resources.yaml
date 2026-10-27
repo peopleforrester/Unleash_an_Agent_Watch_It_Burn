@@ -346,7 +346,7 @@ spec:
         - name: OTEL_SERVICE_NAME
           value: burritobot-agent
         - name: OTEL_RESOURCE_ATTRIBUTES
-          value: "service.name=burritobot-agent,service.version=v0.10.1,deployment.environment.name=production"
+          value: "service.name=burritobot-agent,service.version=v0.10.1,deployment.environment.name=burritobot-kubecon-na-26"
         # Capture gen_ai message content on ADK spans (the agent waterfall input/output). SPAN_AND_EVENT,
         # NOT "true" (invalid under gen_ai_latest_experimental, silently collects nothing). SPAN_AND_EVENT
         # (not bare EVENT_ONLY) so the content lands as gen_ai.input.messages / gen_ai.output.messages SPAN
@@ -732,7 +732,7 @@ spec:
             # injects it from the DEPLOYMENT name at admission. Without this pin the rename was applied,
             # synced and running, and the spans still said guard-proxy (measured 2026-09-06, #265).
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=burritobot,service.version=1.0.0,deployment.environment.name=production" # ROOT span: names the Agent Observability application (#265)
+              value: "service.name=burritobot,service.version=1.0.0,deployment.environment.name=burritobot-kubecon-na-26" # ROOT span: names the Agent Observability application (#265)
             # EVENT_ONLY captures gen_ai message content as OTel span events (GenAI semconv v1.37+).
             # "true" is a silent no-op under gen_ai_latest_experimental; must be EVENT_ONLY.
             - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
@@ -800,7 +800,7 @@ spec:
             # injects it from the DEPLOYMENT name at admission. Without this pin the rename was applied,
             # synced and running, and the spans still said guard-proxy (measured 2026-09-06, #265).
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=burritobot-evil-mcp,service.version=1.0.0,deployment.environment.name=production"
+              value: "service.name=burritobot-evil-mcp,service.version=1.0.0,deployment.environment.name=burritobot-kubecon-na-26"
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
         - name: src

@@ -22,8 +22,8 @@ spec:
         podAnnotations:
           # Datadog Unified Service Tagging (PRD #28): puts Falco on the service catalog / map as a
           # first-class platform component. env locked to production; version = deployed Falco appVersion.
-          tags.datadoghq.com/service: falco
-          tags.datadoghq.com/env: production
+          tags.datadoghq.com/service: burritobot-falco
+          tags.datadoghq.com/env: burritobot-kubecon-na-26
           tags.datadoghq.com/version: "0.44.1"
           ad.datadoghq.com/falco.checks: |
             {"falco":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8765/metrics"}]}}

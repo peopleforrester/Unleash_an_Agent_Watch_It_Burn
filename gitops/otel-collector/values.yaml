@@ -506,7 +506,7 @@ extraEnvs:
     valueFrom:
       configMapKeyRef:
         name: cluster-identity
-        key: cluster-name
+        key: datadog-cluster-name  # burritobot-<role>, the name the Agents report (#629)
         optional: true   # absent on a cluster bootstrapped before #242; rebuilt clusters always have it
 service:
   enabled: true

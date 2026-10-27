@@ -71,8 +71,8 @@ spec:
           # Datadog Unified Service Tagging (PRD #28): puts the Istio control plane (istiod) on the
           # service catalog / map under the same `istio` service. env locked to production.
           podAnnotations:
-            tags.datadoghq.com/service: istio
-            tags.datadoghq.com/env: production
+            tags.datadoghq.com/service: burritobot-istio
+            tags.datadoghq.com/env: burritobot-kubecon-na-26
             tags.datadoghq.com/version: "1.30.1"
           resources:
             requests: { cpu: 100m, memory: 256Mi }
@@ -107,8 +107,8 @@ spec:
         podAnnotations:
           # Datadog Unified Service Tagging (PRD #28): puts the Istio ambient data plane (ztunnel) on the
           # service catalog / map. env locked to production; version = deployed Istio appVersion.
-          tags.datadoghq.com/service: istio
-          tags.datadoghq.com/env: production
+          tags.datadoghq.com/service: burritobot-istio
+          tags.datadoghq.com/env: burritobot-kubecon-na-26
           tags.datadoghq.com/version: "1.30.1"
           ad.datadoghq.com/istio-proxy.checks: |
             {"istio":{"instances":[{"istio_mesh_endpoint":"http://%%host%%:15020/stats/prometheus","istio_mode":"ambient","ztunnel_endpoint":"http://%%host%%:15020/stats/prometheus"}]}}

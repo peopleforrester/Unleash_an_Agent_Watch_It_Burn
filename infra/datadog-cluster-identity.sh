@@ -20,6 +20,10 @@ log() { printf '    %s\n' "$*" >&2; }
 
 CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cluster/##')}"
 [[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "cannot derive cluster name (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
+# What Datadog calls the cluster (#629): Whitney's sandbox org filters BurritoBot by a burritobot prefix,
+# and a Datadog cluster name should be unique, so each cluster is burritobot-<role>. cluster-name keeps the
+# EKS name, which the probes and fleet.sh compare against the cluster itself.
+DATADOG_CLUSTER_NAME="burritobot-${CLUSTER_NAME#watch-it-burn-}"
 SITE="${DD_SITE:-datadoghq.com}"
 ADMIN_API="${WITB_DD_ADMIN_API_KEY:-}"
 # The admin APP key is deliberately NOT put on a cluster. It is a READ credential for the instructor org,
@@ -38,6 +42,7 @@ PUBLIC_HOST="${WITB_PUBLIC_HOST:-}"
 for ns in ${NAMESPACES}; do
     kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
     kubectl -n "${ns}" create configmap cluster-identity --from-literal=cluster-name="${CLUSTER_NAME}" \
+        --from-literal=datadog-cluster-name="${DATADOG_CLUSTER_NAME}" \
         --from-literal=public-host="${PUBLIC_HOST}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
 done
 log "cluster-identity=${CLUSTER_NAME} public-host=${PUBLIC_HOST:-<unset>} in ${NAMESPACES// /\/}"

@@ -73,8 +73,8 @@ spec:
           podAnnotations:
             # Datadog Unified Service Tagging (PRD #28): puts the Kyverno admission controller on the
             # service catalog / map. env locked to production; version = deployed Kyverno appVersion.
-            tags.datadoghq.com/service: kyverno
-            tags.datadoghq.com/env: production
+            tags.datadoghq.com/service: burritobot-kyverno
+            tags.datadoghq.com/env: burritobot-kubecon-na-26
             tags.datadoghq.com/version: "v1.19.1"
             ad.datadoghq.com/kyverno.checks: |
               {"kyverno":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8000/metrics"}]}}

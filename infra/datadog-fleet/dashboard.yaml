@@ -36,7 +36,7 @@ widgets:
           queries:
             - data_source: metrics
               name: agents
-              query: "count_not_null(max:datadog.agent.running{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name})"
+              query: "count_not_null(max:datadog.agent.running{kube_cluster_name:burritobot-*} by {kube_cluster_name})"
               aggregator: last
           formulas:
             - formula: agents
@@ -53,7 +53,7 @@ widgets:
           queries:
             - data_source: metrics
               name: spend
-              query: "sum:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*}"
+              query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-*}"
               aggregator: last
           formulas:
             - formula: spend
@@ -79,23 +79,23 @@ widgets:
           queries:
             - data_source: metrics
               name: agent
-              query: "max:datadog.agent.running{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              query: "max:datadog.agent.running{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
             - data_source: metrics
               name: console
-              query: "max:kubernetes_state.deployment.replicas_available{kube_cluster_name:watch-it-burn-*,kube_namespace:agent,kube_deployment:console} by {kube_cluster_name}"
+              query: "max:kubernetes_state.deployment.replicas_available{kube_cluster_name:burritobot-*,kube_namespace:agent,kube_deployment:console} by {kube_cluster_name}"
               aggregator: last
             - data_source: metrics
               name: burritobot
-              query: "max:kubernetes_state.deployment.replicas_available{kube_cluster_name:watch-it-burn-*,kube_namespace:agent,kube_deployment:workshop-agent} by {kube_cluster_name}"
+              query: "max:kubernetes_state.deployment.replicas_available{kube_cluster_name:burritobot-*,kube_namespace:agent,kube_deployment:workshop-agent} by {kube_cluster_name}"
               aggregator: last
             - data_source: metrics
               name: traces
-              query: "sum:traces.span.metrics.calls{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}.as_count()"
+              query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-*} by {kube_cluster_name}.as_count()"
               aggregator: sum
             - data_source: metrics
               name: cost
-              query: "max:gen_ai.client.cost{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}"
+              query: "max:gen_ai.client.cost{kube_cluster_name:burritobot-*} by {kube_cluster_name}"
               aggregator: last
           formulas:
             - formula: agent
@@ -135,6 +135,6 @@ widgets:
           queries:
             - data_source: metrics
               name: spans
-              query: "sum:traces.span.metrics.calls{kube_cluster_name:watch-it-burn-*} by {kube_cluster_name}.as_count()"
+              query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-*} by {kube_cluster_name}.as_count()"
           formulas:
             - formula: spans
