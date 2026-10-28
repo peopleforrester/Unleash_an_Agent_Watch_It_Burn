@@ -51,7 +51,7 @@ case "$*" in
     cat "${T}/live/gw-${var}" 2>/dev/null ;;
   *" set env deployment/agentgateway -c agentgateway "*)
     [[ -f "${T}/patch_fails" ]] && exit 1
-    kv="${args[$(( ${#args[@]} - 1 ))]}"
+    kv=""; for a in "${args[@]}"; do [[ "${a}" == [A-Z_]*=* ]] && kv="${a}"; done
     printf '%s\n' "${kv#*=}" >"${T}/live/gw-${kv%%=*}" ;;
 esac
 exit 0
@@ -95,6 +95,11 @@ check "agentgateway's BEDROCK_NOVA_MODEL now names the cluster's nova profile" \
   '[[ "$(cat "${T}/live/gw-BEDROCK_NOVA_MODEL")" == "$(arn nova0001)" ]]'
 check "it is set on the agentgateway container, not the C7 one" \
   'grep -q "set env deployment/agentgateway -c agentgateway BEDROCK_NOVA_MODEL=$(arn nova0001)" "${CALLS}"'
+# The Deployment is Argo-managed, and on an armed admin cluster block-argocd-drift denies an UPDATE from the
+# operator: the 2026-10-28 bring-up of watch-it-burn-private left the gateway on the system id (#630). The
+# policy always admits the Argo controller, so the pin impersonates it, as the probe does for the C7 rule.
+check "the gateway patch runs as the Argo controller, which block-argocd-drift admits" \
+  'grep -q "set env deployment/agentgateway .*--as=system:serviceaccount:argocd:argocd-application-controller" "${CALLS}"'
 check "the map is read from this cluster's own state" \
   'grep -q "output -state=${T}/states/watch-it-burn-attendee-001.tfstate -json bedrock_application_profiles" "${CALLS}"'
 check "nothing is recorded as failed" '[[ ! -s "${T}/ledger" ]]'

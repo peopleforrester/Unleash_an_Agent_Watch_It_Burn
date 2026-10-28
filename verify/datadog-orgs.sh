@@ -12,7 +12,8 @@
 #   verify/datadog-orgs.sh <kube-context> [aws-profile]           # one cluster
 #   verify/datadog-orgs.sh --pool [aws-profile]                   # the pool secret only
 #
-# Env: WIB_DD_POOL_PREFIX (default devops-days-portland-090826) is the org-name prefix every cluster must be on.
+# Env: WIB_DD_POOL_PREFIX (default Datadog, Whitney's shared sandbox org for KubeCon NA 2026, #629) is the
+#      org-name prefix every cluster must be on. A per-event pool sets it to that pool's prefix.
 #      WIB_DD_MIN_DAYS (default 3) is the minimum days of pool validity left before this fails.
 #      WITB_DD_ADMIN_APP_KEY is the instructor org APP key, read from THIS environment. It used to be read
 #      off the cluster out of datadog-admin-secret, which meant a read credential for the org holding every
@@ -31,7 +32,7 @@ source "${_HERE_DDO}/../infra/terraform/fleet/fleet.sh" >/dev/null 2>&1 || true
 # Without the rule every cluster would read as "single org by design", which is the false pass above.
 declare -F is_attendee_name >/dev/null || { echo "FATAL: could not load is_attendee_name from fleet.sh" >&2; exit 2; }
 
-PREFIX="${WIB_DD_POOL_PREFIX:-devops-days-portland-090826}"
+PREFIX="${WIB_DD_POOL_PREFIX:-Datadog}"
 ADMIN_APP_KEY="${WITB_DD_ADMIN_APP_KEY:-}"
 MIN_DAYS="${WIB_DD_MIN_DAYS:-3}"
 REGION="${WIB_REGION:-us-west-2}"
@@ -67,8 +68,10 @@ check_cluster() {
     local api app org
     read -r api app < <(AWS_PROFILE="$profile" kubectl --context "$ctx" -n datadog get secret datadog-secret -o json \
         | python3 -c 'import sys,json,base64;d=json.load(sys.stdin)["data"];print(base64.b64decode(d["api-key"]).decode(),base64.b64decode(d["app-key"]).decode())')
-    org="$(curl -s --max-time 20 -H "DD-API-KEY: $api" -H "DD-APPLICATION-KEY: $app" https://api.datadoghq.com/api/v1/org \
-        | python3 -c 'import sys,json;print(json.load(sys.stdin)["orgs"][0]["name"])' 2>/dev/null || echo "?")"
+    # /api/v2/current_user, not /api/v1/org: the org endpoint needs org_management_read, which a read-only
+    # application key does not carry (the KubeCon sandbox key answers it 403, #629). current_user includes the org.
+    org="$(curl -s --max-time 20 -H "DD-API-KEY: $api" -H "DD-APPLICATION-KEY: $app" https://api.datadoghq.com/api/v2/current_user \
+        | python3 -c 'import sys,json;d=json.load(sys.stdin);print(next(i for i in d["included"] if i["type"]=="orgs")["attributes"]["name"])' 2>/dev/null || echo "?")"
     local rc=0
     if [[ "$org" == "$PREFIX"* ]]; then
         echo "  OK    $ctx -> $org"
