@@ -3220,3 +3220,18 @@ certificate (#139), which apex's router never checked, is refused.
   `verify/test_bootstrap_chart_render.py` (renders burn with and without the ARN and a bad one, Helm v4.2.1) and
   `verify/test_front_door_cert.sh` (the helper against an aws shim). No cluster, certificate or DNS record was
   created; the definition of done's `labctl event up` and `labctl tls-check attackme.agenticburn.com` wait on both.
+
+## 2026-10-28T23:17:57Z · question 868 · guard-proxy's root service stays burritobot; the LLM Observability app is burritobot and the burritobot- prefix has one exception
+
+**Answer:** Keep burritobot.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**The question.** Issue 629 records two of Whitney's sandbox-org rules: the LLM Observability application (`ml_app`) is `burritobot`, and every service name starts with `burritobot-`. The root span of a BurritoBot interaction belongs to guard-proxy, whose service is `burritobot`. Datadog's OpenTelemetry LLM Observability page (docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation, read 2026-10-28) sets `ml_app` from the root span's `service.name`. `DD_LLMOBS_ML_APP` belongs to Datadog's own tracing library, which this repo does not use, and no attribute in the OpenTelemetry path overrides `ml_app`. Renaming the root service would therefore rename the application to `burritobot-guard-proxy`.
+
+**What it changes.**
+- guard-proxy's root service stays `burritobot`: `OTEL_SERVICE_NAME` and `OTEL_RESOURCE_ATTRIBUTES` in `gitops/ai-layer/resources.yaml` are unchanged, and so is the `tags.datadoghq.com/service: burritobot` label added in 440f946. `verify/test_service_naming.py` already pins the root to exactly `burritobot`.
+- `ml_app` is `burritobot`. The prefix rule has one exception, the root service. Every other BurritoBot service is `burritobot-*`.
+- Filters for BurritoBot's data in the shared org use `service:burritobot*`, not `service:burritobot-*`, so that the root span and guard-proxy's logs are included.
+- No `DD_LLMOBS_ML_APP` is added, and no `dd-ml-app` header: the collector exports through the Datadog Agent path, not straight to Datadog's OTLP intake, and a second export path risks duplicate spans in LLM Observability.
+- The exception is recorded here. Issue 629 closes once the log labels from 440f946 are seen on a live cluster under `burritobot-*` services.
