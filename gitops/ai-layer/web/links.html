@@ -154,7 +154,7 @@
   // can reach it. explore opens Grafana Explore on that data source uid (gitops/bootstrap/apps/prometheus.yaml).
   function svcUrl(e){
     var h = location.hostname;
-    if (!/agenticburn\.com$/.test(h)) return '';
+    if (!/\.(agenticburn\.com|burritobot\.co)$/.test(h)) return ''; // both domains serve it (#651)
     var u = 'https://' + e.svc + '-' + h + '/';
     if (e.explore) u += 'explore?schemaVersion=1&orgId=1&panes=' + encodeURIComponent(JSON.stringify(
       {a:{datasource:e.explore, queries:[{refId:'A', datasource:{type:e.explore, uid:e.explore}}], range:{from:'now-1h', to:'now'}}}));

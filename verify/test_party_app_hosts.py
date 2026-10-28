@@ -69,10 +69,12 @@ for app in PARTY:
              for d in yaml.safe_load_all(p.read_text(encoding="utf-8")) if d]
     check(f"demo-app-{app} still ships its Service", "Service" in kinds, f"kinds={kinds}")
     check(f"demo-app-{app} ships no Ingress", "Ingress" not in kinds, f"kinds={kinds}")
-    row = re.search(rf'"~\^{re.escape(app)}-\[a-z0-9-\]\+\\\.agenticburn\\\.com\$"\s+(\S+);', CONF)
-    check(f"console.conf maps {app}-<cluster>.agenticburn.com to demo-app-{app}",
-          bool(row) and row.group(1) == f"http://demo-app-{app}.apps.svc.cluster.local:80",
-          f"row={row.group(1) if row else None!r}")
+    # Run the real map rules against a hostname on each served domain (#651), rather than pinning their text.
+    rules = re.findall(r'"~(\^[^"]+\$)"\s+(\S+);', CONF)
+    for dom in ("agenticburn.com", "burritobot.co"):
+        hit = [up for rx, up in rules if re.fullmatch(rx, f"{app}-attackme.{dom}")]
+        check(f"console.conf maps {app}-<cluster>.{dom} to demo-app-{app}",
+              hit == [f"http://demo-app-{app}.apps.svc.cluster.local:80"], f"hit={hit!r}")
 m = re.search(r"^\s*server_name\s+~\^\(([^)]+)\)-", CONF, re.M)
 names = m.group(1).split("|") if m else []
 check("the console's service server block answers every party host", all(a in names for a in PARTY), f"{names}")

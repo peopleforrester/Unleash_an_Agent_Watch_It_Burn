@@ -25,5 +25,8 @@ window.WIB_EVENT = {
   feedbackUrl: "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553",
   // Hide the storefront's Terminal button on publicUrl's host (#645). The room attacks from phones and
   // the presenters keep their terminal on the private bot. Set false for the 2-hour workshop.
-  hideTerminalOnPublic: true
+  hideTerminalOnPublic: true,
+  // Every name the public bot answers on (#651: agenticburn.com and burritobot.co are both served). The
+  // Terminal button hides on each of them; publicUrl's host is always included.
+  publicHosts: ["attackme.agenticburn.com", "attackme.burritobot.co"]
 };

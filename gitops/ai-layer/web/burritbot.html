@@ -10,7 +10,7 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>%F0%9F%8C%AF</text></svg>">
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>BurritoBot — agenticburn</title>
+<title>BurritoBot</title>
 <style>
   :root{
     --dd:#632CA6;--acn:#A100FF;--accent:#8A00D6;--cream:#FDF6EE;--lav:#ECE3FB;--ink:#2b2230;--mid:#4A4A4A;--line:#e4d8f5;
@@ -294,7 +294,7 @@
     <path d="M26.6 4.6 l0.85 2.2 l2.2 0.85 l-2.2 0.85 l-0.85 2.2 l-0.85 -2.2 l-2.2 -0.85 l2.2 -0.85 z" fill="#FFD86B"/>
   </symbol></svg>
   <header>
-    <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· agenticburn</small></div>
+    <div class="brand"><svg class="logo"><use href="#cauldron"/></svg> BurritoBot <small style="font-weight:600;opacity:.8;font-size:12px">· burritobot.co</small></div>
     <div class="spacer"></div>
     <!-- THE SAME FOUR BUTTONS AS THE VTT, same order (Michael, 2026-08-30). This page had no navigation
          at all, so an attendee who opened BurritoBot had no way back to their terminal except browser
@@ -724,9 +724,11 @@
     // A talk's room uses the public bot from phones and has no use for a shell (#645, Whitney 2026-10-28:
     // "terminal invites chaos"). When the event says so, the Terminal button is hidden on the host the room
     // was handed, publicUrl's host; the presenters' private bot and every attendee cluster keep it.
-    var pubHost=''; try{ pubHost=ev.publicUrl ? new URL(ev.publicUrl).hostname : ''; }catch(e){}
+    // Both domains serve the public bot (#651), so every name in publicHosts counts, plus publicUrl's host.
+    var pubHosts=Array.isArray(ev.publicHosts) ? ev.publicHosts.slice() : [];
+    try{ if(ev.publicUrl) pubHosts.push(new URL(ev.publicUrl).hostname); }catch(e){}
     var vtb=document.getElementById('vttbtn');
-    if(vtb && ev.hideTerminalOnPublic===true && pubHost && location.hostname===pubHost) vtb.hidden=true;
+    if(vtb && ev.hideTerminalOnPublic===true && pubHosts.indexOf(location.hostname)>=0) vtb.hidden=true;
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that

@@ -99,10 +99,12 @@ got = feedback_href('window.WIB_EVENT = { feedbackUrl: "javascript:alert(1)" };'
 check("a javascript: URL leaves the workshop default in place", got.startswith(QUICK), got)
 
 print("== the room never sees a Terminal button on the public host (#645) ==")
-check("on attackme, with the committed event.js, the Terminal button is hidden",
-      run_init(EVENT_JS)["terminalHidden"] is True)
-check("on the presenters' private host it stays",
-      run_init(EVENT_JS, "burritobot-private.agenticburn.com")["terminalHidden"] is False)
+# Both domains serve the public bot (#651), so the hide holds under either name.
+for host in ("attackme.agenticburn.com", "attackme.burritobot.co"):
+    check(f"on {host}, with the committed event.js, the Terminal button is hidden",
+          run_init(EVENT_JS, host)["terminalHidden"] is True)
+for host in ("burritobot-private.agenticburn.com", "burritobot-private.burritobot.co"):
+    check(f"on the presenters' {host} it stays", run_init(EVENT_JS, host)["terminalHidden"] is False)
 check("on an attendee's own cluster it stays", run_init(EVENT_JS, "soot-ember.agenticburn.com")["terminalHidden"] is False)
 check("with no event set (the workshop) it stays, even on attackme", run_init("")["terminalHidden"] is False)
 

@@ -45,8 +45,11 @@ for p in sorted((REPO / "gitops").rglob("*.yaml")):
     if "grafana.agenticburn.com" in text and "grafana.agenticburn.com" in repr(list(yaml.safe_load_all(text))):
         claimed.append(str(p.relative_to(REPO)))
 check("nothing in gitops/ claims the fixed host grafana.agenticburn.com", not claimed, f"{claimed}")
-check("the console's nginx serves grafana-<cluster> instead",
-      '"~^grafana-[a-z0-9-]+\\.agenticburn\\.com$"' in CONF and "prometheus-grafana.monitoring" in CONF)
+_rules = re.findall(r'"~(\^[^"]+\$)"\s+(\S+);', CONF)
+for _dom in ("agenticburn.com", "burritobot.co"):  # both domains serve the platform (#651)
+    check(f"the console's nginx serves grafana-<cluster>.{_dom} instead",
+          [up for rx, up in _rules if re.fullmatch(rx, f"grafana-attackme.{_dom}")]
+          == ["http://prometheus-grafana.monitoring.svc.cluster.local:80"])
 
 print("== root_url is this cluster's grafana-<public-host> ==")
 server = (grafana.get("grafana.ini") or {}).get("server") or {}

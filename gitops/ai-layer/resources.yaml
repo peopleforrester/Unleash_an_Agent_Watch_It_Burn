@@ -1330,6 +1330,7 @@ spec:
   dnsNames:
     - console.agent.svc.cluster.local
     - "*.agenticburn.com"
+    - "*.burritobot.co"   # both domains serve the platform (#651)
   duration: 2160h    # 90d, comfortably past any workshop
   renewBefore: 360h
 ---
