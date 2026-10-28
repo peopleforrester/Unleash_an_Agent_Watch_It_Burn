@@ -1,5 +1,7 @@
 # ABOUTME: Shared Helm values for the OpenTelemetry Collector DaemonSet, used by BOTH otel-collector
 # ABOUTME: Applications (instructor and attendee). Attendee clusters layer values-dual.yaml on top (#242).
+# Docker Hub only in a render of these files alone. On a cluster each otel-collector app file's valuesObject
+# overrides it with lab-platform's mirror/ copy, through the root's imageRegistry (#623).
 image:
   repository: "otel/opentelemetry-collector-contrib"
 mode: daemonset

@@ -22,6 +22,14 @@ spec:
         valueFiles:
           - $values/gitops/otel-collector/values.yaml
           - $values/gitops/otel-collector/values-dual.yaml
+        # lab-platform's mirror/ copy of otel/opentelemetry-collector-contrib:0.160.0 (#623), named by its tag
+        # plus the first twelve characters of its linux/amd64 digest. It is here, not in the value files: a $values
+        # file reaches Helm as written, so only an app file can take the root's imageRegistry. Argo CD gives
+        # valuesObject precedence over valueFiles.
+        valuesObject:
+          image:
+            repository: "{{ .Values.imageRegistry }}/mirror/otel/opentelemetry-collector-contrib"
+            tag: "0.160.0-5b66b0dc6921"
     - repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
       targetRevision: "{{ .Values.revision }}"
       ref: values

@@ -41,6 +41,12 @@ spec:
             enabled: false
         # Grafana configuration
         grafana:
+          # lab-platform's mirror/ copy of docker.io/grafana/grafana:13.2.2-distroless (#623), named by its tag plus
+          # the first twelve characters of its linux/amd64 digest.
+          image:
+            registry: "{{ .Values.imageRegistry }}/mirror"
+            repository: grafana/grafana
+            tag: "13.2.2-distroless-ada1141b386c"
           # Admin credentials are sourced from a Secret synced by the
           # External Secrets Operator. The matching ExternalSecret lives at
           # security/eso/grafana-admin-external-secret.yaml and pulls from

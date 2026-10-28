@@ -54,6 +54,24 @@ spec:
         # with every process event.
         kubearmorConfig:
           enableStdOutAlerts: true
+        # lab-platform's mirror/ copies of the six docker.io/kubearmor images (#623), each named by its tag plus
+        # the first twelve characters of its linux/amd64 digest: the operator, and the five it runs from its
+        # compiled-in defaults (pkg/KubeArmorOperator/common/defaults.go at v1.7.4). imagePinning is how all six
+        # are set. The chart passes the five to the operator as RELATED_IMAGE_* env, which GetApplicationImage
+        # reads before anything the KubeArmorConfig says, and the snitch has no KubeArmorConfig field at all, so
+        # kubearmorConfig.kubearmorImage and its siblings would leave the snitch on Docker Hub. With imagePinning
+        # the operator's own image is <repo>/<kubearmorOperator.image>:<tag> too, and kubearmorOperator.image is
+        # not read.
+        imagePinning: true
+        kubearmor:
+          repo: "{{ .Values.imageRegistry }}/mirror/kubearmor"
+          images:
+            kubearmor: { image: kubearmor, tag: "stable-bf867783eb30" }
+            kubearmorInit: { image: kubearmor-init, tag: "stable-cdc3763f302d" }
+            kubearmorRelay: { image: kubearmor-relay-server, tag: "latest-e4fd875cc1e4" }
+            kubearmorController: { image: kubearmor-controller, tag: "latest-89f52a3e9fc0" }
+            kubearmorSnitch: { image: kubearmor-snitch, tag: "latest-ec11d33057b1" }
+            kubearmorOperator: { image: kubearmor-operator, tag: "v1.7.4-84626528c4d6" }
   destination:
     server: https://kubernetes.default.svc
     namespace: kubearmor

@@ -45,6 +45,23 @@ spec:
         otel:
           tracing: { enabled: true }
           logging: { enabled: true }
+        # lab-platform's mirror/ copies of the two Docker Hub images the chart pulls (#623): the bundled
+        # docker.io/library/postgres:18.6-alpine3.23 and the grafana-mcp subchart's mcp/grafana:latest, each named
+        # by its tag plus the first twelve characters of its linux/amd64 digest. The chart joins registry,
+        # repository and (postgres only) name with "/".
+        database:
+          postgres:
+            bundled:
+              image:
+                registry: "{{ .Values.imageRegistry }}/mirror"
+                repository: library
+                name: postgres
+                tag: "18.6-alpine3.23-dd504ba15d33"
+        grafana-mcp:
+          image:
+            registry: "{{ .Values.imageRegistry }}/mirror"
+            repository: mcp/grafana
+            tag: "latest-208f8ea16064"
   destination:
     server: https://kubernetes.default.svc
     namespace: kagent

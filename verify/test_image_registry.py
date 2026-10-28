@@ -1,24 +1,27 @@
-# ABOUTME: Static gate for #622: no file the lab-bootstrap root deploys names ghcr.io/peopleforrester/lab-platform
-# ABOUTME: literally; app files take that registry from the root's imageRegistry value, which defaults to it.
+# ABOUTME: Static gate for #622 and #623: nothing lab-bootstrap deploys names ghcr.io/peopleforrester/lab-platform
+# ABOUTME: literally, and every mirror/ copy a chart pulls is named through the root's imageRegistry, by its digest tag.
 #
-# Why. lab-platform's packages on ghcr.io are private. Each workshop cluster pulls them through its AWS account's
-# ECR pull-through cache, and lab-platform's bootstrap passes the cache path to lab-bootstrap as the Helm value
-# imageRegistry (lab-platform#214), e.g. <account>.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/
-# lab-platform. A containerd mirror for ghcr.io cannot carry ECR's credential, so the cache only works if the
-# reference itself names the cache path. A literal ghcr.io/peopleforrester/lab-platform image anywhere the root
-# deploys from is an image that cluster cannot pull. The one place the literal belongs is the chart's default in
-# gitops/bootstrap/values.yaml, which infra/deploy-full-idp.sh and an account with no cache get.
+# Why. lab-bootstrap takes the registry lab-platform's images come from as the Helm value imageRegistry, default
+# ghcr.io/peopleforrester/lab-platform. lab-platform#214 passed each cluster's ECR pull-through cache path there,
+# when those packages were private; lab-platform 5192c1a reverted that, the packages are public (the mirror/
+# copies were read back anonymously on 2026-10-28), and today nothing passes the value. It stays the one switch
+# that points every lab-platform image at a cache or another mirror at once, which only works if the reference
+# itself names the value. A literal ghcr.io/peopleforrester/lab-platform image anywhere the root deploys from is
+# an image that switch misses. The one place the literal belongs is the chart's default in
+# gitops/bootstrap/values.yaml, which infra/deploy-full-idp.sh gets.
 #
 # Only an apps/ file is rendered with the value (through tpl), so a lab-platform image belongs in an app file's
 # Helm values as "{{ .Values.imageRegistry }}/<path>:<tag>". A plain manifest a directory source applies cannot
-# take it. test_image_registry_render.py renders the chart with and without the value.
+# take it. test_image_registry_render.py renders the chart with and without the value, and the charts themselves.
 import pathlib
+import re
 import sys
 
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import APPS, CHART, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL  # noqa: E402
+from bootstrap_chart import (APPS, CHART, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, MIRROR_COPIES,  # noqa: E402
+                             MIRROR_COPIES_NOT_PULLED, REPO, REPO_URL, chart_helm, mirror_reference)
 
 failures = []
 
@@ -90,6 +93,31 @@ for root in sorted(roots):
         if any(IMAGE_REGISTRY in uncommented(ln) for ln in text.splitlines()):
             outside.append(str(p.relative_to(REPO)))
 check(f"{IMAGE_REGISTRY} appears only in apps/ files, the ones the chart renders {outside}", not outside)
+
+print("== every mirror/ copy a chart pulls is named through the value, by its digest-suffixed tag (#623) ==")
+# lab-platform's deploy/mirror/copies.tsv (lab-platform#183): a copy's tag is the upstream tag with the first twelve
+# characters of its linux/amd64 digest appended, so it never moves. test_image_registry_render.py renders each chart
+# and finds the copy in the pod spec, and no upstream reference a copy replaces.
+digest_tag = re.compile(r"^[a-z0-9./-]+:[\w.-]+-[0-9a-f]{12}$")
+for copy in [c for _, c, _, _ in MIRROR_COPIES] + [c for _, c in MIRROR_COPIES_NOT_PULLED]:
+    check(f"{copy} is a path under mirror/ and a digest-suffixed tag", bool(digest_tag.match(copy)))
+
+
+def application(name: str) -> dict:
+    docs = yaml.safe_load_all((APPS / f"{name}.yaml").read_text(encoding="utf-8"))
+    return next((d for d in docs if d and d.get("kind") == "Application"), {})
+
+
+app_docs = {a: application(a) for _, _, apps, _ in MIRROR_COPIES for a in apps}
+for upstream, copy, apps, where in MIRROR_COPIES:
+    for app in apps:
+        got = mirror_reference(chart_helm(app_docs[app]), where)
+        want = f"{IMAGE_REGISTRY}/mirror/{copy}"
+        check(f"apps/{app}.yaml names {upstream} as {want}" + ("" if got == want else f" (it says {got!r})"),
+              got == want)
+# The operator reads the pinned images only with imagePinning on, and they are the only way to set the snitch.
+check("apps/kubearmor.yaml turns imagePinning on, so the operator runs the five KubeArmorConfig images from mirror/",
+      chart_helm(app_docs["kubearmor"]).get("imagePinning") is True)
 
 print()
 if failures:

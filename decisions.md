@@ -2965,3 +2965,38 @@ With CONTEXT and the IAM pipeline variables unset, `bash verify/run-e2e.sh` fetc
 and exits 1 listing three items: IAM_PIPELINE_PROFILE/IAM_PIPELINE_REGION, CONTEXT, and otelcol-contrib v0.160.0.
 That last one became a prerequisite with #150 and was not in this issue. It is filed as a follow-up to fetch it
 through `verify/e2e-tools.lock`, as the other pinned tools are. No code changes here.
+
+## 2026-10-28 · #623 · The charts pull lab-platform's mirror/ copies through `imageRegistry`; Falco stays on Docker Hub
+
+lab-platform#183 closed on 2026-10-28 with every row of its `deploy/mirror/copies.tsv`: sixteen copies under
+`ghcr.io/peopleforrester/lab-platform/mirror/`, each named by its upstream tag with the first twelve characters of
+its linux/amd64 digest appended, all public. On 2026-10-28 each of the sixteen tags returned 200 to an anonymous
+manifest request on ghcr.io. lab-platform 5192c1a reverted the ECR cache path, so nothing passes `imageRegistry`
+and the #622 default, `ghcr.io/peopleforrester/lab-platform`, is what every cluster, `infra/deploy-full-idp.sh`'s
+included, pulls from. The issue's "settle one thing" (public packages, or a cache path from deploy-full-idp.sh) is
+settled by the packages being public. Alloy and Loki, in the issue's first list, left with #474.
+
+- **Re-rendered first.** Every chart Application in the four profiles was rendered at its pin with its values on
+  2026-10-28. Fourteen copies match an image a chart pulls, and each is now named in its app file's
+  `valuesObject` through `"{{ .Values.imageRegistry }}/mirror..."` by its digest-suffixed tag: falco-talon,
+  falcosidekick, kagent's bundled postgres and grafana-mcp, the six KubeArmor images, the collector
+  (`otel-collector`, `-attendee`, `-burn`), the OpenTelemetry operator's collector image, Grafana and Tempo. Where a
+  chart splits registry from repository, the registry is `<imageRegistry>/mirror` and the repository is upstream's.
+- **Falco and falcoctl are not pointed at their copies.** The copies are falco 0.44.1 and falcoctl 0.13.0, taken at
+  01c1d9e. Falco moved to chart 9.2.1 on 2026-10-27 for kernel 6.18 (#626), which pulls falco 0.45.1 and falcoctl
+  0.14.2, so the copies would undo that fix. They wait for lab-platform to copy 0.45.1 and 0.14.2 (a follow-up).
+- **KubeArmor through `imagePinning`.** The operator chart's `imagePinning: true` with `kubearmor.repo` and each
+  image's tag. The chart turns these into the operator's `RELATED_IMAGE_*` env and its own image.
+  `GetApplicationImage` (v1.7.4 `pkg/KubeArmorOperator/common/defaults.go`) reads that env before anything a
+  KubeArmorConfig sets, and the snitch has no KubeArmorConfig field, so the KubeArmorConfig route (the issue
+  comment's suggestion) would have left the snitch on Docker Hub.
+- **The collector's image is in the app files.** `gitops/otel-collector/values.yaml` is a `$values` file, which
+  cannot take the template, so each of the three otel-collector app files sets `image` in a `valuesObject`, which
+  Argo CD applies over `valueFiles`.
+- **Tests.** `verify/bootstrap_chart.py` holds the copies as `MIRROR_COPIES` (upstream, copy, app files, where in
+  `valuesObject`) and the two not taken as `MIRROR_COPIES_NOT_PULLED`. `verify/test_image_registry.py` (offline)
+  checks each app file composes `{{ .Values.imageRegistry }}/mirror/<copy>` and that `imagePinning` is on.
+  `verify/test_image_registry_render.py` (E2E tools tier) renders each such app file alone, unset and at a cache
+  path, and finds the copy at ghcr.io and at the cache path. It then renders every upstream chart with its
+  Application's values at the cache path, and finds each copy in a pod spec (or the operators' env and args) and
+  no image a copy replaces.

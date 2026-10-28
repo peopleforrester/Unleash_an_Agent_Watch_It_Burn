@@ -1,16 +1,18 @@
 # ABOUTME: Renders gitops/bootstrap with the pinned Helm with and without imageRegistry (#622): set, no
-# ABOUTME: ghcr.io/peopleforrester reference is left; unset, the render is today's, lab-platform images on ghcr.io.
-# SUITE: e2e (needs helm: the chart is Helm's to render)
+# ABOUTME: ghcr.io/peopleforrester reference is left; unset, lab-platform's mirror/ copies (#623) come from ghcr.io.
+# SUITE: e2e (needs helm: the chart is Helm's to render, and each upstream chart is fetched to render it)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
-# Why. lab-platform's bootstrap passes each cluster's ECR pull-through cache path to lab-bootstrap as imageRegistry
-# (lab-platform#214), because its ghcr.io packages are private and a node can only pull them through the cache.
-# infra/deploy-full-idp.sh passes nothing, and must get the render it gets today. test_image_registry.py holds
-# that no file names the registry literally; this asks Helm what the value does to every profile's render, and,
-# through a fixture app in a copy of the chart, that an app naming a mirror/ copy as the value says is rendered
-# at the cache path when it is set and at ghcr.io when it is not.
+# Why. lab-bootstrap's imageRegistry is the one switch that points every lab-platform image at a cache or another
+# mirror (lab-platform#214 passed an ECR pull-through cache path there until lab-platform 5192c1a reverted it).
+# infra/deploy-full-idp.sh passes nothing, and gets ghcr.io, where the mirror/ copies are public.
+# test_image_registry.py holds that no file names the registry literally and where each copy is named; this asks
+# Helm what the value does to every profile's render, finds each copy at the cache path in the Application that
+# names it, and renders each upstream chart with the Application's values to find the copy in the pod spec and
+# no upstream image a copy replaces. A fixture app in a copy of the chart covers a values string block.
 from __future__ import annotations
 
+import json
 import pathlib
 import shutil
 import subprocess
@@ -20,7 +22,9 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import CHART, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, profiles, values_path  # noqa: E402
+from bootstrap_chart import (CHART, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, MIRROR_COPIES,  # noqa: E402
+                             MIRROR_COPIES_NOT_PULLED, REPO, app_names, chart_helm, mirror_reference, profiles,
+                             values_path)
 
 failures: list[str] = []
 
@@ -40,7 +44,7 @@ version = subprocess.run([HELM, "version", "--short"], capture_output=True, text
 check(f"helm is the pinned v4.2.1 ({version})", version.startswith("v4.2.1"))
 
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
-# The shape lab-platform#214 passes: <account>.dkr.ecr.<region>.amazonaws.com/<cache prefix>/peopleforrester/lab-platform.
+# The shape lab-platform#214 passed: <account>.dkr.ecr.<region>.amazonaws.com/<cache prefix>/peopleforrester/lab-platform.
 CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
 GHCR_OWNER = "ghcr.io/peopleforrester"
 
@@ -69,10 +73,15 @@ def fixture_helm(out: str) -> dict:
     return app["spec"]["source"]["helm"]
 
 
+def applications(out: str) -> list[dict]:
+    return [d for d in yaml.safe_load_all(out) if d and d.get("kind") == "Application"]
+
+
 def naming(out: str, needle: str) -> list[str]:
     return [s for d in yaml.safe_load_all(out) if d for s in strings(d) if needle in s]
 
 
+at_cache: dict[str, dict] = {}  # every distinct chart Application any profile renders at the cache path
 for profile in profiles():
     print(f"== {profile}: rendered with and without imageRegistry ==")
     values = ("-f", str(values_path(profile)))
@@ -92,6 +101,88 @@ for profile in profiles():
           "reference(s) moved to the cache, and nothing else changed",
           cache.stdout.replace(CACHE + "/", LAB_PLATFORM_GHCR + "/") == unset.stdout
           and len(naming(cache.stdout, CACHE + "/")) == len(today))
+    for app in applications(cache.stdout):
+        if any("chart" in s for s in [app["spec"].get("source", {})] + app["spec"].get("sources", [])):
+            at_cache.setdefault(json.dumps(app["spec"], sort_keys=True), app)
+
+print("== each mirror/ copy is at the cache path in the Application that names it (#623) ==")
+deployed = {a for profile in profiles() for a in app_names(profile)}
+for upstream, copy, apps, where in MIRROR_COPIES:
+    for app in apps:
+        check(f"apps/{app}.yaml is in a profile", app in deployed)
+        only = ("--set", f"apps={{{app}}}")
+        unset, cache = render(CHART, *only), render(CHART, *only, "--set", f"imageRegistry={CACHE}")
+        if unset.returncode or cache.returncode:
+            check(f"apps/{app}.yaml renders alone", False, (unset.stderr + cache.stderr).strip()[:200])
+            continue
+        got_unset = mirror_reference(chart_helm(applications(unset.stdout)[0]), where)
+        got_cache = mirror_reference(chart_helm(applications(cache.stdout)[0]), where)
+        check(f"{app}: unset, {upstream} is {LAB_PLATFORM_GHCR}/mirror/{copy}",
+              got_unset == f"{LAB_PLATFORM_GHCR}/mirror/{copy}", got_unset)
+        check(f"{app}: set, it is {CACHE}/mirror/{copy}", got_cache == f"{CACHE}/mirror/{copy}", got_cache)
+
+print("== each chart, rendered with its Application's values at the cache path, pulls the copies ==")
+# Argo CD layers a source's valueFiles, then values, then valuesObject, the last winning; $values/ is this repo.
+
+
+def chart_images(app: dict) -> tuple[set[str], str]:
+    """Every image the chart's render names: container images, the KubeArmor operator's RELATED_IMAGE_* env and the
+    OpenTelemetry operator's --collector-image. The second value is helm's error, empty on success."""
+    sp = app["spec"]
+    src = next(s for s in ([sp["source"]] if "source" in sp else []) + list(sp.get("sources") or []) if "chart" in s)
+    helm = src.get("helm") or {}
+    with tempfile.TemporaryDirectory() as tmp:
+        files = [str(REPO / f.replace("$values/", "")) for f in helm.get("valueFiles") or []]
+        for key, text in (("values", helm.get("values")), ("valuesObject", helm.get("valuesObject"))):
+            if text:
+                path = pathlib.Path(tmp, f"{key}.yaml")
+                path.write_text(text if isinstance(text, str) else yaml.safe_dump(text), encoding="utf-8")
+                files.append(str(path))
+        repo, ver = src["repoURL"], str(src["targetRevision"])
+        chart = (["--repo", repo, src["chart"]] if repo.startswith("http")
+                 else [f"oci://{repo.removeprefix('oci://')}/{src['chart']}"])
+        release = helm.get("releaseName") or app["metadata"]["name"]
+        r = subprocess.run([HELM, "template", release, *chart, "--version", ver,
+                            "-n", sp["destination"].get("namespace", "default"), *sum((["-f", f] for f in files), [])],
+                           capture_output=True, text=True)
+    if r.returncode:
+        return set(), (r.stderr.strip().splitlines() or ["helm failed"])[-1][:200]
+    found: set[str] = set()
+
+    def walk(node):
+        if isinstance(node, dict):
+            if isinstance(node.get("image"), str):
+                found.add(node["image"])
+            if str(node.get("name", "")).startswith("RELATED_IMAGE_") and isinstance(node.get("value"), str):
+                found.add(node["value"])
+            for v in node.values():
+                walk(v)
+        elif isinstance(node, list):
+            for v in node:
+                walk(v)
+        elif isinstance(node, str) and node.startswith("--collector-image="):
+            found.add(node.removeprefix("--collector-image="))
+    for doc in yaml.load_all(r.stdout, Loader=yaml.BaseLoader):  # charts emit tags the safe loader rejects
+        walk(doc)
+    return found, ""
+
+
+def bare(ref: str) -> str:
+    return ref.removeprefix("docker.io/")
+
+
+every: set[str] = set()
+for app in at_cache.values():
+    name = app["metadata"]["name"]
+    found, err = chart_images(app)
+    check(f"{name}: the chart renders with its values", not err, err)
+    every |= found
+    stale = sorted(f for f in found for u, *_ in MIRROR_COPIES + MIRROR_COPIES_NOT_PULLED if bare(f) == bare(u))
+    check(f"{name}: no image is one a mirror/ copy replaces {stale}", not stale)
+for upstream, copy, _, _ in MIRROR_COPIES:
+    check(f"a pod pulls {CACHE}/mirror/{copy} in place of {upstream}", f"{CACHE}/mirror/{copy}" in every)
+for upstream, copy in MIRROR_COPIES_NOT_PULLED:
+    check(f"no chart pulls {upstream}, so its copy {copy} is not named", bare(upstream) not in {bare(i) for i in every})
 
 print("== an app naming a mirror/ copy, in a copy of the chart ==")
 # A KubeArmorConfig image from lab-platform's deploy/mirror/copies.tsv, in both places an app file's Helm values
