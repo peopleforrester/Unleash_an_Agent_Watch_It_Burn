@@ -58,7 +58,7 @@ KubeCon clusters), #41, #42; lab-platform#244 to #248; prompts-agenticburn#11; h
 Next, in order:
 - [ ] Rehearsal with Whitney, Wed 2026-10-28 09:00 Central: the cold read against the live platform (#611).
 - [ ] Rebuild the recorded fallback (#452); its branch was lost. Record once the rehearsal works.
-- [ ] Deck PDF to Sessionize by 11-04 (#449), blocked on rounds-agenticburn#41.
+- [x] Deck PDF to Sessionize: dropped, no deck is submitted (Michael, 2026-10-28; #449, #537 closed).
 - [ ] #634 (workshop_agent service name), #635 (converge skipping repair_datadog: not reproduced on the
   rebuild, where Datadog went in at bootstrap; re-check when keys change after a bring-up).
 - [ ] Two timed run-throughs by 11-08 (#615).

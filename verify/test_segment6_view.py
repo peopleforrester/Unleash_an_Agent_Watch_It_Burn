@@ -117,7 +117,7 @@ check("the rogue tool is named read_internal_config", "def read_internal_config(
 
 print("== the run-of-show names the surface and the URL ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
-seg6 = ros[ros.index("### Segment 6"):ros.index("### Segment 7")]
+seg6 = ros[ros.index("### Segment 5"):ros.index("### Segment 6")]  # the trace walk-through (#639)
 fleet = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 shared = re.search(r'SHARED_ADMIN_HOST="([a-z0-9.-]+)"', fleet).group(1)
 url = f"https://grafana-{shared}/d/{dash['uid']}"

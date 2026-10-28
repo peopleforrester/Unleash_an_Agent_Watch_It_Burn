@@ -3043,6 +3043,7 @@ admin cluster, and the converge that followed printed CONVERGED for it while the
   holds it.
 - **Not verified on a cluster.** No admin cluster was built in this run. The live check is
   `verify/test_gateway_bedrock_tagged_live.py` after the next admin bring-up.
+<<<<<<< Updated upstream
 ## 2026-10-28 · #590 · PRD #13's UST rows carry the current values, with history
 
 #590 asked whether PRD #13's Locked Decisions rows should be updated to the UST values the manifests now emit, or
@@ -3148,3 +3149,12 @@ could not tell them apart and would pool them for students.
   checks roster.tsv's roles pass it, holds every apply and destroy of the cluster root to passing role, and
   dry-runs `up` of three attendees (role=attendee each) and `instructors up all` (community and admin, matching
   roster.tsv). No cluster was touched.
+=======
+
+## 2026-10-28T23:30:00Z · 2.2 · No deck goes to Sessionize; the PDF exporter is removed
+
+Michael, 2026-10-28: the KubeCon NA 2026 deck is not submitted to Sessionize. #449, #537 and M5 #614 are
+closed as not planned. `scripts/kubecon-deck-pdf.py`, its two tests and `facilitation/kubecon-na-2026-deck/`
+existed only for that upload and are removed; the deck is still presented from rounds-agenticburn. The
+session id and the Sessionize feedback survey link stay, since feedback is kept.
+>>>>>>> Stashed changes

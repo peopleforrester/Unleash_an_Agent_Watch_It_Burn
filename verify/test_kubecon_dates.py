@@ -64,10 +64,10 @@ check("it names Michael's 2026-10-24 revision", "2026-10-24" in dates and "Micha
 
 print("== agent-built work is in order, with no forecast date ==")
 build = re.findall(r"^\d+\. \*\*(.+?)\*\*", dates, re.M)
-check("four build steps", len(build) == 4)
-order = ["Platform live on AWS", "Every abstract point READY", "recorded fallback", "16:9 PDF"]
-check("in Michael's order: platform, points, fallback, deck",
-      len(build) == 4 and all(o.lower() in b.lower() for o, b in zip(order, build)))
+check("three build steps", len(build) == 3)
+order = ["Platform live on AWS", "Every abstract point READY", "recorded fallback"]  # no deck upload (2026-10-28)
+check("in Michael's order: platform, points, fallback",
+      len(build) == 3 and all(o.lower() in b.lower() for o, b in zip(order, build)))
 check("the build steps carry no 'by <date>' deadline",
       not re.search(r"^\d+\. .*\b[Bb]y \d{4}-\d{2}-\d{2}", dates, re.M))
 check("the platform comes up from fleet.sh", "`fleet.sh`" in dates)
@@ -111,18 +111,18 @@ check("no room copied into the run-of-show", "Ballroom" not in ROS)
 print("== the run-through record agrees with the segment table ==")
 seg_rows = [r for r in table_rows(section(ROS, "The segments, in order (30 minutes)")) if r[0].isdigit()]
 minutes = {int(r[0]): int(r[1]) for r in seg_rows}
-check("the segment table has segments 1 to 7", sorted(minutes) == list(range(1, 8)))
+check("the segment table has segments 1 to 6", sorted(minutes) == list(range(1, 7)))  # three challenges (#639)
 rec = table_rows(record)
 check("a record table with one column per run",
       bool(rec) and rec[0][1:] == ["Run-through 1", "Run-through 2", "Delivered"])
 labels = {r[0]: r for r in rec[1:]}
 whole = sum(minutes.values())
-demo = sum(m for s, m in minutes.items() if 2 <= s <= 6)
+demo = sum(m for s, m in minutes.items() if 2 <= s <= 5)
 check(f"whole-slot target is the segments' total, {mmss(whole)}",
       f"Whole slot (target {mmss(whole)})" in labels)
 check("the whole slot is the 30-minute slot", whole == 30)
-check(f"demo target is segments 2 to 6, {mmss(demo)}",
-      f"Demo, segments 2 to 6 (target {mmss(demo)})" in labels)
+check(f"demo target is segments 2 to 5, {mmss(demo)}",
+      f"Demo, segments 2 to 5 (target {mmss(demo)})" in labels)
 for s, m in sorted(minutes.items()):
     check(f"segment {s} row, target {mmss(m)}", f"Segment {s} (target {mmss(m)})" in labels)
 check("every row has a cell per run", all(len(r) == 4 for r in rec))

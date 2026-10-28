@@ -150,11 +150,11 @@ check("kubearmor.yaml sets kubearmorConfig.enableStdOutAlerts: true",
 check("only alerts go to stdout, not every process log",
       (values.get("kubearmorConfig") or {}).get("enableStdOutLogs") in (None, False))
 
-print("== segment 4 names the signal that fires ==")
+print("== the on-deck C3 beat names the signal that fires ==")
 ros = RUN_OF_SHOW.read_text()
-s4 = ros[ros.find("### Segment 4"):ros.find("### Segment 5")]
+s4 = ros[ros.find("### On deck"):ros.find("## Abstract points to segments")]  # C3 is on deck (#639)
 c3 = s4[s4.find("- C3 "):s4.find("- If a prompt wanders")]
-check("segment 4 has a C3 bullet", bool(c3.strip()))
+check("the on-deck section has a C3 bullet", bool(c3.strip()))
 check("C3 names KubeArmor's alert", "KubeArmor's own alert" in c3)
 check("C3 no longer promises Falco alerting", "with Falco alerting" not in c3)
 check("C3 points at the fallback", "challenges/c3-secret-grep/fallback.kubectl.sh" in c3)
