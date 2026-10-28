@@ -167,9 +167,13 @@ for name, (desc, args) in served.items():
     entry = pinned.get(name, {})
     check(f"{name}: the pinned description is server.py's (re-pin with local-bed.sh if you changed it)",
           entry.get("description") == desc)
-    # FastMCP's schema for a function with no parameters, as measured on the bed with mcp 1.29.1.
-    check(f"{name}: takes no arguments, so the pinned inputSchema is FastMCP's empty one",
-          not args and entry.get("inputSchema") == {"properties": {}, "title": f"{name}Arguments", "type": "object"})
+    # FastMCP's schemas as measured with mcp 1.29.1: empty for a function with no parameters, and for
+    # get_weather (#642) one optional string city that defaults to Salt Lake City (measured 2026-10-28).
+    want = {"properties": {}, "title": f"{name}Arguments", "type": "object"}
+    if name == "get_weather":
+        want["properties"] = {"city": {"default": "Salt Lake City", "title": "City", "type": "string"}}
+    check(f"{name}: the pinned inputSchema is FastMCP's schema for its arguments ({args})",
+          args == list(want["properties"]) and entry.get("inputSchema") == want)
 
 print("== the rendered cluster config ==")
 root = load_schema()

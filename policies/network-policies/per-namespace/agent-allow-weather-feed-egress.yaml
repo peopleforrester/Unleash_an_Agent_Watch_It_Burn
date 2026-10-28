@@ -1,0 +1,19 @@
+# ABOUTME: Lets the weather feed, and only it, reach Open-Meteo on 443 from the default-deny agent namespace.
+# ABOUTME: C7's get_weather returns a real reading through it (#642); the MCP servers stay locked down.
+#
+# Open-Meteo's addresses are not fixed, and a NetworkPolicy cannot name a host, so the rule is TCP 443 to
+# anywhere for this one pod. What keeps that narrow is the pod: weather_feed.py builds its own two URLs from a
+# city name and answers four fields. The Kyverno egressLabels list carries its label, so the agent cannot
+# create a pod that wears it. The same policy ships in the C1 fix (challenge-fixes), so a student who locks
+# egress down keeps the weather.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agent-allow-weather-feed-egress
+  namespace: agent
+spec:
+  podSelector:
+    matchLabels: { app.kubernetes.io/name: weather-feed }
+  policyTypes: [Egress]
+  egress:
+    - ports: [{ protocol: TCP, port: 443 }]

@@ -818,6 +818,44 @@ spec:
   selector: { app: evil-mcp-shim }
   ports: [{ name: mcp, port: 8000, targetPort: mcp }]
 ---
+# The weather feed (#642). get_weather on evil-mcp-shim returns a REAL reading, which it asks for here. This
+# is the only pod in the agent namespace allowed out to the internet (agent-allow-weather-feed-egress, TCP 443),
+# and all it does is build two Open-Meteo URLs from a city name. Keeping the fetch out of the MCP server keeps
+# Challenge 1's egress lock-down true for every pod that can run a tool. Its label is on the Kyverno
+# egressLabels list, so the agent cannot mint a pod that borrows this egress.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: weather-feed
+  labels: { app.kubernetes.io/name: weather-feed }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app.kubernetes.io/name: weather-feed } }
+  template:
+    metadata: { labels: { app.kubernetes.io/name: weather-feed } }
+    spec:
+      automountServiceAccountToken: false # it needs no cluster API, so it holds no token
+      containers:
+        - name: feed
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
+          imagePullPolicy: Always
+          command: ["python", "/app/weather_feed.py"]
+          resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
+          ports: [{ name: http, containerPort: 8080 }]
+          readinessProbe: { httpGet: { path: /healthz, port: http }, periodSeconds: 10 }
+          volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
+      volumes:
+        - name: src
+          configMap: { name: weather-feed-src }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: weather-feed
+spec:
+  selector: { app.kubernetes.io/name: weather-feed }
+  ports: [{ name: http, port: 8080, targetPort: http }]
+---
 apiVersion: kagent.dev/v1alpha2
 kind: RemoteMCPServer
 metadata:
@@ -1141,6 +1179,20 @@ data:
       policyTypes: [Egress]
       egress:
         - to: [{ podSelector: {} }]
+    ---
+    # Keeps C7's live weather working once egress is locked down (#642): the weather feed alone may reach
+    # Open-Meteo on 443. It is a fixed lookup service, not a route out for the agent.
+    apiVersion: networking.k8s.io/v1
+    kind: NetworkPolicy
+    metadata:
+      name: agent-allow-weather-feed-egress
+      namespace: agent
+    spec:
+      podSelector:
+        matchLabels: { app.kubernetes.io/name: weather-feed }
+      policyTypes: [Egress]
+      egress:
+        - ports: [{ protocol: TCP, port: 443 }]
   c3-kubearmor-policy.yaml: |
     # Challenge 3 fix: block reads of the recipe file inline, in the kernel, for the agent's tool pod.
     apiVersion: security.kubearmor.com/v1

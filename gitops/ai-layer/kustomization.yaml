@@ -27,6 +27,9 @@ configMapGenerator:
   - name: evil-mcp-src
     files:
       - server.py
+  - name: weather-feed-src
+    files:
+      - weather_feed.py # C7's live weather (#642): the one agent pod with internet egress
   - name: workshop-mcp-src
     files:
       - server.py=workshop-mcp-server.py # key is server.py so the container's /app/server.py path matches

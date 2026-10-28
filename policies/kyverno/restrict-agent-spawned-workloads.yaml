@@ -99,9 +99,10 @@ spec:
     - name: modelIdentities
       expression: "['agent-sa', 'agentgateway', 'web-terminal']"
     # Every label a NetworkPolicy in namespace `agent` selects pods on, with the values it matches: console for
-    # platform-console-egress, the other three for chat-path-ingress (a peer it trusts, or a pod it guards).
+    # platform-console-egress, weather-feed for agent-allow-weather-feed-egress (#642), the other three for
+    # chat-path-ingress (a peer it trusts, or a pod it guards).
     - name: egressLabels
-      expression: "{'app.kubernetes.io/name': ['agentgateway', 'console', 'guard-proxy', 'workshop-agent']}"
+      expression: "{'app.kubernetes.io/name': ['agentgateway', 'console', 'guard-proxy', 'weather-feed', 'workshop-agent']}"
     - name: labels
       expression: "object.metadata.?labels.orValue({})"
     # The one Secret c8-scoped-role.yaml lets agent-sa read (get, by name). Mounting it reads nothing more.
@@ -124,8 +125,8 @@ spec:
       message: >-
         A workload the agent creates may not carry a label that a NetworkPolicy trusts
         (app.kubernetes.io/name=agentgateway, app.kubernetes.io/name=console, app.kubernetes.io/name=guard-proxy,
-        app.kubernetes.io/name=workshop-agent). That pod could reach a public model API, agentgateway's model
-        bind or the agent itself, around guard-proxy.
+        app.kubernetes.io/name=weather-feed, app.kubernetes.io/name=workshop-agent). That pod could reach a public
+        model API, the internet, agentgateway's model bind or the agent itself, around guard-proxy.
     - expression: >-
         !object.spec.?volumes.orValue([]).exists(v,
           (has(v.secret) && !(v.secret.?secretName.orValue('') in variables.readableSecrets)) ||
