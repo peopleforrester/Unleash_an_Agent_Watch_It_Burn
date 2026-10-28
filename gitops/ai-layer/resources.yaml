@@ -835,6 +835,7 @@ spec:
     metadata: { labels: { app.kubernetes.io/name: weather-feed } }
     spec:
       automountServiceAccountToken: false # it needs no cluster API, so it holds no token
+      enableServiceLinks: false # no injected <SERVICE>_PORT=tcp://... variables to collide with its own settings
       containers:
         - name: feed
           image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime

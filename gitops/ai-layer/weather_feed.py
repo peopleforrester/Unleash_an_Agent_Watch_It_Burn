@@ -103,8 +103,10 @@ class Handler(BaseHTTPRequestHandler):
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
-    host = os.environ.get("WEATHER_FEED_HOST", "0.0.0.0")
-    port = int(os.environ.get("WEATHER_FEED_PORT", "8080"))
+    # Not WEATHER_FEED_*: Kubernetes injects WEATHER_FEED_PORT=tcp://<ip>:8080 into pods for the Service named
+    # weather-feed, and reading that crashed the first rollout (2026-10-28).
+    host = os.environ.get("FEED_LISTEN_HOST", "0.0.0.0")
+    port = int(os.environ.get("FEED_LISTEN_PORT", "8080"))
     log.info("listening on %s:%d", host, port)
     ThreadingHTTPServer((host, port), Handler).serve_forever()
 

@@ -52,6 +52,12 @@ check("it uses the pinned workshop-mcp image, already on the registry allow-list
 check("it runs weather_feed.py from a generated ConfigMap",
       c.get("command") == ["python", "/app/weather_feed.py"] and
       any(g.get("name") == "weather-feed-src" and "weather_feed.py" in g.get("files", []) for g in KUST["configMapGenerator"]))
+FEED = (AI / "weather_feed.py").read_text()
+# A Service named weather-feed makes Kubernetes inject WEATHER_FEED_PORT=tcp://<ip>:8080; the first rollout read
+# it as the listen port and crashed (2026-10-28).
+check("the feed reads no WEATHER_FEED_* variable, which Kubernetes service links would set",
+      "WEATHER_FEED_" not in FEED.replace("# Not WEATHER_FEED_*", "").replace("WEATHER_FEED_PORT=tcp", ""))
+check("and its pod turns service links off", pod.get("spec", {}).get("enableServiceLinks") is False)
 svc = one("Service", "weather-feed")
 check("a weather-feed Service on 8080", svc.get("spec", {}).get("ports", [{}])[0].get("port") == 8080
       and svc.get("spec", {}).get("selector") == LABEL)

@@ -43,7 +43,7 @@ with socket.socket() as s:
     s.bind(("127.0.0.1", 0))
     port = s.getsockname()[1]
 feed = subprocess.Popen([sys.executable, "-I", str(AI / "weather_feed.py")],
-                        env={"WEATHER_FEED_PORT": str(port), "WEATHER_FEED_HOST": "127.0.0.1"},
+                        env={"FEED_LISTEN_PORT": str(port), "FEED_LISTEN_HOST": "127.0.0.1"},
                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
 base = f"http://127.0.0.1:{port}"
 try:
