@@ -3148,3 +3148,28 @@ could not tell them apart and would pool them for students.
   checks roster.tsv's roles pass it, holds every apply and destroy of the cluster root to passing role, and
   dry-runs `up` of three attendees (role=attendee each) and `instructors up all` (community and admin, matching
   roster.tsv). No cluster was touched.
+## 2026-10-28 · #634 · The collector renames kagent's workshop_agent to burritobot-agent, first in the pipeline
+
+Whitney's sandbox org, after one /chat on attackme, had `traces.span.metrics.calls` for `service:burritobot` and
+`service:workshop_agent` and nothing else, against the rule (#629) that every service starts with `burritobot`.
+
+- **The cause is kagent, not the collector or ADK.** kagent 0.10.1's `configure_tracing` (kagent-core,
+  `kagent/core/tracing/_utils.py`, read at tag v0.10.1) builds `Resource.create({"service.name": name,
+  "service.namespace": namespace})`, where `name` is KAGENT_NAME with `-` turned into `_`. An attribute passed to
+  Resource.create beats OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES, so the Agent's pinned burritobot-agent is
+  lost while service.version and deployment.environment.name, merged from the same env, survive. No env var
+  reaches it: KAGENT_NAME is also the A2A app name, so it is not ours to change.
+- **The fix is `transform/kagent_service_name`** in `gitops/otel-collector/values.yaml`: a resource-context
+  `set(service.name, "burritobot-agent") where service.name == "workshop_agent"`, for traces and metrics. It runs
+  right after memory_limiter, ahead of filter/drop_noise, because every agent rule after it matches
+  burritobot-agent. With the agent reporting workshop_agent those rules had silently stopped matching: its ASGI
+  HTTP spans and empty `chat` spans were shipping again and call_llm/invocation lost their invoke_agent stamp. The
+  overlays restate exporters only, so all three profiles get it.
+- **An exact name, not a pattern.** `verify/test_service_naming.py` derives the literal from the Agent's
+  metadata.name, so a renamed Agent fails the offline suite rather than leaking a new service, and checks the
+  position on every profile with and without datadog-secret.
+- **Proved on the real collector, not on a cluster.** `verify/test_kagent_service_name_collector.py` (`# SUITE:
+  e2e`, otelcol-contrib 0.160.0) runs the shipped attendee pipelines on one /chat's spans and kagent's token metric.
+  Without the transform it reproduces the measurement (spans and `traces.span.metrics.calls` as burritobot and
+  workshop_agent); with it, both are burritobot and burritobot-agent, the `POST /` span is dropped and call_llm
+  is invoke_agent. No cluster was built in this run; the live check is a fresh /chat against Whitney's org.
