@@ -140,7 +140,10 @@ useful half.
 ## What would change this finding
 
 - Prompt Guard 2 measured on `verify/injection_config_matrix.py`'s prompts with fewer misses at the same speed:
-  swap the input classifier, keep everything else.
+  swap the input classifier, keep everything else. **Measured 2026-10-28 (#621,
+  docs/spike-prompt-guard-2-2026-10-28.md): it meets that rule, and the swap waits on the licence.** That run also
+  corrects point 2 above: the payload in the middle starts at token 396 of 818, inside our model's window, so ours
+  misses it on detection, not on the window. Only the payload at the end is past token 512.
 - A CVE in llm-guard's own code (zero advisories against it as of the 09-22 research) or in a pinned dependency
   that the image cannot bump without a source change: re-cost the fork against Prompt Guard 2 behind a thin
   scan endpoint.

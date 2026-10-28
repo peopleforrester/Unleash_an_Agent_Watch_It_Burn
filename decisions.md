@@ -2954,3 +2954,29 @@ actions/checkout and actions/setup-python are pinned to commit SHAs (v7.0.1 3d3c
 read from their release tags 2026-10-24). PyYAML is pinned at 6.0.3 for the job. The workflow is not on
 the netcup runner and takes no OIDC role. A real-account plan (#201's pipeline role) stays a separate
 decision.
+
+## 2026-10-28 · #621 · Llama Prompt Guard 2 86M measured against Challenge 6: it meets the swap rule
+
+The dated finding is `docs/spike-prompt-guard-2-2026-10-28.md`. In short:
+
+- **Measured without the gate.** Meta's repo is gated, but its file listing is public and carries each file's git
+  object id. `project-free-llama/Llama-Prompt-Guard-2-86M` at `43882965` is ungated and matches all ten ids of
+  Meta's commit `a8ded8e6` (2025-04-29). `verify/injection_config_matrix.py` recomputes them from the bytes before
+  loading anything, so what it measures is Meta's commit or nothing.
+- **Result, deployed config (0.5, `full`), one core:** Prompt Guard 2 misses 2 of 4 attacks, and ours misses 3. It
+  also refuses the payload placed in the middle of the padding; neither model catches the payload past token 512
+  or the reworded one. It was no slower (slowest 1.9 s and 2.1 s against ours at 2.9 s and 2.4 s over two runs).
+  On a 74-prompt sweep, every lab.html chat prompt plus all of topic_cases, the two models disagree on none.
+  Peak memory rises from 1,675 MiB to 2,421 MiB, inside the pod's 3 GiB limit.
+- **Behind the same `/analyze/prompt`, with two model-dir changes:** a `config.json` naming `LABEL_1` as
+  `INJECTION` (as shipped, llm-guard would read every malicious verdict as safe), and an ONNX export with torch's
+  TorchScript exporter (optimum 1.25's `export=True` fails on torch 2.14).
+- **The swap is not made here.** It redistributes Llama weights in the public mirrored model image under the
+  Llama 4 Community License with "Built with Llama" attribution, which is Michael's to accept; #621's report asks.
+
+**New dev dependency, fetched only by `verify/injection_config_matrix.py` into the gitignored `verify/.tools`,
+never committed and never installed into the offline suite:** Llama Prompt Guard 2 86M, Meta's commit
+`a8ded8e697ce7c355e395a0df51f94adb4a2fd27`, read from `project-free-llama/Llama-Prompt-Guard-2-86M` at
+`43882965632dcb7b20299530f6436ac759d07fd9` (checked 2026-10-28), Llama 4 Community License. It is there because
+#621 asked for this measurement and the gate's manual approval would have held it on a sign-in. The scanner stack
+is the existing pins (llm-guard 0.3.16, torch 2.14.0+cpu).
