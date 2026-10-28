@@ -47,6 +47,7 @@
   .brand .logo{width:26px;height:26px;display:inline-block;vertical-align:middle}
   .avatar .logo{width:22px;height:22px;display:block}
   header .spacer{flex:1}
+  header a.hb[hidden]{display:none}
   header a.hb{color:#fff;text-decoration:none;font-weight:800;font-size:12.5px;background:rgba(255,255,255,.16);padding:7px 12px;border-radius:8px;white-space:nowrap;margin-left:7px}
   header a.hb:hover{background:rgba(255,255,255,.28)}
   /* PHONE TITLE BAR (#387). A flex-wrap here put "BurritoBot" and one stray button on the top row and
@@ -720,6 +721,12 @@
     var ev=window.WIB_EVENT||{}, fb=document.getElementById('fbbtn');
     var evfb=(typeof ev.feedbackUrl==='string' && /^https:\/\//.test(ev.feedbackUrl)) ? ev.feedbackUrl : '';
     if(fb&&evfb)fb.href=evfb;
+    // A talk's room uses the public bot from phones and has no use for a shell (#645, Whitney 2026-10-28:
+    // "terminal invites chaos"). When the event says so, the Terminal button is hidden on the host the room
+    // was handed, publicUrl's host; the presenters' private bot and every attendee cluster keep it.
+    var pubHost=''; try{ pubHost=ev.publicUrl ? new URL(ev.publicUrl).hostname : ''; }catch(e){}
+    var vtb=document.getElementById('vttbtn');
+    if(vtb && ev.hideTerminalOnPublic===true && pubHost && location.hostname===pubHost) vtb.hidden=true;
     if(nq.length){
       var vt=document.getElementById('vttbtn'); if(vt)vt.href='/lab?'+nq.join('&');
       // Join with & when the href already carries a query string (#364). A bare '?' on a URL that

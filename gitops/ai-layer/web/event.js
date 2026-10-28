@@ -22,5 +22,8 @@ window.WIB_EVENT = {
   publicUrl: "https://attackme.agenticburn.com/",
   // The session survey, recorded as the answer to question 147 (BurritoBot repo #80). Rating there is
   // mobile-only and opens near the session, so a person confirms it shows this talk once it does.
-  feedbackUrl: "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553"
+  feedbackUrl: "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553",
+  // Hide the storefront's Terminal button on publicUrl's host (#645). The room attacks from phones and
+  // the presenters keep their terminal on the private bot. Set false for the 2-hour workshop.
+  hideTerminalOnPublic: true
 };

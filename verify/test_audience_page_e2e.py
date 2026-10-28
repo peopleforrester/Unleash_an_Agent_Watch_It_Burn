@@ -55,11 +55,11 @@ HARNESS = r"""
 const vm = require('vm');
 const [eventSrc, initSrc, search, host, quick] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const els = {};
-for (const id of ['vttbtn', 'bbbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '' };
+for (const id of ['vttbtn', 'bbbtn', 'fbbtn', 'clusterid', 'clusterfoot']) els[id] = { href: '', textContent: '', title: '', hidden: false };
 els.fbbtn.href = quick;
 const window = {};
 const ctx = {
-  window, URLSearchParams, encodeURIComponent, JSON,
+  window, URLSearchParams, URL, encodeURIComponent, JSON,
   location: { search, hostname: host },
   document: { getElementById: (id) => els[id] || null },
   localStorage: { getItem: () => null },
@@ -68,17 +68,20 @@ const ctx = {
 vm.createContext(ctx);
 if (eventSrc) vm.runInContext(eventSrc, ctx);
 vm.runInContext(initSrc, ctx);
-process.stdout.write(els.fbbtn.href);
+process.stdout.write(JSON.stringify({ fb: els.fbbtn.href, terminalHidden: els.vttbtn.hidden === true }));
 """
 
 
-def feedback_href(event_src: str) -> str:
-    payload = json.dumps([event_src, INIT, "?cluster=watch-it-burn-community&user=a%40b.example",
-                          "attackme.agenticburn.com", QUICK])
+def run_init(event_src: str, host: str = "attackme.agenticburn.com") -> dict:
+    payload = json.dumps([event_src, INIT, "?cluster=watch-it-burn-community&user=a%40b.example", host, QUICK])
     r = subprocess.run(["node", "-e", HARNESS], input=payload, capture_output=True, text=True)
     if r.returncode != 0:
-        return f"<node failed: {r.stderr.strip()}>"
-    return r.stdout
+        return {"fb": f"<node failed: {r.stderr.strip()}>", "terminalHidden": None}
+    return json.loads(r.stdout)
+
+
+def feedback_href(event_src: str) -> str:
+    return run_init(event_src)["fb"]
 
 
 print("== the page's own init, with the committed event.js ==")
@@ -94,6 +97,14 @@ check("and carries cluster and user, joined with &", got == QUICK + "&cluster=wa
 print("== a non-https knob value is ignored, not followed ==")
 got = feedback_href('window.WIB_EVENT = { feedbackUrl: "javascript:alert(1)" };')
 check("a javascript: URL leaves the workshop default in place", got.startswith(QUICK), got)
+
+print("== the room never sees a Terminal button on the public host (#645) ==")
+check("on attackme, with the committed event.js, the Terminal button is hidden",
+      run_init(EVENT_JS)["terminalHidden"] is True)
+check("on the presenters' private host it stays",
+      run_init(EVENT_JS, "burritobot-private.agenticburn.com")["terminalHidden"] is False)
+check("on an attendee's own cluster it stays", run_init(EVENT_JS, "soot-ember.agenticburn.com")["terminalHidden"] is False)
+check("with no event set (the workshop) it stays, even on attackme", run_init("")["terminalHidden"] is False)
 
 print("== the committed QR is exactly segno's rendering of publicUrl ==")
 r = subprocess.run(["uv", "run", "--no-project", "--with", "segno==1.6.6", "python", "-I",
