@@ -3043,3 +3043,23 @@ admin cluster, and the converge that followed printed CONVERGED for it while the
   holds it.
 - **Not verified on a cluster.** No admin cluster was built in this run. The live check is
   `verify/test_gateway_bedrock_tagged_live.py` after the next admin bring-up.
+## 2026-10-28 · #590 · PRD #13's UST rows carry the current values, with history
+
+#590 asked whether PRD #13's Locked Decisions rows should be updated to the UST values the manifests now emit, or
+left as a record of 2026-06-23 with a pointer to `verify/test_observability.py`. The repo had already answered for
+one row: #586 moved the kagent `service.version` row to v0.10.1 in place, with "was v0.9.9 until ..." after it, and
+#599 made `verify/test_kagent_version_pins.py` fail if that row goes stale. The other rows follow the same pattern.
+
+- **Values.** The service names are `burritobot-agent`, `burritobot-gateway`, `burritobot` and `burritobot-evil-mcp`,
+  after the 2026-09-06 rename to one service family (#265). agentgateway's `service.version` is `v1.5.0`: the
+  image moved on 2026-09-10 and the span version followed on 2026-10-24 (#495). `deployment.environment.name` is
+  `burritobot-kubecon-na-26`, which replaced `production` on 2026-10-27 (#629). #590 did not name the env row, but
+  it was out of date in the same way. Each row then gives the old value and the date it changed.
+- **Where else.** The Milestone 3 goal and pod criteria, the Milestone 4 service-name list and the Acceptance
+  Criteria now give the same values. Two paths that no longer exist were corrected: `gitops/apps/kagent.yaml` is now
+  `gitops/bootstrap/apps/kagent.yaml`, and `agent/gateway/agentgateway.yaml` is now `gitops/ai-layer/agentgateway.yaml`.
+  The Problem section still describes the June state, as a record.
+- **Test.** `verify/test_prd13_ust.py` (offline) reads each component's `OTEL_RESOURCE_ATTRIBUTES` from
+  `gitops/ai-layer/` and fails if the table, the Milestone 3 and 4 criteria or the Acceptance Criteria give a
+  different current value. History may follow the current value. The kagent version row stays with
+  test_kagent_version_pins.py, which holds it to the chart. Against the PRD before this change, it failed 19 checks.

@@ -35,17 +35,19 @@ The current state of the repo:
 
 All decisions below were finalized in the Milestone 1 design conversation (2026-06-23) and are recorded in the meta-PRD #7 Decision Log. Read those entries before implementing.
 
+The UST values (`deployment.environment.name`, `service.name`, `service.version`) have moved since 2026-06-23. Each of those rows gives the value the manifests carry now, then the earlier value and when it changed. `verify/test_observability.py` holds the manifests to these values, and `verify/test_prd13_ust.py` holds this table and the Milestone 3 and 4 criteria to the manifests (#590).
+
 | Decision | Value |
 |---|---|
 | Datadog site | `datadoghq.com` (US1) |
-| `deployment.environment.name` | `production` (all components) |
+| `deployment.environment.name` | `burritobot-kubecon-na-26` (all components; was `production` until 2026-10-27, when telemetry moved to Whitney's shared Datadog sandbox org and this tag became what keeps BurritoBot's data separate there, #629) |
 | OTel attribute name | `deployment.environment.name` — NOT the deprecated `deployment.environment` |
-| `service.name` for kagent | `kagent` |
-| `service.name` for agentgateway | `agentgateway` |
-| `service.name` for guard-proxy | `guard-proxy` |
-| `service.name` for evil-mcp-shim | `evil-mcp-shim` |
-| `service.version` for kagent | `v0.10.1` (the kagent chart `gitops/apps/kagent.yaml` pins; was `v0.9.9` until the 2026-09-10 chart bump, #586) |
-| `service.version` for agentgateway | `v1.3.0` |
+| `service.name` for kagent | `burritobot-agent` (was `kagent` until the 2026-09-06 rename to one BurritoBot service family, #265) |
+| `service.name` for agentgateway | `burritobot-gateway` (was `agentgateway` until the 2026-09-06 rename, #265) |
+| `service.name` for guard-proxy | `burritobot` (the root span's service, which Datadog names the Agent Observability application after; was `guard-proxy` until the 2026-09-06 rename, #265) |
+| `service.name` for evil-mcp-shim | `burritobot-evil-mcp` (was `evil-mcp-shim` until the 2026-09-06 rename, #265) |
+| `service.version` for kagent | `v0.10.1` (the kagent chart `gitops/bootstrap/apps/kagent.yaml` pins; was `v0.9.9` until the 2026-09-10 chart bump, #586) |
+| `service.version` for agentgateway | `v1.5.0` (the image tag `gitops/ai-layer/agentgateway.yaml` runs; the image moved to v1.5.0 on 2026-09-10 and the span version followed on 2026-10-24, #495; was `v1.3.0` until then) |
 | `service.version` for guard-proxy | `1.0.0` |
 | `service.version` for evil-mcp-shim | `1.0.0` |
 | UST path | `OTEL_RESOURCE_ATTRIBUTES` — NOT `DD_SERVICE`/`DD_ENV`/`DD_VERSION` (those are ignored on the OTel path) |
@@ -127,24 +129,24 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
 
 ### Milestone 3 — Apply locked UST vocabulary to all four AI-layer components
 
-**Goal**: Every AI-layer pod emits `service.name`, `service.version`, and `deployment.environment.name=production` via `OTEL_RESOURCE_ATTRIBUTES`. The values are locked in the Decisions table above — do not modify them.
+**Goal**: Every AI-layer pod emits `service.name`, `service.version`, and `deployment.environment.name=burritobot-kubecon-na-26` via `OTEL_RESOURCE_ATTRIBUTES`. The values are locked in the Decisions table above — do not modify them.
 
 **Steps**:
 1. Read `gitops/ai-layer/resources.yaml` to see the current `OTEL_RESOURCE_ATTRIBUTES` setting. Replace any incorrect values:
-   - Change `deployment.environment.name=watch-it-burn` → `deployment.environment.name=production`
+   - Change `deployment.environment.name=watch-it-burn` → the locked `deployment.environment.name` in the Decisions table
    - Change `service.version=CLUSTER_TIER` → the correct per-component value
    - Confirm `service.name` is set to the locked value for each component
-2. Check `agent/gateway/agentgateway.yaml` for `OTEL_RESOURCE_ATTRIBUTES`. Add or correct to the locked values for `agentgateway`.
+2. Check `gitops/ai-layer/agentgateway.yaml` for `OTEL_RESOURCE_ATTRIBUTES`. Add or correct to the locked values for `agentgateway`.
 3. Check the guard-proxy deployment manifest (in `agent/gateway/guard-proxy/` or referenced from `gitops/ai-layer/`). Add or correct `OTEL_RESOURCE_ATTRIBUTES` for `guard-proxy`.
 4. Check the evil-mcp-shim container spec in `gitops/ai-layer/resources.yaml`. Add or correct `OTEL_RESOURCE_ATTRIBUTES` for `evil-mcp-shim`. (The deployed pod is defined there, not in `challenges/` — see issue #18 Decision Log.)
 5. If a single `OTEL_RESOURCE_ATTRIBUTES` in `resources.yaml` applies to ALL four components (and thus cannot have per-component `service.name`/`service.version`), each component needs its own env var override in its own deployment manifest. Check whether the current structure supports per-component values — if not, split them out.
 6. Commit and let ArgoCD reconcile. Confirm all four pods restart cleanly.
 
 **Done when:**
-- [ ] kagent pod has `service.name=kagent`, `service.version=v0.10.1`, `deployment.environment.name=production`
-- [ ] agentgateway pod has `service.name=agentgateway`, `service.version=v1.3.0`, `deployment.environment.name=production`
-- [ ] guard-proxy pod has `service.name=guard-proxy`, `service.version=1.0.0`, `deployment.environment.name=production`
-- [ ] evil-mcp-shim pod has `service.name=evil-mcp-shim`, `service.version=1.0.0`, `deployment.environment.name=production`
+- [ ] kagent pod has `service.name=burritobot-agent`, `service.version=v0.10.1`, `deployment.environment.name=burritobot-kubecon-na-26`
+- [ ] agentgateway pod has `service.name=burritobot-gateway`, `service.version=v1.5.0`, `deployment.environment.name=burritobot-kubecon-na-26`
+- [ ] guard-proxy pod has `service.name=burritobot`, `service.version=1.0.0`, `deployment.environment.name=burritobot-kubecon-na-26`
+- [ ] evil-mcp-shim pod has `service.name=burritobot-evil-mcp`, `service.version=1.0.0`, `deployment.environment.name=burritobot-kubecon-na-26`
 - [ ] No component uses `deployment.environment` (deprecated) — all use `deployment.environment.name`
 - [ ] No component has `CLUSTER_TIER` or `watch-it-burn` in its `OTEL_RESOURCE_ATTRIBUTES`
 
@@ -163,7 +165,7 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
 
 **Done when:**
 - [ ] At least one metric or trace from an AI-layer component is visible in the Datadog UI
-- [ ] The service name visible in Datadog matches one of the locked values (`guard-proxy`, `agentgateway`, `kagent`, or `evil-mcp-shim`)
+- [ ] The service name visible in Datadog matches one of the locked values (`burritobot`, `burritobot-gateway`, `burritobot-agent`, or `burritobot-evil-mcp`). When M4 was verified on 2026-06-25 the names were guard-proxy, agentgateway, kagent and evil-mcp-shim; #265 renamed them on 2026-09-06.
 
 ---
 
@@ -171,7 +173,7 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
 
 - [ ] `datadog-secret` K8s secret exists in the target namespace (never committed to the repo)
 - [ ] OTel Collector running with `datadog/connector` wired in traces and metrics pipelines
-- [ ] All four AI-layer components emitting UST-tagged telemetry (`service.name`, `service.version=<locked>`, `deployment.environment.name=production`)
+- [ ] All four AI-layer components emitting UST-tagged telemetry (`service.name`, `service.version=<locked>`, `deployment.environment.name=burritobot-kubecon-na-26`)
 - [ ] At least one metric or trace from the AI-layer appears in Datadog after running a beat
 - [ ] `PROGRESS.md` updated
 
@@ -194,3 +196,4 @@ All decisions below were finalized in the Milestone 1 design conversation (2026-
 | Date | Decision | Rationale |
 |---|---|---|
 | 2026-06-23 | All decisions deferred to meta-PRD #7 Decision Log | This child PRD records outcomes only. Full rationale for each decision (UST vocabulary, datadog/connector requirement, DD_SITE, credential handling) is in the meta-PRD #7 Decision Log entries dated 2026-06-23. Read those before implementing. |
+| 2026-10-28 | The UST rows carry the current values, each with the value it replaced and when (#590) | The manifests moved under the locked values: the service names to the burritobot-* family (#265), agentgateway's span version to v1.5.0 (#495) and the env to burritobot-kubecon-na-26 (#629). #586 had already updated the kagent version row in place, and a test holds it, so the other rows follow the same pattern instead of being left as a record. `verify/test_prd13_ust.py` fails when the table or the milestone criteria drift from the manifests. |
