@@ -1,6 +1,6 @@
 # ABOUTME: Renders gitops/bootstrap with the pinned Helm for every profile at a 40-digit revision, and checks what
 # ABOUTME: lab-platform's pin check will: every Unleashed source at that commit, charts exact, no second root (#609).
-# SUITE: e2e (needs helm: the chart is Helm's to render)
+# SUITE: e2e (needs helm: the chart is Helm's to render; and kubectl, to apply the front door patch with kustomize)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why. test_bootstrap_chart.py reads the files. Whether tpl leaves every app as it was written, renders the escaped
@@ -11,16 +11,18 @@
 # that check, on the rendered chart.
 from __future__ import annotations
 
+import os
 import pathlib
 import re
 import shutil
 import subprocess
 import sys
+import tempfile
 
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import (APPS, CHART, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY,  # noqa: E402
+from bootstrap_chart import (APPS, CHART, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO,  # noqa: E402
                              LAB_PLATFORM_GHCR, REPO_URL, REVISION, app_names, profiles, values_path,
                              without_front_door)
 
@@ -123,6 +125,22 @@ check("it puts the certificate on the NLB's 443 as a TLS listener that re-encryp
               "service.beta.kubernetes.io/aws-load-balancer-backend-protocol": "ssl",
               "service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy":
                   "ELBSecurityPolicy-TLS13-1-2-2021-06"}, str(ops))
+# The patch as Argo CD applies it: kustomize over gitops/ai-layer, from a scratch overlay in the repo's tmp/.
+KUBECTL = shutil.which("kubectl")
+check("kubectl is on PATH, to apply the patch with kustomize", KUBECTL is not None)
+if KUBECTL and patches:
+    (REPO / "tmp").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
+        (pathlib.Path(d) / "kustomization.yaml").write_text(yaml.safe_dump({
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+            "resources": [os.path.relpath(REPO / "gitops/ai-layer", d)], "patches": patches}), encoding="utf-8")
+        k = subprocess.run([KUBECTL, "kustomize", d], capture_output=True, text=True)
+    svc = next((x for x in yaml.safe_load_all(k.stdout) if x and x.get("kind") == "Service"
+                and x["metadata"]["name"] == "console"), {}) if k.returncode == 0 else {}
+    ann = (svc.get("metadata") or {}).get("annotations") or {}
+    check("kustomize applies it: the console Service carries the certificate and keeps its own annotations",
+          all(ann.get(a) == v for a, v in ops.items()) and ann.get("service.beta.kubernetes.io/aws-load-balancer-type")
+          == "external" and len(ann) == len(ops) + 4, k.stderr.strip()[:300] or str(ann))
 fd["spec"]["source"].pop("kustomize", None) if fd else None
 check("and changes nothing else in the Application", bool(fd) and fd == plain)
 r = render("-f", str(values_path("burn")), "--set", f"revision={COMMIT}", "--set", "frontDoor.certificateArn=console-tls")
