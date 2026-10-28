@@ -216,6 +216,16 @@ judge reading the redacted calibration block (`5285204`, #628) and Falco 0.45.1 
 #626). Admin then ran 24 PASS, 0 FAIL in five consecutive runs. Community ran 6 PASS three
 times, the last on guard-proxy `000f57e` with the per-conversation rate limit (#450).
 
+**2026-10-28, rebuilt as the two named-for-the-room clusters (#632).** Both 10-27 clusters
+were torn down and `./fleet.sh instructors up all` built watch-it-burn-community
+(`attackme.agenticburn.com`) and watch-it-burn-private (`burritobot-private.agenticburn.com`)
+in accen-dev, us-west-2, at staging `7210a3b`. Datadog went in at bootstrap on both, as
+`burritobot-public` and `burritobot-private` in Whitney's sandbox org. The private bring-up
+failed its gateway pin (block-argocd-drift denied the operator; fixed in `7210a3b`) and
+the org check (it expected the Portland pool; fixed in the same commit), then converged.
+TLS and websocket checks passed on both hosts. Community: 6 PASS, $0.0239 over 5 model
+calls. Private: 24 PASS, $0.0306 over 12 model calls, on the first run.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in

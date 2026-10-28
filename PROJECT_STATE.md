@@ -34,33 +34,34 @@ us-west-2, ran the #503 probe: RED on both, about $0.05 of Bedrock. Its per-beat
 `facilitation/kubecon-na-2026-run-of-show.md`, "Probe record" (#509); its findings #528, #529 and #530 are
 fixed on staging. Its teardown to zero (`verify/account-audit.sh` CLEAN) is not recorded here yet.
 
-## KubeCon platform up (2026-10-27)
+## KubeCon platform up (rebuilt 2026-10-28)
 
-`watch-it-burn-community` (attackme) and `watch-it-burn-private` are running in accen-dev, us-west-2,
-at about $24 a day, the two clusters Michael chose on #610 (question 846). On staging `5285204` the KubeCon
-probe is GREEN on both: community 6/6, admin 24/24, with four more admin repeats queued (#627, #628). The
-probe record is in the run-of-show. The 10-24 teardown was recorded on #454 (audit-zero); this bring-up is up.
+`watch-it-burn-community` (attackme.agenticburn.com) and `watch-it-burn-private`
+(burritobot-private.agenticburn.com, the one admin cluster Michael and Whitney share, #632) are running in
+accen-dev, us-west-2, at about $24 a day. No cluster carries a person's name. At staging `7210a3b` the KubeCon
+probe is GREEN on both: community 6/6, private 24/24 on its first run; TLS and websockets pass on both hosts;
+the public bot's counter was reset to zero. Datadog ships to Whitney's sandbox org as `burritobot-public` and
+`burritobot-private`, env `burritobot-kubecon-na-26`, keys in `watch-it-burn/datadog` (accen-dev). The probe
+record is in the run-of-show.
 
-Fixed today:
-- the Bedrock profile description comma (#610)
-- the guard-proxy re-pin to 96f3203 (#487, #519, #486, #455)
-- the probe writing the C7 rule as the web terminal
-- the C6 image named in full (#627)
-- the probe judging C7 as the stage shows it (#628)
-- Falco 0.45.1 for kernel 6.18 (#626)
-- the event-tag test (#631)
+Fixed 2026-10-27 and 10-28: the Bedrock profile description comma (#610); the guard-proxy re-pin (#487, #519,
+#486, #455); the probe and the gateway pin writing Argo-managed objects as the principals block-argocd-drift
+admits (#630); the C6 image named in full (#627); the probe judging C7 as the stage shows it (#628); Falco
+0.45.1 for kernel 6.18 (#626); the event-tag test (#631); the per-conversation rate limit (#450, partial);
+the Datadog org verifier against the read-only key (#629). Merged on Michael's approval: customer-stream
+removal (#473), Loki and Alloy removal (#474), the plan-time policy (#200).
 
-Merged on Michael's approval: customer-stream removal (#473), Loki and Alloy removal (#474), and the
-plan-time policy (#200).
+Integration issues filed 2026-10-28 for the sister repos' agents: apex-agenticburn#40, #41 (landed);
+provisioning-agenticburn#39, #40 (the private cluster is claimable until fixed; keep WIB_NO_INGEST=1 for the
+KubeCon clusters), #41, #42; lab-platform#244 to #248; prompts-agenticburn#11; here #636.
 
 Next, in order:
-- [ ] Datadog sandbox (#629): repo side done (`57ad24d`). Michael accepts Whitney's invite and creates the
-  `burritobot` API and application keys; they go in `watch-it-burn/datadog` (accen-dev), then
-  `fleet.sh converge` and a live trace check. A draft reply asks Whitney to confirm per-cluster names.
-- [ ] One admin cluster or two (#632): Whitney's call, then the run-of-show and roster.
-- [ ] Rebuild the ballroom limits (#450) and the recorded fallback (#452); their branches were lost.
+- [ ] Rehearsal with Whitney, Wed 2026-10-28 09:00 Central: the cold read against the live platform (#611).
+- [ ] Rebuild the recorded fallback (#452); its branch was lost. Record once the rehearsal works.
 - [ ] Deck PDF to Sessionize by 11-04 (#449), blocked on rounds-agenticburn#41.
-- [ ] Cold read and two timed run-throughs with Whitney (#611, #615); the first is the 10-28 rehearsal.
+- [ ] #634 (workshop_agent service name), #635 (converge skipping repair_datadog: not reproduced on the
+  rebuild, where Datadog went in at bootstrap; re-check when keys change after a bring-up).
+- [ ] Two timed run-throughs by 11-08 (#615).
 
 ## Current cycle (2026-10-05, supply chain closed; components split; Go rewrite planned)
 
