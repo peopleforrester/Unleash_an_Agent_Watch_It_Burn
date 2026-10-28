@@ -30,7 +30,7 @@ clusters each keep their own surface, and none of them is asked to read another'
 
 | Column | Source | Notes |
 |---|---|---|
-| cluster | the public host, from `fleet.sh hosts` | the name the room hears (`attackme`, `michael-admin`, the two-word attendee names) |
+| cluster | the public host, from `fleet.sh hosts` | the name the room hears (`attackme`, `burritobot-private`, the two-word attendee names) |
 | name | the cluster name | what claims and Datadog call it |
 | claimed by | provisioning `GET /admin/export` | `-` unclaimed, `?` the claims could not be read |
 | console | `start.agenticburn.com/roster.json`, then `GET https://<host>/cost` | the same probe the start page makes; `unrouted` means the router has no line for it |

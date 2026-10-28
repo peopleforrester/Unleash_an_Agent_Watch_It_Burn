@@ -40,7 +40,7 @@ C56 = "challenges/02-sanitization/fallback.curl.sh"
 C7 = "challenges/03-bad-mcp-excessive-agency/fallback.curl.sh"
 # (beat, script, argv)
 BEATS = [("C1", C1, []), ("C2", C2, []), ("C5", C56, ["output"]), ("C6", C56, ["input"]), ("C7", C7, [])]
-CONTEXT = "arn:aws:eks:us-west-2:000000000000:cluster/watch-it-burn-michael-admin"
+CONTEXT = "arn:aws:eks:us-west-2:000000000000:cluster/watch-it-burn-private"
 
 failures = []
 

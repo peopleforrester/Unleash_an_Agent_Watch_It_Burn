@@ -24,7 +24,7 @@ DOM.
 
 Usage:
     uv run --with playwright verify/browser-smoke.py                  # the roster clusters
-    uv run --with playwright verify/browser-smoke.py michael-admin    # named hosts only
+    uv run --with playwright verify/browser-smoke.py burritobot-private    # named hosts only
 
 Exits non-zero if any cluster fails, so it can gate a demo.
 """
@@ -187,6 +187,6 @@ if __name__ == "__main__":
         args = [
             # The roster (#291). A presenter's student cluster is a claimed pool cluster (#295):
             # pass its memorable name to smoke it.
-            "attackme", "michael-admin", "whitney-admin",
+            "attackme", "burritobot-private",
         ]
     sys.exit(asyncio.run(main(args)))

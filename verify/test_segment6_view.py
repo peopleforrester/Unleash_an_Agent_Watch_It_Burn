@@ -119,10 +119,9 @@ print("== the run-of-show names the surface and the URL ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
 seg6 = ros[ros.index("### Segment 6"):ros.index("### Segment 7")]
 fleet = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
-suffix = re.search(r'PRESENTER_SUFFIX="([a-z]+)"', fleet).group(1)
-for owner in ("michael", "whitney"):
-    url = f"https://grafana-{owner}-{suffix}.agenticburn.com/d/{dash['uid']}"
-    check(f"segment 6 names {url}", url in seg6)
+shared = re.search(r'SHARED_ADMIN_HOST="([a-z0-9.-]+)"', fleet).group(1)
+url = f"https://grafana-{shared}/d/{dash['uid']}"
+check(f"segment 6 names {url}, the presenters' shared cluster", url in seg6)
 check("the console routes grafana-<cluster> to Grafana",
       "grafana-[a-z0-9-]+" in (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8"))
 check("segment 6 says Datadog when the pool is live and Grafana when not",

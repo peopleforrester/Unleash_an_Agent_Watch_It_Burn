@@ -43,7 +43,7 @@ check "never the a-NNN route #359 removed" '[[ "${got}" != *"host=a-"* ]]'
 stale="$(WIB_CONSOLE_HOST=stale-host.agenticburn.com q 'harvest_one watch-it-burn-attendee-007')"
 check "an exported WIB_CONSOLE_HOST does not override the per-cluster name" \
   '[[ "${stale}" == "watch-it-burn-attendee-007,us-west-2,host=$(q "public_host_for watch-it-burn-attendee-007")" ]]'
-for n in watch-it-burn-community watch-it-burn-michael-admin; do
+for n in watch-it-burn-community watch-it-burn-private; do
     r="$(WIB_CONSOLE_HOST=stale-host.agenticburn.com q "harvest_one ${n}")"
     check "a roster cluster (${n}) is left to the harvester's own mapping: empty host" \
       '[[ "${r}" == "${n},us-west-2,host=" ]]'
@@ -57,7 +57,7 @@ check "and each is the one public_host_for publishes" \
 echo "== ingest never registers a retired cluster name through /admin/import =="
 # A state file for each, so the only thing that can stop the import is the name check.
 for n in watch-it-burn-michael-student watch-it-burn-whitney-student watch-it-burn-r2-1 watch-it-burn-r3-2 \
-         watch-it-burn-attendee-001 watch-it-burn-community watch-it-burn-michael-admin; do
+         watch-it-burn-attendee-001 watch-it-burn-community watch-it-burn-private; do
     : >"${T}/states/${n}.tfstate"
 done
 for n in watch-it-burn-michael-student watch-it-burn-whitney-student watch-it-burn-r2-1 watch-it-burn-r3-2; do
@@ -67,7 +67,7 @@ for n in watch-it-burn-michael-student watch-it-burn-whitney-student watch-it-bu
     check "${n} is not queued for the ingest retry loop" '[[ -z "$(cat "${T}"/logs/.failures.* 2>/dev/null)" ]]'
 done
 # The live classes still go on to the cluster: the name check stops nothing it should not.
-for n in watch-it-burn-attendee-001 watch-it-burn-community watch-it-burn-michael-admin; do
+for n in watch-it-burn-attendee-001 watch-it-burn-community watch-it-burn-private; do
     out="$(WIB_INGEST_LB_WAIT=0 q "ingest_one ${n} accen-dev")"
     check "${n} is not refused" '! grep -q "REFUSING" <<<"${out}" && grep -q "KUBECONFIG-CALLED" <<<"${out}"'
 done

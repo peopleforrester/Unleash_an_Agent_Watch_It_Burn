@@ -59,9 +59,9 @@ echo "== datadog_keys_for: one truth for every cluster class =="
 check "attendee-002 gets pool row 2 plus the instructor org second" \
   '[[ "$(src "datadog_keys_for watch-it-burn-attendee-002")" == "ROW2_API ROW2_APP ADMIN_API ADMIN_APP" ]]'
 check "an admin cluster gets the instructor org and nothing second" \
-  '[[ "$(src "datadog_keys_for watch-it-burn-michael-admin")" == "ADMIN_API ADMIN_APP  " ]]'
+  '[[ "$(src "datadog_keys_for watch-it-burn-private")" == "ADMIN_API ADMIN_APP  " ]]'
 check "nothing reads the retired admin-attendee org (#295)" \
-  '( : >"${CALLS}"; src "datadog_keys_for watch-it-burn-michael-admin" >/dev/null; ! grep -q datadog-admin-attendee "${CALLS}" )'
+  '( : >"${CALLS}"; src "datadog_keys_for watch-it-burn-private" >/dev/null; ! grep -q datadog-admin-attendee "${CALLS}" )'
 check "an instructor cluster gets the instructor org and nothing second" \
   '[[ "$(src "datadog_keys_for watch-it-burn-r2-1")" == "ADMIN_API ADMIN_APP  " ]]'
 check "a slot beyond the pool resolves nothing and returns 1" \
@@ -94,11 +94,11 @@ rm -f "${T}/admin_present"
 
 echo "== no shared-org secret: roster clusters carry a logged gap, attendees are refused (#510) =="
 touch "${T}/no_admin_secret"
-check "a roster cluster resolves no keys and returns 1" '! src "datadog_keys_for watch-it-burn-michael-admin" >/dev/null'
+check "a roster cluster resolves no keys and returns 1" '! src "datadog_keys_for watch-it-burn-private" >/dev/null'
 : >"${CALLS}"; rm -f "${T}/live_key" "${T}/admin_present"; : >"${T}/stderr"
-src 'repair_datadog watch-it-burn-michael-admin /dev/null acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
+src 'repair_datadog watch-it-burn-private /dev/null acct; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
 check "repair: a roster cluster without keys is a logged gap, not a failure" \
-  '[[ ! -s "${T}/out" ]] && grep -q "michael-admin: Datadog gap logged" "${T}/stderr" && ! grep -q "identity-script\|reload" "${CALLS}"'
+  '[[ ! -s "${T}/out" ]] && grep -q "watch-it-burn-private: Datadog gap logged" "${T}/stderr" && ! grep -q "identity-script\|reload" "${CALLS}"'
 check "repair: an attendee whose keys do not resolve is still recorded as datadog-keys-unresolved" \
   '! src "datadog_keys_for watch-it-burn-attendee-099" >/dev/null && src "repair_datadog watch-it-burn-attendee-099 /dev/null acct; cat \"\${FAIL_FILE}\"; rm -f \"\${FAIL_FILE}\"" | grep -qx "watch-it-burn-attendee-099:datadog-keys-unresolved"'
 # bootstrap_one with every external step replaced by a recorder; the key decision stays the real one.
@@ -112,25 +112,25 @@ boot() { src "provider_write_kubeconfig() { :; }; bootstrap_student_aws() { echo
 # The Night Before build: every roster cluster 'instructors up all' selects, with the profile it selects.
 night="$(src '_provision_spec_fleet() { :; }; require_tools() { :; }; load_roster; cmd_instructors up all >/dev/null 2>&1
     for k in "${!PROVISION_SPEC[@]}"; do echo "${k} $(cut -d"|" -f2 <<<"${PROVISION_SPEC[$k]}")"; done | sort')"
-check "instructors up all selects the three roster clusters" '[[ "$(wc -l <<<"${night}")" -eq 3 ]] && grep -q "^watch-it-burn-community burn$" <<<"${night}"'
+check "instructors up all selects the two roster clusters" '[[ "$(wc -l <<<"${night}")" -eq 2 ]] && grep -q "^watch-it-burn-community burn$" <<<"${night}"'
 : >"${CALLS}"; : >"${T}/stderr"
 boot "$(while read -r n p; do printf 'bootstrap_one %s %s; ' "$n" "$p"; done <<<"${night}")" >"${T}/out"
 check "bootstrap: every roster cluster runs deploy-full-idp with empty keys and nothing is recorded failed" \
-  '[[ ! -s "${T}/out" ]] && [[ "$(grep -c "^idp watch-it-burn-[a-z-]* [a-z]* api= app=$" "${CALLS}")" -eq 3 ]]'
-check "bootstrap: each one goes on to its terminal login, and the admin clusters are armed" \
-  '[[ "$(grep -c "^terminal-auth " "${CALLS}")" -eq 3 ]] && grep -q "^arm watch-it-burn-michael-admin$" "${CALLS}" && grep -q "^arm watch-it-burn-whitney-admin$" "${CALLS}"'
+  '[[ ! -s "${T}/out" ]] && [[ "$(grep -c "^idp watch-it-burn-[a-z-]* [a-z]* api= app=$" "${CALLS}")" -eq 2 ]]'
+check "bootstrap: each one goes on to its terminal login, and the admin cluster is armed" \
+  '[[ "$(grep -c "^terminal-auth " "${CALLS}")" -eq 2 ]] && grep -q "^arm watch-it-burn-private$" "${CALLS}" && [[ "$(grep -c "^arm " "${CALLS}")" -eq 1 ]]'
 check "bootstrap: each one points its Bedrock ModelConfigs at its tagged profiles (#513)" \
-  '[[ "$(grep -c "^pin-bedrock " "${CALLS}")" -eq 3 ]]'
+  '[[ "$(grep -c "^pin-bedrock " "${CALLS}")" -eq 2 ]]'
 check "bootstrap: the gap is a WARN naming the cluster" \
-  '[[ "$(grep -c "WARN: watch-it-burn-[a-z-]*: no Datadog keys" "${T}/stderr")" -eq 3 ]] && ! grep -q "BOOTSTRAP FAILED" "${T}/stderr"'
+  '[[ "$(grep -c "WARN: watch-it-burn-[a-z-]*: no Datadog keys" "${T}/stderr")" -eq 2 ]] && ! grep -q "BOOTSTRAP FAILED" "${T}/stderr"'
 : >"${CALLS}"; : >"${T}/stderr"
 boot "bootstrap_one watch-it-burn-attendee-099 attendee" >"${T}/out"
 check "bootstrap: an attendee whose org does not resolve is refused, never given the shared org" \
   'grep -qx "watch-it-burn-attendee-099" "${T}/out" && ! grep -q "^idp " "${CALLS}" && grep -q "refusing to fall back" "${T}/stderr"'
 # Loading the key later is all it takes: the next converge sees own-key-drift and turns Datadog on.
-rm -f "${T}/no_admin_secret"; : >"${CALLS}"; printf 'watch-it-burn-michael-admin' >"${T}/identity"
-printf '%s' "$(src 'public_host_for watch-it-burn-michael-admin')" >"${T}/public_host"
-src 'repair_datadog watch-it-burn-michael-admin /dev/null acct'
+rm -f "${T}/no_admin_secret"; : >"${CALLS}"; printf 'watch-it-burn-private' >"${T}/identity"
+printf '%s' "$(src 'public_host_for watch-it-burn-private')" >"${T}/public_host"
+src 'repair_datadog watch-it-burn-private /dev/null acct'
 check "once the key exists, repair writes datadog-secret in all three namespaces and reloads the consumers" \
   '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ADMIN_API" "${CALLS}")" -eq 3 ]] && grep -q "^reload ctx-test acct" "${CALLS}"'
 : >"${T}/stderr"

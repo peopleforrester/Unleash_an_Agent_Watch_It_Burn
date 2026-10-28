@@ -152,7 +152,7 @@ for name, note in [("off-topic", kp.judge_off_topic_answered(chat(LONG))[1]),
           EXCERPT >= 300 and re.sub(r"\s+", " ", LONG).strip()[:300] in note, note)
 
 print("== admin judges ==")
-host = "michael-admin.agenticburn.com"
+host = "burritobot-private.agenticburn.com"
 check("identity: both paths name the host passes", passes(kp.judge_identity(host, host, host)))
 check("identity: another cluster's kube-context fails",
       not passes(kp.judge_identity(host, "whitney-admin.agenticburn.com", host)))
@@ -768,9 +768,8 @@ print("== the Night Before list runs it ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text()
 nb = ros[ros.find("## Night Before"):ros.find("## Rollback on the day")]
 check("Night Before runs the probe on the community cluster", "kubecon_probe.py community attackme.agenticburn.com" in nb)
-check("Night Before runs the probe on each admin cluster",
-      "kubecon_probe.py admin michael-admin.agenticburn.com" in nb
-      and "kubecon_probe.py admin whitney-admin.agenticburn.com" in nb)
+check("Night Before runs the probe on the private cluster the presenters share",
+      "kubecon_probe.py admin burritobot-private.agenticburn.com" in nb and "whitney-admin" not in nb)
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
 check("Night Before counts the community run's 5 model calls", "a community run makes 5 model calls" in nb)
 

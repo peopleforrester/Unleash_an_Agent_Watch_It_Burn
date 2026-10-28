@@ -54,8 +54,8 @@ readonly NAME_PREFIX="watch-it-burn-attendee"
 # The attendee pool, by name: watch-it-burn-attendee-NNN. Every cluster anybody claims by email is one of
 # these, the presenters' included (#295), so this is the class that takes a pool org and dual-ships.
 is_attendee_name() { [[ "$1" =~ ^${NAME_PREFIX}-[0-9]+$ ]]; }
-# PRESENTER clusters are named for their OWNER FIRST, then the role: watch-it-burn-michael-admin serves
-# michael-admin.agenticburn.com (#258, #294). This is the ONE place that rule lives; is_instructor_name,
+# PRESENTER clusters are named for their OWNER FIRST, then the role: watch-it-burn-private serves
+# burritobot-private.agenticburn.com (#258, #294). This is the ONE place that rule lives; is_instructor_name,
 # role_of_instructor_name and public_host_for all ask it, because two places disagreeing about a cluster's
 # name produced #265 and #272. The only presenter role left is admin: the dedicated <owner>-student
 # clusters are retired (#295), and a presenter who needs a student cluster claims one from the pool by
@@ -64,6 +64,10 @@ is_attendee_name() { [[ "$1" =~ ^${NAME_PREFIX}-[0-9]+$ ]]; }
 # appends "-cluster-", so the whole cluster name must stay under 30 (watch-it-burn-presenter-michael failed
 # plan at 40). 27 characters at owner=7.
 readonly PRESENTER_SUFFIX="admin"
+# The presenters share one admin cluster, named for its role and not for a person (2026-10-28): the room sees
+# burritobot-public (attackme) and burritobot-private. It is a presenter cluster for every rule below.
+readonly SHARED_ADMIN_NAME="watch-it-burn-private"
+readonly SHARED_ADMIN_HOST="burritobot-private.agenticburn.com"
 readonly PRESENTER_OWNER_MAX=10
 # Service hostnames (#233): <service>-<label>.agenticburn.com for every cluster, riding the cluster's
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
@@ -76,7 +80,7 @@ emit_service_hosts() {
         printf '%s-%s.agenticburn.com  %s:443\n' "${svc}" "${label}" "${lb}"
     done
 }
-is_presenter_name() { [[ "$1" =~ ^watch-it-burn-[a-z0-9-]+-${PRESENTER_SUFFIX}$ ]]; }
+is_presenter_name() { [[ "$1" == "${SHARED_ADMIN_NAME}" || "$1" =~ ^watch-it-burn-[a-z0-9-]+-${PRESENTER_SUFFIX}$ ]]; }
 presenter_owner_of() { local n="${1#watch-it-burn-}"; printf '%s' "${n%-${PRESENTER_SUFFIX}}"; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
 # 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
@@ -143,8 +147,7 @@ load_roster() {
     # with no owner and no friendly hostname, silently (#284).
     [[ "${#INSTRUCTORS[@]}" -gt 0 ]] || INSTRUCTORS=(
         "watch-it-burn-community|community|||-1|burn|"
-        "watch-it-burn-michael-admin|admin||||admin|michael"
-        "watch-it-burn-whitney-admin|admin||||admin|whitney"
+        "watch-it-burn-private|admin||||admin|"
     )
 }
 
@@ -343,6 +346,7 @@ public_host_for() {
     # The community cluster is the one the whole room attacks, and it is reachable at the name the room
     # is told: attackme.
     [[ "${name}" == "watch-it-burn-community" ]] && { printf 'attackme.agenticburn.com'; return 0; }
+    [[ "${name}" == "${SHARED_ADMIN_NAME}" ]] && { printf '%s' "${SHARED_ADMIN_HOST}"; return 0; }
     if is_presenter_name "${name}"; then
         printf '%s-%s.agenticburn.com' "$(presenter_owner_of "${name}")" "${PRESENTER_SUFFIX}"; return 0
     fi
@@ -560,11 +564,11 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       across all accounts. DRY-RUN unless WIB_APPLY=1.
     status            List clusters that have state and their EKS status.
 
-  INSTRUCTOR clusters (roster.tsv: one community + one admin per presenter, NOT in the attendee pool):
+  INSTRUCTOR clusters (roster.tsv: one community + the presenters' shared private cluster, NOT in the attendee pool):
     instructors up [role|owner]
                               Provision the roster. The argument is a ROLE (community|admin), an OWNER
-                              (michael|whitney, from roster.tsv's owner column), or both|all for
-                              everything. `instructors up whitney` builds exactly her admin cluster.
+                              (from roster.tsv's owner column; the shared private cluster has none),
+                              or both|all for everything.
                               Regenerates routes AND
                               registers the roster with the provisioning app (set WIB_PROVISIONING_URL +
                               WIB_ADMIN_TOKEN; WIB_NO_INGEST=1 opts out).
@@ -2112,9 +2116,9 @@ deregister_one() {
 #
 #   attendees            every attendee cluster that HAS state
 #   attendees:40         attendee-001 .. attendee-040, whether or not they exist yet
-#   instructors          the roster clusters (community + one admin per presenter) with state
+#   instructors          the roster clusters (community + the shared private cluster) with state
 #   presenters           every presenter cluster (<owner>-admin, is_presenter_name) with state
-#   michael | whitney    that owner's roster clusters. A presenter's student cluster is a claimed pool
+#   <owner>              that owner's roster clusters. A presenter's student cluster is a claimed pool
 #                        cluster since #295, so it is in `attendees`, like any other claim.
 #   all                  everything with state
 #   <name> ...           explicit names, expanded as before
@@ -3870,7 +3874,7 @@ cmd_routes() {
         # provisioning/start/apex kept serving). TLS is declared statically in the apex Caddyfile transport
         # instead. The two sides must therefore move TOGETHER: :443 here requires the TLS transport there.
         # Single label, deliberately. The certificate is *.agenticburn.com, which covers exactly one
-        # level, so michael-admin.agenticburn.com validates and admin.michael.agenticburn.com does
+        # level, so burritobot-private.agenticburn.com validates and admin.michael.agenticburn.com does
         # not: it fails the TLS handshake outright rather than warning. Verified 2026-08-27, on the
         # cluster names of the day.
         # EVERY roster row gets a host, including an unassigned one. An empty owner means a shared hot

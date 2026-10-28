@@ -47,7 +47,7 @@ printf '%s' "${reply}"
 S
 chmod +x "${SHIM}"/*
 export T CALLS PATH="${SHIM}:${PATH}"
-C=watch-it-burn-community; ADMIN=watch-it-burn-michael-admin
+C=watch-it-burn-community; ADMIN=watch-it-burn-private
 touch "${T}/states/${C}.tfstate" "${T}/states/${ADMIN}.tfstate"
 ctx_of() { printf 'arn:aws:eks:us-west-2:111122223333:cluster/%s' "$1"; }
 ZERO='{"tier": "nova", "requests": 0, "input_tokens": 0, "output_tokens": 0, "total_tokens": 0, "usd": 0.0, "cap_usd": 25.0, "budget_guard": false}'
@@ -108,7 +108,7 @@ check "no name is a usage error" '[[ "${rc}" -ne 0 ]] && grep -q "usage: reset-b
 echo "== an admin cluster is read on its own host =="
 replies "${ZERO}"
 KCTX="$(ctx_of "${ADMIN}")" src "cmd_reset_bot ${ADMIN}"; rc=$?
-check "michael-admin reads michael-admin.agenticburn.com/cost" '[[ "${rc}" -eq 0 ]] && grep -q "^curl https://michael-admin.agenticburn.com/cost$" "${CALLS}"'
+check "michael-admin reads burritobot-private.agenticburn.com/cost" '[[ "${rc}" -eq 0 ]] && grep -q "^curl https://burritobot-private.agenticburn.com/cost$" "${CALLS}"'
 
 echo "== wired into the driver =="
 src_txt="$(cat "${FLEET}")"; usage_txt="$(sed -n '/^usage() {/,/^}/p' "${FLEET}")"

@@ -36,7 +36,7 @@ fixed on staging. Its teardown to zero (`verify/account-audit.sh` CLEAN) is not 
 
 ## KubeCon platform up (2026-10-27)
 
-`watch-it-burn-community` (attackme) and `watch-it-burn-michael-admin` are running in accen-dev, us-west-2,
+`watch-it-burn-community` (attackme) and `watch-it-burn-private` are running in accen-dev, us-west-2,
 at about $24 a day, the two clusters Michael chose on #610 (question 846). On staging `5285204` the KubeCon
 probe is GREEN on both: community 6/6, admin 24/24, with four more admin repeats queued (#627, #628). The
 probe record is in the run-of-show. The 10-24 teardown was recorded on #454 (audit-zero); this bring-up is up.

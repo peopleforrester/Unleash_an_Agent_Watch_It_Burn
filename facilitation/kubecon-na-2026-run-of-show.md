@@ -84,9 +84,8 @@ Deployment's replacement to go Ready. That is a pod delete, never a
 touched, so the app stays Synced and self-heal has nothing to revert. It then reads
 `/cost` through the router and exits non-zero unless the counter reads
 `$0.0000 over 0 requests`. The curl is the same read by eye: `"usd": 0.0` and
-`"requests": 0`. To zero the admin clusters' counters as well, add their names
-(`watch-it-burn-michael-admin`, `watch-it-burn-whitney-admin`), then run
-`guards-off` on each admin terminal: the restart puts guard-proxy's own toggles back
+`"requests": 0`. To zero the private cluster's counter as well, add its name
+(`watch-it-burn-private`), then run `guards-off` on its terminal: the restart puts guard-proxy's own toggles back
 to the repo's values (all off), but the C7 tool allow-list and gateway rule live
 outside guard-proxy, and only `guards-off` puts them back.
 
@@ -226,8 +225,8 @@ presenter cluster for the before and after.
 
 - **Community cluster**, `attackme.agenticburn.com`: no guardrails at all. This is
   what the room attacks from their phones, and where the wide-open start happens.
-- **A presenter admin cluster**, `michael-admin.agenticburn.com` (Whitney's is
-  `whitney-admin.agenticburn.com`): the full IDP with every Kubernetes control
+- **The private cluster**, `burritobot-private.agenticburn.com`, which Michael and
+  Whitney share: the full IDP with every Kubernetes control
   armed, and the AI guardrails present but toggled off at the start so they can be
   turned on live. This is the guarded half of every before/after.
 
@@ -433,9 +432,8 @@ guardrail did its job.
 
 - **Datadog pool live:** Agent Observability in the shared Datadog org.
 - **No pool live:** the Grafana view on the admin cluster, which reads Tempo and
-  needs no Datadog key (#500). Michael's cluster:
-  `https://grafana-michael-admin.agenticburn.com/d/witb-agent-obs` (Whitney's:
-  `https://grafana-whitney-admin.agenticburn.com/d/witb-agent-obs`). Login
+  needs no Datadog key (#500):
+  `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. Login
   `admin`; the admin cluster terminal prints the password in its catalogue. Say
   "this is Grafana reading the traces from Tempo, on the cluster itself".
 
@@ -550,7 +548,7 @@ is merely slow rather than rebuilding:
   The preflight in the next step reports it per account, and on a FAIL prints this
   line for the account that is missing it.
 - [ ] **Accounts and quota resolve, before anything is brought up (#534):**
-  `WIB_ATTENDEE_ACCOUNTS=accen-dev ./fleet.sh preflight 3`. It is read-only, so it
+  `WIB_ATTENDEE_ACCOUNTS=accen-dev ./fleet.sh preflight 2`. It is read-only, so it
   runs before the bring-up commits any money. It must end `PREFLIGHT GREEN`; on a
   FAIL, fix what it names (it prints the apply line for a missing boundary or lab
   VPC) and run it again. It is scoped to accen-dev because every roster cluster lives
@@ -586,13 +584,13 @@ is merely slow rather than rebuilding:
   must print `200`. Anything else means the provisioning service, which stays up
   for this session as the beacon collector (open question 9), is down; bring it back
   before the day. The router 404s `/kubecon` on any host outside the roster (#511),
-  so confirm the gate lets the stage through: for each of attackme,
-  michael-admin and whitney-admin,
+  so confirm the gate lets the stage through: for each of attackme and
+  burritobot-private,
   `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.agenticburn.com/kubecon`
   must print `200`. A `404` means the router's roster matcher does not know that
   host, and the presenters have nothing to drive from.
 - [ ] **Hostnames serve over HTTPS and websocket:**
-  `./fleet.sh check-tls attackme.agenticburn.com michael-admin.agenticburn.com whitney-admin.agenticburn.com`.
+  `./fleet.sh check-tls attackme.agenticburn.com burritobot-private.agenticburn.com`.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.
 - [ ] **The pinned model answers in the delivery region.** From the repo root:
   `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`. It
@@ -615,10 +613,8 @@ is merely slow rather than rebuilding:
 
   ```bash
   python3 verify/kubecon_probe.py community attackme.agenticburn.com
-  python3 verify/kubecon_probe.py admin michael-admin.agenticburn.com \
-      --context <michael-admin-context> --kubeconfig /tmp/michael-admin.kubeconfig --profile accen-dev
-  python3 verify/kubecon_probe.py admin whitney-admin.agenticburn.com \
-      --context <whitney-admin-context> --kubeconfig /tmp/whitney-admin.kubeconfig --profile accen-dev
+  python3 verify/kubecon_probe.py admin burritobot-private.agenticburn.com \
+      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
   ```
 
   - Community (segment 2): the wide-open start, a burrito order answered, the CEO
@@ -659,7 +655,7 @@ is merely slow rather than rebuilding:
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
   pool is live, segment 6 runs on the admin cluster's Grafana view
-  (`https://grafana-michael-admin.agenticburn.com/d/witb-agent-obs`): open it, run
+  (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
   the C6, C5 and C7 beats once, and confirm each of the three segment 6 panels shows
   a row. Say on the day which surface is shown.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the

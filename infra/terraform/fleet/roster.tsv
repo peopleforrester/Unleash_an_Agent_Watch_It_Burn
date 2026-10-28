@@ -2,13 +2,13 @@
 #   name|role|tier|instance_type|pids|bootstrap|owner
 #
 # ROLE replaced the old numbered clusters (#291), which are gone: there is one Community cluster
-# the whole room attacks together, and one admin cluster per presenter. The role decides the bootstrap
+# the whole room attacks together, and one admin cluster the presenters share. The role decides the bootstrap
 # profile and the public hostname, so it is data here rather than a rule someone has to remember:
 #
 #   community  no guardrails at all, the unguarded spectacle. Reachable at attackme.agenticburn.com.
 #              pids=-1 because Challenge 4's fork bomb has to burn an uncapped node.
 #   admin      the student build with every guardrail ARMED, so a presenter can show a control already
-#              working instead of staging an attack against it. Reachable at <owner>-admin.agenticburn.com.
+#              working instead of staging an attack against it. watch-it-burn-private is reachable at burritobot-private.agenticburn.com.
 #
 # OWNER is what splits the roster per presenter. It is empty for the community cluster, which belongs to
 # the room. It also drives the hostname, so it is an explicit column rather than a convention: "the -1
@@ -22,5 +22,4 @@
 # pids -> module default (1024). The tier column is not applied yet: every cluster runs Nova whatever it
 # says (decisions.md, 2026-07-07, §4.6-d).
 watch-it-burn-community|community|||-1|burn|
-watch-it-burn-michael-admin|admin||||admin|michael
-watch-it-burn-whitney-admin|admin||||admin|whitney
+watch-it-burn-private|admin||||admin|

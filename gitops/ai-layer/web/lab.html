@@ -943,8 +943,8 @@ kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","pa
     // nav links carry the FRIENDLY name in ?cluster= (#383), so ?cluster= may hold either form. An
     // attendee's memorable name (soot-sabrina) is a menu word then a witch, so it never ends in -admin.
     // ?role= still wins when present, so an instructor previewing the student view keeps working.
-    var _rosterName=/^watch-it-burn-(community|[a-z0-9-]+-admin)$/i;
-    var _rosterHost=/^(attackme|[a-z0-9-]+-admin)$/i;
+    var _rosterName=/^watch-it-burn-(community|private|[a-z0-9-]+-admin)$/i;
+    var _rosterHost=/^(attackme|burritobot-private|[a-z0-9-]+-admin)$/i;
     var _hostLabel=(location.hostname||'').split('.')[0];
     var _looksInstructor=[(cluster||'').trim(), _hostLabel].some(function(v){
       return _rosterName.test(v) || _rosterHost.test(v);

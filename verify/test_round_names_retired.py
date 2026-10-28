@@ -160,8 +160,8 @@ def looks_instructor(v: str) -> bool:
 
 _roster = [l.split("|")[0] for l in (FLEET.parent / "roster.tsv").read_text(encoding="utf-8").splitlines()
            if l.strip() and not l.startswith("#")]
-check(f"the roster has its community and admin clusters ({len(_roster)})",
-      "watch-it-burn-community" in _roster and any(n.endswith("-admin") for n in _roster))
+check(f"the roster has its community and private clusters ({len(_roster)})",
+      _roster == ["watch-it-burn-community", "watch-it-burn-private"])
 for n in _roster:
     host = fleet_q(f"public_host_for {n}").split(".")[0]
     check(f"{n} reads as an instructor cluster by name", looks_instructor(n))
@@ -223,7 +223,7 @@ with tempfile.TemporaryDirectory() as tmp:
                       (("watch-it-burn-michael-student",), "a retired presenter student name"),
                       (("some-other-cluster",), "a cluster that is not the fleet's"),
                       (("watch-it-burn-community", "2"), "the old round argument"),
-                      (("watch-it-burn-michael-admin", "3"), "the old round argument on an admin cluster")):
+                      (("watch-it-burn-private", "3"), "the old round argument on an admin cluster")):
         rc, err, called = run(*args)
         check(f"refuses {why} before touching AWS", rc != 0 and called == "")
     rc, err, _ = run("watch-it-burn-community", "2")

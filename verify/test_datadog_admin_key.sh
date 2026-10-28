@@ -62,7 +62,7 @@ check "and refuses to run without it, rather than calling everything single-org"
 echo "== the rule actually matches today's names =="
 match() { ( source "${FLEET}" >/dev/null 2>&1; is_attendee_name "$1" && echo yes || echo no ) 2>/dev/null | tail -1; }
 check "an attendee pool cluster dual-ships"                   '[[ "$(match watch-it-burn-attendee-007)" == yes ]]'
-check "an admin cluster does NOT (it ships to the shared org)" '[[ "$(match watch-it-burn-michael-admin)" == no ]]'
+check "an admin cluster does NOT (it ships to the shared org)" '[[ "$(match watch-it-burn-private)" == no ]]'
 check "the community cluster does NOT"                        '[[ "$(match watch-it-burn-community)" == no ]]'
 check "a retired presenter student name is not a pool cluster" '[[ "$(match watch-it-burn-whitney-student)" == no ]]'
 check "the old pres- form no longer matches, so nothing silently depends on it" \

@@ -6,7 +6,7 @@
 # a cluster name. Without the tag it reported every cluster as having no hostname and wrote no pool file. The
 # host comes from fleet.sh's public_host_for, the one function routes and ingest already use, so the tag cannot
 # name a host the router does not serve for that cluster: attackme.agenticburn.com for the community cluster,
-# <owner>-admin.agenticburn.com for a presenter's, and the two-word name of the slot for an attendee's.
+# burritobot-private.agenticburn.com for the presenters' shared cluster, and the two-word name of the slot for an attendee's.
 import os, pathlib, re, stat, subprocess, sys, tempfile
 REPO = pathlib.Path(__file__).resolve().parents[1]
 CLUSTER_TF = (REPO / "infra" / "terraform" / "aws" / "cluster" / "main.tf").read_text()
@@ -70,9 +70,8 @@ rc, out = run_fleet("hosts")
 table = dict(l.split("\t")[:2] for l in out.splitlines() if l.count("\t") == 2)
 check(f"fleet.sh hosts lists the roster and the attendee grid (rc={rc}, {len(table)} rows)", rc == 0 and len(table) >= 250)
 want = {"watch-it-burn-community": "attackme.agenticburn.com",
-        "watch-it-burn-michael-admin": "michael-admin.agenticburn.com",
-        "watch-it-burn-whitney-admin": "whitney-admin.agenticburn.com"}
-check("the roster's hosts are attackme and <owner>-admin", all(table.get(k) == v for k, v in want.items()))
+        "watch-it-burn-private": "burritobot-private.agenticburn.com"}
+check("the roster's hosts are attackme and burritobot-private", all(table.get(k) == v for k, v in want.items()))
 bad = [h for h in table.values() if host_re is None or not host_re.fullmatch(h)]
 check(f"every host the fleet assigns passes var.hostname's validation ({len(bad)} do not: {bad[:3]})", not bad)
 rejected = ["https://attackme.agenticburn.com", "Attackme.agenticburn.com", "attackme", "", "soot-.agenticburn.com"]

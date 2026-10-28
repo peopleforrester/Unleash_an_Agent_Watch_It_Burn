@@ -54,7 +54,7 @@ print("== the identity script derives a distinct burritobot-<role> name per clus
 # Named for what the audience sees on the Datadog screen: the bot the room hacks is public, the presenters'
 # cluster is private. A second presenter cluster keeps its owner so the names stay unique.
 for eks, want in (("watch-it-burn-community", "burritobot-public"),
-                  ("watch-it-burn-michael-admin", "burritobot-private"),
+                  ("watch-it-burn-private", "burritobot-private"),
                   ("watch-it-burn-whitney-admin", "burritobot-private-whitney"),
                   ("watch-it-burn-attendee-007", "burritobot-attendee-007")):
     made = identity_literals(eks)

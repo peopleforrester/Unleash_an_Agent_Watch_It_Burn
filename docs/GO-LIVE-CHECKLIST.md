@@ -45,7 +45,7 @@ python3 verify/agent_probe.py attackme.agenticburn.com --context <ctx> --profile
     --repeat 5 --max-calls 60
 
 # c) hostnames, TLS and websockets
-infra/terraform/fleet/check-tls.sh attackme.agenticburn.com michael-admin.agenticburn.com
+infra/terraform/fleet/check-tls.sh attackme.agenticburn.com burritobot-private.agenticburn.com
 ```
 
 - [ ] Drift audit clean on every cluster (expected values are documented in the script header).

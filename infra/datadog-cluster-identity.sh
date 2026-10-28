@@ -22,11 +22,11 @@ CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cl
 [[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "cannot derive cluster name (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
 # What Datadog calls the cluster (#629): Whitney's sandbox org filters BurritoBot by a burritobot prefix, and a
 # Datadog cluster name should be unique. Named for the screen: the bot the room hacks is public, the presenters'
-# cluster is private, and a second presenter cluster keeps its owner. cluster-name keeps the EKS name, which the
+# cluster they share is private, and any other admin cluster keeps its owner. cluster-name keeps the EKS name, which the
 # probes and fleet.sh compare against the cluster itself.
 case "${CLUSTER_NAME}" in
     watch-it-burn-community)     DATADOG_CLUSTER_NAME="burritobot-public" ;;
-    watch-it-burn-michael-admin) DATADOG_CLUSTER_NAME="burritobot-private" ;;
+    watch-it-burn-private)       DATADOG_CLUSTER_NAME="burritobot-private" ;;
     watch-it-burn-*-admin)       owner="${CLUSTER_NAME#watch-it-burn-}"; DATADOG_CLUSTER_NAME="burritobot-private-${owner%-admin}" ;;
     *)                           DATADOG_CLUSTER_NAME="burritobot-${CLUSTER_NAME#watch-it-burn-}" ;;
 esac

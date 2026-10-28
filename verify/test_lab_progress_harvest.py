@@ -58,10 +58,10 @@ lab = [
     {"tag_set": [f"kube_cluster_name:{B}", "span.name:lab.heartbeat"], "pointlist": [[T0 * 1000, None]]},
 ]
 running = lambda n: {"tag_set": [f"kube_cluster_name:{n}"], "pointlist": [[T0 * 1000, 1]]}
-agents = [running(A), running(B), running("watch-it-burn-attendee-003"), running("watch-it-burn-michael-admin"),
+agents = [running(A), running(B), running("watch-it-burn-attendee-003"), running("watch-it-burn-private"),
           running("watch-it-burn-community"), running("watch-it-burn-michael-student")]
 # An admin cluster's lab opened without ?role= reports role=student; it is still not an attendee.
-lab.append(s("watch-it-burn-michael-admin", "michael-admin", "lab.session.start", {0: 1}))
+lab.append(s("watch-it-burn-private", "michael-admin", "lab.session.start", {0: 1}))
 
 summary = lp.summarize(lab, agents)
 by = {r["cluster"]: r for r in summary["clusters"]}

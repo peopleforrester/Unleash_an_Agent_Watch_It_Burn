@@ -424,7 +424,7 @@
 <script src="event.js"></script>
 <script>
   // Every cluster's BurritoBot talks to its OWN same-origin /chat. The agenticburn.com router proxies the
-  // whole host+path (e.g. michael-admin.agenticburn.com/chat) to that cluster's console, so same-origin
+  // whole host+path (e.g. burritobot-private.agenticburn.com/chat) to that cluster's console, so same-origin
   // reaches the right backend with NO cross-origin call (a cross-origin POST triggers a CORS preflight the
   // backend returns 501 on -> the browser blocks it -> "couldn't reach the kitchen").
   // The backend is always this cluster's own console, same-origin, so there is one endpoint. The round

@@ -93,7 +93,7 @@ def app_profile(name, pid, **over):
 
 APPS = {"inferenceProfileSummaries": [
     app_profile("watch-it-burn-attendee-001-nova", "nova0001"),
-    app_profile("watch-it-burn-michael-admin-nova", "nova0002"),
+    app_profile("watch-it-burn-private-nova", "nova0002"),
     app_profile("watch-it-burn-attendee-001-haiku", "haiku001"),
     app_profile("packt-cluster-nova", "packt001"),
 ]}
@@ -101,7 +101,7 @@ TAGS_OK = {"tags": [{"key": "project", "value": "watch-it-burn"}, {"key": "event
                     {"key": "attendee", "value": "watch-it-burn-attendee-001"}, {"key": "consumer", "value": "agent"}]}
 picked = mpc.cluster_profiles(APPS["inferenceProfileSummaries"], "nova")
 check("the clusters' profiles for the pinned tier are picked, by the cluster root's <cluster>-<tier> name",
-      [s["inferenceProfileName"] for s in picked] == ["watch-it-burn-attendee-001-nova", "watch-it-burn-michael-admin-nova"],
+      [s["inferenceProfileName"] for s in picked] == ["watch-it-burn-attendee-001-nova", "watch-it-burn-private-nova"],
       str(picked))
 check("copies that route where the pin routes pass, in any order",
       all_ok(mpc.judge_app_profiles(picked, "nova", PINNED_ARNS, "us-west-2")))

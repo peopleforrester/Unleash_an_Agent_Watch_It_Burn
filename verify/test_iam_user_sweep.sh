@@ -62,7 +62,8 @@ deletes() { grep -c 'aws iam delete-\(user\|access-key\|user-policy\) ' "${CALLS
 
 echo "== the user name is the cluster root's (and was the generator's) =="
 check "attendee cluster -> wib-attendee-001" '[[ "$(iam_user_for watch-it-burn-attendee-001)" == "wib-attendee-001" ]]'
-check "presenter cluster -> wib-michael-admin" '[[ "$(iam_user_for watch-it-burn-michael-admin)" == "wib-michael-admin" ]]'
+check "shared admin cluster -> wib-private" '[[ "$(iam_user_for watch-it-burn-private)" == "wib-private" ]]'
+check "<owner>-admin cluster -> wib-alpha-admin" '[[ "$(iam_user_for watch-it-burn-alpha-admin)" == "wib-alpha-admin" ]]'
 
 C=watch-it-burn-attendee-007
 echo "== a destroyed cluster's user goes, keys first =="

@@ -85,7 +85,7 @@ variable "hostname" {
   # one from the cluster name. The name is assigned upstream, by fleet.sh's public_host_for from the roster
   # and the slot grid, and the fleet driver passes it on every apply and destroy. A default would tag a
   # cluster with a host the router does not serve for it, which harvest would then hand to a student.
-  description = "Public hostname this cluster is reached on (the hostname= tag), e.g. soot-sabrina.agenticburn.com, attackme.agenticburn.com or michael-admin.agenticburn.com. Set by fleet.sh's public_host_for."
+  description = "Public hostname this cluster is reached on (the hostname= tag), e.g. soot-sabrina.agenticburn.com, attackme.agenticburn.com or burritobot-private.agenticburn.com. Set by fleet.sh's public_host_for."
   validation {
     condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$", var.hostname))
     error_message = "hostname must be a lowercase DNS name such as soot-sabrina.agenticburn.com, without a scheme."

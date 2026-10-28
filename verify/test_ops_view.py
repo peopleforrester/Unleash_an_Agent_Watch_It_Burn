@@ -62,11 +62,11 @@ rows_tsv = [line.split("\t") for line in HOSTS_TSV.splitlines()]
 check("every line is name, host, kind", all(len(x) == 3 and all(x) for x in rows_tsv))
 check("no host is listed for two clusters", len({x[1] for x in rows_tsv}) == len(rows_tsv))
 check("the roster comes first, by kind",
-      [x[2] for x in rows_tsv[:3]] == ["community", "presenter", "presenter"]
+      [x[2] for x in rows_tsv[:2]] == ["community", "presenter"]
       and hosts["watch-it-burn-community"]["host"] == "attackme.agenticburn.com")
-check("presenters by owner, as public_host_for names them",
-      hosts["watch-it-burn-michael-admin"]["host"] == "michael-admin.agenticburn.com"
-      and hosts["watch-it-burn-whitney-admin"]["host"] == "whitney-admin.agenticburn.com")
+check("the presenters' shared cluster, as public_host_for names it",
+      hosts["watch-it-burn-private"]["host"] == "burritobot-private.agenticburn.com"
+      and "watch-it-burn-whitney-admin" not in hosts)
 attendees = [x for x in rows_tsv if x[2] == "attendee"]
 check("every slot of the name grid is listed (the 250-seat plan fits with room)", len(attendees) >= 250)
 for n in ("watch-it-burn-attendee-001", "watch-it-burn-attendee-042", "watch-it-burn-attendee-250"):
@@ -91,14 +91,14 @@ check("headers are the board's aliases", [c["alias"] for c in cols if c["kind"] 
 # ---- fakes ---------------------------------------------------------------------------------------------------------
 
 A1, A2, A3, A5 = (f"watch-it-burn-attendee-00{i}" for i in (1, 2, 3, 5))
-H = {n: hosts[n]["host"] for n in (A1, A2, A3, A5, "watch-it-burn-michael-admin")}
+H = {n: hosts[n]["host"] for n in (A1, A2, A3, A5, "watch-it-burn-private")}
 EVIL = "<script>alert(1)</script>@x.test"
 CSV = ("email,cluster_name,region,console_url,datadog_org,claimed_at,email_sent\n"
        f"alice@x.test,{A1},us-west-2,https://{H[A1]},org-3,2026-09-08T16:01:00Z,1\n"
        f"bob@x.test,{A2},us-west-2,https://{H[A2]},org-4,2026-09-08T16:02:00Z,1\n"
        f"{EVIL},{A5},us-west-2,https://{H[A5]},org-7,2026-09-08T16:03:00Z,0\n")
-ROUTED = [H[A1], H[A2], H[A3], H["watch-it-burn-michael-admin"], "mystery.agenticburn.com"]
-SERIES = {"online": {A1: 1, A3: 1, "watch-it-burn-michael-admin": 1, A2: 1}, "c1": {A1: 3}, "c4": {A1: 1.234}}
+ROUTED = [H[A1], H[A2], H[A3], H["watch-it-burn-private"], "mystery.agenticburn.com"]
+SERIES = {"online": {A1: 1, A3: 1, "watch-it-burn-private": 1, A2: 1}, "c1": {A1: 3}, "c4": {A1: 1.234}}
 
 
 def fake_get(claims_status=200, routed_status=200):
@@ -191,7 +191,7 @@ check("a claimed cluster with no route needs attention", rows[A5]["console"] == 
 check("a claimed cluster the instructor org cannot hear needs attention",
       rows[A5]["agent"] is False)
 check("a routed, unclaimed attendee cluster is a free seat", rows[A3]["email"] == "" and doc["summary"]["free"] == 1)
-check("a presenter cluster is not a seat", rows["watch-it-burn-michael-admin"]["kind"] == "presenter")
+check("a presenter cluster is not a seat", rows["watch-it-burn-private"]["kind"] == "presenter")
 check("a routed host the name table cannot place still gets a row",
       rows["mystery.agenticburn.com"]["name"] == "" and rows["mystery.agenticburn.com"]["console"] == "down")
 order = [r["name"] or r["host"] for r in doc["rows"]]

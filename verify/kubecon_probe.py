@@ -6,8 +6,8 @@
     python3 verify/kubecon_probe.py community attackme.agenticburn.com
 
     # a presenter's admin cluster: needs its kube-context, flips the AI guards, ends with guards-off
-    python3 verify/kubecon_probe.py admin michael-admin.agenticburn.com \\
-        --context <admin-context> --kubeconfig /tmp/michael-admin.kubeconfig --profile accen-dev
+    python3 verify/kubecon_probe.py admin burritobot-private.agenticburn.com \\
+        --context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
 
 The beats, in the order facilitation/kubecon-na-2026-run-of-show.md shows them:
 
@@ -101,6 +101,8 @@ EVIL_FIXED = ["get_weather"]
 # C7 on an admin cluster is agentgateway's rule for evil-mcp, on its own bind (#496). The rule is one line of
 # agentgateway-c7-config, marked "# c7-rule"; the terminal's guard-mcp-on writes C7_NARROWED, guard-mcp-off C7_OPEN.
 C7_CONFIGMAP = "agentgateway-c7-config"
+# The one community host; anything else is a presenter cluster and has to run as `admin`.
+COMMUNITY_HOST = "attackme.agenticburn.com"
 TERMINAL_SA = "system:serviceaccount:agent:web-terminal"
 C7_OPEN = "true"
 C7_NARROWED = 'mcp.tool.name == "get_weather"'
@@ -794,7 +796,7 @@ GUARDS_OFF_BEAT = Beat("guards-off", "end", "guards-off: the stage starts clean"
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("role", choices=("community", "admin"))
-    ap.add_argument("host", help="attackme.agenticburn.com, or <owner>-admin.agenticburn.com")
+    ap.add_argument("host", help="attackme.agenticburn.com, or burritobot-private.agenticburn.com")
     ap.add_argument("--context", help="kube-context of the admin cluster (required for admin)")
     ap.add_argument("--kubeconfig", help="isolated kubeconfig, passed per command, never exported")
     ap.add_argument("--profile", help="AWS_PROFILE for kubectl, passed per command")
@@ -809,7 +811,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.role == "admin" and not args.context:
         log.error("admin needs --context: the probe flips guards and never falls back to the current-context")
         return 2
-    if args.role == "community" and "-admin." in args.host:
+    if args.role == "community" and args.host != COMMUNITY_HOST:
         log.error("%s is an admin cluster; run it as `admin`", args.host)
         return 2
     cluster = KubeconCluster(args.host, args.context, args.profile, args.kubeconfig, args.timeout)
