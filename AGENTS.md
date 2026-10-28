@@ -47,6 +47,9 @@ Watch it Burn!" (Michael Forrester with Whitney Lee). It holds the build, not th
   `devopsdays-portland-2026`, `kubecon-na-2026`). Name the entry; do not copy the fact here (#417).
 - **Components built from their own repos** (git submodules): guard-proxy-agenticburn at
   `gitops/ai-layer/guard-proxy`, llm-guard-cpu-offline at `images/llm-guard`.
+- **Upstream backup, not a submodule:** llm-guard-upstream-mirror (`peopleforrester/llm-guard-upstream-mirror`,
+  private), a mirror of the archived `protectai/llm-guard` so builds survive if the upstream repo is deleted.
+  Nothing in this repo builds from it; llm-guard-cpu-offline is the public offering (#416).
 - **This repo's own state:** `PROJECT_STATE.md` (current cycle) and `decisions.md` (append-only).
 
 ## Branch target: staging, not main

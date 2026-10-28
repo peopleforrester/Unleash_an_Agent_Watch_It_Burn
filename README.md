@@ -117,6 +117,10 @@ git submodule update --init --recursive
 Without them, `kubectl kustomize gitops/ai-layer` fails and the offline tests that import the guard
 proxy cannot find it. Argo CD fetches submodules on its own, so a cluster needs nothing extra.
 
+A third repository, `peopleforrester/llm-guard-upstream-mirror` (private), is a backup of the archived
+[protectai/llm-guard](https://github.com/protectai/llm-guard) so builds survive if the upstream repository
+is deleted. It is not a submodule and nothing here builds from it.
+
 ## Safety
 
 Everything here is synthetic. Planted secrets are obviously fake and carry a `FAKE-` prefix. No real
