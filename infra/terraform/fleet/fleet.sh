@@ -81,8 +81,9 @@ emit_service_hosts() {
     done
 }
 # Both domains serve the roster (#651, Michael 2026-10-28): every roster row gets a burritobot.co twin on the
-# same upstream. Twins follow their agenticburn.com row, because the router's derive-roster keeps the first host
-# it meets for a cluster, so the wall and router-check keep the agenticburn.com name until #651 step B.
+# same upstream. The twin goes FIRST, because the router's derive-roster keeps the first host it meets for a
+# cluster, so the wall and router-check name burritobot.co, the domain the room is shown. public_host_for stays
+# on agenticburn.com: it is also the cluster's identity in hostname tags and the shrink guard.
 readonly WIB_TWIN_DOMAIN="burritobot.co"
 twin_rows() { sed -E "s/^([a-z0-9-]+)\.agenticburn\.com([[:space:]]|$)/\1.${WIB_TWIN_DOMAIN}\2/"; }
 is_presenter_name() { [[ "$1" == "${SHARED_ADMIN_NAME}" || "$1" =~ ^watch-it-burn-[a-z0-9-]+-${PRESENTER_SUFFIX}$ ]]; }
@@ -3911,8 +3912,8 @@ roster_route_hosts() {
     for entry in "${INSTRUCTORS[@]}"; do
         host="$(public_host_for "${entry%%|*}")"
         rows="$(printf '%s\n' "${host}"; emit_service_hosts "${host}" - | awk '{ print $1 }')"
+        twin_rows <<<"${rows}"   # the burritobot.co twins the table also carries, first (#651)
         printf '%s\n' "${rows}"
-        twin_rows <<<"${rows}"   # the burritobot.co twins the table also carries (#651)
     done
 }
 
@@ -3981,8 +3982,8 @@ cmd_routes() {
         # past a red line.
         local rows
         rows="$(printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}"; emit_service_hosts "$(public_host_for "${name}")" "${h}")"
-        printf '%s\n' "${rows}" >> "${tmp}"
         twin_rows <<<"${rows}" >> "${tmp}"
+        printf '%s\n' "${rows}" >> "${tmp}"
         # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
         # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
         # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one
@@ -4496,7 +4497,7 @@ cmd_router_check() {
         || { log "router-check: FAIL could not read ${url}"; return 1; }
     got="$(jq -r '.[].host' <<<"${body}" 2>/dev/null | sort -u)" \
         || { log "router-check: FAIL ${url} is not the router's host list"; return 1; }
-    want="$(for entry in "${INSTRUCTORS[@]}"; do public_host_for "${entry%%|*}"; echo; done | sort -u)"
+    want="$(for entry in "${INSTRUCTORS[@]}"; do public_host_for "${entry%%|*}"; echo; done | twin_rows | sort -u)"
     for h in ${want}; do
         if grep -qFx "${h}" <<<"${got}"; then log "  PASS  the router serves ${h}"
         else log "  FAIL  the router has no row for ${h}: run 'fleet.sh routes roster'"; rc=1; fi

@@ -66,8 +66,8 @@ check "each burritobot.co twin points at the same cluster as its agenticburn.com
   'grep -qx "attackme.burritobot.co  lb-watch-it-burn-community.elb.test:443" "${T}/apex/routes.map" &&
    grep -qx "grafana-burritobot-private.burritobot.co  lb-watch-it-burn-private.elb.test:443" "${T}/apex/routes.map"'
 # derive-roster keeps the FIRST host it meets for a cluster, so agenticburn.com stays the wall's name until #651 step B.
-check "the agenticburn.com row comes before its twin, so the router's roster keeps naming it" \
-  '[[ "$(grep -n "^attackme.agenticburn.com " "${T}/apex/routes.map" | cut -d: -f1)" -lt "$(grep -n "^attackme.burritobot.co " "${T}/apex/routes.map" | cut -d: -f1)" ]]'
+check "the burritobot.co row comes before its agenticburn.com twin, so the router's roster names burritobot.co" \
+  '[[ "$(grep -n "^attackme.burritobot.co " "${T}/apex/routes.map" | cut -d: -f1)" -lt "$(grep -n "^attackme.agenticburn.com " "${T}/apex/routes.map" | cut -d: -f1)" ]]'
 check "no attendee-pool row, although attendee state is on disk" '! grep -q attendee "${T}/apex/routes.map"'
 check "no roundN alias (#502)" '! grep -q "^round" "${T}/apex/routes.map"'
 check "each host points at its own cluster on :443" \
@@ -110,14 +110,16 @@ rc_of() {   # $1 roster.json body; prints rc=<n>, stderr to ${T}/log
     ( cd "$(dirname "${FLEET}")" && WIB_ROUTER_ROSTER_URL="file://${T}/roster.json" bash -c '
         source "'"${FLEET}"'" >/dev/null 2>&1; load_roster; cmd_router_check' 2>"${T}/log"; echo "rc=$?" )
 }
-two='{"host":"attackme.agenticburn.com","name":"attackme"},{"host":"burritobot-private.agenticburn.com","name":"burritobot-private"}'
+two='{"host":"attackme.burritobot.co","name":"attackme"},{"host":"burritobot-private.burritobot.co","name":"burritobot-private"}'
 check "exactly the two roster hosts passes" '[[ "$(rc_of "[${two}]")" == rc=0 ]]'
+check "the roster under its agenticburn.com names fails: the wall must show burritobot.co" \
+  '[[ "$(rc_of "[{\"host\":\"attackme.agenticburn.com\"},{\"host\":\"burritobot-private.agenticburn.com\"}]")" == rc=1 ]]'
 check "a pool cluster still routed fails, and is named" \
   '[[ "$(rc_of "[${two},{\"host\":\"bane-sabrina.agenticburn.com\",\"name\":\"bane-sabrina\"}]")" == rc=1 ]] &&
    grep -q "still serves bane-sabrina.agenticburn.com" "${T}/log"'
 check "a missing admin host fails, and is named" \
-  '[[ "$(rc_of "[{\"host\":\"attackme.agenticburn.com\"}]")" == rc=1 ]] &&
-   grep -q "no row for burritobot-private.agenticburn.com" "${T}/log"'
+  '[[ "$(rc_of "[{\"host\":\"attackme.burritobot.co\"}]")" == rc=1 ]] &&
+   grep -q "no row for burritobot-private.burritobot.co" "${T}/log"'
 check "an empty router fails" '[[ "$(rc_of "[]")" == rc=1 ]]'
 check "a reply that is not the host list fails" '[[ "$(rc_of "<html>404</html>")" == rc=1 ]]'
 rm -f "${T}/roster.json"
