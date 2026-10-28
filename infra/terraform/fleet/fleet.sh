@@ -80,6 +80,11 @@ emit_service_hosts() {
         printf '%s-%s.agenticburn.com  %s:443\n' "${svc}" "${label}" "${lb}"
     done
 }
+# Both domains serve the roster (#651, Michael 2026-10-28): every roster row gets a burritobot.co twin on the
+# same upstream. Twins follow their agenticburn.com row, because the router's derive-roster keeps the first host
+# it meets for a cluster, so the wall and router-check keep the agenticburn.com name until #651 step B.
+readonly WIB_TWIN_DOMAIN="burritobot.co"
+twin_rows() { sed -E "s/^([a-z0-9-]+)\.agenticburn\.com([[:space:]]|$)/\1.${WIB_TWIN_DOMAIN}\2/"; }
 is_presenter_name() { [[ "$1" == "${SHARED_ADMIN_NAME}" || "$1" =~ ^watch-it-burn-[a-z0-9-]+-${PRESENTER_SUFFIX}$ ]]; }
 presenter_owner_of() { local n="${1#watch-it-burn-}"; printf '%s' "${n%-${PRESENTER_SUFFIX}}"; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
@@ -3902,10 +3907,12 @@ cmd_down_acct() {
 # hosts. The shrink guard reads it to tell a dropped roster host from a dropped pool row. Offline.
 roster_route_hosts() {
     local entry host
+    local rows
     for entry in "${INSTRUCTORS[@]}"; do
         host="$(public_host_for "${entry%%|*}")"
-        printf '%s\n' "${host}"
-        emit_service_hosts "${host}" - | awk '{ print $1 }'
+        rows="$(printf '%s\n' "${host}"; emit_service_hosts "${host}" - | awk '{ print $1 }')"
+        printf '%s\n' "${rows}"
+        twin_rows <<<"${rows}"   # the burritobot.co twins the table also carries (#651)
     done
 }
 
@@ -3972,8 +3979,10 @@ cmd_routes() {
         # functions that name a cluster agree. While they did not, the acceptance pass reported three
         # permanent failures for hosts the table was never asked to carry, which teaches everyone to read
         # past a red line.
-        printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}" >> "${tmp}"
-        emit_service_hosts "$(public_host_for "${name}")" "${h}" >> "${tmp}"
+        local rows
+        rows="$(printf '%s  %s:443\n' "$(public_host_for "${name}")" "${h}"; emit_service_hosts "$(public_host_for "${name}")" "${h}")"
+        printf '%s\n' "${rows}" >> "${tmp}"
+        twin_rows <<<"${rows}" >> "${tmp}"
         # The raw "r1-1" alias is NO LONGER emitted (#142). Nothing functional pointed at it: every hit in
         # the three repos was either a cluster NAME (which is unchanged) or a comment recording where
         # something was observed. BurritoBot's roundOf() matches michael-round2 / round2 / r2-1 from one

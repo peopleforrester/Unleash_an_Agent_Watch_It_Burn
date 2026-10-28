@@ -15,11 +15,14 @@ export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 TMPDIR="${T}"
 # list is read from fleet.sh's WIB_SERVICE_HOSTS so a new service host does not need a second edit here.
 SERVICES="$(sed -n 's/^readonly WIB_SERVICE_HOSTS="\(.*\)"$/\1/p' "${FLEET}")"
 NSVC="$(wc -w <<<"${SERVICES}")"
+# Both domains serve the roster (#651): every row has a burritobot.co twin on the same upstream.
 expected() {
-    local h
-    for h in attackme burritobot-private; do
-        echo "${h}.agenticburn.com"
-        for s in ${SERVICES}; do echo "${s}-${h}.agenticburn.com"; done
+    local h d
+    for d in agenticburn.com burritobot.co; do
+        for h in attackme burritobot-private; do
+            echo "${h}.${d}"
+            for s in ${SERVICES}; do echo "${s}-${h}.${d}"; done
+        done
     done | sort
 }
 
@@ -58,7 +61,13 @@ out="$(routes roster)"
 check "it succeeds" '[[ "${out}" == *rc=0* ]]'
 check "the table is exactly the two roster hosts and their service hosts" \
   'diff <(table_hosts) <(expected) >/dev/null'
-check "that is two consoles and ${NSVC} services each" '[[ "$(table_hosts | wc -l)" -eq $(( 2 * (NSVC + 1) )) ]]'
+check "that is two consoles and ${NSVC} services each, on both domains" '[[ "$(table_hosts | wc -l)" -eq $(( 4 * (NSVC + 1) )) ]]'
+check "each burritobot.co twin points at the same cluster as its agenticburn.com row" \
+  'grep -qx "attackme.burritobot.co  lb-watch-it-burn-community.elb.test:443" "${T}/apex/routes.map" &&
+   grep -qx "grafana-burritobot-private.burritobot.co  lb-watch-it-burn-private.elb.test:443" "${T}/apex/routes.map"'
+# derive-roster keeps the FIRST host it meets for a cluster, so agenticburn.com stays the wall's name until #651 step B.
+check "the agenticburn.com row comes before its twin, so the router's roster keeps naming it" \
+  '[[ "$(grep -n "^attackme.agenticburn.com " "${T}/apex/routes.map" | cut -d: -f1)" -lt "$(grep -n "^attackme.burritobot.co " "${T}/apex/routes.map" | cut -d: -f1)" ]]'
 check "no attendee-pool row, although attendee state is on disk" '! grep -q attendee "${T}/apex/routes.map"'
 check "no roundN alias (#502)" '! grep -q "^round" "${T}/apex/routes.map"'
 check "each host points at its own cluster on :443" \
