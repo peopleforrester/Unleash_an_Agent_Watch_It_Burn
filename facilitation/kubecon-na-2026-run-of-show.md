@@ -753,13 +753,12 @@ These are the things this run-of-show could not settle from a source. They are
 written down rather than guessed. A question that has since been decided keeps its
 number and says who settled it and when, so references to it elsewhere still land.
 
-1. **The on-topic guardrail for point 8 is half built (#455).** This repo's half is
-   on `staging`: the settings, the persona's hours and locations, and
-   `guard-topic-on`. The topic stage in `proxy.py` (guard-proxy-agenticburn) and the
-   BanTopics model in the offline LLM Guard image (llm-guard-cpu-offline) are not,
-   so segment 7, the abstract's ending, cannot be shown live until both land and
-   the probe's on-topic beats pass. If they do not land for this delivery, is point
-   8 cut with Whitney's agreement (which #456 allows)? Also open on #455: the hours
+1. **The on-topic guardrail's classifier half is unproven (#455).** The topic stage
+   in `proxy.py`, the settings, the persona's hours and locations and
+   `guard-topic-on` are live, and the probe's on-topic beats passed on 2026-10-27
+   and 2026-10-28, so segment 7 can be shown with the phrase-listed asks. The
+   BanTopics model in the offline LLM Guard image (llm-guard-cpu-offline#2) is still
+   open, so a paraphrase with no listed word is not promised. Still open on #455: the hours
    and locations BurritoBot will say on stage were invented in-world (every day 11am
    to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
    the Moonrise Pass drive-thru); keep them or replace them with Michael's and
