@@ -2965,3 +2965,27 @@ With CONTEXT and the IAM pipeline variables unset, `bash verify/run-e2e.sh` fetc
 and exits 1 listing three items: IAM_PIPELINE_PROFILE/IAM_PIPELINE_REGION, CONTEXT, and otelcol-contrib v0.160.0.
 That last one became a prerequisite with #150 and was not in this issue. It is filed as a follow-up to fetch it
 through `verify/e2e-tools.lock`, as the other pinned tools are. No code changes here.
+## 2026-10-28 · #600 · fleet.sh ingest registers through `labctl import`, not POST /admin/import
+
+lab-platform has an import entry point for clusters built here (peopleforrester/lab-platform#62, commit fc4b6d9):
+`labctl import --customer agenticburn --event <event> -` reads pool.csv rows on stdin. The provisioning app's
+/admin/import, which ingest used to POST to, left these clusters out of the handout pool that the inventory's
+Load clusters fills.
+
+- **The pipe.** `ingest_one` builds the same row as before, adds a `role` column, turns the row into a quoted
+  header and one CSV line with `jq @csv`, and pipes it to labctl. The event is `WIB_EVENT`, the fleet's event
+  tag (`event.sh`), the same value `labctl harvest` finds the clusters by (#602). Three attempts, as the POST had,
+  then a named `ingest:<name>` failure carrying labctl's last line of output.
+- **role.** `instructor` for a roster cluster (`is_instructor_name`: the community cluster and each
+  `<owner>-admin`), empty for an attendee. lab-platform hands out any row without role=instructor, so a roster row
+  sent without it would be claimable by the room.
+- **What it needs.** labctl on PATH, `DATABASE_URL` (lab-platform's database) and `USER`. `labctl_ready` checks
+  all three and names what is missing. `register_with_provisioning` checks it where it used to resolve the admin
+  token, and stays loud: no labctl means "was NOT registered" and an `ingest:no-labctl` failure. `ingest` and
+  `ingest-instructors` exit 1 before touching a cluster.
+- **Not moved.** `ingest pool` still reads its names from the provisioning app's /admin/roster, and teardown's
+  deregister still POSTs /admin/delete there, both with the admin token. The issue covers ingest only.
+- **Test:** `verify/test_fleet_terminal_harvest.sh` (offline) gives labctl a shim and checks the arguments, the
+  environment, a header with one row, role=instructor on both roster clusters and an empty role on an attendee,
+  the three attempts, and the loud failure when DATABASE_URL or USER is missing. No cluster and no lab-platform
+  database were touched.

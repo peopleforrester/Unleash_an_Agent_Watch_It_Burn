@@ -124,8 +124,8 @@ _reg = FLEET_SH[FLEET_SH.index("register_with_provisioning() {"):]
 _reg = _reg[:_reg.index("\n}\n") + 2]
 check("the shared registration helper is loud when it cannot register",
       "was NOT registered" in _reg and "record_fail" in _reg)
-check("only ONE copy of the token-resolve-then-ingest envelope exists",
-      FLEET_SH.count("resolve_admin_token >/dev/null 2>&1; then") == 1)
+check("only ONE copy of the labctl-ready-then-ingest envelope exists",
+      FLEET_SH.count("if labctl_ready; then") == 1 and "if labctl_ready; then" in _reg)
 # Count actual CALL sites, not the comment or the definition: exactly one, in the core.
 _reg_calls = len([ln for ln in FLEET_SH.splitlines()
                    if ln.lstrip().startswith("register_with_provisioning ")

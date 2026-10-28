@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: fleet.sh hands the harvester an attendee's two-word hostname as WIB_CONSOLE_HOST, and never
-# ABOUTME: registers a retired cluster name through /admin/import (#444). Offline: the harvester is a shim.
+# ABOUTME: registers a retired cluster name through labctl import (#444, #600). Offline: the harvester is a shim.
 #
 # Why. provisioning-agenticburn#14 retired rounds in harvest_cluster_access.sh. It maps the community and
 # admin clusters to their hosts itself, but an attendee's memorable name (soot-sabrina) cannot be worked out
@@ -27,7 +27,7 @@ chmod +x "${T}/prov/scripts/harvest_cluster_access.sh"
 # so a check can read what fleet.sh said; curl and kubectl are trapped so nothing leaves the box.
 q() { ( cd "$(dirname "${FLEET}")" && WIB_PROVISION_DIR="${T}/prov" WIB_STATE_DIR="${T}/states" \
         WIB_LOG_DIR="${T}/logs" bash -c "source '${FLEET}' >/dev/null 2>&1
-        curl() { echo CURL-CALLED >&2; }; kubectl() { echo KUBECTL-CALLED >&2; }
+        curl() { echo CURL-CALLED >&2; }; labctl() { echo LABCTL-CALLED >&2; }; kubectl() { echo KUBECTL-CALLED >&2; }
         provider_write_kubeconfig() { echo KUBECONFIG-CALLED >&2; }
         $1" 2>&1 ); }
 
@@ -54,7 +54,7 @@ check "cmd_harvest gives every attendee row its own host" \
 check "and each is the one public_host_for publishes" \
   '( while IFS=, read -r n _ h; do [[ "${h#host=}" == "$(q "public_host_for ${n}")" ]] || exit 1; done <<<"${fleet}" )'
 
-echo "== ingest never registers a retired cluster name through /admin/import =="
+echo "== ingest never registers a retired cluster name through labctl import =="
 # A state file for each, so the only thing that can stop the import is the name check.
 for n in watch-it-burn-michael-student watch-it-burn-whitney-student watch-it-burn-r2-1 watch-it-burn-r3-2 \
          watch-it-burn-attendee-001 watch-it-burn-community watch-it-burn-private; do
@@ -63,7 +63,7 @@ done
 for n in watch-it-burn-michael-student watch-it-burn-whitney-student watch-it-burn-r2-1 watch-it-burn-r3-2; do
     out="$(q "ingest_one ${n} accen-dev; echo rc=\$?")"
     check "${n} is refused and says so" 'grep -q "REFUSING" <<<"${out}" && grep -q "rc=0" <<<"${out}"'
-    check "${n} never reaches the cluster or the import" '! grep -qE "CURL-CALLED|KUBECTL-CALLED|KUBECONFIG-CALLED" <<<"${out}"'
+    check "${n} never reaches the cluster or the import" '! grep -qE "CURL-CALLED|LABCTL-CALLED|KUBECTL-CALLED|KUBECONFIG-CALLED" <<<"${out}"'
     check "${n} is not queued for the ingest retry loop" '[[ -z "$(cat "${T}"/logs/.failures.* 2>/dev/null)" ]]'
 done
 # The live classes still go on to the cluster: the name check stops nothing it should not.
@@ -72,9 +72,9 @@ for n in watch-it-burn-attendee-001 watch-it-burn-community watch-it-burn-privat
     check "${n} is not refused" '! grep -q "REFUSING" <<<"${out}" && grep -q "KUBECONFIG-CALLED" <<<"${out}"'
 done
 rm -f "${T}"/logs/.failures.*
-out="$(q 'cmd_ingest_instructors() { :; }; resolve_admin_token() { echo t; }; require_tools() { :; }
+out="$(q 'cmd_ingest_instructors() { :; }; labctl_ready() { :; }; require_tools() { :; }
           aws() { echo "[]"; }; cmd_ingest watch-it-burn-r2-1 watch-it-burn-michael-student; echo rc=$?')"
 check "cmd_ingest by name refuses the retired names without a failure" \
-  '[[ "$(grep -c REFUSING <<<"${out}")" == 2 ]] && ! grep -q CURL-CALLED <<<"${out}"'
+  '[[ "$(grep -c REFUSING <<<"${out}")" == 2 ]] && ! grep -qE "CURL-CALLED|LABCTL-CALLED" <<<"${out}"'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

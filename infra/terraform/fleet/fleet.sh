@@ -252,6 +252,29 @@ resolve_admin_token() {
     WIB_ADMIN_TOKEN_CACHE="${tok}"
     printf '%s' "${tok}"
 }
+
+# Where ingest registers a cluster: lab-platform's handout pool, through its import entry point
+# (peopleforrester/lab-platform#62, docs/provisioning.md section 9 there). `labctl import --customer
+# agenticburn --event <event> -` reads pool.csv rows on stdin; ingest_one sends one row per cluster. It
+# replaced the POST to the provisioning app's /admin/import, which left these clusters out of the pool the
+# inventory's Load clusters fills (#600). The event is the fleet's own event tag, the one `labctl harvest`
+# finds the clusters by (#602).
+readonly WIB_LABCTL_CUSTOMER="agenticburn"
+
+# labctl writes the import to lab-platform's database and records who ran it, so it needs DATABASE_URL and
+# USER. Says which of them is missing, and returns 1, so a caller can fail loudly instead of discovering it
+# one cluster at a time.
+labctl_ready() {
+    local missing=()
+    command -v labctl >/dev/null 2>&1 || missing+=("labctl on PATH")
+    [[ -n "${DATABASE_URL:-}" ]] || missing+=("DATABASE_URL")
+    [[ -n "${USER:-}" ]] || missing+=("USER")
+    [[ "${#missing[@]}" -eq 0 ]] && return 0
+    local IFS=','
+    log "ingest: labctl import cannot run, missing: ${missing[*]}"
+    return 1
+}
+log_ingest_target() { log "ingest -> labctl import --customer ${WIB_LABCTL_CUSTOMER} --event ${WIB_EVENT}"; }
 WIB_ROLES="${WIB_ROLES:-}"                        # comma list of roles to include, e.g. "admin" (empty = all)
 WIB_PER_ROLE="${WIB_PER_ROLE:-}"                  # max clusters per role (empty = all)
 # Roles run CONCURRENTLY by default (each role its own subshell so per-role vars cannot clash; the
@@ -548,7 +571,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
     harvest <n>      Harvest student-facing access info (console NLB / grafana / ...) of an up-fleet run
                       (SAME <n> + WIB_NAME_OFFSET) to a pool CSV on stdout (feed merge_pool.py).
     ingest <n> | ingest <name...> | ingest pool
-                      Register clusters with the provisioning app through /admin/import, the terminal
+                      Register clusters in lab-platform's handout pool through labctl import (needs
+                      labctl, DATABASE_URL and USER; a roster cluster goes in as role=instructor), the terminal
                       login harvested from each cluster's terminal-auth Secret
                       (\${WIB_PROVISION_DIR}/scripts/harvest_terminal_credential.sh). 'pool' re-ingests
                       every row the live pool holds, claimed ones included, so a corrected login reaches
@@ -570,8 +594,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                               (from roster.tsv's owner column; the shared private cluster has none),
                               or both|all for everything.
                               Regenerates routes AND
-                              registers the roster with the provisioning app (set WIB_PROVISIONING_URL +
-                              WIB_ADMIN_TOKEN; WIB_NO_INGEST=1 opts out).
+                              registers the roster in lab-platform's handout pool through labctl
+                              import (set DATABASE_URL + USER; WIB_NO_INGEST=1 opts out).
     instructors down [role|owner]
                               Destroy the roster, or exactly the part the same selector built with
                               'instructors up'.
@@ -2211,17 +2235,18 @@ run_pool() {
 register_with_provisioning() {
     local label="$1" ingest_fn="$2"; shift 2
     [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]] || return 0
-    if resolve_admin_token >/dev/null 2>&1; then
+    if labctl_ready; then
         POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
         POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-        log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+        log_ingest_target
         "${ingest_fn}" "$@" || log "ingest: re-run the matching 'fleet.sh ingest' once the consoles are up"
     else
-        log "ingest: CANNOT RESOLVE the provisioning admin token, so ${label} was NOT registered."
-        log "        The clusters are up and routable, but a student claiming one will be told there are"
-        log "        none, and a presenter will see a blank terminal password. Fix by logging in to"
-        log "        Railway (railway login), or export WIB_ADMIN_TOKEN, then re-run the ingest by hand."
-        record_fail "ingest:no-admin-token"
+        log "ingest: labctl import CANNOT RUN, so ${label} was NOT registered."
+        log "        The clusters are up and routable, but they are not in the handout pool: a student"
+        log "        claiming one will be told there are none, and a presenter will see a blank terminal"
+        log "        password. Fix by putting labctl on PATH and exporting DATABASE_URL (lab-platform's"
+        log "        database) and USER, then re-run the ingest by hand."
+        record_fail "ingest:no-labctl"
     fi
 }
 
@@ -3615,7 +3640,7 @@ cmd_reconcile_pool() {
     report_failures
 }
 
-# Push one converged cluster's full row into the live provisioning pool via /admin/import: harvest the
+# Push one converged cluster's full row into lab-platform's handout pool via labctl import: harvest the
 # console NLB, read the boot-persisted AWS creds, look up the per-student Datadog org by slot (same index
 # as bootstrap + merge_pool). No CSV rebuild, no redeploy. POOL1/POOL2 are preloaded by cmd_ingest.
 ingest_one() {
@@ -3710,37 +3735,45 @@ ingest_one() {
     local pub_host; pub_host="$(public_host_for "${name}")"
     local console_url="https://${pub_host}"
     [[ -n "${pub_host}" ]] || console_url="https://${console_host}"
-    local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "${console_url}" --arg tu "${term_user}" --arg tp "${term_pw}" --argjson dd "${dd}" \
+    # role: a roster cluster is `instructor`, an attendee's is empty. lab-platform hands out any row without
+    # role=instructor, so a roster cluster sent without it would be claimable by the room, presenter
+    # console and all (#600). is_instructor_name decides it, the same rule the terminal login follows.
+    local role=""; if is_instructor_name "${name}"; then role="instructor"; fi
+    local row; row="$(jq -cn --arg n "${name}" --arg r "${WIB_REGION}" --arg ak "${ak}" --arg sk "${sk}" --arg cu "${console_url}" --arg tu "${term_user}" --arg tp "${term_pw}" --arg role "${role}" --argjson dd "${dd}" \
         '($dd.site // "datadoghq.com") as $site
          | ($site | if . == "datadoghq.com" or . == "datadoghq.eu" then "https://app." + . else "https://" + . end) as $ddurl
-         | {name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,terminal_user:$tu,terminal_password:$tp,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:$site,datadog_dashboard_url:$ddurl}')"
-    # Retry the POST. A single transient failure used to leave one cluster unregistered and everything
+         | {name:$n,region:$r,access_key:$ak,secret_key:$sk,console_url:$cu,terminal_user:$tu,terminal_password:$tp,datadog_org:($dd.org//""),datadog_email:($dd.email//""),datadog_password:($dd.password//""),datadog_api_key:($dd.api//""),datadog_app_key:($dd.app//""),datadog_site:$site,datadog_dashboard_url:$ddurl,role:$role}')"
+    # labctl import reads pool.csv rows, so the row goes in as its header and one CSV line, in the row's
+    # own key order.
+    local csv; csv="$(jq -r '(keys_unsorted | @csv), ([.[]] | @csv)' <<<"${row}")"
+    # Retry the import. A single transient failure used to leave one cluster unregistered and everything
     # else looking fine, which is how watch-it-burn-r3-1 ended up missing from provisioning on
-    # 2026-08-26 while the other five succeeded. One HTTP blip should not require a human to notice.
-    local tok attempt code=""
-    tok="$(resolve_admin_token || true)"
+    # 2026-08-26 while the other five succeeded. One blip should not require a human to notice.
+    local attempt out="" ok=""
     for attempt in 1 2 3; do
-        code="$(curl -s -X POST "${WIB_PROVISIONING_URL%/}/admin/import" -H "X-Admin-Token: ${tok}" \
-            -H "Content-Type: application/json" --data "{\"clusters\":[${row}]}" \
-            --max-time 25 -o /dev/null -w '%{http_code}' 2>/dev/null)"
-        [[ "${code}" == "200" ]] && break
+        if out="$(printf '%s\n' "${csv}" \
+                | labctl import --customer "${WIB_LABCTL_CUSTOMER}" --event "${WIB_EVENT}" - 2>&1)"; then
+            ok=1; break
+        fi
         [[ "${attempt}" -lt 3 ]] && sleep $(( attempt * 5 ))
     done
-    if [[ "${code}" == "200" ]]; then
-        log "  ingested: ${name}"
+    if [[ -n "${ok}" ]]; then
+        log "  ingested: ${name}${role:+ (role=${role})}"
     else
-        log "  ingest POST failed: ${name} (last status ${code:-none} after 3 attempts)"; record_fail "ingest:${name}"
+        log "  labctl import failed: ${name} after 3 attempts: $(tail -n 1 <<<"${out}")"; record_fail "ingest:${name}"
     fi
 }
 
 # Harvest + push the fleet (or explicit names) into the live provisioning pool. Numeric arg = per-account
 # count form (honors WIB_NAME_OFFSET + WIB_ATTENDEE_ACCOUNTS); otherwise explicit cluster names (default account).
-# `ingest pool` re-ingests every row the live pool holds, by name, read from /admin/roster. /admin/import
-# upserts by name and never touches claim state, so this is how rows already claimed pick up a corrected
-# terminal login: the bare-password era left claimed rows showing agentic / sprouts (provisioning-agenticburn#16).
+# `ingest pool` re-ingests every row the provisioning app's pool holds, by name, read from its /admin/roster
+# (pool_rows, which still takes the admin token). It was how rows already claimed picked up a corrected
+# terminal login, because /admin/import upserted by name and never touched claim state: the bare-password
+# era left claimed rows showing agentic / sprouts (provisioning-agenticburn#16). The rows now go to labctl
+# import like every other ingest.
 cmd_ingest() {
     [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest pool | ingest <cluster-name...>"; exit 2; }
-    resolve_admin_token >/dev/null 2>&1 || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
+    labctl_ready || exit 1
     require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     if [[ "$1" == pool && $# -eq 1 ]]; then
         local rows _pool_names=()
@@ -3752,7 +3785,7 @@ cmd_ingest() {
     fi
     POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
     POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-    log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+    log_ingest_target
     if [[ "$1" =~ ^[0-9]+$ ]]; then
         local per_account="$1" accounts idx=0 acct start n name
         IFS=',' read -ra accounts <<<"${WIB_ATTENDEE_ACCOUNTS}"
@@ -4466,11 +4499,11 @@ main() {
         harvest) cmd_harvest "$@" ;;
         ingest) cmd_ingest "$@" ;;
         ingest-instructors)
-            resolve_admin_token >/dev/null 2>&1 || { log "cannot resolve the provisioning admin token (railway login, or export WIB_ADMIN_TOKEN)"; exit 1; }
+            labctl_ready || exit 1
             require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
             POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
             POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-            log "ingest -> ${WIB_PROVISIONING_URL%/}/admin/import"
+            log_ingest_target
             cmd_ingest_instructors "$@"; report_failures ;;
         aws-keys) cmd_aws_keys "$@" ;;
         reap-lbs) cmd_reap_lbs ;;
