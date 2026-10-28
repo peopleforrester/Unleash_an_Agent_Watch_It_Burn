@@ -48,6 +48,13 @@ spec:
           # Static admin password for the demo (was an ESO ExternalSecret backed by AWS Secrets Manager;
           # a static value removes that external dependency). verify-at-build: rotate or wire a real store.
           adminPassword: "watchitburn-admin"
+          # lab-platform's mirror/ copy of docker.io/grafana/grafana:13.2.2-distroless, the chart's tag, named by
+          # its linux/amd64 digest's first twelve characters (#623). The k8s-sidecar image stays on quay.io: the
+          # mirror holds only Docker Hub images.
+          image:
+            registry: "{{ .Values.imageRegistry }}/mirror"
+            repository: grafana/grafana
+            tag: "13.2.2-distroless-ada1141b386c"
           # Sidecar for dashboard provisioning from ConfigMaps
           sidecar:
             # Every container needs limits under require-resource-limits (Enforce on an admin cluster, #234).

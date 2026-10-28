@@ -28,6 +28,11 @@ spec:
       helm:
         valuesObject:
           tempo:
+            # lab-platform's mirror/ copy of docker.io/grafana/tempo:3.0.3, the chart's appVersion, named by its
+            # linux/amd64 digest's first twelve characters (#623).
+            registry: "{{ .Values.imageRegistry }}/mirror"
+            repository: grafana/tempo
+            tag: "3.0.3-05321ebf1f19"
             resources:
               requests: { cpu: 100m, memory: 128Mi }
               limits: { cpu: 500m, memory: 512Mi }

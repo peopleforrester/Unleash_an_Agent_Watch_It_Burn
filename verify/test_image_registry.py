@@ -1,13 +1,13 @@
 # ABOUTME: Static gate for #622: no file the lab-bootstrap root deploys names ghcr.io/peopleforrester/lab-platform
 # ABOUTME: literally; app files take that registry from the root's imageRegistry value, which defaults to it.
 #
-# Why. lab-platform's packages on ghcr.io are private. Each workshop cluster pulls them through its AWS account's
-# ECR pull-through cache, and lab-platform's bootstrap passes the cache path to lab-bootstrap as the Helm value
-# imageRegistry (lab-platform#214), e.g. <account>.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/
-# lab-platform. A containerd mirror for ghcr.io cannot carry ECR's credential, so the cache only works if the
-# reference itself names the cache path. A literal ghcr.io/peopleforrester/lab-platform image anywhere the root
-# deploys from is an image that cluster cannot pull. The one place the literal belongs is the chart's default in
-# gitops/bootstrap/values.yaml, which infra/deploy-full-idp.sh and an account with no cache get.
+# Why. A root can pass lab-bootstrap an ECR pull-through cache path as the Helm value imageRegistry, e.g.
+# <account>.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform, as lab-platform's bootstrap did
+# (lab-platform#214) until 5192c1a reverted it; the packages are public, so today every root takes the default. A
+# containerd mirror for ghcr.io cannot carry ECR's credential, so a cache only works if the reference itself names
+# the cache path, and a literal ghcr.io/peopleforrester/lab-platform image anywhere the root deploys from is one
+# such a cluster would not pull through it. The one place the literal belongs is the chart's default in
+# gitops/bootstrap/values.yaml, which infra/deploy-full-idp.sh and every root that passes nothing get.
 #
 # Only an apps/ file is rendered with the value (through tpl), so a lab-platform image belongs in an app file's
 # Helm values as "{{ .Values.imageRegistry }}/<path>:<tag>". A plain manifest a directory source applies cannot
@@ -90,6 +90,28 @@ for root in sorted(roots):
         if any(IMAGE_REGISTRY in uncommented(ln) for ln in text.splitlines()):
             outside.append(str(p.relative_to(REPO)))
 check(f"{IMAGE_REGISTRY} appears only in apps/ files, the ones the chart renders {outside}", not outside)
+
+print("== each mirror/ copy a chart pulls is named in its app files, through the value (#623) ==")
+# test_image_registry_render.py renders each chart to see the whole reference; this is the offline half: the
+# table is self-consistent and every app file it names says the copy's tag and the value.
+from mirror_copies import COPIES, UNPULLED  # noqa: E402
+
+
+def code(name: str) -> str:
+    return "\n".join(uncommented(ln) for ln in (APPS / f"{name}.yaml").read_text(encoding="utf-8").splitlines())
+
+
+for c in COPIES + UNPULLED:
+    check(f"{c.path}: the tag ends in the first twelve characters of {c.digest[:19]}...",
+          c.digest.startswith("sha256:") and len(c.digest) == 71 and c.tag.endswith("-" + c.digest[7:19]))
+for c in COPIES:
+    for app in c.apps:
+        text = code(app)
+        check(f"{app}.yaml names {c.path.split(':')[0]} by its tag {c.tag}, under {IMAGE_REGISTRY}/mirror",
+              f'{c.tag}"' in text and f'"{IMAGE_REGISTRY}/mirror' in text)
+for c in UNPULLED:
+    named = [p.name for p in sorted(APPS.glob("*.yaml")) if c.tag in code(p.stem)]
+    check(f"{c.path}, a copy of a tag no chart pulls, is named nowhere {named}", not named)
 
 print()
 if failures:

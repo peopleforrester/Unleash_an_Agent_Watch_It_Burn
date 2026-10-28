@@ -74,8 +74,12 @@ def missing_limits(docs):
 
 
 apps = []
+from bootstrap_chart import IMAGE_REGISTRY, LAB_PLATFORM_GHCR  # noqa: E402
+
 for f in sorted((REPO / "gitops/bootstrap/apps").glob("*.yaml")):
-    for d in yaml.safe_load_all(f.read_text()):
+    # The root fills an app file's image registry in through tpl before Argo CD renders the chart (#622); a
+    # mirror/ copy's reference (#623) is template text until then, so it is given the root's default here.
+    for d in yaml.safe_load_all(f.read_text().replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)):
         if isinstance(d, dict) and d.get("kind") == "Application":
             apps.append((f.name, d))
 

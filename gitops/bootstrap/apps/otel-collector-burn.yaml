@@ -16,6 +16,13 @@ spec:
       chart: opentelemetry-collector
       targetRevision: "0.173.1"
       helm:
+        # lab-platform's mirror/ copy of otel/opentelemetry-collector-contrib:0.160.0, the chart's appVersion, named by
+        # its linux/amd64 digest's first twelve characters (#623). It is here, not in the shared values.yaml, because
+        # only an app file's values take the root's imageRegistry; valuesObject wins over the value files.
+        valuesObject:
+          image:
+            repository: "{{ .Values.imageRegistry }}/mirror/otel/opentelemetry-collector-contrib"
+            tag: "0.160.0-5b66b0dc6921"
         # Same Application name and chart as otel-collector.yaml, one overlay file different
         # (gitops/otel-collector/values-burn.yaml), as otel-collector-attendee.yaml is. Only the burn root
         # selects this file; every other root excludes it. Argo CD multi-source: the second source is a

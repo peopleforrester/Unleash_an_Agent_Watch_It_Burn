@@ -17,6 +17,12 @@ spec:
     targetRevision: "0.14.0"
     helm:
       valuesObject:
+        # lab-platform's mirror/ copy of docker.io/falcosecurity/falcosidekick:2.32.0, the chart's tag, named by its
+        # linux/amd64 digest's first twelve characters (#623).
+        image:
+          registry: "{{ .Values.imageRegistry }}/mirror"
+          repository: falcosecurity/falcosidekick
+          tag: "2.32.0-399d95934a67"
         config:
           prometheus:
             extralabels: ""

@@ -16,6 +16,13 @@ spec:
       chart: opentelemetry-collector
       targetRevision: "0.173.1"
       helm:
+        # lab-platform's mirror/ copy of otel/opentelemetry-collector-contrib:0.160.0, the chart's appVersion, named by
+        # its linux/amd64 digest's first twelve characters (#623). It is here, not in the shared values.yaml, because
+        # only an app file's values take the root's imageRegistry; valuesObject wins over the value files.
+        valuesObject:
+          image:
+            repository: "{{ .Values.imageRegistry }}/mirror/otel/opentelemetry-collector-contrib"
+            tag: "0.160.0-5b66b0dc6921"
         # Values live in the repo so the instructor and attendee Applications share one config and
         # differ by one overlay file (gitops/otel-collector/values-dual.yaml). Argo CD multi-source:
         # the second source is a ref, never deployed, only read for the value files.

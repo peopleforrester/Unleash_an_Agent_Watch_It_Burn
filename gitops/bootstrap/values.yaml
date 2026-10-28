@@ -5,10 +5,11 @@
 # Applications pointing at nothing. labctl sets it to the 40-digit commit it pins (lab-platform.yaml's
 # bootstrap.revision_parameter); infra/deploy-full-idp.sh sets it to staging.
 revision: ""
-# Where every image under ghcr.io/peopleforrester/lab-platform (the mirror/ copies included) is pulled from
-# (#622, lab-platform#214). Those packages are private, so lab-platform's bootstrap passes each cluster its
-# account's ECR pull-through cache path, <account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/
-# lab-platform, and passes nothing on an account with no cache. infra/deploy-full-idp.sh passes nothing either.
+# Where every image under ghcr.io/peopleforrester/lab-platform (the mirror/ copies included, #623) is pulled from
+# (#622). Those packages are public (verify/test_mirror_copies_public.py reads each copy anonymously), so this
+# default pulls on any cluster, and it is what every root gets today: lab-platform 5192c1a reverted the ECR
+# pull-through cache path its bootstrap passed (lab-platform#214), and infra/deploy-full-idp.sh passes nothing.
+# A root may still pass a cache path, <account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/lab-platform.
 # An app file names such an image as "{{ .Values.imageRegistry }}/<path>:<tag>", never by the ghcr.io literal:
 # verify/test_image_registry.py fails on the literal anywhere the root deploys from.
 imageRegistry: ghcr.io/peopleforrester/lab-platform

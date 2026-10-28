@@ -3082,3 +3082,41 @@ run-of-show.
   which leaves out attackme and the admin cluster until lab-platform#137 lands (prompts-agenticburn#11).
 - **Test:** `verify/test_fleet_wall_check.sh` (offline, curl stubbed). Run live and read-only on 2026-10-28: the
   public wall answered 200 and showed both clusters.
+
+## 2026-10-28 · #623 · The charts pull lab-platform's mirror/ copies of their Docker Hub images
+
+lab-platform#183 handed over its `deploy/mirror/copies.tsv` on 2026-10-28 (this issue, comment 6474733299): each
+vendor image copied under `ghcr.io/peopleforrester/lab-platform/mirror/`, tagged with its upstream tag and the first
+twelve characters of its linux/amd64 manifest digest. The copies are public, so the issue's "settle one thing" is
+settled by the packages, not by `infra/deploy-full-idp.sh`: it still passes no `imageRegistry`, and the default
+pulls. lab-platform 5192c1a reverted the ECR cache path, so no root passes the value today; the comments in
+`values.yaml` and both registry tests that called the packages private now say so.
+
+- **Re-rendered first.** Each chart was rendered at this commit with its app file's values. 14 of the 16 rows match
+  what a chart pulls and are named. The falco and falcoctl rows do not: copies.tsv was resolved at 01c1d9e, and
+  89fce6a took Falco chart 9.2.1 (falco 0.45.1, falcoctl 0.14.2, the kernel 6.18 fix), so naming the 0.44.1 and
+  0.13.0 copies would downgrade Falco. Both stay on Docker Hub until lab-platform copies the tags the chart pulls.
+  k8s-sidecar is on quay.io and Alloy and Loki left with #474, so none of those has a copy.
+- **Where each is named.** In its app file's Helm values, as `"{{ .Values.imageRegistry }}/mirror/..."`, split
+  across the keys the chart builds the reference from (registry, repository, name, tag): falco-talon,
+  falcosidekick, kagent (bundled postgres and grafana-mcp), kube-prometheus-stack's Grafana, tempo, the operator's
+  `manager.collectorImage`, and the collector, whose `image` moved from the shared
+  `gitops/otel-collector/values.yaml` (a `$values` file `tpl` never renders) into `valuesObject` in each of the three
+  `otel-collector*.yaml` app files.
+- **KubeArmor.** The operator image is the chart's `kubearmorOperator.image`. The kubearmor, init, relay and
+  controller images are KubeArmorConfig fields, set under `kubearmorConfig`, which the chart writes into the
+  `kubearmor-default` KubeArmorConfig. The snitch has no field: the operator (v1.7.4, `common.GetApplicationImage`)
+  reads `RELATED_IMAGE_KUBEARMOR_SNITCH`, and without it names `docker.io/kubearmor/kubearmor-snitch` with the
+  operator image's own tag (`NewClusterWatcher` splits it off the Deployment's image). On the copy's tag,
+  `v1.7.4-84626528c4d6`, that tag does not exist on Docker Hub, so the env is set to the copy of `:latest`. That
+  moves the snitch from the `v1.7.4` build (`sha256:047908ef…` on Docker Hub, 2026-10-28) to the copy of `latest`,
+  the tag lab-platform copied and the one relay and controller already run; a live cluster build should confirm the
+  snitch job labels the nodes.
+- **Tests.** `verify/mirror_copies.py` holds the 16 rows, the two unpulled ones apart. `test_image_registry.py`
+  (offline) checks each tag ends in its digest's first twelve characters and each app file names its copies'
+  tags under the value. `test_image_registry_render.py` (tools tier, now needing the network for the upstream
+  charts) renders each app through the root, unset and at a cache path, then renders its chart with the values the
+  root produced: every copy is named at ghcr.io unset and at the cache path set, the replaced upstream reference
+  is gone, and the falco chart still does not pull the two unpulled tags. `test_mirror_copies_public.py` (tools
+  tier, new) reads every named copy from ghcr.io with no credential and checks it serves its digest; all 14 did on
+  2026-10-28.

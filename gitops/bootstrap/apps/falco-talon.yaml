@@ -21,6 +21,13 @@ spec:
     targetRevision: "0.4.2" # verify-at-build: app v0.3.0; confirm chart version (helm search repo falcosecurity/falco-talon)
     helm:
       valuesObject:
+        # lab-platform's mirror/ copy of falco.docker.scarf.sh/falcosecurity/falco-talon:0.3.0, the tag the chart
+        # pulls, named by its linux/amd64 digest's first twelve characters (#623). The chart joins registry and
+        # repository, so the copy's path is split across the two.
+        image:
+          registry: "{{ .Values.imageRegistry }}/mirror"
+          repository: falcosecurity/falco-talon
+          tag: "0.3.0-0a06b6a5e9f0"
         resources:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { cpu: 200m, memory: 128Mi }

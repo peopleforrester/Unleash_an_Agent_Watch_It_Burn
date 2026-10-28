@@ -1,7 +1,8 @@
 # ABOUTME: Shared Helm values for the OpenTelemetry Collector DaemonSet, used by BOTH otel-collector
 # ABOUTME: Applications (instructor and attendee). Attendee clusters layer values-dual.yaml on top (#242).
-image:
-  repository: "otel/opentelemetry-collector-contrib"
+# The collector image is not here: it is lab-platform's mirror/ copy of otel/opentelemetry-collector-contrib, and
+# only an app file's Helm values can name it through the root's imageRegistry (#623). Each of the three
+# gitops/bootstrap/apps/otel-collector*.yaml files sets image.repository and image.tag.
 mode: daemonset
 presets:
   kubernetesAttributes:

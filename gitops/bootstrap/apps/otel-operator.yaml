@@ -40,10 +40,13 @@ spec:
     targetRevision: "0.122.0"
     helm:
       valuesObject:
-        # The manager image's collector tag must be pinned (the chart requires it explicitly).
+        # The manager image's collector tag must be pinned (the chart requires it explicitly). It is the
+        # operator's --collector-image: lab-platform's mirror/ copy of otel/opentelemetry-collector-k8s:0.158.0,
+        # named by its linux/amd64 digest's first twelve characters (#623).
         manager:
           collectorImage:
-            repository: otel/opentelemetry-collector-k8s
+            repository: "{{ .Values.imageRegistry }}/mirror/otel/opentelemetry-collector-k8s"
+            tag: "0.158.0-158b837a5e98"
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 200m, memory: 256Mi }
