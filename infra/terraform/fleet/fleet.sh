@@ -940,9 +940,11 @@ repair_agent_injection() {
 repair_agent_tools() {
     local name="$1" kcfg="$2"
     local want live
-    want="$(python3 - <<'PYEOF' 2>/dev/null
-import pathlib, yaml
-for d in yaml.safe_load_all(pathlib.Path("gitops/ai-layer/resources.yaml").read_text()):
+    # From REPO_ROOT, never the working directory: converge runs from infra/terraform/fleet, where the relative
+    # path did not exist, and the failed read ended the whole converge_one job before repair_datadog (#635).
+    want="$(python3 - "${REPO_ROOT}/gitops/ai-layer/resources.yaml" <<'PYEOF'
+import sys, yaml
+for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
     if d and d.get("kind") == "Agent":
         for s in d["spec"]["declarative"]["tools"]:
             m = s.get("mcpServer") or {}
@@ -951,8 +953,9 @@ for d in yaml.safe_load_all(pathlib.Path("gitops/ai-layer/resources.yaml").read_
 PYEOF
 )"
     [[ -n "${want}" ]] || return 0
-    live="$(KUBECONFIG="${kcfg}" kubectl -n agent get agent workshop-agent \
-        -o jsonpath='{range .spec.declarative.tools[?(@.mcpServer.name=="workshop-mcp")]}{.mcpServer.toolNames}{end}' 2>/dev/null \
+    # No Agent CR (Argo still recreating one this repair deleted last round) is no live list, not a failure.
+    live="$( { KUBECONFIG="${kcfg}" kubectl -n agent get agent workshop-agent \
+        -o jsonpath='{range .spec.declarative.tools[?(@.mcpServer.name=="workshop-mcp")]}{.mcpServer.toolNames}{end}' 2>/dev/null || true; } \
         | tr -d '[]"' | tr ',' '\n' | sort | paste -sd, -)"
     [[ -n "${live}" ]] || return 0
     if [[ "${live}" != "${want}" ]]; then
@@ -1091,16 +1094,33 @@ pin_bedrock_profiles() {
     [[ "${bad}" -eq 0 ]] || { record_fail "${name}:bedrock-profiles"; return 1; }
 }
 
+# One repair, in its own subshell under errexit: repair_step <fn> <name> [args...]. An unguarded failure
+# inside a repair used to end the whole backgrounded converge_one job without a word. On 2026-10-28
+# repair_agent_tools did that on both KubeCon clusters, so repair_datadog never ran, nothing reached the
+# ledger, and converge said CONVERGED 2/2 with no datadog-secret written (#635). Now such a failure ends
+# that one repair, is logged and recorded as <name>:<fn>, and the repairs after it still run.
+repair_step() {
+    local fn="$1" name="$2" rc had_e=0
+    [[ "$-" == *e* ]] && had_e=1
+    set +e
+    ( set -e; "$@" ); rc=$?
+    [[ "${had_e}" -eq 0 ]] || set -e
+    [[ "${rc}" -ne 0 ]] || return 0
+    log "  ${name}: ${fn} stopped with exit ${rc}; the repairs after it still run"
+    record_fail "${name}:${fn}"
+}
+
 repair_one() {
     local name="$1" kcfg="$2" acct="$3"
-    repair_stuck_syncs "${name}" "${kcfg}"
-    repair_failed_syncs "${name}" "${kcfg}"
-    repair_agent_injection "${name}" "${kcfg}"
-    repair_agent_tools "${name}" "${kcfg}"
+    repair_step repair_stuck_syncs "${name}" "${kcfg}"
+    repair_step repair_failed_syncs "${name}" "${kcfg}"
+    repair_step repair_agent_injection "${name}" "${kcfg}"
+    repair_step repair_agent_tools "${name}" "${kcfg}"
+    # Not a step: it records its own ledger line when it fails, and a step would record a second one.
     pin_bedrock_profiles "${name}" "${kcfg}" || true
-    repair_stuck_pods "${name}" "${kcfg}"
-    repair_datadog "${name}" "${kcfg}" "${acct}"
-    verify_one "${name}" "${kcfg}" "${acct}"
+    repair_step repair_stuck_pods "${name}" "${kcfg}"
+    repair_step repair_datadog "${name}" "${kcfg}" "${acct}"
+    repair_step verify_one "${name}" "${kcfg}" "${acct}"
 }
 
 # Zero audit (#255). After a fleet teardown the only billable things left in an account are what its

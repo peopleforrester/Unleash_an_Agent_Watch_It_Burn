@@ -37,6 +37,7 @@ case "$*" in
   *"get pods -A -o json"*) cat "${T}/pods.json" 2>/dev/null || echo '{"items":[]}' ;;
   *"-n agent get configmap cluster-identity"*) cat "${T}/public_host" 2>/dev/null ;;
   *"get configmap cluster-identity"*) cat "${T}/identity" 2>/dev/null ;;
+  *"-n agent get agent workshop-agent"*) cat "${T}/agent_tools" 2>/dev/null ;;
   *"get secret datadog-secret -o jsonpath={.data.api-key}"*) printf '%s' "$(cat "${T}/live_key" 2>/dev/null)" | base64 ;;
   *"get secret datadog-admin-secret"*) [[ -f "${T}/admin_present" ]] && exit 0; exit 1 ;;
   *"create namespace"*|*"create secret generic"*) echo "kind: Placeholder" ;;
@@ -135,6 +136,48 @@ check "once the key exists, repair writes datadog-secret in all three namespaces
   '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ADMIN_API" "${CALLS}")" -eq 3 ]] && grep -q "^reload ctx-test acct" "${CALLS}"'
 : >"${T}/stderr"
 
+echo "== converge alone turns Datadog on for clusters whose keys arrived after bring-up (#635) =="
+# The 2026-10-28 KubeCon run: the keys went into watch-it-burn/datadog after bring-up, `./fleet.sh converge
+# watch-it-burn-community watch-it-burn-michael-admin` said CONVERGED 2/2, and no datadog-secret was written.
+# repair_agent_tools read a path relative to the working directory, which from the fleet directory does not
+# exist, and errexit ended each converge_one job before repair_datadog. This runs the real cmd_converge from
+# that directory through every real repair; only the cluster edges and pin_bedrock_profiles are stubbed.
+python3 -c 'import json; print(json.dumps({"items":[{"metadata":{"name":f"app-{i}"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded"}}} for i in range(12)]}))' >"${T}/apps.json"
+python3 - "${HERE}/../gitops/ai-layer/resources.yaml" >"${T}/agent_tools" <<'PY'
+import json, sys, yaml
+for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
+    if d and d.get("kind") == "Agent":
+        for s in d["spec"]["declarative"]["tools"]:
+            if (s.get("mcpServer") or {}).get("name") == "workshop-mcp":
+                print(json.dumps(s["mcpServer"]["toolNames"], separators=(",", ":")), end="")  # as kubectl prints it
+PY
+rm -f "${T}/live_key" "${T}/admin_present"; : >"${CALLS}"; : >"${T}/stderr"; mkdir -p "${T}/logs"
+WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 src 'provider_write_kubeconfig() { :; }; require_tools() { :; }
+    converge_endpoint() { echo console.example; }
+    pin_bedrock_profiles() { echo "pin-bedrock $1" >>"${CALLS}"; }  # its own test: test_pin_bedrock_profiles.sh
+    cmd_converge watch-it-burn-community watch-it-burn-private'; rc=$?
+check "converge reaches repair_datadog on both clusters and runs the identity script for each" \
+  'grep -q "^identity-script CLUSTER_NAME=watch-it-burn-community " "${CALLS}" && grep -q "^identity-script CLUSTER_NAME=watch-it-burn-private " "${CALLS}"'
+check "it writes datadog-secret in all three namespaces of both clusters and reloads both" \
+  '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ADMIN_API" "${CALLS}")" -eq 6 && "$(grep -c "^reload ctx-test " "${CALLS}")" -eq 2 ]]'
+check "it logs the own-key-drift it repaired, for each cluster" \
+  '[[ "$(grep -c "watch-it-burn-[a-z]*: repairing datadog (.*own-key-drift" "${T}/stderr")" -eq 2 ]]'
+check "the verifier after it runs too, and the agent tools repair found nothing to do" \
+  '[[ "$(grep -c "^verify ctx-test " "${CALLS}")" -eq 2 ]] && ! grep -q "delete agent workshop-agent" "${CALLS}"'
+check "and only then does it say CONVERGED 2/2" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "CONVERGED: 2/2" "${T}/stderr" && ! grep -q "stopped with exit" "${T}/stderr"'
+rm -f "${T}/agent_tools"; : >"${T}/stderr"
+
+echo "== repair_step: a repair that fails is logged and recorded, and the next one still runs (#635) =="
+: >"${CALLS}"
+WIB_LOG_DIR="${T}/logs" src 'boom() { false; echo "boom-went-on $1" >>"${CALLS}"; }; after() { echo "after-ran $1" >>"${CALLS}"; }
+    repair_step boom c; repair_step after c; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "the failing repair stops at its first unguarded error" '! grep -q "boom-went-on" "${CALLS}"'
+check "it is recorded as <name>:<repair> and logged" \
+  'grep -qx "c:boom" "${T}/out" && grep -q "c: boom stopped with exit 1" "${T}/stderr"'
+check "the repair after it still runs" 'grep -qx "after-ran c" "${CALLS}"'
+: >"${T}/stderr"
+
 echo "== repair_stuck_syncs =="
 old="$(date -u -d '40 minutes ago' +%FT%TZ)"; new="$(date -u -d '2 minutes ago' +%FT%TZ)"
 printf '{"items":[{"metadata":{"name":"prometheus"},"status":{"operationState":{"phase":"Running","startedAt":"%s"}}},{"metadata":{"name":"kagent"},"status":{"operationState":{"phase":"Running","startedAt":"%s"}}},{"metadata":{"name":"ai-layer"},"status":{"operationState":{"phase":"Succeeded","startedAt":"%s"}}}]}' "$old" "$new" "$old" >"${T}/apps.json"
@@ -188,7 +231,9 @@ check "a failing datadog-orgs verifier is recorded as <name>:datadog-orgs" 'grep
 
 echo "== wiring =="
 check "converge_one runs repair_one" 'grep -q "^    repair_one \"\${name}\" \"\${kcfg}\" \"\${acct_profile}\"" "${FLEET}"'
-check "repair_one includes repair_failed_syncs" 'grep -q "^    repair_failed_syncs \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
+check "repair_one includes repair_failed_syncs" 'grep -q "^    repair_step repair_failed_syncs \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
+check "every repair and verifier in repair_one runs as a repair_step, but pin_bedrock_profiles (#635)" \
+  '[[ "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -cE "^    (repair_|verify_)" )" -eq 7 && "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -c "^    repair_step ")" -eq 7 ]]'
 check "converge instructors skips roster slots with no state" 'grep -q "not provisioned, skipping" "${FLEET}"'
 check "up ends with a converge pass over what it built" 'grep -q "repair-and-verify pass over" "${FLEET}"'
 check "the post-up wait and verify iterate the PROVISION_SPEC names, never the register arguments" \
