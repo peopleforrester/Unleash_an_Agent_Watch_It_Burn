@@ -3183,3 +3183,40 @@ Hecaton's insights found two runs that lost their time to the environment rather
   `gitops/bootstrap/apps/` and each lab-platform.yaml profile's values file exist, and `gitops/apps/` does not.
 - **Not done here.** The cause is to be named in a comment on #633; this run could not post it (`sources` asked for
   a sudo password), so the comment is escalated in the run's report.
+
+## 2026-10-28 · #638 · Each roster profile's front door, with an ACM certificate on its NLB
+
+lab-platform's bootstrap records each roster cluster's front door (peopleforrester/lab-platform#184,
+`docs/talk-config.md` section 3, `profiles[].front_door`): it waits up to ten minutes for the named Service's
+`status.loadBalancer.ingress[0].hostname` and records `https://<hostname>/`, and its gateway proxies attackme and
+burritobot-private there, verifying the certificate against the system roots. The console's self-signed
+certificate (#139), which apex's router never checked, is refused.
+
+- **The front door is `agent/console`** on `burn` and `admin` in `lab-platform.yaml`: the one internet-facing
+  LoadBalancer Service the console answers on (`gitops/ai-layer/resources.yaml`). attendee and full declare none.
+- **ACM on the NLB, not cert-manager.** ACM's certificate does not depend on the NLB's hostname, which changes on
+  every build; one per account and region, for `*.agenticburn.com` and `*.burritobot.co` (#651), renews itself
+  while it is in use and its two validation CNAMEs stay in DNS; one left unused between events can expire, and
+  the helper below then requests a new one. Let's Encrypt from the cluster would need HTTP-01 through
+  the very gateway that refuses the self-signed certificate, or DNS-01 on Namecheap, whose API answers only
+  allowlisted IPs; and each rebuild would spend one of its five duplicate-certificate issues a week.
+- **The ARN is a root value, `frontDoor.certificateArn`,** as `imageRegistry` is (#622): per account, so the
+  root that builds the cluster passes it. Set, the ai-layer Application carries a kustomize patch adding the
+  load balancer controller's `ssl-cert`, `ssl-ports: "443"`, `backend-protocol: ssl` and the TLS 1.3/1.2
+  negotiation policy to the console Service, so the NLB terminates with ACM and re-encrypts to nginx, which
+  needs no change. Unset, nothing renders and 443 stays the TCP pass-through; `deploy-full-idp.sh` and fleet.sh
+  clusters, the KubeCon ones included, are unchanged. A value that is not an ACM ARN fails the render by name.
+- **The guard sits in YAML comments** (`# {{- if .Values.frontDoor.certificateArn }}` … `# {{- end }}`), so
+  `ai-layer.yaml` still parses as written for the offline sweeps; `verify/bootstrap_chart.py`
+  `without_front_door` is the file as rendered without the value.
+- **`infra/front-door-cert.sh <aws-profile> <region>`** finds or requests that certificate, prints the
+  validation CNAMEs as `set-demo-dns.py` arguments while it is pending, and the `frontDoor.certificateArn=`
+  value once it is issued.
+- **Assumed of the gateway:** it sends the roster hostname as SNI and verifies the certificate against it. No
+  public certificate can name the NLB's own `*.elb.amazonaws.com` hostname, which is what lab-platform records,
+  so a gateway that verifies against that name refuses every front door. lab-platform's repo could not be read
+  from this run; the follow-up there states this contract and asks for `frontDoor.certificateArn` to be passed.
+- **Tests:** `verify/test_bootstrap_chart.py` (the declarations, the value, the guard),
+  `verify/test_bootstrap_chart_render.py` (renders burn with and without the ARN and a bad one, Helm v4.2.1) and
+  `verify/test_front_door_cert.sh` (the helper against an aws shim). No cluster, certificate or DNS record was
+  created; the definition of done's `labctl event up` and `labctl tls-check attackme.agenticburn.com` wait on both.

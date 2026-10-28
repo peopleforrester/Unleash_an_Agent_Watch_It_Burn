@@ -20,8 +20,9 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import (APPS, CHART, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO_URL, REVISION,  # noqa: E402
-                             app_names, profiles, values_path)
+from bootstrap_chart import (APPS, CHART, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY,  # noqa: E402
+                             LAB_PLATFORM_GHCR, REPO_URL, REVISION, app_names, profiles, values_path,
+                             without_front_door)
 
 failures: list[str] = []
 
@@ -69,10 +70,10 @@ for profile in profiles():
     check(f"{profile}: besides the Applications it renders only the ghcr-kagent-oci Secret {rest}",
           rest == [("Secret", "ghcr-kagent-oci")])
     # Each listed file, rendered, is the file as written with the revision and the default image registry filled
-    # in: tpl changes nothing else.
+    # in and, with no frontDoor.certificateArn, the front door's guarded block left out: tpl changes nothing else.
     want = []
     for n in app_names(profile):
-        raw = (APPS / f"{n}.yaml").read_text(encoding="utf-8").replace(REVISION, COMMIT) \
+        raw = without_front_door((APPS / f"{n}.yaml").read_text(encoding="utf-8")).replace(REVISION, COMMIT) \
             .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
         want += [d for d in yaml.safe_load_all(raw) if d]
@@ -96,6 +97,40 @@ for profile in profiles():
         alerts = r.stdout
         check("admin: the Prometheus alert text renders as Prometheus' own template",
               '"Node {{ $labels.node }} is not ready"' in alerts and "{{`" not in alerts)
+
+print("== the front door's certificate (#638) ==")
+CERT = "arn:aws:acm:us-west-2:111122223333:certificate/0f1e2d3c-4b5a-6978-8a9b-0c1d2e3f4a5b"
+
+
+def ai_layer(*args: str) -> dict:
+    r = render("-f", str(values_path("burn")), "--set", f"revision={COMMIT}", *args)
+    return next((d for d in yaml.safe_load_all(r.stdout) if d and d["metadata"]["name"] == "ai-layer"), {}) \
+        if r.returncode == 0 else {}
+
+
+plain = ai_layer()
+check("no certificateArn: ai-layer has no kustomize block, so 443 stays nginx's self-signed pass-through",
+      bool(plain) and "kustomize" not in plain["spec"]["source"])
+fd = ai_layer("--set", f"frontDoor.certificateArn={CERT}")
+patches = ((fd.get("spec") or {}).get("source") or {}).get("kustomize", {}).get("patches") or []
+check("with one: one patch, on the console Service", len(patches) == 1
+      and patches[0].get("target") == {"kind": "Service", "name": "console"})
+ops = {o["path"].rsplit("/", 1)[-1].replace("~1", "/"): o["value"]
+       for o in yaml.safe_load(patches[0]["patch"]) if o.get("op") == "add"} if patches else {}
+check("it puts the certificate on the NLB's 443 as a TLS listener that re-encrypts to nginx",
+      ops == {"service.beta.kubernetes.io/aws-load-balancer-ssl-cert": CERT,
+              "service.beta.kubernetes.io/aws-load-balancer-ssl-ports": "443",
+              "service.beta.kubernetes.io/aws-load-balancer-backend-protocol": "ssl",
+              "service.beta.kubernetes.io/aws-load-balancer-ssl-negotiation-policy":
+                  "ELBSecurityPolicy-TLS13-1-2-2021-06"}, str(ops))
+fd["spec"]["source"].pop("kustomize", None) if fd else None
+check("and changes nothing else in the Application", bool(fd) and fd == plain)
+r = render("-f", str(values_path("burn")), "--set", f"revision={COMMIT}", "--set", "frontDoor.certificateArn=console-tls")
+check("a certificateArn that is not an ACM ARN: the render fails, naming it", r.returncode != 0
+      and "frontDoor.certificateArn is the ARN of the ACM certificate" in r.stderr, r.stderr.strip()[:200])
+for guard in (FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END):
+    check(f"no rendered Application keeps {guard}", guard not in render(
+        "-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--set", f"frontDoor.certificateArn={CERT}").stdout)
 
 print("== the render refuses what it cannot pin ==")
 r = render("-f", str(values_path("attendee")))

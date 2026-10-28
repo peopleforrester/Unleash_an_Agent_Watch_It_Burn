@@ -1,5 +1,10 @@
 # ABOUTME: What this talk presents to lab-platform: the labs it is the content for, and the root
 # ABOUTME: ArgoCD chart of each bootstrap profile, read at the commit an event pins.
+#
+# front_door (#638, lab-platform#184): on the two roster profiles, the LoadBalancer Service the console answers
+# on. lab-platform waits for its hostname after the root syncs and records https://<hostname>/ on the cluster's
+# row, which is where its gateway sends attackme and burritobot-private. The gateway verifies that certificate
+# against the system roots, so it must be the ACM one: see frontDoor.certificateArn in gitops/bootstrap/values.yaml.
 format: lab-platform/v1
 labs:
   - burn
@@ -13,9 +18,15 @@ bootstrap:
     - name: burn
       root: gitops/bootstrap
       values: values-burn.yaml
+      front_door:
+        namespace: agent
+        service: console
     - name: admin
       root: gitops/bootstrap
       values: values-admin.yaml
+      front_door:
+        namespace: agent
+        service: console
     - name: full
       root: gitops/bootstrap
       values: values-full.yaml

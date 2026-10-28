@@ -19,6 +19,10 @@ Records are written only for what Railway serves under its own custom domain: th
 `monitoring` or `provisioning`. Railway needs a CNAME **and** its `_railway-verify.<label>` TXT for each;
 with only the CNAME the domain resolves and returns 404.
 
+The one other record is ACM's: the front door certificate a lab-platform roster cluster's NLB presents (#638)
+is validated by one `_<token>` CNAME per domain per AWS account. `infra/front-door-cert.sh <aws-profile>
+<region>` prints them as this tool's arguments; leave them in place, since ACM renews against them.
+
 ## How to write records (with Michael's go)
 
 ```bash

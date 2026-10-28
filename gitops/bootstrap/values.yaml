@@ -13,3 +13,11 @@ revision: ""
 # An app file names such an image as "{{ .Values.imageRegistry }}/<path>:<tag>", never by the ghcr.io literal:
 # verify/test_image_registry.py fails on the literal anywhere the root deploys from.
 imageRegistry: ghcr.io/peopleforrester/lab-platform
+# The ACM certificate the console's load balancer presents on 443 (#638). lab-platform's gateway proxies a roster
+# host (attackme, burritobot-private) to the front door lab-platform.yaml declares and verifies its certificate
+# against the system roots, which the console's own self-signed one fails. Set, the NLB terminates TLS with this
+# certificate and re-encrypts to nginx; empty, 443 passes TCP through to nginx's self-signed certificate as
+# before, which is what infra/deploy-full-idp.sh and fleet.sh clusters get. A root passes the ARN of a certificate
+# for *.agenticburn.com and *.burritobot.co in the cluster's own account and region (infra/front-door-cert.sh).
+frontDoor:
+  certificateArn: ""

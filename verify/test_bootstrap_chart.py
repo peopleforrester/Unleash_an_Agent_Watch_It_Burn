@@ -16,8 +16,9 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import (APPS, CHART, CONFIG, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL,  # noqa: E402
-                             REVISION, TEMPLATES, app_names, deploy_root, deploys, profiles, values_path)
+from bootstrap_chart import (APPS, CHART, CONFIG, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF,  # noqa: E402
+                             IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL, REVISION, TEMPLATES, app_names,
+                             deploy_root, deploys, profiles, values_path)
 
 failures = []
 
@@ -46,9 +47,26 @@ boot = cfg.get("bootstrap") or {}
 check("bootstrap holds revision_parameter and profiles only", list(boot) == ["revision_parameter", "profiles"])
 check("the revision parameter is `revision`", boot.get("revision_parameter") == "revision")
 check("the profiles are attendee, burn, admin and full", profiles() == ["attendee", "burn", "admin", "full"])
+# front_door (#638, lab-platform#184): the two roster profiles name the LoadBalancer Service the console answers on,
+# whose hostname lab-platform records as the cluster's front door. The attendee profile declares none, and full,
+# which no roster cluster runs, none either.
+FRONT_DOOR = {"burn": {"namespace": "agent", "service": "console"}, "admin": {"namespace": "agent", "service": "console"}}
 for p in boot.get("profiles") or []:
-    check(f"profile {p.get('name')}: root gitops/bootstrap, values values-{p.get('name')}.yaml",
-          p == {"name": p.get("name"), "root": "gitops/bootstrap", "values": f"values-{p.get('name')}.yaml"})
+    name = p.get("name")
+    want = {"name": name, "root": "gitops/bootstrap", "values": f"values-{name}.yaml"}
+    if name in FRONT_DOOR:
+        want["front_door"] = FRONT_DOOR[name]
+    check(f"profile {name}: root gitops/bootstrap, values values-{name}.yaml"
+          + (", front_door agent/console" if name in FRONT_DOOR else ", no front_door"), p == want)
+resources = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+console = next((d for d in yaml.safe_load_all(resources)
+                if d and d.get("kind") == "Service" and d["metadata"]["name"] == "console"), {})
+check("the front door is the console Service, a LoadBalancer with an https port, in the ai-layer bundle's namespace",
+      (console.get("spec") or {}).get("type") == "LoadBalancer"
+      and any(pt.get("name") == "https" and pt.get("port") == 443 for pt in console["spec"].get("ports", []))
+      and yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text(encoding="utf-8"))["namespace"]
+      == "agent")
+check("both roster profiles install the ai-layer app that creates it", all(deploys(p, "ai-layer") for p in FRONT_DOOR))
 # The strict subset: block style only and every value text, so a flow collection or a non-string scalar fails.
 body = [ln.split("#", 1)[0] for ln in text.splitlines()]
 check("block style only: no flow collection", not any(re.search(r"[\[\]{}]", ln) for ln in body))
@@ -72,10 +90,11 @@ print("== gitops/bootstrap is the one root chart ==")
 chart = yaml.safe_load((CHART / "Chart.yaml").read_text(encoding="utf-8"))
 check("gitops/bootstrap/Chart.yaml is a Helm v2 application chart",
       chart.get("apiVersion") == "v2" and chart.get("type") == "application" and bool(chart.get("version")))
-check("values.yaml shares an empty revision, so a render without the parameter fails, and imageRegistry at "
-      f"{LAB_PLATFORM_GHCR}, so a root that passes none pulls from ghcr.io as before (#622)",
+check("values.yaml shares an empty revision, so a render without the parameter fails, imageRegistry at "
+      f"{LAB_PLATFORM_GHCR}, so a root that passes none pulls from ghcr.io as before (#622), and an empty "
+      "frontDoor.certificateArn, so a root that passes none keeps nginx's self-signed certificate (#638)",
       yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
-      == {"revision": "", "imageRegistry": LAB_PLATFORM_GHCR})
+      == {"revision": "", "imageRegistry": LAB_PLATFORM_GHCR, "frontDoor": {"certificateArn": ""}})
 check("the chart holds apps/, templates/ and no other directory (the four old root directories are gone)",
       sorted(d.name for d in CHART.iterdir() if d.is_dir()) == ["apps", "templates"])
 check("gitops/apps is gone: its files are the chart's apps/", not (REPO / "gitops/apps").exists())
@@ -88,6 +107,13 @@ check("apps.yaml renders each listed file through tpl", "{{ tpl $body $ }}" in t
 check("apps.yaml fails an empty imageRegistry, one with a scheme and one with a trailing slash, by name",
       '{{- if or (not $registry) (contains "://" $registry) (hasSuffix "/" $registry) }}' in tpl
       and 'fail (printf "imageRegistry is the registry path' in tpl)
+check("apps.yaml fails a frontDoor.certificateArn that is not an ACM certificate ARN, by name",
+      'regexMatch "^arn:aws[a-z-]*:acm:[a-z0-9-]+:[0-9]{12}:certificate/[0-9a-f-]+$" $cert' in tpl
+      and 'fail (printf "frontDoor.certificateArn is the ARN' in tpl)
+ai_layer = (APPS / "ai-layer.yaml").read_text(encoding="utf-8")
+check("ai-layer.yaml patches the console Service only when frontDoor.certificateArn is set, the guard in comments",
+      "    # {{- if .Values.frontDoor.certificateArn }}\n    kustomize:\n" in ai_layer
+      and "    # {{- end }}\n  destination:" in ai_layer)
 
 print("== each profile is an explicit list of files that exist ==")
 app_files = sorted(p.name for p in APPS.glob("*.yaml"))
@@ -127,10 +153,12 @@ for f in app_files:
     raw = (APPS / f).read_text(encoding="utf-8")
     # tpl renders the whole file, so the only template text is the revision, the lab-platform image registry
     # (#622) and Prometheus' own, escaped.
+    # ai-layer.yaml alone also holds the front door's guarded certificate patch (#638).
+    allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END) if f == "ai-layer.yaml" else ())
     stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw))
-             if m not in (REVISION, IMAGE_REGISTRY)]
-    check(f"{f}: no template text but the revision and the image registry (Prometheus' {{{{ }}}} escaped) {stray}",
-          not stray)
+             if m not in allowed]
+    check(f"{f}: no template text but the revision and the image registry (Prometheus' {{{{ }}}} escaped)"
+          + (" and the front door's certificate" if f == "ai-layer.yaml" else "") + f" {stray}", not stray)
     docs = [d for d in yaml.safe_load_all(raw) if d]
     check(f"{f}: every document is an Application", bool(docs) and all(d.get("kind") == "Application" for d in docs))
     for d in docs:

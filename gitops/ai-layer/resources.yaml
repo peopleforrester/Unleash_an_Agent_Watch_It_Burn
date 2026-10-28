@@ -1309,6 +1309,12 @@ spec:
 # on a shared conference network, not someone impersonating our NLB, and the router is the only client.
 # So: cert-manager issues a self-signed cert, nginx terminates TLS, the NLB passes TCP through, and Caddy
 # connects with tls_insecure_skip_verify. Encrypted, not authenticated, and honest about which.
+#
+# A lab-platform roster cluster is the exception (#638). lab-platform's gateway proxies attackme and
+# burritobot-private to the console Service, the front_door lab-platform.yaml declares, and verifies the
+# certificate against the system roots, so this one is refused there. Its root passes
+# frontDoor.certificateArn, and the ai-layer Application (gitops/bootstrap/apps/ai-layer.yaml) patches the
+# Service below so the NLB's 443 listener presents that ACM certificate and re-encrypts to this one.
 apiVersion: cert-manager.io/v1
 kind: Issuer
 metadata:
@@ -1407,6 +1413,8 @@ spec:
     - { name: http, port: 80, targetPort: http }
     # #139: the NLB passes TCP through on 443 and nginx terminates TLS with the cert-manager
     # self-signed cert. ADDITIVE: 80 stays live so the router keeps working until routes.map is flipped.
+    # #638: with frontDoor.certificateArn set, the ai-layer Application makes 443 a TLS listener on the
+    # NLB with that ACM certificate instead, so lab-platform's gateway can verify it.
     - { name: https, port: 443, targetPort: https }
 ---
 # Beat-2 planted fake secret. BurritoBot's "Bat Spit Amazing Awesome Sauce" is the proprietary value the agent is

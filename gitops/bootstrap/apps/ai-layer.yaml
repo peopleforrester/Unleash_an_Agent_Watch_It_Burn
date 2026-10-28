@@ -21,6 +21,31 @@ spec:
     repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
     targetRevision: "{{ .Values.revision }}"
     path: gitops/ai-layer
+    # The front door's certificate (#638). With frontDoor.certificateArn set, the console Service's 443 becomes a
+    # TLS listener on the NLB with that ACM certificate, re-encrypting to nginx, so lab-platform's gateway, which
+    # verifies against the system roots, accepts it. Unset, this block is not rendered and 443 stays the TCP
+    # pass-through to nginx's self-signed certificate (#139). The if and end sit in YAML comments so the file
+    # still parses as written; tpl renders them, and verify/test_bootstrap_chart_render.py renders both ways.
+    # {{- if .Values.frontDoor.certificateArn }}
+    kustomize:
+      patches:
+        - target:
+            kind: Service
+            name: console
+          patch: |-
+            - op: add
+              path: /metadata/annotations/service.beta.kubernetes.io~1aws-load-balancer-ssl-cert
+              value: "{{ .Values.frontDoor.certificateArn }}"
+            - op: add
+              path: /metadata/annotations/service.beta.kubernetes.io~1aws-load-balancer-ssl-ports
+              value: "443"
+            - op: add
+              path: /metadata/annotations/service.beta.kubernetes.io~1aws-load-balancer-backend-protocol
+              value: ssl
+            - op: add
+              path: /metadata/annotations/service.beta.kubernetes.io~1aws-load-balancer-ssl-negotiation-policy
+              value: ELBSecurityPolicy-TLS13-1-2-2021-06
+    # {{- end }}
   destination:
     server: https://kubernetes.default.svc
     namespace: agent

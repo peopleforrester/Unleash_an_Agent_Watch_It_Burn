@@ -26,6 +26,16 @@ REVISION = "{{ .Values.revision }}"
 IMAGE_REGISTRY = "{{ .Values.imageRegistry }}"
 # The chart's default for it, which infra/deploy-full-idp.sh and an account with no pull-through cache get.
 LAB_PLATFORM_GHCR = "ghcr.io/peopleforrester/lab-platform"
+# The front door's certificate (#638): ai-layer.yaml alone holds a block between these two guards, rendered only when
+# a root passes frontDoor.certificateArn, which patches the ARN onto the console Service's load balancer.
+FRONT_DOOR_IF = "{{- if .Values.frontDoor.certificateArn }}"
+FRONT_DOOR_ARN = "{{ .Values.frontDoor.certificateArn }}"
+FRONT_DOOR_END = "{{- end }}"
+
+
+def without_front_door(raw: str) -> str:
+    """An app file as the chart renders it with no frontDoor.certificateArn: each guarded block left out."""
+    return re.sub(r" \{\{- if \.Values\.frontDoor\.certificateArn \}\}.*? \{\{- end \}\}", "", raw, flags=re.S)
 
 
 def profiles() -> list[str]:

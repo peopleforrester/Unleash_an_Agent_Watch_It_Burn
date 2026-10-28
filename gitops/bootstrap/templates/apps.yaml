@@ -7,6 +7,10 @@ ABOUTME: source takes .Values.revision and every lab-platform image .Values.imag
 {{- if or (not $registry) (contains "://" $registry) (hasSuffix "/" $registry) }}
 {{- fail (printf "imageRegistry is the registry path lab-platform's images are pulled from, with no scheme and no trailing slash, or unset for the chart default (got %q)" $registry) }}
 {{- end }}
+{{- $cert := default "" .Values.frontDoor.certificateArn }}
+{{- if and $cert (not (regexMatch "^arn:aws[a-z-]*:acm:[a-z0-9-]+:[0-9]{12}:certificate/[0-9a-f-]+$" $cert)) }}
+{{- fail (printf "frontDoor.certificateArn is the ARN of the ACM certificate the console's load balancer presents, arn:aws:acm:<region>:<account>:certificate/<id>, or unset for nginx's self-signed one (got %q)" $cert) }}
+{{- end }}
 {{- if not .Values.apps }}
 {{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
 {{- end }}
