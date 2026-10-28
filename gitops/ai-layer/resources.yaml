@@ -330,6 +330,9 @@ spec:
       # (invoke_agent -> chat -> execute_tool). The Agent CRD supports pod annotations (kubectl explain
       # agent.spec.declarative.deployment).
       annotations: { instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python" }
+      # The Datadog Agent tags this pod's container logs from these labels (Unified Service Tagging), the same
+      # service and env its spans carry, so its logs land under BurritoBot in the shared sandbox org (#629).
+      labels: { tags.datadoghq.com/service: burritobot-agent, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
       # Unified Service Tagging for Datadog correlation on the kagent agent pod (same scheme as
       # guard-proxy / agentgateway). UST vocabulary locked in PRD #13: service.version is the component's
       # real software version (NOT a model-tier label); the model dimension for the cost race comes from
@@ -420,7 +423,7 @@ spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: llm-guard } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: llm-guard } }
+    metadata: { labels: { app.kubernetes.io/name: llm-guard, tags.datadoghq.com/service: burritobot-llm-guard, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
@@ -615,7 +618,9 @@ spec:
   selector: { matchLabels: { app.kubernetes.io/name: guard-proxy } }
   template:
     metadata:
-      labels: { app.kubernetes.io/name: guard-proxy }
+      # tags.datadoghq.com/*: the Datadog Agent tags this pod's logs with the service and env its spans carry
+      # (#629). The service is the root span's name, burritobot, which Datadog takes as the LLM Obs ml_app.
+      labels: { app.kubernetes.io/name: guard-proxy, tags.datadoghq.com/service: burritobot, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
       # OTel Operator injects the Python SDK (init-container + PYTHONPATH) so proxy.py's manual spans
       # (PRD #22 M1) emit. The image carries no SDK; this annotation activates injection. References the
       # Instrumentation CR `watch-it-burn-python` in this namespace.
@@ -774,7 +779,7 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: evil-mcp-shim } }
   template:
-    metadata: { labels: { app: evil-mcp-shim } }
+    metadata: { labels: { app: evil-mcp-shim, tags.datadoghq.com/service: burritobot-evil-mcp, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
     spec:
       containers:
         - name: shim
@@ -832,7 +837,7 @@ spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: weather-feed } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: weather-feed } }
+    metadata: { labels: { app.kubernetes.io/name: weather-feed, tags.datadoghq.com/service: burritobot-weather-feed, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
     spec:
       automountServiceAccountToken: false # it needs no cluster API, so it holds no token
       enableServiceLinks: false # no injected <SERVICE>_PORT=tcp://... variables to collide with its own settings
@@ -883,7 +888,7 @@ spec:
   replicas: 1
   selector: { matchLabels: { app: workshop-mcp } }
   template:
-    metadata: { labels: { app: workshop-mcp } }
+    metadata: { labels: { app: workshop-mcp, tags.datadoghq.com/service: burritobot-workshop-mcp, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
     spec:
       # Its own ServiceAccount, bound to the agent's Role, so the tools have the agent's real namespaced RBAC
       # (secrets get/list, pods, configmaps/services/deployments). The MCP tools call the in-cluster API with
@@ -1026,7 +1031,7 @@ spec:
   strategy: { type: Recreate }
   selector: { matchLabels: { app.kubernetes.io/name: web-terminal } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: web-terminal } }
+    metadata: { labels: { app.kubernetes.io/name: web-terminal, tags.datadoghq.com/service: burritobot-web-terminal, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
     spec:
       serviceAccountName: web-terminal
       automountServiceAccountToken: true # the shell's kubectl uses this token to reach the cluster API
@@ -1350,7 +1355,7 @@ spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: console } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: console } }
+    metadata: { labels: { app.kubernetes.io/name: console, tags.datadoghq.com/service: burritobot-console, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }

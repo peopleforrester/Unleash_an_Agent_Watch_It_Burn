@@ -87,6 +87,34 @@ check("datadog-orgs.sh expects the sandbox org by default (its name is Datadog)"
 check("last_trace.py queries kube_cluster_name:burritobot-*",
       "kube_cluster_name:burritobot-*" in (REPO / "verify/last_trace.py").read_text())
 
+print("== every BurritoBot pod labels its logs with the env and the service its spans carry ==")
+# The Agent tags a container's logs from the pod's tags.datadoghq.com/* labels (Unified Service Tagging,
+# docs.datadoghq.com/getting_started/tagging/unified_service_tagging, read 2026-10-28); without them a log's
+# service is the image short name (nginx, workshop-mcp) and sits outside BurritoBot in the shared org.
+# guard-proxy's service is the root span's, burritobot, which Datadog takes as the LLM Obs ml_app.
+pods = {}
+for path in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yaml",
+             "gitops/ai-layer/argocd-managed-app.yaml"):
+    for d in yaml.safe_load_all((REPO / path).read_text()):
+        if not d or d.get("kind") not in ("Deployment", "Agent"):
+            continue
+        if d["kind"] == "Agent":
+            dep = d["spec"]["declarative"]["deployment"]
+            env = {e["name"]: e.get("value", "") for e in dep.get("env", [])}
+            pods[d["metadata"]["name"]] = (dep.get("labels") or {}, env)
+        else:
+            c = d["spec"]["template"]["spec"]["containers"][0]
+            env = {e["name"]: e.get("value", "") for e in c.get("env", [])}
+            pods[d["metadata"]["name"]] = (d["spec"]["template"]["metadata"].get("labels") or {}, env)
+check("the AI layer's workloads were found (9 Deployments and the workshop-agent)", len(pods) == 10, sorted(pods))
+for name, (labels, env) in sorted(pods.items()):
+    svc = labels.get("tags.datadoghq.com/service", "")
+    otel = env.get("OTEL_SERVICE_NAME")
+    named = svc == "burritobot" if name == "guard-proxy" else svc.startswith("burritobot-")
+    check(f"{name} labels service={svc or '<none>'} env={labels.get('tags.datadoghq.com/env', '<none>')}",
+          named and svc == (otel or svc) and labels.get("tags.datadoghq.com/env") == DD_ENV,
+          f"OTEL_SERVICE_NAME={otel}")
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
