@@ -59,6 +59,9 @@ Next, in order:
 - [ ] Rehearsal with Whitney, Wed 2026-10-28 09:00 Central: the cold read against the live platform (#611).
 - [ ] Rebuild the recorded fallback (#452); its branch was lost. Record once the rehearsal works.
 - [ ] Deck PDF to Sessionize by 11-04 (#449), blocked on rounds-agenticburn#41.
+- [ ] Sync the #629 tagging onto both clusters (collector env and burritobot-prefix guard, pod
+  `tags.datadoghq.com` labels) and confirm in Whitney's org that logs from the BurritoBot pods carry
+  `burritobot-*` services. The root service stays `burritobot`, which is the ML app (decisions.md, #629).
 - [ ] #634 (workshop_agent service name), #635 (converge skipping repair_datadog: not reproduced on the
   rebuild, where Datadog went in at bootstrap; re-check when keys change after a bring-up).
 - [ ] Two timed run-throughs by 11-08 (#615).

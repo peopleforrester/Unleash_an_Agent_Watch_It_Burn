@@ -47,7 +47,7 @@ spec:
   selector: { matchLabels: { app.kubernetes.io/name: agentgateway } }
   template:
     metadata:
-      labels: { app.kubernetes.io/name: agentgateway, app.kubernetes.io/component: gateway }
+      labels: { app.kubernetes.io/name: agentgateway, app.kubernetes.io/component: gateway, tags.datadoghq.com/service: burritobot-gateway, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
     spec:
       serviceAccountName: agentgateway
       automountServiceAccountToken: false

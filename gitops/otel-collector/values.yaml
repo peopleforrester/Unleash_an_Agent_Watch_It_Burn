@@ -34,8 +34,17 @@ config:
       send_batch_max_size: 2048
     resource:
       attributes:
+        # Was the literal watch-it-burn, which put a second, stale cluster name on every span in the shared
+        # sandbox org (#629). Now it is the same burritobot-<role> name as k8s.cluster.name below.
         - key: cluster.name
-          value: watch-it-burn
+          value: ${env:WIB_CLUSTER_NAME}
+          action: upsert
+        # Whitney's sandbox org separates BurritoBot's data by this env tag (#629), and it must be on
+        # everything. The services set it themselves in OTEL_RESOURCE_ATTRIBUTES; this upsert also covers
+        # what does not, such as the lab markers, whose resource transform/lab_contract strips to service.name.
+        # The Datadog exporter maps deployment.environment.name to env.
+        - key: deployment.environment.name
+          value: burritobot-kubecon-na-26
           action: upsert
         # The cluster's real name, from the cluster-identity ConfigMap deploy-full-idp writes. The Datadog
         # exporter maps k8s.cluster.name to kube_cluster_name, which is what every Datadog view groups
@@ -215,6 +224,22 @@ config:
             # of the JSON key, which keeps a backslash out of a YAML scalar that is already fiddly.
             - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+    # Every service name in Whitney's sandbox org starts with burritobot (#629). The BurritoBot path pins its
+    # own names (burritobot, burritobot-agent, ...); anything else that reaches this collector, such as a pod
+    # the OTel Operator instruments under its Deployment name, gets the prefix here instead of arriving as a
+    # stranger in a shared org. The root service stays exactly "burritobot": for OTel spans Datadog takes the
+    # LLM Observability ml_app from the root span's service, and Whitney's ML app is burritobot.
+    # Runs last, so every condition above still sees the name the service sent.
+    transform/burritobot_service:
+      error_mode: ignore
+      trace_statements:
+        - context: resource
+          statements:
+            - 'set(attributes["service.name"], Concat(["burritobot-", attributes["service.name"]], "")) where attributes["service.name"] != nil and not IsMatch(attributes["service.name"], "^burritobot(-|$)")'
+      metric_statements:
+        - context: resource
+          statements:
+            - 'set(attributes["service.name"], Concat(["burritobot-", attributes["service.name"]], "")) where attributes["service.name"] != nil and not IsMatch(attributes["service.name"], "^burritobot(-|$)")'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
@@ -313,6 +338,7 @@ config:
           - batch
           - resource
           - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock where N/A
+          - transform/burritobot_service # every service starts with burritobot (#629)
         exporters:
           - prometheusremotewrite # the fallback, and the only metrics sink without Datadog
           - debug
@@ -329,6 +355,7 @@ config:
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
           - transform/mark_tool_failure # a model call that received a failed tool result renders as an error
           - transform/adk_tool_content # surface ADK's tool args/result under gen_ai.* so Datadog renders them
+          - transform/burritobot_service # every service starts with burritobot (#629); last, after every match above
         exporters:
           - otlp_grpc/tempo # the fallback, and the only trace sink without Datadog
           - span_metrics  # feed the connector so it can derive metrics from these spans

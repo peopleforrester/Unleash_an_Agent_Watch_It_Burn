@@ -44,7 +44,8 @@ print("== the feed runs in the agent namespace from its own source ==")
 dep = one("Deployment", "weather-feed")
 pod = dep.get("spec", {}).get("template", {})
 check("a weather-feed Deployment exists", bool(dep))
-check("its pods carry the label the egress policy selects", pod.get("metadata", {}).get("labels") == LABEL)
+check("its pods carry the label the egress policy selects",
+      LABEL.items() <= (pod.get("metadata", {}).get("labels") or {}).items())
 c = (pod.get("spec", {}).get("containers") or [{}])[0]
 check("it has resource limits (the Enforce floor denies it otherwise)", bool((c.get("resources") or {}).get("limits")))
 check("it uses the pinned workshop-mcp image, already on the registry allow-list",

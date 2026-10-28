@@ -18,6 +18,8 @@ spec:
     metadata:
       labels:
         app: demo-app-spider
+        tags.datadoghq.com/service: burritobot-demo-app-spider
+        tags.datadoghq.com/env: burritobot-kubecon-na-26
         version: "2.0.2"
     spec:
       securityContext:

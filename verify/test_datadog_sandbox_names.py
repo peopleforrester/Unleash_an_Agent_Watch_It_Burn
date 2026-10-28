@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import re
 import subprocess
 import sys
 import tempfile
@@ -86,6 +87,61 @@ check("datadog-orgs.sh expects the sandbox org by default (its name is Datadog)"
       'PREFIX="${WIB_DD_POOL_PREFIX:-Datadog}"' in (REPO / "verify/datadog-orgs.sh").read_text())
 check("last_trace.py queries kube_cluster_name:burritobot-*",
       "kube_cluster_name:burritobot-*" in (REPO / "verify/last_trace.py").read_text())
+
+print("== the collector puts the env and the cluster name on everything it ships ==")
+cfg = collector["config"]
+res = {a["key"]: a for a in cfg["processors"]["resource"]["attributes"]}
+check(f"resource upserts deployment.environment.name={DD_ENV}",
+      res.get("deployment.environment.name", {}).get("value") == DD_ENV
+      and res["deployment.environment.name"].get("action") == "upsert")
+check("cluster.name is the burritobot-<role> name, not the stale watch-it-burn literal",
+      res.get("cluster.name", {}).get("value") == "${env:WIB_CLUSTER_NAME}")
+pipes = cfg["service"]["pipelines"]
+for name in ("traces", "metrics", "traces/lab", "metrics/lab"):
+    check(f"the {name} pipeline runs the resource processor", "resource" in pipes[name]["processors"])
+
+print("== services outside the burritobot family get the prefix; the family is left alone ==")
+guard = cfg["processors"].get("transform/burritobot_service") or {}
+stmts = [s for k in ("trace_statements", "metric_statements") for g in guard.get(k, []) for s in g["statements"]]
+check("transform/burritobot_service rewrites service.name for spans and metrics", len(stmts) == 2)
+pat = re.search(r'not IsMatch\(attributes\["service\.name"\], "([^"]+)"\)', stmts[0]) if stmts else None
+family = re.compile(pat.group(1)) if pat else None
+emitted = {m.group(1) for p in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yaml")
+           for m in re.finditer(r"service\.name=([A-Za-z0-9_.-]+)", (REPO / p).read_text())}
+check(f"no service the BurritoBot path sends is renamed {sorted(emitted)}",
+      bool(family) and bool(emitted) and all(family.search(s) for s in emitted))
+check("a stranger such as workshop-agent or burritobotx is prefixed",
+      bool(family) and not family.search("workshop-agent") and not family.search("burritobotx"))
+check("the guard runs last in traces, after every condition that matches a sent name",
+      pipes["traces"]["processors"][-1] == "transform/burritobot_service")
+check("the guard runs last in metrics", pipes["metrics"]["processors"][-1] == "transform/burritobot_service")
+
+print("== the ML app is burritobot, and it is the root service ==")
+# For OTel spans Datadog sets ml_app from the root span's service (docs.datadoghq.com/llm_observability/
+# instrumentation/otel_instrumentation, read 2026-10-28), so the root keeps the bare name and no hyphen.
+docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+proxy = next(d for d in docs if d["kind"] == "Deployment" and d["metadata"]["name"] == "guard-proxy")
+penv = {e["name"]: e.get("value") for e in proxy["spec"]["template"]["spec"]["containers"][0]["env"]}
+check("guard-proxy, the root span, is service burritobot", penv.get("OTEL_SERVICE_NAME") == "burritobot")
+check("guard-proxy's DD_LLMOBS_ML_APP is that same name", penv.get("DD_LLMOBS_ML_APP") == "burritobot")
+
+print("== every BurritoBot pod tags its logs with the env and a burritobot service ==")
+workloads = docs + [d for p in ("gitops/ai-layer/agentgateway.yaml", "gitops/ai-layer/argocd-managed-app.yaml",
+                                *sorted(str(x.relative_to(REPO)) for x in REPO.glob("gitops/manifests/demo-app-*/deployment.yaml")))
+                    for d in yaml.safe_load_all((REPO / p).read_text()) if d]
+deploys = [d for d in workloads if d["kind"] == "Deployment"]
+check(f"found the Deployments ({len(deploys)})", len(deploys) >= 14)
+for d in deploys:
+    labels = d["spec"]["template"]["metadata"].get("labels") or {}
+    svc = labels.get("tags.datadoghq.com/service", "")
+    check(f"{d['metadata']['name']}: env {DD_ENV}, service {svc or 'none'}",
+          labels.get("tags.datadoghq.com/env") == DD_ENV and bool(re.fullmatch(r"burritobot(-[a-z0-9-]+)?", svc)))
+check("guard-proxy's logs carry the service its spans do",
+      (proxy["spec"]["template"]["metadata"]["labels"]).get("tags.datadoghq.com/service") == "burritobot")
+agent_cr = next(d for d in docs if d["kind"] == "Agent")
+aenv = {e["name"]: e.get("value") for e in agent_cr["spec"]["declarative"]["deployment"]["env"]}
+check("the kagent agent pod (no pod labels of ours) sets DD_SERVICE burritobot-agent and the env",
+      aenv.get("DD_SERVICE") == "burritobot-agent" and aenv.get("DD_ENV") == DD_ENV)
 
 print()
 if failures:

@@ -19,6 +19,8 @@ spec:
     metadata:
       labels:
         app: argocd-managed-app
+        tags.datadoghq.com/service: burritobot-argocd-managed-app
+        tags.datadoghq.com/env: burritobot-kubecon-na-26
     spec:
       containers:
         # docker.io/library only (the registry allowlist permits library + Harbor; see test_villain_app /

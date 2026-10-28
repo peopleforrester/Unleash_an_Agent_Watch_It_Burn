@@ -59,7 +59,8 @@ check(f"every collector Application pins chart {CHART}",
 
 
 ENV = {"PATH": "/usr/bin:/bin", "DD_API_KEY": "x", "DD_SITE": "datadoghq.com", "DD_ADMIN_API_KEY": "y",
-       "WIB_CLUSTER_NAME": "watch-it-burn-attendee-001", "MY_POD_IP": "127.0.0.1"}
+       # WIB_CLUSTER_NAME is cluster-identity's datadog-cluster-name, burritobot-<role> since #629.
+       "WIB_CLUSTER_NAME": "burritobot-attendee-001", "MY_POD_IP": "127.0.0.1"}
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = pathlib.Path(tmp)
@@ -160,8 +161,11 @@ with tempfile.TemporaryDirectory() as tmp:
            "lab.control.installed", "lab.heartbeat"} <= set(names))
     check("a forged non-lab span (chat, with a prompt) is dropped", "chat" not in names and "FORGED-PROMPT" not in wire)
     check("a name outside lab.<a>[.<b>] is dropped", "lab.not.a.marker.name" not in names)
-    check("the resource is burritobot-lab with the cluster's REAL name, whatever the sender claimed",
-          resources == {json.dumps({"cluster.name": "watch-it-burn", "k8s.cluster.name": "watch-it-burn-attendee-001",
+    # The env tag too (#629): lab_contract strips the resource to service.name, and the resource processor puts
+    # back the env Whitney's sandbox org separates BurritoBot by.
+    check("the resource is burritobot-lab with the cluster's REAL name and the env, whatever the sender claimed",
+          resources == {json.dumps({"cluster.name": "burritobot-attendee-001", "k8s.cluster.name": "burritobot-attendee-001",
+                                    "deployment.environment.name": "burritobot-kubecon-na-26",
                                     "service.name": "burritobot-lab"}, sort_keys=True)})
     forged_lab = [s for s in spans if s["name"] == "lab.step.open"
                   and {a["key"]: a["value"]["stringValue"] for a in s["attributes"]}.get("witb.lab.challenge") == "3"]
