@@ -261,17 +261,17 @@ resolve_admin_token() {
 # finds the clusters by (#602).
 readonly WIB_LABCTL_CUSTOMER="agenticburn"
 
-# labctl writes the import to lab-platform's database and records who ran it, so it needs DATABASE_URL and
-# USER. Says which of them is missing, and returns 1, so a caller can fail loudly instead of discovering it
-# one cluster at a time.
+# labctl writes every change (import, deregister, release) to lab-platform's database and records who ran
+# it, so it needs DATABASE_URL and USER. Says which of them is missing, and returns 1, so a caller can fail
+# loudly instead of discovering it one cluster at a time. $1 names the step for the log (default: ingest's).
 labctl_ready() {
-    local missing=()
+    local what="${1:-ingest: labctl import}" missing=()
     command -v labctl >/dev/null 2>&1 || missing+=("labctl on PATH")
     [[ -n "${DATABASE_URL:-}" ]] || missing+=("DATABASE_URL")
     [[ -n "${USER:-}" ]] || missing+=("USER")
     [[ "${#missing[@]}" -eq 0 ]] && return 0
     local IFS=','
-    log "ingest: labctl import cannot run, missing: ${missing[*]}"
+    log "${what} cannot run, missing: ${missing[*]}"
     return 1
 }
 log_ingest_target() { log "ingest -> labctl import --customer ${WIB_LABCTL_CUSTOMER} --event ${WIB_EVENT}"; }
@@ -526,8 +526,13 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
     reap-secrets [accts]  Force-delete every watch-it-burn/* secret. NOT part of 'down all': the Datadog
                       pool secret is what the next 'up' provisions against.
     down <name...>    Destroy the named clusters. Sweeps leaked load balancers, target groups and
-                      volumes, removes each cluster's provisioning row, and republishes the routes.
-    deregister <name...>  Remove clusters from the provisioning app by hand (down does this itself).
+                      volumes, removes each cluster's handout-pool row, and republishes the routes.
+    deregister [--release-claimed] <name...>
+                      Remove clusters from lab-platform's handout pool by hand through labctl deregister
+                      (down does this itself; needs labctl, DATABASE_URL and USER). labctl refuses a claimed
+                      cluster: tell its attendee, then rerun with --release-claimed.
+    release <email...>  Release a mis-claim, or reset after a rehearsal, through labctl release. The cluster
+                      that email held leaves the pool for good; it is not claimable again.
     reconcile-pool    Name every provisioning row whose cluster no longer exists in any fleet account
                       (a ghost the admin page still counts), and with WIB_APPLY=1 deregister them.
                       'down all' and 'down-fleet' end with it. Non-zero while a ghost remains.
@@ -2115,26 +2120,39 @@ down_one() {
     deregister_one "${name}"
 }
 
-# Remove a cluster's row from the provisioning app, so nobody can claim a cluster that no longer exists.
+# Remove a cluster's row from the handout pool, so nobody can claim a cluster that no longer exists.
 # Teardown never did this; after the 2026-09-06 teardown to zero the fifteen dead rows had to be purged
 # by hand through /admin/delete (#251). Same contract as ingest: WIB_NO_INGEST=1 opts out, a failure is
 # logged and recorded, never fatal, and the row can be purged later with 'fleet.sh deregister <name>'.
 deregister_one() {
-    local name="$1" tok code
     [[ -z "${WIB_NO_INGEST:-}" ]] || return 0
-    if ! tok="$(resolve_admin_token 2>/dev/null)"; then
-        log "  ${name}: NOT deregistered (no admin token); run 'fleet.sh deregister ${name}'"
-        record_fail "deregister:${name}"; return 0
+    labctl_deregister "$1"
+}
+
+# The pool is lab-platform's now (peopleforrester/lab-platform#66, docs/provisioning.md section 9 there):
+# `labctl deregister --customer agenticburn --event <event> <name...>` replaced the POST to the provisioning
+# app's /admin/delete (#624). labctl refuses, non-zero, a cluster someone has claimed or a name the pool does
+# not hold. Each name is then a deregister:<name> failure, never fatal, and the log says what to do: tell the
+# attendee their cluster is going, then rerun with --release-claimed, which this passes on to labctl.
+# Usage: labctl_deregister [--release-claimed] <name...>
+labctl_deregister() {
+    local flags=() out n
+    if [[ "${1:-}" == --release-claimed ]]; then flags=(--release-claimed); shift; fi
+    if ! labctl_ready "deregister: labctl deregister"; then
+        for n in "$@"; do
+            log "  ${n}: NOT deregistered (labctl cannot run); run 'fleet.sh deregister ${n}'"
+            record_fail "deregister:${n}"
+        done
+        return 0
     fi
-    code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 -X POST "${WIB_PROVISIONING_URL%/}/admin/delete" \
-            -H "X-Admin-Token: ${tok}" -H 'Content-Type: application/json' \
-            --data "$(jq -cn --arg n "${name}" '{names:[$n]}')" 2>/dev/null || echo 000)"
-    if [[ "${code}" == "200" ]]; then
-        log "  deregistered: ${name}"
-    else
-        log "  ${name}: deregister answered HTTP ${code}; run 'fleet.sh deregister ${name}'"
-        record_fail "deregister:${name}"
+    if out="$(labctl deregister --customer "${WIB_LABCTL_CUSTOMER}" --event "${WIB_EVENT}" "${flags[@]}" "$@" 2>&1)"; then
+        for n in "$@"; do log "  deregistered: ${n}${flags[*]:+ (claim released)}"; done
+        return 0
     fi
+    log "  labctl deregister refused $*: $(tail -n 1 <<<"${out}")"
+    log "  A cluster still claimed, or a name the pool does not hold, stays as it is. Tell the attendee who"
+    log "  holds it that it is going, then run 'fleet.sh deregister --release-claimed $*'."
+    for n in "$@"; do record_fail "deregister:${n}"; done
 }
 
 # ONE SELECTOR LANGUAGE for every verb, so "Whitney's clusters" is the same phrase whether you are
@@ -2189,10 +2207,34 @@ resolve_all() {
     local a; for a in "$@"; do resolve_selector "${a}"; done | awk 'NF && !seen[$0]++'
 }
 
+# By hand, so labctl must be ready up front and WIB_NO_INGEST does not apply. One labctl call for all the
+# names, as lab-platform's section 9 runs it.
 cmd_deregister() {
+    local flags=()
+    if [[ "${1:-}" == --release-claimed ]]; then flags=(--release-claimed); shift; fi
     [[ $# -ge 1 ]] || usage
-    local names n; mapfile -t names < <(expand_names "$@")
-    for n in "${names[@]}"; do deregister_one "${n}"; done
+    labctl_ready "deregister: labctl deregister" || exit 1
+    mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
+    local names; mapfile -t names < <(expand_names "$@")
+    labctl_deregister "${flags[@]}" "${names[@]}"
+    report_failures
+}
+
+# A mis-claim, or the reset after a rehearsal: `labctl release --customer agenticburn --event <event> <email>`
+# replaced the POST to the provisioning app's /admin/release (#624). The cluster that email held leaves the
+# pool for good; it does not become claimable again, so the attendee claims a fresh one.
+cmd_release() {
+    [[ $# -ge 1 ]] || usage
+    labctl_ready "release: labctl release" || exit 1
+    mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
+    local email out
+    for email in "$@"; do
+        if out="$(labctl release --customer "${WIB_LABCTL_CUSTOMER}" --event "${WIB_EVENT}" "${email}" 2>&1)"; then
+            log "  released: ${email} (that cluster has left the pool; the attendee claims a fresh one)"
+        else
+            log "  labctl release refused ${email}: $(tail -n 1 <<<"${out}")"; record_fail "release:${email}"
+        fi
+    done
     report_failures
 }
 
@@ -4483,6 +4525,7 @@ main() {
         up-fleet) cmd_up_fleet "$@" ;;
         down) cmd_down "$@" ;;
         deregister) cmd_deregister "$@" ;;
+        release) cmd_release "$@" ;;
         audit-zero) cmd_audit_zero ;;
         down-acct) cmd_down_acct "$@" ;;
         down-fleet) cmd_down_fleet "$@" ;;

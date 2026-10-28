@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # ABOUTME: Behavioural tests for the fleet.sh teardown and routes hooks (#251): per-process failure ledger,
 # ABOUTME: deregister on teardown, target-group retry, console-LB wait, and router reload retry. Uses shims.
+# ABOUTME: deregister and release go to lab-platform through labctl, not /admin/delete or /admin/release (#624).
 #
 # Usage: verify/test_fleet_teardown_hooks.sh      (no cloud access; every external command is a shim)
 set -uo pipefail
@@ -40,12 +41,19 @@ cat >"${SHIM}/curl" <<'S'
 #!/usr/bin/env bash
 echo "curl $*" >>"${CALLS}"; printf '%s' "${CURL_CODE:-200}"
 S
+# labctl: logs its arguments and whether it saw DATABASE_URL and USER; LABCTL_RC makes it refuse with that code.
+cat >"${SHIM}/labctl" <<'S'
+#!/usr/bin/env bash
+echo "labctl $* [DATABASE_URL=${DATABASE_URL:-} USER=${USER:-}]" >>"${CALLS}"
+[[ "${LABCTL_RC:-0}" -eq 0 ]] || { echo "labctl: ${!#} is claimed (test)" >&2; exit "${LABCTL_RC}"; }
+S
 for c in terraform railway; do printf '#!/usr/bin/env bash\necho "%s $*" >>"${CALLS}"\nexit 0\n' "$c" >"${SHIM}/$c"; done
 chmod +x "${SHIM}"/*
 export T CALLS PATH="${SHIM}:${PATH}"
 # Sourcing fleet.sh: the source guard keeps main() from running; WIB_* settings make every wait instant.
 src() { # $1: bash snippet to run after sourcing
   ( cd "$(dirname "${FLEET}")" && WIB_ADMIN_TOKEN=test-token WIB_PROVISIONING_URL=https://prov.test \
+      DATABASE_URL="${TEST_DATABASE_URL-postgresql://lab@db.test/lab}" USER="${TEST_USER-tester}" WIB_EVENT=test-event \
       WIB_TG_BACKOFF=0 WIB_LB_GONE_INTERVAL=0 WIB_LB_WAIT_INTERVAL=0 WIB_RELOAD_BACKOFF=0 \
       bash -c "source '${FLEET}' >/dev/null 2>&1; $1" 2>>"${T}/stderr" )
 }
@@ -56,18 +64,60 @@ check "two runs write different ledgers" '[[ -n "$a" && "$a" != "$b" ]]'
 check "ledger is under logs/ and carries the pid" '[[ "$a" == */logs/.failures.[0-9]* ]]'
 rm -f "$a" "$b"
 
-echo "== deregister on teardown =="
-: >"${CALLS}"
+echo "== deregister on teardown, through labctl deregister (#624) =="
+: >"${CALLS}"; : >"${T}/stderr"
 src 'deregister_one watch-it-burn-attendee-009; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"
-check "posts the name to /admin/delete with the admin token" \
-  'grep -q "curl .*https://prov.test/admin/delete .*X-Admin-Token: test-token.*{\"names\":\[\"watch-it-burn-attendee-009\"\]}" "${CALLS}"'
-check "a 200 records no failure" '[[ ! -s "${T}/out" ]]'
-: >"${CALLS}"
-CURL_CODE=500 src 'deregister_one watch-it-burn-attendee-009; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
-check "a non-200 is recorded as deregister:<name>, not fatal" 'grep -qx "deregister:watch-it-burn-attendee-009" "${T}/out"'
+check "runs labctl deregister --customer agenticburn --event <the fleet's event> <name>, with DATABASE_URL and USER" \
+  'grep -qxF "labctl deregister --customer agenticburn --event test-event watch-it-burn-attendee-009 [DATABASE_URL=postgresql://lab@db.test/lab USER=tester]" "${CALLS}"'
+check "nothing is POSTed to /admin/delete" '! grep -q "admin/delete" "${CALLS}"'
+check "a zero exit records no failure" '[[ ! -s "${T}/out" ]]'
+: >"${CALLS}"; : >"${T}/stderr"
+LABCTL_RC=1 src 'deregister_one watch-it-burn-attendee-009; echo rc=$?; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "a refusal (still claimed, or unknown) is recorded as deregister:<name>, not fatal" \
+  'grep -qx "rc=0" "${T}/out" && grep -qx "deregister:watch-it-burn-attendee-009" "${T}/out"'
+check "and says to tell the attendee, then rerun with --release-claimed, carrying labctl's message" \
+  'grep -q "labctl: watch-it-burn-attendee-009 is claimed (test)" "${T}/stderr" && grep -q "Tell the attendee" "${T}/stderr" && grep -q "fleet.sh deregister --release-claimed watch-it-burn-attendee-009" "${T}/stderr"'
+: >"${CALLS}"; : >"${T}/stderr"
+TEST_DATABASE_URL="" src 'deregister_one watch-it-burn-attendee-009; echo rc=$?; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "without DATABASE_URL it names what is missing, runs nothing, and records the failure" \
+  'grep -qx "rc=0" "${T}/out" && grep -qx "deregister:watch-it-burn-attendee-009" "${T}/out" && grep -q "missing: DATABASE_URL" "${T}/stderr" && ! grep -q "^labctl" "${CALLS}"'
 : >"${CALLS}"
 WIB_NO_INGEST=1 src 'deregister_one watch-it-burn-attendee-009'
-check "WIB_NO_INGEST=1 opts out (no request made)" '! grep -q "admin/delete" "${CALLS}"'
+check "WIB_NO_INGEST=1 opts out (labctl not run)" '! grep -q "^labctl" "${CALLS}"'
+
+echo "== fleet.sh deregister and release by hand (#624) =="
+N1=watch-it-burn-attendee-009; N2=watch-it-burn-attendee-010
+: >"${CALLS}"
+src "rc=0; cmd_deregister ${N1} ${N2} || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "deregister sends every name in one labctl call" \
+  'grep -qxF "labctl deregister --customer agenticburn --event test-event ${N1} ${N2} [DATABASE_URL=postgresql://lab@db.test/lab USER=tester]" "${CALLS}" && [[ "$(grep -c "^labctl" "${CALLS}")" -eq 1 ]] && grep -qx "rc=0" "${T}/out"'
+: >"${CALLS}"
+src "rc=0; cmd_deregister --release-claimed ${N1} || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "--release-claimed is passed on to labctl" \
+  'grep -qxF "labctl deregister --customer agenticburn --event test-event --release-claimed ${N1} [DATABASE_URL=postgresql://lab@db.test/lab USER=tester]" "${CALLS}" && grep -qx "rc=0" "${T}/out"'
+: >"${CALLS}"; : >"${T}/stderr"
+LABCTL_RC=1 src "rc=0; cmd_deregister ${N1} ${N2} || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "a refused deregister exits non-zero and names every cluster in the call" \
+  '! grep -qx "rc=0" "${T}/out" && grep -qx "    - deregister:${N1}" "${T}/stderr" && grep -qx "    - deregister:${N2}" "${T}/stderr"'
+: >"${CALLS}"; : >"${T}/stderr"
+TEST_USER="" src "rc=0; cmd_deregister ${N1} || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "deregister without USER exits 1 before running labctl" \
+  '! grep -qx "rc=0" "${T}/out" && grep -q "missing: USER" "${T}/stderr" && ! grep -q "^labctl" "${CALLS}"'
+: >"${CALLS}"
+WIB_NO_INGEST=1 src "cmd_deregister ${N1}" >/dev/null
+check "WIB_NO_INGEST does not silence a deregister asked for by hand" 'grep -q "^labctl deregister" "${CALLS}"'
+: >"${CALLS}"
+src "rc=0; cmd_release a@example.test b@example.test || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "release runs labctl release --customer agenticburn --event <event> <email>, once per email" \
+  'grep -qxF "labctl release --customer agenticburn --event test-event a@example.test [DATABASE_URL=postgresql://lab@db.test/lab USER=tester]" "${CALLS}" && grep -qxF "labctl release --customer agenticburn --event test-event b@example.test [DATABASE_URL=postgresql://lab@db.test/lab USER=tester]" "${CALLS}" && grep -qx "rc=0" "${T}/out"'
+check "nothing is POSTed to /admin/release" '! grep -q "admin/release" "${CALLS}"'
+: >"${CALLS}"; : >"${T}/stderr"
+LABCTL_RC=1 src "rc=0; cmd_release a@example.test || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "a refused release exits non-zero, recorded as release:<email>" '! grep -qx "rc=0" "${T}/out" && grep -qx "    - release:a@example.test" "${T}/stderr"'
+: >"${CALLS}"; : >"${T}/stderr"
+TEST_DATABASE_URL="" src "rc=0; cmd_release a@example.test || rc=\$?; echo rc=\${rc}" >"${T}/out"
+check "release without DATABASE_URL exits 1 before running labctl" \
+  '! grep -qx "rc=0" "${T}/out" && grep -q "missing: DATABASE_URL" "${T}/stderr" && ! grep -q "^labctl" "${CALLS}"'
 
 echo "== target-group sweep waits for the LB and retries =="
 rm -f "${T}/lb_polls" "${T}/tg_tries"; : >"${CALLS}"
@@ -123,6 +173,7 @@ check "down_one calls deregister_one" 'grep -q "^    deregister_one \"\${name}\"
 check "up waits for console LBs before routes" 'grep -q "wait_for_console_lbs \"\${built\[@\]}\" || true" "${FLEET}"'
 check "down republishes routes with the shrink allowed" 'grep -q "WIB_ROUTES_ALLOW_SHRINK=1 cmd_routes" "${FLEET}"'
 check "deregister is a subcommand" 'grep -q "deregister) cmd_deregister" "${FLEET}"'
+check "release is a subcommand" 'grep -q "release) cmd_release" "${FLEET}"'
 check "no shared .failures path remains" '! grep -q "LOG_DIR}/.failures\"" "${FLEET}"'
 check "drain waits for the cluster load balancers to be gone before destroy (#269)" \
   'grep -q "cluster_lb_count \"\${name}\" \"\${acct}\"" "${FLEET}"'

@@ -2989,3 +2989,35 @@ Load clusters fills.
   environment, a header with one row, role=instructor on both roster clusters and an empty role on an attendee,
   the three attempts, and the loud failure when DATABASE_URL or USER is missing. No cluster and no lab-platform
   database were touched.
+## 2026-10-28 · #624 · fleet.sh deregisters through `labctl deregister` and releases through `labctl release`
+
+lab-platform took over clearing the handout pool from the provisioning app (peopleforrester/lab-platform#66, commit
+0590215; its docs/provisioning.md section 9, "Removing torn-down clusters and releasing claims"). This follows #600,
+which moved ingest to `labctl import`.
+
+- **Deregister.** `labctl_deregister [--release-claimed] <name...>` runs `labctl deregister --customer agenticburn
+  --event $WIB_EVENT <name...>` with DATABASE_URL and USER, where `deregister_one` used to resolve the admin token
+  and POST /admin/delete. `deregister_one` (teardown, `reconcile-pool` under WIB_APPLY=1) calls it with one name
+  and keeps its contract: WIB_NO_INGEST=1 opts out, and a failure is a `deregister:<name>` entry, never fatal.
+  `fleet.sh deregister` sends all its names in one labctl call, as section 9 does.
+- **A refusal.** labctl exits non-zero for a cluster still claimed or a name the pool does not hold. Every name in
+  that call is recorded as `deregister:<name>`, with labctl's last line of output, and the log says to tell the
+  attendee their cluster is going and then run `fleet.sh deregister --release-claimed <name...>`. fleet.sh passes
+  `--release-claimed` straight to labctl; it never adds it on its own, so teardown cannot take a claimed cluster
+  from an attendee without someone deciding to.
+- **Release.** New verb `fleet.sh release <email...>` runs `labctl release --customer agenticburn --event
+  $WIB_EVENT <email>` once per email, for a mis-claim or a rehearsal reset. fleet.sh never called /admin/release;
+  that step was done by hand against the provisioning app. Under labctl the released cluster leaves the pool for
+  good instead of becoming claimable again, and the verb's log and usage say so.
+- **By hand is loud.** `deregister` and `release` exit 1 before running labctl when labctl, DATABASE_URL or USER is
+  missing (`labctl_ready`, which now takes the step's name for its log line), and WIB_NO_INGEST does not silence
+  them: a by-hand verb that quietly does nothing is worse than one that fails.
+- **Not moved.** `reconcile-pool` and `ingest pool` still read the pool's names from the provisioning app's
+  /admin/roster with the admin token. Ghosts are now deregistered from lab-platform's pool, so a name that is only
+  in the provisioning app's roster is refused by labctl and stays a recorded failure. Filed as a follow-up.
+- **Not checked against lab-platform.** Its repo could not be read from this run, so the commands follow the issue
+  text. The position of `--release-claimed` (before the names) is the one assumption beyond it.
+- **Test:** `verify/test_fleet_teardown_hooks.sh` and `verify/test_fleet_pool_reconcile.sh` (offline) give labctl
+  a shim and check the arguments, the environment, one call for all names, `--release-claimed` passed through,
+  the refusal message and ledger entries, release per email, the loud exit without DATABASE_URL or USER, and that
+  nothing calls /admin/delete or /admin/release. No cluster and no lab-platform database were touched.
