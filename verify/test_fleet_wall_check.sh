@@ -63,10 +63,10 @@ check "the Night Before runs wall-check after router-check and before check-tls"
 check "the Night Before step names the health URL of the wall" 'section "Night Before" | grep -qF "${WALL}/healthz"'
 check "the Night Before keeps the wall off the lab-platform roster until after the event" \
   'section "Night Before" | tr "\n" " " | grep -q "lab-platform#137"'
-check "segment 2 puts the wall URL on screen" \
-  'section "Segment 2: Wide-open start" | grep -qF "${WALL}"'
-check "the segment table shows the wall on screen in segment 2" \
-  'grep -E "^\| 2 \|" "${ROS}" | grep -qF "prompts.agenticburn.com"'
+check "segment 1 puts the wall URL on screen (#639)" \
+  'section "Segment 1: Cold open" | grep -qF "${WALL}"'
+check "the segment table shows the wall on screen from segment 1" \
+  'grep -E "^\| 1 \|" "${ROS}" | grep -qF "prompts.agenticburn.com"'
 check "the /kubecon page projects the wall in segment 2" \
   'sed -n "/SEGMENT 2:/,/<article/p" "${KUBECON}" | grep -qF "href=\"${WALL}\""'
 

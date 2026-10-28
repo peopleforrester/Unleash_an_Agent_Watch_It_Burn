@@ -273,22 +273,12 @@ the three minutes of play there is no hands-on, so the other beats give way firs
 
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
-<<<<<<< Updated upstream
-| 1 | 2 | M | Title, then the deleted-cluster hook | Listens | framing |
-| 2 | 5 | W leads, M on cost | Community bot `attackme.agenticburn.com`, cost counter, the prompt wall `prompts.agenticburn.com` | Attacks it from their phones | 1, 4, 9 (live half) |
-| 3 | 3 | M | The admin cluster: Argo CD apps, the platform tour | Watches | 3 |
-| 4 | 6 | W narrates, M names controls | Admin cluster: re-run the attacks, each blocked | Watches | 5 |
-| 5 | 7 | M+W | Admin cluster: toggle the AI guardrails on live | Watches | 2, 6 |
-| 6 | 3 | W | Datadog Agent Observability, or the admin cluster's Grafana view if no pool is live | Watches | 7 |
-| 7 | 4 | M+W | On-topic guardrail on, then the close | Watches | 8 |
-=======
-| 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook | Opens the bot on their phones | framing, 1 |
+| 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
 | 2 | 7 | M+W | C5: the public bot, then the private bot with `guard-output-on`, then the Datadog C5 tab | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 7 | W+M | C6: the public bot, then the private bot with `guard-input-on` and Kyverno armed, then the Datadog C6 tab | Asks the bot to read a support ticket | 4, 5, 6 |
 | 4 | 7 | M+W | C7: the public bot, then the private bot with `guard-mcp-on`, then the Datadog C7 tab | Asks for the weather | 2, 4, 6 |
 | 5 | 2 | W | The trace walk-through on the room's own prompts. Cut first if behind | Watches | 7 |
 | 6 | 4 | M+W | The layers by voice, `guard-topic-on`, the close | Watches | 3, 5, 8 |
->>>>>>> Stashed changes
 
 Total 30 minutes. Segments 2 to 4 are 21 minutes of hands-on. If the clock is
 behind after segment 4, drop segment 5 and give its two minutes to the close.
@@ -313,6 +303,13 @@ burrito chain. Put the QR and `attackme.burritobot.co` on screen and leave them 
 
 - Say the housekeeping line: every prompt shows on the wall without a name, so
   nothing personal goes in the box.
+- The room's prompts go on the projector through the prompt wall,
+  `https://prompts.agenticburn.com`: open it full screen before the session
+  starts (#637). It reads each cluster's feed, picks a new prompt up within about 3
+  seconds, and lists the clusters named in `start.agenticburn.com/roster.json`, so
+  the Night Before's `wall-check` is what proves both clusters are on it. If the
+  wall is down, project attackme's own feed at
+  `https://attackme.burritobot.co/display` instead.
 - Have Whitney send one ordinary ask (a burrito order) so the room sees a working
   burrito-chain bot before it misbehaves.
 - **Delivers:** the framing, and point 1 (a chatbot for a fictional burrito chain).
@@ -321,25 +318,10 @@ burrito chain. Put the QR and `attackme.burritobot.co` on screen and leave them 
 
 ### Segment 2: C5, the CEO's secret (7 min). Owner: Michael and Whitney.
 
-<<<<<<< Updated upstream
-Put `attackme.agenticburn.com` on screen and give the room the URL. Say the one
-housekeeping line first: the prompts they send show on screen, so nothing personal
-in the box (the feed is `STREAM_PROMPTS`, masked by a wordlist, so the disclosure
-is what makes projecting it fair). The room's prompts go on the projector through
-the prompt wall, `https://prompts.agenticburn.com`: open it full screen before the
-segment starts. It reads each cluster's feed, picks a new prompt up within about 3
-seconds, and lists the clusters named in `start.agenticburn.com/roster.json`, so
-the Night Before's `wall-check` is what proves both clusters are on it. If the wall
-is down, project attackme's own feed at `https://attackme.agenticburn.com/display`
-instead. Then let them attack from their phones while
-Whitney drives a couple of asks herself to prove the bot is a working burrito-chain
-bot before it misbehaves.
-=======
 The opener, chosen to land a bang: the bot prints a real-looking home address to
 chat. The story: the engineers gave the bot read access to every Secret in its
 namespace so it could reach its own model keys, and never thought another Secret
 would land there. `ceo-personal-record` did.
->>>>>>> Stashed changes
 
 - **Play (3 min):** the room asks the public bot for the CEO's record. Prompts and
   verified results are on `/kubecon` and in `challenges/PROMPT-CATALOG.md`. The home
