@@ -273,7 +273,7 @@ restart (#496).
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 2 | M | Title, then the deleted-cluster hook | Listens | framing |
-| 2 | 5 | W leads, M on cost | Community bot `attackme.agenticburn.com`, cost counter | Attacks it from their phones | 1, 4, 9 (live half) |
+| 2 | 5 | W leads, M on cost | Community bot `attackme.agenticburn.com`, cost counter, the prompt wall `prompts.agenticburn.com` | Attacks it from their phones | 1, 4, 9 (live half) |
 | 3 | 3 | M | The admin cluster: Argo CD apps, the platform tour | Watches | 3 |
 | 4 | 6 | W narrates, M names controls | Admin cluster: re-run the attacks, each blocked | Watches | 5 |
 | 5 | 7 | M+W | Admin cluster: toggle the AI guardrails on live | Watches | 2, 6 |
@@ -301,7 +301,13 @@ introduce Michael and Whitney and the burrito chain.
 Put `attackme.agenticburn.com` on screen and give the room the URL. Say the one
 housekeeping line first: the prompts they send show on screen, so nothing personal
 in the box (the feed is `STREAM_PROMPTS`, masked by a wordlist, so the disclosure
-is what makes projecting it fair). Then let them attack from their phones while
+is what makes projecting it fair). The room's prompts go on the projector through
+the prompt wall, `https://prompts.agenticburn.com`: open it full screen before the
+segment starts. It reads each cluster's feed, picks a new prompt up within about 3
+seconds, and lists the clusters named in `start.agenticburn.com/roster.json`, so
+the Night Before's `wall-check` is what proves both clusters are on it. If the wall
+is down, project attackme's own feed at `https://attackme.agenticburn.com/display`
+instead. Then let them attack from their phones while
 Whitney drives a couple of asks herself to prove the bot is a working burrito-chain
 bot before it misbehaves.
 
@@ -602,6 +608,24 @@ is merely slow rather than rebuilding:
   `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.agenticburn.com/kubecon`
   must print `200`. A `404` means the router's roster matcher does not know that
   host, and the presenters have nothing to drive from.
+- [ ] **The prompt wall shows both clusters (#637).** Segment 2 projects
+  `https://prompts.agenticburn.com`, and the wall builds its cluster list from the same
+  `roster.json` that `router-check` just read, so run it once the routes are right:
+
+  ```bash
+  ./fleet.sh wall-check
+  ```
+
+  It reads `https://prompts.agenticburn.com/healthz` and must end "the wall shows
+  every roster cluster": a `200`, and `attackme` and `burritobot-private` each in its
+  `clusters` list with `ok` true. A missing cluster means the router's roster lacks it;
+  run `router-check` again. A cluster listed with `ok` false means the wall cannot read
+  that cluster's feed, and the log prints the wall's error. The same read by eye:
+  `curl -s https://prompts.agenticburn.com/healthz | python3 -c "import json,sys; print([c['name'] for c in json.load(sys.stdin)['clusters']])"`
+  prints `['attackme', 'burritobot-private']`. Keep the wall on this roster through
+  the session: do not move it onto lab-platform's roster before 2026-11-12, which
+  leaves out attackme and the admin cluster until lab-platform#137 lands
+  (prompts-agenticburn#11).
 - [ ] **Hostnames serve over HTTPS and websocket:**
   `./fleet.sh check-tls attackme.agenticburn.com burritobot-private.agenticburn.com`.
 - [ ] **Clusters healthy:** `./fleet.sh converge instructors`.

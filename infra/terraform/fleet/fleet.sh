@@ -484,6 +484,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       service hosts only, no attendee-pool row (the KubeCon breakout, #502).
   router-check        Read the live router's host list (start.agenticburn.com/roster.json) and assert it
                       is exactly the roster's clusters: attackme and each <owner>-admin. Read-only.
+  wall-check          Read the prompt wall's health (prompts.agenticburn.com/healthz) and assert it
+                      answers 200 and shows every roster cluster with its prompts readable. Read-only.
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
     scale <n>         DESIRED STATE: make exactly <n> attendee clusters exist. Creates what is missing,
@@ -4511,6 +4513,38 @@ cmd_router_check() {
     return "${rc}"
 }
 
+# Does the prompt wall show every roster cluster (#637)? prompts.agenticburn.com is what the projector shows in
+# segment 2, and it builds its cluster list from start.agenticburn.com/roster.json, so a cluster missing from the
+# router's roster is missing from the wall too. Its /healthz names each cluster it polls, by the first label of
+# the cluster's host, with ok false and an error when it cannot read that cluster's prompts. Run it after
+# router-check. Do not point the wall at lab-platform's roster before 2026-11-12: that roster leaves out attackme
+# and the admin cluster until lab-platform#137 lands (prompts-agenticburn#11). Read-only. WIB_WALL_URL points it
+# elsewhere.
+cmd_wall_check() {
+    local url="${WIB_WALL_URL:-https://prompts.agenticburn.com}/healthz" out code body got entry h n rc=0
+    out="$(curl -sS --max-time 15 -w '\n%{http_code}' "${url}" 2>/dev/null)" \
+        || { log "wall-check: FAIL could not read ${url}"; return 1; }
+    code="${out##*$'\n'}"; body="${out%$'\n'*}"
+    [[ "${code}" == 200 ]] || { log "wall-check: FAIL ${url} answered ${code}, not 200"; return 1; }
+    got="$(jq -r 'if (.clusters | type) == "array" then .clusters[] | "\(.name)\t\(.ok)\t\(.error // "")"
+                  else error("no cluster list") end' <<<"${body}" 2>/dev/null)" \
+        || { log "wall-check: FAIL ${url} is not the wall's health report"; return 1; }
+    log "  PASS  ${url} answers 200"
+    for entry in "${INSTRUCTORS[@]}"; do
+        h="$(public_host_for "${entry%%|*}")"; n="${h%%.*}"
+        if ! grep -q "^${n}"$'\t' <<<"${got}"; then
+            log "  FAIL  the wall has no ${n}: is ${h} in start.agenticburn.com/roster.json? run 'fleet.sh router-check'"
+            rc=1
+        elif ! grep -q "^${n}"$'\ttrue\t' <<<"${got}"; then
+            log "  FAIL  the wall lists ${n} but cannot read its prompts: $(grep "^${n}"$'\t' <<<"${got}" | cut -f3)"
+            rc=1
+        else log "  PASS  the wall shows ${n}"; fi
+    done
+    if [[ "${rc}" -eq 0 ]]; then log "wall-check: the wall shows every roster cluster"
+    else log "wall-check: the wall does NOT show every roster cluster"; fi
+    return "${rc}"
+}
+
 # The shared ops view (#308): claims from provisioning, liveness from the apex table and each console, and
 # progress from the instructor org, one row per cluster. This resolves the one credential the operator would
 # otherwise have to fetch by hand (the provisioning admin token) and passes the account and region explicitly
@@ -4539,6 +4573,7 @@ main() {
             --profile "${WIB_DEFAULT_ACCOUNT}" --region "${WIB_REGION}" "$@" ;;
         routes) cmd_routes "$@" ;;
         router-check) cmd_router_check ;;
+        wall-check) cmd_wall_check ;;
         ops) cmd_ops "$@" ;;
         hosts) cmd_hosts ;;
         preflight) exec "${SCRIPT_DIR}/preflight.sh" "$@" ;;

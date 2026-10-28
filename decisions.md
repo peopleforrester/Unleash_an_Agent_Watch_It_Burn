@@ -3063,3 +3063,22 @@ one row: #586 moved the kagent `service.version` row to v0.10.1 in place, with "
   `gitops/ai-layer/` and fails if the table, the Milestone 3 and 4 criteria or the Acceptance Criteria give a
   different current value. History may follow the current value. The kagent version row stays with
   test_kagent_version_pins.py, which holds it to the chart. Against the PRD before this change, it failed 19 checks.
+## 2026-10-28 · #637 · The prompt wall is a Night Before check and the segment 2 projector
+
+prompts-agenticburn asked for the prompt wall, `https://prompts.agenticburn.com`, in the KubeCon Night Before and
+run-of-show.
+
+- **A verb, not a curl to read by eye.** `fleet.sh wall-check` reads the wall's `/healthz` and fails unless it
+  answers 200 and lists every roster cluster, by the first label of `public_host_for` (`attackme`,
+  `burritobot-private`), with `ok` true. The names come from roster.tsv, the same source router-check uses, so a
+  new roster row needs no edit here. A listed cluster with `ok` false fails too and prints the wall's error:
+  listed but unreadable shows nothing on the projector. A cluster beyond the roster does not fail it, because the
+  wall mirrors the router's roster.json and router-check already fails on an extra host.
+- **Order.** It runs after router-check and before check-tls: the wall builds its list from roster.json, so it
+  is only meaningful once router-check passes.
+- **Segment 2 projects the wall.** The run-of-show's segment table and segment 2, and `/kubecon`'s segment 2 and
+  header, name the wall URL. The cluster's own `/display` stays as the fallback if the wall is down.
+- **Kept through the event.** The step says not to move the wall onto lab-platform's roster before 2026-11-12,
+  which leaves out attackme and the admin cluster until lab-platform#137 lands (prompts-agenticburn#11).
+- **Test:** `verify/test_fleet_wall_check.sh` (offline, curl stubbed). Run live and read-only on 2026-10-28: the
+  public wall answered 200 and showed both clusters.
