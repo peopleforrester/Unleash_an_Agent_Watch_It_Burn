@@ -19,7 +19,8 @@ window.WIB_EVENT = {
   // KubeCon NA 2026 breakout, Sessionize 1249553 (facilitation/kubecon-na-2026-run-of-show.md, #451).
   name: "KubeCon NA 2026: BurritoBot Said Let's Dance, the Platform Said No",
   // The community cluster: the wide-open bot the room attacks in segment 2.
-  publicUrl: "https://attackme.agenticburn.com/",
+  // burritobot.co is the displayed domain (#651); attackme.agenticburn.com stays served as its twin.
+  publicUrl: "https://attackme.burritobot.co/",
   // The session survey, recorded as the answer to question 147 (BurritoBot repo #80). Rating there is
   // mobile-only and opens near the session, so a person confirms it shows this talk once it does.
   feedbackUrl: "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553",

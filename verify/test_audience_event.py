@@ -26,7 +26,7 @@ CHECK = REPO / "facilitation/kubecon-na-2026-phone-check.md"
 ROS = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
 
 SURVEY = "https://kubecon-cloudnativecon-north-america-2026.sessionize.com/session/1249553"
-PUBLIC = "https://attackme.agenticburn.com/"
+PUBLIC = "https://attackme.burritobot.co/"  # the displayed domain (#651 step B)
 
 failures: list[str] = []
 
@@ -47,6 +47,8 @@ check("event.js sets window.WIB_EVENT", "window.WIB_EVENT = {" in EVENT)
 check("feedbackUrl is the KubeCon session survey (question 147)", field("feedbackUrl") == SURVEY)
 check("publicUrl is the community cluster the room attacks", field("publicUrl") == PUBLIC)
 # fleet.sh public_host_for() is what actually publishes the community cluster under this name.
+check("fleet.sh routes a burritobot.co twin of every roster row, so publicUrl's host is served",
+      'readonly WIB_TWIN_DOMAIN="burritobot.co"' in (REPO / "infra/terraform/fleet/fleet.sh").read_text())
 check("fleet.sh publishes the community cluster as attackme",
       "watch-it-burn-community\" ]] && { printf 'attackme.agenticburn.com'"
       in (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8"))

@@ -43,7 +43,7 @@ for n, title in ((1, "Community"), (2, "Provisioning"), (3, "Their cluster")):
 check("each phase chip has a style", all(f".chip.r{n}{{" in BRIEF for n in (1, 2, 3)))
 
 print("== Phase 1 sends the room at the Community cluster, with nothing to hand out ==")
-check("it names the hostname", "attackme.agenticburn.com" in BRIEF)
+check("it names the displayed hostname (#651)", "attackme.burritobot.co" in BRIEF and "attackme.agenticburn.com" not in BRIEF)
 check("it says the cluster is unguarded", "no guardrails at all" in FLAT)
 check("it states the goal", "leak the CEO's home address into the chat" in FLAT)
 # Whitney's reason for choosing this challenge over the exfiltration one.

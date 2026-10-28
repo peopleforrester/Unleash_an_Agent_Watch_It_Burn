@@ -63,6 +63,16 @@ brand = re.search(r'<div class="brand">(.*?)</div>', page, re.S)
 check("the brand label does not say agenticburn", brand is not None and "agenticburn" not in brand.group(1).lower())
 check("the brand label names burritobot.co", brand is not None and "burritobot.co" in brand.group(1))
 
+print("== the presenter pages name burritobot.co, not agenticburn.com, for the roster (#651 step B) ==")
+def visible(src: str) -> str:
+    src = re.sub(r"<!--.*?-->", "", src, flags=re.S)
+    return re.sub(r"<(script|style)\b.*?</\1>", "", src, flags=re.S | re.I)
+for page in ("kubecon.html", "brief.html"):
+    v = visible((WEB / page).read_text())
+    left = re.findall(r"(?:attackme|burritobot-private|-admin)\.agenticburn\.com", v)
+    check(f"{page} shows no roster host on agenticburn.com", not left, str(left))
+    check(f"{page} shows attackme.burritobot.co", "attackme.burritobot.co" in v)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
