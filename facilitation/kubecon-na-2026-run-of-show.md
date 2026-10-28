@@ -477,16 +477,19 @@ hot-dog-party, karaoke kind). With it on, BurritoBot answers menu, hours and
 locations and redirects everything else back to the menu, politely. This is the
 abstract's ending: by the end the chatbot is selling burritos, nothing more.
 
-- **Delivers:** point 8 (ends selling burritos only). This repo's half of the
-  on-topic guardrail is on `staging` (#455): the guard's settings on guard-proxy
-  (`TOPIC_GUARD` off at the start, the phrase lists, and a refusal that offers the
-  menu, hours and locations), hours and locations in the persona, and
-  `guard-topic-on` and `guard-topic-off` in the terminal. The guard itself is not:
-  the topic stage in `proxy.py` (guard-proxy-agenticburn) and the zero-shot BanTopics
-  model in the offline LLM Guard image (llm-guard-cpu-offline) are still to build,
-  and until both land and their pins are bumped here, `guard-topic-on` prints "This
-  guard-proxy has no on-topic guard, so nothing changed" and exits 1. Until then this segment cannot be shown live, and the talk cannot deliver
-  point 8 as written. This is the single biggest content risk in the cut.
+- **Delivers:** point 8 (ends selling burritos only). The on-topic guard is live
+  (#455): `proxy.py` carries the topic stage (`TOPIC_GUARD` off at the start, the
+  phrase lists, and a refusal that offers the menu, hours and locations), hours and
+  locations are in the persona, and `guard-topic-on` and `guard-topic-off` are in
+  the terminal. The probe's topic beats passed on the admin cluster on 2026-10-27 and
+  on burritobot-private on 2026-10-28 (the probe record above): the listed off-topic
+  asks are redirected and the menu asks pass. The stage decides cheapest first: an
+  off phrase refuses, an on phrase passes, and anything with neither goes to LLM
+  Guard's BanTopics zero-shot scanner. That last step is the unproven half: the
+  offline image's BanTopics model is llm-guard-cpu-offline#2, still open, and the
+  probe sends only phrase-listed asks. So on stage re-send the segment 2 asks that
+  use a listed word (dance, hot dog, karaoke, linked list, playlist, song). A
+  paraphrase with none of those words may be answered; do not promise it is refused.
 - **The close (Michael, the last ~2 min):** every attack today was a plausible
   request, not an exploit. The controls that stopped them were an egress policy, an
   admission rule, a kernel block, a tool allow-list, a budget, and a guardrail layer
