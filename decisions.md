@@ -2954,3 +2954,14 @@ actions/checkout and actions/setup-python are pinned to commit SHAs (v7.0.1 3d3c
 read from their release tags 2026-10-24). PyYAML is pinned at 6.0.3 for the job. The workflow is not on
 the netcup runner and takes no OIDC role. A real-account plan (#201's pipeline role) stays a separate
 decision.
+## 2026-10-28 · #523 · The E2E tools are on the dispatch host; only the cluster, AWS and otelcol-contrib remain
+
+Hecaton's toolchain installed the 2026-10-25 #523 entry's pins on 2026-10-26. On 2026-10-28 the run PATH
+(`/var/lib/hecaton/cli:/usr/local/bin:/usr/bin:/bin`) has kyverno 1.19.1, conftest 0.71.1 (OPA 1.21.1),
+terraform v1.15.6, aws-cli 2.38.5 (`/var/lib/hecaton/toolchain/aws-cli/v2/2.38.5`), kubectl v1.36.2 and helm
+v4.2.1, which also covers #439. Kyverno stays v1.19.1, the deployed version, not the issue's v1.19.0.
+
+With CONTEXT and the IAM pipeline variables unset, `bash verify/run-e2e.sh` fetches its five pinned tools (#585)
+and exits 1 listing three items: IAM_PIPELINE_PROFILE/IAM_PIPELINE_REGION, CONTEXT, and otelcol-contrib v0.160.0.
+That last one became a prerequisite with #150 and was not in this issue. It is filed as a follow-up to fetch it
+through `verify/e2e-tools.lock`, as the other pinned tools are. No code changes here.
