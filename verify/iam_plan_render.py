@@ -149,13 +149,15 @@ def render(root: str, edit=None) -> dict:
             r = run("init", "-input=false", "-no-color")
             if r.returncode:
                 raise SystemExit(f"FAIL: terraform init of {root} failed:\n{r.stderr or r.stdout}")
-            # event has no default in either root (#494, #507), nor the cluster root's hostname (#602).
+            # event has no default in either root (#494, #507), nor the cluster root's hostname (#602) or
+            # role (#636).
             args = ["plan", "-input=false", "-no-color", "-refresh=false", "-out=render.tfplan", "-var", "profile=render",
                     "-var", "event=render"]
             if root == "cluster":
                 args += [f"-target={t}" for t in CLUSTER_TARGETS]
                 args += ["-var", f"name={CLUSTER_NAME}", "-var", f"hostname={CLUSTER_HOST}",
-                         "-var", "vpc_id=vpc-render", "-var", 'private_subnet_ids=["subnet-render"]']
+                         "-var", "role=attendee", "-var", "vpc_id=vpc-render",
+                         "-var", 'private_subnet_ids=["subnet-render"]']
             r = run(*args)
             if r.returncode:
                 raise SystemExit(f"FAIL: terraform plan of {root} failed:\n{r.stderr or r.stdout}")

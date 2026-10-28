@@ -22,7 +22,7 @@ both the label and the grouping mechanism.
 |---|---|---|
 | `project` | `watch-it-burn` | every resource (the discriminator) |
 | `event` | `kubecon-na-2026` (was `devopsdays-portland-2026` for Portland, `ai-engineer-worldsfair-2026` for the June fleet). Set in one place, `infra/terraform/fleet/event.sh`; see below | clusters, buckets, secrets |
-| `role` | `attendee` / `test` / `c1-1` / `c2-3` / `c3-inst-1` / ... | clusters + nodegroups |
+| `role` | `attendee` for a seat in the pool, `community` or `admin` for a roster cluster (`fleet.sh`'s `role_for_cluster`; see below) | every resource of a cluster root |
 | `attendee` | the attendee id | attendee clusters only |
 | `component` | `exfil-game-hoop` / `exfil-game-trophy` / ... | non-cluster AWS resources |
 
@@ -44,6 +44,11 @@ Secrets Manager: `watch-it-burn/<purpose>` (e.g. `watch-it-burn/exfil-game-troph
   `project=watch-it-burn` to every resource the provider creates (VPC, cluster, node group, IRSA /
   Pod Identity roles, EBS), so the whole stack inherits it. The per-attendee cluster also gets
   `attendee=<name>`. (Provisioning is Terraform, not eksctl.)
+- **The `role` value** - `var.role` in the cluster root, no default, validated to `attendee`, `community` or
+  `admin`. `fleet.sh` passes `role_for_cluster` of the cluster on every apply and destroy: the roster's own role
+  for `watch-it-burn-community` and the presenters' admin cluster, `attendee` for everything else (#636). The
+  roster shares the `project` and `event` tags with the seats, so this is what lets `labctl harvest` leave
+  attackme and burritobot-private out of the attendee pool.
 - **The `event` value** - one setting, `WIB_EVENT` in `infra/terraform/fleet/event.sh` (default
   `kubecon-na-2026`; `WIB_EVENT=<slug>` in the environment overrides it for one run). Both roots take it
   as `var.event`, which has no default, so an apply that does not pass `-var event=...` fails instead of

@@ -3120,3 +3120,31 @@ pulls. lab-platform 5192c1a reverted the ECR cache path, so no root passes the v
   is gone, and the falco chart still does not pull the two unpulled tags. `test_mirror_copies_public.py` (tools
   tier, new) reads every named copy from ghcr.io with no credential and checks it serves its digest; all 14 did on
   2026-10-28.
+## 2026-10-28 · #636 · Every cluster carries its role as the role= tag, so harvest can leave the roster out of the pool
+
+lab-platform's `labctl harvest` finds the fleet by its `project` and `event` tags and reads each host from
+`hostname` (#602). The roster clusters (watch-it-burn-community at attackme, watch-it-burn-private at
+burritobot-private) carried the same tags as the attendee seats, `Purpose=attendee-cluster` included, so harvest
+could not tell them apart and would pool them for students.
+
+- **The tag is `role`, in `fleet_tags`.** The cluster root adds `role = var.role` beside `hostname`, so the
+  provider's default_tags put it on the cluster and every resource, and the node launch templates, CNI ENIs and
+  Bedrock application profiles carry it with the rest of `fleet_tags`.
+- **Every cluster gets one, attendees included.** `community` or `admin` for a roster cluster, `attendee` for a
+  seat. That is the value `infra/TAGGING.md` already gave the `role` key, and it lets harvest select the pool
+  positively (`role=attendee`) instead of relying on a tag being absent.
+- **The value is `role_for_cluster`, from `role_of_instructor_name`.** fleet.sh already answers a roster
+  cluster's role from its name for the account and bootstrap profile; `role_for_cluster` returns that answer, or
+  `attendee` when there is none. No second derivation.
+- **No default, validated to the three values.** As with `event` and `hostname`, an apply that forgets the role
+  fails rather than tagging a roster cluster as a seat. `up_one` passes it in `tfvars` (so the adopt step's
+  imports get it too) and `down_one` passes it on destroy.
+- **A running cluster gets the tag on its next apply.** `up` skips a healthy cluster, so one built before this is
+  tagged only by `WIB_FORCE_UP=1 fleet.sh up <name>` or a rebuild; that apply rolls the node group's launch
+  template, as #602's did.
+- **The lab-platform half is filed there.** Harvest has to read the tag and skip anything not `role=attendee`.
+  lab-platform's repo could not be read from this run, so the follow-up states the tag contract, not a patch.
+- **Test:** `verify/test_hostname_tag.py` (offline) reads the tag, the variable and its validation from the root,
+  checks roster.tsv's roles pass it, holds every apply and destroy of the cluster root to passing role, and
+  dry-runs `up` of three attendees (role=attendee each) and `instructors up all` (community and admin, matching
+  roster.tsv). No cluster was touched.

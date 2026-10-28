@@ -446,6 +446,13 @@ role_of_instructor_name() {
     fi
     return 0
 }
+# The role= tag of any cluster (#636): a roster cluster's own role, attendee for everything else. lab-platform's
+# `labctl harvest` finds the fleet by its project and event tags, which the roster shares with the seats, so this
+# is how it tells attackme and burritobot-private from the pool. One answer, from role_of_instructor_name.
+role_for_cluster() {
+    local role; role="$(role_of_instructor_name "$1")"
+    printf '%s' "${role:-attendee}"
+}
 # Kept as the single place that answers "which account holds a roster cluster". Every roster cluster now
 # lives in the default account: there are three of them, and one account holds them without nearing a
 # quota. Callers still ask rather than assuming, so moving one later is one edit here.
@@ -1569,11 +1576,13 @@ up_one() {
     # The hostname= tag lab-platform's harvest reads the attendee host from (#602). Same function as routes
     # and ingest, so the tag cannot name a host the router does not serve for this cluster.
     local host; host="$(public_host_for "${name}")"
+    # The role= tag that keeps the roster out of harvest's attendee pool (#636).
+    local role; role="$(role_for_cluster "${name}")"
     if [[ -n "${WIB_DRY_RUN}" ]]; then
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
-    local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
+    local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "role=${role}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
                   "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}")
     # An IAM user of this cluster's name made before #549 would fail the apply on EntityAlreadyExists.
     if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then
@@ -2112,7 +2121,8 @@ down_one() {
     local prof=(); [[ -n "${TF_PROFILE}" ]] && prof=(-var "profile=${TF_PROFILE}" -var "region=${WIB_REGION}")
     if terraform -chdir="${CLUSTER_DIR}" destroy -auto-approve -no-color \
         -state="${STATE_DIR}/${name}.tfstate" \
-        -var "name=${name}" -var "hostname=$(public_host_for "${name}")" -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
+        -var "name=${name}" -var "hostname=$(public_host_for "${name}")" -var "role=$(role_for_cluster "${name}")" \
+        -var "vpc_id=${VPC_ID}" -var "event=${WIB_EVENT}" \
         -var "private_subnet_ids=${SUBNETS_JSON}" "${prof[@]}" \
         >"${LOG_DIR}/${name}.destroy.log" 2>&1; then
         rm -f "${STATE_DIR}/${name}.tfstate" "$(membership_file "${name}")"; log "  ok: ${name}"

@@ -44,6 +44,7 @@ locals {
     ManagedBy = "terraform"
     attendee  = var.name
     hostname  = var.hostname
+    role      = var.role
   }
 }
 
@@ -89,6 +90,19 @@ variable "hostname" {
   validation {
     condition     = can(regex("^[a-z0-9]+(-[a-z0-9]+)*(\\.[a-z0-9]+(-[a-z0-9]+)*)+$", var.hostname))
     error_message = "hostname must be a lowercase DNS name such as soot-sabrina.agenticburn.com, without a scheme."
+  }
+}
+
+variable "role" {
+  type = string
+  # NO DEFAULT, on purpose (#636). Every cluster carries the same project and event tags, so `labctl harvest`
+  # finding the fleet by them would pool the roster clusters (attackme and burritobot-private) with the attendee
+  # seats. This tag is what tells them apart: attendee for a seat, community or admin for a roster cluster, from
+  # fleet.sh's role_for_cluster. A default would tag a roster cluster as a seat, which harvest hands to a student.
+  description = "What this cluster is for (the role= tag): attendee for a seat in the pool, community or admin for a roster cluster. Set by fleet.sh's role_for_cluster."
+  validation {
+    condition     = contains(["attendee", "community", "admin"], var.role)
+    error_message = "role must be attendee, community or admin."
   }
 }
 

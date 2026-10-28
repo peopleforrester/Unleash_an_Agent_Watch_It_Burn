@@ -1,5 +1,5 @@
-# ABOUTME: Each cluster carries its attendee hostname as the hostname= tag (#602), set from public_host_for, on
-# ABOUTME: every apply and destroy of the cluster root. Offline: the dry run stubs terraform/aws.
+# ABOUTME: Each cluster carries its attendee hostname as the hostname= tag (#602) and its role as the role= tag (#636),
+# ABOUTME: set by fleet.sh on every apply and destroy of the cluster root. Offline: the dry run stubs terraform/aws.
 #
 # Why. lab-platform's `labctl harvest` (lab-platform#84) finds the fleet by its project and event tags and reads
 # each cluster's attendee hostname from a tag the operator names with --host-tag. It does not derive a host from
@@ -7,6 +7,11 @@
 # host comes from fleet.sh's public_host_for, the one function routes and ingest already use, so the tag cannot
 # name a host the router does not serve for that cluster: attackme.agenticburn.com for the community cluster,
 # burritobot-private.agenticburn.com for the presenters' shared cluster, and the two-word name of the slot for an attendee's.
+#
+# The role= tag (#636). The roster clusters carry the same project and event tags as the seats, so harvest finding
+# the fleet by them would pool attackme and burritobot-private with the attendee clusters and hand one to a
+# student. role=community or role=admin, from the roster's role through fleet.sh's role_for_cluster, is what tells
+# them apart; every attendee cluster is role=attendee.
 import os, pathlib, re, stat, subprocess, sys, tempfile
 REPO = pathlib.Path(__file__).resolve().parents[1]
 CLUSTER_TF = (REPO / "infra" / "terraform" / "aws" / "cluster" / "main.tf").read_text()
@@ -31,6 +36,22 @@ rx = re.search(r'condition\s*=\s*can\(regex\("(.*?)", var\.hostname\)\)', var.gr
 check("var.hostname is validated by a regex", rx is not None)
 host_re = re.compile(rx.group(1).replace("\\\\", "\\")) if rx else None
 
+print("== the cluster root tags every resource with var.role ==")
+check("fleet_tags carries role = var.role",
+      tags is not None and re.search(r"^\s*role\s*=\s*var\.role\s*$", tags.group(1), re.M) is not None)
+rvar = re.search(r'variable "role" \{(.*?)\n\}', CLUSTER_TF, re.S)
+check('the root declares variable "role"', rvar is not None)
+check("var.role has no default (a roster cluster built without its role fails instead of being tagged a seat)",
+      rvar is not None and not re.search(r"^\s*default\s*=", rvar.group(1), re.M))
+allowed = re.search(r'condition\s*=\s*contains\(\[(.*?)\], var\.role\)', rvar.group(1) if rvar else "")
+roles = set(re.findall(r'"([a-z]+)"', allowed.group(1))) if allowed else set()
+check(f"var.role is validated to attendee, community and admin ({sorted(roles)})",
+      roles == {"attendee", "community", "admin"})
+roster = (REPO / "infra" / "terraform" / "fleet" / "roster.tsv").read_text()
+roster_roles = {l.split("|")[1] for l in roster.splitlines() if l.strip() and not l.startswith("#")}
+check(f"every role in roster.tsv passes that validation ({sorted(roster_roles)})",
+      roster_roles and roster_roles <= roles - {"attendee"})
+
 print("== fleet.sh passes the host public_host_for gives, on apply and destroy ==")
 tfvars = re.search(r"local tfvars=\((.*?)\)\n", FLEET_SH, re.S)
 check("up_one's tfvars carry -var hostname=${host}", tfvars is not None and '-var "hostname=${host}"' in tfvars.group(1))
@@ -51,6 +72,12 @@ bare = [n for n, c in cmds if "hostname=" not in c and '"${tfvars[@]}"' not in c
 check(f"each passes hostname, directly or through tfvars (missing at lines {bare})", not bare)
 check("down_one's destroy passes public_host_for of the cluster",
       '-var "hostname=$(public_host_for "${name}")"' in FLEET_SH)
+check("up_one's tfvars carry -var role=${role}", tfvars is not None and '-var "role=${role}"' in tfvars.group(1))
+check("and ${role} is role_for_cluster of the cluster", 'local role; role="$(role_for_cluster "${name}")"' in FLEET_SH)
+bare = [n for n, c in cmds if "role=" not in c and '"${tfvars[@]}"' not in c]
+check(f"each apply and destroy passes role, directly or through tfvars (missing at lines {bare})", not bare)
+check("down_one's destroy passes role_for_cluster of the cluster",
+      '-var "role=$(role_for_cluster "${name}")"' in FLEET_SH)
 check("the adopt step's imports get the same variables as the apply",
       'adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"'
       in FLEET_SH)
@@ -80,17 +107,26 @@ check("and the validation refuses a scheme, capitals, a bare label, empty and a 
 
 def dry_lines(out):
     return dict(re.findall(r"DRY-RUN (\S+): apply .*?-var hostname=(\S+)", out))
+def dry_roles(out):
+    return dict(re.findall(r"DRY-RUN (\S+): apply .*?-var role=(\S+)", out))
 rc, out = run_fleet("up", "watch-it-burn-attendee-001", "watch-it-burn-attendee-007", "watch-it-burn-attendee-042")
 got = dry_lines(out)
+got_roles = dry_roles(out)
 check(f"WIB_DRY_RUN fleet.sh up of three attendees exits 0 and shows a hostname for each (rc={rc}, {got})",
       rc == 0 and len(got) == 3)
 check("each attendee's hostname is its two-word name from the slot grid",
       got and all(table.get(k) == v and re.fullmatch(r"[a-z]+-[a-z]+\.agenticburn\.com", v) for k, v in got.items()))
+check(f"each attendee cluster is tagged role=attendee ({got_roles})",
+      len(got_roles) == 3 and set(got_roles.values()) == {"attendee"})
 rc, out = run_fleet("instructors", "up", "all")
 got = dry_lines(out)
 check(f"WIB_DRY_RUN fleet.sh instructors up all exits 0 and tags the roster with its hosts (rc={rc}, {got})",
       rc == 0 and got == want)
+want_roles = {l.split("|")[0]: l.split("|")[1] for l in roster.splitlines() if l.strip() and not l.startswith("#")}
+got_roles = dry_roles(out)
+check(f"and with roster.tsv's role, community and admin, so harvest can leave them out of the pool ({got_roles})",
+      got_roles == want_roles == {"watch-it-burn-community": "community", "watch-it-burn-private": "admin"})
 
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)"); sys.exit(1)
-print("\nAll hostname-tag checks passed.")
+print("\nAll hostname- and role-tag checks passed.")
