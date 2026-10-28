@@ -48,9 +48,18 @@ case "$*" in
     jq -r '.spec.model' <<<"${body}" >"${T}/live/${cfg}" ;;
   *" get deployment agentgateway "*)
     var="$(grep -o '@.name=="[A-Z_]*"' <<<"$*" | tail -1 | cut -d'"' -f2)"
+    if [[ -f "${T}/gw_late" ]]; then  # Argo has not created the Deployment yet; it appears after that many reads
+      n="$(cat "${T}/gw_late")"
+      if (( n > 0 )); then echo $(( n - 1 )) >"${T}/gw_late"; echo "deployments.apps \"agentgateway\" not found" >&2; exit 1; fi
+      rm -f "${T}/gw_late"; echo "us.amazon.nova-pro-v1:0" >"${T}/live/gw-${var}"
+    fi
     cat "${T}/live/gw-${var}" 2>/dev/null ;;
   *" set env deployment/agentgateway -c agentgateway "*)
     [[ -f "${T}/patch_fails" ]] && exit 1
+    # block-argocd-drift, armed: an UPDATE of an Argo-managed Deployment is admitted only from the Argo controller.
+    if [[ -f "${T}/drift_armed" && "$*" != *"--as=system:serviceaccount:argocd:argocd-application-controller"* ]]; then
+      echo "denied by block-argocd-drift" >&2; exit 1
+    fi
     kv=""; for a in "${args[@]}"; do [[ "${a}" == [A-Z_]*=* ]] && kv="${a}"; done
     printf '%s\n' "${kv#*=}" >"${T}/live/gw-${kv%%=*}" ;;
 esac
@@ -65,7 +74,7 @@ run() { # $1: the cluster name. Prints the function's exit code; its log goes to
         cat \"\${FAIL_FILE}\" >'${T}/ledger' 2>/dev/null || : >'${T}/ledger'" 2>"${T}/stderr" )
 }
 fresh() { # the four Bedrock ModelConfigs and the gateway as Argo first creates them, on their committed system ids
-  rm -f "${T}/live/"* "${T}/patch_fails"; : >"${CALLS}"
+  rm -f "${T}/live/"* "${T}/patch_fails" "${T}/gw_late" "${T}/drift_armed"; : >"${CALLS}"
   echo "us.amazon.nova-pro-v1:0" >"${T}/live/bedrock-nova"
   echo "us.anthropic.claude-haiku-4-5-20251001-v1:0" >"${T}/live/bedrock-haiku"
   echo "us.anthropic.claude-sonnet-4-6" >"${T}/live/bedrock-sonnet"
@@ -137,6 +146,23 @@ fresh; rm -f "${T}/live/gw-BEDROCK_NOVA_MODEL"; rc="$(WAIT=1 run watch-it-burn-a
 check "a gateway without the env var fails after the wait" '[[ "${rc}" == "1" ]]'
 check "and says so" 'grep -q "agentgateway.s BEDROCK_NOVA_MODEL never appeared" "${T}/stderr"'
 check "the ModelConfigs are still pinned" '[[ "$(cat "${T}/live/bedrock-nova")" == "$(arn nova0001)" ]]'
+
+echo "== the agentgateway Deployment arrives late on an armed admin cluster: it is waited for and pinned (#630) =="
+# The 2026-10-27 admin bring-up logged "could not point agentgateway's BEDROCK_NOVA_MODEL" and left the gateway
+# on the system id. Here Argo creates the Deployment three reads after the ModelConfigs are pinned, and
+# block-argocd-drift is armed, so only a patch made as the Argo controller is admitted.
+fresh; rm -f "${T}/live/gw-BEDROCK_NOVA_MODEL"; echo 3 >"${T}/gw_late"; touch "${T}/drift_armed"
+rc="$(WAIT=30 run watch-it-burn-private)"
+check "it succeeds" '[[ "${rc}" == "0" ]]'
+check "it read the Deployment until it appeared" \
+  '[[ "$(grep -c " get deployment agentgateway " "${CALLS}")" -ge 4 ]] && [[ ! -f "${T}/gw_late" ]]'
+check "agentgateway's BEDROCK_NOVA_MODEL then names the cluster's nova profile" \
+  '[[ "$(cat "${T}/live/gw-BEDROCK_NOVA_MODEL")" == "$(arn nova0001)" ]]'
+check "and says so" 'grep -q "agentgateway.s BEDROCK_NOVA_MODEL now calls $(arn nova0001)" "${T}/stderr"'
+check "nothing is recorded as failed" '[[ ! -s "${T}/ledger" ]]'
+check "the ModelConfigs are pinned as well" '[[ "$(cat "${T}/live/bedrock-nova")" == "$(arn nova0001)" ]]'
+check "the operator's own patch is what the armed policy denies (the shim enforces it)" \
+  '( touch "${T}/drift_armed"; ! PATH="${SHIM}:${PATH}" kubectl -n agent set env deployment/agentgateway -c agentgateway X=1 2>/dev/null )'
 
 echo "== a gateway config the pin cannot reach fails, it does not pass with the gateway path untagged =="
 # The same function against a copy of the repo whose agentgateway.yaml is broken one way at a time. fleet.sh

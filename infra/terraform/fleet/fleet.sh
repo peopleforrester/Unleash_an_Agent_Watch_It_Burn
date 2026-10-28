@@ -663,6 +663,8 @@ assert_ours() {
 # Record a per-cluster failure so the parent command can report it and exit non-zero. A backgrounded
 # job's exit code is otherwise lost in the pool, which would silently half-provision a 60-cluster fleet.
 record_fail() { echo "${1}" >>"${FAIL_FILE}"; }
+# One cluster's lines in the failure ledger, which the clusters of a pool append to in parallel.
+ledger_of() { awk -F: -v n="$1" '$1 == n' "${FAIL_FILE}" 2>/dev/null || true; }
 
 # Flip an admin cluster's infra guardrails to enforcing after bootstrap. Kyverno ships in Audit
 # (kyverno-policies.yaml), so wait for the ValidatingPolicy to sync then run the Audit->Deny toggle.
@@ -3096,12 +3098,21 @@ converge_one() {
                 argocd.argoproj.io/refresh=hard --overwrite >/dev/null 2>&1 || true
         done <<<"${bad}"
     fi
+    local prior; prior="$(ledger_of "${name}" | wc -l)"
     repair_one "${name}" "${kcfg}" "${acct_profile}"
     local ep; ep="$(converge_endpoint "${name}" "${kcfg}")"
     local ok=$?
     rm -f "${kcfg}"
+    # What repair_one's repairs and verifiers recorded against this cluster just now. They write the ledger,
+    # not a return code, and this line used to say CONVERGED over them: the 2026-10-27 admin bring-up read
+    # "CONVERGED" while agentgateway was still on the system model id and bedrock-profiles had failed (#630).
+    local failed; failed="$(ledger_of "${name}" | tail -n +$(( prior + 1 )) | cut -d: -f2- | paste -sd' ' -)"
     if [[ "${healthy}" == "${total}" && "${ok}" -eq 0 ]]; then
-        log "  ${name}: CONVERGED (apps ${total}/${total}, console ${ep})"
+        if [[ -n "${failed}" ]]; then
+            log "  ${name}: NOT CONVERGED (apps ${total}/${total}, console ${ep}, but failed: ${failed})"
+        else
+            log "  ${name}: CONVERGED (apps ${total}/${total}, console ${ep})"
+        fi
         return 0
     fi
     record_fail "${name}:apps=${healthy}/${total} endpoint=${ep}"

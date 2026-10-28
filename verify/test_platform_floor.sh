@@ -47,7 +47,8 @@ S
 chmod +x "${SHIM}/kubectl"
 export CALLS MODE PATH="${SHIM}:${PATH}"
 
-WIB_STATE_DIR="${T}/states" source "${FLEET}" >/dev/null 2>&1 || true
+mkdir -p "${T}/fleet-logs"
+WIB_STATE_DIR="${T}/states" WIB_LOG_DIR="${T}/fleet-logs" source "${FLEET}" >/dev/null 2>&1 || true
 for fn in platform_floor read_argo_apps converge_one health_one; do
     declare -F "${fn}" >/dev/null || { echo "  FAIL  ${fn} is not defined in fleet.sh"; exit 1; }
 done
@@ -58,7 +59,8 @@ record_fail() { echo "RECORD_FAIL $1" >>"${CALLS}"; }
 provider_write_kubeconfig() { : >"$2"; return 0; }
 # Everything converge does AFTER the floor. If any of these is called on an empty cluster, converge
 # went on to repair and endpoint-check a cluster with nothing installed, which is the defect.
-repair_one() { echo "REPAIR_CALLED" >>"${CALLS}"; }
+# A repair that fails writes the shared ledger as the real record_fail does, which is all converge_one can see.
+repair_one() { echo "REPAIR_CALLED" >>"${CALLS}"; [[ -f "${T}/repair_fails" ]] && echo "$1:bedrock-profiles" >>"${FAIL_FILE}"; :; }
 converge_endpoint() { echo "ENDPOINT_CALLED" >>"${CALLS}"; echo "some-lb.example"; return 0; }
 
 run() { # run <mode> <fn>; fresh ledgers each time
@@ -97,6 +99,21 @@ check "twenty healthy apps reach the repair step"    "grep -q 'REPAIR_CALLED' '$
 check "and the endpoint check"                       "grep -q 'ENDPOINT_CALLED' '${CALLS}'"
 check "and the cluster converges"                    "grep -q 'CONVERGED' '${LOGS}'"
 check "with no failure recorded"                     "! grep -q 'RECORD_FAIL' '${CALLS}'"
+
+echo "== a repair that fails on a healthy platform is not CONVERGED either (#630) =="
+# The 2026-10-27 admin bring-up: every app Synced and Healthy, the console up, and pin_bedrock_profiles
+# failing inside repair_one. converge_one said CONVERGED over the ledger line that said otherwise.
+rm -f "${FAIL_FILE}"; touch "${T}/repair_fails"
+run full converge_one
+check "it does NOT say CONVERGED"                    "! grep -q '  watch-it-burn-attendee-001: CONVERGED' '${LOGS}'"
+check "it says NOT CONVERGED and names the repair"   "grep -q 'NOT CONVERGED.*failed: bedrock-profiles' '${LOGS}'"
+check "the ledger keeps the failure"                 "grep -qx 'watch-it-burn-attendee-001:bedrock-profiles' '${FAIL_FILE}'"
+rm -f "${T}/repair_fails"
+printf 'watch-it-burn-attendee-002:datadog-orgs\n' >>"${FAIL_FILE}"
+run full converge_one
+check "a failure from before this pass that the repair cleared, or another cluster's, does not hold it back" \
+                                                     "grep -q '  watch-it-burn-attendee-001: CONVERGED' '${LOGS}'"
+rm -f "${FAIL_FILE}"
 
 echo "== health is gated the same way, since it answers the same question =="
 run empty health_one

@@ -3021,3 +3021,25 @@ which moved ingest to `labctl import`.
   a shim and check the arguments, the environment, one call for all names, `--release-claimed` passed through,
   the refusal message and ledger entries, release per email, the loud exit without DATABASE_URL or USER, and that
   nothing calls /admin/delete or /admin/release. No cluster and no lab-platform database were touched.
+## 2026-10-28 · #630 · The gateway pin survives a late Deployment, and converge does not say CONVERGED over a failed repair
+
+The 2026-10-27 `fleet.sh instructors up michael` logged "could not point agentgateway's BEDROCK_NOVA_MODEL" on the
+admin cluster, and the converge that followed printed CONVERGED for it while the Deployment stayed on
+`us.amazon.nova-pro-v1:0`, so the gateway path billed untagged.
+
+- **The cause was the policy, not the timing.** "Could not point" is the message for a refused patch; a Deployment
+  that never appears logs "never appeared" instead. block-argocd-drift denies the operator's UPDATE of an
+  Argo-managed Deployment on an armed cluster, and community ships no policies, which is why the same step passed
+  there. 7210a3b already makes the gateway patch as the Argo controller, which the policy admits.
+- **The late Deployment is tested anyway.** pin_bedrock_profiles already polls each target until it appears
+  (WIB_MODELCONFIG_WAIT, 300 s), the gateway included. `verify/test_pin_bedrock_profiles.sh` now has the shim
+  create the agentgateway Deployment three reads late with block-argocd-drift armed, and checks that it is waited
+  for and pinned with nothing recorded as failed. Without the impersonation that case fails.
+- **converge_one's verdict reads the ledger.** repair_one's repairs and verifiers report through the failure ledger,
+  not a return code, so converge_one printed CONVERGED on apps and console alone. It now counts this cluster's
+  ledger lines before repair_one (`ledger_of`) and prints `NOT CONVERGED (..., but failed: <what>)` when the pass
+  added any. Lines from before the pass, which the pass may have repaired, and other clusters' lines do not count.
+  The round loop and the final verdict already read the ledger and are unchanged. `verify/test_platform_floor.sh`
+  holds it.
+- **Not verified on a cluster.** No admin cluster was built in this run. The live check is
+  `verify/test_gateway_bedrock_tagged_live.py` after the next admin bring-up.
