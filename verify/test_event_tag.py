@@ -48,20 +48,44 @@ check("fleet.sh does not set WIB_EVENT itself (one setting, not two)", "WIB_EVEN
 check("fleet.sh passes -var event=${WIB_EVENT}", '-var "event=${WIB_EVENT}"' in fleet)
 
 # No Portland literal remains under infra/terraform or infra/org outside .terraform/ and state.
-def is_state(p):
-    rel = p.relative_to(REPO).parts
+def is_state(p, repo=REPO):
+    rel = p.relative_to(repo).parts
     return ".terraform" in rel or "states" in rel or p.name.endswith((".tfstate", ".tfstate.backup"))
-def tree_files(pattern):
+def tree_files(pattern, repo=REPO):
     # What git would commit, not every file on disk: fleet/logs/*.apply.log are gitignored run logs, and the
     # machine that ran Portland holds about 120 of them naming its tag, which turned this suite red there (#631).
-    listed = subprocess.run(["git", "-C", str(REPO), "ls-files", "--cached", "--others", "--exclude-standard",
-                             "--", str(TF.relative_to(REPO)), str(ORG.relative_to(REPO))],
-                            capture_output=True, text=True, check=True).stdout.split()
-    return sorted(p for p in (REPO / f for f in listed)
-                  if p.is_file() and p.match(pattern) and not is_state(p))
-stale = [str(p.relative_to(REPO)) for p in tree_files("*") if "devopsdays-portland-2026" in p.read_text(errors="ignore")]
+    listed = subprocess.run(["git", "-C", str(repo), "ls-files", "-z", "--cached", "--others", "--exclude-standard",
+                             "--", "infra/terraform", "infra/org"],
+                            capture_output=True, text=True, check=True).stdout.split("\0")
+    return sorted(p for p in (repo / f for f in listed if f)
+                  if p.is_file() and p.match(pattern) and not is_state(p, repo))
+def stale_in(repo=REPO):
+    return [str(p.relative_to(repo)) for p in tree_files("*", repo)
+            if "devopsdays-portland-2026" in p.read_text(errors="ignore")]
+stale = stale_in()
 check(f"no literal devopsdays-portland-2026 under infra/terraform or infra/org (found: {stale})", not stale)
-check("the scan skips gitignored run logs", not any("/logs/" in str(p) and p.suffix == ".log" for p in tree_files("*")))
+
+# The scan is held to both halves of #631 in a scratch repo, since a clean checkout has no run logs to skip:
+# a tracked or untracked file naming the tag is caught, and a gitignored apply log naming it is not.
+with tempfile.TemporaryDirectory() as d:
+    scratch = pathlib.Path(d)
+    git = lambda *a: subprocess.run(["git", "-C", d, "-c", "user.name=t", "-c", "user.email=t@t", *a],
+                                    capture_output=True, text=True, check=True)
+    git("init", "-q")
+    planted = {"infra/terraform/aws/network/main.tf": "tracked", "infra/org/boundary/main.tf": "tracked",
+               "infra/terraform/fleet/new.sh": "untracked",
+               "infra/terraform/fleet/logs/watch-it-burn-attendee-001.apply.log": "ignored"}
+    for rel in planted:
+        (scratch / rel).parent.mkdir(parents=True, exist_ok=True)
+        (scratch / rel).write_text('  event = "devopsdays-portland-2026"\n')
+    (scratch / ".gitignore").write_text("infra/terraform/fleet/logs/\n")
+    git("add", ".gitignore", *(rel for rel, kind in planted.items() if kind == "tracked"))
+    git("commit", "-q", "-m", "scratch")
+    found = set(stale_in(scratch))
+    check(f"the scan catches the literal in tracked files ({sorted(found)})",
+          {rel for rel, kind in planted.items() if kind == "tracked"} <= found)
+    check("and in an untracked file not yet added", "infra/terraform/fleet/new.sh" in found)
+    check("and skips a gitignored fleet/logs/*.apply.log", not any("/logs/" in f for f in found))
 
 # Every terraform apply/destroy of any root, in any script under infra/terraform or infra/org, passes event:
 # the variable has no default, so one that does not is a teardown or a build that fails on the night. The
