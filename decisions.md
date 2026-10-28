@@ -3155,3 +3155,31 @@ Michael, 2026-10-28: the KubeCon NA 2026 deck is not submitted to Sessionize. #4
 closed as not planned. `scripts/kubecon-deck-pdf.py`, its two tests and `facilitation/kubecon-na-2026-deck/`
 existed only for that upload and are removed; the deck is still presented from rounds-agenticburn. The
 session id and the Sessionize feedback survey link stay, since feedback is kept.
+## 2026-10-28 · #633 · Dispatched runs get an AGENTS.md section: no bring-up from a run, and a drift check for old drafts
+
+Hecaton's insights found two runs that lost their time to the environment rather than the work.
+
+- **Run 9654 (#610): a run cannot deploy.** The issue was the KubeCon rehearsal bring-up. A dispatched run has no
+  cluster and no AWS profile, and its governance forbids deploying, while AGENTS.md's change cadence rules 3 and 4
+  say to provision a cluster and validate. Nothing in this repo can give a run that access, and it should not: the
+  go is Michael's spend (about $1 an hour for the two clusters, question 846). What is fixable is that a run read
+  rules meant for a session with AWS access. The new "Dispatched runs (hecaton)" section scopes them: a run writes
+  the change and its offline test, runs both gate commands, names the owed live check under "Not yet run on a
+  cluster", and on a bring-up, teardown or live-run issue says there is no code, gives the exact command, and waits
+  on the go already asked instead of asking it again.
+- **Run 9672 (#474): the draft no longer applied.** The approved draft (`afea397` on `agent/474-9586`) was cut
+  before #609 moved `gitops/apps/` into the `lab-bootstrap` chart, and was found stale only by conflicts. It was
+  the third time #474 was redone for that reason (run 7819 against #475 and #493, then `docs/DESIGN-GLANCE.md`).
+  `verify/draft-drift.sh <draft> [base]` now lists, before any work, every path the draft changes that the base has
+  since edited, renamed (with the new path) or deleted, and every directory the draft adds files to that the base
+  removed, each with the newest base commit that did it, and exits 1 on any. Run as `origin/agent/474-9586` against
+  8429c6b, staging just after #609, it names the three `gitops/apps/* -> gitops/bootstrap/apps/*` renames and the 14
+  other files #609 edited. AGENTS.md says to run it and make the design again on the current layout, and a "Where
+  things live" bullet names the post-#609 app layout, since PRDs and older docs still say `gitops/apps/`.
+- **Tests.** `verify/test_draft_drift.sh` (offline) builds a scratch repo with a draft on the old layout and checks
+  a clean base, a moved directory with a rename, an edit and an added file in the gone directory, HEAD as the
+  default base, a draft already merged, and exit 2 for no arguments, an unknown ref and no shared history.
+  `verify/test_dispatched_runs.py` holds the AGENTS.md section and checks the layout bullet against the tree:
+  `gitops/bootstrap/apps/` and each lab-platform.yaml profile's values file exist, and `gitops/apps/` does not.
+- **Not done here.** The cause is to be named in a comment on #633; this run could not post it (`sources` asked for
+  a sudo password), so the comment is escalated in the run's report.

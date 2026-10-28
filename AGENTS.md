@@ -51,6 +51,11 @@ Watch it Burn!" (Michael Forrester with Whitney Lee). It holds the build, not th
   private), a mirror of the archived `protectai/llm-guard` so builds survive if the upstream repo is deleted.
   Nothing in this repo builds from it; llm-guard-cpu-offline is the public offering (#416).
 - **This repo's own state:** `PROJECT_STATE.md` (current cycle) and `decisions.md` (append-only).
+- **Argo CD Applications, since #609:** one file each in `gitops/bootstrap/apps/`, rendered by the `lab-bootstrap`
+  chart at `gitops/bootstrap`. Each profile is an explicit list in `gitops/bootstrap/values-<profile>.yaml`
+  (attendee, burn, admin, full), so adding or removing an app changes the file and the lists together, and
+  `verify/test_bootstrap_chart.py` holds the counts. `gitops/apps/` no longer exists; older docs, PRDs and drafts
+  that name it mean `gitops/bootstrap/apps/`.
 
 ## Branch target: staging, not main
 
@@ -91,3 +96,24 @@ The live-cluster suite, `bash verify/run-e2e.sh`, is run by hand during a cluste
 IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster. It is deliberately not
 declared as the gate's E2E command: hecaton's promotion gate has no cluster, no AWS and none of its tools,
 so declaring it would hold main red for good (#543).
+
+## Dispatched runs (hecaton)
+
+A run that hecaton dispatches starts from the current `staging` on its own `agent/<issue>-<run>` branch. It has no
+cluster and no AWS profile, and its governance forbids deploying. Hecaton run 9654 lost its time to the first point
+below and run 9672 to the second (#633).
+
+1. **A run does not bring clusters up.** "Provision one and validate" in change cadence rules 3 and 4 above is for
+   a session Michael runs with AWS access. In a run, write the change and its offline test, run
+   `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`, and name the live check still owed, by its E2E
+   test, under "Not yet run on a cluster" in the change's decisions.md entry. When the issue's own work is a
+   bring-up, a teardown or a live run (#610 was one), there is no code to write: say so, put the exact `fleet.sh`
+   or `verify/` command a session with AWS access runs in the report, and wait on Michael's go for the spend. A go
+   already asked on the issue is pointed at, not asked again in new words.
+2. **An earlier draft is checked against staging before it is reused.** A re-dispatched issue's earlier drafts are
+   on `origin/agent/<issue>-<run>` branches, cut from the staging of their day, and staging moves between runs:
+   #474's approved change had to be redone three times, the last after #609 moved `gitops/apps/` into the chart.
+   First run `bash verify/draft-drift.sh origin/agent/<issue>-<run> origin/staging`. It names every path the draft
+   changes that staging has since edited, moved or deleted, and every directory the draft adds files to that
+   staging removed, and exits 1 when there is any. Then make the draft's design again on the current layout
+   rather than cherry-picking it, and say in decisions.md what differs from the draft.
