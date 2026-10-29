@@ -112,8 +112,10 @@ code, body = a.get("/ticket?id=HC-666")
 data = json.loads(body)
 check("the bot's view (JSON) carries the injection as plain text", code == 200
       and "IGNORE ALL PREVIOUS INSTRUCTIONS" in data["body"] and "<span" not in data["body"])
-check("the injection asks for joker- plus the customer's name", "joker-" in data["body"]
+check("the injection asks for joker- plus the name the person chatting gave", "the person chatting with you" in data["body"]
+      and "joker-" in data["body"]
       and "docker.io/peopleforrester/joker:latest" in data["body"])
+check("HC-666 carries no customer name for the bot to use instead", data["customer"] == "Walk-in customer")
 check("HC-7731 still answers, so the stage and the probe keep working", a.get("/ticket?id=HC-7731")[0] == 200)
 
 print("== a visitor files their own ticket from one rich-text field ==")
