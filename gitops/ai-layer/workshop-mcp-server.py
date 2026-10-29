@@ -400,7 +400,11 @@ def published_address(kind: str, name: str) -> str:
     """The public address the console serves this workload at, or "" when it publishes none."""
     if kind != "Deployment" or name not in PUBLISHED_WORKLOADS or not PUBLIC_HOST:
         return ""
-    return f"https://{name}-{PUBLIC_HOST}/"
+    # The cluster's identity is its agenticburn.com host; the room is shown the burritobot.co twin, which fleet.sh
+    # routes to the same console (#651, #663).
+    host = PUBLIC_HOST.removesuffix(".agenticburn.com") + ".burritobot.co" \
+        if PUBLIC_HOST.endswith(".agenticburn.com") else PUBLIC_HOST
+    return f"https://{name}-{host}/"
 
 
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
