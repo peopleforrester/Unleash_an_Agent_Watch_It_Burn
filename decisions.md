@@ -4039,3 +4039,29 @@ run-of-show to six segments and three challenges. It is re-read against the run-
 - **Not yet run on a cluster.** Nothing here changes a cluster. The rows' Live cells for the three-challenge order
   wait on the next bring-up's `verify/kubecon_probe.py` runs on both clusters ending `KUBECON PROBE GREEN`, which
   #639's entry already names.
+## 2026-10-29 · #672 · The browsers-directory failure names the group; the dispatch host's certkraken run users need that group
+
+Hecaton run 10488 failed `test_mobile_titles_e2e.py` with EACCES on `/var/lib/hecaton/ms-playwright/__dirlock`.
+There was no earlier draft of this issue to check against staging.
+
+- **The cause is on the host, not in this repo.** The directory is `root:hecaton-tools`, mode 2775, with a default
+  ACL for `hecaton-tools`. Every `-performantpro` and `-gmail` slot user and `hecaton-gate` are in `hecaton-tools`.
+  None of the `-certkraken` users are, and this run's user, `hecaton-run-claude-certkraken`, is one of them. Hecaton's
+  `deploy/netcup/setup.sh` toolchain section already adds `$(slot_users)` for every pool in governance
+  `claude_pools` to `hecaton-tools`. So that section was not run again after the certkraken pool was added. Its check,
+  `check_toolchain`, tests the write only for the home pool's slot 1 and the gate, so it did not catch the gap.
+- **What stands today.** Every browser Playwright 1.64.1 lists (chromium-1248, chromium_headless_shell-1248,
+  ffmpeg-1013) is installed there. #658 also means a test runs `playwright install` only when one is missing. So
+  `bash verify/run-e2e-tools.sh` passes on this host as it is, for a certkraken run as well. A certkraken run still
+  cannot add the browsers of a new Playwright pin until the host fix below is made.
+- **The host fix, escalated, not made here:** `sudo bash deploy/netcup/setup.sh toolchain`, run from hecaton's repo
+  root on netcup, or for just this gap, `usermod -aG hecaton-tools` for each `hecaton-*-claude-certkraken` user. A
+  follow-up asks hecaton's `check_toolchain` to test the write for every slot user.
+- **In this repo.** No fallback to a per-user browsers directory: that is a second install path that would hide the
+  host gap. The not-writable report in `verify/playwright_browsers.py` now adds the directory's owner, group and
+  mode, and whether this user is in that group, so the next such failure names its fix. On this host it reads
+  `/var/lib/hecaton/ms-playwright is owner root, group hecaton-tools, mode 2775, and hecaton-run-claude-certkraken is
+  not in group hecaton-tools`. `verify/test_playwright_browsers.py` holds the wording, including a user outside the
+  group, with `os.getgid` and `os.getgroups` stubbed.
+
+**Not yet run on a cluster:** nothing is owed. This changes an offline check's message and its offline test.

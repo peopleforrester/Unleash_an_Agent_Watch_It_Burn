@@ -122,6 +122,28 @@ with tempfile.TemporaryDirectory() as t:
           and "chromium" not in problems[0], str(problems))
     check("no `playwright install` is run, so there is no lock to wait on", installs(log) == [], str(calls(log)))
     check("check() reports the same problem", script == problems, str(script))
+    group = pb.ownership(browsers).rsplit(" ", 1)[-1]
+    check("it names the directory's owner, group and mode, and whether this user is in that group (#672)",
+          bool(problems) and f"({browsers} is owner " in problems[0] and ", mode 555, and " in problems[0]
+          and f"{pb._user()} is in group {group})" in problems[0], str(problems))
+
+print("== the ownership says when this user is not in the directory's group (#672) ==")
+with tempfile.TemporaryDirectory() as t:
+    d = pathlib.Path(t)
+    group = pb.ownership(d).rsplit(" ", 1)[-1]
+    check("this user's own directory: it is in the directory's group",
+          pb.ownership(d).endswith(f"and {pb._user()} is in group {group}"), pb.ownership(d))
+    check("a directory that does not exist yet is described by the nearest one above it",
+          pb.ownership(d / "a" / "b") == pb.ownership(d), pb.ownership(d / "a" / "b"))
+    real = (os.getgid, os.getgroups)
+    # A user whose groups hold nothing of the directory's, as a run user outside hecaton-tools.
+    os.getgid, os.getgroups = (lambda: -1), (lambda: [])
+    try:
+        outside = pb.ownership(d)
+    finally:
+        os.getgid, os.getgroups = real
+    check("a user outside the directory's group is told so, with the group named",
+          outside.endswith(f"and {pb._user()} is not in group {group}"), outside)
 
 print("== a browser missing from a writable directory is installed ==")
 with tempfile.TemporaryDirectory() as t:

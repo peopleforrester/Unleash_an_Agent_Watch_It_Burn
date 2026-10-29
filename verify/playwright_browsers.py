@@ -8,7 +8,9 @@ owned by another group), the lock fails with EACCES and Playwright retries it fo
 On 2026-10-29 that cost each Playwright test 8 minutes and pushed run-e2e-tools.sh past 10 (#658, from #633).
 
 So nothing here runs `playwright install` unless a browser is missing, and a missing browser in a directory this user
-cannot write is reported at once, naming the directory and what is missing. A browser counts as installed when its
+cannot write is reported at once, naming the directory and what is missing. The report also gives the directory's
+owner, group and mode and whether this user is in that group: on 2026-10-29 the dispatch host's run users of one pool
+had been left out of the group that writes the shared directory (#672). A browser counts as installed when its
 install location holds INSTALLATION_COMPLETE, the marker Playwright writes last and checks before downloading.
 
 Run as a script, it is run-e2e-tools.sh's prerequisite check: it prints one line per problem and exits 1 when the
@@ -36,11 +38,33 @@ def listing(dry_run: str) -> list[tuple[str, pathlib.Path]]:
             for name, loc in re.findall(r"^(\S[^\n]*)\n[ \t]+Install location:[ \t]+(\S[^\n]*)$", dry_run, re.M)]
 
 
-def writable(path: pathlib.Path) -> bool:
-    """Whether this user can create entries in path, or in the nearest directory above it that exists."""
+def existing(path: pathlib.Path) -> pathlib.Path:
+    """path, or the nearest directory above it that exists."""
     while not path.exists() and path != path.parent:
         path = path.parent
-    return os.access(path, os.W_OK | os.X_OK)
+    return path
+
+
+def writable(path: pathlib.Path) -> bool:
+    """Whether this user can create entries in path, or in the nearest directory above it that exists."""
+    return os.access(existing(path), os.W_OK | os.X_OK)
+
+
+def ownership(path: pathlib.Path) -> str:
+    """Who may write path: its owner, group and mode, and whether this user is in that group (#672).
+
+    A shared browsers directory is written through its group, so a user left out of the group is what to fix.
+    """
+    st = existing(path).stat()
+    try:
+        import grp
+        import pwd
+        owner, group = pwd.getpwuid(st.st_uid).pw_name, grp.getgrgid(st.st_gid).gr_name
+    except (ImportError, KeyError):
+        owner, group = f"uid {st.st_uid}", f"gid {st.st_gid}"
+    member = st.st_gid == os.getgid() or st.st_gid in os.getgroups()
+    return (f"{existing(path)} is owner {owner}, group {group}, mode {st.st_mode & 0o7777:o}, "
+            f"and {_user()} is {'' if member else 'not '}in group {group}")
 
 
 def check() -> tuple[list[str], list[tuple[str, pathlib.Path]]]:
@@ -64,7 +88,8 @@ def check() -> tuple[list[str], list[tuple[str, pathlib.Path]]]:
             continue
         absent = "; ".join(f"{name} at {loc}" for name, loc in missing if loc.parent == root)
         problems.append(f"Playwright's browsers directory {root} is not writable by this user "
-                        f"({_user()}), so `playwright install` cannot add what is missing there: {absent}")
+                        f"({_user()}), so `playwright install` cannot add what is missing there: {absent} "
+                        f"({ownership(root)})")
     return problems, missing
 
 
