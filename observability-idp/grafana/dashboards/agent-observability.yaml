@@ -1,24 +1,25 @@
-# ABOUTME: Grafana dashboard ConfigMap for the agent-observability narration surface (P4), and segment 6's
-# ABOUTME: Datadog-free view: cost, the gen_ai trace view, and one Tempo panel per guardrail beat (C6, C5, C7).
+# ABOUTME: Grafana dashboard ConfigMap for the agent-observability narration surface (P4), and segment 5's
+# ABOUTME: Datadog-free view: cost, the gen_ai trace view, and one Tempo panel per guardrail beat (C5, C6, C7).
 # Auto-provisioned by the Grafana sidecar via the grafana_dashboard label.
 # verify-at-build: confirm the Prometheus datasource uid on the live Grafana (kube-prometheus-stack
 #   default is "prometheus"); the Tempo datasource uid is pinned to "tempo" in prometheus.yaml.
 #
-# THE SEGMENT 6 PANELS (#500). The KubeCon run-of-show's segment 6 shows, for the beats just run on the admin
-# cluster, the C6 injection blocked at zero tokens, the C5 reply that came back redacted, and the C7 call
-# that never reached read_internal_config. Datadog Agent Observability is the primary surface; these panels
-# are the fallback when no Datadog org pool is live, and they read only Tempo, which the collector feeds with
-# or without a Datadog key (gitops/otel-collector/values.yaml). Open at
-# https://grafana-<owner>-admin.agenticburn.com/d/witb-agent-obs.
+# THE SEGMENT 5 PANELS (#500, #675). The KubeCon run-of-show's segment 5, the trace walk-through, shows, for the
+# beats just run on the private cluster, the C5 reply that came back redacted, the C6 injection blocked at zero
+# tokens, and the C7 call that never reached read_internal_config, in the order the challenges run. Datadog
+# Agent Observability is the primary surface; these panels are the fallback when no Datadog org pool is live,
+# and they read only Tempo, which the collector feeds with or without a Datadog key
+# (gitops/otel-collector/values.yaml). Open at
+# https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs.
 #
 # Each query keys on what guard-proxy and kagent actually put on the spans (gitops/ai-layer/guard-proxy/proxy.py):
+#   C5  guard-proxy sets the ROOT span's gen_ai.output.messages to the reply the user got, after the output
+#       guard, so a redacted reply carries llm-guard's [REDACTED] (or the hard-block text). The chat child
+#       span keeps the model's own reply, which is the before/after.
 #   C6  An input-guard block returns from guard-proxy's /chat handler BEFORE the chat child span and its
 #       agent.forward exist, so the trace is a POST /chat root with no agent.forward under it: no model call,
 #       zero input tokens. The budget cap and the rate limit stop a request the same way and land here too;
 #       neither fires during segment 5 on an admin cluster. The 400 for an empty prompt is excluded.
-#   C5  guard-proxy sets the ROOT span's gen_ai.output.messages to the reply the user got, after the output
-#       guard, so a redacted reply carries llm-guard's [REDACTED] (or the hard-block text). The chat child
-#       span keeps the model's own reply, which is the before/after.
 #   C7  The weather-tool prompt (challenges/03-bad-mcp-excessive-agency/agent-prompt.txt) with no
 #       execute_tool read_internal_config span under it. The panel beside it lists the calls that DID reach
 #       the rogue tool, so the run with guard-mcp off appears there and the run after guard-mcp-on does not.
@@ -41,13 +42,13 @@ data:
   agent-observability.json: |
     {
       "annotations": { "list": [] },
-      "description": "Cost, gen_ai traces, and the segment 6 guardrail beats (C6, C5, C7) from Tempo. The time range is the session: on an admin cluster only the presenters use BurritoBot.",
+      "description": "Cost, gen_ai traces, and the segment 5 guardrail beats (C5, C6, C7) from Tempo. The time range is the session: on an admin cluster only the presenters use BurritoBot.",
       "editable": true,
       "graphTooltip": 1,
       "id": null,
       "links": [],
       "schemaVersion": 39,
-      "tags": ["watch-it-burn", "agent", "cost", "segment-6"],
+      "tags": ["watch-it-burn", "agent", "cost", "segment-5"],
       "time": { "from": "now-30m", "to": "now" },
       "title": "Agent Observability (Watch It Burn)",
       "uid": "witb-agent-obs",
@@ -77,35 +78,35 @@ data:
         {
           "id": 5,
           "type": "row",
-          "title": "Segment 6: did each guardrail do its job? (C6, C5, C7, newest first)",
+          "title": "Segment 5: did each guardrail do its job? (C5, C6, C7, newest first)",
           "collapsed": false,
           "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 },
           "panels": []
-        },
-        {
-          "id": 6,
-          "type": "table",
-          "title": "C6: blocked before the model. /chat requests with no model call under them (0 input tokens)",
-          "description": "guard-proxy's input guard answered without forwarding, so there is no agent.forward span and no model call in the trace. The cost panel does not move for these.",
-          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
-          "datasource": { "type": "tempo", "uid": "tempo" },
-          "targets": [
-            { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
-              "queryType": "traceql", "tableType": "traces", "limit": 20,
-              "query": "{ name = \"agent.forward\" } !<< { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.http.response.status_code = 200 }" }
-          ]
         },
         {
           "id": 7,
           "type": "table",
           "title": "C5: the reply came back redacted. /chat replies the output guard rewrote",
           "description": "The root span's gen_ai.output.messages is what the user received. Open the trace: the chat span under it holds what the model said before the output guard.",
-          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 11 },
           "datasource": { "type": "tempo", "uid": "tempo" },
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
               "queryType": "traceql", "tableType": "traces", "limit": 20,
               "query": "{ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.gen_ai.output.messages =~ \".*(REDACTED|blocked by the output guardrail).*\" }" }
+          ]
+        },
+        {
+          "id": 6,
+          "type": "table",
+          "title": "C6: blocked before the model. /chat requests with no model call under them (0 input tokens)",
+          "description": "guard-proxy's input guard answered without forwarding, so there is no agent.forward span and no model call in the trace. The cost panel does not move for these.",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
+          "datasource": { "type": "tempo", "uid": "tempo" },
+          "targets": [
+            { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
+              "queryType": "traceql", "tableType": "traces", "limit": 20,
+              "query": "{ name = \"agent.forward\" } !<< { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.http.response.status_code = 200 }" }
           ]
         },
         {

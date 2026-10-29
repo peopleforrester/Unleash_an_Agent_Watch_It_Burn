@@ -1,17 +1,22 @@
-# ABOUTME: Holds segment 6's Grafana view (#500) to the spans it reads: one Tempo panel per guardrail beat (C6, C5,
-# ABOUTME: C7), the guard-proxy facts each query depends on, and the run-of-show naming the URL and the surface.
-"""Why this exists (#500).
+# ABOUTME: Holds the trace walk-through's Grafana view (#500) to the spans it reads, one Tempo panel per guardrail
+# ABOUTME: beat (C5, C6, C7), and to the run-of-show: the segment its row is titled for, the beats' order, the URL.
+"""Why this exists (#500, #675).
 
-Segment 6 shows that each guardrail did its job, for the beats just run: the C6 injection blocked at zero
-tokens, the C5 reply that came back redacted, the C7 call that never reached read_internal_config. Datadog
+The trace walk-through shows that each guardrail did its job, for the beats just run: the C5 reply that came back
+redacted, the C6 injection blocked at zero tokens, the C7 call that never reached read_internal_config. Datadog
 Agent Observability is the primary surface and needs a Datadog org pool (#454); without one the run-of-show
-falls back to a Grafana view on the admin cluster, which reads Tempo.
+falls back to a Grafana view on the private cluster, which reads Tempo.
 
 A TraceQL query that names a span or an attribute nobody emits returns an empty panel, and an empty panel on
 stage reads as "the guardrail did nothing". So each query is checked here against the code that produces what
 it looks for, not just for being present. The queries themselves were run against Tempo 3.0.3 (the deployed
 version) on synthetic traces of these shapes when this was written, each returning only its own trace; that
 needs a Tempo binary and stays out of the offline suite.
+
+The row kept the seven-segment plan's "Segment 6" title, in that plan's C6, C5, C7 order, after the run-of-show
+moved the walk-through to segment 5 and the challenges to C5, C6, C7 (#675). So the segment number and the beat
+order are read from the run-of-show's headings, not written here, and the file is named for the walk-through
+rather than for a segment number.
 """
 from __future__ import annotations
 
@@ -59,12 +64,12 @@ print("== one Tempo panel per beat ==")
 for t, p in beat.items():
     check(f"a {t} panel exists", p is not None)
 check("the C7 companion panel exists", other is not None)
-check("every segment 6 panel reads the Tempo datasource (uid tempo)",
+check("every beat panel reads the Tempo datasource (uid tempo)",
       all(p and p["datasource"].get("uid") == "tempo" and all(x["datasource"]["uid"] == "tempo" for x in p["targets"])
           for p in [*beat.values(), other]))
-check("every segment 6 query is TraceQL", all(p and all(x.get("queryType") == "traceql" for x in p["targets"])
+check("every beat query is TraceQL", all(p and all(x.get("queryType") == "traceql" for x in p["targets"])
                                              for p in [*beat.values(), other]))
-check("the default range covers a whole segment 5 (30 minutes or more)",
+check("the default range covers a whole walk-through (30 minutes or more)",
       re.fullmatch(r"now-(\d+)m", dash["time"]["from"]) is not None and int(dash["time"]["from"][4:-1]) >= 30)
 
 print("== C6: a /chat root with no agent.forward under it ==")
@@ -117,17 +122,42 @@ check("the rogue tool is named read_internal_config", "def read_internal_config(
 
 print("== the run-of-show names the surface and the URL ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
-seg6 = ros[ros.index("### Segment 5"):ros.index("### Segment 6")]  # the trace walk-through (#639)
+heads = list(re.finditer(r"^### Segment (\d+): (.*)$", ros, re.M))
+walk = next((h for h in heads if h.group(2).startswith("The trace walk-through")), None)  # #639
+check("the run-of-show has a trace walk-through segment", walk is not None)
+seg_n = walk.group(1)
+nxt = next((h for h in heads if h.start() > walk.start()), None)
+seg = ros[walk.start():nxt.start() if nxt else len(ros)]
 fleet = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 shared = re.search(r'SHARED_ADMIN_HOST="([a-z0-9.-]+)"', fleet).group(1)
 url = f"https://grafana-{shared}/d/{dash['uid']}"
-check(f"segment 6 names {url}, the presenters' shared cluster", url in seg6)
+check(f"segment {seg_n} names {url}, the presenters' shared cluster", url in seg)
 check("the console routes grafana-<cluster> to Grafana",
       "grafana-[a-z0-9-]+" in (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8"))
-check("segment 6 says Datadog when the pool is live and Grafana when not",
-      "**Which surface is shown.**" in seg6 and "**Datadog pool live:**" in seg6 and "**No pool live:**" in seg6)
-check("segment 6 walks each beat's panel", all(f"**{b}:**" in seg6 for b in ("C6", "C5", "C7")))
-check("segment 6 no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg6)
+check(f"segment {seg_n} says Datadog when the pool is live and Grafana when not",
+      "**Which surface is shown.**" in seg and "**Datadog pool live:**" in seg and "**No pool live:**" in seg)
+check(f"segment {seg_n} walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
+check(f"segment {seg_n} no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg)
+
+print("== the beats' row is titled for the walk-through's segment, in the challenges' run order ==")
+# The challenge segments' headings ("### Segment 2: C5, ...") give the order the room sees the beats.
+run_order = [m.group(1) for h in heads for m in [re.match(r"(C\d+),", h.group(2))] if m]
+check("the run-of-show runs C5, C6 and C7, each in its own segment", sorted(run_order) == ["C5", "C6", "C7"])
+rows = [p for p in dash["panels"] if p.get("type") == "row"]
+row = next((p for p in rows if "did each guardrail do its job?" in p["title"]), None)
+check("the dashboard has the guardrail beats' row", row is not None)
+title = row["title"]
+check(f"the row is titled for segment {seg_n}, the trace walk-through (was 'Segment 6')", title.startswith(f"Segment {seg_n}:"))
+check(f"the row lists the beats in the run-of-show's order ({', '.join(run_order)})",
+      f"({', '.join(run_order)}, newest first)" in title)
+laid_out = [p["title"].split(":")[0] for p in sorted((beat[t] for t in run_order),
+                                                      key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]))]
+check("the row's beat panels are laid out in that order", laid_out == run_order)
+walked = sorted(run_order, key=lambda b: seg.index(f"**{b}:**"))
+check(f"segment {seg_n} walks the panels in that order", walked == run_order)
+check(f"segment {seg_n} names the row by its title's segment", f'the "Segment {seg_n}" row' in seg)
+rdy = (REPO / "docs/KUBECON-ABSTRACT-READINESS.md").read_text(encoding="utf-8")
+check("the readiness file no longer notes a stale row title", 'still titled "Segment' not in rdy)
 
 print()
 if failures:
@@ -135,4 +165,4 @@ if failures:
     for f in failures:
         print(f"  - {f}")
     sys.exit(1)
-print("All segment 6 view checks passed.")
+print("All trace walk-through view checks passed.")

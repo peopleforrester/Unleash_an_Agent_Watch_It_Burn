@@ -127,7 +127,7 @@ check("guard-proxy records gen_ai.client.cost", "gen_ai.client.cost" in proxy)
 res = (REPO / "gitops/ai-layer/resources.yaml").read_text()
 check("guard-proxy's service is burritobot", "service.name=burritobot," in res)
 check("tool spans are execute_tool <tool> (the toplist's wildcard)",
-      "execute_tool read_internal_config" in (REPO / "verify/test_segment6_view.py").read_text())
+      "execute_tool read_internal_config" in (REPO / "verify/test_trace_walkthrough_view.py").read_text())
 for t in sorted({t for q in qs for t in rv.filter_tags(q) if t.startswith("service:")}):
     check(f"service filter {t} is a service in the bundle", f"service.name={t.split(':', 1)[1]}," in res)
 

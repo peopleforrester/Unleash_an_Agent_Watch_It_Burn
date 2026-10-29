@@ -433,7 +433,7 @@ behind.
   `admin`; the private cluster terminal prints the password in its catalogue. Say
   "this is Grafana reading the traces from Tempo, on the cluster itself".
 
-In the Grafana view, the "Segment 6" row has one panel per beat, newest first,
+In the Grafana view, the "Segment 5" row has one panel per beat, newest first,
 over the last 30 minutes. On the private cluster only the presenters use
 BurritoBot, so that window is this session:
 

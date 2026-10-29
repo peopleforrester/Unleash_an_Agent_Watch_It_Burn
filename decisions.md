@@ -4123,3 +4123,25 @@ staging.
   tier names on both. On the files before this change it fails four of those checks.
 - **Not yet run on a cluster:** nothing new is owed. The presenters read `/kubecon` against the run-of-show in
   run-through 1, as #639's entry already names.
+## 2026-10-29 · #675 · The Grafana beats row is titled for segment 5 and runs C5, C6, C7
+
+The row in `observability-idp/grafana/dashboards/agent-observability.yaml` was still "Segment 6: did each guardrail
+do its job? (C6, C5, C7, newest first)", the seven-segment plan's name, after the run-of-show moved the trace
+walk-through to segment 5 and the challenges to C5, C6, C7 (95f86f2, #639). #667 left it as a follow-up. There was
+no earlier draft of this issue to check against staging.
+
+- **Retitled** "Segment 5: did each guardrail do its job? (C5, C6, C7, newest first)". The dashboard's description
+  and its `segment-6` tag follow, and the header comment names segment 5, the private cluster's Grafana URL and the
+  beats in run order. "Newest first" stays: it is each table's order, not the beats'.
+- **The panels follow the title.** C5 now sits left and C6 right on the first line of the row, so the panels read in
+  the order the title and the run-of-show's walk give. Panel ids are unchanged, so nothing that links a panel moves.
+- **The run-of-show's quote** in segment 5 says the "Segment 5" row. Row 7 of `docs/KUBECON-ABSTRACT-READINESS.md`
+  drops its stale-title note.
+- **The test is renamed** `verify/test_segment6_view.py` to `verify/test_trace_walkthrough_view.py`, and
+  `verify/test_room_view.py`'s reference to it follows. It no longer hard-codes a segment: it finds the
+  `### Segment N: The trace walk-through` heading, reads the challenge order from the `### Segment N: C<k>,`
+  headings, and holds the row title to that N and that order, the panel layout and the run-of-show's walk to the
+  same order, the run-of-show's quote to that N, and the readiness file to having no stale-title note. On the files
+  before this change it fails those five checks.
+- **Not yet run on a cluster.** The Grafana sidecar picks the ConfigMap up on the next sync of `grafana-dashboards`
+  on burritobot-private. The run-of-show's Night Before step, each Grafana panel showing a row, is the live check.
