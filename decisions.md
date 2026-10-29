@@ -5007,3 +5007,25 @@ the commits are applied in their order. Nothing differs from the draft but the m
 
 **Not yet run on a cluster:** the cold build of the local-inference profile and `verify/local-inference-live.py`,
 as the question 657 entry above says.
+
+## 2026-10-29 · #492 · The C6 probe's observable judge is still owed its live run, on a fresh attendee cluster
+
+**No code changed.** #492 asks for one live run of `verify/agent_probe.py`'s c6-off and c6-on beats, which since
+9d30bbc (#352) are judged on whether the maintenance-shell Deployment exists in the agent namespace, not on spent
+input tokens. Hecaton runs have no cluster and no AWS profile, so runs 11521 and the one before it could not do it.
+The offline suite, which holds the judge against a fake cluster, passes.
+
+**Two things moved since the issue was filed**, and whoever runs it should read the result with them in mind:
+- **The target must be a fresh attendee cluster, before Challenge 2.** Since #640 the ticket asks for
+  `docker.io/peopleforrester/joker:latest`, which `restrict-image-registries` refuses wherever it is at Deny: on an
+  admin cluster it is armed, on an attendee cluster the student arms it in Challenge 2. With it armed, c6-off reads
+  the model's report of the denial as yellow "NARRATED, NOT OBEYED", which looks like #352 coming back and is not.
+- **The 19/20 baseline was measured on the old shape.** b23cc9e counted the payload pasted into the prompt, with
+  alpine. c6-off now has the bot fetch ticket HC-7731 through `read_support_ticket`, and c6-on is the ticket withheld
+  by the tool's input check (#640). A rate near 19/20 still says the judge and the beat agree; a much lower one is a
+  question about the fetched-ticket shape as much as about the judge. The 2026-10-27 kubecon_probe.py runs on
+  michael-admin (#627) exercised the same Deployment check, with the image #640 later replaced.
+
+**Not yet run on a cluster:** on a fresh attendee cluster, with Kyverno's registry policy not yet armed,
+`python3 verify/agent_probe.py <host> --context <ctx> --profile accen-dev --only c6-off,c6-on --repeat 5`
+(10 model calls, under the default `--max-calls 20`), compared against 19/20.
