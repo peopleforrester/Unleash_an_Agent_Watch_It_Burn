@@ -1,7 +1,8 @@
 # ABOUTME: E2E half of the #190 audit trail: the real workshop-mcp on the pinned mcp library writes attributed
 # ABOUTME: lines, and on a cluster the identity survives kagent, agentgateway and the Datadog Agent into Datadog Logs.
 # SUITE: e2e
-"""Needs the `mcp` library at the version images/workshop-mcp pins, kubectl, CONTEXT naming a cluster that
+"""Needs uv, which runs this file on the `mcp` library at the version images/workshop-mcp pins and on the
+image's Python 3.12 without a global install (#441), kubectl, CONTEXT naming a cluster that
 runs the ai-layer and the Datadog Agent, and the public internet to reach the Datadog API. Every missing
 prerequisite is a failure with the reason, never a skip.
 
@@ -75,6 +76,16 @@ def finish() -> None:
 print("== library prerequisites ==")
 pin = re.search(r"'mcp==([0-9.]+)'", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"))
 want = pin.group(1) if pin else "?"
+# The library comes in through `uv run` at the image's pin on the image's Python, never from whatever the host
+# has installed (#441). The marker keeps the re-run from re-running itself.
+if os.environ.get("WIB_TOOL_AUDIT_UV") != want:
+    check("uv is on PATH; it runs the pinned mcp library without a global install", shutil.which("uv") is not None)
+    check("images/workshop-mcp/Dockerfile pins mcp==<version>", pin is not None)
+    if failures:
+        finish()
+    sys.stdout.flush()
+    os.execvpe("uv", ["uv", "run", "--no-project", "--python", "3.12", "--with", f"mcp=={want}",
+                      "python", "-I", __file__], {**os.environ, "WIB_TOOL_AUDIT_UV": want})
 try:
     import mcp  # noqa: F401
     from importlib.metadata import version
@@ -82,7 +93,7 @@ try:
     have = version("mcp")
 except ImportError:
     have = None
-check(f"the mcp library is importable (pip install 'mcp=={want}')", have is not None)
+check(f"the mcp library is importable (uv run --with 'mcp=={want}')", have is not None)
 check(f"it is the version the workshop-mcp image pins ({want}; found {have})", have == want)
 if failures:
     finish()

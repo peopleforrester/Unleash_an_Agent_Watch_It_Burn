@@ -106,7 +106,7 @@ bare = run_e2e({})
 check(f"with no toolchain it exits 1 (exit {bare.returncode})", bare.returncode == 1)
 check("it says it cannot run, as a failure and not a skip", CANNOT_RUN in bare.stderr)
 for item in ("node is not on PATH", "corepack is not on PATH", "CONTEXT is not set", "curl is not on PATH",
-             "unzip is not on PATH", "sha256sum is not on PATH",
+             "unzip is not on PATH", "sha256sum is not on PATH", "uv is not on PATH",
              "the pinned kyverno, conftest, terraform, kubectl, helm and otelcol-contrib were not fetched: "
              "fetch-e2e-tools.sh needs curl, tar, unzip and sha256sum"):
     check(f"it lists what is missing: {item}", f"  - {item}" in bare.stderr)

@@ -217,7 +217,15 @@ check("it builds its probe pod with verify/probe_pod.py, which test_probe_pod_ad
 check("it runs the shim image the workshop-mcp Deployment names, read off the cluster",
       re.search(r'get", "deployment", "workshop-mcp".*\n.*containers\[\?\(@\.name=="shim"\)\]\.image', LIVE) is not None)
 check("it no longer uses kubectl run or curlimages/curl, which Deny refuses on that profile",
-      '"run",' not in LIVE and "curlimages" not in LIVE)
+      re.search(r'kubectl\(\s*"run"', LIVE) is None and "curlimages" not in LIVE)
+
+print("== the live check runs on the image's mcp pin through uv, never a global install (#441) ==")
+py = re.search(r"^FROM python:(\d+\.\d+)", (REPO / "images/workshop-mcp/Dockerfile").read_text(encoding="utf-8"), re.M)
+check("it re-runs itself under uv run --with mcp==<the Dockerfile pin>",
+      'os.execvpe("uv", ["uv", "run", "--no-project"' in LIVE and '"--with", f"mcp=={want}"' in LIVE)
+check(f"on the workshop-mcp image's Python ({py.group(1) if py else '?'})",
+      bool(py) and f'"--python", "{py.group(1)}"' in LIVE)
+check("the re-run is marked so it does not re-run itself", 'WIB_TOOL_AUDIT_UV' in LIVE)
 
 print()
 if failures:

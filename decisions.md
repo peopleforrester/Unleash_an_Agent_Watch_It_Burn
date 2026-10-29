@@ -4509,3 +4509,64 @@ anyone who can run a pod as agent-sa has the credential, so its scope is the con
   ALLOWED, and IMDS BLOCKED.
 
 `bash verify/run-e2e.sh` also runs `verify/test_iam_policy_aws.py` for the Access Analyzer half.
+
+## 2026-10-29 · #441 · run-e2e.sh asks for uv, the live audit-trail check runs on the image's mcp pin through uv, and the C6 endpoint test no longer crashes at exit
+
+**Context.** #441 asks for `CONTEXT=<ctx> bash verify/run-e2e.sh` to be run green on a freshly provisioned attendee
+cluster, and for whatever fails to be fixed. Hecaton runs have no cluster and no AWS profile, so the cluster,
+Datadog and AWS halves are still unrun (the bring-up waits on Michael's go for the spend). This run fixes what
+can be found and fixed without a cluster, and names the command still owed.
+
+**The earlier draft.** Run 7339's draft (`origin/agent/441-7339`, commit `bf424c4`) was checked with
+`verify/draft-drift.sh`, which named all four files it touches as changed on staging since. Its design was made
+again on today's layout instead of cherry-picked:
+- Its Playwright fix (`generateProjects({ channel: 'chromium' })`) is already on staging by another road
+  (`bcf49cd`, the corepack-yarn change), so nothing is redone there.
+- Its uv fix for `test_tool_audit_live.py` was not on staging and is made again below, the same way. Since the draft,
+  #555 moved the file's live half to a probe pod, and `test_tool_audit.py` gained a check that the file never says
+  `"run",` (meant for `kubectl run`). The `uv run` argv says it too, so that check now looks for `kubectl("run"`
+  only. Run against the file as it was before #555, it still finds the old `kubectl run`.
+- The draft added `uv` to run-e2e.sh's tool loop. Staging's loop has since changed (corepack, jq, the fetched tools),
+  and `uv` is added to the new loop. Five `# SUITE: e2e` tests already run under `uv run` (audience page, mobile
+  titles, topic and injection classifiers, weather feed) without run-e2e.sh asking for it, so a host without uv
+  failed them one by one instead of in the prerequisite check.
+
+**What changed.**
+- `verify/test_tool_audit_live.py` re-runs itself under `uv run --no-project --python 3.12 --with mcp==<pin>`, with
+  the pin read from `images/workshop-mcp/Dockerfile` and the Python of its `python:3.12-slim` base. Before this,
+  it needed a global `pip install mcp==1.29.1` that nothing checked for, and failed on a fresh machine. A
+  `WIB_TOOL_AUDIT_UV` marker stops the re-run from re-running itself.
+- `verify/run-e2e.sh` lists `uv` among its prerequisites, as `run-e2e-tools.sh` already does.
+- `verify/test_e2e_toolchain.py` holds that run-e2e.sh says `uv is not on PATH` when it is missing.
+  `verify/test_tool_audit.py` holds the uv re-run, its pin and its Python against the Dockerfile.
+- `verify/test_c6_villain_endpoint.py` crashed in the offline suite about one run in three, with exit 139 or 134,
+  after every check had passed. The suite's first run here failed on it, and the base commit crashes the same way.
+  The cause is deploy_app's `_report`, which posts to the support desk on a daemon thread. In the test it looks
+  up `http://fake-ticket:8080`, and the interpreter finalized while that thread was still inside getaddrinfo.
+  The test now stubs `_report` next to `_req`. `verify/test_deploy_app_limits.py` had the same unstubbed thread
+  (no crash seen in 12 runs) and stubs it too. What the desk is told stays covered by `verify/test_room_jokers.py`,
+  which runs a desk of its own on 127.0.0.1.
+
+**Checked here without a cluster.**
+- `test_tool_audit_live.py` with CONTEXT unset: uv fetched mcp 1.29.1 on Python 3.12, and the library half passed
+  all 14 checks. It then failed loudly with `CONTEXT names the cluster to check (it is never guessed)`.
+- `test_c6_villain_endpoint.py`: 25 runs in a row exited 0, against 5 crashes in 15 before the stub.
+- `bash verify/run-tests.sh` passes (182 tests).
+- `bash verify/run-e2e-tools.sh` passes the offline suite and 25 of its 26 tier tests. The one failure is
+  `test_promo_villains_public.py`: the ten ghcr.io promo/ villain packages answer an anonymous pull with 401. That is
+  a package-visibility setting on ghcr.io, already tracked as #678, and it fails the same way without this change.
+- `bash verify/run-e2e.sh` with no CONTEXT and no IAM_PIPELINE_* fetched the six pinned tools and exited 1. It named
+  only the AWS profile and region and the CONTEXT, so with node 24, corepack, jq and uv present, the prerequisite
+  check now has only the cluster and AWS items left.
+
+**Not yet run on a cluster.** A session with AWS access owes the whole of #441:
+- bring up one attendee cluster with `bash infra/terraform/fleet/fleet.sh up watch-it-burn-attendee-<NNN>`;
+- fetch an isolated kubeconfig with `AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig
+  /tmp/watch-it-burn-attendee-<NNN>.kubeconfig --name watch-it-burn-attendee-<NNN> --region us-west-2`;
+- run `KUBECONFIG=/tmp/watch-it-burn-attendee-<NNN>.kubeconfig CONTEXT=<that file's context>
+  IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 bash verify/run-e2e.sh`;
+- tear the cluster down with `bash infra/terraform/fleet/fleet.sh down watch-it-burn-attendee-<NNN>`.
+
+The run-e2e.sh run covers run-all.sh, the `*_live.py` checks (the cluster half of `test_tool_audit_live.py`
+among them), `test_datadog_service_map.py`, `test_iam_policy_aws.py` and `test_fleet_monitors_live.py`. These
+have never run green.

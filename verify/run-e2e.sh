@@ -26,8 +26,9 @@ NAMESPACE="${NAMESPACE:-agent}"
 
 missing=()
 # jq: test_kyverno_cel_live.py runs the lab's own policyreport jq filter. curl, tar, unzip and sha256sum fetch
-# and verify the pinned tools.
-for tool in python3 node corepack jq curl tar unzip sha256sum; do
+# and verify the pinned tools. uv brings the Python pins the checks run on (playwright, llm-guard, segno, mcp),
+# as in run-e2e-tools.sh, so nothing is installed globally (#441).
+for tool in python3 node corepack jq curl tar unzip sha256sum uv; do
     command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool} is not on PATH")
 done
 # Backstage runs on Node 24 (packages/backend/Dockerfile is node:24). Yarn comes from corepack, which

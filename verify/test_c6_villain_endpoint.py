@@ -79,6 +79,10 @@ def server(public_host: str):
         if old is not None:
             os.environ["WIB_PUBLIC_HOST"] = old
     m._ns = lambda: "agent"
+    # deploy_app's report to the support desk runs on a daemon thread that looks up fake-ticket. Left running, it was
+    # still in getaddrinfo when the interpreter finalized, and about one run in three ended in a segfault or abort
+    # after every check had passed (#441). What the desk is told is test_room_jokers.py's, against a desk of its own.
+    m._report = lambda name, ok, detail: None
     return m
 
 

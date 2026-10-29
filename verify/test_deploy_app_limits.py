@@ -59,6 +59,9 @@ def fake_req(method: str, path: str, body=None, content_type: str = "application
 
 m._req = fake_req
 m._ns = lambda: "agent"
+# No report to the support desk: its daemon thread looks up fake-ticket and can still be inside getaddrinfo when the
+# interpreter finalizes, which crashed test_c6_villain_endpoint.py (#441). test_room_jokers.py covers the report.
+m._report = lambda name, ok, detail: None
 
 
 def deploy(obj: dict, as_yaml: bool = False) -> dict:
