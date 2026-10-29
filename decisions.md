@@ -3363,3 +3363,31 @@ e-mail and a phone number to `https://attackme.agenticburn.com` and read its tra
 (Agent Observability and APM) for `[EMAIL]` and `[PHONE]`, and check the collector is healthy after the sync
 (`kubectl --context <community-context> -n monitoring logs ds/otel-collector-opentelemetry-collector-agent`). Also read one agentgateway `tools/call` span's attributes there: if agentgateway records the MCP arguments under a
 key of its own, that key is not in the scrub's list yet.
+
+## 2026-10-29 · #649 · The C7 handout is the Toronto keynote's six-gate checklist, copied verbatim and linked from the close
+
+The 2026-10-28 planning call (`facilitation/kubecon-na-2026-planning-2026-10-28.md`, "C7 fix changed to a
+tool-registry block") has Michael handing out "an MCP vetting checklist from his Toronto talk". The Toronto talk is the
+MCP Dev Summit Toronto keynote of 2026-10-06, "Governing MCP for a Workforce the Size of a City" (talks-knowledge
+`talks/register.md`, `mcp-for-a-city`). Its published, CC BY 4.0 collateral, `peopleforrester/mcp-for-a-city`, carries
+the checklist as `04-approval-gates-checklist/approval-gates.md`: six approval gates before an MCP server is allowed.
+
+- **Which checklist.** That file, not the `checklist.md` of the standby talk "How Do You Say Yes to an MCP Server?"
+  (`talks/mcp-server-vetting-checklist`): the standby talk was never given in Toronto (register, "Standby offers"), and
+  its repo is private and could not be read from this run (`sources` refused: sudo asked for a password).
+- **Where.** `docs/mcp-server-vetting-checklist.md`, the source file copied byte for byte at `a3e585f` below a marker,
+  with a header naming the source commit, the licence and author, and the source's sha256. The upstream file says it
+  is generated from the keynote site's data and is edited there, so this copy is never edited here; it is refreshed.
+- **Linked from the close.** The run-of-show's close (segment 6) and the `/kubecon` page's close carry the public link
+  to the file on `main`; C7's "Hand out" line names it. The close slide itself is in `peopleforrester/rounds-agenticburn`
+  (cut from the run-of-show by rounds-agenticburn#38), which no run here can write, so putting the link on that slide
+  is a follow-up there.
+
+**Tests.** `verify/test_mcp_vetting_handout.py` (offline): the copy below the marker hashes to the stamped sha256, the
+header names the source commit, licence and date, the copy carries gates 1 to 6 in order, and the run-of-show's close,
+C7's hand-out line and the `/kubecon` page's close name or link it. No network check against upstream: a refresh is a
+deliberate act, and a test that went red whenever the keynote site changed would hold the gate red for an edit
+nobody here made.
+
+**Not yet on the slide.** The link reaches the room only once rounds-agenticburn's close slide carries it, and the
+public URL resolves only once this change reaches `main`.

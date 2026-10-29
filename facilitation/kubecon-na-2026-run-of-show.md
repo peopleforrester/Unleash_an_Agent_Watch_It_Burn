@@ -393,7 +393,9 @@ public bot it does.
   guard from segment 2 is still on, so a leaked token would come back redacted too;
   do not say the MCP server's reply is scanned before the model reads it (#480,
   not built).
-- **Hand out:** the MCP server vetting checklist (#649).
+- **Hand out:** the MCP server vetting checklist (#649),
+  `docs/mcp-server-vetting-checklist.md`: the six approval gates from Michael's
+  Toronto keynote. Name it here; the link goes on the close slide (segment 6).
 - **Datadog C7 tab:** the `read_internal_config` call before the rule, and its
   absence after.
 - **Delivers:** point 2 (the under-protected MCP server), point 4, and point 6
@@ -455,6 +457,8 @@ BurritoBot, so that window is this session:
   and the last two work whether or not the model cooperates. The small, strange
   remainder is the part agents change, and that is where the AI guardrails sit.
   Point at the repo as the Monday-morning takeaway, and at the Feedback button.
+  The close slide links the MCP server vetting checklist handout (#649):
+  `https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/main/docs/mcp-server-vetting-checklist.md`.
 - **Delivers:** point 3 (a full IDP, by voice), point 5 (the layers named), and
   point 8 (ends selling burritos only).
 
