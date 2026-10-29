@@ -155,7 +155,7 @@ components:
       ExternalSecret in this repo reads it today (32a30e2 removed the central ones). lab-platform's build makes
       the platform/external-secrets role that reads the cluster's own secrets under watch-it-burn/
       (lab-platform decisions.md 2026-10-28, #205), for the per-cluster Datadog secret its org pool writes
-      (question 840 there). Whether OpenBao also sits behind ESO is the openbao entry's open question.
+      (question 840 there). OpenBao is held beside it until a beat needs one (question 912, openbao entry).
 
   - name: kube-prometheus-stack
     sister: [kube-prometheus-stack]
@@ -211,11 +211,11 @@ components:
     tier: 1
     profile: fleet
     recommendation: >
-      Question 656 (2026-10-24) decided to adopt it now with the bootstrap Secrets behind it, on the premise
-      that ESO had nothing to read. That premise changed on 2026-10-28, when lab-platform built ESO a role to
-      read each cluster's Datadog secret from Secrets Manager (#205 there). The 2026-10-24 build (branch
-      agent/394-7203) replaced that store and was never merged, so how OpenBao fits beside lab-platform's path
-      is asked again on #394 before it is built (decisions.md 2026-10-29).
+      Held until a beat needs it (question 912 on #394, 2026-10-29). Question 656 had adopted it on the premise
+      that ESO had nothing to read; since 2026-10-28 lab-platform's build has ESO read each cluster's Datadog
+      secret from Secrets Manager (#205 there), so the one bootstrap secret already has a store, and OpenBao
+      beside it would be a pod nothing reads on every cluster. Adopt it with the first challenge that teaches an
+      in-cluster secret store, such as the ESO exfiltration game docs/BUILD-PLAN.md sketches ("possibly Vault").
     cost:
       measured: false
       known: >
