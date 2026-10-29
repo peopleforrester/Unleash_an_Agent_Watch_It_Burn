@@ -491,11 +491,12 @@ real-looking home address to chat.
   name in it: "Hi, I'm <name>. I filed support ticket HC-666...". They paste it into
   BurritoBot, which reads the ticket with `read_support_ticket` and deploys
   `joker-<their-name>`. Project the wall,
-  `https://support-attackme.burritobot.co/wall`, where every Joker shows as it
+  `https://support.burritobot.co/wall`, where every Joker shows as it
   lands; each attendee also sees their own at `/me`. Room Jokers run tiny and scale
   to zero after five minutes (#685). They may also file their own ticket and try
-  their own injection. Until apex-agenticburn#46 is live on main, the desk is
-  `support-attackme.burritobot.co`, not the bare `support.burritobot.co`.
+  their own injection. The bare `support.burritobot.co` routes to attackme's desk
+  (apex-agenticburn#46, live 2026-10-29); `support-attackme.burritobot.co` is the
+  same desk if the bare name ever fails.
 - **Attack:** the presenters send the `/kubecon` prompt, which uses the fixed name
   Agatha the Banshee so the probe can check it, and `joker-agatha-the-banshee`
   appears on the wall.
