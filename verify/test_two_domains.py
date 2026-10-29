@@ -73,6 +73,29 @@ for page in ("kubecon.html", "brief.html"):
     check(f"{page} shows no roster host on agenticburn.com", not left, str(left))
     check(f"{page} shows attackme.burritobot.co", "attackme.burritobot.co" in v)
 
+print("== the instructor console at start.burritobot.co can read each cluster ==")
+# The console polls /cost and /prompts cross-origin; the guard-proxy answers CORS only for CONSOLE_ORIGIN, which
+# defaults to start.agenticburn.com. Walked 2026-10-29: start.burritobot.co showed both clusters down and $0.
+docs = list(yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()))
+gp = next(d for d in docs if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
+env = {e["name"]: e.get("value") for c in gp["spec"]["template"]["spec"]["containers"] for e in c.get("env", [])}
+check("guard-proxy sets CONSOLE_ORIGIN to https://start.burritobot.co",
+      env.get("CONSOLE_ORIGIN") == "https://start.burritobot.co", str(env.get("CONSOLE_ORIGIN")))
+import importlib.util, os  # noqa: E401,E402
+os.environ["CONSOLE_ORIGIN"] = str(env.get("CONSOLE_ORIGIN"))
+spec = importlib.util.spec_from_file_location("guard_proxy_twin", REPO / "gitops/ai-layer/guard-proxy/proxy.py")
+proxy = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(proxy)
+
+
+class _Req:
+    def __init__(self, origin: str) -> None:
+        self.headers = {"Origin": origin, "Host": "attackme.burritobot.co"}
+
+
+check("the proxy allows the console's origin", proxy._origin_allowed(_Req("https://start.burritobot.co")))
+check("the proxy still refuses a foreign origin", not proxy._origin_allowed(_Req("https://evil.example")))
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

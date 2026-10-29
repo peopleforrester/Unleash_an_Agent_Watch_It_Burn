@@ -734,6 +734,10 @@ spec:
             # The deterministic mask (BLOCK_LIST + PROFANITY_LIST, truncated to 280 chars) is the floor,
             # not a moderation service. Turn this back off for any run where the room has not been told.
             - { name: STREAM_PROMPTS, value: "on" }
+            # The instructor console reads /cost and /prompts cross-origin, and the proxy answers CORS for one
+            # origin. The room is shown start.burritobot.co (#651), so that is the one; start.agenticburn.com
+            # still loads but shows every cluster down.
+            - { name: CONSOLE_ORIGIN, value: "https://start.burritobot.co" }
             # Unified Service Tagging for Datadog correlation (same scheme as the kagent agent +
             # agentgateway). The Datadog Agent reads this to tag this pod's container logs now; once
             # proxy.py carries manual OTel SDK spans (PRD #22 / issue #19) the same tags map service.version
