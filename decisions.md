@@ -3489,3 +3489,33 @@ ships no dot-named file. `verify/test_service_hosts_live.py` (E2E, live) now ask
 `CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py`. Its new section requests
 `https://<public host>/..data/brief.html` through the real apex router. That proves the router passes the path to the
 console, and that the rolled console answers 404.
+## 2026-10-29 · #646 · The prompt wall's redaction is written in guard-proxy; this repo repins once it is pushed there
+
+The 2026-10-28 planning call (`facilitation/kubecon-na-2026-planning-2026-10-28.md`, Public console) agreed
+that a prompt with a code-of-conduct term or personal data is still sent to the bot but shown redacted on the
+prompt wall. The wall, `prompts.agenticburn.com`, draws each cluster's `GET /prompts`. guard-proxy builds that
+feed, and its `moderate()` is the only place a prompt is masked, so the change is guard-proxy's
+(`gitops/ai-layer/guard-proxy`, the guard-proxy-agenticburn submodule). The wall repo was not readable from
+this run (private, and `sources` refused), so whether it also filters is unknown. Either way, the feed has to
+be clean at the source, because `/prompts` is publicly readable on every cluster.
+
+- **What the guard-proxy change does.** Before the 280-character cut, `moderate()` masks email addresses,
+  any run of seven or more digits with separators (phone, card, Social Security and account numbers, and dates
+  written with dashes), and street addresses. It also matches `PROFANITY_LIST` terms as whole words, plural
+  included. As substrings those terms showed "spicy" as "[redacted]y" on a burrito bot's wall. Only the feed
+  copy is masked. The conformance tests in guard-proxy's `conformance/test_prompt_feed.py` pin that `/chat` and
+  the A2A path forward the prompt unchanged. guard-proxy's own `decisions.md` holds the detail.
+- **Why it is not pinned here.** By #521, a submodule pin must be a commit that a branch of its remote holds,
+  and no run can push guard-proxy-agenticburn. The change goes there as a follow-up issue carrying the patch,
+  one commit on `000f57e`, the current pin. guard-proxy's suite (ruff, 285 conformance tests) passes with it,
+  and its mutation check catches all 27 mutants, three of them new for the feed.
+  Once it is pushed, a run on #646 moves the pin and extends `verify/test_stream.py` to hold the pinned
+  `moderate()` to the redaction (an email, a card number and an address masked, "spicy" left alone). It also
+  updates the `STREAM_PROMPTS` comment in `gitops/ai-layer/resources.yaml`, which describes the mask.
+- **Left open, as the planning note does.** Whitney's question still stands: raw personal data still reaches
+  the Datadog traces. This change touches only the wall.
+
+**Not yet run on a cluster:** after the repin, send a prompt carrying a fake email and phone number to
+`attackme` (without the probe marker, so it is recorded). Check that the bot answers it and that `GET /prompts`
+and the wall show it redacted. `verify/kubecon_probe.py` judges the feed but sends only probe-marked prompts,
+which are never recorded, so the check is by hand.
