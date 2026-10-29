@@ -3916,3 +3916,38 @@ maintenance-shell Service. `verify/test_fleet_routes_roster.sh` reads both host 
 4. `CONTEXT=<community-context> python3 verify/test_service_hosts_live.py`, to check the existing service hosts
    still route.
 Whether Nova passes the address on in its reply has not been measured.
+## 2026-10-29 · #668 · The move onto lab-platform's `web` waits on lab-platform's answer to #650, and the package is still private
+
+#668 moves the console Deployment and the five demo apps from nginx to `ghcr.io/peopleforrester/lab-platform/web:v1`
+(digest `sha256:74885296c746…a24a29`). Its own text says the console's `web.yaml` is written once lab-platform answers
+#650's nine points. Run 10510 could not read whether it has, so nothing moved. No earlier draft of #668 exists.
+
+- **What could not be read.** lab-platform is private. `sources repo-whereis lab-platform`,
+  `gh issue view 278 -R peopleforrester/lab-platform --comments`, `gh api repos/peopleforrester/lab-platform/issues/278`
+  and `gog` all refused with "sudo: a password is required", and an anonymous `github.com/peopleforrester/lab-platform`
+  is a 404. So neither `web.yaml`'s schema nor lab-platform's answer to the nine points was seen. The issue names the
+  digest #650 read, built from lab-platform 3dd635a: the image the nine points were raised against.
+- **The package.** An anonymous token request for `repository:peopleforrester/lab-platform/web:pull` was answered
+  401 "authentication required" on 2026-10-29. A node pulls with no credential, so until Michael turns on the
+  package's public visibility a pod on this image sits in ImagePullBackOff.
+- **Why no part of it moved.** `web.yaml` is the console's whole routing, so writing it against a schema this run has
+  not seen would be a guess, and the ~15 offline tests that parse `console.conf` can only move onto a file whose shape
+  is known. Moving the demo apps alone would put all five party hosts on a private image, which every cluster would
+  fail to pull.
+- **A tenth point, new since #650.** #664 added a third server, `maintenance-shell-<cluster>`, after #650 read the
+  file. It is a host route that takes GET and HEAD only (`limit_except GET`), with a 10s timeout and its own fallback
+  page (`@wib_c6_nothing_yet`, "Nothing is running at this address yet"), not the service hosts' `@wib_not_here`.
+  So `web.yaml` has to give each host route its own method limit, timeout and fallback page. #650's points 4, 6 and
+  8 cover the timeout and the fallback's scope, not a second page or a method limit.
+- **How the image reference reaches each source** (the issue's fourth bullet), decided from #622 and #652. The console
+  takes #652's route: its container names the kustomize image `web`, and `gitops/bootstrap/apps/ai-layer.yaml` adds
+  `web={{ .Values.imageRegistry }}/web:v1@sha256:74885296c7464fbc1cdc25f5b8d5135152d3a3d97deaad2478d853d100a24a29` to
+  `kustomize.images` beside llm-guard. Each `gitops/manifests/demo-app-<name>/` is a plain directory source with no
+  `kustomization.yaml`, so Argo CD has nothing to run `kustomize edit set image` in. Each gets a `kustomization.yaml`
+  listing its three files, and its app file carries the same `kustomize.images` entry. #622's rule holds: only an
+  `apps/` file names the registry, and `verify/test_image_registry.py` needs no new exemption.
+
+**Not yet run on a cluster.** Nothing changed. The live checks the issue names,
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` and
+`CONTEXT=<attendee-context> python3 verify/test_console_no_toggle_live.py`, are owed once the move is made on a public
+package.
