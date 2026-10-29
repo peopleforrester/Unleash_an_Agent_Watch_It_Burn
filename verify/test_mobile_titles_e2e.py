@@ -16,8 +16,10 @@ test), and these must hold:
 
 At 1280 the header is still a single row, so the desktop layout is unchanged.
 
-Needs uv and network on the first run: playwright 1.64.1 comes in through `uv run`, and `playwright install
-chromium` fetches the browser if it is not cached. A missing tool or a failed browser launch is a failure.
+Needs uv and network on the first run: the playwright pinned in verify/playwright_browsers.py comes in through
+`uv run`, and `playwright install chromium` fetches a browser only when one is missing, because it locks the browsers
+directory even when nothing is (#658). A missing tool, a browser that cannot be installed or a failed browser launch
+is a failure.
 """
 from __future__ import annotations
 
@@ -27,9 +29,11 @@ import shutil
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from playwright_browsers import UV, ensure  # noqa: E402
+
 REPO = pathlib.Path(__file__).resolve().parent.parent
 PAGE = REPO / "gitops/ai-layer/web/burritbot.html"
-PLAYWRIGHT = "playwright==1.64.1"
 WIDTHS = [320, 359, 360, 390, 412, 430, 680, 1280]
 
 failures: list[str] = []
@@ -45,10 +49,9 @@ if shutil.which("uv") is None:
     print("FAILED: uv is not on PATH; this E2E check cannot run, which is a failure, not a skip")
     sys.exit(1)
 
-UV = ["uv", "run", "--no-project", "--with", PLAYWRIGHT]
-install = subprocess.run([*UV, "playwright", "install", "chromium"], capture_output=True, text=True)
-if install.returncode != 0:
-    print(f"FAILED: `playwright install chromium` exited {install.returncode}:\n{install.stdout}{install.stderr}")
+not_ready = ensure()
+if not_ready:
+    print("FAILED: Chromium cannot run; this is a failure, not a skip:\n" + "\n".join(f"  - {p}" for p in not_ready))
     sys.exit(1)
 
 # Runs inside the uv environment. Prints one JSON object per width: the boxes the checks below need.

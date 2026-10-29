@@ -30,6 +30,16 @@ done
 if command -v node >/dev/null 2>&1 && [[ "$(node -p 'process.versions.node.split(".")[0]')" != "24" ]]; then
     missing+=("node $(node --version) is on PATH; the node harnesses run on Node 24")
 fi
+# The Playwright tests' browsers, checked once (#658). `playwright install` locks the browsers directory even when
+# nothing is missing, and where that directory is not writable it retries for about 8 minutes per test before it fails.
+if command -v uv >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
+    if ! pw="$(python3 "${SCRIPT_DIR}/playwright_browsers.py" 2>&1)"; then
+        while IFS= read -r line; do
+            [[ -n "${line}" ]] && missing+=("${line}")
+        done <<<"${pw}"
+        [[ -n "${pw}" ]] || missing+=("verify/playwright_browsers.py failed without saying why")
+    fi
+fi
 if [[ "${#missing[@]}" -gt 0 ]]; then
     printf 'E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip:\n' >&2
     printf '  - %s\n' "${missing[@]}" >&2

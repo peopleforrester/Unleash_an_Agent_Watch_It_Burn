@@ -11,7 +11,8 @@ The fetch is run here for real, in a scratch copy of the scripts, with `curl` st
 archives and log each call, and `uname`, `sha256sum` and `unzip` stubbed so the run does not depend on the
 host. A good lock installs every binary, a second run downloads nothing, and a missing artifact or a
 checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e2e-tools.sh stops on a
-failed fetch or a missing prerequisite before any test runs.
+failed fetch or a missing prerequisite before any test runs, and that includes Playwright browsers that are missing
+from a directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
 
 run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
 the gate's binaries, otelcol-contrib included since #654. Its scratch copy is run with a fixture lock of the six tools: the fetched kubectl, not one
@@ -37,6 +38,7 @@ VERIFY = REPO / "verify"
 LOCK = VERIFY / "e2e-tools.lock"
 FETCH = VERIFY / "fetch-e2e-tools.sh"
 RUNNER = VERIFY / "run-e2e-tools.sh"
+BROWSERS = VERIFY / "playwright_browsers.py"
 BASH = shutil.which("bash")
 PY = sys.executable
 
@@ -289,12 +291,26 @@ with tempfile.TemporaryDirectory() as t:
 print("== run-e2e-tools.sh stops before any test when it cannot have its tools ==")
 NODE24 = '#!/bin/sh\ncase "$1" in -p) echo 24 ;; --version) echo v24.22.0 ;; esac\n'
 NODE22 = '#!/bin/sh\ncase "$1" in -p) echo 22 ;; --version) echo v22.11.0 ;; esac\n'
-PREREQS = {"uv": "#!/bin/sh\nexit 0\n", "jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n"}
+PREREQS = {"jq": "#!/bin/sh\nexit 0\n", "openssl": "#!/bin/sh\nexit 0\n"}
+
+
+def uv_listing(browsers: pathlib.Path, installed: bool) -> str:
+    """A uv whose `playwright install --dry-run chromium` lists two browsers under browsers, installed or not."""
+    browsers.mkdir(parents=True, exist_ok=True)
+    listing = ""
+    for name, d in (("Chrome for Testing 1 (playwright chromium v9)", "chromium-9"),
+                    ("FFmpeg (playwright ffmpeg v9)", "ffmpeg-9")):
+        if installed:
+            (browsers / d).mkdir(exist_ok=True)
+            (browsers / d / "INSTALLATION_COMPLETE").touch()
+        listing += f"{name}\n  Install location:    {browsers / d}\n  Download url:        https://fixture.invalid/{d}\n\n"
+    return f"#!/bin/sh\ncat <<'EOF'\n{listing}EOF\n"
+
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, BAD_LOCK, (FETCH, RUNNER))
-    make_stubs(tmp / "bin", {**PREREQS, "node": NODE24})
+    vdir = scratch(tmp, BAD_LOCK, (FETCH, RUNNER, BROWSERS))
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE24})
     r = run(vdir / RUNNER.name, tmp, tmp / "bin")
     check(f"a failed fetch fails the tier (exit {r.returncode})", r.returncode == 1)
     check("it says the tier cannot run, as a failure and not a skip",
@@ -305,12 +321,32 @@ with tempfile.TemporaryDirectory() as t:
 
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER))
-    make_stubs(tmp / "bin", {**PREREQS, "node": NODE22})
+    vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER, BROWSERS))
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(tmp / "ms-playwright", True), "node": NODE22})
     r = run(vdir / RUNNER.name, tmp, tmp / "bin")
     check(f"a Node other than 24 fails the tier before any fetch (exit {r.returncode})",
           r.returncode == 1 and "node v22.11.0 is on PATH; the node harnesses run on Node 24" in r.stderr
           and not curl_calls(tmp), r.stderr)
+    check("no test ran", "== " not in r.stdout, r.stdout)
+
+with tempfile.TemporaryDirectory() as t:
+    tmp = pathlib.Path(t)
+    vdir = scratch(tmp, GOOD_LOCK, (FETCH, RUNNER, BROWSERS))
+    browsers = tmp / "ms-playwright"
+    make_stubs(tmp / "bin", {**PREREQS, "uv": uv_listing(browsers, False), "node": NODE24})
+    browsers.chmod(0o555)
+    try:
+        r = run(vdir / RUNNER.name, tmp, tmp / "bin")
+    finally:
+        browsers.chmod(0o755)
+    check(f"Playwright browsers missing from a directory it cannot write fail the tier before any fetch "
+          f"(exit {r.returncode})",
+          r.returncode == 1 and "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip" in r.stderr
+          and not curl_calls(tmp), r.stderr)
+    check("it names the directory and each missing browser at its install location",
+          f"Playwright's browsers directory {browsers} is not writable" in r.stderr
+          and f"FFmpeg (playwright ffmpeg v9) at {browsers / 'ffmpeg-9'}" in r.stderr
+          and f"Chrome for Testing 1 (playwright chromium v9) at {browsers / 'chromium-9'}" in r.stderr, r.stderr)
     check("no test ran", "== " not in r.stdout, r.stdout)
 
 print("== run-e2e.sh fetches the same tools and runs them first on PATH (#585) ==")
