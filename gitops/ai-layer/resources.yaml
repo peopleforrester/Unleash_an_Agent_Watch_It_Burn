@@ -650,7 +650,7 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "0cca4692acab"
+        checksum/proxy-py: "4170cfb66e4c"
     spec:
       # A dedicated ServiceAccount with a mounted token, so /controls can read the badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
@@ -734,8 +734,9 @@ spec:
             # The deterministic mask (BLOCK_LIST + PROFANITY_LIST, truncated to 280 chars) is the floor,
             # not a moderation service. Turn this back off for any run where the room has not been told.
             - { name: STREAM_PROMPTS, value: "on" }
-            # The instructor console reads /cost and /prompts cross-origin, and the proxy answers CORS for one
-            # origin. The room is shown start.burritobot.co (#651), so that is the one; start.agenticburn.com
+            # The instructor console reads /cost and /prompts cross-origin, and the proxy answers CORS for the
+            # origins listed here (comma-separated since guard-proxy-agenticburn#19; unset, it allows both start
+            # domains). The room is shown start.burritobot.co (#651), so that is the one; start.agenticburn.com
             # still loads but shows every cluster down.
             - { name: CONSOLE_ORIGIN, value: "https://start.burritobot.co" }
             # Unified Service Tagging for Datadog correlation (same scheme as the kagent agent +

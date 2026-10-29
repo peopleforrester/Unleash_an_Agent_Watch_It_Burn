@@ -124,7 +124,7 @@ sleep 2
 # ---- INPUT, guard OFF: injection reaches the agent --------------------------------------------
 step "INPUT guard OFF: sending prompt injection -- expect it to REACH the agent (not blocked)"
 INPUT_OFF="$(send_prompt "${INJECTION}")" || INPUT_OFF=""
-if echo "${INPUT_OFF}" | grep -qiE 'prompt injection detected|input block-list'; then
+if echo "${INPUT_OFF}" | grep -qiE 'prompt injection detected|blocked by input guardrail|input block-list'; then
     bad "injection was blocked with input guard OFF (§2 before-state broken): ${INPUT_OFF}"
 elif echo "${INPUT_OFF}" | grep -q '"result"'; then
     pass "injection reaches the agent while input guard is off (agent returned a result)"

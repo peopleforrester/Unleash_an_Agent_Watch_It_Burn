@@ -137,6 +137,10 @@ term it matched. Surfacing the scanner and score is a guard-proxy change and bel
 `guard-proxy-agenticburn`; given point 1, the score will almost always read 1.0, so the scanner name is the
 useful half.
 
+**Done 2026-10-29 (guard-proxy-agenticburn#17, pinned at `c247b3d` by #684).** The refusal now names each scanner
+LLM Guard scored above zero: on `/chat`, "blocked by the input guardrail: PromptInjection, risk 1.00", and on the
+A2A path, "flagged by PromptInjection, risk 1.00". With no scores, or failing closed, it keeps the old wording.
+
 ## What would change this finding
 
 - Prompt Guard 2 measured on `verify/injection_config_matrix.py`'s prompts with fewer misses at the same speed:

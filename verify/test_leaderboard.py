@@ -127,8 +127,10 @@ check("C4: guard-proxy exports gen_ai.client.cost", '"gen_ai.client.cost"' in pr
 check("C5/C6: guard-proxy is a Deployment in the agent bundle", "guard-proxy" in deployments)
 check("C5: guard-proxy logs event output_scrub when the output guard redacts",
       'extra={"event": "output_scrub"}' in proxy and "@event:output_scrub" in search.get("c5", ""))
+# The classifier's extra also carries the flagged scanners since guard-proxy-agenticburn#17, so the event key is
+# matched at the start of the extra dict, not as the whole of it.
 check("C6: guard-proxy logs both input-guard refusals",
-      all(f'extra={{"event": "{e}"}}' in proxy for e in ("input_blocklist_hit", "input_classifier_block"))
+      all(re.search(r'extra=\{\s*"event": "' + e + '"', proxy) for e in ("input_blocklist_hit", "input_classifier_block"))
       and "kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)" in search.get("c6", ""))
 mcp_src = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text()
 check("C6: read_support_ticket logs ticket_withheld when the input guard withholds the ticket (#640)",

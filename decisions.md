@@ -4370,3 +4370,41 @@ Michael whether to swap.
   padded-past-512 and reworded payloads pass both models, so C6's teaching points were never at stake.
 
 **Not yet run on a cluster.** Nothing: no deployed object changes.
+
+## 2026-10-29 · #684 · guard-proxy pinned at c247b3d, and the recorded classifier refusals follow the scanner name
+
+guard-proxy-agenticburn#17 made the classifier refusal name each scanner LLM Guard scored above zero. On `/chat` it
+reads "BurritoBot can't help with that (blocked by the input guardrail: PromptInjection, risk 1.00)." and on the A2A
+path "Request blocked by input guardrail (flagged by PromptInjection, risk 1.00)." With no scores, or failing closed
+with LLM Guard unreachable, the old text stands. The issue held the fixture refresh for the next repin, and
+guard-proxy's main and staging both read `c247b3d` on 2026-10-29 (`git ls-remote`), so this change is that repin.
+
+- **The pin moves from `000f57e` to `c247b3d`.** That brings in three more of guard-proxy's commits, all checked by
+  the offline suite here: #19, a comma-separated `CONSOLE_ORIGIN` whose default allows both start domains, and #20,
+  the prompt-feed redaction #646 asked for (personal data masked, `PROFANITY_LIST` terms matched as whole words).
+  `checksum/proxy-py` is bumped to `4170cfb66e4c` so the pod rolls. `CONSOLE_ORIGIN` stays set to
+  `https://start.burritobot.co` only, as #651 chose and `verify/test_two_domains.py` holds; the comment over it
+  now says the variable takes a list. Whether to list both domains is left to a follow-up, not decided here.
+- **The recorded replies.** `verify/test_kubecon_probe.py`'s `CLASSIFIER` and the fake `/chat` in
+  `verify/test_challenge_fallbacks.py` now carry the scored shape, which is what a cluster with LLM Guard answers.
+  The no-score text is kept as `CLASSIFIER_NO_SCORE`, and the probe's C6 judge is checked on both.
+- **The fixtures are tied to the pin.** `test_kubecon_probe.py` now runs the pinned proxy.py's `/chat` handler with
+  only the input classifier on and a stub LLM Guard, three ways: PromptInjection scored 1.0, a verdict with no
+  scores, and LLM Guard unreachable. The first has to equal `CLASSIFIER` and the other two `CLASSIFIER_NO_SCORE`, so
+  a later repin that changes the wording fails offline instead of leaving a stale recording.
+- **beat-02.sh's guard-off check.** It treated an injection as blocked only on "prompt injection detected" or the
+  block-list wording. With scores, the A2A refusal no longer says "prompt injection detected", so a block with the
+  guard off would have failed with "no agent result" rather than naming the block. It now also matches "blocked by
+  input guardrail", as its guard-on check already did.
+- **The leaderboard's C6 log check.** `verify/test_leaderboard.py` looked for
+  `extra={"event": "input_classifier_block"}` verbatim. The pinned call adds the flagged scanners to that
+  dict, so the check now matches the event key at the start of `extra=`, which is what the Datadog query reads.
+- **#646.** The redaction is now pinned. What that issue still owes here is the `verify/test_stream.py` extension
+  and the `STREAM_PROMPTS` comment in `gitops/ai-layer/resources.yaml`; the pin is no longer one of them.
+- `docs/spike-llm-guard-2026-10-26.md`'s Explainability section, which named this as missing, records it as done.
+
+**Not yet run on a cluster.** On the next attendee or admin bring-up, `bash verify/beat-02.sh <context>` (part of
+`bash verify/run-e2e.sh`) should show the guard-on refusal naming PromptInjection. A `/chat` prompt injection with
+`input_classifier` on should reply "blocked by the input guardrail: PromptInjection, risk 1.00". The #646 wall check
+recorded under that issue (a fake email and phone number shown redacted on `GET /prompts`) can be run on the same
+cluster, now that the pin carries it.
