@@ -55,20 +55,23 @@ ROS="${HERE}/../facilitation/kubecon-na-2026-run-of-show.md"
 KUBECON="${HERE}/../gitops/ai-layer/web/kubecon.html"
 WALL="https://prompts.agenticburn.com"
 line_of() { grep -nF -- "$1" "${ROS}" | head -1 | cut -d: -f1; }
+# A pipeline into these checks ends in `grep ... >/dev/null`, never `grep -q`: under pipefail, grep -q exits at its first
+# match, the writer still sending gets SIGPIPE, and the pipeline returns 141, so the check failed whenever the writer
+# had more to send at that moment (seen once in a full run-tests.sh on 2026-10-29, not reproducible alone).
 section() { awk -v h="$1" '$0 ~ "^#+ "h { on=1; next } on && /^#+ / { exit } on' "${ROS}"; }   # to the next heading
 check "the Night Before runs wall-check after router-check and before check-tls" \
   '[[ -n "$(line_of "./fleet.sh wall-check")" ]] &&
    (( $(line_of "./fleet.sh router-check") < $(line_of "./fleet.sh wall-check") &&
       $(line_of "./fleet.sh wall-check") < $(line_of "./fleet.sh check-tls attackme") ))'
-check "the Night Before step names the health URL of the wall" 'section "Night Before" | grep -qF "${WALL}/healthz"'
+check "the Night Before step names the health URL of the wall" 'section "Night Before" | grep -F "${WALL}/healthz" >/dev/null'
 check "the Night Before keeps the wall off the lab-platform roster until after the event" \
-  'section "Night Before" | tr "\n" " " | grep -q "lab-platform#137"'
+  'section "Night Before" | tr "\n" " " | grep "lab-platform#137" >/dev/null'
 check "segment 1 puts the wall URL on screen (#639)" \
-  'section "Segment 1: Cold open" | grep -qF "${WALL}"'
+  'section "Segment 1: Cold open" | grep -F "${WALL}" >/dev/null'
 check "the segment table shows the wall on screen from segment 1" \
-  'grep -E "^\| 1 \|" "${ROS}" | grep -qF "prompts.agenticburn.com"'
+  'grep -E "^\| 1 \|" "${ROS}" | grep -F "prompts.agenticburn.com" >/dev/null'
 check "the /kubecon page projects the wall in segment 1, as the run-of-show does (#639)" \
-  'sed -n "/SEGMENT 1:/,/<article/p" "${KUBECON}" | grep -qF "href=\"${WALL}\""'
+  'sed -n "/SEGMENT 1:/,/<article/p" "${KUBECON}" | grep -F "href=\"${WALL}\"" >/dev/null'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }
