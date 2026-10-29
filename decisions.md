@@ -4876,3 +4876,84 @@ verify/local-inference-live.py`. It checks that the vLLM pod is Ready with no re
 creation to Ready and its live footprint. It also checks that one chat call through `:3002/local` comes back from
 qwen3-1.7b. It is not a `test_*.py`, because run-e2e.sh runs those against an attendee cluster, which has no vLLM.
 The measured wall-clock and requests then go into the vllm entry as `measured: true`.
+
+## 2026-10-29 · #394 · The two IDPs never shared a base, and platform-baseline.yaml now says what became of each component
+
+#394 measured twenty components the sister platform (`peopleforrester/packt-agentic-devops`,
+`solution/platform/`) runs and this one does not. It asked three things: why the two diverged, what the shared
+baseline is, and which of the twenty to adopt, in what order.
+
+**Why they diverged: they were never one platform.** The port commit that founded this IDP, `6880677`
+(2026-06-18), says what it copied: "Copy the proven EKS IDP ... from kubeauto-ai-day; drop
+ecom/sample/load-gen", with Promtail swapped for Alloy. The source was KubeAuto AI Day, not the Packt platform.
+KubeAuto's `gitops/apps`, as archived (re-read 2026-10-29), holds 29 Applications and one of the twenty,
+cert-manager-issuers, which came across in the port and was dropped in 3435e01. It has no OpenBao, no Argo
+Rollouts, Workflows or Events, no KEDA, no Gitea and no model serving. So nothing was left behind from the sister,
+because nothing was taken from it then. What the two share came across later, piece by piece: agentgateway, kagent,
+LLM Guard, and the Terraform fleet layout. This corrects one premise of the 2026-09-17 Gitea entry, which compared
+the port against the sister. The port brought no Gitea because its source had none. The rejection itself stands
+on its own reasons.
+
+**The baseline is `platform-baseline.yaml`, and two tests keep it true.** It has one entry per component: the
+sister's 38 and this repo's own. Each entry has a status (adopted, equivalent, disabled, rejected, proposed, local,
+opt-in) and the field that status needs. Entries are keyed on the sister's directory names, so the two lists can
+be compared by a program. The file carries no versions. Those stay in VERSIONS.lock and the Application files, so
+this is not a third list to drift.
+
+- `verify/test_platform_baseline.py` (offline) fails on any of these:
+  - a file in `gitops/bootstrap/apps` or `gitops/apps-disabled` that no entry claims;
+  - a sister component claimed zero times or twice;
+  - an entry missing what its status needs;
+  - an opt-in app that a fleet profile lists.
+- `verify/test_platform_baseline_sister.py` (E2E tools tier, so the gate runs it) fails when the sister's `main`
+  gains or loses a component. It stays red until this file says what to do about that component.
+
+**What happened to the twenty.**
+
+- Four are here in another form: cert-manager-issuers, ai-dashboards, ai-policies and demo-agent. The file says
+  by what.
+- Gitea and gitea-config stay rejected. Re-read for this work, the 2026-09-17 revisit condition (a challenge
+  that needs in-cluster git) has not happened.
+- vLLM is built, on an opt-in profile (the question 657 entry above).
+- Thirteen are proposals, ranked by the rule the Gitea entry applied: a component earns its place on a
+  50-cluster fleet when a beat exercises it.
+  - Tier 1, on the fleet with its beat: OpenBao (the question 656 entry below) and Argo Rollouts, which waits for
+    a canary beat that aborts an agent-authored bad deploy.
+  - Tier 3, off the fleet until a beat needs it: Argo Workflows, Argo Events, KEDA, KServe, llm-d, kgateway,
+    Gateway API and agent-service. agent-service also needs Backstage (#244) and Gitea.
+
+Loki, which the sister runs, is recorded as rejected under the #474 entry that dropped it here.
+
+**What differs from the 2026-10-24 draft** (`origin/agent/394-7203`, which was never merged).
+`verify/draft-drift.sh` found twelve drift lines against staging, chief among them #609's move of `gitops/apps/`
+into the `gitops/bootstrap` chart. So the design was made again on the chart, not cherry-picked:
+
+- The claimed files are `gitops/bootstrap/apps/*.yaml`.
+- The local entries lose loki, alloy, customer-stream, rbac and resource-quotas, which staging removed.
+- The local entries gain cluster-network-policies (#203) and otel-collector-burn (#476).
+- OpenBao is a proposal again, not adopted.
+
+## 2026-10-29 · question 656 · OpenBao's adoption is asked again, because lab-platform now reads the Datadog secret from Secrets Manager (#394)
+
+**Answer (2026-10-24):** "OpenBao now (sister's dev-mode shape, ESO reads it, bootstrap Secrets move behind
+it); Argo Rollouts only once its beat is written." It was decided by hecaton's research under Michael's standing
+rules, citing Michael's 32a30e2 ("OpenBao remains the right post-event on-cluster secret store").
+
+**The Argo Rollouts half stands.** Argo Rollouts stays `proposed`, tier 1, waiting for its beat.
+
+**The OpenBao half is not built again, and is asked again on #394.** The answer rested on one premise: ESO was
+installed with nothing to read. The 2026-10-24 draft built OpenBao on that premise, replacing the
+`aws-secrets-manager` ClusterSecretStore with one named `openbao` and seeding `datadog-secret` into it from
+deploy-full-idp.sh and fleet.sh. Since then, lab-platform has given ESO something to read in Secrets Manager:
+
+- 2026-10-26, its question 840: an event's Datadog org pool writes each cluster's keys to Secrets Manager as
+  `watch-it-burn/datadog/<cluster>`.
+- 2026-10-28, its #205: lab-platform's build makes the `platform/external-secrets` Pod Identity role that reads
+  the cluster's own secrets under `watch-it-burn/`.
+
+Both are written for the store the draft removed. Building the draft again would break that path on every
+lab-platform cluster. It would also put the bootstrap secret into deploy-full-idp.sh and fleet.sh, which
+lab-platform's bootstrap does not run. Building OpenBao beside the AWS store, with nothing moved into it, would
+add a pod on fifty clusters for a store nothing reads, which is the Gitea rule's "a component nothing uses".
+Which way to go is a choice between two answered designs, so it goes back to Michael as one question. Until he
+answers, platform-baseline.yaml has openbao as proposed, tier 1, and `security/eso` is unchanged.

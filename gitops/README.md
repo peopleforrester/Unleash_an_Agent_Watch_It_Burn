@@ -16,7 +16,8 @@ bootstrap/               # The root chart, lab-bootstrap: one Helm chart for eve
   templates/
     apps.yaml            # renders each listed apps/<name>.yaml, its Unleashed sources at .Values.revision
     ghcr-kagent-oci.yaml # the credential-free OCI Helm repository Secret kagent's chart needs
-  apps/                  # the ArgoCD Application manifests, one or more per file
+  apps/                  # the ArgoCD Application manifests, one or more per file. What each is, and
+                         # what the sister platform runs that we do not, is ../platform-baseline.yaml
 
 argocd/
   values.yaml            # ArgoCD Helm chart values
@@ -81,6 +82,8 @@ Gaps between groups are reserved for future components.
    `targetRevision: "{{ .Values.revision }}"`, a chart one exact version
 3. Set the appropriate sync wave annotation
 4. Add `<name>` to the `apps` list of each profile that should install it (`gitops/bootstrap/values-<profile>.yaml`)
-5. Commit and push. Clusters following `staging` pick it up; a lab-platform event takes it at its next pin
+5. Give it an entry in `platform-baseline.yaml` at the repo root; `verify/test_platform_baseline.py` fails on an
+   Application file no entry claims
+6. Commit and push. Clusters following `staging` pick it up; a lab-platform event takes it at its next pin
 
 See [ADR-002](../docs/adr/ADR-002-gitops-engine.md) for the ArgoCD selection rationale.

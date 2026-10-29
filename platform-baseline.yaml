@@ -1,0 +1,501 @@
+# ABOUTME: The IDP's component baseline: every component the sister platform runs and every one this
+# ABOUTME: platform runs, each with what happened to it here and why. Checked by verify/test_platform_baseline.py.
+#
+# Why this exists (#394). The question "why is component X missing" was asked twice (Gitea, then OpenBao,
+# Argo Rollouts and Argo Workflows) and the repo had no answer either time. This file is the answer, one
+# entry per component, so the next question is a lookup instead of another repo-by-repo diff.
+#
+# What it holds and what it does not. It records the component SET and each component's disposition. It
+# does not repeat versions: those live in VERSIONS.lock and in the Application files, and a third copy would
+# be one more list to drift. The sister keeps its own set, with versions, in its root components.yaml; the
+# `sister` keys below use its directory names under solution/platform/, so the two can be compared mechanically.
+#
+# Two files, on purpose (question 694 on #394, 2026-10-25): this repo keeps this file and checks the sister's
+# list with the E2E test below, rather than both repos reading one shared file. Revisit if the sister's
+# solution/platform is declared the reusable baseline (open on packt-agentic-devops#32). Because the keys are
+# the sister's directory names, moving these decisions onto its list would be mechanical.
+#
+# Two tests hold it to the truth:
+#   verify/test_platform_baseline.py         offline: every Application file in gitops/bootstrap/apps and
+#                                            gitops/apps-disabled is claimed here, every sister component in the
+#                                            snapshot is claimed exactly once, and every entry carries the fields
+#                                            its status needs.
+#   verify/test_platform_baseline_sister.py  E2E: the snapshot below still matches the sister's main branch.
+#                                            When the sister adds a component, that test goes red until this
+#                                            file says what we do about it.
+#
+# Statuses:
+#   adopted     the same component runs here. `apps` names its files in gitops/bootstrap/apps (or `installed_by`
+#               names the script that installs it outside the chart).
+#   equivalent  the sister's capability is met here by something else; `by` says what.
+#   disabled    present here but parked in gitops/apps-disabled; `revisit` says what brings it back.
+#   rejected    decided against, or dropped; `decision` names the decisions.md entry that records why.
+#   proposed    not here and not built. Carries `tier`, `profile`, `recommendation` and `cost`. A proposal
+#               is a recommendation, not an install.
+#   local       runs here only; the sister has no counterpart. `why` says what it is for in this workshop.
+#   opt-in      runs only on one opt-in profile, never on a fleet profile. `profile` names it
+#               (gitops/bootstrap/values-<profile>.yaml), `apps` names its files in gitops/bootstrap/apps, and
+#               `cost` says what it adds. verify/test_platform_baseline.py fails if a fleet profile lists them.
+#
+# Tiers, for proposed components only. Every component added here is paid fifty times per event in
+# provisioning wall-clock (15 to 25 minute budget, t3.2xlarge nodes), so the rule that ranks them is the one
+# decisions.md 2026-09-17 applied to Gitea: a component earns its place on the fleet when a beat exercises it.
+#   1  adopt next, on the fleet, together with the beat that uses it. A beat or a recorded intent exists.
+#   2  opt-in profile only (one instructor or demo cluster), not the fleet.
+#   3  no beat uses it here; stays off the fleet until one does.
+#
+# Cost (proposed and opt-in entries). `cost.measured: false` means nobody has timed it on this platform's build.
+# Measuring means a cold build on a t3.2xlarge with and without the component, recording the wall-clock to
+# Healthy and the pod requests it adds. When an entry flips to `measured: true` it must carry `build_seconds`
+# and `requests`.
+
+schema_version: 1
+recorded_on: "2026-10-29"
+
+sister:
+  repo: peopleforrester/packt-agentic-devops
+  ref: main
+  path: solution/platform
+  checked_on: "2026-10-29"
+  # The component directories under each layer on the date above: 38 in all, the same 38 as on 2026-10-24.
+  # The port that founded this platform did not come from here (decisions.md 2026-10-29, #394), so this is a
+  # list to compare against, not a list we were ever a copy of.
+  snapshot:
+    1-foundation:
+      - argo-events
+      - argo-rollouts
+      - argo-workflows
+      - aws-load-balancer-controller
+      - backstage
+      - cert-manager
+      - cert-manager-issuers
+      - external-secrets
+      - gitea
+      - gitea-config
+      - keda
+      - kube-prometheus-stack
+      - kyverno
+      - loki
+      - openbao
+      - openbao-config
+      - opentelemetry-collector
+      - opentelemetry-operator
+      - policy-baseline
+      - tempo
+    2-ai-plane:
+      - agentgateway
+      - agentgateway-crds
+      - agentgateway-runtime
+      - ai-dashboards
+      - ai-policies
+      - demo-agent
+      - gateway-api
+      - kagent
+      - kagent-crds
+      - kgateway
+      - kgateway-crds
+      - kserve
+      - kserve-crd
+      - llm-d
+      - llm-guard
+      - mcp-server
+      - vllm
+    3-self-service:
+      - agent-service
+
+components:
+
+  # ---------------------------------------------------------------- 1-foundation, both platforms
+
+  - name: argo-cd
+    sister: []
+    status: adopted
+    installed_by: infra/deploy-full-idp.sh
+    why: >
+      The GitOps engine both platforms are built on. It is not an Application here: deploy-full-idp.sh installs
+      it before lab-bootstrap, and on a cluster lab-platform builds, labctl installs it at its own pin. The
+      sister lists it in components.yaml rather than as a directory.
+
+  - name: aws-load-balancer-controller
+    sister: [aws-load-balancer-controller]
+    status: adopted
+    installed_by: infra/deploy-full-idp.sh
+    why: >
+      Installed outside the chart: by deploy-full-idp.sh with its Pod Identity association from Terraform, and
+      by lab-platform's build on the clusters it makes.
+
+  - name: backstage
+    sister: [backstage]
+    status: disabled
+    apps: [backstage.yaml, backstage-resources.yaml]
+    why: >
+      Moved to gitops/apps-disabled on 2026-06-27 (32a30e2): no challenge needed it and it needs secrets
+      the per-cluster bootstrap does not provision.
+    revisit: "#244 (Backstage on every cluster, with the party apps in its catalog)."
+
+  - name: cert-manager
+    sister: [cert-manager]
+    status: adopted
+    apps: [cert-manager.yaml]
+
+  - name: cert-manager-issuers
+    sister: [cert-manager-issuers]
+    status: equivalent
+    by: >
+      The console's self-signed Issuer, which lives beside the certificate it issues in gitops/ai-layer. The
+      issuers Application came across in the port and its two Let's Encrypt ClusterIssuers sat at
+      Ready=False with nothing using them, so they were dropped in 3435e01.
+
+  - name: external-secrets
+    sister: [external-secrets]
+    status: adopted
+    apps: [external-secrets.yaml, eso-resources.yaml]
+    why: >
+      Its one ClusterSecretStore, aws-secrets-manager, reads AWS Secrets Manager through EKS Pod Identity. No
+      ExternalSecret in this repo reads it today (32a30e2 removed the central ones). lab-platform's build makes
+      the platform/external-secrets role that reads the cluster's own secrets under watch-it-burn/
+      (lab-platform decisions.md 2026-10-28, #205), for the per-cluster Datadog secret its org pool writes
+      (question 840 there). Whether OpenBao also sits behind ESO is the openbao entry's open question.
+
+  - name: kube-prometheus-stack
+    sister: [kube-prometheus-stack]
+    status: adopted
+    apps: [prometheus.yaml]
+
+  - name: kyverno
+    sister: [kyverno]
+    status: adopted
+    apps: [kyverno.yaml]
+
+  - name: loki
+    sister: [loki]
+    status: rejected
+    decision: "Loki and Alloy are dropped; the #190 audit trail is read from Datadog Logs"
+    why: >
+      It came across in the port and ran until 2026-10-24, when #474 dropped it with Alloy: nothing a student
+      or presenter reads uses it, and the #190 audit trail is read from Datadog Logs instead.
+
+  - name: opentelemetry-collector
+    sister: [opentelemetry-collector]
+    status: adopted
+    apps: [otel-collector.yaml, otel-collector-attendee.yaml, otel-collector-burn.yaml]
+    why: >
+      One collector chart, three Applications under one Application name, one per profile family: full and
+      admin, the attendee dual-ship (#242), and the burn cluster's Datadog-only collector (#476).
+
+  - name: opentelemetry-operator
+    sister: [opentelemetry-operator]
+    status: adopted
+    apps: [otel-operator.yaml]
+
+  - name: policy-baseline
+    sister: [policy-baseline]
+    status: equivalent
+    by: >
+      The same concerns as separate Applications so each profile can take a different subset:
+      kyverno-policies, minimal-floor, network-policies and cluster-network-policies (each its own entry
+      below). The sister's RBAC part has no counterpart: the rbac app was removed in #478 because its bindings
+      granted nobody.
+
+  - name: tempo
+    sister: [tempo]
+    status: adopted
+    apps: [tempo.yaml]
+    why: Admin and full profiles only; no attendee step reads Tempo (#475).
+
+  # ---------------------------------------------------------------- 1-foundation, sister only
+
+  - name: openbao
+    sister: [openbao, openbao-config]
+    status: proposed
+    tier: 1
+    profile: fleet
+    recommendation: >
+      Question 656 (2026-10-24) decided to adopt it now with the bootstrap Secrets behind it, on the premise
+      that ESO had nothing to read. That premise changed on 2026-10-28, when lab-platform built ESO a role to
+      read each cluster's Datadog secret from Secrets Manager (#205 there). The 2026-10-24 build (branch
+      agent/394-7203) replaced that store and was never merged, so how OpenBao fits beside lab-platform's path
+      is asked again on #394 before it is built (decisions.md 2026-10-29).
+    cost:
+      measured: false
+      known: >
+        In the sister's dev-mode shape, one unsealed in-memory pod with the injector and UI off: requests 50m CPU
+        / 64Mi in the 2026-10-24 draft. Chart 0.29.4 (OpenBao 2.6.2).
+
+  - name: argo-rollouts
+    sister: [argo-rollouts]
+    status: proposed
+    tier: 1
+    profile: fleet
+    recommendation: >
+      Decided 2026-10-24 (question 656 on #394): it waits for its beat. Adopt together with the beat it
+      exists for: an agent-authored bad deploy that a canary's analysis aborts, so the platform visibly
+      catches it. Without that beat it is a controller nothing uses. One controller Deployment; converting a
+      party app to a Rollout is the only manifest change it forces.
+    cost:
+      measured: false
+      known: One controller Deployment, chart defaults, no resource requests set in the sister.
+
+  - name: argo-workflows
+    sister: [argo-workflows]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: No challenge runs a workflow. Stays off the fleet until one does.
+    cost:
+      measured: false
+      known: Controller plus server, and v4's full-validation CRDs are large enough to need server-side apply.
+
+  - name: argo-events
+    sister: [argo-events]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: >
+      No beat is event-triggered. The chart installs only the controller; any use also needs a JetStream
+      EventBus, so the real cost is two things, not one.
+    cost:
+      measured: false
+      known: Controller from the chart, plus an EventBus StatefulSet the moment anything uses it.
+
+  - name: keda
+    sister: [keda]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: Nothing here scales on events and each cluster serves one student. Stays off the fleet.
+    cost:
+      measured: false
+      known: Operator, metrics API server and admission webhook, chart defaults.
+
+  - name: gitea
+    sister: [gitea, gitea-config]
+    status: rejected
+    decision: "Gitea is not part of this IDP, and the reason was never written down"
+    why: >
+      Argo CD sources from GitHub and no challenge asks a student to commit. Re-read against this parity
+      work on 2026-10-29: its revisit condition (a challenge that needs in-cluster git) has not happened,
+      so it stands.
+
+  # ---------------------------------------------------------------- 2-ai-plane, both platforms
+
+  - name: agentgateway
+    sister: [agentgateway, agentgateway-runtime]
+    status: adopted
+    apps: [ai-layer.yaml]
+    why: >
+      Run standalone from a config file in gitops/ai-layer/agentgateway.yaml, not as the chart's controller
+      plus Gateway resources. The sister's agentgateway-runtime (the Gateway, the vLLM route, the prompt
+      guard) is the same data path; here the routes are in the config file, including the :3002 inference
+      bind with its /bedrock and /local routes.
+
+  - name: agentgateway-crds
+    sister: [agentgateway-crds]
+    status: equivalent
+    by: Nothing. The standalone gateway reads a config file and needs no CRDs; they only matter with the chart's controller.
+
+  - name: ai-dashboards
+    sister: [ai-dashboards]
+    status: equivalent
+    by: >
+      The Agent Observability dashboard in observability-idp/grafana/dashboards (grafana-dashboards
+      Application): traces, live cost by model, and the per-guard view. The sister's vLLM panels only have
+      data where vLLM runs, so they belong with the vllm entry's opt-in profile.
+
+  - name: ai-policies
+    sister: [ai-policies]
+    status: equivalent
+    by: >
+      Two of the sister's four are here in policies/kyverno: deny-llm-endpoint-bypass and
+      restrict-image-registries. Its llm-guard-reference policy has no target here because the guard is
+      guard-proxy in the request path, not a reference on the Agent. Its OTel-annotation policy is left out on
+      the sister's own finding (packt-agentic-devops#32): kagent does not copy Agent annotations to the pod,
+      so the policy certifies nothing.
+
+  - name: demo-agent
+    sister: [demo-agent]
+    status: equivalent
+    by: >
+      workshop-agent in gitops/ai-layer/resources.yaml. The sister's demo agent points a provider: OpenAI
+      ModelConfig at a local vLLM; the gateway-local-qwen3 ModelConfig here is the same thing through the
+      gateway, served on the local-inference profile (vllm entry).
+
+  - name: kagent
+    sister: [kagent, kagent-crds]
+    status: adopted
+    apps: [kagent.yaml, kagent-crds.yaml]
+
+  - name: llm-guard
+    sister: [llm-guard]
+    status: adopted
+    apps: [ai-layer.yaml]
+    why: The offline CPU image (peopleforrester/llm-guard-cpu-offline) behind guard-proxy, in gitops/ai-layer.
+
+  - name: mcp-server
+    sister: [mcp-server]
+    status: adopted
+    apps: [ai-layer.yaml]
+    why: workshop-mcp (the agent's tool server) and evil-mcp (the malicious one), both in gitops/ai-layer.
+
+  # ---------------------------------------------------------------- 2-ai-plane, sister only
+
+  - name: vllm
+    sister: [vllm]
+    status: opt-in
+    profile: local-inference
+    apps: [vllm-qwen3.yaml]
+    why: >
+      Built 2026-10-29 from question 657 on #394. The workload the /local route already pointed at
+      (hostOverride vllm-qwen3.agent.svc.cluster.local:8000), as a plain Deployment and Service with the
+      sister's pod spec, listed by values-local-inference.yaml only. KServe is not required for the route.
+    cost:
+      measured: false
+      known: >
+        Measured on the sister, on the same t3.2xlarge node type: requests 4 CPU / 10Gi, limits 6 CPU / 16Gi,
+        memory peak 12.52 GiB with KVCACHE 2 (it OOMKilled at a 10Gi limit). The Qwen3-1.7B weights are baked
+        into ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b, 4.95 GB compressed (read from the registry
+        2026-10-24), so nothing downloads at start, but that pull is the build-time cost nobody has timed here.
+
+  - name: kserve
+    sister: [kserve, kserve-crd]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: >
+      A second controller and its CRDs to manage the one vLLM Deployment the local-inference profile runs. Earns a
+      place only if that profile is meant to teach KServe; otherwise the plain Deployment does the job.
+    cost:
+      measured: false
+      known: Controller in RawDeployment mode (no Knative, no Istio) plus its CRDs, chart defaults.
+
+  - name: llm-d
+    sister: [llm-d]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: >
+      The sister ships it as an architecture reference and does not deploy it on its own lean cluster.
+      Distributed inference has nothing to distribute with one CPU model; it follows vllm, if ever.
+    cost:
+      measured: false
+      known: Not deployed on the sister's lean cluster either, so there is no number to borrow.
+
+  - name: kgateway
+    sister: [kgateway, kgateway-crds]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: >
+      agentgateway already does the AI-gateway job here, standalone (docs/STACK-WALKTHROUGH.md: kgateway is not
+      installed, #245). kgateway would be a second gateway in front of the first with no beat that needs it.
+    cost:
+      measured: false
+      known: Controller plus CRDs, and it needs the Gateway API CRDs first.
+
+  - name: gateway-api
+    sister: [gateway-api]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: >
+      CRDs only, the prerequisite for kgateway and for agentgateway's controller mode. Neither runs here, so
+      nothing would read them. Adopt with whichever of those comes first.
+    cost:
+      measured: false
+      known: Five standard-channel CRDs, no workload.
+
+  # ---------------------------------------------------------------- 3-self-service
+
+  - name: agent-service
+    sister: [agent-service]
+    status: proposed
+    tier: 3
+    profile: none
+    recommendation: >
+      The sister's Backstage scaffolder template whose generated repos an ApplicationSet picks up from
+      the in-cluster Gitea. It needs Backstage (disabled here, #244) and Gitea (rejected), so it cannot move
+      before both do.
+    cost:
+      measured: false
+      known: Rides on Backstage and Gitea; nothing of its own runs.
+
+  # ---------------------------------------------------------------- this platform only
+
+  - name: ai-layer-otel
+    sister: []
+    status: local
+    apps: [ai-layer-otel.yaml]
+    why: The AI layer's OTel Instrumentation CR, so the agent pod is traced from admission.
+
+  - name: cluster-network-policies
+    sister: []
+    status: local
+    apps: [cluster-network-policies.yaml]
+    why: >
+      The agent namespace's Admin-tier deny on the instance metadata service, the rule Challenge 8's
+      cloud-credential beat reads (#203). Attendee, admin and full.
+
+  - name: datadog
+    sister: []
+    status: local
+    apps: [datadog-operator.yaml, datadog-agent-cr.yaml]
+    why: The workshop's observability back end for students; switched by datadog-secret on the cluster (#500).
+
+  - name: demo-apps
+    sister: []
+    status: local
+    apps:
+      - demo-app-hedgehog.yaml
+      - demo-app-mantis-shrimp.yaml
+      - demo-app-spider.yaml
+      - demo-app-unicorn.yaml
+      - demo-app-wombat.yaml
+    why: The five party apps. They came across in the port from kubeauto-ai-day as the *-party apps.
+
+  - name: falco
+    sister: []
+    status: local
+    apps: [falco.yaml, falcosidekick.yaml, falco-talon.yaml]
+    why: Runtime detection (Falco), forwarding (Falcosidekick) and response (Talon, admin and full only, #475).
+
+  - name: grafana-dashboards
+    sister: []
+    status: local
+    apps: [grafana-dashboards.yaml]
+    why: The platform and agent dashboards; also what the ai-dashboards entry above points at.
+
+  - name: istio-ambient
+    sister: []
+    status: local
+    apps: [istio.yaml]
+    why: Ambient-mode mTLS between pods; its workload certificates are SPIFFE identities.
+
+  - name: kubearmor
+    sister: []
+    status: local
+    apps: [kubearmor.yaml, kubearmor-policies.yaml]
+    why: In-kernel enforcement; its policy is Challenge 3's control, armed on the admin profile only.
+
+  - name: kyverno-policies
+    sister: []
+    status: local
+    apps: [kyverno-policies.yaml]
+    why: The workshop's admission policies. Part of the sister's policy-baseline, split out so the burn profile can drop it.
+
+  - name: minimal-floor
+    sister: []
+    status: local
+    apps: [minimal-floor.yaml]
+    why: The restriction floor the guarded profiles keep, apart from the challenge policies.
+
+  - name: namespaces
+    sister: []
+    status: local
+    apps: [namespaces.yaml]
+    why: The namespaces, at sync wave -10 so every later wave has somewhere to land.
+
+  - name: network-policies
+    sister: []
+    status: local
+    apps: [network-policies.yaml]
+    why: Challenge 1's control, the agent namespace's egress policy set. Admin only; attendee and full leave it for the fix step.
