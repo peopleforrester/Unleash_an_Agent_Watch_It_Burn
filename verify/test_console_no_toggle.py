@@ -143,7 +143,8 @@ def is_guard_proxy(host: str) -> bool:
 
 conf = strip_comments(CONF)
 servers = blocks(conf, "server")
-check("console.conf has the default server and the service-host server", len(servers) == 2, f"{len(servers)}")
+# Three since #664: the default server, the service-host server and C6's maintenance-shell server.
+check("console.conf has the default, service-host and C6 villain servers", len(servers) == 3, f"{len(servers)}")
 default = servers[0][1] if servers else ""
 check("the first server is the default one (server_name _), which every console hostname reaches",
       re.search(r"\bserver_name\s+_\s*;", default) is not None)
@@ -177,6 +178,11 @@ vhost_map = next((body for args, body in blocks(conf, "map") if "$wib_service_up
 check("the service-host map exists", bool(vhost_map))
 check("no service hostname maps to guard-proxy", "guard-proxy" not in vhost_map)
 check("the service-host server names no guard-proxy upstream", len(servers) < 2 or "guard-proxy" not in servers[1][1])
+c6 = next((body for _, body in servers if "maintenance-shell-" in body), "")
+check("C6's villain server exists", bool(c6))
+check("C6's villain server names no guard-proxy upstream and only the maintenance-shell Service",
+      "guard-proxy" not in c6 and re.findall(r"https?://[a-z0-9.-]+", c6) == ["http://maintenance-shell.agent.svc.cluster.local"],
+      f"{re.findall(r'https?://[a-z0-9.-]+', c6)}")
 
 print("== this file is what the admin and community clusters serve ==")
 kust = yaml.safe_load((AI / "kustomization.yaml").read_text(encoding="utf-8"))

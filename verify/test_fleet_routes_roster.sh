@@ -12,8 +12,8 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 export GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 TMPDIR="${T}"
 
 # The breakout's two clusters, and every service host each one carries (console.conf, #233). The service
-# list is read from fleet.sh's WIB_SERVICE_HOSTS so a new service host does not need a second edit here.
-SERVICES="$(sed -n 's/^readonly WIB_SERVICE_HOSTS="\(.*\)"$/\1/p' "${FLEET}")"
+# list is read from fleet.sh's WIB_SERVICE_HOSTS and WIB_VILLAIN_HOSTS (#664) so a new host needs no second edit here.
+SERVICES="$(sed -n 's/^readonly WIB_\(SERVICE\|VILLAIN\)_HOSTS="\(.*\)"$/\2/p' "${FLEET}" | tr '\n' ' ')"
 NSVC="$(wc -w <<<"${SERVICES}")"
 # Both domains serve the roster (#651): every row has a burritobot.co twin on the same upstream.
 expected() {

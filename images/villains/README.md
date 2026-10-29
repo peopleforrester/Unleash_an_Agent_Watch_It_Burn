@@ -43,3 +43,15 @@ What a student sees is in `challenges/LAB-TEXT.md`, Challenge 2.
   less one refused path, `*/peopleforrester/lab-platform/promo/*`, on any of them. The villain is on an
   allowed host and in our own org, but on that path, so the deploy is denied
   (`policies/kyverno/restrict-image-registries.yaml`).
+
+## The Joker serves a page (C6, #664)
+
+Challenge 6's support ticket asks for `docker.io/peopleforrester/joker:latest`, and that Joker is no longer a
+plain log loop. `build.sh` builds it from `joker-web/`: busybox (pinned by digest as `JOKER_BASE`) with
+`start.sh` and `www/` appended as a layer under `/villain`, so busybox `httpd` serves the "HA HA HA" page on
+`PORT=8080` while the old catchphrase still laughs in the logs. The rest of the path is in this repo:
+workshop-mcp's `deploy_app` labels the pod `burritobot.co/workload=maintenance-shell`, the `maintenance-shell`
+Service selects that label, the console serves it at `maintenance-shell-<cluster>.agenticburn.com` (and the
+burritobot.co twin), `fleet.sh` publishes the host, and `deploy_app`'s reply names the address so the bot can
+hand it to the attendee. `verify/test_joker_web_busybox.py` runs `start.sh` on the pinned busybox's own binary.
+The image is amd64 only, as the cluster nodes are.

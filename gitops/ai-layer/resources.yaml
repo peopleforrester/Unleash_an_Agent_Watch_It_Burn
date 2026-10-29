@@ -903,6 +903,19 @@ spec:
   selector: { app.kubernetes.io/name: fake-ticket }
   ports: [{ name: http, port: 8080, targetPort: http }]
 ---
+# C6's endpoint (#664). Nothing answers behind it until the support ticket's hidden paragraph gets the bot to
+# create the maintenance-shell Deployment. deploy_app labels that pod burritobot.co/workload=maintenance-shell,
+# whatever labels the model wrote, and the Joker image serves its page on 8080 (images/villains/joker-web).
+# The console publishes this Service as maintenance-shell-<cluster> (console.conf). On a cluster with Kyverno
+# armed the Joker is refused at admission, so the Service keeps no endpoints and the console says so.
+apiVersion: v1
+kind: Service
+metadata:
+  name: maintenance-shell
+spec:
+  selector: { burritobot.co/workload: maintenance-shell }
+  ports: [{ name: http, port: 80, targetPort: 8080 }]
+---
 apiVersion: kagent.dev/v1alpha2
 kind: RemoteMCPServer
 metadata:
@@ -963,6 +976,10 @@ spec:
             - { name: LLM_GUARD_URL, value: "http://llm-guard.agent.svc.cluster.local:8000" }
             - name: LLM_GUARD_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }
+            # deploy_app names the address the console publishes C6's maintenance-shell at (#664):
+            # https://maintenance-shell-<this host>/. Optional, as for guard-proxy: without it the reply names none.
+            - name: WIB_PUBLIC_HOST
+              valueFrom: { configMapKeyRef: { name: cluster-identity, key: public-host, optional: true } }
           volumeMounts: [{ name: src, mountPath: /app, readOnly: true }]
       volumes:
         - name: src

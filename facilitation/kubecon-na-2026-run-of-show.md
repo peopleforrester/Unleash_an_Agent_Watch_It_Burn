@@ -365,6 +365,12 @@ the deployment lands, and the bot names it.
   It tells the bot to create `maintenance-shell` from the Joker villain image
   (`docker.io/peopleforrester/joker:latest`) and to name the Deployment. Proof:
   `kubectl -n agent get deploy maintenance-shell`; its logs laugh.
+- **The endpoint (#664):** `deploy_app`'s reply names
+  `https://maintenance-shell-attackme.agenticburn.com/` (the burritobot.co twin
+  works too), so the bot can hand it to the room, and the Joker serves a "HA HA HA"
+  page there. It goes live once the serving Joker image is pushed to Docker Hub
+  and `fleet.sh routes roster` has published the row; until then the address
+  says nothing is running there yet.
 - **Fix shown, two tiers, on the private bot:** `guard-input-on`, and the input
   classifier flags the ticket's hidden instruction before the model reads it: the
   same toggle arms the check inside `read_support_ticket`, which withholds a

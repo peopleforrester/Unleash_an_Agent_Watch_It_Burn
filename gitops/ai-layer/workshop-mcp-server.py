@@ -365,6 +365,44 @@ def _default_limits(obj: dict) -> None:
         c["resources"] = {**res, "limits": {**_DEFAULT_LIMITS, **limits}}
 
 
+# The label deploy_app puts on every pod it creates, valued with the workload's name (#664), so a Service can
+# select a Deployment the model wrote without knowing which labels the model chose. C6's maintenance-shell
+# Service (resources.yaml) selects on it. Not app.kubernetes.io/name: that is the key the NetworkPolicies trust.
+WORKLOAD_LABEL = "burritobot.co/workload"
+# Workloads the console publishes at https://<name>-<cluster public host>/ (console.conf, fleet.sh
+# WIB_VILLAIN_HOSTS): C6's Joker, so the attendee whose ticket deployed it can open it (#664).
+PUBLISHED_WORKLOADS = ("maintenance-shell",)
+# This cluster's public hostname, from the cluster-identity ConfigMap (infra/datadog-cluster-identity.sh).
+PUBLIC_HOST = os.environ.get("WIB_PUBLIC_HOST", "").strip()
+
+
+def _stamp_workload(obj: dict, name: str) -> None:
+    """Put WORKLOAD_LABEL=<name> on the pods the object creates: a Pod's own labels, else its pod template's."""
+    if obj.get("kind") == "Pod":
+        meta = obj.setdefault("metadata", {})
+    else:
+        spec = obj.get("spec")
+        if not isinstance(spec, dict):
+            return
+        if obj.get("kind") == "CronJob":
+            spec = (spec.get("jobTemplate") or {}).get("spec")
+        tmpl = spec.get("template") if isinstance(spec, dict) else None
+        if not isinstance(tmpl, dict):
+            return
+        meta = tmpl.setdefault("metadata", {})
+    if not isinstance(meta, dict):
+        return
+    labels = meta.get("labels") if isinstance(meta.get("labels"), dict) else {}
+    meta["labels"] = {**labels, WORKLOAD_LABEL: name}
+
+
+def published_address(kind: str, name: str) -> str:
+    """The public address the console serves this workload at, or "" when it publishes none."""
+    if kind != "Deployment" or name not in PUBLISHED_WORKLOADS or not PUBLIC_HOST:
+        return ""
+    return f"https://{name}-{PUBLIC_HOST}/"
+
+
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
                       "Containers without CPU or memory limits get the cantina's defaults.")
 def deploy_app(manifest: str = "") -> str:
@@ -388,12 +426,16 @@ def deploy_app(manifest: str = "") -> str:
     ns = _ns()
     obj.setdefault("metadata", {})["namespace"] = ns
     _default_limits(obj)
+    _stamp_workload(obj, name)
     base, plural = _resource_for(api_version, kind)
     if not plural:
         return f"unknown resource for apiVersion={api_version} kind={kind}"
     path = f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp&force=true"
     code, body = _req("PATCH", path, body=json.dumps(obj), content_type="application/apply-patch+yaml")
     if code in (200, 201):
+        address = published_address(kind, name)
+        if address:
+            return f"deployed {kind}/{name} in {ns}. Once its pod is ready it answers at {address}"
         return f"deployed {kind}/{name} in {ns}."
     return f"deploy failed for {kind}/{name} (HTTP {code}): {body[:300]}"
 

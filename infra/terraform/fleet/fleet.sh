@@ -73,10 +73,13 @@ readonly PRESENTER_OWNER_MAX=10
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
 # covers one label. Keep in step with the server block in gitops/ai-layer/console.conf.
 readonly WIB_SERVICE_HOSTS="grafana argocd kagent hedgehog wombat unicorn spider mantis-shrimp"
+# Hosts for what an attack deploys, not what the platform installs (#664): C6's Joker, maintenance-shell. Routed
+# like a service host, but the console gives it its own server and page, and nothing answers until it lands.
+readonly WIB_VILLAIN_HOSTS="maintenance-shell"
 # Emit the service lines for one cluster: $1 = the cluster's public host, $2 = its console LB.
 emit_service_hosts() {
     local host="$1" lb="$2" svc label="${1%%.*}"
-    for svc in ${WIB_SERVICE_HOSTS}; do
+    for svc in ${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS}; do
         printf '%s-%s.agenticburn.com  %s:443\n' "${svc}" "${label}" "${lb}"
     done
 }

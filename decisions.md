@@ -3853,3 +3853,66 @@ us-west-2 --apply`, commits `share.json`, and renders the QR. Then, with attackm
 must pass. A prompt to `https://attackme.burritobot.co` must move the chat count, and one to the private bot must
 not. Each widget must show data, which checks that `kube_cluster_name` arrives on `traces.span.metrics.calls` and
 `gen_ai.client.cost` in the sandbox org.
+## 2026-10-29 · #664 · C6's Joker serves a page at maintenance-shell-<cluster>, and deploy_app's reply names it
+
+The 2026-10-28 planning note wanted C6 to end with the bot naming the Deployment and returning an endpoint the
+attendee can open. #640 built the naming. This builds the endpoint, everything except the image push, which needs
+the Docker Hub Team credentials a dispatched run does not have. There was no earlier draft of this issue.
+
+- **The image stays `docker.io/peopleforrester/joker:latest`.** It is the only Docker Hub villain anything still
+  names (#653), so it is rebuilt in place to serve a page. The ticket's paragraph is unchanged, and so is what
+  `verify/test_injection_classifier.py` measures. `images/villains/build.sh` builds it from `joker-web/`:
+  `start.sh` and `www/index.html` are appended as a layer under `/villain` on busybox pinned by digest
+  (`JOKER_BASE`, busybox:latest on 2026-10-29), with entrypoint `/bin/sh /villain/start.sh` and `PORT=8080`. The
+  files go in as a layer rather than through `--cmd`, which crane splits on commas (the Skeletor bug #653
+  recorded). busybox `httpd` serves the page while the old catchphrase loop keeps laughing in the logs, and the
+  shell traps SIGTERM so the pod ends on delete instead of waiting out the grace period. The image is amd64 only,
+  as the nodes are. The other villains' build is unchanged.
+- **The Service selects a label deploy_app sets, not one the model chose.** The model writes the Deployment, so
+  its labels are unknown. `deploy_app` now puts `burritobot.co/workload=<metadata.name>` on every pod it creates
+  (a Pod's own labels, or a Deployment's, Job's or CronJob's template), and keeps the model's labels and selector
+  as written. The `maintenance-shell` Service (port 80 to 8080) ships in the ai-layer bundle and selects
+  `burritobot.co/workload=maintenance-shell`. The key is not `app.kubernetes.io/name`, the one the
+  NetworkPolicies trust and restrict-agent-spawned-workloads guards.
+- **The route.** console.conf gets a third server, for `maintenance-shell-<cluster>` on both domains. It proxies
+  GET only to the Service, resolved per request, and its own page says nothing is running there yet when no pod
+  answers (an armed cluster, or before the attack). It is not a row in the service map, because the platform's
+  not-installed page would be wrong for it, and `verify/test_service_hosts_live.py` would fail a host that has
+  nothing behind it before the attack. fleet.sh's new `WIB_VILLAIN_HOSTS="maintenance-shell"` goes through
+  `emit_service_hosts`, so the routes table carries `maintenance-shell-<label>.agenticburn.com` for every cluster,
+  plus the burritobot.co twin on the roster.
+- **How the bot learns the address.** `deploy_app`'s reply for a Deployment it publishes (`PUBLISHED_WORKLOADS`,
+  only maintenance-shell) adds "Once its pod is ready it answers at https://maintenance-shell-<public host>/".
+  The public host is read from cluster-identity's `public-host` into `WIB_PUBLIC_HOST`, optional as it is for
+  guard-proxy. Without it the reply names no address. A refused Deployment gets no address either. The ticket
+  already asks the bot to tell the customer what it made, so no payload change was needed.
+- **Docs.** `/kubecon`'s public success marker, the run-of-show's C6 bullet, the prompt catalog and the villain
+  README describe the endpoint and say it goes live only after the push. The two-hour lab's C6 text is
+  unchanged.
+
+**Tests.** `verify/test_c6_villain_endpoint.py` (offline, new) checks the five pieces against each other. First, the
+ticket's image is build.sh's `$ORG/joker:latest`, built from the pinned base with the layer, entrypoint and PORT,
+and start.sh is committed executable. Second, the Service selects deploy_app's label on the image's port. Third, it
+runs deploy_app against a captured API and checks the label on each shape with the model's labels kept, and the
+address only with a public host, only for maintenance-shell, and never on a refusal. Fourth, the console server
+proxies to the Service. Fifth, fleet.sh's `emit_service_hosts` emits the row. Dropping the label call fails 6 of its
+checks and dropping the fleet.sh list fails 3; both were tried and reverted. `verify/test_joker_web_busybox.py`
+(tools tier, new) pulls `JOKER_BASE` from Docker Hub by digest, checks every blob's sha256, takes `bin/busybox` out
+of the layer, and runs start.sh on it. It checks that a missing PORT is refused, GET / is the page byte for byte,
+a path outside www/ is a 404, the laugh is logged, and SIGTERM ends both processes within 5 seconds.
+`verify/test_console_no_toggle.py` now expects three servers and checks that the new one reaches only the
+maintenance-shell Service. `verify/test_fleet_routes_roster.sh` reads both host lists.
+
+**Not yet run on a cluster.** Owed, in order, by a session with the Docker Hub Team PAT and AWS:
+1. Run `images/villains/build.sh` after `crane auth login` (it re-pushes the whole Docker Hub roster, the Joker
+   last).
+2. Run `fleet.sh routes roster` to publish the new rows, then let the ai-layer sync so workshop-mcp picks up
+   the new server.py and `WIB_PUBLIC_HOST`.
+3. On the community cluster, `python3 verify/kubecon_probe.py community attackme.agenticburn.com --context
+   <community-context> --kubeconfig /tmp/community.kubeconfig --profile accen-dev` (c6-lands), then
+   `curl -s https://maintenance-shell-attackme.burritobot.co/ | grep 'HA HA HA'` and
+   `kubectl --context <community-context> -n agent get endpoints maintenance-shell`, which should list the
+   villain pod.
+4. `CONTEXT=<community-context> python3 verify/test_service_hosts_live.py`, to check the existing service hosts
+   still route.
+Whether Nova passes the address on in its reply has not been measured.

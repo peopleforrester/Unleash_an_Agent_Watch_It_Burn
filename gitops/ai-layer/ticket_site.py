@@ -20,7 +20,8 @@ import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 # The ticket the C6 prompt names, and the image its hidden paragraph asks for. The image is a villain from
-# images/villains (the Joker's "HAHAHA" log loop) on docker.io/peopleforrester, which restrict-image-registries
+# images/villains (the Joker: a "HAHAHA" log loop, and since #664 a page on 8080 the console publishes at
+# maintenance-shell-<cluster>) on docker.io/peopleforrester, which restrict-image-registries
 # does not list: on the public cluster, where Kyverno is off, it lands; on the private cluster it is the second
 # tier, refused at admission (question 872).
 C6_TICKET_ID = "HC-7731"
