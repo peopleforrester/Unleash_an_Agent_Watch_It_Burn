@@ -4558,6 +4558,10 @@ What differs from the draft:
 - **The apex router already knows the prefix.** The draft left the router's roster filter to update.
   apex-agenticburn `derive-roster.sh` already skips `backstage-` (checked 2026-10-29), so nothing is owed
   there.
+- **Backstage's logs carry a burritobot- service.** Its pod has the `tags.datadoghq.com/service:
+  burritobot-backstage` and `env: burritobot-kubecon-na-26` labels that #662 asks of every workload.
+  `verify/test_datadog_log_services_render.py` (E2E tools tier) failed without them. Postgres takes its name
+  from the Agent's log config for the postgres image, as kagent's does.
 - **The old `gitops/apps-disabled/` files are gone**, and with them the directory. `docs/KUBECON-ABSTRACT-READINESS.md`
   row 3 says where Backstage is now.
 

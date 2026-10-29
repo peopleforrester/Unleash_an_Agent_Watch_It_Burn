@@ -30,6 +30,9 @@ spec:
       labels:
         app.kubernetes.io/name: backstage
         app.kubernetes.io/part-of: watch-it-burn-idp
+        # The Datadog Agent names this pod's logs from these two labels (#662).
+        tags.datadoghq.com/service: burritobot-backstage
+        tags.datadoghq.com/env: burritobot-kubecon-na-26
     spec:
       serviceAccountName: backstage
       securityContext:
