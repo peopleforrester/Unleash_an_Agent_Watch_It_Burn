@@ -3596,3 +3596,23 @@ attendee bring-up, after the package is public: `bash verify/input-guard.sh <hos
 It must pass the benign prompt and block the injection through the new image. Also, `kubectl --context <ctx> -n
 agent get deploy llm-guard -o jsonpath='{.spec.template.spec.containers[0].image}'` must print
 `ghcr.io/peopleforrester/lab-platform/llm-guard:v1@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b`.
+## 2026-10-29 · #655 · The labctl import row is still unchecked against lab-platform; the live import is owed
+
+#600 pipes each cluster's row to `labctl import --customer agenticburn --event <event> -`, built from the issue
+text alone. This run could not check it either. `sources repo-whereis lab-platform` and
+`gh api repos/peopleforrester/lab-platform/contents/docs/provisioning.md` both refused with "sudo: a password is
+required", so docs/provisioning.md section 9 was not read, and a run brings up no cluster and holds no
+`DATABASE_URL`. No change was made to the row.
+
+- **Still assumed, all five.** (1) An attendee row goes in with an empty `role`, not `attendee`. (2) The
+  header is quoted, as jq's `@csv` quotes it. (3) The row carries `terminal_user`, `terminal_password` and
+  `role` beyond pool.csv's v2 header. (4) Success is labctl's exit code. (5) `fleet.sh ingest pool`
+  re-importing a name the pool holds updates the row and leaves its claim alone, as /admin/import did.
+- **Changed.** Only the `ingest-instructors` usage line, which still said it registers with the provisioning
+  app. It now says lab-platform's handout pool through labctl import, as role=instructor.
+
+**Not yet run on a cluster:** with labctl on PATH, `DATABASE_URL` pointing at a lab-platform database and `USER`
+set, and a test event in `WIB_EVENT`, run one `fleet.sh ingest watch-it-burn-attendee-001` and one
+`fleet.sh ingest-instructors` against built clusters. Confirm that the attendee row is claimable and that the
+roster rows are not. Then run `fleet.sh ingest watch-it-burn-attendee-001` again after a claim, and confirm that
+the claim holds. Reading section 9 first settles (1) to (4) without any spend.

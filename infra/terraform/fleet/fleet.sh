@@ -619,8 +619,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
     instructors down [role|owner]
                               Destroy the roster, or exactly the part the same selector built with
                               'instructors up'.
-    ingest-instructors [role]  Register the roster with the provisioning app on its own (the same step
-                              'instructors up' runs). Use after a console NLB was not ready in time.
+    ingest-instructors [role]  Register the roster in lab-platform's handout pool through labctl import
+                              on its own, as role=instructor (the same step 'instructors up' runs). Use
+                              after a console NLB was not ready in time.
     Every roster cluster lives in \${WIB_DEFAULT_ACCOUNT}, which needs its lab-vpc applied to
     states/<profile>.tfstate first (the command prints the exact apply line if missing).
 
