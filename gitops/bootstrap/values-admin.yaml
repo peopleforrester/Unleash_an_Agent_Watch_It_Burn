@@ -34,8 +34,7 @@
 # arrives, writing the secret and restarting the readers adds Datadog with no change here.
 #
 # C7's control here is agentgateway's rule, not the Agent's toolNames list (#496), so ai-layer does not ignore that
-# list (#679). The ignore sat inside the Agent's tools array, and Argo CD's RespectIgnoreDifferences then applies the
-# whole live array on every sync: read_support_ticket (#640) never reached either KubeCon cluster.
+# list (#679), and selfHeal keeps the Agent's tools at git's on this profile.
 c7Control: gateway
 #
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no

@@ -4332,3 +4332,86 @@ contains #474 (`dfb2f41`), so Loki should never have run on them. The PVC is sti
 on watch-it-burn-private (admin, armed) and watch-it-burn-community (burn). That run is still owed for each Datadog
 assumption #555 lists: the kube_deployment, pod_name and kube_container_name:shim tags, how the JSON line is
 parsed, the app key's logs_read_data permission, and indexing inside 300 seconds.
+
+## 2026-10-29 · #679 (reopened) · ai-layer syncs without RespectIgnoreDifferences, and converge judges a rollout by its hashed ConfigMap names
+
+**Why it was reopened.** 69ba6cf fixed the Agent's tools on the admin profile only. The same day a6af457's new
+`CONSOLE_ORIGIN` env entry never reached guard-proxy on either KubeCon cluster, and guard-proxy stayed OutOfSync.
+After ed8dbf8, every ai-layer sync reported Succeeded while none of its new hashed ConfigMaps existed. Each self-heal
+synced guard-proxy alone, so the pods kept the old code. Michael asked for a fix that covers any list with an ignored
+element, that leaves guard-proxy Synced after an env change and the Agent Synced after a tools change, and for a
+fleet rollout check that reads the new hashed ConfigMap names rather than the sync phase.
+
+**What was measured.** Argo CD v3.5.2's `normalizeTargetResources`, `getMergePatch`, `applyMergePatch` and
+`restoreNonIgnoredFields` were copied verbatim into a small Go program. It was built with the versions Argo CD's
+go.mod pins (k8s.io/apimachinery and client-go v0.36.1, evanphx/json-patch v5.9.11, gojq v0.12.19) on go1.27.3, in
+/tmp, not committed, and run on the committed guard-proxy Deployment and ai-layer's env ignore:
+- With a live Deployment that has no `CONSOLE_ORIGIN`, the object the sync applies does carry it, in git's place. On
+  a built-in kind, the copy from live is a strategic merge patch, and a target-only entry survives it.
+- With `CONSOLE_ORIGIN` appended at the end of the live env, as `kubectl set env` does, the applied object takes
+  live's order. The patch's `$setElementOrder/env` is taken from live. ai-layer syncs with ServerSideApply, so Argo
+  CD diffs with structured merge diff, which compares the predicted object with live in order. So guard-proxy is
+  OutOfSync for good, and every self-heal applies the live order again and reports success.
+- On the Agent, a CRD, the copy is a JSON merge patch that carries the whole live tools array. That is the freeze
+  the earlier #679 entry ported to Python.
+
+What blocked the very first a6af457 sync, before any hand edit, is not proven offline. Argo CD's `autoSync`
+(controller/appcontroller.go) fills a self-heal operation's `sync.resources` with only the resources that are not
+Synced, and `SyncAppState` resumes an operation state that already exists. Together, these let one resource that is
+stuck OutOfSync turn every later sync into a partial one, which matches the controller log Michael quoted. Either
+way, the cure is the same: nothing in ai-layer may be able to stay OutOfSync after its own sync.
+
+**What changed.**
+- `gitops/bootstrap/apps/ai-layer.yaml` syncs with `ApplyOutOfSyncOnly=true` and no longer with
+  `RespectIgnoreDifferences=true`. The ignores stay, for the diff. A live edit of an ignored field shows no drift, so
+  selfHeal never syncs that resource for it, and ApplyOutOfSyncOnly keeps a Synced resource out of every other sync.
+  These edits are a student's guard-mcp-on, a tier swap, fleet.sh's Bedrock pins, and C8's scoped Role. A git change
+  to a resource makes it OutOfSync, and the sync applies git's whole object, so the Agent's tools and guard-proxy's
+  env land, and land in git's order, on every profile. c7Control from 69ba6cf stays: on admin nothing writes evil-mcp's
+  list live, so selfHeal restores git's list there.
+- `verify/test_agent_tools_sync.py` keeps the port of Argo CD's code and models a sync with and without the option.
+  With it, it reproduces #679 on attendee, burn and full. With the committed options, git's twelve tools land and
+  the Agent is Synced on every profile, and a student's guard-mcp-on survives syncs of anything else. It also shows
+  the price on the toolnames profiles: a commit that changes the Agent resets guard-mcp-on. Its rule now covers
+  every API group. No app that syncs with RespectIgnoreDifferences may ignore anything inside a list (a `[]` or an
+  index in a jq path, or an index in a JSON pointer). A map key in brackets, such as `.data["config.yaml"]`, is not
+  a list. Putting the option back on ai-layer fails 27 checks.
+- `fleet.sh`: there is a new step in converge's repair_one, `repair_ai_layer_rollout`. It renders this checkout's
+  gitops/ai-layer with `kubectl kustomize` and reads ai-layer's `status.sync.revision`. It judges only when the
+  checkout's gitops/ai-layer tree is the tree at that revision and has no local edits. Otherwise it records
+  `<name>:ai-layer-rollout-unjudged` and names both commits. Every generated ConfigMap must exist in agent, and
+  every Deployment must reference exactly the generated names the render gives it. A gap is recorded as
+  `<name>:ai-layer-rollout`, so converge says NOT CONVERGED whatever the sync phase says. When no operation is in
+  flight, the step starts one full sync. That sync has no resource filter, uses ai-layer's own syncOptions and the
+  compared revision, and is the by-hand repair Michael ran. An operation already in flight is left alone, never
+  merged into. `repair_agent_tools` stays as a backstop.
+- `verify/test_fleet_converge_repairs.sh` runs the step on the ed8dbf8 state (a Succeeded phase with the old
+  hashes), on a cluster with the new ConfigMaps but a Deployment still on an old one, on an operation in flight, on
+  a checkout of another tree, and on a missing revision. The full converge run judges both clusters rolled out.
+- `docs/MASTER-RECREATION-SPEC.md`'s tier-swap bullet and `verify/test_recreation_spec_tier_swap.py` name
+  ApplyOutOfSyncOnly, and they say that a commit changing anything else of the Agent or guard-proxy brings git's tier
+  with it. `verify/test_c7_gateway_toggle.py` checks ApplyOutOfSyncOnly instead of RespectIgnoreDifferences.
+
+**The price, accepted.** A commit that changes the Agent, guard-proxy, agentgateway, a Bedrock ModelConfig,
+agentgateway-c7-config or the workshop-agent Role resets that object's live edits to git. A reset Bedrock pin is
+untagged spend until the next `fleet.sh converge` re-pins it. Before this change, such a commit did not land on a
+running cluster at all, and Argo CD reported success. A guard-proxy change already restarts the pod and resets the
+in-memory guard toggles anyway.
+
+### REJECTED: keep RespectIgnoreDifferences and move each list ignore out of its list
+**Why:** guard-proxy's MODEL_TIER and agentgateway's BEDROCK_NOVA_MODEL could have become pod-template annotations
+read through the Downward API, which are map keys. But the Agent's evil-mcp toolNames is inside kagent's tools array
+by kagent's own schema, so the toolnames profiles would still freeze.
+
+### REJECTED: a second Application for the Agent and guard-proxy without the option
+**Why:** it changes the platform's layout and the profile lists, to keep an option whose only benefit
+ApplyOutOfSyncOnly already gives for every resource that git has not changed.
+
+**Not yet run on a cluster.** On a fresh attendee or burn cluster and on an admin cluster, once this is synced:
+`KUBECONFIG=<file> kubectl --context <ctx> -n argocd get application ai-layer -o jsonpath='{.spec.syncPolicy.syncOptions}'`
+should show ApplyOutOfSyncOnly and no RespectIgnoreDifferences. Run `kubectl set env` on guard-proxy for an entry
+git has mid-list, and confirm that Argo CD puts it back in git's order and that ai-layer reads Synced. Run guard-mcp-on
+on a burn or attendee cluster and push a commit that changes only another resource, and confirm that the narrowed
+list stays. `./fleet.sh converge <name>` from a checkout of the revision the cluster tracks should log
+"ai-layer rolled out <rev>". After that, the live suite `bash verify/run-e2e.sh` with CONTEXT set. On the two
+KubeCon clusters, the first sync after this reaches them applies git's objects for every OutOfSync resource.

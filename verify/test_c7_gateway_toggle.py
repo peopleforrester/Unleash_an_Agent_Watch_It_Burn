@@ -75,8 +75,10 @@ check("on the agentgateway Deployment only the BEDROCK_NOVA_MODEL env entry is i
       and [i for i in ignores if i.get("kind") == "Deployment" and i.get("name") == "agentgateway"]
       == [{"group": "apps", "kind": "Deployment", "name": "agentgateway", "jqPathExpressions": [BEDROCK_PIN]}],
       f"{[i for i in ignores if i.get('kind') == 'Deployment']}")
-check("RespectIgnoreDifferences is on, so a sync does not revert the edit either",
-      "RespectIgnoreDifferences=true" in APP["spec"]["syncPolicy"]["syncOptions"])
+# Not RespectIgnoreDifferences (#679): the ignore keeps the edit from showing as drift, and ApplyOutOfSyncOnly keeps a
+# Synced agentgateway-c7-config out of every sync of the other resources. A commit to the ConfigMap itself resets it.
+check("ApplyOutOfSyncOnly is on, so a sync of anything else does not revert the edit either",
+      "ApplyOutOfSyncOnly=true" in APP["spec"]["syncPolicy"]["syncOptions"])
 
 print("== block-argocd-drift lets the terminal, and only the terminal, UPDATE it ==")
 conds = {c["name"]: c["expression"] for c in DRIFT["spec"]["matchConditions"]}

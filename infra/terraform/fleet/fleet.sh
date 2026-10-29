@@ -939,11 +939,11 @@ repair_agent_injection() {
 # converge did not touch the field, an explicit sync reported "no more tasks", and Force changed nothing
 # because no write was being attempted.
 #
-# #679 is the same wall, and why it stands: the Agent is a CRD, so RespectIgnoreDifferences carries the ignored
-# evil-mcp toolNames back as a JSON merge patch, which holds the whole live tools array, and every sync applies that
+# #679 was the same wall: the Agent is a CRD, so RespectIgnoreDifferences carried the ignored evil-mcp toolNames
+# back as a JSON merge patch, which held the whole live tools array, and every sync applied that
 # (verify/test_agent_tools_sync.py ports Argo CD v3.5.2's code). read_support_ticket (#640) never reached either
-# KubeCon cluster that way. The admin profile no longer renders that ignore, so Argo syncs its tools from git; the
-# toolnames profiles keep it for the student's guard-mcp-on, and this repair is what brings them back to git.
+# KubeCon cluster that way. ai-layer now syncs without that option, so Argo writes git's tools on every profile;
+# this repair stays as the backstop for a cluster whose Agent is stale anyway.
 #
 # Replacing the object is the only repair that works. Deleting the Agent CR makes Argo recreate it from the
 # manifest; kagent owns the agent Deployment through an ownerRef, so the pod cycles with it (about a
@@ -973,6 +973,105 @@ PYEOF
         log "  ${name}: agent tool list is stale; recreating the Agent CR so Argo rewrites it"
         KUBECONFIG="${kcfg}" kubectl -n agent delete agent workshop-agent >/dev/null 2>&1 || true
     fi
+}
+
+# Has the commit ai-layer compares actually rolled out? Judged by the hashed ConfigMap names git renders, never by
+# the sync phase (#679). On 2026-10-29 both KubeCon clusters reported every ai-layer sync Succeeded after ed8dbf8
+# while none of its new hashed ConfigMaps existed: guard-proxy was stuck OutOfSync, so each self-heal synced it
+# alone, and the pods kept the old code. Michael's measure was the names, so this is too.
+#
+# The names come from rendering this checkout's gitops/ai-layer, so they are judged only when that tree is the one
+# at the revision ai-layer compares (status.sync.revision) and the working tree under it is clean; otherwise the
+# verdict is "unjudged", a failure that names both commits. Each generated ConfigMap must exist in agent, and each
+# Deployment must reference exactly the generated names the render gives it. A gap is recorded, and when no
+# operation is in flight a full sync (no resource filter, ai-layer's own syncOptions) is started, as Michael's
+# by-hand repair was; the next converge round judges again.
+render_ai_layer() { kubectl kustomize "${REPO_ROOT}/gitops/ai-layer"; }
+ai_layer_tree() { # $1 a commit: the tree id of gitops/ai-layer there; no argument: the checkout's, empty if dirty
+    if [[ $# -eq 0 ]]; then
+        [[ -z "$(git -C "${REPO_ROOT}" status --porcelain --untracked-files=no -- gitops/ai-layer 2>/dev/null)" ]] || return 0
+        set -- HEAD
+    fi
+    git -C "${REPO_ROOT}" rev-parse --verify -q "$1:gitops/ai-layer" 2>/dev/null || true
+}
+
+ai_layer_rollout_gaps() { # $1 render (YAML file), $2 live agent ConfigMaps (JSON), $3 live agent Deployments (JSON)
+    python3 - "$1" "$2" "$3" "${REPO_ROOT}/gitops/ai-layer/kustomization.yaml" <<'PYEOF'
+import json, re, sys, yaml
+render = [d for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")) if d]
+kz = yaml.safe_load(open(sys.argv[4], encoding="utf-8"))
+gens = [g["name"] for k in ("configMapGenerator", "secretGenerator") for g in kz.get(k) or []]
+generated = re.compile(r"^(" + "|".join(map(re.escape, gens)) + r")-[a-z0-9]{10}$")
+
+def refs(obj):  # every generated name a workload spec refers to, wherever kustomize rewrites one
+    out, todo = set(), [obj]
+    while todo:
+        o = todo.pop()
+        if isinstance(o, dict):
+            for k in ("configMap", "secret", "configMapRef", "secretRef", "configMapKeyRef", "secretKeyRef"):
+                v = o.get(k)
+                if isinstance(v, dict) and isinstance(v.get("name"), str) and generated.match(v["name"]):
+                    out.add(v["name"])
+            if isinstance(o.get("secretName"), str) and generated.match(o["secretName"]):
+                out.add(o["secretName"])
+            todo.extend(o.values())
+        elif isinstance(o, list):
+            todo.extend(o)
+    return out
+
+live_cms = {i["metadata"]["name"] for i in json.load(open(sys.argv[2], encoding="utf-8")).get("items", [])}
+live_deps = {i["metadata"]["name"]: i for i in json.load(open(sys.argv[3], encoding="utf-8")).get("items", [])}
+for name in sorted(d["metadata"]["name"] for d in render if d["kind"] == "ConfigMap" and generated.match(d["metadata"]["name"])):
+    if name not in live_cms:
+        print(f"configmap {name} missing")
+for d in sorted((d for d in render if d["kind"] == "Deployment"), key=lambda d: d["metadata"]["name"]):
+    name, want = d["metadata"]["name"], refs(d["spec"])
+    if name not in live_deps:
+        print(f"deployment {name} missing")
+        continue
+    got = refs(live_deps[name]["spec"])
+    if got != want:
+        print(f"deployment {name} still on {','.join(sorted(got - want)) or '-'} (git: {','.join(sorted(want - got)) or '-'})")
+PYEOF
+}
+
+repair_ai_layer_rollout() {
+    local name="$1" kcfg="$2" app rev want have tmp gaps op
+    app="$(KUBECONFIG="${kcfg}" kubectl -n argocd get application ai-layer -o json 2>/dev/null || true)"
+    rev="$(jq -r '.status.sync.revision // empty' <<<"${app}" 2>/dev/null || true)"
+    if [[ -z "${rev}" ]]; then
+        log "  ${name}: ai-layer has no compared revision, so its rollout cannot be judged"
+        record_fail "${name}:ai-layer-rollout-unjudged"; return 0
+    fi
+    want="$(ai_layer_tree "${rev}")"; have="$(ai_layer_tree)"
+    if [[ -z "${want}" || "${want}" != "${have}" ]]; then
+        log "  ${name}: ai-layer compares ${rev:0:12}, and this checkout's gitops/ai-layer is not that tree (or has local edits); check out ${rev:0:12} to judge its rollout"
+        record_fail "${name}:ai-layer-rollout-unjudged"; return 0
+    fi
+    tmp="$(mktemp -d)"
+    if ! render_ai_layer >"${tmp}/render.yaml" 2>"${tmp}/err"; then
+        log "  ${name}: cannot render gitops/ai-layer (is the guard-proxy submodule checked out?): $(head -c 200 "${tmp}/err")"
+        rm -rf "${tmp}"; record_fail "${name}:ai-layer-rollout-unjudged"; return 0
+    fi
+    KUBECONFIG="${kcfg}" kubectl -n agent get configmaps -o json >"${tmp}/cms.json" 2>/dev/null || echo '{"items":[]}' >"${tmp}/cms.json"
+    KUBECONFIG="${kcfg}" kubectl -n agent get deployments -o json >"${tmp}/deps.json" 2>/dev/null || echo '{"items":[]}' >"${tmp}/deps.json"
+    gaps="$(ai_layer_rollout_gaps "${tmp}/render.yaml" "${tmp}/cms.json" "${tmp}/deps.json")"
+    rm -rf "${tmp}"
+    if [[ -z "${gaps}" ]]; then
+        log "  ${name}: ai-layer rolled out ${rev:0:12}: every hashed ConfigMap is live and every Deployment mounts git's"
+        return 0
+    fi
+    log "  ${name}: ai-layer has NOT rolled out ${rev:0:12}, whatever its sync phase says: $(paste -sd';' <<<"${gaps}")"
+    record_fail "${name}:ai-layer-rollout"
+    op="$(jq -c '.operation // empty' <<<"${app}")"
+    if [[ -n "${op}" ]]; then
+        log "  ${name}: an ai-layer operation is in flight (${op:0:120}); leaving it, the next round judges again"
+        return 0
+    fi
+    log "  ${name}: starting a full ai-layer sync to ${rev:0:12} (no resource filter, ai-layer's own sync options)"
+    KUBECONFIG="${kcfg}" kubectl -n argocd patch application ai-layer --type merge -p "$(jq -c --arg r "${rev}" \
+        '{operation: {initiatedBy: {username: "fleet-converge"}, sync: {revision: $r, prune: true,
+          syncOptions: (.spec.syncPolicy.syncOptions // [])}}}' <<<"${app}")" >/dev/null 2>&1 || true
 }
 
 # Bedrock spend carries project/event (#513). A system-defined inference profile cannot be tagged, so a
@@ -1127,6 +1226,7 @@ repair_one() {
     repair_step repair_failed_syncs "${name}" "${kcfg}"
     repair_step repair_agent_injection "${name}" "${kcfg}"
     repair_step repair_agent_tools "${name}" "${kcfg}"
+    repair_step repair_ai_layer_rollout "${name}" "${kcfg}"
     # Not a step: it records its own ledger line when it fails, and a step would record a second one.
     pin_bedrock_profiles "${name}" "${kcfg}" || true
     repair_step repair_stuck_pods "${name}" "${kcfg}"

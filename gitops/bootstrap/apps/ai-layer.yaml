@@ -69,6 +69,9 @@ spec:
         # pointed at a pruned Secret (#254). Ignoring every literal then swallowed OTEL_RESOURCE_ATTRIBUTES,
         # so renaming the service to burritobot never reached a cluster while Argo still reported the
         # Deployment Synced (#265). Anything not named here is managed by Git and syncs normally.
+        # The diff only (#679): with RespectIgnoreDifferences the sync took the env list's ORDER from live (the
+        # strategic merge patch's $setElementOrder), so CONSOLE_ORIGIN, appended by hand where git puts it
+        # mid-list, left guard-proxy OutOfSync for good and every self-heal applied the live order again.
         - '.spec.template.spec.containers[] | select(.name=="proxy") | .env[] | select(.name | test("^(INPUT_BLOCKLIST|INPUT_CLASSIFIER|OUTPUT_GUARD|PROXY_FAIL_CLOSED|MODEL_TIER|RATE_LIMIT_RPM|COST_CAP_USD|STREAM_PROMPTS|OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT)$"))'
     # Beat-3 (C7) LIVE TOGGLE: challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh patches
     # the kagent Agent's MCP toolNames allowlist (ON excludes the rogue tools, --off lets them back in).
@@ -86,16 +89,15 @@ spec:
     # Only Challenge 7 patches a tool list live, and only evil-mcp's. Selecting that one server by NAME
     # rather than by array index keeps it correct if the order ever changes.
     #
-    # Even narrowed, this ignore freezes the WHOLE tools array on sync (#679). The Agent is a CRD, so
-    # RespectIgnoreDifferences copies the ignored field back from live with a JSON merge patch, and a merge
-    # patch cannot write one element of an array: it carries the entire live array, and Argo CD v3.5.2's
-    # restoreNonIgnoredFields only walks maps. So every sync applies the live tools, a git change to any
-    # tool entry never lands, and the Agent stays OutOfSync while each auto-sync says serverside-applied.
-    # That is how read_support_ticket (#640) never reached either KubeCon cluster. On toolnames profiles
-    # the ignore stays, because selfHeal would otherwise undo a student's guard-mcp-on, and fleet.sh
-    # converge's repair_agent_tools recreates the Agent when its workshop-mcp list is stale. On the admin
-    # profile (c7Control: gateway) C7 is agentgateway's rule (#496), nothing writes this list live, and the
-    # ignore is not rendered, so Argo syncs the tools from git. verify/test_agent_tools_sync.py models it.
+    # This ignore is for the DIFF only (#679). It sits inside the tools array, and while ai-layer synced with
+    # RespectIgnoreDifferences=true that froze the whole array: the Agent is a CRD, so the sync copied the
+    # ignored field back from live as a JSON merge patch, which carries the entire live array, and every sync
+    # applied the live tools. read_support_ticket (#640) never reached either KubeCon cluster that way. The
+    # option is gone (syncOptions below), so a sync applies git's Agent, and a student's guard-mcp-on is kept
+    # by this ignore (no drift, so no selfHeal) and by ApplyOutOfSyncOnly (a sync of anything else does not
+    # re-apply the Agent). A commit that changes the Agent resets it to git, guard-mcp-on included. On the
+    # admin profile (c7Control: gateway) C7 is agentgateway's rule (#496), nothing writes this list live, and
+    # the ignore is not rendered, so selfHeal restores git's list too. verify/test_agent_tools_sync.py models it.
     - group: kagent.dev
       kind: Agent
       name: workshop-agent
@@ -131,7 +133,9 @@ spec:
     # The config is one string, so the ignore has to cover all of it. That is why the evil-mcp bind has a
     # ConfigMap and a container of its own: agentgateway-config (the A2A, workshop-mcp and LLM routes) stays
     # fully managed, and the agentgateway Deployment ignores only its BEDROCK_NOVA_MODEL env (above).
-    # The cost: a committed change to agentgateway-c7-config reaches new clusters only.
+    # A committed change to agentgateway-c7-config's config.yaml alone shows no drift, so it reaches new clusters
+    # only; a change to anything else of it makes it OutOfSync, and the sync then applies git's config.yaml
+    # too, which resets a live guard-mcp-on (#679: syncs no longer copy ignored fields from live).
     - group: ""
       kind: ConfigMap
       name: agentgateway-c7-config
@@ -163,14 +167,29 @@ spec:
       # kubectl-patch owned .spec.declarative.tools, so the get_recipe -> get_vault_entry rename never
       # reached a single live cluster and Challenge 5 was impossible on all of them (#349).
       #
-      # Force lets Argo reclaim the field. It is only safe because the ignore above is now narrowed to
-      # evil-mcp's toolNames: that one path stays ignored, so a student's Challenge 7 patch is still
-      # protected, while everything else about the agent reconciles again. Forcing with the old
-      # wholesale ignore would have reverted the student's fix mid-challenge.
+      # Force lets Argo reclaim the field. A student's Challenge 7 patch survives because the ignore above is
+      # narrowed to evil-mcp's toolNames, so the patch shows no drift and selfHeal never syncs the Agent for it,
+      # and because ApplyOutOfSyncOnly (below) leaves a Synced Agent out of every other sync. With the old
+      # wholesale ignore the Agent could never be OutOfSync, so no change of ours reached it at all.
       - Force=true
-      # RespectIgnoreDifferences: honor the ignoreDifferences (guard-proxy env, Agent tools, modelConfig,
-      # the Bedrock ModelConfigs' model, agentgateway's BEDROCK_NOVA_MODEL, agentgateway-c7-config's config.yaml)
-      # on SYNC too, not just on diff. Without it a sync re-applies the committed spec and can revert a
-      # live toggle (found 2026-07-10 for kyverno-policies; C7 MCP-authz toggle patches the Agent CR tools
-      # and has the same exposure — held in the stable window but a forced/initial-churn sync could revert).
-      - RespectIgnoreDifferences=true
+      # ApplyOutOfSyncOnly, and NO RespectIgnoreDifferences (#679). The ignores above are for the diff: a live
+      # edit of an ignored field (a student's guard-mcp-on, a tier swap, fleet.sh's Bedrock profile pins, C8's
+      # scoped Role) shows no drift, so selfHeal never syncs that resource for it, and ApplyOutOfSyncOnly keeps
+      # it out of every sync of the other resources too (a new commit, or a self-heal of something else).
+      #
+      # RespectIgnoreDifferences=true, which this app carried from 2026-07-10 to keep those edits through a
+      # sync, is what froze our own changes. On a sync it copies each ignored field from live into what it
+      # applies, and three of the ignores here sit inside a list (the Agent's tools, guard-proxy's and
+      # agentgateway's env). The Agent is a CRD, so the copy is a JSON merge patch that carries the whole live
+      # tools array, and for a Deployment it is a strategic merge patch whose $setElementOrder takes the env
+      # list's order from live. read_support_ticket (#640) never reached
+      # the Agent, and guard-proxy's CONSOLE_ORIGIN, appended by hand at the end of the live env, kept guard-proxy
+      # OutOfSync for good. Each self-heal then synced guard-proxy alone, Succeeded, and changed nothing, and
+      # the next commit's new hashed ConfigMaps never landed while every sync reported success.
+      #
+      # The price: a commit that changes a resource applies git's whole object, so it also resets that
+      # resource's live edits (C7's toolNames, the tier, the Bedrock pin, which the next fleet.sh converge
+      # puts back). verify/test_agent_tools_sync.py fails if RespectIgnoreDifferences returns on an app whose
+      # ignores reach into a list, and fleet.sh converge's repair_ai_layer_rollout judges a rollout by the
+      # hashed ConfigMap names git renders, not by the sync phase.
+      - ApplyOutOfSyncOnly=true

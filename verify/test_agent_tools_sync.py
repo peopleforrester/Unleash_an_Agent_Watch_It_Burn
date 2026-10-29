@@ -1,5 +1,5 @@
-# ABOUTME: Reproduces #679 offline: Argo CD's RespectIgnoreDifferences sync of the workshop-agent CRD, ported from
-# ABOUTME: v3.5.2, keeps the live tools array whenever an ignore sits inside it; admin no longer has one there.
+# ABOUTME: Reproduces #679 offline: Argo CD v3.5.2's RespectIgnoreDifferences sync of the workshop-agent CRD, ported,
+# ABOUTME: keeps the live tools array; ai-layer now syncs without it, so git's tools land on every profile.
 #
 # Why (#679). Git gave workshop-mcp twelve tools, read_support_ticket among them (#640), and both KubeCon clusters
 # kept the older eleven. ai-layer showed Agent/workshop-agent OutOfSync, every auto-sync said serverside-applied,
@@ -10,12 +10,18 @@
 # toolNames puts the WHOLE live tools array in the patch. restoreNonIgnoredFields, which repairs that collateral,
 # walks maps only, and the tools array is a leaf to it, so the live array is what gets applied.
 #
+# The same copy froze guard-proxy's env on both clusters (a6af457's CONSOLE_ORIGIN). A Deployment is in the scheme,
+# so there the copy is a strategic merge patch, and its $setElementOrder directive takes the env list's order from
+# live: an entry appended by hand stays where live has it, the structured-merge diff still sees git's order, and the
+# Deployment is OutOfSync for good. That was run with Argo CD's own code (k8s.io/apimachinery v0.36.1, decisions.md
+# #679); this file holds the rule it leads to, that no app syncing with RespectIgnoreDifferences ignores anything
+# inside a list. ai-layer has three such ignores, so it syncs without the option, with ApplyOutOfSyncOnly instead.
+#
 # This ports that function for a resource outside the scheme (the jq deletion is the real jq, as Argo CD's gojq
-# del(<expression>)) and runs it on the committed Agent and each profile's rendered ai-layer ignores. On the
-# toolnames profiles the hazard is kept on purpose, for the student's guard-mcp-on, and fleet.sh converge's
-# repair_agent_tools is the repair (its shim test is in test_fleet_converge_repairs.sh). On admin, where C7 is
-# agentgateway's rule (#496), the ignore is gone and the sync carries git's tools. The port is held to
-# VERSIONS.lock's Argo CD version: a version bump fails here until the port is read against the new sync.go.
+# del(<expression>)) and runs it on the committed Agent and each profile's rendered ai-layer ignores: once with the
+# option the clusters had, which reproduces #679, and once with the committed syncOptions, which apply git's Agent.
+# The port is held to VERSIONS.lock's Argo CD version: a version bump fails here until the port is read against the
+# new sync.go.
 from __future__ import annotations
 
 import copy
@@ -180,83 +186,131 @@ def live_agent(workshop_tools: list[str] | None = None, evil_tools: list[str] | 
     return live
 
 
+RESPECT = "RespectIgnoreDifferences=true"
+
+
+def sync_options(app: dict) -> list[str]:
+    return ((app.get("spec") or {}).get("syncPolicy") or {}).get("syncOptions") or []
+
+
+def applied_by_sync(app: dict, target: dict, live: dict | None, expressions: list[str]) -> dict:
+    """What one sync of this app applies for the resource: sync.go runs normalizeTargetResources only with the option."""
+    return synced_target(target, live, expressions) if RESPECT in sync_options(app) else target
+
+
+def in_sync_operation(app: dict, target: dict, live: dict | None, expressions: list[str]) -> bool:
+    """Whether a sync applies the resource at all: with ApplyOutOfSyncOnly, only a missing or OutOfSync one."""
+    if "ApplyOutOfSyncOnly=true" not in sync_options(app):
+        return True
+    return live is None or out_of_sync(target, live, expressions)
+
+
+def after_sync(app: dict, target: dict, live: dict, expressions: list[str]) -> dict:
+    return applied_by_sync(app, target, live, expressions) if in_sync_operation(app, target, live, expressions) else live
+
+
 ai_profiles = [p for p in profiles() if "ai-layer" in app_names(p)]
 check("every profile deploys ai-layer", ai_profiles == profiles(), str(ai_profiles))
-check("ai-layer syncs with RespectIgnoreDifferences=true, the option the port is",
-      all("RespectIgnoreDifferences=true" in rendered_ai_layer(p)["spec"]["syncPolicy"]["syncOptions"] for p in ai_profiles))
 check("only admin puts C7 on agentgateway's rule (c7Control gateway), the profile the web terminal's _c7gw names",
       [p for p in ai_profiles if c7_control(p) == "gateway"] == ["admin"])
+for profile in ai_profiles:
+    opts = sync_options(rendered_ai_layer(profile))
+    check(f"{profile}: ai-layer syncs WITHOUT RespectIgnoreDifferences, so a sync applies git's objects (#679)",
+          RESPECT not in opts, str(opts))
+    check(f"{profile}: and with ApplyOutOfSyncOnly, so a sync leaves every Synced resource as it is",
+          "ApplyOutOfSyncOnly=true" in opts, str(opts))
+    check(f"{profile}: server-side apply with Force and selfHeal stay, so a git change still lands by itself",
+          "ServerSideApply=true" in opts and "Force=true" in opts
+          and rendered_ai_layer(profile)["spec"]["syncPolicy"]["automated"] == {"prune": True, "selfHeal": True})
 
 for profile in ai_profiles:
-    control, ignores = c7_control(profile), agent_ignores(rendered_ai_layer(profile))
+    app = rendered_ai_layer(profile)
+    old = copy.deepcopy(app)
+    old["spec"]["syncPolicy"]["syncOptions"] = [o for o in sync_options(app) if o != "ApplyOutOfSyncOnly=true"] + [RESPECT]
+    control, ignores = c7_control(profile), agent_ignores(app)
     stale = live_agent(workshop_tools=STALE_ELEVEN)
-    applied = synced_target(AGENT, stale, ignores)
+    print(f"== {profile} (c7Control {control}) ==")
     if control == "toolnames":
-        print(f"== {profile} (c7Control toolnames): #679 reproduced, and the student's C7 fix kept ==")
         check(f"{profile}: the Agent's ignores are evil-mcp's toolNames and modelConfig",
               ignores == [EVIL, ".spec.declarative.modelConfig"], str(ignores))
-        check(f"{profile}: git's twelve show as drift on the stale Agent (OutOfSync)", out_of_sync(AGENT, stale, ignores))
-        check(f"{profile}: the sync applies the LIVE tools array, so read_support_ticket never lands",
-              server(applied, "workshop-mcp")["toolNames"] == STALE_ELEVEN,
-              str(server(applied, "workshop-mcp")["toolNames"]))
-        check(f"{profile}: so the applied Agent is still OutOfSync, every auto-sync after it the same",
-              out_of_sync(AGENT, synced_target(AGENT, applied, ignores), ignores))
-        narrowed = live_agent(evil_tools=["get_weather"])
-        check(f"{profile}: a student's guard-mcp-on (evil-mcp narrowed to get_weather) survives a sync, why it is kept",
-              server(synced_target(AGENT, narrowed, ignores), "evil-mcp")["toolNames"] == ["get_weather"]
-              and not out_of_sync(AGENT, narrowed, ignores))
+        frozen = after_sync(old, AGENT, stale, ignores)
+        check(f"{profile}: #679 reproduced: with RespectIgnoreDifferences the sync applies the LIVE tools array",
+              server(frozen, "workshop-mcp")["toolNames"] == STALE_ELEVEN, str(server(frozen, "workshop-mcp")["toolNames"]))
+        check(f"{profile}: so the Agent stays OutOfSync, every auto-sync after it the same",
+              out_of_sync(AGENT, after_sync(old, AGENT, frozen, ignores), ignores))
     else:
-        print(f"== {profile} (c7Control gateway): the sync carries git's tools ==")
         check(f"{profile}: the Agent's only ignore is modelConfig, outside the tools array",
               ignores == [".spec.declarative.modelConfig"], str(ignores))
-        check(f"{profile}: the sync applies git's workshop-mcp list, read_support_ticket included",
-              server(applied, "workshop-mcp")["toolNames"] == GIT_TOOLS, str(server(applied, "workshop-mcp")["toolNames"]))
-        check(f"{profile}: and git's whole tools array, headersFrom included",
-              applied["spec"]["declarative"]["tools"] == AGENT["spec"]["declarative"]["tools"])
-        check(f"{profile}: after it the Agent is Synced", not out_of_sync(AGENT, applied, ignores))
-        tiered = live_agent(workshop_tools=STALE_ELEVEN, model_config="bedrock-claude")
-        got = synced_target(AGENT, tiered, ignores)
-        check(f"{profile}: a per-cluster modelConfig still survives the same sync (a field of a map, not an array)",
-              got["spec"]["declarative"]["modelConfig"] == "bedrock-claude"
-              and server(got, "workshop-mcp")["toolNames"] == GIT_TOOLS)
-        check(f"{profile}: nothing on admin writes evil-mcp's list but the committed one, so selfHeal restoring it is right",
-              server(synced_target(AGENT, live_agent(evil_tools=["get_weather"]), ignores), "evil-mcp")["toolNames"]
-              == server(AGENT, "evil-mcp")["toolNames"])
-    check(f"{profile}: a fresh cluster (no live Agent) gets git's Agent as committed",
-          synced_target(AGENT, None, ignores) == AGENT)
+    check(f"{profile}: git's twelve show as drift on the stale Agent (OutOfSync), so selfHeal syncs it",
+          out_of_sync(AGENT, stale, ignores))
+    applied = after_sync(app, AGENT, stale, ignores)
+    check(f"{profile}: the sync applies git's workshop-mcp list, read_support_ticket included",
+          server(applied, "workshop-mcp")["toolNames"] == GIT_TOOLS, str(server(applied, "workshop-mcp")["toolNames"]))
+    check(f"{profile}: and git's whole tools array, headersFrom included", applied["spec"]["declarative"]["tools"]
+          == AGENT["spec"]["declarative"]["tools"])
+    check(f"{profile}: after it the Agent is Synced", not out_of_sync(AGENT, applied, ignores))
 
-print("== the stale toolnames clusters are converge's to repair ==")
+    narrowed = live_agent(evil_tools=["get_weather"], model_config="bedrock-claude")
+    if control == "toolnames":
+        check(f"{profile}: a student's guard-mcp-on (evil-mcp narrowed to get_weather) shows no drift, so no selfHeal",
+              not out_of_sync(AGENT, narrowed, ignores))
+        kept = after_sync(app, AGENT, narrowed, ignores)
+        check(f"{profile}: and a sync of anything else leaves it, with a per-cluster modelConfig, as the student set it",
+              server(kept, "evil-mcp")["toolNames"] == ["get_weather"]
+              and kept["spec"]["declarative"]["modelConfig"] == "bedrock-claude")
+        both = live_agent(workshop_tools=STALE_ELEVEN, evil_tools=["get_weather"])
+        reset = after_sync(app, AGENT, both, ignores)
+        check(f"{profile}: the price: a commit that changes the Agent resets guard-mcp-on to git's full rogue list",
+              server(reset, "evil-mcp")["toolNames"] == server(AGENT, "evil-mcp")["toolNames"]
+              and server(reset, "workshop-mcp")["toolNames"] == GIT_TOOLS)
+    else:
+        check(f"{profile}: nothing on admin writes evil-mcp's list live, so a narrowed one is drift and selfHeal restores it",
+              out_of_sync(AGENT, narrowed, ignores)
+              and server(after_sync(app, AGENT, narrowed, ignores), "evil-mcp")["toolNames"]
+              == server(AGENT, "evil-mcp")["toolNames"])
+        tiered = live_agent(model_config="bedrock-claude")
+        check(f"{profile}: a per-cluster modelConfig alone shows no drift, so a sync leaves it",
+              not out_of_sync(AGENT, tiered, ignores)
+              and after_sync(app, AGENT, tiered, ignores)["spec"]["declarative"]["modelConfig"] == "bedrock-claude")
+    check(f"{profile}: a fresh cluster (no live Agent) gets git's Agent as committed",
+          after_sync(app, AGENT, None, ignores) == AGENT)
+
+print("== the stale clusters are converge's to repair until this reaches them ==")
 fleet = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 check("fleet.sh repair_one runs repair_agent_tools", re.search(
     r"^repair_one\(\) \{\n(?:.*\n){0,8}?    repair_step repair_agent_tools \"\$\{name\}\" \"\$\{kcfg\}\"", fleet, re.M)
       is not None)
-check("and its shim test recreates the Agent from the #679 state",
-      "#679" in (REPO / "verify/test_fleet_converge_repairs.sh").read_text(encoding="utf-8"))
+check("and repair_ai_layer_rollout, which judges a rollout by the hashed ConfigMap names, not the sync phase",
+      re.search(r"^repair_one\(\) \{\n(?:.*\n){0,10}?    repair_step repair_ai_layer_rollout ", fleet, re.M) is not None)
+shim = (REPO / "verify/test_fleet_converge_repairs.sh").read_text(encoding="utf-8")
+check("and their shim test recreates the Agent from the #679 state and finds the missing hashed ConfigMaps",
+      "#679" in shim and "repair_ai_layer_rollout" in shim)
 
-print("== no other ignore freezes part of an array on sync ==")
-# A JSON merge patch replaces an array whole, so on a resource outside Argo CD's scheme (a CRD: a dotted group not
-# under k8s.io) an ignore that reaches INTO an array element freezes the whole array. Built-in kinds take a
-# strategic merge patch with their merge keys, and an ignore of a whole array field is the intended freeze.
-BUILTIN = re.compile(r"^$|^[a-z0-9]+$|\.k8s\.io$")
-
-
-def into_array(i: dict) -> list[str]:
-    return [e for e in i.get("jqPathExpressions") or [] if "[" in e] + \
-        [p for p in i.get("jsonPointers") or [] if re.search(r"/\d+/", p)]
+print("== no app that syncs with RespectIgnoreDifferences ignores anything inside a list ==")
+# The copy from live replaces a list whole on a CRD (a JSON merge patch) and takes its order from live on a built-in
+# kind (a strategic merge patch's $setElementOrder). An ignore of a whole field, a list included (kyverno-policies'
+# /spec/validationActions, the root's /metadata/finalizers), is copied whole, which is what it means.
+ELEMENT = re.compile(r"\[\]|\[\s*-?\d")
 
 
+def into_list(i: dict) -> list[str]:
+    return [e for e in i.get("jqPathExpressions") or [] if ELEMENT.search(e)] + \
+        [p for p in i.get("jsonPointers") or [] if re.search(r"/(\d+|-)(/|$)", p)]
+
+
+check("the rule finds the three list ignores ai-layer has (so it would catch them were the option back)",
+      sum(len(into_list(i)) for i in rendered_ai_layer("attendee")["spec"]["ignoreDifferences"]) == 3)
+check("and reads a map key in brackets as no list (agentgateway-c7-config's .data[\"config.yaml\"])",
+      not into_list({"jqPathExpressions": ['.data["config.yaml"]']}))
 for profile in profiles():
     for n in app_names(profile):
         raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
         for app in (d for d in yaml.safe_load_all(without_front_door(raw)) if d):
-            opts = ((app.get("spec") or {}).get("syncPolicy") or {}).get("syncOptions") or []
-            if "RespectIgnoreDifferences=true" not in opts:
+            if RESPECT not in sync_options(app):
                 continue
             for i in app["spec"].get("ignoreDifferences") or []:
-                bad = [] if BUILTIN.search(i.get("group", "")) else into_array(i)
-                if (n, i.get("kind"), c7_control(profile)) == ("ai-layer", "Agent", "toolnames"):
-                    bad = [e for e in bad if e != EVIL]
-                check(f"{profile} {n}: {i.get('kind')} ignores reach into no array {bad}", not bad)
+                bad = into_list(i)
+                check(f"{profile} {n}: {i.get('kind')} ignores reach into no list {bad}", not bad)
 
 print()
 if failures:

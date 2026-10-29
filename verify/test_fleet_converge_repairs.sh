@@ -34,6 +34,9 @@ echo "kubectl $*" >>"${CALLS}"
 case "$*" in
   *"config current-context"*) echo "ctx-test" ;;
   *"get applications.argoproj.io -n argocd -o json"*) cat "${T}/apps.json" 2>/dev/null || echo '{"items":[]}' ;;
+  *"-n argocd get application ai-layer -o json"*) cat "${T}/ailayer.json" 2>/dev/null || exit 1 ;;
+  *"-n agent get configmaps -o json"*) cat "${T}/cms.json" 2>/dev/null || echo '{"items":[]}' ;;
+  *"-n agent get deployments -o json"*) cat "${T}/deps.json" 2>/dev/null || echo '{"items":[]}' ;;
   *"get pods -A -o json"*) cat "${T}/pods.json" 2>/dev/null || echo '{"items":[]}' ;;
   *"-n agent get configmap cluster-identity"*) cat "${T}/public_host" 2>/dev/null ;;
   *"get configmap cluster-identity"*) cat "${T}/identity" 2>/dev/null ;;
@@ -136,6 +139,67 @@ check "once the key exists, repair writes datadog-secret in all three namespaces
   '[[ "$(grep -c "create secret generic datadog-secret --from-literal=api-key=ADMIN_API" "${CALLS}")" -eq 3 ]] && grep -q "^reload ctx-test acct" "${CALLS}"'
 : >"${T}/stderr"
 
+# ---- ai-layer as git renders it at c0ffee, and a cluster that rolled it out ----
+# Real generator names (gitops/ai-layer/kustomization.yaml), so the names are judged by fleet.sh's own pattern.
+cat >"${T}/render.yaml" <<'Y'
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: fake-ticket-src-k2m8t4f6hd}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: console-conf-9c7b5d2mtk}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: console}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: console}
+spec: {template: {spec: {volumes: [{name: conf, configMap: {name: console-conf-9c7b5d2mtk}}], containers: [{name: nginx}]}}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: fake-ticket-site}
+spec: {template: {spec: {volumes: [{name: src, configMap: {name: fake-ticket-src-k2m8t4f6hd}}], containers: [{name: site}]}}}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: guard-proxy}
+spec: {template: {spec: {containers: [{name: proxy, env: [{name: LLM_GUARD_TOKEN, valueFrom: {secretKeyRef: {name: llm-guard-auth-b5f2h7k9gm, key: token}}}]}]}}}
+Y
+# The live objects: Deployments with the server's own fields and the given ConfigMap behind each, and ConfigMaps.
+live_ai_layer() { # $1 console's conf, $2 the ticket site's src, $3.. the ConfigMaps that exist
+    local conf="$1" src="$2"; shift 2
+    python3 - "${conf}" "${src}" "$@" >"${T}/deps.json" 3>"${T}/cms.json" <<'PY'
+import json, os, sys
+conf, src, cms = sys.argv[1], sys.argv[2], sys.argv[3:]
+dep = lambda n, vols, cs: {"metadata": {"name": n, "generation": 4}, "spec": {"replicas": 1, "template": {"spec": {
+    "volumes": vols, "containers": cs}}}, "status": {"observedGeneration": 4}}
+print(json.dumps({"items": [
+    dep("console", [{"name": "conf", "configMap": {"name": conf, "defaultMode": 420}}], [{"name": "nginx"}]),
+    dep("fake-ticket-site", [{"name": "src", "configMap": {"name": src, "defaultMode": 420}}], [{"name": "site"}]),
+    dep("guard-proxy", [{"name": "kube-api-access", "projected": {}}], [{"name": "proxy", "env": [{"name": "LLM_GUARD_TOKEN",
+        "valueFrom": {"secretKeyRef": {"name": "llm-guard-auth-b5f2h7k9gm", "key": "token"}}}]}])]}))
+os.write(3, json.dumps({"items": [{"metadata": {"name": n}} for n in cms + ["kube-root-ca.crt", "cluster-identity"]]}).encode())
+PY
+}
+ai_layer_app() { # $1 the operation in flight, or empty
+    printf '{"metadata":{"name":"ai-layer"},%s"spec":{"syncPolicy":{"syncOptions":["CreateNamespace=true","ServerSideApply=true","Force=true","ApplyOutOfSyncOnly=true"]}},"status":{"sync":{"status":"Synced","revision":"c0ffee0000000000000000000000000000000000"},"operationState":{"phase":"Succeeded","operation":{"sync":{"resources":[{"group":"apps","kind":"Deployment","name":"guard-proxy"}]}}}}}' \
+        "${1:+\"operation\":$1,}" >"${T}/ailayer.json"
+}
+rolled_out() {
+    live_ai_layer console-conf-9c7b5d2mtk fake-ticket-src-k2m8t4f6hd console-conf-9c7b5d2mtk fake-ticket-src-k2m8t4f6hd console-conf-4f4hb2g7cd
+    ai_layer_app ""
+    printf 'TREE-C0FFEE' >"${T}/tree_c0ffee0000000000000000000000000000000000"; printf 'TREE-C0FFEE' >"${T}/tree_checkout"
+}
+rollout() { # the real repair, with the render and the checkout's tree from the fixtures; prints what it recorded
+    : >"${CALLS}"; : >"${T}/stderr"
+    WIB_LOG_DIR="${T}/logs" src 'render_ai_layer() { cat "${T}/render.yaml"; }; ai_layer_tree() { cat "${T}/tree_${1:-checkout}" 2>/dev/null || true; }
+        repair_ai_layer_rollout watch-it-burn-community /dev/null; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"'
+}
+
 echo "== converge alone turns Datadog on for clusters whose keys arrived after bring-up (#635) =="
 # The 2026-10-28 KubeCon run: the keys went into watch-it-burn/datadog after bring-up, `./fleet.sh converge
 # watch-it-burn-community watch-it-burn-michael-admin` said CONVERGED 2/2, and no datadog-secret was written.
@@ -151,9 +215,11 @@ for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
             if (s.get("mcpServer") or {}).get("name") == "workshop-mcp":
                 print(json.dumps(s["mcpServer"]["toolNames"], separators=(",", ":")), end="")  # as kubectl prints it
 PY
+rolled_out  # ai-layer's rollout matches git (its own section below)
 rm -f "${T}/live_key" "${T}/admin_present"; : >"${CALLS}"; : >"${T}/stderr"; mkdir -p "${T}/logs"
 WIB_LOG_DIR="${T}/logs" WIB_CONVERGE_ROUNDS=1 src 'provider_write_kubeconfig() { :; }; require_tools() { :; }
     converge_endpoint() { echo console.example; }
+    render_ai_layer() { cat "${T}/render.yaml"; }; ai_layer_tree() { cat "${T}/tree_${1:-checkout}" 2>/dev/null || true; }
     pin_bedrock_profiles() { echo "pin-bedrock $1" >>"${CALLS}"; }  # its own test: test_pin_bedrock_profiles.sh
     cmd_converge watch-it-burn-community watch-it-burn-private'; rc=$?
 check "converge reaches repair_datadog on both clusters and runs the identity script for each" \
@@ -164,14 +230,17 @@ check "it logs the own-key-drift it repaired, for each cluster" \
   '[[ "$(grep -c "watch-it-burn-[a-z]*: repairing datadog (.*own-key-drift" "${T}/stderr")" -eq 2 ]]'
 check "the verifier after it runs too, and the agent tools repair found nothing to do" \
   '[[ "$(grep -c "^verify ctx-test " "${CALLS}")" -eq 2 ]] && ! grep -q "delete agent workshop-agent" "${CALLS}"'
+check "and the ai-layer rollout check judged both clusters rolled out" \
+  '[[ "$(grep -c "ai-layer rolled out c0ffee000000" "${T}/stderr")" -eq 2 ]] && ! grep -q "patch application ai-layer" "${CALLS}"'
 check "and only then does it say CONVERGED 2/2" \
   '[[ "${rc}" -eq 0 ]] && grep -q "CONVERGED: 2/2" "${T}/stderr" && ! grep -q "stopped with exit" "${T}/stderr"'
 rm -f "${T}/agent_tools"; : >"${T}/stderr"
 
 echo "== repair_agent_tools: the #679 state is recreated from git =="
 # Both KubeCon clusters on 2026-10-29: git's workshop-mcp had twelve tools, the live Agent the eleven from before
-# read_support_ticket (#640), and Argo CD cannot write one element of the tools array on a toolnames profile
-# (verify/test_agent_tools_sync.py ports why). Deleting the Agent is the repair: Argo recreates it from git.
+# read_support_ticket (#640), and Argo CD, syncing with RespectIgnoreDifferences, could not write one element of the
+# tools array (verify/test_agent_tools_sync.py ports why). ai-layer syncs without it now; this repair is the backstop:
+# deleting the Agent makes Argo recreate it from git.
 printf '%s' '["lookup_customer_records","check_inventory","reorder_supply","get_order_history","get_marketing_intel","search_web","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]' >"${T}/agent_tools"
 : >"${CALLS}"; : >"${T}/stderr"; src 'repair_agent_tools watch-it-burn-community /dev/null'
 check "the live eleven against git's twelve: the stale list is logged and the Agent CR is deleted for Argo to recreate" \
@@ -189,6 +258,42 @@ check "git's twelve in another order: nothing is deleted (the lists are compared
   '! grep -q "delete agent" "${CALLS}" && grep -q "read_support_ticket" "${T}/agent_tools"'
 rm -f "${T}/agent_tools"; : >"${CALLS}"; src 'repair_agent_tools watch-it-burn-community /dev/null'
 check "no live Agent (Argo still recreating it): nothing is deleted" '! grep -q "delete agent" "${CALLS}"'
+: >"${T}/stderr"
+
+echo "== repair_ai_layer_rollout: judged by the hashed ConfigMap names, not the sync phase (#679) =="
+mkdir -p "${T}/logs"; rolled_out; rollout >"${T}/out"
+check "every hashed ConfigMap live and every Deployment on git's: nothing recorded, nothing synced" \
+  '[[ ! -s "${T}/out" ]] && grep -q "ai-layer rolled out c0ffee000000" "${T}/stderr" && ! grep -q "patch application" "${CALLS}"'
+# 2026-10-29 after ed8dbf8: every ai-layer sync Succeeded (a self-heal of guard-proxy alone), and none of the commit's
+# new hashed ConfigMaps existed, so the console and the ticket site kept the old ones.
+live_ai_layer console-conf-4f4hb2g7cd fake-ticket-src-7d8hf2kt5m console-conf-4f4hb2g7cd fake-ticket-src-7d8hf2kt5m
+rollout >"${T}/out"
+check "the #679 state: a Succeeded sync phase and the old hashes is recorded as <name>:ai-layer-rollout" \
+  'grep -qx "watch-it-burn-community:ai-layer-rollout" "${T}/out" && grep -q "has NOT rolled out c0ffee000000, whatever its sync phase says" "${T}/stderr"'
+check "it names each missing ConfigMap and each Deployment still on an old one" \
+  'grep -q "configmap fake-ticket-src-k2m8t4f6hd missing" "${T}/stderr" && grep -q "configmap console-conf-9c7b5d2mtk missing" "${T}/stderr" \
+   && grep -q "deployment console still on console-conf-4f4hb2g7cd (git: console-conf-9c7b5d2mtk)" "${T}/stderr" \
+   && ! grep -q "deployment guard-proxy" "${T}/stderr"'
+check "with no operation in flight it starts one full sync: the compared revision, ai-layer's sync options, no resource filter" \
+  'grep -q "patch application ai-layer --type merge -p {\"operation\":{\"initiatedBy\":{\"username\":\"fleet-converge\"},\"sync\":{\"revision\":\"c0ffee0000000000000000000000000000000000\",\"prune\":true,\"syncOptions\":\[\"CreateNamespace=true\",\"ServerSideApply=true\",\"Force=true\",\"ApplyOutOfSyncOnly=true\"\]}}}" "${CALLS}" \
+   && ! grep "patch application ai-layer" "${CALLS}" | grep -q resources'
+live_ai_layer console-conf-9c7b5d2mtk fake-ticket-src-k2m8t4f6hd console-conf-9c7b5d2mtk; rollout >"${T}/out"
+check "the new ConfigMaps applied but a Deployment not yet on its own: still recorded" \
+  'grep -qx "watch-it-burn-community:ai-layer-rollout" "${T}/out" && grep -q "configmap fake-ticket-src-k2m8t4f6hd missing" "${T}/stderr" && ! grep -q "deployment console" "${T}/stderr"'
+ai_layer_app '{"sync":{"resources":[{"kind":"Deployment","name":"guard-proxy"}]}}'; rollout >"${T}/out"
+check "an operation already in flight is left alone, never merged into, and the gap is still recorded" \
+  'grep -qx "watch-it-burn-community:ai-layer-rollout" "${T}/out" && ! grep -q "patch application" "${CALLS}" && grep -q "operation is in flight" "${T}/stderr"'
+rolled_out; printf 'TREE-OTHER' >"${T}/tree_checkout"; rollout >"${T}/out"
+check "a checkout whose gitops/ai-layer is not the compared tree is unjudged, recorded, and reads nothing live" \
+  'grep -qx "watch-it-burn-community:ai-layer-rollout-unjudged" "${T}/out" && grep -q "check out c0ffee000000 to judge" "${T}/stderr" && ! grep -q "get configmaps\|patch application" "${CALLS}"'
+rolled_out; rm -f "${T}/tree_c0ffee0000000000000000000000000000000000"; rollout >"${T}/out"
+check "a compared revision this clone does not have is unjudged too" 'grep -qx "watch-it-burn-community:ai-layer-rollout-unjudged" "${T}/out"'
+rolled_out; rm -f "${T}/ailayer.json"; rollout >"${T}/out"
+check "no ai-layer Application (or no compared revision) is unjudged, not a pass" \
+  'grep -qx "watch-it-burn-community:ai-layer-rollout-unjudged" "${T}/out" && grep -q "no compared revision" "${T}/stderr"'
+rolled_out
+check "ai_layer_tree reads the tree id of gitops/ai-layer at a commit from git itself" \
+  '[[ -n "$(src "ai_layer_tree HEAD")" && "$(src "ai_layer_tree HEAD")" == "$(git -C "${HERE}/.." rev-parse HEAD:gitops/ai-layer)" ]]'
 : >"${T}/stderr"
 
 echo "== repair_step: a repair that fails is logged and recorded, and the next one still runs (#635) =="
@@ -255,8 +360,9 @@ check "a failing datadog-orgs verifier is recorded as <name>:datadog-orgs" 'grep
 echo "== wiring =="
 check "converge_one runs repair_one" 'grep -q "^    repair_one \"\${name}\" \"\${kcfg}\" \"\${acct_profile}\"" "${FLEET}"'
 check "repair_one includes repair_failed_syncs" 'grep -q "^    repair_step repair_failed_syncs \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
+check "and repair_ai_layer_rollout (#679)" 'grep -q "^    repair_step repair_ai_layer_rollout \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
 check "every repair and verifier in repair_one runs as a repair_step, but pin_bedrock_profiles (#635)" \
-  '[[ "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -cE "^    (repair_|verify_)" )" -eq 7 && "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -c "^    repair_step ")" -eq 7 ]]'
+  '[[ "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -cE "^    (repair_|verify_)" )" -eq 8 && "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -c "^    repair_step ")" -eq 8 ]]'
 check "converge instructors skips roster slots with no state" 'grep -q "not provisioned, skipping" "${FLEET}"'
 check "up ends with a converge pass over what it built" 'grep -q "repair-and-verify pass over" "${FLEET}"'
 check "the post-up wait and verify iterate the PROVISION_SPEC names, never the register arguments" \

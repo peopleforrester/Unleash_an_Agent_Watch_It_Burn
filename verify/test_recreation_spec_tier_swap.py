@@ -3,8 +3,9 @@
 #
 # Why (#598). The spec's Key Decisions bullet said "Tier swaps by repointing the Agent modelConfig (commit + resync),
 # never kubectl patch live." The ai-layer Application ignores the Agent's .spec.declarative.modelConfig and
-# guard-proxy's MODEL_TIER env with RespectIgnoreDifferences=true, so on a running cluster a commit plus resync
-# changes nothing, and decisions.md (2026-07-07, §4.6-d) recommends the live patch the spec forbade.
+# guard-proxy's MODEL_TIER env, and syncs with ApplyOutOfSyncOnly=true (RespectIgnoreDifferences=true until #679), so
+# on a running cluster a commit plus resync changes nothing, and decisions.md (2026-07-07, §4.6-d) recommends the live
+# patch the spec forbade.
 import pathlib, re, sys
 
 import yaml
@@ -35,8 +36,11 @@ check("the workshop-agent Agent's .spec.declarative.modelConfig is ignored",
       ".spec.declarative.modelConfig" in ignored("Agent", "workshop-agent"))
 check("guard-proxy's MODEL_TIER env is ignored",
       any("MODEL_TIER" in e for e in ignored("Deployment", "guard-proxy")))
-check("syncs respect the ignores (RespectIgnoreDifferences=true)",
-      "RespectIgnoreDifferences=true" in app["spec"].get("syncPolicy", {}).get("syncOptions", []))
+# A commit that changes only an ignored field shows no drift, and ApplyOutOfSyncOnly leaves a Synced object out of the
+# sync. RespectIgnoreDifferences, which did this before #679, froze every list with an ignored element in it.
+check("syncs apply only OutOfSync objects (ApplyOutOfSyncOnly=true), not RespectIgnoreDifferences (#679)",
+      "ApplyOutOfSyncOnly=true" in app["spec"].get("syncPolicy", {}).get("syncOptions", [])
+      and "RespectIgnoreDifferences=true" not in app["spec"].get("syncPolicy", {}).get("syncOptions", []))
 
 lines = (REPO / SPEC).read_text(encoding="utf-8").splitlines()
 
@@ -60,8 +64,10 @@ line = swap[0] if swap else ""
 check("it says a fresh cluster gets the committed default", re.search(r"(?i)fresh cluster", line) is not None)
 check("it says a commit plus resync changes nothing on a running cluster",
       re.search(r"(?i)running cluster.*commit plus resync changes neither", line) is not None)
-check("it names the ignored fields and RespectIgnoreDifferences",
-      all(t in line for t in (".spec.declarative.modelConfig", "MODEL_TIER", "RespectIgnoreDifferences=true")))
+check("it names the ignored fields and ApplyOutOfSyncOnly",
+      all(t in line for t in (".spec.declarative.modelConfig", "MODEL_TIER", "ApplyOutOfSyncOnly=true")))
+check("it says a commit that changes anything else of either object applies git's tier with it (#679)",
+      re.search(r"(?i)anything else of either.*#679", line) is not None)
 check("it patches the Agent and guard-proxy's MODEL_TIER together",
       "bedrock-<tier>" in line and "set env deploy/guard-proxy MODEL_TIER=<tier>" in line)
 
