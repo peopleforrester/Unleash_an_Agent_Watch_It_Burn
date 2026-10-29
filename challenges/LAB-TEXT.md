@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-10-29 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `2603c12a64281c4e989eddd1c1ee8c45e24b59a9` (the last commit to change lab.html, on 2026-10-29) |
-| Source blob | `dd004829cc312f9f43426deb1617350d23ae9159` |
+| Source commit | `83673241364c3fcd2bcf3635e36f04bdbe53a82c` (the last commit to change lab.html, on 2026-10-29) |
+| Source blob | `b9c64c59d90348a24d2eb5a14b980867e2dbec1c` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -109,6 +109,7 @@ There is a lot here and you are not expected to know what all of it is. But here
 - [OpenTelemetry](https://opentelemetry.io/docs/) collects the traces and metrics. We send them to Datadog, but OpenTelemetry is vendor neutral. You can send the collected data to any observability backend.
 - [External Secrets](https://external-secrets.io/latest/) pulls your Datadog keys out of AWS Secrets Manager, so no credential is committed anywhere.
 - The `*-party` workloads (hedgehog, wombat, unicorn, spider, mantis-shrimp) are deliberate filler: ordinary apps so the cluster is not suspiciously empty. Never mind what the mantis shrimp is doing. 🦐💥 🙂
+- *[Not on the Community cluster]* [Backstage](https://backstage.io/docs/overview/what-is-backstage) is the developer portal: every app on this cluster that is not infrastructure, which team owns it, and its live pods. Open [your cluster's Backstage](#) and look at BurritoBot's page: the agent and its tools belong to the developers, the guardrails around them to the platform team. That split is what the rest of the workshop is about.
 
 ### BurritoBot's components
 
