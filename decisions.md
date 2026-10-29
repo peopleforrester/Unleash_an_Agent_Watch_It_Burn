@@ -4509,3 +4509,66 @@ anyone who can run a pod as agent-sa has the credential, so its scope is the con
   ALLOWED, and IMDS BLOCKED.
 
 `bash verify/run-e2e.sh` also runs `verify/test_iam_policy_aws.py` for the Access Analyzer half.
+
+## 2026-10-29 · #244 · Backstage returns on the attendee, full and admin profiles, with a catalog of every non-infrastructure app
+
+The approved draft (`agent/244-6778` at 51b5c17, approved by the coordinator) made again on current staging.
+`verify/draft-drift.sh` named 14 drifted paths, the biggest that #609 had moved `gitops/apps/` into the
+lab-bootstrap chart, so the change was redone on the chart layout rather than cherry-picked. The design is the
+draft's:
+
+- **Plain manifests, not the Backstage Helm chart.** `backstage/` is one kustomize app. The chart takes the image
+  as separate registry, repository and tag keys, so no `image:` line names it, and the digest-pin test and
+  `verify/sign-images.sh` both read `image:` lines. Its bundled Postgres pins
+  `bitnami/postgresql:15.4.0-debian-11-r10`, which Docker Hub now answers with a 404.
+- **Our image, pinned by digest**, `ghcr.io/peopleforrester/watch-it-burn:backstage@sha256:9e9756b0…`.
+- **New dependency: `docker.io/library/postgres:18.6-alpine`**, pinned by digest `sha256:898c60cb…`. That was
+  the current 18.x on 2026-10-24, and it still pulled on 2026-10-29. The tag has been rebuilt since; the pin
+  holds. It runs on an emptyDir with trust auth, and a NetworkPolicy that admits only the Backstage pod is the
+  access control.
+- **Guest sign-in, with RBAC as the boundary.** The service account reads no pod logs, ConfigMaps or Secrets,
+  and `kubernetes.objectTypes` asks for exactly what it is granted.
+- **No token Secret.** The plugin reads the pod's mounted token.
+- **The Node 24.22.1 pin in `packages/backend/Dockerfile`.** It fixes the node-fetch "Premature close" that broke
+  every Kubernetes tab on the published 24.17.0 image.
+- **Routing.** `backstage-<cluster>` is in the console's map, its server_name and `fleet.sh` WIB_SERVICE_HOSTS.
+  It is linked from /platform, the lab's tour and the terminal's `platform` command. The run-of-show's tour
+  table points at BurritoBot's system page.
+
+What differs from the draft:
+
+- **Where the app lives.** It is `gitops/bootstrap/apps/backstage.yaml` at `{{ .Values.revision }}`, named in
+  `values-attendee.yaml`, `values-full.yaml` and `values-admin.yaml`, not a file in a directory every root
+  read. `verify/test_bootstrap_chart.py` now holds attendee 28, burn 18, admin 32 and full 30. The rendered
+  counts move from 36 and 32 to 37 and 33. The platform page, the run-of-show, the design glance and
+  `verify/test_fleet_contract.py` carry the new numbers.
+- **No customer-stream.** #473 removed the app on 2026-10-26, so it has no Component. Its system and its
+  `customer-data-team` went with it.
+- **Two workloads joined the catalog.** The support desk, `fake-ticket` (#640, #685), is a `support-desk`
+  System owned by a new `customer-support` group. It is Hex & Cauldron's desk, and what a customer writes there
+  reaches the agent, which is Challenge 6. The weather feed, `weather-feed` (#642), belongs to `tool-vendor`
+  next to evil-mcp, whose get_weather it serves. evil-mcp's API now names agentgateway's :3003 bind (#514),
+  and agentgateway depends on evil-mcp as well as workshop-mcp.
+- **Both domains.** The route matches `agenticburn.com` and `burritobot.co` (#651), as every service host does
+  now. The lab page's link script accepts both.
+- **The cluster's name reaches backstage without the instructor key.** The draft added `backstage` to
+  `infra/datadog-cluster-identity.sh` NAMESPACES. That list also gets `datadog-admin-secret`, the instructor
+  org's API key, and this namespace is the public portal's. It is in a separate `IDENTITY_ONLY_NAMESPACES`,
+  which gets the `cluster-identity` ConfigMap and nothing else.
+- **The apex router already knows the prefix.** The draft left the router's roster filter to update.
+  apex-agenticburn `derive-roster.sh` already skips `backstage-` (checked 2026-10-29), so nothing is owed
+  there.
+- **The old `gitops/apps-disabled/` files are gone**, and with them the directory. `docs/KUBECON-ABSTRACT-READINESS.md`
+  row 3 says where Backstage is now.
+
+**Until #483 lands, the backstage app is Degraded on every cluster but burn.** The published image is unsigned,
+so verify-image-signatures (Deny, every namespace) refuses its pod. `fleet.sh verify` and the converge probe
+then count one unhealthy app per cluster. #483 rebuilds the image on Node 24.22.1, pushes and signs it, and
+pins the new digest in `backstage/k8s/backstage.yaml`. It needs this change on staging first, because that
+file is where the digest goes.
+
+**Not yet run on a cluster.** `CONTEXT=<ctx> bash verify/backstage-footprint.sh` (#484), after #483, on a
+t3.2xlarge with the attendee profile. It measures Backstage and Postgres usage against requests and node
+allocatable, and it checks that the Kubernetes tab lists pods for unicorn-party and workshop-agent.
+`CONTEXT=<ctx> python3 verify/test_service_hosts_live.py` (part of `bash verify/run-e2e.sh`) now probes
+`backstage-<cluster>` along with the other service hosts.

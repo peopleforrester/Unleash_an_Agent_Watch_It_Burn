@@ -9,7 +9,7 @@ work. Three of those failures were in what these pages handed out, not in the ro
 - Loki, Prometheus and Tempo were offered as a `kubectl port-forward`. In a browser terminal that listens
   inside the terminal pod, so the localhost URL it promises never opens on the student's laptop. Those
   three have no login and are deliberately not published (#233); Grafana is how a browser reaches them.
-- Backstage has no host because nothing deploys it yet (#244, which adds backstage-<cluster>).
+- Backstage had no host because nothing deployed it; #244 deploys it and publishes backstage-<cluster>.
 
 Three lists name the service hosts and must agree: fleet.sh WIB_SERVICE_HOSTS (the routes table rows),
 the console's nginx map, and its server_name. A label in one and not the others is a host that 404s at the

@@ -1,0 +1,120 @@
+# ABOUTME: Backstage's Postgres: one disposable pod on an emptyDir, trust auth, and a NetworkPolicy that
+# ABOUTME: admits the Backstage pod and nothing else. Its contents are rebuilt from git on every start.
+#
+# Not the Backstage chart's bundled PostgreSQL. Chart 2.10.2 pins docker.io/bitnami/postgresql:15.4.0-debian-11-r10,
+# and that tag answers 404 on Docker Hub now (it survives only under bitnamilegacy/; checked 2026-10-24).
+#
+# No PersistentVolumeClaim, on purpose. The catalog is read from files on every start, so the database only
+# caches what git already says; a PVC would add an EBS volume per cluster for fleet.sh to reclaim at teardown
+# and buy nothing a restart does not already give back.
+#
+# No password. POSTGRES_HOST_AUTH_METHOD=trust, and the NetworkPolicy below is the access control: only a
+# pod labelled app.kubernetes.io/name=backstage reaches 5432. Nothing else in the cluster, BurritoBot's
+# command tool included, can open a connection. A password committed to git would protect nothing more.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backstage-postgres
+  namespace: backstage
+  labels:
+    app.kubernetes.io/name: backstage-postgres
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backstage-postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: backstage-postgres
+        app.kubernetes.io/part-of: watch-it-burn-idp
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70     # the alpine image's postgres user; the entrypoint runs initdb as it directly
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          image: docker.io/library/postgres:18.6-alpine@sha256:898c60cb390d1085bc97bdd6a1ae968757421df394b071848b52b1c09c89d6a5
+          env:
+            - { name: POSTGRES_USER, value: backstage }
+            - { name: POSTGRES_HOST_AUTH_METHOD, value: trust }
+          ports:
+            - name: postgres
+              containerPort: 5432
+              protocol: TCP
+          readinessProbe:
+            exec: { command: ["pg_isready", "-U", "backstage", "-h", "127.0.0.1"] }
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["pg_isready", "-U", "backstage", "-h", "127.0.0.1"] }
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql }
+            - { name: run, mountPath: /var/run/postgresql }
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: data
+          emptyDir: { sizeLimit: 1Gi }
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backstage-postgres
+  namespace: backstage
+  labels:
+    app.kubernetes.io/name: backstage-postgres
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: backstage-postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backstage-postgres-ingress
+  namespace: backstage
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: backstage-postgres
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: backstage
+      ports:
+        - { protocol: TCP, port: 5432 }

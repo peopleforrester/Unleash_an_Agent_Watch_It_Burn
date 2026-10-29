@@ -17,6 +17,8 @@
 #   - cluster-network-policies KEPT -> it is platform baseline, not a challenge control: the Admin-tier deny on
 #       the instance metadata service from the agent namespace, which C8's cloud-credential beat shows (#203).
 #       No NetworkPolicy can say deny, and network-policies is left off here, so this is the readable rule.
+#   - backstage KEPT -> the developer portal (#244): every non-infrastructure app, its owner and its pods, at
+#       backstage-<cluster>. It is the tour's "one column is the developer's" table as a real page.
 #
 # The collector is otel-collector-attendee, the same Application name as otel-collector with the dual-ship
 # overlay (#242); otel-collector-burn is the burn cluster's Datadog-only collector (#476), the same name again.
@@ -40,6 +42,7 @@
 apps:
   - ai-layer-otel
   - ai-layer
+  - backstage
   - cert-manager
   - cluster-network-policies
   - datadog-agent-cr

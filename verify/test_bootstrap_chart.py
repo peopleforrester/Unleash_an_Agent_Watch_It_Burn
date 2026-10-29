@@ -154,12 +154,17 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
 # The selections the four globs made at b1fcb0e, less the overlay the excludes matched without meaning to,
 # less customer-stream, which every profile listed until #473 removed it,
 # and less loki and alloy, which #474 dropped from attendee, admin and full,
-# plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full.
+# plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full,
+# plus backstage, the developer portal, which #244 added to attendee, admin and full.
 WANT = {
-    "attendee": 27, "burn": 18, "admin": 31, "full": 29,
+    "attendee": 28, "burn": 18, "admin": 32, "full": 30,
 }
 for profile, n in WANT.items():
-    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203", len(app_names(profile)) == n)
+    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203 and #244",
+          len(app_names(profile)) == n)
+for profile in WANT:
+    check(f"{profile} {'lists' if profile != 'burn' else 'does not list'} backstage (#244)",
+          ("backstage" in app_names(profile)) == (profile != "burn"))
 for profile in WANT:
     check(f"{profile} {'lists' if profile != 'burn' else 'does not list'} cluster-network-policies (#203)",
           ("cluster-network-policies" in app_names(profile)) == (profile != "burn"))

@@ -1,0 +1,119 @@
+# ABOUTME: What exists only to run the workshop: the attendee's terminal and the Beat-1 drift target on this
+# ABOUTME: cluster, and the two external systems around the fleet (the provisioning app and the apex router).
+#
+# The two external systems run on Railway, not on any cluster, so they carry no Kubernetes annotation and
+# their pages show source and links instead of pods.
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: workshop-lab
+  title: Workshop lab
+  description: The attendee's own tooling on this cluster, and the props the challenges act on.
+spec:
+  owner: workshop-crew
+  domain: watch-it-burn-workshop
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: web-terminal
+  title: Web terminal
+  description: >-
+    The terminal on the right of the lab page (ttyd), plus the browser IDE and JupyterLab, all sharing
+    /home/student. kubectl and aws come pre-wired; `platform` prints every service on this cluster.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=web-terminal
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/images/web-terminal/
+  tags: [ttyd]
+spec:
+  type: website
+  lifecycle: production
+  owner: workshop-crew
+  system: workshop-lab
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: argocd-managed-app
+  title: Argo CD drift target
+  description: >-
+    A deliberately boring Deployment whose only job is to be what the agent tries, and fails, to drift.
+    Admission denies the out-of-band patch and Argo CD's self-heal reverts anything that gets through.
+  annotations:
+    backstage.io/kubernetes-label-selector: app=argocd-managed-app
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/argocd-managed-app.yaml
+spec:
+  type: service
+  lifecycle: production
+  owner: workshop-crew
+  system: workshop-lab
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: provisioning
+  title: Provisioning (external)
+  description: Hands each attendee a cluster and its logins. Runs on Railway, outside every cluster.
+  tags: [external, railway]
+  links:
+    - url: https://provisioning.agenticburn.com
+      title: provisioning.agenticburn.com
+spec:
+  owner: workshop-crew
+  domain: watch-it-burn-workshop
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: provisioning-app
+  title: Provisioning app
+  description: Flask with SQLite on a Railway volume. The page an attendee starts from, and claims a cluster on.
+  annotations:
+    github.com/project-slug: peopleforrester/provisioning-agenticburn
+    backstage.io/source-location: url:https://github.com/peopleforrester/provisioning-agenticburn
+  tags: [external, railway, flask]
+  links:
+    - url: https://provisioning.agenticburn.com
+      title: provisioning.agenticburn.com
+spec:
+  type: website
+  lifecycle: production
+  owner: workshop-crew
+  system: provisioning
+---
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: apex-router
+  title: Apex router (external)
+  description: >-
+    Gives every cluster its public hostname. Runs on Railway, outside every cluster; this portal is reached
+    through it.
+  tags: [external, railway]
+  links:
+    - url: https://agenticburn.com
+      title: agenticburn.com
+spec:
+  owner: workshop-crew
+  domain: watch-it-burn-workshop
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: apex-router
+  title: Apex router
+  description: >-
+    Caddy on Railway. Maps <name>.agenticburn.com to that cluster's console load balancer and passes the
+    Host header through, which is how <service>-<cluster> hostnames such as this portal's reach the right
+    service.
+  annotations:
+    github.com/project-slug: peopleforrester/apex-agenticburn
+    backstage.io/source-location: url:https://github.com/peopleforrester/apex-agenticburn
+  tags: [external, railway, caddy]
+spec:
+  type: service
+  lifecycle: production
+  owner: workshop-crew
+  system: apex-router

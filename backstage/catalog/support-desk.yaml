@@ -1,0 +1,33 @@
+# ABOUTME: Hex & Cauldron's support desk: the ticket site BurritoBot reads tickets from (Challenge 6), also open to
+# ABOUTME: the room at support-<cluster>. Owned by a team that is not BurritoBot's, which is why its text is input.
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: support-desk
+  title: Support desk
+  description: >-
+    Where Hex & Cauldron's customers file tickets. BurritoBot reads them through workshop-mcp's
+    read_support_ticket, so whatever a customer writes in a ticket reaches the agent.
+spec:
+  owner: customer-support
+  domain: hex-and-cauldron
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: fake-ticket
+  title: Ticket desk
+  description: >-
+    Fixed tickets served from memory, two of them (HC-7731 and the room's HC-666) carrying a hidden
+    instruction. The room opens them at support-<cluster>, files its own tickets and sees what the bot
+    deployed. It makes no outbound call.
+  annotations:
+    backstage.io/kubernetes-label-selector: app.kubernetes.io/name=fake-ticket
+    backstage.io/kubernetes-namespace: agent
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/staging/gitops/ai-layer/ticket_site.py
+  tags: [python]
+spec:
+  type: website
+  lifecycle: production
+  owner: customer-support
+  system: support-desk

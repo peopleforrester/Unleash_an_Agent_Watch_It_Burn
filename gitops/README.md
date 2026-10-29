@@ -67,8 +67,8 @@ Gaps between groups are reserved for future components.
 | 1    | Prometheus (kube-prometheus-stack), cert-manager |
 | 2    | OTel Collector, cert-manager ClusterIssuers |
 | 3    | Grafana dashboards, Tempo |
-| 5    | Sample app, Backstage resources (RBAC, catalog) |
-| 6    | Backstage |
+| 5    | Sample app |
+| 6    | Backstage (`backstage/`: portal, Postgres, RBAC, catalog) |
 | 7    | Demo apps (Unicorn Party, E-commerce frontend/API/worker) |
 | 8    | Load generator |
 
