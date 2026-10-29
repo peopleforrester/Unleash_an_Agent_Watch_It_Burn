@@ -156,6 +156,12 @@ for label in labels:
     status, body = fetch(f"https://{label}-{host}/")
     why = hop(status, body, f"{ns}/{svc}")
     check(f"{label}: https://{label}-{host}/ reaches it", not why, why)
+# The other two from the report. Loki is gone (#474) and Backstage waits on #244: neither has a row, so the
+# published table must agree and answer the router's own 404, never the console pretending to be them.
+for svc in sorted({"loki", "backstage"} - set(labels)):
+    status, body = fetch(f"https://{svc}-{host}/")
+    check(f"{svc}: unpublished, so https://{svc}-{host}/ is the router's unknown-host 404",
+          status == 404 and APEX_UNKNOWN in body, f"HTTP {status}: {body.strip()[:160]}")
 
 print("== Grafana works past its front page, and fronts Prometheus and Tempo ==")
 status, body = fetch(f"https://grafana-{host}/api/health")

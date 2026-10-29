@@ -66,7 +66,12 @@ check("it gives them a command to tell the difference", "kubectl get pods -A" in
 print("== the burn profile really does omit these, so the page is telling the truth ==")
 check("no prometheus in the burn profile", "prometheus" not in BURN)
 check("no grafana in the burn profile", not any("grafana" in a for a in BURN))
-check("no argocd app in the burn profile's list", not any("argocd" in a for a in BURN))
+# Argo CD is not an app in any list: deploy-full-idp.sh installs it on every profile, because it is what syncs
+# the list. The page used to say AttackMe runs no Argo CD while argocd-attackme served Argo CD v3.5.2 (#381,
+# probed 2026-10-29), so a visitor who had just used it read a page that contradicted them.
+IDP = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
+check("Argo CD is bootstrap-installed on every profile", "helm upgrade --install argocd argo/argo-cd" in IDP)
+check("so the page does not say AttackMe runs no Argo CD", "Argo CD" not in body)
 check("but Datadog IS there, or the page would be sending them nowhere",
       "datadog-agent-cr" in BURN and any(a.startswith("otel-collector") for a in BURN))
 

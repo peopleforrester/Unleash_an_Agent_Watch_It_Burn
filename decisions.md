@@ -4427,3 +4427,45 @@ watch-it-burn-community once it has synced this commit. It checks that the deplo
 that PROXY_TIMEOUT is 45. It then checks, through the apex, the per-conversation burst and the per-network burst,
 using empty prompts that spend nothing, and times one probe turn against PROXY_TIMEOUT. A phone-scale load test on
 attackme is also still owed.
+
+## 2026-10-29 · #381 · The four service URLs from the report, re-diagnosed on a live pool: two work, two are unpublished and handed out nowhere
+
+**The question.** Issue 381 (Michael, 2026-09-08) reported that the Grafana, Loki, Argo CD and Backstage URLs
+reached through the apex router or the provisioning page did not work. Run 6953 (`2c94038`) fixed what the
+console pages handed out, but no cluster was up then, so it could not prove Grafana and Argo CD live, and its
+test said nothing about Backstage (test review run 6958).
+
+**What the live pool shows (2026-10-29, read-only GETs through the apex router).** The apex `routes.map` holds 4
+`grafana-` rows, for attackme and burritobot-private on both domains, and no `loki-` or `backstage-` row.
+`grafana-burritobot-private.agenticburn.com` redirects to Grafana's `/login`, and `/api/health` answers Grafana
+13.2.2 with `"database": "ok"`; the `.burritobot.co` name answers the same. `argocd-burritobot-private` and
+`argocd-attackme` both answer Argo CD v3.5.2 at `/api/version`. `grafana-attackme` gets the console's "not on
+this cluster" page, which is correct, because the burn profile installs no Grafana. `loki-` and `backstage-` get
+the router's "no cluster here yet" 404, also by construction. Loki was removed in #474, and Backstage's
+Application is still in `gitops/apps-disabled/` waiting on #244. Provisioning's `success.html` hands out no
+service URL at all: its Argo CD and Grafana drawer was removed on 2026-08-31. The console pages and the terminal's
+`platform` command hand out Grafana and Argo CD only.
+
+**Decided.** None of the four is a broken link today. Two of them work, and the other two are handed out nowhere.
+One false claim turned up: the "not on this cluster" page said AttackMe "runs no Prometheus, Grafana or Argo CD",
+while argocd-attackme serves Argo CD. Argo CD is installed by bootstrap on every profile (`deploy-full-idp.sh`
+step 2), and it is not in any app list, which is why `test_console_service_vhosts.py`'s "no argocd app in the burn
+list" check passed. The page now says Prometheus or Grafana, and that check now reads the installer instead.
+
+`verify/test_service_links.py` now holds all four services to one rule. An address goes out only where the router
+has its row. A row exists only where the attendee and admin profiles run the service. A page or terminal command
+names Loki or Backstage only once the attendee profile runs it. The surfaces it reads include both copies of the
+terminal's `entrypoint.sh`, which no check covered before: a `backstage-${_h}` row added there failed nothing until
+now. Its detector must first find the Grafana and Argo CD addresses, so it cannot pass by finding nothing. Each of
+these was checked by mutation and fails: adding backstage to `WIB_SERVICE_HOSTS`, giving a links.html card
+`svc:'backstage'`, adding a terminal row for Backstage, and putting "Argo CD" back on the page. When #244 moves
+Backstage into `apps/`, these checks require its host, its links and its name to land together.
+`test_service_hosts_live.py` also checks that `loki-` and `backstage-` get the router's 404 while they are
+unpublished.
+
+**Left alone.** `facilitation/slides-outline.md` section 6 lists Backstage in "the platform you get". That is
+presenter prose and waits on Michael. #244 decides whether it becomes true.
+
+**Not yet run on a cluster.** `CONTEXT=<attendee or admin ctx> python3 verify/test_service_hosts_live.py` (it
+needs kubectl for the passwords and the Services). The GETs above stand in for its unauthenticated half, against
+burritobot-private and attackme. The Grafana data-source health and Argo CD session checks have not been run.

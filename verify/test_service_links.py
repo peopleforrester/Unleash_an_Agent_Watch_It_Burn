@@ -11,6 +11,12 @@ work. Three of those failures were in what these pages handed out, not in the ro
   three have no login and are deliberately not published (#233); Grafana is how a browser reaches them.
 - Backstage has no host because nothing deploys it yet (#244, which adds backstage-<cluster>).
 
+So the four from the report are held to one rule here: an address for a service is handed out only when the
+router has its row and the profile runs it, and a page names a component only where it runs. Probed through
+the apex router on 2026-10-29: grafana- and argocd-burritobot-private answer Grafana 13.2.2 and Argo CD
+v3.5.2, while loki- and backstage- get the router's unknown-host 404, and no page, terminal command or
+provisioning page hands those two out.
+
 Three lists name the service hosts and must agree: fleet.sh WIB_SERVICE_HOSTS (the routes table rows),
 the console's nginx map, and its server_name. A label in one and not the others is a host that 404s at the
 router or lands on the BurritoBot storefront. The live half is test_service_hosts_live.py.
@@ -118,6 +124,59 @@ for name, text in (("links.html", LINKS), ("platform.html", PLATFORM)):
     check(f"{name} builds the Explore URL Grafana 10+ reads (schemaVersion 1, panes)",
           "explore?schemaVersion=1&orgId=1&panes=" in text and "encodeURIComponent(JSON.stringify(" in text)
     check(f"{name} derives the host from the address bar", "location.hostname" in text)
+
+print("== Grafana, Argo CD, Loki and Backstage: an address only where it is routed and running (#381) ==")
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import deploys  # noqa: E402
+
+IDP = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
+
+
+def uncommented(path: pathlib.Path) -> str:
+    """What a student sees: HTML comments, // comment lines and shell # lines removed."""
+    text = re.sub(r"(?s)<!--.*?-->", "", path.read_text(encoding="utf-8"))
+    return "\n".join(ln for ln in text.splitlines() if not re.match(r"\s*(#|//)", ln))
+
+
+# Everything that hands a student an address: the console pages and both copies of the terminal's `platform`
+# command. The provisioning page hands out none since 2026-08-31 (provisioning-agenticburn success.html).
+SURFACES = {p.relative_to(REPO).as_posix(): uncommented(p) for p in
+            [*sorted(WEB.glob("*.html")), REPO / "images/web-terminal/entrypoint.sh",
+             REPO / "gitops/ai-layer/web-terminal/entrypoint.sh"]}
+# Argo CD is no app in any list: deploy-full-idp.sh installs it on every profile, since it syncs the lists.
+RUNS = {
+    "grafana": lambda p: deploys(p, "prometheus") and grafana.get("enabled", True),
+    "argocd": lambda p: "helm upgrade --install argocd argo/argo-cd" in IDP,
+    "loki": lambda p: deploys(p, "loki"),
+    "backstage": lambda p: deploys(p, "backstage"),
+}
+NAMES = {"grafana": "Grafana", "argocd": "Argo CD", "loki": "Loki", "backstage": "Backstage"}
+
+
+def hands_out(svc: str, text: str) -> bool:
+    return re.search(rf"https://{svc}-|\bsvc:'{svc}'|data-svc=\"{svc}\"", text) is not None
+
+
+for svc in ("grafana", "argocd"):
+    # The detector must find the two that are handed out, or every check below passes by finding nothing.
+    check(f"the detector finds {svc}'s address on the pages and in the terminal",
+          sum(hands_out(svc, t) for t in SURFACES.values()) >= 3)
+for svc, runs in RUNS.items():
+    linked = sorted(f for f, t in SURFACES.items() if hands_out(svc, t))
+    for profile in ("attendee", "admin"):
+        check(f"{svc}: routed only where the {profile} profile runs it", svc not in routed or runs(profile),
+              f"{svc} is in WIB_SERVICE_HOSTS but the {profile} profile does not run it")
+    check(f"{svc}: an address is handed out only when the router has its row", not linked or svc in routed,
+          f"handed out by {linked} with no {svc}-<cluster> row in WIB_SERVICE_HOSTS")
+for svc in ("loki", "backstage"):
+    named = sorted(f for f, t in SURFACES.items() if re.search(rf"\b{NAMES[svc]}\b", t))
+    check(f"no page or terminal command names {NAMES[svc]} unless the attendee profile runs it",
+          not named or RUNS[svc]("attendee"), f"named in {named}")
+# Backstage's Application waits in apps-disabled/ until #244 lands; moving it into apps/ is when its host,
+# its links and its name on the pages become right, and the checks above then require all three together.
+check("Backstage is not deployed yet, so it is neither routed nor handed out",
+      RUNS["backstage"]("attendee") or ("backstage" not in routed
+                                        and not any(hands_out("backstage", t) for t in SURFACES.values())))
 
 print()
 if failures:
