@@ -3916,3 +3916,32 @@ maintenance-shell Service. `verify/test_fleet_routes_roster.sh` reads both host 
 4. `CONTEXT=<community-context> python3 verify/test_service_hosts_live.py`, to check the existing service hosts
    still route.
 Whether Nova passes the address on in its reply has not been measured.
+## 2026-10-29 · #669 · lab-platform's attestor is not added: its signing identity is unreadable here, and `lab-platform/*` would deny the mirror copies
+
+#669 asks `verify-image-signatures` to verify `ghcr.io/peopleforrester/lab-platform/llm-guard:v1` (#652) under
+lab-platform's own signing identity, matching `ghcr.io/peopleforrester/lab-platform/*` and the ECR cache path a root
+can pass as `imageRegistry`. No policy change was made. There was no earlier draft of this issue.
+
+- **The identity could not be read.** `sources repo-whereis lab-platform` and `gh issue view 91 -R
+  peopleforrester/lab-platform` both refused with "sudo: a password is required". The repo is private (an anonymous
+  `GET` of `api.github.com/repos/peopleforrester/lab-platform` and of its github.com page got 404). The signature cannot
+  be read from the registry either: ghcr.io refused an anonymous pull token for `lab-platform/llm-guard` and for
+  `lab-platform/promo/joker` on 2026-10-29, so both packages were still private. Without the public key, or the
+  keyless issuer and subject, there is no attestor to write. A guessed one under `Deny` with `required: true` denies
+  the guard, and a placeholder is what #331 removed.
+- **`lab-platform/*` catches unsigned images.** All 14 `mirror/` copies in `verify/mirror_copies.py` are public, and
+  each one's tag list holds only its own tag: no `sha256-<digest>` signature tag, where every signed
+  `watch-it-burn` image has one. The kyverno CLI v1.19.1 (the pinned one) was run against a scratch copy of the
+  policy with `ghcr.io/peopleforrester/lab-platform/*` added. The falcosidekick and postgres copies, by digest, failed
+  with the signature message, and a promo villain matched too. Kyverno's glob crosses `/`, so that one line would
+  deny Falco's sidekick, Talon, kagent's postgres, KubeArmor, the OTel collectors, Grafana and Tempo at admission.
+  The scope therefore goes to Michael as a question in the run's report, recommending `lab-platform/llm-guard*` and
+  its cache-path form only.
+- **Also owed with the identity.** Whether lab-platform signs with cosign 3.x's bundle format, which
+  `verify/sign-images.sh` refuses because Kyverno 1.19 cannot read it, and whether it stores signatures in another
+  repository (`COSIGN_REPOSITORY`), which the attestor would then have to name.
+
+**Not yet run on a cluster.** Nothing changed. Once the attestor lands and the llm-guard package is public,
+`verify/test_kyverno_cel_policies.py` (tools tier) must pass the guard's digest under lab-platform's identity and fail
+it under a minted wrong one, and on the next attendee bring-up `bash verify/input-guard.sh <host> <kube-context>
+<aws-profile>` must pass through an admitted guard.
