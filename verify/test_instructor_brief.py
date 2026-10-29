@@ -238,6 +238,28 @@ check("the page and the run-of-show give the private terminal the presenter logi
       "<code>sprouts</code> / <code>sprouts</code>" in KUBECON and "`sprouts` / `sprouts`" in ROS
       and "`agentic` / `agentic`" not in ROS)
 
+print("== /kubecon reads at a glance (#639) ==")
+# The page is read on stage, so only the cues stay up: prompt, toggle and success markers. The story,
+# the notes and every fallback fold behind a disclosure, and a table gives the half hour in six rows.
+_glance = re.search(r'<table class="glance">(.*?)</table>', KUBECON, re.S)
+check("a glance table lists the six segments in order",
+      _glance is not None
+      and re.findall(r"<tr><td>(\d)</td>", _glance.group(1)) == ["1", "2", "3", "4", "5", "6"])
+check("it names each challenge's toggle",
+      _glance is not None and all(t in _glance.group(1) for t in
+                                  ("guard-output-on", "guard-input-on", "guard-mcp-on", "guard-topic-on")))
+_visible = re.sub(r"<details.*?</details>|<!--.*?-->|<style>.*?</style>|<script>.*?</script>", "",
+                  KUBECON, flags=re.S)
+check("every fallback is folded", '<div class="fallback">' in KUBECON
+      and '<div class="fallback">' not in _visible)
+check("every premise is folded", '<p class="premise">' in KUBECON
+      and '<p class="premise">' not in _visible)
+check("every prompt and toggle stays visible",
+      KUBECON.count('<div class="prompt"') == _visible.count('<div class="prompt"')
+      and KUBECON.count('<div class="toggle"') == _visible.count('<div class="toggle"'))
+check("the visible page is under 2,000 words",
+      len(re.sub(r"<[^>]+>", " ", _visible.split("<body>")[1]).split()) < 2000)
+
 print("== the run-of-show links the page ==")
 check("the run-of-show drives from /kubecon", "/kubecon" in ROS)
 check("and names the page file", "gitops/ai-layer/web/kubecon.html" in ROS)
