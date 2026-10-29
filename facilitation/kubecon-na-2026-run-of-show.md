@@ -711,7 +711,7 @@ is merely slow rather than rebuilding:
 - [ ] **Every shown beat works, on the clusters that will be on stage (#503).** From
   the repo root, one command per cluster. It runs the beats in this file's order and
   prints PASS or FAIL for each. It spends real Bedrock money, capped by `--max-calls`
-  (default 20): a community run makes 6 model calls, an admin run 11. Pull each
+  (default 20): a community run makes 7 model calls, an admin run 11. Pull each
   cluster's credentials into its own kubeconfig first; the probe passes it per
   command and never touches `~/.kube/config`. Both runs need the kube-context: C6 is
   judged on the `joker-agatha-the-banshee` Deployment HC-666 asks for, not on the reply.
@@ -726,7 +726,8 @@ is merely slow rather than rebuilding:
   - Community (segments 1 to 3): the kube-context and the hostname are the same
     cluster (if not, it stops before touching anything); the wide-open start, a
     burrito order answered, the CEO record leaking with the `/brief` prompt (her
-    address in the reply the room reads, or the signature), the linked-list ask
+    address in the reply the room reads, or the signature), Whitney's friendly
+    opener getting nothing from the Secret (#688), the linked-list ask
     answered 3 of 3, Challenge 2's three openings (the beacon reached, the villain
     image admitted in a dry run, the recipe file read), Challenge 3's HC-666 ask
     landing `joker-agatha-the-banshee` (Kyverno is off here; the probe deletes it

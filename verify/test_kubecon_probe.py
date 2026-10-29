@@ -892,13 +892,13 @@ check("the same cluster driven by its burritobot.co name passes every beat (#651
       all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
 check("community beats in order", [r["key"] for r in res]
-      == ["identity", "wide-open", "order", "ceo-leak", "off-topic", "c1-open", "c2-open", "c3-open", "c6-lands",
+      == ["identity", "wide-open", "order", "ceo-leak", "ceo-friendly", "off-topic", "c1-open", "c2-open", "c3-open", "c6-lands",
           "cost", "feed"])
 check("community beats report segments 1 to 4",
-      [r["segment"] for r in res] == ["-", "1", "1", "2", "2", "3", "3", "3", "4", "-", "1"],
+      [r["segment"] for r in res] == ["-", "1", "1", "2", "2", "2", "3", "3", "3", "4", "-", "1"],
       str([r["segment"] for r in res]))
-check("community spends 6 model calls, the linked-list ask three times, and toggles nothing",
-      f.calls == 6 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log))
+check("community spends 7 model calls, the linked-list ask three times, and toggles nothing",
+      f.calls == 7 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log))
 check("and leaves no stage Joker behind", f.c6 is False)
 f = Community()
 f.host = "attackme.agenticburn.com"
@@ -928,13 +928,13 @@ check("Nova's shapes: the address leak and three answered asks behind <thinking>
 f = NovaCommunity([LINKED_LIST_THINKING, COMMUNITY_OFF_TOPIC, LINKED_LIST_THINKING])
 res = {r["key"]: r for r in kp.Probe(f, 20).run(kp.COMMUNITY)}
 check("one deflection in three fails the off-topic beat, and asks all three",
-      res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3") and f.calls == 6,
+      res["off-topic"]["verdict"] == kp.FAIL and res["off-topic"]["note"].startswith("answered 2 of 3") and f.calls == 7,
       res["off-topic"]["note"])
 f = Community()
 f.host = "attackme.agenticburn.com"
 res = kp.Probe(f, 4).run(kp.COMMUNITY)
 check("a ceiling below the three tries fails the off-topic beat unasked",
-      [r for r in res if r["key"] == "off-topic"][0]["verdict"] == kp.FAIL and f.calls == 3, str(f.calls))
+      [r for r in res if r["key"] == "off-topic"][0]["verdict"] == kp.FAIL and f.calls == 4, str(f.calls))
 
 print("== the command refuses what it cannot do safely ==")
 check("admin without --context exits 2", kp.main(["admin", host]) == 2)
@@ -958,8 +958,8 @@ check("Night Before runs the probe on the community cluster, with its kube-conte
 check("Night Before runs the probe on the private cluster the presenters share",
       "kubecon_probe.py admin burritobot-private.agenticburn.com" in nb and "whitney-admin" not in nb)
 check("Night Before says it must end KUBECON PROBE GREEN", "KUBECON PROBE GREEN" in nb)
-check("Night Before counts the community run's 6 model calls and the admin run's 11",
-      "a community run makes 6 model calls, an admin run 11" in nb)
+check("Night Before counts the community run's 7 model calls and the admin run's 11",
+      "a community run makes 7 model calls, an admin run 11" in nb)
 
 print("== the stage promises what the probe proves (#530) ==")
 beat2 = re.sub(r"\s+", " ", brief.split("<h3>2. A reason it likes</h3>", 1)[1].split('<div class="note">', 1)[0])
