@@ -4957,3 +4957,38 @@ lab-platform's bootstrap does not run. Building OpenBao beside the AWS store, wi
 add a pod on fifty clusters for a store nothing reads, which is the Gitea rule's "a component nothing uses".
 Which way to go is a choice between two answered designs, so it goes back to Michael as one question. Until he
 answers, platform-baseline.yaml has openbao as proposed, tier 1, and `security/eso` is unchanged.
+
+## 2026-10-29 · question 912 · OpenBao is held until a beat needs it; the Secrets Manager store stays (#394)
+
+**Question:** should OpenBao still go onto every cluster, now that lab-platform's build has External Secrets read
+each cluster's Datadog key straight from AWS Secrets Manager?
+
+**Answer:** Hold OpenBao until a beat needs it.
+
+**Decided by hecaton's research under Michael's standing rules, not by Michael.** The answer run cited this
+repo's 2026-09-17 Gitea rule: a component that no challenge exercises does not go onto a platform that builds in
+15 to 25 minutes, 50 times over, and is revisited when a challenge needs it. OpenBao beside the AWS store,
+holding nothing, is that case.
+
+**What it changes.**
+
+- The OpenBao half of question 656 (2026-10-24) is superseded. Its premise, that ESO had nothing to read,
+  stopped holding on 2026-10-28, when lab-platform's build gave `platform/external-secrets` a Pod Identity role
+  that reads each cluster's own `watch-it-burn/` secrets (lab-platform #205). That role exists for the
+  per-cluster Datadog secret its question 840 names. The Argo Rollouts half of 656 stands: it waits for its
+  canary beat.
+- `security/eso/cluster-secret-store.yaml` stays the `aws-secrets-manager` store. No OpenBao Application,
+  namespace, seed script or second ClusterSecretStore is added, and deploy-full-idp.sh and fleet.sh keep writing
+  `datadog-secret` as they do.
+- `platform-baseline.yaml` keeps openbao as `proposed`, tier 1, with this decision as its recommendation. It goes
+  in with the first challenge that teaches an in-cluster secret store, such as the ESO exfiltration game that
+  `docs/BUILD-PLAN.md` sketches with "possibly Vault".
+- The 2026-10-24 draft's OpenBao work (`origin/agent/394-7203`, d2412aa) is not to be revived as written: it
+  removes the store lab-platform's path reads.
+- **Revisit when** a challenge or tour step needs an in-cluster secret store, or lab-platform stops reading
+  Secrets Manager through ESO.
+
+This closes the third question #394 asked, which of the twenty to adopt and in what order. No component joins
+the 50-cluster fleet, so the fleet's build time is unchanged. vLLM goes onto one deploy-only cluster (question
+657 above), and its cold-build cost is the one measurement still owed, under that entry's "Not yet run on a
+cluster".
