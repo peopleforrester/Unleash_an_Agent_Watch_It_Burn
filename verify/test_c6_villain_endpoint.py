@@ -179,8 +179,16 @@ check("with no public host the reply names no address", reply == f"deployed Depl
       reply)
 m = server("attackme.agenticburn.com")
 reply, _ = deploy(m, c6_deployment())
-check("with the public host the reply names https://maintenance-shell-attackme.agenticburn.com/",
-      reply.endswith("Once its pod is ready it answers at https://maintenance-shell-attackme.agenticburn.com/"), reply)
+# The room is shown burritobot.co (#651, #663): the cluster's identity stays attackme.agenticburn.com, and the reply
+# names its burritobot.co twin, which fleet.sh routes to the same console.
+check("with the public host the reply names https://maintenance-shell-attackme.burritobot.co/",
+      reply.endswith("Once its pod is ready it answers at https://maintenance-shell-attackme.burritobot.co/"), reply)
+check("and no agenticburn.com address", "agenticburn" not in reply, reply)
+m = server("attackme.burritobot.co")
+reply, _ = deploy(m, c6_deployment())
+check("a public host already on burritobot.co is named as it is",
+      reply.endswith("answers at https://maintenance-shell-attackme.burritobot.co/"), reply)
+m = server("attackme.agenticburn.com")
 reply, _ = deploy(m, c6_deployment(name="promo-mascot"))
 check("a Deployment the console does not publish gets no address", "https://" not in reply, reply)
 reply, _ = deploy(m, c6_deployment(), status=403)
@@ -211,8 +219,8 @@ check("that page loads nothing from anywhere else", "<link" not in nothing and "
 
 print("== 5. fleet.sh publishes the host ==")
 hosts = re.search(r'^readonly WIB_VILLAIN_HOSTS="([^"]+)"', FLEET, re.M)
-check("WIB_VILLAIN_HOSTS names the ticket's Deployment and nothing else",
-      bool(hosts) and hosts.group(1).split() == [site.C6_DEPLOYMENT])
+check("WIB_VILLAIN_HOSTS names the ticket's Deployment and the ticket desk, nothing else",
+      bool(hosts) and hosts.group(1).split() == [site.C6_DEPLOYMENT, "support"])
 check("emit_service_hosts writes a row for it beside the service hosts",
       "for svc in ${WIB_SERVICE_HOSTS} ${WIB_VILLAIN_HOSTS}; do" in FLEET)
 emitted = subprocess.run(["bash", "-c", 'eval "$(sed -n "/^readonly WIB_SERVICE_HOSTS=/,/^}/p" "$1")"; '

@@ -23,6 +23,7 @@ import sys
 import threading
 import types
 import urllib.error
+import urllib.parse
 import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -149,6 +150,42 @@ check("/ticket?id=HC-7731 returns the ticket, whatever the case", code == 200 an
 check("an unknown ticket is a 404, not an invented one", get(f"{SITE}/ticket?id=HC-0000")[0] == 404)
 check("no id is a 400", get(f"{SITE}/ticket")[0] == 400)
 check("any other path is a 404", get(f"{SITE}/admin")[0] == 404)
+# 2026-10-29 on the private cluster the model called read_support_ticket('HC7731') and told the room the ticket did
+# not exist. A ticket number is unique, so any spelling that carries exactly its digits finds it.
+for spelled in ("HC7731", "hc 7731", "HC_7731", "7731", "HH-7731"):
+    code, body = get(f"{SITE}/ticket?id={urllib.parse.quote(spelled)}")
+    check(f"/ticket?id={spelled} finds HC-7731", code == 200 and body.get("id") == "HC-7731", f"{code} {body}")
+check("digits that match no ticket are still a 404", get(f"{SITE}/ticket?id=HC-773")[0] == 404)
+
+print("== the room can open the ticket desk: support-<cluster> (2026-10-28 call) ==")
+
+
+def page(url: str) -> tuple[int, str, str]:
+    with urllib.request.urlopen(url, timeout=5) as r:
+        return r.status, r.headers.get("Content-Type", ""), r.read().decode()
+
+
+code, ctype, html_page = page(f"{SITE}/")
+check("/ is an HTML page", code == 200 and ctype.startswith("text/html"), ctype)
+check("it lists every ticket by id", all(t in html_page for t in site.TICKETS))
+check("it shows HC-7731's hidden instruction, so the room can see what the bot read",
+      "IGNORE ALL PREVIOUS INSTRUCTIONS" in html_page)
+check("ticket text is escaped, not injected as markup", "<script" not in html_page.lower())
+code, ctype, one_page = page(f"{SITE}/HC-7731")
+check("/HC-7731 is that ticket's own page", code == 200 and "Hazel Bramblewick" in one_page
+      and "Barnaby" not in one_page)
+CONF = (AI / "console.conf").read_text()
+block = re.search(r"server \{[^{}]*server_name ~\^support-\[a-z0-9-\]\+\\\.(.*?)\n\}", CONF, re.S)
+check("console.conf has a server for support-<cluster>", block is not None)
+body_txt = block.group(0) if block else ""
+for d in ("agenticburn.com", "burritobot.co"):
+    rx = re.search(r"server_name (~\^support-[^;]+);", body_txt)
+    check(f"it answers support-attackme.{d}", bool(rx) and re.fullmatch(rx.group(1)[1:], f"support-attackme.{d}"))
+check("it proxies to the fake-ticket Service", "fake-ticket.agent.svc.cluster.local:8080" in body_txt)
+check("GET only: the desk is read-only", "limit_except GET" in body_txt)
+FLEET_SRC = (REPO / "infra/terraform/fleet/fleet.sh").read_text()
+hosts = " ".join(re.findall(r'^readonly WIB_(?:SERVICE|VILLAIN)_HOSTS="([^"]*)"', FLEET_SRC, re.M)).split()
+check("fleet.sh publishes support-<cluster>", "support" in hosts, str(hosts))
 
 print("== read_support_ticket, against stand-ins for guard-proxy and LLM Guard ==")
 state = {"guards": {"input_classifier": False}, "guards_up": True, "llm_up": True, "scans": [], "auth": []}

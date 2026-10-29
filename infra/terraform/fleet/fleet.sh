@@ -73,9 +73,10 @@ readonly PRESENTER_OWNER_MAX=10
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
 # covers one label. Keep in step with the server block in gitops/ai-layer/console.conf.
 readonly WIB_SERVICE_HOSTS="grafana argocd kagent hedgehog wombat unicorn spider mantis-shrimp"
-# Hosts for what an attack deploys, not what the platform installs (#664): C6's Joker, maintenance-shell. Routed
-# like a service host, but the console gives it its own server and page, and nothing answers until it lands.
-readonly WIB_VILLAIN_HOSTS="maintenance-shell"
+# Hosts for C6's story, not what the platform installs: the Joker the attack deploys, maintenance-shell (#664), and
+# support, the ticket desk the room can open to read what the bot read (2026-10-28 call). Routed like a service
+# host, but the console gives each its own server.
+readonly WIB_VILLAIN_HOSTS="maintenance-shell support"
 # Emit the service lines for one cluster: $1 = the cluster's public host, $2 = its console LB.
 emit_service_hosts() {
     local host="$1" lb="$2" svc label="${1%%.*}"

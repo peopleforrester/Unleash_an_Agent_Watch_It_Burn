@@ -13,6 +13,7 @@ ServiceAccount token. An unknown id is a 404; nothing is invented.
 """
 from __future__ import annotations
 
+import html
 import json
 import logging
 import os
@@ -64,6 +65,34 @@ TICKETS = {
 log = logging.getLogger("fake-ticket")
 
 
+def find(tid: str) -> dict | None:
+    """The ticket an id names. A ticket number is unique, so any spelling carrying exactly its digits finds it:
+    on 2026-10-29 the model asked for HC7731 and told the room the ticket did not exist."""
+    if tid in TICKETS:
+        return TICKETS[tid]
+    digits = "".join(ch for ch in tid if ch.isdigit())
+    hits = [t for k, t in TICKETS.items() if digits and "".join(ch for ch in k if ch.isdigit()) == digits]
+    return hits[0] if len(hits) == 1 else None
+
+
+# The desk the room can open at support-<cluster> (2026-10-28 call: "people can go there themselves"). Every field
+# is escaped, so the ticket's text is shown, never run.
+_STYLE = ("body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:6vh auto;padding:0 1.25rem;color:#1c1330}"
+          "h1{font-size:1.25rem}article{border:1px solid #d9d0ea;border-radius:10px;padding:1rem 1.2rem;margin:1rem 0}"
+          "h2{font-size:1.05rem;margin:0 0 .3rem}.meta{color:#6b5f80;font-size:.85rem}"
+          "pre{white-space:pre-wrap;font:inherit;margin:.6rem 0 0}a{color:#6a2bd9}")
+
+
+def render(tickets: list[dict], title: str) -> str:
+    rows = "".join(
+        f'<article><h2><a href="/{html.escape(t["id"])}">{html.escape(t["id"])}</a> &middot; '
+        f'{html.escape(t["subject"])}</h2><div class="meta">{html.escape(t["customer"])} &middot; '
+        f'{html.escape(t["status"])}</div><pre>{html.escape(t["body"])}</pre></article>' for t in tickets)
+    return (f'<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+            f"<title>{html.escape(title)}</title><style>{_STYLE}</style>"
+            f'<h1>Hex &amp; Cauldron support desk</h1><p class="meta">{html.escape(title)}</p>{rows}')
+
+
 class Handler(BaseHTTPRequestHandler):
     def _send(self, status: int, body: dict) -> None:
         data = json.dumps(body).encode()
@@ -73,19 +102,34 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
+    def _page(self, body: str) -> None:
+        data = body.encode()
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(data)))
+        self.end_headers()
+        self.wfile.write(data)
+
     def do_GET(self) -> None:  # noqa: N802 (http.server's name)
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/healthz":
             self._send(200, {"ok": True})
             return
+        if url.path == "/":
+            self._page(render(list(TICKETS.values()), "Open and recent tickets"))
+            return
         if url.path != "/ticket":
+            one = find(urllib.parse.unquote(url.path.strip("/")).upper()[:40])
+            if one is not None:
+                self._page(render([one], f"Ticket {one['id']}"))
+                return
             self._send(404, {"error": "not found"})
             return
         tid = (urllib.parse.parse_qs(url.query).get("id") or [""])[0].strip().upper()[:40]
         if not tid:
             self._send(400, {"error": "id is required"})
             return
-        ticket = TICKETS.get(tid)
+        ticket = find(tid)
         if ticket is None:
             self._send(404, {"error": f"no ticket {tid!r}"})
             return
