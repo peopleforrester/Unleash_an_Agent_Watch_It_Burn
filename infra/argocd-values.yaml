@@ -19,13 +19,15 @@ server:
     requests: { cpu: 100m, memory: 128Mi }
     limits: { cpu: "1", memory: 512Mi }
   podAnnotations:
-    # Datadog Unified Service Tagging (PRD #28): puts argocd-server on the service catalog / map as a
-    # first-class platform component. env locked to production; version = deployed ArgoCD appVersion.
+    ad.datadoghq.com/server.checks: |
+      {"argocd":{"instances":[{"api_server_endpoint":"http://%%host%%:8083/metrics"}]}}
+  # Datadog Unified Service Tagging (PRD #28): puts argocd-server on the service catalog / map as a
+  # first-class platform component; version = deployed ArgoCD appVersion. Pod labels, not annotations:
+  # the Agent reads tags.datadoghq.com/{service,env,version} off pod labels (#661).
+  podLabels:
     tags.datadoghq.com/service: burritobot-argocd
     tags.datadoghq.com/env: burritobot-kubecon-na-26
     tags.datadoghq.com/version: "v3.4.4"
-    ad.datadoghq.com/server.checks: |
-      {"argocd":{"instances":[{"api_server_endpoint":"http://%%host%%:8083/metrics"}]}}
 # argocd-server behind the console's reverse proxy at argocd-<cluster>.agenticburn.com (#233). The
 # proxy terminates TLS; without this the server redirects every plain-HTTP hop to https and the
 # login loops. The chart's params ConfigMap carries it, so it survives helm upgrades.

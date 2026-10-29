@@ -135,7 +135,7 @@ if _missing:
 DD_API_KEY = os.environ["DD_API_KEY"]
 DD_APP_KEY = os.environ["DD_APP_KEY"]
 DD_SITE = os.environ.get("DD_SITE", "datadoghq.com")
-DD_ENV = os.environ.get("DD_ENV", "production")  # locked UST SDLC env (PRD #27 M1)
+DD_ENV = os.environ.get("DD_ENV", "burritobot-kubecon-na-26")  # the UST env every pod carries since 57ad24d (#629)
 HEADERS = {"DD-API-KEY": DD_API_KEY, "DD-APPLICATION-KEY": DD_APP_KEY}
 
 # Internal Service Map edges the AI layer is expected to render. guard-proxy sets peer.service in code
@@ -202,8 +202,10 @@ def test_service_map_edges():
 
 
 # Platform components that carry Unified Service Tagging (PRD #28). Service-tag values match the
-# tags.datadoghq.com/service annotations on their pods (gitops/bootstrap/apps/*, infra/argocd-values.yaml).
-PLATFORM_COMPONENTS = ["argocd", "kyverno", "falco", "cert-manager", "istio"]
+# tags.datadoghq.com/service pod labels (gitops/bootstrap/apps/*, infra/argocd-values.yaml; labels since #661),
+# which carry the burritobot- prefix since 57ad24d (#629).
+PLATFORM_COMPONENTS = ["burritobot-argocd", "burritobot-kyverno", "burritobot-falco", "burritobot-cert-manager",
+                       "burritobot-istio"]
 
 
 def _metrics_for_service(service):
@@ -239,11 +241,11 @@ def _series_has_points(metric, service):
 
 
 def test_platform_component_ust():
-    """PRD #28: each platform component reports metrics tagged service:<name> AND env:production.
+    """PRD #28: each platform component reports metrics tagged service:<name> AND env:<DD_ENV>.
 
     Two assertions per component: (1) at least one metric is actively reporting under service:<name>
     (discovered via /api/v2/metrics, so no integration metric name is hard-coded); (2) live data for one
-    of those metrics is present when scoped to service:<name> + env=production, proving the full UST set
+    of those metrics is present when scoped to service:<name> + env=<DD_ENV>, proving the full UST set
     landed on real telemetry. This is the live counterpart to the static manifest gate in
     verify/test_observability.py. Catalog/Service-Map UI rendering remains a manual facilitator look.
     """

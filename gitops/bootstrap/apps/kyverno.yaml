@@ -71,13 +71,15 @@ spec:
             config: prometheus
             port: 8000
           podAnnotations:
-            # Datadog Unified Service Tagging (PRD #28): puts the Kyverno admission controller on the
-            # service catalog / map. env locked to production; version = deployed Kyverno appVersion.
+            ad.datadoghq.com/kyverno.checks: |
+              {"kyverno":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8000/metrics"}]}}
+          # Datadog Unified Service Tagging (PRD #28): puts the Kyverno admission controller on the
+          # service catalog / map; version = deployed Kyverno appVersion. Pod labels, not annotations:
+          # the Agent reads tags.datadoghq.com/{service,env,version} off pod labels (#661).
+          podLabels:
             tags.datadoghq.com/service: burritobot-kyverno
             tags.datadoghq.com/env: burritobot-kubecon-na-26
             tags.datadoghq.com/version: "v1.19.1"
-            ad.datadoghq.com/kyverno.checks: |
-              {"kyverno":{"instances":[{"openmetrics_endpoint":"http://%%host%%:8000/metrics"}]}}
         # Background controller for policy reports
         backgroundController:
           resources:

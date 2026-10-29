@@ -215,7 +215,7 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
 ## P2 — observability polish (ROADMAP)
 
 - [ ] #27 UST / Service Map / log-trace correlation: live acceptance on a real cluster.
-- [ ] #28 platform-component UST: `tags.datadoghq.com/*` pod annotations on ArgoCD, Kyverno, Falco,
+- [ ] #28 platform-component UST: `tags.datadoghq.com/*` pod labels on ArgoCD, Kyverno, Falco,
       cert-manager, Istio ambient (completes the Service Map). Gated on #27.
 - [ ] #33 dashboards: verify the OOTB integration dashboards import, scaffold `infra/terraform/dashboards/`,
       and build the 4 custom story dashboards (cost, model-tier race, tool-call heatmap, guardrail timeline).

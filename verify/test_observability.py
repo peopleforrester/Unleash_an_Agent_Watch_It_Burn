@@ -172,13 +172,15 @@ for _name, _ust, _svc, _ver in _ust_targets:
 
 
 # Platform-component Unified Service Tagging (PRD #28): the five platform controls carry the Datadog
-# UST pod annotations (tags.datadoghq.com/{service,env,version}) so they appear on the Service Catalog /
+# UST pod labels (tags.datadoghq.com/{service,env,version}) so they appear on the Service Catalog /
 # Service Map as first-class components. Unlike the AI layer (OTEL_RESOURCE_ATTRIBUTES env), these are
-# Helm-values podAnnotations on the Datadog-Agent-scraped pods. env is DD_ENV, and each service starts with
-# burritobot- so it cannot collide with another project's in the shared org (#629); version is
-# the real deployed software version (NOT a chart version where they differ, e.g. falco app 0.45.1).
-def _pod_annotations(path, *navkeys, doc_name=None):
-    """Return the podAnnotations dict at valuesObject + navkeys for a manifest.
+# Helm-values podLabels on the Datadog-Agent-scraped pods. They are labels, not annotations: Datadog's
+# Unified Service Tagging page (Kubernetes tab, read 2026-10-28) puts them on the pod template's labels and
+# says nothing of annotations (#661). env is DD_ENV, and each service starts with burritobot- so it cannot
+# collide with another project's in the shared org (#629); version is the real deployed software version
+# (NOT a chart version where they differ, e.g. falco app 0.45.1).
+def _pod_values(path, *navkeys, doc_name=None):
+    """Return the Helm values node at valuesObject + navkeys for a manifest.
 
     For an ArgoCD Application manifest the values live under spec.source.helm.valuesObject; for the
     bootstrap argocd-values.yaml they are at the document root. doc_name selects one Application from a
@@ -193,23 +195,29 @@ def _pod_annotations(path, *navkeys, doc_name=None):
         node = _app_values(node)
     for k in navkeys:
         node = node[k]
-    return node.get("podAnnotations", {})
+    return node
 
 
-# (component, service, version, podAnnotations) — istio has two pods (control plane + data plane).
+# (component, service, version, Helm values node) — istio has two pods (control plane + data plane).
+# Each chart's podLabels key was rendered with `helm template` on 2026-10-29 and lands on the pod
+# template only, never on a selector (#661).
 _PLATFORM_UST = [
-    ("cert-manager", "burritobot-cert-manager", "v1.20.2", _pod_annotations("gitops/bootstrap/apps/cert-manager.yaml")),
-    ("falco", "burritobot-falco", "0.45.1", _pod_annotations("gitops/bootstrap/apps/falco.yaml")),
-    ("kyverno", "burritobot-kyverno", "v1.19.1", _pod_annotations("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
-    ("argocd", "burritobot-argocd", "v3.4.4", _pod_annotations("infra/argocd-values.yaml", "server")),
-    ("istio-ztunnel", "burritobot-istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
-    ("istiod", "burritobot-istio", "1.30.1", _pod_annotations("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
+    ("cert-manager", "burritobot-cert-manager", "v1.20.2", _pod_values("gitops/bootstrap/apps/cert-manager.yaml")),
+    ("falco", "burritobot-falco", "0.45.1", _pod_values("gitops/bootstrap/apps/falco.yaml")),
+    ("kyverno", "burritobot-kyverno", "v1.19.1", _pod_values("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
+    ("argocd", "burritobot-argocd", "v3.4.4", _pod_values("infra/argocd-values.yaml", "server")),
+    ("istio-ztunnel", "burritobot-istio", "1.30.1", _pod_values("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
+    ("istiod", "burritobot-istio", "1.30.1", _pod_values("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
 ]
-for _name, _svc, _ver, _ann in _PLATFORM_UST:
-    check(f"{_name} carries platform UST (tags.datadoghq.com service={_svc} env={DD_ENV} version={_ver})",
-          _ann.get("tags.datadoghq.com/service") == _svc
-          and _ann.get("tags.datadoghq.com/env") == DD_ENV
-          and str(_ann.get("tags.datadoghq.com/version")) == _ver)
+for _name, _svc, _ver, _vals in _PLATFORM_UST:
+    _labels = _vals.get("podLabels") or {}
+    check(f"{_name} carries platform UST pod labels (tags.datadoghq.com service={_svc} env={DD_ENV} version={_ver})",
+          _labels.get("tags.datadoghq.com/service") == _svc
+          and _labels.get("tags.datadoghq.com/env") == DD_ENV
+          and str(_labels.get("tags.datadoghq.com/version")) == _ver)
+    _stale = sorted(k for k in (_vals.get("podAnnotations") or {}) if k.startswith("tags.datadoghq.com/"))
+    check(f"{_name} keeps no tags.datadoghq.com/* key in podAnnotations (UST goes on pod labels, #661)",
+          not _stale)
 
 # Falcosidekick forwards Falco alerts to Datadog, key from a BYO secret, Talon path preserved.
 fvals = _app_values(yaml.safe_load((REPO / "gitops" / "bootstrap" / "apps" / "falcosidekick.yaml").read_text()))

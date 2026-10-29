@@ -3770,3 +3770,34 @@ example after the 60 anonymous requests an hour are used up. Pointed at #659 (no
 pointed at #610 it fails three. Both were tried and then reverted.
 
 **Not yet run on a cluster:** nothing is owed. The test needs the network only.
+## 2026-10-29 · #661 · The platform charts' Datadog service tags are pod labels, not pod annotations
+
+57ad24d (#629) renamed the five platform services to `burritobot-*`, but the `tags.datadoghq.com/{service,env,version}`
+keys sat in each chart's `podAnnotations`. Datadog's Unified Service Tagging page
+(docs.datadoghq.com/getting_started/tagging/unified_service_tagging, Kubernetes tab, read 2026-10-28) puts them on
+the pod template as labels and does not mention annotations. The AI layer's pods already carry them as labels
+(`verify/test_datadog_sandbox_names.py`).
+
+- **Moved to each chart's pod-label key:** `podLabels` for cert-manager (v1.21.2), falco (9.2.1) and ztunnel
+  (1.30.4), `admissionController.podLabels` for kyverno (3.9.1), `pilot.podLabels` for istiod (1.30.4) and
+  `server.podLabels` for argo-cd (9.6.0, `infra/argocd-values.yaml`). Each was rendered with `helm template` on
+  2026-10-29: the label lands on the pod template of the one controller, and on no selector, so the change is a
+  rollout and not an immutable-selector conflict. The `ad.datadoghq.com/*.checks` Autodiscovery keys stay
+  annotations, which is where the Agent reads them.
+- **The issue's live check came first in its text,** to see whether the Agent already gives these pods' logs the
+  `burritobot-` service. A dispatched run has no cluster and no Datadog access, so the move was made on the
+  documentation alone. Labels are the documented place either way, so making the move costs nothing even if the
+  annotations turn out to have worked.
+- **Tests.** `verify/test_observability.py` reads `podLabels` (its `_pod_annotations` became `_pod_values`) and
+  also fails if any `tags.datadoghq.com/*` key is left in a chart's `podAnnotations`. Reverting falco.yaml fails
+  both checks; that was tried and then undone. `verify/test_kyverno_version_pins.py` reads the version from
+  `admissionController.podLabels`. `verify/test_datadog_service_map.py`, the live counterpart, still asked
+  Datadog for the pre-57ad24d service names (`argocd`, `kyverno`, ...) and defaulted `DD_ENV` to `production`.
+  It now asks for the `burritobot-*` names and defaults to `burritobot-kubecon-na-26`, so it can pass against
+  the sandbox org.
+
+**Not yet run on a cluster.** On a fresh cluster with the Datadog Agent shipping to the sandbox org: run
+`python3 verify/test_datadog_service_map.py` (`test_platform_component_ust` wants live metrics under
+`service:burritobot-{argocd,kyverno,falco,cert-manager,istio}` with `env:burritobot-kubecon-na-26`), then check
+in Log Explorer that `kube_cluster_name:burritobot-* kube_namespace:cert-manager` shows `service:burritobot-cert-manager`.
+On the cluster itself, `kubectl --context "$CONTEXT" -n cert-manager get pods --show-labels` should show the three labels.

@@ -30,7 +30,7 @@ def check(n, c, detail=""):
 app = yaml.safe_load((REPO / "gitops/bootstrap/apps/kyverno.yaml").read_text())
 chart = str(app["spec"]["source"]["targetRevision"])
 values = app["spec"]["source"]["helm"]["valuesObject"]
-dd_version = str(values["admissionController"]["podAnnotations"]["tags.datadoghq.com/version"])
+dd_version = str(values["admissionController"]["podLabels"]["tags.datadoghq.com/version"])
 
 # Two lines, two layouts: "app v1.19.1 / chart 3.9.1" and "chart 3.9.1   app v1.19.1".
 lock_lines = [l for l in (REPO / "VERSIONS.lock").read_text().splitlines() if re.match(r"^kyverno\s", l)]
