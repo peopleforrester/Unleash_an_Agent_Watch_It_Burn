@@ -3678,3 +3678,15 @@ until the packages are public.
 lab's jq prints the new message line, and Deny refuses it), and
 `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`. Then, by hand, check that
 `kubectl -n agent logs deploy/promo-mascot` shows the Joker's whole line.
+## 2026-10-29 · #657 · test_repo_identity.py checks that llm-guard-upstream-mirror is named outside decisions.md
+
+#625 named the mirror in AGENTS.md's "Where things live" and in the README, but no test checked either. Test
+review run 10203 found the gap. `verify/test_repo_identity.py` now checks the "Upstream backup, not a submodule"
+bullet: it must name llm-guard-upstream-mirror, `peopleforrester/llm-guard-upstream-mirror`, private, and the
+archived `protectai/llm-guard`. It also checks the README's "`peopleforrester/llm-guard-upstream-mirror` (private)"
+and its "It is not a submodule and nothing here builds from it." Last, neither the submodule bullet nor
+`.gitmodules` may name the mirror. That way the mirror cannot become a submodule while both files still say it is
+not one. Deleting the bullet fails five checks, and rewording the README's name fails one. Both were tried and
+then reverted.
+
+**Not yet run on a cluster:** nothing is owed. The test reads repo files only.

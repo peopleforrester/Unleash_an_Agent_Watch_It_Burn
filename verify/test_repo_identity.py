@@ -11,6 +11,10 @@ session that reads `CLAUDE.md` first lands on that section, so `CLAUDE.md` must 
 The title is checked against the README's heading rather than written down twice here, so a rename of the
 workshop has to move both files together. The submodule pointers are checked against `.gitmodules`, so a
 moved or added submodule cannot leave the section naming the wrong path.
+
+#625 named the third repo, llm-guard-upstream-mirror, outside decisions.md: a bullet in the section and a
+paragraph in the README, each saying it is private and not a submodule. Both are checked here, and so is
+`.gitmodules`, so the mirror cannot be added as a submodule while the two still say it is not one (#657).
 """
 from __future__ import annotations
 
@@ -92,6 +96,19 @@ urls = re.findall(r"^\s*url = \S+/([^/\s]+?)(?:\.git)?$", gitmodules, re.M)
 check(".gitmodules lists submodules", bool(paths) and len(paths) == len(urls))
 for path, repo in zip(paths, urls):
     check(f"the section names submodule {repo} at `{path}`", repo in modules and f"`{path}`" in modules)
+
+print("== it names the upstream mirror, which is not a submodule ==")
+MIRROR = "peopleforrester/llm-guard-upstream-mirror"
+mirror = bullet(where, "Upstream backup, not a submodule")
+check("a bullet for the upstream backup", bool(mirror))
+for needle in ("llm-guard-upstream-mirror", f"`{MIRROR}`", "private", "`protectai/llm-guard`"):
+    check(f"the upstream-backup bullet names {needle}", needle in mirror)
+check("the mirror is not in the submodule bullet", "upstream-mirror" not in modules)
+check(".gitmodules does not list the mirror", "llm-guard-upstream-mirror" not in gitmodules)
+readme_flat = flat(README.read_text(encoding="utf-8"))
+check(f"the README names `{MIRROR}` (private)", f"`{MIRROR}` (private)" in readme_flat)
+check("the README says the mirror is not a submodule and nothing builds from it",
+      "It is not a submodule and nothing here builds from it." in readme_flat)
 
 print("== it names this repo's own state files ==")
 state = bullet(where, "This repo's own state")
