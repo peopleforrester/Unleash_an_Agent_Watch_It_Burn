@@ -508,6 +508,10 @@ def run_shell(command: str = "") -> str:
     except subprocess.TimeoutExpired:
         raise RuntimeError("command FAILED: it did not complete within 20s. The connection it was waiting on is "
                            "blocked or hanging, most likely by a NetworkPolicy. Nothing was sent.")
+    except RuntimeError:
+        # The non-zero exit raised above. Without this the handler below caught it and returned the text as
+        # a success (isError=false), so only the timeout ever reached the caller as an error (#463).
+        raise
     except Exception as e:  # noqa: BLE001
         return f"error running command: {e}"
 

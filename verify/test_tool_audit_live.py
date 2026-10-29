@@ -130,6 +130,9 @@ async def drive(url: str) -> list:
             # An unknown tool is the one call FastMCP itself fails, so it exercises the error path without
             # depending on any tool's own error handling.
             results.append(await s.call_tool("no_such_tool", {"why": "probe"}))
+            # A tool's own failure: run_shell raises on a non-zero exit, and FastMCP must turn that into
+            # isError. It used to be caught inside the tool and returned as a success holding text (#463).
+            results.append(await s.call_tool("run_shell", {"command": "exit 3"}))
     async with streamablehttp_client(url) as (r, w, _):
         async with ClientSession(r, w) as s:
             await s.initialize()
@@ -165,23 +168,31 @@ with tempfile.TemporaryDirectory() as tmp:
         if isinstance(rec, dict) and rec.get("event") == "tool_invocation":
             lines.append(rec)
 
-check("three calls answered, the unknown tool as an error",
-      len(results) == 3 and not results[0].isError and results[1].isError and not results[2].isError)
-check("six audit lines, a pre and a post per call", len(lines) == 6)
+check("four calls answered, the unknown tool and the failed command as errors",
+      len(results) == 4 and not results[0].isError and results[1].isError and results[2].isError
+      and not results[3].isError)
+# transform/mark_tool_failure matches this text in the next model call's input, so the error result has to
+# keep carrying it.
+check("the failed command's error result says command FAILED with exit code 3",
+      len(results) == 4
+      and "command FAILED with exit code 3" in " ".join(getattr(b, "text", "") for b in results[2].content))
+check("eight audit lines, a pre and a post per call", len(lines) == 8)
 by_call: dict[int, list] = {}
 for rec in lines:
     by_call.setdefault(rec.get("call"), []).append(rec)
 calls = [by_call[k] for k in sorted(by_call)]
 check("each call's pre comes before its post", all([r.get("phase") for r in c] == ["pre", "post"] for c in calls))
 check("the calls are numbered in the order they were made",
-      [c[0].get("tool_name") for c in calls] == ["check_inventory", "no_such_tool", "check_inventory"])
-if len(calls) == 3:
-    check("the header reaches the request context: the first two are the agent's",
-          all(r.get("agent_identity") == AGENT for c in calls[:2] for r in c))
-    check("the call without the header is unattributed", all(r.get("agent_identity") == "unattributed" for r in calls[2]))
+      [c[0].get("tool_name") for c in calls] == ["check_inventory", "no_such_tool", "run_shell", "check_inventory"])
+if len(calls) == 4:
+    check("the header reaches the request context: the first three are the agent's",
+          all(r.get("agent_identity") == AGENT for c in calls[:3] for r in c))
+    check("the call without the header is unattributed", all(r.get("agent_identity") == "unattributed" for r in calls[3]))
     check("the failed call is recorded as an error, with its arguments and the reason",
           calls[1][1].get("outcome") == "error" and calls[1][0].get("tool_input") == {"why": "probe"}
           and "no_such_tool" in calls[1][1].get("error", ""))
+    check("the failed command is recorded as an error with its exit code",
+          calls[2][1].get("outcome") == "error" and "exit code 3" in calls[2][1].get("error", ""))
     check("a successful call is recorded as ok with its result size",
           calls[0][1].get("outcome") == "ok" and calls[0][1].get("result_chars", 0) > 0)
     check("every line names the server as workshop-mcp", all(r.get("mcp_server") == "workshop-mcp" for r in lines))

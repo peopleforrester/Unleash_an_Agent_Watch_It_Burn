@@ -4659,3 +4659,35 @@ retitled "Traces". The 2-hour lab keeps HC-7731 and maintenance-shell. The iPad 
 in the page from the same prompt blocks, because a new path would need an apex router matcher change.
 Not yet run on a cluster: the community probe's c1-open, c2-open, c3-open and HC-666 c6-lands beats, and the
 admin probe's HC-666 c6-admission, c6-withheld and c6-on (verify/kubecon_probe.py on both clusters).
+
+## 2026-10-29 · #463 · run_shell's non-zero exit reaches the caller as an MCP error
+
+**Made the fix.** run_shell raised `RuntimeError("command FAILED with exit code N ...")` inside its try block,
+and the generic `except Exception` beside it returned that as text, so FastMCP answered `exit 3` with
+isError=false. A timeout raised from its own handler, out of the generic one's reach, so it alone came back as
+isError=true. An `except RuntimeError: raise` now sits before the generic handler, as the comment in run_shell
+(Whitney, 2026-09-06) always said it worked. A command that cannot be started at all (an OSError) is still
+returned as text.
+
+**Why the C1 trace is not at risk.** Both raises keep the `command FAILED` wording, and mcp 1.29.1 puts the
+message in the error result's text, so `transform/mark_tool_failure` still matches it in the next model call's
+input messages. What changes is the execute_tool span: `transform/adk_tool_content` marks it from
+`isError: true`, which before this happened only for a hung curl. A curl that fails fast (exit 6 or 7) now marks
+that span too. The 2026-09-07 measurement in `verify/test_collector_config.py` predates the fix, and says so.
+
+**Tests.** `verify/test_run_shell_failure.py` (offline) loads the server with a stand-in for tool_audit and checks
+that a non-zero exit and a timeout raise `command FAILED`, a success and an OSError return text, and every raise
+in run_shell keeps the wording the collector matches. Without the fix 4 of its checks fail.
+`verify/test_tool_audit_live.py`'s library half now calls run_shell `exit 3` on the pinned mcp 1.29.1 and asserts
+isError, the `command FAILED with exit code 3` text, and an error audit line. Run here through uv: the library
+half passes with the fix, and fails 2 checks without it.
+
+**Against the earlier draft** (`agent/463-7506`, cut from the staging of 2026-10-24): redone on current staging,
+not cherry-picked; `verify/draft-drift.sh` named all four files it touched as changed since. The design is the
+same. The offline test's tool_audit stand-in now takes any constructor arguments, like `test_room_jokers.py`'s,
+and the wording check reads the raises out of run_shell's body rather than counting them across the whole file.
+
+**Not yet run on a cluster:** the C1 trace re-measurement the issue asks for. On a fresh attendee cluster, run
+Challenge 1's exfil with the egress NetworkPolicies on, then confirm in Datadog that both the model call after the
+blocked curl and the `execute_tool run_shell` span are `status:error`. The audit-trail half runs as
+`CONTEXT=<attendee context> python3 verify/test_tool_audit_live.py` through `bash verify/run-e2e.sh`.
