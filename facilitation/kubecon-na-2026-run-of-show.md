@@ -274,7 +274,7 @@ the three minutes of play there is no hands-on, so the other beats give way firs
 
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
-| 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
+| 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook; the prompt wall `prompts.burritobot.co` on the projector from here on | Opens the bot on their phones | framing, 1 |
 | 2 | 7 | M+W | C5: the public bot, then the private bot with `guard-output-on`, then the Datadog C5 tab | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 7 | W+M | C6: the public bot, then the private bot with `guard-input-on` and Kyverno armed, then the Datadog C6 tab | Asks the bot to read a support ticket | 4, 5, 6 |
 | 4 | 7 | M+W | C7: the public bot, then the private bot with `guard-mcp-on`, then the Datadog C7 tab | Asks for the weather | 2, 4, 6 |
@@ -308,9 +308,9 @@ burrito chain. Put the QR and `attackme.burritobot.co` on screen and leave them 
 - Say the housekeeping line: every prompt shows on the wall without a name, so
   nothing personal goes in the box.
 - The room's prompts go on the projector through the prompt wall,
-  `https://prompts.agenticburn.com`: open it full screen before the session
+  `https://prompts.burritobot.co`: open it full screen before the session
   starts (#637). It reads each cluster's feed, picks a new prompt up within about 3
-  seconds, and lists the clusters named in `start.agenticburn.com/roster.json`, so
+  seconds, and lists the clusters named in `start.burritobot.co/roster.json`, so
   the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
   `https://attackme.burritobot.co/display` instead.
@@ -414,7 +414,7 @@ behind.
   org, and the `burritobot-public` tab for the room's own prompts.
 - **No pool live:** the Grafana view on the private cluster, which reads Tempo and
   needs no Datadog key (#500):
-  `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. Login
+  `https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`. Login
   `admin`; the private cluster terminal prints the password in its catalogue. Say
   "this is Grafana reading the traces from Tempo, on the cluster itself".
 
@@ -572,7 +572,7 @@ is merely slow rather than rebuilding:
   `routes roster` publishes attackme, both admin hosts and their service hosts, and
   lists any pool row it takes out of the table. It refuses if a roster console has no
   load balancer yet; wait for it and run it again. `router-check` reads
-  `https://start.agenticburn.com/roster.json`, which the router builds from the table
+  `https://start.burritobot.co/roster.json`, which the router builds from the table
   it is actually serving, and must end "the router serves exactly the roster". A
   table pushed but not reloaded fails here, not on stage. Then confirm the C1 beacon
   view answers through the router:
@@ -582,23 +582,23 @@ is merely slow rather than rebuilding:
   before the day. The router 404s `/kubecon` on any host outside the roster (#511),
   so confirm the gate lets the stage through: for each of attackme and
   burritobot-private,
-  `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.agenticburn.com/kubecon`
+  `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.burritobot.co/kubecon`
   must print `200`. A `404` means the router's roster matcher does not know that
   host, and the presenters have nothing to drive from.
 - [ ] **The prompt wall shows both clusters (#637).** Segment 2 projects
-  `https://prompts.agenticburn.com`, and the wall builds its cluster list from the same
+  `https://prompts.burritobot.co`, and the wall builds its cluster list from the same
   `roster.json` that `router-check` just read, so run it once the routes are right:
 
   ```bash
   ./fleet.sh wall-check
   ```
 
-  It reads `https://prompts.agenticburn.com/healthz` and must end "the wall shows
+  It reads `https://prompts.burritobot.co/healthz` and must end "the wall shows
   every roster cluster": a `200`, and `attackme` and `burritobot-private` each in its
   `clusters` list with `ok` true. A missing cluster means the router's roster lacks it;
   run `router-check` again. A cluster listed with `ok` false means the wall cannot read
   that cluster's feed, and the log prints the wall's error. The same read by eye:
-  `curl -s https://prompts.agenticburn.com/healthz | python3 -c "import json,sys; print([c['name'] for c in json.load(sys.stdin)['clusters']])"`
+  `curl -s https://prompts.burritobot.co/healthz | python3 -c "import json,sys; print([c['name'] for c in json.load(sys.stdin)['clusters']])"`
   prints `['attackme', 'burritobot-private']`. Keep the wall on this roster through
   the session: do not move it onto lab-platform's roster before 2026-11-12, which
   leaves out attackme and the admin cluster until lab-platform#137 lands
@@ -678,7 +678,7 @@ is merely slow rather than rebuilding:
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
   pool is live, segment 5 runs on the admin cluster's Grafana view
-  (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
+  (`https://grafana-burritobot-private.burritobot.co/d/witb-agent-obs`): open it, run
   the C5, C6 and C7 beats once, and confirm each of the three segment 5 panels shows
   a row. Say on the day which surface is shown.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the

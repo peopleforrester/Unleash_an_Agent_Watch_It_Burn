@@ -27,7 +27,7 @@ check "both roster clusters, readable, passes" \
   '[[ "$(wall "{\"ok\":true,\"entries\":2,\"seq\":2,\"clusters\":[${both}]}" 200)" == rc=0 ]] &&
    grep -q "PASS  the wall shows attackme" "${T}/log" && grep -q "PASS  the wall shows burritobot-private" "${T}/log"'
 check "it reads the public wall's /healthz by default" \
-  '[[ "$(cat "${T}/body.url")" == "https://prompts.agenticburn.com/healthz" ]]'
+  '[[ "$(cat "${T}/body.url")" == "https://prompts.burritobot.co/healthz" ]]'
 check "a cluster beyond the roster does not fail it (router-check owns extra hosts)" \
   '[[ "$(wall "{\"clusters\":[${both},$(c bane-sabrina)]}" 200)" == rc=0 ]]'
 check "a missing admin cluster fails, and is named" \
@@ -53,7 +53,7 @@ check "the usage text names wall-check" 'grep -q "^  wall-check" "${FLEET}"'
 
 ROS="${HERE}/../facilitation/kubecon-na-2026-run-of-show.md"
 KUBECON="${HERE}/../gitops/ai-layer/web/kubecon.html"
-WALL="https://prompts.agenticburn.com"
+WALL="https://prompts.burritobot.co"
 line_of() { grep -nF -- "$1" "${ROS}" | head -1 | cut -d: -f1; }
 section() { awk -v h="$1" '$0 ~ "^#+ "h { on=1; next } on && /^#+ / { exit } on' "${ROS}"; }   # to the next heading
 check "the Night Before runs wall-check after router-check and before check-tls" \
@@ -66,7 +66,7 @@ check "the Night Before keeps the wall off the lab-platform roster until after t
 check "segment 1 puts the wall URL on screen (#639)" \
   'section "Segment 1: Cold open" | grep -qF "${WALL}"'
 check "the segment table shows the wall on screen from segment 1" \
-  'grep -E "^\| 1 \|" "${ROS}" | grep -qF "prompts.agenticburn.com"'
+  'grep -E "^\| 1 \|" "${ROS}" | grep -qF "prompts.burritobot.co"'
 check "the /kubecon page projects the wall in segment 1, as the run-of-show does (#639)" \
   'sed -n "/SEGMENT 1:/,/<article/p" "${KUBECON}" | grep -qF "href=\"${WALL}\""'
 

@@ -489,9 +489,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
   routes [roster]     Write the apex router's table from the live console LBs, record it in the apex
                       repo and reload the live router. 'roster' publishes the roster clusters and their
                       service hosts only, no attendee-pool row (the KubeCon breakout, #502).
-  router-check        Read the live router's host list (start.agenticburn.com/roster.json) and assert it
+  router-check        Read the live router's host list (start.burritobot.co/roster.json) and assert it
                       is exactly the roster's clusters: attackme and each <owner>-admin. Read-only.
-  wall-check          Read the prompt wall's health (prompts.agenticburn.com/healthz) and assert it
+  wall-check          Read the prompt wall's health (prompts.burritobot.co/healthz) and assert it
                       answers 200 and shows every roster cluster with its prompts readable. Read-only.
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
@@ -4518,13 +4518,14 @@ cmd_hosts() {
 # Does the LIVE router serve the roster, and only the roster (#502)? The breakout's three hosts reach their
 # clusters only through the apex router, and a table that was pushed but never reloaded leaves it serving
 # the previous one (2026-08-26), so the table in the apex repo proves nothing about the router. This reads
-# the router's own view instead: start.agenticburn.com/roster.json, which the router derives from the table
-# on its volume after every reload, one host per cluster and no LB address. It is the same read the ops
-# view treats as "routed" (#308). A missing roster host is a URL that 404s on stage; an extra host is a
-# cluster the table still routes that nobody on stage is watching. Service hosts are not in roster.json;
-# check-tls covers the consoles themselves. Read-only. WIB_ROUTER_ROSTER_URL points it elsewhere.
+# the router's own view instead: start.burritobot.co/roster.json (start.agenticburn.com serves the same
+# list), which the router derives from the table on its volume after every reload, one host per cluster and
+# no LB address. It is the same read the ops view treats as "routed" (#308). A missing roster host is a URL
+# that 404s on stage; an extra host is a cluster the table still routes that nobody on stage is watching.
+# Service hosts are not in roster.json; check-tls covers the consoles themselves. Read-only.
+# WIB_ROUTER_ROSTER_URL points it elsewhere.
 cmd_router_check() {
-    local url="${WIB_ROUTER_ROSTER_URL:-https://start.agenticburn.com/roster.json}" body got want entry h rc=0
+    local url="${WIB_ROUTER_ROSTER_URL:-https://start.burritobot.co/roster.json}" body got want entry h rc=0
     body="$(curl -fsS --max-time 15 "${url}" 2>/dev/null)" \
         || { log "router-check: FAIL could not read ${url}"; return 1; }
     got="$(jq -r '.[].host' <<<"${body}" 2>/dev/null | sort -u)" \
@@ -4543,15 +4544,15 @@ cmd_router_check() {
     return "${rc}"
 }
 
-# Does the prompt wall show every roster cluster (#637)? prompts.agenticburn.com is what the projector shows in
-# segment 2, and it builds its cluster list from start.agenticburn.com/roster.json, so a cluster missing from the
+# Does the prompt wall show every roster cluster (#637)? prompts.burritobot.co is what the projector shows in
+# segment 2, and it builds its cluster list from the router's roster.json, so a cluster missing from the
 # router's roster is missing from the wall too. Its /healthz names each cluster it polls, by the first label of
 # the cluster's host, with ok false and an error when it cannot read that cluster's prompts. Run it after
 # router-check. Do not point the wall at lab-platform's roster before 2026-11-12: that roster leaves out attackme
 # and the admin cluster until lab-platform#137 lands (prompts-agenticburn#11). Read-only. WIB_WALL_URL points it
 # elsewhere.
 cmd_wall_check() {
-    local url="${WIB_WALL_URL:-https://prompts.agenticburn.com}/healthz" out code body got entry h n rc=0
+    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/healthz" out code body got entry h n rc=0
     out="$(curl -sS --max-time 15 -w '\n%{http_code}' "${url}" 2>/dev/null)" \
         || { log "wall-check: FAIL could not read ${url}"; return 1; }
     code="${out##*$'\n'}"; body="${out%$'\n'*}"
@@ -4563,7 +4564,7 @@ cmd_wall_check() {
     for entry in "${INSTRUCTORS[@]}"; do
         h="$(public_host_for "${entry%%|*}")"; n="${h%%.*}"
         if ! grep -q "^${n}"$'\t' <<<"${got}"; then
-            log "  FAIL  the wall has no ${n}: is ${h} in start.agenticburn.com/roster.json? run 'fleet.sh router-check'"
+            log "  FAIL  the wall has no ${n}: is $(twin_rows <<<"${h}") in start.burritobot.co/roster.json? run 'fleet.sh router-check'"
             rc=1
         elif ! grep -q "^${n}"$'\ttrue\t' <<<"${got}"; then
             log "  FAIL  the wall lists ${n} but cannot read its prompts: $(grep "^${n}"$'\t' <<<"${got}" | cut -f3)"

@@ -73,6 +73,20 @@ for page in ("kubecon.html", "brief.html"):
     check(f"{page} shows no roster host on agenticburn.com", not left, str(left))
     check(f"{page} shows attackme.burritobot.co", "attackme.burritobot.co" in v)
 
+print("== no page a viewer opens names a host on agenticburn.com ==")
+# Every kept host answers on burritobot.co (the prompt wall, the feedback form, the roster), so a page that
+# still names one on agenticburn.com is showing the room the old domain. The bare agenticburn.com is not a
+# host the router twins: it is where the C1 beacon lives, so the check is on subdomains.
+for page in ("burritbot.html", "lab.html", "kubecon.html", "brief.html", "platform.html", "links.html"):
+    v = visible((WEB / page).read_text())
+    left = sorted(set(re.findall(r"\b[a-z0-9-]+\.agenticburn\.com", v)))
+    check(f"{page} names no *.agenticburn.com host", not left, str(left))
+for page, host, link in (("burritbot.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("lab.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("platform.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("kubecon.html", "the prompt wall", 'href="https://prompts.burritobot.co"')):
+    check(f"{page} links {host} on burritobot.co", link in (WEB / page).read_text())
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
