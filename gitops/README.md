@@ -12,6 +12,7 @@ bootstrap/               # The root chart, lab-bootstrap: one Helm chart for eve
   values-burn.yaml       # apps: the burn (community) profile's list
   values-admin.yaml      # apps: the admin profile's list
   values-full.yaml       # apps: the full (instructor) profile's list
+  values-local-inference.yaml  # apps: full's list plus vllm-qwen3, one demo cluster only (#394)
   templates/
     apps.yaml            # renders each listed apps/<name>.yaml, its Unleashed sources at .Values.revision
     ghcr-kagent-oci.yaml # the credential-free OCI Helm repository Secret kagent's chart needs
@@ -35,12 +36,13 @@ namespaces/
 
 Every cluster has one root Application, `lab-bootstrap`, sourcing the `gitops/bootstrap` chart with its
 profile's `values-<profile>.yaml` and the Helm parameter `revision`. `lab-platform.yaml` at the repo root
-presents the four profiles to lab-platform, whose labctl creates the root at a pinned 40-digit commit with
+presents four of the profiles to lab-platform, whose labctl creates the root at a pinned 40-digit commit with
 `revision` set to that commit. `infra/deploy-full-idp.sh <profile>` applies the same root at `staging` with
-`revision=staging`, so clusters it builds follow `staging`:
+`revision=staging`, so clusters it builds follow `staging`. It also builds the fifth, `local-inference`, which
+lab-platform.yaml leaves out so that only one demo cluster ever carries its model server:
 
 ```bash
-bash infra/deploy-full-idp.sh attendee   # or burn, admin, full
+bash infra/deploy-full-idp.sh attendee   # or burn, admin, full, local-inference
 ```
 
 After this, ArgoCD manages everything. No more `kubectl apply` is needed.

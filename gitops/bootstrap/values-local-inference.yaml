@@ -1,0 +1,49 @@
+# ABOUTME: The LOCAL-INFERENCE profile: the full instructor build plus a CPU vLLM serving Qwen3-1.7B behind
+# ABOUTME: agentgateway's /local route. One cluster, never the fleet (#394, question 657).
+#
+# The list is full's, unchanged, plus vllm-qwen3, so this cluster is an instructor cluster in every other respect
+# (values-full.yaml says why each app is in or out). verify/test_local_inference.py holds the two lists together.
+#
+# What it makes real: the gateway-local-qwen3 ModelConfig (gitops/ai-layer/resources.yaml) and the /local route on
+# agentgateway's :3002 bind exist on every profile and resolve to nothing. Here they resolve to
+# vllm-qwen3.agent.svc.cluster.local:8000. The Agent stays on its committed modelConfig; pointing it at
+# gateway-local-qwen3 is the switch, and nothing else changes.
+#
+# To build one: infra/deploy-full-idp.sh local-inference. lab-platform.yaml does not present this profile, so labctl
+# never builds it on a roster or attendee cluster (verify/bootstrap_chart.py, DEPLOY_ONLY_PROFILES). The sister
+# measured vLLM at 4 CPU / 10Gi requested on a t3.2xlarge; whether it fits beside this platform on one is what the
+# cold build is for, and platform-baseline.yaml's vllm entry is where its measured cost goes.
+#
+# Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
+# profile until a line here names it, and a name with no file fails the render.
+apps:
+  - ai-layer-otel
+  - ai-layer
+  - cert-manager
+  - cluster-network-policies
+  - datadog-agent-cr
+  - datadog-operator
+  - demo-app-hedgehog
+  - demo-app-mantis-shrimp
+  - demo-app-spider
+  - demo-app-unicorn
+  - demo-app-wombat
+  - eso-resources
+  - external-secrets
+  - falco-talon
+  - falco
+  - falcosidekick
+  - grafana-dashboards
+  - istio
+  - kagent-crds
+  - kagent
+  - kubearmor
+  - kyverno-policies
+  - kyverno
+  - minimal-floor
+  - namespaces
+  - otel-collector
+  - otel-operator
+  - prometheus
+  - tempo
+  - vllm-qwen3

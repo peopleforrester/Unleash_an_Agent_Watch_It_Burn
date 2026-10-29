@@ -63,6 +63,17 @@ def profiles() -> list[str]:
     return [p["name"] for p in doc["bootstrap"]["profiles"]]
 
 
+# Profiles infra/deploy-full-idp.sh builds that lab-platform.yaml does not present (#394): local-inference is full
+# plus a CPU vLLM for one instructor or demo cluster (question 657), never a roster or attendee cluster, so labctl
+# is not handed it.
+DEPLOY_ONLY_PROFILES = ("local-inference",)
+
+
+def all_profiles() -> list[str]:
+    """Every profile the chart has a values file for: lab-platform.yaml's, then the deploy-only ones."""
+    return profiles() + list(DEPLOY_ONLY_PROFILES)
+
+
 def values_path(profile: str) -> pathlib.Path:
     return CHART / f"values-{profile}.yaml"
 

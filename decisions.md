@@ -4824,3 +4824,55 @@ spans" banner should be gone, and the list should show one row per interaction.
 change that baseline should be one, and `verify/one_root_probe.py` is the way to record it. The Go proxy keeps it
 only if it sends the traceparent on its forward and dials agentgateway on :3000. The second is what the gateway
 exemption keys on, and `verify/test_collector_one_root.py` follows AGENT_URL.
+
+## 2026-10-29 · question 657 · A local-inference profile for one cluster, with a plain vLLM Deployment (#394)
+
+**Answer (2026-10-24):** "Yes: a new bootstrap profile for one cluster, plain vLLM Deployment, then time a
+cold build with it."
+
+**Decided by hecaton's research under Michael's standing rules, not by Michael.** The answer run cited these
+sources:
+
+- Michael's bd45449 (2026-09-17), which built the `/local` route and the `gateway-local-qwen3` ModelConfig so
+  that a local model would be "a configuration choice". Only the workload was left to build.
+- The sister's measured vLLM pod spec.
+- The Gitea rule, which keeps a 4-CPU server off the fleet.
+- CLAUDE.md change-cadence rules 3 and 4.
+
+**What it changes.**
+
+- `gitops/manifests/vllm-qwen3/` holds a Deployment and Service in `agent`. They sit at the exact host, port and
+  model name the `/local` route asks for, with the sister's pod spec:
+  - requests 4 CPU / 10Gi, limits 6 CPU / 16Gi, and a 2 GiB KV cache;
+  - SYS_NICE as the only capability, and a memory-backed /dev/shm;
+  - tool calling on, for kagent;
+  - the image pinned by digest (re-read from ghcr.io on 2026-10-29, unchanged since 2026-10-24).
+
+  KServe is not used.
+- `gitops/bootstrap/apps/vllm-qwen3.yaml` is its Application. `gitops/bootstrap/values-local-inference.yaml`,
+  the only list that names it, is full's list plus vllm-qwen3.
+- `infra/deploy-full-idp.sh local-inference` builds it.
+- **Not presented in `lab-platform.yaml`**, so labctl is never handed it for a roster or attendee cluster.
+  `verify/bootstrap_chart.py` names it in `DEPLOY_ONLY_PROFILES`, and the chart tests check it alongside
+  lab-platform.yaml's four.
+- The Agent stays on its committed modelConfig. Pointing it at `gateway-local-qwen3` is the switch.
+- `verify/test_local_inference.py` (offline) checks two things. The server, the route and the ModelConfig agree.
+  And no list but values-local-inference.yaml names vllm-qwen3, a list that is otherwise full's.
+- **Known gap, recorded rather than half-fixed.** Any pod in the agent namespace can call the vLLM Service
+  directly, around guard-proxy and agentgateway. A port-8000 ingress NetworkPolicy would close that. But once the
+  namespace is enrolled in the ambient mesh, pod traffic arrives on ztunnel's port 15008, and that policy would
+  cut the gateway off too.
+
+**What differs from the 2026-10-24 draft.** The draft added a fifth app-of-apps root that took `gitops/apps` by
+glob, and it kept the Application in `gitops/opt-in/` so that no glob could pick it up. Since #609 a profile is
+an explicit list, so the Application lives in the chart's `apps/`, and containment is checked on the lists. The
+draft also had `fleet.sh` arm the profile like full. That is dropped: no roster role maps to this profile, so
+fleet.sh never builds it.
+
+**Not yet run on a cluster.** Two things are owed. The first is a cold build:
+`CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference` on a fresh t3.2xlarge cluster, timed from start to
+every Application Healthy. The second, once that build is up, is `CONTEXT=<ctx> python3
+verify/local-inference-live.py`. It checks that the vLLM pod is Ready with no restarts and prints its time from
+creation to Ready and its live footprint. It also checks that one chat call through `:3002/local` comes back from
+qwen3-1.7b. It is not a `test_*.py`, because run-e2e.sh runs those against an attendee cluster, which has no vLLM.
+The measured wall-clock and requests then go into the vllm entry as `measured: true`.

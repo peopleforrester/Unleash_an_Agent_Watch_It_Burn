@@ -23,7 +23,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, CHART, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO,  # noqa: E402
-                             LAB_PLATFORM_GHCR, REPO_URL, REVISION, app_names, c7_control, for_c7_control,
+                             LAB_PLATFORM_GHCR, REPO_URL, REVISION, all_profiles, app_names, c7_control, for_c7_control,
                              profiles, values_path, kustomize_images, without_front_door)
 
 failures: list[str] = []
@@ -60,7 +60,7 @@ def unleashed(url: str) -> bool:
     return url.rstrip("/").removesuffix(".git").lower() == REPO_URL.removesuffix(".git").lower()
 
 
-for profile in profiles():
+for profile in all_profiles():
     print(f"== {profile}: rendered at revision={COMMIT[:12]}... ==")
     r = render("-f", str(values_path(profile)), "--set", f"revision={COMMIT}")
     check(f"{profile} renders", r.returncode == 0, r.stderr.strip()[:300])

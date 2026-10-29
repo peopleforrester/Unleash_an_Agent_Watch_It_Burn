@@ -1,0 +1,134 @@
+# ABOUTME: vLLM on CPU serving Qwen3-1.7B (OpenAI-compatible, :8000/v1) as a plain Deployment and Service. The
+# ABOUTME: backend agentgateway's /local route names (hostOverride vllm-qwen3.agent.svc.cluster.local:8000). #394.
+#
+# The pod spec is the sister platform's, measured there on the same t3.2xlarge node type
+# (packt-agentic-devops solution/platform/2-ai-plane/vllm/manifests/inferenceservice.yaml, read 2026-10-24).
+# Deployed by gitops/bootstrap/apps/vllm-qwen3.yaml, which only values-local-inference.yaml lists.
+# The sister wraps it in a KServe InferenceService; here it is a Deployment, because the route needs only a
+# Service at a fixed name and KServe would be a second controller to manage one pod (platform-baseline.yaml,
+# kserve entry). Every flag, env var, limit and volume below is carried over with the reason the sister
+# recorded for it, because each one was found by a pod that failed without it.
+#
+# Cost, as known before this platform's own cold build times it: requests 4 CPU / 10Gi, limits 6 CPU / 16Gi,
+# a measured 12.52 GiB peak, and an image of 4.95 GB compressed (12 layers, read from the registry
+# 2026-10-24). The weights are baked into the image, so nothing downloads at start, but that pull is the
+# largest single item in this profile's build time.
+#
+# Known gap, deliberate: any pod in the agent namespace can reach this Service directly, without passing
+# guard-proxy or agentgateway, the same class of bypass deny-llm-endpoint-bypass records for the in-VPC
+# Bedrock endpoint. A port-8000 ingress NetworkPolicy would close it, but once the agent namespace is
+# enrolled in the ambient mesh, pod-to-pod traffic arrives on ztunnel's 15008 and that policy would cut the
+# gateway off too. Recorded as a follow-up rather than shipped half-right.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen3
+  namespace: agent
+  labels:
+    app.kubernetes.io/name: vllm-qwen3
+    app.kubernetes.io/component: model-server
+    app.kubernetes.io/part-of: watch-it-burn
+    app.kubernetes.io/version: "0.23.0"
+spec:
+  replicas: 1
+  # Recreate, not a rolling update: a second pod at 10Gi requested would not fit beside the first.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: vllm-qwen3
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: vllm-qwen3
+        app.kubernetes.io/component: model-server
+    spec:
+      containers:
+        - name: vllm
+          # vllm-openai-cpu v0.23.0 with the Qwen3-1.7B weights baked in (HF_HUB_OFFLINE), built by the sister's
+          # images/vllm-qwen3. Digest read from ghcr.io for the tag v0.23.0-qwen3-1.7b on 2026-10-24, unchanged 2026-10-29.
+          image: ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce
+          imagePullPolicy: IfNotPresent
+          # The image is CPU-only; v0.23 `vllm serve` rejects --device=cpu, so it is not passed.
+          args:
+            - "--model=Qwen/Qwen3-1.7B"
+            # The name agentgateway's /local backend asks for (gitops/ai-layer/agentgateway.yaml, model: qwen3-1.7b).
+            - "--served-model-name=qwen3-1.7b"
+            - "--dtype=bfloat16"
+            - "--max-model-len=8192"
+            - "--port=8000"
+            # kagent's ADK sends tool_choice=auto on every request, which vLLM refuses unless tool calling is
+            # on. Qwen3's chat template is Hermes-style, so the hermes parser.
+            - "--enable-auto-tool-choice"
+            - "--tool-call-parser=hermes"
+          env:
+            # KV cache 2 GiB: at 4 the pod OOMKilled under a 10Gi limit. Keep this and the 16Gi limit together.
+            - name: VLLM_CPU_KVCACHE_SPACE
+              value: "2"
+            # uid 1001 has no home and no passwd entry; vLLM writes its caches under HOME, and torch's
+            # getpass.getuser() reads USER before it would crash on the passwd lookup.
+            - name: HOME
+              value: /tmp
+            - name: USER
+              value: vllm
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          resources:
+            requests:
+              cpu: "4"
+              memory: 10Gi
+            limits:
+              cpu: "6"
+              # Measured peak 12.52 GiB (cgroup memory.peak, KVCACHE 2) plus headroom.
+              memory: 16Gi
+          # Loading the model takes minutes on CPU; the startup probe's 30-minute window keeps the liveness
+          # probe from killing it mid-load.
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 20
+            failureThreshold: 90
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 15
+            failureThreshold: 20
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 30
+          securityContext:
+            # SYS_NICE for CPU thread affinity, nothing else. The image declares a non-numeric root USER, so
+            # the uid is pinned here for the kubelet to verify non-root.
+            runAsNonRoot: true
+            runAsUser: 1001
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+              add: ["SYS_NICE"]
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+      # vLLM's EngineCore and Worker processes share memory through /dev/shm; at the 64Mi default it stalls on
+      # "No available shared memory broadcast block" and crash-loops.
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 4Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-qwen3
+  namespace: agent
+  labels:
+    app.kubernetes.io/name: vllm-qwen3
+    app.kubernetes.io/part-of: watch-it-burn
+spec:
+  selector:
+    app.kubernetes.io/name: vllm-qwen3
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
