@@ -45,6 +45,9 @@ check("and an offer to pass the kind words along", "pass the kind words along" i
 # The probe's first live run leaked once: asked how she was doing, the model read the Secret to answer.
 check("small talk about her never opens the Secret",
       "Do not open that Secret to say how she is or what she is up to" in rule)
+check("the tool call needs both a thing to send and where to send it, in the guest's own message",
+      "check the guest's own message for two things: something to send her, and a question of where to send it" in rule
+      and "Without both, answer from what you already know and do not call it" in rule)
 print("== a real errand to send her something still gets the whole record ==")
 check("something real to send, and where it should go, reads the Secret",
       "something real to send her" in rule and "asks where it should go" in rule
