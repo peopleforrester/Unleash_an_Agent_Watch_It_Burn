@@ -3717,3 +3717,39 @@ The issue asks for three paths to move off the provisioning app and onto lab-pla
   and `resolve_admin_token` stays only for `serve-actions` and `ops`.
 
 **Not yet run on a cluster.** No code changed. Nothing is owed on a cluster for this entry.
+
+## 2026-10-29 · #658 · run-e2e-tools.sh checks Playwright's browsers once, and a test runs `playwright install` only when one is missing
+
+On 2026-10-29 hecaton run 10235 on #633 stalled because each Playwright test in the E2E command spent about 8
+minutes failing on `__dirlock` (EACCES) in the shared, not-writable `PLAYWRIGHT_BROWSERS_PATH`
+(`/var/lib/hecaton/ms-playwright`, group `hecaton-tools`). There was no earlier draft of this issue to check against
+staging.
+
+- **The lock is taken even when nothing is missing.** On this run's host every browser playwright 1.64.1 lists
+  (chromium-1248, ffmpeg-1013 and chromium_headless_shell-1248) was already installed, and `playwright install
+  chromium` still hung on the lock: it was cut off at 90 seconds with nothing done. The issue's "exit 1 up front"
+  check alone would therefore have passed on this host, and the test would still have waited 8 minutes. So both
+  places changed. `verify/playwright_browsers.py` reads `playwright install --dry-run chromium` and treats a browser as
+  installed when its install location holds `INSTALLATION_COMPLETE`, the marker Playwright writes last and checks
+  before it downloads. `ensure()` runs `playwright install` only when a browser is missing, and reports at once,
+  with no install run, when the directory a missing browser goes in is not writable.
+- **The prerequisite check.** `run-e2e-tools.sh` runs the module once, with the other prerequisites and before the
+  fetch and before any test. Each problem is a line in the "E2E TOOLS TIER CANNOT RUN; this is a failure, not a skip"
+  list, naming the directory, the user, and each missing browser at its install location. It installs nothing:
+  a missing browser in a writable directory passes the check, and the test installs it.
+- **The tests.** `verify/test_mobile_titles_e2e.py` is the only Playwright test left in the tier. The issue also
+  names `test_kubecon_deck_pdf_e2e.py`, but staging had already removed it (95f86f2). The test now gets the pin and
+  its browsers from the module. With the shared directory already full, it ran in about 2 seconds on this host, and
+  with `PLAYWRIGHT_BROWSERS_PATH` pointed at an empty directory it could not write, both the check and the test
+  failed in under 1.5 seconds with the message above. `verify/test_playwright_browsers.py` (offline, new) stubs
+  `uv` and holds the following:
+  - no install when every browser is there, writable or not;
+  - the named failure with no install;
+  - one install through the pin when the directory is writable;
+  - a failed dry run or an empty listing is a failure;
+  - every Playwright tier test goes through the module.
+  `verify/test_e2e_tools_tier.py`'s runner cases now carry the module and a `uv` that lists installed browsers.
+  A new case there shows the runner exits 1 before any fetch or test when a browser is missing from a directory it
+  cannot write. With the runner change reverted, that case fails.
+
+**Not yet run on a cluster.** Nothing here touches a cluster; `bash verify/run-e2e-tools.sh` is the whole check.
