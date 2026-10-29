@@ -39,6 +39,8 @@ before either transcript is stored in `transcripts/`, Drive, or anywhere else.
   an attendee with Datadog access could read another's. Either keep attendees out of
   Datadog, or scrub before the trace lands. Michael: the `burritobot-public` data is
   scrubbed from Whitney's org after the talk regardless.
+  Settled (#647, decisions.md 2026-10-29): attackme's collector scrubs e-mails, card numbers,
+  SSNs and phone numbers from trace content before export; no attendee gets a Datadog account.
 
 ## Datadog on stage
 

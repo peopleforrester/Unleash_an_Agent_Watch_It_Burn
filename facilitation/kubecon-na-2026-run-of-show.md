@@ -290,6 +290,9 @@ view per challenge in presentation order, so nobody waits for a span to arrive.
 Datadog comes up when it explains the attack (the tool call, the Secret read, the
 policy block), not as a product tour. If the Datadog side is not ready, the Grafana
 view on the private cluster carries the same three beats (segment 5).
+On the `burritobot-public` tab, e-mails, card numbers, SSNs and phone numbers in the
+room's prompts read `[EMAIL]`, `[CARD]`, `[SSN]` and `[PHONE]`: attackme's collector
+scrubs them before export (#647). Names and other free text are not scrubbed.
 
 **The prompt wall.** Every prompt the room sends is projected, anonymously. Say so
 in segment 1, before anyone types.

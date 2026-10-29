@@ -110,11 +110,18 @@ check(f"burn installs neither Prometheus nor Tempo, the case this test exists fo
 base, burn = helm_values("instructor"), helm_values("burn")
 burn_file = yaml.safe_load((REPO / "gitops/otel-collector/values-burn.yaml").read_text(encoding="utf-8"))
 check("values-burn.yaml overrides only config and the Datadog ConfigMap", set(burn_file) == {"config", "extraManifests"})
-check("values-burn.yaml's config touches only the pipelines' exporters lists",
-      burn_file["config"] == {"service": {"pipelines": {
-          sig: {"exporters": burn_file["config"]["service"]["pipelines"][sig]["exporters"]}
-          for sig in burn_file["config"]["service"]["pipelines"]}}})
+# Besides the exporters, burn adds one thing: the PII scrub at the end of the traces processors (#647), which
+# verify/test_collector_pii_scrub.py holds in full.
+SCRUB = "transform/scrub_pii"
+burn_pipes = burn_file["config"]["service"]["pipelines"]
+check("values-burn.yaml's config touches only the exporters lists, the traces processors and the PII scrub",
+      burn_file["config"] == {"processors": {SCRUB: burn_file["config"]["processors"].get(SCRUB)},
+                              "service": {"pipelines": {
+          sig: {k: burn_pipes[sig][k] for k in (["exporters", "processors"] if sig == "traces" else ["exporters"])}
+          for sig in burn_pipes}}})
 bp, bbp = base["config"]["service"]["pipelines"], burn["config"]["service"]["pipelines"]
+check("relay.yaml traces.processors on burn is values.yaml's with the PII scrub last, same order",
+      bbp["traces"]["processors"] == bp["traces"]["processors"] + [SCRUB])
 check("relay.yaml on burn has the same pipelines as values.yaml", set(bp) == set(bbp))
 for sig in sorted(bp):
     check(f"relay.yaml {sig}.exporters on burn is values.yaml's without Tempo and Prometheus, same order",

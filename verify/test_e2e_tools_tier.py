@@ -56,8 +56,8 @@ def lock_rows(text: str) -> list[list[str]]:
 print("== the lock pins what VERSIONS.lock and the tests pin ==")
 rows = lock_rows(LOCK.read_text())
 tools = {r[0]: r for r in rows}
-check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl and helm ({sorted(tools)})",
-      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm"})
+check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm and otelcol-contrib ({sorted(tools)})",
+      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib"})
 for name, row in tools.items():
     check(f"{name}: five fields (name, version, sha256, url, member)", len(row) == 5, str(row))
     if len(row) != 5:
@@ -66,6 +66,14 @@ for name, row in tools.items():
     check(f"{name}: a 64-hex SHA-256", re.fullmatch(r"[0-9a-f]{64}", sha) is not None, sha)
     check(f"{name}: an https URL naming {version}", url.startswith("https://") and version.lstrip("v") in url, url)
     check(f"{name}: a linux x86_64 artifact", re.search(r"linux[_/-](amd64|x86_64)", url, re.I) is not None, url)
+
+# otelcol-contrib runs the PII scrub test (#647) on the collector the clusters run, so its pin is the image tag
+# every gitops/bootstrap/apps/otel-collector*.yaml file names (lab-platform's mirror tag is <version>-<digest>).
+collector_tags = {re.search(r'^\s+tag: "([0-9.]+)-', f.read_text(), re.M).group(1)
+                  for f in sorted((REPO / "gitops/bootstrap/apps").glob("otel-collector*.yaml"))}
+check(f"otelcol-contrib is the collector image's version {sorted(collector_tags)}",
+      len(collector_tags) == 1 and "otelcol-contrib" in tools
+      and tools["otelcol-contrib"][1] == f"v{next(iter(collector_tags))}")
 
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):

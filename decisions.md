@@ -3308,3 +3308,58 @@ body from `ticket_site.py`, which is what the tool sends to the scanner.
 `CONTEXT=<private-context> challenges/02-sanitization/fallback.curl.sh input`; and `bash verify/run-e2e-tools.sh`'s
 `test_injection_classifier.py`, which measures the new payload against the deployed classifier. The landing rate
 of the two-tool-call injection on Nova is unmeasured.
+
+## 2026-10-29 · #647 · The room's PII is scrubbed on attackme before its spans leave; no attendee gets a Datadog account
+
+Whitney's open question on the 2026-10-28 planning call (`facilitation/kubecon-na-2026-planning-2026-10-28.md`, Public
+console): the prompt wall redacts what it shows, but the raw prompt still lands in the Datadog traces, and an
+attendee given Datadog access could read another's. The issue allowed either answer: scrub before the trace lands,
+or keep attendees out of Datadog. The choice is the scrub, because it is the only one that also covers the two
+exposures that remain with attendees kept out: the `burritobot-public` tab Whitney projects (segment 5 walks "the
+oddest audience prompt"), and the copy stored in her sandbox org until it is purged.
+
+- **Where.** `transform/scrub_pii`, the last traces processor of the burn collector (`gitops/otel-collector/values-burn.yaml`),
+  so only attackme scrubs. All of BurritoBot's spans reach Datadog through that collector (the Agent's APM is off), so
+  it is the one place the text leaves. Last, so it runs after `transform/adk_tool_content` has copied the tool
+  arguments and result to `gen_ai.tool.call.*`, and before every exporter.
+- **What.** E-mail addresses, card numbers (13 to 19 digits, or grouped 4-4-4-4 and 4-6-5), US social security numbers
+  and phone numbers (North American with separators or parentheses, ten bare digits, or any `+` number), replaced with
+  `[EMAIL]`, `[CARD]`, `[SSN]` and `[PHONE]`. Read: the eight span attributes that carry the conversation (the gen_ai
+  messages, the gen_ai tool call copies and the `gcp.vertex.agent.*` request, response and tool keys), copied into
+  `cache`, scrubbed and merged back so each pattern is written once, plus every span-event attribute. Ids such as
+  `session.id` are never read, so the session and correlation views keep working.
+- **What it does not catch.** Names, street addresses and other free text. That is text the room is told goes on the
+  prompt wall (segment 1), so the residue is no wider than what is already projected.
+- **Burn only.** On an attendee cluster C1's ten fake customer records are meant to show in the student's own trace,
+  and the presenters' cluster carries no attendee's text. On attackme the fake customers' e-mails now show as
+  `[EMAIL]` in the trace (C1 is on deck only); the chat itself is not touched, because the scrub is on telemetry.
+  C5's record (a street address, kept in the trace on purpose) and the planted 7-digit 555 numbers match nothing.
+- **Attendee access.** No attendee gets a Datadog login or account in Whitney's sandbox org: it holds
+  `burritobot-private` and other projects' data. The room's read-only view the call proposed ("Keep feedback"), scoped
+  to `burritobot-public`, may now go ahead, since its condition, the PII question, is settled by the scrub. Building that
+  view in her org is Whitney's, and is not done here.
+- **Owed after the talk.** Michael's commitment on the call stands whatever the scrub catches: the `burritobot-public`
+  data is purged from Whitney's org after the talk on 2026-11-12. That needs a sign-in to her org, which no run has.
+  Datadog's LLM Observability deletion endpoint (`/api/v2/llm-obs/deletion/data/llmobs`, in preview, read 2026-10-29)
+  deletes by trace id; APM spans have no delete-by-query that this check found, so their part is retention or Datadog
+  support. Confirm on the day.
+- **New dev dependency.** `verify/e2e-tools.lock` pins otelcol-contrib v0.160.0 (linux amd64, 2026-10-29), the
+  collector the three `gitops/bootstrap/apps/otel-collector*.yaml` images run, so the scrub is proven on the binary the
+  clusters use rather than only on Python's regex engine. Its SHA-256 matches the release asset's published digest. It
+  is not a VERSIONS.lock line (VERSIONS.lock's collector lines are stale at app 0.153.0); the tier test holds it to the
+  app files' image tag instead. About 110 MB, downloaded once and reused while the checksum holds.
+
+**Tests.** `verify/test_collector_pii_scrub.py` (offline): the scrub is burn's last traces processor with and without
+datadog-secret, no other profile has it, it reads every content key including both halves of each
+`adk_tool_content` copy and no id, the four patterns are RE2-safe and identical in both contexts, and with Python's
+`re` the attendee text in `verify/pii_scrub_cases.py` comes out scrubbed while C5's record and the demo text do not
+change. `verify/test_collector_pii_scrub_e2e.py` (E2E tools tier) runs the burn traces processors in the real
+otelcol-contrib 0.160.0 and reads the exporter's output for three spans shaped as guard-proxy's chat span and kagent's
+model and tool calls. With the scrub taken out of the pipeline it fails 8 checks. `verify/test_collector_backends.py`
+now allows burn's one addition, the scrub and the restated traces processors list.
+
+**Not yet run on a cluster.** No cluster was up for this run. Owed on the next attackme bring-up: send a prompt with an
+e-mail and a phone number to `https://attackme.agenticburn.com` and read its trace in the `burritobot-public` tab
+(Agent Observability and APM) for `[EMAIL]` and `[PHONE]`, and check the collector is healthy after the sync
+(`kubectl --context <community-context> -n monitoring logs ds/otel-collector-opentelemetry-collector-agent`). Also read one agentgateway `tools/call` span's attributes there: if agentgateway records the MCP arguments under a
+key of its own, that key is not in the scrub's list yet.
