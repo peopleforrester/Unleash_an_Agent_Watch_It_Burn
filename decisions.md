@@ -3938,3 +3938,21 @@ first one names the mirrored image.
   records. The `contrib 0.158.2` remark in `gitops/otel-collector/values.yaml` is a statement about that release.
 
 **Not yet run on a cluster:** nothing is owed. This changes records and an offline test, not what a cluster deploys.
+## 2026-10-29 · #670 · The heavy gate is red on one test, and it turns green when the promo/ packages go public
+
+Hecaton's heavy gate failed `CI` on staging at 3b7fa6a. On run 10515, `bash verify/run-tests.sh` passed (173
+tests) at aa5ae1a. `bash verify/run-e2e-tools.sh` ran 24 checks, the offline suite and 23 tier tests, and exited 1
+on one of them, `test_promo_villains_public.py`. Every one of the ten
+`ghcr.io/peopleforrester/lab-platform/promo/<name>:v1` packages answered an anonymous pull with HTTP 401. #653
+added that test, and its entry above says it fails until the packages are public. `test_mobile_titles_e2e.py`, the
+second failure #653's run reported, now passes, because #658 checks Playwright's browsers once up front.
+
+- **No change here makes it green honestly.** The test is right, because a node pulls the villain with no
+  credential, and a private package leaves Challenge 2's pod in ImagePullBackOff with no logs to read. Moving the
+  test out of the tools tier, or loosening it, would let main ship a lab whose C2 cannot run. The rules forbid both.
+- **What turns it green.** Michael sets each of the ten promo/ packages to public in the lab-platform package
+  settings. GitHub's REST API cannot change a container package's visibility, so a run cannot do it. Once that is
+  done, the next gate run on staging passes with no commit. `python3 verify/test_promo_villains_public.py` checks
+  it on its own in a few seconds.
+
+**Not yet run on a cluster:** nothing new. #653's live checks are still owed once the packages are public.
