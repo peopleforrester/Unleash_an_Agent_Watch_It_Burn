@@ -4715,3 +4715,41 @@ the Service port and the RemoteMCPServer url mid-check.
 on a fresh attendee cluster with the tool-pin image built, pushed and signed (`images/tool-pin/Dockerfile`). That is
 the issue's remaining acceptance: kagent's discovery and the agent's list_tools seen through the processor, kagent's
 handling of the deny's JSON-RPC error, and then the badge decision the spike README recommends.
+## 2026-10-30 · #268 · The runner meets the shipped admin console: Railway host by default, health rows posted as `clusters`
+
+**Why this run changed anything.** provisioning-agenticburn#33 closed on 2026-10-28 as completed, and its
+`/admin/console`, the action queue and `/admin/health` are deployed. On the Railway host they answer 403 without the
+token (read-only curl, 2026-10-29 23:20 UTC). Read against that app's code (`app.py`, `templates/admin_console.html`), the
+runner side here had two faults that would have left Whitney's page empty and her buttons dead:
+
+- **The runner was pointed at a retired host.** `fleet.sh` defaulted `WIB_PROVISIONING_URL` to
+  `provisioning.agenticburn.com`, which was retired on 2026-10-29 (apex-agenticburn#44, provisioning #43) and now
+  answers the apex router's unknown-host 404. `serve-actions` would never have seen the queue. The default is now
+  `https://watch-it-burn-provisioning-production.up.railway.app`, the app's only public address, and
+  `verify/fleet-hygiene.sh` uses the same default. This is the `fleet.sh` half of #691. The beacon-view references
+  #691 also names (`infra/datadog-fleet/README.md`, the C1 fallback's `BEACON_VIEW`, older docs) stay with #691.
+- **The health report's shape did not match the app.** `fleet-walkthrough.sh --json` has written `clusters` as a
+  count and the rows as `results` since 559eed7. The app reads `clusters` as the list of rows, its page draws one
+  row per item, and it answers 400 when `clusters` is not a list. `post_fleet_health` now posts the report with the
+  rows moved into `clusters` and the count and `results` dropped. The walkthrough's own file is unchanged, because
+  `test_walkthrough_no_state.sh` and anyone diffing two runs read it in its old shape. A report with no list of
+  results is a failure and nothing is posted. `docs/admin-console.md` now says which shape goes where, and where the
+  page is.
+
+**Held offline.** `verify/test_admin_actions.sh` asserts that the posted body has the rows as `clusters` and keeps
+`generated`, `failed` and `last_trace_error`, that a report with no results fails, that the default URL is the
+Railway host, and that `docs/admin-console.md` names the same host. `verify/test_ops_view.py` follows the default.
+
+**Checked against the app's own code, once, not as a suite test.** The app's `app.py` and templates, read through
+`sources`, were run locally with Flask. A walkthrough report made by `test_walkthrough_report.sh`'s shims went
+through the real `post_fleet_health` and real curl, and the response was 200. `/admin/console` then showed the row:
+console 200, Argo 1/2, agent ready, last trace unknown with its reason. The same report posted raw, without the
+reshape, got a 400. A page-form POST as wiggitywhitney@gmail.com queued `restart-agent`. `_prov_call` read it from
+the pending list, `run_admin_action` claimed it and refused it, because there was no state for it on the runner and
+no cluster was touched. The action log showed who, what, when, `failed`, exit 2 and the runner. This is not a
+committed test, because it needs the sister repo's code, which the gate does not have.
+
+**Not yet run on a cluster:** `infra/terraform/fleet/fleet.sh serve-actions --once` from a host holding the fleet
+profiles, against a fleet that is up and the live app. Then press `restart-agent` on one attendee row of
+`/admin/console?token=` and see the action go `done` with a new Ready workshop-agent pod. That needs the fleet up and
+the admin token, so it waits for the next cluster build.

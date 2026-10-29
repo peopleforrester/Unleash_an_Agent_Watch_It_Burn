@@ -13,7 +13,7 @@ under `peopleforrester`, deployed by Railway from its `main` branch.
 | Walkthrough deck | `railway/walkthrough/` | `peopleforrester/walkthrough-agenticburn` | https://walkthrough.agenticburn.com |
 | Rounds + Challenges deck | `railway/rounds-walkthrough/` | `peopleforrester/rounds-agenticburn` | https://rounds.agenticburn.com |
 | Apex / wildcard router (Caddy) | `railway/apex/` | `peopleforrester/apex-agenticburn` | https://agenticburn.com (apex + `*.agenticburn.com`) |
-| Provisioning distributor (Flask) | `lab-distribution/` | `peopleforrester/provisioning-agenticburn` | https://provisioning.agenticburn.com |
+| Provisioning distributor (Flask) | `lab-distribution/` | `peopleforrester/provisioning-agenticburn` | https://watch-it-burn-provisioning-production.up.railway.app (`provisioning.agenticburn.com` retired 2026-10-29) |
 
 On a workstation they are expected as siblings of this repo (e.g. `~/repos/agenticburn/<app>-agenticburn`).
 

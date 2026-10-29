@@ -166,13 +166,32 @@ KCTX="$(ctx_of "${A}")" src "post_fleet_health() { :; }; cmd_serve_actions --onc
 check "an unreadable queue fails the pass" '[[ "${rc}" -ne 0 ]] && grep -q "did not answer with an action list" "${T}/stderr"'
 
 echo "== the health report goes to /admin/health =="
+# The walkthrough's own shape (fleet-walkthrough.sh --json): a count in clusters, the rows in results.
+REPORT='{\"generated\": \"2026-10-30T09:00:00+00:00\", \"clusters\": 1, \"healthy\": 0, \"failed\": 1, \"last_trace_error\": null, \"results\": [{\"cluster\": \"'"${A}"'\", \"agent_ready\": true}]}'
 rm -f "${T}/health.json"
-src "cmd_verify() { printf '{\"clusters\": 1, \"results\": [{\"cluster\": \"${A}\", \"agent_ready\": true}]}' >\"\${WIB_VERIFY_REPORT}\"; return 1; }; post_fleet_health"; rc=$?
-check "a walkthrough that found a broken cluster is still posted" '[[ "${rc}" -eq 0 ]] && jtrue "${T}/health.json" "d[\"results\"][0][\"agent_ready\"] is True"'
+src "cmd_verify() { printf '%s' \"${REPORT}\" >\"\${WIB_VERIFY_REPORT}\"; return 1; }; post_fleet_health"; rc=$?
+check "a walkthrough that found a broken cluster is still posted" '[[ "${rc}" -eq 0 ]] && jtrue "${T}/health.json" "d[\"clusters\"][0][\"agent_ready\"] is True"'
+# The app (provisioning-agenticburn #33) refuses a report whose clusters is not the list of rows, and its page
+# draws one row per item of clusters.
+check "the rows are posted as clusters, the list the app requires" \
+  'jtrue "${T}/health.json" "d[\"clusters\"] == [{\"cluster\": \"${A}\", \"agent_ready\": True}] and \"results\" not in d"'
+check "the top-level fields the page shows are kept" \
+  'jtrue "${T}/health.json" "d[\"generated\"].startswith(\"2026-10-30\") and d[\"failed\"] == 1 and \"last_trace_error\" in d"'
 src "cmd_verify() { return 1; }; post_fleet_health"; rc=$?
 check "a walkthrough that wrote no report is a failure" '[[ "${rc}" -ne 0 ]]'
-HEALTH_CODE=500 src "cmd_verify() { echo '{}' >\"\${WIB_VERIFY_REPORT}\"; }; post_fleet_health"; rc=$?
-check "a report the app refused is a failure" '[[ "${rc}" -ne 0 ]]'
+rm -f "${T}/health.json"
+src "cmd_verify() { echo '{\"clusters\": 0}' >\"\${WIB_VERIFY_REPORT}\"; }; post_fleet_health"; rc=$?
+check "a report with no list of results is a failure, and nothing is posted" \
+  '[[ "${rc}" -ne 0 ]] && [[ ! -e "${T}/health.json" ]] && grep -q "no list of results" "${T}/stderr"'
+HEALTH_CODE=500 src "cmd_verify() { printf '%s' \"${REPORT}\" >\"\${WIB_VERIFY_REPORT}\"; }; post_fleet_health"; rc=$?
+check "a report the app refused is a failure" '[[ "${rc}" -ne 0 ]] && grep -q "did not accept the health report" "${T}/stderr"'
+
+echo "== the runner reaches the app where it answers =="
+# provisioning.agenticburn.com was retired on 2026-10-29 and answers the apex router's 404, so a runner left
+# on it would never see the queue. Unset, the URL is the app's Railway host.
+url="$( cd "$(dirname "${FLEET}")" && env -u WIB_PROVISIONING_URL bash -c "source '${FLEET}' >/dev/null 2>&1; printf '%s' \"\${WIB_PROVISIONING_URL}\"" )"
+check "the default provisioning URL is the Railway host" '[[ "${url}" == "https://watch-it-burn-provisioning-production.up.railway.app" ]]'
+check "and docs/admin-console.md names the same host" 'grep -qF "${url}" "${HERE}/../docs/admin-console.md"'
 
 echo "== wired into the driver =="
 src_txt="$(cat "${FLEET}")"; usage_txt="$(sed -n '/^usage() {/,/^}/p' "${FLEET}")"

@@ -17,6 +17,15 @@ admin page ──POST /admin/actions──▶ provisioning app (queue + audit) �
                                             └──────────── POST /admin/health (walkthrough report) ◀───┘
 ```
 
+## Where the page is
+
+`https://watch-it-burn-provisioning-production.up.railway.app/admin/console?token=<admin token>`, built in
+provisioning-agenticburn #33 and linked from `/admin` as "Fleet console". Pick your own email under "Acting
+as" before pressing an action button: the token is shared, so the audit line names the person from that
+choice. The app has no router name since `provisioning.agenticburn.com` was retired on 2026-10-29
+(apex-agenticburn#44); the Railway host is `fleet.sh`'s default `WIB_PROVISIONING_URL`, so the runner and
+the page meet at the same address without anything being exported.
+
 ## Running the runner
 
 ```
@@ -63,7 +72,9 @@ covers one cluster:
  "last_trace": "2026-10-24T16:05:00+00:00"}
 ```
 
-The top level carries `generated`, `clusters`, `healthy`, `failed` and `last_trace_error`. `null` in a
+The walkthrough's file carries `generated`, `clusters` (a count), `healthy`, `failed`, `last_trace_error` and
+the rows in `results`. What the runner posts to `/admin/health` moves the rows into `clusters` and drops the
+count and `results`, because the app takes `clusters` as the list of rows and answers 400 to anything else. `null` in a
 column means unknown: the cluster was unreachable, or (for `last_trace`) no span arrived in the last 24
 hours. An idle cluster outside a session is a correct cluster, so a missing trace is not an issue.
 `last_trace` comes from one query to the instructor Datadog org, which every cluster dual-ships to
@@ -83,7 +94,7 @@ the runner to this contract.
 | `GET /admin/actions?status=pending` | runner, every poll | `200 {"actions": [{"id", "action", "cluster", "requested_by", "requested_at"}]}`, oldest first. |
 | `POST /admin/actions/<id>/claim` | runner, before running | `200` when the action moved from pending to running in one atomic update, `409` otherwise. A second runner, or the same runner restarted, never runs an action twice. |
 | `POST /admin/actions/<id>/result` | runner, after running | `{"status": "done"\|"failed", "exit_code", "output" (last 4000 bytes), "runner" (hostname), "finished_at"}` → `200`. |
-| `POST /admin/health` | runner, every health interval | The health report above, stored as the latest → `200`. |
+| `POST /admin/health` | runner, every health interval | The health report above with the rows as `clusters` (a list), stored as the latest → `200`; `400` when `clusters` is not a list. |
 
 **The audit line.** The app keeps one record per action: who (`requested_by`), what (`action`, `cluster`),
 when (`requested_at`, then `finished_at`), the outcome (`status`, `exit_code`) and where it ran (`runner`).

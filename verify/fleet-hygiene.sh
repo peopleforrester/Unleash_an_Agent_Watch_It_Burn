@@ -140,7 +140,7 @@ fi
 echo
 echo "== the internal slot id has not leaked back into student-facing text =="
 PROBE_EMAIL="${WIB_PROBE_EMAIL:-}"
-PROV_URL="${WIB_PROVISIONING_URL:-https://provisioning.agenticburn.com}"
+PROV_URL="${WIB_PROVISIONING_URL:-https://watch-it-burn-provisioning-production.up.railway.app}"
 if [[ -z "${PROBE_EMAIL}" ]]; then
     note "set WIB_PROBE_EMAIL to an address that ALREADY holds a claim to run the rendered-page check"
     note "(claiming is idempotent for an existing email, so it consumes nothing)"

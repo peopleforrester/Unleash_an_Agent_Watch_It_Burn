@@ -224,8 +224,9 @@ WIB_STUDENT_PASSWORD="${WIB_STUDENT_PASSWORD:-agentic}"
 # The provisioning app the fleet registers clusters with. This is a fixed, known address, so it is a
 # default rather than something an operator has to remember to export. It used to have no default, which
 # meant a normal `instructors up` silently skipped registration and the clusters were invisible in
-# provisioning until someone noticed and re-ran ingest by hand.
-WIB_PROVISIONING_URL="${WIB_PROVISIONING_URL:-https://provisioning.agenticburn.com}"
+# provisioning until someone noticed and re-ran ingest by hand. It is the Railway host: the router name
+# provisioning.agenticburn.com was retired on 2026-10-29 (apex-agenticburn#44) and answers the router's 404.
+WIB_PROVISIONING_URL="${WIB_PROVISIONING_URL:-https://watch-it-burn-provisioning-production.up.railway.app}"
 
 # Railway coordinates for that app, used to resolve its ADMIN_TOKEN automatically (see resolve_admin_token).
 readonly WIB_PROVISIONING_RW_PROJECT="859f9db0-bbda-4d3c-8026-767d0b9047a9"
@@ -4455,16 +4456,25 @@ print(json.dumps({"status": "done" if rc == 0 else "failed", "exit_code": rc, "o
 
 # Walk the fleet (the same checks as `verify`) and post the JSON report to the admin page. A walkthrough
 # that finds a broken cluster exits non-zero, and that is the report, so only a missing report is a failure.
+# The walkthrough's report counts clusters in `clusters` and lists the rows in `results`; the app takes the
+# rows as `clusters` and refuses anything else (400), so the rows are moved there and the count dropped.
 post_fleet_health() {
-    local report rc=0; report="$(mktemp -t wib-health.XXXX)"
+    local report body rc=0; report="$(mktemp -t wib-health.XXXX)"; body="$(mktemp -t wib-health-body.XXXX)"
     mkdir -p "${LOG_DIR}"
     WIB_VERIFY_REPORT="${report}" cmd_verify all >>"${LOG_DIR}/serve-actions-health.log" 2>&1 || true
     if [[ ! -s "${report}" ]]; then
         log "serve-actions: the walkthrough wrote no report (see ${LOG_DIR}/serve-actions-health.log)"; rc=1
-    elif ! _prov_call POST /admin/health "${report}" >/dev/null; then
+    elif ! python3 -c 'import json, sys
+d = json.load(open(sys.argv[1]))
+rows = d.pop("results")
+assert isinstance(rows, list)
+d["clusters"] = rows
+json.dump(d, open(sys.argv[2], "w"))' "${report}" "${body}" 2>/dev/null; then
+        log "serve-actions: the walkthrough report has no list of results to post"; rc=1
+    elif ! _prov_call POST /admin/health "${body}" >/dev/null; then
         log "serve-actions: the app did not accept the health report"; rc=1
     fi
-    rm -f "${report}"
+    rm -f "${report}" "${body}"
     return "${rc}"
 }
 

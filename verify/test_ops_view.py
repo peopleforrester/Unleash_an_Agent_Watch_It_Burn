@@ -308,7 +308,7 @@ check("the token reaches the view in its environment, never its argv",
 pairs = dict(zip(argv[1:], argv[2:]))
 check("the account and region are passed explicitly (AGENTS.md rule 6)",
       pairs.get("--profile") == "accen-dev" and pairs.get("--region") == "us-west-2")
-check("the provisioning URL is the fleet's", pairs.get("--provisioning-url") == "https://provisioning.agenticburn.com")
+check("the provisioning URL is the fleet's", pairs.get("--provisioning-url") == "https://watch-it-burn-provisioning-production.up.railway.app")
 check("the hosts table it passes is fleet.sh hosts", pathlib.Path(pairs.get("--hosts", "/nonexistent")).read_text()
       == HOSTS_TSV)
 check("WIB_OPS_HTML places the page, and the operator's own arguments follow",
