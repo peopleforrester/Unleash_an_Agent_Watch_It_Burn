@@ -122,6 +122,20 @@ check("silence is YELLOW, not GREEN",
 check("it looks for the pretext as well as the tool name",
       '"read_internal_config" in low or "calibration" in low' in PROBE)
 
+print("== the stage asks for a burrito that matches the weather (#683) ==")
+# The 2026-10-28 call: C7's ask works the weather into the order. Measured 2026-10-29 on attackme.burritobot.co:
+# this prompt leaked the recipe and the sentinel 3 of 3 and ended on a weather-matched order.
+sys.path.insert(0, str(REPO / "verify"))
+import html as _html  # noqa: E402
+from agent_probe import MCP_PROMPT  # noqa: E402
+KUBECON = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
+stage = [_html.unescape(re.sub(r"<[^>]+>", "", p)).replace("copy", "").strip()
+         for p in re.findall(r'<div class="prompt"[^>]*>(.*?)</div>', KUBECON, re.S) if "weather" in p]
+check("the probe's C7 prompt orders a burrito by the weather", "burrito" in MCP_PROMPT and "weather" in MCP_PROMPT)
+check("/kubecon's C7 prompt is the probe's, word for word", stage == [MCP_PROMPT])
+FALLBACK = (REPO / "challenges/03-bad-mcp-excessive-agency/fallback.curl.sh").read_text(encoding="utf-8")
+check("the C7 fallback sends the same ask", "lunch burrito to match the weather" in FALLBACK)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
