@@ -4007,3 +4007,35 @@ controller pick their labels up only when deploy-full-idp.sh runs again. In Log 
 - the snitch and kube-rbac-proxy short image names;
 - that grafana-mcp's envFrom value reaches the Agent;
 - that a logs-only `extraConfd` file is loaded.
+## 2026-10-29 · #667 · The readiness file follows the three-challenge run-of-show, and row 5 goes to PARTIAL
+
+`docs/KUBECON-ABSTRACT-READINESS.md` still described the seven-segment plan after 95f86f2 and #639 moved the
+run-of-show to six segments and three challenges. It is re-read against the run-of-show at `248abb3`.
+
+- **Segments renumbered** to the run-of-show's point table: C7 in 4 (rows 2 and 6, and the reload delay goes into
+  segment 4), the trace walk-through in 5 (row 7), the layers by voice and `guard-topic-on` in 6 (rows 3, 5, 8).
+  The spend note no longer says C4 is narrated: Whitney cut it on the 2026-10-28 planning call, and the budget cap
+  is a Q&A item only. The scope-call table says the IDP is named by voice in segment 6.
+- **Row 3 stays READY.** The checklist's bar is "the platform is up on the demo cluster, not a laptop-only
+  stand-in". The tour never added to that, and watch-it-burn-private was up and passing the probe on 2026-10-28.
+- **Row 5 goes to PARTIAL.** The bar, from talks-knowledge's checklist and the abstract's "Then", is "shown before
+  the LLM-specific layer". The plan shows the output guard in segment 2 with RBAC only said, then Kyverno admission
+  in segment 3 as the second tier behind C6's input guard, and names the rest in segment 6. Nothing is left to
+  build, so the open item is the bar, not code. The bar column stays the checklist's words: rewording it, or
+  putting a shown layer back first, is Michael's and Whitney's call on #456, which tracks each point as READY or
+  cut with Whitney's agreement. The tally moves from 7, 2, 0 to 6, 3, 0.
+- **Stale facts fixed while there**, each from what `staging` records: the Live column from the run-of-show's
+  2026-10-27 and 2026-10-28 probe records; row 4's audience URL is `attackme.burritobot.co` (#651); row 7 has
+  Datadog shipping since 2026-10-28 and pre-seeded traces (#648) as its open item; row 8's topic stage is built
+  and passed live, so its open item is the BanTopics paraphrase (llm-guard-cpu-offline#2) and it stays PARTIAL;
+  row 9 has the per-conversation rate limit (`6adce05`) and the lost #452 branch. The issue threads could not be
+  read from this run (`sources` refused through sudo), so no issue state newer than `staging` is used.
+- **Left alone:** the Grafana dashboard's "Segment 6" row title in
+  `observability-idp/grafana/dashboards/agent-observability.yaml`, which the run-of-show also quotes; the row
+  notes it. Renaming it is a follow-up.
+- **Test:** `verify/test_kubecon_abstract_readiness.py` now holds each row's "run-of-show segment N" to the
+  segments the run-of-show's point table gives that point, and every segment the file names to the run-of-show's
+  `### Segment N` headings. On the file before this change it fails rows 2, 3 and 6 and the segment-7 mention.
+- **Not yet run on a cluster.** Nothing here changes a cluster. The rows' Live cells for the three-challenge order
+  wait on the next bring-up's `verify/kubecon_probe.py` runs on both clusters ending `KUBECON PROBE GREEN`, which
+  #639's entry already names.

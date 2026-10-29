@@ -1,5 +1,6 @@
 # ABOUTME: Holds docs/KUBECON-ABSTRACT-READINESS.md to the accepted KubeCon abstract in docs/ABSTRACT.md: nine
-# ABOUTME: rows in order, a legend status on each, a tally that matches, quotes found verbatim, cited paths that exist.
+# ABOUTME: rows in order, a legend status on each, a tally that matches, quotes found verbatim, cited paths that exist,
+# ABOUTME: and each row's run-of-show segments the ones the run-of-show's point table gives that point.
 """The KubeCon NA 2026 breakout's readiness against its accepted abstract (#456).
 
 The breakout is held to the accepted Sessionize text (session 1249553), which `docs/ABSTRACT.md` carries
@@ -7,7 +8,8 @@ verbatim as Version 4. The readiness file has one row per point the text promise
 delivery, so this test holds what drifts when it is edited by hand: a row dropped or renumbered, a status
 outside the legend, a verdict tally that no longer adds up, a quote reworded away from the accepted text,
 or a cited file that was moved or deleted. It also holds the run-of-show's point table to the same nine
-numbers, so the two files cannot disagree on what the points are.
+numbers, so the two files cannot disagree on what the points are, and each row's "run-of-show segment N" to
+the segments that table gives the point, so a re-cut of the run-of-show cannot leave old numbers here (#667).
 
 Whether a status is right is a judgment made from the evidence on `staging`; this test cannot make it.
 """
@@ -132,6 +134,35 @@ print("== the run-of-show's point table has the same nine points ==")
 ros_rows = table_rows(section(ROS, "Abstract points to segments"))
 check("the run-of-show numbers points 1 to 9", [r[0] for r in ros_rows[1:]] == [str(n) for n in range(1, 10)])
 check("the run-of-show points at the readiness file", "docs/KUBECON-ABSTRACT-READINESS.md" in ROS)
+
+
+def segment_numbers(text: str) -> set[int]:
+    """Segment numbers in '2, 3 and 4', '2 to 4' or '1 (a working order), 4 (C7)': asides are not numbers."""
+    nums: set[int] = set()
+    for a, b in re.findall(r"(?<![#\w])(\d+)(?:\s+to\s+(\d+))?", re.sub(r"\([^)]*\)", "", text)):
+        nums.update(range(int(a), int(b or a) + 1))
+    return nums
+
+
+# #667: the readiness file kept naming the seven-segment plan's numbers after the run-of-show moved to six.
+# A row that says which run-of-show segment shows its point must name one the run-of-show gives that point.
+print("== each row's run-of-show segments are the run-of-show's for that point ==")
+ros_header = ros_rows[0] if ros_rows else []
+ros_seg_col = ros_header.index("Segment") if "Segment" in ros_header else -1
+check("the run-of-show's point table has a Segment column", ros_seg_col >= 0)
+ros_segments = {r[0]: segment_numbers(r[ros_seg_col]) for r in ros_rows[1:] if 0 <= ros_seg_col < len(r)}
+segment_count = len(re.findall(r"^### Segment \d+:", ROS, re.M))
+for r in body:
+    cited: set[int] = set()
+    for phrase in re.findall(r"run-of-show segments? (\d+(?:(?:, | and | to )\d+)*)", " ".join(r)):
+        cited |= segment_numbers(phrase)
+    if cited:
+        check(f"row {r[0]}'s run-of-show segments {sorted(cited)} are among the run-of-show's "
+              f"{sorted(ros_segments.get(r[0], set()))} for point {r[0]}",
+              cited <= ros_segments.get(r[0], set()))
+cited_all = {int(n) for n in re.findall(r"\bsegments? (\d+)", READINESS, re.I)}
+check(f"every segment the readiness file names exists in the run-of-show (1 to {segment_count})",
+      segment_count > 0 and cited_all <= set(range(1, segment_count + 1)))
 
 if failures:
     print(f"\n{len(failures)} FAILED")

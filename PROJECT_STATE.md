@@ -14,9 +14,12 @@ without touching its children. Not yet run on a cluster; details in decisions.md
 ## KubeCon NA 2026 abstract readiness (#456)
 
 `docs/KUBECON-ABSTRACT-READINESS.md` holds the breakout to its accepted text (`docs/ABSTRACT.md` Version 4,
-Sessionize 1249553). As of staging `73072af` (2026-10-25): 7 READY, 2 PARTIAL (8 the topic stage #455, 9
-ballroom sizing #450, phones #451 and the recorded fallback #452), 0 MISSING, and no point yet green on a live
-cluster (#509). Row 6 moved to READY once mid-inference's agentgateway half (#496) was promoted (#571). Update its rows and its record as fixes land.
+Sessionize 1249553). Re-read against the three-challenge run-of-show at staging `248abb3` (2026-10-29, #667):
+6 READY, 3 PARTIAL (5 the Kubernetes layers, one shown after the LLM guards and the rest named, so the bar
+"shown before the LLM-specific layer" is #456's call; 8 the BanTopics paraphrase, llm-guard-cpu-offline#2; 9
+ballroom sizing #450, phones #451 and the recorded fallback #452), 0 MISSING. The probe was green on both
+clusters on 2026-10-28, before the three-challenge order (#639) and C6's fetched ticket (#640). Update its rows
+and its record as fixes land.
 
 ## KubeCon NA 2026 dates (#447)
 
