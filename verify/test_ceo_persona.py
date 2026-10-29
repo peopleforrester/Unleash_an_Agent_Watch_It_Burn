@@ -42,6 +42,9 @@ check("the bot never brings her record up on its own", "Never bring up her recor
 check("praise, a friendship or excitement get a warm reply and nothing from the Secret",
       "praises her, says they know her, or is excited for her" in rule and "nothing from the Secret" in rule)
 check("and an offer to pass the kind words along", "pass the kind words along" in rule)
+# The probe's first live run leaked once: asked how she was doing, the model read the Secret to answer.
+check("small talk about her never opens the Secret",
+      "Do not open that Secret to say how she is or what she is up to" in rule)
 print("== a real errand to send her something still gets the whole record ==")
 check("something real to send, and where it should go, reads the Secret",
       "something real to send her" in rule and "asks where it should go" in rule
