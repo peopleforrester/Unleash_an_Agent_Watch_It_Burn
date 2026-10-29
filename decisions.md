@@ -4570,3 +4570,42 @@ again on today's layout instead of cherry-picked:
 The run-e2e.sh run covers run-all.sh, the `*_live.py` checks (the cluster half of `test_tool_audit_live.py`
 among them), `test_datadog_service_map.py`, `test_iam_policy_aws.py` and `test_fleet_monitors_live.py`. These
 have never run green.
+
+## 2026-10-29 · #267 · The fleet is watched: every item of the issue is in the repo, and loading it into an event's org is #485
+
+#267 asked for four things, in build order. All four are now in this repo or the apex router:
+
+1. **Monitors in the instructor org, loaded by a script like the pool loader.** `infra/datadog-fleet/monitors.yaml`
+   holds the six the issue names, one alert group per `kube_cluster_name`, and `fleet.sh monitors` loads them:
+   dry run by default, Datadog validates every monitor before `--apply` writes, `--check` is read-only (205e75e,
+   recorded in `docs/DECISION-LOG.md` under 2026-10-24).
+2. **One instructor dashboard, a row per cluster.** `infra/datadog-fleet/dashboard.yaml`, loaded by the same apply.
+3. **monitoring.agenticburn.com.** Served by the apex router since apex-agenticburn#34 as a 302 to
+   `WIB_MONITORING_URL`. The apply prints the `railway variables` command that sets it to the new dashboard (#550).
+   The DECISION-LOG entry of 2026-10-24 still calls this "not done"; it was written before #34 and #550.
+4. **fleet-walkthrough.sh on every build.** `cmd_verify` runs it at the end of `up` and `scale`.
+
+What the repo cannot do is the apply itself: each event brings a new instructor org, so `fleet.sh monitors --apply`
+is an event-setup step (`docs/GO-LIVE-CHECKLIST.md` step d2), and the first apply is what proves the metric and tag
+names against real data. That is #485, open. #267 closes on the repo work; it is not held for an event.
+
+`--notify` stays empty by default (the earlier run's question): the monitors change state on the dashboard that
+monitoring.agenticburn.com opens, which is the screen the instructor has up. A handle is added per event on the
+apply line if one is wanted.
+
+**Checked here without a cluster.** `fleet.sh monitors` (dry run) lists the six monitors and both dashboards and
+writes nothing. `bash verify/run-tests.sh` passes (182 tests, `test_fleet_monitors.py` among them).
+`bash verify/run-e2e-tools.sh` passes the offline suite and 25 of its 26 tier tests. The one failure is
+`test_promo_villains_public.py` (ghcr.io answers an anonymous pull of the promo/ villains with 401), which is #678 and
+fails the same way without this change.
+
+**Not yet run on a cluster.** `verify/test_fleet_monitors_live.py` (E2E, run by `bash verify/run-e2e.sh`) has never
+run green: it needs an instructor org with the monitors applied. A session with AWS access owes, at the next
+event's setup, after the pool is loaded: `infra/terraform/fleet/fleet.sh monitors --apply --session
+<start>Z/<end>Z`, then the printed `railway variables --service watch-it-burn-apex --set WIB_MONITORING_URL=...`,
+then `infra/terraform/fleet/fleet.sh monitors --check` (#485).
+
+**Why the previous attempt stalled.** Run 11327's predecessor stopped after 900 s without output, with nothing
+committed and no log kept. The issue's repo work was already merged, so that run had nothing to change, and the
+long silent step was most likely the offline suite run in the foreground (it takes several minutes over 180+
+tests). This run ran the suites in the background, writing to a log it polled.
