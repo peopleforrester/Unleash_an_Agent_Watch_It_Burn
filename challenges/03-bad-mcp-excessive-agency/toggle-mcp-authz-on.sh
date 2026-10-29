@@ -43,7 +43,7 @@ esac
 # The merge patch REPLACES the tools array, so GOOD_TOOL is the whole committed workshop-mcp entry from
 # gitops/ai-layer/resources.yaml, headersFrom included: dropping X-Agent-Identity would turn every later
 # tool call into an `unattributed` audit line (#190). verify/test_tool_audit.py keeps the two identical.
-readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["lookup_customer_records","check_inventory","reorder_supply","get_order_history","get_marketing_intel","search_web","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]},"headersFrom":[{"name":"X-Agent-Identity","value":"workshop-agent"}]}'
+readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["lookup_customer_records","check_inventory","reorder_supply","get_order_history","get_marketing_intel","search_web","read_support_ticket","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]},"headersFrom":[{"name":"X-Agent-Identity","value":"workshop-agent"}]}'
 
 # evil-mcp (the look-alike supply-chain MCP) stays WIRED in both states; this script's control is its toolNames
 # allowlist, C7's control on a workshop cluster (an admin cluster's is the gateway rule, see WHY). The benign get_weather is always present (it is the injection entrypoint), so the demo's
