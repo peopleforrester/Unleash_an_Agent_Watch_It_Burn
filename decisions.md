@@ -4992,3 +4992,18 @@ This closes the third question #394 asked, which of the twenty to adopt and in w
 the 50-cluster fleet, so the fleet's build time is unchanged. vLLM goes onto one deploy-only cluster (question
 657 above), and its cold-build cost is the one measurement still owed, under that entry's "Not yet run on a
 cluster".
+
+## 2026-10-30 · #394 · Run 11202's draft is replayed onto staging 7b132c5 unchanged in design
+
+Run 11202's five commits (`origin/agent/394-11202`, cut from staging 540d040) were never promoted: its report was
+refused because its followups were strings, not objects. `bash verify/draft-drift.sh origin/agent/394-11202
+origin/staging` named two drift lines, `decisions.md` and `gitops/ai-layer/resources.yaml`. Neither is a layout
+move. In `decisions.md` both sides only appended, so staging's entries come first and the draft's follow. In
+`resources.yaml` the draft's hunk is the comment on the `/local` route, and staging's (1d39b44) is the CEO persona's
+prompt further down. No path the draft touches was moved or deleted, and nothing under `gitops/bootstrap/`,
+`infra/` or the deploy scripts changed between 540d040 and 7b132c5. So the design is the draft's as written, and
+the commits are applied in their order. Nothing differs from the draft but the merged `decisions.md`.
+`bash verify/run-tests.sh` passes on the result.
+
+**Not yet run on a cluster:** the cold build of the local-inference profile and `verify/local-inference-live.py`,
+as the question 657 entry above says.
