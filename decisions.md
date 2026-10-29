@@ -4065,3 +4065,39 @@ There was no earlier draft of this issue to check against staging.
   group, with `os.getgid` and `os.getgroups` stubbed.
 
 **Not yet run on a cluster:** nothing is owed. This changes an offline check's message and its offline test.
+
+## 2026-10-29 · #674 · VERSIONS.lock records the Argo CD, cert-manager and Istio that are deployed, and a test holds them there
+
+#389 moved argo-cd to chart 10.8.4, cert-manager to v1.21.2 and the four Istio charts to 1.30.4. VERSIONS.lock went
+on saying argo-cd 9.6.0 / Argo CD v3.4.4 on both of its Argo CD lines and cert-manager v1.20.2, and it had no Istio
+line at all. The working docs said the same old versions. #662 set the Datadog version labels to the deployed
+versions and left the lock and docs for this issue.
+
+- **VERSIONS.lock:** both Argo CD lines now say chart 10.8.4 / app v3.5.2. The first one changed its layout from
+  "v3.4.4 (chart argo-cd 9.6.0)" to "chart X / app Y" so the test reads both lines the same way. v3.5.2 is the
+  `appVersion` in argo-helm's `charts/argo-cd/Chart.yaml` at tag `argo-cd-10.8.4`, read on 2026-10-29. cert-manager
+  says chart v1.21.2 / app v1.21.2. A new IDP foundation line, `istio chart 1.30.4 app 1.30.4`, covers base, cni,
+  istiod and ztunnel. jetstack and istio-release publish each chart at the app's own version.
+- **Docs and comments:** `docs/MASTER-RECREATION-SPEC.md`: the bootstrap paragraph, the sync-wave table's three Istio
+  rows and its cert-manager row, and the UST line. In the UST line, falco 0.44.1 became 0.45.1, the version the
+  falco label carries. `docs/BUILD-SPEC.md`: the platform list (ArgoCD `v3.4.3`) and §6, which now also names
+  cert-manager and Istio. `docs/STACK-WALKTHROUGH.md`: the GitOps and Mesh rows. `docs/BUILD-PLAN.md`: the Istio
+  pin. `deploy-full-idp.sh`: its step-2 log line, which said chart 9.6.0 / app v3.4.4 while installing 10.8.4.
+  `gitops/bootstrap/apps/istio.yaml`: its header, which said "Pinned 1.30.1".
+- **`verify/test_platform_version_pins.py` (offline, new)** works the way `test_kyverno_version_pins.py` does. It
+  takes the deployed chart from deploy-full-idp.sh's `--version` and from the cert-manager Application and the four
+  Istio Applications, which must all be one version. The VERSIONS.lock lines must pin that chart and name one app
+  version. Every other copy is held to that app version: the Datadog version labels on argocd-server, the
+  cert-manager controller, istiod and ztunnel; argocd-values.yaml's note on where the label comes from;
+  deploy-full-idp.sh's log line; istio.yaml's header; and `test_mesh.py`'s ISTIO_VERSION. In BUILD-SPEC,
+  MASTER-RECREATION-SPEC and STACK-WALKTHROUGH, each component's phrase must name the deployed version, and no other
+  version may be named as current. A version after "from" is history. A number inside a longer dotted number, like
+  the spec's IP `10.0.16.75`, is skipped. Against the old files it fails 30 checks; that was tried and then reverted.
+- **Not changed:** the PRDs, `docs/UPGRADE-INVENTORY.md`, PROJECT_STATE.md, the research notes and earlier
+  decisions.md entries are dated records. The "kustomize v5.8.1, the one Argo CD v3.4.4 bundles" remarks in
+  `verify/bootstrap_chart.py` and `verify/test_bootstrap_chart_render.py` describe how one measurement was made. The
+  other stale Falco versions (the spec's sync-wave row says chart 9.1.0 / app 0.44.1, and BUILD-SPEC says 0.44.1)
+  are a follow-up: no test holds Falco's docs yet.
+
+**Not yet run on a cluster:** nothing is owed. This changes records, comments, a log line and an offline test, not
+what a cluster deploys.

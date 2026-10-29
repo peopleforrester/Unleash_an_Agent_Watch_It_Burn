@@ -33,12 +33,12 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | Layer | Technology | Role | Where (file) | Mechanism |
 |---|---|---|---|---|
 | Cluster | EKS + VPC-CNI | isolation, networking | `infra/terraform/` | independent per-attendee cluster (Terraform), shared VPC; CNI enforces NetworkPolicy |
-| GitOps | Argo CD v3.4.4 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
+| GitOps | Argo CD v3.5.2 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
 | Admission | Kyverno v1.19.1 (chart 3.9.1, moved from 3.9.0 on 2026-09-10) | block non-compliant workloads | `policies/kyverno/` | CEL `ValidatingPolicy` (`policies.kyverno.io/v1`, #206), `spec.validationActions` Audit to Deny |
 | Supply chain | Kyverno ImageValidatingPolicy (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | cosign key attestor, Deny, verifies offline |
 | Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/bootstrap/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
-| Mesh | Istio 1.30.1 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/bootstrap/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
+| Mesh | Istio 1.30.4 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/bootstrap/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
 | Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs; creds via EKS Pod Identity |
 | Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
 | Agent | kagent 0.10.1 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |

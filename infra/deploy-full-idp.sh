@@ -27,7 +27,7 @@ log() { printf '\n==> %s\n' "$*" >&2; }
 log "[1] default gp3 StorageClass"
 kubectl apply -f "${REPO}/infra/gp3-storageclass.yaml"
 
-log "[2] ArgoCD (chart 9.6.0 / app v3.4.4)"
+log "[2] ArgoCD (chart 10.8.4 / app v3.5.2)"
 helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
 helm repo update >/dev/null
 # NOTE: do NOT use --wait here. On EKS the helm install with --wait repeatedly hangs in

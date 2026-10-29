@@ -26,7 +26,7 @@ kagent                 chart 0.10.1 / app v0.10.1  (CRD group kagent.dev/v1alpha
                        the workshop-agent sets no runtime, so Python. guard-proxy record_usage() reads kagent_ first, adk_ as fallback
 vcluster               REMOVED (architecture = separate EKS cluster per attendee)
 kyverno                app v1.19.1 / chart 3.9.1  (CEL ValidatingPolicy, spec.validationActions; #206)
-argocd                 v3.4.4  (chart argo-cd 9.6.0; was v3.4.3 / 9.5.21)
+argocd                 chart 10.8.4 / app v3.5.2  (chart argo-cd, deploy-full-idp.sh pin; was 9.6.0 / v3.4.4 until #674 caught up with #389)
 falco                  0.45.1
 falco-talon            chart 0.4.1 / app v0.3.0  (resolves the prior UNKNOWN chart pin)
 kube-prometheus-stack  chart 86.2.3  (optional bump to 86.3.2; app v0.91.0 unchanged)
@@ -63,12 +63,13 @@ tier-opus                us.anthropic.claude-opus-4-8     (NO date stamp; In-Reg
                          The earlier us.anthropic.claude-sonnet-4-6-<DATE>-v1:0 placeholders were wrong: delete the <DATE>, there is no date stamp.
 
 ## IDP foundation (RE-PINNED to current GA 2026-06-20)
-argo-cd                chart 9.6.0       app v3.4.4    (deploy-full-idp.sh pin)
+argo-cd                chart 10.8.4      app v3.5.2    (deploy-full-idp.sh pin; was 9.6.0 / v3.4.4)
 kyverno                chart 3.9.1       app v1.19.1   (was 3.8.1; #389)
 falco                  chart 9.2.1       app 0.45.1    (was 9.1.0; 0.45.1 fixes kernel 6.18, #626)
 falcosidekick          chart 0.14.0      app 2.31.1    (was 0.12.1)
 external-secrets       chart 2.6.0       app v2.6.0    (was 1.3.2; MAJOR v1->v2 — manifests use external-secrets.io/v1 GA, verify v2 still serves v1 at deploy)
-cert-manager           chart v1.20.2                   (was v1.19.3)
+cert-manager           chart v1.21.2     app v1.21.2   (was v1.20.2; v1.20.3+ patches GHSA-8rvj-mm4h-c258)
+istio                  chart 1.30.4      app 1.30.4    (base, cni, istiod and ztunnel on one pin; was 1.30.1)
 kube-prometheus-stack  chart 86.2.3      app v0.91.0   (was 82.1.0)
 tempo                  chart 2.2.3       app 2.10.7    (REPOINTED to grafana-community/helm-charts; grafana/helm-charts tempo chart migrated 2026-01-30 and the old path is a dead stub — research/14 §added, research/11)
 opentelemetry-collector chart 0.173.1    app 0.160.0   (was 0.158.2 / 0.153.0; #666)

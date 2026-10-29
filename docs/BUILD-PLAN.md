@@ -65,7 +65,7 @@ From her Google Doc comments (Michael handles the substantive replies; these are
 - **Considered CNCF adds:** Harbor + image signing -> an image-verification Kyverno policy added
   (`policies/kyverno/verify-image-signatures.yaml`); NetworkPolicy / Falco / ESO already present.
   **Istio service mesh (ambient, STRICT mTLS) now BUILT** (`gitops/bootstrap/apps/istio.yaml` + `security/istio/`,
-  pinned 1.30.1); its mTLS certs are SPIFFE identities, so it also delivers the SPIFFE identity layer
+  pinned 1.30.4); its mTLS certs are SPIFFE identities, so it also delivers the SPIFFE identity layer
   (standalone SPIRE stays narrated per the research spike).
 
 ## Design evolution + decisions (2026-06-20, from the Drive docs 8/9)
