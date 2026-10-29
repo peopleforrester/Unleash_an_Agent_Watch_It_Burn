@@ -4883,3 +4883,18 @@ This closes the third question #394 asked, which of the twenty to adopt and in w
 the 50-cluster fleet, so the fleet's build time is unchanged. vLLM goes onto one deploy-only cluster (question
 657 above), and its cold-build cost is the one measurement still owed, under that entry's "Not yet run on a
 cluster".
+
+## 2026-10-29 · #394 re-applied on staging at 239b40b after run 11202's base went stale
+
+Run 11202 built #394 (the local-inference profile for question 657, `platform-baseline.yaml` and its two drift
+tests, the question 912 entry above, and the `test_fleet_wall_check.sh` pipefail fix) on staging at 540d040. Its
+promotion stopped as stale: staging moved six commits while it waited (#463, #480 and the CEO Secret persona
+changes). Nothing in the work was wrong. `bash verify/draft-drift.sh origin/agent/394-11202 origin/staging` named
+two drifted paths. In `decisions.md` both sides only appended, so staging's entries come first and #394's follow.
+In `gitops/ai-layer/resources.yaml` the draft's hunk is the comment above the `/local` route and staging's is the
+CEO persona prompt further down, so the two do not touch. The layout the draft was made on (`gitops/bootstrap`
+chart, `values-<profile>.yaml` lists) is unchanged since 540d040. So the design is the draft's exactly, applied
+onto 239b40b, and the offline suite passes on it.
+
+**Not yet run on a cluster:** unchanged from the question 657 entry: `CONTEXT=<ctx> bash infra/deploy-full-idp.sh
+local-inference` timed cold on a fresh t3.2xlarge cluster, then `CONTEXT=<ctx> python3 verify/local-inference-live.py`.
