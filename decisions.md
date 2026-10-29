@@ -4332,3 +4332,41 @@ contains #474 (`dfb2f41`), so Loki should never have run on them. The PVC is sti
 on watch-it-burn-private (admin, armed) and watch-it-burn-community (burn). That run is still owed for each Datadog
 assumption #555 lists: the kube_deployment, pod_name and kube_container_name:shim tags, how the JSON line is
 parsed, the app key's logs_read_data permission, and indexing inside 300 seconds.
+
+## 2026-10-29 · question 864 · #621: Challenge 6 keeps its current input classifier; Llama Prompt Guard 2 86M was measured and not swapped in
+
+**Answer:** Keep the current classifier.
+
+**Decided by:** Michael.
+
+**The question.** Issue 621 asked for Meta's Llama Prompt Guard 2 86M to be measured against Challenge 6's prompts,
+as a replacement for `protectai/deberta-v3-base-prompt-injection-v2`, LLM Guard's input classifier, which was last
+trained 2024-04-23 by a project now archived. Its rule was to swap only if Prompt Guard 2 missed fewer prompts at
+the same speed with no false positives. Run 10190 measured it on one core behind llm-guard 0.3.16's
+`PromptInjection`, from an ungated copy whose every file matched the git ids of Meta's commit `a8ded8e6`. Under the
+deployed config (0.5, `full`) it missed 2 of 4 attacks to ours 3: it also refused the payload in the middle of
+the padding. It was no slower, and on a 74-prompt false-positive sweep the two models disagreed on none. That meets
+the rule. The swap would put Llama weights in our public mirrored model image, which means accepting the Llama 4
+Community License and showing "Built with Llama" in ATTRIBUTION.md and the image's NOTICE. Question 864 asked
+Michael whether to swap.
+
+**What it changes.**
+- Nothing in the serving path. The llm-guard image and its model pin in `gitops/ai-layer/resources.yaml`, the model
+  pin in `verify/test_injection_classifier.py`, ATTRIBUTION.md, `agent/GATEWAY-NOTES.md` and C6's narration stay
+  as they are. No Meta licence, NOTICE or "Built with Llama" line is added, and the pod's 3 GiB limit stands.
+- The dated finding is `docs/spike-prompt-guard-2-2026-10-28.md`, with the answer at the top and what a swap would
+  touch at the end. `docs/spike-llm-guard-2026-10-26.md`'s "What would change this finding" points at it and
+  records the correction to its point 2: the middle payload starts at token 396 of 818, inside our model's
+  512-token window, so ours misses it on detection, not on the window.
+- **What differs from the draft.** Run 10190's draft (`830fb00` on `agent/621-10190`) also extended
+  `verify/injection_config_matrix.py` to fetch, verify and run Prompt Guard 2. `verify/draft-drift.sh` flagged that
+  file: #640 has since moved C6's ticket to HC-7731 on the fake ticket site (`gitops/ai-layer/ticket_site.py`), and
+  the tool now reads it from there. With the swap declined, that extension is not brought onto staging. Running it
+  would bind whoever runs it to the Llama 4 Community License, and it would add a 1.1 GB download nobody now needs.
+  The tool stays as staging has it, measuring our classifier only, and the new dev dependency the draft recorded
+  (Meta's weights from `project-free-llama/Llama-Prompt-Guard-2-86M`) is not taken on. The finding doc says what
+  was measured: the pasted ticket from before #640, which asked for `docker.io/library/alpine:latest`.
+- What keeping costs is the payload buried mid-ticket, which our classifier passes and Prompt Guard 2 refused. The
+  padded-past-512 and reworded payloads pass both models, so C6's teaching points were never at stake.
+
+**Not yet run on a cluster.** Nothing: no deployed object changes.
