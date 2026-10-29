@@ -3,11 +3,11 @@
 """One command per cluster that proves the KubeCon beats work on the clusters that will be on stage.
 
     # the community cluster: nothing on it is toggled; the context is for C6's Deployment check
-    python3 verify/kubecon_probe.py community attackme.agenticburn.com \\
+    python3 verify/kubecon_probe.py community attackme.burritobot.co \\
         --context <community-context> --kubeconfig /tmp/community.kubeconfig --profile accen-dev
 
     # a presenter's admin cluster: needs its kube-context, flips the AI guards, ends with guards-off
-    python3 verify/kubecon_probe.py admin burritobot-private.agenticburn.com \\
+    python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co \\
         --context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
 
 The beats, in the order facilitation/kubecon-na-2026-run-of-show.md shows them:
@@ -125,8 +125,8 @@ EVIL_FIXED = ["get_weather"]
 # C7 on an admin cluster is agentgateway's rule for evil-mcp, on its own bind (#496). The rule is one line of
 # agentgateway-c7-config, marked "# c7-rule"; the terminal's guard-mcp-on writes C7_NARROWED, guard-mcp-off C7_OPEN.
 C7_CONFIGMAP = "agentgateway-c7-config"
-# The one community host; anything else is a presenter cluster and has to run as `admin`.
-COMMUNITY_HOST = "attackme.agenticburn.com"
+# The one community cluster, on both domains (#651); anything else is a presenter cluster and runs as `admin`.
+COMMUNITY_HOSTS = ("attackme.burritobot.co", "attackme.agenticburn.com")
 TERMINAL_SA = "system:serviceaccount:agent:web-terminal"
 C7_OPEN = "true"
 C7_NARROWED = 'mcp.tool.name == "get_weather"'
@@ -324,11 +324,18 @@ def c7_config_with_rule(text: str, rule: str) -> str:
     return "\n".join(lines)
 
 
+def identity_name(host: str | None) -> str | None:
+    """The name a cluster calls itself: its agenticburn.com host, which burritobot.co twins (#651)."""
+    if host and host.endswith(".burritobot.co"):
+        return host[: -len(".burritobot.co")] + ".agenticburn.com"
+    return host
+
+
 def judge_identity(host: str, identity_host: str | None, controls_host: str | None) -> tuple[bool, str]:
     """kubectl and HTTPS must both reach the cluster named on the command line before anything is flipped."""
-    if identity_host != host:
+    if identity_name(identity_host) != identity_name(host):
         return False, f"the kube-context's cluster-identity says {identity_host!r}, not {host!r}: STOP"
-    if controls_host != host:
+    if identity_name(controls_host) != identity_name(host):
         return False, f"https://{host}/controls answers as {controls_host!r}: STOP"
     return True, f"kube-context and https://{host} are the same cluster"
 
@@ -679,7 +686,7 @@ def _wide_open(p: Probe) -> tuple[bool, str]:
     p.state["cost_before"] = p.cluster.get_json("/cost")
     if controls is None:
         return False, "could not read /controls"
-    if controls.get("host") and controls["host"] != p.cluster.host:
+    if controls.get("host") and identity_name(controls["host"]) != identity_name(p.cluster.host):
         return False, f"https://{p.cluster.host}/controls answers as {controls['host']!r}"
     return judge_wide_open(controls)
 
@@ -844,7 +851,7 @@ GUARDS_OFF_BEAT = Beat("guards-off", "end", "guards-off: the stage starts clean"
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("role", choices=("community", "admin"))
-    ap.add_argument("host", help="attackme.agenticburn.com, or burritobot-private.agenticburn.com")
+    ap.add_argument("host", help="attackme.burritobot.co, or burritobot-private.burritobot.co (agenticburn.com also serves both)")
     ap.add_argument("--context", help="kube-context of the cluster (required: C6 is judged on its Deployment)")
     ap.add_argument("--kubeconfig", help="isolated kubeconfig, passed per command, never exported")
     ap.add_argument("--profile", help="AWS_PROFILE for kubectl, passed per command")
@@ -860,7 +867,7 @@ def main(argv: list[str] | None = None) -> int:
         log.error("%s needs --context: the probe reads and clears C6's Deployment (and on admin flips guards), "
                   "and never falls back to the current-context", args.role)
         return 2
-    if args.role == "community" and args.host != COMMUNITY_HOST:
+    if args.role == "community" and args.host not in COMMUNITY_HOSTS:
         log.error("%s is an admin cluster; run it as `admin`", args.host)
         return 2
     cluster = KubeconCluster(args.host, args.context, args.profile, args.kubeconfig, args.timeout)

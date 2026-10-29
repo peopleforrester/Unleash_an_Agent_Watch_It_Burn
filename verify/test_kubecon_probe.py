@@ -158,6 +158,12 @@ check("identity: another cluster's kube-context fails",
       not passes(kp.judge_identity(host, "whitney-admin.agenticburn.com", host)))
 check("identity: a missing cluster-identity fails", not passes(kp.judge_identity(host, None, host)))
 check("identity: HTTPS answering as another cluster fails", not passes(kp.judge_identity(host, host, "x")))
+# The cluster's identity stays on agenticburn.com (fleet.sh public_host_for); burritobot.co is its twin (#651).
+check("identity: the burritobot.co name of the same cluster passes",
+      passes(kp.judge_identity("attackme.burritobot.co", "attackme.agenticburn.com", "attackme.agenticburn.com")))
+check("identity: the burritobot.co name of another cluster fails",
+      not passes(kp.judge_identity("attackme.burritobot.co", "burritobot-private.agenticburn.com",
+                                   "attackme.agenticburn.com")))
 armed = {"guards": {k: False for k in kp.AI_GUARDS}, "evil_tools": list(kp.EVIL_ALL), "c7_rule": kp.C7_OPEN,
          "kyverno_actions": ["Deny"], "networkpolicy": True, "kubearmor_action": "Block"}
 check("start state: guards off and controls armed passes", passes(kp.judge_start_state(armed)))
@@ -822,6 +828,25 @@ f.host = "attackme.agenticburn.com"
 res = kp.Probe(f, 20).run(kp.COMMUNITY)
 check("a wide-open community cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
+
+
+class TwinCommunity(Community):
+    """Driven as attackme.burritobot.co, while the cluster names itself on agenticburn.com (#651)."""
+
+    def identity_host(self):
+        return kp.identity_name(self.host)
+
+    def get_json(self, path):
+        got = super().get_json(path)
+        return {**got, "host": kp.identity_name(self.host)} if path == "/controls" else got
+
+
+f = TwinCommunity()
+f.host = "attackme.burritobot.co"
+res = kp.Probe(f, 20).run(kp.COMMUNITY)
+check("the same cluster driven by its burritobot.co name passes every beat (#651)",
+      all(r["verdict"] == kp.PASS for r in res),
+      str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
 check("community beats in order", [r["key"] for r in res]
       == ["identity", "wide-open", "order", "ceo-leak", "off-topic", "c6-lands", "cost", "feed"])
 check("community beats report segments 1 to 3",
@@ -868,6 +893,10 @@ check("admin without --context exits 2", kp.main(["admin", host]) == 2)
 check("community without --context exits 2: C6 is judged on its Deployment",
       kp.main(["community", "attackme.agenticburn.com"]) == 2)
 check("community pointed at an admin host exits 2", kp.main(["community", host, "--context", "x"]) == 2)
+check("the public cluster is community on both domains (#651)",
+      set(kp.COMMUNITY_HOSTS) == {"attackme.agenticburn.com", "attackme.burritobot.co"})
+check("community pointed at the burritobot.co admin host exits 2",
+      kp.main(["community", "burritobot-private.burritobot.co", "--context", "x"]) == 2)
 src = (REPO / "verify/kubecon_probe.py").read_text()
 check("--max-calls defaults to 20", '"--max-calls", type=int, default=20' in src)
 check("the probe never mutates kube config", "use-context" not in src and "set-context" not in src)
