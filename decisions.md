@@ -900,6 +900,29 @@ Michael's answers on #454, and where each one lands in the repo.
   come down in the same session with zero fleet resources verified. A second admin cluster is not part of
   it. The run on attackme and michael-admin is recorded on #510, #526, #528 and #530. The teardown's zero
   check (`verify/account-audit.sh` CLEAN) is not recorded in this repo yet.
+
+**Update, 2026-10-29: the 10-24 teardown is recorded, and decision 2 is answered by a sandbox org, not a pool.**
+
+- **Teardown (Michael's comment on #454, 2026-10-24).** `./fleet.sh instructors down all` ran 18:17 to 18:37Z and
+  removed both clusters with their node groups, 4 leaked load balancers, 6 EBS volumes, the community cluster's 6
+  orphaned security groups and both EKS log groups. The 6 security groups it reported surviving on michael-admin
+  went with the VPC. `WIB_APPLY=1 ./fleet.sh down-infra accen-dev` destroyed the lab VPC 20:05 to 20:07Z. The
+  router was reloaded with 0 routes. `./fleet.sh audit-zero` read ZERO in all five accounts, and his direct checks
+  in accen-dev, us-west-2 at 20:08Z found no EKS cluster, EC2 instance, NAT gateway, load balancer, EIP, EBS
+  volume, VPC endpoint or `event=kubecon-na-2026` security group, and the VPC NotFound. His go asked for "zero
+  fleet resources" verified, and that is what audit-zero answers. `verify/account-audit.sh`, the wider sweep
+  the entry above named, was not the check he ran, so this records audit-zero ZERO, not account-audit CLEAN.
+  His estimate for the bring-up was about $2.30 from list prices, not billing data.
+- **Datadog (#629, Whitney, 2026-10-27).** Datadog no longer issues per-student trial orgs, so there is no
+  KubeCon pool to load. Both KubeCon clusters ship to Whitney's sandbox org (US1) instead, under her rules: env
+  `burritobot-kubecon-na-26`, `burritobot-*` services, ml_app `burritobot`, one API key named `burritobot` in
+  `watch-it-burn/datadog` (accen-dev). It has shipped from both clusters since the 2026-10-28 rebuild as
+  `burritobot-public` and `burritobot-private` (#632). No attendee gets a Datadog account (#647). The rest of
+  that move, and abstract point 7 shown on stage, stays on #629, #647 and #456's readiness file, not here.
+- **What this closes.** All three of #454's decisions are answered and built: the five Portland accounts in
+  their regions, `event=kubecon-na-2026` from `fleet/event.sh`, and the sandbox org. The 10-24 clusters are gone;
+  the platform that runs now is the 10-28 rebuild of watch-it-burn-community and watch-it-burn-private, in the
+  same account and region under the same tag. Its own teardown after delivery is not part of #454.
 ## 2026-10-24 · #449 · The KubeCon deck stays in rounds-agenticburn; this repo exports its 16:9 PDF and holds it to its source
 
 **Where the deck is built.** The issue asked to confirm with Michael and Whitney where the slides are built

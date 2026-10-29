@@ -30,12 +30,14 @@ conference-knowledge `kubecon-na-2026`.
 
 ## KubeCon delivery identity (#454)
 
-The five Portland accounts in the same regions, `event=kubecon-na-2026` (`infra/terraform/fleet/event.sh`),
-and no Datadog pool until Whitney loads one the week of 2026-10-26: a logged gap (#500, #510). Details are
-in decisions.md, 2026-10-24 · #454. The 2026-10-24 bring-up of attackme and michael-admin in accen-dev,
-us-west-2, ran the #503 probe: RED on both, about $0.05 of Bedrock. Its per-beat results are in
+Answered and built. The five Portland accounts in the same regions, `event=kubecon-na-2026`
+(`infra/terraform/fleet/event.sh`), and no Datadog pool: Datadog no longer issues per-student orgs, so both
+KubeCon clusters ship to Whitney's sandbox org (#629). Details are in decisions.md, 2026-10-24 · #454 and its
+2026-10-29 update. The 2026-10-24 bring-up of attackme and michael-admin in accen-dev, us-west-2, ran the #503
+probe: RED on both, about $0.05 of Bedrock. Its per-beat results are in
 `facilitation/kubecon-na-2026-run-of-show.md`, "Probe record" (#509); its findings #528, #529 and #530 are
-fixed on staging. Its teardown to zero (`verify/account-audit.sh` CLEAN) is not recorded here yet.
+fixed on staging. It was torn down the same day: `./fleet.sh audit-zero` ZERO in all five accounts (Michael's
+comment on #454), about $2.30 at list prices.
 
 ## KubeCon platform up (rebuilt 2026-10-28)
 
