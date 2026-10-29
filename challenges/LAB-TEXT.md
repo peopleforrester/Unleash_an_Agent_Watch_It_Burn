@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-10-29 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `0633ab0b5e2efba27baf2e6bbd935a984b2865d5` (the last commit to change lab.html, on 2026-10-29) |
-| Source blob | `24238279e41e192890f407170b2ebb6313ce23db` |
+| Source commit | `28ae583b3a25c84fe65b3b517d36e4431966b931` (the last commit to change lab.html, on 2026-10-29) |
+| Source blob | `ab103ad45b33c859dc5cc97d3ff9bfd6ed51fca0` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -874,7 +874,7 @@ Hex & Cauldron's CEO Ophelia Thorn personally thanks you in advance for helping 
 
 This is the long form, the one that asks about pacing and difficulty. As a thank-you, it lets you ask for **two more hours on your cluster** after the workshop ends.
 
-[Leave feedback →](https://feedback.agenticburn.com)
+[Leave feedback →](https://feedback.burritobot.co)
 
 ## Reset and explore
 
