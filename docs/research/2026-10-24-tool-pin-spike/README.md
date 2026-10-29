@@ -160,6 +160,10 @@ to show:
 
 `restore` deletes tool-pin and turns Argo CD auto-sync back on, and selfHeal reverts the rest.
 
+`setup` pauses the root, `lab-bootstrap` since #609, as well as ai-layer, and refuses to go on without it:
+the root's selfHeal would otherwise turn ai-layer's auto-sync back on mid-check. The names the script acts on
+are rechecked against staging by `verify/test_tool_pin.py` (last changed 2026-10-29).
+
 ## Reproduce the local bed
 
 ```bash

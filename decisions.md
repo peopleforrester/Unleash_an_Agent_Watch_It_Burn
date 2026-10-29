@@ -4691,3 +4691,27 @@ and the wording check reads the raises out of run_shell's body rather than count
 Challenge 1's exfil with the egress NetworkPolicies on, then confirm in Datadog that both the model call after the
 blocked curl and the `execute_tool run_shell` span are `status:error`. The audit-trail half runs as
 `CONTEXT=<attendee context> python3 verify/test_tool_audit_live.py` through `bash verify/run-e2e.sh`.
+## 2026-10-29 · #480 · The tool-pin spike's live-check.sh pauses lab-bootstrap, not the retired app-of-apps roots
+
+**Why this run changed anything.** The spike's code is on staging (400a13e, then #290's port move to :3004), and the
+issue's only open part is the live kagent check, which needs a cluster this run does not have. Checked against
+today's staging, `live-check.sh` would not have held on a cluster built since #609. Its `setup` paused Argo CD
+auto-sync on every Application named `app-of-apps*` and on ai-layer. Since #609 the only root is `lab-bootstrap`
+(`infra/deploy-full-idp.sh`, and lab-platform's root by the same name). So setup paused ai-layer alone, and
+lab-bootstrap's selfHeal would have put ai-layer's auto-sync back within seconds, reverting the pinned bind,
+the Service port and the RemoteMCPServer url mid-check.
+
+- **The root is named.** `ROOT=application/lab-bootstrap`; setup exits 1 if it is not there, rather than going on
+  with nothing holding ai-layer paused, and `restore` turns it back on after ai-layer.
+- **The gateway's log is read from its container.** The pod has had two containers since #514. Every log read
+  now says `-c agentgateway`, the container whose `agentgateway-config` `gateway_bind.py` extends, instead of
+  leaning on kubectl's default-container pick.
+- **Held offline.** `verify/test_tool_pin.py` gains a "live-check.sh against the current layout" section: the root
+  name is read from deploy-full-idp.sh's heredoc, the ai-layer name from `gitops/bootstrap/apps/ai-layer.yaml`, the
+  container from the agentgateway Deployment, the port from `gateway_bind.PINNED_PORT`, and the rug-pull edit's
+  anchor from `gitops/ai-layer/server.py`. The old script fails the root and container checks.
+
+**Not yet run on a cluster:** `live-check.sh` itself, phases setup, observe, rugpull, observe, deny, observe, restore,
+on a fresh attendee cluster with the tool-pin image built, pushed and signed (`images/tool-pin/Dockerfile`). That is
+the issue's remaining acceptance: kagent's discovery and the agent's list_tools seen through the processor, kagent's
+handling of the deny's JSON-RPC error, and then the badge decision the spike README recommends.

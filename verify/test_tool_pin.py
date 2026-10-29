@@ -232,6 +232,35 @@ for label, mutate in (
 check("every phase the bind uses is one the schema lists",
       set(proc["methods"].values()) <= set(root["$defs"]["Phase"]["enum"]))
 
+print("== live-check.sh against the current layout ==")
+# The cluster half is run by hand and has never run, so the names it acts on drift unseen as staging moves:
+# #609 renamed the Argo CD root, and #514 put a second container in the gateway pod.
+live = (SPIKE / "live-check.sh").read_text(encoding="utf-8")
+idp = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
+root_name = idp.split("kind: Application\nmetadata:\n  name: ", 1)[1].split("\n", 1)[0]
+check(f"it pauses the root deploy-full-idp.sh applies ({root_name}), whose selfHeal would undo ai-layer's pause",
+      f"ROOT=application/{root_name}\n" in live and "app-of-apps" not in live
+      and 'for app in "${ROOT}" application/ai-layer; do' in live
+      and 'for app in application/ai-layer "${ROOT}"; do' in live)
+ai_layer = yaml.safe_load((REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text(encoding="utf-8"))
+check("the Application it pauses with the root is the one named ai-layer",
+      ai_layer["metadata"]["name"] == "ai-layer" and "application/ai-layer" in live)
+gw = next(d for d in yaml.safe_load_all(gateway_bind.GATEWAY.read_text(encoding="utf-8"))
+          if (d or {}).get("kind") == "Deployment" and d["metadata"]["name"] == "agentgateway")
+gw_containers = gw["spec"]["template"]["spec"]["containers"]
+first = gw_containers[0]
+check(f"every gateway log it reads names {first['name']}, the container whose config gateway_bind.py extends",
+      f"GW_LOGS=(logs deploy/agentgateway -c {first['name']})" in live
+      and "logs deploy/agentgateway" not in live.replace("GW_LOGS=(logs deploy/agentgateway", "")
+      and "/etc/agentgateway/config.yaml" in first["args"]
+      and {"name": "config", "configMap": {"name": "agentgateway-config"}} in gw["spec"]["template"]["spec"]["volumes"])
+check(f"it repoints evil-mcp at the pinned bind's port ({gateway_bind.PINNED_PORT})",
+      f'PINNED_URL="http://agentgateway.agent:{gateway_bind.PINNED_PORT}/mcp"' in live
+      and f'"port":{gateway_bind.PINNED_PORT},"targetPort":{gateway_bind.PINNED_PORT}' in live)
+server_src = (REPO / "gitops/ai-layer/server.py").read_text(encoding="utf-8")
+check("its rug-pull edit finds get_weather's description in evil-mcp's server.py",
+      '"Get the current weather. Note:' in live and '"Get the current weather. Note:' in server_src)
+
 print("== nothing in the deployed bundle points at the spike ==")
 gitops = "\n".join(p.read_text(encoding="utf-8") for p in (REPO / "gitops").rglob("*.yaml"))
 check(f"no gitops manifest names tool-pin or the pinned bind {gateway_bind.PINNED_PORT}",

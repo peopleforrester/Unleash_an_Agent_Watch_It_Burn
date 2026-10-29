@@ -28,19 +28,24 @@ ARGO=(kubectl --context "${CONTEXT}" -n argocd)
 # Not 3003: that is agentgateway-c7's evil-mcp bind since #514, in the same pod.
 PINNED_URL="http://agentgateway.agent:3004/mcp"
 
-roots() { "${ARGO[@]}" get applications -o name | grep '/app-of-apps' || true; }
+# The root that renders ai-layer, which deploy-full-idp.sh and lab-platform both name lab-bootstrap since #609. Its
+# selfHeal would put ai-layer's auto-sync back within seconds, so setup refuses to go on without it.
+ROOT=application/lab-bootstrap
+# The gateway pod has two containers since #514 (agentgateway-c7 serves :3003); the pinned bind is the first's.
+GW_LOGS=(logs deploy/agentgateway -c agentgateway)
 
 case "${PHASE}" in
 setup)
     "${KCTL[@]}" get remotemcpserver evil-mcp >/dev/null
     # The guardrails are props (CLAUDE.md): selfHeal would revert every change below within seconds.
-    for app in $(roots) application/ai-layer; do
+    "${ARGO[@]}" get "${ROOT}" >/dev/null || { echo "no ${ROOT} on ${CONTEXT}; nothing else would hold ai-layer paused" >&2; exit 1; }
+    for app in "${ROOT}" application/ai-layer; do
         "${ARGO[@]}" patch "${app}" --type merge -p '{"spec":{"syncPolicy":{"automated":null}}}'
     done
     kubectl kustomize "${HERE}" | "${KCTL[@]}" apply -f -
     "${KCTL[@]}" set image deploy/tool-pin "tool-pin=${IMAGE}"
     "${KCTL[@]}" rollout status deploy/tool-pin --timeout=120s
-    loads() { "${KCTL[@]}" logs deploy/agentgateway | grep -c 'loaded config' || true; }
+    loads() { "${KCTL[@]}" "${GW_LOGS[@]}" | grep -c 'loaded config' || true; }
     before="$(loads)"
     python3 "${HERE}/gateway_bind.py" cluster | "${KCTL[@]}" apply -f -
     if ! "${KCTL[@]}" get svc agentgateway -o jsonpath='{.spec.ports[*].port}' | grep -qw 3004; then
@@ -52,7 +57,7 @@ setup)
     echo "waiting for the gateway to reload with bind 3004..."
     for _ in $(seq 40); do [[ "$(loads)" -gt "${before}" ]] && break; sleep 5; done
     [[ "$(loads)" -gt "${before}" ]] || { echo "the gateway never reloaded; check its log" >&2; exit 1; }
-    "${KCTL[@]}" logs deploy/agentgateway | grep -E 'Failed to reload' | tail -1 || true
+    "${KCTL[@]}" "${GW_LOGS[@]}" | grep -E 'Failed to reload' | tail -1 || true
     "${KCTL[@]}" patch remotemcpserver evil-mcp --type merge -p "{\"spec\":{\"url\":\"${PINNED_URL}\"}}"
     echo "setup done; ask BurritoBot a weather question, wait ~70s, then run: observe"
     ;;
@@ -70,7 +75,7 @@ for c in o.get("status", {}).get("conditions", []):
     "${KCTL[@]}" logs deploy/tool-pin --tail=10
     echo "== who sent each tools/list on the pinned bind (gateway log src.addr -> pod)"
     ips="$(kubectl --context "${CONTEXT}" get pods -A -o jsonpath='{range .items[*]}{.status.podIP}={.metadata.namespace}/{.metadata.name}{"\n"}{end}')"
-    "${KCTL[@]}" logs deploy/agentgateway --since=10m | grep 'route=default/evil-mcp-pinned' | grep 'tools/list' | tail -10 |
+    "${KCTL[@]}" "${GW_LOGS[@]}" --since=10m | grep 'route=default/evil-mcp-pinned' | grep 'tools/list' | tail -10 |
         while read -r line; do
             src="$(grep -oE 'src.addr=[0-9.]+' <<<"${line}" | cut -d= -f2)"
             err="$(grep -oE 'mcp.error.code=[^ ]+' <<<"${line}" || true)"
@@ -100,7 +105,7 @@ deny)
     ;;
 restore)
     kubectl kustomize "${HERE}" | "${KCTL[@]}" delete --ignore-not-found -f -
-    for app in application/ai-layer $(roots); do
+    for app in application/ai-layer "${ROOT}"; do
         "${ARGO[@]}" patch "${app}" --type merge -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
     done
     echo "Argo CD auto-sync back on; selfHeal restores the gateway config, its Service, evil-mcp and its URL"
