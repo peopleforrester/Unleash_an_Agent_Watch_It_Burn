@@ -122,16 +122,19 @@ _body = re.sub(r"<!--.*?-->", "", KUBECON, flags=re.S)
 _body = re.sub(r"<script>.*?</script>", "", _body, flags=re.S)
 
 # Every shown beat is a <article class="beat" data-beat="..." data-segment="...">. Collect the blocks per
-# beat key; a beat may be shown in more than one segment (C5 is the audience beat in 2 and the output-guard
-# toggle in 5), so key -> list of blocks.
+# beat key; a beat could be shown in more than one segment, so key -> list of blocks.
 beat_blocks: dict[str, list[str]] = {}
+beat_segment: dict[str, str] = {}
 for m in re.finditer(
     r'<article class="beat"\s+data-beat="([^"]+)"\s+data-segment="([^"]+)">(.*?)</article>',
     KUBECON, re.S,
 ):
     beat_blocks.setdefault(m.group(1), []).append(m.group(3))
+    beat_segment.setdefault(m.group(1), m.group(2))
 
-SHOWN_BEATS = ("C1", "C2", "C3", "C5", "C6", "C7", "off-topic", "on-topic")
+# C2 has no block of its own: since #640 the C6 ticket deploys the Joker, so C2's admission rule is C6's second
+# tier, shown inside the C6 block with C2's fallback (run-of-show, "Challenges shown live, and challenges cut").
+SHOWN_BEATS = ("C1", "C3", "C5", "C6", "C7", "off-topic", "on-topic")
 for b in SHOWN_BEATS:
     check(f"the KubeCon brief shows a {b} block", b in beat_blocks)
 
@@ -142,9 +145,9 @@ for b in SHOWN_BEATS:
               'class="prompt"' in blk and 'class="cp"' in blk)
         check(f"{b} block {i} has a success marker", 'class="marker"' in blk)
 
-# The toggles, where one applies, on the admin terminal, each inside its beat's block (segment-5 order is
-# C6, C5, C7; the on-topic guard is segment 7). C1/C2/C3 and the segment-2 off-topic beat have no live
-# toggle on purpose: the Kubernetes controls start armed and the Community cluster is wide open.
+# The toggles, where one applies, on the private terminal, each inside its beat's block (C5, C6 and C7 in
+# segments 2 to 4; the on-topic guard in segment 6). C1/C3 and the segment-2 off-topic beat have no live
+# toggle on purpose: the Kubernetes controls start armed and the public cluster is wide open.
 BEAT_TOGGLE = {"C6": "guard-input-on", "C5": "guard-output-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
 for b, cmd in BEAT_TOGGLE.items():
     in_a_block = any(f'class="toggle"' in blk and cmd in blk for blk in beat_blocks.get(b, []))
@@ -154,7 +157,7 @@ for b, cmd in BEAT_TOGGLE.items():
 # C2 the Kyverno registry allow-list, C3 KubeArmor's block AND its own alert (#497), and the signatures the
 # guards scrub/produce.
 check("C1 marker names the beacon count holding", "beacon" in KUBECON and "does <b>not</b> move" in KUBECON)
-check("C2 marker names the admission policy", "restrict-image-registries" in KUBECON)
+check("C2's admission rule is named, inside C6", "restrict-image-registries" in KUBECON)
 check("C3 marker names KubeArmor's block AND its alert",
       "block-recipe-snoop" in KUBECON and '"Action":"Block"' in KUBECON)
 check("C5 marker is the real CEO signature", "OPHELIA-THORN-TIBBY-TOP-SPIRE-No9" in KUBECON)
@@ -169,13 +172,42 @@ for b in SHOWN_BEATS:
     check(f"{b} names a fallback", has_fallback)
 
 print("== it includes the projected feed and the observability surface, and no provisioning ==")
-check("segment 2 points at the projected prompt feed /display", "/display" in KUBECON)
-check("segment 6 points at the Datadog observability surface",
+check("segment 1 points at the projected prompt feed /display", "/display" in KUBECON)
+check("segments 2 to 5 point at the Datadog observability surface",
       "app.datadoghq.com/llm/traces" in KUBECON)
 # No provisioning, claim-by-email or student-lab content on the demo page (run-of-show: it stays off).
 for banned in ("provision", "claim a cluster", "claims a cluster", "claim one",
                "by email", "attendee", "student lab", "student challenge"):
     check(f"the page body carries no {banned!r}", banned.lower() not in _body.lower())
+
+print("== the page follows the run-of-show's segments: C5, C6, C7, and C4 cut (#639) ==")
+# The run-of-show's segment table, | # | Min | ..., against the page's <h2> chips, SEGMENT n · m min, in order.
+ros_segments = [(int(n), int(m)) for n, m in re.findall(r"^\| (\d) \| (\d+) \| ", ROS, re.M)]
+page_segments = [(int(n), int(m)) for n, m in re.findall(r'<span class="n">SEGMENT (\d) · (\d+) min</span>', KUBECON)]
+check("the run-of-show's table has six segments that sum to 30 minutes",
+      [n for n, _ in ros_segments] == [1, 2, 3, 4, 5, 6] and sum(m for _, m in ros_segments) == 30)
+check(f"the page has the same segments, in order, with the same minutes (page {page_segments})",
+      page_segments == ros_segments)
+check("C5 is segment 2, C6 segment 3, C7 segment 4, the on-topic guard segment 6",
+      [beat_segment.get(b) for b in ("C5", "C6", "C7", "on-topic")] == ["2", "3", "4", "6"])
+check("C1 and C3 are on deck, not timed", beat_segment.get("C1") == beat_segment.get("C3") == "deck")
+_order = [m.group(1) for m in re.finditer(r'<article class="beat"\s+data-beat="([^"]+)"', KUBECON)]
+check("the challenges appear in the order C5, C6, C7",
+      all(b in _order for b in ("C5", "C6", "C7")) and _order.index("C5") < _order.index("C6") < _order.index("C7"))
+check("C4 is not on the page (cut, 2026-10-28)", "C4" not in _body and "denial-of-wallet" not in _body.lower())
+for b in ("C5", "C6", "C7"):
+    blk = " ".join(beat_blocks.get(b, []))
+    check(f"{b} is played on the public bot and fixed on the private bot",
+          "public bot" in blk and "private bot" in blk)
+    check(f"{b} names its Datadog tab", f"Datadog {b} tab" in blk)
+check("C6's admission tier names the C2 fallback, not the retired workshop Beat 1 (#499)",
+      "challenges/c2-villain-image/fallback.kubectl.sh" in " ".join(beat_blocks.get("C6", []))
+      and "01-cncf-wall" not in KUBECON)
+# The roster's terminals take the presenter login, sprouts (fleet.sh, verify/test_admin_actions.sh); the public
+# bot shows no Terminal button (#645).
+check("the page and the run-of-show give the private terminal the presenter login",
+      "<code>sprouts</code> / <code>sprouts</code>" in KUBECON and "`sprouts` / `sprouts`" in ROS
+      and "`agentic` / `agentic`" not in ROS)
 
 print("== the run-of-show links the page ==")
 check("the run-of-show drives from /kubecon", "/kubecon" in ROS)

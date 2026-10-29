@@ -3391,3 +3391,43 @@ nobody here made.
 
 **Not yet on the slide.** The link reaches the room only once rounds-agenticburn's close slide carries it, and the
 public URL resolves only once this change reaches `main`.
+## 2026-10-29 · #639 · /kubecon and the probe follow the three-challenge run-of-show
+
+95f86f2 rewrote the run-of-show for C5, C6, C7; the issue's thread left the `/kubecon` page and
+`verify/kubecon_probe.py` on the old seven segments and the old C6, C5, C7 order. Both now follow it.
+
+- **`/kubecon` (`gitops/ai-layer/web/kubecon.html`) is laid out by the six segments**, with the run-of-show's
+  minutes: segment 1 the QR, the prompt wall and one working order; 2 C5, 3 C6, 4 C7, each block carrying the
+  public-bot marker, the private-terminal toggle, the private-bot marker and its Datadog tab; 5 the trace
+  walk-through; 6 the layers by voice, `guard-topic-on` and the close. C1 and C3 are an untimed on-deck section.
+  C4 and the cost narration are gone, and the prompt wall moves to segment 1 with the run-of-show.
+- **C6 is #640's shape, and C2 has no block of its own.** The ask names HC-7731; on the private bot the Joker is
+  refused at admission before `guard-input-on` (the second tier), then the ticket comes back withheld. C2's
+  admission rule is that second tier, so its fallback sits in the C6 block, as the run-of-show's "Folded into
+  C6" says. `verify/test_instructor_brief.py` no longer asks for a C2 block.
+- **The probe runs the stage's order:** start state; C5 off, `guard-output-on`, C5 on; C6's admission dry run,
+  `guard-input-on`, the withheld ticket, C6 on; C7 off, the gateway rule, C7 on; C1, C2 and C3 (on deck or
+  named by voice); the topic beats; `guards-off`. Each beat reports its run-of-show segment (2, 3, 4, 6,
+  `deck`). On the community cluster the off-topic ask (segment 2) now comes before C6's landing (segment 3).
+  The model calls stay 11 and 6. C6 now runs with the output guard on, which does not touch its judge, the
+  `maintenance-shell` Deployment.
+- **Fixes found on the way:** the page's C2 fallback named `challenges/01-cncf-wall/fallback.kubectl.sh`, the
+  retired workshop Beat 1 (#499), and its C5 fallback used a `--sidecar` flag the script dropped; the
+  run-of-show gave the private terminal the attendee login, `agentic`, where the roster gets `sprouts`
+  (`verify/test_admin_actions.sh`); its fallback table still described C6's input check as a guard-proxy
+  request with zero tokens, where `fallback.curl.sh input` now calls `read_support_ticket` in the tool pod;
+  and its Night Before still expected the badge and topic beats to fail, which have passed since 2026-10-27.
+- **What differs from the earlier draft** (`a893fbf`, cut from staging at `264c252`, before #640 and #647).
+  That draft showed C6's second tier with C2's villain image, because the pasted ticket's
+  `docker.io/library/alpine` is on the allow-list; #640's ticket asks for the Joker, which is not, so C6's own
+  image is the second tier again and the draft's C2-in-segment-3 block is dropped. The draft's community probe
+  had no C6 beat; #640 added one, kept here and placed in segment 3. The page also carries #647's note that
+  the `burritobot-public` tab shows e-mails, cards, SSNs and phone numbers scrubbed.
+- **Tests:** `verify/test_instructor_brief.py` holds the page's segments and minutes equal to the run-of-show's
+  table, each challenge in its segment, played on the public bot and fixed on the private bot with its Datadog
+  tab, C4 off the page and the C2 fallback inside C6; `verify/test_kubecon_probe.py` holds the new order and
+  segments on both clusters; `verify/test_fleet_wall_check.sh` reads the wall from segment 1.
+- **Not yet run on a cluster.** The reordered probe has not run live. The next bring-up's
+  `python3 verify/kubecon_probe.py admin burritobot-private.agenticburn.com --context <private-context>
+  --kubeconfig /tmp/private.kubeconfig --profile accen-dev` and the community run must end
+  `KUBECON PROBE GREEN`, and the presenters read `/kubecon` against the run-of-show in run-through 1.

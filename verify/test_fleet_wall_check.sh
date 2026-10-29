@@ -67,8 +67,8 @@ check "segment 1 puts the wall URL on screen (#639)" \
   'section "Segment 1: Cold open" | grep -qF "${WALL}"'
 check "the segment table shows the wall on screen from segment 1" \
   'grep -E "^\| 1 \|" "${ROS}" | grep -qF "prompts.agenticburn.com"'
-check "the /kubecon page projects the wall in segment 2" \
-  'sed -n "/SEGMENT 2:/,/<article/p" "${KUBECON}" | grep -qF "href=\"${WALL}\""'
+check "the /kubecon page projects the wall in segment 1, as the run-of-show does (#639)" \
+  'sed -n "/SEGMENT 1:/,/<article/p" "${KUBECON}" | grep -qF "href=\"${WALL}\""'
 
 echo; echo "  ${pass} passed, ${fail} failed"
 [[ "${fail}" -eq 0 ]] || { echo "  (last log)"; sed "s/^/    /" "${T}/log"; }

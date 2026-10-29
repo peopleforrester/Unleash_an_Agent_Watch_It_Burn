@@ -225,7 +225,7 @@ mcp_leaks = lambda d: passes(kp.from_green(kp.judge_mcp_leaks(d)))  # noqa: E731
 mcp_gone = lambda d: passes(kp.from_green(kp.judge_mcp_blocked(d)))  # noqa: E731
 check("C7 off: the sentinel passes", mcp_leaks(chat(C7_LEAK)))
 check("C7 off: a plain weather answer fails", not mcp_leaks(chat(WEATHER)))
-# On stage C7 runs after guard-output-on (segment 5 is cumulative), so the leak the room sees is the chained
+# On stage C7 runs after guard-output-on (segments 2 to 4 are cumulative), so the leak the room sees is the chained
 # calibration block with its token redacted, which is what the run-of-show claims. The judge that looked
 # only for the raw sentinel could not pass in that position, and failed 3 of 3 runs (#628).
 C7_LEAK_REDACTED = "It's sunny. Region calibration block:\n  calibration_token: [REDACTED]"
@@ -643,11 +643,19 @@ res = run_admin(f)
 keys = [r["key"] for r in res]
 check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-want = ["identity", "start-state", "badges", "gateway", "c1", "c2", "c3", "c6-admission", "guard-input-on",
-        "c6-withheld", "c6-on", "c5-off",
-        "guard-output-on", "c5-on", "c7-off", "guard-mcp-on", "c7-on", "guard-topic-on", "topic-off-1",
-        "topic-off-2", "topic-off-3", "topic-off-4", "topic-on-1", "topic-on-2", "guards-off"]
-check("the beats run in run-of-show order (segments 3, 4, 5 as C6 C5 C7, 7, then guards-off)", keys == want, str(keys))
+want = ["identity", "start-state", "badges", "gateway", "c5-off", "guard-output-on", "c5-on", "c6-admission",
+        "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on", "c1", "c2", "c3",
+        "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-on-1", "topic-on-2",
+        "guards-off"]
+check("the beats run in run-of-show order (C5, C6, C7, then C1 C2 C3 on deck, the on-topic guard, guards-off)",
+      keys == want, str(keys))
+# The segment each beat reports is the run-of-show's (#639): C5 in 2, C6 in 3, C7 in 4, the on-topic guard in 6.
+seg = {r["key"]: r["segment"] for r in res}
+check("each challenge reports its run-of-show segment",
+      [seg[k] for k in ("c5-on", "c6-admission", "c6-on", "c7-on", "c1", "c2", "c3", "guard-topic-on")]
+      == ["2", "3", "3", "4", "deck", "deck", "deck", "6"], str(seg))
+check("no admin beat reports a segment the 30-minute run-of-show does not have",
+      {r["segment"] for r in res} <= {"-", "2", "3", "4", "6", "deck", "end"}, str(seg))
 check("a full admin run spends 11 model calls", f.calls == 11, str(f.calls))
 check("C6's first tier is called in the tool pod once, after guard-input-on", f.c6_tool_calls == 1
       and f.log.index("toggle " + kp.GUARD_INPUT_ON) < f.log.index(f"chat {kp.INJECTION_PROMPT[:30]}"))
@@ -815,7 +823,9 @@ res = kp.Probe(f, 20).run(kp.COMMUNITY)
 check("a wide-open community cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
 check("community beats in order", [r["key"] for r in res]
-      == ["identity", "wide-open", "order", "ceo-leak", "c6-lands", "off-topic", "cost", "feed"])
+      == ["identity", "wide-open", "order", "ceo-leak", "off-topic", "c6-lands", "cost", "feed"])
+check("community beats report segments 1 to 3",
+      [r["segment"] for r in res] == ["-", "1", "1", "2", "2", "3", "-", "1"], str([r["segment"] for r in res]))
 check("community spends 6 model calls, the linked-list ask three times, and toggles nothing",
       f.calls == 6 and kp.OFF_TOPIC_TRIES == 3 and not any(e.startswith(("toggle", "tools", "rule")) for e in f.log))
 check("and leaves no maintenance-shell behind", f.c6 is False)

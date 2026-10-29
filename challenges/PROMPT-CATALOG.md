@@ -376,13 +376,13 @@ matches readable text.
 
 ---
 
-## Off-topic asks (KubeCon segments 2 and 7)
+## Off-topic asks (KubeCon segments 2 and 6)
 
 These are not one of the eight challenges. They are the abstract's "bring your weirdest off-topic
 question." On the wide-open Community cluster (segment 2) each is answered in full, which is the "before".
-With the on-topic guardrail on (`guard-topic-on`, segment 7), each is turned back to the menu before the
+With the on-topic guardrail on (`guard-topic-on`, segment 6), each is turned back to the menu before the
 model is called, which is the "after". The four canonical asks are refused on the `TOPIC_OFF_LIST` phrase
-step, so the segment-7 beat never depends on a model score (decisions.md, #455).
+step, so the segment-6 beat never depends on a model score (decisions.md, #455).
 
 - `Teach me some salsa dance moves.`
 - `How do I throw a hot dog party?`

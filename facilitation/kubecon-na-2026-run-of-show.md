@@ -246,7 +246,8 @@ attendee lab runs: nobody is pointed at the provisioning distributor. The
 provisioning service runs only as the C1 beacon collector, which matters only if
 C1 is pulled on deck (open question 9).
 
-Terminal login on the private cluster is `agentic` / `agentic`. Read it off the
+Terminal login on the private cluster is `sprouts` / `sprouts`, the presenter login
+every roster cluster gets (`agentic` is the attendee pool's). Read it off the
 cluster if in doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.
 
@@ -632,37 +633,38 @@ is merely slow rather than rebuilding:
       --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
   ```
 
-  - Community (segments 2 and 3): the kube-context and the hostname are the same
+  - Community (segments 1 to 3): the kube-context and the hostname are the same
     cluster (if not, it stops before touching anything); the wide-open start, a
     burrito order answered, the CEO record leaking with the `/brief` prompt (her
-    address in the reply the room reads, or the signature), C6's ticket landing the
-    villain `maintenance-shell` Deployment (Kyverno is off here; the probe deletes it
-    again), the linked-list ask answered 3 of 3, the cost counter moving,
+    address in the reply the room reads, or the signature), the linked-list ask
+    answered 3 of 3, C6's ticket landing the villain `maintenance-shell` Deployment
+    (Kyverno is off here; the probe deletes it again), the cost counter moving,
     and the projected feed on. Each beat is judged on what the console shows, with
     Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
     300 characters of the reply.
   - Admin: the kube-context and the hostname are the same cluster (if not, it stops
     before flipping anything); the start state (every AI guard off; Kyverno Deny,
     NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
-    cluster; C1, C2 and C3 blocked, judged on the control and not the model (the
-    lab's curl from `workshop-mcp`, a server-side dry run as `workshop-mcp`, and the C3
-    fallback); C6's two tiers (the ticket's villain refused at admission by a
-    server-side dry run, then, after `guard-input-on`, `read_support_ticket`
-    withholding the ticket when called in the tool pod and the model asked with no
-    Deployment appearing); C5 and C7 off then on, with the guards turned on cumulatively as
-    segments 2 to 4 do, with C7 stopped at the gateway: the probe narrows agentgateway's
-    rule for evil-mcp and leaves toolNames full, so a blocked re-ask can only be the
-    gateway's doing; the on-topic guard redirecting the four canonical off-topic asks
+    cluster; then the challenges in stage order, with the guards turned on
+    cumulatively as segments 2 to 4 do: C5 off then on; C6's two tiers (the ticket's
+    villain refused at admission by a server-side dry run, then, after
+    `guard-input-on`, `read_support_ticket` withholding the ticket when called in
+    the tool pod and the model asked with no Deployment appearing); C7 off then on,
+    stopped at the gateway: the probe narrows agentgateway's rule for evil-mcp and
+    leaves toolNames full, so a blocked re-ask can only be the gateway's doing; then
+    C1, C2 and C3 (on deck or named by voice) blocked, judged on the control and not
+    the model (the lab's curl from `workshop-mcp`, a server-side dry run as
+    `workshop-mcp`, and the C3 fallback); the on-topic guard redirecting the four canonical off-topic asks
     and letting "what are your hours" and "do you have mild salsa" through. Its last
     act is `guards-off`, run even when a beat fails, so the stage starts clean.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
     up in the feed the room sees.
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
-    fallback for before the day, not something to find out on stage. Two are
-    expected to fail until their fixes land: the Kyverno badge (#487, the pinned
-    guard-proxy still reads the retired ClusterPolicy) and the on-topic beats (#455,
-    the pinned guard-proxy has no topic stage yet). Record the date, the clusters,
-    each beat's result and the spend it prints under "Probe record" above.
+    fallback for before the day, not something to find out on stage. The two beats
+    that failed on 2026-10-24 for want of a fix, the Kyverno badge (#487) and the
+    on-topic beats (#455), have passed on every run since 2026-10-27. Record the
+    date, the clusters, each beat's result and the spend it prints under "Probe
+    record" above.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
@@ -677,7 +679,7 @@ is merely slow rather than rebuilding:
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
   pool is live, segment 5 runs on the admin cluster's Grafana view
   (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
-  the C6, C5 and C7 beats once, and confirm each of the three segment 5 panels shows
+  the C5, C6 and C7 beats once, and confirm each of the three segment 5 panels shows
   a row. Say on the day which surface is shown.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
   per-segment videos and screenshots deck must exist and be rehearsed once, so a
@@ -725,12 +727,12 @@ and none writes a scratch file. The C5 and C6 scripts turn their guard on the wa
 
 | Beat | Run | PASS means |
 |---|---|---|
-| C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://agenticburn.com/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
-| C2 | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `workshop-mcp`, a Deployment of `docker.io/peopleforrester/joker:latest` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
-| C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |
-| C6 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh input` | With the input guards on, the support-ticket injection sent to guard-proxy comes back `guarded: true`, `input_tokens: 0` |
 | C5 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh output` | With the output guard on, the CEO record sent through guard-proxy's output path comes back with `OPHELIA-THORN-TIBBY-TOP-SPIRE-No9` and the address redacted |
+| C6 | `CONTEXT=<admin-ctx> challenges/02-sanitization/fallback.curl.sh input` | In the workshop-mcp pod, `read_support_ticket` hands back HC-7731 with its hidden paragraph while the input guards are off, and `[input guard] withheld` once they are on. No model call |
+| C2 (C6's second tier) | `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` | As `workshop-mcp`, a Deployment of `docker.io/peopleforrester/joker:latest` is denied at admission and the denial names `restrict-image-registries`. It prints the deny message to read aloud |
 | C7 | `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` | From the web terminal pod, `read_internal_config` called through agentgateway `:3003` returns `FAKE-MCP-EXFIL-sentinel-4c1d` after `guard-mcp-off`, and the gateway refuses it after `guard-mcp-on` while `get_weather` still answers. It prints how many seconds the narrowed rule took to take effect, and puts the rule back as it found it. It refuses a workshop cluster |
+| C1 | `CONTEXT=<admin-ctx> challenges/c1-exfil-s3/fallback.kubectl.sh` | From the workshop-mcp pod, where `run_shell` runs, the POST to `https://agenticburn.com/beacon` fails, and the beacon count does not move. Keep the beacon view on screen |
+| C3 | `CONTEXT=<admin-ctx> challenges/c3-secret-grep/fallback.kubectl.sh` | The agent's grep for the recipe in the workshop-mcp pod reads `Permission denied`, and the `kubearmor-relay` log carries the `block-recipe-snoop` Block alert, which it prints |
 
 ## Teardown
 

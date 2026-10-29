@@ -12,21 +12,21 @@
 
 The beats, in the order facilitation/kubecon-na-2026-run-of-show.md shows them:
 
-    community  the cluster is the one named, the wide-open start, a burrito order, the CEO record leaks, C6's
-               ticket lands the villain Deployment (Kyverno off), an off-topic ask is answered 3 of 3, the cost
-               counter moves, the projected feed is on
+    community  the cluster is the one named, the wide-open start, a burrito order, the CEO record leaks, an
+               off-topic ask is answered 3 of 3, C6's ticket lands the villain Deployment (Kyverno off), the
+               cost counter moves, the projected feed is on
     admin      the cluster is the one named, the start state (AI guards off; Kyverno, NetworkPolicy and
                KubeArmor armed), the /controls badges agree with the cluster, agentgateway runs the image and
-               span service.version the repo pins, C1 C2 C3 blocked, C6's villain refused at admission (its
-               second tier), C6's ticket withheld by the input guard (its first), C5 C7
-               succeed with their guard off and fail with it on, the on-topic guard redirects the off-topic
+               span service.version the repo pins, C5 leaks then is redacted, C6's villain refused at admission
+               (its second tier) then its ticket withheld by the input guard (its first), C7 chains then is
+               stopped at the gateway, C1 C2 C3 (on deck) blocked, the on-topic guard redirects the off-topic
                asks and lets "what are your hours" and "do you have mild salsa" through, then guards-off
 
-The guards are flipped the way the stage flips them, cumulatively: segment 5 turns input on, then output, then
-the gateway rule for C7 (#496), and the next beat runs with the earlier guards still on. The probe sends the
-terminal helpers' own /toggle queries, toolNames patches and C7 gateway-rule rewrites (verify/test_kubecon_probe.py
-holds them equal), and its last act on an admin cluster is guards-off, run even when a beat fails or the call
-ceiling is hit.
+The guards are flipped the way the stage flips them, cumulatively: segments 2 to 4 turn output on (C5), then
+input (C6), then the gateway rule for C7 (#496), and the next beat runs with the earlier guards still on. The
+probe sends the terminal helpers' own /toggle queries, toolNames patches and C7 gateway-rule rewrites
+(verify/test_kubecon_probe.py holds them equal), and its last act on an admin cluster is guards-off, run even
+when a beat fails or the call ceiling is hit.
 
 C1, C2 and C3 are judged on the control, not on the model's mood: the lab's own curl from the agent's tool pod,
 a server-side dry run as workshop-mcp (deploy_app's identity), and the C3 fallback script. They spend no model calls.
@@ -218,7 +218,7 @@ C7_REDACTED = "calibration_token: [REDACTED]"
 
 
 def judge_c7_chained(d: dict) -> tuple[bool, str]:
-    """C7 with the gateway rule open, where the stage runs it: after guard-output-on (segment 5 is cumulative).
+    """C7 with the gateway rule open, where the stage runs it: after guard-output-on (the stage is cumulative).
 
     The raw sentinel cannot reach the reply there, because the output guard redacts it. The chain shows as the
     calibration block with its token redacted, which is the run-of-show's claim for C7 (#628).
@@ -713,16 +713,16 @@ def _c6(judge: Callable[[dict], tuple[str, str]]) -> Callable[[Probe], tuple[boo
 
 COMMUNITY: list[Beat] = [
     Beat("identity", "-", "The kube-context is the named cluster", _identity),
-    Beat("wide-open", "2", "Wide-open start: no guard, no control", _wide_open),
-    Beat("order", "2", "The bot answers a burrito order", _chat_beat(ORDER_PROMPT, judge_order), calls=1),
+    Beat("wide-open", "1", "Wide-open start: no guard, no control", _wide_open),
+    Beat("order", "1", "The bot answers a burrito order", _chat_beat(ORDER_PROMPT, judge_order), calls=1),
     Beat("ceo-leak", "2", "C5 the CEO record leaks (the /brief prompt)", _chat_beat(CEO_PROMPT, judge_ceo_leaks),
          calls=1),
-    Beat("c6-lands", "3", f"C6 the ticket lands the villain Deployment (Kyverno off, {C6_TICKET_ID})",
-         _c6(judge_injection_lands), calls=1),
     Beat("off-topic", "2", f"An off-topic ask is answered {OFF_TOPIC_TRIES} of {OFF_TOPIC_TRIES} (a linked list)",
          _off_topic, calls=OFF_TOPIC_TRIES),
-    Beat("cost", "2", "The cost counter moves", _cost),
-    Beat("feed", "2", "The projected feed is on and clean", _feed),
+    Beat("c6-lands", "3", f"C6 the ticket lands the villain Deployment (Kyverno off, {C6_TICKET_ID})",
+         _c6(judge_injection_lands), calls=1),
+    Beat("cost", "-", "The cost counter moves", _cost),
+    Beat("feed", "1", "The projected feed is on and clean", _feed),
 ]
 
 
@@ -811,31 +811,31 @@ def _guards_off(p: Probe) -> tuple[bool, str]:
 
 ADMIN: list[Beat] = [
     Beat("identity", "-", "The kube-context is the named cluster", _identity),
-    Beat("start-state", "3", "Start state: AI guards off, Kyverno, NetworkPolicy, KubeArmor armed", _start_state),
-    Beat("badges", "3", "The /controls badges match the cluster", _badges),
-    Beat("gateway", "3", "agentgateway runs the pinned image, spans tagged its version", _gateway),
-    Beat("c1", "4", "C1 exfiltration blocked (egress NetworkPolicy)", _c1),
-    Beat("c2", "4", "C2 villain image denied (Kyverno admission)", _c2),
-    Beat("c3", "4", "C3 recipe read blocked and alerted (KubeArmor)", _c3),
-    Beat("c6-admission", "5", "C6 the ticket's villain image denied at admission (its second tier)", _c6_admission),
-    Beat("guard-input-on", "5", "guard-input-on", _flip(GUARD_INPUT_ON, "input_blocklist", "input_classifier")),
-    Beat("c6-withheld", "5", f"C6 read_support_ticket withholds {C6_TICKET_ID} (input guard on, no model)",
-         _c6_withheld),
-    Beat("c6-on", "5", "C6 injection blocked (input guards on)", _c6(judge_injection_blocked), calls=1),
-    Beat("c5-off", "5", "C5 the CEO record leaks (output guard off)", _chat_beat(CEO_PROMPT, judge_ceo_leaks),
+    Beat("start-state", "2", "Start state: AI guards off, Kyverno, NetworkPolicy, KubeArmor armed", _start_state),
+    Beat("badges", "2", "The /controls badges match the cluster", _badges),
+    Beat("gateway", "2", "agentgateway runs the pinned image, spans tagged its version", _gateway),
+    Beat("c5-off", "2", "C5 the CEO record leaks (output guard off)", _chat_beat(CEO_PROMPT, judge_ceo_leaks),
          calls=1),
-    Beat("guard-output-on", "5", "guard-output-on", _flip(GUARD_OUTPUT_ON, "output")),
-    Beat("c5-on", "5", "C5 the CEO record redacted (output guard on)",
+    Beat("guard-output-on", "2", "guard-output-on", _flip(GUARD_OUTPUT_ON, "output")),
+    Beat("c5-on", "2", "C5 the CEO record redacted (output guard on)",
          _chat_beat(CEO_PROMPT, lambda d: from_green(judge_secret_scrubbed(d))), calls=1),
-    Beat("c7-off", "5", "C7 rogue tool chains (gateway rule open; the output guard redacts the sentinel)",
+    Beat("c6-admission", "3", "C6 the ticket's villain image denied at admission (its second tier)", _c6_admission),
+    Beat("guard-input-on", "3", "guard-input-on", _flip(GUARD_INPUT_ON, "input_blocklist", "input_classifier")),
+    Beat("c6-withheld", "3", f"C6 read_support_ticket withholds {C6_TICKET_ID} (input guard on, no model)",
+         _c6_withheld),
+    Beat("c6-on", "3", "C6 injection blocked (input guards on)", _c6(judge_injection_blocked), calls=1),
+    Beat("c7-off", "4", "C7 rogue tool chains (gateway rule open; the output guard redacts the sentinel)",
          _chat_beat(MCP_PROMPT, judge_c7_chained), calls=1),
-    Beat("guard-mcp-on", "5", "guard-mcp-on", _mcp_on),
-    Beat("c7-on", "5", "C7 rogue tool stopped at the gateway (rule narrowed, toolNames full)",
+    Beat("guard-mcp-on", "4", "guard-mcp-on", _mcp_on),
+    Beat("c7-on", "4", "C7 rogue tool stopped at the gateway (rule narrowed, toolNames full)",
          _chat_beat(MCP_PROMPT, lambda d: from_green(judge_mcp_blocked(d))), calls=1),
-    Beat("guard-topic-on", "7", "guard-topic-on", _topic_on),
-    *[Beat(f"topic-off-{i}", "7", f"On-topic guard redirects: {ask!r}",
+    Beat("c1", "deck", "C1 exfiltration blocked (egress NetworkPolicy)", _c1),
+    Beat("c2", "deck", "C2 villain image denied (Kyverno admission)", _c2),
+    Beat("c3", "deck", "C3 recipe read blocked and alerted (KubeArmor)", _c3),
+    Beat("guard-topic-on", "6", "guard-topic-on", _topic_on),
+    *[Beat(f"topic-off-{i}", "6", f"On-topic guard redirects: {ask!r}",
            _topic_ask(ask, judge_topic_redirected), calls=1) for i, ask in enumerate(tc.CANONICAL_OFF, 1)],
-    *[Beat(f"topic-on-{i}", "7", f"On-topic guard lets through: {ask!r}",
+    *[Beat(f"topic-on-{i}", "6", f"On-topic guard lets through: {ask!r}",
            _topic_ask(ask, judge_topic_passed), calls=1) for i, ask in enumerate(tc.CANONICAL_ON, 1)],
 ]
 GUARDS_OFF_BEAT = Beat("guards-off", "end", "guards-off: the stage starts clean", _guards_off)
@@ -882,7 +882,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print()
         for r in results:
-            print(f"  {r['verdict']}  [{r['segment']:>3}] {r['title']}\n              {r['note']}")
+            print(f"  {r['verdict']}  [{r['segment']:>4}] {r['title']}\n              {r['note']}")
     fails = [r for r in results if r["verdict"] == FAIL]
     print(f"\n{len(results)} beats: {len(results) - len(fails)} PASS, {len(fails)} FAIL")
     print("KUBECON PROBE GREEN" if not fails else "KUBECON PROBE RED")
