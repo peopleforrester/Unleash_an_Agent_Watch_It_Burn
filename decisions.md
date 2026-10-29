@@ -3753,3 +3753,20 @@ staging.
   cannot write. With the runner change reverted, that case fails.
 
 **Not yet run on a cluster.** Nothing here touches a cluster; `bash verify/run-e2e-tools.sh` is the whole check.
+## 2026-10-29 · #659 · A tools-tier test reads #633's comments and checks one names both causes
+
+#633's first criterion was "The cause is named in a comment on this issue." Test review run 10345 found that no
+test checked it. That is because the comment is on GitHub, not in the tree. The 2026-10-28 #633 entry above says
+the run could not post the comment. The criterion holds anyway: hecaton's run-report comment on #633
+(issuecomment-6483003262, 2026-10-28T23:05:41Z) names both causes. Run 9654 (#610) was a bring-up, and a run has
+no cluster or AWS profile and may not deploy. Run 9672 (#474) found its draft stale because #609 had moved
+gitops/apps/ into the lab-bootstrap chart.
+
+`verify/test_dispatched_runs_cause_comment.py` (tools tier, new) asks api.github.com for the issue's comments,
+anonymously because the repo is public. It checks that a comment by hecatongithub[bot] or peopleforrester names
+both causes. The run numbers come from AGENTS.md's "Dispatched runs (hecaton)" section, so the comment and the fix
+have to cite the same runs. The test fails, with the reason, if GitHub does not answer or refuses the read, for
+example after the 60 anonymous requests an hour are used up. Pointed at #659 (no comments) it fails one check, and
+pointed at #610 it fails three. Both were tried and then reverted.
+
+**Not yet run on a cluster:** nothing is owed. The test needs the network only.
