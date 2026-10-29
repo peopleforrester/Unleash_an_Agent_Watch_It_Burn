@@ -240,6 +240,17 @@ Public, 11:31Z: 6 PASS, 2 FAIL, $0.0333 over 5 model calls.
 
 Private: 25 PASS, $0.0322 over 11 model calls. Every toggle fired and the guards ended off.
 
+**2026-10-29 evening, Challenge 1 to 4 on HC-666 (#687, #688).** Same two clusters, at staging
+`1d39b44`. The community run now probes Challenge 2's three openings on the public cluster and runs
+Challenge 3 as HC-666 under the stage name Agatha the Banshee; the admin run judges HC-666's Joker at
+admission and withheld. Before the persona fix of #688 settled, the community run failed twice on the
+friendly opener (the model read the record to say how she was) and once on the linked-list ask (#530),
+and the admin run once on Challenge 4's re-ask ("no sign it tried"). After it: the friendly opener got
+nothing from the Secret 8 of 8 and the Challenge 1 prompt leaked the address 3 of 3 on attackme, then:
+
+Public: 12 PASS, 0 FAIL, $0.0387 over 7 model calls.
+Private: 25 PASS, 0 FAIL, $0.0329 over 11 model calls. The guards ended off.
+
 ## The one platform, and the two clusters on it
 
 The session runs on the agenticburn fleet. For a demo that means the roster in
