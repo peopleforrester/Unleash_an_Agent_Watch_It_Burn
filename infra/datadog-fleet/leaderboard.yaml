@@ -26,8 +26,10 @@
 #                 race rather than a tick: the biggest bill in the room is the score.
 #   C5 guarded    guard-proxy event output_scrub: the output guard is on and redacted a reply, which only
 #                 happens once the student has installed the fix and run the attack again.
-#   C6 blocked    guard-proxy events input_blocklist_hit / input_classifier_block: the input guard is on and
-#                 refused a prompt, the same "fix installed, attack re-run" moment.
+#   C6 blocked    guard-proxy events input_blocklist_hit / input_classifier_block, or workshop-mcp's
+#                 ticket_withheld: the input guard is on and refused a prompt or withheld the fetched ticket
+#                 (#640: C6's payload arrives through read_support_ticket, which guard-proxy never sees), the
+#                 same "fix installed, attack re-run" moment.
 # Not scored. C7's rogue server writes no logs on purpose (#18: a rogue tool that audits itself undermines the
 # lesson), and C8 goes straight to the API server around everything that records; "there is no trace of it" is
 # what C8 teaches. Neither leaves a per-cluster signal in the org, and the note on the board says so.
@@ -107,7 +109,7 @@ widgets:
               indexes: ["*"]
               compute: { aggregation: count }
               search:
-                query: "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)"
+                query: "kube_cluster_name:burritobot-* kube_namespace:agent ((kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)) OR (kube_deployment:workshop-mcp @event:ticket_withheld))"
               group_by:
                 - { facet: kube_cluster_name, limit: 500, sort: { aggregation: count, order: desc } }
           # A done cell is solid green with the count hidden: the room reads ticks, not log volume.

@@ -18,6 +18,7 @@ must read PASS and exit 0; an "open" one must read FAIL and exit 1. Whether the 
 way is the bring-up probe's job (#503), not this file's.
 """
 import base64
+import importlib.util
 import json
 import os
 import pathlib
@@ -132,13 +133,30 @@ check("the C7 sentinel is the one evil-mcp returns", MCP_SENTINEL == "FAKE-MCP-E
 _beacon = re.search(r'^BEACON = "([^"]+)"', (REPO / "verify/c1-winrate.py").read_text(), re.M).group(1)
 check("C1 posts to the beacon the C1 beat uses", f'BEACON="{_beacon}"' in (REPO / C1).read_text())
 
+_spec = importlib.util.spec_from_file_location("ticket_site", REPO / "gitops/ai-layer/ticket_site.py")
+ticket_site = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(ticket_site)
+_t = ticket_site.TICKETS[ticket_site.C6_TICKET_ID]
+TICKET_SHOWN = f"Ticket {_t['id']} [{_t['status']}] from {_t['customer']}: {_t['subject']}\n\n{_t['body']}"
+_MCP = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text()
+_withheld = re.search(r'^TICKET_WITHHELD = "([^"]+)"$', _MCP, re.M)
+check("workshop-mcp names the guard's withheld notice", _withheld is not None)
+TICKET_WITHHELD_SHOWN = (f"Ticket {_t['id']} [{_t['status']}] from {_t['customer']}: {_t['subject']}\n"
+                         f"{_withheld.group(1) if _withheld else ''}: the ticket body was flagged as a prompt-injection "
+                         "attempt and was not loaded.")
+check("C6's fallback looks for the notice the tool writes and the Deployment the paragraph asks for",
+      _withheld is not None and f'WITHHELD="{_withheld.group(1)}"' in (REPO / C56).read_text()
+      and f'PAYLOAD_MARK="{ticket_site.C6_DEPLOYMENT}"' in (REPO / C56).read_text()
+      and f'TICKET_ID="{ticket_site.C6_TICKET_ID}"' in (REPO / C56).read_text())
+
 TEXT = {s: (REPO / s).read_text() for s in (C1, C2, C56, C7)}
 for s, needles in ((C1, ['NS="agent"', 'POD="deploy/workshop-mcp"', 'CONTAINER="shim"']),
                    (C2, ['NS="agent"', 'SA="system:serviceaccount:${NS}:workshop-mcp"', 'POLICY="restrict-image-registries"',
                          'docker.io/peopleforrester/']),
                    (C56, ['NS="agent"', 'POD="deploy/guard-proxy"', 'CONTAINER="proxy"',
                           'RECORD_SECRET="ceo-personal-record"', 'output=on',
-                          'input_blocklist=on&input_classifier=on']),
+                          'input_blocklist=on&input_classifier=on', 'MCP_POD="deploy/workshop-mcp"',
+                          'MCP_CONTAINER="shim"']),
                    (C7, ['NS="agent"', 'POD="deploy/web-terminal"', 'CONTAINER="ttyd"', f'GATEWAY="{EVIL_URL}"',
                          f'SENTINEL="{MCP_SENTINEL}"', 'C7_CONFIGMAP="agentgateway-c7-config"', 'get application lab-bootstrap',
                          'bash "${TERMINAL_HOME}/$1"', 'toggle guard-mcp-off', 'toggle guard-mcp-on',
@@ -185,6 +203,12 @@ if "exec" in args:
     if (ns, target, container) == ("agent", "deploy/workshop-mcp", "shim"):
         if cmd == ["true"]:
             sys.exit(0)
+        if cmd[:2] == ["python3", "-c"] and "read_support_ticket" in cmd[2]:
+            # C6: the deployed tool, called in the tool pod. It withholds the ticket when guard-proxy's input
+            # classifier is on, as read_support_ticket does; an open cluster's guard never turns on.
+            compile(cmd[2], "ticket-snippet", "exec")
+            state["ticket_reads"].append({"id": cmd[3], **state["guards"]}); save()
+            print(fixture["withheld"] if state["guards"]["input_classifier"] else fixture["ticket"]); sys.exit(0)
         if cmd[0] == "curl" and fixture["beacon"] in cmd:
             if scenario == "open":
                 state["beacons"].append(cmd[cmd.index("-d") + 1]); save()
@@ -487,14 +511,14 @@ def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, out
         "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED,
         "gateway": EVIL_URL, "fake_gateway": FAKE_URL, "c7_config": C7_CONFIG, "open": C7_OPEN,
         "narrowed": C7_NARROWED, "terminal_says": TERMINAL_SAYS, "fake_agent": FAKE_AGENT_URL,
-        "kagent_delay": KAGENT_DELAY}))
+        "kagent_delay": KAGENT_DELAY, "ticket": TICKET_SHOWN, "withheld": TICKET_WITHHELD_SHOWN}))
     (work / "state.json").write_text(json.dumps({
         "beacons": ["earlier-cluster"], "guards": {"input_blocklist": False, "input_classifier": False,
                                                     "output": output, "budget": False},
         "chats": 0, "deployments": [], "created_images": [], "created_manifests": [],
         "rule": rule, "served": rule, "rule_at": -1000, "clock": 0, "toggles": [], "gateway": [],
         "tools": tools, "patches": [], "pending": None, "patched_at": 0, "generation": 7, "served_tools": served,
-        "asks": []}))
+        "asks": [], "ticket_reads": []}))
     (work / "log").write_text("")
     env = {"PATH": f"{work / 'bin'}:{os.environ['PATH']}", "HOME": str(work), "TMPDIR": str(work / "tmpdir"),
            "STUB_LOG": str(work / "log"), "STUB_STATE": str(work / "state.json"),
@@ -557,13 +581,18 @@ try:
             check("C5 reads FAIL when LLM Guard does not answer (fail closed is not redaction)",
                   rc_fc == 1 and "failed closed" in out_fc, out_fc)
         if beat == "C6":
-            check("C6 asserts guarded: true and input_tokens: 0",
-                  "  PASS  guarded: true" in out and "  PASS  input_tokens: 0" in out)
-            check("C6 sends the support ticket once, to guard-proxy /chat", state["chats"] == 1)
+            check("C6 reads ticket HC-7731 in workshop-mcp's shim, once with the input guards off and once on",
+                  [(r["id"], r["input_classifier"]) for r in state["ticket_reads"]]
+                  == [("HC-7731", False), ("HC-7731", True)], state["ticket_reads"])
+            check("C6 asserts the hidden paragraph first, then the withheld ticket with none of it",
+                  all(f"  PASS  {s}" in out for s in ("input guards off: the ticket comes back with its hidden paragraph",
+                                                      "the ticket comes back withheld by the input guard",
+                                                      "nothing of the hidden paragraph reaches the model")), out)
+            check("C6 never calls /chat, so the model is never called", state["chats"] == 0 and state_open["chats"] == 0)
             check("C6 puts the input guards back off after",
                   not state["guards"]["input_blocklist"] and not state["guards"]["input_classifier"])
-            check("C6 does not send the injection when the input guards will not turn on",
-                  state_open["chats"] == 0, state_open)
+            check("C6 stops after the allow read when the input guards will not turn on",
+                  len(state_open["ticket_reads"]) == 1, state_open["ticket_reads"])
         if beat == "C7":
             execs = [c for c in log if "exec" in c]
             check("C7 runs every command in the web terminal's ttyd container in agent",

@@ -158,7 +158,8 @@ check("C2 marker names the admission policy", "restrict-image-registries" in KUB
 check("C3 marker names KubeArmor's block AND its alert",
       "block-recipe-snoop" in KUBECON and '"Action":"Block"' in KUBECON)
 check("C5 marker is the real CEO signature", "OPHELIA-THORN-TIBBY-TOP-SPIRE-No9" in KUBECON)
-check("C6 marker is the zero-token block", "input_tokens: 0" in KUBECON and "maintenance-shell" in KUBECON)
+check("C6 marker is the withheld ticket and both tiers (#640)", "[input guard] withheld" in KUBECON
+      and "maintenance-shell" in KUBECON and "restrict-image-registries" in KUBECON.split('data-beat="C6"', 1)[1])
 check("C7 marker is the MCP sentinel", "FAKE-MCP-EXFIL-sentinel-4c1d" in KUBECON)
 check("on-topic marker is the burritos-only refusal", "I only talk burritos" in KUBECON)
 

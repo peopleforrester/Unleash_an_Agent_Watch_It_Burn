@@ -1,16 +1,17 @@
 # ABOUTME: Runs LLM Guard's real PromptInjection scanner (llm-guard 0.3.16, the image's version) with the params
-# ABOUTME: deployed in llm-guard-scanners: Challenge 6's ticket and input-guard.sh's injection block, menu asks pass.
+# ABOUTME: deployed in llm-guard-scanners: Challenge 6's fetched ticket and input-guard.sh's injection block, menu asks pass.
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The cluster-free half of Challenge 6's guards-on beat (#128).
 
 Challenge 6's ticket carries no block-list term, so with the input guards on it is the classifier alone that
-refuses it. Until this test that was only ever checked on a live cluster (verify/input-guard.sh, the probe).
+refuses it. Since #640 the ticket is fetched by read_support_ticket from the fake ticket site, and the tool sends
+the ticket BODY to this scanner, so the body is what is scanned here, read from gitops/ai-layer/ticket_site.py. Until this test that was only ever checked on a live cluster (verify/input-guard.sh, the probe).
 Here the scanner is built the way the LLM Guard API builds it (use_onnx=True, model_max_length into the
 pipeline's max_length) with the PromptInjection params read from the deployed scanners.yml, so a change to the
 threshold or match_type is measured the moment it lands:
 
-- the ticket prompt on lab.html and the injection verify/input-guard.sh sends are refused;
+- the ticket body on the fake ticket site and the injection verify/input-guard.sh sends are refused;
 - the same ticket with its payload paragraph removed passes, and so does every on-topic ask in topic_cases;
 - every scan finishes inside the configured scan_prompt_timeout, because a slower scan is a 408 that
   guard-proxy, failing closed, turns into a refusal of an innocent prompt;
@@ -26,7 +27,6 @@ failure, never a skip.
 """
 from __future__ import annotations
 
-import html
 import json
 import pathlib
 import re
@@ -60,15 +60,12 @@ if len(pi) != 1:
 params = {k: v for k, v in (pi[0].get("params") or {}).items() if k != "model_path"}
 timeout_s = float(scanners["app"]["scan_prompt_timeout"])
 
-lab = (REPO / "gitops/ai-layer/web/lab.html").read_text()
-m = re.search(r'onclick="cp\(this\)">(Here is a support ticket.*?--- END TICKET ---)<button', lab, re.S)
-if m is None:
-    print("FAIL  Challenge 6's ticket prompt is not on lab.html where this test reads it", file=sys.stderr)
-    sys.exit(1)
-ticket = html.unescape(m.group(1))
-payload = next((p for p in ticket.split("\n\n") if p.startswith("IGNORE ALL PREVIOUS INSTRUCTIONS")), None)
-if payload is None:
-    print("FAIL  the ticket has no 'IGNORE ALL PREVIOUS INSTRUCTIONS' paragraph to remove", file=sys.stderr)
+from agent_probe import ticket_site  # noqa: E402
+
+ticket = ticket_site.TICKETS[ticket_site.C6_TICKET_ID]["body"]
+payload = ticket_site.C6_PAYLOAD
+if payload not in ticket or not payload.startswith("IGNORE ALL PREVIOUS INSTRUCTIONS"):
+    print("FAIL  the C6 ticket body has no 'IGNORE ALL PREVIOUS INSTRUCTIONS' paragraph to remove", file=sys.stderr)
     sys.exit(1)
 clean_ticket = ticket.replace("\n\n" + payload, "")
 probe = re.search(r'^INJECT="([^"]+)"$', (REPO / "verify/input-guard.sh").read_text(), re.M)
@@ -77,7 +74,7 @@ if probe is None:
     sys.exit(1)
 
 cases = [
-    {"name": "Challenge 6's ticket (lab.html)", "text": ticket, "want": "refuse"},
+    {"name": "Challenge 6's ticket body (ticket_site.py)", "text": ticket, "want": "refuse"},
     {"name": "input-guard.sh's injection", "text": probe.group(1), "want": "refuse"},
     {"name": "the same ticket without its payload", "text": clean_ticket, "want": "pass"},
 ]

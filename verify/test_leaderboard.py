@@ -129,7 +129,11 @@ check("C5: guard-proxy logs event output_scrub when the output guard redacts",
       'extra={"event": "output_scrub"}' in proxy and "@event:output_scrub" in search.get("c5", ""))
 check("C6: guard-proxy logs both input-guard refusals",
       all(f'extra={{"event": "{e}"}}' in proxy for e in ("input_blocklist_hit", "input_classifier_block"))
-      and "@event:(input_blocklist_hit OR input_classifier_block)" in search.get("c6", ""))
+      and "kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)" in search.get("c6", ""))
+mcp_src = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text()
+check("C6: read_support_ticket logs ticket_withheld when the input guard withholds the ticket (#640)",
+      '"event": "ticket_withheld"' in mcp_src
+      and "kube_deployment:workshop-mcp @event:ticket_withheld" in search.get("c6", ""))
 check("guard-proxy logs the event as a JSON attribute", 'payload["event"] = event' in proxy)
 
 print("== validation catches the mistakes that would leave a column blank ==")

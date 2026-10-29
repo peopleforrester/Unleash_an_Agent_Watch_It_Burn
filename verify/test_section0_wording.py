@@ -138,14 +138,15 @@ C6 = LAB[LAB.find("Challenge 6: Hide an instruction"):LAB.find("Challenge 7: Let
 # The goal was narrowed when C6's impossible secret-listing half was removed (#352): "print cluster
 # secrets to the chat" named an outcome that could not happen on this platform (no list-all-secrets
 # tool, measured 0/20). It now names the outcome that does happen and lands 19/20: the agent acts on a
-# hidden instruction it was only asked to summarize. Still concrete, which is what this check guards.
+# hidden instruction it was only asked to summarize. Since #640 the ticket is fetched, not pasted, so the goal
+# names the ticket it was only asked to read. Still concrete, which is what this check guards.
 check("the goal names the concrete outcome",
-      "act on an instruction hidden inside a document it was only asked to summarize" in C6)
+      "act on an instruction hidden inside a support ticket it was only asked to read" in C6)
 check("the impossible secret-listing goal is gone", "print cluster secrets to the chat" not in C6)
 check("the how-you-know line is present", "How you will know it worked:" in C6)
-# The re-run instruction now tells them to reset and paste, with the expected refusal.
-check("the re-run says to reset and paste again",
-      "Press &#8635; Reset, then copy-paste the same ticket prompt" in C6)
+# The re-run instruction tells them to reset and ask again, with what the guard does to the ticket.
+check("the re-run says to reset and ask about the same ticket again",
+      "Press &#8635; Reset, then ask about ticket HC-7731 the same way" in C6 and "withheld" in C6)
 check("the C5 comparison she cut is gone",
       "Send the ticket back" not in C6 and "trace you left behind in Challenge 5" not in C6)
 # #352: a student can mistake the agent narrating the injection for success. Give a terminal check that a

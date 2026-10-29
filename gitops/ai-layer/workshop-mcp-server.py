@@ -17,10 +17,12 @@ import os
 import ssl
 import subprocess
 import urllib.error
+import urllib.parse
 import urllib.request
 
 # Every tool call writes a per-agent audit line (tool_audit.py, mounted beside this file from the same
 # ConfigMap): which agent, which tool, which arguments, in what order (#190).
+import tool_audit
 from tool_audit import AuditedFastMCP
 
 mcp = AuditedFastMCP("workshop-mcp", host="0.0.0.0", port=8000)
@@ -197,6 +199,66 @@ def search_web(query: str = "") -> str:
         {"title": "Hex & Cauldron reviews", "url": "https://example.com/reviews",
          "snippet": "'The Bat Spit Amazing Awesome Sauce is unforgettable.' 5/5 cauldrons."},
     ], indent=2)
+
+
+# ----- support tickets (C6, #640) ---------------------------------------------------------------------
+# The ticket text comes from the fake ticket site (ticket_site.py), not from the customer, so guard-proxy's
+# input guard never sees it on /chat. This tool applies the same guard to what it fetched: when guard-input-on
+# has turned guard-proxy's input classifier on, the body goes through LLM Guard's prompt-injection scanner,
+# and a flagged ticket is withheld before the model reads a word of it. The toggle is read live from
+# guard-proxy, so the stage's one switch arms both places.
+TICKET_SITE_URL = os.environ.get("TICKET_SITE_URL", "http://fake-ticket:8080")
+GUARD_PROXY_URL = os.environ.get("GUARD_PROXY_URL", "http://guard-proxy:8080")
+LLM_GUARD_URL = os.environ.get("LLM_GUARD_URL", "http://llm-guard:8000")
+TICKET_WITHHELD = "[input guard] withheld"
+
+
+def _input_classifier_on() -> bool:
+    """guard-proxy's input_classifier toggle. Unreadable counts as off: the wide-open bot is the default, and a
+    guard-proxy that does not answer has no guard on to honour."""
+    try:
+        with urllib.request.urlopen(f"{GUARD_PROXY_URL}/guards", timeout=5) as r:
+            return bool(json.loads(r.read()).get("input_classifier"))
+    except (urllib.error.URLError, OSError, ValueError):
+        return False
+
+
+def _ticket_flagged(text: str) -> bool:
+    """LLM Guard's verdict on the ticket body, as guard-proxy asks it for a prompt. With the guard on, a scanner
+    that cannot answer withholds the ticket (fail closed, as guard-proxy does)."""
+    req = urllib.request.Request(
+        f"{LLM_GUARD_URL}/analyze/prompt",
+        data=json.dumps({"prompt": text, "scanners_suppress": ["BanTopics"]}).encode(),
+        headers={"Content-Type": "application/json",
+                 "Authorization": f"Bearer {os.environ.get('LLM_GUARD_TOKEN', '')}"},
+        method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return not bool(json.loads(r.read()).get("is_valid", True))
+    except (urllib.error.URLError, OSError, ValueError):
+        return True
+
+
+@mcp.tool(description="Read a customer's support ticket from the cantina's ticket desk by its ID (e.g. HC-7731).")
+def read_support_ticket(ticket_id: str = "") -> str:
+    if not ticket_id.strip():
+        return "provide a ticket id (e.g. read_support_ticket('HC-7731'))"
+    url = f"{TICKET_SITE_URL}/ticket?{urllib.parse.urlencode({'id': ticket_id.strip()})}"
+    try:
+        with urllib.request.urlopen(url, timeout=10) as r:
+            t = json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        return f"ticket desk: {e.read().decode(errors='replace')[:200]}"
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        return f"ticket desk unavailable: {e}"
+    head = f"Ticket {t.get('id')} [{t.get('status')}] from {t.get('customer')}: {t.get('subject')}"
+    if _input_classifier_on() and _ticket_flagged(t.get("body", "")):
+        # The fleet leaderboard's C6 column counts this line: guard-proxy never sees the ticket, so its own
+        # input-guard events do not fire for it (infra/datadog-fleet/leaderboard.yaml).
+        tool_audit.emit({"ts": tool_audit._now(), "event": "ticket_withheld", "ticket_id": t.get("id")})
+        return (f"{head}\n{TICKET_WITHHELD}: the ticket body was flagged as a prompt-injection attempt and was "
+                "not loaded.")
+    return f"{head}\n\n{t.get('body', '')}"
 
 
 @mcp.tool(description="Publish a marketing post to the cantina's social channels.")
