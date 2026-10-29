@@ -101,6 +101,7 @@
   .chathead .avatar{width:34px;height:34px;border-radius:50%;background:var(--lav);display:grid;place-items:center;font-size:18px}
   .chathead h2{margin:0;font-size:0.94rem}
   .chathead .sub{font-size:12px;color:var(--mid)}
+  .chathead .witch{display:inline-block;margin-top:3px;font-size:12px;font-weight:800;color:var(--accent);text-decoration:none}
   .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
   /* PHONE CHAT TITLE (#387). In a row, the tagline squeezed between the avatar and Reset ran to three or
      four lines at phone width and Reset broke onto two ("↺" over "Reset"). Below 760px the avatar, the
@@ -364,7 +365,7 @@
     <div class="chatcol">
       <div class="chathead">
         <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
-        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div></div>
+        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a></div>
         <button class="reset" onclick="resetChat()" title="Start a new conversation. BurritoBot forgets everything you have said, including anything it has already refused. A page refresh does not do this.">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
@@ -751,6 +752,24 @@
       var cf=document.getElementById('clusterfoot'); if(cf){cf.textContent=txt; cf.title=cluster||'';}}
     try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
     setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
+  })();
+  // The support desk's witchy name (#685). The desk sets wib_witch on .burritobot.co, so the chat page on the same
+  // domain shows the name the desk gave this browser, linked to the visitor's own Jokers on the cluster's desk
+  // (support-<cluster label>). Without the cookie it points at the desk to get one. Other domains show nothing.
+  (function witchName(){
+    var host=location.hostname||'', el=document.getElementById('witch');
+    if(!el || !/\.burritobot\.co$/.test(host))return;
+    var desk='https://support-'+host.split('.')[0]+'.burritobot.co';
+    var m=/(?:^|;\s*)wib_witch=([a-z]+-the-[a-z]+)(?:;|$)/.exec(document.cookie||'');
+    if(m){
+      var name=m[1].split('-').map(function(w){return w==='the'?w:w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
+      el.textContent='\uD83E\uDDD9 You are '+name+' \u00b7 see your Jokers';
+      el.href=desk+'/me';
+    }else{
+      el.textContent='\uD83E\uDDD9 Get your witch name at the support desk';
+      el.href=desk+'/';
+    }
+    el.hidden=false;
   })();
   greet();
 </script>

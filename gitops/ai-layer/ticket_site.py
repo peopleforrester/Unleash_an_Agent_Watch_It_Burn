@@ -18,6 +18,7 @@ import html
 import json
 import logging
 import os
+import re
 import secrets
 import threading
 import time
@@ -236,8 +237,29 @@ def who_deployed(name: str) -> str:
     return "an unnamed Joker"
 
 
+# The wall is read by a room, so a refusal is one sentence, never the API server's message.
+REFUSED_REGISTRY = ("Refused at admission: restrict-image-registries allows only images from approved registries, "
+                    "and this Joker's image is not from one.")
+
+
+def plain_refusal(detail: str) -> str:
+    """One sentence for what deploy_app reported ("HTTP <code>: <the API server's message>")."""
+    if not detail:
+        return ""
+    if "restrict-image-registries" in detail:
+        return REFUSED_REGISTRY
+    policy = re.search(r"Policy ([a-z0-9][a-z0-9-]*) failed", detail)
+    if policy:
+        return f"Refused at admission by the cluster policy {policy.group(1)}."
+    if "forbidden" in detail.lower():
+        return "Refused: the bot's ServiceAccount is not allowed to create that."
+    code = re.match(r"HTTP (\d{3})", detail)
+    return f"Refused by the cluster (HTTP {code.group(1)})." if code else "Refused by the cluster."
+
+
 def record_landing(name: str, ok: bool, detail: str) -> dict:
-    row = {"name": name[:63], "who": who_deployed(name), "ok": bool(ok), "detail": str(detail)[:200],
+    row = {"name": name[:63], "who": who_deployed(name), "ok": bool(ok),
+           "detail": "" if ok else plain_refusal(str(detail)[:400]),
            "at": time.strftime("%H:%M:%S"), "ts": time.time()}
     with _lock:
         LANDINGS.insert(0, row)

@@ -67,7 +67,12 @@ def fake_req(method: str, path: str, body=None, content_type: str = "application
         return 200, json.dumps({"resources": [{"kind": "Deployment", "name": "deployments"}]})
     calls.append((method, path.split("?")[0], json.loads(body) if body else {}))
     if status["code"] >= 400:
-        return status["code"], '{"message":"admission webhook denied: restrict-image-registries"}'
+        # The API server's own Status body for a Kyverno deny, as the private cluster returns it.
+        return status["code"], json.dumps({
+            "kind": "Status", "apiVersion": "v1", "metadata": {}, "status": "Failure",
+            "message": 'admission webhook "vpol.validate.kyverno.svc-fail" denied the request: Policy '
+                       "restrict-image-registries failed: image docker.io/peopleforrester/joker:latest is not from "
+                       "an allowed registry", "reason": "Forbidden", "code": 403})
     return status["code"], "{}"
 
 
@@ -132,9 +137,10 @@ print("== a refusal is reported as refused ==")
 status["code"] = 403
 reply = m.deploy_app(joker(f"joker-{site.slug(site.NAME_SPACE[1])}"))
 check("deploy_app says it failed", "deploy failed" in reply, reply)
-check("the wall shows the refusal with the admission message",
-      wait_for(lambda: any(r["who"] == site.NAME_SPACE[1] and not r["ok"] and "restrict-image-registries" in r["detail"]
-                           for r in wall())))
+refused = lambda: [r for r in wall() if r["who"] == site.NAME_SPACE[1] and not r["ok"]]  # noqa: E731
+check("the wall shows the refusal", wait_for(lambda: bool(refused())))
+check("as one plain sentence naming the policy, not the API server's JSON (#685)",
+      bool(refused()) and refused()[0]["detail"] == site.REFUSED_REGISTRY, str(refused()[:1]))
 
 print("== a desk that does not answer never fails a deploy ==")
 status["code"] = 201

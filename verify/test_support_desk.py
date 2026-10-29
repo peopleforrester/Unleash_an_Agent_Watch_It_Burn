@@ -148,6 +148,20 @@ check("a generated name shows as that witch", any(r["who"] == na and r["ok"] for
 check("a name the desk never generated shows as an unnamed Joker",
       any(r["who"] == "an unnamed Joker" for r in rows) and not any("not-a-generated" in r["who"] for r in rows))
 check("a refusal shows as refused", any(r["who"] == nb and not r["ok"] for r in rows))
+print("== a refusal reads as one sentence (#685) ==")
+for raw, want in [
+    ('HTTP 403: admission webhook "vpol.validate.kyverno.svc-fail" denied the request: Policy restrict-image-registries '
+     "failed: image docker.io/peopleforrester/joker:latest is not from an allowed registry", site.REFUSED_REGISTRY),
+    ('HTTP 403: admission webhook "vpol.validate.kyverno.svc-fail" denied the request: Policy require-resource-limits '
+     "failed: cpu limit missing", "Refused at admission by the cluster policy require-resource-limits."),
+    ('HTTP 403: deployments.apps is forbidden: User "system:serviceaccount:agent:workshop-mcp" cannot create',
+     "Refused: the bot's ServiceAccount is not allowed to create that."),
+    ("HTTP 500: something broke", "Refused by the cluster (HTTP 500)."),
+    ("", ""),
+]:
+    check(f"{raw[:40]!r} reads {want!r}", site.plain_refusal(raw) == want, site.plain_refusal(raw))
+check("every sentence ends with a full stop and carries no JSON or quotes",
+      all(s.endswith(".") and "{" not in s and '\\"' not in s for s in (site.REFUSED_REGISTRY,)))
 check("the wall page polls the feed", "wall.json" in a.get("/wall")[1])
 _, me = a.get("/me")
 check("/me shows the visitor's own Joker", f"joker-{slug_a}" in me and "landed" in me.lower())

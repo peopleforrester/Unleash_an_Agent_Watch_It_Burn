@@ -425,13 +425,22 @@ def _shrink_room_joker(obj: dict, name: str) -> None:
             c["resources"] = json.loads(json.dumps(JOKER_RESOURCES))
 
 
+def _status_message(body: str) -> str:
+    """The API server's Status message, which names the policy that refused, rather than its JSON wrapper."""
+    try:
+        msg = json.loads(body).get("message")
+    except (ValueError, AttributeError):
+        msg = None
+    return str(msg or body)
+
+
 def _report(name: str, ok: bool, detail: str) -> None:
     """Tell the support desk what was deployed, for its wall and the visitor's /me. Best effort: a desk that does not
     answer never changes what deploy_app returns."""
     def send() -> None:
         try:
             req = urllib.request.Request(f"{TICKET_SITE_URL}/landed", method="POST",
-                                         data=json.dumps({"name": name, "ok": ok, "detail": detail[:200]}).encode(),
+                                         data=json.dumps({"name": name, "ok": ok, "detail": detail[:400]}).encode(),
                                          headers={"Content-Type": "application/json"})
             urllib.request.urlopen(req, timeout=3).read()
         except (urllib.error.URLError, OSError, ValueError) as e:
@@ -476,7 +485,7 @@ def deploy_app(manifest: str = "") -> str:
         return f"unknown resource for apiVersion={api_version} kind={kind}"
     path = f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp&force=true"
     code, body = _req("PATCH", path, body=json.dumps(obj), content_type="application/apply-patch+yaml")
-    _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {body[:160]}")
+    _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}")
     if code in (200, 201) and kind == "Deployment" and name.startswith(JOKER_PREFIX):
         t = threading.Timer(JOKER_SCALE_DOWN_SECONDS, _scale_to_zero, args=(base, ns, plural, name))
         t.daemon = True
