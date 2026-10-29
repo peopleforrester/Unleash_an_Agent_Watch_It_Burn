@@ -3308,3 +3308,32 @@ body from `ticket_site.py`, which is what the tool sends to the scanner.
 `CONTEXT=<private-context> challenges/02-sanitization/fallback.curl.sh input`; and `bash verify/run-e2e-tools.sh`'s
 `test_injection_classifier.py`, which measures the new payload against the deployed classifier. The landing rate
 of the two-tool-call injection on Nova is unmeasured.
+## 2026-10-29 · #644 · Load test one public cluster at 500 users: the replay harness built, the run waits for a go
+
+The 2026-10-28 planning call agreed to load test one public cluster at 500 users by replaying the last delivery's
+recorded prompts. Built offline: `scripts/load-replay.py`, the record `facilitation/kubecon-na-2026-load-test.md`
+(method, the limits the configuration predicts, a Results section), `verify/test_load_replay.py` and
+`verify/test_load_replay_live.py`.
+
+- **The recording is the Portland harvest**, `.harvest/devopsdays-portland/prompts/`, which
+  `scripts/harvest/run.sh` wrote from each cluster's Datadog spans. Only each span's last user entry is the
+  turn's prompt (the earlier entries are the conversation's history), one turn's several spans give one prompt,
+  and earlier probes are dropped. The harvest stays gitignored, so the run happens where the harvest is.
+- **No attendee text leaves the recording.** The results name a prompt by its index and a 10-hex-digit hash and
+  keep no reply, so `requests.jsonl`, `summary.json` and `summary.md` can be committed. Every replayed prompt
+  carries guard-proxy's `[[wib-probe]]` marker by default, which keeps the Portland text off the side-screen feed
+  and the prompt wall; `--on-wall` sends it bare.
+- **One user is one session**, started across a 60-second ramp, sending 3 prompts with 20 seconds of reading
+  between them. Neighbouring prompts of one recorded cluster go to the same user.
+- **Refusals are results, not stops.** guard-proxy answers its cluster window, its per-conversation limit and its
+  cost backstop with HTTP 200 and canned replies, so the harness tells them apart by guard-proxy's own words
+  (the offline test checks them against `proxy.py` and provokes each on its real handler on loopback). New turns
+  stop only at `--duration` (900 s) or once replies report `--budget-usd` (`$10`), which is below the cluster's
+  `$25` backstop.
+- **The target is required**, as in #452's replay: a load test that guessed its cluster could saturate the wrong
+  one. After a run on a cluster the room will use, `fleet.sh reset-bot` zeroes its counter.
+- **Standard library only**, one thread per user. The offline test sends 500 concurrent users through the real
+  handler in a few seconds, so the generator is not the bottleneck. No new dependency.
+- **Not yet run on a cluster.** `verify/test_load_replay_live.py` (two users, one turn each, from a synthetic
+  two-prompt recording) has not run, and the 500-user run itself has not run. It needs a public cluster, the
+  Portland harvest and Michael's go for the Bedrock spend. Its summary goes under Results in the record.
