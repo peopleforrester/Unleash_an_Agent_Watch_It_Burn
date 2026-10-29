@@ -66,7 +66,10 @@ check("it gives them a command to tell the difference", "kubectl get pods -A" in
 print("== the burn profile really does omit these, so the page is telling the truth ==")
 check("no prometheus in the burn profile", "prometheus" not in BURN)
 check("no grafana in the burn profile", not any("grafana" in a for a in BURN))
-check("no argocd app in the burn profile's list", not any("argocd" in a for a in BURN))
+# Argo CD is the engine every profile is applied through (lab-bootstrap is an Argo CD Application), so it runs on
+# AttackMe too. The page said otherwise until #381: on 2026-10-29 argocd-attackme answered Argo CD's own /api/version
+# (v3.5.2) while grafana-attackme showed this page, which told the visitor Argo CD was not there.
+check("the page does not say AttackMe has no Argo CD", re.search(r"deliberately runs no[^:]*Argo CD", body) is None)
 check("but Datadog IS there, or the page would be sending them nowhere",
       "datadog-agent-cr" in BURN and any(a.startswith("otel-collector") for a in BURN))
 

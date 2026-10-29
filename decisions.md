@@ -4609,3 +4609,41 @@ then `infra/terraform/fleet/fleet.sh monitors --check` (#485).
 committed and no log kept. The issue's repo work was already merged, so that run had nothing to change, and the
 long silent step was most likely the offline suite run in the foreground (it takes several minutes over 180+
 tests). This run ran the suites in the background, writing to a log it polled.
+## 2026-10-29 · #381 · Grafana and Argo CD answer through the router; Backstage and Loki are held to "routed exactly when deployed"; the AttackMe page stops denying Argo CD
+
+**Why:** test review run 6958 found no test on #381's Backstage URL. The earlier run (2c94038) fixed what the console
+pages handed out but could not reproduce the 9-08 failure, because no cluster was up.
+
+**Measured live on 2026-10-29**, with read-only GETs through the apex router, while the community (AttackMe, burn
+profile) and shared admin (burritobot-private) clusters were routed in apex-agenticburn's `routes.map`:
+
+- burritobot-private, on both domains: Grafana's `/api/health` answers (`"database": "ok"`, 13.2.2), `/` sends
+  you to `/login` and the login page is 200. Argo CD's `/api/version` answers v3.5.2. Both URLs work.
+- attackme: Argo CD's `/api/version` answers v3.5.2. Grafana shows the console's "not on this cluster" page. That
+  is by design (#341): the burn profile installs no Grafana. But the page said AttackMe "deliberately runs no
+  Prometheus, Grafana or Argo CD", and Argo CD runs on every profile, because lab-bootstrap is an Argo CD
+  Application. The page now names only Prometheus and Grafana.
+  `verify/test_console_service_vhosts.py` checked "no argocd app in the burn profile's list" as proof of the old
+  wording. That proved nothing about the engine, and the check is replaced by one that the page does not say so.
+- `loki-` and `backstage-` on both clusters: the router's own 404 ("no cluster here yet"). Neither has a row.
+- provisioning-agenticburn hands out only `grafana_url` and `argocd_url` (`scripts/harvest_cluster_access.sh`).
+  It builds `grafana-<label>` for any cluster whose console answers, the community cluster included (its
+  `test_app.py` asserts `grafana-attackme`). On AttackMe that link lands on the explainer page. That is a
+  follow-up for that repo, not a change here.
+
+**What it changes:**
+
+- `verify/test_service_links.py` gains a Backstage and Loki section. It reads which profiles deploy each one
+  (`bootstrap_chart.app_names`). When a profile deploys it, fleet.sh must publish `<svc>-<cluster>`, the console's
+  nginx must route it, and both console pages must link it. When nothing deploys it, nothing may route it, and no
+  console page or script, terminal entrypoint or `challenges/LAB-TEXT.md` may hand out a `<svc>-` host. Today both
+  are undeployed: Loki was dropped (#474) and Backstage waits in `gitops/apps-disabled` for #244. When #244 lands,
+  the same check requires the route and the links. Mutation-checked: a backstage address in the lab text, a loki
+  address in links.html, backstage added to `WIB_SERVICE_HOSTS` alone, and backstage added to the attendee
+  profile alone each fail.
+- `verify/test_service_hosts_live.py` probes `backstage-<host>` and `loki-<host>` while neither is published, and
+  expects the router's 404 rather than the storefront or the not-installed page.
+
+**Not yet run on a cluster:** `CONTEXT=<attendee context> python3 verify/test_service_hosts_live.py` (through
+`bash verify/run-e2e.sh`) on a fresh attendee cluster. No attendee cluster was up. The figures above come from the
+admin and community clusters, probed by hand with curl.

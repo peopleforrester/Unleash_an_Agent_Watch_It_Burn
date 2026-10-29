@@ -157,6 +157,17 @@ for label in labels:
     why = hop(status, body, f"{ns}/{svc}")
     check(f"{label}: https://{label}-{host}/ reaches it", not why, why)
 
+print("== Backstage and Loki: the router's own 404 while nothing deploys them ==")
+# The other two URLs #381 named. Once a profile deploys one, fleet.sh publishes it and the loop above probes it
+# (test_service_links.py holds that offline); until then the honest answer is the router's "no cluster here yet",
+# not the storefront or a not-installed page that sends somebody hunting for a broken Backstage.
+for svc in ("backstage", "loki"):
+    if svc in labels:
+        continue
+    status, body = fetch(f"https://{svc}-{host}/")
+    check(f"{svc}: https://{svc}-{host}/ is the router's 404, since no row publishes it",
+          status == 404 and APEX_UNKNOWN in body, f"HTTP {status}: {hop(status, body, svc) or body[:160]}")
+
 print("== Grafana works past its front page, and fronts Prometheus and Tempo ==")
 status, body = fetch(f"https://grafana-{host}/api/health")
 check("Grafana's /api/health answers through its hostname", status == 200 and '"database"' in body,

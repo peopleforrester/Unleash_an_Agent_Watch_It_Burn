@@ -9,7 +9,9 @@ work. Three of those failures were in what these pages handed out, not in the ro
 - Loki, Prometheus and Tempo were offered as a `kubectl port-forward`. In a browser terminal that listens
   inside the terminal pod, so the localhost URL it promises never opens on the student's laptop. Those
   three have no login and are deliberately not published (#233); Grafana is how a browser reaches them.
-- Backstage has no host because nothing deploys it yet (#244, which adds backstage-<cluster>).
+- Backstage and Loki have no host because nothing deploys them: Loki was dropped (#474), and Backstage waits
+  in gitops/apps-disabled for #244, which adds backstage-<cluster> with the app. Their check holds both
+  states: no address handed out while undeployed, and routed and linked once a profile deploys it.
 
 Three lists name the service hosts and must agree: fleet.sh WIB_SERVICE_HOSTS (the routes table rows),
 the console's nginx map, and its server_name. A label in one and not the others is a host that 404s at the
@@ -25,6 +27,9 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+from bootstrap_chart import app_names, profiles  # noqa: E402
+
 FLEET = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 CONF = (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8")
 WEB = REPO / "gitops/ai-layer/web"
@@ -118,6 +123,34 @@ for name, text in (("links.html", LINKS), ("platform.html", PLATFORM)):
     check(f"{name} builds the Explore URL Grafana 10+ reads (schemaVersion 1, panes)",
           "explore?schemaVersion=1&orgId=1&panes=" in text and "encodeURIComponent(JSON.stringify(" in text)
     check(f"{name} derives the host from the address bar", "location.hostname" in text)
+
+print("== Backstage and Loki: a host is handed out exactly when an app deploys it ==")
+# #381 named four URLs. Grafana and Argo CD are above. The other two had no row in the routes table, so the router
+# answered its own 404: Loki because it was dropped (#474), Backstage because nothing deploys it (it sits in
+# gitops/apps-disabled until #244). Handing out either address then is the 9-08 failure. Deploying one without
+# routing it is the same failure the other way round, and #244 adds backstage-<cluster> with the app.
+# Everything a student is handed an address from: the console pages, the terminal's commands, the lab text.
+HANDED = {p.relative_to(REPO).as_posix(): p.read_text(encoding="utf-8") for p in
+          [*sorted(WEB.glob("*.html")), *sorted(WEB.glob("*.js")),
+           REPO / "gitops/ai-layer/web-terminal/entrypoint.sh", REPO / "images/web-terminal/entrypoint.sh",
+           REPO / "challenges/LAB-TEXT.md"]}
+deployed_by = {p: set(app_names(p)) for p in profiles()}
+for svc in ("backstage", "loki"):
+    on = sorted(p for p, apps in deployed_by.items() if svc in apps)
+    in_routes, in_map = svc in routed, svc in mapped
+    if on:
+        check(f"{svc} is deployed on {on}, so fleet.sh publishes {svc}-<cluster>", in_routes)
+        check(f"{svc}: the console's nginx routes {svc}-<cluster>", in_map)
+        check(f"{svc}: the console pages link it", svc in page_svcs and svc in link_svcs,
+              f"platform={svc in page_svcs} links={svc in link_svcs}")
+        continue
+    check(f"{svc} is deployed on no profile, so fleet.sh publishes no {svc}-<cluster> row", not in_routes)
+    check(f"{svc}: the console's nginx has no vhost for it", not in_map and svc not in named)
+    for name, text in HANDED.items():
+        # A host anywhere in what a student reads: {svc}-<cluster>, {svc}-${host}, {svc}-' + host, https://{svc}.
+        hit = re.search(rf"(?<![\w-]){svc}-(?:\$|\{{|<|'|\"|[a-z0-9-]+\.(?:agenticburn\.com|burritobot\.co))"
+                        rf"|https?://{svc}[.-]", text)
+        check(f"{svc}: {name} hands out no {svc} address", hit is None, hit.group(0) if hit else "")
 
 print()
 if failures:
