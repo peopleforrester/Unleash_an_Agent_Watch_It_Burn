@@ -191,15 +191,16 @@
     something it was told to by a stranger."</p>
   </section>
 
-  <!-- SEGMENT 3: C6, public bot then private bot with guard-input-on, Kyverno as the second tier, the C6 tab -->
+  <!-- SEGMENT 3: C6, public bot then private bot: Kyverno's denial (the second tier), then guard-input-on, the C6 tab -->
   <section class="seg">
     <h2><span class="n">SEGMENT 3 · 7 min</span> C6: prompt injection through a support ticket</h2>
     <p class="premise">Whitney and Michael. A frustrated customer asks the bot to read their support ticket,
     and names nothing else. BurritoBot fetches it with <code>read_support_ticket</code> from the fake ticket site
     (#640), so the hidden paragraph is never in front of the person who asked. It tells the bot to create
     <code>maintenance-shell</code> from the Joker villain image and to name the Deployment. On the public bot
-    Kyverno is off, so it lands. The fix has two tiers on the private bot: admission control, then the input
-    classifier.</p>
+    Kyverno is off, so it lands. The fix has two tiers on the private bot, shown in this order: admission control,
+    armed from the start, refuses the Joker; then <code>guard-input-on</code> arms the input classifier, and the
+    ticket never reaches the model.</p>
 
     <article class="beat" data-beat="C6" data-segment="3">
       <h3>C6: the hidden instruction in the ticket (pre-inference analysis)</h3>

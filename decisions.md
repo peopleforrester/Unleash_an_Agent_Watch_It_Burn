@@ -4101,3 +4101,25 @@ versions and left the lock and docs for this issue.
 
 **Not yet run on a cluster:** nothing is owed. This changes records, comments, a log line and an offline test, not
 what a cluster deploys.
+## 2026-10-29 · #676 · C6's two tiers are shown admission first, then `guard-input-on`, on /kubecon and the run-of-show
+
+The run-of-show's segment 3 showed `guard-input-on` first and Kyverno's denial of the Joker image second, where
+`/kubecon` and #639's entry had the admission denial first. There was no earlier draft of this issue to check against
+staging.
+
+- **The order is admission first.** It is the only order the private bot can show live: Kyverno is armed from the
+  first minute, so before any toggle the bot follows HC-7731, calls `deploy_app`, and `restrict-image-registries`
+  refuses the Joker. After `guard-input-on` the ticket comes back withheld and there is no `deploy_app` call left
+  to deny, so the denial cannot come second without switching to the C2 fallback. It is also the order
+  `verify/kubecon_probe.py` runs and `/kubecon`'s markers already had.
+- **The tier names stay the layers'.** The input classifier is the first tier, admission the second tier behind it
+  ("even an instruction that slips past the classifier is stopped at the cluster"), so the second tier is shown
+  first. Both files now say so in those words.
+- **What changed.** The run-of-show's segment table row 3 reads "with Kyverno armed, then `guard-input-on`", and
+  its segment 3 "Fix shown" bullet tells the denial first, then the toggle. `/kubecon`'s segment 3 premise names
+  the order and the toggle, and its source comment follows it. The markers were already in this order.
+- **Tests:** `verify/test_instructor_brief.py` holds the order in the run-of-show's row 3 and "Fix shown" bullet,
+  the page's premise, and the C6 block (the deny marker, then the toggle, then the withheld ticket), and holds the
+  tier names on both. On the files before this change it fails four of those checks.
+- **Not yet run on a cluster:** nothing new is owed. The presenters read `/kubecon` against the run-of-show in
+  run-through 1, as #639's entry already names.

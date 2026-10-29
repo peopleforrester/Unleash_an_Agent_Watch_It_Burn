@@ -200,6 +200,35 @@ for b in ("C5", "C6", "C7"):
     check(f"{b} is played on the public bot and fixed on the private bot",
           "public bot" in blk and "private bot" in blk)
     check(f"{b} names its Datadog tab", f"Datadog {b} tab" in blk)
+# C6's two tiers are shown in one order on both pages (#676): Kyverno is armed from the start, so the private bot's
+# deploy_app is refused at admission before guard-input-on, and after the toggle there is no deploy_app call left to
+# deny. That is the order the probe runs (verify/kubecon_probe.py). The tier names stay the layers': the input
+# classifier is the first tier, admission the second, behind it.
+_ros_seg3 = ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
+_ros_fix = " ".join(_ros_seg3.split("- **Fix shown", 1)[1].split("\n- **", 1)[0].split())
+_ros_row3 = next((ln for ln in ROS.splitlines() if ln.startswith("| 3 | ")), "")
+_page_seg3 = " ".join(KUBECON.split('<span class="n">SEGMENT 3', 1)[1].split('<span class="n">SEGMENT 4', 1)[0].split())
+_c6 = " ".join(" ".join(beat_blocks.get("C6", [])).split())
+_premise = _page_seg3.split('<p class="premise">', 1)[1].split("</p>", 1)[0] if '<p class="premise">' in _page_seg3 else ""
+
+
+def _before(text: str, first: str, then: str) -> bool:
+    return first in text and then in text and text.index(first) < text.index(then)
+
+
+check("the run-of-show's segment 3 row puts Kyverno before guard-input-on",
+      _before(_ros_row3, "Kyverno armed", "`guard-input-on`"))
+check("the run-of-show's C6 fix shows the admission denial, then guard-input-on",
+      _before(_ros_fix, "denies the Joker image at admission", "Then `guard-input-on`"))
+check("the run-of-show names admission the second tier and the input classifier the first",
+      _before(_ros_fix, "That is the second tier", "`guard-input-on`, the first tier"))
+check("the page's C6 premise puts admission control before guard-input-on",
+      _before(_premise, "admission control", "guard-input-on"))
+check("the page's C6 block shows the admission deny, then the toggle, then the withheld ticket",
+      _before(_c6, "restrict-image-registries</code>", 'class="toggle"')
+      and _before(_c6, 'class="toggle"', "[input guard] withheld"))
+check("the page names the before-toggle marker the second tier and the after-toggle one the first",
+      _before(_c6, "before the toggle (the second tier)", "after the toggle (the first tier)"))
 check("C6's admission tier names the C2 fallback, not the retired workshop Beat 1 (#499)",
       "challenges/c2-villain-image/fallback.kubectl.sh" in " ".join(beat_blocks.get("C6", []))
       and "01-cncf-wall" not in KUBECON)

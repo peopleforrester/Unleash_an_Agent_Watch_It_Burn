@@ -276,7 +276,7 @@ the three minutes of play there is no hands-on, so the other beats give way firs
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
 | 2 | 7 | M+W | C5: the public bot, then the private bot with `guard-output-on`, then the Datadog C5 tab | Pulls the CEO's home address out of the bot | 4, 5, 9 |
-| 3 | 7 | W+M | C6: the public bot, then the private bot with `guard-input-on` and Kyverno armed, then the Datadog C6 tab | Asks the bot to read a support ticket | 4, 5, 6 |
+| 3 | 7 | W+M | C6: the public bot, then the private bot with Kyverno armed, then `guard-input-on`, then the Datadog C6 tab | Asks the bot to read a support ticket | 4, 5, 6 |
 | 4 | 7 | M+W | C7: the public bot, then the private bot with `guard-mcp-on`, then the Datadog C7 tab | Asks for the weather | 2, 4, 6 |
 | 5 | 2 | W | The trace walk-through on the room's own prompts. Cut first if behind | Watches | 7 |
 | 6 | 4 | M+W | The layers by voice, `guard-topic-on`, the close | Watches | 3, 5, 8 |
@@ -371,14 +371,17 @@ the deployment lands, and the bot names it.
   page there. It goes live once the serving Joker image is pushed to Docker Hub
   and `fleet.sh routes roster` has published the row; until then the address
   says nothing is running there yet.
-- **Fix shown, two tiers, on the private bot:** `guard-input-on`, and the input
-  classifier flags the ticket's hidden instruction before the model reads it: the
-  same toggle arms the check inside `read_support_ticket`, which withholds a
-  flagged ticket. The prompt itself is innocent, so the model is still called to
-  fetch the ticket; what it never sees is the payload. Then the second tier: even
-  an instruction that slips past is stopped at the cluster, because Kyverno's
-  registry allow-list denies the Joker image at admission. Read the deny message
-  aloud. Say "deterministic" only for the admission rule, never for the classifier.
+- **Fix shown, two tiers, on the private bot, admission first (#676):** Kyverno is
+  armed from the start, so before any toggle the bot follows the ticket, calls
+  `deploy_app`, and the registry allow-list denies the Joker image at admission.
+  Read the deny message aloud. That is the second tier: even an instruction that
+  slips past the classifier is stopped at the cluster. Then `guard-input-on`, the
+  first tier: the input classifier flags the ticket's hidden instruction before the
+  model reads it, because the same toggle arms the check inside
+  `read_support_ticket`, which withholds a flagged ticket. The prompt itself is
+  innocent, so the model is still called to fetch the ticket; what it never sees
+  is the payload, so there is no `deploy_app` call left to deny. Say
+  "deterministic" only for the admission rule, never for the classifier.
 - **Datadog C6 tab:** the `read_support_ticket` call returning the guard's
   withheld notice with no `deploy_app` after it, and the admission denial.
 - **Delivers:** point 4, point 5 (admission control), and point 6 (pre-inference
