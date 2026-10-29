@@ -14,7 +14,7 @@ ACTION="Deny"
 [[ "${1:-}" == "--audit" ]] && ACTION="Audit"
 
 # Both policies are flipped together: the resource-limits wall (beat-1) and the registry allow-list that
-# blocks the C2 villain image (docker.io/peopleforrester/<villain>). ArgoCD ignoreDifferences covers both
+# blocks the C2 villain image (ghcr.io/peopleforrester/lab-platform/promo/<villain>). ArgoCD ignoreDifferences covers both
 # /spec/validationActions fields, so selfHeal does not revert the live flip.
 for pol in require-resource-limits restrict-image-registries; do
   echo "==> Setting ${pol} validationActions to [${ACTION}]"

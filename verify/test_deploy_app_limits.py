@@ -68,7 +68,7 @@ def deploy(obj: dict, as_yaml: bool = False) -> dict:
     return sent[0] if sent else {}
 
 
-VILLAIN = "docker.io/peopleforrester/promo-mascot:latest"
+VILLAIN = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
 
 
 def villain(resources: dict | None = None, kind: str = "Deployment") -> dict:

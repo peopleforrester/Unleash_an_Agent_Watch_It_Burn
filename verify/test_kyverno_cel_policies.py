@@ -65,7 +65,7 @@ USERS = {
 
 TRACKED = {"argocd.argoproj.io/tracking-id": "ai-layer:apps/Deployment:agent/guard-proxy"}
 LIMITS = {"limits": {"cpu": "100m", "memory": "64Mi"}}
-VILLAIN = "docker.io/peopleforrester/promo-mascot:latest"
+VILLAIN = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
 SIGNED = ("ghcr.io/peopleforrester/watch-it-burn:busybox-1.36"
           "@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662")
 
@@ -150,6 +150,13 @@ g = run(REG, [pod("villain", "agent", [c(VILLAIN)]),
                                       c("registry.k8s.io/pause:3.9", name="e")]),
               pod("spoofed-ecr", "apps", [c("evil.example/x.dkr.ecr.y.amazonaws.com/z:1")]),
               pod("docker-user", "apps", [c("docker.io/someone/nginx:1")]),
+              pod("lab-platform", "apps", [c("ghcr.io/peopleforrester/lab-platform/web:v1"),
+                                          c("ghcr.io/peopleforrester/lab-platform/mirror/mcp/grafana:latest-208f8ea16064",
+                                            name="d")]),
+              pod("promo-via-ecr", "agent",
+                  [c("123456789012.dkr.ecr.us-west-2.amazonaws.com/ghcr/peopleforrester/lab-platform/promo/joker:v1")]),
+              pod("promo-beside-ok", "agent", [c(), c("ghcr.io/peopleforrester/lab-platform/promo/joker:v1", name="d")]),
+              pod("old-villain", "agent", [c("docker.io/peopleforrester/promo-mascot:latest")]),
               pod("elsewhere", "default", [c(VILLAIN)])])
 expect("the villain Pod in agent fails with the named message", g, "villain", "fail", REG_MSG)
 expect("the villain DEPLOYMENT fails too (autogen), so deploy_app is refused at the Deployment",
@@ -158,6 +165,11 @@ expect("every ai-layer registry passes", g, "ai-layer", "pass")
 expect("docker.io/library, ECR and registry.k8s.io pass in apps", g, "apps-ok", "pass")
 expect("an ECR-looking path on another host does not pass as ECR", g, "spoofed-ecr", "fail", REG_MSG)
 expect("a docker.io user namespace is not docker.io/library", g, "docker-user", "fail", REG_MSG)
+# #653: the villain is on ghcr.io, which stays allowed, so the refusal is the promo/ path and only that path.
+expect("lab-platform's other ghcr.io paths (web, mirror/) still pass", g, "lab-platform", "pass")
+expect("the promo/ path is refused through an ECR pull-through cache too", g, "promo-via-ecr", "fail", REG_MSG)
+expect("one promo/ container fails a Pod whose other containers pass", g, "promo-beside-ok", "fail", REG_MSG)
+expect("the old Docker Hub villain is still refused", g, "old-villain", "fail", REG_MSG)
 expect("namespaces other than apps and agent are out of scope", g, "elsewhere", "ignored")
 g = run(REG, [pod("villain", "agent", [c(VILLAIN)])], operation="UPDATE")
 expect("an UPDATE to a Pod that already violated passes (the old allowExistingViolations)", g, "villain", "pass")

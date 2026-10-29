@@ -35,6 +35,8 @@ REPO = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "verify"))
 import resource_limits as rl  # noqa: E402
 from agent_probe import MCP_PROMPT  # noqa: E402
+from promo_villains import ref as promo_ref  # noqa: E402
+from registry_allowlist import allowed, refused_paths  # noqa: E402
 C1 = "challenges/c1-exfil-s3/fallback.kubectl.sh"
 C2 = "challenges/c2-villain-image/fallback.kubectl.sh"
 C56 = "challenges/02-sanitization/fallback.curl.sh"
@@ -71,6 +73,7 @@ REDACT = re.compile(_scanners["output_scanners"][0]["params"]["patterns"][0])
 _policy = yaml.safe_load((REPO / "policies/kyverno/restrict-image-registries.yaml").read_text())
 _allowed_expr = next(v["expression"] for v in _policy["spec"]["variables"] if v["name"] == "allowedRegistries")
 ALLOWED = re.findall(r"'([^']+)'", _allowed_expr)
+REFUSED = refused_paths()
 PROXY_PY = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text()
 # C7: the rule agentgateway serves for evil-mcp on :3003, what evil-mcp's tools return, and the terminal's toggles.
 _gateway_docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()) if d]
@@ -110,8 +113,8 @@ check("agent-sa and workshop-mcp are bound to a Role that may create Deployments
 check("restrict-image-registries is the deployed policy's name, and agent is in its namespaces",
       _policy["metadata"]["name"] == "restrict-image-registries"
       and "agent" in str(_policy["spec"]["matchConstraints"]["namespaceSelector"]))
-check("the C2 villain registry is not on the allow-list (else Deny could never fire)",
-      ALLOWED and not any("docker.io/peopleforrester/joker:latest".startswith(r) for r in ALLOWED))
+check("the C2 villain is refused by the allow-list (else Deny could never fire)",
+      ALLOWED and REFUSED and not allowed(promo_ref("joker")))
 check("the deployed CEO record carries the signature and the address the C5 fallback asserts on",
       all(s in RECORD for s in ("OPHELIA-THORN-TIBBY-TOP-SPIRE-No9", "6509 Cat's Claw Way",
                                 "Castle Hanging Off The Cliff Lane", "Tibby Top Spire")))
@@ -152,7 +155,7 @@ check("C6's fallback looks for the notice the tool writes and the Deployment the
 TEXT = {s: (REPO / s).read_text() for s in (C1, C2, C56, C7)}
 for s, needles in ((C1, ['NS="agent"', 'POD="deploy/workshop-mcp"', 'CONTAINER="shim"']),
                    (C2, ['NS="agent"', 'SA="system:serviceaccount:${NS}:workshop-mcp"', 'POLICY="restrict-image-registries"',
-                         'docker.io/peopleforrester/']),
+                         'ghcr.io/peopleforrester/lab-platform/promo/']),
                    (C56, ['NS="agent"', 'POD="deploy/guard-proxy"', 'CONTAINER="proxy"',
                           'RECORD_SECRET="ceo-personal-record"', 'output=on',
                           'input_blocklist=on&input_classifier=on', 'MCP_POD="deploy/workshop-mcp"',
@@ -315,7 +318,8 @@ if "create" in args and flag("-f") == "-":
     images = [c["image"] for c in d["spec"]["template"]["spec"]["containers"]]
     state["created_images"] += images
     state["created_manifests"].append(d)
-    if scenario == "guarded" and not all(any(i.startswith(r) for r in fixture["allowed"]) for i in images):
+    if scenario == "guarded" and not all(any(i.startswith(r) for r in fixture["allowed"])
+                                         and not any(p in i for p in fixture["refused"]) for i in images):
         sys.stderr.write('Error from server: error when creating "STDIN": admission webhook '
                          '"vpol.validate.kyverno.svc-fail" denied the request: Policy restrict-image-registries '
                          'failed: Images must come from allowed registries\n')
@@ -508,7 +512,7 @@ def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, out
         p.chmod(0o755)
     (work / "fixture.json").write_text(json.dumps({
         "beacon": _beacon, "view": "https://provisioning.agenticburn.com/beacon/view",
-        "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED,
+        "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED, "refused": REFUSED,
         "gateway": EVIL_URL, "fake_gateway": FAKE_URL, "c7_config": C7_CONFIG, "open": C7_OPEN,
         "narrowed": C7_NARROWED, "terminal_says": TERMINAL_SAYS, "fake_agent": FAKE_AGENT_URL,
         "kagent_delay": KAGENT_DELAY, "ticket": TICKET_SHOWN, "withheld": TICKET_WITHHELD_SHOWN}))
@@ -561,8 +565,8 @@ try:
             check("C1 on an open cluster names the moved count", "does not move" in out_open
                   and "  FAIL  the beacon count does not move" in out_open, out_open)
         if beat == "C2":
-            check("C2 creates docker.io/peopleforrester/<villain>:latest as workshop-mcp",
-                  state["created_images"] == ["docker.io/peopleforrester/joker:latest"])
+            check("C2 creates lab-platform's promo/<villain>:v1 as workshop-mcp",
+                  state["created_images"] == [promo_ref("joker")], state["created_images"])
             # #529: on an admin cluster with every policy at Deny, a limit-less Deployment is also refused by
             # require-resource-limits, and whichever webhook answers first is the deny message the room hears.
             check("C2's Deployment satisfies require-resource-limits, so only the registry wall can deny it",

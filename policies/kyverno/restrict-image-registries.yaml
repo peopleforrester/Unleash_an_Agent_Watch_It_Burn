@@ -1,5 +1,6 @@
 # ABOUTME: Kyverno policy restricting container images to trusted registries.
-# ABOUTME: Applies in the apps and agent namespaces; allows Harbor, ghcr.io, the agentgateway/kagent registries, docker.io/library, registry.k8s.io, ECR.
+# ABOUTME: Applies in the apps and agent namespaces; allows Harbor, ghcr.io, the agentgateway/kagent registries, docker.io/library, registry.k8s.io, ECR,
+# ABOUTME: and refuses lab-platform's promo/ path, where the C2 villains live, on whichever registry serves it.
 #
 # Kyverno's CEL ValidatingPolicy (policies.kyverno.io/v1), which replaced the deprecated kyverno.io/v1
 # ClusterPolicy (#206). Written against Kyverno v1.19.0.
@@ -44,8 +45,7 @@ spec:
             - agent # the ai-layer namespace where BurritoBot's deploy_app lands the C2 villain image
   variables:
     # Allow-list covers EVERY real ai-layer image in the agent namespace (ghcr.io/peopleforrester,
-    # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries. The C2 villain images
-    # (docker.io/peopleforrester/<villain>) match NONE of these, so Deny refuses them once armed.
+    # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries.
     # Harbor images are additionally signature-checked by verify-image-signatures.
     - name: allowedRegistries
       expression: >-
@@ -54,19 +54,28 @@ spec:
     # ECR is any account in any region: <account>.dkr.ecr.<region>.amazonaws.com/<repo>.
     - name: ecr
       expression: "r'^[^/]+\\.dkr\\.ecr\\.[^/]+\\.amazonaws\\.com/'"
+    # The C2 villains are lab-platform's promo/ images, ghcr.io/peopleforrester/lab-platform/promo/<villain>:v1
+    # (#653): an allowed host and our own org, on a path nothing vetted. The lesson is the path, so the path is
+    # refused wherever it appears, which also covers it pulled through an ECR cache
+    # (<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/lab-platform/promo/...). The rest of
+    # ghcr.io stays allowed: lab-platform's mirror/ copies and its web image run in these namespaces.
+    - name: refusedPaths
+      expression: "['/peopleforrester/lab-platform/promo/']"
     - name: imageAllowed
       expression: >-
         object.spec.containers.all(c,
-        variables.allowedRegistries.exists(r, c.image.startsWith(r)) || c.image.matches(variables.ecr))
+        (variables.allowedRegistries.exists(r, c.image.startsWith(r)) || c.image.matches(variables.ecr))
+        && !variables.refusedPaths.exists(p, c.image.contains(p)))
     # An UPDATE to a Pod that was already in violation is let through, so turning this to Deny never
     # wedges a workload that predates the flip. A compliant Pod still cannot be updated into violation.
     - name: alreadyViolating
       expression: >-
         request.?operation.orValue('') == 'UPDATE' && !oldObject.spec.containers.all(c,
-        variables.allowedRegistries.exists(r, c.image.startsWith(r)) || c.image.matches(variables.ecr))
+        (variables.allowedRegistries.exists(r, c.image.startsWith(r)) || c.image.matches(variables.ecr))
+        && !variables.refusedPaths.exists(p, c.image.contains(p)))
   validations:
     - expression: "variables.imageAllowed || variables.alreadyViolating"
       message: >-
         Images must come from allowed registries:
         the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, docker.io/library,
-        registry.k8s.io, or ECR.
+        registry.k8s.io, or ECR, and not from the lab-platform/promo/ path.

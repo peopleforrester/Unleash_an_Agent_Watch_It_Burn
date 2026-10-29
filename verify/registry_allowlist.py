@@ -2,8 +2,10 @@
 # ABOUTME: image the way the policy does without each test re-deriving it from the YAML.
 """The policy is a Kyverno CEL ValidatingPolicy (#206). Its allow-list is two variables:
 `allowedRegistries`, a CEL list of registry prefixes, and `ecr`, a host-anchored regex for any ECR registry.
-An image is allowed when it starts with a prefix or matches the regex, exactly as the policy's expression
-says. The real evaluation of that expression is covered by verify/test_kyverno_cel_policies.py."""
+A third, `refusedPaths`, lists paths refused on any registry: lab-platform's promo/, where the C2 villains live
+(#653). An image is allowed when it starts with a prefix or matches the regex and contains no refused path,
+exactly as the policy's expression says. The real evaluation of that expression is covered by
+verify/test_kyverno_cel_policies.py."""
 from __future__ import annotations
 
 import pathlib
@@ -31,5 +33,10 @@ def ecr_regex() -> re.Pattern[str]:
     return re.compile(m.group(1))
 
 
+def refused_paths() -> list[str]:
+    return re.findall(r"'([^']+)'", _variables()["refusedPaths"])
+
+
 def allowed(image: str) -> bool:
-    return any(image.startswith(p) for p in prefixes()) or ecr_regex().search(image) is not None
+    return ((any(image.startswith(p) for p in prefixes()) or ecr_regex().search(image) is not None)
+            and not any(p in image for p in refused_paths()))

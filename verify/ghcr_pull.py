@@ -1,0 +1,28 @@
+# ABOUTME: Asks ghcr.io, with no credential, which digest a reference serves: what a node with no pull secret gets.
+# ABOUTME: Shared by the tools-tier checks that lab-platform's mirror/ copies and promo/ villains are public.
+from __future__ import annotations
+
+import json
+import urllib.error
+import urllib.request
+
+ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
+                    "application/vnd.docker.distribution.manifest.list.v2+json",
+                    "application/vnd.docker.distribution.manifest.v2+json"))
+
+
+def served_digest(reference: str) -> tuple[str | None, str]:
+    """The digest ghcr.io serves for <host>/<repo>:<tag> to a client with no credential, or None and why not."""
+    host, _, rest = reference.partition("/")
+    repo, tag = rest.rsplit(":", 1)
+    try:
+        with urllib.request.urlopen(f"https://{host}/token?scope=repository:{repo}:pull", timeout=30) as r:
+            token = json.load(r)["token"]
+        req = urllib.request.Request(f"https://{host}/v2/{repo}/manifests/{tag}", method="HEAD",
+                                     headers={"Authorization": f"Bearer {token}", "Accept": ACCEPT})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            return r.headers.get("Docker-Content-Digest"), ""
+    except urllib.error.HTTPError as e:
+        return None, f"HTTP {e.code} {e.reason}"
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError) as e:
+        return None, f"{type(e).__name__}: {e}"

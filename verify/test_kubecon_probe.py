@@ -183,7 +183,7 @@ check("C1: HTTP 405 from the beacon fails", not passes(kp.judge_egress_blocked(0
 check("C1: a pod that is not there fails",
       not passes(kp.judge_egress_blocked(1, 'Error from server (NotFound): deployments.apps "workshop-mcp" not found')))
 DENIED = ('error: failed to create deployment: admission webhook "vpol.validate.kyverno.svc-fail" denied the request: '
-          "Policy restrict-image-registries failed: image docker.io/peopleforrester/promo-mascot:latest is not from "
+          "Policy restrict-image-registries failed: image ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1 is not from "
           "an allowed registry")
 check("C2: denied by restrict-image-registries passes", passes(kp.judge_admission_denied(1, DENIED)))
 check("C2: admitted fails", not passes(kp.judge_admission_denied(0, "deployment.apps/promo-mascot (server dry run)")))

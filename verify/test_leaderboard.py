@@ -105,7 +105,7 @@ named = set(m.group(1).split(" OR ")) if m else set()
 check(f"C2: the query names exactly the villain roster ({len(roster)} images)", named == roster and len(roster) >= 3)
 check("C2: the lab's three cover images are on the roster",
       {"promo-mascot", "festival-promo", "loyalty-rewards"} <= roster
-      and all(f"docker.io/peopleforrester/{n}:latest" in lab for n in ("promo-mascot", "festival-promo", "loyalty-rewards")))
+      and all(f"ghcr.io/peopleforrester/lab-platform/promo/{n}:v1" in lab for n in ("promo-mascot", "festival-promo", "loyalty-rewards")))
 platform_images = set()
 for f in (REPO / "gitops").rglob("*.yaml"):
     platform_images |= set(re.findall(r"image:\s*\"?([^\s\"#]+)", f.read_text(errors="replace")))

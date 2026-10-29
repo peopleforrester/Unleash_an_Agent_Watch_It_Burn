@@ -89,7 +89,7 @@ C1_CHECK = ["-n", "agent", "exec", "deploy/workshop-mcp", "-c", "shim", "--",
 # the first to answer is the deny message, so a limit-less `kubectl create deployment` was refused by
 # require-resource-limits about one try in four. With limits set, the registry allow-list is the only
 # policy it breaks. It goes in on stdin.
-VILLAIN_IMAGE = "docker.io/peopleforrester/promo-mascot:latest"
+VILLAIN_IMAGE = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
 C2_MANIFEST = {
     "apiVersion": "apps/v1", "kind": "Deployment",
     "metadata": {"name": "promo-mascot", "namespace": "agent", "labels": {"app": "promo-mascot"}},

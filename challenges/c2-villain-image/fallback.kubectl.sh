@@ -6,7 +6,8 @@
 #
 # BurritoBot's deploy_app runs in workshop-mcp, as that pod's own ServiceAccount (workshop-mcp, bound to the
 # agent's Role; not agent-sa, #553), and applies a Deployment in the agent namespace. So this creates one the
-# same way: as workshop-mcp, in agent, with docker.io/peopleforrester/<villain>:latest.
+# same way: as workshop-mcp, in agent, with lab-platform's ghcr.io/peopleforrester/lab-platform/promo/<villain>:v1,
+# the path the allow-list refuses (#653).
 # The Deployment carries limits, so the only policy it breaks is the registry allow-list and the denial
 # message can only be that one. challenges/01-cncf-wall/fallback.kubectl.sh is the retired workshop Beat 1
 # (resource limits, nginx) and is not this beat (#499).
@@ -22,7 +23,7 @@ readonly NS="agent"
 readonly SA="system:serviceaccount:${NS}:workshop-mcp"
 readonly POLICY="restrict-image-registries"
 readonly VILLAIN="joker"
-readonly IMAGE="docker.io/peopleforrester/${VILLAIN}:latest"
+readonly IMAGE="ghcr.io/peopleforrester/lab-platform/promo/${VILLAIN}:v1"
 readonly NAME="c2-fallback-${VILLAIN}"
 
 kc() { kubectl --context "${CONTEXT}" -n "${NS}" "$@"; }
