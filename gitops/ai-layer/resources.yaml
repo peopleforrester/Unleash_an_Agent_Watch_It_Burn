@@ -90,7 +90,8 @@ spec:
     baseUrl: http://agentgateway.agent.svc.cluster.local:3002/bedrock/v1
 ---
 # Local inference. Resolves only where the vllm-qwen3 workload is installed, which is the opt-in half
-# of the toggle; the route is present everywhere so switching needs no gateway edit.
+# of the toggle: the local-inference profile (gitops/bootstrap/values-local-inference.yaml, #394) installs it,
+# and no fleet profile does. The route is present everywhere so switching needs no gateway edit.
 #
 # Sized from the sister platform's measured deployment rather than guessed: vLLM runs CPU-ONLY there
 # (vllm-openai-cpu, no GPU), the Qwen3-1.7B weights are BAKED INTO THE IMAGE with HF_HUB_OFFLINE so

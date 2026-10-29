@@ -1,0 +1,36 @@
+# ABOUTME: ArgoCD Application for the CPU vLLM that serves Qwen3-1.7B to agentgateway's /local route. Listed by
+# ABOUTME: values-local-inference.yaml only, never by a fleet profile (#394, question 657).
+#
+# A 4-CPU, 10Gi model server is fine on one instructor or demo cluster and wrong on fifty student nodes, so no
+# fleet profile lists it: verify/test_local_inference.py fails if any list but values-local-inference.yaml does.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: vllm-qwen3
+  namespace: argocd
+  annotations:
+    # After the ai-layer (wave 3) that holds the gateway and the ModelConfig it serves.
+    argocd.argoproj.io/sync-wave: "5"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/manifests/vllm-qwen3
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

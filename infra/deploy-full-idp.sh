@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
 REPO_URL="https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git"
 # Profile selects which values file of the gitops/bootstrap chart the root reads (#609); lab-platform.yaml lists
-# the same four. Each file's header says what its profile is for.
+# the first four; local-inference is built only from here (#394). Each file's header says what its profile is for.
 PROFILE="${1:-full}"
 case "${PROFILE}" in
     # full: Cluster 2/3, the guarded instructor clusters.
@@ -19,7 +19,10 @@ case "${PROFILE}" in
     # admin: the presenters' own cluster. The student build with every guardrail ARMED, so a control can be
     # shown already working rather than staged (#294).
     admin)    VALUES="values-admin.yaml" ;;
-    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin]" >&2; exit 2 ;;
+    # local-inference: full plus a CPU vLLM behind agentgateway's /local route, for one instructor or demo
+    # cluster, never the fleet (#394, question 657).
+    local-inference) VALUES="values-local-inference.yaml" ;;
+    *)        echo "usage: deploy-full-idp.sh [full|burn|attendee|admin|local-inference]" >&2; exit 2 ;;
 esac
 [[ -f "${REPO}/gitops/bootstrap/${VALUES}" ]] || { echo "gitops/bootstrap/${VALUES} is missing" >&2; exit 1; }
 log() { printf '\n==> %s\n' "$*" >&2; }

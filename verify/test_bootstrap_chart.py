@@ -16,9 +16,9 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import (APPS, C7_TOOLNAMES_END, C7_TOOLNAMES_IF, CHART, CONFIG, FRONT_DOOR_ARN,  # noqa: E402
-                             FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL, REVISION, TEMPLATES, app_names,
-                             deploy_root, deploys, profiles, values_path)
+from bootstrap_chart import (APPS, C7_TOOLNAMES_END, C7_TOOLNAMES_IF, CHART, CONFIG, DEPLOY_ONLY_PROFILES,  # noqa: E402
+                             FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL,
+                             REVISION, TEMPLATES, all_profiles, app_names, deploy_root, deploys, profiles, values_path)
 
 failures = []
 
@@ -127,8 +127,14 @@ check("ai-layer.yaml sets LLM Guard's image outside that guard, so every root re
 
 print("== each profile is an explicit list of files that exist ==")
 app_files = sorted(p.name for p in APPS.glob("*.yaml"))
+# local-inference (#394) is built by deploy-full-idp.sh alone; lab-platform.yaml does not present it.
+check(f"the deploy-only profiles {list(DEPLOY_ONLY_PROFILES)} are not in lab-platform.yaml",
+      not set(DEPLOY_ONLY_PROFILES) & set(profiles()))
+on_disk = sorted(p.name[len("values-"):-len(".yaml")] for p in CHART.glob("values-*.yaml"))
+check(f"every values-<profile>.yaml is a profile lab-platform.yaml presents or a deploy-only one {on_disk}",
+      on_disk == sorted(all_profiles()))
 listed = set()
-for profile in profiles():
+for profile in all_profiles():
     vp = values_path(profile)
     check(f"{vp.name} exists", vp.is_file())
     if not vp.is_file():
@@ -222,7 +228,7 @@ check("it never reads `gh auth token`", "gh auth" not in code)
 check("it writes no repository Secret (no password, no secret-type label)",
       "password:" not in code and "secret-type" not in code)
 check("it removes a witb-repo Secret an earlier build wrote", "kubectl -n argocd delete secret witb-repo --ignore-not-found" in code)
-for profile in profiles():
+for profile in all_profiles():
     check(f"`{profile}` picks values-{profile}.yaml", re.search(rf'{profile}\)\s+VALUES="values-{profile}\.yaml"', code) is not None)
 root = deploy_root("admin")
 check("step [4] applies one heredoc root", bool(root))
