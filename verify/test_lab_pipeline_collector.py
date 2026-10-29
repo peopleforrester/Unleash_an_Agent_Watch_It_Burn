@@ -1,14 +1,15 @@
 # ABOUTME: Runs the REAL collector binary on the lab-marker pipeline (#150): validates both shipped configs, then
 # ABOUTME: feeds it the page's own payload and a forged one and asserts only the documented contract comes out.
 # SUITE: e2e (needs otelcol-contrib at the chart's collector version, and node for the page's payload)
+# E2E TIER: tools (no cluster, no AWS: the pinned otelcol-contrib from e2e-tools.lock, run on loopback)
 #
 # Why the binary and not just YAML checks. A config the collector rejects CrashLoops the DaemonSet and takes every
 # trace on the cluster down with it, the student's own included (test_collector_config.py has the history). And
 # the lab route is public, so what matters about filter/lab_contract and transform/lab_contract is what they do to
 # a hostile payload, which only the real OTTL engine can say.
 #
-# Install: the otelcol-contrib release tarball for OTELCOL_VERSION from
-# github.com/open-telemetry/opentelemetry-collector-releases, on PATH or at $OTELCOL_CONTRIB.
+# Install: none. verify/fetch-e2e-tools.sh fetches otelcol-contrib OTELCOL_VERSION from e2e-tools.lock, and
+# run-e2e.sh and run-e2e-tools.sh point $OTELCOL_CONTRIB at it (#654). Run by hand, set it or put one on PATH.
 from __future__ import annotations
 
 import json

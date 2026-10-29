@@ -3519,3 +3519,30 @@ be clean at the source, because `/prompts` is publicly readable on every cluster
 `attackme` (without the probe marker, so it is recorded). Check that the bot answers it and that `GET /prompts`
 and the wall show it redacted. `verify/kubecon_probe.py` judges the feed but sends only probe-marked prompts,
 which are never recorded, so the check is by hand.
+## 2026-10-29 · #654 · run-e2e.sh runs the fetched otelcol-contrib and no longer asks for one on PATH
+
+#647 put otelcol-contrib v0.160.0 in `verify/e2e-tools.lock` (SHA-256 7bb60c58...b47b0c, the same tarball as the
+#150 entry), so `verify/fetch-e2e-tools.sh` already fetched it. What this issue still saw was run-e2e.sh's own check,
+from #150, for `otelcol-contrib` on PATH or at `$OTELCOL_CONTRIB`. That check is gone. run-e2e.sh now points
+`OTELCOL_CONTRIB` at `verify/.tools/bin/otelcol-contrib`, next to KYVERNO_CLI, CONFTEST and TERRAFORM, and a failed
+fetch names otelcol-contrib with the other five tools. An `OTELCOL_CONTRIB` already set in the environment is
+overridden, as #585 did for the other three. With CONTEXT and IAM_PIPELINE_* unset, on 2026-10-29 it exits 1 listing
+two items, IAM_PIPELINE_PROFILE/IAM_PIPELINE_REGION and CONTEXT. No hecaton setup.sh change is needed.
+
+- **The collector test joins the gate's tier.** `verify/test_lab_pipeline_collector.py` needs no cluster and no AWS:
+  it validates every profile's rendered config and runs the lab pipeline on loopback. It is now `# E2E TIER: tools`,
+  and `run-e2e-tools.sh` passes it `OTELCOL_CONTRIB` pointing at the fetched binary. Run here with that binary, all
+  18 of its checks passed.
+- **The tier's Datadog-key check.** That test gives the collector `"DD_API_KEY": "x"` so the Datadog exporter's
+  config validates, and `test_e2e_tools_tier.py`'s "reads no Datadog key" check matched the name. The check now
+  ignores a quoted Datadog key name set to a short literal, which is a stand-in rather than a read. Any other use of
+  the name still fails it.
+- **Held offline.** `verify/test_e2e_tools_tier.py` checks that both runners point OTELCOL_CONTRIB at the fetched
+  binary, that run-e2e.sh has no PATH lookup for otelcol-contrib, and that the lock's version is the test's
+  `OTELCOL_VERSION`. Its scratch run-e2e.sh now fetches six tools and does not list otelcol-contrib as missing.
+  `verify/test_e2e_toolchain.py` checks that a bare run-e2e.sh never asks for otelcol-contrib on PATH. Run against
+  the old run-e2e.sh and run-e2e-tools.sh, the two tests fail 6 checks.
+
+**Not yet run on a cluster.** Nothing here touches a cluster. On the next cluster build,
+`CONTEXT=<attendee-context> IAM_PIPELINE_PROFILE=<profile> IAM_PIPELINE_REGION=<region> bash verify/run-e2e.sh`
+should get past its prerequisite check with no otelcol-contrib installed on the host.

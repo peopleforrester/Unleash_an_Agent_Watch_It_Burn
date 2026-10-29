@@ -14,7 +14,7 @@ checksum mismatch exits 1 naming each failure and leaves no binary behind. run-e
 failed fetch or a missing prerequisite before any test runs.
 
 run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
-the gate's binaries. Its scratch copy is run with a fixture lock of the five tools: the fetched kubectl, not one
+the gate's binaries, otelcol-contrib included since #654. Its scratch copy is run with a fixture lock of the six tools: the fetched kubectl, not one
 already on PATH, is what checks the cluster, and a failed fetch is listed as missing with no kubectl run at all.
 Some prerequisite is always left missing there, so the run stops before any check or cluster call.
 """
@@ -74,6 +74,9 @@ collector_tags = {re.search(r'^\s+tag: "([0-9.]+)-', f.read_text(), re.M).group(
 check(f"otelcol-contrib is the collector image's version {sorted(collector_tags)}",
       len(collector_tags) == 1 and "otelcol-contrib" in tools
       and tools["otelcol-contrib"][1] == f"v{next(iter(collector_tags))}")
+want = re.search(r'^OTELCOL_VERSION = "([^"]+)"', (VERIFY / "test_lab_pipeline_collector.py").read_text(), re.M)
+check("otelcol-contrib is the version test_lab_pipeline_collector.py demands",
+      bool(want) and "otelcol-contrib" in tools and tools["otelcol-contrib"][1] == f"v{want.group(1)}")
 
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):
@@ -104,13 +107,17 @@ tests = sorted(list(VERIFY.glob("test_*.py")) + list(VERIFY.glob("test_*.sh")))
 tier = [t for t in tests if re.search(r"^# E2E TIER: tools", t.read_text(), re.M)]
 names = {t.name for t in tier}
 for need in ("test_kyverno_cel_policies.py", "test_iam_policy_structural.py", "test_service_naming_render.py",
-             "test_terraform_lock_init.py", "test_party_refresh_rate.py"):
+             "test_terraform_lock_init.py", "test_party_refresh_rate.py", "test_lab_pipeline_collector.py",
+             "test_collector_pii_scrub_e2e.py"):
     check(f"{need} is in the tier", need in names)
 for t in tier:
     text = t.read_text()
     check(f"{t.name} is also `# SUITE: e2e`, so run-tests.sh leaves it out", re.search(r"^# SUITE: e2e", text, re.M)
           is not None)
-    used = sorted(set(re.findall(r"\b(CONTEXT|IAM_PIPELINE_[A-Z]+|DD_API_KEY|DD_APP_KEY)\b", text)))
+    # A literal stand-in handed to a subprocess ("DD_API_KEY": "x", which the collector's validator needs to see set)
+    # is not a read of the real value, so it is taken out before looking.
+    read = re.sub(r'"(?:DD_API_KEY|DD_APP_KEY|DD_ADMIN_API_KEY)":\s*"[^"$]{0,8}"', "", text)
+    used = sorted(set(re.findall(r"\b(CONTEXT|IAM_PIPELINE_[A-Z]+|DD_API_KEY|DD_APP_KEY)\b", read)))
     check(f"{t.name} reads no CONTEXT, IAM_PIPELINE_* or Datadog key ({used})", not used)
     check(f"{t.name} calls no kubectl against a cluster", "--context" not in text)
 
@@ -122,7 +129,8 @@ check("run-e2e-tools.sh runs the offline suite, which the gate no longer runs on
 for var in ("CONTEXT", "IAM_PIPELINE_PROFILE", "IAM_PIPELINE_REGION", "AWS_PROFILE"):
     check(f"run-e2e-tools.sh runs each tier test with {var} unset", f"-u {var}" in code)
 check("run-e2e-tools.sh runs each tier test with KUBECONFIG=/dev/null", "KUBECONFIG=/dev/null" in code)
-for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform")):
+for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
+                  ("OTELCOL_CONTRIB", "otelcol-contrib")):
     check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
 check("run-e2e-tools.sh puts the fetched tools first on PATH", 'PATH="${TOOLS_BIN}:${PATH}"' in code)
 
@@ -186,13 +194,13 @@ FIXTURES = {
     "beta_linux_amd64.zip": zipped("beta", b"#!/bin/sh\necho beta\n"),
     "gamma-linux-amd64": b"#!/bin/sh\necho gamma\n",
 }
-# run-e2e.sh's five tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
-FIVE = ("kyverno", "conftest", "terraform", "kubectl", "helm")
-for _tool in FIVE:
+# run-e2e.sh's six tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
+SIX = ("kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib")
+for _tool in SIX:
     FIXTURES[f"{_tool}-linux-amd64"] = (
         b'#!/bin/sh\necho "fetched $*" >>"$KUBECTL_LOG"\nexit 1\n' if _tool == "kubectl" else b"#!/bin/sh\nexit 0\n")
-FIVE_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} https://fixture.invalid/{t}-linux-amd64 -\n"
-                    for t in FIVE)
+SIX_LOCK = "".join(f"{t} v9 {sha(FIXTURES[f'{t}-linux-amd64'])} https://fixture.invalid/{t}-linux-amd64 -\n"
+                   for t in SIX)
 GOOD_LOCK = (
     "# fixture lock\n"
     f"alpha v1 {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
@@ -311,8 +319,11 @@ live = "\n".join(line for line in RUN_E2E.read_text().splitlines() if not line.l
 check("run-e2e.sh runs fetch-e2e-tools.sh", 'bash "${SCRIPT_DIR}/fetch-e2e-tools.sh"' in live)
 check("run-e2e.sh fetches into the directory the tier runs from", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
 check("run-e2e.sh puts the fetched tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
-for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform")):
+for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
+                  ("OTELCOL_CONTRIB", "otelcol-contrib")):
     check(f"run-e2e.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
+check("run-e2e.sh never looks for otelcol-contrib on PATH (#654)",
+      "command -v" not in "\n".join(line for line in live.splitlines() if "otelcol" in line.lower()))
 # The host's kubectl logs as "host": if it is ever what runs, the fetched one was not first on PATH.
 HOST_KUBECTL = '#!/bin/sh\necho "host $*" >>"$KUBECTL_LOG"\nexit 1\n'
 
@@ -332,14 +343,15 @@ def kubectl_calls(tmp: pathlib.Path) -> list[str]:
 LIVE_CANNOT_RUN = "E2E SUITE CANNOT RUN; this is a failure, not a skip"
 with tempfile.TemporaryDirectory() as t:
     tmp = pathlib.Path(t)
-    vdir = scratch(tmp, FIVE_LOCK, (FETCH, RUN_E2E))
+    vdir = scratch(tmp, SIX_LOCK, (FETCH, RUN_E2E))
     make_stubs(tmp / "bin", {"kubectl": HOST_KUBECTL})
     r = run_live(tmp, vdir)
     check(f"run-e2e.sh stops in its prerequisite check (exit {r.returncode})",
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
-    check("it fetched all five tools into its .tools/bin",
-          all(os.access(vdir / ".tools" / "bin" / tool, os.X_OK) for tool in FIVE), r.stdout + r.stderr)
+    check("it fetched all six tools into its .tools/bin",
+          all(os.access(vdir / ".tools" / "bin" / tool, os.X_OK) for tool in SIX), r.stdout + r.stderr)
+    check("otelcol-contrib is not listed as missing", "otelcol" not in r.stderr, r.stderr)
     check("a good fetch is not listed as missing", "could not be fetched" not in r.stderr
           and "were not fetched" not in r.stderr, r.stderr)
     check("the fetched kubectl checks the cluster, with the explicit context",
@@ -357,7 +369,8 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
     check("it lists the failed fetch as missing",
-          "  - the pinned kyverno, conftest, terraform, kubectl and helm could not be fetched" in r.stderr, r.stderr)
+          "  - the pinned kyverno, conftest, terraform, kubectl, helm and otelcol-contrib could not be fetched" in r.stderr,
+          r.stderr)
     check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
     check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))
 

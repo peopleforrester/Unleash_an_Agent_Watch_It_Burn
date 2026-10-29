@@ -58,12 +58,13 @@ run_one() { # $1: label, rest: command
 # The gate runs this in place of the Test command, so main stays gated on the offline suite as well.
 run_one "run-tests.sh (the offline suite)" bash "${SCRIPT_DIR}/run-tests.sh"
 
-# The pinned tools come first on PATH, and the three tests that take a path get it, so a tool already on the
+# The pinned tools come first on PATH, and the four tests that take a path get it, so a tool already on the
 # host is never what a check runs.
 tier_env=(env -u CONTEXT -u IAM_PIPELINE_PROFILE -u IAM_PIPELINE_REGION -u AWS_PROFILE
     -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN
     KUBECONFIG=/dev/null PATH="${TOOLS_BIN}:${PATH}"
-    KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform")
+    KYVERNO_CLI="${TOOLS_BIN}/kyverno" CONFTEST="${TOOLS_BIN}/conftest" TERRAFORM="${TOOLS_BIN}/terraform"
+    OTELCOL_CONTRIB="${TOOLS_BIN}/otelcol-contrib")
 tier=0
 for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
     [[ -e "${t}" ]] && grep -q '^# E2E TIER: tools' "${t}" || continue
