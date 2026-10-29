@@ -1,5 +1,5 @@
-# ABOUTME: The party apps have no ALB Ingress of their own and nothing deployed joins watch-it-burn-ingress:
-# ABOUTME: they are reached at <app>-<cluster>.agenticburn.com through the console LB (#233, #554).
+# ABOUTME: The party apps have no ALB Ingress of their own and nothing deployed joins watch-it-burn-ingress,
+# ABOUTME: and since #651 no public host either: neither the console nor the routes table names one.
 """Why (#554). Each party app shipped an internet-facing ALB Ingress in group watch-it-burn-ingress for a fixed
 host (hedgehog.agenticburn.com and so on), the same host on every cluster. Since #233 the party apps are reached
 at <app>-<cluster>.agenticburn.com, which the apex router sends to the console LB and the console's nginx fans
@@ -7,6 +7,9 @@ out on Host. The Ingresses kept an ALB alive on every cluster that deployed a pa
 remove when it took Grafana out of the group. gitops/argocd/values.yaml carried a third claimant,
 argocd.agenticburn.com, in a file nothing installed: deploy-full-idp.sh installs Argo CD from
 infra/argocd-values.yaml.
+
+#651 (Michael, 2026-10-28) retired the <app>-<cluster> hosts too: the KubeCon talk does not use them. The
+party apps stay deployed as ordinary workloads, reached in-cluster.
 """
 from __future__ import annotations
 
@@ -62,22 +65,26 @@ print("== nothing deployable asks for an ALB ==")
 check("no deployable manifest or Helm values names ingressClassName alb", not alb, f"{sorted(set(alb))}")
 check("and nothing joins the ALB group watch-it-burn-ingress", not grouped, f"{sorted(set(grouped))}")
 
-print("== each party app is served through the console, not its own Ingress ==")
+print("== each party app is an in-cluster Service, with no Ingress and no public host (#651) ==")
 for app in PARTY:
     mdir = GITOPS / f"manifests/demo-app-{app}"
     kinds = [d.get("kind") for p in sorted(mdir.glob("*.yaml"))
              for d in yaml.safe_load_all(p.read_text(encoding="utf-8")) if d]
     check(f"demo-app-{app} still ships its Service", "Service" in kinds, f"kinds={kinds}")
     check(f"demo-app-{app} ships no Ingress", "Ingress" not in kinds, f"kinds={kinds}")
-    # Run the real map rules against a hostname on each served domain (#651), rather than pinning their text.
+    # Run the real map rules against a hostname on each served domain, rather than pinning their text.
     rules = re.findall(r'"~(\^[^"]+\$)"\s+(\S+);', CONF)
     for dom in ("agenticburn.com", "burritobot.co"):
         hit = [up for rx, up in rules if re.fullmatch(rx, f"{app}-attackme.{dom}")]
-        check(f"console.conf maps {app}-<cluster>.{dom} to demo-app-{app}",
-              hit == [f"http://demo-app-{app}.apps.svc.cluster.local:80"], f"hit={hit!r}")
+        check(f"console.conf maps no {app}-<cluster>.{dom}", hit == [], f"hit={hit!r}")
 m = re.search(r"^\s*server_name\s+~\^\(([^)]+)\)-", CONF, re.M)
 names = m.group(1).split("|") if m else []
-check("the console's service server block answers every party host", all(a in names for a in PARTY), f"{names}")
+check("the console's service server block answers no party host", m is not None and not set(PARTY) & set(names),
+      f"{names}")
+FLEET = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
+routed = re.search(r'^readonly WIB_SERVICE_HOSTS="([^"]+)"', FLEET, re.M)
+check("fleet.sh routes no party host", routed is not None and not set(PARTY) & set(routed.group(1).split()),
+      routed.group(1) if routed else "")
 
 print("== Argo CD is installed from infra/argocd-values.yaml, and the unused gitops copy is gone ==")
 check("deploy-full-idp.sh installs Argo CD with infra/argocd-values.yaml",

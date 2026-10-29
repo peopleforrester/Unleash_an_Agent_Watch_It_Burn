@@ -3489,3 +3489,46 @@ ships no dot-named file. `verify/test_service_hosts_live.py` (E2E, live) now ask
 `CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py`. Its new section requests
 `https://<public host>/..data/brief.html` through the real apex router. That proves the router passes the path to the
 console, and that the rolled console answers 404.
+
+## 2026-10-29 · #651 · The remaining viewer-facing names move to burritobot.co, and the kagent and party-app hosts are retired
+
+Steps A and B of #651 were already on staging (ce80db5, e4de38d, c68ce1a, 9462dbe): both domains are accepted
+everywhere a hostname is matched, the router carries a burritobot.co twin of every roster row, and the QR,
+`publicUrl`, `/kubecon` and `/brief` show burritobot.co. This run did the rest of step 3 that this repo owns,
+and this repo's half of step 4.
+
+**Checked live before switching a link (2026-10-29, read-only curl).** `prompts.burritobot.co`,
+`start.burritobot.co/roster.json`, `feedback.burritobot.co/quick`, `attackme.burritobot.co/kubecon`,
+`burritobot-private.burritobot.co/kubecon` and `grafana-burritobot-private.burritobot.co` each answer with a
+certificate that verifies. The wall's `/healthz` lists `attackme` and `burritobot-private`, both `ok`. The bare
+`burritobot.co` does not answer at all, so the C1 beacon has no home there.
+
+**Shown on burritobot.co now.** The prompt wall link on `/kubecon`; the Feedback links on the storefront, the lab and
+the platform tour (`feedback.burritobot.co/quick`, the same form; on KubeCon the storefront's button still goes to the
+Sessionize survey through `event.js`); the run-of-show's wall, roster, Grafana and `/kubecon` gate URLs; the phone
+check, which still said the QR opened `attackme.agenticburn.com`; the terminal's `platform` catalogue, which turns the
+cluster identity's agenticburn.com host into its burritobot.co twin. `fleet.sh router-check` and `wall-check` read
+`start.burritobot.co` and `prompts.burritobot.co` by default. `verify/test_two_domains.py` now fails when any of the six
+pages a viewer opens names a `*.agenticburn.com` host.
+
+**Left on agenticburn.com on purpose.** The C1 beacon (`agenticburn.com/beacon`) on `/kubecon`, `/brief`, the lab and the
+run-of-show: the issue retires it unless C1 stays on deck, the planning note keeps C1 on deck if time allows, and
+burritobot.co has no apex route for it. That is a question for Michael in this run's report. The probe and `check-tls`
+commands in the run-of-show keep the agenticburn.com names, because `kubecon_probe.py` checks the host against the
+cluster identity, which `public_host_for` still writes on agenticburn.com (e4de38d).
+
+**Retired: the kagent UI and party-app service hosts.** `WIB_SERVICE_HOSTS` is `grafana argocd`, and the console's host
+map and `server_name` carry those two only. The party apps and the kagent UI are still deployed; `platform.html` and the
+terminal catalogue now list them as in-cluster. The routes table drops from 36 hosts to 12 on the next
+`fleet.sh routes roster`. The shrink guard discounts the retired prefixes by `WIB_RETIRED_SERVICE_HOSTS`, the way it
+discounts a-NNN and roundN, so that run is not refused. `route_hosts_of` now reads both domains, so a burritobot.co host
+that would go missing is refused like an agenticburn.com one; before, the guard did not see the twins at all.
+
+**Not this repo's part.** Every other name on the retire list (provisioning, walkthrough, mystery, backstage, monitoring,
+standalone grafana and argocd, harbor, s., x.) is an apex-agenticburn route and a Namecheap record. `rounds` stays,
+by Michael's decision on the issue (rounds-agenticburn#43). guard-proxy's `CONSOLE_ORIGIN` lives in
+guard-proxy-agenticburn. Both are follow-ups in this run's report.
+
+**Not yet run on a cluster.** Owed in a session with AWS access: `./fleet.sh routes roster` (expect 12 hosts and no
+REFUSING), then `./fleet.sh router-check` and `./fleet.sh wall-check`, then
+`CONTEXT=<community-context> python3 verify/test_service_hosts_live.py` once the console has rolled.

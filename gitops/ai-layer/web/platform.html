@@ -12,9 +12,10 @@
   out what is on it, where it lives, and how to log in. The Packt workshop had a tab that listed every
   service, its URL and its credentials, plus what was installed at which phase. This is that.
 
-  HONEST ABOUT REACHABILITY. Every link on this page is one a browser can open. Grafana, Argo CD, the
-  kagent UI and the party apps have their own <service>-<cluster>.agenticburn.com name (#233), filled in
-  from the address bar. Prometheus and Tempo have no login and stay unpublished, so their rows open
+  HONEST ABOUT REACHABILITY. Every link on this page is one a browser can open. Grafana and Argo CD
+  have their own <service>-<cluster> name on agenticburn.com and burritobot.co (#233, #651), filled in
+  from the address bar. The kagent UI and the party apps lost theirs with #651 and are in-cluster only.
+  Prometheus and Tempo have no login and stay unpublished, so their rows open
   them through Grafana Explore, where each is already a data source. They used to carry a
   `kubectl port-forward`, which listens inside the terminal pod and never reaches the attendee's browser:
   that was the Loki "URL" that could not work (#381). Loki itself is gone (#474): the pod logs are in Datadog.
@@ -131,13 +132,13 @@
 
   <section class="layer">
       <h2>The developer's side, and the neighbours</h2>
-      <p class="sub">Each has its own address on this cluster. These are what a platform team hosts for the people who build on it.</p>
+      <p class="sub">What a platform team hosts for the people who build on it. Neither has a public address: reach them from your terminal.</p>
       <table>
         <tr><th>Service</th><th>Where</th><th>Login</th></tr>
         <tr><td class="svc">kagent UI<small>The developer's view of BurritoBot: its prompt, tools and model binding</small></td>
-            <td><a class="svchost" data-svc="kagent" href="#">kagent-…</a></td><td>none</td></tr>
+            <td>in-cluster only, <code class="inl">kagent-ui.kagent:8080</code></td><td>none</td></tr>
         <tr><td class="svc">The party apps<small>Ordinary workloads that share the cluster: hedgehog, wombat, unicorn, spider, mantis-shrimp</small></td>
-            <td><a class="svchost" data-svc="unicorn" href="#">unicorn-…</a> &middot; <a class="svchost" data-svc="hedgehog" href="#">hedgehog-…</a> &middot; <a class="svchost" data-svc="wombat" href="#">wombat-…</a> &middot; <a class="svchost" data-svc="spider" href="#">spider-…</a> &middot; <a class="svchost" data-svc="mantis-shrimp" href="#">mantis-shrimp-…</a></td><td>none</td></tr>
+            <td>in-cluster only, <code class="inl">kubectl -n apps get svc</code></td><td>none</td></tr>
       </table>
     </section>
 

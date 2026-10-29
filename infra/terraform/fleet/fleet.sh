@@ -72,7 +72,12 @@ readonly PRESENTER_OWNER_MAX=10
 # Service hostnames (#233): <service>-<label>.agenticburn.com for every cluster, riding the cluster's
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
 # covers one label. Keep in step with the server block in gitops/ai-layer/console.conf.
-readonly WIB_SERVICE_HOSTS="grafana argocd kagent hedgehog wombat unicorn spider mantis-shrimp"
+# Grafana and Argo CD only (#651, Michael 2026-10-28): the presenters keep those two prefixes, and the
+# kagent UI and party-app hosts, which the KubeCon talk does not use, are retired on both domains.
+readonly WIB_SERVICE_HOSTS="grafana argocd"
+# The service prefixes #651 retired. The shrink guard does not count their rows in the published table as
+# losses, the way it discounts the a-NNN and roundN aliases.
+readonly WIB_RETIRED_SERVICE_HOSTS="kagent hedgehog wombat unicorn spider mantis-shrimp"
 # Emit the service lines for one cluster: $1 = the cluster's public host, $2 = its console LB.
 emit_service_hosts() {
     local host="$1" lb="$2" svc label="${1%%.*}"
@@ -3950,7 +3955,8 @@ roster_route_hosts() {
 }
 
 # The hostnames a routes table carries, sorted: the first field of every row, comments skipped.
-route_hosts_of() { awk '!/^[[:space:]]*#/ && $1 ~ /\.agenticburn\.com$/ { print $1 }' | sort -u; }
+# Both domains (#651), so a burritobot.co twin that would go missing is a loss the shrink guard sees.
+route_hosts_of() { awk '!/^[[:space:]]*#/ && $1 ~ /\.(agenticburn\.com|burritobot\.co)$/ { print $1 }' | sort -u; }
 
 # Auto-generate the agenticburn.com wildcard-router map (railway/apex/routes.map) from LIVE cluster
 # console LBs, then commit + push so the apex Railway service redeploys and every friendly
@@ -4062,17 +4068,19 @@ cmd_routes() {
     # so a correct run legitimately produces a table two hosts shorter than the one on HEAD, and counting
     # them would make this guard refuse every publish until someone overrode it with the very flag that
     # also disables the protection. Retiring a hostname is not the same event as losing one. The roundN
-    # aliases are discounted the same way (#502).
+    # aliases are discounted the same way (#502), and so are the kagent and party-app service hosts #651
+    # retired: a roster run after it legitimately drops six rows per cluster on each domain.
     #
     # A roster run drops the pool's rows ON PURPOSE, so it compares the roster's hosts only: a pool row
     # leaving is the point of the mode and is listed. It compares them as a SET, not a count: the roster is
     # three consoles, and a table that gains a cluster's eight service hosts while losing another
     # cluster's console is longer and still takes a presenter's URL down on stage. Hosts are counted, not
     # lines, so the header comment no longer counts on both sides.
-    local new_hosts old_hosts pool_rows new_count old_count shrinks=0
+    local new_hosts old_hosts pool_rows new_count old_count shrinks=0 retired
+    retired="$(tr ' ' '|' <<<"${WIB_RETIRED_SERVICE_HOSTS}")"
     new_hosts="$(route_hosts_of < "${tmp}")"
     old_hosts="$(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null \
-        | route_hosts_of | grep -vE '^(a-[0-9]+|round[^.]*)\.' || true)"
+        | route_hosts_of | grep -vE "^(a-[0-9]+|round[^.]*|(${retired})-[a-z0-9-]+)\." || true)"
     if [[ "${scope}" == roster ]]; then
         pool_rows="$(grep -vFx -f <(roster_route_hosts) <<<"${old_hosts}" | grep . || true)"
         old_hosts="$(grep -Fx -f <(roster_route_hosts) <<<"${old_hosts}" || true)"
