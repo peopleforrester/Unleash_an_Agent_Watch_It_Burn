@@ -3801,3 +3801,55 @@ the pod template as labels and does not mention annotations. The AI layer's pods
 `service:burritobot-{argocd,kyverno,falco,cert-manager,istio}` with `env:burritobot-kubecon-na-26`), then check
 in Log Explorer that `kube_cluster_name:burritobot-* kube_namespace:cert-manager` shows `service:burritobot-cert-manager`.
 On the cluster itself, `kubectl --context "$CONTEXT" -n cert-manager get pods --show-labels` should show the three labels.
+## 2026-10-29 · #665 · The room's read-only Datadog view is a public shared dashboard of burritobot-public, with counts and no traces
+
+The 2026-10-28 planning call asked for a read-only Datadog view for the room, scoped to `burritobot-public`, once
+the PII question was settled. #647 settled it, and said no attendee gets a Datadog login. The view therefore has
+to work with no account, and the issue asked whether such a view can show LLM Observability traces or only
+widgets.
+
+- **Only widgets.** Datadog's shared dashboards page (docs.datadoghq.com/dashboards/sharing/shared_dashboards,
+  read 2026-10-29) lists the widgets a shared dashboard renders. The List widget is not on it, and that is the only
+  widget that lists spans: its source enum in Datadog's v1 API spec (datadog-api-client-python
+  `.generator/schemas/v1/openapi.yaml`, read 2026-10-29) includes `llm_observability_stream`. Datadog accepts an
+  unsupported widget without an error and then shows it empty. Opening a trace needs the Datadog app. So the room
+  sees counts, and traces stay on Whitney's projected tab in segment 5.
+- **What is on it** (`infra/datadog-room/room_view.yaml`): chats, tool calls, the model bill, the tools by name and
+  chats per minute, over a fixed last hour, shared `open` until `2026-11-13T12:00:00Z`. That expiry falls the morning
+  after the talk, ahead of the purge #647 committed to. Datadog's default expiry is a year.
+- **The fence is the query, so the loader enforces it.** A shared dashboard runs with its author's permissions, and
+  Whitney can read the whole sandbox org. `room_view.py` refuses any query whose filter lacks
+  `kube_cluster_name:burritobot-public` or names another cluster, and any `ml_obs.*` metric. Datadog's metrics page
+  (docs.datadoghq.com/llm_observability/monitoring/metrics, read 2026-10-29) says span tags are not on those
+  metrics, and both clusters share `env`, `ml_app` and every service, so `ml_obs.*` cannot be limited to one
+  cluster. It also refuses non-metric data sources, a group by anything but `span.name` (so no attendee text
+  reaches the page), any widget type outside note, query value, timeseries and top list, template variables, and a
+  share that lets the viewer select a time or a variable. The counts come from the collector's `span_metrics`
+  connector, which keeps `k8s.cluster.name`, the same signal the fleet dashboard reads.
+- **Who builds it.** The application key in `watch-it-burn/datadog` is read-only (#629), and sharing needs
+  `dashboards_write` and `dashboards_public_share` (the API spec's `x-permission` on `/api/v1/dashboard/public`).
+  `--apply` therefore takes a key Whitney issues from her own user, in `WIB_ROOM_VIEW_APP_KEY` for that one command.
+  It refuses an org whose name does not start with `WIB_DD_POOL_PREFIX`, and records the share in
+  `infra/datadog-room/share.json`, which `--check` and the run-of-show read. `--json` prints the body for building
+  the view by hand in the UI. The loader reuses `fleet_monitors.py`'s Datadog client, key reader and dashboard
+  lookup, and adds no dependency.
+- **Run-of-show.** Segment 1 puts up the view's QR beside attackme's once it exists. A Night Before step builds it,
+  checks it, and confirms on a phone that the private bot's traffic does not move it.
+
+**Tests.** `verify/test_room_view.py` (offline) holds `room_view.yaml` to the fence. It feeds `validate()` 17
+leaking variants (no cluster filter, the private cluster, a `burritobot-*` wildcard, an `ml_obs` metric, a group by
+`gen_ai.input.messages`, an LLM Observability query, a list widget, a template variable, an invite share, a
+selectable time, no or a passed expiry, and others) and expects each refused. It checks that the names the
+queries count exist: burritobot-public for the community cluster, burn's resource and `span_metrics` wiring,
+guard-proxy's `chat` span, `gen_ai.client.cost` and the `burritobot` service. It then drives the loader through a
+fake org: a fresh apply, a second apply in place, a `--check` that passes using only the read-only key, and
+`--check` failures on a 403 public URL, an invite or paused share, a missing expiry, a query edited in the UI, and
+no share yet. `verify/test_room_view_live.py` (`# SUITE: e2e`) runs `--check` against the sandbox org. It fails
+until the view is built.
+
+**Not yet built, and not run on a cluster.** A run has no sign-in to Whitney's org and no write key. Owed:
+Whitney runs `WIB_ROOM_VIEW_APP_KEY=<key> python3 infra/datadog-room/room_view.py --profile accen-dev --region
+us-west-2 --apply`, commits `share.json`, and renders the QR. Then, with attackme up, `verify/test_room_view_live.py`
+must pass. A prompt to `https://attackme.burritobot.co` must move the chat count, and one to the private bot must
+not. Each widget must show data, which checks that `kube_cluster_name` arrives on `traces.span.metrics.calls` and
+`gen_ai.client.cost` in the sandbox org.

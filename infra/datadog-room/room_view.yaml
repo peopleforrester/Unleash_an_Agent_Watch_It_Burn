@@ -1,0 +1,127 @@
+# ABOUTME: The room's read-only Datadog view (#665): a public shared dashboard in Whitney's sandbox org that shows
+# ABOUTME: only burritobot-public (attackme), needs no login, and is what segment 1's second QR code opens.
+#
+# Two halves. `dashboard` is the Datadog dashboard API body (v1, ordered layout) written as YAML; room_view.py finds
+# the live one by its title and replaces it in place. `share` is the body of the public share that room_view.py
+# creates on that dashboard (POST /api/v1/dashboard/public), less the dashboard_id it fills in.
+#
+# Why every query is a metric query filtered on kube_cluster_name:burritobot-public (room_view.py refuses anything
+# else):
+# - A shared dashboard runs its queries with the sharer's permissions, and the sharer can read the whole sandbox
+#   org: burritobot-private, and other projects. The only fence is the filter written into each query. So the
+#   dashboard has no template variables (a viewer could otherwise widen the filter) and the share lets the viewer
+#   pick nothing.
+# - The cluster tag is the one thing that tells attackme from the presenters' cluster. The two share env
+#   (burritobot-kubecon-na-26), ml_app (burritobot) and every service name. The collector stamps k8s.cluster.name
+#   from cluster-identity (datadog-cluster-identity.sh) onto every span and metric, and Datadog maps it to
+#   kube_cluster_name.
+# - LLM Observability's own metrics (ml_obs.*) do NOT carry it: Datadog's metrics page says "Other tags set on spans
+#   are not available as tags on Agent Observability metrics" (read 2026-10-29). Filtered on it they would be empty,
+#   and without the filter they mix the presenters' cluster in. So the counts below come from the collector's
+#   span_metrics connector (traces.span.metrics.*), which keeps the resource attributes (add_resource_attributes).
+# - The LLM Observability traces themselves cannot be shown without a login: the List widget that lists spans
+#   (llm_observability_stream) is not on Datadog's list of widgets a shared dashboard renders, and opening a trace is
+#   the Datadog app. The room sees the counts, the tools and the bill; Whitney's projected burritobot-public tab
+#   (segment 5) is where a trace is read.
+# - Nothing is grouped by a content attribute (a prompt, a reply, a tool argument), only by span name, so no
+#   attendee text reaches the page even before the collector's scrub (#647).
+dashboard:
+  title: "BurritoBot: the room's view (burritobot-public)"
+  description: "Read-only public view of attackme for the KubeCon NA 2026 room (#665). Managed by infra/datadog-room/room_view.py; edits in the UI are overwritten on the next apply."
+  layout_type: ordered
+  widgets:
+    - definition:
+        type: note
+        content: |
+          **This is the BurritoBot you are attacking** (attackme.burritobot.co), and nothing else. Read-only, no login.
+          It refreshes about once a minute. E-mail addresses, card numbers, SSNs and phone numbers in your prompts are
+          scrubbed before anything leaves the cluster. Names and other text are not, so keep them out of the box.
+        background_color: yellow
+        font_size: "14"
+        text_align: left
+        show_tick: false
+        has_padding: true
+
+    - definition:
+        type: query_value
+        title: Chats sent to BurritoBot
+        precision: 0
+        autoscale: true
+        requests:
+          - response_format: scalar
+            queries:
+              - data_source: metrics
+                name: chats
+                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,service:burritobot,span.name:chat}.as_count()"
+                aggregator: sum
+            formulas:
+              - formula: chats
+
+    - definition:
+        type: query_value
+        title: Tools the bot ran for you
+        precision: 0
+        autoscale: true
+        requests:
+          - response_format: scalar
+            queries:
+              - data_source: metrics
+                name: tools
+                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,span.name:execute_tool*}.as_count()"
+                aggregator: sum
+            formulas:
+              - formula: tools
+
+    - definition:
+        type: query_value
+        title: The room's model bill so far (USD)
+        precision: 4
+        autoscale: false
+        custom_unit: "$"
+        requests:
+          - response_format: scalar
+            queries:
+              - data_source: metrics
+                name: spend
+                query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-public}"
+                aggregator: last
+            formulas:
+              - formula: spend
+
+    - definition:
+        type: toplist
+        title: Which tools you talked the bot into calling
+        requests:
+          - response_format: scalar
+            queries:
+              - data_source: metrics
+                name: calls
+                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,span.name:execute_tool*} by {span.name}.as_count()"
+                aggregator: sum
+            formulas:
+              - formula: calls
+                limit: { count: 10, order: desc }
+
+    - definition:
+        type: timeseries
+        title: Chats per minute
+        show_legend: false
+        requests:
+          - response_format: timeseries
+            display_type: bars
+            queries:
+              - data_source: metrics
+                name: chats
+                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,service:burritobot,span.name:chat}.as_count()"
+            formulas:
+              - formula: chats
+
+share:
+  share_type: open                       # anyone with the link; no Datadog account, no invite
+  global_time: { live_span: 1h }         # the session is 30 minutes
+  global_time_selectable_enabled: false  # the viewer cannot move the window
+  selectable_template_vars: []           # and has no variable to widen the filter with
+  # The burritobot-public data is purged from Whitney's org after the talk on 2026-11-12 (decisions.md, #647), so the
+  # link stops answering the morning after, in every US time zone, instead of Datadog's default of a year.
+  expiration: "2026-11-13T12:00:00Z"
+  viewing_preferences: { theme: dark, high_density: false }

@@ -314,6 +314,12 @@ burrito chain. Put the QR and `attackme.burritobot.co` on screen and leave them 
   the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
   `https://attackme.burritobot.co/display` instead.
+- Put up the second QR, the room's read-only Datadog view (#665): a public
+  dashboard of attackme only (`burritobot-public`), with no login, showing chats,
+  the tools the bot ran, the tools by name and the bill. It shows counts, not traces.
+  Its URL is `public_url` in `infra/datadog-room/share.json`, and the QR is
+  `facilitation/kubecon-na-2026-room-view-qr.svg`. Neither exists until the Night
+  Before step builds the view; without it, show only the attackme QR.
 - Have Whitney send one ordinary ask (a burrito order) so the room sees a working
   burrito-chain bot before it misbehaves.
 - **Delivers:** the framing, and point 1 (a chatbot for a fictional burrito chain).
@@ -681,6 +687,14 @@ is merely slow rather than rebuilding:
   (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
   the C5, C6 and C7 beats once, and confirm each of the three segment 5 panels shows
   a row. Say on the day which surface is shown.
+- [ ] **The room's Datadog view (#665).** Whitney (or Michael signed in to her org)
+  builds it once with a write application key from her own user:
+  `WIB_ROOM_VIEW_APP_KEY=<key> python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --apply`,
+  commits the `share.json` it writes, and renders the QR (`infra/datadog-room/README.md`).
+  Then `python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --check`
+  must end `OK`. Open the URL on a phone with no Datadog session, send a prompt to
+  attackme and see the chat count move, then send one to the private bot and see it not
+  move. Re-applying keeps the URL, so a QR printed earlier stays good.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
   per-segment videos and screenshots deck must exist and be rehearsed once, so a
   dead venue network does not end the session. The repo paths for these are not
