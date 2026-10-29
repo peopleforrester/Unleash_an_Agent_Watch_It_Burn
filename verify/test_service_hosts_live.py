@@ -122,7 +122,9 @@ if missing:
 m = re.search(r'^readonly WIB_SERVICE_HOSTS="([^"]+)"', FLEET, re.M)
 labels = m.group(1).split() if m else []
 check("fleet.sh names the service hosts it publishes", bool(labels))
-upstreams = dict(re.findall(r'"~\^([a-z-]+)-\[a-z0-9-\]\+\\\.agenticburn\\\.com\$"\s+http://([a-z0-9.-]+):\d+;', CONF))
+# The domain part is whatever follows the label's `[a-z0-9-]+\.`: one domain until #651, both since. Reading
+# only agenticburn\.com$ found no upstream at all once the patterns took the two-domain group.
+upstreams = dict(re.findall(r'"~\^([a-z-]+)-\[a-z0-9-\]\+\\\.[^"]*\$"\s+http://([a-z0-9.-]+):\d+;', CONF))
 check("console.conf names an upstream for each", set(upstreams) == set(labels), f"{sorted(upstreams)}")
 r = kubectl("-n", "agent", "get", "configmap", "cluster-identity", "-o", "jsonpath={.data.public-host}")
 host = r.stdout.strip()
@@ -136,6 +138,13 @@ print("== the router passes Host to the console ==")
 status, body = fetch(f"https://{host}/whoami")
 check(f"https://{host}/whoami answers host={host}", status == 200 and body.strip() == f"host={host}",
       f"HTTP {status}: {body.strip()[:160]}")
+
+print("== the roster-only pages are not served under the volume's dot entries ==")
+# console-src is a ConfigMap volume, so kubelet's ..data symlink sits under the console's root. The router gates
+# /brief and /kubecon by exact path only, so a 200 here hands the presenter pages to any attendee (#650).
+for page in ("brief", "kubecon"):
+    status, body = fetch(f"https://{host}/..data/{page}.html")
+    check(f"https://{host}/..data/{page}.html is a 404", status == 404, f"HTTP {status}: {body.strip()[:160]}")
 
 print("== every service host reaches its Service ==")
 for label in labels:

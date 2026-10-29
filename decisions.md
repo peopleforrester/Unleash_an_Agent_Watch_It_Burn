@@ -3431,3 +3431,61 @@ public URL resolves only once this change reaches `main`.
   `python3 verify/kubecon_probe.py admin burritobot-private.agenticburn.com --context <private-context>
   --kubeconfig /tmp/private.kubeconfig --profile accen-dev` and the community run must end
   `KUBECON PROBE GREEN`, and the presenters read `/kubecon` against the run-of-show in run-through 1.
+## 2026-10-29 · #650 · The answer to lab-platform's `web.yaml`, and the console's dot paths are a 404
+
+lab-platform#278 moves the console Deployment and the five demo apps from nginx to its `web` image, a Go static
+server and reverse proxy (`ghcr.io/peopleforrester/lab-platform/web:v1`, digest `sha256:74885296c746…a24a29`, built from
+lab-platform 3dd635a). It reads one `web.yaml` in place of `console.conf`, and asked on this issue what `console.conf`
+does that the file cannot say. Read against today's `console.conf`, the published console file (with `host: caller`
+on `/chat`) leaves out these:
+
+- **Unmatched paths fall through to root.** `skin.js`, `skins.js`, `active-skin.js`, `event.js`, `lab-events.js` and
+  `display.js` have no location. The pages load them by relative name, so they work only because nginx serves an
+  unmatched path from `root`. The file routes `/console.js` alone, so either the shape says unmatched paths are served
+  by name or the file needs six more routes.
+- **Dot paths.** A bug in the console today, fixed here (below). If `web` serves root by name, it needs the same 404:
+  Go's `http.Dir` refuses only `..` elements, so `..data` passes.
+- **Both domains (#651).** The file was written at 9ad5cd4, before ce80db5. Each `match` takes
+  `\.(?:agenticburn\.com|burritobot\.co)$`. This is the file's content, not its shape.
+- **Host routes.** The service-host server sends the caller's Host, a fixed `X-Forwarded-Proto: https`,
+  `X-Forwarded-Host`, the websocket upgrade, and a 3600s timeout. A `hosts` entry carries only `match` and `proxy`.
+- **No X-Forwarded-For by default.** Go's `ReverseProxy` with a `Director` adds one, and nginx does not.
+  `console.conf` sends it on `/jupyter/` only, and `test_lab_events.py` holds that `/lab-events` forwards no client
+  address.
+- **The fallback page is for host routes only.** On a console route it would turn `/chat`'s 502 into a 200, and the
+  storefront reads `res.ok`.
+- **Host matching as nginx does it.** Hosts are matched before routes, and on the lowercased name with the port
+  stripped, which is also what `/whoami` must echo.
+- **A proxy route with no timeout.** It had nginx's 60s default.
+- **No objection.** The rate bucket being per route rather than per port (it is still one per cluster), a 405 in place of
+  nginx's 403 for a non-POST to `/lab-events`, and the demo apps' file. Their port, 80 today, and `NETWORK_BOUNDARY=sandbox`
+  are this repo's side of the move.
+
+The comment saying this went into the run's escalation list, because a run cannot write to an issue. Moving the
+console and the demo apps onto `web` is a follow-up, held for the answers to the points above.
+
+**The dot-path fix.** console-src is mounted as a ConfigMap volume over the console's root. kubelet lays such a
+volume out as a `..data` symlink to a `..<timestamp>` directory, with each file a symlink into it. With no location for
+those names, nginx served `/..data/brief.html` and `/..data/kubecon.html`, which is past the router's exact-path gate
+on `/brief` and `/kubecon` and past #511's two 404s. `..data` is not a `..` segment, so URI normalisation keeps it, and
+`%2e%2e` decodes to the same thing. Measured on 2026-10-29 with nginx 1.27-alpine (the console's image, run with no
+network) on a root laid out the way kubelet lays it out. Before the fix, `/..data/brief.html`, `/..data/kubecon.html`,
+`/%2e%2edata/brief.html` and `/..<timestamp>/brief.html` answered 200 on 8080, and `/..data/brief.html` also on 8443.
+After `location ^~ /. { return 404; }` all of them are 404, and `/`, `/brief`, the six assets, `/console.js`,
+`/healthz` and `/whoami` still answer 200.
+
+A prefix location rather than a regex, so `test_gated_page_names.py`'s "no regex location" check still holds. Nothing
+the console serves starts with a dot.
+
+**Also fixed.** `verify/test_service_hosts_live.py` read each service host's upstream from `console.conf` with a pattern
+that ended in `agenticburn\.com$`. #651 changed every host pattern to the two-domain group, so the live test found no
+upstream and would fail its first check on any cluster. It now takes whatever domain part follows the label.
+
+**Tests.** `verify/test_gated_page_names.py` (offline) now checks that the `^~ /.` 404 is there and that console-src
+ships no dot-named file. `verify/test_service_hosts_live.py` (E2E, live) now asks for `/..data/brief.html` and
+`/..data/kubecon.html` through the router and expects 404.
+
+**Not yet run on a cluster.** No cluster was up for this run. Owed on the next attendee bring-up:
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py`. Its new section requests
+`https://<public host>/..data/brief.html` through the real apex router. That proves the router passes the path to the
+console, and that the rolled console answers 404.

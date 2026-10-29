@@ -52,6 +52,15 @@ for page in GATED:
               if "return 404;" not in m.group(0)]
     check(f"no other location serves /{page}.html", not others)
 
+# The console-src volume's own entries (#650). kubelet mounts a ConfigMap as a `..data` symlink to a
+# `..<timestamp>` directory, with each key a symlink into it, so with no location for them nginx served
+# /..data/brief.html straight from root. Every path whose first segment starts with a dot is a 404.
+print("== and is a 404 under the volume's dot entries ==")
+check("a ^~ /. prefix location returns 404",
+      re.search(r"location \^~ /\. \{ return 404; \}", DEFAULT_SERVER) is not None)
+dot_named = [f for f in shipped if f.startswith(".")]
+check(f"console-src ships no file whose name starts with a dot {dot_named or ''}".rstrip(), not dot_named)
+
 # An exact location beats every other kind in nginx, so the 404s above hold whatever is added later. A regex
 # location could still hand a gated file out under some third name the router does not gate, so there is none.
 print("== no regex location can alias a gated file ==")
