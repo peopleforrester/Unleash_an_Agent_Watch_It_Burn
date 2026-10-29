@@ -3938,3 +3938,72 @@ first one names the mirrored image.
   records. The `contrib 0.158.2` remark in `gitops/otel-collector/values.yaml` is a statement about that release.
 
 **Not yet run on a cluster:** nothing is owed. This changes records and an offline test, not what a cluster deploys.
+
+## 2026-10-29 · #662 · Every platform pod names its logs' burritobot- service: pod labels, env where a chart takes only env, and the Agent's log config for the rest
+
+#629 asks that every log from the two KubeCon clusters carry a `burritobot-*` service in Whitney's sandbox org. #662
+listed what still logged under image short names after 440f946 labelled the agent namespace. There was no earlier
+draft of this issue to check against staging.
+
+- **The five platform charts' keys moved to labels in #661 (d9cefce), which this entry builds on.** PRD #28 had put
+  `tags.datadoghq.com/{service,env,version}` in podAnnotations on cert-manager, Falco, Kyverno, istiod, ztunnel and
+  argocd-server. The Datadog Agent reads those keys from pod labels only (`comp/core/tagger/collectors/workloadmeta_extract.go`,
+  `extractTagsFromPodLabels`, read 2026-10-29), so the annotations set nothing. #661 moved them, and this change keeps
+  its labels. The one difference is the version label, which is set to the deployed appVersion: cert-manager v1.21.2
+  (#661 left v1.20.2), istio 1.30.4 (#661 left 1.30.1), and Argo CD v3.5.2 (#661 left v3.4.4), the appVersion of
+  argo-cd 10.8.4, which deploy-full-idp.sh pins. #661's entry also names argo-cd 9.6.0, which is out of date for the
+  same reason. VERSIONS.lock still lists argo-cd 9.6.0 and cert-manager v1.20.2; that drift is left for its own issue.
+- **The rebase.** This branch was cut from 448affa, and #661 landed on staging meanwhile, changing the same five charts
+  and the same test lines. The first rebase onto staging conflicted in seven files, which is why the earlier run
+  stopped. Those files now take #661's version, with this change's additions reapplied on top: the sub-component labels,
+  the istio cni and Argo CD labels, kyverno's hook and controller labels, and the version pins above. The
+  `verify/test_datadog_service_map.py` change was already on staging, so nothing from this branch is needed there.
+- **Why not a Kyverno mutate policy, the issue's second option.** The burn profile, which builds burritobot-public,
+  runs no Kyverno. Kyverno's webhook here also excludes kube-system and its own namespace.
+- **Three mechanisms, in the order the Agent applies them.**
+  - **Pod labels** where the chart or operator takes them. That covers every component of cert-manager, Falco, Kyverno
+    (with its hook Jobs), istio-cni, istiod and ztunnel, and kagent's controller and UI. It also covers the OTel operator,
+    the collector (in `gitops/otel-collector/values.yaml`, which all three collector apps read) and Prometheus (through
+    the operator's `podMetadata`). So do Grafana, kube-state-metrics, node-exporter, the Prometheus operator, Tempo, the
+    three external-secrets pods, falcosidekick, the KubeArmor operator, the Datadog operator, and the node Agent and
+    Cluster Agent (the DatadogAgent's `override.*.labels`). Every Argo CD pod is labelled too: env once in
+    `global.podLabels`, which argo-cd merges under each component's. The AWS Load Balancer Controller is labelled through
+    a new `infra/aws-load-balancer-controller-values.yaml` that deploy-full-idp.sh passes. So are the five demo apps and
+    the AI layer's two PreSync gate Jobs, which are recreated each sync, so their immutable template can change.
+  - **`DD_SERVICE` and `DD_ENV` env** where the chart takes only env. The Agent reads these off a container as the
+    same standard tags; its containerd collector reads them from the container spec, so envFrom counts. That covers
+    kagent-tools and kmcp (env), grafana-mcp (its config map, which is its envFrom), and falco-talon. falco-talon's
+    chart 0.4.2 has no podLabels and writes podAnnotations into the pod's labels; that is a template bug this does not
+    rely on. Its extraEnv keeps the chart's own `LOG_LEVEL=warning`. It also covers KubeArmor's DaemonSet, init, relay
+    and controller containers: v1.7.4's operator applies each KubeArmorConfig component's `env` to its first container
+    (`internal/controller/cluster.go`).
+  - **A file-based Autodiscovery log config** in the DatadogAgent's `extraConfd` for containers that take neither. The
+    config matches a container's short image name and sets the logs' service, plus an `env:` tag. The source stays the
+    image name, as before. That covers kube-system's add-ons from `infra/terraform/aws/cluster/main.tf`: coredns,
+    kube-proxy, aws-node's three images, the EBS CSI driver and its sidecars, and eks-pod-identity-agent. It also covers
+    kagent's bundled postgres, KubeArmor's kube-rbac-proxy sidecar and snitch Jobs, and kube-prometheus-stack's
+    kube-webhook-certgen Jobs. Their only label hook, `commonLabels`, would collide with the per-component labels.
+- **A log config's service wins over a pod's labels.** So no labelled pod may run one of those images. kmcp's and
+  kagent's images are both `controller`, and grafana-mcp's and Grafana's are both `grafana`, which is why those two pods
+  are named through env, not the log config.
+- **Tests.**
+  - `verify/test_datadog_log_services_render.py` (E2E tools tier, new) renders, with the pinned Helm v4.2.1, every
+    Application, every operator CR, Argo CD and the LB controller at deploy-full-idp.sh's pins. For every container, it
+    requires a `burritobot-` service and the env from labels, env or a log config. It also requires that no log config
+    names a labelled pod, and that main.tf's add-ons are the ones whose images it lists. On staging's manifests, it
+    fails 77 checks.
+  - `verify/test_datadog_sandbox_names.py` (offline) now fails if any annotations map under `gitops/` or the
+    `infra/*values*.yaml` files holds a `tags.datadoghq.com/*` key, and it holds the Agent pods' labels.
+  - `test_observability.py` and `test_kyverno_version_pins.py` read podLabels.
+  - The live `test_datadog_service_map.py` asks for the `burritobot-` service names the pods now carry. It still asked
+    for `argocd`, `kyverno` and the other unprefixed names.
+- **Not covered.** Pods the agent or the room creates during a run, such as a villain Deployment, log under their image
+  name.
+
+**Not yet run on a cluster.** Owed on the next bring-up of burritobot-public and burritobot-private. Argo CD and the LB
+controller pick their labels up only when deploy-full-idp.sh runs again. In Log Explorer,
+`kube_cluster_name:burritobot-* -service:burritobot*` should return nothing. `verify/test_datadog_service_map.py`
+(`test_platform_component_ust`) checks the five platform services. Three assumptions are only checked live:
+- the snitch and kube-rbac-proxy short image names;
+- that grafana-mcp's envFrom value reaches the Agent;
+- that a logs-only `extraConfd` file is loaded.
