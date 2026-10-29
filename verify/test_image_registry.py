@@ -61,6 +61,10 @@ check(f"every Unleashed source path is a directory {missing}", not missing)
 check("the sweep reaches beyond gitops/ (policies/, security/, observability-idp/)",
       {"policies", "security", "observability-idp"} <= {r.relative_to(REPO).parts[0] for r in roots})
 
+# The one literal path allowed is promo/, Challenge 2's villains (#653). /lab hands the student that reference to paste
+# into a chat, and the cluster pulls it as typed: it is the unvetted image the lesson is about, not one the root
+# deploys, and restrict-image-registries refuses it wherever it appears, a cache path included.
+PROMO = f"{LAB_PLATFORM_GHCR}/promo/"
 literal = []
 scanned = 0
 for root in sorted(roots):
@@ -73,11 +77,13 @@ for root in sorted(roots):
             continue
         scanned += 1
         for i, line in enumerate(text.splitlines(), 1):
-            if LAB_PLATFORM_GHCR in uncommented(line):
+            if LAB_PLATFORM_GHCR in uncommented(line).replace(PROMO, ""):
                 literal.append(f"{p.relative_to(REPO)}:{i}")
 check(f"files were read ({scanned})", scanned > 100)
-check(f"no file names {LAB_PLATFORM_GHCR} outside a comment; an app file says {IMAGE_REGISTRY} instead {literal}",
-      not literal)
+check(f"no file names {LAB_PLATFORM_GHCR} outside a comment or {PROMO}; an app file says {IMAGE_REGISTRY} instead "
+      f"{literal}", not literal)
+handed = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
+check(f"the {PROMO} exemption is in use: /lab hands out the C2 villains there", PROMO in handed)
 
 print("== the value is only used where tpl renders it ==")
 # A plain manifest or a $values file reaches the cluster as written, so the template text would be the image.
