@@ -3391,3 +3391,44 @@ nobody here made.
 
 **Not yet on the slide.** The link reaches the room only once rounds-agenticburn's close slide carries it, and the
 public URL resolves only once this change reaches `main`.
+## 2026-10-29 · #648 · The stage's Datadog traces are seeded by a script, kept by a retention filter, and saved by hand
+
+**What it changes.**
+- `verify/stage_traces.py seed` runs on the private bot only, the night before: C5, C6 and C7, each once with its
+  guard off and once on, with the guards turned on cumulatively in segments 2 to 4's order, through the KubeCon
+  probe's own identity check, start-state check, flips and closing guards-off. That is six model calls, at most
+  12 with `--tries 2`. Each request carries its own `session` in the /chat body, `wib-stage-<UTC minute>-<seed>-t<try>`,
+  which guard-proxy stamps on the root span as `session.id`. The views find the traces by that, not by a trace id.
+- C6 off on the private cluster is a new seed the probe does not have: the probe dropped its admin c6-off beat
+  because Kyverno refuses the Joker there (question 872). Here the refusal is the point: the trace shows the
+  ticket read and any `deploy_app` it caused denied at admission, which is the run-of-show's "the admission
+  denial" in the C6 tab. It is judged on no `maintenance-shell` existing and a non-empty reply.
+- Five views, in presentation order: one per challenge, pinned to its two sessions' root spans
+  (`service:burritobot`, under env `burritobot-kubecon-na-26`) over the seed window, and the live tabs
+  `burritobot-public` and `burritobot-private`, by `kube_cluster_name`.
+- A retention filter, `@session.id:wib-stage-*` at span rate and trace rate 1.0, written by `stage_traces.py
+  retention --apply`. Trace Explorer searches unindexed spans for only 15 minutes, so a seed from the night before
+  would be gone by morning without it. `seed` refuses to send a call until the filter is in the org.
+- The views are saved by hand. Datadog's API has no endpoint for Trace Explorer saved views (the API reference has
+  none; the saved-views pages describe only the explorer's Save button, read 2026-10-29), so `seed` prints each
+  view's name and URL for the Save button. `check`, run at least 15 minutes after the seed, is what proves the
+  views still find their traces as indexed spans.
+- The seeds carry guard-proxy's probe marker, so the wall does not show the room the challenge prompts before
+  they play them. The cost is that `[[wib-probe]]` shows at the end of the prompt in the projected trace.
+
+**Tests.** `verify/test_stage_traces.py` runs the seeder against a fake cluster and a fake Datadog: the order and the
+guard state under each seed, one session per request, the identity stop, retries, a failed flip, the call ceiling,
+guards-off last, the views and their URLs, the retention filter's body and its create, update and refused write,
+and the morning check's too-early, green and red cases. It reads the root service and env from
+`gitops/ai-layer/resources.yaml` and the `session.id` stamp from guard-proxy's `proxy.py`.
+
+**Not yet run on a cluster.** No cluster or Datadog key was available to this run. Owed, the night before the
+session (2026-11-11), against Whitney's org: `python3 verify/stage_traces.py retention --profile accen-dev --region
+us-west-2 --apply` (the sandbox org's key is read-only per #629, so this may need Whitney to add the filter by hand
+from the printed fields), then `python3 verify/stage_traces.py seed burritobot-private.agenticburn.com --context
+<private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev --region us-west-2 --out
+/tmp/stage-views.json` ending `STAGE TRACES SEEDED`, saving the five printed views in the Datadog UI, and the next
+morning `python3 verify/stage_traces.py check /tmp/stage-views.json --profile accen-dev --region us-west-2` ending
+`STAGE VIEWS GREEN`. Unproven until then: that the read-only key may read retention filters and search spans, that
+`kube_cluster_name` is on the root spans as it is on the span metrics `verify/last_trace.py` reads, and that Trace
+Explorer honours the `historicalData` and pinned-window URL parameters.

@@ -286,7 +286,8 @@ behind after segment 4, drop segment 5 and give its two minutes to the close.
 **Datadog on stage** (#648). Whitney keeps two tabs: `burritobot-public` is the
 room, `burritobot-private` is the presenters, so the room's volume never buries the
 trace being shown. Every trace she shows is pre-seeded the night before, one saved
-view per challenge in presentation order, so nobody waits for a span to arrive.
+view per challenge in presentation order, so nobody waits for a span to arrive
+(`verify/stage_traces.py`, Night Before "Seed the Datadog tabs").
 Datadog comes up when it explains the attack (the tool call, the Secret read, the
 policy block), not as a product tour. If the Datadog side is not ready, the Grafana
 view on the private cluster carries the same three beats (segment 5).
@@ -669,6 +670,38 @@ is merely slow rather than rebuilding:
   It must end `C7 PROVEN`. Write the delay it prints ("the narrowed rule took effect
   after N s") into segment 4's "Measured reload delay" line. If the deny never comes,
   C7 is not ready to show.
+- [ ] **Seed the Datadog tabs (#648).** Every trace Whitney shows is put in her org
+  the night before, from the private bot, so nobody waits for a span. From the repo
+  root:
+
+  ```bash
+  # once per org, before the first seed: needs an admin APP key in watch-it-burn/datadog
+  python3 verify/stage_traces.py retention --profile accen-dev --region us-west-2 --apply
+  # six model calls on the private bot; ends with guards-off
+  python3 verify/stage_traces.py seed burritobot-private.agenticburn.com \
+      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev \
+      --region us-west-2 --out /tmp/stage-views.json
+  ```
+
+  `retention` writes the one retention filter the seeds need: Trace Explorer finds
+  an unindexed span for only 15 minutes, so without it the seeds are gone by the
+  morning. If the key cannot write it, it prints the filter for an org admin to add
+  by hand, and `seed` refuses to spend a call until it is there. `seed` runs C5, C6
+  and C7, each once with its guard off and once on, turning the guards on in
+  segments 2 to 4's order, each request under its own `wib-stage-...` session id.
+  It waits until every trace is in Datadog, writes the views file and must end
+  `STAGE TRACES SEEDED`. It prints five views in presentation order: `1 C5 the CEO's
+  secret`, `2 C6 the support ticket` and `3 C7 the poisoned weather tool`, each
+  pinned to its two traces, then `burritobot-public` (the room) and
+  `burritobot-private` (the presenters), live. Datadog's API cannot save a Trace
+  Explorer view, so open each URL signed in to Whitney's org and save it under its
+  name (Views, Save as new view). The seeds carry the probe marker, so the prompt
+  wall does not show the room the challenge prompts before they play them; the
+  marker shows in the trace's prompt. The morning of, at least 15 minutes after the
+  seed:
+  `python3 verify/stage_traces.py check /tmp/stage-views.json --profile accen-dev --region us-west-2`
+  must end `STAGE VIEWS GREEN`: every seeded trace is still found as an indexed
+  span, and each live tab answers.
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
   so the AI guardrails start off and the live toggles in segments 2 to 4 are real. The
   probe above ends with it already; run it again if anyone has touched the guards
