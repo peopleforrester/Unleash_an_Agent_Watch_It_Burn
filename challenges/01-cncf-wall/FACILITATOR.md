@@ -32,7 +32,7 @@ it with a policy message naming `require-resource-limits`.
 > (S3 exfil was CUT). The egress wall below is still a real, deployed control and the verify still holds;
 > it just no longer has a matching S3-push attack in the live run. Keep it as the "could not have pushed
 > it out" network story. Since then the student lab's Challenge 1 (`challenges/LAB-TEXT.md`) has become the
-> outbound beacon, a POST to `https://agenticburn.com/beacon`, and this wall is what blocks it.
+> outbound beacon, a POST to `https://beacon.burritobot.co/beacon`, and this wall is what blocks it.
 
 Once the policy set is in place, the agent namespace runs default-deny egress plus an allow-list scoped
 to the `workshop-agent` pod: in-VPC `10.0.0.0/16:443` (which reaches Bedrock via its **PrivateLink VPC endpoint**), DNS, the OTel

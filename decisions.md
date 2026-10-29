@@ -4332,3 +4332,85 @@ contains #474 (`dfb2f41`), so Loki should never have run on them. The PVC is sti
 on watch-it-burn-private (admin, armed) and watch-it-burn-community (burn). That run is still owed for each Datadog
 assumption #555 lists: the kube_deployment, pod_name and kube_container_name:shim tags, how the JSON line is
 parsed, the app key's logs_read_data permission, and indexing inside 300 seconds.
+
+## 2026-10-29 · question 877 · #651: Challenge 1's beacon is shown at beacon.burritobot.co, and agenticburn.com/beacon keeps serving
+
+**Answer:** "Since I asked to keep both domains, I'm not sure why you wouldn't keep both fucking domains. But since we
+moved everything over to burrito.bot.io, there's no reason not to move it over to beacon.burrito.bot.io, is there?"
+
+**Decided by:** Michael.
+
+**The question.** Where Challenge 1's beacon, the address the bot is tricked into posting stolen data to, lives now
+that the room is shown burritobot.co only. #651 retired `agenticburn.com/beacon` unless Challenge 1 stayed on deck, and
+the 2026-10-28 planning note keeps it on deck if time allows.
+
+**How the answer is read.** "burrito.bot.io" is burritobot.co: it is the domain #651 moved everything to, and the only
+one Michael bought. So the beacon is served on both domains and shown on burritobot.co, like every other kept name.
+Nothing is retired: `agenticburn.com/beacon` and `/beacon/view` keep answering.
+
+**What it changes.**
+- The address on every page, prompt, script and test is `https://beacon.burritobot.co/beacon`, and the view is
+  `https://beacon.burritobot.co/beacon/view`. The collector's own two paths are kept on the new host, so the apex
+  router needs only a host handle in front of the same collector, with no rewrite, and the collector's routes, reply
+  text and single shared count do not change. `beacon` is one label under `*.burritobot.co`, so the wildcard
+  certificate and DNS already cover it.
+- The C1 fallback read the beacon view at `provisioning.agenticburn.com/beacon/view`. apex-agenticburn retired that host
+  on 2026-10-29 (`71a80c8`), so the fallback's count check could no longer read anything. It now reads the
+  burritobot.co view.
+- Challenge 1 stays on deck as the planning note has it. The Night Before beacon-view curl now runs against the new
+  host, so that check is what proves the apex handle is live.
+
+**Not yet live (checked 2026-10-29, read-only curl).** `https://beacon.burritobot.co/beacon` and `/beacon/view` get the
+router's unknown-host 404 with a certificate that verifies. `https://agenticburn.com/beacon` answers 405 to a GET and
+`/beacon/view` answers 200. The handle is apex-agenticburn's part, on apex-agenticburn#44, which was waiting on this
+question. Until it lands, Challenge 1 on a cluster built from this commit posts to a 404 and the beacon view does not
+load.
+
+## 2026-10-29 · #651 · Every page a viewer opens shows burritobot.co, and the kagent and party-app hosts are retired
+
+Steps A and B of #651 were already on staging (ce80db5, e4de38d, c68ce1a, 9462dbe, and a6af457 for guard-proxy's
+`CONSOLE_ORIGIN`). Run 10468 drafted the rest on `origin/agent/651-10468` (28ae583, a14c8cd, f893a51), but the draft
+did not reach staging. `verify/draft-drift.sh` named 10 paths staging had changed since, so this run made the design
+again on staging at e36056b.
+
+**What differs from the draft.**
+- #664 added `maintenance-shell-<cluster>` (`WIB_VILLAIN_HOSTS`) after the draft. It stays routed, so the roster
+  table drops from 40 hosts to 16 on the next `fleet.sh routes roster`, not from 36 to 12, and
+  `verify/test_fleet_routes_roster.sh` uses those counts with the Joker row in its fixture.
+- `verify/test_segment6_view.py` is `verify/test_trace_walkthrough_view.py` now (58e08ed). It holds the run-of-show's
+  Grafana URL to the burritobot.co twin.
+- The draft left the C1 beacon on agenticburn.com, waiting on question 877. Its answer is above, and the beacon moved.
+- `verify/test_two_domains.py` is stricter than the draft's check. The draft failed on a `*.agenticburn.com` host.
+  This one fails when the visible text of any of the six pages (burritbot, lab, kubecon, brief, platform, links)
+  contains "agenticburn" at all, which is #651's done line.
+- Also new in this run: C6's `deploy_app` reply, which the room reads on their phones, named
+  `maintenance-shell-<cluster>.agenticburn.com` from the cluster identity. It now hands out the burritobot.co twin
+  (`SHOWN_HOST` in `gitops/ai-layer/workshop-mcp-server.py`). `fleet.sh reset-bot` reads `/cost` on the twin, the
+  counter the room watches. The run-of-show's probe commands use the burritobot.co names, which the probe accepts
+  since d83b88e. Its `check-tls` line checks both domains' names, because the agenticburn.com twins are the
+  redundancy and must hold too.
+
+**Shown on burritobot.co now (each host checked live 2026-10-29 with a verifying certificate).** The prompt wall link
+on `/kubecon`. The Feedback links on the storefront, the lab and the platform tour (`feedback.burritobot.co/quick`; on
+KubeCon the storefront's button still goes to the Sessionize survey through `event.js`). The run-of-show's wall,
+roster, Grafana, `/kubecon` gate, cost, probe and Joker URLs. The phone check, which still said the QR opened
+`attackme.agenticburn.com`. The terminal's `platform` catalogue. `fleet.sh router-check` and `wall-check` read
+`start.burritobot.co` and `prompts.burritobot.co` by default.
+
+**Retired: the kagent UI and party-app service hosts.** `WIB_SERVICE_HOSTS` is `grafana argocd`, and the console's host
+map and `server_name` carry only those two, plus the Joker's own server. The party apps and the kagent UI are still
+deployed, and `platform.html` and the terminal list them as in-cluster. The shrink guard skips the retired prefixes,
+listed in `WIB_RETIRED_SERVICE_HOSTS`, the same way it skips a-NNN and roundN, so that run is not refused.
+`route_hosts_of` now reads both domains, so a burritobot.co host that would go missing is refused like an
+agenticburn.com one. Before this change the guard did not see the twins at all.
+
+**Not this repo's part.** The beacon's burritobot.co handle and the retirement of `/beacon` on agenticburn.com are
+apex-agenticburn's, and the second does not happen because question 877 keeps both. apex-agenticburn retired the other
+router names on 2026-10-29 (`71a80c8`). The round hosts, attendee hosts and old `-admin` hosts are rows in the fleet's
+routes table, which the next roster run leaves out. `rounds` stays, by Michael's decision (rounds-agenticburn#43).
+
+**Not yet run on a cluster.** A session with AWS access owes these, in order. First, `./fleet.sh routes roster`, which
+should give 16 hosts and no REFUSING. Then `./fleet.sh router-check` and `./fleet.sh wall-check`. Then
+`CONTEXT=<community-context> python3 verify/test_service_hosts_live.py` once the console has rolled. Then the
+Night Before beacon-view curl on `https://beacon.burritobot.co/beacon/view`, which must print `200` once
+apex-agenticburn#44 has the handle. Last, the two `kubecon_probe.py` runs on the burritobot.co names.

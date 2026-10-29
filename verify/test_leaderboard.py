@@ -94,7 +94,7 @@ check("C1: the tool audit writes event tool_invocation with a pre phase, tool_na
 check("C1: workshop-mcp builds its server with the audit", "AuditedFastMCP" in mcp)
 check("C1: run_shell's argument is `command`, which is the @tool_input.command the query reads",
       re.search(r"def run_shell\(command: str", mcp) is not None and "@tool_input.command:*beacon*" in search.get("c1", ""))
-check("C1: the lab's beacon address contains the word the query matches", "agenticburn.com/beacon" in lab)
+check("C1: the lab's beacon address contains the word the query matches", "beacon.burritobot.co/beacon" in lab)
 check("C1: only the pre line, which is the only one that carries the arguments",
       "@phase:pre" in search.get("c1", "") and '"phase": "post", "outcome"' in audit and "tool_input" not in audit.split('"phase": "post"', 1)[1].split("\n", 1)[0])
 

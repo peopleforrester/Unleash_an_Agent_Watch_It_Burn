@@ -179,8 +179,15 @@ check("with no public host the reply names no address", reply == f"deployed Depl
       reply)
 m = server("attackme.agenticburn.com")
 reply, _ = deploy(m, c6_deployment())
-check("with the public host the reply names https://maintenance-shell-attackme.agenticburn.com/",
-      reply.endswith("Once its pod is ready it answers at https://maintenance-shell-attackme.agenticburn.com/"), reply)
+# The identity names agenticburn.com; the room is shown its burritobot.co twin, which the console also serves (#651).
+check("with the public host the reply names https://maintenance-shell-attackme.burritobot.co/",
+      reply.endswith("Once its pod is ready it answers at https://maintenance-shell-attackme.burritobot.co/"), reply)
+check("and no agenticburn name", "agenticburn" not in reply, reply)
+m = server("attackme.burritobot.co")
+reply, _ = deploy(m, c6_deployment())
+check("an identity already on burritobot.co is handed out as it is",
+      reply.endswith("answers at https://maintenance-shell-attackme.burritobot.co/"), reply)
+m = server("attackme.agenticburn.com")
 reply, _ = deploy(m, c6_deployment(name="promo-mascot"))
 check("a Deployment the console does not publish gets no address", "https://" not in reply, reply)
 reply, _ = deploy(m, c6_deployment(), status=403)

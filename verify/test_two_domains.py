@@ -96,6 +96,20 @@ class _Req:
 check("the proxy allows the console's origin", proxy._origin_allowed(_Req("https://start.burritobot.co")))
 check("the proxy still refuses a foreign origin", not proxy._origin_allowed(_Req("https://evil.example")))
 
+print("== no page a viewer opens shows agenticburn (#651's done line) ==")
+# Every kept host answers on burritobot.co (the prompt wall, the feedback form, the roster, and since question 877
+# the C1 beacon), so a page that still shows agenticburn is showing the room the old domain. Comments and code are
+# not shown; what is left of the markup is.
+for page in ("burritbot.html", "lab.html", "kubecon.html", "brief.html", "platform.html", "links.html"):
+    v = visible((WEB / page).read_text())
+    left = sorted(set(re.findall(r"[a-z0-9./-]*agenticburn[a-z0-9./-]*", v, re.I)))
+    check(f"{page} shows no agenticburn", not left, str(left))
+for page, host, link in (("burritbot.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("lab.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("platform.html", "the feedback form", 'href="https://feedback.burritobot.co/quick?'),
+                         ("kubecon.html", "the prompt wall", 'href="https://prompts.burritobot.co"')):
+    check(f"{page} links {host} on burritobot.co", link in (WEB / page).read_text())
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

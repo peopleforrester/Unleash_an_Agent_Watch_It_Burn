@@ -374,6 +374,10 @@ WORKLOAD_LABEL = "burritobot.co/workload"
 PUBLISHED_WORKLOADS = ("maintenance-shell",)
 # This cluster's public hostname, from the cluster-identity ConfigMap (infra/datadog-cluster-identity.sh).
 PUBLIC_HOST = os.environ.get("WIB_PUBLIC_HOST", "").strip()
+# The identity names agenticburn.com. Both domains serve every host, and the room is shown burritobot.co (#651),
+# so the address the bot hands out is the twin.
+SHOWN_HOST = PUBLIC_HOST.removesuffix(".agenticburn.com") + ".burritobot.co" \
+    if PUBLIC_HOST.endswith(".agenticburn.com") else PUBLIC_HOST
 
 
 def _stamp_workload(obj: dict, name: str) -> None:
@@ -400,7 +404,7 @@ def published_address(kind: str, name: str) -> str:
     """The public address the console serves this workload at, or "" when it publishes none."""
     if kind != "Deployment" or name not in PUBLISHED_WORKLOADS or not PUBLIC_HOST:
         return ""
-    return f"https://{name}-{PUBLIC_HOST}/"
+    return f"https://{name}-{SHOWN_HOST}/"
 
 
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "

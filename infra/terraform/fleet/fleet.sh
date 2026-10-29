@@ -72,7 +72,12 @@ readonly PRESENTER_OWNER_MAX=10
 # Service hostnames (#233): <service>-<label>.agenticburn.com for every cluster, riding the cluster's
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
 # covers one label. Keep in step with the server block in gitops/ai-layer/console.conf.
-readonly WIB_SERVICE_HOSTS="grafana argocd kagent hedgehog wombat unicorn spider mantis-shrimp"
+# Grafana and Argo CD only (#651, Michael 2026-10-28): the presenters keep those two prefixes, and the
+# kagent UI and party-app hosts, which the KubeCon talk does not use, are retired on both domains.
+readonly WIB_SERVICE_HOSTS="grafana argocd"
+# The service prefixes #651 retired. The shrink guard does not count their rows in the published table as
+# losses, the way it discounts the a-NNN and roundN aliases.
+readonly WIB_RETIRED_SERVICE_HOSTS="kagent hedgehog wombat unicorn spider mantis-shrimp"
 # Hosts for what an attack deploys, not what the platform installs (#664): C6's Joker, maintenance-shell. Routed
 # like a service host, but the console gives it its own server and page, and nothing answers until it lands.
 readonly WIB_VILLAIN_HOSTS="maintenance-shell"
@@ -492,9 +497,9 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
   routes [roster]     Write the apex router's table from the live console LBs, record it in the apex
                       repo and reload the live router. 'roster' publishes the roster clusters and their
                       service hosts only, no attendee-pool row (the KubeCon breakout, #502).
-  router-check        Read the live router's host list (start.agenticburn.com/roster.json) and assert it
+  router-check        Read the live router's host list (start.burritobot.co/roster.json) and assert it
                       is exactly the roster's clusters: attackme and each <owner>-admin. Read-only.
-  wall-check          Read the prompt wall's health (prompts.agenticburn.com/healthz) and assert it
+  wall-check          Read the prompt wall's health (prompts.burritobot.co/healthz) and assert it
                       answers 200 and shows every roster cluster with its prompts readable. Read-only.
 
   ATTENDEE clusters (numbered, pool-distributed, single account):
@@ -3960,7 +3965,8 @@ roster_route_hosts() {
 }
 
 # The hostnames a routes table carries, sorted: the first field of every row, comments skipped.
-route_hosts_of() { awk '!/^[[:space:]]*#/ && $1 ~ /\.agenticburn\.com$/ { print $1 }' | sort -u; }
+# Both domains (#651), so a burritobot.co twin that would go missing is a loss the shrink guard sees.
+route_hosts_of() { awk '!/^[[:space:]]*#/ && $1 ~ /\.(agenticburn\.com|burritobot\.co)$/ { print $1 }' | sort -u; }
 
 # Auto-generate the agenticburn.com wildcard-router map (railway/apex/routes.map) from LIVE cluster
 # console LBs, then commit + push so the apex Railway service redeploys and every friendly
@@ -4072,17 +4078,19 @@ cmd_routes() {
     # so a correct run legitimately produces a table two hosts shorter than the one on HEAD, and counting
     # them would make this guard refuse every publish until someone overrode it with the very flag that
     # also disables the protection. Retiring a hostname is not the same event as losing one. The roundN
-    # aliases are discounted the same way (#502).
+    # aliases are discounted the same way (#502), and so are the kagent and party-app service hosts #651
+    # retired: a roster run after it legitimately drops six rows per cluster on each domain.
     #
     # A roster run drops the pool's rows ON PURPOSE, so it compares the roster's hosts only: a pool row
     # leaving is the point of the mode and is listed. It compares them as a SET, not a count: the roster is
     # three consoles, and a table that gains a cluster's eight service hosts while losing another
     # cluster's console is longer and still takes a presenter's URL down on stage. Hosts are counted, not
     # lines, so the header comment no longer counts on both sides.
-    local new_hosts old_hosts pool_rows new_count old_count shrinks=0
+    local new_hosts old_hosts pool_rows new_count old_count shrinks=0 retired
+    retired="$(tr ' ' '|' <<<"${WIB_RETIRED_SERVICE_HOSTS}")"
     new_hosts="$(route_hosts_of < "${tmp}")"
     old_hosts="$(git -C "${WIB_APEX_DIR}" show HEAD:"$(basename "${out}")" 2>/dev/null \
-        | route_hosts_of | grep -vE '^(a-[0-9]+|round[^.]*)\.' || true)"
+        | route_hosts_of | grep -vE "^(a-[0-9]+|round[^.]*|(${retired})-[a-z0-9-]+)\." || true)"
     if [[ "${scope}" == roster ]]; then
         pool_rows="$(grep -vFx -f <(roster_route_hosts) <<<"${old_hosts}" | grep . || true)"
         old_hosts="$(grep -Fx -f <(roster_route_hosts) <<<"${old_hosts}" || true)"
@@ -4330,7 +4338,8 @@ restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTO
 reset_bot_one() {
     local name="$1" kcfg="$2" ctx="$3" host url body verdict waited=0
     restart_pods "${name}" "${kcfg}" "${ctx}" agent "${GUARD_PROXY_POD_SELECTOR}" || return 1
-    host="$(public_host_for "${name}")"; url="https://${host}/cost"
+    # The room reads the counter on the burritobot.co twin (#651), so that is the one read back.
+    host="$(public_host_for "${name}" | twin_rows)"; url="https://${host}/cost"
     while :; do
         body="$(curl -fsS --max-time 10 "${url}" 2>/dev/null || true)"
         verdict="$(python3 -c '
@@ -4528,13 +4537,14 @@ cmd_hosts() {
 # Does the LIVE router serve the roster, and only the roster (#502)? The breakout's three hosts reach their
 # clusters only through the apex router, and a table that was pushed but never reloaded leaves it serving
 # the previous one (2026-08-26), so the table in the apex repo proves nothing about the router. This reads
-# the router's own view instead: start.agenticburn.com/roster.json, which the router derives from the table
-# on its volume after every reload, one host per cluster and no LB address. It is the same read the ops
-# view treats as "routed" (#308). A missing roster host is a URL that 404s on stage; an extra host is a
-# cluster the table still routes that nobody on stage is watching. Service hosts are not in roster.json;
-# check-tls covers the consoles themselves. Read-only. WIB_ROUTER_ROSTER_URL points it elsewhere.
+# the router's own view instead: start.burritobot.co/roster.json (start.agenticburn.com serves the same
+# list), which the router derives from the table on its volume after every reload, one host per cluster and
+# no LB address. It is the same read the ops view treats as "routed" (#308). A missing roster host is a URL
+# that 404s on stage; an extra host is a cluster the table still routes that nobody on stage is watching.
+# Service hosts are not in roster.json; check-tls covers the consoles themselves. Read-only.
+# WIB_ROUTER_ROSTER_URL points it elsewhere.
 cmd_router_check() {
-    local url="${WIB_ROUTER_ROSTER_URL:-https://start.agenticburn.com/roster.json}" body got want entry h rc=0
+    local url="${WIB_ROUTER_ROSTER_URL:-https://start.burritobot.co/roster.json}" body got want entry h rc=0
     body="$(curl -fsS --max-time 15 "${url}" 2>/dev/null)" \
         || { log "router-check: FAIL could not read ${url}"; return 1; }
     got="$(jq -r '.[].host' <<<"${body}" 2>/dev/null | sort -u)" \
@@ -4553,15 +4563,15 @@ cmd_router_check() {
     return "${rc}"
 }
 
-# Does the prompt wall show every roster cluster (#637)? prompts.agenticburn.com is what the projector shows in
-# segment 2, and it builds its cluster list from start.agenticburn.com/roster.json, so a cluster missing from the
+# Does the prompt wall show every roster cluster (#637)? prompts.burritobot.co is what the projector shows in
+# segment 2, and it builds its cluster list from the router's roster.json, so a cluster missing from the
 # router's roster is missing from the wall too. Its /healthz names each cluster it polls, by the first label of
 # the cluster's host, with ok false and an error when it cannot read that cluster's prompts. Run it after
 # router-check. Do not point the wall at lab-platform's roster before 2026-11-12: that roster leaves out attackme
 # and the admin cluster until lab-platform#137 lands (prompts-agenticburn#11). Read-only. WIB_WALL_URL points it
 # elsewhere.
 cmd_wall_check() {
-    local url="${WIB_WALL_URL:-https://prompts.agenticburn.com}/healthz" out code body got entry h n rc=0
+    local url="${WIB_WALL_URL:-https://prompts.burritobot.co}/healthz" out code body got entry h n rc=0
     out="$(curl -sS --max-time 15 -w '\n%{http_code}' "${url}" 2>/dev/null)" \
         || { log "wall-check: FAIL could not read ${url}"; return 1; }
     code="${out##*$'\n'}"; body="${out%$'\n'*}"
@@ -4573,7 +4583,7 @@ cmd_wall_check() {
     for entry in "${INSTRUCTORS[@]}"; do
         h="$(public_host_for "${entry%%|*}")"; n="${h%%.*}"
         if ! grep -q "^${n}"$'\t' <<<"${got}"; then
-            log "  FAIL  the wall has no ${n}: is ${h} in start.agenticburn.com/roster.json? run 'fleet.sh router-check'"
+            log "  FAIL  the wall has no ${n}: is $(twin_rows <<<"${h}") in start.burritobot.co/roster.json? run 'fleet.sh router-check'"
             rc=1
         elif ! grep -q "^${n}"$'\ttrue\t' <<<"${got}"; then
             log "  FAIL  the wall lists ${n} but cannot read its prompts: $(grep "^${n}"$'\t' <<<"${got}" | cut -f3)"

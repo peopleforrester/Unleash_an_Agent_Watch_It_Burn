@@ -4,7 +4,7 @@
 # KubeCon NA 2026: real-phone check for the audience page
 
 The room opens one page from their phones: the community BurritoBot at
-**https://attackme.agenticburn.com/** (segment 2 of
+**https://attackme.burritobot.co/** (segment 2 of
 `facilitation/kubecon-na-2026-run-of-show.md`). This file is the check that the
 page, the QR code on the projector and the Feedback button work for them. A
 person does it, on the live community cluster, after the Night Before bring-up.
@@ -17,7 +17,7 @@ row below is one real phone, in hand, on the network named.
 
 Both come from one file, `gitops/ai-layer/web/event.js`:
 
-- `publicUrl`, `https://attackme.agenticburn.com/`, is what the QR encodes.
+- `publicUrl`, `https://attackme.burritobot.co/`, is what the QR encodes.
 - `feedbackUrl`, the Sessionize survey for session 1249553, is where the
   storefront's Feedback button goes. It opens in a new tab, so the chat is still
   there afterwards, and no cluster or user is added to it.
@@ -40,9 +40,9 @@ student's cluster and user again.
 
 ## Before you start
 
-- [ ] The community cluster is up and `https://attackme.agenticburn.com/` shows
+- [ ] The community cluster is up and `https://attackme.burritobot.co/` shows
   the storefront on a laptop.
-- [ ] `curl -s https://attackme.agenticburn.com/event.js` returns the `event.js`
+- [ ] `curl -s https://attackme.burritobot.co/event.js` returns the `event.js`
   in this repo. If it does not, the console pod has not rolled yet.
 
 ## Real devices
@@ -79,7 +79,7 @@ use, in a room at least as deep as the session's room (conference-knowledge (`ev
 or as close as you can get.
 Scan it with each phone's own camera app, not a QR app, from the back row.
 
-| Phone | Distance from the screen | Scans first try | Opens https://attackme.agenticburn.com/ | Checked by, date |
+| Phone | Distance from the screen | Scans first try | Opens https://attackme.burritobot.co/ | Checked by, date |
 |---|---|---|---|---|
 | iPhone, camera | | | | |
 | Android, camera | | | | |

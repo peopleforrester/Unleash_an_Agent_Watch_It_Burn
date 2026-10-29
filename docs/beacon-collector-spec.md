@@ -48,3 +48,11 @@ are live on the provisioning service, **tell Michael** and he will repoint apex 
 `agenticburn.com/beacon` and `/beacon/view` `reverse_proxy` into the provisioning app (same pattern apex
 already uses for `provisioning` / `rounds` / `feedback`). The provisioning agent does NOT need to touch
 apex — just build the two routes and report the path.
+
+## Both domains (#651, question 877)
+The room is shown burritobot.co, so the address on every page, prompt and script is
+`https://beacon.burritobot.co/beacon`, with the view at `https://beacon.burritobot.co/beacon/view`. Both domains keep
+serving: `agenticburn.com/beacon` and `/beacon/view` stay as they are. The same two paths on the `beacon.burritobot.co`
+host go to the same collector, so the collector's routes, its reply text and its one shared count do not change.
+`beacon` is one label under `*.burritobot.co`, so the wildcard certificate and DNS already cover it; the apex router
+needs the host's handle (apex-agenticburn#44).
