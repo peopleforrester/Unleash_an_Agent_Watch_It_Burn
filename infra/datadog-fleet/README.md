@@ -86,12 +86,13 @@ provisioning claims and each console's liveness, one row per cluster, for the in
 the same question by walking what a student touches. The monitors are the continuous version of it, and
 every alert names the `fleet.sh verify <cluster>` command for the cluster it is about.
 
+## The one link
+
+The apply prints the dashboard's URL as `fleet dashboard:`. Open that on the instructor screen. There is
+no hostname for it: `monitoring.agenticburn.com` was a redirect to this URL (apex-agenticburn#34), and it
+was retired with the other hostnames the KubeCon talk does not use (#651, apex-agenticburn#44). It now gets
+the router's unknown-host 404, so the apply no longer prints a command to point it here.
+
 ## Not here yet
 
-- `monitoring.agenticburn.com` lives in the apex router (`peopleforrester/apex-agenticburn`, Caddyfile),
-  which is a separate repo. Since apex-agenticburn#34 it is a 302 to `WIB_MONITORING_URL` on the
-  `watch-it-burn-apex` Railway service, and a 503 until that is set. The dashboard URL changes every event,
-  so the apply prints the `railway variables --service watch-it-burn-apex --set WIB_MONITORING_URL='<url>'`
-  command after the `fleet dashboard:` URL (#550). Running it stays a manual step, during event setup:
-  changing a Railway variable redeploys the apex service and restarts the router.
 - The per-attendee orgs get none of this; each student's org sees only their own cluster.

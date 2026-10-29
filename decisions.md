@@ -4427,3 +4427,28 @@ watch-it-burn-community once it has synced this commit. It checks that the deplo
 that PROXY_TIMEOUT is 45. It then checks, through the apex, the per-conversation burst and the per-network burst,
 using empty prompts that spend nothing, and times one probe turn against PROXY_TIMEOUT. A phone-scale load test on
 attackme is also still owed.
+
+## 2026-10-29 · #267 · The fleet dashboard's URL is the one link; the retired monitoring host gets no railway step
+
+#267's third item was monitoring.agenticburn.com pointing at the fleet dashboard. apex-agenticburn#34 built it, as
+a 302 to `WIB_MONITORING_URL` on the `watch-it-burn-apex` Railway service, and `fleet.sh monitors --apply` printed
+the `railway variables` command to set it (#550). Michael's #651 decision (2026-10-28) then put `monitoring` on the
+list of hostnames the KubeCon talk does not use, and apex-agenticburn#44 retired it live (router `71a80c8`,
+checked 2026-10-29 13:48 UTC). The Caddyfile has no handle for it now, and the router's E2E tests check it gets the
+unknown-host 404. So the apply was printing a command for a host that no longer exists.
+
+- `fleet_monitors.py` no longer prints the railway command or holds `MONITORING_LABEL` and `APEX_SERVICE`. It
+  prints `fleet dashboard: <url>` and `challenge leaderboard: <url>` as before, and the fleet dashboard URL is
+  the one link to open on the instructor screen.
+- `infra/datadog-fleet/README.md` says this under "The one link". `verify/test_fleet_monitors.py` now fails if
+  the apply prints `railway variables`, `WIB_MONITORING_URL` or the retired host.
+- No burritobot.co twin was added: #651's keep list does not name monitoring, and adding a hostname is that
+  decision's to change, not this issue's.
+
+The rest of #267 was already done (`205e75e`): the six monitors, the fleet dashboard, the loader, and
+fleet-walkthrough.sh on every `up` and `scale`.
+
+**Not yet run on a live org.** The monitors have not been applied to an instructor org yet. A session with AWS
+access runs `infra/terraform/fleet/fleet.sh monitors --apply --session <START>/<END>` once per event, after the
+pool is loaded. Then `WIB_DEFAULT_ACCOUNT=accen-dev WIB_REGION=us-west-2 python3 verify/test_fleet_monitors_live.py`
+checks the org, and that run is also the first one against real metric names.
