@@ -50,7 +50,7 @@ record is in the run-of-show.
 Fixed 2026-10-27 and 10-28: the Bedrock profile description comma (#610); the guard-proxy re-pin (#487, #519,
 #486, #455); the probe and the gateway pin writing Argo-managed objects as the principals block-argocd-drift
 admits (#630); the C6 image named in full (#627); the probe judging C7 as the stage shows it (#628); Falco
-0.45.1 for kernel 6.18 (#626); the event-tag test (#631); the per-conversation rate limit (#450, partial);
+0.45.1 for kernel 6.18 (#626); the event-tag test (#631); the per-conversation rate limit (#450; the per-network ceiling, the timeout ladder and readable refusals followed on 2026-10-29, not yet live);
 the Datadog org verifier against the read-only key (#629). Merged on Michael's approval: customer-stream
 removal (#473), Loki and Alloy removal (#474), the plan-time policy (#200).
 

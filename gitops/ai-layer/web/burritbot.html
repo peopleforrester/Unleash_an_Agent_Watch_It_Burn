@@ -649,12 +649,17 @@
     const t=document.createElement('div');t.className='typing';t.textContent='BurritoBot is thinking…';
     const s=document.getElementById('stream');s.appendChild(t);s.scrollTop=s.scrollHeight;
     try{
-      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:v,session:getSession()})});
+      // The session rides as a header too, so the console's nginx can hold one conversation to its 10 a minute
+      // before the per-network ceiling counts it (#450, console.conf).
+      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-BurritoBot-Session':getSession()},body:JSON.stringify({prompt:v,session:getSession()})});
       t.remove();
       // The cluster RESPONDED (even an error status means it is alive) — never show the cluster-dead
       // screen here; that is reserved for a genuinely unreachable cluster (the catch below).
       unreachable=0; noBurritos(false);
-      if(!res.ok){ bubble("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again.",'bot'); return; }
+      // guard-proxy and the console's nginx both answer an error in the /chat shape, so its reply is the
+      // sentence to show; the status code is for a body that carries none (BurritoBot#110, #450).
+      if(!res.ok){ let r=''; try{ r=(await res.json()).reply||''; }catch(e){}
+        bubble(r||("Hmm, the kitchen isn't answering right now ("+res.status+"). Give it a second and send that again."),'bot'); return; }
       const data=await res.json();
       botReply(data.reply);
       if((data.reply||'').toLowerCase().includes('free burritos for life')) winBubble();

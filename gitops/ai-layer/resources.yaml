@@ -727,6 +727,13 @@ spec:
             - { name: RATE_LIMIT_RPM, value: "150" }
             - { name: RATE_LIMIT_SESSION_RPM, value: "10" }
             - { name: COST_CAP_USD, value: "25" }
+            # Per upstream call, and a /chat turn makes up to six in a row (the injection classifier, the topic
+            # classifier, three agent forwards counting the two self-heal retries, the output scrub), so the
+            # turn's worst is 6 x 45 = 270s. It must stay under the console nginx's /chat 285s, which is under
+            # Railway's 300s of silence and the NLB's 350s (#450). proxy.py's default, 150s, made it 900s, and a
+            # long turn would have shown the phone Railway's bare error instead of a reply. A forward that runs
+            # out answers "BurritoBot's kitchen isn't answering". verify/test_audience_path.py holds the ladder.
+            - { name: PROXY_TIMEOUT, value: "45" }
             # Optional side-screen prompt stream; ON only once moderation is confirmed (code of conduct).
             # ON for Portland (Michael, 2026-09-03), so the instructor feed at start.agenticburn.com
             # has something to render. Attendees are TOLD their prompts may appear on the instructor

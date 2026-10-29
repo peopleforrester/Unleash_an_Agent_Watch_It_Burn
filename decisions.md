@@ -4370,3 +4370,60 @@ Michael whether to swap.
   padded-past-512 and reworded payloads pass both models, so C6's teaching points were never at stake.
 
 **Not yet run on a cluster.** Nothing: no deployed object changes.
+
+## 2026-10-29 · #450 · The ballroom's /chat: a per-network ceiling under the cluster window, a timeout ladder under Railway's 300 s, and refusals in words
+
+**The question.** Issue 450 asks that a KubeCon ballroom of phones, most of it on one venue Wi-Fi NAT address, can
+share attackme without one phone or one script spending the room's budget, without a slow turn showing a phone an
+outer hop's bare error, and with every refusal readable. Michael's 2026-10-27 progress already settled the exposure
+path (attackme behind the Railway apex), the per-conversation limit (guard-proxy `RATE_LIMIT_SESSION_RPM` 10,
+`000f57e`), the cluster window (150) and the $25 cost cap (about 25 minutes of a saturated room). He left open the
+per-address ceiling, which waited on apex-agenticburn#40, and the timeout ladder. apex-agenticburn#40 has been live
+on production since `483ed28` (2026-10-28): the apex sends the caller's public address as the one X-Forwarded-For
+entry, measured in attackme's nginx log.
+
+**What it changes.**
+- **Per-network ceiling, in the console's nginx.** `limit_req` on `/chat`: first 10 a minute per conversation
+  (burst 9), keyed on a new `X-BurritoBot-Session` header the storefront sends, then 120 a minute per address
+  (burst 60), keyed on `$http_x_forwarded_for`. nginx's own peer is the NLB, the same for every phone, so it is not
+  the key. Why 120: BurritoBot's question 157 set 300 a minute per address, but here the cluster window is 150, so 300
+  would never bind. 120 is under 150, so one address (a script rotating sessions, or the whole venue NAT) cannot take
+  the full window, and cellular phones and the stage keep 30. The per-conversation zone is in nginx too, ahead of
+  the address zone, because nginx counts a request in a zone only when every zone passes it: a phone over its own
+  10 then does not spend its network's 120. guard-proxy's own per-conversation limit stays as it is.
+- **The timeout ladder.** `/chat` sends nothing until the turn is done, so Railway's 300 s with no data
+  (docs.railway.com specs-and-limits, read 2026-10-29) is the outer limit; the apex Caddy sets no response timeout,
+  and the NLB's TCP idle timeout is the 350 s default. A guard-proxy turn makes up to six upstream calls in a row (the
+  injection classifier, the topic classifier, three agent forwards counting the two self-heal retries, the output
+  scrub), each under `PROXY_TIMEOUT`, so proxy.py's default of 150 s gave a worst turn of 900 s. Now `PROXY_TIMEOUT`
+  is 45 (worst 270 s) and nginx's `/chat` timeout is 285 s (was 160 s). The cost is that one agent forward longer
+  than 45 s now ends in "BurritoBot's kitchen isn't answering" rather than an answer. The followup asks
+  guard-proxy-agenticburn for one deadline per turn, so that a single long turn could have most of the 270 s back.
+- **Refusals in words (BurritoBot#110).** nginx's limit is a guarded 200 in guard-proxy's `/chat` shape ("Slow down,
+  hungry traveler."). nginx's own 502, 503 and 504 return JSON with a `reply` that carries "kitchen isn't answering",
+  which the probes already read as a failure. guard-proxy's own error replies pass through, since
+  `proxy_intercept_errors` is off in the default server. The storefront now shows the body's `reply` on any error
+  status, and falls back to the status code only when the body has no reply.
+- `verify/test_audience_path.py` (offline) holds all of this. It counts the calls in proxy.py's `_handle_chat`, so
+  an added retry fails it. Putting back PROXY_TIMEOUT 150, nginx 160 s or 295 s, a 300 a minute ceiling, a
+  `$binary_remote_addr` key, the missing error_page or the old header name each fails it. The run-of-show has the
+  hop table under "The audience path", and the readiness row 9 and PROJECT_STATE are updated.
+- **Checked on a real nginx.** The console runs nginx 1.27. Debian's nginx 1.26.3 was run against this
+  console.conf's default server, with a fake guard-proxy in front of it. Twelve requests at once from one
+  conversation gave 10 answers and 2 "Slow down" refusals. Seventy fresh conversations from one address gave 61
+  answers. After one conversation sent 40 (10 passed), 50 fresh conversations on the same address all passed, which
+  shows that refused requests do not spend the address budget. guard-proxy received the caller's X-Forwarded-For
+  unchanged. A request with neither header was not limited by nginx. A slow upstream gave a 504 JSON reply, a dead
+  one gave a 502 JSON reply, and guard-proxy's own 502 came through untouched.
+
+**Known limits.** The NLB is internet-facing, so a caller who goes around the apex can choose its own X-Forwarded-For
+and get around the per-network ceiling. Such a caller is still held by guard-proxy's per-conversation limit, its
+150 a minute window and the cost cap. A request from inside the cluster sends neither header and is held by
+guard-proxy alone. Whether iPhone Safari waits 270 s for a fetch has not been checked; the phone check (#451) covers
+it.
+
+**Not yet run on a cluster.** `CONTEXT=<community ctx> python3 verify/test_audience_path_live.py` on
+watch-it-burn-community once it has synced this commit. It checks that the deployed nginx config matches git and
+that PROXY_TIMEOUT is 45. It then checks, through the apex, the per-conversation burst and the per-network burst,
+using empty prompts that spend nothing, and times one probe turn against PROXY_TIMEOUT. A phone-scale load test on
+attackme is also still owed.

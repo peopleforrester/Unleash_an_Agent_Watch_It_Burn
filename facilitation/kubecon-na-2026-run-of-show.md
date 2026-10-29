@@ -263,6 +263,27 @@ attendee lab runs: nobody is pointed at the provisioning distributor. The
 provisioning service runs only as the C1 beacon collector, which matters only if
 C1 is pulled on deck (open question 9).
 
+**The audience path (#450).** A phone reaches attackme through Railway's edge, the
+apex Caddy, the cluster's NLB, the console's nginx, then guard-proxy. The limits and
+timeouts on that path, outside in:
+
+| Hop | Limit on a /chat turn | Rate limit |
+|---|---|---|
+| Railway edge | 300 s with no data (15 min while data flows) | none |
+| apex Caddy | no response timeout; dial 2 s, retried for 5 s | none; sends the phone's address as the one X-Forwarded-For (apex-agenticburn#40) |
+| NLB | 350 s TCP idle (AWS default) | none |
+| console nginx `/chat` | 285 s | 10 a minute per conversation, then 120 a minute per network address |
+| guard-proxy | 45 s per call, up to six calls a turn: 270 s | 10 a minute per conversation, 150 a minute for the cluster, $25 cost cap |
+
+Most of the room leaves the venue Wi-Fi through one NAT address, so the room on
+Wi-Fi shares the 120 a minute, and phones on cellular and the stage keep the
+other 30 of the cluster's 150. A phone over its own 10 is refused without
+spending its network's 120. Every refusal shows on the phone as a sentence,
+"Slow down, hungry traveler.", and a turn that runs out of time reads "BurritoBot's
+kitchen isn't answering", never a bare status code. `verify/test_audience_path.py`
+holds all of this offline; `CONTEXT=<community ctx> python3
+verify/test_audience_path_live.py` checks it through the apex on the live cluster.
+
 Terminal login on the private cluster is `sprouts` / `sprouts`, the presenter login
 every roster cluster gets (`agentic` is the attendee pool's). Read it off the
 cluster if in doubt:
@@ -844,9 +865,10 @@ number and says who settled it and when, so references to it elsewhere still lan
    `python3 verify/model_pin_check.py --profile accen-dev --region us-west-2`, has
    not been run yet. It needs the accen-dev credentials. Record its date and output
    on #453.
-7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized for a
-   ballroom on one venue Wi-Fi NAT, verified on real phones. Not yet done; needs the
-   live platform and two real devices.
+7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized in git
+   for a ballroom on one venue Wi-Fi NAT ("The audience path" above). Still owed:
+   `verify/test_audience_path_live.py` on attackme once it runs this config, a
+   phone-scale load test there, and the real-phone check (#451).
 8. **The deck (rounds-agenticburn#38).** This file is the beat list the deck is
    cut from. The deck itself is built in `peopleforrester/rounds-agenticburn`
    (`attendee.html`); this repo builds no slide HTML. No deck is submitted to
