@@ -4287,3 +4287,48 @@ change moves no pointer.
 verify/kubecon_probe.py admin <host> --context <admin-context> --kubeconfig <file> --profile accen-dev` on a fresh
 admin cluster, whose `badges` beat now compares C7 with the gateway rule. Its `c7-on` beat narrows the rule. The
 badge read after that is still a hand check of /controls (`tool_allowlist` true).
+## 2026-10-29 · #555 · The live audit-trail check sends its call from a pod the armed admin profile admits
+
+**Context.** #555 asks for `verify/test_tool_audit_live.py` to be run on a cluster, to confirm that the Datadog
+Logs search #474 moved it to finds workshop-mcp's audit lines, and for whatever does not hold to be fixed. This run
+has no cluster and no AWS credentials, so the Datadog half is still unrun. Reading the check against the policies
+the clusters run showed one link that would break before the check reached Datadog. The private KubeCon cluster is
+the admin profile, and fleet.sh `arm_infra_guardrails` flips `restrict-image-registries` and
+`require-resource-limits` to Deny on admin and full clusters. The check sent its tools/call from `kubectl run
+--image=curlimages/curl:8.10.1`, with no limits set. `curlimages/` is on no allowed registry (only
+`docker.io/library/` is), and the pod had no CPU or memory limits, so the API server would refuse it on that
+cluster. The community cluster (burn profile) runs no Kyverno and would have admitted it.
+
+**What changed.**
+- `verify/probe_pod.py` (new) builds the one-shot pod as a manifest. It runs `sh -c <script>` with CPU and memory
+  limits on the image the caller passes. `kubectl run` cannot be rendered offline: with or without `--overrides`
+  it asks the API server for discovery first, and it has no flag for resource limits (none in the pinned
+  v1.36.2). So the pod is created with `kubectl create -f -`, which makes the manifest the offline test judges
+  the same one the live check creates.
+- `test_tool_audit_live.py` reads the shim image off the cluster's workshop-mcp Deployment and runs the probe on
+  it. That image is on ghcr.io, its digest is already signed and admitted for the Deployment, the node has it
+  cached, and it has sh and curl (`images/workshop-mcp/Dockerfile`). The check creates the pod, waits for it to
+  stop, reads its logs and deletes it. If the pod never runs, the check prints why, for example Kyverno's message.
+  The Datadog search and every check after it are unchanged.
+- `verify/test_probe_pod_admission.py` (new, E2E tools tier) uses the pinned Kyverno CLI v1.19.1 to run the probe
+  pod and the old curlimages pod through every workshop policy and the floor. It does this for two operator
+  identities: a system:masters admin, and an EKS access-entry principal that is in no system group. Every policy
+  admits the probe pod, and both armed policies actually judge it and pass it. The old pod is refused by exactly
+  those two policies.
+- `verify/test_tool_audit.py` holds that the live check builds its pod with probe_pod, reads the shim image off
+  the Deployment, and no longer uses `kubectl run` or curlimages.
+
+**Checked here without a cluster.** With mcp 1.29.1 in a throwaway venv, the live check's library half passes all
+14 checks. Its live half was then driven against a stand-in kubectl, which showed the pod being created, polled,
+read and deleted in that order, with the shim image and the limits. The probe's shell script was also run under
+dash and mawk, the shell and awk of the python:3.12-slim base, against a local workshop-mcp. It got a result, and
+workshop-mcp wrote the pre and post lines with the probe's identity.
+
+**Loki's leftover PVC.** Both KubeCon clusters were rebuilt on 2026-10-28 at staging `7210a3b`, which already
+contains #474 (`dfb2f41`), so Loki should never have run on them. The PVC is still listed for a check. Loki chart
+7.3.0's single-binary StatefulSet `loki` named its claim `storage-loki-0`.
+
+**Not yet run on a cluster.** `CONTEXT=<ctx> python3 verify/test_tool_audit_live.py` with mcp 1.29.1 installed,
+on watch-it-burn-private (admin, armed) and watch-it-burn-community (burn). That run is still owed for each Datadog
+assumption #555 lists: the kube_deployment, pod_name and kube_container_name:shim tags, how the JSON line is
+parsed, the app key's logs_read_data permission, and indexing inside 300 seconds.

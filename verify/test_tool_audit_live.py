@@ -13,7 +13,8 @@ and that the identity header really is on the request context the override reads
 Live half, one link of the chain per check:
 1. the Agent CR on the cluster carries X-Agent-Identity on its workshop-mcp entry;
 2. kagent rendered it into the agent's config Secret, which is what the ADK runtime sends on every MCP request;
-3. a tools/call sent through agentgateway with a unique identity comes out of Datadog Logs with that
+3. a tools/call sent through agentgateway with a unique identity, from a one-shot pod in the agent namespace
+   that the admin profile's armed Kyverno admits (verify/probe_pod.py), comes out of Datadog Logs with that
    identity, which proves agentgateway forwards the header, workshop-mcp audits it and the Datadog Agent
    (containerCollectAll, gitops/manifests/datadog/datadog-agent.yaml) ships it tagged with its namespace,
    deployment, pod and container. The search runs against the cluster's own org, with the keys the Agent
@@ -44,6 +45,9 @@ import urllib.request
 import uuid
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO / "verify"))
+import probe_pod  # noqa: E402
+
 AI = REPO / "gitops/ai-layer"
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
@@ -183,8 +187,26 @@ if failures:
     finish()
 
 
-def kubectl(*args: str, timeout: int = 60) -> subprocess.CompletedProcess:
-    return subprocess.run(["kubectl", "--context", CONTEXT, *args], capture_output=True, text=True, timeout=timeout)
+def kubectl(*args: str, timeout: int = 60, stdin: str | None = None) -> subprocess.CompletedProcess:
+    return subprocess.run(["kubectl", "--context", CONTEXT, *args], capture_output=True, text=True, timeout=timeout,
+                          input=stdin)
+
+
+def run_pod(pod: dict, timeout: int = 300) -> tuple[str, str]:
+    """Create the pod, wait for it to stop, and return its phase and its stdout (or why it never ran). The pod
+    is deleted whatever happened."""
+    name = pod["metadata"]["name"]
+    made = kubectl("create", "-f", "-", stdin=json.dumps(pod))
+    if made.returncode != 0:
+        return "Refused", made.stderr.strip()
+    try:
+        phase, deadline = "", time.time() + timeout
+        while time.time() < deadline and phase not in ("Succeeded", "Failed"):
+            time.sleep(3)
+            phase = kubectl("-n", NS, "get", "pod", name, "-o", "jsonpath={.status.phase}").stdout.strip()
+        return phase or "Unknown", kubectl("-n", NS, "logs", name).stdout
+    finally:
+        kubectl("-n", NS, "delete", "pod", name, "--ignore-not-found", "--wait=false")
 
 
 def find_headers(node, url_part: str):
@@ -231,14 +253,21 @@ SID=$(curl -s -D - -o /dev/null -X POST "$U" "$@" -d '{init}' | tr -d '\\r' | aw
 curl -s -o /dev/null -X POST "$U" "$@" -H "mcp-session-id: $SID" -d '{{"jsonrpc":"2.0","method":"notifications/initialized"}}'
 curl -s -X POST "$U" "$@" -H "mcp-session-id: $SID" -d '{call}'
 """
-# Searched from a minute before the call: the curl pod can take minutes to schedule, and a window that
+# The probe runs workshop-mcp's own image, so the armed admin profile admits it (verify/probe_pod.py, #555).
+img = kubectl("-n", NS, "get", "deployment", "workshop-mcp", "-o",
+              'jsonpath={.spec.template.spec.containers[?(@.name=="shim")].image}')
+image = img.stdout.strip() if img.returncode == 0 else ""
+check("the workshop-mcp Deployment names the shim image the probe pod runs", bool(image))
+if failures:
+    finish()
+# Searched from a minute before the call: the probe pod can take minutes to schedule, and a window that
 # opened after it ran would miss the lines it made.
 sent_at = time.time()
-sent = kubectl("run", f"toolaudit-{uuid.uuid4().hex[:6]}", "--rm", "-i", "--restart=Never", "-n", NS,
-               "--pod-running-timeout=180s", "--image=curlimages/curl:8.10.1", "--command", "--", "sh", "-c", script,
-               timeout=300)
-check("the tools/call through agentgateway was answered", sent.returncode == 0 and "NO_SESSION" not in sent.stdout
-      and '"result"' in sent.stdout)
+phase, answer = run_pod(probe_pod.shell_pod(f"toolaudit-{uuid.uuid4().hex[:6]}", NS, image, script))
+if phase != "Succeeded":
+    print(f"        the probe pod ended {phase}: {answer.strip()[:300]}")
+check("the tools/call through agentgateway was answered", phase == "Succeeded" and "NO_SESSION" not in answer
+      and '"result"' in answer)
 
 print("== the Datadog org this cluster ships to ==")
 dda = kubectl("-n", "datadog", "get", "datadogagent", "datadog", "-o", "json")

@@ -210,6 +210,15 @@ APPS = REPO / "gitops/bootstrap/apps"
 check("no Loki or Alloy app is left to read the trail from (#474)",
       APPS.is_dir() and not (APPS / "loki.yaml").exists() and not (APPS / "alloy.yaml").exists())
 
+print("== the live check's call is sent from a pod the armed admin profile admits (#555) ==")
+LIVE = (REPO / "verify/test_tool_audit_live.py").read_text(encoding="utf-8")
+check("it builds its probe pod with verify/probe_pod.py, which test_probe_pod_admission.py judges",
+      "probe_pod.shell_pod(" in LIVE)
+check("it runs the shim image the workshop-mcp Deployment names, read off the cluster",
+      re.search(r'get", "deployment", "workshop-mcp".*\n.*containers\[\?\(@\.name=="shim"\)\]\.image', LIVE) is not None)
+check("it no longer uses kubectl run or curlimages/curl, which Deny refuses on that profile",
+      '"run",' not in LIVE and "curlimages" not in LIVE)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
