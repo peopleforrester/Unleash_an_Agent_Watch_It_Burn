@@ -4252,3 +4252,38 @@ a check of the Agent after a tools change in git. Patch the live workshop-mcp to
 confirm that Argo puts it back and that ai-layer reads Synced: `KUBECONFIG=<file> kubectl --context <ctx> -n agent
 get agent workshop-agent -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'`. On a burn or attendee
 cluster, `./fleet.sh converge <name>` should log "agent tool list is stale" once and then read CONVERGED.
+
+## 2026-10-29 · #519 · The probe holds the C7 badge to the gateway rule, and a check ties proxy.py's reads to guard-proxy-reader
+
+**The pin was already in place.** #519 asked to move gitops/ai-layer/guard-proxy to a guard-proxy-agenticburn main
+commit that has guard-proxy-agenticburn#5, the C7 badge reading the `# c7-rule` line of agent/agentgateway-c7-config.
+Run 10553 found staging's pointer at 000f57e, which is that repo's main and staging head, and 8b525c6 (the #5 fix)
+is its ancestor. Michael's hand re-pin to 96f3203 (ac68a12, question 752) brought the fix in, and 6adce05 moved it
+to 000f57e. That re-pin also brought in what run 10553's predecessor listed as riding along: the topic guard (#455),
+the C2 ValidatingPolicy badge (#487) and the measured Falco badge (#486), with the checks those needed. So this
+change moves no pointer.
+
+**What changed.**
+- `verify/kubecon_probe.py`: a new `c7_badge(m)` gives the C7 badge the pinned proxy.py should show. It is True
+  when the measured gateway rule is narrowed or toolNames drops the rogue tools, and False when the rule is open and
+  toolNames is full. Anything else is None, which is how proxy.py shows an unreadable or unknown rule. An empty
+  toolNames counts as full, as in proxy.py, because kagent then exposes every evil-mcp tool. `judge_badges` holds
+  `tool_allowlist` to it rather than to toolNames alone. Before this, an admin cluster after guard-mcp-on (rule
+  narrowed, toolNames full) failed the beat if the badge was lit, and passed it if the badge was dark.
+- `verify/test_kubecon_probe.py`: one case where the badge and the narrowed rule agree (lit, passes), one where they
+  do not (dark, fails), one where the badge is lit with the rule open (fails), and the empty-toolNames and
+  unreadable-rule cases. The fake cluster's /controls follows the rule too. A stale comment saying the pinned proxy
+  reads the retired ClusterPolicy now says that is what it did then.
+- `verify/test_c7_badge_grants.py` (new): it reads every `_k8s_get` path in the pinned proxy.py (it fails on a
+  path that is not a string literal). It finds the C7 readers from the names read_controls tests before setting
+  `tool_allowlist`, and requires configmaps/agentgateway-c7-config and agents/workshop-agent among them. Then it
+  checks that each read is granted `get` by resourceNames to guard-proxy-reader: by the Role for `agent`, or by the
+  ClusterRole. Both bindings have to bind the role to ServiceAccount agent/guard-proxy-reader. With the ConfigMap's
+  resourceName renamed, the check fails on the C7 read. `test_c7_gateway_reader.py` (#564) still holds the shape of
+  that grant. This check holds that the pinned code's reads match the grants, so a re-pin that reads a new object
+  fails offline.
+
+**Not yet run on a cluster.** The live proof is the coordinator's #503 probe at bring-up: `python3
+verify/kubecon_probe.py admin <host> --context <admin-context> --kubeconfig <file> --profile accen-dev` on a fresh
+admin cluster, whose `badges` beat now compares C7 with the gateway rule. Its `c7-on` beat narrows the rule. The
+badge read after that is still a hand check of /controls (`tool_allowlist` true).

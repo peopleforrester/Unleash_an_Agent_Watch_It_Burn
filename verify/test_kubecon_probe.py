@@ -179,9 +179,21 @@ for name, change in [("an AI guard on", {"guards": {**armed["guards"], "budget":
 badges = {"ai": dict(armed["guards"]), "host": host,
           "infra": {"networkpolicy": True, "kyverno": True, "kubearmor": True, "falco": True, "tool_allowlist": False}}
 check("badges: a strip that agrees with the cluster passes", passes(kp.judge_badges(badges, armed)))
-# The pinned guard-proxy still reads the retired ClusterPolicy (#487), so this is what an admin cluster shows today.
+# What an admin cluster showed while the pinned guard-proxy read the retired ClusterPolicy (#487).
 check("badges: a dark Kyverno badge on an armed cluster fails (#487)",
       not passes(kp.judge_badges({**badges, "infra": {**badges["infra"], "kyverno": False}}, armed)))
+# After guard-mcp-on the gateway rule is narrowed and toolNames left full, so only the rule can light C7 (#519).
+mcp_on = {**armed, "c7_rule": kp.C7_NARROWED}
+check("badges: a lit C7 badge with the gateway rule narrowed and toolNames full passes (#519)",
+      passes(kp.judge_badges({**badges, "infra": {**badges["infra"], "tool_allowlist": True}}, mcp_on)))
+check("badges: a dark C7 badge with the gateway rule narrowed fails, the badge reading toolNames alone (#519)",
+      not passes(kp.judge_badges(badges, mcp_on)))
+check("badges: a lit C7 badge with the gateway rule open and toolNames full fails (#519)",
+      not passes(kp.judge_badges({**badges, "infra": {**badges["infra"], "tool_allowlist": True}}, armed)))
+check("badges: an empty toolNames counts as full, as proxy.py counts it, so C7 stays dark with the rule open",
+      kp.c7_badge({**armed, "evil_tools": []}) is False)
+check("badges: an unreadable gateway rule with toolNames full expects an unlit (None) C7 badge, as proxy.py shows",
+      kp.c7_badge({**armed, "c7_rule": None}) is None)
 check("badges: an unreadable /controls fails", not passes(kp.judge_badges(None, armed)))
 check("C1: curl 000 and exit 28 passes",
       passes(kp.judge_egress_blocked(28, "000command terminated with exit code 28\n")))
@@ -554,7 +566,7 @@ class Fake:
             return {"enabled": True, "prompts": []}
         return {"ai": dict(self.g), "host": self.host, "infra": {
             "networkpolicy": True, "kyverno": True, "kubearmor": True, "falco": True,
-            "tool_allowlist": not (set(kp.ROGUE_TOOLS) & set(self.tools))}}
+            "tool_allowlist": self.rule == kp.C7_NARROWED or not (set(kp.ROGUE_TOOLS) & set(self.tools))}}
 
     def identity_host(self):
         return self.identity

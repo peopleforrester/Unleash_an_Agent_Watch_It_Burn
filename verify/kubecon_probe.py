@@ -360,15 +360,28 @@ def judge_start_state(m: dict) -> tuple[bool, str]:
     return True, "AI guards off, C7 gateway rule open; Kyverno Deny, NetworkPolicy and KubeArmor Block armed"
 
 
+def c7_badge(m: dict) -> bool | None:
+    """The C7 badge the pinned proxy.py should show (guard-proxy-agenticburn#5): True when the measured gateway rule
+    is narrowed or toolNames drops the rogue tools, False when the rule is open and toolNames full, else None. An
+    empty toolNames is full: kagent exposes every evil-mcp tool then, and proxy.py counts it that way."""
+    gateway = {C7_NARROWED: True, C7_OPEN: False}.get(m.get("c7_rule"))
+    tools = m.get("evil_tools") or []
+    allowlist = bool(tools) and not (set(ROGUE_TOOLS) & set(tools))
+    if gateway or allowlist:
+        return True
+    return False if gateway is False else None
+
+
 def judge_badges(controls: dict | None, m: dict) -> tuple[bool, str]:
-    """The badge strip BurritoBot shows on stage must say what the cluster says (#486, #487)."""
+    """The badge strip BurritoBot shows on stage must say what the cluster says (#486, #487). An admin cluster's C7
+    is its gateway rule (#496), so tool_allowlist is held to the measured c7_rule as well as toolNames (#519)."""
     if controls is None:
         return False, "could not read /controls"
     infra, ai = controls.get("infra") or {}, controls.get("ai") or {}
     want = {"networkpolicy": bool(m.get("networkpolicy")),
             "kyverno": "Deny" in (m.get("kyverno_actions") or []),
             "kubearmor": m.get("kubearmor_action") == "Block",
-            "tool_allowlist": not (set(ROGUE_TOOLS) & set(m.get("evil_tools") or []))}
+            "tool_allowlist": c7_badge(m)}
     wrong = [f"{k} badge {infra.get(k)!r}, cluster {v!r}" for k, v in want.items() if infra.get(k) != v]
     wrong += [f"{k} badge {ai.get(k)!r}, proxy {v!r}" for k, v in (m.get("guards") or {}).items() if ai.get(k) != v]
     if wrong:
