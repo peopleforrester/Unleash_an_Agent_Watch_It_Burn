@@ -71,29 +71,53 @@ unset STUDENT_AK STUDENT_SK STUDENT_REGION
 # _pxkey <query> <key> : the same, then print what the proxy now reports for <key>: True, False, or missing
 # when this guard-proxy has no such guard. Prints nothing when the proxy could not be reached.
 cat > "$HOME/.guardlib" <<'EOS'
-_px() { kubectl -n agent exec deploy/guard-proxy -- python3 -c \
-  "import urllib.request;urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10).read()" >/dev/null 2>&1; }
-_pxkey() { kubectl -n agent exec deploy/guard-proxy -- python3 -c \
-  "import json,urllib.request;print(json.load(urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10)).get('$2','missing'))" 2>/dev/null | tail -1; }
+# _show <cmd...> : print the command about to run as `$ cmd`, on stderr so a caller's $(...) still captures only
+# the result. Michael, 2026-10-29: the room sees the real kubectl behind every guard command, not only the text.
+# An argument is quoted the way bash reads it back: double quotes when it holds a ' and no " \ $ or `, else single
+# quotes. verify/test_guard_commands_echo.py runs every printed line and compares it with the call that ran.
+_show() { local a o='$'
+  for a in "$@"; do
+    case "$a" in
+      *[!A-Za-z0-9_./=:,@%+-]*)
+        case "$a" in
+          *\'*) case "$a" in *[\"\\\$\`]*) o+=" '${a//\'/\'\\\'\'}'" ;; *) o+=" \"$a\"" ;; esac ;;
+          *) o+=" '$a'" ;;
+        esac ;;
+      *) o+=" $a" ;;
+    esac
+  done
+  printf '%s\n' "$o" >&2; }
+_px() { local c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import urllib.request;urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10).read()")
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
+_pxkey() { local c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import json,urllib.request;print(json.load(urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10)).get('$2','missing'))")
+  _show "${c[@]}"; "${c[@]}" 2>/dev/null | tail -1; }
 # _evil <json-array> : set ONLY the evil-mcp toolNames (index 1 of the tools array). workshop-mcp
 # (index 0, the real BurritoBot tools) is never touched, so the recipe/customer/shell tools survive.
-_evil() { kubectl -n agent patch agent workshop-agent --type=json \
-  -p "[{\"op\":\"replace\",\"path\":\"/spec/declarative/tools/1/mcpServer/toolNames\",\"value\":$1}]" >/dev/null 2>&1; }
+_evil() { local c=(kubectl -n agent patch agent workshop-agent --type=json \
+  -p "[{\"op\":\"replace\",\"path\":\"/spec/declarative/tools/1/mcpServer/toolNames\",\"value\":$1}]")
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
 # _c7gw : C7's control on this cluster. Returns 0 on an admin cluster, whose Argo CD root lab-bootstrap is
 # labelled lab-platform/profile=admin (gitops/bootstrap/values-admin.yaml): there it is agentgateway's rule. Returns 1 anywhere else: there
 # it is the toolNames allow-list. Returns 2 when Argo CD could not be asked, so a flaky lookup never picks
 # the wrong control for an admin cluster's stage demo.
-_c7gw() { local r; r="$(kubectl -n argocd get application lab-bootstrap --ignore-not-found \
-  -o jsonpath='{.metadata.labels.lab-platform/profile}' 2>/dev/null)" || return 2; [ "$r" = admin ]; }
+_c7gw() { local r c=(kubectl -n argocd get application lab-bootstrap --ignore-not-found \
+  -o jsonpath='{.metadata.labels.lab-platform/profile}')
+  _show "${c[@]}"; r="$("${c[@]}" 2>/dev/null)" || return 2; [ "$r" = admin ]; }
 # _c7rule on|off : rewrite the one rule line in agentgateway-c7-config (on = get_weather only, off = 'true').
 # The JSON patch tests the resourceVersion it read, so it never writes over a change it did not see. Then it
 # touches the gateway pod: a pod update makes the kubelet refresh the ConfigMap volume now instead of on its
 # next periodic sync, and agentgateway reloads the file when it changes. The touch is best effort.
-_c7rule() { local p; p="$(kubectl -n agent get configmap agentgateway-c7-config -o json 2>/dev/null \
+_c7rule() { local p c
+  printf '$ kubectl -n agent get configmap agentgateway-c7-config -o json | python3 "$HOME/.c7rule.py" %s\n' "$1" >&2
+  p="$(kubectl -n agent get configmap agentgateway-c7-config -o json 2>/dev/null \
   | python3 "$HOME/.c7rule.py" "$1")" || return 1
-  kubectl -n agent patch configmap agentgateway-c7-config --type=json -p "$p" >/dev/null 2>&1 || return 1
-  kubectl -n agent annotate pod -l app.kubernetes.io/name=agentgateway --overwrite \
-    "wib.agenticburn.com/c7-rule-at=$(date +%s)" >/dev/null 2>&1 || true; }
+  c=(kubectl -n agent patch configmap agentgateway-c7-config --type=json -p "$p")
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1 || return 1
+  c=(kubectl -n agent annotate pod -l app.kubernetes.io/name=agentgateway --overwrite \
+    "wib.agenticburn.com/c7-rule-at=$(date +%s)")
+  _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1 || true; }
 # _mcp on|off : flip C7 through this cluster's control. Prints which one it used (gateway or toolnames), or
 # nothing, with a failing status, when the change did not go through. On an admin cluster the rule is written
 # first, so a refused patch (a stale read) leaves the allow-list as it was too; nothing here deletes, restarts
