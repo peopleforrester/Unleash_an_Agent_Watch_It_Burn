@@ -62,6 +62,73 @@ spec:
   # separate override component. Container names per the Datadog AgentContainerName set.
   override:
     nodeAgent:
+      # Datadog Unified Service Tagging (#662): the Agent's own pods log under a burritobot- service too. The
+      # operator puts these labels on the node Agent's pod, and the Agent reads tags.datadoghq.com/* from labels.
+      labels:
+        tags.datadoghq.com/service: burritobot-datadog-agent
+        tags.datadoghq.com/env: burritobot-kubecon-na-26
+      # Every log from the KubeCon clusters carries a burritobot- service (#629, #662). Pods name theirs with
+      # tags.datadoghq.com/* labels, or DD_SERVICE/DD_ENV where a chart takes only env, but these containers
+      # take neither: kube-system's EKS add-ons are not charts here, and the rest are containers their chart or
+      # operator gives no labels or env to. A file-based Autodiscovery log config (docs.datadoghq.com/containers/
+      # kubernetes/log, read 2026-10-29) matches a container by its short image name and sets the service its
+      # logs carry, and the tags add the env, which these pods have no label for; the source stays the short image
+      # name, which is what they had. One file per image, named burritobot-logs-<image>.yaml so no integration's
+      # own check name is taken. A log config's service wins over a pod's labels, so no labelled pod may run one of
+      # these images: verify/test_datadog_log_services_render.py renders every chart to hold that.
+      extraConfd:
+        configDataMap:
+          burritobot-logs-coredns.yaml: |
+            ad_identifiers: [coredns]
+            logs: [{ source: coredns, service: burritobot-coredns, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-kube-proxy.yaml: |
+            ad_identifiers: [kube-proxy]
+            logs: [{ source: kube-proxy, service: burritobot-kube-proxy, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-amazon-k8s-cni.yaml: |
+            ad_identifiers: [amazon-k8s-cni]
+            logs: [{ source: amazon-k8s-cni, service: burritobot-aws-node, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-amazon-k8s-cni-init.yaml: |
+            ad_identifiers: [amazon-k8s-cni-init]
+            logs: [{ source: amazon-k8s-cni-init, service: burritobot-aws-node, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-aws-network-policy-agent.yaml: |
+            ad_identifiers: [aws-network-policy-agent]
+            logs: [{ source: aws-network-policy-agent, service: burritobot-aws-node, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-aws-ebs-csi-driver.yaml: |
+            ad_identifiers: [aws-ebs-csi-driver]
+            logs: [{ source: aws-ebs-csi-driver, service: burritobot-ebs-csi-driver, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-csi-provisioner.yaml: |
+            ad_identifiers: [csi-provisioner]
+            logs: [{ source: csi-provisioner, service: burritobot-ebs-csi-driver, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-csi-attacher.yaml: |
+            ad_identifiers: [csi-attacher]
+            logs: [{ source: csi-attacher, service: burritobot-ebs-csi-driver, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-csi-snapshotter.yaml: |
+            ad_identifiers: [csi-snapshotter]
+            logs: [{ source: csi-snapshotter, service: burritobot-ebs-csi-driver, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-csi-resizer.yaml: |
+            ad_identifiers: [csi-resizer]
+            logs: [{ source: csi-resizer, service: burritobot-ebs-csi-driver, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-livenessprobe.yaml: |
+            ad_identifiers: [livenessprobe]
+            logs: [{ source: livenessprobe, service: burritobot-ebs-csi-driver, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-csi-node-driver-registrar.yaml: |
+            ad_identifiers: [csi-node-driver-registrar]
+            logs: [{ source: csi-node-driver-registrar, service: burritobot-ebs-csi-driver, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-eks-pod-identity-agent.yaml: |
+            ad_identifiers: [eks-pod-identity-agent]
+            logs: [{ source: eks-pod-identity-agent, service: burritobot-eks-pod-identity-agent, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-postgres.yaml: |
+            ad_identifiers: [postgres]
+            logs: [{ source: postgres, service: burritobot-kagent-postgres, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-kube-rbac-proxy.yaml: |
+            ad_identifiers: [kube-rbac-proxy]
+            logs: [{ source: kube-rbac-proxy, service: burritobot-kubearmor-controller, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-kubearmor-snitch.yaml: |
+            ad_identifiers: [kubearmor-snitch]
+            logs: [{ source: kubearmor-snitch, service: burritobot-kubearmor-snitch, tags: ["env:burritobot-kubecon-na-26"] }]
+          burritobot-logs-kube-webhook-certgen.yaml: |
+            ad_identifiers: [kube-webhook-certgen]
+            logs: [{ source: kube-webhook-certgen, service: burritobot-prometheus-operator-webhook, tags: ["env:burritobot-kubecon-na-26"] }]
       # Per-cluster identity and dual shipping (#242). Both come from objects deploy-full-idp writes at
       # bootstrap (infra/datadog-cluster-identity.sh): cluster-identity on every cluster, so this cluster
       # reports its real name instead of the shared literal above; datadog-admin-secret only on attendee
@@ -112,6 +179,9 @@ spec:
               memory: 512Mi
     clusterAgent:
       replicas: 1
+      labels:
+        tags.datadoghq.com/service: burritobot-datadog-cluster-agent
+        tags.datadoghq.com/env: burritobot-kubecon-na-26
       env:
         - name: DD_CLUSTER_NAME
           valueFrom: { configMapKeyRef: { name: cluster-identity, key: datadog-cluster-name, optional: true } }

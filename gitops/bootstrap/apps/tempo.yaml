@@ -52,6 +52,8 @@ spec:
                   path: /var/tempo/wal
             retention:
               24h
+          # Datadog Unified Service Tagging (#662): the Agent tags this pod's logs from these labels.
+          podLabels: { tags.datadoghq.com/service: burritobot-tempo, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           persistence:
             enabled: true
             size: 5Gi

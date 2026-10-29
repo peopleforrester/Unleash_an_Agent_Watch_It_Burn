@@ -46,6 +46,8 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 300m, memory: 256Mi }
+          # Datadog Unified Service Tagging (#662): the Agent tags this pod's logs from these labels.
+          podLabels: { tags.datadoghq.com/service: burritobot-istio-cni, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
   destination: { server: https://kubernetes.default.svc, namespace: istio-system }
   syncPolicy:
     automated: { prune: true, selfHeal: true }
@@ -74,7 +76,7 @@ spec:
           podLabels:
             tags.datadoghq.com/service: burritobot-istio
             tags.datadoghq.com/env: burritobot-kubecon-na-26
-            tags.datadoghq.com/version: "1.30.1"
+            tags.datadoghq.com/version: "1.30.4"
           resources:
             requests: { cpu: 100m, memory: 256Mi }
             limits: { cpu: 500m, memory: 512Mi }
@@ -114,7 +116,7 @@ spec:
         podLabels:
           tags.datadoghq.com/service: burritobot-istio
           tags.datadoghq.com/env: burritobot-kubecon-na-26
-          tags.datadoghq.com/version: "1.30.1"
+          tags.datadoghq.com/version: "1.30.4"
   destination: { server: https://kubernetes.default.svc, namespace: istio-system }
   syncPolicy:
     automated: { prune: true, selfHeal: true }

@@ -20,6 +20,8 @@ spec:
     helm:
       valuesObject:
         replicaCount: 1
+        # Datadog Unified Service Tagging (#662): the Agent tags this pod's logs from these labels.
+        podLabels: { tags.datadoghq.com/service: burritobot-datadog-operator, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         resources:
           requests:
             cpu: 100m

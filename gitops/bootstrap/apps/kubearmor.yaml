@@ -59,23 +59,43 @@ spec:
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 300m, memory: 256Mi }
+          # Datadog Unified Service Tagging (#662): the Agent tags this pod's logs from these labels.
+          podLabels: { tags.datadoghq.com/service: burritobot-kubearmor-operator, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         # C3's detection signal (#497). A Block policy emits a KubeArmor alert as it denies, on the attempt,
         # unlike Falco's open_read rule, which never fires because the read never succeeds. The relay only
         # prints those alerts to its stdout with this on (chart default false), and that stdout is where
         # challenges/c3-secret-grep/fallback.kubectl.sh and the segment 4 beat read the alert with
         # `kubectl logs deployment/kubearmor-relay`. Helm merges the rest of kubearmorConfig from the chart
         # defaults. Alerts only: enableStdOutLogs would flood the relay log with every process event.
+        #
+        # The pods below are the operator's, built from this KubeArmorConfig, which takes no pod labels. It takes env
+        # per component (v1.7.4 sets it on each workload's first container, and the init image's on the DaemonSet's
+        # init container), and the Datadog Agent reads DD_SERVICE/DD_ENV off a container as the same tags as the
+        # labels (#662). The controller's kube-rbac-proxy sidecar and the per-node kubearmor-snitch Jobs get none of
+        # it; the Datadog Agent's own log config names those (gitops/manifests/datadog/datadog-agent.yaml).
         kubearmorConfig:
           enableStdOutAlerts: true
           # The four mirror/ copies the KubeArmorConfig names (see Images above).
           kubearmorImage:
             image: "{{ .Values.imageRegistry }}/mirror/kubearmor/kubearmor:stable-bf867783eb30"
+            env:
+              - { name: DD_SERVICE, value: burritobot-kubearmor }
+              - { name: DD_ENV, value: burritobot-kubecon-na-26 }
           kubearmorInitImage:
             image: "{{ .Values.imageRegistry }}/mirror/kubearmor/kubearmor-init:stable-cdc3763f302d"
+            env:
+              - { name: DD_SERVICE, value: burritobot-kubearmor }
+              - { name: DD_ENV, value: burritobot-kubecon-na-26 }
           kubearmorRelayImage:
             image: "{{ .Values.imageRegistry }}/mirror/kubearmor/kubearmor-relay-server:latest-e4fd875cc1e4"
+            env:
+              - { name: DD_SERVICE, value: burritobot-kubearmor-relay }
+              - { name: DD_ENV, value: burritobot-kubecon-na-26 }
           kubearmorControllerImage:
             image: "{{ .Values.imageRegistry }}/mirror/kubearmor/kubearmor-controller:latest-89f52a3e9fc0"
+            env:
+              - { name: DD_SERVICE, value: burritobot-kubearmor-controller }
+              - { name: DD_ENV, value: burritobot-kubecon-na-26 }
   destination:
     server: https://kubernetes.default.svc
     namespace: kubearmor

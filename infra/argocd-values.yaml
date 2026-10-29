@@ -1,5 +1,5 @@
 # ABOUTME: Helm values for the bootstrap ArgoCD install (deploy-full-idp.sh).
-# ABOUTME: Folds the Datadog Agent Autodiscovery annotation onto argocd-server (PRD #26 M2).
+# ABOUTME: Folds the Datadog Agent Autodiscovery annotation onto argocd-server (PRD #26 M2) and a burritobot- service label onto every Argo CD pod (#662).
 #
 # ArgoCD installs itself via Helm in the bootstrap (it is the GitOps engine; it is NOT managed by an
 # ArgoCD Application, so its own config belongs here, not in a self-referential app). The block-argocd-drift
@@ -27,7 +27,26 @@ server:
   podLabels:
     tags.datadoghq.com/service: burritobot-argocd
     tags.datadoghq.com/env: burritobot-kubecon-na-26
-    tags.datadoghq.com/version: "v3.4.4"
+    tags.datadoghq.com/version: "v3.5.2"
+# Every other Argo CD pod logs under its own burritobot- service (#662). The chart merges global.podLabels under
+# each component's, so the env is set once and each component names its service. The version is argo-cd 10.8.4's
+# appVersion, the chart deploy-full-idp.sh pins.
+global:
+  podLabels:
+    tags.datadoghq.com/env: burritobot-kubecon-na-26
+    tags.datadoghq.com/service: burritobot-argocd
+controller:
+  podLabels: { tags.datadoghq.com/service: burritobot-argocd-application-controller }
+repoServer:
+  podLabels: { tags.datadoghq.com/service: burritobot-argocd-repo-server }
+applicationSet:
+  podLabels: { tags.datadoghq.com/service: burritobot-argocd-applicationset }
+notifications:
+  podLabels: { tags.datadoghq.com/service: burritobot-argocd-notifications }
+redis:
+  podLabels: { tags.datadoghq.com/service: burritobot-argocd-redis }
+redisSecretInit:
+  podLabels: { tags.datadoghq.com/service: burritobot-argocd-redis-secret-init }
 # argocd-server behind the console's reverse proxy at argocd-<cluster>.agenticburn.com (#233). The
 # proxy terminates TLS; without this the server redirects every plain-HTTP hop to https and the
 # login loops. The chart's params ConfigMap carries it, so it survives helm upgrades.

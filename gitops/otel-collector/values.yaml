@@ -492,6 +492,12 @@ extraVolumeMounts:
 # checksum. Without it an edited overlay sat unused until something else restarted the pods.
 podAnnotations:
   checksum/datadog-overlay: '{{ .Values.extraManifests | toJson | sha256sum }}'
+# Datadog Unified Service Tagging (#662): the Datadog Agent names the collector's own logs from these labels; without
+# them they went out as the image short name, outside BurritoBot in the shared sandbox org. Every profile's
+# collector (otel-collector, -burn, -attendee) reads this file.
+podLabels:
+  tags.datadoghq.com/service: burritobot-otel-collector
+  tags.datadoghq.com/env: burritobot-kubecon-na-26
 # DD_API_KEY is optional: the collector starts without datadog-secret, and only the overlay reads it. DD_SITE is
 # that account's site (e.g. datadoghq.com, us5.datadoghq.com, datadoghq.eu).
 extraEnvs:

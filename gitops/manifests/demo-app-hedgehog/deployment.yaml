@@ -18,6 +18,9 @@ spec:
     metadata:
       labels:
         app: demo-app-hedgehog
+        # The Datadog Agent tags this pod's logs from these two labels (#662); without them they went out as nginx.
+        tags.datadoghq.com/service: burritobot-demo-app-hedgehog
+        tags.datadoghq.com/env: burritobot-kubecon-na-26
         version: "2.0.2"
     spec:
       securityContext:

@@ -115,6 +115,41 @@ for name, (labels, env) in sorted(pods.items()):
           named and svc == (otel or svc) and labels.get("tags.datadoghq.com/env") == DD_ENV,
           f"OTEL_SERVICE_NAME={otel}")
 
+print("== tags.datadoghq.com/* are pod labels everywhere, never annotations (#662) ==")
+# The Agent reads these keys from pod labels only (comp/core/tagger/collectors/workloadmeta_extract.go, read
+# 2026-10-29). As annotations they set nothing, which is how the five platform charts logged under image names
+# while looking tagged. verify/test_datadog_log_services_render.py renders every chart to hold the labels.
+
+
+def annotated(node, where: str) -> list[str]:
+    """Every annotations or podAnnotations map under node that holds a tags.datadoghq.com/* key."""
+    out = []
+    if isinstance(node, dict):
+        for k, v in node.items():
+            if k in ("annotations", "podAnnotations") and isinstance(v, dict) \
+                    and any(str(a).startswith("tags.datadoghq.com/") for a in v):
+                out.append(f"{where}.{k}")
+            out += annotated(v, f"{where}.{k}")
+    elif isinstance(node, list):
+        for i, v in enumerate(node):
+            out += annotated(v, f"{where}[{i}]")
+    return out
+
+
+swept, found = 0, []
+for path in sorted([*(REPO / "gitops").rglob("*.yaml"), *(REPO / "infra").glob("*values*.yaml")]):
+    if "templates" in path.relative_to(REPO).parts:
+        continue  # gitops/bootstrap/templates is Go template text, not YAML
+    for i, d in enumerate(yaml.safe_load_all(path.read_text())):
+        swept += 1
+        found += annotated(d, f"{path.relative_to(REPO)}#{i}")
+check(f"no annotations carry tags.datadoghq.com/* ({swept} documents swept)", swept > 100 and not found,
+      "\n        ".join(found))
+for comp, want in (("nodeAgent", "burritobot-datadog-agent"), ("clusterAgent", "burritobot-datadog-cluster-agent")):
+    labels = (override.get(comp) or {}).get("labels") or {}
+    check(f"the DatadogAgent's {comp} pods carry service={want} env={DD_ENV}",
+          labels.get("tags.datadoghq.com/service") == want and labels.get("tags.datadoghq.com/env") == DD_ENV)
+
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")

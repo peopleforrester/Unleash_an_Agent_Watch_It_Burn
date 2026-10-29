@@ -68,6 +68,8 @@ spec:
               value: "https://api.datadoghq.com"
         webui:
           enabled: false
+        # Datadog Unified Service Tagging (#662): the Agent tags this pod's logs from these labels.
+        podLabels: { tags.datadoghq.com/service: burritobot-falcosidekick, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         podAnnotations:
           prometheus.io/scrape: "true"
           prometheus.io/port: "2801"

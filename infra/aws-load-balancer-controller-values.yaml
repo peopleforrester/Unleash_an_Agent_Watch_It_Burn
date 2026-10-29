@@ -1,0 +1,9 @@
+# ABOUTME: Helm values for the AWS Load Balancer Controller that deploy-full-idp.sh installs into kube-system.
+# ABOUTME: Gives its pods a burritobot- service so their logs land under BurritoBot in the shared Datadog org (#662).
+#
+# The Datadog Agent names a pod's logs from its tags.datadoghq.com/* labels; without them the controller's logs
+# went out as the image short name, outside BurritoBot in Whitney's sandbox org. clusterName, region and vpcId stay
+# --set flags in deploy-full-idp.sh, because they are derived per cluster there.
+podLabels:
+  tags.datadoghq.com/service: burritobot-aws-load-balancer-controller
+  tags.datadoghq.com/env: burritobot-kubecon-na-26

@@ -202,12 +202,12 @@ def _pod_values(path, *navkeys, doc_name=None):
 # Each chart's podLabels key was rendered with `helm template` on 2026-10-29 and lands on the pod
 # template only, never on a selector (#661).
 _PLATFORM_UST = [
-    ("cert-manager", "burritobot-cert-manager", "v1.20.2", _pod_values("gitops/bootstrap/apps/cert-manager.yaml")),
+    ("cert-manager", "burritobot-cert-manager", "v1.21.2", _pod_values("gitops/bootstrap/apps/cert-manager.yaml")),
     ("falco", "burritobot-falco", "0.45.1", _pod_values("gitops/bootstrap/apps/falco.yaml")),
     ("kyverno", "burritobot-kyverno", "v1.19.1", _pod_values("gitops/bootstrap/apps/kyverno.yaml", "admissionController")),
-    ("argocd", "burritobot-argocd", "v3.4.4", _pod_values("infra/argocd-values.yaml", "server")),
-    ("istio-ztunnel", "burritobot-istio", "1.30.1", _pod_values("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
-    ("istiod", "burritobot-istio", "1.30.1", _pod_values("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
+    ("argocd", "burritobot-argocd", "v3.5.2", _pod_values("infra/argocd-values.yaml", "server")),
+    ("istio-ztunnel", "burritobot-istio", "1.30.4", _pod_values("gitops/bootstrap/apps/istio.yaml", doc_name="ztunnel")),
+    ("istiod", "burritobot-istio", "1.30.4", _pod_values("gitops/bootstrap/apps/istio.yaml", "pilot", doc_name="istiod")),
 ]
 for _name, _svc, _ver, _vals in _PLATFORM_UST:
     _labels = _vals.get("podLabels") or {}

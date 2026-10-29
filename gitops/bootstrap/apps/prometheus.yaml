@@ -34,6 +34,10 @@ spec:
                 memory: 2Gi
             # ServiceMonitor selector - match all in cluster
             serviceMonitorSelectorNilUsesHelmValues: false
+            # Datadog Unified Service Tagging (#662): the operator copies these onto the Prometheus pod, and the
+            # Datadog Agent tags its logs from them. Each component below gets its own burritobot- service.
+            podMetadata:
+              labels: { tags.datadoghq.com/service: burritobot-prometheus, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
             podMonitorSelectorNilUsesHelmValues: false
             ruleSelectorNilUsesHelmValues: false
           # Disable built-in Thanos sidecar for simplicity
@@ -48,6 +52,7 @@ spec:
           # Static admin password for the demo (was an ESO ExternalSecret backed by AWS Secrets Manager;
           # a static value removes that external dependency). verify-at-build: rotate or wire a real store.
           adminPassword: "watchitburn-admin"
+          podLabels: { tags.datadoghq.com/service: burritobot-grafana, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           # lab-platform's mirror/ copy of docker.io/grafana/grafana:13.2.2-distroless, the chart's tag, named by
           # its linux/amd64 digest's first twelve characters (#623). The k8s-sidecar image stays on quay.io: the
           # mirror holds only Docker Hub images.
@@ -103,6 +108,7 @@ spec:
         # require-resource-limits policy (kyverno-policies) rejects them, which left the app
         # OutOfSync on every full-profile cluster and the Grafana Service missing there (#234).
         prometheusOperator:
+          podLabels: { tags.datadoghq.com/service: burritobot-prometheus-operator, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             requests: { cpu: 100m, memory: 128Mi }
             limits: { cpu: 500m, memory: 512Mi }
@@ -132,6 +138,7 @@ spec:
         nodeExporter:
           enabled: true
         prometheus-node-exporter:
+          podLabels: { tags.datadoghq.com/service: burritobot-node-exporter, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 200m, memory: 128Mi }
@@ -139,6 +146,7 @@ spec:
         kubeStateMetrics:
           enabled: true
         kube-state-metrics:
+          podLabels: { tags.datadoghq.com/service: burritobot-kube-state-metrics, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 200m, memory: 256Mi }

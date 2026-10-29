@@ -170,6 +170,8 @@ spec:
   ttlSecondsAfterFinished: 120
   template:
     metadata:
+      # The Datadog Agent tags this pod's logs from these labels (#662), as on every BurritoBot pod.
+      labels: { tags.datadoghq.com/service: burritobot-kubearmor-gate, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
       annotations:
         sidecar.istio.io/inject: "false"
     spec:

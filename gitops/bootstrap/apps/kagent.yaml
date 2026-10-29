@@ -45,6 +45,27 @@ spec:
         otel:
           tracing: { enabled: true }
           logging: { enabled: true }
+        # Datadog Unified Service Tagging (#662): the Agent names a pod's logs from its tags.datadoghq.com/*
+        # labels, and without them they go out as the image short name, outside BurritoBot in the shared
+        # sandbox org. Chart 0.10.1 takes pod labels only for the controller and the UI. kagent-tools and kmcp
+        # take env, and the Agent reads DD_SERVICE/DD_ENV off a container as the same tags. grafana-mcp takes
+        # neither, but its config map is its envFrom, so the two keys reach it there. The bundled postgres
+        # takes nothing; the Datadog Agent's own log config names it (gitops/manifests/datadog/datadog-agent.yaml).
+        podLabels: { tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+        controller:
+          podLabels: { tags.datadoghq.com/service: burritobot-kagent-controller }
+        ui:
+          podLabels: { tags.datadoghq.com/service: burritobot-kagent-ui }
+        kagent-tools:
+          tools:
+            env:
+              - { name: DD_SERVICE, value: burritobot-kagent-tools }
+              - { name: DD_ENV, value: burritobot-kubecon-na-26 }
+        kmcp:
+          controller:
+            env:
+              - { name: DD_SERVICE, value: burritobot-kmcp }
+              - { name: DD_ENV, value: burritobot-kubecon-na-26 }
         # The two Docker Hub images the chart pulls, from lab-platform's mirror/ copies, each named by its
         # upstream tag and its linux/amd64 digest's first twelve characters (#623). The chart joins registry,
         # repository and name with slashes, so the copy's path is split across them.
@@ -61,6 +82,7 @@ spec:
             registry: "{{ .Values.imageRegistry }}/mirror/mcp"
             repository: grafana
             tag: "latest-208f8ea16064"
+          config: { DD_SERVICE: burritobot-grafana-mcp, DD_ENV: burritobot-kubecon-na-26 }
   destination:
     server: https://kubernetes.default.svc
     namespace: kagent

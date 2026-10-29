@@ -111,7 +111,7 @@ VPC_ID="$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${REGION}"
 helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
 helm repo update >/dev/null
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller --version 1.14.0 \
-  -n kube-system \
+  -n kube-system --values "${SCRIPT_DIR}/aws-load-balancer-controller-values.yaml" \
   --set clusterName="${CLUSTER_NAME}" \
   --set region="${REGION}" \
   --set vpcId="${VPC_ID}" \

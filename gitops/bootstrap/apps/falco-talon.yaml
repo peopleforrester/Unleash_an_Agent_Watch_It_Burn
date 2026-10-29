@@ -31,6 +31,14 @@ spec:
         resources:
           requests: { cpu: 50m, memory: 64Mi }
           limits: { cpu: 200m, memory: 128Mi }
+        # Datadog Unified Service Tagging (#662). Chart 0.4.2 has no podLabels (it writes podAnnotations into the
+        # pod's labels, a template bug this does not lean on), so the one container gets DD_SERVICE/DD_ENV, which
+        # the Datadog Agent reads off a container as the same tags. A list replaces the chart's, so its one
+        # default, LOG_LEVEL=warning, is carried over.
+        extraEnv:
+          - { name: LOG_LEVEL, value: warning }
+          - { name: DD_SERVICE, value: burritobot-falco-talon }
+          - { name: DD_ENV, value: burritobot-kubecon-na-26 }
         config:
           # Talon rules: on the fork-bomb Falco event, terminate the offending pod.
           # MUST be config.rulesOverride (the chart key); a top-level rulesOverride is silently ignored,

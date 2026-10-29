@@ -82,6 +82,7 @@ spec:
             tags.datadoghq.com/version: "v1.19.1"
         # Background controller for policy reports
         backgroundController:
+          podLabels: { tags.datadoghq.com/service: burritobot-kyverno-background-controller, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             limits:
               memory: 256Mi
@@ -91,6 +92,7 @@ spec:
               cpu: 50m
         # Cleanup controller
         cleanupController:
+          podLabels: { tags.datadoghq.com/service: burritobot-kyverno-cleanup-controller, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             limits:
               memory: 256Mi
@@ -98,6 +100,12 @@ spec:
             requests:
               memory: 128Mi
               cpu: 50m
+        # The chart's hook Jobs: the post-upgrade CRD migration and the pre-delete webhook cleanup (#662).
+        crds:
+          migration:
+            podLabels: { tags.datadoghq.com/service: burritobot-kyverno-hooks, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+        webhooksCleanup:
+          podLabels: { tags.datadoghq.com/service: burritobot-kyverno-hooks, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         # Kyverno's own feature block owns the scan interval. Setting reportsController.extraArgs instead
         # looks right, applies cleanly, syncs Healthy, and changes nothing, because the chart already emits
         # --backgroundScanInterval from this value and the duplicate flag is ignored. Verified on
@@ -117,6 +125,7 @@ spec:
           # 30s so the evidence is there while the student is still looking at it. The cost is a rescan of a
           # single-node lab cluster with roughly forty pods, which is nothing next to a challenge whose
           # payoff never appears.
+          podLabels: { tags.datadoghq.com/service: burritobot-kyverno-reports-controller, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
           resources:
             limits:
               memory: 256Mi

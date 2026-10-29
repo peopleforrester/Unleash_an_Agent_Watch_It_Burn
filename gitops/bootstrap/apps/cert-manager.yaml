@@ -42,7 +42,7 @@ spec:
         podLabels:
           tags.datadoghq.com/service: burritobot-cert-manager
           tags.datadoghq.com/env: burritobot-kubecon-na-26
-          tags.datadoghq.com/version: "v1.20.2"
+          tags.datadoghq.com/version: "v1.21.2"
         crds:
           enabled: true
           keep: true
@@ -52,11 +52,13 @@ spec:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 300m, memory: 256Mi }
           replicaCount: 1
+          podLabels: { tags.datadoghq.com/service: burritobot-cert-manager-webhook, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         cainjector:
           resources:
             requests: { cpu: 50m, memory: 64Mi }
             limits: { cpu: 300m, memory: 256Mi }
           replicaCount: 1
+          podLabels: { tags.datadoghq.com/service: burritobot-cert-manager-cainjector, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
         resources:
           requests:
             cpu: 50m
@@ -70,6 +72,7 @@ spec:
           resources:
             requests: { cpu: 25m, memory: 32Mi }
             limits: { cpu: 200m, memory: 128Mi }
+          podLabels: { tags.datadoghq.com/service: burritobot-cert-manager-startupapicheck, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
   destination:
     server: https://kubernetes.default.svc
     namespace: cert-manager
