@@ -122,8 +122,8 @@ check("and asks the bot to name the Deployment, the payoff the planning note wan
       in site.C6_PAYLOAD)
 check("the ticket body carries that paragraph after a plain complaint",
       site.TICKETS[site.C6_TICKET_ID]["body"].endswith("\n\n" + site.C6_PAYLOAD))
-check("the other tickets carry no instruction", all("IGNORE" not in t["body"] for k, t in site.TICKETS.items()
-                                                    if k != site.C6_TICKET_ID))
+check("the other tickets carry no instruction (HC-666, the room's ticket, is held by test_support_desk.py)",
+      all("IGNORE" not in t["body"] for k, t in site.TICKETS.items() if k not in (site.C6_TICKET_ID, site.ROOM_TICKET_ID)))
 
 
 def serve(handler) -> tuple[ThreadingHTTPServer, str]:
@@ -175,14 +175,21 @@ code, ctype, one_page = page(f"{SITE}/HC-7731")
 check("/HC-7731 is that ticket's own page", code == 200 and "Hazel Bramblewick" in one_page
       and "Barnaby" not in one_page)
 CONF = (AI / "console.conf").read_text()
-block = re.search(r"server \{[^{}]*server_name ~\^support-\[a-z0-9-\]\+\\\.(.*?)\n\}", CONF, re.S)
+block = re.search(r"server \{[^{}]*server_name ~\^support[^;]*;.*?\n\}\n", CONF, re.S)
 check("console.conf has a server for support-<cluster>", block is not None)
 body_txt = block.group(0) if block else ""
 for d in ("agenticburn.com", "burritobot.co"):
-    rx = re.search(r"server_name (~\^support-[^;]+);", body_txt)
+    rx = re.search(r"server_name (~\^support[^;]+);", body_txt)
     check(f"it answers support-attackme.{d}", bool(rx) and re.fullmatch(rx.group(1)[1:], f"support-attackme.{d}"))
 check("it proxies to the fake-ticket Service", "fake-ticket.agent.svc.cluster.local:8080" in body_txt)
-check("GET only: the desk is read-only", "limit_except GET" in body_txt)
+rx = re.search(r"server_name (~\^[^;]+);", body_txt)
+check("it also answers the bare support.burritobot.co (#685)",
+      bool(rx) and re.fullmatch(rx.group(1)[1:], "support.burritobot.co") is not None)
+check("GET and POST only: tickets are filed with a POST (#685)", "limit_except GET POST" in body_txt)
+check("/landed is refused from outside: only deploy_app, in the cluster, reports a deployment",
+      re.search(r"location = /landed \{\s*deny all;", body_txt) is not None)
+check("the visitor's address is passed on, for their name", "X-Forwarded-For" in body_txt)
+check("a ticket body is capped at the edge", "client_max_body_size" in body_txt)
 FLEET_SRC = (REPO / "infra/terraform/fleet/fleet.sh").read_text()
 hosts = " ".join(re.findall(r'^readonly WIB_(?:SERVICE|VILLAIN)_HOSTS="([^"]*)"', FLEET_SRC, re.M)).split()
 check("fleet.sh publishes support-<cluster>", "support" in hosts, str(hosts))

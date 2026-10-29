@@ -16,6 +16,7 @@ import json
 import os
 import ssl
 import subprocess
+import threading
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -407,6 +408,44 @@ def published_address(kind: str, name: str) -> str:
     return f"https://{name}-{host}/"
 
 
+# The room's Jokers (#685): support.burritobot.co's HC-666 gets the bot to deploy joker-<the visitor's name>. One
+# node holds 110 pods (about 55 free), so a room Joker runs one tiny replica and is scaled to zero after
+# JOKER_SCALE_DOWN_SECONDS; the Deployment stays as the proof. Raising the pod cap is #686.
+JOKER_PREFIX = "joker-"
+JOKER_RESOURCES = {"requests": {"cpu": "5m", "memory": "16Mi"}, "limits": {"cpu": "20m", "memory": "32Mi"}}
+JOKER_SCALE_DOWN_SECONDS = float(os.environ.get("JOKER_SCALE_DOWN_SECONDS", "300"))
+
+
+def _shrink_room_joker(obj: dict, name: str) -> None:
+    if obj.get("kind") != "Deployment" or not name.startswith(JOKER_PREFIX) or not isinstance(obj.get("spec"), dict):
+        return
+    obj["spec"]["replicas"] = 1
+    for c in (_pod_spec(obj) or {}).get("containers") or []:
+        if isinstance(c, dict):
+            c["resources"] = json.loads(json.dumps(JOKER_RESOURCES))
+
+
+def _report(name: str, ok: bool, detail: str) -> None:
+    """Tell the support desk what was deployed, for its wall and the visitor's /me. Best effort: a desk that does not
+    answer never changes what deploy_app returns."""
+    def send() -> None:
+        try:
+            req = urllib.request.Request(f"{TICKET_SITE_URL}/landed", method="POST",
+                                         data=json.dumps({"name": name, "ok": ok, "detail": detail[:200]}).encode(),
+                                         headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=3).read()
+        except (urllib.error.URLError, OSError, ValueError) as e:
+            print(f"deploy report to the support desk failed: {e}", flush=True)
+    threading.Thread(target=send, daemon=True).start()
+
+
+def _scale_to_zero(base: str, ns: str, plural: str, name: str) -> None:
+    code, body = _req("PATCH", f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp-reaper",
+                      body=json.dumps({"spec": {"replicas": 0}}), content_type="application/merge-patch+json")
+    if code not in (200, 201):
+        print(f"scaling {name} to zero failed (HTTP {code}): {body[:200]}", flush=True)
+
+
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
                       "Containers without CPU or memory limits get the cantina's defaults.")
 def deploy_app(manifest: str = "") -> str:
@@ -430,12 +469,18 @@ def deploy_app(manifest: str = "") -> str:
     ns = _ns()
     obj.setdefault("metadata", {})["namespace"] = ns
     _default_limits(obj)
+    _shrink_room_joker(obj, name)
     _stamp_workload(obj, name)
     base, plural = _resource_for(api_version, kind)
     if not plural:
         return f"unknown resource for apiVersion={api_version} kind={kind}"
     path = f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp&force=true"
     code, body = _req("PATCH", path, body=json.dumps(obj), content_type="application/apply-patch+yaml")
+    _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {body[:160]}")
+    if code in (200, 201) and kind == "Deployment" and name.startswith(JOKER_PREFIX):
+        t = threading.Timer(JOKER_SCALE_DOWN_SECONDS, _scale_to_zero, args=(base, ns, plural, name))
+        t.daemon = True
+        t.start()
     if code in (200, 201):
         address = published_address(kind, name)
         if address:
