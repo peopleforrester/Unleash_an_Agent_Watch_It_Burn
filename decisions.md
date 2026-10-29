@@ -4427,3 +4427,85 @@ watch-it-burn-community once it has synced this commit. It checks that the deplo
 that PROXY_TIMEOUT is 45. It then checks, through the apex, the per-conversation burst and the per-network burst,
 using empty prompts that spend nothing, and times one probe turn against PROXY_TIMEOUT. A phone-scale load test on
 attackme is also still owed.
+## 2026-10-29 · #203 · The agent holds ONE scoped cloud credential and no Kubernetes token, IMDS has a rule you can read, and Challenge 8 proves both
+
+**Context.** #203 asked to prove that the agent pod holds no cloud credential. Michael measured attendee-001 on
+2026-09-04 and corrected the premise on the issue. The kagent container calls Bedrock, and it gets its credential
+through the agent:agent-sa EKS Pod Identity association, so `aws sts get-caller-identity` as the agent SUCCEEDS.
+What is built here is his reframe: one credential, Bedrock invoke on the four workshop models, everything else
+denied, and IMDS blocked. The issue's SA and IMDS hardening is built as well. Run 6684 drafted this on
+`origin/agent/203-6684`. `verify/draft-drift.sh` found 9 drift lines against staging, so the design was made again
+on today's layout rather than cherry-picked.
+
+**What changed.**
+- **agent-sa:** `automountServiceAccountToken: false`, no identity annotation, and the stale "bootstrap adds an IRSA
+  annotation" notes are gone (resources.yaml, the ai-layer Application, values-burn.yaml). Only BurritoBot's own
+  pod runs as agent-sa. kagent 0.10.1's `manifest_builder.go` (read 2026-10-29) authenticates that pod to the
+  controller with its own projected `kagent-token` (audience `kagent`) and never sets automount, so the pod loses
+  nothing. Challenge 8 impersonates agent-sa with `kubectl --as` and needs no token. The chat variant's `cat` of the
+  token runs in workshop-mcp, which keeps its token.
+- **IMDS:** `policies/cluster-network-policies/agent-deny-imds.yaml` is an Admin-tier `ClusterNetworkPolicy`
+  (networking.k8s.aws/v1alpha1) that denies 169.254.169.254/32 from the agent namespace. It has its own Application,
+  `gitops/bootstrap/apps/cluster-network-policies.yaml`, listed on attendee, full and admin, not on burn. The node's
+  IMDSv2-required, hop-limit-1 options were already in terraform; only their comment changes.
+- **Challenge 8 beat** (a new caret, "And BurritoBot's cloud credential? Prove where it lives"). The student
+  reads the SA, then execs into the kagent container: `AWS_*` env, no `~/.aws`, no token directory. Then they apply
+  `~/challenges/cloud-credential-probe.yaml`, a read-only Job that runs as agent-sa on the web terminal's pinned
+  image and prints ALLOWED, DENIED by IAM, UNREACHABLE or BLOCKED for who-am-I, Nova Pro, an off-list model, S3, EC2,
+  IAM and IMDS. Last, they read the deny rule and `~/challenges/agent-bedrock-policy.json`, the policy as the
+  terraform writes it.
+- **C8 prose, two lines kept true.** The intro said agent-sa's token is on disk in BurritoBot's pod. It now says
+  the tools' pod, under a second account with the same Role, has it. "The agent can read its own token" is now
+  "BurritoBot's tools can read their own token".
+- **Counts.** Attendee clusters render 32 Applications and instructor clusters 36. platform.html, DESIGN-GLANCE.md,
+  the run-of-show and `test_fleet_contract.py` / `test_bootstrap_chart.py` say so.
+
+**What differs from run 6684's draft.**
+- #553 had already moved workshop-mcp onto its own account, so the draft's `automountServiceAccountToken: true`
+  opt-in on workshop-mcp is gone. That pod no longer runs as agent-sa.
+- The Application is a chart file, listed in three values files, not a `gitops/apps/` file.
+- The staged policy has the second statement #513 added (this cluster's tagged application profiles) and both
+  statements' tag conditions.
+- The draft added AWS_PROFILE to run-e2e.sh and read the role and its policy back from AWS. That is dropped:
+  `test_iam_policy_aws.py` already sends the same document to Access Analyzer and runs `infra/org/effect-tests.yaml`
+  (Nova Pro allowed, off-menu models, IAM, EKS and S3 denied) through the simulator, under the existing IAM_PIPELINE_*.
+- The admission of the probe is now tested.
+- The draft's C8 goal-line rewording is not made.
+
+**Tests.** `verify/test_agent_cloud_credential.py` (offline, 79 checks) covers:
+- the SA;
+- that agent-sa is the only workload identity in the bundle;
+- the terraform's policy shape;
+- the staged copy against the terraform, statement by statement;
+- node IMDS;
+- the deny and its profiles;
+- that no agent NetworkPolicy opens TCP 80 to IMDS;
+- that the probe is read-only;
+- the lab commands.
+
+`verify/test_cloud_credential_probe_admission.py` (E2E tools tier, Kyverno CLI v1.19.1) admits the student's Job,
+and the pod the Job controller makes, through all eleven workshop policies. It also shows the same pod refused by
+`restrict-agent-spawned-workloads` when workshop-mcp asks for it.
+
+### REJECTED: a NetworkPolicy for the "explicit 169.254.169.254 deny"
+**Why:** A NetworkPolicy cannot deny. Any policy that selects the agent pods makes them default-deny for egress,
+and attendee clusters ship with no agent egress policy so that Challenge 1's exfil works first. Such a rule would
+either be unreadable or would break C1.
+**Do not suggest:** an `ipBlock` with `except: [169.254.169.254/32]`, which needs a wide allow around it.
+
+### REJECTED: running the beat's AWS calls inside the agent pod
+**Why:** The kagent image has no aws CLI, and the point is the credential, not the pod. Pod Identity binds the role
+to the ServiceAccount, so a Job running as agent-sa holds exactly what BurritoBot holds. That is also the lesson:
+anyone who can run a pod as agent-sa has the credential, so its scope is the control.
+**Do not suggest:** exec'ing `aws` or `curl` into workshop-agent.
+
+**Not yet run on a cluster.** `CONTEXT=<ctx> python3 verify/test_agent_cloud_credential_live.py` (part of
+`bash verify/run-e2e.sh`) on a fresh attendee cluster. It covers:
+- agent-sa as applied;
+- the BurritoBot pod's env and mounts;
+- the lab's exec command, run as written;
+- the ClusterNetworkPolicy present as written (this proves the VPC CNI on the cluster serves the CRD);
+- the probe's verdicts: Nova Pro ALLOWED, off-list DENIED by the same `-bedrock-` role, S3, EC2 and IAM never
+  ALLOWED, and IMDS BLOCKED.
+
+`bash verify/run-e2e.sh` also runs `verify/test_iam_policy_aws.py` for the Access Analyzer half.

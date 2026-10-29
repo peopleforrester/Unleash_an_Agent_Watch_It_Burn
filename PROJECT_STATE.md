@@ -193,7 +193,8 @@ instruction and its one implemented paragraph reverted). Things a future session
   this write); do not "fix" that.
 
 Open and owned by Michael: #203 (premise wrong: the agent holds Pod Identity creds because it must
-call Bedrock; needs an architecture call), #187/#95/#175/#177/#174 (Datadog org supply, Sunday),
+call Bedrock; Michael's reframe, one scoped credential, is built and awaits its live run, see decisions.md
+2026-10-29 · #203), #187/#95/#175/#177/#174 (Datadog org supply, Sunday),
 #97 cleanup checklist, and the post-Portland builds (#112/#113/#116/#117/#204/#205/#206/#208/#210).
 Clusters track `staging`; main is behind by design until Michael promotes.
 

@@ -14,6 +14,9 @@
 #   - kyverno-policies KEPT but NOT armed -> restrict-image-registries ships in Audit (fleet.sh only arms
 #       "full"), so C2's villain image deploys. The student flips it to Enforce.
 #   - C7 needs nothing here: the rogue MCP tools ship present on every profile; the student removes them.
+#   - cluster-network-policies KEPT -> it is platform baseline, not a challenge control: the Admin-tier deny on
+#       the instance metadata service from the agent namespace, which C8's cloud-credential beat shows (#203).
+#       No NetworkPolicy can say deny, and network-policies is left off here, so this is the readable rule.
 #
 # The collector is otel-collector-attendee, the same Application name as otel-collector with the dual-ship
 # overlay (#242); otel-collector-burn is the burn cluster's Datadog-only collector (#476), the same name again.
@@ -38,6 +41,7 @@ apps:
   - ai-layer-otel
   - ai-layer
   - cert-manager
+  - cluster-network-policies
   - datadog-agent-cr
   - datadog-operator
   - demo-app-hedgehog

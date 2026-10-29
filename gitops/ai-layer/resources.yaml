@@ -1,13 +1,26 @@
 # ABOUTME: GitOps-materialized AI layer (Watch It Burn only) - agent + guard + bad-MCP, namespace 'agent'.
 # ABOUTME: namespace is set by kustomization (namespace: agent); cross-service URLs use .agent DNS.
-# NOTE: agent-sa needs an IRSA annotation (eks.amazonaws.com/role-arn) for Bedrock - IAM cannot be
-# created via GitOps; a bootstrap step (eksctl/Pod Identity/ACK) adds it. See infra/cluster3-setup.sh.
 ---
+# agent-sa holds ONE cloud credential and no Kubernetes token (#203).
+#
+# The cloud credential: an EKS Pod Identity association (infra/terraform/aws/cluster/main.tf,
+# module.agent_bedrock_pod_identity) binds agent:agent-sa to a role whose only policy is Bedrock invoke on the
+# four workshop models. It is bound by the association, NOT by an annotation, so this account carries no
+# eks.amazonaws.com/role-arn and must not gain one: the clusters have no IRSA/OIDC provider (enable_irsa = false).
+# Measured inside the kagent container on attendee-001 2026-09-04: AWS_CONTAINER_CREDENTIALS_FULL_URI (the
+# 169.254.170.23 Pod Identity agent) and its token FILE, and no key.
+#
+# The Kubernetes token: not mounted. The only pod that runs as agent-sa is BurritoBot's own (the Agent below),
+# and it never calls the API server: kagent 0.10.1 authenticates it to the controller with a SEPARATE projected
+# token (volume kagent-token, audience "kagent", manifest_builder.go), which this setting does not touch, and
+# the Pod Identity webhook projects its own token the same way. The tools that DO call the API run in
+# workshop-mcp under their own account (#553), which keeps its token. Challenge 8 impersonates agent-sa from
+# the student's terminal (kubectl --as), which needs the Role below and no token at all.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: agent-sa
-  # verify-at-build: bootstrap adds eks.amazonaws.com/role-arn for Bedrock IRSA
+automountServiceAccountToken: false
 ---
 # workshop-mcp's own identity (#553). Its tools need the agent's RBAC, and C8 is about exactly that Role, so
 # the RoleBinding below binds this account to it alongside agent-sa. What it must NOT have is agent-sa's EKS
@@ -1343,6 +1356,136 @@ data:
         resources: ["secrets"]
         resourceNames: ["ceo-personal-record"]
         verbs: ["get"]
+  cloud-credential-probe.yaml: |
+    # Challenge 8, "and its cloud credential?" (#203). READ-ONLY: it changes nothing on the cluster or in AWS
+    # beyond one five-token Nova Pro reply. It runs as agent-sa, so it gets exactly the AWS credential
+    # BurritoBot's pod gets: EKS Pod Identity binds the credential to the ServiceAccount, so ANY pod scheduled
+    # as agent-sa holds it, which is why its scope is the thing worth proving. Each line reports ALLOWED,
+    # DENIED by IAM (the role's policy said no), or UNREACHABLE (your Challenge 1 egress policy stopped the
+    # packet before IAM was asked). Bedrock stays reachable either way, over PrivateLink.
+    # The image is the web terminal's, already on the node and signed, because it carries the aws CLI.
+    # You create the Job, so the Job controller makes its pod: restrict-agent-spawned-workloads, which refuses
+    # a pod as agent-sa when the AGENT asks for it, never sees a request from the agent here.
+    apiVersion: batch/v1
+    kind: Job
+    metadata:
+      name: cloud-credential-probe
+      namespace: agent
+      labels: { app.kubernetes.io/name: cloud-credential-probe }
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 150
+      ttlSecondsAfterFinished: 900
+      template:
+        metadata:
+          labels: { app.kubernetes.io/name: cloud-credential-probe }
+        spec:
+          serviceAccountName: agent-sa
+          # No Kubernetes token in this pod, as in BurritoBot's. The AWS credential still arrives: it is a
+          # different token, projected by the Pod Identity webhook, and the two have nothing to do with each other.
+          automountServiceAccountToken: false
+          restartPolicy: Never
+          securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: probe
+              image: ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf
+              imagePullPolicy: IfNotPresent
+              securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
+              resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+              command: ["bash", "-c"]
+              args:
+                - |
+                  set -u
+                  region=us-west-2
+                  a() { AWS_MAX_ATTEMPTS=1 aws --region "$region" --cli-connect-timeout 5 --cli-read-timeout 20 "$@"; }
+                  row() { printf '  %-36s %s\n' "$1" "$2"; }
+                  try() {
+                    local label=$1 res; shift
+                    if res=$("$@" 2>&1); then row "$label" "ALLOWED   ${res:0:140}"
+                    elif grep -qE 'AccessDenied|UnauthorizedOperation|not authorized' <<<"$res"; then
+                      row "$label" "DENIED by IAM"
+                      grep -oE 'User: [^ ]+ is not authorized to perform: [^ ]+' <<<"$res" | head -1 | sed 's/^/      /'
+                    elif grep -qiE 'could not connect|connect timeout|read timeout|timed out' <<<"$res"; then
+                      row "$label" "UNREACHABLE (network policy)"
+                    else row "$label" "FAILED    $(tail -1 <<<"$res" | cut -c1-140)"
+                    fi
+                  }
+                  echo "== what a pod running as agent-sa holds =="
+                  env | grep '^AWS_' | sort | sed 's/^/  /'
+                  [ -z "${AWS_ACCESS_KEY_ID:-}${AWS_SECRET_ACCESS_KEY:-}" ] && echo "  no AWS_ACCESS_KEY_ID, no AWS_SECRET_ACCESS_KEY"
+                  [ -e ~/.aws/credentials ] || echo "  no ~/.aws/credentials file"
+                  [ -e /var/run/secrets/kubernetes.io/serviceaccount/token ] || echo "  no Kubernetes token mounted"
+                  echo
+                  echo "== what that credential can reach =="
+                  try "who am I (sts get-caller-identity)" a sts get-caller-identity --query Arn --output text
+                  try "Bedrock: Nova Pro (on the list)" a bedrock-runtime converse --model-id us.amazon.nova-pro-v1:0 \
+                    --messages '[{"role":"user","content":[{"text":"Reply with the single word: ok"}]}]' \
+                    --inference-config '{"maxTokens":5}' --query 'output.message.content[0].text' --output text
+                  try "Bedrock: a model NOT on the list" a bedrock-runtime converse --model-id us.anthropic.claude-sonnet-5 \
+                    --messages '[{"role":"user","content":[{"text":"ok"}]}]' --inference-config '{"maxTokens":5}'
+                  try "S3: list buckets" a s3api list-buckets --query 'Buckets[].Name' --output text
+                  try "EC2: describe instances" a ec2 describe-instances --max-items 1
+                  try "IAM: look up any role or policy" a iam list-roles --max-items 1
+                  echo
+                  echo "== the node's instance metadata service (IMDS) =="
+                  rc=0; curl -s -m 2 -o /dev/null http://169.254.169.254/ || rc=$?
+                  if [ "$rc" -eq 0 ]; then row "curl -m 2 http://169.254.169.254/" "REACHED (this should not happen)"
+                  else row "curl -m 2 http://169.254.169.254/" "BLOCKED (curl exit $rc)"; fi
+                  rc=0; curl -s -m 2 -o /dev/null -X PUT -H 'X-aws-ec2-metadata-token-ttl-seconds: 60' \
+                    http://169.254.169.254/latest/api/token || rc=$?
+                  if [ "$rc" -eq 0 ]; then row "IMDSv2 token request" "REACHED (this should not happen)"
+                  else row "IMDSv2 token request" "BLOCKED (curl exit $rc)"; fi
+  agent-bedrock-policy.json: |
+    {
+      "_comment": "The IAM policy <cluster>-bedrock-invoke on agent-sa's Pod Identity role (<cluster>-bedrock-...), as infra/terraform/aws/cluster/main.tf writes it (aws_iam_policy.bedrock_invoke). <account> is this AWS account, <cluster> this cluster, <region> its region. It is the role's ONLY policy. The probe (cloud-credential-probe.yaml) is the evidence that this, and nothing wider, is in force. verify/test_agent_cloud_credential.py fails if this copy drifts from the terraform.",
+      "Version": "2012-10-17",
+      "Statement": [
+        {
+          "Effect": "Allow",
+          "Action": [
+            "bedrock:InvokeModel",
+            "bedrock:InvokeModelWithResponseStream",
+            "bedrock:Converse",
+            "bedrock:ConverseStream"
+          ],
+          "Resource": [
+            "arn:aws:bedrock:*:<account>:inference-profile/us.amazon.nova-pro-v1:0",
+            "arn:aws:bedrock:*:<account>:inference-profile/us.anthropic.claude-haiku-4-5-20251001-v1:0",
+            "arn:aws:bedrock:*:<account>:inference-profile/us.anthropic.claude-sonnet-4-6",
+            "arn:aws:bedrock:*:<account>:inference-profile/us.anthropic.claude-opus-4-8",
+            "arn:aws:bedrock:*::foundation-model/amazon.nova-pro-v1:0",
+            "arn:aws:bedrock:*::foundation-model/anthropic.claude-haiku-4-5-20251001-v1:0",
+            "arn:aws:bedrock:*::foundation-model/anthropic.claude-sonnet-4-6",
+            "arn:aws:bedrock:*::foundation-model/anthropic.claude-opus-4-8"
+          ],
+          "Condition": {
+            "StringEquals": {
+              "aws:PrincipalTag/eks-cluster-name": "<cluster>",
+              "aws:PrincipalTag/kubernetes-namespace": "agent"
+            }
+          }
+        },
+        {
+          "Effect": "Allow",
+          "Action": [
+            "bedrock:InvokeModel",
+            "bedrock:InvokeModelWithResponseStream",
+            "bedrock:Converse",
+            "bedrock:ConverseStream"
+          ],
+          "Resource": "arn:aws:bedrock:<region>:<account>:application-inference-profile/*",
+          "Condition": {
+            "StringEquals": {
+              "aws:PrincipalTag/eks-cluster-name": "<cluster>",
+              "aws:PrincipalTag/kubernetes-namespace": "agent",
+              "aws:ResourceTag/project": "watch-it-burn",
+              "aws:ResourceTag/attendee": "<cluster>",
+              "aws:ResourceTag/consumer": "agent"
+            }
+          }
+        }
+      ]
+    }
 ---
 # The attendee's working tree, kept across a pod restart.
 #

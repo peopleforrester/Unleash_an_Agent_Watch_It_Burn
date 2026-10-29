@@ -1,0 +1,44 @@
+# ABOUTME: Admin-tier egress DENY from the agent namespace to the EC2 instance metadata service (IMDS).
+# ABOUTME: The one network rule in the lab that says "deny" out loud; no NetworkPolicy can (#203).
+#
+# Why a ClusterNetworkPolicy and not one more NetworkPolicy beside agent-egress-allowlist:
+#
+#   1. A NetworkPolicy cannot deny. It can only allow, and a pod becomes deny-by-default for a direction the
+#      moment any policy selects it. "IMDS is blocked" was true only by ABSENCE from the allowlist, which is
+#      not a rule an attendee can read, and #203 asked for one they can.
+#   2. It would not exist when the lab needs it. Attendee clusters ship with NO egress NetworkPolicy in the
+#      agent namespace (the network-policies app is left off so Challenge 1's exfil succeeds first), so until
+#      the student applies C1 the default-deny "already covering" IMDS covers nothing. The Admin tier is
+#      evaluated before every NetworkPolicy and its Deny cannot be overridden by one, so this holds before C1,
+#      after C1, and after the lab's reset deletes the C1 policies again.
+#
+# What it does NOT break: Pod Identity. Every AWS credential in this namespace (agent-sa, agentgateway,
+# web-terminal) comes from the EKS Pod Identity agent at 169.254.170.23, a different address
+# (agent-egress-allowlist.yaml allows it explicitly), and AWS documents that Pod Identity pods do not use IMDS.
+# IMDS is also closed at the node by IMDSv2-required with hop limit 1 (infra/terraform/aws/cluster/main.tf);
+# this is the second, readable layer, not the only one.
+#
+# Needs the Amazon VPC CNI at v1.21.1 or later with network policy enabled (enableNetworkPolicy in the
+# cluster's vpc-cni addon, which takes the most recent version) on Kubernetes 1.29 or later (the clusters run
+# 1.36). Schema per docs.aws.amazon.com/eks/latest/userguide/cni-network-policy.html and the AWS containers
+# blog's block-instance-metadata-service example, read 2026-10-29. Its own Argo CD Application
+# (gitops/bootstrap/apps/cluster-network-policies.yaml) says why it is not part of network-policies.
+apiVersion: networking.k8s.aws/v1alpha1
+kind: ClusterNetworkPolicy
+metadata:
+  name: agent-deny-imds
+  labels:
+    app.kubernetes.io/part-of: watch-it-burn-idp
+spec:
+  tier: Admin
+  priority: 10
+  subject:
+    namespaces:
+      matchLabels:
+        kubernetes.io/metadata.name: agent
+  egress:
+    - name: deny-instance-metadata
+      action: Deny
+      to:
+        - networks:
+            - 169.254.169.254/32

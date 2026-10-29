@@ -2,7 +2,9 @@
 # ABOUTME: admission control at all (no Kyverno, no floor), no RBAC scoping app, no GitOps-drift block.
 # Just the agent + cost-meter proxy and the party burn targets. It is meant to die in one prompt; the
 # facilitator rotates ~10 disposable C1 spares from SSH.
-# NOTE: the agent still needs Bedrock IRSA per cluster (IAM, not GitOps) — see infra/cluster3-setup.sh / deploy.
+# The agent's Bedrock credential is an EKS Pod Identity association made by the cluster terraform, not GitOps (#203).
+# cluster-network-policies (the agent namespace's Admin-tier IMDS deny) is not listed: nothing here defends the
+# agent, and the node's IMDSv2 hop limit of 1 still keeps pods off the instance metadata service.
 #
 # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
 # observability stores/backstage. Just the agent + ai-layer (cost meter) + burn targets, plus

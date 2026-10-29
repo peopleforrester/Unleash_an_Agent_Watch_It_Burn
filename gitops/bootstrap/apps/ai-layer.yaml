@@ -1,5 +1,5 @@
 # ABOUTME: ArgoCD Application for the Watch It Burn AI layer (kustomize bundle in gitops/ai-layer).
-# ABOUTME: Syncs after kagent (CRDs + controller). agent-sa IRSA is added by a bootstrap step (IAM).
+# ABOUTME: Syncs after kagent (CRDs + controller). agent-sa's Bedrock role is a Pod Identity association (terraform).
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:

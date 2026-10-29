@@ -335,7 +335,11 @@ module "eks" {
       # IMDS could steal the node instance-role creds (broader than the pod's Bedrock-scoped Pod Identity),
       # which would falsify PRD 36's "AWS keyless, nothing to steal" baseline. Require IMDSv2 and set
       # hop_limit=1 so pods cannot reach node IMDS. Pod Identity is unaffected: it uses the container-creds
-      # endpoint 169.254.170.23, not IMDS. verify-at-build: confirm Pod Identity still resolves at hop=1.
+      # endpoint 169.254.170.23, not IMDS (the kagent container held its Pod Identity credential on
+      # watch-it-burn-attendee-001, built with these options, 2026-09-04, #203). The agent namespace ALSO
+      # carries an explicit Admin-tier deny for 169.254.169.254 (policies/cluster-network-policies/), so the
+      # rule is readable in the lab and holds on attendee clusters, which ship with no agent egress
+      # NetworkPolicy until the student applies Challenge 1.
       metadata_options = {
         http_endpoint               = "enabled"
         http_tokens                 = "required"
@@ -440,8 +444,11 @@ module "eso_pod_identity" {
 # a per-cluster role to the SA with NO ServiceAccount annotation in gitops (the gitops manifests are
 # identical across all 60 clusters) and NO per-cluster OIDC trust. The eks-pod-identity-agent addon
 # (above) injects the creds via the standard AWS SDK chain, which kagent already uses for Bedrock.
-# verify-at-build: we validated the IRSA path live; confirm kagent picks up Pod Identity creds on a
-# real cluster (same SDK chain; high confidence). Fall back to IRSA + a fleet annotate step if not.
+# Confirmed live on watch-it-burn-attendee-001 2026-09-04 (#203): the kagent container carries
+# AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/v1/credentials and the Pod Identity token file,
+# and no key. This association is the agent's ONE cloud credential, and Bedrock invoke on the four models
+# below is all it reaches; Challenge 8's probe (cloud-credential-probe.yaml in ~/challenges) shows the rest
+# denied, and verify/test_agent_cloud_credential.py holds the lab's copy of this policy to the one here.
 # The four models the workshop can actually bind, as cross-region inference profiles. Nova Pro is the
 # default; the three Claude tiers exist for the cost-race demo. Keep in sync with the ModelConfigs in
 # gitops/ai-layer/resources.yaml: a model listed there and missing here fails at invoke time with an
@@ -589,8 +596,8 @@ module "agent_bedrock_pod_identity" {
 # terraform that creates the cluster, which is what makes the tutor part of the lab rather than a
 # separate service somebody has to stand up.
 #
-# Scoped deliberately tighter than the agent's own Bedrock policy above, which is Resource = "*". This
-# one is read-only inference on ONE model family. A cluster-admin's reach is the union of every Pod
+# Scoped to ONE model family, where the agent's policy above covers the four the workshop binds. This
+# is read-only inference only. A cluster-admin's reach is the union of every Pod
 # Identity role on the cluster, so a broad grant here would widen what the workshop's own hostile
 # workloads can do, and this cluster runs those on purpose.
 data "aws_caller_identity" "current" {}

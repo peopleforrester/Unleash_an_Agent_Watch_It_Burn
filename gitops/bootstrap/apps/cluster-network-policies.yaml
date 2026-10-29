@@ -1,0 +1,31 @@
+# ABOUTME: ArgoCD Application for the Admin-tier ClusterNetworkPolicies in policies/cluster-network-policies/.
+# ABOUTME: A platform baseline, NOT a challenge control: attendee, full and admin list it (#203).
+#
+# Its own Application, not part of network-policies, for two reasons:
+#   - network-policies is Challenge 1's control and is left OFF the attendee profile so the exfil can succeed
+#     first. The IMDS deny must be present on exactly those clusters, before C1.
+#   - ClusterNetworkPolicy is a VPC CNI CRD (networking.k8s.aws). If a cluster's CNI predates it, only this app
+#     goes Degraded; bundled into another app, one unsatisfiable kind would stop that whole app syncing.
+# The burn profile does not list it: it is the cluster with nothing defending the agent, and the node-level
+# IMDS hop limit still applies there.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cluster-network-policies
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "-4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: policies/cluster-network-policies
+  destination:
+    server: https://kubernetes.default.svc
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

@@ -11,6 +11,8 @@
 # policies to stage the attack restored them in about a second (measured on r3-3, #281): a failed
 # demo with no visible cause. The attendee profile has always left out exactly these two; the
 # profiles agree.
+# cluster-network-policies is NOT a challenge control: it is the agent namespace's IMDS deny (#203), listed on
+# attendee, full and admin alike.
 #
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
@@ -18,6 +20,7 @@ apps:
   - ai-layer-otel
   - ai-layer
   - cert-manager
+  - cluster-network-policies
   - datadog-agent-cr
   - datadog-operator
   - demo-app-hedgehog
