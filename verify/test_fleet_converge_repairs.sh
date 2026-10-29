@@ -168,6 +168,29 @@ check "and only then does it say CONVERGED 2/2" \
   '[[ "${rc}" -eq 0 ]] && grep -q "CONVERGED: 2/2" "${T}/stderr" && ! grep -q "stopped with exit" "${T}/stderr"'
 rm -f "${T}/agent_tools"; : >"${T}/stderr"
 
+echo "== repair_agent_tools: the #679 state is recreated from git =="
+# Both KubeCon clusters on 2026-10-29: git's workshop-mcp had twelve tools, the live Agent the eleven from before
+# read_support_ticket (#640), and Argo CD cannot write one element of the tools array on a toolnames profile
+# (verify/test_agent_tools_sync.py ports why). Deleting the Agent is the repair: Argo recreates it from git.
+printf '%s' '["lookup_customer_records","check_inventory","reorder_supply","get_order_history","get_marketing_intel","search_web","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]' >"${T}/agent_tools"
+: >"${CALLS}"; : >"${T}/stderr"; src 'repair_agent_tools watch-it-burn-community /dev/null'
+check "the live eleven against git's twelve: the stale list is logged and the Agent CR is deleted for Argo to recreate" \
+  'grep -qx "kubectl -n agent delete agent workshop-agent" "${CALLS}" && grep -q "watch-it-burn-community: agent tool list is stale" "${T}/stderr"'
+python3 - "${HERE}/../gitops/ai-layer/resources.yaml" >"${T}/agent_tools" <<'PY'
+import json, sys, yaml
+for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
+    if d and d.get("kind") == "Agent":
+        for s in d["spec"]["declarative"]["tools"]:
+            if (s.get("mcpServer") or {}).get("name") == "workshop-mcp":
+                print(json.dumps(list(reversed(s["mcpServer"]["toolNames"])), separators=(",", ":")), end="")
+PY
+: >"${CALLS}"; src 'repair_agent_tools watch-it-burn-community /dev/null'
+check "git's twelve in another order: nothing is deleted (the lists are compared as sets)" \
+  '! grep -q "delete agent" "${CALLS}" && grep -q "read_support_ticket" "${T}/agent_tools"'
+rm -f "${T}/agent_tools"; : >"${CALLS}"; src 'repair_agent_tools watch-it-burn-community /dev/null'
+check "no live Agent (Argo still recreating it): nothing is deleted" '! grep -q "delete agent" "${CALLS}"'
+: >"${T}/stderr"
+
 echo "== repair_step: a repair that fails is logged and recorded, and the next one still runs (#635) =="
 : >"${CALLS}"
 WIB_LOG_DIR="${T}/logs" src 'boom() { false; echo "boom-went-on $1" >>"${CALLS}"; }; after() { echo "after-ran $1" >>"${CALLS}"; }

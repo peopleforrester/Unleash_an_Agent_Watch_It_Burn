@@ -85,11 +85,24 @@ spec:
     #
     # Only Challenge 7 patches a tool list live, and only evil-mcp's. Selecting that one server by NAME
     # rather than by array index keeps it correct if the order ever changes.
+    #
+    # Even narrowed, this ignore freezes the WHOLE tools array on sync (#679). The Agent is a CRD, so
+    # RespectIgnoreDifferences copies the ignored field back from live with a JSON merge patch, and a merge
+    # patch cannot write one element of an array: it carries the entire live array, and Argo CD v3.5.2's
+    # restoreNonIgnoredFields only walks maps. So every sync applies the live tools, a git change to any
+    # tool entry never lands, and the Agent stays OutOfSync while each auto-sync says serverside-applied.
+    # That is how read_support_ticket (#640) never reached either KubeCon cluster. On toolnames profiles
+    # the ignore stays, because selfHeal would otherwise undo a student's guard-mcp-on, and fleet.sh
+    # converge's repair_agent_tools recreates the Agent when its workshop-mcp list is stale. On the admin
+    # profile (c7Control: gateway) C7 is agentgateway's rule (#496), nothing writes this list live, and the
+    # ignore is not rendered, so Argo syncs the tools from git. verify/test_agent_tools_sync.py models it.
     - group: kagent.dev
       kind: Agent
       name: workshop-agent
       jqPathExpressions:
+        # {{- if ne .Values.c7Control "gateway" }}
         - '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
+        # {{- end }}
         # Per-cluster model tier (cost-race demo): modelConfig can be patched live to another Bedrock tier
         # on one cluster. Ignore drift so selfHeal keeps the per-cluster tier instead of reverting to the
         # committed default (bedrock-nova).

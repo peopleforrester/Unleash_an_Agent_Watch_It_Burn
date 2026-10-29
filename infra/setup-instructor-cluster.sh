@@ -84,4 +84,6 @@ CONTEXT="${CONTEXT}" KUBECONFIG="${KCFG}" AWS_PROFILE="${PROFILE}" \
 log "Admin cluster ready: ${NAME} has its infra guardrails armed; the AI guards are deployed but OFF. Flip them live with:"
 log "  CONTEXT=${CONTEXT} challenges/02-sanitization/toggle-output-guard-on.sh   (output first)"
 log "  CONTEXT=${CONTEXT} challenges/02-sanitization/toggle-input-guard-on.sh     (then input)"
-log "  CONTEXT=${CONTEXT} challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh  (then MCP)"
+# C7 here is agentgateway's rule (#496), flipped from the web terminal. toggle-mcp-authz-on.sh is a workshop
+# cluster's control: this profile does not ignore the Agent's toolNames (#679), so Argo CD puts git's list back.
+log "  guard-mcp-on in this cluster's web terminal  (then MCP: agentgateway's rule, not toggle-mcp-authz-on.sh)"

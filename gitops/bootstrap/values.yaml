@@ -21,3 +21,9 @@ imageRegistry: ghcr.io/peopleforrester/lab-platform
 # for *.agenticburn.com and *.burritobot.co in the cluster's own account and region (infra/front-door-cert.sh).
 frontDoor:
   certificateArn: ""
+# Where Challenge 7's control sits on this profile (#679): toolnames, the kagent Agent's evil-mcp toolNames list,
+# which a student narrows live with guard-mcp-on, or gateway, agentgateway's :3003 rule, which only the admin
+# profile uses (#496) and which the web terminal picks by the root's lab-platform/profile=admin label. With
+# toolnames, ai-layer ignores drift on that one list so selfHeal keeps the student's fix. With gateway nothing
+# writes the list live, so ai-layer does not ignore it, and Argo CD syncs the Agent's whole tools array from git.
+c7Control: toolnames

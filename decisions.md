@@ -4202,3 +4202,53 @@ checks fail.
 with no cluster. The cluster checks owed by #653 are still owed:
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py` and
 `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`.
+## 2026-10-29 · #679 · Admin syncs the Agent's tools from git; why the toolnames profiles cannot, proven offline
+
+Both KubeCon clusters (watch-it-burn-community on the burn profile, watch-it-burn-private on admin) kept workshop-mcp's
+eleven tools after git gave it twelve, read_support_ticket included (#640). ai-layer showed the Agent OutOfSync, and
+every auto-sync said serverside-applied with no change. The issue's guess was right, and Argo CD v3.5.2's
+`controller/sync.go` shows why. With RespectIgnoreDifferences=true, `normalizeTargetResources` copies each ignored
+field from live into the target it applies. It does so as the merge patch from the normalized live object to the
+live one. The Agent is a CRD, outside Argo CD's scheme, so that patch is an RFC 7386 JSON merge patch, which replaces
+arrays whole. The ignore on evil-mcp's toolNames therefore carries the entire live tools array. `restoreNonIgnoredFields`
+walks maps only, so it does not put the target's array back. Every sync applies the live tools, and no git change to
+any tool entry can land while that ignore exists. Force=true does not help, because the write already holds the
+live values.
+
+**What changed.**
+- The chart has a new value, `c7Control` (values.yaml: `toolnames`; values-admin.yaml: `gateway`), validated
+  by name in templates/apps.yaml. `apps/ai-layer.yaml` renders the evil-mcp toolNames ignore only when it is
+  not `gateway`. On admin, C7 is agentgateway's rule (#496). The web terminal's `_mcp` writes only the committed
+  full list to the Agent there, so nothing needs the ignore, and Argo syncs the tools array from git. The
+  modelConfig ignore stays on every profile, because it is a map field and the merge patch writes only that field.
+- `verify/test_agent_tools_sync.py` (offline, new) ports `normalizeTargetResources` for a resource outside the
+  scheme, with the real jq for the deletion, as Argo CD's gojq `del()` does. It runs the port on the committed Agent
+  and each profile's rendered ignores. On attendee, burn and full it reproduces #679: the stale eleven stay, and the
+  Agent stays OutOfSync. It also shows why those profiles keep the ignore: a student's guard-mcp-on survives a sync.
+  On admin, the sync carries git's whole tools array and a per-cluster modelConfig survives. On every profile, a
+  fresh cluster gets the committed Agent. The test fails if VERSIONS.lock's Argo CD moves off v3.5.2, so the port
+  gets read again against the new sync.go. It also fails if any RespectIgnoreDifferences app gains another CRD
+  ignore that reaches into an array.
+- `test_fleet_converge_repairs.sh` gains the #679 state: a live eleven against git's twelve makes
+  `repair_agent_tools` delete the Agent for Argo to recreate. The same list in another order, or no live Agent,
+  deletes nothing. fleet.sh's comment on that repair now says it is what returns the toolnames profiles to git.
+- `test_bootstrap_chart.py` and `test_bootstrap_chart_render.py` hold the value, its guard and each profile's
+  rendered Agent ignore. A misspelt c7Control fails the render.
+- `infra/setup-instructor-cluster.sh` told an admin cluster's operator to run toggle-mcp-authz-on.sh for C7. That
+  script is a workshop cluster's control, and Argo now puts git's list back on admin. The hint now names
+  guard-mcp-on.
+
+**Not changed, and why.** The toolnames profiles keep the ignore. Without it, selfHeal would undo the student's
+guard-mcp-on within seconds. converge's `repair_agent_tools` stays their repair: a fresh bring-up creates the Agent
+from git, so its first sync has no live array to keep. A cluster that is already up when the tool list changes in
+git needs `fleet.sh converge`. To lift the freeze on those profiles too, the Agent would have to leave ai-layer for an
+Application without RespectIgnoreDifferences, or C7's workshop control would have to move off the tools array. Both
+change the platform's layout, so they are left as a follow-up rather than made here. toggle-mcp-authz-on.sh still
+writes the whole tools array from its copy. `test_tool_audit.py` holds that copy equal to git, so the copy cannot
+reintroduce the eleven.
+
+**Not yet run on a cluster.** On a fresh admin cluster, `bash verify/run-e2e.sh` with CONTEXT set is owed, and so is
+a check of the Agent after a tools change in git. Patch the live workshop-mcp toolNames to drop one tool, then
+confirm that Argo puts it back and that ai-layer reads Synced: `KUBECONFIG=<file> kubectl --context <ctx> -n agent
+get agent workshop-agent -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'`. On a burn or attendee
+cluster, `./fleet.sh converge <name>` should log "agent tool list is stale" once and then read CONVERGED.

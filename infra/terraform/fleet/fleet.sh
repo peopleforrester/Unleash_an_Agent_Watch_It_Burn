@@ -938,6 +938,12 @@ repair_agent_injection() {
 # converge did not touch the field, an explicit sync reported "no more tasks", and Force changed nothing
 # because no write was being attempted.
 #
+# #679 is the same wall, and why it stands: the Agent is a CRD, so RespectIgnoreDifferences carries the ignored
+# evil-mcp toolNames back as a JSON merge patch, which holds the whole live tools array, and every sync applies that
+# (verify/test_agent_tools_sync.py ports Argo CD v3.5.2's code). read_support_ticket (#640) never reached either
+# KubeCon cluster that way. The admin profile no longer renders that ignore, so Argo syncs its tools from git; the
+# toolnames profiles keep it for the student's guard-mcp-on, and this repair is what brings them back to git.
+#
 # Replacing the object is the only repair that works. Deleting the Agent CR makes Argo recreate it from the
 # manifest; kagent owns the agent Deployment through an ownerRef, so the pod cycles with it (about a
 # minute). Idempotent: it only acts when the live tool list actually differs from the committed one.

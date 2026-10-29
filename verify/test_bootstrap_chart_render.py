@@ -23,8 +23,8 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, CHART, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO,  # noqa: E402
-                             LAB_PLATFORM_GHCR, REPO_URL, REVISION, app_names, profiles, values_path,
-                             kustomize_images, without_front_door)
+                             LAB_PLATFORM_GHCR, REPO_URL, REVISION, app_names, c7_control, for_c7_control,
+                             profiles, values_path, kustomize_images, without_front_door)
 
 failures: list[str] = []
 
@@ -72,10 +72,12 @@ for profile in profiles():
     check(f"{profile}: besides the Applications it renders only the ghcr-kagent-oci Secret {rest}",
           rest == [("Secret", "ghcr-kagent-oci")])
     # Each listed file, rendered, is the file as written with the revision and the default image registry filled
-    # in and, with no frontDoor.certificateArn, the front door's guarded block left out: tpl changes nothing else.
+    # in and, with no frontDoor.certificateArn, the front door's guarded block left out, and on a gateway profile
+    # the c7Control guarded block too (#679): tpl changes nothing else.
     want = []
     for n in app_names(profile):
-        raw = without_front_door((APPS / f"{n}.yaml").read_text(encoding="utf-8")).replace(REVISION, COMMIT) \
+        raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
+        raw = without_front_door(raw).replace(REVISION, COMMIT) \
             .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
         want += [d for d in yaml.safe_load_all(raw) if d]
@@ -95,6 +97,16 @@ for profile in profiles():
                 check(f"{profile} {n}: {s['chart']} at one exact version", SEMVER.fullmatch(rev) is not None, rev)
             else:
                 check(f"{profile} {n}: {url} at a 40-digit commit", re.fullmatch(r"[0-9a-f]{40}", rev) is not None, rev)
+    # The Agent's ignore (#679): evil-mcp's toolNames inside the tools array only where C7 is that list.
+    ai = next((a for a in apps if a["metadata"]["name"] == "ai-layer"), {})
+    agent = [p for i in (ai.get("spec") or {}).get("ignoreDifferences") or [] if i.get("kind") == "Agent"
+             for p in i.get("jqPathExpressions") or []]
+    evil = '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
+    want_agent = ([evil] if c7_control(profile) == "toolnames" else []) + [".spec.declarative.modelConfig"]
+    check(f"{profile}: ai-layer's Agent ignore is {want_agent} (c7Control {c7_control(profile)})", agent == want_agent,
+          str(agent))
+    check(f"{profile}: no rendered Application keeps the c7Control guard",
+          '.Values.c7Control' not in r.stdout)
     if profile == "admin":
         alerts = r.stdout
         check("admin: the Prometheus alert text renders as Prometheus' own template",
@@ -212,6 +224,9 @@ r = render("--set", f"revision={COMMIT}", "--set", "apps={external-secrets,no-su
 check("an app with no file: the render fails, naming the file", r.returncode != 0
       and "the values name app no-such-app, and the chart has no apps/no-such-app.yaml" in r.stderr,
       r.stderr.strip()[:200])
+r = render("-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--set", "c7Control=toolNames")
+check("a c7Control that is neither toolnames nor gateway: the render fails, naming it (#679)", r.returncode != 0
+      and "c7Control is where Challenge 7's control sits" in r.stderr, r.stderr.strip()[:200])
 r = render("-f", str(values_path("burn")), "--set", "revision=staging")
 check("revision=staging, deploy-full-idp.sh's root, renders the burn children at staging",
       r.returncode == 0 and all(str(s.get("targetRevision")) == "staging"

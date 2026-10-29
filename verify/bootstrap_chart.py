@@ -33,6 +33,25 @@ FRONT_DOOR_ARN = "{{ .Values.frontDoor.certificateArn }}"
 FRONT_DOOR_END = "{{- end }}"
 
 
+# Where Challenge 7's control sits (#679): values.yaml's c7Control, toolnames unless a profile's values file says
+# gateway. ai-layer.yaml renders the Agent's evil-mcp toolNames ignore between these two guards, on toolnames only.
+C7_TOOLNAMES_IF = '{{- if ne .Values.c7Control "gateway" }}'
+C7_TOOLNAMES_END = "{{- end }}"
+
+
+def c7_control(profile: str) -> str:
+    """Where a profile's Challenge 7 control sits: its values file's c7Control, else values.yaml's."""
+    shared = yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8")) or {}
+    return values(profile).get("c7Control", shared.get("c7Control"))
+
+
+def for_c7_control(raw: str, control: str) -> str:
+    """An app file as the chart renders it for this c7Control: the toolnames-only block left out on gateway."""
+    if control == "toolnames":
+        return raw
+    return re.sub(r" \{\{- if ne \.Values\.c7Control \"gateway\" \}\}.*? \{\{- end \}\}", "", raw, flags=re.S)
+
+
 def without_front_door(raw: str) -> str:
     """An app file as the chart renders it with no frontDoor.certificateArn: each guarded block left out."""
     return re.sub(r" \{\{- if \.Values\.frontDoor\.certificateArn \}\}.*? \{\{- end \}\}", "", raw, flags=re.S)

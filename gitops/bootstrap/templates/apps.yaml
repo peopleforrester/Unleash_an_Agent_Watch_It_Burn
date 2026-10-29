@@ -11,6 +11,10 @@ ABOUTME: source takes .Values.revision and every lab-platform image .Values.imag
 {{- if and $cert (not (regexMatch "^arn:aws[a-z-]*:acm:[a-z0-9-]+:[0-9]{12}:certificate/[0-9a-f-]+$" $cert)) }}
 {{- fail (printf "frontDoor.certificateArn is the ARN of the ACM certificate the console's load balancer presents, arn:aws:acm:<region>:<account>:certificate/<id>, or unset for nginx's self-signed one (got %q)" $cert) }}
 {{- end }}
+{{- $c7 := default "" .Values.c7Control }}
+{{- if not (has $c7 (list "toolnames" "gateway")) }}
+{{- fail (printf "c7Control is where Challenge 7's control sits on this profile: toolnames, the Agent's evil-mcp toolNames list, or gateway, agentgateway's rule (got %q)" $c7) }}
+{{- end }}
 {{- if not .Values.apps }}
 {{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
 {{- end }}
