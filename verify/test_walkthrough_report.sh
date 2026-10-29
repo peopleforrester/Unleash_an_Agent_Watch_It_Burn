@@ -9,7 +9,7 @@ T="$(mktemp -d)"; trap 'rm -rf "${T}"' EXIT
 SHIM="${T}/bin"; mkdir -p "${SHIM}" "${T}/states"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
-jtrue() { python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); r = d["results"][0]; sys.exit(0 if eval(sys.argv[2]) else 1)' "$1" "$2" 2>/dev/null; }
+jtrue() { python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); r = d["clusters"][0]; sys.exit(0 if eval(sys.argv[2]) else 1)' "$1" "$2" 2>/dev/null; }
 
 # curl: the console answers 200, the lab page has Challenge 1, the terminal demands its password.
 cat >"${SHIM}/curl" <<'S'
@@ -53,6 +53,10 @@ walk() { # $1 AGENT_READY value, $2 report path
 echo "== a cluster with BurritoBot Ready =="
 walk True "${T}/r1.json"
 check "the report is written" '[[ -s "${T}/r1.json" ]]'
+# The provisioning app's /admin/health answers 400 unless "clusters" is a list, and the page and its roster
+# check (#34) read each row's "cluster" from it (provisioning-agenticburn app.py admin_health, reported_clusters).
+check "clusters is the row list the app's /admin/health takes" \
+  'jtrue "${T}/r1.json" "isinstance(d[\"clusters\"], list) and r[\"cluster\"] == \"watch-it-burn-attendee-007\" and d[\"total\"] == 1"'
 check "console HTTP code" 'jtrue "${T}/r1.json" "r[\"console_http\"] == 200"'
 check "Argo Synced+Healthy count out of total" 'jtrue "${T}/r1.json" "r[\"argo\"] == {\"synced_healthy\": 1, \"total\": 2}"'
 check "agent pod Ready" 'jtrue "${T}/r1.json" "r[\"agent_ready\"] is True and \"agent-not-ready\" not in r[\"issues\"]"'

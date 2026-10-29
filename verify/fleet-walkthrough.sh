@@ -139,10 +139,12 @@ for line in (tsv.read_text().splitlines() if tsv.exists() else []):
                  "argo": {"synced_healthy": num(argo_ok), "total": num(argo_total)},
                  "agent_ready": {"true": True, "false": False}.get(agent),
                  "last_trace": trace or None})
+# "clusters" is the row list: the admin page's /admin/health refuses a report whose clusters is not one,
+# and reads its rows and its #34 roster check from it, so the count is "total".
 json.dump({"generated": datetime.datetime.now(datetime.UTC).isoformat(),
-           "clusters": len(rows), "healthy": sum(r["status"] == "ok" for r in rows),
+           "total": len(rows), "healthy": sum(r["status"] == "ok" for r in rows),
            "failed": sum(r["status"] != "ok" for r in rows),
-           "last_trace_error": os.environ.get("TRACE_ERR") or None, "results": rows},
+           "last_trace_error": os.environ.get("TRACE_ERR") or None, "clusters": rows},
           open(out, "w"), indent=2)
 PY2
     rm -f "${JSON}.tsv"; echo "  report: ${JSON}"

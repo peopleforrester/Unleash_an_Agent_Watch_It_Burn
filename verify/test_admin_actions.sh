@@ -167,8 +167,8 @@ check "an unreadable queue fails the pass" '[[ "${rc}" -ne 0 ]] && grep -q "did 
 
 echo "== the health report goes to /admin/health =="
 rm -f "${T}/health.json"
-src "cmd_verify() { printf '{\"clusters\": 1, \"results\": [{\"cluster\": \"${A}\", \"agent_ready\": true}]}' >\"\${WIB_VERIFY_REPORT}\"; return 1; }; post_fleet_health"; rc=$?
-check "a walkthrough that found a broken cluster is still posted" '[[ "${rc}" -eq 0 ]] && jtrue "${T}/health.json" "d[\"results\"][0][\"agent_ready\"] is True"'
+src "cmd_verify() { printf '{\"total\": 1, \"clusters\": [{\"cluster\": \"${A}\", \"agent_ready\": true}]}' >\"\${WIB_VERIFY_REPORT}\"; return 1; }; post_fleet_health"; rc=$?
+check "a walkthrough that found a broken cluster is still posted" '[[ "${rc}" -eq 0 ]] && jtrue "${T}/health.json" "d[\"clusters\"][0][\"agent_ready\"] is True"'
 src "cmd_verify() { return 1; }; post_fleet_health"; rc=$?
 check "a walkthrough that wrote no report is a failure" '[[ "${rc}" -ne 0 ]]'
 HEALTH_CODE=500 src "cmd_verify() { echo '{}' >\"\${WIB_VERIFY_REPORT}\"; }; post_fleet_health"; rc=$?

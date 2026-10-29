@@ -63,7 +63,8 @@ covers one cluster:
  "last_trace": "2026-10-24T16:05:00+00:00"}
 ```
 
-The top level carries `generated`, `clusters`, `healthy`, `failed` and `last_trace_error`. `null` in a
+The top level carries `generated`, `total`, `healthy`, `failed`, `last_trace_error` and `clusters`, the
+list of rows. The app's `POST /admin/health` refuses a report whose `clusters` is not a list. `null` in a
 column means unknown: the cluster was unreachable, or (for `last_trace`) no span arrived in the last 24
 hours. An idle cluster outside a session is a correct cluster, so a missing trace is not an issue.
 `last_trace` comes from one query to the instructor Datadog org, which every cluster dual-ships to

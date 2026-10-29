@@ -4252,3 +4252,27 @@ a check of the Agent after a tools change in git. Patch the live workshop-mcp to
 confirm that Argo puts it back and that ai-layer reads Synced: `KUBECONFIG=<file> kubectl --context <ctx> -n agent
 get agent workshop-agent -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'`. On a burn or attendee
 cluster, `./fleet.sh converge <name>` should log "agent tool list is stale" once and then read CONVERGED.
+
+## 2026-10-29 · #268 · The walkthrough report puts its rows under `clusters`, the key the admin page reads
+
+provisioning-agenticburn#33, the app side of the admin console, closed on 2026-10-28. Run 10551 read its `app.py`
+against `docs/admin-console.md` and `fleet.sh serve-actions`, route by route. The four action names, the
+`^watch-it-burn-[a-z0-9-]+$` cluster pattern, the 4000-byte output cap, the claim's 409, the 300 s health interval
+and the one-minute pending alarm all agree. The health report did not. `verify/fleet-walkthrough.sh --json` wrote
+`"clusters"` as a count and the rows as `"results"`. The app's `POST /admin/health` answers 400 unless `clusters`
+is a list. Its page loops over `report.clusters`, and its #34 roster check (`reported_clusters`) takes cluster
+names from the same key. So every health post from `serve-actions` would have been refused. The page would have
+said the runner was down while it was up, and no row would have shown. The contract was what was ambiguous: it
+listed `clusters` among the top-level keys without saying it held the rows, and the app read it that way.
+
+**What changed.** The report now carries `clusters` as the row list and the count as `total`. `results` is gone.
+Nothing else read the walkthrough report's top level: the other `results` readers in verify/ read other reports.
+`docs/admin-console.md` now says `clusters` is the list and that the app refuses a report where it is not.
+`verify/test_walkthrough_report.sh` gains a check that `clusters` is a list whose first row names the cluster and
+that `total` counts it. With the old `fleet-walkthrough.sh`, 9 of its checks fail.
+`test_walkthrough_no_state.sh` and `test_admin_actions.sh` read the new keys.
+
+**Not yet run on a cluster.** The live path is owed by a session with AWS access and the Railway admin token:
+`infra/terraform/fleet/fleet.sh serve-actions --once` against a fresh attendee cluster. Its health post should read
+200, and `/admin/console?token=...` should show the cluster's row. Then queue `restart-agent` for that cluster from
+the page, run `serve-actions --once` again, and check that the audit list reads done with exit code 0.

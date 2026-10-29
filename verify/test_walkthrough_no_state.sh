@@ -57,7 +57,7 @@ walk "watch-it-burn-attendee-001,watch-it-burn-attendee-002" "${T}/r1.json"
 check "exits non-zero" '[[ "${rc}" -ne 0 ]]'
 check "each missing cluster is a named failure" 'grep -q "FAIL watch-it-burn-attendee-001: no-state" "${T}/out" && grep -q "FAIL watch-it-burn-attendee-002: no-state" "${T}/out"'
 check "the tally counts them" 'grep -q "0 healthy, 2 with problems, out of 2" "${T}/out"'
-check "the report lists them as failed" 'jtrue "${T}/r1.json" "d[\"clusters\"] == 2 and d[\"failed\"] == 2 and all(r[\"issues\"] == [\"no-state\"] for r in d[\"results\"])"'
+check "the report lists them as failed" 'jtrue "${T}/r1.json" "d[\"total\"] == 2 and d[\"failed\"] == 2 and all(r[\"issues\"] == [\"no-state\"] for r in d[\"clusters\"])"'
 
 echo "== one named cluster has state, one does not =="
 touch "${T}/states/watch-it-burn-attendee-007.tfstate"
