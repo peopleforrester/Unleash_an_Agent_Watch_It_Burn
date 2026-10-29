@@ -284,6 +284,18 @@ kitchen isn't answering", never a bare status code. `verify/test_audience_path.p
 holds all of this offline; `CONTEXT=<community ctx> python3
 verify/test_audience_path_live.py` checks it through the apex on the live cluster.
 
+The phone-scale load test comes after that check passes, from a laptop off the
+venue network:
+`python3 verify/ballroom_load.py --host attackme.agenticburn.com --max-usd 6`.
+It runs 200 phones as one network, each a conversation that sends real
+`[[wib-probe]]` turns about every 30 s for the 5-minute audience segment. It fails
+if any phone gets something other than a sentence, if any turn ends in "kitchen
+isn't answering", if guard-proxy's cluster window is reached, if the turns that get
+past nginx come to more or well less than the 120 a minute ceiling, or if the spend
+rate would reach the $25 cap within the segment. About 660 turns reach the model,
+a few dollars, and the run stops if `/cost` rises by `--max-usd`. Reset the
+community bot afterwards.
+
 Terminal login on the private cluster is `sprouts` / `sprouts`, the presenter login
 every roster cluster gets (`agentic` is the attendee pool's). Read it off the
 cluster if in doubt:
@@ -867,8 +879,9 @@ number and says who settled it and when, so references to it elsewhere still lan
    on #453.
 7. **The audience rate limit, venue NAT, and timeouts (#450, #451).** Sized in git
    for a ballroom on one venue Wi-Fi NAT ("The audience path" above). Still owed:
-   `verify/test_audience_path_live.py` on attackme once it runs this config, a
-   phone-scale load test there, and the real-phone check (#451).
+   `verify/test_audience_path_live.py` on attackme once it runs this config, then
+   the phone-scale load test `verify/ballroom_load.py` there (written, not yet
+   run), and the real-phone check (#451).
 8. **The deck (rounds-agenticburn#38).** This file is the beat list the deck is
    cut from. The deck itself is built in `peopleforrester/rounds-agenticburn`
    (`attendee.html`); this repo builds no slide HTML. No deck is submitted to

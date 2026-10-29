@@ -4509,3 +4509,31 @@ anyone who can run a pod as agent-sa has the credential, so its scope is the con
   ALLOWED, and IMDS BLOCKED.
 
 `bash verify/run-e2e.sh` also runs `verify/test_iam_policy_aws.py` for the Access Analyzer half.
+## 2026-10-29 · #450 · The ballroom load test is a hand-run script with a required spend stop, held offline by its verdict
+
+**The question.** The earlier #450 entry today left one thing owed besides the live check: a phone-scale load test
+on attackme. No script for it existed, so a session with network access had nothing to run.
+
+**What it changes.**
+- `verify/ballroom_load.py` runs a ballroom from one machine. One machine is one public address, which is what the
+  venue Wi-Fi NAT makes of the room. It starts 200 phones by default. Each is its own conversation
+  (`X-BurritoBot-Session`) that sends a real `[[wib-probe]]` turn, waits for the reply, thinks for about 30 s and
+  sends again, for 5 minutes. It fails if any reply is not a sentence in the /chat shape, if any turn ends in
+  "kitchen isn't answering", if guard-proxy's 150-a-minute cluster window is reached, if the turns past nginx exceed
+  the per-network ceiling (burst + 1 + rate × minutes, read from console.conf) or fall under 90 % of it while the
+  room offered more, or if the measured spend rate would reach the cost cap within `--segment-minutes`. It also
+  reports the latency median, p95 and max, and how many phones got at least one answer.
+- It is not a `test_*` file and carries no `# SUITE: e2e`, so neither suite runs it. Each run spends real Bedrock
+  (at most about 660 turns, a few dollars) and holds attackme's spend counter until a reset-bot. `--max-usd` is
+  required, and the run stops and fails once `/cost` has risen by that much, or once `/cost` stops answering. It
+  takes `--host` and never calls kubectl, so it has no kube context to get wrong. The live config check,
+  `verify/test_audience_path_live.py`, runs first.
+- `verify/test_ballroom_load.py` (offline) holds it. It classifies the reply bodies that console.conf and proxy.py
+  really send, runs the verdict against invented rooms, and runs the whole loop in-process behind a fake front door
+  that limits like nginx's leaky bucket. That fake shows that a front door holding the ceiling passes, one that does
+  not limit the network fails on the ceiling, a bare HTML 502 fails on the words, and `--max-usd` stops the run.
+
+**Not yet run on a cluster.** `python3 verify/ballroom_load.py --host attackme.agenticburn.com --max-usd 6`, from a
+session with network access, off the venue network, after `CONTEXT=<community ctx> python3
+verify/test_audience_path_live.py` passes on attackme synced to `7a7ae65` or later. Then
+`./fleet.sh reset-bot watch-it-burn-community`.
