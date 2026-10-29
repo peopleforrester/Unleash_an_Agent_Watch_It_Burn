@@ -39,6 +39,8 @@ readonly BOUNDARY_DIR="${SCRIPT_DIR}/../../org/boundary"
 # Keep in step with local.boundary_name in infra/org/boundary/main.tf and the cluster root's lookup.
 readonly BOUNDARY_NAME="watch-it-burn-permissions-boundary"
 WIB_REGION="${WIB_REGION:-us-west-2}"
+# fleet.sh's home region (#643): outside it every account's lab VPC state is states/<account>.<region>.tfstate.
+WIB_HOME_REGION="${WIB_HOME_REGION:-us-west-2}"
 # The `event` tag the apply hints below must pass: the network and boundary roots have no default for it
 # (#494, #507).
 # shellcheck source=SCRIPTDIR/event.sh
@@ -195,7 +197,10 @@ for acct in "${accounts[@]}"; do
     # the default account built a second VPC state that down-infra never destroys (#526).
     vpc_state="${LAB_VPC_DIR}/states/${acct}.tfstate"
     vpc_state_arg="states/${acct}.tfstate"
-    if [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
+    if [[ "${WIB_REGION}" != "${WIB_HOME_REGION}" ]]; then
+        # A standby region (#643): one state per account and region, the default account's included.
+        vpc_state_arg="states/${acct}.${WIB_REGION}.tfstate"; vpc_state="${LAB_VPC_DIR}/${vpc_state_arg}"
+    elif [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
         vpc_state_arg="terraform.tfstate"
         if [[ -f "${vpc_state}" ]]; then
             note "a stray ${vpc_state} exists: fleet.sh reads it before terraform.tfstate, and down-infra never destroys it"

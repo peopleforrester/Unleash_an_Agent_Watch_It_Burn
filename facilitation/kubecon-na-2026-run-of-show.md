@@ -246,6 +246,33 @@ attendee lab runs: nobody is pointed at the provisioning distributor. The
 provisioning service runs only as the C1 beacon collector, which matters only if
 C1 is pulled on deck (open question 9).
 
+### Standbys and automatic promotion (#643)
+
+Each hostname has standbys, listed with their region, wave and promotion order in
+`infra/terraform/fleet/backups.tsv`: 12 for attackme and 3 for burritobot-private,
+spread over us-east-2, us-east-1 and us-west-2. `backups.py` builds them, self-checks
+them and moves a hostname when its cluster fails:
+
+- **Schedule.** `infra/terraform/fleet/backups.py schedule <session start, UTC>`
+  prints the crontab lines (the start is conference-knowledge's `kubecon-na-2026`
+  entry). The 3 private and 3 public standbys stand up 18 hours out, the other 9
+  public ones 6 hours out. The watcher runs from 17 hours out until 90 minutes after
+  the start, and every standby comes down two hours after the start.
+- **Self-check.** Run on each console's own load balancer: `/healthz`, the
+  storefront, `/controls`, and a chat that carries the probe marker, so it never
+  reaches the wall. `backups.py check` runs it on demand.
+- **Promotion.** After three failed checks in a row (about a minute), the hostname
+  goes to the next standby in order that passes. That includes the burritobot.co
+  twin and the service hosts. The router reloads with no redeploy, and
+  `promoted.tsv` keeps the change, so a later `fleet.sh routes roster` does not
+  undo it. Nothing fails back on its own. `backups.py status` shows who holds each
+  hostname, and `backups.py promote <role> <cluster>` moves one by hand.
+- **After a promotion on stage.** The standby starts in its own start state: an
+  empty prompt wall feed and a zero cost counter on the public bot, and every AI
+  guard off on the private bot. Re-run the current segment's `guard-*-on` there. A
+  presenter's open terminal still points at the old cluster, so reopen it from the
+  hostname.
+
 Terminal login on the private cluster is `agentic` / `agentic`. Read it off the
 cluster if in doubt:
 `kubectl -n agent get secret terminal-auth -o jsonpath='{.data.TTYD_CREDENTIAL}' | base64 -d`.

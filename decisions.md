@@ -3235,3 +3235,82 @@ certificate (#139), which apex's router never checked, is refused.
 - Filters for BurritoBot's data in the shared org use `service:burritobot*`, not `service:burritobot-*`, so that the root span and guard-proxy's logs are included.
 - No `DD_LLMOBS_ML_APP` is added, and no `dd-ml-app` header: the collector exports through the Datadog Agent path, not straight to Datadog's OTLP intake, and a second export path risks duplicate spans in LLM Observability.
 - The exception is recorded here. Issue 629 closes once the log labels from 440f946 are seen on a live cluster under `burritobot-*` services.
+
+## 2026-10-29 · #643 · Standbys for attackme and burritobot-private, promoted automatically, across three regions
+
+Agreed on the 2026-10-28 planning call (`facilitation/kubecon-na-2026-planning-2026-10-28.md`): 12 public standbys
+and 3 private ones, across zones and regions. If the cluster serving attackme fails its self-check, the next healthy
+one takes the hostname with nobody acting, and the same goes for the private bot. Three public standbys stand up the
+night before and nine six hours out. The reason given was that Portland narrowly missed a us-west-2 outage.
+
+- **The standbys are data, `infra/terraform/fleet/backups.tsv`**: `name|role|region|wave`, and the order of the rows
+  is the promotion order. The public ones are `watch-it-burn-community-b01` to `-b12` and the private ones
+  `watch-it-burn-private-b01` to `-b03`. They alternate us-east-2, us-east-1 and us-west-2, so the next standby is
+  never in the region of the one before it, and the first one is outside us-west-2, where the roster clusters are.
+  All of them are in `WIB_DEFAULT_ACCOUNT`, as the roster is (`account_for_role`).
+- **The three private standbys stand up the night before.** The call gave the public waves only. The night-before
+  wave is the one that gets a full night of checks, and the private bot is the one whose guard toggles the
+  presenters need to have seen work. This is a choice made here, and it is one column to change.
+- **A standby is its roster cluster under another name.** fleet.sh gives it the role (`role_of_instructor_name`,
+  so the `role=` tag and the bootstrap profile follow), the presenters' terminal login, and its role's hostname
+  (`public_host_for`), so its cluster identity is already right when it is promoted. `datadog-cluster-identity.sh`
+  reports it as `burritobot-public` or `burritobot-private`, so Whitney's two tabs follow a promotion.
+- **`infra/terraform/fleet/backups.py` drives the standbys.** `up <wave>` makes one fleet.sh run per region:
+  `instructors up all` over a roster file of that region's standbys, with `WIB_REGION` set to the region and with
+  `WIB_NO_ROUTES`, `WIB_NO_INGEST` and `WIB_NO_VERIFY` set. Then it runs `converge` on the same clusters, and then
+  the self-check. Standbys stay out of the router until they are promoted, out of the provisioning pool, and out of
+  the walkthrough, because the walkthrough reaches a cluster by its routed hostname. `down`, `check`, `status`,
+  `watch`, `promote`, `schedule` and `unschedule` are the other verbs.
+- **The self-check runs on each console's own load balancer**, with the Host header of the role's hostname. It
+  checks `/healthz`, the storefront page, `/controls`, and one `/chat` carrying the probe marker, so the chat never
+  reaches the prompt wall. It never goes through the router, so a standby can be checked before it is routed.
+- **Promotion repoints the router table, not DNS.** After three failed checks in a row (`--fail-after`, at a
+  15-second interval), the watcher walks the role's pool, starting after the cluster that failed and wrapping round.
+  It gives the hostname to the first standby that passes the full self-check: every row of the apex table that
+  pointed at the failed console's LB is repointed (the burritobot.co twins and the service hosts included), and the
+  table goes to the live router through the apex repo's `reload-routes.sh`. Reading the failed cluster's LB from
+  the table needs no AWS call into the region that failed. If the router refuses the reload, the file is put back
+  and the next tick tries again.
+- **`states/promoted.tsv` records the holder**, and `cmd_routes` reads it. Without it, the Night Before's
+  `fleet.sh routes roster` after a promotion would give attackme back to the failed cluster. A holder that
+  backups.tsv does not list is ignored, and the log says so.
+- **Nothing fails back on its own.** A cluster that failed once is not given the room again until someone runs
+  `backups.py promote <role> <cluster>`. That command is also how a drill is undone.
+- **The chat check runs every fourth tick by default (`--chat-every`)**, which is one model call a minute on the
+  cluster that holds the hostname. The marker keeps it off the wall. It still counts toward `/cost`, which no
+  longer matters on stage since C4 was cut.
+- **Cross-region builds needed four fixes in fleet.sh.** First, the lab VPC state outside `WIB_HOME_REGION`
+  (us-west-2) is `states/<account>.<region>.tfstate` for every account, the default one included
+  (`lab_vpc_state_for`, `read_vpc_for`, `lab_vpc_present`, and preflight.sh). Second, the Datadog keys are still
+  read from the home region (`WIB_SECRETS_REGION`), where they are kept. Third, `deploy-full-idp.sh` is given
+  `REGION`, which it defaulted to us-west-2 when it looked up the VPC for the load balancer controller. Fourth,
+  `provider_write_kubeconfig` takes an optional region.
+- **Bedrock follows the cluster's region.** A cluster's application inference profiles are created in its own
+  region, so a us-east-2 standby has us-east-2 ARNs, and the committed `region: us-west-2` would fail every call.
+  `pin_bedrock_profiles` now also sets each Bedrock ModelConfig's `.spec.bedrock.region` and agentgateway's new
+  `BEDROCK_REGION` env to the region in the ARN. agentgateway-config reads `region: ${BEDROCK_REGION}`, and ai-layer
+  ignores both fields, just as it ignores the model. A us-west-2 cluster is unchanged. On a cluster built before
+  this change, run `fleet.sh converge <name>` after Argo syncs it. That sets `BEDROCK_REGION` on the gateway even if
+  the ignore kept Argo from adding the entry, which is the same way `BEDROCK_NOVA_MODEL` reached clusters after #561.
+- **The schedule takes the session start as an argument.** The start is conference-knowledge's `kubecon-na-2026`
+  entry (#417). `schedule` prints crontab lines in the cron host's time zone: the night-before wave 18 hours out,
+  the six-hours wave 6 hours out, the watcher from 17 hours out until 90 minutes after the start, and `down all
+  --apply` two hours after the start, followed by `unschedule`. Cron has no year field, so the lines remove
+  themselves.
+- **The watcher is one process on the host that holds the fleet profiles**, behind a lock file. If that host goes
+  down, there is no promotion. The router itself was not changed to hold several upstreams (apex-agenticburn),
+  because the self-check is more than a health URL, and this run could not read that repo.
+- **Tests.** `verify/test_backups.py` (offline) holds the pools and waves and the standby naming in fleet.sh. It
+  drives the watcher with a fake check against a real `routes.map` and a recording reload script: promotion after
+  three failures, in order, skipping unhealthy clusters and ones without an LB, wrapping round, the private bot, no
+  healthy standby, a refused reload, and the drill. It also runs the self-check against a local console and checks
+  the schedule and the dry-run bring-up and teardown. `verify/test_fleet_standbys.sh` (offline) covers `routes
+  roster` with a promoted standby read in its own region, the lab VPC state per region, and `REGION` reaching the
+  bootstrap. `verify/test_pin_bedrock_profiles.sh` adds the cross-region pin, and `verify/test_preflight_boundary.sh`
+  adds the standby-region VPC state.
+- **Not yet run on a cluster.** `verify/test_backups_promotion_live.py` (E2E) is the rehearsal the issue asks for.
+  It runs after both waves are up: all 17 consoles pass their self-check, then a drill fails each roster cluster,
+  the watcher moves its hostname through the live router, the hostname answers, and the hostname is failed back by
+  hand. Before that, the lab VPCs in us-east-2 and us-east-1 have to be applied (`backups.py up` prints the apply
+  command), `preflight` has to pass in both regions, and the waves have to be built. All of that is spend that
+  waits for Michael's go.

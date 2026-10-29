@@ -130,6 +130,17 @@ check "aws1-student31's line names states/aws1-student31.tfstate" \
       'fail_line "no lab VPC state" | grep -qF "apply -state=states/aws1-student31.tfstate -var profile=aws1-student31"'
 check "accen-dev's VPC passes from the default state" 'grep -F PASS "${OUT}" | grep -qF "lab VPC vpc-0abc present and live"'
 
+echo "== a standby region (#643): every account, the default one included, has states/<acct>.<region>.tfstate =="
+reset_states; echo vpc >"${NET}/terraform.tfstate"
+run accen-dev WIB_REGION=us-east-2
+check "the home region's default state does not count in us-east-2" '[[ "${rc}" -eq 1 ]]'
+check "accen-dev's line names states/accen-dev.us-east-2.tfstate and the region" \
+      'fail_line "no lab VPC state" | grep -qF "apply -state=states/accen-dev.us-east-2.tfstate -var profile=accen-dev -var region=us-east-2"'
+reset_states; echo vpc >"${NET}/states/accen-dev.us-east-2.tfstate"
+run accen-dev WIB_REGION=us-east-2
+check "with that state it passes" 'grep -F PASS "${OUT}" | grep -qF "lab VPC vpc-0abc present and live"'
+check "read from that state" 'grep -qF "output -state=${FLEET_DIR}/../aws/network/states/accen-dev.us-east-2.tfstate -raw vpc_id" "${CALLS}"'
+
 echo "== a stray states/<default>.tfstate is called out (down-infra never destroys it) =="
 reset_states; echo vpc >"${NET}/terraform.tfstate"; echo vpc >"${NET}/states/accen-dev.tfstate"
 run accen-dev
