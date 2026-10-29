@@ -3616,3 +3616,65 @@ set, and a test event in `WIB_EVENT`, run one `fleet.sh ingest watch-it-burn-att
 `fleet.sh ingest-instructors` against built clusters. Confirm that the attendee row is claimable and that the
 roster rows are not. Then run `fleet.sh ingest watch-it-burn-attendee-001` again after a claim, and confirm that
 the claim holds. Reading section 9 first settles (1) to (4) without any spend.
+
+## 2026-10-29 · #653 · Challenge 2 hands out lab-platform's promo/ villains, and the registry rule refuses that path
+
+lab-platform#92 rebuilt the ten villains `images/villains/build.sh` pushed to `docker.io/peopleforrester/<name>:latest`
+as `ghcr.io/peopleforrester/lab-platform/promo/<name>:v1`, the same catchphrase loop on lab-platform's shell base, the
+lines read from `build.sh` at 45e62f0. The digests used are the rebuild in the issue's comment 6477523413 (the
+entrypoint ends on SIGTERM), not the first table in the issue body. The crane build split three catchphrases on their
+commas, Skeletor's among them, so those pods never said their lines; lab-platform's images say them whole. There was no
+earlier draft of this issue to check against staging.
+
+- **What the student gets.** `/lab` hands out the three covers, `promo-mascot`, `festival-promo` and
+  `loyalty-rewards`, at `ghcr.io/peopleforrester/lab-platform/promo/<name>:v1`. They are named by the tag and not
+  the digest, as the issue asks, because a digest in a copy-paste box reads as vetted. The stuck prompt, the prompt
+  catalog, the C2 fallback (the Joker), the KubeCon probe's C2 dry run and the regenerated `LAB-TEXT.md` follow.
+  `infra/datadog-fleet/leaderboard.yaml` matches `short_image:`, which is still the bare name, so it is unchanged.
+- **The registry rule had to change, or the challenge had no fix.** `restrict-image-registries` allowed all of
+  `ghcr.io/`, so the new villain passed it. After the student flipped the policy to Deny, the villain would have
+  deployed anyway. The policy gains a `refusedPaths` variable, `['/peopleforrester/lab-platform/promo/']`. An image
+  that contains the path is refused on any registry, which also covers an ECR pull-through cache path. The variable
+  is read both in the admission check and in the UPDATE exemption. The message now ends "and not from the
+  lab-platform/promo/ path", and the lab's quoted report line and its "the villain lives at" paragraph say that the
+  site is on the list but the path is not. This is the issue's "the lesson is the path".
+- **Why a refused path and not a narrower ghcr.io entry.** Listing only the ghcr.io paths we trust (watch-it-burn,
+  lab-platform's mirror/) would read better as an allow-list. But lab-platform is moving the console and the five
+  demo apps in `apps` onto `ghcr.io/peopleforrester/lab-platform/web:v1` (#650), and this run cannot see which other
+  lab-platform images run in `apps` or `agent`. A narrowed list would refuse them as soon as a student arms Deny.
+  The refused path changes nothing for any image except the villains.
+- **The #622 literal sweep.** `verify/test_image_registry.py` fails on `ghcr.io/peopleforrester/lab-platform` named
+  literally anywhere the root deploys from, because a deployed image has to take `imageRegistry` for a cache path to
+  work. The promo/ path is exempt, and the test says why: /lab hands the reference to the student to paste, the
+  cluster pulls it as typed, and it is the unvetted image the lesson is about, not one the root deploys.
+- **C6 is unchanged.** The support ticket's hidden paragraph still asks for `docker.io/peopleforrester/joker:latest`
+  (question 872). Moving it would change the payload that `verify/test_injection_classifier.py` measures, so it is
+  a follow-up and not part of this issue.
+- **The packages are private.** On 2026-10-29 an anonymous token request for each promo/ package was answered 403,
+  as the issue says ("Private until Michael's package toggles"). A node pulls them with no credential, so until
+  they are public, a cluster admits the villain and then leaves it in ImagePullBackOff. That means there are no
+  logs for the reveal.
+
+**Tests.** `verify/promo_villains.py` holds the ten names and digests. `verify/test_promo_villains.py` (offline,
+new) holds the following:
+- the README roster is the same ten;
+- /lab's copy boxes are the three covers at `:v1`, with no digest;
+- every C2 copy names the promo/ path and no Docker Hub villain except C6's Joker;
+- the probe and fallback images;
+- every promo reference is refused, on ghcr.io and through an ECR cache, while lab-platform's web and mirror/
+  images are not;
+- the lab's quoted line is the policy's message.
+
+`verify/test_kyverno_cel_policies.py` (tools tier) gains Kyverno CLI cases: lab-platform's web and mirror/ images
+pass; the promo/ path fails through an ECR cache and beside a passing container; the old Docker Hub villain still
+fails. `verify/test_challenge_fallbacks.py`'s stub kubectl now refuses the refused path, as the policy does. Without
+that, the stub would have admitted the new villain.
+`verify/test_promo_villains_public.py` (tools tier, new) asks ghcr.io anonymously for each `:v1` and checks it
+serves the handed-over digest. It shares `verify/ghcr_pull.py` with `test_mirror_copies_public.py`, and it fails
+until the packages are public.
+
+**Not yet run on a cluster.** Once the packages are public, on an attendee cluster:
+`CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py` (the promo-mascot Deployment is admitted in Audit, the
+lab's jq prints the new message line, and Deny refuses it), and
+`CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`. Then, by hand, check that
+`kubectl -n agent logs deploy/promo-mascot` shows the Joker's whole line.
