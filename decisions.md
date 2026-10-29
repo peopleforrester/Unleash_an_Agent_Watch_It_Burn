@@ -4332,3 +4332,38 @@ contains #474 (`dfb2f41`), so Loki should never have run on them. The PVC is sti
 on watch-it-burn-private (admin, armed) and watch-it-burn-community (burn). That run is still owed for each Datadog
 assumption #555 lists: the kube_deployment, pod_name and kube_container_name:shim tags, how the JSON line is
 parsed, the app key's logs_read_data permission, and indexing inside 300 seconds.
+
+## 2026-10-29 · question 864 · #621: Challenge 6 keeps its current input classifier; Prompt Guard 2 is measured, not swapped in
+
+**Answer: Keep the current classifier.** Decided by Michael (overridden in the web view; the asking run had
+recommended the swap).
+
+**The question.** Should Challenge 6's input classifier be swapped from ProtectAI's
+`deberta-v3-base-prompt-injection-v2` (April 2024, from the archived LLM Guard project) to Meta's Llama Prompt
+Guard 2 86M (April 2025), which means redistributing Meta's weights in our public model image under the Llama 4
+Community License, with Meta's licence, a NOTICE file and "Built with Llama" attribution?
+
+**The measurement it rested on** (run 10190, draft `830fb00` on `agent/621-10190`, dated 2026-10-28). Both models
+behind llm-guard 0.3.16's `PromptInjection`, ONNX, one pinned core, Prompt Guard 2 from an ungated copy checked
+file by file against the git ids of Meta's commit `a8ded8e6`. Under the deployed config (0.5, `full`) Prompt Guard 2
+missed 2 of 4 attacks and ours 3; its extra catch was the payload in the middle of the padding. Same speed, no
+disagreement over 74 other prompts, peak memory 2.4 GiB against 1.7 GiB. That met #621's swap rule. The full
+record is now `docs/spike-prompt-guard-2-2026-10-28.md`.
+
+**What it changes.**
+- Nothing is swapped. The llm-guard-cpu-offline image, its pin in `gitops/ai-layer/resources.yaml`, the model pin
+  in `verify/test_injection_classifier.py`, `ATTRIBUTION.md` (no Meta entry) and the pod's 3 GiB limit stay as
+  they are. No Llama licence is accepted on the project's behalf and no "Built with Llama" line is published.
+- The measurement lands as a record only: `docs/spike-prompt-guard-2-2026-10-28.md` (new), and the 10-26 spike's
+  "What would change this finding" now says the rule was met and the classifier kept, with the point-2 correction
+  (the middle payload sat at token 396 of 818, inside our window, so ours misses it on detection).
+- **Differs from the draft.** `draft-drift.sh` flagged `verify/injection_config_matrix.py`, which #640 moved to the
+  fake ticket site's body since the draft was cut. The draft's two-model code is not brought to staging: it fetches
+  Meta's weights from an ungated copy, and with the classifier kept there is nothing to re-run it for. Staging's
+  tool still measures ours on the fetched ticket. The doc says its numbers are for the pasted `lab.html` ticket of
+  staging `c7de3a1`, before #640 and question 872 changed the ticket; they were not re-taken. The draft's "New dev
+  dependency" note for the Prompt Guard 2 weights is dropped with the code.
+- The measured cost of keeping it stands: a short injection in the middle of a long ticket passes our classifier.
+  The 10-26 spike's other triggers (a CVE llm-guard cannot patch, GPU nodes) are still what would reopen this.
+
+**Not yet run on a cluster.** Nothing here changes what a cluster runs.
