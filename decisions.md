@@ -3916,3 +3916,25 @@ maintenance-shell Service. `verify/test_fleet_routes_roster.sh` reads both host 
 4. `CONTEXT=<community-context> python3 verify/test_service_hosts_live.py`, to check the existing service hosts
    still route.
 Whether Nova passes the address on in its reply has not been measured.
+## 2026-10-29 · #666 · VERSIONS.lock records the collector the Applications run, and a test holds it there
+
+VERSIONS.lock pinned the OpenTelemetry Collector at chart 0.158.2 / app 0.153.0 on both of its lines (the component
+versions line and the IDP foundation line), but all three `gitops/bootstrap/apps/otel-collector*.yaml` files run chart
+0.173.1 with lab-platform's mirrored otelcol-contrib image `0.160.0-5b66b0dc6921`. 0.160.0 is that chart's
+`appVersion` (the 2026-10-24 otelcol-contrib entry above). Both lines now say chart 0.173.1 / app 0.160.0, and the
+first one names the mirrored image.
+
+- **The working docs had the same drift,** and the Kyverno and kagent pin tests hold the working docs, so they were
+  fixed too. `docs/BUILD-SPEC.md` said chart 0.158.2 / app 0.153.0 in §6 and `v0.154.0` in the platform list, and
+  `docs/MASTER-RECREATION-SPEC.md` said 0.158.2 in the sync-wave table, the data-flow diagram and the components
+  list. In the last two, 0.158.2 was called "contrib", but it is the chart's version, not the collector's.
+- **`verify/test_otel_collector_version_pins.py` (offline, new)** checks that the three Applications pin one chart
+  and one `<version>-<digest>` image tag. It checks that both VERSIONS.lock lines name that chart and that version,
+  and that `test_lab_pipeline_collector.py`'s CHART and OTELCOL_VERSION match. The two specs must name the chart and
+  the app together, with no other version in a collector phrase. Against the old VERSIONS.lock and docs it fails six
+  checks; that was tried and then reverted. e2e-tools.lock's otelcol-contrib was already held to the image tag by
+  `test_e2e_tools_tier.py`, and its header comment no longer says the version is "not a VERSIONS.lock line".
+- **Not changed:** the PRDs, `docs/UPGRADE-INVENTORY.md`, PROJECT_STATE.md and earlier decisions.md entries are dated
+  records. The `contrib 0.158.2` remark in `gitops/otel-collector/values.yaml` is a statement about that release.
+
+**Not yet run on a cluster:** nothing is owed. This changes records and an offline test, not what a cluster deploys.

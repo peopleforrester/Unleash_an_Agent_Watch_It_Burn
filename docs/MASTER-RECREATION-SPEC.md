@@ -232,7 +232,7 @@ Child apps are `argoproj.io/v1alpha1` `Application` objects in `argocd`, `projec
 | istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.1.0 (app 0.44.1), kagent 0.10.1 | varies |
 | falco-talon / falcosidekick | -2 | helm | talon chart 0.4.1 (app 0.3.0), falcosidekick 0.14.0 | falco / security |
 | cert-manager / kagent / prometheus | 1 | helm | cert-manager v1.20.2, kagent 0.10.1, kube-prometheus-stack 86.2.3 | varies |
-| otel-operator / otel-collector | 2 | git + helm | otel-operator 0.117.0, otel-collector 0.158.2 | varies |
+| otel-operator / otel-collector | 2 | git + helm | otel-operator 0.117.0, otel-collector chart 0.173.1 (app 0.160.0) | varies |
 | ai-layer / datadog-operator / tempo | 3 | git + helm | datadog-operator chart 2.23.2 (app 1.27.1) | varies |
 | datadog-agent-cr | 4 | git | n/a | datadog |
 | unicorn/spider/hedgehog/wombat/mantis-shrimp -party | 7 | git | n/a | apps |
@@ -433,7 +433,7 @@ Give every attendee a full-fidelity Datadog view so the demo's story beats are v
 AI-layer pods emit OTel GenAI semconv spans + metrics (SDK injected at pod-create by the OTel Operator webhook)
    | OTLP http/protobuf :4318
    v
-OTel Collector (DaemonSet, contrib 0.158.2, ns=monitoring)
+OTel Collector (DaemonSet, contrib 0.160.0, ns=monitoring)
    receivers otlp(4317/4318); processors memory_limiter->batch->resource(cluster.name)->transform/set_genai_provider
      (+ transform/set_peer_service on traces; + transform/redact_sentinel in Act 2)
    connectors span_metrics (RED, add_resource_attributes), datadog/connector (APM trace.* stats)
@@ -473,7 +473,7 @@ Per-attendee org keys land in each cluster as `datadog-secret` (`api-key`+`app-k
 
 ### Components & Versions
 
-OTel Operator (Helm 0.117.0, ns `opentelemetry-operator-system`); OTel Collector (Helm 0.158.2, contrib daemonset, ns `monitoring`, PRIMARY sink); Datadog Operator + Agent + Cluster Agent (CR `datadoghq.com/v2alpha1`, ns `datadog`); Falcosidekick (Helm 0.14.0, env via `config.extraEnv`, ns `security`); Weaver 0.24.2; Prometheus/Tempo (kube-prometheus-stack, hours retention); OTel semconv v1.37.0 + `gen_ai_latest_experimental`; Bedrock haiku/sonnet/opus; Instrumentation CR endpoint `http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`.
+OTel Operator (Helm 0.117.0, ns `opentelemetry-operator-system`); OTel Collector (Helm 0.173.1, contrib 0.160.0 daemonset, ns `monitoring`, PRIMARY sink); Datadog Operator + Agent + Cluster Agent (CR `datadoghq.com/v2alpha1`, ns `datadog`); Falcosidekick (Helm 0.14.0, env via `config.extraEnv`, ns `security`); Weaver 0.24.2; Prometheus/Tempo (kube-prometheus-stack, hours retention); OTel semconv v1.37.0 + `gen_ai_latest_experimental`; Bedrock haiku/sonnet/opus; Instrumentation CR endpoint `http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318`.
 
 ### Recreation Steps
 

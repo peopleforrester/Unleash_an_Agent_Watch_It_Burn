@@ -30,7 +30,9 @@ argocd                 v3.4.4  (chart argo-cd 9.6.0; was v3.4.3 / 9.5.21)
 falco                  0.45.1
 falco-talon            chart 0.4.1 / app v0.3.0  (resolves the prior UNKNOWN chart pin)
 kube-prometheus-stack  chart 86.2.3  (optional bump to 86.3.2; app v0.91.0 unchanged)
-otel-collector         chart 0.158.2 / app 0.153.0 (contrib distro; the old v0.154.0 line below was stale)
+otel-collector         chart 0.173.1 / app 0.160.0  (contrib distro; was 0.158.2 / 0.153.0 until #666)
+                       image: the mirror's otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921, set in all three
+                       gitops/bootstrap/apps/otel-collector*.yaml; verify/test_otel_collector_version_pins.py holds the copies together
 agentgateway           OSS v1.5.0  (released 2026-08-27, GitHub releases agentgateway/agentgateway; pinned 2026-09-10 in 20aee62, recorded here 2026-10-24)
                        image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339e... (digest pin in gitops/ai-layer/agentgateway.yaml, #415)
                        chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
@@ -69,7 +71,7 @@ external-secrets       chart 2.6.0       app v2.6.0    (was 1.3.2; MAJOR v1->v2 
 cert-manager           chart v1.20.2                   (was v1.19.3)
 kube-prometheus-stack  chart 86.2.3      app v0.91.0   (was 82.1.0)
 tempo                  chart 2.2.3       app 2.10.7    (REPOINTED to grafana-community/helm-charts; grafana/helm-charts tempo chart migrated 2026-01-30 and the old path is a dead stub — research/14 §added, research/11)
-opentelemetry-collector chart 0.158.2    app 0.153.0   (was 0.145.0)
+opentelemetry-collector chart 0.173.1    app 0.160.0   (was 0.158.2 / 0.153.0; #666)
 backstage              chart 2.8.2                     (was 2.6.3)
 
 ## Kubernetes version (2026-06-18; moved to 1.36 on 2026-09-10)
