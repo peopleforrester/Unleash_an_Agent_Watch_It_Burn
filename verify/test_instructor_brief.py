@@ -132,9 +132,9 @@ for m in re.finditer(
     beat_blocks.setdefault(m.group(1), []).append(m.group(3))
     beat_segment.setdefault(m.group(1), m.group(2))
 
-# C2 has no block of its own: since #640 the C6 ticket deploys the Joker, so C2's admission rule is C6's second
-# tier, shown inside the C6 block with C2's fallback (run-of-show, "Challenges shown live, and challenges cut").
-SHOWN_BEATS = ("C1", "C3", "C5", "C6", "C7", "off-topic", "on-topic")
+# The stage numbers the challenges Challenge 1 to 4 (#687). The data-beat keys keep the internal ids: Challenge 1 is
+# C5, Challenge 2 (the Kubernetes catch-all) is C2, C3 and C1, Challenge 3 is C6, Challenge 4 is C7.
+SHOWN_BEATS = ("C1", "C2", "C3", "C5", "C6", "C7", "off-topic", "on-topic")
 for b in SHOWN_BEATS:
     check(f"the KubeCon brief shows a {b} block", b in beat_blocks)
 
@@ -146,8 +146,8 @@ for b in SHOWN_BEATS:
         check(f"{b} block {i} has a success marker", 'class="marker"' in blk)
 
 # The toggles, where one applies, on the private terminal, each inside its beat's block (C5, C6 and C7 in
-# segments 2 to 4; the on-topic guard in segment 6). C1/C3 and the segment-2 off-topic beat have no live
-# toggle on purpose: the Kubernetes controls start armed and the public cluster is wide open.
+# segments 2, 4 and 5; the on-topic guard in segment 6). C1, C2, C3 and the off-topic beat have no live toggle on
+# purpose: the Kubernetes controls start armed on the private cluster and the public cluster is wide open.
 BEAT_TOGGLE = {"C6": "guard-input-on", "C5": "guard-output-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
 for b, cmd in BEAT_TOGGLE.items():
     in_a_block = any(f'class="toggle"' in blk and cmd in blk for blk in beat_blocks.get(b, []))
@@ -161,8 +161,10 @@ check("C2's admission rule is named, inside C6", "restrict-image-registries" in 
 check("C3 marker names KubeArmor's block AND its alert",
       "block-recipe-snoop" in KUBECON and '"Action":"Block"' in KUBECON)
 check("C5 marker is the real CEO signature", "OPHELIA-THORN-TIBBY-TOP-SPIRE-No9" in KUBECON)
-check("C6 marker is the withheld ticket and both tiers (#640)", "[input guard] withheld" in KUBECON
-      and "maintenance-shell" in KUBECON and "restrict-image-registries" in KUBECON.split('data-beat="C6"', 1)[1])
+check("C6 marker is the withheld ticket, the room's Joker and both tiers (#640, #685)", "[input guard] withheld" in KUBECON
+      and "joker-agatha-the-banshee" in KUBECON and "HC-666" in KUBECON
+      and "restrict-image-registries" in KUBECON.split('data-beat="C6"', 1)[1])
+check("the stage no longer runs the lab's ticket", "HC-7731" not in KUBECON and "maintenance-shell" not in KUBECON)
 check("C7 marker is the MCP sentinel", "FAKE-MCP-EXFIL-sentinel-4c1d" in KUBECON)
 check("on-topic marker is the burritos-only refusal", "I only talk burritos" in KUBECON)
 
@@ -180,7 +182,7 @@ for banned in ("provision", "claim a cluster", "claims a cluster", "claim one",
                "by email", "attendee", "student lab", "student challenge"):
     check(f"the page body carries no {banned!r}", banned.lower() not in _body.lower())
 
-print("== the page follows the run-of-show's segments: C5, C6, C7, and C4 cut (#639) ==")
+print("== the page follows the run-of-show's segments: Challenge 1 to 4 (#687) ==")
 # The run-of-show's segment table, | # | Min | ..., against the page's <h2> chips, SEGMENT n · m min, in order.
 ros_segments = [(int(n), int(m)) for n, m in re.findall(r"^\| (\d) \| (\d+) \| ", ROS, re.M)]
 page_segments = [(int(n), int(m)) for n, m in re.findall(r'<span class="n">SEGMENT (\d) · (\d+) min</span>', KUBECON)]
@@ -188,26 +190,50 @@ check("the run-of-show's table has six segments that sum to 30 minutes",
       [n for n, _ in ros_segments] == [1, 2, 3, 4, 5, 6] and sum(m for _, m in ros_segments) == 30)
 check(f"the page has the same segments, in order, with the same minutes (page {page_segments})",
       page_segments == ros_segments)
-check("C5 is segment 2, C6 segment 3, C7 segment 4, the on-topic guard segment 6",
-      [beat_segment.get(b) for b in ("C5", "C6", "C7", "on-topic")] == ["2", "3", "4", "6"])
-check("C1 and C3 are on deck, not timed", beat_segment.get("C1") == beat_segment.get("C3") == "deck")
+check("Challenge 1 (C5) is segment 2, Challenge 2 (C1 C2 C3) segment 3, Challenge 3 (C6) segment 4, "
+      "Challenge 4 (C7) segment 5, the on-topic guard segment 6",
+      [beat_segment.get(b) for b in ("C5", "C2", "C3", "C1", "C6", "C7", "on-topic")]
+      == ["2", "3", "3", "3", "4", "5", "6"])
 _order = [m.group(1) for m in re.finditer(r'<article class="beat"\s+data-beat="([^"]+)"', KUBECON)]
-check("the challenges appear in the order C5, C6, C7",
-      all(b in _order for b in ("C5", "C6", "C7")) and _order.index("C5") < _order.index("C6") < _order.index("C7"))
-check("C4 is not on the page (cut, 2026-10-28)", "C4" not in _body and "denial-of-wallet" not in _body.lower())
-for b in ("C5", "C6", "C7"):
+check("the challenges appear in the order shown: C5, then C2 C3 C1, then C6, then C7",
+      all(b in _order for b in ("C5", "C1", "C6", "C7"))
+      and _order.index("C5") < _order.index("C1") < _order.index("C6") < _order.index("C7"))
+_titles = re.findall(r'<span class="n">SEGMENT \d · \d+ min</span> ([^<]+)</h2>', KUBECON)
+check("the headings number the challenges Challenge 1 to 4, in order",
+      [h.split(":")[0] for h in _titles if h.startswith("Challenge")] == [f"Challenge {n}" for n in (1, 2, 3, 4)],
+      )
+check("no visible heading names a C-number", not any(re.search(r"\bC\d\b", h) for h in _titles))
+check("C4 is not on the page as a challenge (2026-10-28)", "C4" not in _body and "denial-of-wallet" not in _body.lower())
+for b, n in (("C5", 1), ("C6", 3), ("C7", 4)):
     blk = " ".join(beat_blocks.get(b, []))
     check(f"{b} is played on the public bot and fixed on the private bot",
           "public bot" in blk and "private bot" in blk)
-    check(f"{b} names its Datadog tab", f"Datadog {b} tab" in blk)
+    check(f"{b} names its Datadog tab as Challenge {n}", f"Datadog Challenge {n} tab" in blk)
+check("Challenge 1 teaches RBAC, and keeps the output guard as an optional second fix",
+      "RBAC" in " ".join(beat_blocks.get("C5", [])) and "optional second fix" in " ".join(beat_blocks.get("C5", [])))
+print("== the per-challenge pattern and the OWASP close (#687) ==")
+check("the page states the pattern once: tee-up, play, attack, fix, keep trying",
+      all(w in KUBECON for w in ("<b>tee-up</b>", "<b>play</b>", "<b>attack</b>", "<b>fix</b>", "<b>keeps trying</b>")))
+_seg6 = KUBECON.split('<span class="n">SEGMENT 6', 1)[1]
+_llm = ("LLM01</b> Prompt Injection", "LLM02</b> Sensitive Information Disclosure", "LLM03</b> Supply Chain",
+        "LLM04 Data and Model Poisoning", "LLM05 Improper Output Handling", "LLM06</b> Excessive Agency",
+        "LLM07 System Prompt Leakage", "LLM08 Vector and Embedding Weaknesses", "LLM09 Misinformation",
+        "LLM10</b> Unbounded Consumption")
+check("the close carries all ten 2025 OWASP LLM items, by their names on genai.owasp.org",
+      all(x in " ".join(_seg6.split()) for x in _llm))
+check("and the OWASP Kubernetes Top 10 is named", "OWASP Kubernetes Top 10" in _seg6 and "K04" in _seg6)
+check("the close invites the room to break it (#690)", "You have our permission." in " ".join(_seg6.split()))
+_ros6 = ROS.split("### Segment 6:", 1)[1].split("\n## ", 1)[0]
+check("the run-of-show's close says the same", "LLM01 Prompt Injection" in _ros6 and "K05" in _ros6
+      and "You have our permission." in _ros6)
 # C6's two tiers are shown in one order on both pages (#676): Kyverno is armed from the start, so the private bot's
 # deploy_app is refused at admission before guard-input-on, and after the toggle there is no deploy_app call left to
 # deny. That is the order the probe runs (verify/kubecon_probe.py). The tier names stay the layers': the input
 # classifier is the first tier, admission the second, behind it.
-_ros_seg3 = ROS.split("### Segment 3:", 1)[1].split("### Segment 4:", 1)[0]
-_ros_fix = " ".join(_ros_seg3.split("- **Fix shown", 1)[1].split("\n- **", 1)[0].split())
-_ros_row3 = next((ln for ln in ROS.splitlines() if ln.startswith("| 3 | ")), "")
-_page_seg3 = " ".join(KUBECON.split('<span class="n">SEGMENT 3', 1)[1].split('<span class="n">SEGMENT 4', 1)[0].split())
+_ros_seg3 = ROS.split("### Segment 4:", 1)[1].split("### Segment 5:", 1)[0]
+_ros_fix = " ".join(_ros_seg3.split("- **Fix, two tiers", 1)[1].split("\n- **", 1)[0].split())
+_ros_row3 = next((ln for ln in ROS.splitlines() if ln.startswith("| 4 | ")), "")
+_page_seg3 = " ".join(KUBECON.split('<span class="n">SEGMENT 4', 1)[1].split('<span class="n">SEGMENT 5', 1)[0].split())
 _c6 = " ".join(" ".join(beat_blocks.get("C6", [])).split())
 _premise = _page_seg3.split('<p class="premise">', 1)[1].split("</p>", 1)[0] if '<p class="premise">' in _page_seg3 else ""
 
@@ -216,7 +242,7 @@ def _before(text: str, first: str, then: str) -> bool:
     return first in text and then in text and text.index(first) < text.index(then)
 
 
-check("the run-of-show's segment 3 row puts Kyverno before guard-input-on",
+check("the run-of-show's Challenge 3 row puts Kyverno before guard-input-on",
       _before(_ros_row3, "Kyverno armed", "`guard-input-on`"))
 check("the run-of-show's C6 fix shows the admission denial, then guard-input-on",
       _before(_ros_fix, "denies the Joker image at admission", "Then `guard-input-on`"))

@@ -56,9 +56,9 @@ check("every gate has something to verify", len(re.findall(r"^Verify:$", body, f
 
 print("== the close links it ==")
 ros = RUN_OF_SHOW.read_text(encoding="utf-8")
-close = ros.partition("- **The close (Michael, 2 min):**")[2].partition("\n- **Delivers:**")[0]
+close = ros.partition("- **The close (Michael):**")[2].partition("\n- **Delivers:**")[0]
 check("the run-of-show's close carries the handout's public link", PUBLIC_URL in close)
-c7 = ros.partition("### Segment 4: C7")[2].partition("### Segment 5")[0]
+c7 = ros.partition("### Segment 5: Challenge 4")[2].partition("### Segment 6")[0]
 check("C7's hand-out line names the handout file", "docs/mcp-server-vetting-checklist.md" in c7)
 page = KUBECON_PAGE.read_text(encoding="utf-8")
 page_close = page.partition("<b>The close (Michael")[2].partition("</div>")[0]

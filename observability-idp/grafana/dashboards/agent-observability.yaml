@@ -78,7 +78,7 @@ data:
         {
           "id": 5,
           "type": "row",
-          "title": "Segment 5: did each guardrail do its job? (C5, C6, C7, newest first)",
+          "title": "Traces: did each guardrail do its job? (C5, C6, C7, newest first)",
           "collapsed": false,
           "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 },
           "panels": []

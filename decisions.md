@@ -4647,3 +4647,15 @@ profile) and shared admin (burritobot-private) clusters were routed in apex-agen
 **Not yet run on a cluster:** `CONTEXT=<attendee context> python3 verify/test_service_hosts_live.py` (through
 `bash verify/run-e2e.sh`) on a fresh attendee cluster. No attendee cluster was up. The figures above come from the
 admin and community clusters, probed by hand with curl.
+## 2026-10-29T22:00:00Z · 2.2 · KubeCon cut renumbered Challenge 1 to 4, stage moved to HC-666 (#687, #689)
+
+From the 2026-10-29 planning call. /kubecon, the run-of-show and the probe now run Challenge 1 (C5, RBAC taught,
+output guard optional), Challenge 2 (the Kubernetes catch-all: C2, C3, C1 played on the open public cluster, each
+layer named), Challenge 3 (C6 on the room's ticket HC-666, asked under the fixed stage name Agatha the Banshee so
+the probe can check joker-agatha-the-banshee), Challenge 4 (C7), and a close with the OWASP LLM Top 10 2025 and
+Kubernetes Top 10 2025 (read 2026-10-29 at genai.owasp.org and kubernetes-top10.owasp.org; the mapping to
+challenges is ours). The separate trace walk-through segment is gone: each fix shows its trace, the Grafana row is
+retitled "Traces". The 2-hour lab keeps HC-7731 and maintenance-shell. The iPad sheet is /kubecon?sheet=1, built
+in the page from the same prompt blocks, because a new path would need an apex router matcher change.
+Not yet run on a cluster: the community probe's c1-open, c2-open, c3-open and HC-666 c6-lands beats, and the
+admin probe's HC-666 c6-admission, c6-withheld and c6-on (verify/kubecon_probe.py on both clusters).

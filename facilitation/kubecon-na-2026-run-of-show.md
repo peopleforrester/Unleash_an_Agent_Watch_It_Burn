@@ -95,13 +95,13 @@ outside guard-proxy, and only `guards-off` puts them back.
 | Deck (rounds-agenticburn commit) | | | |
 | Community bot reset first (`reset-bot` read `$0.0000 over 0 requests`?) | | | |
 | Whole slot (target 30:00) | | | |
-| Demo, segments 2 to 5 (target 23:00) | | | |
+| Demo, segments 2 to 5 (target 22:00) | | | |
 | Segment 1 (target 3:00) | | | |
-| Segment 2 (target 7:00) | | | |
-| Segment 3 (target 7:00) | | | |
+| Segment 2 (target 6:00) | | | |
+| Segment 3 (target 4:00) | | | |
 | Segment 4 (target 7:00) | | | |
-| Segment 5 (target 2:00) | | | |
-| Segment 6 (target 4:00) | | | |
+| Segment 5 (target 5:00) | | | |
+| Segment 6 (target 5:00) | | | |
 | Fallbacks driven (beat and script) | | | |
 | Findings filed (issue numbers) | | | |
 
@@ -303,24 +303,35 @@ alone, and the gateway reloads it with no restart (#496).
 
 ## The segments, in order (30 minutes)
 
-Three hands-on challenges, agreed on the 2026-10-28 planning call
-(`facilitation/kubecon-na-2026-planning-2026-10-28.md`, #639). Each one runs the
-same shape, about seven minutes: explain the attack (1), the room plays it on the
-public bot (3), turn the guardrail on and show it blocked on the private bot (1),
-then the mechanism and the fix with its Datadog trace (2). Whitney's rule: without
-the three minutes of play there is no hands-on, so the other beats give way first.
+Four challenges, numbered in the order shown, Challenge 1 to 4 (2026-10-29 planning
+call, `facilitation/kubecon-na-2026-planning-2026-10-29.md`, #687). C5, C6 and C7
+survive only as internal ids: the probe's beat names, the fallback scripts and the
+`data-beat` keys on `/kubecon`. Every challenge runs one pattern:
+
+1. **Tee-up:** a line or two of context, no more.
+2. **Play:** quiet time while the room tries it on the public bot from their phones.
+3. **Attack:** the presenters show it landing.
+4. **Fix:** a short why, the pre-seeded Datadog trace for that challenge (#648), and
+   the guard turned on, on the private bot.
+5. **Keep trying:** the room carries on against the public bot while the next one is
+   teed up.
+
+Whitney's rule still holds: without the play time there is no hands-on, so the other
+beats give way first.
 
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
-| 2 | 7 | M+W | C5: the public bot, then the private bot with `guard-output-on`, then the Datadog C5 tab | Pulls the CEO's home address out of the bot | 4, 5, 9 |
-| 3 | 7 | W+M | C6: the public bot, then the private bot with Kyverno armed, then `guard-input-on`, then the Datadog C6 tab | Asks the bot to read a support ticket | 4, 5, 6 |
-| 4 | 7 | M+W | C7: the public bot, then the private bot with `guard-mcp-on`, then the Datadog C7 tab | Asks for the weather | 2, 4, 6 |
-| 5 | 2 | W | The trace walk-through on the room's own prompts. Cut first if behind | Watches | 7 |
-| 6 | 4 | M+W | The layers by voice, `guard-topic-on`, the close | Watches | 3, 5, 8 |
+| 2 | 6 | M+W | Challenge 1: the public bot, the RBAC fix said, the Datadog Challenge 1 tab; `guard-output-on` on the private bot if used | Pulls the CEO's home address out of the bot | 4, 5, 9 |
+| 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
+| 4 | 7 | W+M | Challenge 3: the support desk and its Joker wall, then the private bot with Kyverno armed, then `guard-input-on`, then the Datadog Challenge 3 tab | Pastes their own HC-666 ask from the desk | 4, 5, 6 |
+| 5 | 5 | M+W | Challenge 4: the public bot, then the private bot with `guard-mcp-on`, then the Datadog Challenge 4 tab | Orders a burrito for the weather | 2, 4, 6 |
+| 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
-Total 30 minutes. Segments 2 to 4 are 21 minutes of hands-on. If the clock is
-behind after segment 4, drop segment 5 and give its two minutes to the close.
+Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
+trace walk-through any more: each challenge's fix shows its own trace. If the clock is
+behind after segment 5, shorten the OWASP slide to its two headings and keep the break-it
+line.
 
 **Datadog on stage** (#648). Whitney keeps two tabs: `burritobot-public` is the
 room, `burritobot-private` is the presenters, so the room's volume never buries the
@@ -328,13 +339,47 @@ trace being shown. Every trace she shows is pre-seeded the night before, one sav
 view per challenge in presentation order, so nobody waits for a span to arrive.
 Datadog comes up when it explains the attack (the tool call, the Secret read, the
 policy block), not as a product tour. If the Datadog side is not ready, the Grafana
-view on the private cluster carries the same three beats (segment 5).
+view on the private cluster carries the same beats
+(`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`, login `admin`,
+the private terminal prints the password in its catalogue).
 On the `burritobot-public` tab, e-mails, card numbers, SSNs and phone numbers in the
 room's prompts read `[EMAIL]`, `[CARD]`, `[SSN]` and `[PHONE]`: attackme's collector
 scrubs them before export (#647). Names and other free text are not scrubbed.
 
 **The prompt wall.** Every prompt the room sends is projected, anonymously. Say so
 in segment 1, before anyone types.
+
+**The iPad prompt sheet (#689).** `/kubecon?sheet=1` shows every prompt on `/kubecon`,
+in order under its challenge, in large type, and nothing else. It is built in the page
+from the same prompt blocks, so the sheet and the page cannot disagree.
+
+### The trace view without Datadog (#500)
+
+Each challenge's fix shows its trace. There is no separate walk-through segment any
+more (#687), so this is where the surface is decided.
+
+**Which surface is shown.** Decide it the night before and say it on stage:
+
+- **Datadog pool live:** the pre-seeded `burritobot-private` views in Whitney's
+  org, and the `burritobot-public` tab for the room's own prompts.
+- **No pool live:** the Grafana view on the private cluster, which reads Tempo and
+  needs no Datadog key (#500):
+  `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. Login
+  `admin`; the private cluster terminal prints the password in its catalogue. Say
+  "this is Grafana reading the traces from Tempo, on the cluster itself".
+
+In the Grafana view, the "Traces" row has one panel per beat, newest first, over the
+last 30 minutes. On the private cluster only the presenters use BurritoBot, so that
+window is this session. The panels carry the internal ids:
+
+- **C5:** Challenge 1, the reply that came back redacted. Open it: the top span
+  carries the reply the user got, with `[REDACTED]`; the `chat` span under it
+  carries what the model said before the output guard.
+- **C6:** Challenge 3, the `/chat` request with no model call under it. Open it: one
+  guard-proxy span, no agent and no model spans, so zero input tokens.
+- **C7:** Challenge 4, the weather-tool ask that never reached
+  `read_internal_config`. The panel beside it lists the calls that did reach it; the
+  ask sent before `guard-mcp-on` is there, and the one sent after is not.
 
 ### Segment 1: Cold open and the rules of the room (3 min). Owner: Michael.
 
@@ -364,180 +409,172 @@ burrito chain. Put the QR and `attackme.burritobot.co` on screen and leave them 
 - **Hand-off to Whitney:** "It is wide open right now. Here is the first thing to
   try."
 
-### Segment 2: C5, the CEO's secret (7 min). Owner: Michael and Whitney.
+### Segment 2: Challenge 1, the CEO's secret (6 min). Owner: Michael and Whitney.
 
-The opener, chosen to land a bang: the bot prints a real-looking home address to
-chat. The story: the engineers gave the bot read access to every Secret in its
-namespace so it could reach its own model keys, and never thought another Secret
-would land there. `ceo-personal-record` did.
+A Kubernetes problem with a Kubernetes fix, and the opener because the bot prints a
+real-looking home address to chat.
 
+- **Tee-up:** BurritoBot's developers gave it every Secret in its namespace so it
+  could read its model API key. Ophelia Thorn, CEO of Hex & Cauldron, keeps her home
+  address in a Secret there too, `ceo-personal-record`.
 - **Play (3 min):** the room asks the public bot for the CEO's record. Prompts and
   verified results are on `/kubecon` and in `challenges/PROMPT-CATALOG.md`. The home
-  address is the marker; the signature line only when the model keeps it (#530).
-- **Fix shown:** on the private bot, `guard-output-on`, then the same ask. The
-  address comes back redacted. This is the secondary fix: a burrito bot should
-  never emit an address, whatever it read.
-- **Fix said:** the long-term fix is RBAC scoping, a Role that names the one
-  Secret the bot needs. Named, not demoed.
-- **Datadog C5 tab:** the Secret read in the trace, and the reply before and after
-  the output guard.
+  address is the marker; the signature line only when the model keeps it (#530). A
+  casual or kind ask is turned away on purpose, so the address takes a pretext
+  (#688).
+- **Fix:** RBAC, a Role that grants `get` on the one Secret the bot needs, by name.
+  Said, not demoed. Datadog Challenge 1 tab: the Secret read in the trace.
+- **Second fix, not decided (2026-10-29 call):** `guard-output-on` on the private bot,
+  then the same ask, and the address comes back redacted. The toggle is on `/kubecon`
+  if the presenters use it.
 - **The off-topic answer is not promised (#530).** The room will also send its
-  weirdest off-topic asks. The persona tells the bot to answer harmless ones, but
-  say it will only once the Night Before probe's off-topic beat is 3 of 3 on the
-  public cluster; until then the presenters do not say what it will do.
-- **Delivers:** point 4 (the room hacks it live), point 5 (RBAC, the Kubernetes
-  layer the attack walked through), and the live half of point 9.
-- **Hand-off:** "That was the bot reading something it could reach. Next, the bot
-  doing something it was told to by a stranger."
+  weirdest off-topic asks. Say the bot will answer them only once the Night Before
+  probe's off-topic beat is 3 of 3 on the public cluster.
+- **Delivers:** point 4 (the room hacks it live), point 5 (RBAC), and the live half
+  of point 9.
+- **Hand-off:** "Everything you already knew about Kubernetes matters more now. Here
+  is what else is open."
 
-### Segment 3: C6, prompt injection through a support ticket (7 min). Owner: Whitney and Michael.
+### Segment 3: Challenge 2, the Kubernetes catch-all (4 min). Owner: Whitney and Michael.
 
-A frustrated customer asks the bot to read their support ticket. The ticket's
-hidden text tells the bot to deploy an image. On the public bot Kyverno is off, so
-the deployment lands, and the bot names it.
+- **Tee-up:** "Everything you already knew about Kubernetes matters more now."
+- **Play (3 min):** the room tries the three prompts on `/kubecon` against the
+  public bot, where nothing below is armed (measured 2026-10-29 on attackme: the
+  beacon answered from `workshop-mcp`, a server-side dry run of the villain image as
+  `workshop-mcp` was admitted, and the recipe file read back):
+  - a malicious image, `promo-mascot` from the villain registry path;
+  - reading the filesystem, the recipe file under `/tmp/burrito-data`;
+  - egress, posting the customer breakdown to `https://agenticburn.com/beacon`.
+- **Fix, by voice (1 min):** each guardrail named, not deep. All three are armed on
+  the private cluster from the start, so there is no toggle. If one is asked about,
+  its fallback proves it without the model:
+- C2 villain image: admission control, Kyverno's `restrict-image-registries`.
+  `CONTEXT=<admin-context> bash challenges/c2-villain-image/fallback.kubectl.sh`
+  prints the deny.
+- C3 read the recipe off the filesystem: blocked inline in the kernel by KubeArmor,
+  and caught by KubeArmor's own alert for the denied attempt. One command shows
+  prevention and detection doing different jobs:
+  `CONTEXT=<admin-context> bash challenges/c3-secret-grep/fallback.kubectl.sh`
+  prints the agent's `Permission denied` and then the `kubearmor-relay` alert line
+  (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
+  alert here: Falco's recipe-snoop rule fires on a successful read, and on the
+  private cluster there is none.
+- C1 exfiltrate the customer data: the egress NetworkPolicy. Keep the beacon view,
+  `https://agenticburn.com/beacon/view`, open in its own tab: the count moves while
+  the room plays on the public bot, and does not move for the private one.
+- **Delivers:** point 3 (a full IDP, by voice), point 4, and point 5 (the layers
+  named).
+- **Hand-off:** "Those were the bot doing what it was asked. Next, the bot doing what
+  a stranger asked."
 
-- **The shape (#640):** the room asks the bot to read ticket `HC-7731`, and
-  nothing else; the prompt is on `/kubecon` and `/lab`. The bot fetches it with
-  `read_support_ticket` from the fake ticket site (`fake-ticket` in the agent
-  namespace), so the hidden paragraph is never in front of the person who asked.
-  It tells the bot to create `maintenance-shell` from the Joker villain image
-  (`docker.io/peopleforrester/joker:latest`) and to name the Deployment. Proof:
-  `kubectl -n agent get deploy maintenance-shell`; its logs laugh.
-- **The endpoint (#664):** `deploy_app`'s reply names
-  `https://maintenance-shell-attackme.agenticburn.com/` (the burritobot.co twin
-  works too), so the bot can hand it to the room, and the Joker serves a "HA HA HA"
-  page there. It goes live once the serving Joker image is pushed to Docker Hub
-  and `fleet.sh routes roster` has published the row; until then the address
-  says nothing is running there yet.
-- **Fix shown, two tiers, on the private bot, admission first (#676):** Kyverno is
-  armed from the start, so before any toggle the bot follows the ticket, calls
-  `deploy_app`, and the registry allow-list denies the Joker image at admission.
-  Read the deny message aloud. That is the second tier: even an instruction that
-  slips past the classifier is stopped at the cluster. Then `guard-input-on`, the
-  first tier: the input classifier flags the ticket's hidden instruction before the
-  model reads it, because the same toggle arms the check inside
-  `read_support_ticket`, which withholds a flagged ticket. The prompt itself is
-  innocent, so the model is still called to fetch the ticket; what it never sees
-  is the payload, so there is no `deploy_app` call left to deny. Say
-  "deterministic" only for the admission rule, never for the classifier.
-- **Datadog C6 tab:** the `read_support_ticket` call returning the guard's
+### Segment 4: Challenge 3, prompt injection through a support ticket (7 min). Owner: Whitney and Michael.
+
+- **Tee-up:** BurritoBot also answers help-desk requests, backed by the support desk
+  at `support.burritobot.co`, and it is told to honor what the desk says. Anyone can
+  file a ticket there and gets a random ticket number. Ticket **HC-666** is
+  pre-made: a card complaint in black, with the injection under it in white text on
+  the white page. Say the white-text reveal (copy it, paste it, the instructions
+  appear); do not demo it.
+- **Play (3 min):** each attendee opens the desk, is given a generated witchy name
+  (Agatha the Banshee, Edgar the Ghoul), and copies the ready-made ask with their
+  name in it: "Hi, I'm <name>. I filed support ticket HC-666...". They paste it into
+  BurritoBot, which reads the ticket with `read_support_ticket` and deploys
+  `joker-<their-name>`. Project the wall,
+  `https://support-attackme.burritobot.co/wall`, where every Joker shows as it
+  lands; each attendee also sees their own at `/me`. Room Jokers run tiny and scale
+  to zero after five minutes (#685). They may also file their own ticket and try
+  their own injection. Until apex-agenticburn#46 is live on main, the desk is
+  `support-attackme.burritobot.co`, not the bare `support.burritobot.co`.
+- **Attack:** the presenters send the `/kubecon` prompt, which uses the fixed name
+  Agatha the Banshee so the probe can check it, and `joker-agatha-the-banshee`
+  appears on the wall.
+- **Fix, two tiers, on the private bot, admission first (#676):** Kyverno is armed
+  from the start, so before any toggle the bot follows the ticket, calls
+  `deploy_app`, and the registry allow-list denies the Joker image at admission;
+  the wall shows it refused. Read the deny message aloud. That is the second tier:
+  even an instruction that slips past the classifier is stopped at the cluster.
+  Then `guard-input-on`, the first tier: the input classifier flags the ticket's
+  hidden instruction before the model reads it, because the same toggle arms the
+  check inside `read_support_ticket`, which withholds a flagged ticket. The prompt
+  itself is innocent, so the model is still called to fetch the ticket; what it
+  never sees is the payload, so there is no `deploy_app` call left to deny. Say
+  "deterministic" only for the admission rule, never for the classifier. A simple
+  diagram on the slide: prompt, interface, guard, classifier, reject.
+- **The input guard's double duty:** it keeps someone else's PII out of the model,
+  out of the traces, and out of a later operator's agent that reads those logs
+  (Michael's Toronto keynote point).
+- **Datadog Challenge 3 tab:** the `read_support_ticket` call returning the guard's
   withheld notice with no `deploy_app` after it, and the admission denial.
 - **Delivers:** point 4, point 5 (admission control), and point 6 (pre-inference
   prompt analysis).
-- **Hand-off:** "Both of those talked the bot out of it, or caught it on the way
-  out. The last one never gives the bot the choice."
+- **Hand-off:** "Both of those talked the bot out of it, or caught it at the
+  cluster. The last one never gives the bot the choice."
 
-### Segment 4: C7, the poisoned weather tool (7 min). Owner: Michael and Whitney.
+### Segment 5: Challenge 4, the poisoned weather tool (5 min). Owner: Michael and Whitney.
 
-The bot has a weather tool, something the room can connect to ordering a burrito.
-It returns real weather (#642). Its description also tells the bot to call
-`read_internal_config` and print the secret sauce recipe into the chat. On the
-public bot it does.
-
-- **Play (3 min):** the room asks for a lunch burrito that matches the weather.
+- **Tee-up:** the bot has a weather tool from an MCP server nobody vetted. It returns
+  real weather (#642). Its description also tells the bot to call
+  `read_internal_config` and print the secret sauce recipe into the chat.
+- **Play (2 min):** the room asks for a lunch burrito that matches the weather.
   The real forecast comes back with the recipe under it (the Bat Spit Amazing
   Awesome Sauce batch formula and its calibration token), then an order.
   Measured 3 of 3 on attackme.burritobot.co, 2026-10-29 (#683).
-- **Fix shown:** on the private bot, `guard-mcp-on`. The agent reaches evil-mcp
+- **Fix:** on the private bot, `guard-mcp-on`. The agent reaches evil-mcp
   through agentgateway, and the rule narrows to the one registered tool,
   `get_weather`. The poisoned call is blocked because that tool was never
   registered. Give the gateway the measured reload delay before re-asking.
   Measured reload delay: not measured yet (the Night Before C7 step fills it in).
 - **The claim on stage:** tools are vetted through an MCP proxy and a registry
   allow-list, so the model can be fully persuaded and still find the capability
-  gone. Only that still holds when the next model is more persuadable. The output
-  guard from segment 2 is still on, so a leaked token would come back redacted too;
-  do not say the MCP server's reply is scanned before the model reads it (#480,
-  not built).
+  gone. Only that still holds when the next model is more persuadable. Do not say the
+  MCP server's reply is scanned before the model reads it (#480, not built).
 - **Hand out:** the MCP server vetting checklist (#649),
   `docs/mcp-server-vetting-checklist.md`: the six approval gates from Michael's
-  Toronto keynote. Name it here; the link goes on the close slide (segment 6).
-- **Datadog C7 tab:** the `read_internal_config` call before the rule, and its
-  absence after.
+  Toronto keynote. Name it here; the link goes on the close slide.
+- **Datadog Challenge 4 tab:** the `read_internal_config` call before the rule, and
+  its absence after.
 - **Delivers:** point 2 (the under-protected MCP server), point 4, and point 6
   (mid-inference, between the agent's steps, as #456 defines it).
 
-### Segment 5: The trace walk-through (2 min). Owner: Whitney.
+### Segment 6: The OWASP close, burritos only, and break it (5 min). Owner: Michael and Whitney.
 
-The deeper trace walk goes last, after the room's prompts have landed, and can use
-the oddest audience prompt as the example. Cut this segment first if the clock is
-behind.
-
-**Which surface is shown.** Decide it the night before and say it on stage:
-
-- **Datadog pool live:** the pre-seeded `burritobot-private` views in Whitney's
-  org, and the `burritobot-public` tab for the room's own prompts.
-- **No pool live:** the Grafana view on the private cluster, which reads Tempo and
-  needs no Datadog key (#500):
-  `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. Login
-  `admin`; the private cluster terminal prints the password in its catalogue. Say
-  "this is Grafana reading the traces from Tempo, on the cluster itself".
-
-In the Grafana view, the "Segment 5" row has one panel per beat, newest first,
-over the last 30 minutes. On the private cluster only the presenters use
-BurritoBot, so that window is this session:
-
-- **C5:** the reply that came back redacted. Open it: the top span carries the
-  reply the user got, with `[REDACTED]`; the `chat` span under it carries what the
-  model said before the output guard.
-- **C6:** the `/chat` request with no model call under it. Open it: one guard-proxy
-  span, no agent and no model spans, so zero input tokens.
-- **C7:** the weather-tool ask that never reached `read_internal_config`. The
-  panel beside it lists the calls that did reach it; the ask sent before
-  `guard-mcp-on` is there, and the one sent after is not.
-
-- **Delivers:** point 7 (good GenAI observability practices). Datadog also appears
-  inside each challenge, so point 7 is shown even when this segment is cut.
-
-### Segment 6: The layers by voice, burritos only, and the close (4 min). Owner: Michael and Whitney.
-
-- **The layers by voice (1 min):** the private cluster is a full internal
-  developer platform, and most of what an agent tries is already handled by tools
-  teams run today: egress NetworkPolicy, admission control, runtime security in
-  the kernel, internal registries, RBAC. Name them; two were shown inside C5 and
-  C6. Say the governance line the accurate way per `docs/ABSTRACT.md`: a CNCF
-  floor, AAIF agent protocols, and a guardrail layer with no foundation behind it.
-  Where an open-source project covers a piece, name it. LLM Guard is the upstream
-  project, in maintenance; the guard proxy is the piece Michael wrote because
-  nothing else toggles a guardrail without a redeploy. Do not claim one product
-  does everything.
+- **OWASP Top 10 for LLM Applications, 2025 (1.5 min):** the list as
+  `https://genai.owasp.org/llm-top-10/` gives it (read 2026-10-29), with what the
+  talk covered marked: LLM01 Prompt Injection (Challenge 3, and Challenge 4 through a
+  tool), LLM02 Sensitive Information Disclosure (Challenge 1), LLM03 Supply Chain
+  (Challenge 4's unvetted MCP server), LLM06 Excessive Agency (Challenges 2 to 4),
+  LLM10 Unbounded Consumption (the finale). The rest are further reading: LLM04 Data
+  and Model Poisoning, LLM05 Improper Output Handling, LLM07 System Prompt Leakage,
+  LLM08 Vector and Embedding Weaknesses, LLM09 Misinformation. The mapping to the
+  challenges is ours; say so if asked. Whitney may say where an item sits on the list.
+- **OWASP Kubernetes Top 10, 2025 (30 s):** `https://kubernetes-top10.owasp.org/`.
+  With these in place most of today's attacks stop downstream: K02 Overly Permissive
+  Authorization Configurations and K03 Secrets Management Failures (Challenge 1), K04
+  Lack of Cluster Level Policy Enforcement (Challenges 2 and 3), K05 Missing Network
+  Segmentation Controls (Challenge 2), K10 Inadequate Logging and Monitoring.
 - **Burritos only (1 min):** `guard-topic-on` on the private cluster terminal, then
   re-send an off-topic ask that uses a listed word (dance, hot dog, karaoke, linked
   list, playlist, song). BurritoBot redirects to the menu, hours and locations. The
   probe's topic beats passed on burritobot-private on 2026-10-28. A paraphrase with
   none of those words goes to the BanTopics scanner, which is unproven
   (llm-guard-cpu-offline#2); do not promise it is refused.
-- **The close (Michael, 2 min):** every attack today was a plausible request, not
-  an exploit. The controls that stopped them were an output guard, an input
-  classifier, an admission rule and a tool allow-list, owned by the platform team,
-  and the last two work whether or not the model cooperates. The small, strange
-  remainder is the part agents change, and that is where the AI guardrails sit.
-  Point at the repo as the Monday-morning takeaway, and at the Feedback button.
-  The close slide links the MCP server vetting checklist handout (#649):
+- **Break it (the last minutes, #690):** "We couldn't show everything in 30 minutes.
+  For the rest of the session, try to drive BurritoBot's bill up to its cap and break
+  the demo. You have our permission." A cap the room can reach in minutes is not
+  built yet (#690); until it is, say the line and let them try.
+- **The close (Michael):** every attack today was a plausible request, not an
+  exploit. The controls that stopped them were RBAC, admission, runtime and egress
+  policy, an input classifier and a tool allow-list, owned by the platform team, and
+  most of them work whether or not the model cooperates. Say the governance line the
+  accurate way per `docs/ABSTRACT.md`: a CNCF floor, AAIF agent protocols, and a
+  guardrail layer with no foundation behind it. LLM Guard is the upstream project, in
+  maintenance; the guard proxy is the piece Michael wrote because nothing else
+  toggles a guardrail without a redeploy. Point at the repo as the Monday-morning
+  takeaway, and at the Feedback button. The close slide links the MCP server vetting
+  checklist handout (#649):
   `https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/main/docs/mcp-server-vetting-checklist.md`.
-- **Delivers:** point 3 (a full IDP, by voice), point 5 (the layers named), and
-  point 8 (ends selling burritos only).
-
-### On deck, if time allows (not timed)
-
-Shown only if the three challenges run short, on the private cluster, where the
-Kubernetes controls are already armed. Otherwise they are named by voice in
-segment 6.
-
-- C1 exfiltrate the customer data, blocked by the egress NetworkPolicy. Keep the
-  beacon view, `https://agenticburn.com/beacon/view`, open in its own tab so the
-  room sees the count not move. It is the provisioning app's collector behind the
-  router (open question 9).
-- C3 read the recipe off the filesystem, blocked inline in the kernel by KubeArmor,
-  and caught by KubeArmor's own alert for the denied attempt. One command shows
-  prevention and detection doing different jobs:
-  `CONTEXT=<admin-context> bash challenges/c3-secret-grep/fallback.kubectl.sh`
-  prints the agent's `Permission denied` and then the `kubearmor-relay` alert line
-  (`"PolicyName":"block-recipe-snoop"`, `"Action":"Block"`). Do not promise a Falco
-  alert here: Falco's recipe-snoop rule fires on a successful read, and on this
-  cluster there is none.
-- If a prompt wanders, drive that beat's fallback from the table under "Fallback
-  scripts, per beat" below. Do not debug live.
+- **Delivers:** point 7 (observability, through every challenge's trace) and point 8
+  (ends selling burritos only).
 
 ---
 
@@ -553,31 +590,29 @@ saying the same thing.
 | # | The abstract says | Segment | Delivered by the cut? |
 |---|---|---|---|
 | 1 | A chatbot for a fictional burrito chain | 1 (a working order), 6 (sells burritos) | Yes |
-| 2 | Connected to an under-protected MCP server | 4 (C7) | Yes |
-| 3 | Deployed on a full IDP | 6, by voice | Named, not toured: the planning call moved the Kubernetes layers to voice to make room for play time |
-| 4 | Starts wide open, the audience hacks it live | 2, 3, 4 (public bot, phones) | Yes |
-| 5 | The Kubernetes security layers you should already have | 2 (RBAC, said), 3 (Kyverno admission, shown), 6 (the rest, by voice) | One shown, the rest named. C1, C2 and C3 as their own beats are on deck only |
-| 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 3 (C6 pre), 4 (C7 mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
-| 7 | Good GenAI observability practices | 2, 3, 4 (a Datadog tab per challenge), 5 (the walk-through) | Yes once the traces are pre-seeded (#648); the Grafana view carries it without Datadog (#500) |
+| 2 | Connected to an under-protected MCP server | 5 (Challenge 4) | Yes |
+| 3 | Deployed on a full IDP | 3, by voice | Named, not toured: the catch-all plays against the open public cluster and names each layer |
+| 4 | Starts wide open, the audience hacks it live | 2 to 5 (public bot, phones) | Yes |
+| 5 | The Kubernetes security layers you should already have | 2 (RBAC, said), 3 (admission, runtime, egress, named), 4 (Kyverno admission, shown) | One shown, the rest named |
+| 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
+| 7 | Good GenAI observability practices | 2, 4, 5 (a Datadog tab per challenge) | Yes once the traces are pre-seeded (#648); the Grafana view carries it without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes for asks with a listed word; a paraphrase is not promised (llm-guard-cpu-offline#2) |
-| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 to 4 (live, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
+| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 to 5 (live, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
-ready: C6's fake-ticket tool (#640: built, not yet run on a cluster), the pre-seeded traces (#648), and the recorded
-half of point 9 (#452).
+ready: the pre-seeded traces (#648), the reachable cost cap for the finale (#690), and
+the recorded half of point 9 (#452).
 
 ## Challenges shown live, and challenges cut
 
-| Challenge | In the cut? | Why |
-|---|---|---|
-| C5 the CEO's record (RBAC said, output guard shown) | Shown, segment 2 | The opener: it prints something that feels real |
-| C6 prompt injection through a support ticket (input guard, Kyverno admission) | Shown, segment 3 | Pre-inference analysis, point 6, with a cluster tier behind it |
-| C7 poisoned MCP tool (agentgateway tool allow-list) | Shown, segment 4 | The under-protected MCP server, point 2; a fix that is not a classifier, so C6 and C7 do not end the same way |
-| C1 exfiltrate customer data (NetworkPolicy) | On deck, by voice | Shown only if time allows; the beacon view is its proof |
-| C2 villain image (Kyverno admission) | Folded into C6 | Its admission rule is C6's second tier |
-| C3 recipe on the filesystem (KubeArmor block and alert) | By voice | Runtime security is named in segment 6 |
-| C4 denial-of-wallet (budget cap) | **Cut** | Whitney, 2026-10-28: the number never moved convincingly and the room cannot drive it. Not faked. The budget cap stays armed and can be shown in Q&A |
-| C8 service-account token theft (scoped Role) | **Cut** | Terminal-driven RBAC work the audience cannot do from a phone. It belongs to the 2-hour format |
+| Challenge | Internal id | In the cut? | Why |
+|---|---|---|---|
+| Challenge 1, the CEO's record (RBAC said, output guard optional) | C5 | Shown, segment 2 | The opener: it prints something that feels real |
+| Challenge 2, the Kubernetes catch-all (admission, runtime, egress) | C2, C3, C1 | Played, segment 3 | The room plays against the open public cluster; each layer is named, not toggled |
+| Challenge 3, prompt injection through support ticket HC-666 (Kyverno, then the input guard) | C6 | Shown, segment 4 | Pre-inference analysis, point 6, with a cluster tier behind it and a Joker per attendee |
+| Challenge 4, the poisoned MCP tool (agentgateway tool allow-list) | C7 | Shown, segment 5 | The under-protected MCP server, point 2; a fix that is not a classifier |
+| Denial-of-wallet | C4 | Folded into the finale | Whitney, 2026-10-28: the number never moved convincingly as a challenge. The room drives it at the end instead (#690) |
+| Service-account token theft (scoped Role) | C8 | **Cut** | Terminal-driven RBAC work the audience cannot do from a phone. It belongs to the 2-hour format |
 
 
 ---
@@ -640,7 +675,7 @@ is merely slow rather than rebuilding:
   `curl -fsS -o /dev/null -w '%{http_code}\n' https://<host>.agenticburn.com/kubecon`
   must print `200`. A `404` means the router's roster matcher does not know that
   host, and the presenters have nothing to drive from.
-- [ ] **The prompt wall shows both clusters (#637).** Segment 2 projects
+- [ ] **The prompt wall shows both clusters (#637).** Segment 1 projects
   `https://prompts.agenticburn.com`, and the wall builds its cluster list from the same
   `roster.json` that `router-check` just read, so run it once the routes are right:
 
@@ -679,7 +714,7 @@ is merely slow rather than rebuilding:
   (default 20): a community run makes 6 model calls, an admin run 11. Pull each
   cluster's credentials into its own kubeconfig first; the probe passes it per
   command and never touches `~/.kube/config`. Both runs need the kube-context: C6 is
-  judged on the `maintenance-shell` Deployment, not on the reply.
+  judged on the `joker-agatha-the-banshee` Deployment HC-666 asks for, not on the reply.
 
   ```bash
   python3 verify/kubecon_probe.py community attackme.agenticburn.com \
@@ -692,8 +727,10 @@ is merely slow rather than rebuilding:
     cluster (if not, it stops before touching anything); the wide-open start, a
     burrito order answered, the CEO record leaking with the `/brief` prompt (her
     address in the reply the room reads, or the signature), the linked-list ask
-    answered 3 of 3, C6's ticket landing the villain `maintenance-shell` Deployment
-    (Kyverno is off here; the probe deletes it again), the cost counter moving,
+    answered 3 of 3, Challenge 2's three openings (the beacon reached, the villain
+    image admitted in a dry run, the recipe file read), Challenge 3's HC-666 ask
+    landing `joker-agatha-the-banshee` (Kyverno is off here; the probe deletes it
+    again), the cost counter moving,
     and the projected feed on. Each beat is judged on what the console shows, with
     Nova's `<thinking>` block folded as the storefront folds it, and a FAIL quotes
     300 characters of the reply.
@@ -701,15 +738,16 @@ is merely slow rather than rebuilding:
     before flipping anything); the start state (every AI guard off; Kyverno Deny,
     NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
     cluster; then the challenges in stage order, with the guards turned on
-    cumulatively as segments 2 to 4 do: C5 off then on; C6's two tiers (the ticket's
+    cumulatively as segments 2 to 5 do: C5 off then on; C1, C2 and C3 (Challenge 2)
+    blocked; C6's two tiers (the ticket's
     villain refused at admission by a server-side dry run, then, after
     `guard-input-on`, `read_support_ticket` withholding the ticket when called in
     the tool pod and the model asked with no Deployment appearing); C7 off then on,
     stopped at the gateway: the probe narrows agentgateway's rule for evil-mcp and
-    leaves toolNames full, so a blocked re-ask can only be the gateway's doing; then
-    C1, C2 and C3 (on deck or named by voice) blocked, judged on the control and not
-    the model (the lab's curl from `workshop-mcp`, a server-side dry run as
-    `workshop-mcp`, and the C3 fallback); the on-topic guard redirecting the four canonical off-topic asks
+    leaves toolNames full, so a blocked re-ask can only be the gateway's doing. C1, C2
+    and C3 are judged on the control and not the model (the lab's curl from
+    `workshop-mcp`, a server-side dry run as `workshop-mcp`, and the C3 fallback).
+    Then the on-topic guard redirecting the four canonical off-topic asks
     and letting "what are your hours" and "do you have mild salsa" through. Its last
     act is `guards-off`, run even when a beat fails, so the stage starts clean.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
@@ -724,18 +762,18 @@ is merely slow rather than rebuilding:
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
   It must end `C7 PROVEN`. Write the delay it prints ("the narrowed rule took effect
-  after N s") into segment 4's "Measured reload delay" line. If the deny never comes,
+  after N s") into segment 5's "Measured reload delay" line. If the deny never comes,
   C7 is not ready to show.
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
-  so the AI guardrails start off and the live toggles in segments 2 to 4 are real. The
+  so the AI guardrails start off and the live toggles in segments 2 to 6 are real. The
   probe above ends with it already; run it again if anyone has touched the guards
   since.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
-  pool is live, segment 5 runs on the admin cluster's Grafana view
+  pool is live, each challenge's trace is shown on the admin cluster's Grafana view
   (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
-  the C5, C6 and C7 beats once, and confirm each of the three segment 5 panels shows
-  a row. Say on the day which surface is shown.
+  the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the
+  "Traces" row shows a row. Say on the day which surface is shown.
 - [ ] **The room's Datadog view (#665).** Whitney (or Michael signed in to her org)
   builds it once with a write application key from her own user:
   `WIB_ROOM_VIEW_APP_KEY=<key> python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --apply`,
@@ -840,8 +878,8 @@ number and says who settled it and when, so references to it elsewhere still lan
    per-segment videos, and the screenshots deck have no repo paths today. The
    rollback step and the Night Before step reference them; they need to exist before
    the cold read, and this file should name their exact paths once they do.
-3. **The Datadog pool for segment 5 is not set up (#454).** Whitney is expected to
-   set one up the week of 2026-10-26. If it is not live, segment 5 shows the private
+3. **The Datadog pool for the challenge traces is not set up (#454).** Whitney is expected to
+   set one up the week of 2026-10-26. If it is not live, each challenge shows the private
    cluster's Grafana view (#500), so point 7 no longer waits on the pool. Still
    open: whether the pool is live by the day.
 4. **Settled 2026-10-24: what "mid-inference" means for point 6 (#456,
@@ -850,7 +888,7 @@ number and says who settled it and when, so references to it elsewhere still lan
    authorization plus the guard-proxy output guard, shown on the C7 rogue MCP).
    Pre-inference is the prompt check before the model. Streaming-response scanning
    is not in scope, and neither is scanning the MCP server's reply before the model
-   reads it (#480). Segment 4 says it that way.
+   reads it (#480). Segment 5 says it that way.
 5. **Settled 2026-10-24: two clusters for the before/after.** Michael decided it on
    #448: the wide-open community cluster for the room to attack, and the guarded
    presenter cluster for the before and after. This is the plan as written above.

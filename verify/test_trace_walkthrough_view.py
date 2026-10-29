@@ -122,40 +122,42 @@ check("the rogue tool is named read_internal_config", "def read_internal_config(
 
 print("== the run-of-show names the surface and the URL ==")
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
-heads = list(re.finditer(r"^### Segment (\d+): (.*)$", ros, re.M))
-walk = next((h for h in heads if h.group(2).startswith("The trace walk-through")), None)  # #639
-check("the run-of-show has a trace walk-through segment", walk is not None)
-seg_n = walk.group(1)
+# Since #687 each challenge's fix shows its own trace and there is no walk-through segment; the run-of-show's
+# "The trace view without Datadog" section decides the surface, and the row is titled "Traces" to match.
+heads = list(re.finditer(r"^### (.*)$", ros, re.M))
+walk = next((h for h in heads if h.group(1).startswith("The trace view without Datadog")), None)
+check("the run-of-show has the trace view section", walk is not None)
 nxt = next((h for h in heads if h.start() > walk.start()), None)
 seg = ros[walk.start():nxt.start() if nxt else len(ros)]
 fleet = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
 shared = re.search(r'SHARED_ADMIN_HOST="([a-z0-9.-]+)"', fleet).group(1)
 url = f"https://grafana-{shared}/d/{dash['uid']}"
-check(f"segment {seg_n} names {url}, the presenters' shared cluster", url in seg)
+check(f"it names {url}, the presenters' shared cluster", url in seg)
 check("the console routes grafana-<cluster> to Grafana",
       "grafana-[a-z0-9-]+" in (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8"))
-check(f"segment {seg_n} says Datadog when the pool is live and Grafana when not",
+check("it says Datadog when the pool is live and Grafana when not",
       "**Which surface is shown.**" in seg and "**Datadog pool live:**" in seg and "**No pool live:**" in seg)
-check(f"segment {seg_n} walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
-check(f"segment {seg_n} no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg)
+check("it walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
+check("it no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg)
 
-print("== the beats' row is titled for the walk-through's segment, in the challenges' run order ==")
-# The challenge segments' headings ("### Segment 2: C5, ...") give the order the room sees the beats.
-run_order = [m.group(1) for h in heads for m in [re.match(r"(C\d+),", h.group(2))] if m]
-check("the run-of-show runs C5, C6 and C7, each in its own segment", sorted(run_order) == ["C5", "C6", "C7"])
+print("== the beats' row is titled Traces, in the challenges' run order ==")
+# The order the room sees the beats is /kubecon's (Challenge 1 is C5, Challenge 3 C6, Challenge 4 C7).
+_kc = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
+run_order = [b for b in re.findall(r'data-beat="(C\d)"', _kc) if b in ("C5", "C6", "C7")]
+check("the stage runs C5, C6 and C7, in that order", run_order == ["C5", "C6", "C7"])
 rows = [p for p in dash["panels"] if p.get("type") == "row"]
 row = next((p for p in rows if "did each guardrail do its job?" in p["title"]), None)
 check("the dashboard has the guardrail beats' row", row is not None)
 title = row["title"]
-check(f"the row is titled for segment {seg_n}, the trace walk-through (was 'Segment 6')", title.startswith(f"Segment {seg_n}:"))
-check(f"the row lists the beats in the run-of-show's order ({', '.join(run_order)})",
+check("the row is titled Traces, not for a segment that no longer exists", title.startswith("Traces:"))
+check(f"the row lists the beats in the stage's order ({', '.join(run_order)})",
       f"({', '.join(run_order)}, newest first)" in title)
 laid_out = [p["title"].split(":")[0] for p in sorted((beat[t] for t in run_order),
                                                       key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]))]
 check("the row's beat panels are laid out in that order", laid_out == run_order)
 walked = sorted(run_order, key=lambda b: seg.index(f"**{b}:**"))
-check(f"segment {seg_n} walks the panels in that order", walked == run_order)
-check(f"segment {seg_n} names the row by its title's segment", f'the "Segment {seg_n}" row' in seg)
+check("the section walks the panels in that order", walked == run_order)
+check("the section names the row by its title", 'the "Traces" row' in seg)
 rdy = (REPO / "docs/KUBECON-ABSTRACT-READINESS.md").read_text(encoding="utf-8")
 check("the readiness file no longer notes a stale row title", 'still titled "Segment' not in rdy)
 
