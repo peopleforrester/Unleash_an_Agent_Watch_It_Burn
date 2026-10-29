@@ -3546,3 +3546,53 @@ two items, IAM_PIPELINE_PROFILE/IAM_PIPELINE_REGION and CONTEXT. No hecaton setu
 **Not yet run on a cluster.** Nothing here touches a cluster. On the next cluster build,
 `CONTEXT=<attendee-context> IAM_PIPELINE_PROFILE=<profile> IAM_PIPELINE_REGION=<region> bash verify/run-e2e.sh`
 should get past its prerequisite check with no otelcol-contrib installed on the host.
+## 2026-10-29 · #652 · LLM Guard runs lab-platform's `llm-guard:v1`, set by the ai-layer Application's `kustomize.images`
+
+lab-platform now builds, reads back and signs the LLM Guard API image from pinned inputs (lab-platform#91, PR #282):
+`ghcr.io/peopleforrester/lab-platform/llm-guard:v1`, digest `sha256:781a126bf7c7…3f4d7b`, built from
+`images/llm-guard` at f2fcb8f, the commit this repo's submodule is pinned at. The `llm-guard` Deployment runs it in
+place of `watch-it-burn:llm-guard-0.3.16-cpu.3`, so llm-guard-cpu-offline no longer has to build or sign it for the
+talk.
+
+- **How the image is named.** #622 says a lab-platform image takes the registry the root passes down
+  (`imageRegistry`), and that only an `apps/` file can say so, because the chart renders those through `tpl`.
+  `resources.yaml` is a plain kustomize manifest. So its container names the kustomize image `llm-guard`, and
+  `gitops/bootstrap/apps/ai-layer.yaml` sets that name in `kustomize.images` to
+  `{{ .Values.imageRegistry }}/llm-guard:v1@sha256:781a…`. Argo CD runs `kustomize edit set image` with each
+  entry. That was measured with kustomize v5.8.1, the one Argo CD v3.4.4 bundles (checksum checked against the
+  release's `checksums.txt`): the command writes `name`, `newName`, `newTag: v1` and `digest`, and the build gives
+  `…/llm-guard:v1@sha256:781a…`, at ghcr.io by default and at an ECR cache path when a root passes one. The
+  images block sits outside the front door's `if`, so every root renders it. A JSON patch on the container would
+  also have worked. `kustomize.images` was chosen because it matches the container by image name, not by array
+  index.
+- **`NETWORK_BOUNDARY=sandbox`** is added to the container's env. Every lab-platform image that listens binds
+  loopback without it, so the pod would answer nothing on 8000. The scanners ConfigMap at
+  `/home/user/app/config`, `AUTH_TOKEN`, `APP_WORKERS`, the probes, uid 1000 and port 8000 stay as they were.
+  `WIB_PI_MODEL_DIR` is not set here: the image sets it (`images/llm-guard/Dockerfile`) to
+  `/home/user/models/prompt-injection`, which is the `model_path` in `llm-guard-scanners`.
+- **Forwarded headers.** The issue asked whether anything in front of the Service relies on
+  `--proxy-headers --forwarded-allow-ips='*'`, which lab-platform's entrypoint drops. Nothing does. The Service
+  has two callers. guard-proxy (`proxy.py`, pin `000f57e`) sends only `Content-Type` and `Authorization`, and so
+  does workshop-mcp (`workshop-mcp-server.py`, `read_support_ticket`). Neither terminates TLS or writes
+  `X-Forwarded-*`, and no Ingress, gateway or console route reaches `llm-guard:8000`. The comment saying this went
+  into the run's escalation list, because a run cannot write to an issue.
+- **What else changes.** Kyverno's `verify-image-signatures` matches `ghcr.io/peopleforrester/watch-it-burn*`
+  and Harbor, so llm-guard is no longer signature-checked at admission. lab-platform signs the image with its own
+  identity, not the key in `policies/cosign/`. Adding lab-platform's attestor is a follow-up. The package was
+  still private when this was written: an anonymous `GET` of its manifest got 403 on 2026-10-29. Until Michael
+  turns on the package's public visibility, a cluster cannot pull it and the pod sits in ImagePullBackOff.
+  `restrict-image-registries` allows both `ghcr.io/` and ECR, so the registry wall admits the image either way.
+- **Tests.** `verify/test_llm_guard_image.py` (offline) checks several things: the one `kustomize.images` entry
+  and its digest, that the placeholder names this container alone, that no file under `gitops/` still names the
+  watch-it-burn build, and the container contract above. `verify/test_bootstrap_chart_render.py` (E2E, tools tier)
+  builds `gitops/ai-layer` through a scratch overlay carrying the entries Argo CD writes. It checks the Deployment's
+  image unset and at a cache path, that the registry policy allows it, and that no other container changes. Its
+  front door checks now look for the absent patches, not an absent `kustomize` block. `verify/test_enforce_floor.py`
+  judges a `kustomize.images` image as Argo CD deploys it, not as the placeholder.
+  `verify/bootstrap_chart.py` gains the parser both use.
+
+**Not yet run on a cluster.** No cluster was up for this run, and the package was still private. Owed on the next
+attendee bring-up, after the package is public: `bash verify/input-guard.sh <host> <kube-context> <aws-profile>`.
+It must pass the benign prompt and block the injection through the new image. Also, `kubectl --context <ctx> -n
+agent get deploy llm-guard -o jsonpath='{.spec.template.spec.containers[0].image}'` must print
+`ghcr.io/peopleforrester/lab-platform/llm-guard:v1@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b`.

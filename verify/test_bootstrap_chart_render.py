@@ -1,6 +1,6 @@
 # ABOUTME: Renders gitops/bootstrap with the pinned Helm for every profile at a 40-digit revision, and checks what
 # ABOUTME: lab-platform's pin check will: every Unleashed source at that commit, charts exact, no second root (#609).
-# SUITE: e2e (needs helm: the chart is Helm's to render; and kubectl, to apply the front door patch with kustomize)
+# SUITE: e2e (needs helm: the chart is Helm's to render; and kubectl, to apply kustomize.images and the patch)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why. test_bootstrap_chart.py reads the files. Whether tpl leaves every app as it was written, renders the escaped
@@ -24,7 +24,7 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, CHART, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO,  # noqa: E402
                              LAB_PLATFORM_GHCR, REPO_URL, REVISION, app_names, profiles, values_path,
-                             without_front_door)
+                             kustomize_images, without_front_door)
 
 failures: list[str] = []
 
@@ -111,8 +111,8 @@ def ai_layer(*args: str) -> dict:
 
 
 plain = ai_layer()
-check("no certificateArn: ai-layer has no kustomize block, so 443 stays nginx's self-signed pass-through",
-      bool(plain) and "kustomize" not in plain["spec"]["source"])
+check("no certificateArn: ai-layer's kustomize block has no patches, so 443 stays nginx's self-signed pass-through",
+      bool(plain) and "patches" not in plain["spec"]["source"].get("kustomize", {}))
 fd = ai_layer("--set", f"frontDoor.certificateArn={CERT}")
 patches = ((fd.get("spec") or {}).get("source") or {}).get("kustomize", {}).get("patches") or []
 check("with one: one patch, on the console Service", len(patches) == 1
@@ -141,7 +141,7 @@ if KUBECTL and patches:
     check("kustomize applies it: the console Service carries the certificate and keeps its own annotations",
           all(ann.get(a) == v for a, v in ops.items()) and ann.get("service.beta.kubernetes.io/aws-load-balancer-type")
           == "external" and len(ann) == len(ops) + 4, k.stderr.strip()[:300] or str(ann))
-fd["spec"]["source"].pop("kustomize", None) if fd else None
+fd["spec"]["source"].get("kustomize", {}).pop("patches", None) if fd else None
 check("and changes nothing else in the Application", bool(fd) and fd == plain)
 r = render("-f", str(values_path("burn")), "--set", f"revision={COMMIT}", "--set", "frontDoor.certificateArn=console-tls")
 check("a certificateArn that is not an ACM ARN: the render fails, naming it", r.returncode != 0
@@ -149,6 +149,57 @@ check("a certificateArn that is not an ACM ARN: the render fails, naming it", r.
 for guard in (FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END):
     check(f"no rendered Application keeps {guard}", guard not in render(
         "-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--set", f"frontDoor.certificateArn={CERT}").stdout)
+
+print("== LLM Guard's image, set through kustomize.images at the root's registry (#652) ==")
+# resources.yaml names the container by the kustomize image name llm-guard; ai-layer.yaml's kustomize.images sets it.
+# Argo CD runs `kustomize edit set image` with each entry, which writes the entries kustomize_images() returns
+# (measured with kustomize v5.8.1, Argo CD v3.4.4's), so the scratch overlay below is what Argo CD builds.
+LLM_GUARD = "llm-guard:v1@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b"
+CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
+
+
+def workload_images(text: str) -> dict[str, str]:
+    """Each workload container's image in a kustomize build, keyed kind/name/container."""
+    out = {}
+    for d in yaml.safe_load_all(text):
+        if not d or d.get("kind") not in ("Deployment", "StatefulSet", "DaemonSet", "Job"):
+            continue
+        spec = (d["spec"].get("template") or {}).get("spec") or {}
+        for c in spec.get("containers", []) + spec.get("initContainers", []):
+            out[f"{d['kind']}/{d['metadata']['name']}/{c['name']}"] = c["image"]
+    return out
+
+
+base = subprocess.run([KUBECTL, "kustomize", str(REPO / "gitops/ai-layer")], capture_output=True, text=True) \
+    if KUBECTL else None
+check("gitops/ai-layer builds with kustomize", base is not None and base.returncode == 0,
+      base.stderr.strip()[:300] if base else "no kubectl")
+from registry_allowlist import allowed  # noqa: E402
+
+for label, registry, args in (("unset", LAB_PLATFORM_GHCR, ()), ("at the cache path", CACHE,
+                                                                ("--set", f"imageRegistry={CACHE}"))):
+    entries = kustomize_images(ai_layer(*args))
+    check(f"{label}: ai-layer sets one image, llm-guard, to {registry}/{LLM_GUARD}",
+          entries == [{"name": "llm-guard", "newName": f"{registry}/llm-guard", "newTag": "v1",
+                       "digest": LLM_GUARD.split("@", 1)[1]}], str(entries))
+    if not (KUBECTL and base and base.returncode == 0 and entries):
+        continue
+    (REPO / "tmp").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
+        (pathlib.Path(d) / "kustomization.yaml").write_text(yaml.safe_dump({
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+            "resources": [os.path.relpath(REPO / "gitops/ai-layer", d)], "images": entries}), encoding="utf-8")
+        k = subprocess.run([KUBECTL, "kustomize", d], capture_output=True, text=True)
+    got = workload_images(k.stdout) if k.returncode == 0 else {}
+    want = workload_images(base.stdout)
+    key = "Deployment/llm-guard/llm-guard-api"
+    check(f"{label}: the llm-guard Deployment runs {registry}/{LLM_GUARD}", got.get(key) == f"{registry}/{LLM_GUARD}",
+          k.stderr.strip()[:300] or str(got.get(key)))
+    check(f"{label}: restrict-image-registries allows it", allowed(got.get(key, "")))
+    check(f"{label}: no other container's image changes", {n: i for n, i in got.items() if n != key}
+          == {n: i for n, i in want.items() if n != key} and set(got) == set(want))
+check("the bundle as written names llm-guard by the kustomize image name alone",
+      workload_images(base.stdout).get("Deployment/llm-guard/llm-guard-api") == "llm-guard" if base else False)
 
 print("== the render refuses what it cannot pin ==")
 r = render("-f", str(values_path("attendee")))

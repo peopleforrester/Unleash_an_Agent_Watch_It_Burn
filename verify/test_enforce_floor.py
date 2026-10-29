@@ -74,7 +74,7 @@ def missing_limits(docs):
 
 
 apps = []
-from bootstrap_chart import IMAGE_REGISTRY, LAB_PLATFORM_GHCR  # noqa: E402
+from bootstrap_chart import IMAGE_REGISTRY, LAB_PLATFORM_GHCR, kustomize_images, set_image  # noqa: E402
 
 for f in sorted((REPO / "gitops/bootstrap/apps").glob("*.yaml")):
     # The root fills an app file's image registry in through tpl before Argo CD renders the chart (#622); a
@@ -150,7 +150,8 @@ for fname, app in apps:
             docs += [d for d in load_all(mf.read_text()) if isinstance(d, dict)]
         except yaml.YAMLError:
             pass
-    bad = sorted({i for i in images(docs) if not image_ok(i)})
+    # An image an app file sets through kustomize.images (#652) is judged as Argo CD deploys it, not as named.
+    bad = sorted({i for i in (set_image(x, kustomize_images(app)) for x in images(docs)) if not image_ok(i)})
     check(f"{fname}: images from allowed registries" + (f" BAD {bad}" if bad else ""), not bad)
 
 print()

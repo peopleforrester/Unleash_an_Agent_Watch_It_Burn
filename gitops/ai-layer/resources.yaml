@@ -432,20 +432,21 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: llm-guard-api
-          # Built from images/llm-guard, the llm-guard-cpu-offline submodule: the API server from
-          # vendored upstream source in a multi-stage build on python:3.12-slim, rather than a wrapper
-          # around laiyer/llm-guard-api. The classifier is baked in as a local model dir with HF
-          # offline (#241), and its weights come from our own mirror (images/llm-guard/model, revision
-          # 90c9989b), so a rebuild no longer depends on an archived Hugging Face org (#414). Torch
-          # comes from PyTorch's CPU index, dropping fifteen NVIDIA wheels these GPU-less nodes never
-          # load, and the compiler stays in the builder stage: 4,211 MB to 1,280 MB compressed, and
-          # 916 unique CVEs to 24 with no criticals (#413, #415). Pinned by digest as well as tag,
-          # because a tag is a moving pointer and the allowlist should name an artifact.
-          image: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.3@sha256:be7d89d52d0e655b5233c5cbef80d3e76cd9b0b215da0c3777c259900d730061
+          # lab-platform's llm-guard:v1 (#652, lab-platform#91), built there from pinned inputs: CPython
+          # 3.12.16 by digest, the API's 130 distributions by sha256 (torch from PyTorch's CPU index), the
+          # source at images/llm-guard's commit f2fcb8f, and the classifier's ONNX files at Hub revision
+          # 90c9989b, baked in at /home/user/models/prompt-injection with HF offline (#241, #414).
+          # "llm-guard" is a kustomize image name, not a pullable reference: the ai-layer Application
+          # (gitops/bootstrap/apps/ai-layer.yaml) sets it to {{ .Values.imageRegistry }}/llm-guard:v1 by
+          # digest, because a lab-platform image takes the registry the root passes down (#622).
+          image: llm-guard
           imagePullPolicy: IfNotPresent
           ports: [{ name: http, containerPort: 8000 }]
           env:
             - { name: APP_WORKERS, value: "1" }
+            # The entrypoint binds loopback unless told the pod's namespace is the network boundary, as every
+            # lab-platform image that listens does; without this the pod answers nothing on 8000.
+            - { name: NETWORK_BOUNDARY, value: sandbox }
             - name: AUTH_TOKEN
               valueFrom: { secretKeyRef: { name: llm-guard-auth, key: token } }
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }

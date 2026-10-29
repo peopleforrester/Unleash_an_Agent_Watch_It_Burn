@@ -112,8 +112,11 @@ check("apps.yaml fails a frontDoor.certificateArn that is not an ACM certificate
       and 'fail (printf "frontDoor.certificateArn is the ARN' in tpl)
 ai_layer = (APPS / "ai-layer.yaml").read_text(encoding="utf-8")
 check("ai-layer.yaml patches the console Service only when frontDoor.certificateArn is set, the guard in comments",
-      "    # {{- if .Values.frontDoor.certificateArn }}\n    kustomize:\n" in ai_layer
-      and "    # {{- end }}\n  destination:" in ai_layer)
+      "      # {{- if .Values.frontDoor.certificateArn }}\n      patches:\n" in ai_layer
+      and "      # {{- end }}\n  destination:" in ai_layer)
+check("ai-layer.yaml sets LLM Guard's image outside that guard, so every root renders it (#652)",
+      "    kustomize:\n" in ai_layer and "      images:\n" in ai_layer
+      and ai_layer.index("      images:\n") < ai_layer.index(FRONT_DOOR_IF))
 
 print("== each profile is an explicit list of files that exist ==")
 app_files = sorted(p.name for p in APPS.glob("*.yaml"))

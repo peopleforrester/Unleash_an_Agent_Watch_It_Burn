@@ -38,8 +38,9 @@ agentgateway           OSS v1.5.0  (released 2026-08-27, GitHub releases agentga
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `scanners`, not `scores`)
                        digest: sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba (OCI index: linux/amd64 + linux/arm64;
                        resolved from Docker Hub 2026-10-25 and checked against the body's sha256, #603; upstream protectai/llm-guard archived July 2026)
-                       deployed image is our own build, not this one: ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.3 from images/llm-guard
-                       (digest pin in gitops/ai-layer/resources.yaml); the saved tarballs and images.lock rows wait on mirror-images.sh save on netcup (#603)
+                       deployed image is not this one: lab-platform's ghcr.io/peopleforrester/lab-platform/llm-guard:v1, built there from
+                       images/llm-guard at f2fcb8f (digest sha256:781a126b..., set by kustomize.images in gitops/bootstrap/apps/ai-layer.yaml, #652);
+                       the saved tarballs and images.lock rows wait on mirror-images.sh save on netcup (#603)
 
 ## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
 ## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.

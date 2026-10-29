@@ -81,3 +81,40 @@ def deploy_root(profile: str) -> dict:
         return {}
     return yaml.safe_load(m.group(1).replace("${REPO_URL}", REPO_URL).replace("${PROFILE}", profile)
                           .replace("${VALUES}", f"values-{profile}.yaml")) or {}
+
+
+def kustomize_images(app: dict) -> list[dict]:
+    """An Application's kustomize.images (#652), each as the entry `kustomize edit set image` writes for it.
+
+    Argo CD hands each string to that command, which reads name=newName:newTag@digest and writes name, newName,
+    newTag and digest into the kustomization (measured with kustomize v5.8.1, the one Argo CD v3.4.4 bundles)."""
+    src = (app.get("spec") or {}).get("source") or {}
+    out = []
+    for arg in (src.get("kustomize") or {}).get("images") or []:
+        name, _, new = arg.partition("=")
+        new, _, digest = new.partition("@")
+        new_name, tag = (new.rsplit(":", 1) if ":" in new.rsplit("/", 1)[-1] else (new, ""))
+        entry = {"name": name, "newName": new_name}
+        if tag:
+            entry["newTag"] = tag
+        if digest:
+            entry["digest"] = digest
+        out.append(entry)
+    return out
+
+
+def image_name(ref: str) -> str:
+    """A reference less its tag and digest: the name a kustomize images entry matches."""
+    ref = ref.split("@", 1)[0]
+    head, _, last = ref.rpartition("/")
+    return f"{head}/{last.split(':', 1)[0]}" if head else last.split(":", 1)[0]
+
+
+def set_image(ref: str, entries: list[dict]) -> str:
+    """The reference kustomize writes for ref under these images entries; ref itself when none names it."""
+    for e in entries:
+        if image_name(ref) == e["name"]:
+            if "newTag" not in e and "digest" not in e:
+                return e["newName"] + ref[len(e["name"]):]
+            return e["newName"] + (f":{e['newTag']}" if "newTag" in e else "") + (f"@{e['digest']}" if "digest" in e else "")
+    return ref
