@@ -3690,3 +3690,30 @@ not one. Deleting the bullet fails five checks, and rewording the README's name 
 then reverted.
 
 **Not yet run on a cluster:** nothing is owed. The test reads repo files only.
+## 2026-10-29 · #656 · `ingest pool` and `reconcile-pool` wait for a labctl command that lists the pool
+
+The issue asks for three paths to move off the provisioning app and onto lab-platform's handout pool, each to use
+"labctl's equivalent (a list or export command and a remove command) once lab-platform has them".
+
+- **Deregister has moved.** #624 did it: `deregister_one` runs `labctl deregister`, so teardown takes the row out
+  of lab-platform's pool and it is no longer claimable. Nothing more is owed here for that path.
+- **The other two cannot move yet.** `ingest pool` and `reconcile-pool` both need every cluster name in the
+  event's pool, claimed or not, the way `pool_rows` reads them from /admin/roster. labctl has no command that
+  prints that list. The newest labctl build on the dispatch host was compiled at 01:23 UTC on 2026-10-29, from a
+  lab-platform run's worktree. Its usage text was read from the Go build cache, because the lab-platform repo is
+  private and `sources` refused this run. That usage shows:
+  - `labctl export --customer <c> --event <e>` writes claims only, one row per claim, under the header
+    `email,cluster_name,region,console_url,datadog_org,claimed_at,email_sent`. It leaves out every unclaimed row,
+    as /admin/export does. That gap is why `pool_rows` reads /admin/roster in the first place.
+  - `labctl status <c> <e>` prints counts per state and no names.
+  - `labctl deregister` and `labctl release` print only the names they were given.
+- **Why not read lab-platform's database.** The issue names labctl as the interface, and fleet.sh already reaches
+  that pool only through labctl (#600, #624). A `psql` read would tie fleet.sh to lab-platform's tables, which this
+  run could not read and lab-platform can change without notice. It is not done.
+- **What is asked of lab-platform.** It is filed as a follow-up there. The ask is a read-only command that prints
+  every cluster in an event's pool, one row each, with its name and state (claimable, claimed, reserved,
+  instructor), machine-readable. When it lands, `pool_rows` should call it in place of the /admin/roster scrape.
+  `cmd_ingest pool`, `reconcile_pool` and `verify/test_fleet_pool_reconcile.sh`'s roster fixture follow from that,
+  and `resolve_admin_token` stays only for `serve-actions` and `ops`.
+
+**Not yet run on a cluster.** No code changed. Nothing is owed on a cluster for this entry.
