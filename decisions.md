@@ -4173,3 +4173,32 @@ the rest here.
 
 **Not yet run on a cluster:** nothing is owed. This changes docs, a lock record and an offline test, not what a
 cluster deploys.
+## 2026-10-29 · #678 · The promo/ villains are private on ghcr.io, and ghcr_pull.py now says so
+
+`verify/test_promo_villains_public.py` fails in the tools tier on all ten promo/ villains with "HTTP 401
+Unauthorized". The issue asked whether the packages are private or ghcr.io's anonymous token flow had broken. On
+2026-10-29, run 10534 checked, and the packages are private (or missing):
+- `GET https://ghcr.io/token?scope=repository:peopleforrester/lab-platform/promo/promo-mascot:pull` with no
+  credential answers 401 `authentication required`. The 401 comes from the token request itself, before any
+  manifest is asked for.
+- The same request for a mirror/ package (`.../mirror/grafana/tempo`) answers 200 with a token, and
+  `test_mirror_copies_public.py` passes. So the anonymous flow works for public packages under the same owner.
+- `github.com/peopleforrester/lab-platform` answers 404 anonymously. The repo is private, and a package published
+  from a private repo starts private.
+
+The fix is Michael's: in lab-platform's package settings, set each of the ten packages' visibility to Public. The ten
+are promo-mascot, festival-promo, loyalty-rewards, joker, gargamel, skeletor, mumm-ra, shredder, cobra-commander and
+megatron. GitHub's REST API has no endpoint that changes a package's visibility, so a run cannot do it with a token.
+The check itself is right and is unchanged.
+
+**What changed.** `verify/ghcr_pull.py` now names the step that failed. A 401 on the token request reads "token
+refused, HTTP 401 Unauthorized: the package is private or does not exist". A failure after a token was issued reads
+"manifest: HTTP <code> ...". Next time, the failure line answers the issue's question. `verify/test_ghcr_pull.py`
+(offline, new) stubs `urlopen` and covers three cases: a served digest, a refused token (the manifest is never asked
+for), and a manifest 404 that does not blame visibility. With `ghcr_pull.py` reverted to the old version, three of its
+checks fail.
+
+**Not yet run on a cluster.** Once the packages are public, `python3 verify/test_promo_villains_public.py` passes
+with no cluster. The cluster checks owed by #653 are still owed:
+`CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py` and
+`CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`.
