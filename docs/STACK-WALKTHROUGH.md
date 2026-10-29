@@ -36,7 +36,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | GitOps | Argo CD v3.5.2 | declarative reconcile + drift control | `gitops/` | in-cluster app-of-apps reconciling the local cluster; self-heal reverts out-of-band change |
 | Admission | Kyverno v1.19.1 (chart 3.9.1, moved from 3.9.0 on 2026-09-10) | block non-compliant workloads | `policies/kyverno/` | CEL `ValidatingPolicy` (`policies.kyverno.io/v1`, #206), `spec.validationActions` Audit to Deny |
 | Supply chain | Kyverno ImageValidatingPolicy (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | cosign key attestor, Deny, verifies offline |
-| Runtime | Falco 0.44.1 | detect shell/exec, sentinel reads, exfil | `gitops/bootstrap/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
+| Runtime | Falco 0.45.1 (chart 9.2.1) | detect shell/exec, sentinel reads, exfil | `gitops/bootstrap/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
 | Mesh | Istio 1.30.4 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/bootstrap/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
 | Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs; creds via EKS Pod Identity |

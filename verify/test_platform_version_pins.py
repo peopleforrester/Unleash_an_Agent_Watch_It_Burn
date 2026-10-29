@@ -1,10 +1,14 @@
-# ABOUTME: Every place that names the deployed Argo CD, cert-manager and Istio agrees: the chart deploy-full-idp.sh and
-# ABOUTME: the Applications pin, the VERSIONS.lock lines, the Datadog version labels, and the working docs.
+# ABOUTME: Every place that names the deployed Argo CD, cert-manager, Istio and Falco agrees: the chart deploy-full-idp.sh
+# ABOUTME: and the Applications pin, the VERSIONS.lock lines, the Datadog version labels, and the working docs.
 #
 # Why (#674). #389 moved argo-cd to chart 10.8.4 (Argo CD v3.5.2), cert-manager to v1.21.2 and Istio to 1.30.4, and
 # VERSIONS.lock went on saying 9.6.0 / v3.4.4 and v1.20.2, with no Istio line at all. The recreation spec, the build
 # spec and the stack walkthrough said the same old versions, and #661 set the Datadog version labels from them, so
 # #662 had to put the labels right by hand. This holds those three the way test_kyverno_version_pins.py holds Kyverno.
+#
+# Falco was the same story (#677). #626 took the chart to 9.2.1 (Falco 0.45.1, the kernel 6.18 fix) and moved the
+# Application, one VERSIONS.lock line and the Datadog label; the lock's other falco line named no chart, and the
+# recreation spec, the build spec and the stack walkthrough went on saying chart 9.1.0 / app 0.44.1.
 #
 # VERSIONS.lock is the record of which app version a chart installs; this test does not look it up. It holds the lock
 # to the chart that is deployed, and every other copy to the lock's app version. cert-manager and Istio publish
@@ -97,7 +101,19 @@ mesh = re.search(r'^ISTIO_VERSION = "([^"]+)"', (REPO / "verify/test_mesh.py").r
 check(f"test_mesh.py's ISTIO_VERSION is {istio}", mesh is not None and mesh.group(1) == istio,
       f"got {mesh.group(1) if mesh else None!r}")
 
-print("== the working docs name the Argo CD, cert-manager and Istio we deploy ==")
+print("== Falco: the Application, VERSIONS.lock, test_observability.py ==")
+falco_app = yaml.safe_load((APPS / "falco.yaml").read_text(encoding="utf-8"))
+falco_chart = str(falco_app["spec"]["source"]["targetRevision"])
+# Two lines: "falco  chart X / app Y" (component versions) and "falco  chart X  app Y" (IDP foundation).
+falco = lock_app("falco", lock_pins("falco"), 2, falco_chart)
+falco_dd = falco_app["spec"]["source"]["helm"]["valuesObject"]["podLabels"]["tags.datadoghq.com/version"]
+check(f"Falco's tags.datadoghq.com/version is {falco}", falco_dd == falco, f"got {falco_dd!r}")
+ust = re.search(r'^\s*\("falco", "burritobot-falco", "([^"]+)"', (REPO / "verify/test_observability.py").read_text(
+    encoding="utf-8"), re.M)
+check(f"test_observability.py expects Falco's version label to be {falco}", ust is not None and ust.group(1) == falco,
+      f"got {ust.group(1) if ust else None!r}")
+
+print("== the working docs name the Argo CD, cert-manager, Istio and Falco we deploy ==")
 # Each of these states the deployed versions. decisions.md, the PRDs, PROJECT_STATE.md, UPGRADE-INVENTORY.md (a
 # superseded dated inventory) and the research notes are records and are not checked.
 # Not inside a longer dotted number: the recreation spec's "argocd-managed-app ... `CONNECT 10.0.16.75`" is an IP.
@@ -128,6 +144,12 @@ COMPONENTS = (
         "docs/MASTER-RECREATION-SPEC.md": {istio},
         "docs/STACK-WALKTHROUGH.md": {istio},
     }),
+    # Not falco-talon, falcosidekick or falco_rules: those are other components and files.
+    ("Falco", r"falco(?![\w-])", r"[|;,]", {falco, falco_chart}, {
+        "docs/BUILD-SPEC.md": {falco, falco_chart},
+        "docs/MASTER-RECREATION-SPEC.md": {falco, falco_chart},
+        "docs/STACK-WALKTHROUGH.md": {falco, falco_chart},
+    }),
 )
 
 
@@ -151,4 +173,4 @@ for label, name, cut, allowed, docs in COMPONENTS:
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
     sys.exit(1)
-print("\nAll Argo CD, cert-manager and Istio version pin checks passed.")
+print("\nAll Argo CD, cert-manager, Istio and Falco version pin checks passed.")

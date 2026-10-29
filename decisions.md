@@ -4145,3 +4145,31 @@ no earlier draft of this issue to check against staging.
   before this change it fails those five checks.
 - **Not yet run on a cluster.** The Grafana sidecar picks the ConfigMap up on the next sync of `grafana-dashboards`
   on burritobot-private. The run-of-show's Night Before step, each Grafana panel showing a row, is the live check.
+
+## 2026-10-29 · #677 · Falco's working docs name the deployed chart 9.2.1 / app 0.45.1, and the platform pin test holds them
+
+#626 took the falco chart to 9.2.1 (Falco 0.45.1, the kernel 6.18 fix) and moved `gitops/bootstrap/apps/falco.yaml`,
+the IDP foundation line in VERSIONS.lock and the Datadog version label. The working docs stayed behind: the
+recreation spec's sync-wave row (wave -3) said `falco chart 9.1.0 (app 0.44.1)`, and BUILD-SPEC (platform list and
+§6) and the stack walkthrough's Runtime row said Falco 0.44.1. #674 fixed only the recreation spec's UST line and left
+the rest here.
+
+- **Docs:** the sync-wave row now says `falco chart 9.2.1 (app 0.45.1)`. BUILD-SPEC's platform list says Falco
+  `0.45.1`, re-wrapped so "Falco" and its version share a line, because the test reads a component's phrase one line
+  at a time and the old wrap put the version on the next line, where nothing would have caught it. BUILD-SPEC §6 says
+  `Falco app 0.45.1 / chart 9.2.1 (moved from 9.1.0 in #626)`. STACK-WALKTHROUGH's Runtime row says
+  `Falco 0.45.1 (chart 9.2.1)`.
+- **VERSIONS.lock:** the component-versions line said only `falco 0.45.1`. It now says `chart 9.2.1 / app 0.45.1`, the
+  layout of the argocd and kyverno lines above it, so the test reads both falco lines the same way.
+- **`verify/test_platform_version_pins.py`** gains a Falco section instead of a new file, because it already has the
+  lock reader and the doc-phrase checker this needs. The chart comes from falco.yaml's `targetRevision`. Both
+  VERSIONS.lock falco lines must pin it and name one app version, and the Datadog label and `test_observability.py`'s
+  expected `burritobot-falco` version must equal that app version. In the three working docs, a Falco phrase must name
+  the app and the chart together, and no other version may be named as current. The name match is `falco` not followed
+  by a word character or a hyphen, so falco-talon, falcosidekick and falco_rules are not read as Falco. Against the
+  old docs and lock it fails 10 checks, and against the old docs alone it fails 6. Both were tried, then reverted.
+- **Not changed:** `docs/UPGRADE-INVENTORY.md`, PROJECT_STATE.md, the PRDs and the research notes are dated records.
+  `verify/mirror_copies.py`'s UNPULLED falco 0.44.1 copy is a deliberate record of a tag the chart no longer pulls.
+
+**Not yet run on a cluster:** nothing is owed. This changes docs, a lock record and an offline test, not what a
+cluster deploys.

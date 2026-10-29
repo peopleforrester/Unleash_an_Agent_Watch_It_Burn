@@ -229,7 +229,7 @@ Child apps are `argoproj.io/v1alpha1` `Application` objects in `argocd`, `projec
 | istio-base / istio-cni | -6 | helm (istio-release) | istio 1.30.4 | istio-system |
 | istiod / kyverno | -5 | helm | istio 1.30.4 / kyverno chart 3.9.1 (app v1.19.1) | istio-system / kyverno |
 | ztunnel / kyverno-policies / network-policies / external-secrets / minimal-floor | -4 | helm + git | ztunnel 1.30.4, ESO chart 2.6.0 | varies |
-| istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.1.0 (app 0.44.1), kagent 0.10.1 | varies |
+| istio-mesh-config / falco / kagent-crds / eso-resources | -3 | git + helm + OCI | falco chart 9.2.1 (app 0.45.1), kagent 0.10.1 | varies |
 | falco-talon / falcosidekick | -2 | helm | talon chart 0.4.1 (app 0.3.0), falcosidekick 0.14.0 | falco / security |
 | cert-manager / kagent / prometheus | 1 | helm | cert-manager v1.21.2, kagent 0.10.1, kube-prometheus-stack 86.2.3 | varies |
 | otel-operator / otel-collector | 2 | git + helm | otel-operator 0.117.0, otel-collector chart 0.173.1 (app 0.160.0) | varies |
