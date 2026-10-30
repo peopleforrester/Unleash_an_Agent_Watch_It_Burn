@@ -415,7 +415,9 @@
   // Carry the cluster identity from the link the fleet built, so a presenter driving two clusters can tell
   // at a glance which one this tab is pointed at.
   (function(){
-    var q=new URLSearchParams(location.search), c=q.get('cluster');
+    // Opened directly, the host's first label is the cluster: burritobot-private.burritobot.co is burritobot-private.
+    var q=new URLSearchParams(location.search),
+        c=q.get('cluster')||(location.hostname.match(/^([a-z0-9-]+)\.(burritobot\.co|agenticburn\.com)$/)||[])[1];
     if(c){document.getElementById('cl').textContent=c;document.title='KubeCon brief: '+c;
       document.getElementById('bb').href='/?cluster='+encodeURIComponent(c);}
   })();
