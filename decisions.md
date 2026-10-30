@@ -5007,3 +5007,52 @@ the commits are applied in their order. Nothing differs from the draft but the m
 
 **Not yet run on a cluster:** the cold build of the local-inference profile and `verify/local-inference-live.py`,
 as the question 657 entry above says.
+
+## 2026-10-30 · #489 · The fleet loader writes with Whitney's key, because the sandbox org's key in the secret is read-only
+
+#489 asks for `fleet.sh monitors --apply` in the next event's instructor org, then one cluster through challenges 1
+to 6, until every leaderboard cell is green. The next event is KubeCon NA 2026, and its instructor org is Whitney's
+sandbox org: Datadog no longer issues per-student orgs, so there is no pool (#629, recorded under #454 above). Read
+against that org, the loader could not have run at all:
+
+- `fleet_monitors.py` named the org with `GET /api/v1/org`. The application key in `watch-it-burn/datadog` is
+  read-only in the sandbox org, and that endpoint answers it 403 (`room_view.py` found this first, #665). So
+  `--check` failed before it compared anything, and with it `verify/test_fleet_monitors_live.py`.
+- `--apply` wrote with that same key, so every monitor, downtime and dashboard write would have been refused.
+
+**What changed.** The loader names the org through `/api/v2/current_user`, as `room_view.py` does. That helper
+now lives in `fleet_monitors.py` and `room_view.py` imports it, so there is one copy. `--apply` writes with the
+application key in `WIB_FLEET_APP_KEY`, set for that one command: an unscoped key Whitney issues from her own user,
+since Datadog refuses log monitors created with a scoped key. Without it, `--apply` stops before it reads a secret
+or calls Datadog. `--check` still reads with the secret's read-only key. This is the same split `room_view.py` makes
+with `WIB_ROOM_VIEW_APP_KEY`. The two variables stay separate because they need different permissions: the room
+view needs a public share, and the fleet needs monitors and downtimes. The README, the go-live checklist (d2),
+`fleet.sh`'s usage text and the live test's failure hint all name the variable.
+
+**The leaderboard's queries are unchanged.** Every name they read still matches the code that emits it on this
+staging: `tool_audit.py`'s `tool_invocation`/`pre`/`tool_input` and `ticket_withheld` (`workshop-mcp-server.py`),
+Falco's `json_output` rule in `gitops/bootstrap/apps/falco.yaml` in namespace `security`, guard-proxy's
+`output_scrub`, `input_blocklist_hit` and `input_classifier_block`, the `promo/` villain roster
+(`verify/test_leaderboard.py` holds that list against `images/villains/README.md`), and `kube_cluster_name:burritobot-*`
+from #629. Only real data can prove these names in Datadog: `short_image`, the `@`-attribute facets, and
+`query_table` joining the logs and metrics queries on `kube_cluster_name`.
+
+**Tests.** `verify/test_fleet_monitors.py`'s fake org now answers `/api/v1/org` with 403, as the sandbox does, so
+the old loader fails it. New checks: `--apply` without `WIB_FLEET_APP_KEY` exits 1, names the variable and makes no
+call. Every `--apply` call carries the write key and none carries the secret's key. `--check` reads with the
+secret's key and needs no write key. The org is named without `/api/v1/org`.
+
+**Not yet run on a cluster.** This needs a session with AWS access and Whitney's write key, while
+watch-it-burn-private is up (it ships as `burritobot-private` and is the one with Falco). Run
+`WIB_FLEET_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session <start>Z/<end>Z`, then
+`infra/terraform/fleet/fleet.sh monitors --check`. Then work challenges 1 to 6 on burritobot-private by hand. The
+KubeCon probe only dry-runs the villain image, so it cannot light column 2. After the walk, the
+`challenge leaderboard:` URL the apply prints should show a green cell in every column for `burritobot-private`.
+Finally, `verify/test_fleet_monitors_live.py` must pass. If a column stays blank, fix its query in
+`infra/datadog-fleet/leaderboard.yaml` and the matching check in `verify/test_leaderboard.py` together. #485 owes
+the same apply for the fleet dashboard's columns.
+
+`bash verify/run-tests.sh` passes. `bash verify/run-e2e-tools.sh` passes the offline suite and 29 of its 30 tier
+tests. The one it fails is `test_promo_villains_public.py`: ghcr.io answers an anonymous pull of the ten `promo/`
+villains with 401. That is #678, and it fails the same way without this change. It also bears on this issue: until
+those images can be pulled, no villain pod runs, so the leaderboard's column 2 cannot fill on any cluster.

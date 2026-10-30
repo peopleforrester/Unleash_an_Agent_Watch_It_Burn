@@ -512,7 +512,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       dashboard in the INSTRUCTOR Datadog org, from infra/datadog-fleet/. Dry run by
                       default; --apply validates every monitor with Datadog before writing any;
                       --check compares the live org with the repo. Run --apply once per event, after
-                      the Datadog pool is loaded, with the session window in UTC.
+                      the Datadog pool is loaded, with the session window in UTC, and with
+                      WIB_FLEET_APP_KEY set to a write key (the secret's is read-only, #629).
     ops [terms...] [--watch S] [--json]
                       The shared ops view (#308): per cluster, who claimed it (provisioning), whether its
                       console answers (apex table + /cost) and which challenges it has done (the

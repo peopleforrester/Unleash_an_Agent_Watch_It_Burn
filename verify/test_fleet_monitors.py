@@ -202,7 +202,10 @@ class FakeOrg:
         self.calls.append((method, path.split("?")[0], headers))
         p = path.split("?")[0]
         if p == "/api/v1/org":
-            return 200, {"orgs": [{"name": "event-001"}]}
+            # What the sandbox org's read-only key answers here (#629); the loader must not need it.
+            return 403, {"errors": ["Forbidden"]}
+        if p == "/api/v2/current_user":
+            return 200, {"included": [{"type": "orgs", "attributes": {"name": "Datadog Whitney Sandbox"}}]}
         if p == "/api/v1/monitor/validate":
             return (400, {"errors": ["bad query"]}) if data["query"] in self.reject else (200, {})
         if p == "/api/v1/monitor" and method == "GET":
@@ -243,12 +246,22 @@ class FakeOrg:
         return [(m, p) for m, p, _ in self.calls if m != "GET" and not p.endswith("/validate")]
 
 
-def run(argv, org, now=None):
+WRITE = {fm.APP_KEY_ENV: "WRITEKEY777777"}
+
+
+def run(argv, org, now=None, env=WRITE):
     out, err = io.StringIO(), io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):
         rc = fm.main(["--profile", "p", "--region", "r", *argv], keys=lambda *_: ("APIKEY123456", "APPKEY654321", "datadoghq.com"),
-                     http=org, now=now or dt.datetime(2026, 9, 8, 12, 0, tzinfo=dt.timezone.utc))
+                     http=org, now=now or dt.datetime(2026, 9, 8, 12, 0, tzinfo=dt.timezone.utc), env=env)
     return rc, out.getvalue() + err.getvalue()
+
+
+print("== apply: the write key is Whitney's, never the read-only one in the secret (#629, #489) ==")
+org = FakeOrg()
+rc, text = run(["--apply"], org, env={})
+check("apply without the write key exits 1, naming the variable", rc == 1 and fm.APP_KEY_ENV in text)
+check("and it reaches the org not at all", org.calls == [])
 
 
 print("== apply: one rejected monitor writes nothing ==")
@@ -284,8 +297,12 @@ new_dts = [d for d in org.downtimes if d["attributes"]["status"] == "active" and
 check("two new mutes: until the session starts, and from when it ends", len(new_dts) == 2)
 check("the dashboard is written before any monitor",
       [p for _, p in org.writes()].index("/api/v1/dashboard") < [p for _, p in org.writes()].index("/api/v1/monitor"))
-check("no key value is printed", "APIKEY" not in text and "APPKEY" not in text)
+check("no key value is printed", "APIKEY" not in text and "APPKEY" not in text and "WRITEKEY" not in text)
 check("the keys travel only as headers", all(h.get("DD-API-KEY") == "APIKEY123456" for _, _, h in org.calls))
+check("every apply call carries the write key, none the secret's read-only one",
+      all(h.get("DD-APPLICATION-KEY") == "WRITEKEY777777" for _, _, h in org.calls))
+check("the org is named through /api/v2/current_user, which the read-only key may read",
+      "instructor org: Datadog Whitney Sandbox" in text and all(p != "/api/v1/org" for _, p, _ in org.calls))
 
 print("== apply again: in place, nothing duplicated ==")
 ids_before = set(org.monitors)
@@ -297,8 +314,11 @@ check("exactly two of our mutes are active afterwards",
       len([d for d in org.downtimes if d["attributes"]["status"] == "active" and fm.ours(d)]) == 2)
 
 print("== check: the live org against the repo ==")
-rc, text = run(["--check"], org)
-check("an org holding exactly the repo passes", rc == 0 and "MISSING" not in text and "DRIFT" not in text)
+n_before = len(org.calls)
+rc, text = run(["--check"], org, env={})
+check("an org holding exactly the repo passes, with no write key set", rc == 0 and "MISSING" not in text and "DRIFT" not in text)
+check("check reads with the secret's read-only key",
+      all(h.get("DD-APPLICATION-KEY") == "APPKEY654321" for _, _, h in org.calls[n_before:]))
 check("each monitor's state is reported", "Alert" in text)
 victim = next(i for i, m in org.monitors.items() if "wib-monitor:console-unavailable" in m["tags"])
 org.monitors[victim]["query"] = "max(last_5m):max:something.else{*} < 1"

@@ -18,13 +18,16 @@ nothing looked at it. These files are what looks.
 
 ```bash
 infra/terraform/fleet/fleet.sh monitors                                   # dry run, offline
-infra/terraform/fleet/fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
+WIB_FLEET_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
 infra/terraform/fleet/fleet.sh monitors --check                           # read-only
 ```
 
-It follows the Datadog pool loader's pattern (#256): `--apply` reads the instructor org keys from Secrets Manager
-`watch-it-burn/datadog`, asks Datadog to validate every monitor, and writes nothing if any one is
-rejected. Monitors are matched by their `wib-monitor:<key>` tag and updated in place, a monitor removed
+It follows the Datadog pool loader's pattern (#256): `--apply` reads the instructor org's API key from Secrets
+Manager `watch-it-burn/datadog`, asks Datadog to validate every monitor, and writes nothing if any one is
+rejected. The application key in that secret is read-only in Whitney's sandbox org (#629), so `--apply` writes
+with the one in `WIB_FLEET_APP_KEY`, set for that one command: an unscoped key Whitney issues from her own user
+(Datadog refuses log monitors created with a scoped key). Without it `--apply` stops before reading anything.
+`--check` needs only the secret (#489). Monitors are matched by their `wib-monitor:<key>` tag and updated in place, a monitor removed
 from the file is deleted, and the dashboard is matched by title, so its URL is stable within an org. Every
 event brings a new instructor org, so run `--apply` once per event, after the pool is loaded.
 

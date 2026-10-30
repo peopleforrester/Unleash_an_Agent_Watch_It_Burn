@@ -69,9 +69,11 @@ AWS_PROFILE=accen-dev verify/datadog-pool-check.sh
 
 ```bash
 # d2) the fleet monitors and the fleet dashboard in the instructor org (#267). Once per event, after the
-#     pool is loaded (a new event is a new instructor org), with the session window in UTC.
+#     pool is loaded (a new event is a new instructor org), with the session window in UTC. The write key is
+#     Whitney's: an unscoped application key from her user, because the one in watch-it-burn/datadog is
+#     read-only in the sandbox org (#629, #489).
 infra/terraform/fleet/fleet.sh monitors                      # dry run: what would be written
-infra/terraform/fleet/fleet.sh monitors --apply --session <start>Z/<end>Z [--notify @handle]
+WIB_FLEET_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session <start>Z/<end>Z [--notify @handle]
 infra/terraform/fleet/fleet.sh monitors --check              # the org holds exactly the repo
 ```
 

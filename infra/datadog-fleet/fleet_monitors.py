@@ -15,9 +15,11 @@ Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_dat
     --check            read-only against the live org: every defined monitor and both dashboards exist, the
                        monitors with the queries in this repo. Prints each monitor's state. Exit 1 on any drift.
 
-The keys are the instructor org's, from Secrets Manager watch-it-burn/datadog (the secret the pool loader
-writes the admin-instructor row to and fleet.sh reads for dual shipping). The APP key must be unscoped:
-Datadog refuses log monitors created with a scoped one. Key values are never printed.
+The keys are the instructor org's. The API key comes from Secrets Manager watch-it-burn/datadog (the secret
+fleet.sh reads for shipping). That secret's application key is read-only in Whitney's sandbox org (#629), so
+--check reads with it and --apply writes with the key in WIB_FLEET_APP_KEY instead: one Whitney issues from
+her own user, unscoped, because Datadog refuses log monitors created with a scoped one (#489). Key values are
+never printed.
 
 The session window. The no-traces monitor only means something while students are at their keyboards; at
 any other time an idle cluster is a correct cluster. Monitors marked `session: true` are muted by downtimes
@@ -28,7 +30,7 @@ its own, so the window can be moved by re-running.
 
 Usage (fleet.sh passes the profile and region; it is the normal way in):
     fleet.sh monitors                                                   # dry run
-    fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
+    WIB_FLEET_APP_KEY=<key> fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
     fleet.sh monitors --check
     python3 infra/datadog-fleet/fleet_monitors.py --profile accen-dev --region us-west-2 [--apply|--check]
 """
@@ -37,6 +39,7 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -57,6 +60,7 @@ DASHBOARDS = (("fleet dashboard", DASHBOARD_FILE), ("challenge leaderboard", LEA
 MONITORING_LABEL = "fleet dashboard"
 APEX_SERVICE = "watch-it-burn-apex"
 SECRET_ID = "watch-it-burn/datadog"
+APP_KEY_ENV = "WIB_FLEET_APP_KEY"
 MANAGED_TAG = "managed-by:wib-fleet-monitors"
 KEY_TAG_PREFIX = "wib-monitor:"
 SESSION_TAG = "window:session"
@@ -307,6 +311,12 @@ def read_keys(profile: str, region: str, run=subprocess.run) -> tuple[str, str, 
     return d["api-key"], d["app-key"], d.get("site") or "datadoghq.com"
 
 
+def org_name(dd: Datadog) -> str:
+    # /api/v2/current_user, not /api/v1/org: the sandbox org's read-only key answers that one 403 (#629).
+    me = dd.call("GET", "/api/v2/current_user")
+    return next((i["attributes"]["name"] for i in me.get("included", []) if i.get("type") == "orgs"), "?")
+
+
 def managed_monitors(dd: Datadog) -> list[dict]:
     q = urllib.parse.urlencode({"monitor_tags": MANAGED_TAG})
     return dd.call("GET", f"/api/v1/monitor?{q}")
@@ -422,7 +432,7 @@ def check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], say=print) ->
     return 1 if drift else 0
 
 
-def main(argv=None, keys=read_keys, http=None, now=None) -> int:
+def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--profile", required=True, help="AWS profile that can read the instructor org secret")
     p.add_argument("--region", required=True)
@@ -433,6 +443,7 @@ def main(argv=None, keys=read_keys, http=None, now=None) -> int:
     p.add_argument("--notify", action="append", default=[],
                    help="a Datadog handle to page, e.g. @someone@example.com (repeatable; default: none)")
     a = p.parse_args(argv)
+    env = os.environ if env is None else env
 
     defs, dashes = load_monitors(), load_dashboards()
     problems = validate_monitors(defs)
@@ -465,11 +476,16 @@ def main(argv=None, keys=read_keys, http=None, now=None) -> int:
         print("  dry run: nothing read or written. Re-run with --apply.")
         return 0
 
+    if a.apply and not env.get(APP_KEY_ENV):
+        print(f"FAILED: --apply needs {APP_KEY_ENV}, an unscoped application key from Whitney's user in the "
+              f"instructor org; the application key in {SECRET_ID} is read-only (#629)", file=sys.stderr)
+        return 1
     try:
         api, app, site = keys(a.profile, a.region)
-        dd = Datadog(site, api, app, http=http)
-        org = dd.call("GET", "/api/v1/org").get("orgs", [{}])[0].get("name", "?")
-        print(f"  instructor org: {org} ({site}), keys from {SECRET_ID}")
+        dd = Datadog(site, api, env[APP_KEY_ENV] if a.apply else app, http=http)
+        org = org_name(dd)
+        print(f"  instructor org: {org} ({site}), api key from {SECRET_ID}, application key from "
+              + (APP_KEY_ENV if a.apply else SECRET_ID))
         if a.check:
             return check(dd, defs, dashes)
         return apply(dd, defs, dashes, a.notify, session, now or dt.datetime.now(dt.timezone.utc))
