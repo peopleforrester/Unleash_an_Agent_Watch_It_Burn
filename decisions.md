@@ -5169,3 +5169,38 @@ no credentials), so the run is still owed. No code changed.
 
 and records here whether the three #607 checks pass (terminal-auth refused by volume and by secretKeyRef, each
 with its message; ceo-personal-record admitted), and whether the #490 and #552 checks the TypeError hid pass.
+
+## 2026-10-30 · #629 · The sandbox org's done-when list is one live check: verify/test_datadog_sandbox_live.py
+
+Everything #629 asks of the repo is on staging: the env tag (57ad24d), the burritobot-public and burritobot-private
+cluster names (77cd0d9), the single-org verifier (7210a3b), the AI-layer pods' log labels (75dd08e), the platform pods'
+(#661, #662), and question 868's root-service exception (above). What was missing was a way to see the done-when list
+hold in Whitney's org: the issue stayed open on "the live check", and no test said what that check was. There was no
+earlier draft to check against staging; the three agent/629-* branches are all merged.
+
+- **`verify/test_datadog_sandbox_live.py`** (`# SUITE: e2e`) reads the org with watch-it-burn/datadog's read-only keys,
+  through `fleet_monitors.read_keys` and `fleet_monitors.Datadog`, over the last `WIB_DD_LOOKBACK_MIN` minutes
+  (default 60). It checks the Agents (`datadog.agent.running` by kube_cluster_name and env: both cluster names report,
+  every series under the env), every log (the Logs aggregate API over `kube_cluster_name:burritobot-*`, grouped by
+  cluster, service and env), every span (`traces.span.metrics.calls` grouped the same way: the collector counts every
+  span before sampling, so this sees spans an indexed-span search would miss) and ml_app (`ml_obs.trace` under the
+  env reports as burritobot and nothing else; ml_obs.* carries no cluster tag, so this one is per env). A service
+  passes when it is the root `burritobot` or `burritobot-<name>`, per question 868. Request and response shapes are
+  from Datadog's Logs and Spans aggregate references and the LLM Observability metrics page, read 2026-10-30.
+- **`verify/test_datadog_sandbox_live_logic.py`** runs it offline against a fake org: a compliant org passes, and a
+  workshop_agent span service, a log with no service or the old env, an Agent with no env, a silent cluster, one
+  shared cluster name and a renamed ml_app each fail. Making the service rule always true fails four of its checks.
+- **Not checked by it:** "nothing outside BurritoBot changes in the org" is a rule for whoever writes to the org, and
+  the read-only key cannot read the Audit Trail. `fleet.sh monitors --apply` already touches only monitors tagged
+  `wib-monitor:*` and the dashboards it names (#485).
+- **It is expected to fail on the spans check until #634 lands.** kagent reports the agent's spans as
+  `workshop_agent`; #634's fix (the collector's `transform/kagent_service_name`, on origin/agent/634-10236) has not
+  merged, and that draft now drifts from staging in three files.
+- Also corrected the stale "the SDLC env (production)" comment on the workshop-agent in `gitops/ai-layer/resources.yaml`.
+
+**Not yet run on a cluster:** `verify/test_datadog_sandbox_live.py`, all of it. A session with the accen-dev profile,
+with both KubeCon clusters up on a staging that includes #634, drives one /chat on each and then runs:
+
+    WIB_DEFAULT_ACCOUNT=accen-dev WIB_REGION=us-west-2 python3 verify/test_datadog_sandbox_live.py
+
+and records here which checks pass. When all pass, #629 closes.

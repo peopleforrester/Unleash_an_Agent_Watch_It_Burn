@@ -358,7 +358,7 @@ spec:
       # guard-proxy / agentgateway). UST vocabulary locked in PRD #13: service.version is the component's
       # real software version (NOT a model-tier label); the model dimension for the cost race comes from
       # gen_ai.request.model (OTel GenAI semconv, captured in M2), not from service.version.
-      # deployment.environment.name is the SDLC env (production), not the project name. verify-at-build:
+      # deployment.environment.name is the sandbox org's env tag, burritobot-kubecon-na-26 (#629). verify-at-build:
       # confirm the v1alpha2 Agent `deployment.env` field is honored on the kagent chart
       # gitops/bootstrap/apps/kagent.yaml pins; if not, set OTEL_RESOURCE_ATTRIBUTES via the kagent Helm pod template
       # instead. service.version below is that chart's version; verify/test_observability.py holds it there.
