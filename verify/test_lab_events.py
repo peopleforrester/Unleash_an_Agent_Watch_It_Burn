@@ -49,6 +49,8 @@ SENT_KEYS = set(re.findall(r"'((?:witb\.lab|session)\.[a-z_]+)'", CODE))
 CFG = collector_render.collector_config("instructor", True)
 PIPES = CFG["service"]["pipelines"]
 ATTENDEE = collector_render.collector_config("attendee", True)["service"]["pipelines"]
+# An attendee cluster whose own org is the instructor org: no datadog-admin-secret, so no datadog-dual.yaml (#587).
+ATTENDEE_ONE_ORG = collector_render.collector_config("attendee", True, admin_secret=False)["service"]["pipelines"]
 
 print("== the page is shipped and started ==")
 check("lab-events.js is in the console-src ConfigMap",
@@ -139,7 +141,7 @@ check("on an instructor cluster both lab pipelines export to its own org (the in
       PIPES["traces/lab"]["exporters"] == ["datadog", "span_metrics/lab", "debug"]
       and PIPES["metrics/lab"]["exporters"] == ["datadog", "debug"])
 
-print("== attendee clusters ship the markers to the instructor org only ==")
+print("== attendee clusters with an org of their own ship the markers to the instructor org only ==")
 check("traces/lab -> datadog/admin, not the student's org",
       ATTENDEE.get("traces/lab", {}).get("exporters") == ["datadog/admin", "span_metrics/lab", "debug"])
 check("metrics/lab -> datadog/admin, not the student's org",
@@ -147,6 +149,12 @@ check("metrics/lab -> datadog/admin, not the student's org",
 check("the attendee lab pipelines process exactly as the instructor ones do",
       all(ATTENDEE[k]["receivers"] == PIPES[k]["receivers"] and ATTENDEE[k]["processors"] == PIPES[k]["processors"]
           for k in ("traces/lab", "metrics/lab")))
+
+print("== attendee clusters on the instructor org ship the markers to it, once ==")
+check("one org: traces/lab -> datadog, the one org, as on an instructor cluster",
+      ATTENDEE_ONE_ORG.get("traces/lab") == PIPES["traces/lab"])
+check("one org: metrics/lab -> datadog, the one org, as on an instructor cluster",
+      ATTENDEE_ONE_ORG.get("metrics/lab") == PIPES["metrics/lab"])
 
 print("== without Datadog the markers go nowhere ==")
 # relay.yaml carries the lab pipelines exporting to debug and the lab connector only, so a cluster with no
@@ -176,9 +184,14 @@ check("the metric name matches the connector namespace",
 tv = {t["name"]: t["prefix"] for t in dash["template_variables"]}
 check("cluster and role template variables", tv == {"cluster": "kube_cluster_name", "role": "witb.lab.role"})
 # By cluster NAME, not by role: before #588 an admin cluster's lab opened without ?role= reported
-# role=student, and those spans are still in the window.
-check("it defaults to the attendee clusters",
-      next(t["default"] for t in dash["template_variables"] if t["name"] == "cluster") == "watch-it-burn-attendee-*")
+# role=student, and those spans are still in the window. The name is the Datadog one, burritobot-attendee-NNN
+# (#629): the Agents and the collector report it, and the EKS name watch-it-burn-attendee-NNN is in no tag (#587).
+check("it defaults to the attendee clusters, by their Datadog name",
+      next(t["default"] for t in dash["template_variables"] if t["name"] == "cluster") == "burritobot-attendee-*")
+check("every collector profile tags k8s.cluster.name from cluster-identity's datadog-cluster-name", all(
+    ((next((e for e in collector_render.helm_values(p).get("extraEnvs", []) if e["name"] == "WIB_CLUSTER_NAME"), {})
+      .get("valueFrom") or {}).get("configMapKeyRef") or {}).get("key") == "datadog-cluster-name"
+    for p in collector_render.PROFILE_APP))
 queries = re.findall(r'"query": "([^"]+)"', blob)
 check("every lab metric query honours $cluster and $role",
       all("$cluster" in q and "$role" in q for q in queries if "witb.lab.calls" in q))

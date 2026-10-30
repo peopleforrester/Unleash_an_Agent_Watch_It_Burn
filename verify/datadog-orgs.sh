@@ -114,7 +114,18 @@ check_cluster() {
         # is_attendee_name comes from fleet.sh so a rename cannot orphan this check again. The pool is the
         # only class that dual-ships: a presenter's student cluster is a claimed pool cluster (#295), and
         # the community and <owner>-admin clusters ship to the shared presenter org alone.
+        # One org (#587): when the cluster's own key IS the instructor org's (a pool row copied from
+        # watch-it-burn/datadog, question 926), the identity script writes no admin secret on purpose, since a
+        # second exporter with the same key counts everything twice, and the collector ships the lab markers there.
+        local iapi=""
         if is_attendee_name "$want"; then
+            iapi="$(AWS_PROFILE="$profile" aws secretsmanager get-secret-value --region "$REGION" \
+                --secret-id watch-it-burn/datadog --query SecretString --output text 2>/dev/null \
+                | python3 -c 'import sys,json;print(json.load(sys.stdin).get("api-key",""))' 2>/dev/null || true)"
+        fi
+        if is_attendee_name "$want" && [[ -n "$iapi" && "$iapi" == "$api" ]]; then
+            echo "  OK    $ctx: attendee cluster on the instructor org itself, one org by design (no dual shipping)"
+        elif is_attendee_name "$want"; then
             echo "  FAIL  $ctx: attendee cluster without datadog-admin-secret (no dual shipping)"; rc=1
         else
             echo "  OK    $ctx: instructor cluster, single org by design"

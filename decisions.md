@@ -5388,3 +5388,65 @@ not the HC-666 beat. Showing that beat needs a query on the tool span, which is 
 send a blocked `/chat` from the storefront and open
 `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. The Session picker should list the
 storefront's `sess-…` id, and C6 should show the turn with All and with that id.
+## 2026-10-30 · #587 · An attendee cluster on the instructor's own org ships the lab markers there, once
+
+#587 is a live run: validate the lab markers, `/lab-events`, the collector's lab pipeline and the fleet-analytics
+dashboard on an attendee cluster. This run had no cluster and no AWS, so it did not do that (CLAUDE.md, Dispatched
+runs, rule 1). `verify/test_lab_pipeline_live.py` (2026-10-25 entry above) is the check that does. Reading it
+against the cluster the next live run will build showed that it could not pass, and neither could the platform.
+The next attendee cluster is #461's: question 926 chose a one-row pool copied from `watch-it-burn/datadog`, so the
+cluster's own key is the instructor org's key (Whitney's one sandbox org, #629). Four things assumed a second org:
+
+- **The attendee collector would not start.** `infra/datadog-cluster-identity.sh` writes no `datadog-admin-secret`
+  when the admin key equals the cluster's key (since #242, so nothing counts twice). `values-dual.yaml` read
+  `DD_ADMIN_API_KEY` from that secret with a required reference, so the pod could not start, and the markers,
+  traces and metrics had nowhere to go. Now the attendee ConfigMap has two files. `datadog.yaml` is one org: the
+  instructor overlay without Tempo, with the lab pipelines to `datadog`. `datadog-dual.yaml` is two orgs, unchanged.
+  The datadog-gate (values.yaml) reads `DD_ADMIN_API_KEY` from the admin secret, optionally, and copies the dual file
+  only when the key is set and the file exists. The instructor and burn ConfigMaps have no dual file, so nothing
+  changes for them. `DD_ADMIN_API_KEY` on the attendee collector is optional now; `DD_API_KEY` stays required.
+- **Its markers carried the EKS name.** Helm replaces `extraEnvs`, and `values-dual.yaml`'s `WIB_CLUSTER_NAME` still
+  read `cluster-name` after #629 moved every consumer to `datadog-cluster-name`. Attendee spans and `witb.lab.calls`
+  said `watch-it-burn-attendee-NNN` while the Agents said `burritobot-attendee-NNN`, against #629's rule that
+  BurritoBot's cluster names start with burritobot. It reads `datadog-cluster-name` now. The fleet-analytics
+  dashboard's `cluster` default moves from `watch-it-burn-attendee-*` to `burritobot-attendee-*`; its
+  `datadog.agent.running{$cluster}` widget matched nothing since #629. Pass 6's regex takes either name.
+- **`fleet.sh converge` would repair the cluster on every pass.** `repair_datadog` wanted an admin secret whenever
+  an admin key resolved, and the identity script removes it on one org, so every converge re-ran the identity script
+  and restarted the collector and Agents. It wants one only when the admin key differs from the cluster's.
+- **`verify/datadog-orgs.sh` failed the cluster.** An attendee without `datadog-admin-secret` was a FAIL. It now reads
+  `watch-it-burn/datadog`'s api key and passes "one org by design" when that is the cluster's own key; any other
+  attendee without the secret still fails, including when the instructor key cannot be read.
+
+**The live check reads which way the cluster ships.** `test_lab_pipeline_live.py` used to fail unless the
+student's org differed from the instructor's. Now, when the cluster's `datadog-secret` key is
+`WITB_DD_ADMIN_API_KEY`, it requires no `datadog-admin-secret`. Otherwise it requires that secret to carry the
+instructor key and keeps the two student-org absence checks. In both cases it requires the calls to add up to the
+spans sent, which a second exporter on the same org would double. It scopes every Datadog query, and pass 6's row,
+by `datadog-cluster-name`.
+
+**Tests.** `test_collector_no_datadog.py` runs the gate under sh with the attendee ConfigMap in four states (no
+secret, datadog-secret only, admin secret only, both), and checks the one-org file against the instructor
+overlay's lists without Tempo. It also checks that no datadog/admin exporter or DD_ADMIN_API_KEY is in the one-org
+config, and that a missing admin secret blocks nothing. `test_lab_events.py` checks the one-org lab exporters and
+every profile's `WIB_CLUSTER_NAME` key. `test_datadog_sandbox_names.py` checks that key per profile, as each
+Application layers its value files; on the old overlay it fails for attendee.
+`test_fleet_converge_repairs.sh` adds a one-org pool: an attendee on the instructor key with no admin secret is
+left alone, and one with an admin secret is repaired. Both checks fail on the old `want_admin` line.
+`test_datadog_admin_key.sh` runs `datadog-orgs.sh` against shim kubectl, curl and aws. The one-org case passes,
+and fails on the old verifier. A second org without the secret, and an unreadable instructor key, both fail.
+`test_lab_pipeline_collector.py` (E2E tools tier) validates the one-org attendee config with the real
+otelcol-contrib 0.160.0 and no `DD_ADMIN_API_KEY` in its environment. The live check was smoke-run outside the
+repo against a fake kubectl, a fake Datadog and a fake pass 6. Both modes passed. Doubled calls on one org, and a
+stale admin secret on one org, each failed one check.
+
+**Not yet run on a cluster.** `verify/test_lab_pipeline_live.py`, all of it, during #461's run (question 926's
+one-row pool, `WIB_NO_INGEST=1 ./fleet.sh up 1`). Before `run-e2e.sh`, apply the dashboard to the sandbox org.
+That takes an application key that can write, which Whitney issues from her user, as for #485's monitors:
+`cd infra/terraform/dashboards && DD_API_KEY=<watch-it-burn/datadog api-key> DD_APP_KEY=<write key> terraform init &&
+DD_API_KEY=... DD_APP_KEY=... terraform apply`. Then run `run-e2e.sh`, or the check alone:
+`KUBECONFIG=/tmp/watch-it-burn-attendee-001.kubeconfig CONTEXT=arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-attendee-001
+WITB_DD_ADMIN_API_KEY=<watch-it-burn/datadog api-key> WITB_DD_ADMIN_APP_KEY=<watch-it-burn/datadog app-key> python3
+verify/test_lab_pipeline_live.py`. Also owed on that cluster: the datadog-gate's log says datadog-secret found, and
+not dual (`kubectl -n monitoring logs ds/otel-collector-opentelemetry-collector-agent -c datadog-gate`).
+`verify/datadog-orgs.sh <context>` says one org by design, and a second `fleet.sh converge` repairs nothing.

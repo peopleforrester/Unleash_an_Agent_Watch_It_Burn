@@ -41,7 +41,7 @@ def s(cluster: str, alias: str, span: str, minutes: dict[int, float], challenge:
     return {"tag_set": tags, "pointlist": [[(T0 + m * 60) * 1000, v] for m, v in sorted(minutes.items())]}
 
 
-A, B = "watch-it-burn-attendee-001", "watch-it-burn-attendee-002"
+A, B = "burritobot-attendee-001", "burritobot-attendee-002"
 lab = [
     s(A, "bane-agatha", "lab.session.start", {0: 1}),
     s(A, "bane-agatha", "lab.heartbeat", {m: 1 for m in range(0, 30)}),
@@ -58,10 +58,10 @@ lab = [
     {"tag_set": [f"kube_cluster_name:{B}", "span.name:lab.heartbeat"], "pointlist": [[T0 * 1000, None]]},
 ]
 running = lambda n: {"tag_set": [f"kube_cluster_name:{n}"], "pointlist": [[T0 * 1000, 1]]}
-agents = [running(A), running(B), running("watch-it-burn-attendee-003"), running("watch-it-burn-private"),
-          running("watch-it-burn-community"), running("watch-it-burn-michael-student")]
+agents = [running(A), running(B), running("burritobot-attendee-003"), running("burritobot-private"),
+          running("burritobot-public"), running("watch-it-burn-michael-student")]
 # An admin cluster's lab opened without ?role= reports role=student; it is still not an attendee.
-lab.append(s("watch-it-burn-private", "michael-admin", "lab.session.start", {0: 1}))
+lab.append(s("burritobot-private", "michael-admin", "lab.session.start", {0: 1}))
 
 summary = lp.summarize(lab, agents)
 by = {r["cluster"]: r for r in summary["clusters"]}
@@ -85,8 +85,8 @@ check("an empty point does not count as seen", b["first_seen"] == T0 + 180)
 
 print("== the room ==")
 check("unused = an attendee cluster running with no lab session; admin, Community and presenter clusters are not",
-      summary["unused"] == ["watch-it-burn-attendee-003"])
-check("running counts attendee clusters only", summary["running"] == [A, B, "watch-it-burn-attendee-003"])
+      summary["unused"] == ["burritobot-attendee-003"])
+check("running counts attendee clusters only", summary["running"] == [A, B, "burritobot-attendee-003"])
 f = {x["challenge"]: x for x in summary["funnel"]}
 check("C1 funnel: 2 opened, 1 hint, 1 prompt, 1 fixed, median 7 minutes",
       (f["1"]["opened"], f["1"]["hint"], f["1"]["solution"], f["1"]["fixed"], f["1"]["median_minutes_to_fix"]) == (2, 1, 1, 1, 7))

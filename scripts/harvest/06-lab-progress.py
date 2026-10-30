@@ -36,7 +36,8 @@ OUT = REPO / ".harvest" / os.environ.get("WIB_EVENT", "devopsdays-portland")
 LAB_QUERY = ("sum:witb.lab.calls{*} by "
              "{kube_cluster_name,witb.lab.alias,span.name,witb.lab.challenge,witb.lab.kind}.as_count().rollup(sum, 60)")
 AGENT_QUERY = "max:datadog.agent.running{*} by {kube_cluster_name}.rollup(max, 300)"
-# An attendee's cluster, as fleet.sh names them (watch-it-burn-attendee-042). The cluster NAME decides who is an
+# An attendee's cluster, as Datadog names them (burritobot-attendee-042 for fleet.sh's watch-it-burn-attendee-042,
+# #629; the regex takes either). The cluster NAME decides who is an
 # attendee, not the witb.lab.role tag: the lab page infers its role from the hostname, and an admin cluster's lab
 # opened without ?role= reports itself as a student. The Community cluster and the <owner>-admin clusters are
 # left out. A presenter's student cluster is a claimed attendee slot since #295, so it counts as one.

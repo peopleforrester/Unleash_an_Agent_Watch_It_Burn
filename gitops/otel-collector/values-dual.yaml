@@ -1,5 +1,5 @@
 # ABOUTME: Overlay for ATTENDEE clusters (a presenter claims one too, #295): a second Datadog exporter that ships every span and
-# ABOUTME: metric to the instructor org as well as the student's own. Layered over values.yaml (#242).
+# ABOUTME: metric to the instructor org as well as the student's own, when those are two orgs. Layered over values.yaml (#242).
 #
 # The Datadog exporter is per-destination, not per-key, so a second org is a second exporter on the same
 # pipelines. The student's org stays first: a throttled or lapsed instructor org must never delay the org
@@ -8,28 +8,34 @@
 #
 # Since #500 the Datadog half of the collector config is not in values.yaml's `config` at all: it is the
 # otel-collector-datadog ConfigMap (extraManifests), which the datadog-gate init container loads as a second
-# collector config only when datadog-secret exists. So this file restates that ConfigMap, the single-org
-# overlay plus datadog/admin and minus Tempo (below), rather than adding to `config`.
-# verify/test_collector_no_datadog.py holds the two overlays to each other: everything in the single-org one
-# except otlp_grpc/tempo, in the same order, with datadog/admin after the student's own org.
+# collector config only when datadog-secret exists. So this file restates that ConfigMap rather than adding to
+# `config`, with two files in it (#587):
 #
-# Instructor clusters do NOT get this file (gitops/bootstrap/values-full.yaml does not list the attendee
-# Application): they already ship to the instructor org, and a second exporter with the same key would
-# double-count every metric there.
+#   datadog.yaml       one org: the instructor overlay minus Tempo (below). The lab markers go to that one org.
+#   datadog-dual.yaml  two orgs: the same plus datadog/admin after the student's own org, and the lab markers to
+#                      the instructor org only.
 #
-# The key comes from datadog-admin-secret, written by infra/datadog-cluster-identity.sh at bootstrap. The
-# exporter fails validation on an empty key and CrashLoops the collector, so the secret is NOT optional
-# here: a cluster on this profile without the secret is a bootstrap bug and should fail loudly. The same goes
-# for the student's own datadog-secret, which is why both references below stay non-optional on this profile
-# while values.yaml makes DD_API_KEY optional for the instructor and admin clusters.
+# The gate loads datadog-dual.yaml only when datadog-admin-secret exists, and infra/datadog-cluster-identity.sh
+# writes that secret only when the instructor key is not the cluster's own key. A pool of per-student orgs
+# (Portland, #242) therefore dual-ships. A cluster whose pool row is the instructor org's own key (Whitney's one
+# sandbox org, #629, and the one-row pool question 926 chose for the live e2e run) ships to that org once: a
+# second exporter with the same key would count every metric twice, which is also why instructor clusters do NOT
+# get this file (gitops/bootstrap/values-full.yaml does not list the attendee Application). Before #587 the
+# admin key was a required reference here, so such a cluster's collector never started.
+# verify/test_collector_no_datadog.py holds the files to each other: the single-org overlay's lists without
+# otlp_grpc/tempo, in the same order, and in datadog-dual.yaml datadog/admin after the student's own org.
+#
+# datadog-secret stays a required reference on this profile, while values.yaml makes DD_API_KEY optional for
+# the instructor and admin clusters: an attendee cluster without its own key is a bootstrap bug (fleet.sh
+# refuses one) and should fail loudly. datadog-admin-secret is optional: its absence means one org.
 #
 # No Tempo here (#475). The attendee profile does not install tempo (gitops/bootstrap/values-attendee.yaml), so this file
 # takes otlp_grpc/tempo out of every trace exporter list: relay.yaml's (the `config` list below, which Helm
 # replaces rather than merges) and the Datadog overlay's. The exporter's own definition stays in values.yaml's
 # `config.exporters`, unused: the collector builds only what a pipeline names. A Helm null is not a safe way to
 # delete it, since Helm drops a null only for keys the chart's own defaults carry, and an exporter left as null
-# fails the collector's config validation (no endpoint). Traces on an attendee cluster go to both Datadog orgs,
-# which is where students read them.
+# fails the collector's config validation (no endpoint). Traces on an attendee cluster go to Datadog, which is
+# where students read them.
 config:
   service:
     pipelines:
@@ -44,6 +50,44 @@ extraManifests:
       name: otel-collector-datadog
     data:
       datadog.yaml: |
+        exporters:
+          datadog:
+            api:
+              key: ${env:DD_API_KEY}
+              site: ${env:DD_SITE}
+        connectors:
+          datadog/connector:
+            traces:
+              compute_stats_by_span_kind: true
+              peer_tags_aggregation: true
+        service:
+          pipelines:
+            metrics:
+              receivers:
+                - otlp
+                - span_metrics
+                - datadog/connector
+              exporters:
+                - datadog
+                - prometheusremotewrite
+                - debug
+            traces:
+              exporters:
+                - datadog
+                - span_metrics
+                - datadog/connector
+                - debug
+            # Lab progress markers (#150). With one org the cluster's own org is the instructor's fleet view.
+            traces/lab:
+              exporters:
+                - datadog
+                - span_metrics/lab
+                - debug
+            metrics/lab:
+              exporters:
+                - datadog
+                - debug
+      datadog-dual.yaml: |
         exporters:
           datadog:
             api:
@@ -108,10 +152,12 @@ extraEnvs:
     valueFrom:
       configMapKeyRef:
         name: cluster-identity
-        key: cluster-name
-        optional: true
+        key: datadog-cluster-name  # burritobot-attendee-NNN, the name the Agents report (#629); values.yaml's entry
+        optional: true             # is replaced, not merged, so this list has to say it too (#587)
+  # Optional: datadog-dual.yaml is the only file that reads it, and the gate loads that file only when it is set.
   - name: DD_ADMIN_API_KEY
     valueFrom:
       secretKeyRef:
         name: datadog-admin-secret
         key: api-key
+        optional: true

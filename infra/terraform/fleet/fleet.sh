@@ -812,7 +812,9 @@ repair_datadog() {
     want_host="$(public_host_for "${name}")"
     live_key="$(KUBECONFIG="${kcfg}" kubectl -n datadog get secret datadog-secret -o jsonpath='{.data.api-key}' 2>/dev/null | base64 -d 2>/dev/null || true)"
     KUBECONFIG="${kcfg}" kubectl -n datadog get secret datadog-admin-secret >/dev/null 2>&1 && admin_present=1
-    [[ -n "${admin_api}" ]] && want_admin=1
+    # The identity script writes datadog-admin-secret only for a second org: on one org (the pool row is the instructor
+    # key, question 926) there is none to want, and wanting it repaired and restarted the consumers every pass (#587).
+    [[ -n "${admin_api}" && "${admin_api}" != "${api}" ]] && want_admin=1
     [[ "${ident}" == "${name}" ]] || reasons+=("identity='${ident:-none}'")
     [[ "${host}" == "${want_host}" ]] || reasons+=("public-host='${host:-none}'")
     [[ "${live_key}" == "${api}" ]] || reasons+=("own-key-drift")

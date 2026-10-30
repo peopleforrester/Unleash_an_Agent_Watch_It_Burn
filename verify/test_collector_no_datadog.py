@@ -16,8 +16,10 @@ only when datadog-secret exists. This checks the pieces offline:
   - the gate itself, run with sh in both branches, writes what the two configs below assume;
   - with the secret: the merged config is the Datadog config the collector ran before #500, and the overlay's
     lists cannot drift from relay.yaml's, because the collector replaces lists rather than merging them;
-  - attendee clusters still dual-ship and still fail loudly without their secrets, and name no Tempo exporter,
-    because the attendee profile installs no Tempo (#475).
+  - attendee clusters still dual-ship when the instructor org is a second org, and still fail loudly without
+    their own datadog-secret, and name no Tempo exporter, because the attendee profile installs no Tempo (#475);
+  - an attendee cluster whose own org IS the instructor org (no datadog-admin-secret, #587) starts and ships to
+    that one org once, lab markers included. Before #587 the admin key was required there and the pod never started.
 
 The merged-config validity check is a reference check, not the collector's own validator. Both configs were also
 run through `otelcol-contrib validate` 0.160.0 (this chart's appVersion) against the real chart render when this
@@ -37,7 +39,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import deploys  # noqa: E402
-from collector_render import REPO, collector_config, datadog_overlay, deep_merge, helm_values  # noqa: E402
+from collector_render import REPO, collector_config, datadog_overlay, deep_merge, helm_values, overlay_configmap  # noqa: E402
 
 failures: list[str] = []
 
@@ -162,7 +164,7 @@ if len(args) == 1 and len(cfg_args) == 1 and {"datadog-gate", "datadog-overlay"}
             out.mkdir()
             (ov / "datadog.yaml").write_text(overlay_text, encoding="utf-8")
             script = args[0].replace(mounts["datadog-overlay"], str(ov)).replace(mounts["datadog-gate"], str(out))
-            env = {k: v for k, v in os.environ.items() if k != "DD_API_KEY"}
+            env = {k: v for k, v in os.environ.items() if k not in ("DD_API_KEY", "DD_ADMIN_API_KEY")}
             if with_key:
                 env["DD_API_KEY"] = "not-a-real-key"
             r = subprocess.run(["sh", "-c", script], env=env, capture_output=True, text=True)
@@ -174,8 +176,12 @@ if len(args) == 1 and len(cfg_args) == 1 and {"datadog-gate", "datadog-overlay"}
                   ("ON" in r.stdout) if with_key else ("OFF" in r.stdout and "Tempo" in r.stdout))
     check("without the secret it writes an empty config", written.get(False) == {})
     check("with the secret it writes the Datadog overlay", written.get(True) == datadog_overlay(vals))
+gate_refs = {e["name"]: (e.get("valueFrom") or {}).get("secretKeyRef") or {} for e in gate.get("env") or []}
 check("the gate reads DD_API_KEY from datadog-secret, optionally",
-      any(((e.get("valueFrom") or {}).get("secretKeyRef") or {}).get("name") == "datadog-secret" for e in gate.get("env") or []))
+      gate_refs.get("DD_API_KEY", {}).get("name") == "datadog-secret" and gate_refs["DD_API_KEY"].get("optional") is True)
+check("the gate reads DD_ADMIN_API_KEY from datadog-admin-secret, optionally",
+      gate_refs.get("DD_ADMIN_API_KEY", {}).get("name") == "datadog-admin-secret"
+      and gate_refs["DD_ADMIN_API_KEY"].get("optional") is True)
 
 print("== with datadog-secret: the same profile ships to Datadog as it did before #500 ==")
 full = deep_merge(vals["config"], written.get(True, {}))
@@ -203,9 +209,37 @@ check("an overlay change rolls the collector (checksum annotation over extraMani
       "extraManifests" in str((vals.get("podAnnotations") or {}).get("checksum/datadog-overlay", ""))
       and "sha256sum" in str((vals.get("podAnnotations") or {}).get("checksum/datadog-overlay", "")))
 
-print("== attendee clusters: still dual-ship, still fail loudly without their secrets ==")
+print("== attendee clusters: the gate picks one org or two from datadog-admin-secret ==")
 att_vals = helm_values("attendee")
 att_ov = datadog_overlay(att_vals)
+att_one_ov = datadog_overlay(att_vals, admin_secret=False)
+check("the attendee ConfigMap carries both files, datadog.yaml (one org) and datadog-dual.yaml (two)",
+      {"datadog.yaml", "datadog-dual.yaml"} <= set(overlay_configmap(att_vals)["data"]))
+check("the instructor ConfigMap has no datadog-dual.yaml, so an admin secret there changes nothing",
+      "datadog-dual.yaml" not in overlay_configmap(vals)["data"])
+if len(args) == 1 and len(cfg_args) == 1 and {"datadog-gate", "datadog-overlay"} <= set(mounts):
+    data = overlay_configmap(att_vals)["data"]
+    for keys, want, label in (((), {}, "no secret"), (("DD_API_KEY",), att_one_ov, "datadog-secret only"),
+                              (("DD_ADMIN_API_KEY",), {}, "datadog-admin-secret only"),
+                              (("DD_API_KEY", "DD_ADMIN_API_KEY"), att_ov, "both secrets")):
+        with tempfile.TemporaryDirectory() as tmp:
+            ov_dir, out = pathlib.Path(tmp, "overlay"), pathlib.Path(tmp, "gate")
+            ov_dir.mkdir()
+            out.mkdir()
+            for name, text in data.items():
+                (ov_dir / name).write_text(text, encoding="utf-8")
+            script = args[0].replace(mounts["datadog-overlay"], str(ov_dir)).replace(mounts["datadog-gate"], str(out))
+            env = {k: v for k, v in os.environ.items() if k not in ("DD_API_KEY", "DD_ADMIN_API_KEY")}
+            env.update({k: "not-a-real-key" for k in keys})
+            r = subprocess.run(["sh", "-c", script], env=env, capture_output=True, text=True)
+            target = out / pathlib.Path(cfg_args[0]).name
+            got = (yaml.safe_load(target.read_text(encoding="utf-8")) or {}) if target.exists() else {"missing": True}
+            check(f"attendee gate, {label}: it writes the {'empty config' if not want else 'dual overlay' if want is att_ov else 'one-org overlay'}",
+                  r.returncode == 0 and got == want)
+            if len(keys) == 2:
+                check("attendee gate, both secrets: its log says dual", "dual" in r.stdout)
+
+print("== attendee clusters with a second org: still dual-ship, still fail loudly without datadog-secret ==")
 att = collector_config("attendee", datadog_secret=True)
 check(f"attendee config with both secrets names defined components {reference_problems(att)}", not reference_problems(att))
 # The attendee profile installs no Tempo (#475), so no attendee trace list may name it: neither the merged
@@ -230,10 +264,29 @@ for sig, kind in (("metrics", "receivers"), ("metrics", "exporters"), ("traces",
     check(f"dual {sig}.{kind} is attendee relay.yaml's list plus both Datadog orgs, in the same order",
           [c for c in att_ov["service"]["pipelines"][sig][kind] if not c.startswith("datadog")] == att_relay[sig][kind])
 att_env = {e["name"]: e for e in att_vals.get("extraEnvs") or []}
-for key in ("DD_API_KEY", "DD_ADMIN_API_KEY"):
-    ref = (att_env.get(key, {}).get("valueFrom") or {}).get("secretKeyRef") or {}
-    check(f"attendee {key} stays non-optional (a pool cluster without it is a bootstrap bug)",
-          bool(ref) and ref.get("optional") is not True)
+ref = (att_env.get("DD_API_KEY", {}).get("valueFrom") or {}).get("secretKeyRef") or {}
+check("attendee DD_API_KEY stays non-optional (a pool cluster without its own key is a bootstrap bug)",
+      bool(ref) and ref.get("optional") is not True)
+
+print("== attendee clusters on one org: no admin secret, and the collector ships to that org once ==")
+check(f"attendee collector env: datadog-admin-secret absent blocks nothing "
+      f"{blocking_refs(att_vals.get('extraEnvs'), {'datadog-admin-secret'})}",
+      not blocking_refs(att_vals.get("extraEnvs"), {"datadog-admin-secret"}))
+att_one = collector_config("attendee", datadog_secret=True, admin_secret=False)
+check(f"attendee config with one org names defined components {reference_problems(att_one)}",
+      not reference_problems(att_one))
+check("it defines no datadog/admin exporter and reads no DD_ADMIN_API_KEY (one org, counted once)",
+      "datadog/admin" not in (att_one.get("exporters") or {}) and "DD_ADMIN_API_KEY" not in env_refs(att_one))
+check("its datadog exporter and connector are the single-org overlay's",
+      att_one_ov["exporters"] == ov["exporters"] and att_one_ov["connectors"] == ov["connectors"])
+for sig, kind in (("metrics", "receivers"), ("metrics", "exporters"), ("traces", "exporters")):
+    check(f"one-org {sig}.{kind} is the single-org list without Tempo, in the same order",
+          att_one_ov["service"]["pipelines"][sig][kind] == [c for c in ovp[sig][kind] if c != "otlp_grpc/tempo"])
+for lab in ("traces/lab", "metrics/lab"):
+    check(f"one-org {lab} exports to that org, as the instructor overlay does",
+          att_one_ov["service"]["pipelines"][lab] == ovp[lab])
+check("the one-org file changes no pipeline the dual one does not", set(att_one_ov["service"]["pipelines"])
+      == set(att_ov["service"]["pipelines"]))
 
 print()
 if failures:

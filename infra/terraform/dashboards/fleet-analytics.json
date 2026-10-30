@@ -8,7 +8,7 @@
       "name": "cluster",
       "prefix": "kube_cluster_name",
       "available_values": [],
-      "default": "watch-it-burn-attendee-*"
+      "default": "burritobot-attendee-*"
     },
     {
       "name": "role",
@@ -24,7 +24,7 @@
     {
       "definition": {
         "type": "note",
-        "content": "**What the room actually did, across every cluster (#150).** Read it live during the session or afterwards.\n\n**Attendees are told.** The lab's privacy warning says which steps, hints and commands are recorded (never what anyone types) and that the instructors keep prompts after the workshop (question 753, `decisions.md`).\n\nLab markers come from the lab page (`gitops/ai-layer/web/lab-events.js`) as `witb.lab.calls`, tagged `span.name`, `kube_cluster_name` and `witb.lab.alias` (the friendly name a student was given, which is also the `cluster` the feedback app records). A fix counts as installed when BurritoBot's `/controls` measured it ON, not when someone said so.\n\nNo typed text is in any of these widgets. The markers carry which guide step, hint or command block was opened, by number, and nothing a student wrote.\n\n**cluster** defaults to `watch-it-burn-attendee-*`, the attendees. Set it to `*` to include the Community and admin clusters (a presenter's student cluster is a claimed attendee slot, #295, so it is already in); scope by cluster rather than **role**, because an admin cluster's lab opened without `?role=` reports itself as a student. Full field list and the post-event pass: `docs/fleet-analytics.md`.",
+        "content": "**What the room actually did, across every cluster (#150).** Read it live during the session or afterwards.\n\n**Attendees are told.** The lab's privacy warning says which steps, hints and commands are recorded (never what anyone types) and that the instructors keep prompts after the workshop (question 753, `decisions.md`).\n\nLab markers come from the lab page (`gitops/ai-layer/web/lab-events.js`) as `witb.lab.calls`, tagged `span.name`, `kube_cluster_name` and `witb.lab.alias` (the friendly name a student was given, which is also the `cluster` the feedback app records). A fix counts as installed when BurritoBot's `/controls` measured it ON, not when someone said so.\n\nNo typed text is in any of these widgets. The markers carry which guide step, hint or command block was opened, by number, and nothing a student wrote.\n\n**cluster** defaults to `burritobot-attendee-*`, the attendees (Datadog names each cluster `burritobot-<role>`, #629). Set it to `*` to include the Community and admin clusters (a presenter's student cluster is a claimed attendee slot, #295, so it is already in); scope by cluster rather than **role**, because an admin cluster's lab opened without `?role=` reports itself as a student. Full field list and the post-event pass: `docs/fleet-analytics.md`.",
         "background_color": "vivid_purple",
         "font_size": "14",
         "text_align": "left",

@@ -51,10 +51,17 @@ lab page (lab-events.js) --POST /lab-events--> console nginx --> collector otlp/
   `gitops/otel-collector/values.yaml`) and export to `debug` only. So a cluster with no `datadog-secret`
   receives the markers and drops them. The Datadog overlay that the `datadog-gate` loads when the secret
   exists (#500) adds the org, the same way it does for traces and metrics:
-  - On attendee clusters, `values-dual.yaml` adds `datadog/admin` only, so the markers reach the
-    instructor org (#242) and never the student's own. The student's org is for the student's workload,
-    and one more unfamiliar service there is noise. A presenter's student cluster is a claimed attendee
-    cluster since #295, so the same applies to it.
+  - On an attendee cluster with an org of its own (a per-student pool), `values-dual.yaml`'s
+    `datadog-dual.yaml` sends them to `datadog/admin` only, so the markers reach the instructor org (#242)
+    and never the student's own. The student's org is for the student's workload, and one more unfamiliar
+    service there is noise. A presenter's student cluster is a claimed attendee cluster since #295, so the
+    same applies to it. The gate loads that file only when `datadog-admin-secret` exists.
+  - On an attendee cluster whose own key is the instructor org's (Whitney's one sandbox org, #629, and the
+    one-row pool question 926 chose for the live e2e run), the identity script writes no
+    `datadog-admin-secret`, because a second exporter with the same key would count everything twice. The
+    gate then loads `values-dual.yaml`'s `datadog.yaml`, and the markers go to `datadog`, which is the
+    instructor org. Before #587 the admin key was a required reference, and that cluster's collector never
+    started.
   - On instructor clusters (admin and full), `datadog` already is the instructor org.
   - On the Community cluster (burn), `datadog` is that cluster's org. The room shares that cluster, so
     the dashboard leaves it out by default.
@@ -94,7 +101,8 @@ That is by construction, and nothing in this path tries to recover it.
 `infra/terraform/dashboards/fleet-analytics.json`, managed by the `fleet_analytics` resource in
 `infra/terraform/dashboards/main.tf`. Apply it with the **instructor org's** `DD_API_KEY` and `DD_APP_KEY`.
 In a student's org it renders empty by design. The `cluster` template variable defaults to
-`watch-it-burn-attendee-*`; set it to `*` to include the Community and admin clusters. A presenter's student
+`burritobot-attendee-*`, the name Datadog has for each attendee cluster (`datadog-cluster-name`, #629; the Agents
+and every profile's collector report it); set it to `*` to include the Community and admin clusters. A presenter's student
 cluster is a claimed attendee slot (#295), so it is inside the default scope. Scope by
 cluster name, not by `role`. The lab infers its role from the hostname, so an admin cluster's lab opened
 without `?role=` reports itself as a student.
@@ -139,14 +147,16 @@ What has not been run against a live cluster or the instructor org yet:
 2. Open `https://<alias>.agenticburn.com/lab`, expand a challenge and open a hint. In the browser's network
    tab, `POST /lab-events` answers 200 within ten seconds.
 3. In the instructor org, `witb.lab.calls` appears by `kube_cluster_name` and `span.name` within about a
-   minute, and nothing named `burritobot-lab` appears in the student's own org.
+   minute, each counted once, and, on a cluster with an org of its own, nothing named `burritobot-lab` appears
+   in the student's org.
 4. Apply the dashboard and confirm every widget renders. The log widgets assume guard-proxy's JSON `event`
    field and Falco's JSON `rule` field are parsed as `@event` and `@rule`.
 5. Run harvest pass 6 over the window, and the markers come back as a `lab-progress.csv` row.
 
 `verify/test_lab_pipeline_live.py` (E2E, in `run-e2e.sh`, #587) checks steps 1 to 3 and 5. It also checks the
-dashboard step, after the dashboard has been applied. Run it against a fresh attendee cluster that dual-ships,
-with the instructor org's `WITB_DD_ADMIN_API_KEY` and `WITB_DD_ADMIN_APP_KEY`:
+dashboard step, after the dashboard has been applied. Run it against a fresh attendee cluster, with the instructor
+org's `WITB_DD_ADMIN_API_KEY` and `WITB_DD_ADMIN_APP_KEY`. The cluster can dual-ship (an org of its own) or be on the
+instructor org itself (its `datadog-secret` key is `WITB_DD_ADMIN_API_KEY`); the check reads which from the cluster:
 
 ```
 CONTEXT=<kube-context> WITB_DD_ADMIN_API_KEY=... WITB_DD_ADMIN_APP_KEY=... python3 verify/test_lab_pipeline_live.py
@@ -154,8 +164,10 @@ CONTEXT=<kube-context> WITB_DD_ADMIN_API_KEY=... WITB_DD_ADMIN_APP_KEY=... pytho
 
 It runs the shipped `lab-events.js` under node, gives the markers a fresh alias (`verify-<hex>`), and posts them
 to the cluster's public `/lab-events`. It then waits up to five minutes for every one of them in the instructor
-org, by `span.name` and tagged with the cluster's `kube_cluster_name`, and checks that the student's org has no
-`witb.lab.calls` and no `burritobot-lab` spans for them. The dashboard in the instructor org must match
+org, by `span.name` and tagged with the cluster's `kube_cluster_name` (its `burritobot-attendee-NNN` name), and checks
+that the calls add up to the spans sent, so nothing was shipped twice. On a dual-shipping cluster it also checks that
+the student's org has no `witb.lab.calls` and no `burritobot-lab` spans for them; on one org it checks that the cluster
+carries no `datadog-admin-secret`. The dashboard in the instructor org must match
 `fleet-analytics.json`. With this cluster selected, Datadog must accept every widget query, and the queries
 these markers fall under must return data. Last, pass 6 runs over the window and must write a row for the alias
 with the fixes the page measured on. It deletes that synthetic `.harvest/` output afterwards. It does not apply

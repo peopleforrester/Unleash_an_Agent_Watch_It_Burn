@@ -5,7 +5,8 @@
 relay.yaml is the chart's render of `config` from the value files an Application lists. Since #500 that is the
 Datadog-free collector. The datadog-gate init container then writes a second file the collector loads after
 it: the otel-collector-datadog ConfigMap's datadog.yaml when datadog-secret exists, an empty config when it
-does not. Both Helm and the collector merge the same way, maps recursively and every other value (lists
+does not. On the attendee profile the ConfigMap also has datadog-dual.yaml, which the gate loads instead when
+datadog-admin-secret exists too, the instructor org being a second org (#587). Both Helm and the collector merge the same way, maps recursively and every other value (lists
 included) replaced, so one deep_merge models both steps.
 
 Two things the chart does to relay.yaml are left out on purpose. It prepends k8s_attributes to each pipeline's
@@ -60,11 +61,16 @@ def overlay_configmap(vals: dict) -> dict:
                 if m.get("kind") == "ConfigMap" and m["metadata"]["name"] == name)
 
 
-def datadog_overlay(vals: dict) -> dict:
-    return yaml.safe_load(overlay_configmap(vals)["data"]["datadog.yaml"]) or {}
+def datadog_overlay(vals: dict, admin_secret: bool = True) -> dict:
+    """The file the gate copies when datadog-secret exists: datadog-dual.yaml where the ConfigMap has one and
+    datadog-admin-secret exists, datadog.yaml otherwise."""
+    data = overlay_configmap(vals)["data"]
+    return yaml.safe_load(data["datadog-dual.yaml" if admin_secret and "datadog-dual.yaml" in data else "datadog.yaml"]) or {}
 
 
-def collector_config(profile: str, datadog_secret: bool) -> dict:
-    """The config the collector runs: relay.yaml, then what the gate wrote."""
+def collector_config(profile: str, datadog_secret: bool, admin_secret: bool = True) -> dict:
+    """The config the collector runs: relay.yaml, then what the gate wrote. admin_secret matters on the attendee
+    profile only: True is a pool of per-student orgs (dual shipping), False one org for the cluster and the
+    instructor."""
     vals = helm_values(profile)
-    return deep_merge(vals["config"], datadog_overlay(vals) if datadog_secret else {})
+    return deep_merge(vals["config"], datadog_overlay(vals, admin_secret) if datadog_secret else {})

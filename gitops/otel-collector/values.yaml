@@ -406,8 +406,9 @@ config:
 # The collector replaces lists when it merges, so the overlay restates in full the exporter lists it changes
 # (traces, metrics, and the two lab pipelines, #150) and the metrics receivers; the processors lists are not
 # touched and come from relay.yaml. values-dual.yaml (attendee) restates
-# this ConfigMap with the instructor org added and Tempo taken out (the attendee profile has no Tempo, #475),
-# and values-burn.yaml (burn) with Tempo and Prometheus removed.
+# this ConfigMap with Tempo taken out (the attendee profile has no Tempo, #475), and adds a second file,
+# datadog-dual.yaml, with the instructor org added; the gate loads that one only when datadog-admin-secret
+# exists (#587). values-burn.yaml (burn) restates it with Tempo and Prometheus removed.
 
 extraManifests:
   - apiVersion: v1
@@ -451,8 +452,8 @@ extraManifests:
                 - debug
             # Lab progress markers (#150). relay.yaml has the two lab pipelines exporting to debug only; this adds
             # Datadog, which on this profile (admin and full, the instructor clusters) IS the instructor org.
-            # values-dual.yaml adds datadog/admin instead, so on attendee clusters the markers reach the
-            # instructor's fleet view and never the student's own org.
+            # values-dual.yaml's datadog-dual.yaml sends them to datadog/admin instead, so on an attendee cluster
+            # with an org of its own the markers reach the instructor's fleet view and never the student's org.
             traces/lab:
               exporters:
                 - datadog
@@ -469,7 +470,10 @@ initContainers:
     command: ["sh", "-c"]
     args:
       - |
-        if [ -n "${DD_API_KEY:-}" ]; then
+        if [ -n "${DD_API_KEY:-}" ] && [ -n "${DD_ADMIN_API_KEY:-}" ] && [ -f /datadog-overlay/datadog-dual.yaml ]; then
+          cp /datadog-overlay/datadog-dual.yaml /datadog-gate/datadog.yaml
+          echo "datadog-gate: datadog-secret and datadog-admin-secret found. Datadog export ON, dual: traces and metrics to the cluster's own org and to the instructor org, lab markers to the instructor org only."
+        elif [ -n "${DD_API_KEY:-}" ]; then
           cp /datadog-overlay/datadog.yaml /datadog-gate/datadog.yaml
           echo "datadog-gate: datadog-secret found. Datadog export ON: traces and metrics to Datadog, and to Tempo and Prometheus on the profiles that install them."
         else
@@ -481,6 +485,15 @@ initContainers:
         valueFrom:
           secretKeyRef:
             name: datadog-secret
+            key: api-key
+            optional: true
+      # Only the attendee ConfigMap has a datadog-dual.yaml to choose. infra/datadog-cluster-identity.sh writes
+      # this secret only when the instructor org is a different org from the cluster's own: with one org for
+      # both (a pool row from the instructor key, question 926), a second exporter would count everything twice.
+      - name: DD_ADMIN_API_KEY
+        valueFrom:
+          secretKeyRef:
+            name: datadog-admin-secret
             key: api-key
             optional: true
     securityContext:

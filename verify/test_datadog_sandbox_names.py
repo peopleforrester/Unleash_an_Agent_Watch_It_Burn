@@ -74,10 +74,16 @@ for comp in ("nodeAgent", "clusterAgent"):
     check(f"{comp} DD_ENV is {DD_ENV}", (env.get("DD_ENV") or {}).get("value") == DD_ENV)
 check("the fallback clusterName is a burritobot name", agent["spec"]["global"]["clusterName"].startswith("burritobot"))
 
-collector = yaml.safe_load((REPO / "gitops/otel-collector/values.yaml").read_text())
-wib = next((e for e in collector.get("extraEnvs", []) if e.get("name") == "WIB_CLUSTER_NAME"), {})
-cref = (wib.get("valueFrom") or {}).get("configMapKeyRef") or {}
-check(f"the collector's k8s.cluster.name reads cluster-identity/{KEY}", cref.get("key") == KEY, str(cref))
+# Every profile's collector, as its Application layers the value files: Helm replaces extraEnvs rather than
+# merging it, so the attendee overlay (values-dual.yaml) restates WIB_CLUSTER_NAME, and it read cluster-name
+# until #587. Attendee markers were then tagged watch-it-burn-attendee-NNN while the Agents said burritobot-attendee-NNN.
+sys.path.insert(0, str(REPO / "verify"))
+import collector_render  # noqa: E402
+for profile in collector_render.PROFILE_APP:
+    wib = next((e for e in collector_render.helm_values(profile).get("extraEnvs", [])
+                if e.get("name") == "WIB_CLUSTER_NAME"), {})
+    cref = (wib.get("valueFrom") or {}).get("configMapKeyRef") or {}
+    check(f"the {profile} collector's k8s.cluster.name reads cluster-identity/{KEY}", cref.get("key") == KEY, str(cref))
 
 monitors = yaml.safe_load((REPO / "infra/datadog-fleet/monitors.yaml").read_text())
 check("the fleet monitors filter on kube_cluster_name:burritobot-*",

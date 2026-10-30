@@ -19,7 +19,7 @@ cat >"${SHIM}/aws" <<S
 #!/usr/bin/env bash
 echo "aws \$*" >>"\${CALLS}"
 case "\$*" in
-  *"--secret-id watch-it-burn/datadog-pool "*) printf '%s' '${POOL}' ;;
+  *"--secret-id watch-it-burn/datadog-pool "*) [[ -f "\${T}/one_org" ]] && { printf '%s' '[{"api-key":"ADMIN_API","app-key":"ADMIN_APP"}]'; exit 0; }; printf '%s' '${POOL}' ;;
   *"--secret-id watch-it-burn/datadog-pool-2 "*) printf '%s' '[]' ;;
   *"--secret-id watch-it-burn/datadog-admin-attendee "*) printf '%s' '${ADMATT}' ;;
   *"--secret-id watch-it-burn/datadog "*) [[ -f "\${T}/no_admin_secret" ]] && exit 254; printf '%s' '${ADMIN}' ;;
@@ -92,6 +92,16 @@ check "attendee without the admin secret: repaired (dual shipping restored)" 'gr
 src 'repair_datadog watch-it-burn-r2-1 /dev/null acct'
 check "instructor WITH an admin secret: repaired (the stale secret goes)" 'grep -q "identity-script CLUSTER_NAME=watch-it-burn-r2-1 admin=$" "${CALLS}"'
 rm -f "${T}/admin_present"
+# One org (#587): the pool row is the instructor key itself (question 926's one-row pool), so the identity script
+# writes no admin secret, and a converge that wanted one would repair, and restart the consumers, on every pass.
+touch "${T}/one_org"; : >"${CALLS}"; printf 'watch-it-burn-attendee-001' >"${T}/identity"; printf 'ADMIN_API' >"${T}/live_key"
+printf '%s' "$(src 'public_host_for watch-it-burn-attendee-001')" >"${T}/public_host"
+src 'repair_datadog watch-it-burn-attendee-001 /dev/null acct'
+check "one org: an attendee on the instructor key without an admin secret is left alone" '! grep -q "identity-script\|reload" "${CALLS}"'
+: >"${CALLS}"; touch "${T}/admin_present"
+src 'repair_datadog watch-it-burn-attendee-001 /dev/null acct'
+check "one org: an admin secret there is repaired away (it would count everything twice)" 'grep -q "identity-script CLUSTER_NAME=watch-it-burn-attendee-001" "${CALLS}"'
+rm -f "${T}/one_org" "${T}/admin_present"
 
 echo "== no shared-org secret: roster clusters carry a logged gap, attendees are refused (#510) =="
 touch "${T}/no_admin_secret"

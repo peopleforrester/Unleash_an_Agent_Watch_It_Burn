@@ -1,7 +1,7 @@
 # ABOUTME: Live half of the fleet-analytics path (#150, #587): the lab page's own markers, posted to a real attendee
 # ABOUTME: cluster's public /lab-events, arrive in the instructor org as witb.lab.calls, feed the dashboard and pass 6.
 # SUITE: e2e
-"""Needs node, kubectl, CONTEXT naming an attendee cluster that dual-ships (#242), and the instructor org's keys in
+"""Needs node, kubectl, CONTEXT naming an attendee cluster that ships to Datadog, and the instructor org's keys in
 WITB_DD_ADMIN_API_KEY and WITB_DD_ADMIN_APP_KEY (WITB_DD_ADMIN_SITE, default datadoghq.com), the same keys harvest
 pass 6 reads. The admin app key is never on a cluster (#272), so it comes from the operator's environment. Every
 missing prerequisite is a failure with the reason, never a skip.
@@ -12,10 +12,16 @@ cannot say, one link per section, in the order docs/fleet-analytics.md "Validati
 2. the console's public /lab-events takes what the shipped lab-events.js sends (run under node by
    lab-events-harness.js, as committed) and refuses a GET;
 3. those markers arrive in the instructor org as witb.lab.calls, tagged with this cluster's kube_cluster_name and
-   by span.name, and nothing of them reaches the student's own org;
+   by span.name, each counted once; and nothing of them reaches the student's own org, when the cluster has one;
 4. the fleet-analytics dashboard in the instructor org is the committed fleet-analytics.json, and every one of its
    queries is accepted with this cluster selected, with data wherever the markers just sent should show;
 5. harvest pass 6 (scripts/harvest/06-lab-progress.py) turns the result into a lab-progress.csv row for them.
+
+The cluster ships one of two ways (#587). With an org of its own (a per-student pool, #242) it dual-ships and carries
+datadog-admin-secret, and the lab markers go to the instructor org only. With the instructor org's key as its own (the
+one sandbox org, #629, and question 926's one-row pool) it has no admin secret and ships everything to that one org,
+once. Which way is read from the cluster: its datadog-secret's key is, or is not, WITB_DD_ADMIN_API_KEY. The Datadog
+cluster name is cluster-identity's datadog-cluster-name, burritobot-attendee-NNN (#629), not the EKS name.
 
 The markers carry a fresh alias (verify-<hex>), so the series found are this run's and no student's. The dashboard is
 checked, not applied: applying infra/terraform/dashboards is an operator step with the instructor org's DD_API_KEY and
@@ -115,18 +121,26 @@ def secret_value(ns: str, name: str, key: str) -> str:
     return base64.b64decode(got.stdout).decode() if got.returncode == 0 and got.stdout.strip() else ""
 
 
-print(f"== on {CONTEXT}: an attendee cluster that dual-ships ==")
+print(f"== on {CONTEXT}: an attendee cluster that ships to the instructor org ==")
 CLUSTER = config_value("monitoring", "cluster-identity", "cluster-name")
+DD_CLUSTER = config_value("monitoring", "cluster-identity", "datadog-cluster-name")
 HOST = config_value("agent", "cluster-identity", "public-host")
 check(f"cluster-identity names an attendee cluster ({CLUSTER or 'none'})", bool(STUDENT_CLUSTER.search(CLUSTER)))
+check(f"cluster-identity carries its Datadog name, burritobot-attendee-NNN ({DD_CLUSTER or 'none'})",
+      DD_CLUSTER.startswith("burritobot-") and bool(STUDENT_CLUSTER.search(DD_CLUSTER)))
 check(f"cluster-identity in agent carries the public console host ({HOST or 'none'})", bool(HOST))
-check("datadog-admin-secret is in monitoring, so the collector ships the lab markers to the instructor org",
-      bool(secret_value("monitoring", "datadog-admin-secret", "api-key")))
 STUDENT_API = secret_value("datadog", "datadog-secret", "api-key")
 STUDENT_APP = secret_value("datadog", "datadog-secret", "app-key")
-check("datadog-secret in datadog carries the student org's api and app keys", bool(STUDENT_API and STUDENT_APP))
-check("the student org is not the instructor org (else the absence check below means nothing)",
-      bool(STUDENT_API) and STUDENT_API != ADMIN_API)
+check("datadog-secret in datadog carries the cluster's own api and app keys", bool(STUDENT_API and STUDENT_APP))
+ADMIN_ON_CLUSTER = secret_value("monitoring", "datadog-admin-secret", "api-key")
+ONE_ORG = STUDENT_API == ADMIN_API
+if ONE_ORG:
+    check("one org (the cluster's key is the instructor org's): no datadog-admin-secret in monitoring, "
+          "so nothing is shipped there twice", not ADMIN_ON_CLUSTER)
+else:
+    check("its own org (a key that is not the instructor org's): datadog-admin-secret in monitoring carries "
+          "WITB_DD_ADMIN_API_KEY, so the collector ships the lab markers to the instructor org",
+          ADMIN_ON_CLUSTER == ADMIN_API)
 if failures:
     finish()
 
@@ -150,6 +164,7 @@ posts = [p["body"] for p in json.loads(h.stdout)["posts"]] if h.returncode == 0 
 check(f"the shipped lab-events.js sends markers ({len(posts)} posts)", bool(posts))
 ALIAS = f"verify-{uuid.uuid4().hex[:10]}"
 SENT: set[tuple[str, str]] = set()  # (span.name, witb.lab.challenge) of every marker sent
+SPANS = 0  # every span sent, each one call
 ROLES: set[str] = set()
 for body in posts:
     for rs in body["resourceSpans"]:
@@ -159,6 +174,7 @@ for body in posts:
                 attrs["witb.lab.alias"] = {"stringValue": ALIAS}
                 s["attributes"] = [{"key": k, "value": v} for k, v in attrs.items()]
                 SENT.add((s["name"], attrs.get("witb.lab.challenge", {}).get("stringValue", "")))
+                SPANS += 1
                 ROLES.add(attrs.get("witb.lab.role", {}).get("stringValue", ""))
 URL = f"https://{HOST}/lab-events"
 TLS = ssl.create_default_context()
@@ -181,23 +197,30 @@ codes = [send("POST", json.dumps(b).encode()) for b in posts]
 check(f"every POST answers 200 ({codes})", bool(codes) and all(c == 200 for c in codes))
 check("a GET is refused with 403", send("GET", None) == 403)
 
-print(f"== 3. witb.lab.calls reaches the instructor org tagged kube_cluster_name:{CLUSTER} ==")
-scope = f"kube_cluster_name:{CLUSTER},witb.lab.alias:{ALIAS}"
+print(f"== 3. witb.lab.calls reaches the instructor org tagged kube_cluster_name:{DD_CLUSTER} ==")
+scope = f"kube_cluster_name:{DD_CLUSTER},witb.lab.alias:{ALIAS}"
 names: set[str] = set()
+total = 0.0
 deadline = time.time() + 300
-while time.time() < deadline and names != {n for n, _ in SENT}:
+while time.time() < deadline and (names != {n for n, _ in SENT} or total < SPANS):
     time.sleep(20)
     ok, series = metric(ADMIN_SITE, ADMIN_API, ADMIN_APP, f"sum:witb.lab.calls{{{scope}}} by {{span.name}}.as_count()",
                         START - 300, int(time.time()))
     names = {t.partition(":")[2] for s in series for t in s.get("tag_set", []) if t.startswith("span.name:")}
+    total = sum(v or 0 for s in series for _, v in s.get("pointlist") or [])
 check(f"every marker sent is there by span.name ({sorted(names)})", names == {n for n, _ in SENT})
-ok, series = metric(STUDENT_SITE, STUDENT_API, STUDENT_APP, f"sum:witb.lab.calls{{{scope}}}.as_count()",
-                    START - 300, int(time.time()))
-check("the student org accepts the query and has no witb.lab.calls for them", ok and not series)
-code, body = dd(STUDENT_SITE, STUDENT_API, STUDENT_APP, "/api/v2/spans/events/search", {"data": {
-    "type": "search_request", "attributes": {"filter": {"query": f"service:burritobot-lab @witb.lab.alias:{ALIAS}",
-                                                        "from": "now-30m", "to": "now"}, "page": {"limit": 1}}}})
-check("the student org has no burritobot-lab spans for them", code == 200 and not body.get("data"))
+# A second exporter on the same org (dual shipping with one org's key on both sides) would show twice the calls.
+check(f"each marker is counted once ({total:g} calls for {SPANS} spans sent)", total == SPANS)
+if ONE_ORG:
+    print("        one org: the cluster's own org is the instructor org, so there is no second org to find nothing in")
+else:
+    ok, series = metric(STUDENT_SITE, STUDENT_API, STUDENT_APP, f"sum:witb.lab.calls{{{scope}}}.as_count()",
+                        START - 300, int(time.time()))
+    check("the student org accepts the query and has no witb.lab.calls for them", ok and not series)
+    code, body = dd(STUDENT_SITE, STUDENT_API, STUDENT_APP, "/api/v2/spans/events/search", {"data": {
+        "type": "search_request", "attributes": {"filter": {"query": f"service:burritobot-lab @witb.lab.alias:{ALIAS}",
+                                                            "from": "now-30m", "to": "now"}, "page": {"limit": 1}}}})
+    check("the student org has no burritobot-lab spans for them", code == 200 and not body.get("data"))
 
 
 def widget_queries(widgets: list[dict]):
@@ -223,7 +246,7 @@ check("its template variables are the committed ones", code == 200 and [
     (v["name"], v["prefix"], v["default"]) for v in DASH["template_variables"]])
 
 check(f"the markers carry one role ({sorted(ROLES)})", len(ROLES) == 1)
-sub = {"$cluster": f"kube_cluster_name:{CLUSTER}", "$role": f"witb.lab.role:{min(ROLES, default='')}"}
+sub = {"$cluster": f"kube_cluster_name:{DD_CLUSTER}", "$role": f"witb.lab.role:{min(ROLES, default='')}"}
 now = int(time.time())
 for source, q in want:
     q = re.sub(r"\$(cluster|role)\b", lambda m: sub[m.group(0)], q)
@@ -251,7 +274,7 @@ try:
     check("06-lab-progress.py exits 0", run.returncode == 0)
     csv_path = out / "lab-progress.csv"
     rows = [r for r in csv.DictReader(csv_path.open(encoding="utf-8")) if r["alias"] == ALIAS] if csv_path.exists() else []
-    check(f"lab-progress.csv has one row for {ALIAS} on {CLUSTER}", len(rows) == 1 and rows[0]["cluster"] == CLUSTER)
+    check(f"lab-progress.csv has one row for {ALIAS} on {DD_CLUSTER}", len(rows) == 1 and rows[0]["cluster"] == DD_CLUSTER)
     fixed = sorted({c for n, c in SENT if n == "lab.control.installed"}, key=int)
     check(f"that row has the fixes the page measured on ({';'.join(fixed)})",
           len(rows) == 1 and rows[0]["fixed"] == ";".join(fixed))

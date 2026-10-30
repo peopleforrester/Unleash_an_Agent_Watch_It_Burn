@@ -1,4 +1,4 @@
-# ABOUTME: Runs the REAL collector binary on the lab-marker pipeline (#150): validates both shipped configs, then
+# ABOUTME: Runs the REAL collector binary on the lab-marker pipeline (#150): validates every shipped config, then
 # ABOUTME: feeds it the page's own payload and a forged one and asserts only the documented contract comes out.
 # SUITE: e2e (needs otelcol-contrib at the chart's collector version, and node for the page's payload)
 # E2E TIER: tools (no cluster, no AWS: the pinned otelcol-contrib from e2e-tools.lock, run on loopback)
@@ -60,16 +60,23 @@ check(f"every collector Application pins chart {CHART}",
 
 
 ENV = {"PATH": "/usr/bin:/bin", "DD_API_KEY": "x", "DD_SITE": "datadoghq.com", "DD_ADMIN_API_KEY": "y",
-       "WIB_CLUSTER_NAME": "watch-it-burn-attendee-001", "MY_POD_IP": "127.0.0.1"}
+       "WIB_CLUSTER_NAME": "burritobot-attendee-001", "MY_POD_IP": "127.0.0.1"}
 
 with tempfile.TemporaryDirectory() as tmp:
     tmp = pathlib.Path(tmp)
     print("== the collector accepts every profile's config, with and without datadog-secret ==")
-    for profile, secret in [(p, sec) for p in collector_render.PROFILE_APP for sec in (False, True)]:
+    # The attendee profile has two Datadog files (#587): datadog-dual.yaml with datadog-admin-secret (an org per
+    # student), datadog.yaml without it (the cluster's own org is the instructor org). The second runs with no
+    # DD_ADMIN_API_KEY at all, as its pod does.
+    runs = [(p, sec, True) for p in collector_render.PROFILE_APP for sec in (False, True)] + [("attendee", True, False)]
+    for profile, secret, admin in runs:
         label = f"{profile}, datadog-secret {'present' if secret else 'absent'}"
+        if profile == "attendee" and secret:
+            label += f", datadog-admin-secret {'present' if admin else 'absent'}"
         f = tmp / "cfg.yaml"
-        f.write_text(yaml.safe_dump(collector_render.collector_config(profile, secret)), encoding="utf-8")
-        r = subprocess.run([binary, "validate", f"--config=file:{f}"], capture_output=True, text=True, env=ENV, timeout=60)
+        f.write_text(yaml.safe_dump(collector_render.collector_config(profile, secret, admin)), encoding="utf-8")
+        env = ENV if admin else {k: v for k, v in ENV.items() if k != "DD_ADMIN_API_KEY"}
+        r = subprocess.run([binary, "validate", f"--config=file:{f}"], capture_output=True, text=True, env=env, timeout=60)
         check(f"{label} validates", r.returncode == 0)
         if r.returncode:
             print("        " + (r.stderr or r.stdout).strip()[-400:])
@@ -162,7 +169,7 @@ with tempfile.TemporaryDirectory() as tmp:
     check("a forged non-lab span (chat, with a prompt) is dropped", "chat" not in names and "FORGED-PROMPT" not in wire)
     check("a name outside lab.<a>[.<b>] is dropped", "lab.not.a.marker.name" not in names)
     check("the resource is burritobot-lab with the cluster's REAL name, whatever the sender claimed",
-          resources == {json.dumps({"cluster.name": "watch-it-burn", "k8s.cluster.name": "watch-it-burn-attendee-001",
+          resources == {json.dumps({"cluster.name": "watch-it-burn", "k8s.cluster.name": "burritobot-attendee-001",
                                     "service.name": "burritobot-lab"}, sort_keys=True)})
     forged_lab = [s for s in spans if s["name"] == "lab.step.open"
                   and {a["key"]: a["value"]["stringValue"] for a in s["attributes"]}.get("witb.lab.challenge") == "3"]

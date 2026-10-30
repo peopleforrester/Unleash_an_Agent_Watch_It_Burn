@@ -68,4 +68,29 @@ check "a retired presenter student name is not a pool cluster" '[[ "$(match watc
 check "the old pres- form no longer matches, so nothing silently depends on it" \
     '[[ "$(match watch-it-burn-pres-michael)" == no ]]'
 
+# One org (#587): an attendee cluster whose own key is the instructor org's (question 926's one-row pool) has no
+# admin secret by design. The verifier runs against shims here: kubectl, curl and aws answer from the test.
+echo "== an attendee on the instructor org itself is one org by design, an attendee on its own org still must dual-ship =="
+SHIM="$(mktemp -d)"; trap 'rm -rf "${SHIM}"' EXIT
+cat >"${SHIM}/kubectl" <<'S'
+#!/usr/bin/env bash
+case "$*" in
+  *"get secret datadog-secret -o json"*) printf '{"data":{"api-key":"%s","app-key":"%s"}}' "$(printf OWN_API | base64)" "$(printf OWN_APP | base64)" ;;
+  *"get configmap cluster-identity"*) printf 'watch-it-burn-attendee-001' ;;
+  *"get secret datadog-admin-secret"*) exit 1 ;;
+esac
+S
+printf '#!/usr/bin/env bash\necho %s\n' "'{\"included\":[{\"type\":\"orgs\",\"attributes\":{\"name\":\"Datadog\"}}]}'" >"${SHIM}/curl"
+printf '#!/usr/bin/env bash\nprintf %s "{\\"api-key\\":\\"${INSTRUCTOR_API}\\"}"\n' "'%s'" >"${SHIM}/aws"
+chmod +x "${SHIM}"/*
+orgs() { PATH="${SHIM}:${PATH}" INSTRUCTOR_API="$1" bash "${ORGS}" arn:aws:eks:us-west-2:1:cluster/watch-it-burn-attendee-001 p 2>&1; }
+one="$(orgs OWN_API)"; one_rc=$?
+check "the cluster's key is the instructor key: it passes, saying one org by design" \
+    '[[ "${one_rc}" -eq 0 ]] && grep -q "one org by design" <<<"${one}"'
+two="$(orgs OTHER_API)"; two_rc=$?
+check "the instructor key is another org's: no admin secret is still a failure" \
+    '[[ "${two_rc}" -ne 0 ]] && grep -q "attendee cluster without datadog-admin-secret" <<<"${two}"'
+none="$(orgs "")"; none_rc=$?
+check "the instructor key unreadable: no admin secret is still a failure" '[[ "${none_rc}" -ne 0 ]]'
+
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]
