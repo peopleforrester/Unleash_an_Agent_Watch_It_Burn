@@ -5246,3 +5246,22 @@ too. There was no earlier draft of this part to check against staging.
 -o jsonpath='{.items[*].spec.validationActions}'` shows `["Deny"]` twice, and `argocd app get kyverno-policies` is
 Synced. `verify/test_kyverno_cel_live.py` is not that check: it wants a full or attendee cluster at Audit. The front door's live checks, the bootstrap step's `front doors: 2 roster clusters recorded` and
 `labctl tls-check attackme.agenticburn.com`, are still owed as the 2026-10-28 entry says.
+## 2026-10-30 · #647 · The run-of-show's teardown carries the purge of burritobot-public from Whitney's org
+
+The 2026-10-29 #647 entry left one part of the issue owed after the talk: purging the `burritobot-public`
+data from Whitney's sandbox org. The run-of-show's Teardown section, the list followed when the session closes,
+did not name it. It now has a step for it: signed in to her org, find the room's traces under
+`kube_cluster_name:burritobot-public` for the session window. Delete their LLM Observability spans by trace id
+through `POST /api/v2/llm-obs/deletion/data/llmobs`. That endpoint is in preview: Datadog's API reference,
+read 2026-10-30, says it takes a query with an `@trace_id` filter and returns a deletion request. For the APM
+spans, ask Datadog support or leave them to retention. Then post on #647 what went and what is left.
+
+- **No purge script.** The endpoint is in preview, and no run has a key to Whitney's org to try it. A script
+  written now could not be checked before the one time it is used, so the step names the call and says to
+  confirm it on the day.
+
+**Tests.** `verify/test_collector_pii_scrub.py` now also checks that the run-of-show's Teardown section has a
+purge step naming #647, the cluster tag, the deletion endpoint and retention. It fails 6 checks with the step
+taken out.
+
+**Not yet run.** The purge itself, after the talk on 2026-11-12, by Whitney or by Michael signed in to her org.

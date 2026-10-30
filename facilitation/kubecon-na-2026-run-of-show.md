@@ -865,6 +865,15 @@ hosts at peak, down to 1 within three hours).
   `infra/terraform/fleet/fleet.sh reap-lbs` (dry run unless `WIB_APPLY=1`).
 - The Datadog pool secret is deliberately not destroyed by `down all`; use
   `fleet.sh reap-secrets` only when the pool itself is finished with.
+- Purge the room's data from Whitney's sandbox org, as promised on the planning call
+  (#647): every `burritobot-public` trace, whatever the scrub caught. Signed in to
+  her org, find the room's traces under `kube_cluster_name:burritobot-public` for the
+  session window. Delete their LLM Observability spans by trace id through
+  `POST /api/v2/llm-obs/deletion/data/llmobs` (in preview, so confirm the call on the
+  day). APM spans have no delete-by-query, so ask Datadog support to remove them or
+  let retention expire them. Then post on #647 what was deleted and what is left to
+  retention. The room's shared view expires on its own the next morning
+  (`infra/datadog-room`).
 - Record the real spend for the delivery window with
   `teardown/cost-report.sh --start <YYYY-MM-DD> --end <YYYY-MM-DD>` once the `event`
   or `project` cost-allocation tag is activated on the payer account (Portland could

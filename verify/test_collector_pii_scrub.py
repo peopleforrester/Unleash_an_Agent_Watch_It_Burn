@@ -14,9 +14,11 @@ numbers in the conversation's attributes and in every span-event attribute. This
   - the attendee and instructor collectors carry no scrub, because C1's fake customer records are meant to show
     in a student's own trace;
   - the four patterns are RE2-safe, written once per context, and do to attendee and demo text what
-    pii_scrub_cases.py says. test_collector_pii_scrub_e2e.py runs the same cases through the real collector.
+    pii_scrub_cases.py says. test_collector_pii_scrub_e2e.py runs the same cases through the real collector;
+  - the run-of-show's Teardown carries the purge of burritobot-public from Whitney's org that #647 owes after
+    the talk, so it is done on the day rather than remembered.
 
-Offline: reads the collector value files and gitops/ai-layer/resources.yaml.
+Offline: reads the collector value files, gitops/ai-layer/resources.yaml and the run-of-show.
 """
 from __future__ import annotations
 
@@ -121,6 +123,16 @@ record = c5_record()
 check("C5's record, a street address the trace is meant to keep, is unchanged", scrub_text(record) == record)
 for text in UNTOUCHED:
     check(f"unchanged: {text[:60]}...", scrub_text(text) == text, scrub_text(text))
+
+print("== the run-of-show's teardown carries the purge the planning call promised ==")
+ros = (REPO / "facilitation" / "kubecon-na-2026-run-of-show.md").read_text()
+teardown = ros.split("\n## Teardown\n", 1)[-1].split("\n## ", 1)[0] if "\n## Teardown\n" in ros else ""
+check("the run-of-show has a Teardown section", bool(teardown))
+purge = next((b for b in teardown.split("\n- ") if "Purge" in b), "")
+check("a Teardown step purges the room's data", bool(purge), teardown[:200])
+for need in ("#647", "burritobot-public", "kube_cluster_name:burritobot-public",
+             "/api/v2/llm-obs/deletion/data/llmobs", "retention"):
+    check(f"the purge step names {need}", need in purge)
 
 print()
 if failures:
