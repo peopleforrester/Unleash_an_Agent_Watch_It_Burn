@@ -27,3 +27,11 @@ frontDoor:
 # toolnames, ai-layer ignores drift on that one list so selfHeal keeps the student's fix. With gateway nothing
 # writes the list live, so ai-layer does not ignore it, and Argo CD syncs the Agent's whole tools array from git.
 c7Control: toolnames
+# The action of the two guardrails an admin cluster arms, require-resource-limits and restrict-image-registries
+# (#638, lab-platform#310). Audit renders them as policies/kyverno writes them, and kyverno-policies ignores drift on
+# their /spec/validationActions so a live toggle-kyverno-enforce.sh flip holds: the attendee's own patch in C2, and
+# fleet.sh's arm on a deploy-full-idp.sh admin cluster. Deny is lab-platform's arm parameter (lab-platform.yaml's
+# arm section), which its arm step sets on the admin role's root once the root has synced: kyverno-policies then
+# patches both to [Deny] and drops that ignore, so Argo CD holds the armed state from git.
+guardrails:
+  validationAction: Audit

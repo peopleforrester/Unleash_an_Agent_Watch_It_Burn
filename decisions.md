@@ -5204,3 +5204,45 @@ with both KubeCon clusters up on a staging that includes #634, drives one /chat 
     WIB_DEFAULT_ACCOUNT=accen-dev WIB_REGION=us-west-2 python3 verify/test_datadog_sandbox_live.py
 
 and records here which checks pass. When all pass, #629 closes.
+
+## 2026-10-30 · #638 · The admin role's guardrails arm from lab-platform's arm parameter, guardrails.validationAction
+
+The front door half of #638 is on staging (96c050f, 264c252, the 2026-10-28 entry above). The issue's newest comment
+adds lab-platform#310's request (hecaton filed no separate issue for it): lab-platform's `labctl event up` now has an
+`arm` step (lab-platform#311, #312) that sets one Helm parameter on the `lab-bootstrap` root of every cluster whose
+role arms its guardrails, the admin role of burn@2.0.0, 2.1.0 and 2.2.0, and refuses a burn event whose talk config
+declares no `arm` section. So `labctl event up`, which the front door's definition of done runs, needs this section
+too. There was no earlier draft of this part to check against staging.
+
+- **The parameter is `guardrails.validationAction`,** the example lab-platform's docs use, declared in
+  `lab-platform.yaml` as `arm: {parameter: guardrails.validationAction, value: Deny}` (block style, as the strict
+  parser wants). The chart's default is `Audit`; any other value fails the render by name.
+- **Deny is a kustomize patch on the kyverno-policies Application.** With the parameter at Deny,
+  `gitops/bootstrap/apps/kyverno-policies.yaml` renders `kustomize.patches` replacing `/spec/validationActions` with
+  `[Deny]` on `require-resource-limits` and `restrict-image-registries`, and does not render its `ignoreDifferences`
+  on that field, so selfHeal holds the armed state from git. At Audit the file renders as before, with the ignore,
+  so the attendee's C2 patch and fleet.sh's `toggle-kyverno-enforce.sh` on a deploy-full-idp.sh admin or full
+  cluster (KubeCon) still hold. Both guards sit in YAML comments, as the front door's do; `verify/bootstrap_chart.py`
+  `for_guardrails` is the file as rendered at either action.
+- **policies/kyverno gains a `Kustomization`,** listing all ten policy files and nothing else, because Argo CD
+  applies `kustomize.patches` only over a kustomization file. Named `Kustomization`, the third name kustomize and
+  Argo CD read, so the `*.yaml` globs that feed the directory to the Kyverno CLI in five verify/ tests do not pick it
+  up. Argo CD now builds the directory as kustomize on every profile instead of as a plain directory; the build is
+  the same ten policies, which the render test checks with the pinned kubectl. A policy file added there and not
+  listed would reach no cluster, so `verify/test_guardrails_arm.py` fails on one.
+- **Considered and not taken:** a second directory of Deny copies of the two policies (two files to keep equal), and
+  making the directory a Helm chart (a larger change to every policy for one field). No profile's values file sets
+  the action: arming waits for lab-platform's arm step, after the root has synced, so a guardrail at Deny never
+  refuses the platform's own pods during the first sync.
+- **Tests:** `verify/test_guardrails_arm.py` (offline: the Kustomization's list, both policies at Audit, the
+  parameter a chart value), `verify/test_bootstrap_chart.py` (the section, the default, the guards) and
+  `verify/test_bootstrap_chart_render.py` (Helm v4.2.1: attendee, admin and full unarmed keep the ignore and no
+  patches; admin armed has the two patches and no ignore and nothing else changes; kubectl v1.36.2's kustomize
+  applies them to Deny and leaves the other eight policies as written; `Enforce` fails by name).
+
+**Not yet run on a cluster:** the arm step against a real admin cluster. A session with AWS access runs
+`labctl event up` for a burn event at a staging commit that includes this, then on the admin cluster
+`KUBECONFIG=<file> kubectl --context <ctx> get validatingpolicy require-resource-limits restrict-image-registries
+-o jsonpath='{.items[*].spec.validationActions}'` shows `["Deny"]` twice, and `argocd app get kyverno-policies` is
+Synced. `verify/test_kyverno_cel_live.py` is not that check: it wants a full or attendee cluster at Audit. The front door's live checks, the bootstrap step's `front doors: 2 roster clusters recorded` and
+`labctl tls-check attackme.agenticburn.com`, are still owed as the 2026-10-28 entry says.

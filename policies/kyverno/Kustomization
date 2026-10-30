@@ -1,0 +1,19 @@
+# ABOUTME: Makes policies/kyverno a kustomize base, every policy file as it is, so the kyverno-policies Application
+# ABOUTME: can patch two of them to Deny when lab-platform arms a cluster (#638, guardrails.validationAction).
+#
+# Named Kustomization, the third name kustomize and Argo CD read, so the *.yaml globs that feed this directory to the
+# Kyverno CLI in verify/ never pick it up. Every policy file is listed: verify/test_guardrails_arm.py fails on a
+# *.yaml here that is missing, because Argo CD builds this list and a policy left off it never reaches a cluster.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - block-argocd-drift.yaml
+  - deny-llm-endpoint-bypass.yaml
+  - disallow-privileged.yaml
+  - require-labels.yaml
+  - require-networkpolicy.yaml
+  - require-probes.yaml
+  - require-resource-limits.yaml
+  - restrict-agent-spawned-workloads.yaml
+  - restrict-image-registries.yaml
+  - verify-image-signatures.yaml

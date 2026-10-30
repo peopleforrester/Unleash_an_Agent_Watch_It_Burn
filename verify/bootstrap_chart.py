@@ -57,6 +57,23 @@ def without_front_door(raw: str) -> str:
     return re.sub(r" \{\{- if \.Values\.frontDoor\.certificateArn \}\}.*? \{\{- end \}\}", "", raw, flags=re.S)
 
 
+# The guardrails' action (#638, lab-platform#310): values.yaml's guardrails.validationAction, Audit unless lab-platform's
+# arm step sets Deny. kyverno-policies.yaml alone holds a block between each pair: the Deny patches when armed, the
+# /spec/validationActions ignore when not.
+ARMED_IF = '{{- if eq .Values.guardrails.validationAction "Deny" }}'
+UNARMED_IF = '{{- if ne .Values.guardrails.validationAction "Deny" }}'
+ARM_END = "{{- end }}"
+# lab-platform.yaml's arm section: the Helm parameter lab-platform sets on an arming role's root, and its value.
+ARM_PARAMETER = "guardrails.validationAction"
+ARM_VALUE = "Deny"
+
+
+def for_guardrails(raw: str, action: str) -> str:
+    """An app file as the chart renders it at this guardrails.validationAction: the other action's block left out."""
+    drop = UNARMED_IF if action == "Deny" else ARMED_IF
+    return re.sub(" " + re.escape(drop) + r".*? \{\{- end \}\}", "", raw, flags=re.S)
+
+
 def profiles() -> list[str]:
     """The profile names lab-platform.yaml declares, in its order."""
     doc = yaml.safe_load(CONFIG.read_text(encoding="utf-8"))

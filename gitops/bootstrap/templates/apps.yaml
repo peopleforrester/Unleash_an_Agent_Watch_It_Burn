@@ -15,6 +15,10 @@ ABOUTME: source takes .Values.revision and every lab-platform image .Values.imag
 {{- if not (has $c7 (list "toolnames" "gateway")) }}
 {{- fail (printf "c7Control is where Challenge 7's control sits on this profile: toolnames, the Agent's evil-mcp toolNames list, or gateway, agentgateway's rule (got %q)" $c7) }}
 {{- end }}
+{{- $action := default "" .Values.guardrails.validationAction }}
+{{- if not (has $action (list "Audit" "Deny")) }}
+{{- fail (printf "guardrails.validationAction is the action of the two guardrails an admin cluster arms: Audit, as policies/kyverno writes them, or Deny, lab-platform's arm parameter (got %q)" $action) }}
+{{- end }}
 {{- if not .Values.apps }}
 {{- fail "the values name no apps: pass the profile's values-<profile>.yaml" }}
 {{- end }}

@@ -15,12 +15,40 @@ spec:
     repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
     targetRevision: "{{ .Values.revision }}"
     path: policies/kyverno
+    # Armed (#638, lab-platform#310): with guardrails.validationAction Deny, lab-platform's arm parameter, kustomize
+    # patches both live-toggle policies to [Deny] over the directory's Kustomization, and the ignore below is not
+    # rendered, so selfHeal holds Deny from git. With Audit, every root but an armed one, neither block changes a
+    # thing. The if and end sit in YAML comments so the file still parses as written; tpl renders them, and
+    # verify/test_bootstrap_chart_render.py renders both ways.
+    # {{- if eq .Values.guardrails.validationAction "Deny" }}
+    kustomize:
+      patches:
+        - target:
+            group: policies.kyverno.io
+            kind: ValidatingPolicy
+            name: require-resource-limits
+          patch: |-
+            - op: replace
+              path: /spec/validationActions
+              value:
+                - Deny
+        - target:
+            group: policies.kyverno.io
+            kind: ValidatingPolicy
+            name: restrict-image-registries
+          patch: |-
+            - op: replace
+              path: /spec/validationActions
+              value:
+                - Deny
+    # {{- end }}
   destination:
     server: https://kubernetes.default.svc
+  # {{- if ne .Values.guardrails.validationAction "Deny" }}
   # Beat-1 LIVE TOGGLE: the demo flips require-resource-limits validationActions [Audit]<->[Deny]
   # via kubectl patch (challenges/01-cncf-wall/toggle-kyverno-enforce.sh). Without this, selfHeal reverts
   # the live toggle instantly. Ignore drift ONLY on that one field so selfHeal still corrects all
-  # other drift (the live gate run on watch-it-burn-test caught this).
+  # other drift (the live gate run on watch-it-burn-test caught this). An armed root renders none of it.
   ignoreDifferences:
     - group: policies.kyverno.io
       kind: ValidatingPolicy
@@ -35,6 +63,7 @@ spec:
       name: restrict-image-registries
       jsonPointers:
         - /spec/validationActions
+  # {{- end }}
   syncPolicy:
     syncOptions:
       # RespectIgnoreDifferences: honor the validationActions ignoreDifferences on SYNC too, not just on diff.

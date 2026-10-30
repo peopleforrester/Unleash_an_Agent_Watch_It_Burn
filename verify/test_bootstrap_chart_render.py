@@ -22,9 +22,10 @@ import tempfile
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import (APPS, CHART, FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO,  # noqa: E402
-                             LAB_PLATFORM_GHCR, REPO_URL, REVISION, all_profiles, app_names, c7_control, for_c7_control,
-                             profiles, values_path, kustomize_images, without_front_door)
+from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, CHART, FRONT_DOOR_ARN,  # noqa: E402
+                             FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, REPO, LAB_PLATFORM_GHCR, REPO_URL, REVISION,
+                             UNARMED_IF, all_profiles, app_names, c7_control, for_c7_control, for_guardrails, profiles,
+                             values_path, kustomize_images, without_front_door)
 
 failures: list[str] = []
 
@@ -72,12 +73,13 @@ for profile in all_profiles():
     check(f"{profile}: besides the Applications it renders only the ghcr-kagent-oci Secret {rest}",
           rest == [("Secret", "ghcr-kagent-oci")])
     # Each listed file, rendered, is the file as written with the revision and the default image registry filled
-    # in and, with no frontDoor.certificateArn, the front door's guarded block left out, and on a gateway profile
-    # the c7Control guarded block too (#679): tpl changes nothing else.
+    # in and, with no frontDoor.certificateArn, the front door's guarded block left out, on a gateway profile
+    # the c7Control guarded block too (#679), and at guardrails.validationAction Audit the armed block (#638): tpl
+    # changes nothing else.
     want = []
     for n in app_names(profile):
         raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
-        raw = without_front_door(raw).replace(REVISION, COMMIT) \
+        raw = without_front_door(for_guardrails(raw, "Audit")).replace(REVISION, COMMIT) \
             .replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
         raw = re.sub(r"\{\{`(\{\{.*?\}\})`\}\}", r"\1", raw)
         want += [d for d in yaml.safe_load_all(raw) if d]
@@ -161,6 +163,78 @@ check("a certificateArn that is not an ACM ARN: the render fails, naming it", r.
 for guard in (FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END):
     check(f"no rendered Application keeps {guard}", guard not in render(
         "-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--set", f"frontDoor.certificateArn={CERT}").stdout)
+
+print("== the guardrails, armed by lab-platform's arm parameter (#638, lab-platform#310) ==")
+ARMING = ("--set", f"{ARM_PARAMETER}={ARM_VALUE}")
+LIVE_TOGGLE = ("require-resource-limits", "restrict-image-registries")
+
+
+def kyverno_policies(profile: str, *args: str) -> dict:
+    r = render("-f", str(values_path(profile)), "--set", f"revision={COMMIT}", *args)
+    return next((d for d in yaml.safe_load_all(r.stdout) if d and d["metadata"]["name"] == "kyverno-policies"), {}) \
+        if r.returncode == 0 else {}
+
+
+def policy_actions(text: str) -> dict[str, list]:
+    """Each ValidatingPolicy's spec.validationActions in a kustomize build of policies/kyverno, by name."""
+    return {d["metadata"]["name"]: d["spec"].get("validationActions") for d in yaml.safe_load_all(text)
+            if d and d.get("kind") == "ValidatingPolicy"}
+
+
+as_written = {}
+for f in sorted((REPO / "policies/kyverno").glob("*.yaml")):
+    as_written.update(policy_actions(f.read_text(encoding="utf-8")))
+built = subprocess.run([KUBECTL, "kustomize", str(REPO / "policies/kyverno")], capture_output=True, text=True) \
+    if KUBECTL else None
+check("policies/kyverno builds with kustomize to every policy as written, as Argo CD now builds it",
+      built is not None and built.returncode == 0 and policy_actions(built.stdout) == as_written
+      and len([d for d in yaml.safe_load_all(built.stdout) if d])
+      == sum(1 for f in (REPO / "policies/kyverno").glob("*.yaml")
+             for d in yaml.safe_load_all(f.read_text(encoding="utf-8")) if d),
+      built.stderr.strip()[:300] if built else "no kubectl")
+for profile in ("attendee", "admin", "full"):
+    plain = kyverno_policies(profile)
+    ign = sorted(i.get("name") for i in (plain.get("spec") or {}).get("ignoreDifferences") or [])
+    check(f"{profile}, unarmed: no kustomize patches, and the live toggle's ignore on both policies",
+          bool(plain) and "kustomize" not in plain["spec"]["source"] and ign == sorted(LIVE_TOGGLE), str(ign))
+armed = kyverno_policies("admin", *ARMING)
+patches = ((armed.get("spec") or {}).get("source") or {}).get("kustomize", {}).get("patches") or []
+check("admin, armed: one patch on each live-toggle policy, replacing /spec/validationActions with [Deny]",
+      sorted(p["target"].get("name") for p in patches) == sorted(LIVE_TOGGLE)
+      and all(p["target"].get("kind") == "ValidatingPolicy" and p["target"].get("group") == "policies.kyverno.io"
+              and yaml.safe_load(p["patch"]) == [{"op": "replace", "path": "/spec/validationActions",
+                                                  "value": ["Deny"]}] for p in patches), str(patches))
+check("admin, armed: no ignore on /spec/validationActions, so selfHeal holds Deny from git",
+      bool(armed) and "ignoreDifferences" not in armed["spec"]
+      and "RespectIgnoreDifferences=true" in armed["spec"]["syncPolicy"]["syncOptions"])
+plain = kyverno_policies("admin")
+if armed and plain:
+    a, b = dict(armed["spec"]), dict(plain["spec"])
+    a["source"] = {k: v for k, v in a["source"].items() if k != "kustomize"}
+    b.pop("ignoreDifferences", None)
+    check("admin, armed: nothing else in kyverno-policies changes", a == b and armed["metadata"] == plain["metadata"])
+r_plain = render("-f", str(values_path("admin")), "--set", f"revision={COMMIT}")
+r_armed = render("-f", str(values_path("admin")), "--set", f"revision={COMMIT}", *ARMING)
+others = lambda r: [d for d in yaml.safe_load_all(r.stdout) if d and d["metadata"]["name"] != "kyverno-policies"]  # noqa: E731
+check("admin, armed: no other Application changes", r_armed.returncode == 0 and others(r_armed) == others(r_plain))
+for guard in (ARMED_IF, UNARMED_IF, ARM_END, ".Values.guardrails"):
+    check(f"no rendered Application keeps {guard}", guard not in r_armed.stdout and guard not in r_plain.stdout)
+# The patches as Argo CD applies them: kustomize over policies/kyverno, from a scratch overlay in the repo's tmp/.
+if KUBECTL and patches:
+    (REPO / "tmp").mkdir(exist_ok=True)
+    with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
+        (pathlib.Path(d) / "kustomization.yaml").write_text(yaml.safe_dump({
+            "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+            "resources": [os.path.relpath(REPO / "policies/kyverno", d)], "patches": patches}), encoding="utf-8")
+        k = subprocess.run([KUBECTL, "kustomize", d], capture_output=True, text=True)
+    got = policy_actions(k.stdout) if k.returncode == 0 else {}
+    check("kustomize applies them: both live-toggle policies at [Deny], every other policy as written",
+          bool(got) and got == {n: (["Deny"] if n in LIVE_TOGGLE else v) for n, v in as_written.items()},
+          k.stderr.strip()[:300] or str(got))
+check("both live-toggle policies ship at [Audit] in git", all(as_written.get(n) == ["Audit"] for n in LIVE_TOGGLE))
+r = render("-f", str(values_path("admin")), "--set", f"revision={COMMIT}", "--set", f"{ARM_PARAMETER}=Enforce")
+check("a guardrails.validationAction that is neither Audit nor Deny: the render fails, naming it", r.returncode != 0
+      and "guardrails.validationAction is the action of the two guardrails" in r.stderr, r.stderr.strip()[:200])
 
 print("== LLM Guard's image, set through kustomize.images at the root's registry (#652) ==")
 # resources.yaml names the container by the kustomize image name llm-guard; ai-layer.yaml's kustomize.images sets it.

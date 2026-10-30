@@ -5,6 +5,10 @@
 # on. lab-platform waits for its hostname after the root syncs and records https://<hostname>/ on the cluster's
 # row, which is where its gateway sends attackme and burritobot-private. The gateway verifies that certificate
 # against the system roots, so it must be the ACM one: see frontDoor.certificateArn in gitops/bootstrap/values.yaml.
+#
+# arm (#638, lab-platform#310): the Helm parameter lab-platform's arm step sets on the lab-bootstrap root of each
+# cluster whose role arms its guardrails, the admin role, and its value. The chart then renders require-resource-limits
+# and restrict-image-registries at [Deny]: see guardrails.validationAction in gitops/bootstrap/values.yaml.
 format: lab-platform/v1
 labs:
   - burn
@@ -30,3 +34,6 @@ bootstrap:
     - name: full
       root: gitops/bootstrap
       values: values-full.yaml
+arm:
+  parameter: guardrails.validationAction
+  value: Deny

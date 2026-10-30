@@ -16,7 +16,8 @@ import sys
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from bootstrap_chart import (APPS, C7_TOOLNAMES_END, C7_TOOLNAMES_IF, CHART, CONFIG, DEPLOY_ONLY_PROFILES,  # noqa: E402
+from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, C7_TOOLNAMES_END,  # noqa: E402
+                             C7_TOOLNAMES_IF, CHART, CONFIG, DEPLOY_ONLY_PROFILES, UNARMED_IF,
                              FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL,
                              REVISION, TEMPLATES, all_profiles, app_names, deploy_root, deploys, profiles, values_path)
 
@@ -38,8 +39,8 @@ print("== lab-platform.yaml presents the chart (lab-platform docs/talk-config.md
 text = CONFIG.read_text(encoding="utf-8")
 cfg = yaml.safe_load(text)
 check("lab-platform.yaml is at the repo root", CONFIG.parent == REPO)
-check("it holds exactly format, labs, branch and bootstrap (the parser refuses any other field)",
-      list(cfg) == ["format", "labs", "branch", "bootstrap"])
+check("it holds exactly format, labs, branch, bootstrap and arm (the parser refuses any other field)",
+      list(cfg) == ["format", "labs", "branch", "bootstrap", "arm"])
 check("format is lab-platform/v1", cfg.get("format") == "lab-platform/v1")
 check("it is the content of the burn lab", cfg.get("labs") == ["burn"])
 check("pinned commits must be on staging", cfg.get("branch") == "staging")
@@ -58,6 +59,13 @@ for p in boot.get("profiles") or []:
         want["front_door"] = FRONT_DOOR[name]
     check(f"profile {name}: root gitops/bootstrap, values values-{name}.yaml"
           + (", front_door agent/console" if name in FRONT_DOOR else ", no front_door"), p == want)
+# arm (#638, lab-platform#310): the Helm parameter lab-platform's arm step sets on the admin role's root, and its value.
+# labctl event up refuses a burn event whose talk config has none, since burn's admin role arms (lab-platform#312).
+arm = cfg.get("arm") or {}
+check(f"arm sets {ARM_PARAMETER}={ARM_VALUE}, and nothing else",
+      arm == {"parameter": ARM_PARAMETER, "value": ARM_VALUE})
+check("the arm parameter is not the revision parameter, which carries the commit",
+      arm.get("parameter") != boot.get("revision_parameter"))
 resources = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
 console = next((d for d in yaml.safe_load_all(resources)
                 if d and d.get("kind") == "Service" and d["metadata"]["name"] == "console"), {})
@@ -93,10 +101,11 @@ check("gitops/bootstrap/Chart.yaml is a Helm v2 application chart",
 check("values.yaml shares an empty revision, so a render without the parameter fails, imageRegistry at "
       f"{LAB_PLATFORM_GHCR}, so a root that passes none pulls from ghcr.io as before (#622), and an empty "
       "frontDoor.certificateArn, so a root that passes none keeps nginx's self-signed certificate (#638), and "
-      "c7Control toolnames, so a profile that names none keeps the Agent's evil-mcp toolNames ignore (#679)",
+      "c7Control toolnames, so a profile that names none keeps the Agent's evil-mcp toolNames ignore (#679), and "
+      "guardrails.validationAction Audit, so only a root lab-platform arms renders the two policies at Deny (#638)",
       yaml.safe_load((CHART / "values.yaml").read_text(encoding="utf-8"))
       == {"revision": "", "imageRegistry": LAB_PLATFORM_GHCR, "frontDoor": {"certificateArn": ""},
-          "c7Control": "toolnames"})
+          "c7Control": "toolnames", "guardrails": {"validationAction": "Audit"}})
 check("the chart holds apps/, templates/ and no other directory (the four old root directories are gone)",
       sorted(d.name for d in CHART.iterdir() if d.is_dir()) == ["apps", "templates"])
 check("gitops/apps is gone: its files are the chart's apps/", not (REPO / "gitops/apps").exists())
@@ -118,6 +127,15 @@ check("ai-layer.yaml patches the console Service only when frontDoor.certificate
       and "      # {{- end }}\n  destination:" in ai_layer)
 check("apps.yaml fails a c7Control that is neither toolnames nor gateway, by name (#679)",
       '{{- if not (has $c7 (list "toolnames" "gateway")) }}' in tpl and 'fail (printf "c7Control is where' in tpl)
+check("apps.yaml fails a guardrails.validationAction that is neither Audit nor Deny, by name (#638)",
+      '{{- if not (has $action (list "Audit" "Deny")) }}' in tpl
+      and 'fail (printf "guardrails.validationAction is the action' in tpl)
+kyv = (APPS / "kyverno-policies.yaml").read_text(encoding="utf-8")
+check("kyverno-policies.yaml renders its kustomize patches only when armed, the guard in comments",
+      f"    # {ARMED_IF}\n    kustomize:\n      patches:\n" in kyv and f"    # {ARM_END}\n  destination:" in kyv)
+check("and its /spec/validationActions ignore only when not armed",
+      re.search(rf"  # {re.escape(UNARMED_IF)}\n(  #.*\n)*  ignoreDifferences:\n", kyv) is not None
+      and f"        - /spec/validationActions\n  # {ARM_END}\n  syncPolicy:" in kyv)
 check("ai-layer.yaml renders the Agent's evil-mcp toolNames ignore only when c7Control is not gateway (#679)",
       f"      jqPathExpressions:\n        # {C7_TOOLNAMES_IF}\n        - '.spec.declarative.tools[] | select("
       f'.mcpServer.name == "evil-mcp") | .mcpServer.toolNames\'\n        # {C7_TOOLNAMES_END}\n' in ai_layer)
@@ -179,12 +197,15 @@ for f in app_files:
     # tpl renders the whole file, so the only template text is the revision, the lab-platform image registry
     # (#622) and Prometheus' own, escaped.
     # ai-layer.yaml alone also holds the front door's guarded certificate patch (#638).
+    # kyverno-policies.yaml alone holds the guardrails' armed and unarmed blocks (#638).
     allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END, C7_TOOLNAMES_IF,
-                                             C7_TOOLNAMES_END) if f == "ai-layer.yaml" else ())
+                                             C7_TOOLNAMES_END) if f == "ai-layer.yaml" else ()) \
+        + ((ARMED_IF, UNARMED_IF, ARM_END) if f == "kyverno-policies.yaml" else ())
     stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw))
              if m not in allowed]
     check(f"{f}: no template text but the revision and the image registry (Prometheus' {{{{ }}}} escaped)"
           + (" and the front door's certificate and the c7Control guard" if f == "ai-layer.yaml" else "")
+          + (" and the guardrails' arm guards" if f == "kyverno-policies.yaml" else "")
           + f" {stray}", not stray)
     docs = [d for d in yaml.safe_load_all(raw) if d]
     check(f"{f}: every document is an Application", bool(docs) and all(d.get("kind") == "Application" for d in docs))
