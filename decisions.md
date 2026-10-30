@@ -5520,3 +5520,45 @@ test, the same config check. Nothing differs from 11df574 but this entry.
 with the C1 NetworkPolicies on, open the interaction in Agent Observability and confirm `execute_tool run_shell` is
 `status:error` with the "command FAILED" result readable on it, under the guard-proxy root. The one-root half is
 #320's `CONTEXT=<admin-context> python3 verify/one_root_probe.py`.
+
+## 2026-10-30 · #634 · The collector renames kagent's workshop_agent to burritobot-agent, first in each pipeline
+
+Whitney's sandbox org, after one /chat on attackme, had `traces.span.metrics.calls` series for `service:burritobot`
+and `service:workshop_agent`. Her rule (#629) is that every service starts with `burritobot`.
+
+- **Where the name comes from.** kagent 0.10.1 sets it. kagent-adk's `cli.py` calls
+  `configure_tracing(app_cfg.name, app_cfg.namespace, server)`. kagent-core exports that name for `configure` in
+  `kagent/core/tracing/_utils.py` (read at tag v0.10.1), which builds `Resource.create({"service.name": name,
+  "service.namespace": namespace})`, and `KAgentConfig.name` (`kagent/core/_config.py`) is KAGENT_NAME with `-`
+  turned into `_`. OpenTelemetry's Resource.create gives the attributes passed to it precedence over
+  OTEL_SERVICE_NAME and OTEL_RESOURCE_ATTRIBUTES, so the Agent's pinned burritobot-agent is dropped, while
+  service.version and deployment.environment.name from the same env still arrive. The collector and ADK set no
+  service name. KAGENT_NAME is also kagent's A2A app name, so this repo leaves it alone and fixes the name
+  downstream.
+- **The fix.** `transform/kagent_service_name` in `gitops/otel-collector/values.yaml` holds one resource-context
+  statement, `set(service.name, "burritobot-agent") where service.name == "workshop_agent"`, for traces and for
+  metrics. It runs right after memory_limiter, ahead of filter/drop_noise, because every agent rule after it
+  matches burritobot-agent. While the agent reported workshop_agent those rules matched nothing: its ASGI send and
+  receive spans and its empty `chat <model>` spans shipped again, and call_llm and invocation lost their
+  invoke_agent stamp. The rename puts all of that back.
+- **The burn overlay.** `values-burn.yaml` restates the traces processors in full (for `transform/scrub_pii`, #647),
+  and burn is attackme, where the issue was measured, so the rename is listed there too.
+- **An exact name.** `verify/test_service_naming.py` derives the literal from the Agent's metadata.name. A renamed
+  Agent then fails the offline suite before a new service can reach the org. The same test holds the rename's
+  position on every profile, with and without datadog-secret.
+- **Checked on the real collector.** `verify/test_kagent_service_name_collector.py` (`# E2E TIER: tools`, the
+  pinned otelcol-contrib 0.160.0) runs each profile's shipped pipelines on one /chat's spans and kagent's token
+  metric. On staging's config it reproduces the measurement: spans and `traces.span.metrics.calls` as burritobot
+  and workshop_agent. With the rename both are burritobot and burritobot-agent on all three profiles, the ASGI
+  send and empty chat spans are dropped, the parented `POST /` server span stays (#320), and call_llm carries
+  invoke_agent.
+
+**What differs from the draft.** Run 10236's commit ca7e601 was cut from a staging that predates #320 and #647. Its
+E2E test checked that a parented `POST /` server span was dropped; since #320 that span is kept, so the test
+checks the ASGI send leaf and the empty chat leaf instead, and also checks the server span stays. The draft
+missed `values-burn.yaml`, which #647 later gave its own traces processor list; this change lists the rename
+there. The draft's test ran the attendee profile only; this one runs all three.
+
+**Not yet run on a cluster.** On attackme, after the collector syncs, drive one /chat and run
+`verify/test_datadog_sandbox_live.py`. Its span check groups `traces.span.metrics.calls` by service and should
+list only burritobot and burritobot-agent.

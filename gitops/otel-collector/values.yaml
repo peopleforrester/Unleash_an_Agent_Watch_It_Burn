@@ -44,6 +44,31 @@ config:
         - key: k8s.cluster.name
           value: ${env:WIB_CLUSTER_NAME}
           action: upsert
+    # kagent names the agent's service after the Agent, whatever its env pins (#634). kagent 0.10.1's
+    # configure_tracing (kagent-core, kagent/core/tracing/_utils.py) builds its resource with
+    # Resource.create({"service.name": name, ...}), where name is KAGENT_NAME with "-" turned into "_"
+    # (kagent/core/_config.py), and an attribute passed there outranks OTEL_SERVICE_NAME and
+    # OTEL_RESOURCE_ATTRIBUTES. So the Agent's env says burritobot-agent and every span and metric leaves the pod as
+    # workshop_agent. Measured 2026-10-28 in Whitney's sandbox org: one /chat gave traces.span.metrics.calls series
+    # for service:burritobot and service:workshop_agent. The rest of the env is merged in, so service.version and
+    # deployment.environment.name do arrive; only the name is lost.
+    #
+    # It runs right after memory_limiter in the traces and metrics pipelines, ahead of filter/drop_noise, because
+    # every rule below that matches the agent matches "burritobot-agent". With the agent reporting workshop_agent
+    # those rules matched nothing: the ASGI send/receive and empty `chat` spans shipped again, and call_llm and
+    # invocation lost their invoke_agent stamp. KAGENT_NAME is the Agent's metadata.name (workshop-agent,
+    # gitops/ai-layer/resources.yaml); verify/test_service_naming.py derives the literal below from it, so a
+    # renamed Agent fails the offline suite before it can leak a new service name.
+    transform/kagent_service_name:
+      error_mode: ignore
+      trace_statements:
+        - context: resource
+          statements:
+            - 'set(attributes["service.name"], "burritobot-agent") where attributes["service.name"] == "workshop_agent"'
+      metric_statements:
+        - context: resource
+          statements:
+            - 'set(attributes["service.name"], "burritobot-agent") where attributes["service.name"] == "workshop_agent"'
     # OTTL fallback (PRD #27 M3): stamp peer.service on third-party component CLIENT spans so the
     # Datadog Service Map draws the agentgateway -> kagent edge, IF agentgateway doesn't emit it
     # natively. guard-proxy sets its OWN peer.service in code (M2), so it is intentionally NOT
@@ -344,6 +369,7 @@ config:
           - span_metrics # RED metrics generated from spans (carry UST tags for correlation)
         processors:
           - memory_limiter
+          - transform/kagent_service_name # #634: kagent's workshop_agent becomes burritobot-agent
           - batch
           - resource
           - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock where N/A
@@ -355,6 +381,7 @@ config:
           - otlp
         processors:
           - memory_limiter
+          - transform/kagent_service_name # #634: before every rule that matches burritobot-agent
           - filter/drop_noise
           - batch
           - resource

@@ -367,6 +367,8 @@ spec:
         # auto-sets it from the deployment name (workshop-agent) at injection. Pin it to the locked UST
         # ONE NAME FAMILY (#265): Datadog derives the Agent Observability application from the ROOT span's
         # service, so every service in the BurritoBot path is prefixed "burritobot" (the root is burritobot).
+        # kagent's own tracer setup overrides both of these with the Agent's name (workshop_agent); the
+        # collector's transform/kagent_service_name maps it back to burritobot-agent (#634).
         - name: OTEL_SERVICE_NAME
           value: burritobot-agent
         - name: OTEL_RESOURCE_ATTRIBUTES
