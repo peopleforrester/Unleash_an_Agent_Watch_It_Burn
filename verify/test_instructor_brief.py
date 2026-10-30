@@ -69,6 +69,34 @@ check("the Datadog showcase is a beat", "Find their attack in Datadog, live" in 
 check("it says to rehearse the live search", "Rehearse this" in BRIEF)
 check("it tells them to close the Community tab", "close the Community BurritoBot tab" in FLAT)
 
+print("== the showcase says how to find a prompt in Datadog (#337) ==")
+# The brief used to say "find their prompt" and not how. The filter is what goes wrong on stage: guard-proxy's
+# root span carries the student's words, burritobot-agent's carries the system prompt.
+_showcase = " ".join(BRIEF.split("Find their attack in Datadog, live", 1)[1].split("</section>", 1)[0].split())
+QUERY = "service:burritobot kube_cluster_name:burritobot-public"
+check("it gives the query for the Community cluster", f"<code>{QUERY}</code>" in _showcase)
+check("it names the saved view the query is kept as", "saved view <b>Every prompt</b>" in _showcase
+      and "save it as a view named <b>Every prompt</b>" in _showcase)
+check("it warns off service:burritobot-agent, and says why",
+      "Not <code>service:burritobot-agent</code>" in _showcase and "system prompt" in _showcase)
+check("it names the column the prompt shows in", "<b>CONTENT</b>" in _showcase and "<b>INPUT</b>" in _showcase)
+check("it states all three gaps", all(g in _showcase for g in ("Not live:", "Not projectable:", "Not durable:")))
+check("it points at the prompt wall for the projector", "prompts.agenticburn.com" in _showcase)
+# The service names have to be the ones the pods carry: guard-proxy is burritobot, the agent burritobot-agent.
+_guard = RES.split("name: guard-proxy\n  labels:", 1)[1].split("\n---", 1)[0] if "name: guard-proxy\n  labels:" in RES else ""
+check("guard-proxy's service is burritobot, as the query says", "tags.datadoghq.com/service: burritobot," in _guard)
+check("the agent's service is burritobot-agent, as the warning says", "tags.datadoghq.com/service: burritobot-agent" in RES)
+# The cluster names are Datadog's, written by the identity script, not the EKS names.
+IDENT = (REPO / "infra/datadog-cluster-identity.sh").read_text(encoding="utf-8")
+check("the Community cluster is burritobot-public in Datadog",
+      'watch-it-burn-community)     DATADOG_CLUSTER_NAME="burritobot-public"' in IDENT)
+check("an admin cluster is burritobot-private-<owner>, an attendee's burritobot-<name>",
+      'DATADOG_CLUSTER_NAME="burritobot-private-${owner%-admin}"' in IDENT
+      and 'DATADOG_CLUSTER_NAME="burritobot-${CLUSTER_NAME#watch-it-burn-}"' in IDENT
+      and "kube_cluster_name:burritobot-private-michael" in _showcase
+      and "kube_cluster_name:burritobot-attendee-007" in _showcase)
+check("no EKS name is given as a Datadog cluster tag", "kube_cluster_name:watch-it-burn" not in BRIEF)
+
 print("== Phase 2 says presenters claim like attendees ==")
 check("presenters claim from the same pool", "Presenters claim one the same way, from the same pool" in FLAT)
 check("the admin and Community clusters are not claimable", "not in the pool and cannot be claimed" in FLAT)

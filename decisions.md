@@ -4824,3 +4824,31 @@ spans" banner should be gone, and the list should show one row per interaction.
 change that baseline should be one, and `verify/one_root_probe.py` is the way to record it. The Go proxy keeps it
 only if it sends the traceparent on its forward and dials agentgateway on :3000. The second is what the gateway
 exemption keys on, and `verify/test_collector_one_root.py` follows AGENT_URL.
+## 2026-10-30 · #337 · The brief's Datadog showcase carries the recipe; the saved view is a hand step
+
+The Phase 1 showcase beat in `gitops/ai-layer/web/brief.html` said to find a student's prompt in Datadog and not
+how. It now gives the recipe the issue measured on 2026-09-08, in the names the platform uses today.
+
+- **The query.** `service:burritobot kube_cluster_name:burritobot-public` in Agent Observability
+  (`app.datadoghq.com/llm/traces`). guard-proxy's root span is service `burritobot` (also the `ml_app`, #629) and
+  carries the student's words in the CONTENT column's INPUT. A warning says not to use `service:burritobot-agent`,
+  whose root span input is the system prompt.
+- **What differs from the issue.** The issue gave EKS names as the cluster tag (`watch-it-burn-community`,
+  `watch-it-burn-attendee-007`) and the Portland trial org. Since #629, `infra/datadog-cluster-identity.sh` writes
+  Datadog's cluster name as `burritobot-public`, `burritobot-attendee-007` and `burritobot-private-<owner>` for an
+  admin cluster, and the shared org is Whitney's sandbox org. The brief uses those, and says the Community cluster's
+  collector scrubs e-mails, cards, SSNs and phone numbers in the trace (#647).
+- **The three gaps** are on the page in one note: not live (one to two minutes of ingestion), not projectable, not
+  durable. Since #309 closed, the prompt wall `prompts.agenticburn.com` is named as the projectable feed. The
+  durability line points at #647's purge of the Community cluster's data after the session.
+- **The saved view.** The brief names it `Every prompt` and puts saving it in the rehearsal note. It cannot be made
+  from here: Datadog's API has no saved-view endpoint for its explorers (the same finding as #648's run), and no run
+  holds a sign-in to the shared org. Saving it is a hand step for a presenter signed in to that org.
+- **Held offline.** `verify/test_instructor_brief.py` checks the query, the view name, the warning, the three gaps
+  and the wall in the showcase beat, and ties the service names to `gitops/ai-layer/resources.yaml` and the cluster
+  names to the identity script. Against the brief before this change, 8 of its checks fail.
+
+**Not yet run on a cluster or in Datadog.** Signed in to the shared org, type the query, confirm the CONTENT
+column shows a Community prompt in INPUT, and save the view as `Every prompt`. Confirm too that
+`kube_cluster_name` is on guard-proxy's LLM Observability root span under the `burritobot-public` name; the issue's
+2026-09-08 check saw it under the old EKS names.
