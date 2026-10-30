@@ -5169,3 +5169,31 @@ no credentials), so the run is still owed. No code changed.
 
 and records here whether the three #607 checks pass (terminal-auth refused by volume and by secretKeyRef, each
 with its message; ceo-personal-record admitted), and whether the #490 and #552 checks the TypeError hid pass.
+
+**Run live, 2026-10-30 (hecaton elevated tier, escalation 325): all of it passes on watch-it-burn-private.** The
+guarded command above ran against `arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private` (ACTIVE,
+tagged `project=watch-it-burn`, `event=kubecon-na-2026`) from staging `0d73c8d`, run id `e8c620`, and exited 0 on
+"All live deny-llm-endpoint-bypass and restrict-agent-spawned-workloads checks passed.", with 57 PASS lines and no
+failed check.
+
+- **The three #607 Secret checks pass.** terminal-auth mounted as a secret volume and terminal-auth read through an
+  env secretKeyRef are each refused by restrict-agent-spawned-workloads, each with its own message (the test asserts
+  `Policy restrict-agent-spawned-workloads failed:` and the volume or env message in the refusal). The Pod that mounts
+  ceo-personal-record and reads it by secretKeyRef is admitted.
+- **The #490 checks pass.** agent-sa may create the default-endpoint, envFrom and valueFrom pods; each exists and no
+  NetworkPolicy lets it reach a public API; the console label really does open egress.
+- **The #552 checks pass.** The plain pod is Ready; agentgateway, workshop-agent and guard-proxy each have a Ready pod;
+  the plain pod's connections to agentgateway :3000 and :3002 and to workshop-agent :8080 are dropped while the hop
+  before each is admitted (and kagent to workshop-agent :8080); guard-proxy still reaches agentgateway :3000; and
+  restrict-agent-spawned-workloads refuses the six impersonating shapes (agent-sa Deployment, agentgateway identity,
+  console label, and pods labelled like guard-proxy, workshop-agent and agentgateway).
+- **The prerequisites, the PolicyReport checks and the guarded path pass too.** Both ValidatingPolicies' live
+  validationActions, matchConditions, variables, validations and namespaceSelector match `policies/kyverno/`, Kyverno
+  reports both ready, the four bypass shapes are reported FAIL and the guard-proxy-routed pod PASS, and guard-proxy's
+  and agentgateway's own pods are reported PASS.
+- **Cleanup held.** The suite reported `cleanup (wib.test/run=e8c620): done`, and afterwards
+  `kubectl -n agent get pods,deployments,replicasets,configmaps -l wib.test/run=e8c620` and
+  `kubectl get pods -A -l wib.test/run` found no resources. Nothing called a model.
+
+This closes #608's live check on the admin profile. An attendee-profile cluster has still not run the suite, since
+none is planned before KubeCon.
