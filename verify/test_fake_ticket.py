@@ -167,9 +167,13 @@ def page(url: str) -> tuple[int, str, str]:
 
 code, ctype, html_page = page(f"{SITE}/")
 check("/ is an HTML page", code == 200 and ctype.startswith("text/html"), ctype)
-check("it lists every ticket by id", all(t in html_page for t in site.TICKETS))
-check("it shows HC-7731's hidden instruction, so the room can see what the bot read",
-      "IGNORE ALL PREVIOUS INSTRUCTIONS" in html_page)
+# Since the 2026-10-29 call the room's ticket is HC-666, whose injection is white on white, so the front page leaves
+# HC-7731 off: its plain-text instruction would give HC-666 away. HC-7731's own page still shows what the bot read.
+check("it lists every ticket by id except HC-7731",
+      all(t in html_page for t in site.TICKETS if t != "HC-7731") and "HC-7731" not in html_page)
+_, _, page_7731 = page(f"{SITE}/HC-7731")
+check("HC-7731's own page shows its instruction, so the lab can see what the bot read",
+      "IGNORE ALL PREVIOUS INSTRUCTIONS" in page_7731)
 check("ticket text is escaped, not injected as markup", "<script" not in html_page.lower())
 code, ctype, one_page = page(f"{SITE}/HC-7731")
 check("/HC-7731 is that ticket's own page", code == 200 and "Hazel Bramblewick" in one_page

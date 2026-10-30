@@ -314,7 +314,9 @@ def ask_for(name: str) -> str:
 
 
 def desk(name: str) -> str:
-    fixed = "".join(_article(TICKETS[k]) for k in FIXED_TICKETS)
+    # HC-7731's injection is plain text, so listing it would give away HC-666's hidden paragraph; the lab and the
+    # ticket tool still read it by id.
+    fixed = "".join(_article(TICKETS[k]) for k in FIXED_TICKETS if k != C6_TICKET_ID)
     return _shell("Support desk", f"""
 <div class="you">You are <b id="witch-name">{html.escape(name)}</b>. That name follows your tickets and anything
 BurritoBot deploys for you.</div>
