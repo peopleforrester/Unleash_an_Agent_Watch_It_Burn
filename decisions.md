@@ -5066,3 +5066,28 @@ issues the key and runs `WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/
 `verify/test_fleet_monitors_live.py` (in `bash verify/run-e2e.sh`) must pass, and every column of the fleet
 dashboard must fill for both clusters. A blank column means a wrong name, fixed in `infra/datadog-fleet/` and
 `verify/test_fleet_monitors.py` together (#485).
+
+## 2026-10-30 · #520 · #481's live check: the public half passes on both clusters, the in-cluster half is still owed
+
+**No code changed.** #520 asks for `verify/test_console_no_toggle_live.py` on the admin and community clusters.
+Hecaton runs have no AWS profile or kubeconfig, so the test's `kubectl exec` steps cannot run from one. The
+clusters are now watch-it-burn-community (`attackme`) and watch-it-burn-private (`burritobot-private`), the
+admin-profile cluster since #632. michael-admin is gone and answers 404 even on `/guards`.
+
+**The public half was probed from outside on 2026-10-30 at 03:12Z**, with the same requests the test sends
+(GET, no query, so nothing flips), on `attackme` and `burritobot-private` under both agenticburn.com and
+burritobot.co:
+- `/guards` returned 200 with the guard JSON on both. Every guard was off on both clusters.
+- `/a2a/toggle`, `/a2a/guards`, `/a2a/` and `/toggle` returned 404 on all four hosts. The 404 body is the console's
+  own nginx/1.27.5 page and holds no guard key. With the old route in place, `/a2a/guards` would have returned
+  guard-proxy's JSON. So the deployed consoles carry #481, and no separate roll-console run is needed for them.
+
+**Not yet run on a cluster:** the test's in-cluster half: the `cluster-identity` public host, guard-proxy's
+`/guards` read over `kubectl exec`, the terminal's `_px` and `guards-status` helpers, and the check that the guards
+did not move. A session with the accen-dev profile runs this once for each of watch-it-burn-private and
+watch-it-burn-community:
+
+    C=watch-it-burn-private; K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_console_no_toggle_live.py
