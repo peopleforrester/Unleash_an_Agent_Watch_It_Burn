@@ -677,7 +677,7 @@ spec:
       # the proxy without bumping this is a test failure rather than a silent no-op in the room.
       annotations:
         instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"
-        checksum/proxy-py: "0cca4692acab"
+        checksum/proxy-py: "4170cfb66e4c"
     spec:
       # A dedicated ServiceAccount with a mounted token, so /controls can read the badge objects
       # (#197/#209). automountServiceAccountToken is TRUE here, unlike everywhere else in this bundle,
@@ -765,8 +765,10 @@ spec:
             # ON for Portland (Michael, 2026-09-03), so the instructor feed at start.agenticburn.com
             # has something to render. Attendees are TOLD their prompts may appear on the instructor
             # screen, in run-of-show step 0 and in the lab guide; that disclosure is the actual control.
-            # The deterministic mask (BLOCK_LIST + PROFANITY_LIST, truncated to 280 chars) is the floor,
-            # not a moderation service. Turn this back off for any run where the room has not been told.
+            # The deterministic mask is the floor, not a moderation service: email addresses, runs of seven or
+            # more digits (phone, card, SSN) and street addresses, then BLOCK_LIST, then PROFANITY_LIST as whole
+            # words, then the 280-char cut (#646). Only the feed copy is masked; the bot gets the prompt as typed,
+            # which verify/test_stream.py holds. Turn this back off for any run where the room has not been told.
             - { name: STREAM_PROMPTS, value: "on" }
             # The instructor console reads /cost and /prompts cross-origin, and the proxy answers CORS for one
             # origin. The room is shown start.burritobot.co (#651), so that is the one; start.agenticburn.com

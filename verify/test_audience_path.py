@@ -111,7 +111,7 @@ def calls_in(node: ast.AST, name: str, skip_nested: bool = False) -> int:
 
 
 chat = funcs["_handle_chat"]
-guard_calls = {g: calls_in(chat, g, skip_nested=True) for g in ("input_allowed", "topic_refused", "output_scrub")}
+guard_calls = {g: calls_in(chat, g, skip_nested=True) for g in ("input_verdict", "topic_refused", "output_scrub")}
 forwards = calls_in(chat, "_attempt", skip_nested=True)
 check(f"each LLM Guard stage in /chat is one _post_guard call {guard_calls}",
       all(calls_in(funcs[g], "_post_guard") == 1 for g in guard_calls) and calls_in(funcs["_post_guard"], "urlopen") == 1)

@@ -5246,3 +5246,34 @@ too. There was no earlier draft of this part to check against staging.
 -o jsonpath='{.items[*].spec.validationActions}'` shows `["Deny"]` twice, and `argocd app get kyverno-policies` is
 Synced. `verify/test_kyverno_cel_live.py` is not that check: it wants a full or attendee cluster at Audit. The front door's live checks, the bootstrap step's `front doors: 2 roster clusters recorded` and
 `labctl tls-check attackme.agenticburn.com`, are still owed as the 2026-10-28 entry says.
+## 2026-10-30 · #646 · guard-proxy is repinned to c247b3d, so the prompt wall shows personal data and terms redacted
+
+The 2026-10-29 entry wrote the redaction in guard-proxy and left the repin owed. Michael landed it there as
+guard-proxy-agenticburn#20: `fe28eb3` on that repo's main, recorded by `c247b3d`. `gitops/ai-layer/guard-proxy` now pins
+`c247b3d` (was `000f57e`), the commit Michael named on the issue. That repo's main has moved on to `6fb522b` (one
+TURN_TIMEOUT deadline per /chat turn). That change is not part of this issue, so this pin leaves it out.
+
+- **What the wall now shows.** `GET /prompts`, which the wall draws, holds `moderate()`'s copy. It masks email addresses,
+  runs of seven or more digits (phone, card, Social Security numbers), street addresses, BLOCK_LIST, and PROFANITY_LIST
+  as whole words. The bot gets the prompt as typed on both `/chat` and the A2A root.
+- **`verify/test_stream.py` holds it.** It checks the pinned `moderate()` against each kind of personal data and a
+  term, and checks that an ordinary order ("spicy", "cocktail", "order 12345", "12:30") stays as typed. Then it starts
+  the pinned proxy.py on loopback with the guard-proxy container's own env from `resources.yaml`, and points it at a
+  fake A2A agent. It sends one prompt on `/chat` and one on A2A, each with personal data and a term. It checks that the
+  agent received each prompt unchanged and that `/prompts` shows them redacted. Run against the old pin `000f57e`, 15
+  of its checks fail.
+- **Also in the pin, so tests and config moved with it.** `000f57e..c247b3d` also brings `f220c9d` (the classifier
+  refusal names the scanners that flagged it, and the log line gains a `scanners` field) and `f13e418`
+  (CONSOLE_ORIGIN takes a comma-separated list). `checksum/proxy-py` is bumped to `4170cfb66e4c`.
+  `verify/test_audience_path.py` counts `input_verdict`, which `/chat` now calls in place of `input_allowed`.
+  `verify/test_leaderboard.py`'s C6 check now accepts the `input_classifier_block` event with more fields after it.
+  The deployment's single `CONSOLE_ORIGIN` value still parses as a one-item list, which `verify/test_two_domains.py`
+  checks. The `STREAM_PROMPTS` comment in `resources.yaml` now describes the mask.
+- **Still open, as before.** Whitney's question about raw personal data in the Datadog traces is not part of this change.
+
+**Not yet run on a cluster:** this run had no cluster, so the hand check from the 2026-10-29 entry is still owed on the
+next `attackme` bring-up with this staging. Send a prompt without the probe marker, carrying a fake email and phone
+number, for example `curl -s https://attackme.burritobot.co/chat -H 'Content-Type: application/json' -d
+'{"prompt":"one burrito, email jane.doe@example.com, call (503) 555-0100"}'`. Check that BurritoBot answers. Then
+check that `curl -s https://attackme.burritobot.co/prompts` and the wall show
+`one burrito, email [redacted], call [redacted]`.
