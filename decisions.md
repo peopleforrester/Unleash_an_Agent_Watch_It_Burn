@@ -5577,3 +5577,71 @@ watch-it-burn-private still refuses nothing the test expects admitted, either wa
 
 **Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it, with the guarded command in the first
 #608 entry above. The result goes here: the three #607 checks, and the #490 and #552 checks the TypeError hid.
+## 2026-10-30 · #265 · question 925: a blocked tool call is one error, on its tool span, shaped as the GenAI semantic conventions say
+
+**Question 925.** Should a blocked BurritoBot tool call be marked as an error only on its tool span, or on both the
+tool span and the model call that read its result? **Answer:** "Need that to align with the Gen AI semantic
+conventions, whatever needs to be done to make it as readable and presentable as possible." **Decided by Michael**
+(verdict: overridden, in the web view; neither offered option was picked by name).
+
+**What the conventions say.** Read on 2026-10-30 from open-telemetry/semantic-conventions-genai at 3fe8460 (the
+GenAI conventions moved there from semantic-conventions, whose pages now only point at it): `gen-ai-spans.md`'s
+execute_tool span, `gen-ai-agent-spans.md` and `mcp.md`, and the Recording Errors document of semantic-conventions
+v1.44.0 they all defer to for span status.
+- Status "MUST be left unset if the instrumented operation has ended without any errors", and errors "handled
+  (allowing an operation to complete gracefully) SHOULD NOT be recorded on spans ... that describe this operation".
+  The model call that reads a "command FAILED" result completed normally, so marking it was against the conventions.
+  That settles the question for the tool span alone, which was also run 12158's recommendation.
+- A failed operation is status ERROR and carries `error.type`, Conditionally Required "if the operation ended in an
+  error". For a CallToolResult with `isError: true`, `mcp.md` says error.type "SHOULD be set to `tool_error`".
+  Datadog maps `error.type` to `meta.error.type` and the status message to `meta.error.message` (its OTel
+  instrumentation page, read 2026-10-30), so the value shows on the span.
+- `gen_ai.tool.call.result` is described as the result "if execution was successful". It is still copied on a
+  failure: the failure text is what a student reads to see the block, which is the "readable" half of the answer.
+  The status message stays a pointer to it (Recording Errors: the description is "not expected to contain sensitive
+  details", and tool output here can hold the exfiltrated payload).
+
+**What it changes.**
+- `transform/mark_tool_failure` is gone from `gitops/otel-collector/values.yaml` and from the traces processors in
+  `values.yaml` and `values-burn.yaml`. A block is one error, not the "2 errors" #320 quotes.
+- `transform/adk_tool_content` also sets `error.type` to `tool_error` beside each of its two status pairs (MCP's
+  isError and workshop-mcp's "command FAILED" text, #264). Only a tool that raises gets marked, and run_shell is
+  the only one that does. `deploy_app` returns Kyverno's refusal in Challenge 2 as text ("deploy failed for ..."),
+  which FastMCP sends as a success, so `challenges/PROMPT-CATALOG.md`'s "the deploy tool call is `status:error` in
+  the trace" was not true before this change and is not true now. mark_tool_failure never matched that text either.
+  Making deploy_app raise, as #463 did for run_shell, is a follow-up: it changes what the agent reads back.
+- `transform/set_genai_provider` now runs after `transform/set_llmobs_workflow`. This is run 12158's finding
+  (2fcebad on `origin/agent/265-12158`): the provider stamp needs an operation name, and it ran before `invocation`
+  and `call_llm` got theirs, so those agent spans had no `gen_ai.provider.name`.
+- `verify/test_trace_shape_e2e.py` (E2E tools tier) is new. It runs Challenge 1's interaction through each profile's
+  traces processors, built with datadog-secret present, on the pinned otelcol-contrib. Every agent span must carry an
+  operation name and `aws.bedrock`. Both tool calls must be named `execute_tool <tool>` and carry their arguments and
+  result under `gen_ai.tool.call.*`. The blocked run_shell must be ERROR with `tool_error` and the pointer message,
+  and nothing else in the trace may be red. Against the previous config it fails 9 checks (provider, error.type and
+  the second error, on each of the three profiles); with this change it passes.
+- `verify/test_tool_failure_status_e2e.py` now requires `tool_error` on both result shapes, none on the success,
+  and no error on the model call. `verify/test_collector_config.py` pins the error.type statements, that
+  mark_tool_failure is gone, and that every STATUS_CODE_ERROR statement in the config reads a tool response.
+  `verify/test_run_shell_failure.py` checks that adk_tool_content, not mark_tool_failure, matches "command FAILED".
+  `docs/CHALLENGE-ASSETS.md`'s Challenge 1 proof now names the tool span.
+
+**What differs from the draft.** `verify/draft-drift.sh origin/agent/265-12158 origin/staging` named
+`decisions.md`, `gitops/otel-collector/values.yaml` and `verify/test_collector_config.py`, all edited since by #264
+(06bb086). The draft was not cherry-picked. Its provider reorder is carried over. Its test is written again on
+`verify/test_collector_one_root_e2e.py`'s parentage, which #320 read from the components' source after the draft
+was cut: execute_tool sits under call_llm, the gateway's :3000 hop and kagent's server span are on the path, and
+guard-proxy's GenAI span is `sanitize`, as `weaver/registry/guard-proxy-spans.yaml` defines it. The draft's noise
+and one-root checks are left to that test rather than repeated. The draft's hypothesis that the split trace was our
+own filter has since been confirmed and fixed by #320 (b78bc62), so it is not restated.
+
+**Left as it is, to be read on a cluster first.** `call_llm` is stamped `invoke_agent`, so one interaction shows
+three nested agent spans (invocation, invoke_agent, call_llm per turn). The conventions have no operation for an
+agent's LLM step, and the 2026-09-07 Datadog reading kept these spans for their hierarchy. Whether the tree reads
+better with call_llm unclassified or renamed is a judgement made by opening the trace, not by a rule.
+
+**Not yet run on a cluster:** the before/after trace #265 asks for. On a cluster with the collector rolled and
+Datadog on, send Challenge 1's prompt with the C1 NetworkPolicies on (`verify/c1-exfil-block.sh`). Open the
+interaction in Agent Observability and check: the trace list says 1 error; `execute_tool run_shell` is red with
+`error.type:tool_error`, and its arguments and result are readable; the generate_content after it is not red; and
+`invocation` and `call_llm` carry `gen_ai.provider.name:aws.bedrock`. The offline half is
+`python3 verify/test_trace_shape_e2e.py`.

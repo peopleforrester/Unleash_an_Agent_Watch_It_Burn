@@ -11,8 +11,10 @@ model call that read the failure go through each profile's traces processors:
 
   - run_shell whose result is the exception's text ({"error": "command FAILED ..."}) is STATUS_CODE_ERROR;
   - run_shell whose result is MCP's error result (isError true) is STATUS_CODE_ERROR;
-  - get_marketing_intel, which succeeded, is not an error;
-  - the model call whose input carries the failed result is STATUS_CODE_ERROR (transform/mark_tool_failure).
+  - both carry error.type `tool_error`, the GenAI semconv's attribute for a span that ended in an error (#265);
+  - get_marketing_intel, which succeeded, is not an error and carries no error.type;
+  - the model call whose input carries the failed result is NOT an error: it ended fine, and a block is one error,
+    on its tool span (question 925, #265; transform/mark_tool_failure, which marked it, is gone).
 
 The one-root shape of the same interaction is verify/test_collector_one_root_e2e.py's.
 Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
@@ -152,16 +154,26 @@ for profile in PROFILES:
     def status(sid: str) -> dict:
         return got.get(sid, {}).get("status", {})
 
+    def error_type(sid: str) -> str | None:
+        return next((a["value"].get("stringValue") for a in got.get(sid, {}).get("attributes", [])
+                     if a["key"] == "error.type"), None)
+
     check(f"{profile}: run_shell with 'command FAILED' as the exception's text is an error",
           status("a000000000000002").get("code") in ERROR, str(status("a000000000000002")))
     check(f"{profile}: its message points at the result",
           "tool call failed" in status("a000000000000002").get("message", ""), str(status("a000000000000002")))
     check(f"{profile}: run_shell with MCP's isError result is an error",
           status("a000000000000003").get("code") in ERROR, str(status("a000000000000003")))
+    for sid, shape in (("a000000000000002", "the exception's text"), ("a000000000000003", "MCP's isError")):
+        check(f"{profile}: run_shell with {shape} carries error.type tool_error", error_type(sid) == "tool_error",
+              str(error_type(sid)))
     check(f"{profile}: get_marketing_intel, which succeeded, is not an error",
           status("a000000000000004").get("code") not in ERROR, str(status("a000000000000004")))
-    check(f"{profile}: the model call that read the failed result is an error",
-          status("a000000000000001").get("code") in ERROR, str(status("a000000000000001")))
+    check(f"{profile}: and carries no error.type", error_type("a000000000000004") is None,
+          str(error_type("a000000000000004")))
+    check(f"{profile}: the model call that read the failed result is not an error (it ended fine)",
+          status("a000000000000001").get("code") not in ERROR and error_type("a000000000000001") is None,
+          f"{status('a000000000000001')} error.type={error_type('a000000000000001')}")
 
 print()
 if failures:

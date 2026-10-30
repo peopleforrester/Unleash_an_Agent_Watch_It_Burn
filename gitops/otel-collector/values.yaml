@@ -217,7 +217,10 @@ config:
     # shows a clean invoke_agent → generate_content hierarchy instead of the full 85-span
     # HTTP trace. Without this, ml_app is derived from the guard-proxy root span and LLM Obs
     # shows all infrastructure spans (A2A protocol, tool call POSTs, DELETEs) as noise.
-    # gen_ai.operation.name=invoke_agent maps to the "workflow" kind in Datadog LLM Obs.
+    # gen_ai.operation.name=invoke_agent maps to the "agent" kind in Datadog LLM Obs (a span with no operation
+    # is the generic "workflow"; Datadog's OTel instrumentation page, read 2026-10-30). It runs before
+    # transform/set_genai_provider, which stamps only spans that already have an operation name, so these two
+    # get gen_ai.provider.name as the GenAI semconv's agent spans want (verify/test_trace_shape_e2e.py, #265).
     transform/set_llmobs_workflow:
       error_mode: ignore
       trace_statements:
@@ -228,18 +231,12 @@ config:
             # defaults to a generic workflow instead of being classified as an LLM, tool, retrieval, or
             # agent span." This rule already did the right thing for call_llm and simply never matched it.
             - set(attributes["gen_ai.operation.name"], "invoke_agent") where (name == "call_llm" or name == "invocation") and IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$")
-    # Make a blocked tool call visible (#265). kagent's execute_tool span is a stub (name and id only);
-    # the tool RESULT, including workshop-mcp's "command FAILED" (#261), arrives as a tool-role message in
-    # the NEXT model call's gen_ai.input.messages. Marking that model span as an error is what turns the
-    # trace red so a student can find the blocked exfiltration; the message itself is readable in the
-    # conversation. Measured 2026-09-06: the failure text is present there and nowhere else on the span.
-    transform/mark_tool_failure:
-      error_mode: ignore
-      trace_statements:
-        - context: span
-          statements:
-            - set(status.code, STATUS_CODE_ERROR) where attributes["gen_ai.input.messages"] != nil and IsMatch(attributes["gen_ai.input.messages"], "command FAILED")
-            - set(status.message, "a tool call failed (see the tool result in this conversation)") where attributes["gen_ai.input.messages"] != nil and IsMatch(attributes["gen_ai.input.messages"], "command FAILED")
+    # transform/mark_tool_failure used to stand here (2026-09-06, while the execute_tool span was believed to be a
+    # stub): it marked the model call that READ a failed tool result as an error too, so one blocked exfiltration
+    # read as "2 errors" (#320). Removed by question 925 on #265: the GenAI semantic conventions say a span's status
+    # "MUST be left unset if the instrumented operation has ended without any errors", and that model call ended
+    # fine; the tool did not. The block is now one error, on execute_tool, below.
+    #
     # The execute_tool span is NOT a stub. Measured on watch-it-burn-michael-admin, 2026-09-07, by reading
     # the trace out of Tempo rather than out of Datadog: the span carries the full tool arguments and the
     # full tool result, including the exfiltrated payload and the blocked curl's exact failure. ADK writes
@@ -263,17 +260,26 @@ config:
             - 'set(attributes["gen_ai.tool.call.result"], attributes["gcp.vertex.agent.tool_response"]) where attributes["gcp.vertex.agent.tool_response"] != nil'
             # MCP reports a failed tool with isError, and the tool span itself carried no status at all, so
             # a blocked exfiltration and a successful one looked identical on the span named after the tool.
-            # Marking it here puts the error on the span a student actually clicks, rather than only on the
-            # model call that read the result afterwards. The `.` in the pattern matches the closing quote
-            # of the JSON key, which keeps a backslash out of a YAML scalar that is already fiddly.
+            # This is the ONE place a blocked call is marked (question 925, #265), as the GenAI semconv puts it:
+            # the execute_tool span's status follows Recording Errors (status ERROR, and error.type, which is
+            # Conditionally Required "if the operation ended in an error"), and the MCP conventions name the
+            # value for a CallToolResult with isError: `tool_error`. Datadog shows status.message as
+            # meta.error.message and error.type as meta.error.type. The `.` in the pattern matches the closing
+            # quote of the JSON key, which keeps a backslash out of a YAML scalar that is already fiddly.
+            #
+            # gen_ai.tool.call.result is still copied on a failure, though the semconv describes it as the
+            # result "if execution was successful": the failure text is what a student reads to see the block,
+            # and the status message stays a pointer to it rather than a copy of tool output.
             - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+            - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             # The same, keyed on workshop-mcp's own wording (#264): every failure run_shell raises starts
             # "command FAILED" (test_run_shell_failure.py holds that), so the blocked exfiltration reads as an
             # error on its execute_tool span whether ADK hands the result over as MCP's isError or as the
             # exception's text.
             - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
+            - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
@@ -386,10 +392,9 @@ config:
           - batch
           - resource
           - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
-          - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock on spans where N/A
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
-          - transform/mark_tool_failure # a model call that received a failed tool result renders as an error
-          - transform/adk_tool_content # surface ADK's tool args/result under gen_ai.* so Datadog renders them
+          - transform/set_genai_provider # after the line above, so the spans it names get aws.bedrock too
+          - transform/adk_tool_content # tool args/result under gen_ai.*, and a failed tool call as its one error
         exporters:
           - otlp_grpc/tempo # the fallback, and the only trace sink without Datadog
           - span_metrics  # feed the connector so it can derive metrics from these spans

@@ -9,8 +9,8 @@ raised from its own handler and out of the generic one's reach, came back as isE
 transform/adk_tool_content marks the execute_tool span from that flag, so a fast failure (curl exit 6 or 7)
 left the span named after the tool unmarked while a hung one marked it.
 
-Both raises keep "command FAILED" in the message. transform/mark_tool_failure matches that text in the next
-model call's input messages, and FastMCP's error result carries the message, so that match still holds.
+Both raises keep "command FAILED" in the message. transform/adk_tool_content also matches that text in the tool
+response, so the execute_tool span is marked whichever shape ADK hands the result over in (#264).
 
 The server is loaded with a stand-in for tool_audit, since the offline suite has no `mcp`.
 """
@@ -105,8 +105,10 @@ check("an OSError is returned, not raised", exc is None and result == "error run
 
 print("== the collector still matches the text both raises carry ==")
 VALUES = yaml.safe_load((REPO / "gitops/otel-collector/values.yaml").read_text(encoding="utf-8"))
-stmts = VALUES["config"]["processors"]["transform/mark_tool_failure"]["trace_statements"][0]["statements"]
-check("mark_tool_failure matches 'command FAILED'", bool(stmts) and all('"command FAILED"' in s for s in stmts))
+stmts = [s for g in VALUES["config"]["processors"]["transform/adk_tool_content"]["trace_statements"]
+         for s in g["statements"]]
+check("adk_tool_content marks a tool response carrying 'command FAILED'",
+      any("STATUS_CODE_ERROR" in s and "tool_response" in s and '"command FAILED"' in s for s in stmts))
 SRC = (AI / "workshop-mcp-server.py").read_text(encoding="utf-8")
 body = SRC[SRC.index("def run_shell("):SRC.index('if __name__ == "__main__":')]
 raises = re.findall(r'raise RuntimeError\(f?"([^"]*)', body)

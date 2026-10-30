@@ -75,7 +75,7 @@ for pipe, pcfg in sorted(((CFG.get("service") or {}).get("pipelines") or {}).ite
 
 print("== the transforms this workshop depends on are wired in, not just defined ==")
 traces = ((CFG.get("service") or {}).get("pipelines") or {}).get("traces", {}).get("processors", [])
-for needed in ("filter/drop_noise", "transform/mark_tool_failure", "transform/adk_tool_content"):
+for needed in ("filter/drop_noise", "transform/adk_tool_content"):
     check(f"{needed} is in the traces pipeline", needed in traces)
 # Order matters: the ADK copy has to run after the noise filter, or it decorates spans that get dropped.
 check("the ADK tool-content copy runs after the noise filter",
@@ -89,6 +89,20 @@ check("execute_tool is marked on MCP's isError",
       any("STATUS_CODE_ERROR" in s and "tool_response" in s and "isError" in s for s in adk))
 check("and on workshop-mcp's 'command FAILED' text",
       any("STATUS_CODE_ERROR" in s and "tool_response" in s and "command FAILED" in s for s in adk))
+# The GenAI semconv's error.type, Conditionally Required on a span that ended in an error, with the MCP conventions'
+# value for a failed tool call (question 925).
+for shape in ("isError", "command FAILED"):
+    check(f"a tool call that failed on {shape} carries error.type tool_error",
+          any('attributes["error.type"], "tool_error"' in s and "tool_response" in s and shape in s for s in adk))
+
+print("== a blocked tool call is ONE error: nothing marks the model call that read it (question 925) ==")
+# transform/mark_tool_failure set STATUS_CODE_ERROR on the next model call too, so one block read as "2 errors"
+# (#320). That model call ended without an error, and the semconv says its status MUST be left unset.
+check("mark_tool_failure is gone from the processors", "transform/mark_tool_failure" not in declared)
+marks = [s for p, pc in (CFG.get("processors") or {}).items() for g in (pc.get("trace_statements") or [])
+         for s in g.get("statements", []) if "STATUS_CODE_ERROR" in s]
+check(f"every error mark reads a tool response, not a model call's messages ({len(marks)} marks)",
+      bool(marks) and all("gcp.vertex.agent.tool_response" in s and "input.messages" not in s for s in marks))
 
 print("== the lab describes what the trace actually contains ==")
 # Measured on watch-it-burn-michael-admin, 2026-09-07, after the transform went live:
@@ -105,8 +119,8 @@ print("== the lab describes what the trace actually contains ==")
 # the student to the trace and still tells them what outcome to look for. Do not restore the span
 # walkthrough as a fix for a failure here.
 #
-# The collector side is unchanged and is still asserted above: mark_tool_failure is what puts the error
-# status on that span, so the thing her sentence promises is still produced.
+# The collector side is asserted above: adk_tool_content is what puts the error status on execute_tool
+# run_shell, the one error a block makes (question 925), so the thing her sentence promises is still produced.
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 check("the lab sends the student to the trace after the fix",
       "See the block in the trace." in LAB)

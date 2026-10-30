@@ -171,8 +171,8 @@ with tempfile.TemporaryDirectory() as tmp:
 check("four calls answered, the unknown tool and the failed command as errors",
       len(results) == 4 and not results[0].isError and results[1].isError and results[2].isError
       and not results[3].isError)
-# transform/mark_tool_failure matches this text in the next model call's input, so the error result has to
-# keep carrying it.
+# transform/adk_tool_content matches this text in the execute_tool span's tool response, so the error result has
+# to keep carrying it.
 check("the failed command's error result says command FAILED with exit code 3",
       len(results) == 4
       and "command FAILED with exit code 3" in " ".join(getattr(b, "text", "") for b in results[2].content))

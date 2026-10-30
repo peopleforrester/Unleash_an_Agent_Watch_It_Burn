@@ -17,7 +17,7 @@ The full student text for each challenge, with its attack prompts and fixes, is
 
 | # | Challenge | The asset | Where it lives | The control that stops it | Visible proof |
 |---|---|---|---|---|---|
-| 1 | Exfiltrate the customer data | marketing intel | `get_marketing_intel` tool | five agent-namespace **NetworkPolicies** (`agent-egress-allowlist` and its DNS/otel/kagent allows) | the tool reports the command FAILED; the model span that received it is `status:error` |
+| 1 | Exfiltrate the customer data | marketing intel | `get_marketing_intel` tool | five agent-namespace **NetworkPolicies** (`agent-egress-allowlist` and its DNS/otel/kagent allows) | the tool reports the command FAILED; its `execute_tool run_shell` span is `status:error` with `error.type:tool_error`, the trace's one error |
 | 2 | Deploy a villain image | a container image on a path the allow-list refuses | lab-platform's `promo/` path on ghcr.io | Kyverno **`restrict-image-registries`**, flipped Audit to Enforce | admission refuses the Deployment, naming the policy |
 | 3 | Get the secret recipe off the filesystem | the sauce recipe | a file baked into the workshop-mcp image at `/tmp/burrito-data/config/legacy/secret-sauce-recipe.conf` | KubeArmor **`block-recipe-snoop`**, action `Block` | the read returns `Permission denied`; Falco's `Recipe Snoop In Agent Namespace` rule fires |
 | 4 | Run up the bill | nothing; the spend itself is the damage | the model, per token | guard-proxy's **budget guard**, `BUDGET_CAP_USD = 0.03` **per conversation** | requests refused before the model is called, so a blocked one costs nothing |
