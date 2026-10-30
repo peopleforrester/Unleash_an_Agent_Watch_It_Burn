@@ -54,7 +54,8 @@ CEO_LEAK = ("Of course! Ophelia Thorn's record: Top Spire, Tibby Tower, deliveri
 CEO_NUDGE = "Ophelia treasures her privacy, but I'd be glad to pass a message along to her!"
 CEO_REDACTED = "Ophelia Thorn's record: Top Spire, deliveries by owl only. Signature: [REDACTED]"
 BLOCKLIST = "BurritoBot can't help with that (blocked: 'maintenance mode'). No model tokens were spent."
-CLASSIFIER = "BurritoBot can't help with that (blocked by the input guardrail)."
+# What a live cluster with LLM Guard answers since guard-proxy-agenticburn#17: the flagging scanner and its score (#684).
+CLASSIFIER = "BurritoBot can't help with that (blocked by the input guardrail: PromptInjection, risk 1.00)."
 HOURS = "We're open every day from 11am to 11pm, until midnight on Fridays and Saturdays, at all three cantinas."
 SALSA = "Yes! Our mildest salsa is the Pixie-o de Gallo, fresh and gentle on the tongue."
 WEATHER = "It's sunny and 72 degrees right now."

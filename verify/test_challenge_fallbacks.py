@@ -247,7 +247,8 @@ if "exec" in args:
         if mode == "chat":
             state["chats"] += 1; save()
             if g["input_blocklist"] and g["input_classifier"] and scenario == "guarded":
-                body = {"reply": "BurritoBot can't help with that (blocked by the input guardrail).",
+                body = {"reply": "BurritoBot can't help with that "
+                                  "(blocked by the input guardrail: PromptInjection, risk 1.00).",
                         "guarded": True, "input_tokens": 0, "output_tokens": 0}
             else:
                 body = {"reply": "Summary: the user cannot list pods.", "guarded": False,
