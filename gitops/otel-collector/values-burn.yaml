@@ -62,6 +62,7 @@ config:
         # copied the tool content to gen_ai.*, so both copies are scrubbed, and before every exporter.
         processors:
           - memory_limiter
+          - transform/kagent_service_name
           - filter/drop_noise
           - batch
           - resource
