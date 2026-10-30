@@ -78,7 +78,7 @@ the room is publicly stuck on Challenge 1 (the same call as feedback-agenticburn
 Columns 1 to 3 go green when the attack lands, 5 and 6 when the fix is in and the attack has been run again
 against it. Challenges 7 and 8 have no column: the rogue tool server writes no logs on purpose (#18), and
 Challenge 8 goes around everything that records, which is what it teaches. Column 1 counts the call
-reaching the tool; `provisioning.agenticburn.com/beacon/view` stays the count of POSTs that landed, and it
+reaching the tool; `https://beacon.burritobot.co/beacon/view` stays the count of POSTs that landed, and it
 cannot say from which cluster.
 
 ## Joined with the claims

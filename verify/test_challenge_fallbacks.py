@@ -365,7 +365,7 @@ os.execv(%r, ["date", *sys.argv[1:]])
 ''' % shutil.which("date")
 
 # The fake :3003 gateway the C7 exchange talks to: streamable HTTP with a session, answers as event streams, and
-# mcpAuthorization as agentgateway documents it, allow-only, so a narrowed rule refuses every tool but get_weather.
+# mcpAuthorization as agentgateway documents it: a bare CEL string is an allow rule, the rest is denied, so a narrowed rule refuses every tool but get_weather.
 # A new rule is served RELOAD fake seconds after the terminal wrote it, on a "guarded" cluster. An "open" one never
 # reloads, so the deny never comes; a "down" one stops answering once it serves the narrowed rule.
 RELOAD = 6

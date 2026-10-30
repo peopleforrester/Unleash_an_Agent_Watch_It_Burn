@@ -575,8 +575,8 @@ real-looking home address to chat.
   re-send an off-topic ask that uses a listed word (dance, hot dog, karaoke, linked
   list, playlist, song). BurritoBot redirects to the menu, hours and locations. The
   probe's topic beats passed on burritobot-private on 2026-10-28. A paraphrase with
-  none of those words goes to the BanTopics scanner, which is unproven
-  (llm-guard-cpu-offline#2); do not promise it is refused.
+  none of those words is let through: the deployed LLM Guard has no BanTopics scanner
+  wired yet (llm-guard-cpu-offline#2), so do not promise it is refused.
 - **Break it (the last minutes, #690):** in the public cluster's terminal, run
   `finale-cap-on` (headroom $1.00 by default, or `finale-cap-on 0.50`). It sets the whole
   cluster's cap to what the room has already spent plus the headroom, and prints both.
@@ -601,8 +601,8 @@ real-looking home address to chat.
   policy, an input classifier and a tool allow-list, owned by the platform team, and
   most of them work whether or not the model cooperates. Say the governance line the
   accurate way per `docs/ABSTRACT.md`: a CNCF floor, AAIF agent protocols, and a
-  guardrail layer with no foundation behind it. LLM Guard is the upstream project, in
-  maintenance; the guard proxy is the piece Michael wrote because nothing else
+  guardrail layer with no foundation behind it. LLM Guard is the upstream project, archived in
+  July 2026; we run its last release, 0.3.16, from our own offline image; the guard proxy is the piece Michael wrote because nothing else
   toggles a guardrail without a redeploy. Point at the repo as the Monday-morning
   takeaway, and at the Feedback button. The close slide links the MCP server vetting
   checklist handout (#649):
@@ -909,12 +909,13 @@ These are the things this run-of-show could not settle from a source. They are
 written down rather than guessed. A question that has since been decided keeps its
 number and says who settled it and when, so references to it elsewhere still land.
 
-1. **The on-topic guardrail's classifier half is unproven (#455).** The topic stage
+1. **The on-topic guardrail's classifier half is not wired yet (#455).** The topic stage
    in `proxy.py`, the settings, the persona's hours and locations and
    `guard-topic-on` are live, and the probe's on-topic beats passed on 2026-10-27
    and 2026-10-28, so segment 6 can be shown with the phrase-listed asks. The
-   BanTopics model in the offline LLM Guard image (llm-guard-cpu-offline#2) is still
-   open, so a paraphrase with no listed word is not promised. Still open on #455: the hours
+   deployed scanners.yml names no BanTopics scanner (llm-guard-cpu-offline#2), and
+   llm-guard 0.3.16 answers valid on an empty scanner list, so a paraphrase with no
+   listed word is let through until it is wired; it is not promised. Still open on #455: the hours
    and locations BurritoBot will say on stage were invented in-world (every day 11am
    to 11pm, until midnight Fridays and Saturdays; 13 Mandrake Row, Black-Bog Market,
    the Moonrise Pass drive-thru); keep them or replace them with Michael's and

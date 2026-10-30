@@ -23,7 +23,8 @@ kagent                 chart 0.10.1 / app v0.10.1  (CRD group kagent.dev/v1alpha
                        crds ref:  oci://ghcr.io/kagent-dev/kagent/helm/kagent-crds (confirm at deploy)
                        A2A usage metadata key is kagent_usage_metadata (NOT adk_usage_metadata): live on 0.9.9 (2026-06-21, PROJECT_STATE.md);
                        re-checked in the v0.10.1 source 2026-10-25 (#578): the default Python runtime emits kagent_<key>, only runtime: go emits adk_<key>;
-                       the workshop-agent sets no runtime, so Python. guard-proxy record_usage() reads kagent_ first, adk_ as fallback
+                       the CRD defaults spec.declarative.runtime to go, and both KubeCon clusters read runtime=go live on 2026-10-30 (#697),
+                       so the agent emits adk_<key>. guard-proxy record_usage() reads kagent_ first, adk_ as fallback
 vcluster               REMOVED (architecture = separate EKS cluster per attendee)
 kyverno                app v1.19.1 / chart 3.9.1  (CEL ValidatingPolicy, spec.validationActions; #206)
 argocd                 chart 10.8.4 / app v3.5.2  (chart argo-cd, deploy-full-idp.sh pin; was 9.6.0 / v3.4.4 until #674 caught up with #389)
@@ -36,7 +37,7 @@ otel-collector         chart 0.173.1 / app 0.160.0  (contrib distro; was 0.158.2
 agentgateway           OSS v1.5.0  (released 2026-08-27, GitHub releases agentgateway/agentgateway; pinned 2026-09-10 in 20aee62, recorded here 2026-10-24)
                        image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339e... (digest pin in gitops/ai-layer/agentgateway.yaml, #415)
                        chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
-                       mcpAuthorization is allow-only CEL, implicit deny, NO action field; MCP config nests under mcp.{targets,policies} — research/14 §2
+                       mcpAuthorization rules are a bare CEL string (an allow rule) or {allow|deny|require}, implicit deny, no `action` field (schema/config.json RuleSerde, v1.3.0 to v1.7.0, #697); MCP config nests under mcp.{targets,policies} — research/14 §2
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `scanners`, not `scores`)
                        digest: sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba (OCI index: linux/amd64 + linux/arm64;
                        resolved from Docker Hub 2026-10-25 and checked against the body's sha256, #603; upstream protectai/llm-guard archived July 2026)

@@ -258,8 +258,8 @@ data:
 # names a tool that exists (docs/research/2026-10-24-agentgateway-evaluation.md, section 2).
 #
 # The rule line is the contract a C7 control reads and rewrites: key config.yaml, the one line ending in
-# the c7-rule marker comment. 'true' is off (every tool allowed); 'mcp.tool.name == "get_weather"' is on (mcpAuthorization
-# is allow-only and OR-combined, so the gateway drops the rogue tools from tools/list and refuses a
+# the c7-rule marker comment. 'true' is off (every tool allowed); 'mcp.tool.name == "get_weather"' is on (a bare CEL string
+# is an mcpAuthorization allow rule, OR-combined, and anything no rule allows is denied, so the gateway drops the rogue tools from tools/list and refuses a
 # tools/call to them before evil-mcp runs it). Committed state is 'true': C7 starts open, like every other
 # guard. On an admin cluster the web terminal's guard-mcp-on/guard-mcp-off and guards-on/guards-off flip it,
 # through _c7rule in gitops/ai-layer/web-terminal/entrypoint.sh. Keep this ConfigMap to the evil-mcp bind.

@@ -19,6 +19,12 @@ challenges, installing each guardrail themselves and re-running the attack to wa
 controls most platform teams already run, then the guardrails specific to *agents*, the input, the output,
 and the tools they can reach, because that is the part existing tooling cannot see.
 
+**At KubeCon NA 2026?** The breakout *BurritoBot Said Let's Dance, the Platform Said No* (with Whitney
+Lee) is a 30-minute cut of this workshop. Its run-of-show is
+[facilitation/kubecon-na-2026-run-of-show.md](facilitation/kubecon-na-2026-run-of-show.md), and the room
+uses the `/kubecon` page on the talk's clusters. The checklist for vetting an MCP server before an agent
+gets it is [docs/mcp-server-vetting-checklist.md](docs/mcp-server-vetting-checklist.md).
+
 ## What this is
 
 You get a Kubernetes cluster that already runs a full internal developer platform: Argo CD for
