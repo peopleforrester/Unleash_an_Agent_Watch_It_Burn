@@ -5286,3 +5286,57 @@ The 2026-10-29 entry's change is on staging (7ffbc73, 1414255, e5bd6fe). Run 125
 `python3 verify/test_promo_villains_public.py`, then on an attendee cluster
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and `CONTEXT=<admin-ctx>
 challenges/c2-villain-image/fallback.kubectl.sh`, whose denial now matches the run-of-show row.
+
+## 2026-10-30 · #504 · The on-topic guard is tested in the running path: the pinned proxy.py, on the deployed env
+
+**Decision.** `verify/test_topic_guard_proxy.py` (offline, new) checks the #455 criterion, "BurritoBot ends selling
+burritos only", against guard-proxy itself. Before it, the tests held the deployed phrase lists to
+`verify/topic_cases.py`'s own copy of the rule, and only grepped the terminal helpers. The first run of #504
+(2026-10-24) was blocked because proxy.py had no topic stage. guard-proxy-agenticburn#7 has since added it, and the
+submodule pin (000f57e) carries it.
+
+**What it does.** It loads proxy.py from the `gitops/ai-layer/guard-proxy` submodule with the guard-proxy
+Deployment's literal env from `gitops/ai-layer/resources.yaml`, so TOPIC_GUARD, both phrase lists, TOPIC_REFUSAL,
+PROXY_FAIL_CLOSED and the rate limits are the ones a cluster runs. Only AGENT_URL, LLM_GUARD_URL and the token
+point at stand-ins on localhost. The stand-in agent answers anything and records what reached it. The stand-in LLM
+Guard plays BanTopics: it refuses the `topic_cases.OFF_TOPIC` paraphrases that no phrase catches, unless BanTopics
+is suppressed. The guard is flipped by the web terminal's own `guard-topic-on` and `guard-topic-off`, taken from
+`web-terminal/entrypoint.sh`. A stub kubectl runs their `exec deploy/guard-proxy` python against this proxy. The
+test checks these things in order:
+- With the guard off, the canonical off-topic asks reach the model, as the wide-open start needs.
+- `guard-topic-on` turns the guard on, and `/guards` reports it on.
+- On `/chat`, every off-topic ask gets the deployed TOPIC_REFUSAL, `guarded`, 0 tokens, and never reaches the
+  agent. An ask with an off phrase makes no classifier call. An ask without one makes one `/analyze/prompt` call
+  with `scanners_suppress: ["PromptInjection"]` and the bearer token. Each refusal logs `topic_guard_block` with
+  the step that decided it.
+- Every on-topic ask reaches the model with no classifier call, and a vague one the classifier passes reaches it too.
+- On A2A `/`, an off-topic message gets 403 with TOPIC_REFUSAL, and an on-topic one is forwarded.
+- With LLM Guard answering 500, an ask left to the classifier is refused (fail closed). An on-topic ask still
+  passes on its phrase.
+- `guard-topic-off` opens the guard again.
+
+**Checked to fail when the criterion stops holding.** Seven mutants of proxy.py, each written to a copy outside the
+repo, fail the test: the /chat topic stage removed, the A2A topic stage removed, the topic stage's suppress list
+dropped, an on phrase that refuses, a classifier error that fails open, `/toggle` that ignores `topic`, and a /chat
+refusal that is not TOPIC_REFUSAL.
+
+**Also changed.** The Deployment's comment said these variables are inert until guard-proxy-agenticburn carries the
+topic stage. It does now, so the comment names the new test instead.
+
+**What differs from the draft.** Run 10552's draft (`origin/agent/504-10552`, commit 24aa93a) was cut from an
+older staging (633f814) and never reached staging. `verify/draft-drift.sh` named two drifted paths, decisions.md and
+`gitops/ai-layer/resources.yaml`, both edited by later commits in places away from the draft's. The test file is
+the draft's, unchanged: proxy.py, the Deployment env, `topic_cases.py` and the terminal helpers it reads are as they
+were, and it passes on this staging with the same 184 checks. The resources.yaml comment and this entry are written
+again on the current files rather than cherry-picked. The run after 10552 stalled with no commit; this one found no
+test that hangs (see the run's report).
+
+**Not changed.** `verify/test_topic_guard.py` still arms its BanTopics scanner checks only once BanTopics is in
+scanners.yml. That waits on the offline image carrying the zero-shot model (llm-guard-cpu-offline#2) and is not
+#504's criterion.
+
+**Not yet run on a cluster.** The real BanTopics scores on the paraphrases are judged by
+`verify/test_topic_classifier.py` (E2E suite). The live refusal through the storefront is judged by
+`verify/kubecon_probe.py`'s topic beats, run by hand on a presenter's admin cluster: `python3 verify/kubecon_probe.py
+admin burritobot-private.burritobot.co --context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile
+accen-dev`.

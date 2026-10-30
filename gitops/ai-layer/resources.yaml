@@ -716,8 +716,8 @@ spec:
             # Decides in three steps: an off phrase refuses, an on phrase passes, and the rest goes to LLM
             # Guard's BanTopics scanner. Phrases match as whole words, any case, with an optional plural "s".
             # The rule, the asks it is judged on, and why the on list has to name every menu item are in
-            # verify/topic_cases.py; verify/test_topic_guard.py holds these values to them.
-            # Read by proxy.py once guard-proxy-agenticburn carries the topic stage. Until then they are inert.
+            # verify/topic_cases.py; verify/test_topic_guard.py holds these values to them, and
+            # verify/test_topic_guard_proxy.py runs the pinned proxy.py on them.
             - { name: TOPIC_GUARD, value: "off" }
             - name: TOPIC_OFF_LIST
               value: "dance,dancing,dance move,karaoke,hot dog,hotdog,linked list,playlist,song,choreography,disco,merengue,tango,cha-cha,two-step,bachata"
