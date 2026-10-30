@@ -5120,3 +5120,20 @@ a session with the fleet's AWS profiles, labctl on PATH, `DATABASE_URL`, `USER` 
 failure, `labctl pool --customer agenticburn --event "$WIB_EVENT"` must list the same names with every claimed
 row still claimed (#655's fifth assumption), and the terminal login a claimed attendee is handed must be
 `agentic` / `agentic`.
+
+## 2026-10-30 · #535 · The off-topic answer is promised: the community probe was 6 of 6 live, 3 of 3 on the linked-list ask
+
+Michael ran `verify/kubecon_probe.py community` on attackme.agenticburn.com on 2026-10-27 (#610): 6 PASS, 0
+FAIL. The linked-list ask was answered 3 of 3, and `judge_ceo_leaks` passed on the CEO record's address in the
+reply the room reads (Michael's comment on #535). That is the condition #530 set, so its notes come out:
+Segment 2 of the run-of-show and the off-topic beat on `/kubecon` now say the bot answers the room's off-topic
+asks, citing the 10-27 run, and `docs/KUBECON-ABSTRACT-READINESS.md` row 9 says the same. The two checks in
+`verify/test_kubecon_probe.py` that pinned the "not promised" wording are removed, as Michael asked.
+
+The gate does not go away, it moves to the night. The off-topic beat is still part of the community probe, which
+the Night Before list says must end `KUBECON PROBE GREEN`, and later runs missed it once each on 2026-10-29
+(2 of 3, the miss narrating its plan; both are in the run-of-show's Probe record). If the night's run misses it,
+that run is red and the room is not told the bot will answer until it is green again.
+
+The C5 address judge's first live run on the admin kind was the same 10-27 bring-up (michael-admin, C5 leaks
+PASS) and the 10-28 watch-it-burn-private run (24 PASS), so both cluster kinds have now run it.

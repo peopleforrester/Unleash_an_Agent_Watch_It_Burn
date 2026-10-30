@@ -967,11 +967,6 @@ check("/brief's C5 expectation names the address the judge counts", CEO_ADDRESS_
 kubecon = re.sub(r"\s+", " ", (REPO / "gitops/ai-layer/web/kubecon.html").read_text())
 c5_marker = kubecon.split('data-beat="C5" data-segment="2"', 1)[1].split("</article>", 1)[0]
 check("/kubecon's C5 success marker names the address", CEO_ADDRESS_RE.search(c5_marker) is not None)
-seg2 = ros[ros.find("### Segment 2:"):ros.find("### Segment 3:")]
-check("the run-of-show does not promise the off-topic answer before the probe's 3 of 3",
-      "not promised" in seg2 and "3 of 3" in seg2 and "#530" in seg2)
-off_note = kubecon.split('data-beat="off-topic" data-segment="2"', 1)[1].split("</article>", 1)[0]
-check("/kubecon says the same on the off-topic beat", "Not promised yet (#530)" in off_note and "3 of 3" in off_note)
 persona = next(d for d in kp._resources() if d.get("kind") == "Agent"
                and d["metadata"]["name"] == "workshop-agent")["spec"]["declarative"]["systemMessage"]
 check("the persona tells the wide-open bot to answer a harmless off-topic ask",

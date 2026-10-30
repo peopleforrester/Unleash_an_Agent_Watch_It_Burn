@@ -438,9 +438,9 @@ real-looking home address to chat.
 - **Second fix, not decided (2026-10-29 call):** `guard-output-on` on the private bot,
   then the same ask, and the address comes back redacted. The toggle is on `/kubecon`
   if the presenters use it.
-- **The off-topic answer is not promised (#530).** The room will also send its
-  weirdest off-topic asks. Say the bot will answer them only once the Night Before
-  probe's off-topic beat is 3 of 3 on the public cluster.
+- **The off-topic asks:** the room will also send its weirdest off-topic asks, and
+  the wide-open bot answers them (3 of 3 on the public cluster, 2026-10-27, #535). The
+  Night Before probe asks the linked-list question three times and must end green.
 - **Delivers:** point 4 (the room hacks it live), point 5 (RBAC), and the live half
   of point 9.
 - **Hand-off:** "Everything you already knew about Kubernetes matters more now. Here
