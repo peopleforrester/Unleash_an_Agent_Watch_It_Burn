@@ -523,6 +523,17 @@ imds_hop_limit_for_role() {
         *) printf '1' ;;
     esac
 }
+# The node kubelet maxPods a cluster's ROLE gets (#686). community (attackme) gets 250: every attendee's
+# Joker (#685) lands on its one node, and at 110 the ~53 platform pods leave room for only ~55 of them.
+# admin and attendee get 110 (the cluster module's var.max_pods default), which the IDP fits in. VPC-CNI
+# prefix delegation is on for every cluster, so the cap is kubelet's alone. It sits in node user data, so a
+# changed value replaces the node: the community cluster picks it up at its next rebuild.
+max_pods_for_role() {
+    case "$1" in
+        community) printf '250' ;;
+        *) printf '110' ;;
+    esac
+}
 
 usage() {
     cat >&2 <<EOF
@@ -1684,11 +1695,13 @@ up_one() {
     # IMDS credential-theft challenge lands), admin/attendee=1 (the working control). Always stated rather
     # than left to the module default, like profile above, so a plan shows which clusters are vulnerable.
     local hop; hop="$(imds_hop_limit_for_role "${role}")"
+    # The node pod cap, role-derived (#686): community=250 (the room's Jokers share its node), admin/attendee=110.
+    local maxpods; maxpods="$(max_pods_for_role "${role}")"
     if [[ -n "${WIB_DRY_RUN}" ]]; then
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} -var max_pods=${maxpods} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
-    local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "role=${role}" -var "imds_hop_limit=${hop}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
+    local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "role=${role}" -var "imds_hop_limit=${hop}" -var "max_pods=${maxpods}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
                   "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}")
     # An IAM user of this cluster's name made before #549 would fail the apply on EntityAlreadyExists.
     if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then

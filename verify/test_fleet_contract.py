@@ -51,7 +51,10 @@ check(
 # the CNI env var and an explicit maxPods are required or ~15 pods per cluster sit Pending forever
 # while the cluster itself reports healthy.
 check("vpc-cni enables prefix delegation", "ENABLE_PREFIX_DELEGATION" in CLUSTER_TF)
-check("nodeadm sets maxPods explicitly (nodeadm ignores prefix delegation)", "maxPods: 110" in CLUSTER_TF)
+check("nodeadm sets maxPods explicitly (nodeadm ignores prefix delegation)",
+      "maxPods: ${var.max_pods}" in CLUSTER_TF)
+check("var.max_pods defaults to 110, the IDP's single-node cap",
+      re.search(r'variable "max_pods"\s*\{[^}]*default\s*=\s*110\b', CLUSTER_TF) is not None)
 check("vpc-cni enforces NetworkPolicy (the egress beat is inert without it)",
       'enableNetworkPolicy = "true"' in CLUSTER_TF)
 

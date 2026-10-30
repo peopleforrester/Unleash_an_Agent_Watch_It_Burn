@@ -3,7 +3,7 @@
 #
 # Modeled on the Packt sister repo's cluster/ module (proven shape on the same shared account):
 # takes vpc_id + private_subnet_ids as inputs (no VPC of its own), VPC-CNI prefix delegation +
-# maxPods=110, and create_cloudwatch_log_group=false so reprovision is idempotent. Diverges from Packt:
+# maxPods=110 (250 on the community cluster, #686), and create_cloudwatch_log_group=false so reprovision is idempotent. Diverges from Packt:
 # EBS CSI + LB controller + ESO + agent are ALL on Pod Identity (no IRSA/OIDC provider on the cluster).
 #
 # THREE Watch-It-Burn deltas vs Packt (our controls; Packt does not have these):
@@ -173,6 +173,22 @@ variable "imds_hop_limit" {
   default = 1
 }
 
+# The node's kubelet maxPods (#686). AL2023's nodeadm ignores VPC-CNI prefix delegation when it computes
+# max-pods, so the NodeConfig always states it. 110 holds the whole IDP on one t3.2xlarge (AWS's recommended
+# ceiling for an instance under 30 vCPUs) and is what admin and attendee clusters keep. fleet.sh passes 250 for
+# the community cluster (attackme.agenticburn.com): the room's per-attendee Jokers (#685) all land on its one
+# node, and at 110 with ~53 platform pods only ~55 of them fit at once. Prefix delegation gives a t3.2xlarge
+# 4 ENIs x 14 slots x 16 = 896 pod IPs, so 250 is a kubelet cap, not an address one. The value lives in node
+# user data, so changing it replaces the node: it lands at a rebuild, never as a live change.
+variable "max_pods" {
+  type    = number
+  default = 110
+  validation {
+    condition     = var.max_pods >= 110 && var.max_pods <= 250
+    error_message = "max_pods must be between 110 (the IDP's own footprint) and 250."
+  }
+}
+
 # Docker Hub Team auth, baked into the node so every docker.io pull authenticates at the node level.
 # Anonymous Docker Hub pulls are rate-limited (~100/6h per NAT IP); at fleet scale (50/account behind
 # one NAT) that yields 429 ImagePullBackOff across the IDP image set. With this set, the node's
@@ -196,7 +212,7 @@ variable "node_disk_size" {
 }
 
 locals {
-  # NodeConfig part: maxPods + the fork-bomb pod-pids cap (the Watch It Burn delta). Always present.
+  # NodeConfig part: maxPods (var.max_pods) + the fork-bomb pod-pids cap (the Watch It Burn delta). Always present.
   nodeadm_part = {
     content_type = "application/node.eks.aws"
     content      = <<-EOT
@@ -205,7 +221,7 @@ locals {
       spec:
         kubelet:
           config:
-            maxPods: 110
+            maxPods: ${var.max_pods}
             podPidsLimit: ${var.pod_pids_limit}
     EOT
   }
@@ -298,10 +314,10 @@ module "eks" {
   addons = {
     vpc-cni = {
       before_compute = true
-      # Prefix delegation raises t3.2xlarge from 58 to ~110 pods so the platform fits one node.
+      # Prefix delegation lifts t3.2xlarge past its 58 secondary-IP pods so the platform fits one node.
       # enableNetworkPolicy is the Watch It Burn delta: VPC-CNI enforces NetworkPolicy in-kernel,
       # which the egress beat (default-deny + allowlist) depends on. Without it, policies are inert
-      # (found live on watch-it-burn-test). Pairs with the node group maxPods=110 below.
+      # (found live on watch-it-burn-test). Pairs with the node group's maxPods (var.max_pods) below.
       configuration_values = jsonencode({
         enableNetworkPolicy = "true"
         env = {

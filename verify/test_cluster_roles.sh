@@ -94,6 +94,19 @@ check "up_one plans imds_hop_limit=1 for the shared admin cluster" \
 check "up_one plans imds_hop_limit=1 for an attendee cluster" \
   '[[ "$(hopvar watch-it-burn-attendee-007)" == *"-var imds_hop_limit=1"* ]]'
 
+echo "== the node pod cap follows the role (#686) =="
+# community (attackme) gets maxPods 250 so the room's per-attendee Jokers (#685) fit on its one node; admin
+# and every attendee seat keep 110, which the IDP fits in. Role-derived, like the hop limit above.
+check "the community cluster's node takes 250 pods" '[[ "$(q "max_pods_for_role community")" == 250 ]]'
+check "the shared admin cluster's node keeps 110" '[[ "$(q "max_pods_for_role admin")" == 110 ]]'
+check "an attendee cluster's node keeps 110" '[[ "$(q "max_pods_for_role attendee")" == 110 ]]'
+check "up_one plans max_pods=250 for the community cluster" \
+  '[[ "$(hopvar watch-it-burn-community)" == *"-var max_pods=250"* ]]'
+check "up_one plans max_pods=110 for the shared admin cluster" \
+  '[[ "$(hopvar watch-it-burn-private)" == *"-var max_pods=110"* ]]'
+check "up_one plans max_pods=110 for an attendee cluster" \
+  '[[ "$(hopvar watch-it-burn-attendee-007)" == *"-var max_pods=110"* ]]'
+
 echo "== teardown takes the same selector as the build (#88) =="
 # After rounds were retired, `instructors down` still looped the three numbered clusters, matched no
 # roster row and destroyed nothing. The workers are stubbed: run_pool prints the names it would hand to
