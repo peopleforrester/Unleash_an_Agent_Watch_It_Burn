@@ -3841,7 +3841,13 @@ ingest_one() {
         [[ "${attempt}" -lt 3 ]] && sleep $(( attempt * 5 ))
     done
     if [[ -n "${ok}" ]]; then
+        # labctl exits 0 on a cluster it left alone because it is released or being torn down, so its own
+        # summary is what says whether the row is in the pool (#655). Pass every line on.
         log "  ingested: ${name}${role:+ (role=${role})}"
+        local line; while IFS= read -r line; do [[ -n "${line}" ]] && log "    ${line}"; done <<<"${out}"
+        if grep -q "left alone, released or torn down" <<<"${out}"; then
+            log "  ingest ${name}: WARN labctl left it out of the pool (released or torn down); nobody can claim it"
+        fi
     else
         log "  labctl import failed: ${name} after 3 attempts: $(tail -n 1 <<<"${out}")"; record_fail "ingest:${name}"
     fi

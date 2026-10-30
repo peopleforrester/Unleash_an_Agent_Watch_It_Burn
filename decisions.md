@@ -5693,3 +5693,45 @@ USER, against an attendee pool imported for the event. First run `infra/terrafor
 dry run). It must list the same names as `labctl pool --customer agenticburn --event "$WIB_EVENT"` and end with
 "all N row(s) name a live cluster". Then run `bash verify/fleet-hygiene.sh` and check that section 3b reports ok.
 Then run #532's live `fleet.sh ingest pool`, per the #532 entry above.
+
+## 2026-10-30 · #655 · fleet.sh's labctl import row holds against lab-platform's parser; the live import is still owed
+
+This run could read lab-platform: `sources repo-cat` gave `docs/provisioning.md` section 9 ("Loading clusters into the
+pool"), `cmd/labctl/import.go`, `internal/store/import.go` and `cmd/labctl/main.go`, read 2026-10-30. The 2026-10-29
+#655 entry above listed five assumptions; the source settles each one.
+
+- **(1) An empty `role` is an attendee.** `store.ParsePoolCSV` turns a blank role into `attendee`, and
+  `ImportEnvironments` puts an attendee row with no `reserved_for` in `ready`, which `claim_environment` hands to
+  anyone. `instructor` goes in `held`, which it never hands out. Any other role refuses the whole file.
+- **(2) The quoting is read.** The header and row go through Go's `encoding/csv`, which reads RFC 4180 quotes the way
+  jq's `@csv` writes them, a doubled quote included. Header names are trimmed and a leading byte-order mark is dropped.
+- **(3) Every column is known.** The known set is `name`, `role`, `reserved_for` and thirteen access columns,
+  `terminal_user` and `terminal_password` among them. Columns are matched by name, so order does not matter, and an
+  unknown or repeated column refuses the file. All fifteen columns fleet.sh sends are in the set.
+- **(4) The exit code is success.** `main.go` exits 1 on any error `importCommand` returns. That covers a row it
+  refuses, an unknown event, one past its deadline, a file holding only placeholder rows, a missing `USER`, and a
+  claimed cluster the file would move. In the last case the access merge has already been committed.
+- **(5) Re-import keeps a claim, with two exceptions /admin/import never had.** A cluster is matched by name within
+  the event. Each non-blank value replaces the stored one and a blank leaves it. A `claimed` or `active` cluster keeps
+  its state and its claim. The first difference: an unclaimed cluster's role and reservation follow the file, and
+  fleet.sh never sends `reserved_for`, so re-ingesting a cluster that a pool.csv reserved for one address puts it back
+  in `ready` for anyone. A claimed cluster that was reserved goes in labctl's `NotPlaced` list and exits 1, so fleet.sh
+  retries it three times and records `ingest:<name>`, although its terminal login was merged each time. Nothing in
+  this repo reserves a cluster today, so this is filed on lab-platform as a follow-up and fleet.sh is unchanged. The
+  second difference: a `released` or torn-down cluster is left out of the pool and labctl still exits 0, so
+  `ingested: <name>` read as success for a cluster nobody can claim.
+- **Changed.** `ingest_one` now logs labctl's own summary lines after a successful import, and warns by name when
+  labctl says it left the cluster alone as released or torn down. `verify/test_fleet_terminal_harvest.sh` gains
+  `labread`, a reader that applies ParsePoolCSV's rules (the known columns, no repeats, field count, a blank name,
+  and the role values with blank read as attendee). The row fleet.sh sends is held to it: an attendee reads as
+  attendee, each roster cluster as instructor, and a password holding a comma and a quote survives the quoting. Because
+  the reader is a copy, it can drift from lab-platform; the comment names the file it was read from.
+- **Still not read.** `ingest pool` still takes its names from the provisioning app's /admin/roster (#656).
+
+**Not yet run on a cluster:** this is the live half of #655. It needs a session with the fleet's AWS profiles, labctl on
+PATH, `DATABASE_URL` at lab-platform's database, `USER` set, and a test event on a `managed_cluster` lab
+(`labctl create-event agenticburn burn@2.1.0 <event> <attendance> <hours>`) in `WIB_EVENT`, against built clusters.
+Run `infra/terraform/fleet/fleet.sh ingest watch-it-burn-attendee-001` and `infra/terraform/fleet/fleet.sh
+ingest-instructors`. Then `labctl status agenticburn <event>` must count the attendee as ready and each roster
+cluster as held. Claim once on `/c/agenticburn/<event>` and rerun the attendee ingest: it must log `0 added` with the
+claim still held. No attendee cluster is up today; the 2026-10-28 platform is the roster alone.

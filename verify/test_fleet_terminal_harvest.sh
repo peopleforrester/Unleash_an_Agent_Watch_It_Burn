@@ -17,6 +17,24 @@ check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((f
 ctrue() { python3 -c 'import csv, sys
 rows = list(csv.DictReader(open(sys.argv[1], newline="")))
 sys.exit(0 if len(rows) == 1 and eval(sys.argv[2], {"d": rows[0]}) else 1)' "$1" "$2" 2>/dev/null; }
+# labread <file>: reads <file> by the rules lab-platform's store.ParsePoolCSV applies (internal/store/import.go,
+# read 2026-10-30 for #655; docs/provisioning.md section 9 there) and prints the one row as <name>|<role>, the role
+# labctl stores. Exits 1 on what labctl refuses: a column outside the known set, one named twice, no name column, a
+# row whose field count differs from the header's, a blank name, or a role that is neither attendee nor instructor.
+# A blank role is stored as attendee, which is what makes an attendee row claimable.
+labread() { python3 -c 'import csv, sys
+known = {"name", "role", "reserved_for", "region", "access_key", "secret_key", "console_url", "datadog_org",
+         "datadog_email", "datadog_password", "datadog_api_key", "datadog_app_key", "datadog_site",
+         "datadog_dashboard_url", "terminal_user", "terminal_password"}
+recs = list(csv.reader(open(sys.argv[1], newline="")))
+head = [h.strip() for h in recs[0]]
+if set(head) - known or len(set(head)) != len(head) or "name" not in head: sys.exit(1)
+rows = [r for r in recs[1:] if any(f.strip() for f in r)]
+if len(rows) != 1 or len(rows[0]) != len(head): sys.exit(1)
+d = {h: f.strip() for h, f in zip(head, rows[0])}
+role = d.get("role", "") or "attendee"
+if not d["name"] or role not in ("attendee", "instructor"): sys.exit(1)
+print(d["name"] + "|" + role)' "$1" 2>/dev/null; }
 
 # ---- the harvester, as provisioning-agenticburn#16 specifies it: <cluster> [region] [out-dir]; 0 written,
 # 3 Secret absent, 1 unreachable/unreadable/malformed. On a non-zero exit this shim LEAVES a stale file, so the
@@ -54,6 +72,8 @@ if [[ "${1:-}" == pool ]]; then
 fi
 [[ "${LABCTL_RC:-0}" -eq 0 ]] || { echo "labctl: import refused (test)" >&2; exit "${LABCTL_RC}"; }
 n="$(ls "${T}/imports" | wc -l)"; cat >"${T}/imports/$((n + 1)).csv"
+echo "imported into agenticburn/test-event: 1 added, 0 updated, 0 unchanged"
+[[ -z "${LABCTL_PAST:-}" ]] || echo "  left alone, released or torn down: ${LABCTL_PAST}"
 S
 # curl: answers 404 to everything. Nothing may read /admin/roster or POST to /admin/import any more.
 cat >"${SHIM}/curl" <<'S'
@@ -161,7 +181,26 @@ for n in "${ADMIN}" "${COMMUNITY}"; do
   reset
   src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${n} acct-default"
   check "roster cluster ${n} goes in as role=instructor" 'ctrue "${T}/imports/1.csv" "d[\"name\"] == \"${n}\" and d[\"role\"] == \"instructor\""'
+  check "and labctl's parser holds it as instructor, so it is held and never claimable (#655)" \
+    '[[ "$(labread "${T}/imports/1.csv")" == "${n}|instructor" ]]'
 done
+
+echo "== the row reads as labctl's store.ParsePoolCSV reads it (#655, lab-platform docs/provisioning.md section 9) =="
+reset
+HARVEST_CRED='agentic:p,a"ss' src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${A} accen-qa"
+check "every column, terminal_user, terminal_password and role among them, is one labctl knows" \
+  '[[ "$(labread "${T}/imports/1.csv")" == "${A}|attendee" ]]'
+check "the attendee's empty role is stored as attendee, so the cluster goes in ready and claimable" \
+  '[[ "$(labread "${T}/imports/1.csv" | cut -d"|" -f2)" == attendee ]]'
+check "the header is quoted field by field as @csv quotes it" '[[ "$(head -1 "${T}/imports/1.csv")" == \"name\",* ]]'
+check "a password holding a comma and a quote survives the quoting" \
+  'ctrue "${T}/imports/1.csv" "d[\"terminal_password\"] == \"p,a\\\"ss\""'
+check "labctl's own summary is logged beside the ingest" \
+  'grep -q "imported into agenticburn/test-event: 1 added, 0 updated, 0 unchanged" "${T}/stderr"'
+reset
+LABCTL_PAST="${A}" src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${A} accen-qa"
+check "a cluster labctl left out of the pool, released or torn down, is warned about by name" \
+  'grep -q "ingest ${A}: WARN labctl left it out of the pool" "${T}/stderr"'
 reset
 LABCTL_RC=1 src "mkdir -p \"\${LOG_DIR}\"; ingest_one ${A} accen-qa"
 check "a failed import is retried three times" '[[ "$(grep -c "^labctl import" "${CALLS}")" -eq 3 ]]'
