@@ -5091,3 +5091,32 @@ watch-it-burn-community:
     AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
     CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
       KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_console_no_toggle_live.py
+## 2026-10-30 · #532 · The live `ingest pool` run waits on #656, and on an attendee pool being up
+
+#532 asks for one live `fleet.sh ingest pool` run, so that claimed rows show the terminal login their cluster
+enforces and the harvester's interface (`<cluster> [region] [out-dir]`, AWS_PROFILE from the environment, exits
+0/3/1, #445) is confirmed. Hecaton run 12337 did not run it, and found that the command it would run is no longer
+the one the issue describes. No code changed.
+
+- **Its write side moved.** Since #600, `ingest_one` pipes each row to `labctl import` into lab-platform's
+  handout pool, not to the provisioning app's /admin/import. The claimed rows #445 wanted corrected were the
+  provisioning app's, and nothing in fleet.sh writes there now.
+- **Its read side did not.** `cmd_ingest pool` still takes its names from `pool_rows`, which reads the
+  provisioning app's /admin/roster with the admin token. Run today, it would re-import into lab-platform the
+  names of a pool fleet.sh no longer fills. #656 is the issue that moves `pool_rows` to lab-platform, and its
+  blocker is gone: lab-platform#302 added `labctl pool --customer <c> --event <e>` (lab-platform commit 227774f),
+  which prints every cluster still in an event's pool with its state.
+- **No attendee pool is up.** The platform rebuilt on 2026-10-28 is the roster alone, `watch-it-burn-community`
+  and `watch-it-burn-private` in accen-dev (PROJECT_STATE.md, "KubeCon platform up"). The KubeCon session points
+  nobody at a distributor, so no attendee lab runs (`facilitation/kubecon-na-2026-run-of-show.md`, "The one
+  platform, and the two clusters on it"). Both roster clusters carry `sprouts`, not `agentic`.
+- **The harvester's source is still unread.** `sources repo-cat agenticburn/provisioning-agenticburn/scripts/harvest_terminal_credential.sh`
+  is still refused as "looks like a secret", and `repo-ls` of that directory does not list it.
+
+**Not yet run on a cluster.** After #656 lands, with an attendee pool imported for the event and its clusters up,
+a session with the fleet's AWS profiles, labctl on PATH, `DATABASE_URL`, `USER` and `WIB_EVENT` set, and
+`WIB_PROVISION_DIR` at a provisioning-agenticburn checkout that holds commit 3462ba2 runs
+`infra/terraform/fleet/fleet.sh ingest pool`. It must end with no `ingest:<name>` or `terminal-open:<name>`
+failure, `labctl pool --customer agenticburn --event "$WIB_EVENT"` must list the same names with every claimed
+row still claimed (#655's fifth assumption), and the terminal login a claimed attendee is handed must be
+`agentic` / `agentic`.
