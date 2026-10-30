@@ -5029,3 +5029,40 @@ The offline suite, which holds the judge against a fake cluster, passes.
 **Not yet run on a cluster:** on a fresh attendee cluster, with Kyverno's registry policy not yet armed,
 `python3 verify/agent_probe.py <host> --context <ctx> --profile accen-dev --only c6-off,c6-on --repeat 5`
 (10 model calls, under the default `--max-calls 20`), compared against 19/20.
+## 2026-10-30 · #485 · The fleet monitors load into Whitney's sandbox org: a write key for the apply, the org named the way the read-only key allows
+
+#485 asks for the first `fleet.sh monitors --apply` against a live org and a check that every fleet-dashboard
+column fills. Its premise was an instructor org per event, after a pool was loaded. #454 closed on 2026-10-29
+with no pool: Datadog no longer issues per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org
+(`burritobot-public` and `burritobot-private`), and `watch-it-burn/datadog` holds a read-only application key
+(#629). The loader was written for the old premise, and against the sandbox org it could not have worked:
+
+- **`--check` would fail before it read a monitor.** `main()` named the org with `GET /api/v1/org`, which the
+  read-only key answers 403 (found on #665, which is why `room_view.py` uses `/api/v2/current_user`). So
+  `fleet.sh monitors --check` and `verify/test_fleet_monitors_live.py` would have failed on the org lookup
+  whether or not the monitors were loaded. `org_name()` moves from `room_view.py` into `fleet_monitors.py`, and
+  both loaders use it.
+- **`--apply` would write with the read-only key.** It now takes the application key from
+  `WIB_FLEET_MONITORS_APP_KEY` in the command's environment, the way `room_view.py --apply` takes
+  `WIB_ROOM_VIEW_APP_KEY`: an unscoped key Whitney issues from her own user. Without it the apply stops before
+  reading any key. `--check` keeps the secret's read-only key.
+- **Both modes refuse an org whose name does not start with `WIB_DD_POOL_PREFIX`** (default `Datadog`, as in
+  `verify/datadog-orgs.sh` and `room_view.py`), so six monitors with `notify_no_data` never land in some other org.
+
+No metric or tag name changed. Nothing here measured them, so the six names the issue lists are as unproven
+as before. The docs that give the apply line (the README, GO-LIVE-CHECKLIST step d2, the run-of-show's Night
+Before item and the live test's failure hint) now include the key.
+
+**Tests.** `verify/test_fleet_monitors.py`'s fake org now answers `/api/v1/org` with 403 and names itself from
+`/api/v2/current_user`, as the sandbox org does. New checks: the apply sends the env key and `--check` the
+secret's key; `--apply` without the env key exits 1 having read no key and made no call; `--apply` and
+`--check` against an org named `event-001` exit 1 after one read and no write; `WIB_DD_POOL_PREFIX` names a
+pool's org instead. The old loader fails the file (no `APP_KEY_ENV`), and a loader that applies with the
+read-only key fails the key check.
+
+**Not yet run on a cluster.** With the clusters up and shipping: Whitney (or Michael signed in to her org)
+issues the key and runs `WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply
+--session <start>Z/<end>Z`, then `infra/terraform/fleet/fleet.sh monitors --check`. Then
+`verify/test_fleet_monitors_live.py` (in `bash verify/run-e2e.sh`) must pass, and every column of the fleet
+dashboard must fill for both clusters. A blank column means a wrong name, fixed in `infra/datadog-fleet/` and
+`verify/test_fleet_monitors.py` together (#485).

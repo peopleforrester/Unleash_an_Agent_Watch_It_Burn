@@ -68,11 +68,12 @@ AWS_PROFILE=accen-dev verify/datadog-pool-check.sh
 ```
 
 ```bash
-# d2) the fleet monitors and the fleet dashboard in the instructor org (#267). Once per event, after the
-#     pool is loaded (a new event is a new instructor org), with the session window in UTC.
+# d2) the fleet monitors and the fleet dashboard in the instructor org (#267). Once per event, with the
+#     session window in UTC. For KubeCon NA 2026 that org is Whitney's sandbox org (#629): the key in
+#     watch-it-burn/datadog is read-only, so the apply takes an unscoped application key from her user (#485).
 infra/terraform/fleet/fleet.sh monitors                      # dry run: what would be written
-infra/terraform/fleet/fleet.sh monitors --apply --session <start>Z/<end>Z [--notify @handle]
-infra/terraform/fleet/fleet.sh monitors --check              # the org holds exactly the repo
+WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session <start>Z/<end>Z [--notify @handle]
+infra/terraform/fleet/fleet.sh monitors --check              # the org holds exactly the repo (read-only key)
 ```
 
 - [ ] The apply printed a `fleet dashboard:` URL. Open it on the instructor screen; every live cluster has

@@ -191,8 +191,8 @@ for bad in ("2026-09-08T16:00/2026-09-08T19:30", "2026-09-08T19:30Z/2026-09-08T1
 class FakeOrg:
     """A Datadog org in memory. Records every call; rejects validation for the queries in `reject`."""
 
-    def __init__(self, monitors=(), dashboards=(), downtimes=(), reject=()):
-        self.calls, self.reject = [], set(reject)
+    def __init__(self, monitors=(), dashboards=(), downtimes=(), reject=(), org="Datadog Whitney Sandbox"):
+        self.calls, self.reject, self.org = [], set(reject), org
         self.monitors = {m["id"]: m for m in monitors}
         self.dashboards, self.downtimes, self.next_id = list(dashboards), list(downtimes), 100
 
@@ -202,7 +202,10 @@ class FakeOrg:
         self.calls.append((method, path.split("?")[0], headers))
         p = path.split("?")[0]
         if p == "/api/v1/org":
-            return 200, {"orgs": [{"name": "event-001"}]}
+            # What the sandbox org's read-only key gets here (#629): the loader must name the org another way.
+            return 403, {"errors": ["Forbidden"]}
+        if p == "/api/v2/current_user":
+            return 200, {"included": [{"type": "orgs", "attributes": {"name": self.org}}]}
         if p == "/api/v1/monitor/validate":
             return (400, {"errors": ["bad query"]}) if data["query"] in self.reject else (200, {})
         if p == "/api/v1/monitor" and method == "GET":
@@ -243,11 +246,16 @@ class FakeOrg:
         return [(m, p) for m, p, _ in self.calls if m != "GET" and not p.endswith("/validate")]
 
 
-def run(argv, org, now=None):
+WRITE_ENV = {fm.APP_KEY_ENV: "WRITEKEY777777"}
+
+
+def run(argv, org, now=None, env=None, keys=None):
     out, err = io.StringIO(), io.StringIO()
     with redirect_stdout(out), redirect_stderr(err):
-        rc = fm.main(["--profile", "p", "--region", "r", *argv], keys=lambda *_: ("APIKEY123456", "APPKEY654321", "datadoghq.com"),
-                     http=org, now=now or dt.datetime(2026, 9, 8, 12, 0, tzinfo=dt.timezone.utc))
+        rc = fm.main(["--profile", "p", "--region", "r", *argv],
+                     keys=keys or (lambda *_: ("APIKEY123456", "APPKEY654321", "datadoghq.com")),
+                     http=org, now=now or dt.datetime(2026, 9, 8, 12, 0, tzinfo=dt.timezone.utc),
+                     env=WRITE_ENV if env is None else env)
     return rc, out.getvalue() + err.getvalue()
 
 
@@ -284,8 +292,12 @@ new_dts = [d for d in org.downtimes if d["attributes"]["status"] == "active" and
 check("two new mutes: until the session starts, and from when it ends", len(new_dts) == 2)
 check("the dashboard is written before any monitor",
       [p for _, p in org.writes()].index("/api/v1/dashboard") < [p for _, p in org.writes()].index("/api/v1/monitor"))
-check("no key value is printed", "APIKEY" not in text and "APPKEY" not in text)
+check("no key value is printed", "APIKEY" not in text and "APPKEY" not in text and "WRITEKEY" not in text)
 check("the keys travel only as headers", all(h.get("DD-API-KEY") == "APIKEY123456" for _, _, h in org.calls))
+check(f"the apply writes with {fm.APP_KEY_ENV}, not the secret's read-only application key (#629)",
+      all(h.get("DD-APPLICATION-KEY") == "WRITEKEY777777" for _, _, h in org.calls))
+check("the org is named from /api/v2/current_user, which the read-only key may call, not /api/v1/org",
+      "instructor org: Datadog Whitney Sandbox" in text and all(p != "/api/v1/org" for _, p, _ in org.calls))
 
 print("== apply again: in place, nothing duplicated ==")
 ids_before = set(org.monitors)
@@ -297,8 +309,11 @@ check("exactly two of our mutes are active afterwards",
       len([d for d in org.downtimes if d["attributes"]["status"] == "active" and fm.ours(d)]) == 2)
 
 print("== check: the live org against the repo ==")
-rc, text = run(["--check"], org)
+calls_before = len(org.calls)
+rc, text = run(["--check"], org, env={})
 check("an org holding exactly the repo passes", rc == 0 and "MISSING" not in text and "DRIFT" not in text)
+check("check needs no write key: it reads with the secret's read-only application key",
+      all(h.get("DD-APPLICATION-KEY") == "APPKEY654321" for _, _, h in org.calls[calls_before:]))
 check("each monitor's state is reported", "Alert" in text)
 victim = next(i for i, m in org.monitors.items() if "wib-monitor:console-unavailable" in m["tags"])
 org.monitors[victim]["query"] = "max(last_5m):max:something.else{*} < 1"
@@ -309,15 +324,32 @@ rc, text = run(["--check"], FakeOrg())
 check("an empty org fails the check, naming every monitor and both dashboards",
       rc == 1 and text.count("MISSING") == len(mons) + 2 and "MISSING  challenge leaderboard" in text)
 
+print("== apply needs the write key, and only ever the sandbox org ==")
+def no_keys_read(*_):
+    raise AssertionError("keys read before the write key was checked")
+org = FakeOrg()
+rc, text = run(["--apply"], org, env={}, keys=no_keys_read)
+check(f"--apply without {fm.APP_KEY_ENV} exits 1, reads no keys and calls nothing",
+      rc == 1 and fm.APP_KEY_ENV in text and "read-only" in text and org.calls == [])
+for mode in (["--apply"], ["--check"]):
+    org = FakeOrg(org="event-001")
+    rc, text = run(mode, org)
+    check(f"{mode[0]} against an org not named Datadog* exits 1 having written nothing",
+          rc == 1 and "'event-001', not the sandbox org" in text and org.writes() == []
+          and [p for _, p, _ in org.calls] == ["/api/v2/current_user"])
+org = FakeOrg(org="Acme Pool 3")
+rc, text = run(["--apply"], org, env={**WRITE_ENV, "WIB_DD_POOL_PREFIX": "Acme Pool"})
+check("WIB_DD_POOL_PREFIX names a per-event pool's org instead", rc == 0 and len(org.monitors) == 6)
+
 print("== dry run touches nothing ==")
 def no_keys(*_):
     raise AssertionError("a dry run must not read keys")
 out = io.StringIO()
 with redirect_stdout(out):
-    rc = fm.main(["--profile", "p", "--region", "r"], keys=no_keys, http=FakeOrg())
+    rc = fm.main(["--profile", "p", "--region", "r"], keys=no_keys, http=FakeOrg(), env={})
 check("a dry run reads no keys and exits 0", rc == 0 and "dry run" in out.getvalue())
 with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
-    check("a notify handle without @ is refused", fm.main(["--profile", "p", "--region", "r", "--notify", "oncall"], keys=no_keys) == 1)
+    check("a notify handle without @ is refused", fm.main(["--profile", "p", "--region", "r", "--notify", "oncall"], keys=no_keys, env={}) == 1)
 
 print("== fleet.sh is the way in ==")
 check("fleet.sh has a monitors verb", re.search(r"^\s+monitors\) exec python3 .*fleet_monitors\.py", fleet_src, re.M) is not None)

@@ -18,15 +18,22 @@ nothing looked at it. These files are what looks.
 
 ```bash
 infra/terraform/fleet/fleet.sh monitors                                   # dry run, offline
-infra/terraform/fleet/fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
+WIB_FLEET_MONITORS_APP_KEY=<key> \
+  infra/terraform/fleet/fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
 infra/terraform/fleet/fleet.sh monitors --check                           # read-only
 ```
 
-It follows the Datadog pool loader's pattern (#256): `--apply` reads the instructor org keys from Secrets Manager
-`watch-it-burn/datadog`, asks Datadog to validate every monitor, and writes nothing if any one is
+It follows the Datadog pool loader's pattern (#256): `--apply` reads the instructor org's API key from Secrets
+Manager `watch-it-burn/datadog`, asks Datadog to validate every monitor, and writes nothing if any one is
 rejected. Monitors are matched by their `wib-monitor:<key>` tag and updated in place, a monitor removed
-from the file is deleted, and the dashboard is matched by title, so its URL is stable within an org. Every
-event brings a new instructor org, so run `--apply` once per event, after the pool is loaded.
+from the file is deleted, and the dashboard is matched by title, so its URL is stable within an org. Run
+`--apply` once per event, against that event's instructor org.
+
+For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datadog no longer issues per-student orgs, so
+both clusters ship there (#629). The application key in `watch-it-burn/datadog` is read-only, which is all
+`--check` needs, so `--apply` takes its application key from `WIB_FLEET_MONITORS_APP_KEY`: an unscoped key
+Whitney issues from her own user (Datadog refuses log monitors created with a scoped one). Both modes refuse an
+org whose name does not start with `WIB_DD_POOL_PREFIX` (default `Datadog`, as `verify/datadog-orgs.sh` uses).
 
 `--notify @handle` (repeatable) adds a Datadog notification handle to every monitor. Without it the
 monitors still change state on the dashboard and the Monitors page, but they page nobody.

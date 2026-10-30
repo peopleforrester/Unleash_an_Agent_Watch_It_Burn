@@ -50,7 +50,7 @@ import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "datadog-fleet"))
-from fleet_monitors import SECRET_ID, Datadog, find_dashboard, norm, read_keys  # noqa: E402
+from fleet_monitors import SECRET_ID, Datadog, find_dashboard, norm, org_name, read_keys  # noqa: E402
 
 DEF_FILE = HERE / "room_view.yaml"
 SHARE_FILE = HERE / "share.json"
@@ -160,12 +160,6 @@ def share_body(defs: dict, dashboard_id: str) -> dict:
 
 def live_queries(dash: dict) -> list[str]:
     return [norm(q.get("query", "")) for _, q in queries(dash)]
-
-
-def org_name(dd: Datadog) -> str:
-    # /api/v2/current_user, not /api/v1/org: the sandbox org's read-only key answers that one 403 (#629).
-    me = dd.call("GET", "/api/v2/current_user")
-    return next((i["attributes"]["name"] for i in me.get("included", []) if i.get("type") == "orgs"), "?")
 
 
 def fetch_public(url: str) -> int:

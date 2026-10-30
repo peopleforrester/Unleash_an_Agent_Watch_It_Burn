@@ -782,7 +782,8 @@ is merely slow rather than rebuilding:
   probe above ends with it already; run it again if anyone has touched the guards
   since.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
-  are applied (#454; `./fleet.sh monitors --apply` once the pool is loaded). If no
+  are applied (#454, #485; `WIB_FLEET_MONITORS_APP_KEY=<key> ./fleet.sh monitors --apply`
+  with an application key from Whitney's user, then `./fleet.sh monitors --check`). If no
   pool is live, each challenge's trace is shown on the admin cluster's Grafana view
   (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
   the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the

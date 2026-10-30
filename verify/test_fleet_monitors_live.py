@@ -29,6 +29,7 @@ print(f"== instructor org fleet monitors ({fm.SECRET_ID} as {profile} in {region
 rc = fm.main(["--profile", profile, "--region", region, "--check"])
 if rc != 0:
     print("FAIL: the instructor org does not hold the fleet monitors this repo defines. Load them with\n"
-          "      infra/terraform/fleet/fleet.sh monitors --apply --session START/END", file=sys.stderr)
+          "      WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session START/END",
+          file=sys.stderr)
     sys.exit(1)
 print("The instructor org holds every fleet monitor, the fleet dashboard and the challenge leaderboard.")
