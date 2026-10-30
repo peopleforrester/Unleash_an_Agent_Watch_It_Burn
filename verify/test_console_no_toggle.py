@@ -214,6 +214,25 @@ check("the lab's toggle commands exec into guard-proxy and call localhost",
       "exec deploy/guard-proxy" in lab and "http://localhost:8080/toggle?" in lab
       and "agenticburn.com/a2a" not in lab and "/a2a/toggle" not in lab)
 
+print("== the KubeCon Night Before runs the live half on both clusters (#520) ==")
+# The live test cannot run from a dispatched run (no AWS, no kubeconfig), so the bring-up it is owed on must
+# carry it: the run-of-show's Night Before list, once per cluster that is on stage, each with the per-command
+# kubeconfig and the explicit CONTEXT the test demands (CLAUDE.md, kube-context safety).
+ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
+night = re.search(r"^## Night Before\n(.*?)^## ", ros, re.S | re.M)
+check("the run-of-show has a Night Before section", night is not None)
+night_text = night.group(1) if night else ""
+live_cmds = re.findall(r"^\s*KUBECONFIG=(\S+) AWS_PROFILE=\S+ CONTEXT=<(\S+?)> \\\n\s*python3 verify/test_console_no_toggle_live\.py",
+                       night_text, re.M)
+check("the Night Before runs verify/test_console_no_toggle_live.py once per cluster, with KUBECONFIG, "
+      "AWS_PROFILE and CONTEXT on the command", len(live_cmds) >= 2, f"{live_cmds}")
+check("one run names the private (admin) cluster and one the community cluster",
+      {c for _, c in live_cmds} >= {"private-context", "community-context"}, f"{live_cmds}")
+check("each run reads its own kubeconfig, never ~/.kube/config",
+      all(k.startswith("/tmp/") for k, _ in live_cmds) and len({k for k, _ in live_cmds}) == len(live_cmds),
+      f"{live_cmds}")
+check("the row says what a pass reads", "All live /toggle exposure checks passed." in night_text)
+
 if failures:
     print(f"\nFAIL: {len(failures)} check(s) failed: {failures}")
     sys.exit(1)

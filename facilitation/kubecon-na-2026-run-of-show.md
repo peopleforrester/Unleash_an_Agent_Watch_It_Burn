@@ -777,6 +777,28 @@ is merely slow rather than rebuilding:
   It must end `C7 PROVEN`. Write the delay it prints ("the narrowed rule took effect
   after N s") into segment 5's "Measured reload delay" line. If the deny never comes,
   C7 is not ready to show.
+- [ ] **The public console reaches no guard toggle (#481, #520).** From the repo
+  root, once per cluster, with the kubeconfig the probe above pulled:
+
+  ```bash
+  KUBECONFIG=/tmp/private.kubeconfig AWS_PROFILE=accen-dev CONTEXT=<private-context> \
+      python3 verify/test_console_no_toggle_live.py
+  KUBECONFIG=/tmp/community.kubeconfig AWS_PROFILE=accen-dev CONTEXT=<community-context> \
+      python3 verify/test_console_no_toggle_live.py
+  ```
+
+  Each must end `All live /toggle exposure checks passed.` It reads the cluster's
+  public host from `cluster-identity`, confirms `/guards` answers 200 through the
+  router and that `/a2a/toggle`, `/a2a/guards`, `/a2a/` and `/toggle` answer the
+  console's own 404 (the route any phone in the room could once flip the guards
+  through), then proves the students lost nothing: the terminal's `_px` and
+  `guards-status` helpers still reach guard-proxy over `kubectl exec`, and the guards
+  read the same before and after. It flips nothing. The public half was seen from
+  outside on 2026-10-30 on both clusters, on both domains; the in-cluster half has
+  not yet run on either cluster, which is why this row is here. The tool pod's own
+  in-cluster call to `guard-proxy:8080/toggle` stays open on purpose (the mesh
+  challenge candidate in `docs/research/2026-10-24-istio-ambient-evaluation.md`,
+  section 2.1); the test does not probe it.
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
   so the AI guardrails start off and the live toggles in segments 2 to 6 are real. The
   probe above ends with it already; run it again if anyone has touched the guards

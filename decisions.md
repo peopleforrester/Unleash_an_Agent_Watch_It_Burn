@@ -5286,3 +5286,32 @@ The 2026-10-29 entry's change is on staging (7ffbc73, 1414255, e5bd6fe). Run 125
 `python3 verify/test_promo_villains_public.py`, then on an attendee cluster
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and `CONTEXT=<admin-ctx>
 challenges/c2-villain-image/fallback.kubectl.sh`, whose denial now matches the run-of-show row.
+
+## 2026-10-30 · #520 · Second pass: the Night Before now carries the live /toggle check, so a bring-up runs it
+
+**What #520 asks** is a live run of `verify/test_console_no_toggle_live.py` on the admin and community clusters
+"at KubeCon bring-up". The first pass (the entry above, 03:12Z) found both clusters already running #481's console
+from outside and left the in-cluster half owed to a session with AWS access. Nothing came back on the issue from
+that escalation, and the run-of-show's Night Before list, which is the bring-up, never named the test. Its probe
+record for 2026-10-24 says only that "#520's console_no_toggle_live test was not run", and the three bring-ups
+since (10-27, 10-28, 10-29) did not run it either. A check that is not on the list is not run at a bring-up.
+
+- **The Night Before has a new row, "The public console reaches no guard toggle (#481, #520)",** after the C7
+  gateway row in `facilitation/kubecon-na-2026-run-of-show.md`. It runs the test once per cluster with the
+  per-command kubeconfig the probe row already pulled (`/tmp/private.kubeconfig`, `/tmp/community.kubeconfig`),
+  `AWS_PROFILE=accen-dev` and an explicit `CONTEXT`, says what a pass reads, what the test proves and that it flips
+  nothing, and names the open in-cluster `guard-proxy:8080/toggle` as the mesh candidate left on purpose.
+- **`verify/test_console_no_toggle.py` (the offline gate) now pins that row:** the Night Before section runs the
+  live test at least twice, once with `<private-context>` and once with `<community-context>`, each with its own
+  `/tmp/` kubeconfig and `AWS_PROFILE` on the command, and the row quotes the test's pass line. With the row
+  stashed, three of those checks fail and the test exits 1.
+- **The public half was probed again from outside at 07:44Z,** same requests as the test, on `attackme` and
+  `burritobot-private` under agenticburn.com and burritobot.co: `/guards` 200 with every guard off on all four
+  hosts; `/a2a/toggle`, `/a2a/guards`, `/a2a/` and `/toggle` 404 from the console's nginx/1.27.5 page, no guard
+  key in the body. Unchanged from 03:12Z.
+- **Why the test is not simply run here.** This run has `kubectl` and `aws` on PATH but no kubeconfig and no
+  credentials (`aws sts get-caller-identity` says NoCredentials, and the accen-dev profile does not exist here).
+  The in-cluster half needs `kubectl exec` into guard-proxy and web-terminal on each cluster.
+
+**Not yet run on a cluster:** the in-cluster half, on both watch-it-burn-private and watch-it-burn-community.
+The exact commands are the new Night Before row, or the first #520 entry's block.
