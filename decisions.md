@@ -5388,3 +5388,28 @@ not the HC-666 beat. Showing that beat needs a query on the tool span, which is 
 send a blocked `/chat` from the storefront and open
 `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. The Session picker should list the
 storefront's `sess-…` id, and C6 should show the turn with All and with that id.
+
+## 2026-10-30 · #608 · The first live run stopped at a prerequisite: a YAML-parser whitespace difference, not a policy drift
+
+Escalation 352 (hecaton run 12662, security tier) ran the #608 entry's guarded command against
+watch-it-burn-private (`arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private`, EKS 1.36, ACTIVE).
+`verify/test_llm_bypass_live.py` exited 1 at its prerequisites, so **the three #607 checks and the #490 and #552
+checks are still not reached**. Seventeen prerequisites passed, deny-llm-endpoint-bypass's five comparisons and
+both policies' Kyverno readiness among them. One failed: "live restrict-agent-spawned-workloads validation
+expressions are the repo's". The run created nothing: it stops before `wib.test/run` is assigned, and
+`kubectl -n agent get deployments,pods,configmaps -l wib.test/run` found none afterwards.
+
+- **The live policy is the repo's.** Argo shows kyverno-policies Synced at staging 2e1829c. Validations 0 and 1
+  match exactly. Validations 2 and 3, the #607 secret-volume and secretKeyRef rules, differ only in whitespace:
+  live, each expression has a blank line after its first line (`exists(v,\n\n  (has(v.secret…`). With whitespace
+  normalised (`' '.join(s.split())`), all four are equal.
+- **Why.** Both expressions are folded scalars (`>-`) whose later lines are more-indented. The YAML parser on the
+  path to the cluster keeps an extra line break before the first more-indented line, and PyYAML, which the test
+  reads the repo file with, does not. CEL ignores whitespace, so the admitted policy is the same.
+- **What unblocks it.** The comparison at `verify/test_llm_bypass_live.py:174` (and the same one for
+  deny-llm-endpoint-bypass at :155) should compare whitespace-normalised expressions. A change in a run with
+  an offline test, then the same guarded command again. Not done here: the escalation authorised the run, not a
+  code change.
+
+**Not yet run on a cluster:** `verify/test_llm_bypass_live.py` past its prerequisites, once the comparison is
+fixed, with the #608 entry's guarded command.
