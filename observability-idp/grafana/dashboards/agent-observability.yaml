@@ -121,14 +121,14 @@ data:
         {
           "id": 6,
           "type": "table",
-          "title": "C6: blocked before the model. /chat requests an input guard refused (0 input tokens)",
-          "description": "The /chat root's witb.guard.decision is input_blocklist or input_classifier: guard-proxy's input guard answered without forwarding, so there is no agent.forward span and no model call in the trace. The cost panel does not move for these.",
+          "title": "C6: HC-666 came back withheld. Ticket reads the input guard withheld, with no deploy after them",
+          "description": "Challenge 3. The prompt is innocent, so the model is called and there are input tokens. Open the trace: execute_tool read_support_ticket returns the guard's withheld notice, and there is no execute_tool deploy_app anywhere under the /chat root.",
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
           "datasource": { "type": "tempo", "uid": "tempo" },
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
               "queryType": "traceql", "tableType": "traces", "limit": 20,
-              "query": "{ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" && (span.witb.guard.decision = \"input_blocklist\" || span.witb.guard.decision = \"input_classifier\") }" }
+              "query": "({ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" } >> { name = \"execute_tool read_support_ticket\" && span.gen_ai.tool.call.result =~ \".*input guard. withheld.*\" }) && ({ name = \"execute_tool deploy_app\" } !<< { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" })" }
           ]
         },
         {

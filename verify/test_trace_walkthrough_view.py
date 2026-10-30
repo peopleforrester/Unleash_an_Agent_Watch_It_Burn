@@ -72,13 +72,23 @@ check("every beat query is TraceQL", all(p and all(x.get("queryType") == "traceq
 check("the default range covers a whole walk-through (30 minutes or more)",
       re.fullmatch(r"now-(\d+)m", dash["time"]["from"]) is not None and int(dash["time"]["from"][4:-1]) >= 30)
 
-print("== C6: the /chat root an input guard decided ==")
+print("== C6: the HC-666 turn whose ticket came back withheld, with no deploy after it (#709) ==")
 q6 = query(beat["C6"])
-check("C6 selects guard-proxy's /chat root whose witb.guard.decision is input_blocklist or input_classifier",
-      re.fullmatch(r'\{ resource\.service\.name = "burritobot" && span\.url\.path = "/chat" && span\.session\.id =~ "\$session"'
-                   r' && \(span\.witb\.guard\.decision = "input_blocklist" \|\| span\.witb\.guard\.decision = "input_classifier"\) \}',
-                   q6) is not None)
-check("C6 no longer infers a block from a missing agent.forward", "agent.forward" not in q6)
+# Challenge 3 is HC-666: the prompt is innocent, so guard-proxy forwards it, and the input guard inside
+# read_support_ticket withholds the flagged ticket. Run on burritobot-private's Tempo 2026-10-30: this query listed the
+# guarded HC-666 turn and not the open one, whose deploy_app call admission refused. It needs one tree per trace,
+# which the collector's gateway exemptions give (#703).
+ROOT6 = '{ resource.service.name = "burritobot" && span.url.path = "/chat" && span.session.id =~ "$session" }'
+check("C6 is a /chat root with a withheld read_support_ticket under it and no execute_tool deploy_app",
+      q6 == f'({ROOT6} >> {{ name = "execute_tool read_support_ticket" && span.gen_ai.tool.call.result =~ ".*input guard. withheld.*" }})'
+            f' && ({{ name = "execute_tool deploy_app" }} !<< {ROOT6})')
+MCP = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text(encoding="utf-8")
+check("the withheld notice the query matches is the one read_support_ticket returns",
+      'TICKET_WITHHELD = "[input guard] withheld"' in MCP)
+check("the collector copies a tool's result into gen_ai.tool.call.result, the attribute it matches",
+      'set(attributes["gen_ai.tool.call.result"], attributes["gcp.vertex.agent.tool_response"])'
+      in (REPO / "gitops/otel-collector/values.yaml").read_text(encoding="utf-8"))
+check("C6 no longer lists a prompt guard-proxy blocked at /chat", "witb.guard.decision" not in q6)
 check("guard-proxy's server span carries url.path", 'set_attribute("url.path", self.path)' in PROXY)
 check("guard-proxy's service name is burritobot",
       "service.name=burritobot," in (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"))
@@ -173,7 +183,7 @@ check("it says Datadog when it is reachable and Grafana when not",
 check("the C6 beat is the HC-666 turn: the model is called, the ticket comes back withheld, no deploy (#680, #699)",
       "zero input tokens" not in seg and "no model call" not in seg
       and "`read_support_ticket` returns the guard's withheld notice" in seg and "no `deploy_app`" in seg
-      and "#709" in seg)
+      and "Grafana C6 panel lists exactly these turns (#709)" in seg)
 check("it walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
 check("it names the session picker", "**Session**" in seg)
 check("it no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg)

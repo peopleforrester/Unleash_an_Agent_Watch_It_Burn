@@ -406,10 +406,8 @@ cluster. The panels carry the internal ids:
 - **C6:** Challenge 3, the HC-666 ask sent after `guard-input-on`. The prompt is
   innocent, so the model is called and there are input tokens: open the trace and
   `read_support_ticket` returns the guard's withheld notice, with no `deploy_app`
-  after it. This is the same trace as segment 4's Datadog Challenge 3 tab. The
-  Grafana C6 panel still lists prompts guard-proxy blocked at `/chat`, which is not
-  this beat, until #709 changes its query; until then, find the turn by its
-  **Session** and open it from the trace view.
+  after it. This is the same trace as segment 4's Datadog Challenge 3 tab, and the
+  Grafana C6 panel lists exactly these turns (#709).
 - **C7:** Challenge 4, the weather-tool ask that never reached
   `read_internal_config`. The panel beside it lists the calls that did reach it; the
   ask sent before `guard-mcp-on` is there, and the one sent after is not.

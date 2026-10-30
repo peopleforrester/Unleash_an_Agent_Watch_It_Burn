@@ -281,8 +281,9 @@ source "$HOME/.guardlib"
 if _px "input_blocklist=on&input_classifier=on"; then
   echo "🛡️  Challenge 6 — INPUT guards ON (two stages): (1) a block-list rejects prompts containing"
   echo "    destructive commands or the secret-recipe phrases, and (2) a prompt-injection classifier catches"
-  echo "    poisoned instructions. Both run BEFORE the model, so a blocked prompt spends ZERO tokens."
-  echo "    Re-send the poisoned ticket; it's rejected upstream and the cost counter does not move."
+  echo "    poisoned instructions, both in a prompt and in a support ticket as the ticket tool reads it."
+  echo "    Re-send the ticket ask: the ticket comes back withheld, so the model never sees the hidden"
+  echo "    instructions and nothing is deployed. A prompt the guards block never reaches the model at all."
 else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-input-on' again."
 fi
