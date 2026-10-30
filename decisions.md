@@ -5562,3 +5562,18 @@ there. The draft's test ran the attendee profile only; this one runs all three.
 **Not yet run on a cluster.** On attackme, after the collector syncs, drive one /chat and run
 `verify/test_datadog_sandbox_live.py`. Its span check groups `traces.span.metrics.calls` by service and should
 list only burritobot and burritobot-agent.
+
+## 2026-10-30 · #608 · #638's arm parameter flips the same two policies, so the guarded run on watch-it-burn-private stands
+
+Hecaton run 12735, the fifth on #608, again had no cluster and no AWS credentials (`kubectl config get-contexts`
+lists none, `aws sts get-caller-identity` returns NoCredentials). `python3 verify/test_llm_bypass_live.py` stops at
+"CONTEXT names the cluster to run against", exit 1, as designed. Since the first #608 entry above, #638 (ea699ed)
+gave the admin role a second way to arm: lab-platform's `labctl event up` sets `guardrails.validationAction=Deny` on
+the lab-bootstrap root, and `gitops/bootstrap/apps/kyverno-policies.yaml` then patches `[Deny]` onto
+require-resource-limits and restrict-image-registries and nothing else. These are the same two policies that
+`infra/terraform/fleet/fleet.sh` `arm_infra_guardrails` flips. The test's pods still set CPU and memory limits
+(`verify/test_llm_bypass_live.py` `container()`) and use the signed busybox on ghcr.io/peopleforrester. So an armed
+watch-it-burn-private still refuses nothing the test expects admitted, either way it was armed. No code changed.
+
+**Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it, with the guarded command in the first
+#608 entry above. The result goes here: the three #607 checks, and the #490 and #552 checks the TypeError hid.
