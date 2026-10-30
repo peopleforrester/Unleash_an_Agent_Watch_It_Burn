@@ -217,6 +217,8 @@ kubeconfigs. Verified 20 hosts reporting.
 (`/etc/containerd/certs.d/docker.io/hosts.toml` via cloud-init) with GHCR as a path-preserving fallback;
 `fleet.sh` passes `-var dockerhub_auth_b64` from `~/secrets`. GHCR fallback packages need to be made
 public (no REST API for user-package visibility; one-time UI step).
+**Superseded 2026-10-30 (#714):** no image a cluster runs is pulled from Docker Hub any more, so the node's
+registry config, the Team PAT and fleet.sh's variable are gone (decisions.md, 2026-10-30, #714).
 
 **Rollout mechanism (so a later session doesn't relearn it).** Clusters track `staging`. To push an
 ai-layer change live: annotate the `ai-layer` Application `argocd.argoproj.io/refresh=hard` + patch its

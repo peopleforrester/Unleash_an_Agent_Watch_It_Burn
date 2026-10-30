@@ -56,7 +56,16 @@ check("a tag-only reference with '@sha256' in its COMMENT is seen as unpinned",
       _m is not None and OURS.search(_m.group(1)) is not None and "@sha256:" not in _m.group(1))
 
 print("== every image from a registry we publish to carries a digest ==")
-unpinned = [(p, n, r) for p, n, r in refs() if OURS.search(r) and "@sha256:" not in r]
+# The villains are the exception, and restrict-image-registries says which they are: an image on one of its refused
+# paths (lab-platform's promo/, our joker- tags, #653 and #714) is the unvetted image a lesson hands over by its tag,
+# or the clown file's untagged one, and a digest would make it read as vetted. Every other image of ours is pinned.
+sys.path.insert(0, str(REPO / "verify"))
+from registry_allowlist import refused_paths  # noqa: E402
+
+VILLAINS = refused_paths()
+check(f"the refused paths are read from the policy ({VILLAINS})", len(VILLAINS) >= 2)
+unpinned = [(p, n, r) for p, n, r in refs()
+            if OURS.search(r) and "@sha256:" not in r and not any(v in r for v in VILLAINS)]
 for p, n, r in unpinned:
     print(f"        {p}:{n}  {r}")
 check(f"all pinned by digest ({len(unpinned)} unpinned)", not unpinned)

@@ -5735,3 +5735,102 @@ Run `infra/terraform/fleet/fleet.sh ingest watch-it-burn-attendee-001` and `infr
 ingest-instructors`. Then `labctl status agenticburn <event>` must count the attendee as ready and each roster
 cluster as held. Claim once on `/c/agenticburn/<event>` and rerun the attendee ingest: it must log `0 added` with the
 claim still held. No attendee cluster is up today; the 2026-10-28 platform is the roster alone.
+
+## 2026-10-30 · #714 · No Docker Hub: every image is built from, pulled from and named on ghcr.io
+
+Michael, 2026-10-30: no Docker Hub anywhere, because it costs money and rate-limits a fresh node's anonymous pulls.
+At 8c44f5a, `git grep -n "docker\.io"` (transcripts/ and ACTION_ITEMS.md left out) found 119 lines, against the
+issue's 113. Now it finds only the three lines in `verify/test_no_docker_hub.py`'s REFUSED list, plus the dated
+records that list leaves out. There was no earlier draft of this issue to check against staging.
+
+- **C6's Joker is ours on ghcr.io: `ghcr.io/peopleforrester/watch-it-burn:joker-busybox-1.38.0`.** Michael's
+  comment on the issue names `joker` among this repo's watch-it-burn tags, so it goes in that package and not under
+  lab-platform's promo/. That package is already public, so a node needs no visibility toggle to pull it. Its base is
+  lab-platform's `base-shell@sha256:86b8e3ab…`, BusyBox 1.38.0 compiled from source, with httpd, as one linux/amd64
+  manifest. This is the shell base lab-platform's promo/ villains use, so busybox no longer comes from Docker Hub.
+  `verify/test_joker_web_busybox.py` now pulls that base from ghcr.io, runs start.sh on its busybox (the page, the
+  laugh and SIGTERM all still pass), and reads the version to check the tag against it.
+- **The Joker must be signed, and it is still refused.** `verify-image-signatures` asks every `watch-it-burn*` image
+  for the workshop signature, in every namespace, at Deny. Unsigned, the Joker would be refused on every Kyverno
+  cluster, including the attendee cluster's open C6 beat. `build.sh` therefore pushes it and says to run
+  `verify/sign-images.sh`, whose scan now reads build.sh's `JOKER=` line. ghcr.io stays on the allow-list, so the
+  refusal C6's second tier and the room's wall show (question 872) comes from a new `refusedPaths` entry,
+  `/peopleforrester/watch-it-burn:joker-`: the repository plus the tag prefix. It refuses every joker- tag, on
+  ghcr.io and through an ECR cache, and nothing else in the package. A digest-only reference to the Joker would get
+  past it, as a digest of a promo/ villain could not; that is not the lesson C6 teaches. The policy message
+  now ends "or a watch-it-burn joker- tag", and /lab's quoted line and LAB-TEXT.md follow it.
+- **build.sh pushes only the Joker.** The ten promo/ villains are lab-platform's build (#653), and lab-platform reads
+  their catchphrases from build.sh pinned at 45e62f0, so the M and V lines stay as the talk's content and the
+  Docker Hub pushes go. The ticket text changed with the image (HC-7731, and HC-666 through `C6_IMAGE`), so
+  `verify/test_injection_classifier.py` was run again on the new body (see Tests).
+- **restrict-image-registries no longer allows `docker.io/library/`.** If Docker Hub stayed on the trusted list, the
+  agent could still pull from it. The Kyverno CLI cases now refuse both `docker.io/someone/nginx:1` and
+  `docker.io/library/nginx:1.27-alpine`, the two refused examples, and refuse the Joker directly and through an ECR
+  cache. The demo apps' and the probe's nginx moved to ghcr.io first, so nothing the root deploys into apps or agent
+  is refused by the change.
+- **Upstream images, through ghcr.io by digest.** Falco now names lab-platform's copies
+  `mirror/falcosecurity/falco:0.45.1-dc34bb8e231e` and `falcoctl:0.14.2-d9d2591057eb`. lab-platform#295 resolved
+  them, and Docker Hub served the same linux/amd64 digests again today. Its copy has not run: the tags are not on
+  ghcr.io yet, so until it runs a Falco pod cannot pull, and `test_mirror_copies_public.py` fails by name. This
+  goes against the run's no-deferral rule, and it is the issue's own instruction: what lab-platform has not
+  copied gets an issue there, not a Docker Hub pull. lab-platform has no copy of nginx, busybox or python, so the
+  demo apps, Beat 1, the argocd drift target, guard-proxy and the Python Dockerfiles use the copies already in our
+  public, signed watch-it-burn package (`nginx-1.27-alpine`, `busybox-1.36`, `python-3.12-slim`, by digest).
+  `debian:bookworm-slim` (web-terminal) and `node:24-trixie-slim` (Backstage) have no ghcr.io copy anywhere. They
+  are named at the path lab-platform's MirrorTarget would give them, with today's linux/amd64 digest. Those two
+  builds fail at FROM until lab-platform copies them, and that includes the next run of build-web-terminal.yml on
+  staging, which this commit triggers. A follow-up asks lab-platform for all five copies.
+- **Implicit Docker Hub pulls.** Beat 1's `nginx:latest` (prompt, fallback, beat-01.sh), the clown file's bare
+  `busybox`, and the `curlimages/curl` helper pods in beat-02.sh, beat-cost.sh and two FACILITATOR.md commands were
+  all Docker Hub pulls. They now name the nginx copy, an untagged `lab-platform/promo/joker` (refused by the registry
+  rule, with no `:latest` to pull), and the workshop-mcp image, which carries curl and is signed. The legacy
+  `agent/gateway/guard-proxy` manifest and the test fixtures follow.
+- **games/villain-apps** built three nginx villains and pushed them to a Docker Hub user namespace, so the registry
+  rule could refuse them. The build is removed (Dockerfile, build-push.sh). The beat now deploys C6's Joker, which
+  serves a page and sits on a refused tag.
+- **Terraform and fleet.sh.** The cluster module's `dockerhub_auth_b64` variable is gone, and so is the
+  cloud-config part that wrote the node's Docker Hub `hosts.toml` (the Team PAT, with a ghcr.io/peopleforrester/dockerhub
+  fallback). fleet.sh's PAT loading goes with them, and three fleet tests stop setting `WIB_DOCKERHUB_ENV`.
+  infra/harbor carried no pull-through cache, only README text, and that text is corrected. #664 no longer needs a
+  Docker Hub token. It needs a ghcr.io write token and the workshop signing key.
+- **Tags name the version inside (the comment on the issue).** Read from the images at their pinned digests:
+  workshop-mcp carries mcp 1.29.1 (dist-info METADATA) and web-terminal carries ttyd 1.7.7 (`ttyd version
+  1.7.7-40e79c7`). The tags become `workshop-mcp-mcp-1.29.1` and `web-terminal-ttyd-1.7.7`. That is the package's
+  `<image>-<version>` habit (`busybox-1.36`) with the software named whenever it is not the image's name, as in
+  lab-platform#330's `web:nginx-<version>`. Each reference keeps its digest, so a cluster runs the same bytes, and a
+  cosign signature is per digest, so it still verifies. The new tags do not exist until the escalated `crane tag`
+  runs. build-web-terminal.yml now builds, runs `ttyd --version` on the image it just built, and pushes
+  `web-terminal-ttyd-<that version>`. sample-app, tool-pin and backstage were not named by the comment and are not in
+  gitops/, so they are not retagged; a follow-up covers them.
+- **What git grep still finds, and why.** decisions.md is append-only. docs/DECISION-LOG.md,
+  docs/RUN-OF-SHOW-2026-08.md and docs/spike-prompt-guard-2-2026-10-28.md are dated records of what was true or
+  measured then. They are listed as RECORDS and kept as written; DECISION-LOG gets a superseded line instead. Mirror
+  provenance comments now say "Docker Hub's <repo>", and verify/mirror_copies.py names the host once as `HUB`, which
+  the render test needs to match what a chart renders.
+
+**Tests.** `verify/test_no_docker_hub.py` is new and offline. Its first check is that `git grep` finds only the
+three REFUSED lines, each commented as a refused example (#714), and every one of them. The second is that no
+image field resolves to Docker Hub by being bare. It reads YAML `image:` keys (Helm registry and repository joined,
+and Application `values:` strings), Dockerfile FROM lines (through the new `verify/image_refs.py`, shared with
+test_images_lock.py) and shell `--image` flags. The kustomize name `llm-guard` counts as replaced, not as a pull.
+The third is that every watch-it-burn tag in gitops/ and the Joker build names a version. It was tried by putting a
+bare `nginx:1.27-alpine` in a demo app and by dropping falco.yaml's `registry:`, and each failed by name; both were
+reverted. `verify/test_image_version_tags.py` is new and in the tools tier. It reads mcp, ttyd and busybox out of
+the images on ghcr.io and checks each against its tag. The versions match. Its three "the tag serves the digest"
+checks fail until the retag and the Joker push run. Other tests changed to match: test_kyverno_cel_policies,
+test_villain_app, test_image_signing, test_promo_villains (its Docker Hub check is now this test's), test_c6,
+test_fake_ticket, test_support_desk, test_room_jokers, test_kubecon_probe, test_weather_feed, test_c8,
+test_deploy_app_limits, test_enforce_floor and test_e2e_toolchain (it reads Node's major from the mirror tag).
+
+**Not yet run on a cluster.** Owed, in order, by a session with a ghcr.io write token and the cosign key:
+1. Tag the two digests (`crane tag ghcr.io/peopleforrester/watch-it-burn@sha256:9a26c18c… workshop-mcp-mcp-1.29.1`,
+   and `@sha256:68004fb5… web-terminal-ttyd-1.7.7`). Run `images/villains/build.sh`, then `verify/sign-images.sh`.
+   After that, `python3 verify/test_image_version_tags.py` must pass.
+2. lab-platform runs #295's copy, and copies nginx, busybox, python, debian and node (the follow-up). Then
+   `python3 verify/test_mirror_copies_public.py` must pass.
+3. On a fresh attendee cluster, `CONTEXT=<ctx> bash verify/run-e2e.sh`. Then confirm that no pod's image names
+   Docker Hub: `kubectl --context <ctx> get pods -A -o jsonpath='{..image}' | tr ' ' '\n' | sort -u` should list
+   only ghcr.io, cr.agentgateway.dev, cr.kagent.dev, registry.k8s.io, quay.io and the other vendor registries.
+   Also confirm that no node event shows a pull from registry-1.docker.io. On the community cluster, HC-666 must
+   land joker-<name> and `https://maintenance-shell-<cluster>.burritobot.co/` must serve the page.
+   `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py` must refuse the Joker once Deny is armed.
