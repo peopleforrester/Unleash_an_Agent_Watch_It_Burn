@@ -100,8 +100,29 @@
     <div class="beat">
       <h3>3. Find their attack in Datadog, live</h3>
       <div class="who">Both &middot; the moment the observability half earns its place</div>
-      <div class="expect">Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> on the shared org. Ask who got it to work and is happy to be named, then find their prompt on screen.</div>
-      <div class="note">Rehearse this. Searching a live list in front of a room is the part that goes wrong, and it is worth having found one prompt by name before the session starts.</div>
+      <div class="expect">Open <a href="https://app.datadoghq.com/llm/traces" target="_blank" rel="noopener">Agent Observability</a> on the shared org, which since #629 is Whitney's Datadog sandbox org, the one both presenters sign in to. Ask who got it to work and is happy to be named, then find their prompt on screen.</div>
+      <!-- The recipe (#337). Every cluster ships to the shared org, so the Community cluster's prompts are already
+           there; what goes wrong on stage is the filter. guard-proxy's root span is service burritobot (which Datadog
+           also takes as the ml_app) and carries the student's own words. burritobot-agent's root span input is the
+           system prompt. Cluster names are what infra/datadog-cluster-identity.sh writes, not the EKS names. -->
+      <div class="control"><b>The recipe.</b> Open the saved view <b>Every prompt</b>. If it is not there, open
+      <a href="https://app.datadoghq.com/llm/traces?query=service%3Aburritobot%20kube_cluster_name%3Aburritobot-public" target="_blank" rel="noopener">the query as a link</a>,
+      or type it: <code>service:burritobot kube_cluster_name:burritobot-public</code>. The <b>CONTENT</b> column then shows
+      one row per chat, <b>INPUT</b> and <b>OUTPUT</b>, newest first. INPUT is the student's own words, except that
+      the Community cluster's collector writes e-mails, card numbers, SSNs and phone numbers as <code>[EMAIL]</code>,
+      <code>[CARD]</code>, <code>[SSN]</code> and <code>[PHONE]</code> (#647).</div>
+      <div class="warn">Not <code>service:burritobot-agent</code>. That root span's input is BurritoBot's system prompt,
+      so every row shows the same wall of instructions and the student's question is nowhere in the preview.</div>
+      <div class="note">Other clusters: swap the cluster term for <code>kube_cluster_name:burritobot-attendee-007</code>
+      (an attendee's), or <code>kube_cluster_name:burritobot-private-michael</code> (an <code>-admin</code> cluster).
+      Drop it to see the whole fleet. Datadog's names are not the EKS names: <code>watch-it-burn-community</code> is
+      <code>burritobot-public</code>.</div>
+      <div class="note">What it is not. <b>Not live:</b> ingestion runs one to two minutes behind, so ask for the name,
+      then look. <b>Not projectable:</b> there is no "show this one" control, so the room sees the Datadog list and
+      whatever else is on it; the prompt wall, <code>prompts.agenticburn.com</code>, is the feed made for the projector.
+      <b>Not durable:</b> the prompts last only as long as the org keeps them, and the Community cluster's are to be
+      purged from the shared org after the session (#647), so copy any prompt worth keeping out on the day.</div>
+      <div class="note">Rehearse this. Searching a live list in front of a room is the part that goes wrong, and it is worth having found one prompt by name before the session starts. Before the session, type the query above in Agent Observability and save it as a view named <b>Every prompt</b>, so on stage it is one click rather than a query typed in front of the room. Datadog's API cannot save the view; it is saved by hand, signed in to the shared org. Michael's user there is the Gmail address Whitney invited on 2026-10-27, through <b>Sign in with Google</b>; the first sign-in asks for Google's consent.</div>
       <div class="warn">Before moving on, tell them to <b>close the Community BurritoBot tab</b>. From here they have their own, and acting on the shared one is the confusion that follows people all session.</div>
     </div>
   </section>

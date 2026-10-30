@@ -5840,3 +5840,39 @@ community cluster (`fleet.sh instructors up community`), run
 provision a fresh attendee cluster and confirm the same script prints `IMDS: BLOCKED`. Final stage placement in
 the run-of-show (which segment, how it flows in the 30-minute KubeCon demo vs the 2-hour format) is the
 presenters' choreography call and is left as a follow-up rather than written into the tightly-timed scripts here.
+## 2026-10-30 · #337 · The brief's Datadog showcase carries the recipe and a one-click link; the saved view waits on a Google consent
+
+The Phase 1 showcase beat in `gitops/ai-layer/web/brief.html` said to find a student's prompt in Datadog and not
+how. It now gives the recipe the issue measured on 2026-09-08, in the names the platform uses today.
+
+- **The query.** `service:burritobot kube_cluster_name:burritobot-public` in Agent Observability
+  (`app.datadoghq.com/llm/traces`). guard-proxy's root span is service `burritobot` (also the `ml_app`, #629) and
+  carries the student's words in the CONTENT column's INPUT. A warning says not to use `service:burritobot-agent`,
+  whose root span input is the system prompt. The beat also links the query as
+  `app.datadoghq.com/llm/traces?query=...`, so it is one click before the saved view exists.
+- **What differs from the issue.** The issue gave EKS names as the cluster tag (`watch-it-burn-community`,
+  `watch-it-burn-attendee-007`) and the Portland trial org. Since #629, `infra/datadog-cluster-identity.sh` writes
+  Datadog's cluster name as `burritobot-public`, `burritobot-attendee-007` and `burritobot-private-<owner>` for an
+  admin cluster, and the shared org is Whitney's sandbox org. The brief uses those, and says the Community cluster's
+  collector scrubs e-mails, cards, SSNs and phone numbers in the trace (#647).
+- **The three gaps** are on the page in one note: not live (one to two minutes of ingestion), not projectable, not
+  durable. Since #309 closed, the prompt wall `prompts.agenticburn.com` is the projectable feed. The durability line
+  points at #647's purge of the Community cluster's data after the session.
+- **What differs from the earlier draft** (`origin/agent/337-12222`, never merged: its gate failed on an unrelated
+  e2e check). Only `decisions.md` had drifted, so the brief and test hunks applied as they were. Added here: the
+  query link and its check, and the rehearsal note now says how Michael signs in (the Gmail address Whitney invited
+  on 2026-10-27, through Sign in with Google). The address itself is kept off the brief, which the cluster serves.
+- **The saved view.** Datadog's API has no saved-view endpoint for its explorers, so the view is saved in the UI.
+  This run drove Michael's signed-in Windows Chrome on Tanjiro through the chrome-broker: the Default profile holds
+  no Datadog session, and Sign in with Google for the invited account stops at Google's OAuth consent screen
+  ("Google will allow datadoghq.com to access this info about you", Continue). That consent is Michael's, so the
+  run closed its tab there and the view `Every prompt` is still unsaved.
+- **Held offline.** `verify/test_instructor_brief.py` checks the query, the link, the view name, the warning, the
+  three gaps and the wall in the showcase beat, and ties the service names to `gitops/ai-layer/resources.yaml` and
+  the cluster names to the identity script. Against the brief before this change, 9 of its checks fail.
+
+**Not yet run in Datadog.** Signed in to Whitney's sandbox org, open the brief's query link and confirm the list
+arrives filtered (Datadog's `query` URL parameter on `/llm/traces` is not confirmed for this page), confirm the
+CONTENT column shows a Community prompt in INPUT, and save the view as `Every prompt`. Confirm too that
+`kube_cluster_name` is on guard-proxy's LLM Observability root span under the `burritobot-public` name; the issue's
+2026-09-08 check saw it under the old EKS names.
