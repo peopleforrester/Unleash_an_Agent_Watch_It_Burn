@@ -5489,3 +5489,34 @@ vllm-qwen3 is about 5 GB.
 
 **Out of scope here.** Images a Helm chart pulls (Argo CD, Kyverno, Falco and the rest) are named by no tracked
 `image:` line, so they are not rows; lab-platform's mirror copies of the Docker Hub ones are its own to retain.
+## 2026-10-30 · #264 · A blocked tool call is an error on its own span, whichever shape its result takes
+
+**What was left of the issue.** The one-trace half is #320's entry above (b78bc62): the noise filter no longer cuts
+the parent chain, so one interaction is one root and its tool calls hang under the prompt. The lab half was already
+there, in Whitney's wording: Challenge 1 names `run_shell` and its `curl`, and says a tool runs commands inside the
+cluster and a command can send a web request anywhere. What remained is the clause "the failed call must read as an
+error" (#261) on the span a student clicks. `transform/adk_tool_content` marked `execute_tool` only from MCP's
+`isError: true`. Whether a raised run_shell failure reaches ADK's span as MCP's error result or as the exception's
+text depends on how ADK hands the result over, and Michael's 2026-09-06 comment left open an OTTL rule that "sets the
+span status from a tool_response starting with 'command FAILED'".
+
+**Made it.** Two statements beside the isError pair also set `STATUS_CODE_ERROR` and its message when the tool
+response carries `command FAILED`, the wording every run_shell raise keeps (`verify/test_run_shell_failure.py`).
+`verify/test_tool_failure_status_e2e.py` (E2E tools tier) runs four spans through the pinned otelcol-contrib for
+the instructor, attendee and burn traces processors: run_shell with the failure as text and with MCP's isError are
+both errors, get_marketing_intel's success is not, and the model call that read the failure is (mark_tool_failure).
+Against the config before this change, its six text-shape checks fail; with it, every check passes.
+`verify/test_collector_config.py` pins both statements.
+
+**Against the earlier drafts.** Run 12155's e39438e was cut from 6f24e46 and carried a parent-chain fix of its own;
+#320 landed the same fix on staging first, in b78bc62, keeping the gateway span by its `:3000` Host. Run 12313's
+redo (11df574 on `origin/agent/264-12155`, cut from f72df7b) dropped those regions and carried over only the status
+statements, with this test. Since then staging edited `gitops/otel-collector/values.yaml` for #587 (the datadog-gate
+and its dual overlay) and `decisions.md`; `verify/draft-drift.sh` named both. Neither touches
+`transform/adk_tool_content`, so the design is made again on d70ba27 unchanged: the same two statements, the same
+test, the same config check. Nothing differs from 11df574 but this entry.
+
+**Not yet run on a cluster:** on a fresh attendee cluster with the collector rolled, send Challenge 1's stuck prompt
+with the C1 NetworkPolicies on, open the interaction in Agent Observability and confirm `execute_tool run_shell` is
+`status:error` with the "command FAILED" result readable on it, under the guard-proxy root. The one-root half is
+#320's `CONTEXT=<admin-context> python3 verify/one_root_probe.py`.

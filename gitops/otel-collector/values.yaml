@@ -243,6 +243,12 @@ config:
             # of the JSON key, which keeps a backslash out of a YAML scalar that is already fiddly.
             - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+            # The same, keyed on workshop-mcp's own wording (#264): every failure run_shell raises starts
+            # "command FAILED" (test_run_shell_failure.py holds that), so the blocked exfiltration reads as an
+            # error on its execute_tool span whether ADK hands the result over as MCP's isError or as the
+            # exception's text.
+            - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
+            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.

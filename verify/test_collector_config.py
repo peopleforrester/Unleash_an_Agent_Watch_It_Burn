@@ -81,6 +81,15 @@ for needed in ("filter/drop_noise", "transform/mark_tool_failure", "transform/ad
 check("the ADK tool-content copy runs after the noise filter",
       traces.index("transform/adk_tool_content") > traces.index("filter/drop_noise"))
 
+print("== a blocked tool call is an error on its own span, in either result shape (#264) ==")
+# verify/test_tool_failure_status_e2e.py runs both shapes through the real collector; this is the half that runs
+# everywhere.
+adk = [s for g in CFG["processors"]["transform/adk_tool_content"]["trace_statements"] for s in g["statements"]]
+check("execute_tool is marked on MCP's isError",
+      any("STATUS_CODE_ERROR" in s and "tool_response" in s and "isError" in s for s in adk))
+check("and on workshop-mcp's 'command FAILED' text",
+      any("STATUS_CODE_ERROR" in s and "tool_response" in s and "command FAILED" in s for s in adk))
+
 print("== the lab describes what the trace actually contains ==")
 # Measured on watch-it-burn-michael-admin, 2026-09-07, after the transform went live:
 #   execute_tool run_shell           STATUS_CODE_ERROR   args = the full curl, result = "command FAILED..."
