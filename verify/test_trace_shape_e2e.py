@@ -98,7 +98,10 @@ SPANS = [
     # The attributes the deployed gateway sends (Tempo on burritobot-private, 2026-10-30): server.port, an int (#703).
     ("gateway", GATEWAY, "POST /", SERVER, "forward-http",
      {"http.request.method": "POST", "url.path": "/", "server.address": "agentgateway.agent", "server.port": 3000}),
-    ("agent-server", AGENT, "POST /", SERVER, "gateway", {"http.method": "POST", "http.route": "/"}),
+    # v1.7.0's outbound span for the A2A backend call, whose id it forwards (log.rs start_outbound, tag v1.7.0).
+    ("gateway-out", GATEWAY, "Http", CLIENT, "gateway",
+     {"agentgateway.outbound.kind": "Primary", "agentgateway.outbound.subtype": "Http"}),
+    ("agent-server", AGENT, "POST /", SERVER, "gateway-out", {"http.method": "POST", "http.route": "/"}),
     ("invocation", AGENT, "invocation", INTERNAL, "agent-server", {"gen_ai.conversation.id": "c1"}),
     ("invoke-agent", AGENT, "invoke_agent burritobot", INTERNAL, "invocation",
      {"gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "burritobot"}),

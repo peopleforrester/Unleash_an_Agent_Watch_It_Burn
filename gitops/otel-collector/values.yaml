@@ -127,7 +127,10 @@ config:
           # earlier rule keyed on http.host never matched and dropped this hop on every cluster (read from Tempo
           # on burritobot-private 2026-10-30, #703). guard-proxy's AGENT_URL is agentgateway :3000, and
           # verify/test_collector_one_root.py holds the port here to that URL and to the gateway's A2A bind.
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call") and not attributes["server.port"] == 3000'
+          # v1.7.0 also writes the backend call as a CLIENT span of its own and forwards that span's id to kagent
+          # (log.rs start_outbound, read at tag v1.7.0), so it is kept too: the A2A backend is the one plain-HTTP
+          # call, subtype "Http" (MCP calls are "Mcp", model calls "Llm").
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call") and not attributes["server.port"] == 3000 and not attributes["agentgateway.outbound.subtype"] == "Http"'
           # kagent's own agent-card GET server spans (the client side is dropped above), and every other
           # HTTP verb from the agent's ASGI instrumentation. Measured 2026-09-07 against the live org: 37 of
           # 50 sampled burritobot-agent spans were POST, "POST /", DELETE, "POST / http send" or

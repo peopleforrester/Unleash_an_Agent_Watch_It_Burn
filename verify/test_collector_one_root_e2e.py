@@ -97,8 +97,13 @@ def interaction(with_a2a: bool) -> list[tuple]:
         ("gateway", GATEWAY, "POST /", SERVER, "forward-http",
          {"http.request.method": "POST", "url.path": "/", "server.address": "agentgateway.agent", "server.port": 3000},
          True),
-        # kagent's FastAPI server span, parented on the gateway's (it injects its own span as traceparent).
-        ("agent-server", AGENT, "POST /", SERVER, "gateway", {"http.method": "POST", "http.route": "/"}, True),
+        # v1.7.0 writes the backend call as its own CLIENT span, named by its subtype, and forwards THAT span's id as
+        # the traceparent (crates/agentgateway/src/telemetry/log.rs, start_outbound, read at tag v1.7.0). The A2A
+        # backend is plain HTTP, so the subtype is "Http"; MCP calls are "Mcp" and model calls "Llm".
+        ("gateway-out", GATEWAY, "Http", CLIENT, "gateway",
+         {"agentgateway.outbound.kind": "Primary", "agentgateway.outbound.subtype": "Http"}, True),
+        # kagent's FastAPI server span, parented on the gateway's outbound span.
+        ("agent-server", AGENT, "POST /", SERVER, "gateway-out", {"http.method": "POST", "http.route": "/"}, True),
         ("asgi-receive", AGENT, "POST / http receive", INTERNAL, "agent-server", {}, False),
         ("asgi-send", AGENT, "POST / http send", INTERNAL, "agent-server", {}, False),
     ]

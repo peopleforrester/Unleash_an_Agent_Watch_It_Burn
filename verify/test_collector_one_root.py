@@ -56,6 +56,8 @@ host = re.search(r'not attributes\["server\.port"\] == (\d+)', gateway_rules[0] 
 check("it exempts the gateway span whose server.port is AGENT_URL's port",
       host is not None and int(host.group(1)) == agent_port, f"{gateway_rules}")
 check("and no longer keys on http.host, which the gateway does not set", "http.host" not in (gateway_rules[0] if gateway_rules else ""))
+check("and keeps v1.7.0's outbound span for the A2A call, whose id kagent is handed (subtype Http)",
+      'not attributes["agentgateway.outbound.subtype"] == "Http"' in (gateway_rules[0] if gateway_rules else ""))
 
 print("== kagent's server span for the message, and the a2a request handlers, are exempt ==")
 agent_http = [r for r in rules if "burritobot-agent" in r and "(GET|POST|" in r]
