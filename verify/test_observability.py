@@ -94,7 +94,9 @@ check("the Tempo datasource ConfigMap is in Grafana's namespace with the sidecar
       and pvals["grafana"]["sidecar"]["datasources"].get("enabled") is True)
 _tds = {d["uid"]: d for f in _ds_cm["data"].values() for d in (yaml.safe_load(f) or {}).get("datasources", [])}
 check("Tempo datasource pinned with uid 'tempo', at the Tempo service",
-      _tds.get("tempo", {}).get("type") == "tempo" and _tds["tempo"].get("url") == "http://tempo.monitoring:3100")
+      # Tempo 3 (chart 3.0.0) serves HTTP on 3200. The datasource kept the 2.x chart's 3100 and Grafana's health
+      # check timed out on it, live on burritobot-private 2026-10-30, so the Datadog-free trace view loaded nothing.
+      _tds.get("tempo", {}).get("type") == "tempo" and _tds["tempo"].get("url") == "http://tempo.monitoring:3200")
 check("Tempo's data source links traces to no Loki, which no cluster runs (#474)", "loki" not in json.dumps(_tds).lower())
 
 # Dashboard: valid JSON with the cost + token + gen_ai trace panels.

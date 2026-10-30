@@ -20,7 +20,9 @@ data:
       - name: Tempo
         type: tempo
         uid: tempo
-        url: http://tempo.monitoring:3100
+        # Tempo 3 serves HTTP on 3200; the 2.x chart's 3100 stayed here after the move to chart 3.0.0, and Grafana's
+        # health check timed out on it (burritobot-private, 2026-10-30).
+        url: http://tempo.monitoring:3200
         access: proxy
         isDefault: false
         jsonData:

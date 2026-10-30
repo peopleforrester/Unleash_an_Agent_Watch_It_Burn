@@ -182,8 +182,12 @@ gateway = [s for s in spans if s["service"] in ("burritobot-gateway", "agentgate
 check("the gateway's span for the A2A hop is in it", bool(gateway))
 server = [s for s in spans if s["service"] == "burritobot-agent" and s["kind"] in (2, "SPAN_KIND_SERVER")
           and re.match(r"POST( |$)", s["name"])]
-check("the agent's server span for the message is in it, under the gateway's",
-      any(s["parent"] in {g["id"] for g in gateway} for s in server), f"{server}")
+# agentgateway v1.7.0 writes the backend call as a CLIENT span of its own under its SERVER span and hands kagent that
+# span's id (log.rs start_outbound, read at tag v1.7.0, #703), so the agent hangs off the outbound span.
+outbound = [s for s in spans if s["service"] in ("burritobot-gateway", "agentgateway")
+            and s["kind"] in (3, "SPAN_KIND_CLIENT") and s["parent"] in {g["id"] for g in gateway}]
+check("the agent's server span for the message is in it, under the gateway's outbound span for the call",
+      any(s["parent"] in {o["id"] for o in outbound} for s in server), f"{server}")
 # Both kagent's FastAPIInstrumentor and the OTel Operator's injected SDK may wrap the app, so the agent can have a
 # server span inside its server span; invocation hangs off one of them.
 invocation = [s for s in spans if s["name"] == "invocation"]
