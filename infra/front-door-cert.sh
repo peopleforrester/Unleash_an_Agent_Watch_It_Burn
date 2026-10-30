@@ -9,8 +9,9 @@
 # its validation CNAMEs stay in DNS, so this runs once per account and region, not once per build. One left unused
 # between events can expire; it is not reused, and this requests a new one and prints its records.
 #
-# Each validation record goes on the domain's DNS. agenticburn.com is on Namecheap, written with
-# infra/dns/set-demo-dns.py (dry run first, --apply only with Michael's go); the lines below are its arguments.
+# Each validation record goes on the domain's DNS. agenticburn.com and burritobot.co are both on Namecheap (#651),
+# written with infra/dns/set-demo-dns.py (dry run first, --apply only with Michael's go); the lines below are its
+# arguments.
 #
 # AWS profile and region are both required and passed on every call (repo CLAUDE.md rule 6).
 #
