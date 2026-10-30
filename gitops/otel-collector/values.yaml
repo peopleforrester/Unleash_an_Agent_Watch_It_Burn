@@ -274,12 +274,12 @@ config:
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             # The same, keyed on workshop-mcp's own wording (#264): every failure run_shell raises starts
-            # "command FAILED" (test_run_shell_failure.py holds that), so the blocked exfiltration reads as an
-            # error on its execute_tool span whether ADK hands the result over as MCP's isError or as the
-            # exception's text.
-            - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
-            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
-            - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED")'
+            # "command FAILED" (test_run_shell_failure.py holds that), and a refused deploy_app raises "deploy failed
+            # for " (#712), so the blocked exfiltration and the blocked deploy read as errors on their execute_tool
+            # spans whether ADK hands the result over as MCP's isError or as the exception's text.
+            - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+            - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.

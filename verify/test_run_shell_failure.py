@@ -108,7 +108,14 @@ VALUES = yaml.safe_load((REPO / "gitops/otel-collector/values.yaml").read_text(e
 stmts = [s for g in VALUES["config"]["processors"]["transform/adk_tool_content"]["trace_statements"]
          for s in g["statements"]]
 check("adk_tool_content marks a tool response carrying 'command FAILED'",
-      any("STATUS_CODE_ERROR" in s and "tool_response" in s and '"command FAILED"' in s for s in stmts))
+      any("STATUS_CODE_ERROR" in s and "tool_response" in s and '"command FAILED' in s for s in stmts))
+# deploy_app raises on a refusal too (#712), and the same statements match its wording.
+check("and one carrying deploy_app's 'deploy failed for '",
+      any("STATUS_CODE_ERROR" in s and "tool_response" in s and "deploy failed for " in s for s in stmts))
+dep = (AI / "workshop-mcp-server.py").read_text(encoding="utf-8")
+dep = dep[dep.index("def deploy_app("):dep.index("\ndef ", dep.index("def deploy_app(") + 1)]
+check("deploy_app's refusal raise starts with 'deploy failed for '",
+      'raise RuntimeError(f"deploy failed for {kind}/{name}' in dep)
 SRC = (AI / "workshop-mcp-server.py").read_text(encoding="utf-8")
 body = SRC[SRC.index("def run_shell("):SRC.index('if __name__ == "__main__":')]
 raises = re.findall(r'raise RuntimeError\(f?"([^"]*)', body)

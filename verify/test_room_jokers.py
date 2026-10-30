@@ -135,8 +135,14 @@ check("the desk still hears about it, as an unnamed Joker",
 
 print("== a refusal is reported as refused ==")
 status["code"] = 403
-reply = m.deploy_app(joker(f"joker-{site.slug(site.NAME_SPACE[1])}"))
-check("deploy_app says it failed", "deploy failed" in reply, reply)
+# A refusal raises, so FastMCP answers it as an error result and the execute_tool span is marked (#712).
+try:
+    reply = m.deploy_app(joker(f"joker-{site.slug(site.NAME_SPACE[1])}"))
+    raised = ""
+except RuntimeError as e:
+    reply, raised = "", str(e)
+check("deploy_app raises on a refused deploy, with the refusal in the message",
+      raised.startswith("deploy failed for Deployment/joker-") and "HTTP 403" in raised and not reply, raised or reply)
 refused = lambda: [r for r in wall() if r["who"] == site.NAME_SPACE[1] and not r["ok"]]  # noqa: E731
 check("the wall shows the refusal", wait_for(lambda: bool(refused())))
 check("as one plain sentence naming the policy, not the API server's JSON (#685)",

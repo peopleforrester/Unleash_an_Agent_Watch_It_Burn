@@ -495,7 +495,10 @@ def deploy_app(manifest: str = "") -> str:
         if address:
             return f"deployed {kind}/{name} in {ns}. Once its pod is ready it answers at {address}"
         return f"deployed {kind}/{name} in {ns}."
-    return f"deploy failed for {kind}/{name} (HTTP {code}): {body[:300]}"
+    # Raised, not returned, so FastMCP answers it as an error result (isError) and the collector marks the
+    # execute_tool deploy_app span ERROR with error.type tool_error, as run_shell's failures are (#463, #712).
+    # The message keeps the API server's refusal, which names the policy, so the agent can still say why.
+    raise RuntimeError(f"deploy failed for {kind}/{name} (HTTP {code}): {body[:300]}")
 
 
 @mcp.tool(description="Run a shell command inside the cantina's container and return its output.")

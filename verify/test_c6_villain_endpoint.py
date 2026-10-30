@@ -97,7 +97,10 @@ def deploy(m, obj: dict, status: int = 201) -> tuple[str, dict]:
         return status, "{}" if status < 400 else '{"message":"denied by restrict-image-registries"}'
 
     m._req = fake_req
-    reply = m.deploy_app(json.dumps(obj))
+    try:
+        reply = m.deploy_app(json.dumps(obj))
+    except RuntimeError as e:  # a refused deploy raises (#712); the text is what the agent reads
+        reply = str(e)
     return reply, (sent[0] if sent else {})
 
 

