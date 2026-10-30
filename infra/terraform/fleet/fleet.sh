@@ -477,6 +477,21 @@ bootstrap_profile_for_role() {
         *) log "bad role: $1"; exit 1 ;;
     esac
 }
+# The node IMDS PUT-response hop limit a cluster's ROLE gets (#113, Michael's question-843 call
+# 2026-10-26). community (the unguarded burn cluster, attackme) gets 2 so a pod CAN reach node IMDS,
+# steal the node instance-role credentials and run `aws sts get-caller-identity` to a node role: the
+# ASI03 "container compromise becomes a cloud-account compromise" beat, the moment the blast radius
+# leaves the cluster. admin and attendee get 1 (the cluster module's var.imds_hop_limit default), the
+# working control, so the same request is refused. This is role-derived like bootstrap_profile_for_role:
+# the burn-vs-armed posture follows the role, not a roster column (the ignored `bootstrap` column is
+# exactly the stale-column wart a second one would repeat). role_for_cluster returns community only for
+# watch-it-burn-community, so every other cluster (admin, every attendee seat) gets 1.
+imds_hop_limit_for_role() {
+    case "$1" in
+        community) printf '2' ;;
+        *) printf '1' ;;
+    esac
+}
 
 usage() {
     cat >&2 <<EOF
@@ -1613,11 +1628,15 @@ up_one() {
     local host; host="$(public_host_for "${name}")"
     # The role= tag that keeps the roster out of harvest's attendee pool (#636).
     local role; role="$(role_for_cluster "${name}")"
+    # The node IMDS hop limit, role-derived (#113): community=2 (the burn cluster leaks node creds so the
+    # IMDS credential-theft challenge lands), admin/attendee=1 (the working control). Always stated rather
+    # than left to the module default, like profile above, so a plan shows which clusters are vulnerable.
+    local hop; hop="$(imds_hop_limit_for_role "${role}")"
     if [[ -n "${WIB_DRY_RUN}" ]]; then
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
-    local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "role=${role}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
+    local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "role=${role}" -var "imds_hop_limit=${hop}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
                   "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}")
     # An IAM user of this cluster's name made before #549 would fail the apply on EntityAlreadyExists.
     if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then

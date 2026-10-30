@@ -4,7 +4,12 @@
 # facilitator rotates ~10 disposable C1 spares from SSH.
 # The agent's Bedrock credential is an EKS Pod Identity association made by the cluster terraform, not GitOps (#203).
 # cluster-network-policies (the agent namespace's Admin-tier IMDS deny) is not listed: nothing here defends the
-# agent, and the node's IMDSv2 hop limit of 1 still keeps pods off the instance metadata service.
+# agent. And unlike every other cluster, the community cluster's node IMDSv2 hop limit is 2, not 1 (fleet.sh
+# sets var.imds_hop_limit=2 for the community role, #113): a compromised pod CAN reach 169.254.169.254, steal
+# the node instance-role credentials and run `aws sts get-caller-identity` to a node role. That is the ASI03
+# credential-theft beat, the moment a container compromise becomes a cloud-account one. Both of the IMDS
+# controls are off here on purpose (no deny policy, hop limit 2); on attendee and admin clusters the hop limit
+# of 1 and the deny policy both hold, so the same request is refused and the contrast is real.
 #
 # Burn subset: NO admission at all (no kyverno engine, no minimal-floor), NO RBAC/falco/
 # observability stores/backstage. Just the agent + ai-layer (cost meter) + burn targets, plus

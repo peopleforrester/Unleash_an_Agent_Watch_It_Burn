@@ -158,6 +158,21 @@ variable "pod_pids_limit" {
   default = 1024
 }
 
+# The node IMDS PUT-response hop limit, the second "watch it burn" delta (#113, Michael's question-843
+# call 2026-10-26). At the default 1, a pod's packet to 169.254.169.254 dies one hop short of the node's
+# metadata service, so a compromised pod cannot steal the node instance-role credentials: the IMDS theft
+# that turns a container compromise into a cloud-account one (ASI03 Identity & Privilege Abuse) FAILS.
+# fleet.sh passes 2 for the community cluster (the unguarded spectacle, attackme.agenticburn.com), where
+# the burn profile ships no agent-deny-imds ClusterNetworkPolicy either, so there the pod CAN reach node
+# IMDS and `aws sts get-caller-identity` returns a node role: that is the beat where the blast radius
+# leaves the cluster. admin and attendee clusters keep this 1, the working control, so the same request
+# is refused and the R-vs-R contrast is real rather than narrated. Pod Identity is unaffected at either
+# value: it uses the container-creds endpoint 169.254.170.23, not IMDS.
+variable "imds_hop_limit" {
+  type    = number
+  default = 1
+}
+
 # Docker Hub Team auth, baked into the node so every docker.io pull authenticates at the node level.
 # Anonymous Docker Hub pulls are rate-limited (~100/6h per NAT IP); at fleet scale (50/account behind
 # one NAT) that yields 429 ImagePullBackOff across the IDP image set. With this set, the node's
@@ -334,16 +349,18 @@ module "eks" {
       # IMDS hardening (PRD 35 3.7-A): the agent runs run_shell by design, so a pod that can reach node
       # IMDS could steal the node instance-role creds (broader than the pod's Bedrock-scoped Pod Identity),
       # which would falsify PRD 36's "AWS keyless, nothing to steal" baseline. Require IMDSv2 and set
-      # hop_limit=1 so pods cannot reach node IMDS. Pod Identity is unaffected: it uses the container-creds
-      # endpoint 169.254.170.23, not IMDS (the kagent container held its Pod Identity credential on
-      # watch-it-burn-attendee-001, built with these options, 2026-09-04, #203). The agent namespace ALSO
-      # carries an explicit Admin-tier deny for 169.254.169.254 (policies/cluster-network-policies/), so the
-      # rule is readable in the lab and holds on attendee clusters, which ship with no agent egress
-      # NetworkPolicy until the student applies Challenge 1.
+      # hop_limit=1 (var.imds_hop_limit default) so pods cannot reach node IMDS. Pod Identity is unaffected:
+      # it uses the container-creds endpoint 169.254.170.23, not IMDS (the kagent container held its Pod
+      # Identity credential on watch-it-burn-attendee-001, built with these options, 2026-09-04, #203). The
+      # agent namespace ALSO carries an explicit Admin-tier deny for 169.254.169.254
+      # (policies/cluster-network-policies/), so the rule is readable in the lab and holds on attendee
+      # clusters, which ship with no agent egress NetworkPolicy until the student applies Challenge 1.
+      # The community/burn cluster deliberately sets var.imds_hop_limit=2 (fleet.sh, #113) so the IMDS
+      # credential-theft challenge actually lands there; see the variable's definition above.
       metadata_options = {
         http_endpoint               = "enabled"
         http_tokens                 = "required"
-        http_put_response_hop_limit = 1
+        http_put_response_hop_limit = var.imds_hop_limit
       }
       # Root volume via block_device_mappings, NOT disk_size: cloudinit_pre_nodeadm forces a custom
       # launch template, under which the module ignores disk_size (node would fall back to AL2023's

@@ -74,6 +74,26 @@ check "an owner selects only that presenter's cluster" \
   '[[ "$(QROSTER="${FIX}" spec beta)" == "watch-it-burn-beta-admin=admin" ]]'
 check "both selects every fixture cluster" '[[ "$(QROSTER="${FIX}" spec both | wc -l)" == "3" ]]'
 
+echo "== the node IMDS hop limit follows the role (#113) =="
+# community (the unguarded burn cluster) gets hop limit 2 so a pod can reach node IMDS and steal the
+# node instance-role credentials: the ASI03 credential-theft beat. admin and every attendee seat get 1,
+# the control, so the same request is refused. Like the profile, this is role-derived, not a roster column.
+check "the community cluster leaks node IMDS (hop limit 2)" \
+  '[[ "$(q "imds_hop_limit_for_role community")" == 2 ]]'
+check "the shared admin cluster keeps the control (hop limit 1)" \
+  '[[ "$(q "imds_hop_limit_for_role admin")" == 1 ]]'
+check "an attendee cluster keeps the control (hop limit 1)" \
+  '[[ "$(q "imds_hop_limit_for_role attendee")" == 1 ]]'
+# And the value actually reaches terraform: up_one's plan passes -var imds_hop_limit, 2 only for community.
+# log (which the DRY-RUN line uses) writes to stderr, and q swallows stderr, so redirect inside q's arg.
+hopvar() { q "require_tools() { :; }; WIB_DRY_RUN=1 up_one $1 2>&1"; }
+check "up_one plans imds_hop_limit=2 for the community cluster" \
+  '[[ "$(hopvar watch-it-burn-community)" == *"-var imds_hop_limit=2"* ]]'
+check "up_one plans imds_hop_limit=1 for the shared admin cluster" \
+  '[[ "$(hopvar watch-it-burn-private)" == *"-var imds_hop_limit=1"* ]]'
+check "up_one plans imds_hop_limit=1 for an attendee cluster" \
+  '[[ "$(hopvar watch-it-burn-attendee-007)" == *"-var imds_hop_limit=1"* ]]'
+
 echo "== teardown takes the same selector as the build (#88) =="
 # After rounds were retired, `instructors down` still looped the three numbered clusters, matched no
 # roster row and destroyed nothing. The workers are stubbed: run_pool prints the names it would hand to

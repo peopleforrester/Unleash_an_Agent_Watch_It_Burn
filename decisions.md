@@ -5753,3 +5753,90 @@ was answered. The 50-phone rate is an estimate from that per-turn cost, not a me
 
 **Open.** The capped reply says "This conversation hit its spend budget... Press Reset", which is wrong when the
 cluster cap tripped; asked on guard-proxy-agenticburn#25.
+## 2026-10-30 · #113 · The community cluster leaks node IMDS creds on purpose (hop limit 2), every other cluster keeps it out of reach, and a facilitator beat steals them to a node role
+
+**Context.** #113 (child of #110) proposes the IMDS credential-theft challenge: a compromised pod curls
+`169.254.169.254`, steals the EC2 node instance-role credentials and calls AWS from inside the pod, so
+`aws sts get-caller-identity` returns a node role. That is the moment a container compromise becomes a
+cloud-account one (OWASP Agentic **ASI03, Identity and Privilege Abuse**). The issue offered two builds and
+asked for a decision first. Michael answered question 843 (2026-10-26, accepted in the web view) and chose
+**Option 2, "make a cluster genuinely vulnerable"**: leave one cluster exploitable so the theft actually
+succeeds and the contrast with the hardened clusters is real rather than narrated. This run builds that.
+
+**The one load-bearing fact.** Our clusters already pin `http_tokens=required` and `http_put_response_hop_limit=1`
+(PRD 35 §3.7-A), and #203 added the Admin-tier `agent-deny-imds` ClusterNetworkPolicy on attendee/admin/full
+(not burn), so the naive attack already fails everywhere. Making a cluster genuinely vulnerable is therefore
+a single per-cluster knob: the node IMDSv2 PUT-response hop limit. At 1 a pod's packet dies one hop short of
+node IMDS; at 2 the pod reaches it. The community (burn) cluster alone gets 2, and it already ships no
+`agent-deny-imds`, so both IMDS controls are off there and nowhere else.
+
+**What differs from the issue's framing (draft drift, #291).** The issue says "set `hop_limit=2` on the R1
+roster entry only ... the roster already carries per-cluster overrides (that is how R1 gets `pids=-1`), so
+this is a roster column." That predates #291, which retired the numbered rounds: `roster.tsv` is now two
+role-based rows (`watch-it-burn-community|community|...|-1|burn|` and `watch-it-burn-private|admin|...`), and
+the burn-vs-armed posture is already **role-derived in fleet.sh** (`bootstrap_profile_for_role`: community→burn,
+admin→admin), NOT read from the roster's `bootstrap` column, which an earlier loop left stale (a documented
+wart). So the IMDS leak is derived from the role the same way the profile is, rather than as a new roster
+column. A new column would have to be threaded through every positional `IFS='|' read` of the roster and would
+reintroduce exactly the stale-column problem the `bootstrap` column already is. `pids` stays a column because
+it is one of several numeric §4.6 shape knobs (tier/instance_type/pids); the IMDS leak is the binary
+"is this the unguarded cluster", which is the role.
+
+**What changed.**
+- **Terraform** (`infra/terraform/aws/cluster/main.tf`): new `variable "imds_hop_limit"` (number, default 1,
+  the control). The managed node group's `metadata_options.http_put_response_hop_limit` now reads
+  `var.imds_hop_limit` instead of the literal 1. Comments explain the community=2 deliberate leak and that
+  Pod Identity (the container-creds endpoint `169.254.170.23`) is unaffected at either value. `terraform fmt`
+  clean.
+- **fleet.sh** (`infra/terraform/fleet/fleet.sh`): new `imds_hop_limit_for_role` (community→2, everything
+  else→1), a sibling of `bootstrap_profile_for_role`. `up_one` computes it from the role it already derives
+  (`role_for_cluster`, which returns `community` only for `watch-it-burn-community`) and passes
+  `-var imds_hop_limit=<n>` on every apply and in the dry-run plan line, so a plan shows which clusters are
+  vulnerable. `up_one` is the single cluster-module apply site (`setup-instructor-cluster.sh` only arms an
+  already-provisioned cluster), so this is the only wiring needed.
+- **Burn profile doc** (`gitops/bootstrap/values-burn.yaml`): the comment that claimed "the node's IMDSv2 hop
+  limit of 1 still keeps pods off the instance metadata service" was now false for this cluster; it now states
+  the deliberate `imds_hop_limit=2` leak and the ASI03 beat it enables.
+- **Facilitator beat** (`challenges/imds-node-creds/`): `steal-node-creds.sh` execs the agent's tool pod
+  (`workshop-mcp`, the pod that runs `run_shell`), requests an IMDSv2 token, reads the node role and its
+  credentials, and runs `aws sts get-caller-identity` with the stolen creds. It prints a node-role ARN on the
+  community cluster and `IMDS: BLOCKED` on a guarded one. It is read-only (one GET of IMDS, one
+  get-caller-identity; nothing created). Per CLAUDE.md kube-safety it requires `CONTEXT` with no
+  current-context fallback and every `kubectl` carries `--context "$CONTEXT"`. `FACILITATOR.md` carries the
+  controls table, the contrast with Challenge 8's `BLOCKED` probe, the ASI03 peg, the node-role-scope caveat
+  (a stock node role reads ECR and describe but cannot reach S3 or Secrets, so do not over-promise on stage)
+  and the owed live check.
+
+**Why this is a presenter beat rather than a numbered Challenge 9.** The student lab runs on attendee clusters, where this is
+blocked by design, so there is nothing for a phone to do. That is also why Challenge 8's terminal RBAC work was
+cut from the KubeCon breakout. So this is a watch-the-screen beat on the community cluster (like the C4 fork bomb
+"on our box only"), not a student step. Numbering it C9 would also collide with the lab's existing feedback
+step "Challenge 9" and cascade the eight-challenge counts (`docs/CHALLENGE-ASSETS.md`,
+`verify/test_challenge_assets.py`'s `range(1,9)`, `docs/DESIGN-GLANCE.md`, `lab.html`). The canonical count of
+eight live challenges is unchanged.
+
+**Not added:** `prds/36-multicloud-attack-control-signal-matrix.md` (the ASI/ATLAS matrix) is a DRAFT whose
+locked scope decision #2 is "descriptive of the existing attack set, not a new attack set ... does not invent
+attacks." Adding a beat there would expand a sealed-scope PRD and is Michael's call, so it was left alone; the
+ASI03 peg lives in the facilitator doc and the terraform/values comments instead.
+
+**Tests.**
+- `verify/test_imds_credential_theft.py` (offline, new): the node group reads `var.imds_hop_limit` (not a
+  literal) defaulting to 1; `imds_hop_limit_for_role` gives community 2 and everything else 1 and is wired into
+  `up_one`'s vars and dry-run; the burn profile omits `cluster-network-policies` and the values file names the
+  leak; the steal script is CONTEXT-safe, targets `169.254.169.254`, does the IMDSv2 token→role→creds→
+  get-caller-identity chain, reports BLOCKED when refused, makes no aws call but the identity lookup, and never
+  touches `169.254.170.23`.
+- `verify/test_cluster_roles.sh` (offline, extended): a new section asserts `imds_hop_limit_for_role` gives
+  community 2, admin 1, attendee 1, and that `up_one`'s dry-run plans `-var imds_hop_limit=2` for the community
+  cluster and `=1` for the admin and an attendee cluster.
+- `verify/test_agent_cloud_credential.py` (offline, updated): its hop-limit check moved off the literal
+  `http_put_response_hop_limit = 1` (which my change removed) to assert the node group reads `var.imds_hop_limit`
+  and that the variable defaults to 1. `bash verify/run-tests.sh` green (192 tests).
+
+**Not yet run on a cluster.** Owed on a build with AWS access (named in the facilitator doc): provision the
+community cluster (`fleet.sh instructors up community`), run
+`CONTEXT=<community-ctx> challenges/imds-node-creds/steal-node-creds.sh` and confirm it prints a node-role ARN;
+provision a fresh attendee cluster and confirm the same script prints `IMDS: BLOCKED`. Final stage placement in
+the run-of-show (which segment, how it flows in the 30-minute KubeCon demo vs the 2-hour format) is the
+presenters' choreography call and is left as a follow-up rather than written into the tightly-timed scripts here.

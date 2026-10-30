@@ -143,7 +143,14 @@ if len(stmts) == 2 and len(tf_stmts) == 2:
 
 print("== IMDS: node hop limit, and an explicit deny the lab can show ==")
 check("node IMDSv2 required", re.search(r'http_tokens\s*=\s*"required"', TF) is not None)
-check("node IMDS PUT response hop limit 1", re.search(r"http_put_response_hop_limit\s*=\s*1\b", TF) is not None)
+# The hop limit is a per-cluster variable now (#113): the node group reads var.imds_hop_limit, whose
+# DEFAULT is 1 (the control). fleet.sh passes 2 for the community/burn cluster alone, so that one cluster
+# leaks node creds for the IMDS theft challenge while admin and every attendee seat keep the control.
+check("the node group's hop limit is var.imds_hop_limit (per-cluster)",
+      re.search(r"http_put_response_hop_limit\s*=\s*var\.imds_hop_limit\b", TF) is not None)
+imds_var = re.search(r'variable "imds_hop_limit"\s*\{[^}]*default\s*=\s*(\d+)', TF)
+check("var.imds_hop_limit defaults to 1, so admin and attendee clusters keep node IMDS out of pod reach",
+      bool(imds_var) and int(imds_var.group(1)) == 1)
 check("the vpc-cni addon enforces network policy (ClusterNetworkPolicy needs it)", 'enableNetworkPolicy = "true"' in TF)
 kver = re.search(r'variable "kubernetes_version" \{[^}]*default\s*=\s*"1\.(\d+)"', TF)
 check("the clusters run Kubernetes 1.29 or later (ClusterNetworkPolicy needs it)", bool(kver) and int(kver.group(1)) >= 29)
