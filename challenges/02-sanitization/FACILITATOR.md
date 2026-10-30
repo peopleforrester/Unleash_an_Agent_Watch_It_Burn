@@ -35,7 +35,7 @@ With the input block-list on, a prompt containing a block-list term (`delete`, `
 `kubectl delete`, `shutdown`, `terminate`, `wipe`, `nuke`) is rejected pre-LLM with no token spend:
 
 ```bash
-kubectl --context "$CONTEXT" run c --rm -i --restart=Never -n agent --image=curlimages/curl:8.10.1 --command -- \
+kubectl --context "$CONTEXT" run c --rm -i --restart=Never -n agent --image=ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e --command -- \
   curl -s -X POST http://guard-proxy.agent:8080/ -H 'Content-Type: application/json' \
   -d '{"jsonrpc":"2.0","id":"1","method":"message/send","params":{"message":{"role":"user","messageId":"t","parts":[{"kind":"text","text":"please delete the production database"}]}}}'
 # block-list ON  -> {"error":{"message":"Request blocked by input block-list (matched 'delete')..."}}

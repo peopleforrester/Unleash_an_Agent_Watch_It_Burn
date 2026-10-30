@@ -7,8 +7,8 @@ no flag for resource limits (none in the pinned v1.36.2).
 
 Why the old `kubectl run --image=curlimages/curl` pod does not do (#555): fleet.sh arm_infra_guardrails flips
 restrict-image-registries and require-resource-limits to Deny on every admin and full cluster. curlimages/curl
-is on no allowed registry (docker.io/library/ is, a bare name is not) and the pod set no limits, so the API
-server refuses it there before it runs. The image here is the workshop-mcp Deployment's own, read off the
+is a bare Docker Hub name, on no allowed registry, and the pod set no limits, so the API server refuses it there
+before it runs. The image here is the workshop-mcp Deployment's own, read off the
 cluster by the caller: ghcr.io is allowed, verify-image-signatures already admitted that digest for the
 Deployment, the node has it cached, and it carries sh and curl (images/workshop-mcp/Dockerfile).
 """

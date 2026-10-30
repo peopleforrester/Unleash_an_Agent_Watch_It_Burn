@@ -163,7 +163,7 @@ def dry_run(extra_env):
             p.write_text("#!/bin/sh\nexit 0\n"); p.chmod(p.stat().st_mode | stat.S_IEXEC)
         env = {k: v for k, v in os.environ.items() if k != "WIB_EVENT"}
         env.update(PATH=f"{d}:{env['PATH']}", WIB_DRY_RUN="1", WIB_STATE_DIR=f"{d}/states",
-                   WIB_DOCKERHUB_ENV=f"{d}/none.env", **extra_env)
+                   **extra_env)
         r = subprocess.run(["bash", str(FLEET), "up", "watch-it-burn-attendee-007"],
                            env=env, capture_output=True, text=True, timeout=120)
         return r.returncode, r.stdout + r.stderr

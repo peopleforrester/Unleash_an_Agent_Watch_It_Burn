@@ -95,7 +95,7 @@ def harvest(n, friendly, pool_by_key):
                     "jsonpath={range .items[*]}{.metadata.namespace}/{.metadata.name} {.spec.template.spec.containers[*].image}{\"\\n\"}{end}")
     deploys = [l for l in out.splitlines() if l.strip()]
     ch["c2_villain_deploys"] = [d for d in deploys if any(v in d.lower() for v in
-                               ("villain", "malicious", "evil", "docker.io", "nginx", "busybox", "alpine"))][:12]
+                               ("villain", "malicious", "evil", "promo/", "joker", "nginx", "busybox", "alpine"))][:12]
     rc, out, _ = kc(kcfg, ctx, acct, "get", "kubearmorpolicy", "-A", "-o", "name")
     ch["c3_kubearmor_policies"] = len([l for l in out.splitlines() if l.strip()])
     rc, out, _ = kc(kcfg, ctx, acct, "-n", "agent", "get", "deploy", "maintenance-shell", "-o", "name")

@@ -126,7 +126,7 @@ out = deploy(villain(kind="CronJob"))
 check("a CronJob's job template gets the limits",
       bool(out) and all(need <= set(c["resources"]["limits"]) for c in pod_of(out)["containers"]))
 two = villain()
-two["spec"]["template"]["spec"]["containers"].append({"name": "sidecar", "image": "docker.io/library/busybox"})
+two["spec"]["template"]["spec"]["containers"].append({"name": "sidecar", "image": "ghcr.io/peopleforrester/watch-it-burn:busybox-1.36"})
 out = deploy(two)
 check("every container of a two-container Deployment gets the limits",
       bool(out) and len(pod_of(out)["containers"]) == 2 and resource_limits.missing(out) == [])

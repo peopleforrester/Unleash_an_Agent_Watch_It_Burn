@@ -2,7 +2,7 @@
 # ABOUTME: the lab gives the student, and the digest lab-platform built, read back and signed it at.
 """One table for the tests that ask which villain images the lab hands out.
 
-lab-platform builds the ten villains `images/villains/build.sh` used to push to docker.io/peopleforrester/<name>:latest,
+lab-platform builds the ten villains `images/villains/build.sh` used to push to Docker Hub as peopleforrester/<name>:latest,
 the same catchphrase loop on lab-platform's shell base with the lines read from build.sh at 45e62f0, and publishes
 them as ghcr.io/peopleforrester/lab-platform/promo/<name>:v1 (lab-platform#92). The digests are the rebuild handed
 over on Watch_It_Burn#653 (comment 6477523413), whose entrypoint ends on SIGTERM so a deleted villain pod stops at

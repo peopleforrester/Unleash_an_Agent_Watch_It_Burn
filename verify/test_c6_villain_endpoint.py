@@ -4,8 +4,8 @@
 naming the Deployment and returning an endpoint the attendee can open, so they see they did it. #640 built the naming.
 The endpoint takes five pieces that live in five files, and any one of them out of step leaves a dead link:
 
-  1. images/villains/build.sh builds docker.io/peopleforrester/joker:latest, the image the ticket asks for, from
-     joker-web/: busybox httpd serving www/ on PORT=8080 beside the old log loop.
+  1. images/villains/build.sh builds $JOKER, ghcr.io/peopleforrester/watch-it-burn:joker-busybox-<version> (#714),
+     the image the ticket asks for, from joker-web/: busybox httpd serving www/ on PORT=8080 beside the old log loop.
   2. gitops/ai-layer/resources.yaml ships the maintenance-shell Service, port 80 to 8080, selecting
      burritobot.co/workload=maintenance-shell.
   3. workshop-mcp's deploy_app puts that label on every pod it creates, whatever labels the model wrote, and names
@@ -111,20 +111,22 @@ def c6_deployment(labels: dict | None = None, name: str | None = None) -> dict:
 
 
 print("== 1. the image the ticket names is the one build.sh builds to serve a page ==")
-org = re.search(r'^ORG="([^"]+)"', BUILD, re.M)
-check("the ticket asks for build.sh's $ORG/joker:latest", bool(org) and site.C6_IMAGE == f"{org.group(1)}/joker:latest",
-      site.C6_IMAGE)
+joker = re.search(r'^JOKER="(ghcr\.io/peopleforrester/watch-it-burn:joker-busybox-[0-9.]+)"$', BUILD, re.M)
+check("the ticket asks for build.sh's $JOKER, a joker-busybox-<version> tag on ghcr.io",
+      bool(joker) and site.C6_IMAGE == joker.group(1), site.C6_IMAGE)
+check("build.sh pushes only the Joker: the roster is lab-platform's promo/ build now (#653)",
+      "build_one" not in BUILD and BUILD.count('-t "$JOKER"') == 2)
 v = re.search(r"^declare -A V=\((.*?)^\)", BUILD, re.M | re.S)
 check("the Joker is no longer a plain log loop in the V roster", bool(v) and "[joker]=" not in v.group(1))
 check("build_joker_web runs, after the loops", BUILD.rstrip().endswith("build_joker_web"))
-base = re.search(r'^JOKER_BASE="(docker\.io/library/busybox@sha256:[0-9a-f]{64})"', BUILD, re.M)
-check("the Joker's base is busybox pinned by digest", base is not None)
+base = re.search(r'^JOKER_BASE="(ghcr\.io/peopleforrester/lab-platform/base-shell@sha256:[0-9a-f]{64})"', BUILD, re.M)
+check("the Joker's base is lab-platform's busybox base-shell, pinned by digest", base is not None)
 check("joker-web goes in as a layer under /villain",
       "--transform 's,^joker-web,villain,'" in BUILD and '-b "$JOKER_BASE"' in BUILD and "-C \"${HERE}\"" in BUILD)
 check("the layer is amd64, the nodes' architecture",
       "--platform linux/amd64" in BUILD
       and 'ami_type       = "AL2023_x86_64_STANDARD"' in (REPO / "infra/terraform/aws/cluster/main.tf").read_text())
-mut = re.search(r'"\$CR" mutate "\$ORG/joker:latest" (.*) -t "\$ORG/joker:latest"', BUILD)
+mut = re.search(r'"\$CR" mutate "\$JOKER" (.*) -t "\$JOKER"', BUILD)
 check("the entrypoint runs start.sh with the image's own sh", bool(mut) and '--entrypoint "/bin/sh,/villain/start.sh"' in mut.group(1))
 port = re.search(r"--env PORT=(\d+)", mut.group(1) if mut else "")
 check("the image sets PORT, which start.sh requires", port is not None and ': "${PORT:?' in START)

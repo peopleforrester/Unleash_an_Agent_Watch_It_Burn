@@ -1,10 +1,10 @@
 <!-- ABOUTME: The C2 "malicious image" villain roster, handed out from lab-platform's promo/ path, and how each kind -->
-<!-- ABOUTME: of cluster treats them. build.sh holds the catchphrases; the lesson is the untrusted source, not the payload. -->
+<!-- ABOUTME: of cluster treats them. build.sh holds the catchphrases and builds C6's Joker; the lesson is the untrusted source. -->
 
 # Villain images (C2 — deploy a malicious image)
 
-Cartoon-villain "promo mascot" images the agent can be talked into deploying (challenge 2). Built from
-`busybox` with a catchphrase echo loop (harmless; visible in pod logs / Datadog when running). The point
+Cartoon-villain "promo mascot" images the agent can be talked into deploying (challenge 2). Built on
+busybox with a catchphrase echo loop (harmless; visible in pod logs / Datadog when running). The point
 of the challenge is the **untrusted source**, not the payload.
 
 ## Roster (all `ghcr.io/peopleforrester/lab-platform/promo/<name>:v1`)
@@ -20,10 +20,10 @@ prompt uses `promo-mascot`.
 lab-platform builds, reads back and signs them (lab-platform#92), the same catchphrase loop on its shell
 base with the lines read from `build.sh` at 45e62f0 by sha256, and the lab hands them out by the `:v1` tag
 (#653). `verify/promo_villains.py` holds each one's digest. A cluster pulls them from ghcr.io with no
-credential, so the packages must be public. `build.sh` still pushes the older crane builds to
-`docker.io/peopleforrester/<name>:latest` (Team PAT from `~/secrets/dockerhub/agenticburn.env`), which only
-Challenge 6's ticket still names; that build's `--cmd` split three catchphrases on their commas, Skeletor's
-among them, so those pods never said their lines. lab-platform's images say them whole.
+credential, so the packages must be public. `build.sh` keeps the catchphrases but no longer pushes the roster:
+its old crane builds went to Docker Hub, where nothing here pulls from any more (#714), and their `--cmd` split
+three catchphrases on their commas, Skeletor's among them, so those pods never said their lines.
+lab-platform's images say them whole. `build.sh` now builds only the Joker below.
 
 ## How each kind of cluster treats them
 
@@ -39,19 +39,24 @@ What a student sees is in `challenges/LAB-TEXT.md`, Challenge 2.
   (`fleet.sh` arms the `admin` profile), so the deploy is refused at admission and the villain never
   starts. The policy matches Pods in the `apps` and `agent` namespaces, and the Deployments that create
   them, against an allow-list of the cantina's real registries:
-  `ghcr.io/* | cr.agentgateway.dev/* | cr.kagent.dev/* | harbor.agenticburn.com/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/* | docker.io/library/*`
-  less one refused path, `*/peopleforrester/lab-platform/promo/*`, on any of them. The villain is on an
-  allowed host and in our own org, but on that path, so the deploy is denied
-  (`policies/kyverno/restrict-image-registries.yaml`).
+  `ghcr.io/* | cr.agentgateway.dev/* | cr.kagent.dev/* | harbor.agenticburn.com/* | registry.k8s.io/* | *.dkr.ecr.*.amazonaws.com/*`
+  less the villains' own paths on any of them: `*/peopleforrester/lab-platform/promo/*`, and C6's
+  `*/peopleforrester/watch-it-burn:joker-*`. The villain is on an allowed host and in our own org, but on that
+  path, so the deploy is denied (`policies/kyverno/restrict-image-registries.yaml`). Docker Hub is not on the
+  list at all (#714).
 
 ## The Joker serves a page (C6, #664)
 
-Challenge 6's support ticket asks for `docker.io/peopleforrester/joker:latest`, and that Joker is no longer a
-plain log loop. `build.sh` builds it from `joker-web/`: busybox (pinned by digest as `JOKER_BASE`) with
-`start.sh` and `www/` appended as a layer under `/villain`, so busybox `httpd` serves the "HA HA HA" page on
-`PORT=8080` while the old catchphrase still laughs in the logs. The rest of the path is in this repo:
+Challenge 6's support ticket asks for `ghcr.io/peopleforrester/watch-it-burn:joker-busybox-1.38.0`, and that
+Joker is no longer a plain log loop. `build.sh` builds it from `joker-web/`: lab-platform's busybox `base-shell`
+(pinned by digest as `JOKER_BASE`) with `start.sh` and `www/` appended as a layer under `/villain`, so busybox
+`httpd` serves the "HA HA HA" page on `PORT=8080` while the old catchphrase still laughs in the logs. The tag names
+the BusyBox inside it, 1.38.0 (#714), and every `joker-` tag is one the registry rule refuses. It is in our own
+package, so `verify-image-signatures` asks for the workshop signature: `build.sh` pushes it with a ghcr.io token,
+then `verify/sign-images.sh` signs it. A Docker Hub token is no longer needed. The rest of the path is in this repo:
 workshop-mcp's `deploy_app` labels the pod `burritobot.co/workload=maintenance-shell`, the `maintenance-shell`
 Service selects that label, the console serves it at `maintenance-shell-<cluster>.agenticburn.com` (and the
 burritobot.co twin), `fleet.sh` publishes the host, and `deploy_app`'s reply names the address so the bot can
-hand it to the attendee. `verify/test_joker_web_busybox.py` runs `start.sh` on the pinned busybox's own binary.
+hand it to the attendee. `verify/test_joker_web_busybox.py` runs `start.sh` on the pinned busybox's own binary,
+and checks the tag against the version that binary reports.
 The image is amd64 only, as the cluster nodes are.

@@ -620,8 +620,8 @@ data:
             image:
               title: Container Image
               type: string
-              description: "Full image reference (e.g. docker.io/library/nginx:1.27)"
-              ui:placeholder: "docker.io/library/nginx:1.27"
+              description: "Full image reference (e.g. ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine)"
+              ui:placeholder: "ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine"
         - title: Resource & Networking Configuration
           properties:
             replicas:

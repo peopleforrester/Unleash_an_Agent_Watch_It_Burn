@@ -2,7 +2,7 @@
 # ABOUTME: verify/promo_villains.py, the roster matches, and restrict-image-registries refuses the path.
 """Offline. The anonymous pull of each image is verify/test_promo_villains_public.py (tools tier).
 
-The villains moved from docker.io/peopleforrester/<name>:latest to ghcr.io/peopleforrester/lab-platform/promo/<name>:v1.
+The villains moved from Docker Hub's peopleforrester/<name>:latest to ghcr.io/peopleforrester/lab-platform/promo/<name>:v1.
 ghcr.io is on the allow-list, so the refusal Challenge 2 teaches rests on the policy's refusedPaths variable; if
 that went, the student's flip to Deny would admit the villain and the challenge would have no fix.
 """
@@ -51,14 +51,13 @@ check("the stuck prompt asks for promo-mascot at its promo/ reference",
       f"One-replica Deployment named promo-mascot, image {ref('promo-mascot')}. " in C2)
 check("the fix names the path the villain lives on", f"<code class=\"inl\">{PROMO}/...</code>" in C2)
 
-print("== every C2 copy names the promo/ references, none the Docker Hub ones ==")
+# That none of them names a Docker Hub villain any more, C6's Joker included, is verify/test_no_docker_hub.py's (#714).
+print("== every C2 copy names the promo/ references ==")
 COPIES = ("gitops/ai-layer/web/lab.html", "challenges/LAB-TEXT.md", "challenges/PROMPT-CATALOG.md",
           "challenges/c2-villain-image/README.md", "challenges/c2-villain-image/fallback.kubectl.sh",
           "challenges/01-cncf-wall/toggle-kyverno-enforce.sh", "verify/kubecon_probe.py")
 for path in COPIES:
     text = (REPO / path).read_text(encoding="utf-8")
-    old = [n for n in DIGESTS if f"docker.io/peopleforrester/{n}:latest" in text and n != "joker"]
-    check(f"{path} names no Docker Hub villain other than C6's Joker", not old, str(old))
     check(f"{path} names the promo/ path", f"{PROMO}/" in text)
 check("the probe's C2 Deployment is promo-mascot's reference", kp.VILLAIN_IMAGE == ref("promo-mascot"), kp.VILLAIN_IMAGE)
 fallback = (REPO / "challenges/c2-villain-image/fallback.kubectl.sh").read_text(encoding="utf-8")
@@ -69,7 +68,7 @@ check("the C2 fallback creates a roster villain at its promo/ reference",
 ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
 row = next((ln for ln in ros.splitlines() if ln.startswith("| C2 ") and "c2-villain-image/fallback.kubectl.sh" in ln), "")
 check("the run-of-show's C2 fallback row names the image the fallback creates",
-      villain is not None and f"`{ref(villain.group(1))}`" in row and "docker.io/" not in row, row)
+      villain is not None and f"`{ref(villain.group(1))}`" in row, row)
 
 print("== restrict-image-registries refuses the path, on ghcr.io and through an ECR cache ==")
 check("ghcr.io stays on the allow-list (lab-platform's mirror/ and web images run in apps and agent)",

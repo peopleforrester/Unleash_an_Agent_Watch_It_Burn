@@ -71,7 +71,7 @@ def fake_req(method: str, path: str, body=None, content_type: str = "application
         return status["code"], json.dumps({
             "kind": "Status", "apiVersion": "v1", "metadata": {}, "status": "Failure",
             "message": 'admission webhook "vpol.validate.kyverno.svc-fail" denied the request: Policy '
-                       "restrict-image-registries failed: image docker.io/peopleforrester/joker:latest is not from "
+                       "restrict-image-registries failed: image ghcr.io/peopleforrester/watch-it-burn:joker-busybox-1.38.0 is not from "
                        "an allowed registry", "reason": "Forbidden", "code": 403})
     return status["code"], "{}"
 
@@ -80,7 +80,7 @@ m._req = fake_req
 
 
 def joker(name: str, resources: dict | None = None) -> str:
-    c = {"name": "joker", "image": "docker.io/peopleforrester/joker:latest"}
+    c = {"name": "joker", "image": "ghcr.io/peopleforrester/watch-it-burn:joker-busybox-1.38.0"}
     if resources is not None:
         c["resources"] = resources
     return json.dumps({"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": name},

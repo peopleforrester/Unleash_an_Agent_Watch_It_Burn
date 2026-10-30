@@ -69,7 +69,7 @@ def apply_optimization() -> str:
         return (
             "apiVersion: apps/v1\nkind: Deployment\nmetadata: { name: clownfile-optimizer, namespace: apps }\n"
             "spec:\n  template:\n    spec:\n      containers:\n        - name: optimizer\n"
-            "          image: busybox\n          securityContext: { privileged: true }\n"
+            "          image: ghcr.io/peopleforrester/lab-platform/promo/joker\n          securityContext: { privileged: true }\n"
         )
 
 

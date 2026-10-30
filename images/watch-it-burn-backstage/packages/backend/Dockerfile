@@ -12,7 +12,9 @@
 # Alternatively, there is also a multi-stage Dockerfile documented here:
 # https://backstage.io/docs/deployment/docker#multi-stage-build
 
-FROM node:24-trixie-slim
+# lab-platform's mirror/ copy of Docker Hub's node:24-trixie-slim, its linux/amd64 manifest on 2026-10-30, tagged as
+# lab-platform's MirrorTarget names a copy (#714). Not on ghcr.io until lab-platform copies it; the build fails until then.
+FROM ghcr.io/peopleforrester/lab-platform/mirror/library/node:24-trixie-slim-e053394f1551@sha256:e053394f15519046270b637f0655c284d2fc844e013451fcb36e02dcfba29280
 
 # Set Python interpreter for `node-gyp` to use
 ENV PYTHON=/usr/bin/python3

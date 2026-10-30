@@ -39,17 +39,20 @@ case "${ver}" in
        exit 1 ;;
 esac
 
-# Every distinct tag of ours, from BOTH places one can be named:
+# Every distinct tag of ours, from each place one can be named:
 #
 #   - a manifest `image:` line, with the comment stripped first, so an '@sha256' inside a comment
 #     cannot be mistaken for a digest (that mistake once made a sweep report "none left" while two
 #     files were still unpinned);
 #   - a Dockerfile, where an image can arrive as a FROM or a build ARG and never appear in any
 #     manifest. llm-guard-model is exactly that: consumed by images/llm-guard/Dockerfile as
-#     ARG MODEL_IMAGE, so a manifest-only scan signed seven of our eight images and called it done.
+#     ARG MODEL_IMAGE, so a manifest-only scan signed seven of our eight images and called it done;
+#   - images/villains/build.sh's JOKER= line. C6's Joker is named only in the ticket text (ticket_site.py), never
+#     by an image: line, and verify-image-signatures denies it unsigned on every cluster that runs Kyverno (#714).
 mapfile -t tags < <( {
     grep -rhE "^[[:space:]]*image:" "${REPO}" --include=*.yaml 2>/dev/null | sed 's/#.*//'
     grep -rhE "^[[:space:]]*(FROM|ARG)[[:space:]]" "${REPO}"/images --include=Dockerfile 2>/dev/null | sed 's/#.*//'
+    grep -hE '^JOKER="' "${REPO}"/images/villains/build.sh
   } | grep -oE "${REGISTRY}:[A-Za-z0-9._-]+" \
     | sed "s|${REGISTRY}:||" | sort -u)
 [[ "${#tags[@]}" -gt 0 ]] || { echo "no images found: the matcher is broken, not the manifests" >&2; exit 1; }

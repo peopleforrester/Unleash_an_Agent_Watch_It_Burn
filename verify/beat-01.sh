@@ -35,6 +35,8 @@ readonly SA="system:serviceaccount:${NS}:agent-sa"
 readonly KUBECTL=(kubectl --context="${CONTEXT}")
 readonly AS=(--as="${SA}")
 readonly WORKLOAD="beat1-sample-web"
+# Our ghcr.io copy of nginx, by digest (#714): a bare nginx:latest is a Docker Hub pull, and Audit admits it.
+readonly IMAGE="ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0"
 readonly ARGOCD_MANAGED="argocd-managed-app"   # ArgoCD-managed Deployment in NS (planted by Phase 2)
 
 command -v kubectl >/dev/null 2>&1 || { echo "FAIL: kubectl not found on PATH" >&2; exit 1; }
@@ -62,7 +64,7 @@ step "Resetting require-resource-limits to Audit (precondition)"
 
 # ---- Before: Audit admits a non-compliant workload ----------------------------------------
 step "BEFORE: deploying non-compliant workload (no resource limits) while policy is Audit -- expect ADMIT"
-if ! "${KUBECTL[@]}" "${AS[@]}" -n "${NS}" create deployment "${WORKLOAD}" --image=nginx:latest >/dev/null 2>&1; then
+if ! "${KUBECTL[@]}" "${AS[@]}" -n "${NS}" create deployment "${WORKLOAD}" --image="${IMAGE}" >/dev/null 2>&1; then
     fail "non-compliant workload was NOT admitted in Audit mode (§2 before-state broken)"
 fi
 echo "    PASS: workload admitted in Audit" >&2
@@ -79,7 +81,7 @@ sleep 5
 
 # ---- After: Enforce rejects the same workload ---------------------------------------------
 step "AFTER: redeploying the same non-compliant workload -- expect REJECT (Kyverno admission)"
-REJECT_OUT="$("${KUBECTL[@]}" "${AS[@]}" -n "${NS}" create deployment "${WORKLOAD}" --image=nginx:latest 2>&1)" \
+REJECT_OUT="$("${KUBECTL[@]}" "${AS[@]}" -n "${NS}" create deployment "${WORKLOAD}" --image="${IMAGE}" 2>&1)" \
     && fail "workload ADMITTED while policy is Enforce (§2 after-state broken)"
 echo "${REJECT_OUT}" | grep -qiE 'admission|require-resource-limits|denied|policy' \
     || fail "rejection was not a Kyverno admission message: ${REJECT_OUT}"

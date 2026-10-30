@@ -101,7 +101,8 @@ check("not scoped to everything", "*" not in refs)
 # was scoped to Harbor ONLY, and rescoping to ghcr would have dropped the Harbor requirement without
 # anything noticing. Harbor is documented in infra/harbor/ and allowlisted, so it stays in scope.
 check("harbor is still required to be signed", "harbor.agenticburn.com/*" in refs)
-for foreign in ("docker.io/library/nginx:1.27-alpine", "cr.agentgateway.dev/agentgateway:v1.5.0",
+for foreign in ("ghcr.io/peopleforrester/lab-platform/mirror/library/postgres:18.6-alpine3.23-dd504ba15d33",
+                "cr.agentgateway.dev/agentgateway:v1.5.0",
                 "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1",
                 "registry.k8s.io/pause:3.9"):
     # A glob of the form "prefix*" matches only references starting with that prefix.
@@ -124,7 +125,7 @@ print("== the registry allowlist and the signature rule agree ==")
 allow = yaml.safe_load((REPO / "policies/kyverno/restrict-image-registries.yaml").read_text(encoding="utf-8"))
 allow_pat = next(v["expression"] for v in allow["spec"]["variables"] if v["name"] == "allowedRegistries")
 check("the allowlist permits Harbor", "'harbor.agenticburn.com/'" in allow_pat)
-check("the allowlist still permits the public demo registries", "'docker.io/library/'" in allow_pat)
+check("the allowlist still permits the public demo registries", "'ghcr.io/'" in allow_pat and "'registry.k8s.io/'" in allow_pat)
 check("every registry the signature rule names is allowlisted",
       all(r.rstrip("*").split("/")[0] in allow_pat for r in refs))
 

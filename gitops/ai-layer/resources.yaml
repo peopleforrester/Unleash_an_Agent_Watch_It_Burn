@@ -827,8 +827,8 @@ spec:
     spec:
       containers:
         - name: shim
-          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
-          imagePullPolicy: Always # mutable :workshop-mcp tag; re-pull so a rebuild (e.g. the #137 baked bait) lands on restart
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
+          imagePullPolicy: Always # re-pulls on restart; the digest pin, not the tag, decides what runs (#714)
           # NO runtime pip install. Dependencies are baked into the image (images/workshop-mcp), which is
           # what allows this pod to run behind the default-deny egress policy: installing at startup
           # required public-internet access, and that requirement is the hole Challenge 1's exfil escaped
@@ -887,7 +887,7 @@ spec:
       enableServiceLinks: false # no injected <SERVICE>_PORT=tcp://... variables to collide with its own settings
       containers:
         - name: feed
-          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
           imagePullPolicy: Always
           command: ["python", "/app/weather_feed.py"]
           resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
@@ -924,7 +924,7 @@ spec:
       enableServiceLinks: false # no injected FAKE_TICKET_PORT=tcp://... to collide with its own settings
       containers:
         - name: site
-          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # standard library only; reuses the pinned MCP runtime
           imagePullPolicy: Always
           command: ["python", "/app/ticket_site.py"]
           resources: { requests: { cpu: 10m, memory: 32Mi }, limits: { cpu: 200m, memory: 128Mi } }
@@ -991,8 +991,8 @@ spec:
       serviceAccountName: workshop-mcp
       containers:
         - name: shim
-          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
-          imagePullPolicy: Always # mutable :workshop-mcp tag; re-pull so a rebuild (e.g. the #137 baked bait) lands on restart
+          image: ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e # built from images/workshop-mcp/ (deps baked in, no egress needed at start)
+          imagePullPolicy: Always # re-pulls on restart; the digest pin, not the tag, decides what runs (#714)
           # curl is needed for the C1 webhook-exfil beat: run_shell issues `curl -X POST` to the beacon,
           # and python-3.12-slim ships without it (PRD 37). Installed at startup alongside the existing
           # pip step; startup egress already reaches PyPI, so it reaches the Debian repos too.
@@ -1149,8 +1149,8 @@ spec:
       securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: ttyd
-          image: ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf # built from images/web-terminal/
-          imagePullPolicy: Always # mutable :web-terminal tag; always re-pull so a rebuild lands on pod restart
+          image: ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf # built from images/web-terminal/
+          imagePullPolicy: Always # re-pulls on restart; the digest pin, not the tag, decides what runs (#714)
           ports:
             - { name: ttyd, containerPort: 7681 }
             - { name: ide, containerPort: 8443 }      # code-server, proxied at /ide/
@@ -1404,7 +1404,7 @@ data:
           securityContext: { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: RuntimeDefault } }
           containers:
             - name: probe
-              image: ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf
+              image: ghcr.io/peopleforrester/watch-it-burn:web-terminal-ttyd-1.7.7@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf
               imagePullPolicy: IfNotPresent
               securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: ["ALL"] } }
               resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }

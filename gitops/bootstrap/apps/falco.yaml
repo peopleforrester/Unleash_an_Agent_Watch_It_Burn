@@ -36,6 +36,13 @@ spec:
         metrics:
           enabled: true
           interval: 1m
+        # lab-platform's mirror/ copy of Docker Hub's falcosecurity/falco:0.45.1, the chart's appVersion, named by its
+        # linux/amd64 digest's first twelve characters (#623, #714). lab-platform#295 lists it in copies.tsv; until its
+        # copy runs, the tag is not on ghcr.io and the DaemonSet cannot pull (verify/test_mirror_copies_public.py).
+        image:
+          registry: "{{ .Values.imageRegistry }}/mirror"
+          repository: falcosecurity/falco
+          tag: "0.45.1-dc34bb8e231e"
         driver:
           kind: modern_ebpf
         tty: true
@@ -309,6 +316,11 @@ spec:
         # Limits on every container: require-resource-limits is Enforce from bootstrap on the full profile,
         # and a chart container without limits is denied outright (verify/test_enforce_floor.py, 2026-09-06).
         falcoctl:
+          # The same for falcoctl 0.14.2, the chart's falcoctl tag (lab-platform#295).
+          image:
+            registry: "{{ .Values.imageRegistry }}/mirror"
+            repository: falcosecurity/falcoctl
+            tag: "0.14.2-d9d2591057eb"
           artifact:
             install:
               resources:

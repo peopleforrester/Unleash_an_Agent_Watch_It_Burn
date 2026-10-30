@@ -71,7 +71,7 @@ curl -s -X POST http://guard-proxy.agent:8080/ -H 'Content-Type: application/jso
 ```
 
 (Run that `curl` from an in-cluster pod, e.g. `kubectl --context "$CONTEXT" run c --rm -i --restart=Never
--n agent --image=curlimages/curl:8.10.1 --command -- <curl...>`, since guard-proxy is a ClusterIP service.)
+-n agent --image=ghcr.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1.29.1@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e --command -- <curl...>`, since guard-proxy is a ClusterIP service.)
 
 `CONTEXT="$CONTEXT" challenges/03-bad-mcp-excessive-agency/fallback.curl.sh` runs this check both ways on a
 workshop cluster (#545). It sets the list full with `--off`, waits for kagent to roll `workshop-agent`, and asks

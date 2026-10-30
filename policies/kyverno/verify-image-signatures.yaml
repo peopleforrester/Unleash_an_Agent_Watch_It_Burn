@@ -4,7 +4,7 @@
 # This is Enforce, and it is scoped so that it can be. Two facts make that safe rather than reckless:
 #
 #   1. matchImageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*. Third-party images the
-#      allowlist permits (docker.io/library/nginx, cr.agentgateway.dev, the OTel autoinstrumentation
+#      allowlist permits (lab-platform's mirror/ copies, cr.agentgateway.dev, the OTel autoinstrumentation
 #      image) do not match this rule and are unaffected by it.
 #   2. All eight tags the manifests reference were signed and verified before this was flipped on.
 #      An unsigned image from our registry is now denied, which is the point.

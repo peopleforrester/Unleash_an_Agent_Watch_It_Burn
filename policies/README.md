@@ -21,7 +21,7 @@ platform components.
 | `require-probes.yaml` | Liveness and readiness probes required | Enforce | #4 |
 | `require-resource-limits.yaml` | CPU and memory limits required | Enforce | #2 |
 | `require-networkpolicy.yaml` | At least one NetworkPolicy per namespace | Audit | #4 |
-| `restrict-image-registries.yaml` | Images from ECR, GHCR, registry.k8s.io, Docker Hub only | Enforce | #8 |
+| `restrict-image-registries.yaml` | Images from Harbor, GHCR, the agentgateway and kagent registries, registry.k8s.io and ECR only, villain paths refused; no Docker Hub (#714) | Audit, armed to Deny | #8 |
 
 See [ADR-003](../docs/adr/ADR-003-policy-engine.md) for Kyverno selection rationale.
 

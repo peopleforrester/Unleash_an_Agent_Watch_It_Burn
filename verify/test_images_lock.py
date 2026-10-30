@@ -23,6 +23,9 @@ import re
 import subprocess
 import sys
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from image_refs import from_refs  # noqa: E402
+
 REPO = pathlib.Path(__file__).resolve().parents[1]
 LOCK = REPO / "images.lock"
 SHA = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -51,26 +54,6 @@ def keep(ref: str) -> bool:
     if templated(ref):
         return True
     return bool(PLAIN_REF.match(ref)) and "//" not in ref and not PICTURE.search(ref.lower())
-
-
-def from_refs(text: str):
-    """FROM lines: flags skipped, scratch and an earlier AS stage of the same file are not pulls."""
-    stages: set[str] = set()
-    for n, line in enumerate(text.splitlines(), 1):
-        line = line.rstrip("\r").lstrip(" \t")
-        if line[:4].lower() != "from" or line[4:5] not in (" ", "\t"):
-            continue
-        t = re.split(r"[ \t]+", line)
-        i = 1
-        while i < len(t) and t[i].startswith("--"):
-            i += 1
-        if i >= len(t):
-            continue
-        img = t[i]
-        if img.lower() != "scratch" and img.lower() not in stages:
-            yield n, img
-        if i + 2 < len(t) and t[i + 1].lower() == "as":
-            stages.add(t[i + 2].lower())
 
 
 def yaml_refs(text: str):

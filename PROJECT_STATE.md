@@ -383,7 +383,7 @@ Platform is built + live-validated (all beats, Terraform provisioning, rebrand).
 ### NEW ASKS + RESOLVED DECISIONS (2026-06-22)
 
 - **Images DONE:** backstage + sample-app built and pushed to ghcr.io/peopleforrester/watch-it-burn
-  (package set PUBLIC by Michael; anonymous pull confirmed). Manifests repointed docker.io->ghcr.io.
+  (package set PUBLIC by Michael; anonymous pull confirmed). Manifests repointed from Docker Hub to ghcr.io.
   Backstage = freshly scaffolded app, source at images/watch-it-burn-backstage/ (reproducible build via
   node:22 container). k8s/argocd Backstage plugins not yet wired into the base image (follow-up).
 - **ESO -> Pod Identity DONE** (PR #4 merged): TF association + stale IRSA annotation removed.

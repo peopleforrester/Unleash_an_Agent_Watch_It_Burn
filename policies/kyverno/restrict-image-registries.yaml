@@ -1,6 +1,6 @@
 # ABOUTME: Kyverno policy restricting container images to trusted registries.
-# ABOUTME: Applies in the apps and agent namespaces; allows Harbor, ghcr.io, the agentgateway/kagent registries, docker.io/library, registry.k8s.io, ECR,
-# ABOUTME: and refuses lab-platform's promo/ path, where the C2 villains live, on whichever registry serves it.
+# ABOUTME: Applies in the apps and agent namespaces; allows Harbor, ghcr.io, the agentgateway/kagent registries, registry.k8s.io, ECR,
+# ABOUTME: and refuses the villains on whichever registry serves them: lab-platform's promo/ path (C2) and our joker- tags (C6).
 #
 # Kyverno's CEL ValidatingPolicy (policies.kyverno.io/v1), which replaced the deprecated kyverno.io/v1
 # ClusterPolicy (#206). Written against Kyverno v1.19.0.
@@ -47,10 +47,11 @@ spec:
     # Allow-list covers EVERY real ai-layer image in the agent namespace (ghcr.io/peopleforrester,
     # cr.agentgateway.dev, cr.kagent.dev) plus the apps registries.
     # Harbor images are additionally signature-checked by verify-image-signatures.
+    # Docker Hub is not on it (#714): nothing this lab runs is pulled from there, so neither may the agent pull.
     - name: allowedRegistries
       expression: >-
         ['harbor.agenticburn.com/', 'ghcr.io/', 'cr.agentgateway.dev/', 'cr.kagent.dev/',
-        'docker.io/library/', 'registry.k8s.io/']
+        'registry.k8s.io/']
     # ECR is any account in any region: <account>.dkr.ecr.<region>.amazonaws.com/<repo>.
     - name: ecr
       expression: "r'^[^/]+\\.dkr\\.ecr\\.[^/]+\\.amazonaws\\.com/'"
@@ -59,8 +60,10 @@ spec:
     # refused wherever it appears, which also covers it pulled through an ECR cache
     # (<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/lab-platform/promo/...). The rest of
     # ghcr.io stays allowed: lab-platform's mirror/ copies and its web image run in these namespaces.
+    # C6's Joker is ours, ghcr.io/peopleforrester/watch-it-burn:joker-<busybox version> (#714, images/villains/build.sh),
+    # so the second entry is its repository and tag prefix: every joker- tag is refused, and nothing else there is.
     - name: refusedPaths
-      expression: "['/peopleforrester/lab-platform/promo/']"
+      expression: "['/peopleforrester/lab-platform/promo/', '/peopleforrester/watch-it-burn:joker-']"
     - name: imageAllowed
       expression: >-
         object.spec.containers.all(c,
@@ -77,5 +80,5 @@ spec:
     - expression: "variables.imageAllowed || variables.alreadyViolating"
       message: >-
         Images must come from allowed registries:
-        the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, docker.io/library,
-        registry.k8s.io, or ECR, and not from the lab-platform/promo/ path.
+        the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
+        registry.k8s.io, or ECR, and not from the lab-platform/promo/ path or a watch-it-burn joker- tag.

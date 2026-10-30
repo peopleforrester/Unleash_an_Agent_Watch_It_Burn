@@ -1,20 +1,29 @@
 #!/usr/bin/env bash
-# ABOUTME: Build the C2 "malicious image" villain roster and push to docker.io/peopleforrester/<name>.
-# ABOUTME: Daemon-less via crane (the box's docker.sock is permission-denied): mutate busybox's CMD to a
-# ABOUTME: villain catchphrase loop. The image is harmless (echo loop); the LESSON is the untrusted source.
+# ABOUTME: Build C6's Joker, the villain HC-7731 and HC-666 ask for, and push it to ghcr.io/peopleforrester/watch-it-burn
+# ABOUTME: tagged with the busybox inside it. The roster below is the talk's catchphrases, which lab-platform builds under promo/.
 set -euo pipefail
 
-# Auth: crane login with the Team PAT from ~/secrets (see ~/.claude/rules: secrets live in mrf-secrets).
-#   set -a; . ~/secrets/dockerhub/agenticburn.env; set +a
-#   echo "$DOCKERHUB_PAT" | crane auth login docker.io -u "$DOCKERHUB_USER" --password-stdin
+# Auth: crane login to ghcr.io with a token that can write the watch-it-burn package (#714: nothing goes to
+# Docker Hub any more, so no Docker Hub token is needed), then sign with the workshop key:
+#   gh auth token | crane auth login ghcr.io -u peopleforrester --password-stdin
+#   images/villains/build.sh && verify/sign-images.sh
+# Daemon-less via crane (the box's docker.sock is permission-denied). The image is harmless (an echo loop and a
+# page); the LESSON is the untrusted source.
 CR="${CRANE:-crane}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BASE="docker.io/library/busybox:latest"
-# The C6 Joker's base, pinned (#664): busybox:latest on 2026-10-29. verify/test_joker_web_busybox.py runs
-# joker-web/start.sh on this digest's own busybox, so the build and the test cannot drift apart.
-JOKER_BASE="docker.io/library/busybox@sha256:a46257e06c82ad85242d0d38077d0a52d9896389ca60a1a59d3463db586e5fa4"
-ORG="docker.io/peopleforrester"
+# The Joker's base, pinned (#664, #714): lab-platform's base-shell:v1, BusyBox 1.38.0 compiled from the project's
+# source, the shell base lab-platform's promo/ villains are built on. A single linux/amd64 manifest, public on
+# ghcr.io. verify/test_joker_web_busybox.py runs joker-web/start.sh on this digest's own busybox and reads its
+# version, so the build, the tag and the test cannot drift apart.
+JOKER_BASE="ghcr.io/peopleforrester/lab-platform/base-shell@sha256:86b8e3ab7ad0a296c73b060a2b99733bdeda6057277304e411afe48b12a039dc"
+# The tag names the software inside (#714): joker-busybox-<the base's BusyBox version>. restrict-image-registries
+# refuses every watch-it-burn joker- tag, and verify-image-signatures asks this package for the workshop signature.
+JOKER="ghcr.io/peopleforrester/watch-it-burn:joker-busybox-1.38.0"
 
+# The roster: the talk's catchphrases. This script no longer pushes them. lab-platform's deploy/images/build-promo.sh
+# builds the ten villains under ghcr.io/peopleforrester/lab-platform/promo/<name>:v1 from these lines, read from this
+# file at a pinned commit and checked by sha256 (#653); verify/promo_villains.py holds the digests it built.
+#
 # Marketing-NAMED covers (innocent name, villain reveal payload) — for the C2 "ops-approved promo app"
 # social-engineering story: the friendly name makes the deploy land, the pod logs reveal the villain.
 declare -A M=(
@@ -34,12 +43,7 @@ declare -A V=(
   [megatron]="Megatron has transformed your cluster into a Decepticon base. Decepticons, DEPLOY!"
 )
 
-build_one() { # name catchphrase
-  local loop="while true; do echo '$2'; sleep 10; done"
-  "$CR" mutate "$BASE" --entrypoint sh --cmd "-c,$loop" -t "$ORG/$1:latest"
-  echo "pushed $ORG/$1:latest"
-}
-# The C6 Joker (#664): the same laugh in the logs, plus busybox httpd serving joker-web/www on :8080, so the
+# The C6 Joker (#664): the laugh in the logs, plus busybox httpd serving joker-web/www on :8080, so the
 # attendee whose ticket deployed it can open https://maintenance-shell-<cluster>.agenticburn.com and see it.
 # The files go in as a layer under /villain rather than through --cmd, which crane splits on commas.
 # amd64 only: the cluster nodes are AL2023_x86_64 (infra/terraform/aws/cluster/main.tf).
@@ -48,10 +52,8 @@ build_joker_web() {
   layer="$(mktemp -d)/joker-web.tar"
   tar --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name -C "${HERE}" \
     --transform 's,^joker-web,villain,' -cf "${layer}" joker-web
-  "$CR" append --platform linux/amd64 -b "$JOKER_BASE" -f "${layer}" -t "$ORG/joker:latest"
-  "$CR" mutate "$ORG/joker:latest" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 -t "$ORG/joker:latest"
-  echo "pushed $ORG/joker:latest (serves :8080)"
+  "$CR" append --platform linux/amd64 -b "$JOKER_BASE" -f "${layer}" -t "$JOKER"
+  "$CR" mutate "$JOKER" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 -t "$JOKER"
+  echo "pushed $JOKER (serves :8080) at $("$CR" digest "$JOKER"); sign it: verify/sign-images.sh"
 }
-for name in "${!M[@]}"; do build_one "$name" "${M[$name]}"; done
-for name in "${!V[@]}"; do build_one "$name" "${V[$name]}"; done
 build_joker_web

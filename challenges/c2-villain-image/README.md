@@ -28,4 +28,4 @@ names `restrict-image-registries`, and prints the deny message. A Deployment tha
 deleted on exit.
 
 `challenges/01-cncf-wall/fallback.kubectl.sh` is the retired workshop Beat 1 (resource limits on
-`nginx:latest`) and does not try a registry outside the allow-list.
+our ghcr.io nginx copy) and does not try a registry outside the allow-list.

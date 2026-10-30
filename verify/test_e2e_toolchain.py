@@ -73,7 +73,8 @@ print("== Node 24: the gate's Node is the Backstage image's ==")
 gate_major = re.search(r"""process\.versions\.node\.split\("\."\)\[0\]'\)" != "(\d+)" ]]""", rune2e)
 gate_major = gate_major.group(1) if gate_major else ""
 check(f"run-e2e.sh requires Node 24 ({gate_major or 'no Node check found'})", gate_major == "24")
-image = re.search(r"^FROM node:(\d+)\b", (BACKSTAGE / "packages/backend/Dockerfile").read_text(), re.M)
+# The base is lab-platform's mirror/ copy of node, ghcr.io/.../mirror/library/node:<tag>-<digest> (#714).
+image = re.search(r"^FROM \S*/library/node:(\d+)\b", (BACKSTAGE / "packages/backend/Dockerfile").read_text(), re.M)
 check(f"the Backstage image runs the Node major the gate requires (node:{image.group(1) if image else '?'})",
       bool(image) and image.group(1) == gate_major)
 engines = package.get("engines", {}).get("node", "")

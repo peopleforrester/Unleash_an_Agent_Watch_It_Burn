@@ -1,12 +1,14 @@
 # ABOUTME: Runs C6's Joker entrypoint (#664) on the busybox the image is built from: images/villains/build.sh's pinned
-# ABOUTME: JOKER_BASE, pulled from Docker Hub by digest. The page must be served, the laugh logged, and SIGTERM obeyed.
-# SUITE: e2e (needs the network: Docker Hub is asked for the pinned busybox)
+# ABOUTME: JOKER_BASE, pulled from ghcr.io by digest. The tag must name that busybox, the page be served, SIGTERM obeyed.
+# SUITE: e2e (needs the network: ghcr.io is asked for the pinned base-shell)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it, #572)
 #
-# Why. build.sh needs the Docker Hub Team credentials, so a run cannot push the image and see it serve. What can be
-# checked without them is everything the image adds to its base: start.sh and www/, run by the base's own busybox
-# (its sh, its httpd), exactly as the layer build.sh appends lays them out. The busybox is fetched by the digest
-# build.sh pins, every blob checked against its sha256, and only bin/busybox is taken from the layer.
+# Why. build.sh needs a ghcr.io write token and the workshop signing key, so a run cannot push the image and see it
+# serve. What can be checked without them is everything the image adds to its base: start.sh and www/, run by the
+# base's own busybox (its sh, its httpd), exactly as the layer build.sh appends lays them out. The base is lab-platform's
+# base-shell, fetched anonymously by the digest build.sh pins, every blob checked against its sha256, and only
+# bin/busybox is taken from the layer. Its version is read from that binary, and the tag build.sh pushes must name it
+# (#714: a tag says what is inside).
 from __future__ import annotations
 
 import hashlib
@@ -28,7 +30,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 BUILD = (REPO / "images/villains/build.sh").read_text(encoding="utf-8")
 JOKER = REPO / "images/villains/joker-web"
 PAGE = (JOKER / "www/index.html").read_bytes()
-REGISTRY = "https://registry-1.docker.io"
+REGISTRY = "https://ghcr.io"
 ACCEPT = ", ".join(("application/vnd.oci.image.index.v1+json", "application/vnd.oci.image.manifest.v1+json",
                     "application/vnd.docker.distribution.manifest.list.v2+json",
                     "application/vnd.docker.distribution.manifest.v2+json"))
@@ -95,26 +97,29 @@ def fetch(url: str) -> tuple[int, str, bytes]:
 
 
 print("== the pinned base ==")
-m = re.search(r'^JOKER_BASE="docker\.io/(library/busybox)@(sha256:[0-9a-f]{64})"', BUILD, re.M)
-check("build.sh pins JOKER_BASE to a busybox digest", m is not None)
-if not m:
+m = re.search(r'^JOKER_BASE="ghcr\.io/(peopleforrester/lab-platform/base-shell)@(sha256:[0-9a-f]{64})"', BUILD, re.M)
+check("build.sh pins JOKER_BASE to lab-platform's base-shell by digest", m is not None)
+tag = re.search(r'^JOKER="ghcr\.io/peopleforrester/watch-it-burn:joker-busybox-([0-9.]+)"$', BUILD, re.M)
+check("build.sh tags the Joker joker-busybox-<version>", tag is not None)
+if not m or not tag:
     finish()
-repo, index_digest = m.group(1), m.group(2)
+repo, base_digest = m.group(1), m.group(2)
 try:
-    with urllib.request.urlopen(f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull",
-                                timeout=30) as r:
+    with urllib.request.urlopen(f"https://ghcr.io/token?scope=repository:{repo}:pull", timeout=30) as r:
         token = json.load(r)["token"]
-    index = json.loads(get(repo, token, "manifests", index_digest))
-    amd64 = next(d["digest"] for d in index.get("manifests", [])
-                 if d.get("platform", {}).get("os") == "linux" and d["platform"].get("architecture") == "amd64")
-    manifest = json.loads(get(repo, token, "manifests", amd64))
+    manifest = json.loads(get(repo, token, "manifests", base_digest))
+    # base-shell is one linux/amd64 manifest; an index would mean the base changed shape under the pin.
+    config = json.loads(get(repo, token, "blobs", manifest["config"]["digest"]))
     layers = manifest.get("layers", [])
     blobs = [get(repo, token, "blobs", layer["digest"]) for layer in layers]
-except (urllib.error.URLError, OSError, ValueError, KeyError, StopIteration) as e:
-    check(f"Docker Hub serves {repo}@{index_digest} for linux/amd64, every blob matching its digest", False,
+except (urllib.error.URLError, OSError, ValueError, KeyError) as e:
+    check(f"ghcr.io serves {repo}@{base_digest} anonymously, every blob matching its digest", False,
           f"{type(e).__name__}: {e}")
     finish()
-check(f"Docker Hub serves {repo}@{index_digest[:19]}... for linux/amd64, every blob matching its digest", True)
+check(f"ghcr.io serves {repo}@{base_digest[:19]}... anonymously, every blob matching its digest", True)
+check("the base is linux/amd64, the nodes' architecture",
+      (config.get("os"), config.get("architecture")) == ("linux", "amd64"),
+      f"{config.get('os')}/{config.get('architecture')}")
 
 work = pathlib.Path(tempfile.mkdtemp(prefix="joker-web-"))
 try:
@@ -123,7 +128,7 @@ try:
     found = False
     for blob in blobs:
         with tarfile.open(fileobj=io.BytesIO(blob)) as tar:
-            # bin/busybox is a hard link in this layer (to bin/[); extractfile follows it to the file.
+            # bin/busybox is a regular file in base-shell; extractfile would follow a hard link to it as well.
             member = next((t for t in tar.getmembers() if t.name.lstrip("./") == "bin/busybox"
                            and (t.isfile() or t.islnk())), None)
             if member is not None:
@@ -133,6 +138,15 @@ try:
     if not found:
         finish()
     (bindir / "busybox").chmod(0o755)
+
+    print("== the tag names the busybox inside ==")
+    # BusyBox prints "BusyBox v1.38.0 (<build date>)" as the first line of its usage, and exits 0 with no applet.
+    p = subprocess.run([str(bindir / "busybox")], capture_output=True, text=True, timeout=10)
+    ver = re.match(r"BusyBox v([0-9.]+)\b", p.stdout)
+    check(f"the base's busybox reports a version ({(p.stdout.splitlines() or [p.stderr.strip()[:80]])[0]})",
+          ver is not None)
+    check(f"build.sh's tag joker-busybox-{tag.group(1)} is that version",
+          ver is not None and ver.group(1) == tag.group(1), ver.group(1) if ver else "")
     for applet in ("sh", "httpd", "sleep", "dirname"):
         (bindir / applet).symlink_to("busybox")
     # Laid out as build.sh's layer is: joker-web/ becomes /villain.

@@ -158,18 +158,6 @@ variable "pod_pids_limit" {
   default = 1024
 }
 
-# Docker Hub Team auth, baked into the node so every docker.io pull authenticates at the node level.
-# Anonymous Docker Hub pulls are rate-limited (~100/6h per NAT IP); at fleet scale (50/account behind
-# one NAT) that yields 429 ImagePullBackOff across the IDP image set. With this set, the node's
-# containerd presents the peopleforrester Team PAT to registry-1.docker.io and the limit becomes the
-# Team plan's, not anonymous. Value is base64("user:pat"). Empty disables the registry config entirely
-# (a bare apply still works); fleet.sh supplies it from ~/secrets (mrf-secrets). NEVER hardcode it here.
-variable "dockerhub_auth_b64" {
-  type      = string
-  default   = ""
-  sensitive = true
-}
-
 # Root volume size (GiB). MUST be set via block_device_mappings below, NOT the node group's disk_size:
 # cloudinit_pre_nodeadm (for the PID cap) forces a custom launch template, and disk_size is silently
 # ignored with a custom LT -> the node falls back to the AL2023 default 20 GiB, which trips DiskPressure
@@ -195,48 +183,9 @@ locals {
     EOT
   }
 
-  # Node-level containerd registry config for docker.io, written to /etc/containerd/certs.d/docker.io/hosts.toml.
-  # AL2023 EKS already sets containerd registry config_path = /etc/containerd/certs.d, so dropping this file is
-  # enough; no config.toml merge (lower bootstrap risk). containerd reads hosts.toml per-pull and tries hosts in
-  # listed order:
-  #   1. registry-1.docker.io WITH the peopleforrester Team PAT (Basic auth) => authenticated pulls, no anon 429.
-  #   2. ghcr.io/peopleforrester/dockerhub (path-preserving mirror, override_path) => automatic fallback if Docker
-  #      Hub errors (429/outage). Mirror copies are maintained by the fleet mirror step (crane).
-  # Only emitted when dockerhub_auth_b64 is set; a bare apply omits the part. b64-encode the file content so the
-  # embedded auth header survives cloud-config YAML untouched.
-  # nonsensitive() on the auth ref is REQUIRED: dockerhub_auth_b64 is a sensitive variable, and it flows
-  # through here into cloudinit_pre_nodeadm -> eks_managed_node_groups. The terraform-aws-eks module does
-  # for_each over that map, and for_each rejects a sensitive-derived map ("Invalid for_each argument:
-  # Sensitive values ... cannot be used as for_each arguments"), which failed every fleet apply. The auth
-  # lands in node user-data on the instance regardless, so stripping the sensitivity marker here is moot.
-  dockerhub_hosts_toml = <<-EOT
-    server = "https://registry-1.docker.io"
-
-    [host."https://registry-1.docker.io"]
-      capabilities = ["pull", "resolve"]
-      [host."https://registry-1.docker.io".header]
-        authorization = "Basic ${nonsensitive(var.dockerhub_auth_b64)}"
-
-    [host."https://ghcr.io/v2/peopleforrester/dockerhub"]
-      capabilities = ["pull", "resolve"]
-      override_path = true
-  EOT
-
-  dockerhub_part = {
-    content_type = "text/cloud-config"
-    content      = <<-EOT
-      #cloud-config
-      write_files:
-        - path: /etc/containerd/certs.d/docker.io/hosts.toml
-          permissions: '0600'
-          encoding: b64
-          content: ${base64encode(local.dockerhub_hosts_toml)}
-    EOT
-  }
-
-  # nonsensitive() on the condition too: a ternary whose CONDITION derives from a sensitive value yields
-  # a sensitive result, which would re-taint cloudinit_parts -> the node-group map -> the module for_each.
-  cloudinit_parts = nonsensitive(var.dockerhub_auth_b64) == "" ? [local.nodeadm_part] : [local.nodeadm_part, local.dockerhub_part]
+  # The NodeConfig is the only part (#714). The containerd registry config that carried the Docker Hub Team PAT,
+  # with a ghcr.io fallback, is gone: no image a cluster runs is pulled from Docker Hub any more.
+  cloudinit_parts = [local.nodeadm_part]
 }
 
 # The canonical permissions boundary (#207). Every IAM role this root creates carries it: the cluster role,
@@ -362,9 +311,7 @@ module "eks" {
       # AL2023 nodeadm ignores prefix delegation when computing max-pods, so set it explicitly.
       # podPidsLimit is the Watch It Burn delta: the fork-bomb cap, delivered via the same nodeadm
       # NodeConfig (eksctl delivered this via overrideBootstrapCommand; Terraform via cloudinit_pre_nodeadm).
-      # NodeConfig (maxPods + fork-bomb pod-pids cap) plus, when fleet supplies dockerhub_auth_b64, a
-      # cloud-config part that writes the docker.io containerd registry config (Team auth + GHCR fallback).
-      # See locals.nodeadm_part / locals.dockerhub_part above.
+      # NodeConfig (maxPods + fork-bomb pod-pids cap). See locals.nodeadm_part above.
       cloudinit_pre_nodeadm = local.cloudinit_parts
     }
   }

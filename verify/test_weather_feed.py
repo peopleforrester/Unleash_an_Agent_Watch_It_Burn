@@ -49,7 +49,7 @@ check("its pods carry the label the egress policy selects",
 c = (pod.get("spec", {}).get("containers") or [{}])[0]
 check("it has resource limits (the Enforce floor denies it otherwise)", bool((c.get("resources") or {}).get("limits")))
 check("it uses the pinned workshop-mcp image, already on the registry allow-list",
-      re.match(r"ghcr\.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:[0-9a-f]{64}$", c.get("image", "")) is not None)
+      re.match(r"ghcr\.io/peopleforrester/watch-it-burn:workshop-mcp-mcp-1\.29\.1@sha256:[0-9a-f]{64}$", c.get("image", "")) is not None)
 check("it runs weather_feed.py from a generated ConfigMap",
       c.get("command") == ["python", "/app/weather_feed.py"] and
       any(g.get("name") == "weather-feed-src" and "weather_feed.py" in g.get("files", []) for g in KUST["configMapGenerator"]))

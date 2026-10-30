@@ -87,8 +87,7 @@ def run_fleet(*args):
         for tool in ("terraform", "aws"):
             p = pathlib.Path(d) / tool
             p.write_text("#!/bin/sh\nexit 0\n"); p.chmod(p.stat().st_mode | stat.S_IEXEC)
-        env = dict(os.environ, PATH=f"{d}:{os.environ['PATH']}", WIB_DRY_RUN="1", WIB_STATE_DIR=f"{d}/states",
-                   WIB_DOCKERHUB_ENV=f"{d}/none.env")
+        env = dict(os.environ, PATH=f"{d}:{os.environ['PATH']}", WIB_DRY_RUN="1", WIB_STATE_DIR=f"{d}/states")
         r = subprocess.run(["bash", str(FLEET), *args], env=env, capture_output=True, text=True, timeout=180)
         return r.returncode, r.stdout + r.stderr
 
