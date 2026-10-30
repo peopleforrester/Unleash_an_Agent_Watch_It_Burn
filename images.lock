@@ -25,7 +25,7 @@ REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-place
 ghcr.io/peopleforrester/watch-it-burn:tool-pin - build:images/tool-pin -
 docker.io/DOCKERHUB_USER/villain-joker:latest - not-an-image:beat-02-placeholder-account-set-at-build -
 ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator -
-cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896 sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896 upstream:https://github.com/agentgateway/agentgateway -
+cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b upstream:https://github.com/agentgateway/agentgateway -
 ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox -
 ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python -
 llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b repo:peopleforrester/lab-platform/deploy/images -

@@ -3,7 +3,7 @@
 # Gateway & Guardrail Notes
 
 Architecture context: separate EKS cluster per attendee (independent, take-home). Everything below runs in each
-attendee's spoke. agentgateway OSS **v1.5.0** fronts the kagent agent's A2A serving endpoint and
+attendee's spoke. agentgateway OSS **v1.7.0** fronts the kagent agent's A2A serving endpoint and
 its MCP tool traffic. LLM Guard (Protect AI, MIT) runs in API-server mode per spoke,
 **output-`Regex`-only by default** to keep each spoke node small.
 
@@ -123,11 +123,11 @@ The input guard has two stages, built and toggled progressively (see `docs/BUILD
   does NOT exist on Docker Hub (404 confirmed 2026-06-16). `laiyer/` is somewhat stale (latest tag
   `0.3.16`) but it is the only published image. **Pin a `@sha256` digest, not `:latest`** (no GitHub
   releases exist). Also pin the PyPI `llm-guard` version. → `VERSIONS.lock`.
-- **agentgateway version:** OSS **v1.5.0** (released 2026-08-27; moved from v1.3.0 on 2026-09-10).
+- **agentgateway version:** OSS **v1.7.0** (released 2026-10-27; moved from v1.5.0 on 2026-10-30 for GHSA-qm3r-hhvc-62cp, #698; v1.5.0 had replaced v1.3.0 on 2026-09-10).
   It deploys as the plain manifest `gitops/ai-layer/agentgateway.yaml` (ServiceAccount, Deployment,
   Service, ConfigMap), not a Helm chart, with the image pinned by tag and digest (#415) and recorded in
   `VERSIONS.lock`. Build strictly from the OSS standalone docs (the Enterprise 2.x docs drift). The
-  committed config is validated offline against the vendored v1.5.0 schema
+  committed config is validated offline against the vendored v1.7.0 schema
   (`verify/test_agentgateway_config.py`); MCP config nests under `mcp.{targets,policies}` and mcpAuthorization is
   allow-only CEL with implicit deny (no `action` field) — the research spikes (removed 2026-08-30; recover with `git log --diff-filter=D -- research/`) §2.
 - **Egress-proxy image:** a real thin reverse proxy (NOT a mock) calling `/analyze/output`. Resolved

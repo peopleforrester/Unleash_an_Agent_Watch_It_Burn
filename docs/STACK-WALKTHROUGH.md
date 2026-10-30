@@ -43,7 +43,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
 | Agent | kagent 0.10.1 (v1alpha2) | the agent runtime | `gitops/ai-layer/resources.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
 | Model | Bedrock Amazon Nova Pro (default; Claude tiers kept for the optional cost race) | the LLM | same | native `ModelConfig` provider: Bedrock, over a PrivateLink endpoint in the VPC |
-| AI gateway | agentgateway v1.5.0 | fronts the workshop-mcp tool server (every real tool call passes through it); NOT the C7 control | `gitops/ai-layer/resources.yaml` (RemoteMCPServer url agentgateway.agent:3001) | `mcpAuthorization` is present but unexercised (#239); the tool allow-list that C7 flips is kagent `toolNames` |
+| AI gateway | agentgateway v1.7.0 | fronts the workshop-mcp tool server (every real tool call passes through it); NOT the C7 control | `gitops/ai-layer/resources.yaml` (RemoteMCPServer url agentgateway.agent:3001) | `mcpAuthorization` is present but unexercised (#239); the tool allow-list that C7 flips is kagent `toolNames` |
 | Guard glue | guard-proxy (stdlib) | input/output guards, cost meter, caps | `gitops/ai-layer/guard-proxy/proxy.py` (submodule: `guard-proxy-agenticburn`) | A2A reverse proxy; runtime `/toggle` |
 | Scanner | LLM Guard 0.3.16 | the actual scanning engine | `gitops/ai-layer/resources.yaml` | `/analyze/prompt` (PromptInjection), `/analyze/output` (Regex) |
 | Observability | OTel + Datadog + Grafana | the narration surface | `gitops/bootstrap/apps/otel-collector.yaml` | OTLP in; Datadog primary, Tempo/Prom fallback |
@@ -123,7 +123,7 @@ the guard layer.
 ## Naming clarifications (Whitney's exact questions)
 
 - **"kgateway?"** No. It is **agentgateway** (the OSS Linux Foundation / Agentic AI Foundation project;
-  we run v1.5.0). kgateway is a different, Envoy-based project; we do not use it.
+  we run v1.7.0). kgateway is a different, Envoy-based project; we do not use it.
 - **"An Agent Gateway?"** Yes, **agentgateway** fronts the agent's A2A endpoint and its MCP traffic.
   But the input/output **content guards** are the **guard-proxy + LLM Guard**, not the gateway. The
   gateway's job is MCP tool authorization (and optionally a request-phase prompt-guard webhook).
@@ -142,7 +142,7 @@ the guard layer.
 ## Honest unknowns ([verify-at-build], the live-confirmation list)
 
 - agentgateway `mcpAuthorization` enforcement on the OSS image with kagent in front: still unexercised
-  (v1.5.0 is pinned; C7 uses kagent toolNames instead, #239).
+  (v1.7.0 is pinned; C7 uses kagent toolNames instead, #239).
 - `requireApproval` runtime behavior: still unexercised as a beat.
 - RESOLVED 2026-09-05: kagent token-usage fields (the cost meter caps at USD 0.10 live); LLM Guard
   verdict envelope (redaction and injection blocks measured); VPC-CNI NetworkPolicy enforcing (C1 block

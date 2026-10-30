@@ -1,4 +1,4 @@
-# ABOUTME: agentgateway OSS v1.5.0 (released 2026-08-27) — the DEPLOYED gateway fronting the kagent agent (A2A)
+# ABOUTME: agentgateway OSS v1.7.0 (released 2026-10-27) — the DEPLOYED gateway fronting the kagent agent (A2A)
 # ABOUTME: and both MCP servers (workshop-mcp, evil-mcp). Namespace is set by the ai-layer kustomization (agent).
 #
 # Config schema verified live against agentgateway.dev/docs/standalone/latest on 2026-06-25:
@@ -40,7 +40,7 @@ metadata:
   labels:
     app.kubernetes.io/name: agentgateway
     app.kubernetes.io/component: gateway
-    app.kubernetes.io/version: "1.5.0"
+    app.kubernetes.io/version: "1.7.0"
 spec:
   replicas: 1
   strategy: { type: RollingUpdate, rollingUpdate: { maxUnavailable: 0, maxSurge: 1 } }
@@ -57,7 +57,7 @@ spec:
           # Pinned by digest as well as tag. This is the one image we run from a registry we do not
           # control, so it is the one where a moving tag matters most (#415). Re-resolve with
           # `docker buildx imagetools inspect cr.agentgateway.dev/agentgateway:<tag>` on any bump.
-          image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896
+          image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
           imagePullPolicy: IfNotPresent
           args: ["-f", "/etc/agentgateway/config.yaml"]
           env:
@@ -68,7 +68,7 @@ spec:
             - name: OTEL_SERVICE_NAME
               value: burritobot-gateway
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
+              value: "service.name=burritobot-gateway,service.version=v1.7.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
             # The model the bedrock-nova backend calls; agentgateway-config reads it as ${BEDROCK_NOVA_MODEL}
             # (#561). The value below is the system profile id, the pin. A system profile cannot be tagged, so
             # fleet.sh pin_bedrock_profiles sets the live value to this cluster's tagged application profile
@@ -105,14 +105,14 @@ spec:
         # It listens on 3003 and 15022 only. Admin and stats are off: their defaults (15000, 15020) and the
         # readiness default (15021) are the first container's, and the pod shares one network namespace.
         - name: agentgateway-c7
-          image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896
+          image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aafb03d37f94e952ff3d51d2f630a65b10ecaebdc0a864882f92610c45b
           imagePullPolicy: IfNotPresent
           args: ["-f", "/etc/agentgateway-c7/config.yaml"]
           env:
             - name: OTEL_SERVICE_NAME
               value: burritobot-gateway
             - name: OTEL_RESOURCE_ATTRIBUTES
-              value: "service.name=burritobot-gateway,service.version=v1.5.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
+              value: "service.name=burritobot-gateway,service.version=v1.7.0,deployment.environment.name=burritobot-kubecon-na-26" # one name family (#265)
           ports:
             - { name: mcp-c7, containerPort: 3003 }   # MCP front -> evil-mcp-shim (C7)
             - { name: ready-c7, containerPort: 15022 }
@@ -168,6 +168,10 @@ metadata:
 data:
   config.yaml: |
     config:
+      # v1.7.0 standalone encrypts MCP session ids and writes a generated key into the config file, which is a
+      # read-only ConfigMap here; 'disabled' keeps them unencrypted, as on v1.5.0 (#698).
+      session:
+        key: disabled
       tracing:
         otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
         otlpProtocol: http
@@ -274,6 +278,8 @@ data:
       adminAddr: "off"
       statsAddr: "off"
       readinessAddr: 0.0.0.0:15022
+      session:
+        key: disabled # as agentgateway-config: v1.7.0 cannot write a generated key into a ConfigMap (#698)
       tracing:
         otlpEndpoint: http://otel-collector-opentelemetry-collector.monitoring.svc.cluster.local:4318
         otlpProtocol: http

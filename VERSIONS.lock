@@ -34,8 +34,11 @@ kube-prometheus-stack  chart 86.2.3  (optional bump to 86.3.2; app v0.91.0 uncha
 otel-collector         chart 0.173.1 / app 0.160.0  (contrib distro; was 0.158.2 / 0.153.0 until #666)
                        image: the mirror's otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921, set in all three
                        gitops/bootstrap/apps/otel-collector*.yaml; verify/test_otel_collector_version_pins.py holds the copies together
-agentgateway           OSS v1.5.0  (released 2026-08-27, GitHub releases agentgateway/agentgateway; pinned 2026-09-10 in 20aee62, recorded here 2026-10-24)
-                       image: cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339e... (digest pin in gitops/ai-layer/agentgateway.yaml, #415)
+agentgateway           OSS v1.7.0  (released 2026-10-27, GitHub releases agentgateway/agentgateway; pinned 2026-10-30 for #698, from v1.5.0)
+                       image: cr.agentgateway.dev/agentgateway:v1.7.0@sha256:60216aaf... (digest pin in gitops/ai-layer/agentgateway.yaml, #415)
+                       why: GHSA-qm3r-hhvc-62cp (Medium, 2026-10-27, all versions before v1.7.0) forwards an MCP request with an
+                       invalid id without applying mcpAuthorization, and C7's stage control is mcpAuthorization. Both configs set
+                       config.session.key: disabled, since v1.7.0 standalone would write a generated key into a read-only ConfigMap
                        chart ref: oci://cr.agentgateway.dev/charts/agentgateway (CONFIRMED reachable 2026-06-16)
                        mcpAuthorization rules are a bare CEL string (an allow rule) or {allow|deny|require}, implicit deny, no `action` field (schema/config.json RuleSerde, v1.3.0 to v1.7.0, #697); MCP config nests under mcp.{targets,policies} — research/14 §2
 llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `scanners`, not `scores`)

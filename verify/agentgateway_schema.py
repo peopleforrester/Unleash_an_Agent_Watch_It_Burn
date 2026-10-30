@@ -11,7 +11,7 @@ import json
 import pathlib
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-SCHEMA_VERSION = "v1.5.0"
+SCHEMA_VERSION = "v1.7.0"
 SCHEMA = REPO / f"verify/schemas/agentgateway-{SCHEMA_VERSION}-config.json"
 
 

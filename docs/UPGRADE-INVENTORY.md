@@ -53,7 +53,7 @@ unless Tempo 3 is wanted for its own sake, in which case the resource budget has
 | Component | Pinned | Latest GA | Source |
 |---|---|---|---|
 | kagent / kagent-crds | 0.9.9 (upgraded to 0.10.1 on 2026-09-10, `20aee62`) | **0.10.1** (2026-09-08) | GitHub releases |
-| agentgateway | v1.3.0 (upgraded to v1.5.0 on 2026-09-10, `20aee62`) | **v1.5.0** (2026-08-27) | GitHub releases |
+| agentgateway | v1.7.0 (v1.3.0 to v1.5.0 on 2026-09-10, `20aee62`; to v1.7.0 on 2026-10-30, #698) | **v1.7.0** (2026-10-27) | GitHub releases |
 | LLM Guard | 0.3.16 | 0.3.16 | PyPI, already current |
 | EKS control plane | 1.35 | **1.36** (AWS ceiling; upstream k8s is v1.37.0 but EKS does not offer it) | `aws eks describe-cluster-versions` |
 | autoinstrumentation-python | 0.63b1 | check upstream | not yet measured |

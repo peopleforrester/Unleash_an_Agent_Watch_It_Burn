@@ -6,12 +6,12 @@ dependency.
 
 | File | Source | Fetched |
 |---|---|---|
-| `agentgateway-v1.5.0-config.json` | `https://raw.githubusercontent.com/agentgateway/agentgateway/v1.5.0/schema/config.json` | 2026-09-21 |
+| `agentgateway-v1.7.0-config.json` | `https://raw.githubusercontent.com/agentgateway/agentgateway/v1.7.0/schema/config.json` | 2026-10-30 |
 
 Re-fetch when the pinned version changes, in the same commit that changes the image tag. The file is
 byte-for-byte upstream: verify with
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/agentgateway/agentgateway/v1.5.0/schema/config.json \
-  | diff - verify/schemas/agentgateway-v1.5.0-config.json && echo identical
+curl -sSL https://raw.githubusercontent.com/agentgateway/agentgateway/v1.7.0/schema/config.json \
+  | diff - verify/schemas/agentgateway-v1.7.0-config.json && echo identical
 ```

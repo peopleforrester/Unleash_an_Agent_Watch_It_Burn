@@ -153,7 +153,7 @@ def _kagent_env():
 _UST = {
     "guard-proxy": ("gitops/ai-layer/resources.yaml", "service.name=burritobot,", "service.version=1.0.0"),
     "evil-mcp-shim": ("gitops/ai-layer/resources.yaml", "service.name=burritobot-evil-mcp", "service.version=1.0.0"),
-    "agentgateway": ("gitops/ai-layer/agentgateway.yaml", "service.name=burritobot-gateway", "service.version=v1.5.0"),
+    "agentgateway": ("gitops/ai-layer/agentgateway.yaml", "service.name=burritobot-gateway", "service.version=v1.7.0"),
 }
 _ust_targets = [(n, _container_env(p, n).get("OTEL_RESOURCE_ATTRIBUTES", ""), s, v) for n, (p, s, v) in _UST.items()]
 # kagent's span version follows the chart the cluster runs, read from the Application rather than written

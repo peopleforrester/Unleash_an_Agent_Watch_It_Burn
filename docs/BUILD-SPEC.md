@@ -257,7 +257,7 @@ Argo CD `v3.5.2` / chart `10.8.4` (moved from `9.6.0` in #389); cert-manager `v1
 Kyverno app `v1.19.1` / chart `3.9.1` (moved from `3.8.1` in #389);
 Falco app `0.45.1` / chart `9.2.1` (moved from `9.1.0` in #626); kube-prometheus-stack `86.2.3`;
 OTel Collector chart `0.173.1` / app `0.160.0`;
-agentgateway OSS `v1.5.0` (released 2026-08-27, moved from `v1.3.0` on 2026-09-10; deployed as the
+agentgateway OSS `v1.7.0` (released 2026-10-27, moved from `v1.5.0` on 2026-10-30 for GHSA-qm3r-hhvc-62cp (#698), and from `v1.3.0` on 2026-09-10; deployed as the
 manifest `gitops/ai-layer/agentgateway.yaml`, image pinned by digest); Tempo chart `2.2.3` @
 `grafana-community/helm-charts`; LLM Guard `laiyer/llm-guard-api:0.3.16` (pin a digest); EKS `1.36` (moved from `1.35` in #389);
 aws-ebs-csi-driver addon + gp3 default SC; Bedrock models

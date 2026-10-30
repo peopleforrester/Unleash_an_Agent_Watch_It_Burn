@@ -47,7 +47,7 @@ The UST values (`deployment.environment.name`, `service.name`, `service.version`
 | `service.name` for guard-proxy | `burritobot` (the root span's service, which Datadog names the Agent Observability application after; was `guard-proxy` until the 2026-09-06 rename, #265) |
 | `service.name` for evil-mcp-shim | `burritobot-evil-mcp` (was `evil-mcp-shim` until the 2026-09-06 rename, #265) |
 | `service.version` for kagent | `v0.10.1` (the kagent chart `gitops/bootstrap/apps/kagent.yaml` pins; was `v0.9.9` until the 2026-09-10 chart bump, #586) |
-| `service.version` for agentgateway | `v1.5.0` (the image tag `gitops/ai-layer/agentgateway.yaml` runs; the image moved to v1.5.0 on 2026-09-10 and the span version followed on 2026-10-24, #495; was `v1.3.0` until then) |
+| `service.version` for agentgateway | `v1.7.0` (the image tag `gitops/ai-layer/agentgateway.yaml` runs; image and span version moved from v1.5.0 together on 2026-10-30, #698; v1.5.0 came on 2026-09-10 and its span version on 2026-10-24, #495; `v1.3.0` before that) |
 | `service.version` for guard-proxy | `1.0.0` |
 | `service.version` for evil-mcp-shim | `1.0.0` |
 | UST path | `OTEL_RESOURCE_ATTRIBUTES` — NOT `DD_SERVICE`/`DD_ENV`/`DD_VERSION` (those are ignored on the OTel path) |
@@ -144,7 +144,7 @@ The UST values (`deployment.environment.name`, `service.name`, `service.version`
 
 **Done when:**
 - [ ] kagent pod has `service.name=burritobot-agent`, `service.version=v0.10.1`, `deployment.environment.name=burritobot-kubecon-na-26`
-- [ ] agentgateway pod has `service.name=burritobot-gateway`, `service.version=v1.5.0`, `deployment.environment.name=burritobot-kubecon-na-26`
+- [ ] agentgateway pod has `service.name=burritobot-gateway`, `service.version=v1.7.0`, `deployment.environment.name=burritobot-kubecon-na-26`
 - [ ] guard-proxy pod has `service.name=burritobot`, `service.version=1.0.0`, `deployment.environment.name=burritobot-kubecon-na-26`
 - [ ] evil-mcp-shim pod has `service.name=burritobot-evil-mcp`, `service.version=1.0.0`, `deployment.environment.name=burritobot-kubecon-na-26`
 - [ ] No component uses `deployment.environment` (deprecated) — all use `deployment.environment.name`

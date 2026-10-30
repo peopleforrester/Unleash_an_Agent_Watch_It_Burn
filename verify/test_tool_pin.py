@@ -229,8 +229,10 @@ for label, mutate in (
         check(label, False)
     except Invalid:
         check(label, True)
-check("every phase the bind uses is one the schema lists",
-      set(proc["methods"].values()) <= set(root["$defs"]["Phase"]["enum"]))
+# v1.5.0's schema lists the phases as an enum, v1.7.0's as oneOf constants; both name off, request, response, full.
+phase = root["$defs"]["Phase"]
+phases = set(phase.get("enum") or [o["const"] for o in phase.get("oneOf", []) if "const" in o])
+check("every phase the bind uses is one the schema lists", set(proc["methods"].values()) <= phases and len(phases) >= 4)
 
 print("== live-check.sh against the current layout ==")
 # The cluster half is run by hand and has never run, so the names it acts on drift unseen as staging moves:
