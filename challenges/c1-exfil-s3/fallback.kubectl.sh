@@ -23,7 +23,8 @@ readonly POD="deploy/workshop-mcp"
 readonly CONTAINER="shim"
 readonly BEACON="https://agenticburn.com/beacon"
 readonly BEACON_VIEW="https://provisioning.agenticburn.com/beacon/view"
-readonly BEACON_OK="beacon received by the agenticburn status collector"
+# The collector's 200 body ends "(HC-204 OK)" in both its old and current wording (#692).
+readonly BEACON_OK="(HC-204 OK)"
 
 kc() { kubectl --context "${CONTEXT}" -n "${NS}" "$@"; }
 
@@ -62,7 +63,7 @@ out="$(kc exec "${POD}" -c "${CONTAINER}" -- curl -sS -m 15 -X POST "${BEACON}" 
 echo "    curl exit ${rc}: ${out:0:200}"
 # kubectl exec hands back curl's own exit code: 28 timed out, 7 refused, 6 no DNS. Exit 1 is kubectl
 # failing to run the command at all, which proves nothing either way.
-if [[ "${rc}" -eq 0 ]] || grep -q "${BEACON_OK}" <<<"${out}"; then
+if [[ "${rc}" -eq 0 ]] || grep -qF "${BEACON_OK}" <<<"${out}"; then
     check "the POST from workshop-mcp fails" fail "the beacon answered; egress is open"
 elif [[ "${rc}" -eq 1 ]]; then
     check "the POST from workshop-mcp fails" fail "kubectl could not run curl in the pod (exit 1)"

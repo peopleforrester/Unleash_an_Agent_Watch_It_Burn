@@ -3,7 +3,7 @@
 """The KubeCon breakout's dates and its run-through record (#447).
 
 The dates moved here from the archived BurritoBot repo. Michael's revision of 2026-10-24 keeps dates only for
-people: the cold read once the platform is live, the Datadog pool the week of 10-26, two timed run-throughs by
+people: the cold read once the platform is live, the Datadog sandbox org by 11-08, two timed run-throughs by
 11-08, delivery on 11-12. The 10-28 rehearsal with Whitney is kept too (question 845 on #457): the cold read's
 slot if it has not run live by then, otherwise run-through 1. Everything agents build is listed in order, with no forecast date.
 
@@ -87,9 +87,10 @@ check("rehearsal: the calendar hold Michael kept, Wed 2026-10-28 09:00 to 12:00 
       and "2026-10-28, 09:00 to 12:00 Central" in reh[2] and "question 845" in reh[2])
 check("rehearsal: the cold read if it has not run live yet, otherwise run-through 1",
       len(reh) == 4 and "cold read" in reh[3] and "run-through 1" in reh[3] and "Run-through record" in reh[3])
-dd = people.get("Datadog org pool (abstract point 7)", [])
-check("Datadog pool: Whitney, the week of 2026-10-26",
-      len(dd) == 4 and dd[1] == "Whitney" and "2026-10-26" in dd[2])
+dd = people.get("Datadog sandbox org (abstract point 7)", [])
+check("Datadog sandbox org: Whitney, by 2026-11-08, with the key, the monitors and the room view (#705)",
+      len(dd) == 4 and dd[1] == "Whitney" and dd[2] == "By 2026-11-08"
+      and "#629" in dd[3] and "WIB_FLEET_MONITORS_APP_KEY" in dd[3] and "#665" in dd[3])
 runs = people.get("Two timed run-throughs", [])
 check("run-throughs: Michael and Whitney, by 2026-11-08",
       len(runs) == 4 and runs[1] == "Michael and Whitney" and runs[2] == "By 2026-11-08")

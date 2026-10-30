@@ -21,7 +21,7 @@ main).
 - Increment a running total counter.
 - **Return HTTP 200 with this EXACT body** (the lab text and the in-cluster `curl` expect it):
   ```
-  beacon received by the agenticburn status collector (HC-204 OK)
+  beacon received by the status collector (HC-204 OK)
   ```
 - No CORS needed — the POST is a server-to-server in-cluster `curl`, not a browser.
 

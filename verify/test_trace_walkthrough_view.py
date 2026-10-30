@@ -167,8 +167,12 @@ url = f"https://grafana-{shared}/d/{dash['uid']}"
 check(f"it names {url}, the presenters' shared cluster", url in seg)
 check("the console routes grafana-<cluster> to Grafana",
       "grafana-[a-z0-9-]+" in (REPO / "gitops/ai-layer/console.conf").read_text(encoding="utf-8"))
-check("it says Datadog when the pool is live and Grafana when not",
-      "**Which surface is shown.**" in seg and "**Datadog pool live:**" in seg and "**No pool live:**" in seg)
+check("it says Datadog when it is reachable and Grafana when not",
+      "**Which surface is shown.**" in seg and "**Datadog reachable:**" in seg and "**Datadog unreachable:**" in seg)
+check("the C6 beat is the HC-666 turn: the model is called, the ticket comes back withheld, no deploy (#680, #699)",
+      "zero input tokens" not in seg and "no model call" not in seg
+      and "`read_support_ticket` returns the guard's withheld notice" in seg and "no `deploy_app`" in seg
+      and "#709" in seg)
 check("it walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
 check("it names the session picker", "**Session**" in seg)
 check("it no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg)

@@ -215,7 +215,7 @@ if "exec" in args:
         if cmd[0] == "curl" and fixture["beacon"] in cmd:
             if scenario == "open":
                 state["beacons"].append(cmd[cmd.index("-d") + 1]); save()
-                print("beacon received by the agenticburn status collector (HC-204 OK)"); sys.exit(0)
+                print("beacon received by the status collector (HC-204 OK)"); sys.exit(0)
             sys.stderr.write("curl: (28) Connection timed out after 15002 milliseconds\n"
                              "command terminated with exit code 28\n")
             sys.exit(28)

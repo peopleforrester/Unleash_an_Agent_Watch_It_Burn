@@ -49,7 +49,7 @@ Dates are for people only:
 |---|---|---|---|
 | Cold read of this run-of-show | Whitney | Once the platform is live. The calendar holds Mon 2026-10-26, 10:00 to 16:00 Central | She reads this file cold against the live platform, not on paper, and each stop is filed as an issue here. Record it under "Run-through record" below |
 | Rehearsal with Whitney | Michael and Whitney | The calendar holds Wed 2026-10-28, 09:00 to 12:00 Central (kept by Michael, question 845 on #457) | If the cold read has not yet run against the live platform, it runs here; otherwise this is run-through 1. Either way it goes under "Run-through record" below |
-| Datadog org pool (abstract point 7) | Whitney | The week of 2026-10-26 | The pool is loaded and `./fleet.sh monitors --apply` has run (#454) |
+| Datadog sandbox org (abstract point 7) | Whitney | By 2026-11-08 | Both KubeCon clusters ship to Whitney's sandbox org (#629). A write application key from her user is in place, `./fleet.sh monitors --apply` has run with `WIB_FLEET_MONITORS_APP_KEY` (#485), and the room view is saved (#665) |
 | Two timed run-throughs | Michael and Whitney | By 2026-11-08 | Two full runs, demo included, each timed against the 30-minute slot, with the timings in the record below and what broke filed as issues here |
 | Delivered | Michael and Whitney | 2026-11-12 | The session runs live. Its slot and room are in conference-knowledge (`kubecon-na-2026`, `schedule`) |
 
@@ -371,9 +371,9 @@ more (#687), so this is where the surface is decided.
 
 **Which surface is shown.** Decide it the night before and say it on stage:
 
-- **Datadog pool live:** the pre-seeded `burritobot-private` views in Whitney's
-  org, and the `burritobot-public` tab for the room's own prompts.
-- **No pool live:** the Grafana view on the private cluster, which reads Tempo and
+- **Datadog reachable:** the pre-seeded `burritobot-private` views in Whitney's
+  sandbox org (#629), and the `burritobot-public` tab for the room's own prompts.
+- **Datadog unreachable:** the Grafana view on the private cluster, which reads Tempo and
   needs no Datadog key (#500):
   `https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. Login
   `admin`; the private cluster terminal prints the password in its catalogue. Say
@@ -388,8 +388,13 @@ cluster. The panels carry the internal ids:
 - **C5:** Challenge 1, the reply that came back redacted. Open it: the top span
   carries the reply the user got, with `[REDACTED]`; the `chat` span under it
   carries what the model said before the output guard.
-- **C6:** Challenge 3, the `/chat` request with no model call under it. Open it: one
-  guard-proxy span, no agent and no model spans, so zero input tokens.
+- **C6:** Challenge 3, the HC-666 ask sent after `guard-input-on`. The prompt is
+  innocent, so the model is called and there are input tokens: open the trace and
+  `read_support_ticket` returns the guard's withheld notice, with no `deploy_app`
+  after it. This is the same trace as segment 4's Datadog Challenge 3 tab. The
+  Grafana C6 panel still lists prompts guard-proxy blocked at `/chat`, which is not
+  this beat, until #709 changes its query; until then, find the turn by its
+  **Session** and open it from the trace view.
 - **C7:** Challenge 4, the weather-tool ask that never reached
   `read_internal_config`. The panel beside it lists the calls that did reach it; the
   ask sent before `guard-mcp-on` is there, and the one sent after is not.
@@ -903,10 +908,11 @@ number and says who settled it and when, so references to it elsewhere still lan
    per-segment videos, and the screenshots deck have no repo paths today. The
    rollback step and the Night Before step reference them; they need to exist before
    the cold read, and this file should name their exact paths once they do.
-3. **The Datadog pool for the challenge traces is not set up (#454).** Whitney is expected to
-   set one up the week of 2026-10-26. If it is not live, each challenge shows the private
-   cluster's Grafana view (#500), so point 7 no longer waits on the pool. Still
-   open: whether the pool is live by the day.
+3. **Settled 2026-10-29: no Datadog pool (#454, #629).** Datadog no longer issues
+   per-student orgs, so both KubeCon clusters ship to Whitney's sandbox org. What is
+   still owed is in the people table above: her write application key, the fleet
+   monitors (#485) and the room view (#665). If Datadog is unreachable on the day,
+   each challenge shows the private cluster's Grafana view (#500).
 4. **Settled 2026-10-24: what "mid-inference" means for point 6 (#456,
    talks-knowledge#29).** Michael decided it: mid-inference is checking between the
    agent's steps, its tool calls and what the MCP server returns (agentgateway MCP
