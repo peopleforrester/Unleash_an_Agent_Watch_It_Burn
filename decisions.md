@@ -5286,3 +5286,33 @@ The 2026-10-29 entry's change is on staging (7ffbc73, 1414255, e5bd6fe). Run 125
 `python3 verify/test_promo_villains_public.py`, then on an attendee cluster
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and `CONTEXT=<admin-ctx>
 challenges/c2-villain-image/fallback.kubectl.sh`, whose denial now matches the run-of-show row.
+
+## 2026-10-30 · #264 · A blocked tool call is an error on its own span, whichever shape its result takes
+
+**What was left of the issue.** The one-trace half is #320's entry above (b78bc62): the noise filter keeps the spans
+on the A2A path, so one interaction is one root and its tool calls sit under the prompt. The lab half was already
+there, in Whitney's wording since af059ef: the C1 text names `run_shell` and its `curl`. What remained is the clause
+"the failed call must read as an error" (#261) on the span a student clicks. `transform/adk_tool_content` marked
+`execute_tool` only from MCP's `isError: true`. A raised run_shell failure can reach ADK's span as MCP's error
+result or as the exception's text, depending on how ADK hands the result over, and Michael's 2026-09-06 comment left
+open an OTTL statement that sets the span status from a tool_response starting with "command FAILED".
+
+**Made it.** Two statements beside the isError pair also set `STATUS_CODE_ERROR` and its message when the tool
+response carries `command FAILED`, the wording every run_shell raise keeps (`verify/test_run_shell_failure.py`).
+`verify/test_tool_failure_status_e2e.py` (E2E tools tier) runs four spans through the pinned otelcol-contrib for
+the instructor, attendee and burn traces processors: run_shell with the failure as text and with MCP's isError are
+both errors, get_marketing_intel's success stays unset, and the model call that read the failure is an error
+(mark_tool_failure). With the new statements taken out, its six text-shape checks fail. `verify/test_collector_config.py`
+pins both statements.
+
+**Against the earlier draft** (run 12155's e39438e, cut from f72df7b): `verify/draft-drift.sh` named only
+`decisions.md` as changed since. Runs 12313 and 12555 had made the same change on later stagings, and their commits
+were never pushed, so this run made it again from the draft on f6e3037. The draft's three parent-chain filter regions
+in `gitops/otel-collector/values.yaml` and its `verify/test_trace_one_root_e2e.py` stay dropped: #320 merged that fix
+first, keeping the gateway span by its `:3000` Host, with `verify/test_collector_one_root_e2e.py` as its test. The
+two status statements and their test are carried over unchanged.
+
+**Not yet run on a cluster:** on a fresh attendee cluster with the collector rolled, send Challenge 1's stuck prompt
+with the C1 NetworkPolicies on, open the interaction in Agent Observability and confirm `execute_tool run_shell` is
+`status:error` with the "command FAILED" result readable on it, under the guard-proxy root. The one-root half is
+#320's `CONTEXT=<admin-context> python3 verify/one_root_probe.py`.
