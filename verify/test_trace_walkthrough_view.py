@@ -124,7 +124,8 @@ print("== C5: the root span carries the reply the user got ==")
 q5 = query(beat["C5"])
 check("C5 matches the root's gen_ai.output.messages on the redaction marker",
       "span.gen_ai.output.messages =~" in q5 and "REDACTED" in q5 and "blocked by the output guardrail" in q5)
-scrub_at = chat.index("output_scrub(reply)")
+# Since guard-proxy-agenticburn#21 the scrub also takes the turn deadline: output_scrub(reply, deadline).
+scrub_at = chat.index("output_scrub(reply")
 root_out = chat.index('_root_span.set_attribute("gen_ai.output.messages"')
 check("guard-proxy sets the root's output AFTER the output guard rewrote the reply", root_out > scrub_at)
 check("the chat child span keeps the model's own reply (set before the guard)",

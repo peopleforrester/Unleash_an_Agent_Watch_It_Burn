@@ -110,8 +110,10 @@ def calls_in(node: ast.AST, name: str, skip_nested: bool = False) -> int:
     return count
 
 
-chat = funcs["_handle_chat"]
-guard_calls = {g: calls_in(chat, g, skip_nested=True) for g in ("input_allowed", "topic_refused", "output_scrub")}
+# Since guard-proxy-agenticburn#21 _handle_chat sets the turn's deadline and _chat_turn runs the turn, and the input
+# classifier stage is input_verdict (it also names the scanners that flagged, #684).
+chat = funcs["_chat_turn"]
+guard_calls = {g: calls_in(chat, g, skip_nested=True) for g in ("input_verdict", "topic_refused", "output_scrub")}
 forwards = calls_in(chat, "_attempt", skip_nested=True)
 check(f"each LLM Guard stage in /chat is one _post_guard call {guard_calls}",
       all(calls_in(funcs[g], "_post_guard") == 1 for g in guard_calls) and calls_in(funcs["_post_guard"], "urlopen") == 1)
@@ -125,7 +127,14 @@ check("guard-proxy's TIMEOUT is PROXY_TIMEOUT", any(
     and "PROXY_TIMEOUT" in ast.unparse(n.value) for n in PROXY.body))
 check("the deployment sets PROXY_TIMEOUT", ENV.get("PROXY_TIMEOUT") is not None)
 per_call = float(ENV.get("PROXY_TIMEOUT") or 150)
-worst_turn = upstream_calls * per_call
+# One deadline for the whole turn (guard-proxy-agenticburn#21, #694): each call gets PROXY_TIMEOUT or what is left
+# of TURN_TIMEOUT, whichever is less, so the turn's worst is TURN_TIMEOUT and no longer calls x PROXY_TIMEOUT.
+check("guard-proxy reads TURN_TIMEOUT", any(
+    isinstance(n, ast.Assign) and any(getattr(t, "id", None) == "TURN_TIMEOUT" for t in n.targets)
+    for n in PROXY.body))
+check("the deployment sets TURN_TIMEOUT", float(ENV.get("TURN_TIMEOUT") or 0) > 0)
+turn_timeout = float(ENV.get("TURN_TIMEOUT") or 0)
+worst_turn = turn_timeout if turn_timeout > 0 else upstream_calls * per_call
 
 # --- the ladder ---------------------------------------------------------------------------------------------
 chat_loc = block("= /chat")
@@ -135,12 +144,14 @@ listener = " ".join(v for k, v in (console_svc["metadata"].get("annotations") or
                     if "listener-attributes" in k)
 m = re.search(r"tcp\.idle_timeout\.seconds=(\d+)", listener)
 nlb_idle = float(m.group(1)) if m else NLB_IDLE_DEFAULT_S
-print(f"  ladder: guard-proxy {upstream_calls} x {per_call:g}s = {worst_turn:g}s < nginx /chat {nginx_chat:g}s"
+print(f"  ladder: guard-proxy turn {worst_turn:g}s ({upstream_calls} calls, each at most {per_call:g}s)"
+      f" < nginx /chat {nginx_chat:g}s"
       f" < Railway {RAILWAY_SILENCE_S}s, NLB {nlb_idle:g}s")
 check("nginx /chat outlasts guard-proxy's slowest turn", nginx_chat >= worst_turn + MARGIN_S)
 check("Railway's edge outlasts nginx /chat", RAILWAY_SILENCE_S >= nginx_chat + MARGIN_S)
 check("the NLB outlasts nginx /chat", nlb_idle >= nginx_chat + MARGIN_S)
-check("one agent forward still gets at least 45s", per_call >= 45)
+check("one agent forward gets more than the 45s it was cut to before TURN_TIMEOUT (#694)", per_call > 45)
+check("and no single call can outlast the turn", per_call <= worst_turn)
 
 # --- the limits ---------------------------------------------------------------------------------------------
 s_key, s_rpm = zone("wib_chat_session")

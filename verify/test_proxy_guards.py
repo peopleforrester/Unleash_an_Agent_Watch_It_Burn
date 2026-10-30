@@ -30,14 +30,15 @@ check("rate limit blocks the request over the cap", proxy.rate_limited())
 proxy.RATE_LIMIT_RPM = 0
 check("rate limit disabled when 0", not proxy.rate_limited())
 
-# Cost cap: freeze spend once the cluster's metered tally hits the cap.
-proxy.COST_CAP_USD = 0
+# Cost cap: freeze spend once the cluster's metered tally hits the cap. cost_capped() reads the runtime cap, which
+# starts at COST_CAP_USD and which /toggle?cost_cap= moves (guard-proxy-agenticburn#23).
+proxy._cost_cap["usd"] = 0
 check("cost cap disabled when 0", not proxy.cost_capped())
 proxy.record_usage({"result": {"metadata": {"kagent_usage_metadata": {
     "promptTokenCount": 100000, "candidatesTokenCount": 100000, "totalTokenCount": 200000}}}})
-proxy.COST_CAP_USD = 0.0001
+proxy._cost_cap["usd"] = 0.0001
 check("cost cap trips once spend exceeds the cap", proxy.cost_capped())
-proxy.COST_CAP_USD = 1e9
+proxy._cost_cap["usd"] = 1e9
 check("cost cap not tripped under a high cap", not proxy.cost_capped())
 
 if failures:

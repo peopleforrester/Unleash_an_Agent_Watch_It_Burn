@@ -363,6 +363,57 @@ else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-budget-off' again."
 fi
 EOS
+# The KubeCon finale (#690): the room is invited to drive the public cluster's spend to its cap. COST_CAP_USD
+# is $25 for the whole cluster, out of reach in a few minutes, so finale-cap-on lowers the cap live to what this
+# cluster has already spent plus a little headroom (guard-proxy's /toggle?cost_cap=N, guard-proxy-agenticburn#23).
+# The tally is kept, so the cap sits just above it. finale-cap-off restores COST_CAP_USD. cost-watch shows the
+# spend against the cap, large, for the screen. Nothing lowers the cap until a presenter runs finale-cap-on.
+cat > "$HOME/finale-cap-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+head="${1:-1.00}"
+case "$head" in ''|*[!0-9.]*|*.*.*) echo "Usage: finale-cap-on [dollars of headroom, default 1.00]"; exit 2 ;; esac
+c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import json,urllib.request as u;g=lambda p:json.load(u.urlopen('http://localhost:8080'+p,timeout=10));s=g('/cost')['usd'];print(json.dumps({'spent':s,'cap':g('/toggle?cost_cap=%.4f'%(s+$head)).get('cost_cap_usd')}))")
+_show "${c[@]}"
+r="$("${c[@]}" 2>/dev/null | tail -1)"
+spent="$(printf '%s' "$r" | python3 -c 'import json,sys;print("%.2f"%json.load(sys.stdin)["spent"])' 2>/dev/null)"
+cap="$(printf '%s' "$r" | python3 -c 'import json,sys;print("%.2f"%json.load(sys.stdin)["cap"])' 2>/dev/null)"
+if [ -z "$spent" ] || [ -z "$cap" ]; then
+  echo "⚠️  The cap did not change: this guard-proxy has no runtime cost cap, or it could not be reached."; exit 1
+fi
+echo "🔥 Finale cap ON. This cluster has spent \$$spent; the cap is now \$$cap for the whole room."
+echo "    Every turn counts toward it. When the room crosses it, BurritoBot stops calling the model for"
+echo "    everyone, and a blocked request costs nothing. Watch it with: cost-watch. Put it back: finale-cap-off."
+EOS
+cat > "$HOME/finale-cap-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+case "$(_pxkey "cost_cap=default" cost_cap_usd)" in
+  ""|missing) echo "⚠️  The cap did not change: this guard-proxy has no runtime cost cap, or it could not be reached."; exit 1 ;;
+  *) echo "🔓 Finale cap OFF. The cluster is back on its normal backstop (COST_CAP_USD). BurritoBot answers again." ;;
+esac
+EOS
+cat > "$HOME/cost-watch" <<'EOS'
+#!/bin/bash
+# Large spend-against-cap readout for the screen, every 2 seconds. Ctrl-C stops it.
+source "$HOME/.guardlib"
+c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
+  "import json,urllib.request as u;d=json.load(u.urlopen('http://localhost:8080/cost',timeout=10));print(json.dumps(d))")
+cmd="$(_show "${c[@]}" 2>&1)"
+while true; do
+  r="$("${c[@]}" 2>/dev/null | tail -1)"
+  line="$(printf '%s' "$r" | python3 -c '
+import json,sys
+try: d=json.load(sys.stdin)
+except ValueError: print("  waiting for guard-proxy..."); sys.exit()
+s,c=d.get("usd",0),d.get("cap_usd",0)
+bar="" if not c else "#"*min(40,int(40*s/c))+"."*max(0,40-int(40*s/c))
+print("  SPENT  $%.4f\n  CAP    $%.2f\n  TURNS  %d\n  [%s]%s" % (s,c,d.get("requests",0),bar,"  CAP HIT: the kitchen is closed" if c and s>=c else ""))' 2>/dev/null)"
+  printf '\033[H\033[2J%s   (every 2 seconds)\n\n  BurritoBot, this cluster\n\n%s\n\n  (Ctrl-C to stop)\n' "$cmd" "$line"
+  sleep 2
+done
+EOS
 # The KubeCon ending (#455, run-of-show segment 7): the on-topic guard. BurritoBot answers the menu, hours
 # and locations and turns everything else back to the menu, before the model is called. It reports what the
 # proxy says rather than assuming the flip worked, because a guard-proxy without the topic stage ignores the
@@ -399,7 +450,7 @@ EOS
 chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
   "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off \
-  "$HOME"/guard-topic-on "$HOME"/guard-topic-off
+  "$HOME"/guard-topic-on "$HOME"/guard-topic-off "$HOME"/finale-cap-on "$HOME"/finale-cap-off "$HOME"/cost-watch
 
 # No banner. The shell opens on a prompt and nothing else (#342).
 #

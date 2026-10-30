@@ -284,7 +284,7 @@ timeouts on that path, outside in:
 | apex Caddy | no response timeout; dial 2 s, retried for 5 s | none; sends the phone's address as the one X-Forwarded-For (apex-agenticburn#40) |
 | NLB | 350 s TCP idle (AWS default) | none |
 | console nginx `/chat` | 285 s | 10 a minute per conversation, then 120 a minute per network address |
-| guard-proxy | 45 s per call, up to six calls a turn: 270 s | 10 a minute per conversation, 150 a minute for the cluster, $25 cost cap |
+| guard-proxy | 270 s for the whole turn (`TURN_TIMEOUT`), each of up to six calls at most 120 s (#694) | 10 a minute per conversation, 150 a minute for the cluster, $25 cost cap |
 
 Most of the room leaves the venue Wi-Fi through one NAT address, so the room on
 Wi-Fi shares the 120 a minute, and phones on cellular and the stage keep the

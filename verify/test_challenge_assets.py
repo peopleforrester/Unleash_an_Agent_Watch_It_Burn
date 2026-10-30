@@ -52,8 +52,11 @@ check("the demo cap is 3 cents in the doc and the proxy",
 check("the doc says the demo cap is per conversation", "per conversation" in DOC)
 check("the proxy measures it per session, not cluster-wide",
       "def cost_capped(session=" in PROXY and "_session_cost" in PROXY)
+# The runtime cap starts at COST_CAP_USD and only /toggle?cost_cap= moves it (guard-proxy-agenticburn#23, #690);
+# it is still checked against the cluster's whole tally, not the session's.
 check("the cluster-wide backstop is still cluster-wide",
-      "spend >= COST_CAP_USD" in PROXY)
+      '_cost_cap = {"usd": COST_CAP_USD}' in PROXY and "spend >= cost_cap" in PROXY
+      and 'spend = _cost["usd"]' in PROXY)
 check("the safety cap is 25 dollars in the doc and the manifest",
       "COST_CAP_USD" in DOC and 'COST_CAP_USD, value: "25"' in RES and "25 dollars" in DOC)
 

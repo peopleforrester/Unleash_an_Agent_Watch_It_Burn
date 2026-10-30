@@ -128,7 +128,9 @@ check("C5/C6: guard-proxy is a Deployment in the agent bundle", "guard-proxy" in
 check("C5: guard-proxy logs event output_scrub when the output guard redacts",
       'extra={"event": "output_scrub"}' in proxy and "@event:output_scrub" in search.get("c5", ""))
 check("C6: guard-proxy logs both input-guard refusals",
-      all(f'extra={{"event": "{e}"}}' in proxy for e in ("input_blocklist_hit", "input_classifier_block"))
+      # The classifier's line also names the scanners that flagged (guard-proxy-agenticburn#17, #684).
+      'extra={"event": "input_blocklist_hit"}' in proxy
+      and 'extra={"event": "input_classifier_block", "scanners":' in proxy
       and "kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block)" in search.get("c6", ""))
 mcp_src = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text()
 check("C6: read_support_ticket logs ticket_withheld when the input guard withholds the ticket (#640)",
