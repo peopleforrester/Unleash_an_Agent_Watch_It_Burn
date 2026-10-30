@@ -3,7 +3,7 @@
 """The offline half of verify/test_collector_one_root_e2e.py.
 
 The E2E runs the interaction through the real collector. What it cannot see is whether the exemptions still name
-the deployment. The gateway's A2A span is kept by the Host it arrived with, `:3000`, because that is the port
+the deployment. The gateway's A2A span is kept by its server.port, 3000, because that is the port
 guard-proxy's AGENT_URL dials and the gateway bind that proxies to workshop-agent. If either moved, the rule would
 quietly stop matching, the gateway span would be dropped with the MCP noise again, and the agent's work would be
 a second root in the student's trace. So the three are held to one port here.
@@ -50,9 +50,12 @@ check("the gateway bind that proxies to workshop-agent is the port AGENT_URL dia
       f"binds to workshop-agent: {a2a_binds}, AGENT_URL port: {agent_port}")
 gateway_rules = [r for r in rules if "burritobot-gateway" in r]
 check("one filter rule drops the gateway's spans", len(gateway_rules) == 1, f"{gateway_rules}")
-host = re.search(r'not IsMatch\(attributes\["http\.host"\], ":(\d+)\$"\)', gateway_rules[0] if gateway_rules else "")
-check("it exempts the gateway span whose Host is AGENT_URL's port",
+# The gateway names the bind's port in server.port, an int, and sets no http.host (read from Tempo on
+# burritobot-private 2026-10-30, #703); a rule keyed on http.host never matched and dropped the A2A hop.
+host = re.search(r'not attributes\["server\.port"\] == (\d+)', gateway_rules[0] if gateway_rules else "")
+check("it exempts the gateway span whose server.port is AGENT_URL's port",
       host is not None and int(host.group(1)) == agent_port, f"{gateway_rules}")
+check("and no longer keys on http.host, which the gateway does not set", "http.host" not in (gateway_rules[0] if gateway_rules else ""))
 
 print("== kagent's server span for the message, and the a2a request handlers, are exempt ==")
 agent_http = [r for r in rules if "burritobot-agent" in r and "(GET|POST|" in r]

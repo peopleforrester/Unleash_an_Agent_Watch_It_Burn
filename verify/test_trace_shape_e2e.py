@@ -95,8 +95,9 @@ SPANS = [
     ("forward", GUARD, "agent.forward", CLIENT, "sanitize", {"http.request.method": "POST"}),
     ("forward-http", GUARD, "POST", CLIENT, "forward",
      {"http.url": "http://agentgateway.agent.svc.cluster.local:3000/"}),
+    # The attributes the deployed gateway sends (Tempo on burritobot-private, 2026-10-30): server.port, an int (#703).
     ("gateway", GATEWAY, "POST /", SERVER, "forward-http",
-     {"http.method": "POST", "http.path": "/", "http.host": "agentgateway.agent.svc.cluster.local:3000"}),
+     {"http.request.method": "POST", "url.path": "/", "server.address": "agentgateway.agent", "server.port": 3000}),
     ("agent-server", AGENT, "POST /", SERVER, "gateway", {"http.method": "POST", "http.route": "/"}),
     ("invocation", AGENT, "invocation", INTERNAL, "agent-server", {"gen_ai.conversation.id": "c1"}),
     ("invoke-agent", AGENT, "invoke_agent burritobot", INTERNAL, "invocation",
@@ -124,7 +125,9 @@ def sid(key: str) -> str:
     return hashlib.sha256(f"{TRACE}/{key}".encode()).hexdigest()[:16]
 
 
-def kv(key: str, value: str) -> dict:
+def kv(key: str, value: str | int) -> dict:
+    if isinstance(value, int):
+        return {"key": key, "value": {"intValue": str(value)}}
     return {"key": key, "value": {"stringValue": value}}
 
 

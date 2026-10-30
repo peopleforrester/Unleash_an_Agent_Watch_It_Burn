@@ -76,7 +76,9 @@ def sid(trace: str, key: str) -> str:
     return hashlib.sha256(f"{trace}/{key}".encode()).hexdigest()[:16]
 
 
-def kv(key: str, value: str) -> dict:
+def kv(key: str, value: str | int) -> dict:
+    if isinstance(value, int):
+        return {"key": key, "value": {"intValue": str(value)}}
     return {"key": key, "value": {"stringValue": value}}
 
 
@@ -89,10 +91,12 @@ def interaction(with_a2a: bool) -> list[tuple]:
         ("forward", GUARD, "agent.forward", CLIENT, "chat", {}, True),
         ("forward-http", GUARD, "POST", CLIENT, "forward",
          {"http.url": "http://agentgateway.agent.svc.cluster.local:3000/"}, True),
-        # agentgateway's span for the A2A hop: SERVER, "<method> <path match>", parented on guard-proxy's call.
+        # agentgateway's span for the A2A hop: SERVER, "<method> <path match>", parented on guard-proxy's call. The
+        # attributes are the ones the deployed gateway sends, read from Tempo on burritobot-private 2026-10-30: the
+        # bind's port as an int server.port and server.address, no http.host (#703).
         ("gateway", GATEWAY, "POST /", SERVER, "forward-http",
-         {"http.method": "POST", "http.path": "/", "http.host": "agentgateway.agent.svc.cluster.local:3000",
-          "endpoint": "workshop-agent.agent.svc.cluster.local:8080"}, True),
+         {"http.request.method": "POST", "url.path": "/", "server.address": "agentgateway.agent", "server.port": 3000},
+         True),
         # kagent's FastAPI server span, parented on the gateway's (it injects its own span as traceparent).
         ("agent-server", AGENT, "POST /", SERVER, "gateway", {"http.method": "POST", "http.route": "/"}, True),
         ("asgi-receive", AGENT, "POST / http receive", INTERNAL, "agent-server", {}, False),
@@ -136,13 +140,13 @@ NOISE = [
     # The gateway's MCP session lifecycle on :3001, which arrives without the agent's context (#265). tools/call
     # is the one it keeps.
     ("mcp-init", GATEWAY, "initialize", SERVER, None,
-     {"http.host": "agentgateway.agent.svc.cluster.local:3001", "mcp.method.name": "initialize"}, False),
+     {"server.address": "agentgateway.agent", "server.port": 3001, "mcp.method.name": "initialize"}, False),
     ("mcp-list", GATEWAY, "tools/list", SERVER, None,
-     {"http.host": "agentgateway.agent.svc.cluster.local:3001", "mcp.method.name": "tools/list"}, False),
+     {"server.address": "agentgateway.agent", "server.port": 3001, "mcp.method.name": "tools/list"}, False),
     ("mcp-delete", GATEWAY, "DELETE /", SERVER, None,
-     {"http.host": "agentgateway.agent.svc.cluster.local:3001", "http.method": "DELETE"}, False),
+     {"server.address": "agentgateway.agent", "server.port": 3001, "http.method": "DELETE"}, False),
     ("mcp-call", GATEWAY, "tools/call", SERVER, None,
-     {"http.host": "agentgateway.agent.svc.cluster.local:3001", "mcp.method.name": "tools/call"}, True),
+     {"server.address": "agentgateway.agent", "server.port": 3001, "mcp.method.name": "tools/call"}, True),
     ("card", AGENT, "GET /.well-known/agent-card.json", SERVER, None, {}, False),
     # A message from a caller that sent no context: kagent's server span is then a root, and stays dropped.
     ("no-context", AGENT, "POST /", SERVER, None, {"http.method": "POST"}, False),

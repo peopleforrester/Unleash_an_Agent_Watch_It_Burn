@@ -123,9 +123,11 @@ config:
           # injects that span's own id as the traceparent it forwards (crates/agentgateway/src/telemetry/trc.rs).
           # Dropping it with the MCP noise left kagent's side naming a parent nothing exported, and Datadog drew
           # it as a second root in the same trace, so a student opened a fragment of their own interaction.
-          # http.host is the Host the request arrived with; guard-proxy's AGENT_URL is agentgateway :3000, and
+          # The gateway names the bind a request arrived on in server.port, an int; it sets no http.host, so the
+          # earlier rule keyed on http.host never matched and dropped this hop on every cluster (read from Tempo
+          # on burritobot-private 2026-10-30, #703). guard-proxy's AGENT_URL is agentgateway :3000, and
           # verify/test_collector_one_root.py holds the port here to that URL and to the gateway's A2A bind.
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call") and not IsMatch(attributes["http.host"], ":3000$")'
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call") and not attributes["server.port"] == 3000'
           # kagent's own agent-card GET server spans (the client side is dropped above), and every other
           # HTTP verb from the agent's ASGI instrumentation. Measured 2026-09-07 against the live org: 37 of
           # 50 sampled burritobot-agent spans were POST, "POST /", DELETE, "POST / http send" or
