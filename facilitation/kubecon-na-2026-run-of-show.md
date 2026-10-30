@@ -347,7 +347,11 @@ line.
 **Datadog on stage** (#648). Whitney keeps two tabs: `burritobot-public` is the
 room, `burritobot-private` is the presenters, so the room's volume never buries the
 trace being shown. Every trace she shows is pre-seeded the night before, one saved
-view per challenge in presentation order, so nobody waits for a span to arrive.
+view per challenge in presentation order, so nobody waits for a span to arrive
+(`verify/stage_traces.py`, Night Before "Seed the Datadog tabs"): `Challenge 1: the
+CEO's Secret`, `Challenge 3: the HC-666 support ticket`, `Challenge 3: someone else's
+PII stopped at the input guard`, `Challenge 4: the poisoned weather tool`. Challenge 2
+has no tab: it is played on the public bot and named by voice.
 Datadog comes up when it explains the attack (the tool call, the Secret read, the
 policy block), not as a product tour. If the Datadog side is not ready, the Grafana
 view on the private cluster carries the same beats
@@ -514,7 +518,15 @@ real-looking home address to chat.
   diagram on the slide: prompt, interface, guard, classifier, reject.
 - **The input guard's double duty:** it keeps someone else's PII out of the model,
   out of the traces, and out of a later operator's agent that reads those logs
-  (Michael's Toronto keynote point).
+  (Michael's Toronto keynote point). Measured 2026-10-30, it did not: the block-list
+  held destructive verbs and recipe phrases, the classifier was PromptInjection alone,
+  and neither caught a card, SSN, e-mail or phone number. #648 added LLM Guard's
+  Regex input scanner with the public trace scrub's four patterns, under the same
+  `guard-input-on`. It is a pattern match, so say what it catches (card, SSN, e-mail,
+  phone), not names or addresses. **Datadog Challenge 3 PII tab:** the refused
+  prompt's trace, the root span alone with `witb.guard.decision` `input_classifier`,
+  zero tokens, no agent span and none of the PII. The Night Before's
+  `stage_traces.py pii` must end `REFUSES 5 OF 5` before this is said.
 - **Datadog Challenge 3 tab:** the `read_support_ticket` call returning the guard's
   withheld notice with no `deploy_app` after it, and the admission denial.
 - **Delivers:** point 4, point 5 (admission control), and point 6 (pre-inference
@@ -777,6 +789,45 @@ is merely slow rather than rebuilding:
   It must end `C7 PROVEN`. Write the delay it prints ("the narrowed rule took effect
   after N s") into segment 5's "Measured reload delay" line. If the deny never comes,
   C7 is not ready to show.
+- [ ] **Seed the Datadog tabs (#648).** Every trace Whitney shows is put in her org
+  the night before, from the private bot, so nobody waits for a span. From the repo
+  root:
+
+  ```bash
+  # what the input guard refuses, asked of guard-proxy in its pod: no model call, nothing toggled
+  python3 verify/stage_traces.py pii burritobot-private.burritobot.co \
+      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev --region us-west-2
+  # once per org, before the first seed: a write application key from Whitney's user
+  WIB_STAGE_TRACES_APP_KEY=<key> python3 verify/stage_traces.py retention --profile accen-dev --region us-west-2 --apply
+  # seven /chat requests on the private bot (six reach the model); ends with guards-off
+  python3 verify/stage_traces.py seed burritobot-private.burritobot.co \
+      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev \
+      --region us-west-2 --out /tmp/stage-views.json
+  ```
+
+  `pii` must end `THE INPUT GUARD REFUSES 5 OF 5 PII PROMPTS`; if it does not, the
+  input guard's double duty in segment 4 is not said and its tab is not shown.
+  `retention` writes the one retention filter the seeds need: Trace Explorer finds
+  an unindexed span for only 15 minutes, so without it the seeds are gone by the
+  morning. If the key cannot write it, it prints the filter for an org admin to add
+  by hand, and `seed` refuses to spend a call until it is there. `seed` runs
+  Challenge 1 (the CEO record, then redacted by the output guard), Challenge 3
+  (HC-666 with Kyverno armed, then withheld by the input guard), the PII refusal,
+  and Challenge 4 (the rogue tool, then stopped at the gateway), turning the guards
+  on in the stage's order, each request under its own `wib-stage-...` session id.
+  It waits until every trace is in Datadog, reads the PII trace back to prove none
+  of the PII is in it, writes the views file and must end `STAGE TRACES SEEDED`. It
+  prints six views in presentation order: the four challenge views named under
+  "Datadog on stage", each pinned to its traces, then `burritobot-public` (the
+  room) and `burritobot-private` (the presenters), live. Datadog's API cannot save
+  a Trace Explorer view, so open each URL signed in to Whitney's org and save it
+  under its name (Views, Save as new view). The seeds carry the probe marker, so
+  the prompt wall does not show the room the challenge prompts before they play
+  them; the marker shows in the trace's prompt. The morning of, at least 15
+  minutes after the seed:
+  `python3 verify/stage_traces.py check /tmp/stage-views.json --profile accen-dev --region us-west-2`
+  must end `STAGE VIEWS GREEN`: every seeded trace is still found as an indexed
+  span, the PII trace holds none of the PII, and each live tab answers.
 - [ ] **Guard start state on the admin cluster:** run `guards-off` from its terminal
   so the AI guardrails start off and the live toggles in segments 2 to 6 are real. The
   probe above ends with it already; run it again if anyone has touched the guards

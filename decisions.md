@@ -5246,3 +5246,69 @@ too. There was no earlier draft of this part to check against staging.
 -o jsonpath='{.items[*].spec.validationActions}'` shows `["Deny"]` twice, and `argocd app get kyverno-policies` is
 Synced. `verify/test_kyverno_cel_live.py` is not that check: it wants a full or attendee cluster at Audit. The front door's live checks, the bootstrap step's `front doors: 2 roster clusters recorded` and
 `labctl tls-check attackme.agenticburn.com`, are still owed as the 2026-10-28 entry says.
+
+## 2026-10-30 · #648 · The stage's Datadog traces are seeded by a script, and the input guard now refuses PII
+
+The first draft (hecaton run 10444, `origin/agent/648-10444`, commit bf76ff6; the run report named it 29d2573, which
+GitHub never had) was cut from the staging of 2026-10-29 and seeded C5, C6 and C7 in the old shape.
+`verify/draft-drift.sh` named `decisions.md` and the run-of-show as edited since. #687 then renumbered the talk to
+Challenges 1 to 4 and moved C6 to HC-666 under a stage name, and Whitney asked on 2026-10-29 for a trace of the input
+guard keeping someone else's PII out. So `verify/stage_traces.py` was rebuilt on the current probe rather than
+cherry-picked. It keeps the draft's design: session ids stamped as `session.id`, the retention filter, the views saved
+by hand, the morning check. What differs from the draft is listed below.
+
+- **Measured first: the input guard caught no PII.** Read from `gitops/ai-layer/resources.yaml` and guard-proxy's
+  `proxy.py` at this commit's base: the block-list stage holds destructive verbs and recipe phrases, and the
+  classifier stage asks LLM Guard, whose only input scanner was PromptInjection. A prompt carrying a card, an SSN, an
+  e-mail or a phone number passed both stages, reached the model, and on the private cluster landed raw in the trace.
+  That cluster has no collector scrub; #647's scrub is burn only. The card-number match Michael remembered on the
+  call is that scrub, which rewrites the public trace after the fact and does not stop anything.
+- **So the input guard got a PII stage.** It is a `Regex` input scanner in `llm-guard-scanners`, blocking, no
+  redaction. Its one pattern is the burn collector's four scrub patterns joined as an alternation, so the guard
+  refuses exactly what the public trace scrubs. `verify/test_input_pii_guard.py` holds the two equal, and holds that
+  no ticket, probe prompt, `/kubecon` page or catalog prompt trips it. It needs no model. It sits under the existing
+  `guard-input-on` (guard-proxy's input_allowed suppresses only BanTopics), so no guard-proxy change and no new
+  toggle are needed. The public bot's guards are never on, so the room is not affected. Side effects, accepted: with
+  the input guard on, read_support_ticket withholds a ticket carrying such a number (no ticket on the desk does), and
+  the topic stage's classifier call now also refuses a PII prompt, as off-topic. The trade-off is surfaced here once,
+  as CLAUDE.md's bias-to-action rule says, rather than held for a question: Whitney asked for the trace, and Michael
+  said the guard already did this.
+- **Why the trace is clean.** guard-proxy writes the prompt to the /chat root span (`gen_ai.input.messages`) only once
+  the input stages pass, so a refused prompt's trace is the root span with `witb.guard.decision` `input_classifier`
+  and no content. LLM Guard logs the prompt only at DEBUG, and it runs at INFO.
+- **`stage_traces.py pii`** measures this live without spending anything. It runs guard-proxy's own block-list
+  function and input_allowed's LLM Guard call, in the guard-proxy pod, on each kind of PII and on a plain order. It
+  passes only when every kind is refused by the Regex scanner (an LLM Guard outage, which fails closed, does not
+  count) and the order passes. `seed` runs the same check on its PII prompt before sending it.
+- **Seven seeds, not six:** Challenge 1 off and on (the output guard is the stage's undecided second fix; one call
+  buys its trace either way), Challenge 3 on HC-666 with the stage's own ask under the stage name, off (Kyverno armed,
+  so the Joker is denied at admission) and on (the ask reaches the model and the ticket is withheld, after the
+  probe's no-model `c6-tool-withheld` check), the PII refusal, then Challenge 4 off and on. Challenge 2 has no seed:
+  it is played on the public bot and named by voice. That makes seven /chat requests, six reaching the model, with
+  `--max-calls` at 14.
+- **Six views:** `Challenge 1: the CEO's Secret`, `Challenge 3: the HC-666 support ticket`, `Challenge 3: someone
+  else's PII stopped at the input guard`, `Challenge 4: the poisoned weather tool`, then the `burritobot-public` and
+  `burritobot-private` live tabs. After seeding, and in `check`, the PII trace is read back from Datadog by its
+  trace_id and must hold none of the three PII values and no `burritobot-agent` span.
+- **Keys:** `retention --apply` takes a write application key from `WIB_STAGE_TRACES_APP_KEY`, because the key in
+  watch-it-burn/datadog is read-only (#629). Every subcommand that talks to Datadog first refuses an org whose name
+  does not start with `WIB_DD_POOL_PREFIX`, as `infra/datadog-room/room_view.py` (#665) does.
+
+**Tests.** `verify/test_stage_traces.py` runs the seeder against a fake cluster and a fake Datadog. It covers the
+order and guard state under each seed, one session per request, the no-model checks, the identity stop, retries, an
+input guard without the scanner, a failed flip, the call ceiling, guards-off last, the views and their URLs, the PII
+trace's judging, the retention filter and its keys, the org fence, `pii`, and the morning check's too-early, green
+and red cases. `verify/test_input_pii_guard.py` covers the scanner, as above.
+
+**Not yet run on a cluster.** This run had no cluster, no AWS and no Datadog key. Owed, by a session with AWS access,
+on a private cluster at a staging commit that includes this (the llm-guard pod must restart to load the new
+scanner):
+`python3 verify/stage_traces.py pii burritobot-private.burritobot.co --context <private-context> --kubeconfig
+/tmp/private.kubeconfig --profile accen-dev --region us-west-2` must end `REFUSES 5 OF 5`. Then, the night before
+the session (2026-11-11), against Whitney's org: `retention --apply` with `WIB_STAGE_TRACES_APP_KEY`, then `seed`
+ending `STAGE TRACES SEEDED`, saving the six printed views in the Datadog UI, and the next morning `check` ending
+`STAGE VIEWS GREEN`. The run-of-show's Night Before item "Seed the Datadog tabs" has the exact commands. Still
+unproven: that llm-guard 0.3.16 scores a matched Regex above 0 in `/analyze/prompt`'s `scanners`, that the
+read-only key may read retention filters and search spans, that `trace_id:` finds a trace's spans by the value the
+Spans API returns, that `kube_cluster_name` is on the root spans, and that Trace Explorer honours the
+`historicalData` and pinned-window URL parameters.
