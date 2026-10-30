@@ -5489,3 +5489,60 @@ vllm-qwen3 is about 5 GB.
 
 **Out of scope here.** Images a Helm chart pulls (Argo CD, Kyverno, Falco and the rest) are named by no tracked
 `image:` line, so they are not rows; lab-platform's mirror copies of the Docker Hub ones are its own to retain.
+## 2026-10-30 · question 926 · #461: the one-off live E2E cluster gets a one-row Datadog pool from the sandbox key
+
+**Answer:** Seed a one-row pool from the sandbox key for the run.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**The question.** #461 is the one live run of `bash verify/run-e2e.sh` that Michael's answer to question 550 (#442)
+set up: a cluster built for the run only, at the smallest size that works, torn down in the same session, held
+until #454 sorted the Datadog credentials. #454 closed on 2026-10-29 with no per-attendee pool: Datadog no longer
+issues per-student orgs, and the KubeCon clusters ship to Whitney's sandbox org with the one key in
+`watch-it-burn/datadog` (#629). fleet.sh's `bootstrap_one` refuses an attendee cluster whose pool row does not
+resolve, so `fleet.sh up 1` was either refused or picked up an expired June row. The question asked where the test
+cluster's telemetry goes.
+
+**What it changes.**
+- **`verify/live-e2e-session.sh`, the whole session as one command.** It refuses if `watch-it-burn-attendee-001`
+  already exists, so it never adopts or tears down a cluster it did not build. It saves
+  `watch-it-burn/datadog-pool`'s value if there is one and writes the pool as one row carrying the sandbox org's
+  api and app keys (from a file, never on a command line, no key printed). It runs `fleet.sh up
+  watch-it-burn-attendee-001` with `WIB_NO_INGEST=1`, so the cluster is never in lab-platform's handout pool where
+  someone could claim it, at the module default of 1 x t3.2xlarge in the existing lab VPC. It pulls an isolated
+  kubeconfig, stops unless its context is that cluster, and runs `run-e2e.sh` with that context. On every exit,
+  a failed build, a failed suite and Ctrl-C included, it runs `WIB_APPLY=1 fleet.sh down` on the cluster, checks EKS
+  no longer lists it, and puts the pool back: the saved value byte for byte, or no secret when there was none.
+  Anything left behind is printed last with the command that fixes it, and the exit is non-zero. The profile and
+  region are required (`E2E_PROFILE`, `E2E_REGION`), never taken from defaults.
+- **No fleet.sh change.** The cluster reports as `burritobot-attendee-001` (`infra/datadog-cluster-identity.sh`),
+  inside the `burritobot-` names Whitney filters on, and since its own key and the instructor org's key are the same
+  key, the identity script turns dual shipping off rather than sending everything twice. The guard that refuses an
+  attendee cluster without an org stays as it was.
+- **The service-map check's blind spot is closed in code, not by hand on the day.** The question's cons named it:
+  `verify/test_datadog_service_map.py` scoped by env alone, so the KubeCon clusters' data in the same org and env
+  could pass it with the test cluster shipping nothing. It now requires `DD_KUBE_CLUSTER` (exit 2 without it,
+  which `run-e2e.sh` counts as a failure), checks that cluster's Agent heartbeat and its own `burritobot` span
+  metrics, and scopes every platform-component UST series to it. The service-dependency edges stay per env, which
+  is all that endpoint takes. `run-e2e.sh` reads the name from the cluster's `datadog/cluster-identity` ConfigMap
+  (`datadog-cluster-name`) as a prerequisite and exports it, so a cluster bootstrapped without Datadog is a listed
+  prerequisite failure before anything runs.
+- **Tests.** `verify/test_live_e2e_session.sh` (offline; aws, kubectl, fleet.sh and run-e2e.sh are shims, 33 checks):
+  the refusals, the row fleet.sh sees at `up`, the tags and the file-only write, the context and kubeconfig
+  run-e2e.sh gets, teardown and restore after a passing suite, a failing suite and a failed build, the loud
+  report of a cluster still up or a pool not restored, and the cluster scoping of the live Datadog check. Taking
+  out the EXIT trap fails 10 checks, `WIB_NO_INGEST=1` 1, the byte-for-byte restore 5, the refusal 3.
+
+**Not yet run on a cluster.** The run itself, which is #461's whole criterion. This run had no AWS profile and its
+governance forbids deploying. A session with accen-dev access, on Michael's go for about $1 of spend
+(1 x t3.2xlarge at $0.3328 an hour plus $0.10 an hour for EKS, about two hours), runs from the repo root:
+
+    E2E_PROFILE=accen-dev E2E_REGION=us-west-2 IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 \
+        bash verify/live-e2e-session.sh
+
+and records the result here under #461. Three things to know before it: `test_datadog_sandbox_live.py`, one of the
+`# SUITE: e2e` checks, reads the two KubeCon clusters, not the test one, so drive one `/chat` on each within the
+hour before; `test_promo_villains_public.py` fails until the lab-platform promo packages are public (#678); and the
+new cluster-scoped Datadog queries (`datadog.agent.running` and `traces.span.metrics.calls` by
+`kube_cluster_name`) are the ones `test_datadog_sandbox_live.py` already makes, but have not been run against this
+cluster.
