@@ -712,8 +712,12 @@
     try{
       const r=await fetch('/cost',{cache:'no-store'}); if(!r.ok) return;
       const d=await r.json();
+      // Tokens moves with Cost, so the two always count the same thing (a fresh tab showed 0 beside $0.24).
       if(typeof d.usd==='number' && d.usd>costUsd){
         costUsd=d.usd; document.getElementById('costusd').textContent='$'+costUsd.toFixed(4);
+        if(typeof d.total_tokens==='number'){
+          tokens=d.total_tokens; document.getElementById('tokens').textContent=tokens.toLocaleString();
+        }
       }
     }catch(e){}
   }

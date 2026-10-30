@@ -313,7 +313,14 @@ def ask_for(name: str) -> str:
             "Please read it with your ticket tool and take care of whatever it needs.")
 
 
-def desk(name: str) -> str:
+def chat_host(host: str) -> str:
+    """The BurritoBot host for the desk at host: support-<cluster>.<domain> is <cluster>.<domain>, and the bare
+    support desk and anything else is the room's public bot."""
+    m = re.fullmatch(r"support-([a-z0-9-]+)\.(burritobot\.co|agenticburn\.com)", host)
+    return f"{m.group(1)}.{m.group(2)}" if m else "attackme.burritobot.co"
+
+
+def desk(name: str, host: str = "") -> str:
     # HC-7731's injection is plain text, so listing it would give away HC-666's hidden paragraph; the lab and the
     # ticket tool still read it by id.
     fixed = "".join(_article(TICKETS[k]) for k in FIXED_TICKETS if k != C6_TICKET_ID)
@@ -321,7 +328,7 @@ def desk(name: str) -> str:
 <div class="you">You are <b id="witch-name">{html.escape(name)}</b>. That name follows your tickets and anything
 BurritoBot deploys for you.</div>
 <h2>Ask BurritoBot about ticket {ROOM_TICKET_ID}</h2>
-<p class="meta">Copy this into the BurritoBot chat at attackme.burritobot.co:</p>
+<p class="meta">Copy this into the BurritoBot chat at {html.escape(chat_host(host))}:</p>
 <pre class="ask" id="ask">{html.escape(ask_for(name))}</pre>
 <button onclick="navigator.clipboard.writeText(document.getElementById('ask').textContent)">Copy</button>
 <p><a href="/me">Your tickets and deployments</a> &middot; <a href="/wall">Everything BurritoBot deployed</a></p>
@@ -400,7 +407,7 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/healthz":
             self._send(200, {"ok": True})
         elif url.path == "/":
-            self._page(desk(self._visitor()))
+            self._page(desk(self._visitor(), (self.headers.get("Host") or "").split(":")[0]))
         elif url.path == "/me":
             self._page(me_page(self._visitor()))
         elif url.path == "/wall":

@@ -102,6 +102,19 @@ ask = re.search(r'id="ask">([^<]+)<', page_a)
 check("the page carries a ready-to-copy ask", ask is not None)
 check("the ask names the visitor and ticket HC-666", ask is not None and na in ask.group(1) and "HC-666" in ask.group(1))
 
+print("== the ask points at the bot of the cluster the desk belongs to ==")
+# Walked in Chrome 2026-10-30: the private desk told the visitor to paste into attackme.burritobot.co.
+check("the bare desk sends the room to the public bot", site.chat_host("support.burritobot.co") == "attackme.burritobot.co")
+check("support-<cluster> sends the visitor to that cluster's bot",
+      site.chat_host("support-burritobot-private.burritobot.co") == "burritobot-private.burritobot.co"
+      and site.chat_host("support-attackme.agenticburn.com") == "attackme.agenticburn.com")
+check("an unknown host falls to the public bot", site.chat_host("127.0.0.1") == "attackme.burritobot.co")
+priv = Phone(IPHONE, "203.0.113.8")
+priv.headers["Host"] = "support-burritobot-private.burritobot.co"
+_, priv_page = priv.get("/")
+check("the private desk's page names the private bot", "chat at burritobot-private.burritobot.co" in priv_page
+      and "attackme" not in priv_page, re.search(r"chat at [^<]+", priv_page).group(0) if "chat at" in priv_page else "")
+
 print("== HC-666: a plain complaint in black, the injection in white on white ==")
 code, t666 = a.get("/HC-666")
 check("/HC-666 is a page", code == 200)
