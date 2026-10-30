@@ -165,7 +165,10 @@ config:
     # shows a clean invoke_agent → generate_content hierarchy instead of the full 85-span
     # HTTP trace. Without this, ml_app is derived from the guard-proxy root span and LLM Obs
     # shows all infrastructure spans (A2A protocol, tool call POSTs, DELETEs) as noise.
-    # gen_ai.operation.name=invoke_agent maps to the "workflow" kind in Datadog LLM Obs.
+    # gen_ai.operation.name=invoke_agent maps to the "agent" kind in Datadog LLM Obs (a span with no operation
+    # is the generic "workflow"; Datadog's OTel instrumentation page, read 2026-09-06). It runs before
+    # transform/set_genai_provider, which stamps only spans that already have an operation name, so these two
+    # get gen_ai.provider.name as well (verify/test_trace_shape_e2e.py, #265).
     transform/set_llmobs_workflow:
       error_mode: ignore
       trace_statements:
@@ -176,11 +179,13 @@ config:
             # defaults to a generic workflow instead of being classified as an LLM, tool, retrieval, or
             # agent span." This rule already did the right thing for call_llm and simply never matched it.
             - set(attributes["gen_ai.operation.name"], "invoke_agent") where (name == "call_llm" or name == "invocation") and IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$")
-    # Make a blocked tool call visible (#265). kagent's execute_tool span is a stub (name and id only);
-    # the tool RESULT, including workshop-mcp's "command FAILED" (#261), arrives as a tool-role message in
-    # the NEXT model call's gen_ai.input.messages. Marking that model span as an error is what turns the
-    # trace red so a student can find the blocked exfiltration; the message itself is readable in the
-    # conversation. Measured 2026-09-06: the failure text is present there and nowhere else on the span.
+    # Make a blocked tool call visible on the model call that read it (#265). The tool RESULT, including
+    # workshop-mcp's "command FAILED" (#261), arrives as a tool-role message in the NEXT model call's
+    # gen_ai.input.messages, and marking that model span as an error turns the conversation red there.
+    # This was written on 2026-09-06 believing the execute_tool span was a stub; on 2026-09-07 it was found
+    # to carry the arguments and result under gcp.vertex.agent.*, and transform/adk_tool_content below now
+    # marks the tool span itself. So one blocked call is two errors, the tool span and this model span;
+    # whether to keep this one is open on #265.
     transform/mark_tool_failure:
       error_mode: ignore
       trace_statements:
@@ -326,8 +331,8 @@ config:
           - batch
           - resource
           - transform/set_peer_service # PRD #27 M3: peer.service fallback for the agentgateway->kagent edge
-          - transform/set_genai_provider # stamp gen_ai.provider.name=aws.bedrock on spans where N/A
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
+          - transform/set_genai_provider # after the line above, so the spans it names get aws.bedrock too
           - transform/mark_tool_failure # a model call that received a failed tool result renders as an error
           - transform/adk_tool_content # surface ADK's tool args/result under gen_ai.* so Datadog renders them
         exporters:

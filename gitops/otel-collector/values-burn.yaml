@@ -66,8 +66,8 @@ config:
           - batch
           - resource
           - transform/set_peer_service
-          - transform/set_genai_provider
           - transform/set_llmobs_workflow
+          - transform/set_genai_provider
           - transform/mark_tool_failure
           - transform/adk_tool_content
           - transform/scrub_pii

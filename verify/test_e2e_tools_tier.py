@@ -110,7 +110,7 @@ tier = [t for t in tests if re.search(r"^# E2E TIER: tools", t.read_text(), re.M
 names = {t.name for t in tier}
 for need in ("test_kyverno_cel_policies.py", "test_iam_policy_structural.py", "test_service_naming_render.py",
              "test_terraform_lock_init.py", "test_party_refresh_rate.py", "test_lab_pipeline_collector.py",
-             "test_collector_pii_scrub_e2e.py"):
+             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py"):
     check(f"{need} is in the tier", need in names)
 for t in tier:
     text = t.read_text()

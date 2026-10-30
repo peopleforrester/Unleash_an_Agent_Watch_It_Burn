@@ -4776,3 +4776,57 @@ committed test, because it needs the sister repo's code, which the gate does not
 profiles, against a fleet that is up and the live app. Then press `restart-agent` on one attendee row of
 `/admin/console?token=` and see the action go `done` with a new Ready workshop-agent pod. That needs the fleet up and
 the admin token, so it waits for the next cluster build.
+## 2026-10-30 · #265 · The trace shape #265 settled on is run on a real collector, the provider stamp moves after the agent stamp, and the split trace may be our own filter
+
+#265 asked for a spike on how Datadog wants an agent trace shaped over OpenTelemetry, experiments on one cluster,
+and the winning shape as a gitops change with a render test. The spike and most of the shape already exist:
+
+- **The spike** is `general/general-knowledge/datadog/2026-09-06_agent-observability-trace-shape-over-otel.md`,
+  not mrf-knowledge as the issue's 2026-09-06 comment says. mrf-knowledge is the brand repo now, and
+  talks-knowledge's `talks/research-index.md` points to the general-knowledge copy. Its last section, "the tool span
+  is a stub", was overtaken on 2026-09-07 (a7def8a): the span carries the arguments and the result under
+  `gcp.vertex.agent.*`. Correcting the spike is a follow-up on general-knowledge, since this run writes only here.
+- **What shipped on 2026-09-06 to 09-08** is the shape in `gitops/otel-collector/values.yaml`: filter/drop_noise
+  for the A2A internals, agent-card fetches, MCP session lifecycle, the agent's HTTP plumbing, the empty AWS SDK
+  leaf and the badge poll; `invoke_agent` stamped on `invocation` and `call_llm`; the tool content copied to
+  `gen_ai.tool.call.*`; a blocked call marked on its tool span and on the model call that read it. The rename to
+  one service family made the root `burritobot`, which is the ml_app Datadog derives (the spike's shape 1: guard
+  as root). It was never run end to end before this.
+
+What this change adds:
+
+- **`verify/test_trace_shape_e2e.py` (E2E tools tier).** For each profile's collector as built with datadog-secret,
+  it runs one interaction with #382's measured parentage (guard-proxy's root, chat and client spans, then kagent's
+  invocation, invoke_agent, two call_llm turns and their model calls, a blocked `run_shell` and a working
+  `get_marketing_intel`) and the noise each filter rule was written for, through the pinned otelcol-contrib. It
+  asserts that the noise is gone and the interaction is whole with one `burritobot` root, that every agent span has
+  an operation name and a provider, that both tool calls carry their arguments and result where Datadog reads them,
+  and that the block is an error on the tool span and on the next model call, with nothing else in the trace red.
+- **It found one defect, fixed here.** transform/set_genai_provider stamps only spans that already have
+  `gen_ai.operation.name`, and it ran before transform/set_llmobs_workflow gives one to `invocation` and `call_llm`.
+  So those two agent spans never got `gen_ai.provider.name`, which the GenAI semantic conventions require on an
+  `invoke_agent` span. The two are swapped in `values.yaml` and `values-burn.yaml`.
+- **Two comments corrected.** set_llmobs_workflow's said `invoke_agent` maps to Datadog's workflow kind. It maps to
+  the agent kind, and a span with no operation is the workflow kind. mark_tool_failure's still said the tool span is
+  a stub. test_collector_config.py credited mark_tool_failure with the tool span's error, which adk_tool_content sets.
+
+**The split trace (#320, #382) may be this collector, not agentgateway.** #382 found that `invocation` names a
+parent no search finds, and reasoned that agentgateway mints it and does not export it. filter/drop_noise drops
+every `burritobot-gateway` or `agentgateway` span not named `tools/call` (60a6257, 2026-09-06), and every
+`burritobot-agent` span named for an HTTP verb, `POST /` included (4b8b568, 2026-09-07 13:36Z). #320 was opened
+after both, at 21:01Z, and #382 measured on 2026-09-08. agentgateway's A2A hop span and kagent's ASGI server span
+would both sit between guard-proxy's client span and `invocation`, so either could be the missing span, dropped
+here before Datadog or Tempo sees it. This is a hypothesis from the rule text and the dates. No span was read, so
+the fixture parents `invocation` on guard-proxy's client span, and its "one root" check proves only that the
+processors keep a connected trace connected. The experiment that settles it is a follow-up.
+
+**Open on #265, asked of Michael:** whether a blocked tool call stays an error on both its tool span and the model
+call that read the result (two errors per block, the "2 errors" #320 quotes), or only on the tool span. The test
+pins today's behaviour, both. Removing mark_tool_failure would change its "the model call that read the failed
+result is marked too" check.
+
+**Not yet run on a cluster:** the before/after trace #265 asks for. On watch-it-burn-private (the admin profile,
+which ships to Tempo and to Whitney's sandbox org), send the C1 probe (`verify/c1-exfil-block.sh`), then open the
+trace in Agent Observability as a student would. Check one root, `invocation` and `call_llm` carrying
+`gen_ai.provider.name=aws.bedrock`, `execute_tool run_shell` red with its arguments and result, and the ml_app
+`burritobot`. Then compare it with the same trace read out of Tempo.

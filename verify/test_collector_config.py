@@ -96,8 +96,9 @@ print("== the lab describes what the trace actually contains ==")
 # the student to the trace and still tells them what outcome to look for. Do not restore the span
 # walkthrough as a fix for a failure here.
 #
-# The collector side is unchanged and is still asserted above: mark_tool_failure is what puts the error
-# status on that span, so the thing her sentence promises is still produced.
+# The collector side is unchanged and is still asserted above: adk_tool_content is what puts the error
+# status on that span (from MCP's isError), and mark_tool_failure on the model call that read the result, so
+# the thing her sentence promises is still produced. verify/test_trace_shape_e2e.py runs both on a real collector.
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 check("the lab sends the student to the trace after the fix",
       "See the block in the trace." in LAB)
