@@ -131,6 +131,23 @@ with tempfile.TemporaryDirectory() as tmp:
           and len(calls.read_text().splitlines()) == n, r.stdout)
     check("the cap is still $25", cost()["cap_usd"] == 25.0)
 
+print("== the close tells the presenters the finale ==")
+ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding="utf-8")
+close = ros[ros.index("- **Break it (the last minutes, #690):**"):ros.index("- **The close (Michael):**")]
+check("the run-of-show's close runs finale-cap-on, shows cost-watch and ends with finale-cap-off",
+      all(f"`{c}" in close for c in ("finale-cap-on", "cost-watch", "finale-cap-off")))
+check("it says what the room sees when the cap trips, and that Reset does not help (guard-proxy-agenticburn#25)",
+      "CAP HIT" in close and "Reset does not help" in close and "guard-proxy-agenticburn#25" in close)
+check("it carries the 2026-10-30 measurement, labeled, and the estimate as an estimate",
+      "Measured 2026-10-30 on attackme" in close and "an estimate" in close)
+check("it no longer says the cap is not built", "not built yet" not in close)
+kc = (REPO / "gitops/ai-layer/web/kubecon.html").read_text(encoding="utf-8")
+kclose = kc[kc.index("<b>Break it (the last minutes, #690):</b>"):]
+kclose = kclose[:kclose.index("</div>")]
+check("/kubecon's close names the same three commands",
+      all(f"<code>{c}</code>" in kclose for c in ("finale-cap-on", "cost-watch", "finale-cap-off"))
+      and "not built yet" not in kclose)
+
 srv.shutdown()
 print()
 if failures:

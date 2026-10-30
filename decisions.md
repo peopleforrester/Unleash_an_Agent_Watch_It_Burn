@@ -5735,3 +5735,21 @@ Run `infra/terraform/fleet/fleet.sh ingest watch-it-burn-attendee-001` and `infr
 ingest-instructors`. Then `labctl status agenticburn <event>` must count the attendee as ready and each roster
 cluster as held. Claim once on `/c/agenticburn/<event>` and rerun the attendee ingest: it must log `0 added` with the
 claim still held. No attendee cluster is up today; the 2026-10-28 platform is the roster alone.
+
+## 2026-10-30 · #690 · The finale lowers the public cap live; guard-proxy pinned at a022fa5 (staging)
+
+guard-proxy a022fa5 adds `/toggle?cost_cap=N`, which lowers the cluster-wide cap and keeps the tally. The web
+terminal gains `finale-cap-on [headroom]` (cap = spent + headroom, $1.00 by default), `finale-cap-off` (restores
+`COST_CAP_USD`) and `cost-watch` (spent, cap, turns and a bar, large, every 2 s). `verify/test_finale_cap.py`
+drives all three against the pinned proxy.py. The pin is a guard-proxy staging commit, not main: it is pushed
+(`verify/submodule-pins-pushed.sh` passes) and its CI is green, and the finale needs it before guard-proxy's
+heavy gate promotes it. The same pin brings TURN_TIMEOUT, so #694 is done here: 270 s for the turn, 120 s a call.
+
+**Run on attackme, 2026-10-30.** `finale-cap-on 0.30` from the public terminal set the cap to $0.30 (the tally
+was $0.00 after the guard-proxy restart). 20 sessions on one address, sending as fast as replies came back, put
+83 turns through the model (about $0.004 each, $0.3362 in all) and crossed the cap in under 45 s; the 188 turns
+after it were answered with the budget reply and cost nothing. `finale-cap-off` restored $25 and the next turn
+was answered. The 50-phone rate is an estimate from that per-turn cost, not a measurement.
+
+**Open.** The capped reply says "This conversation hit its spend budget... Press Reset", which is wrong when the
+cluster cap tripped; asked on guard-proxy-agenticburn#25.

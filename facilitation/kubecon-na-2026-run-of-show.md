@@ -577,10 +577,25 @@ real-looking home address to chat.
   probe's topic beats passed on burritobot-private on 2026-10-28. A paraphrase with
   none of those words goes to the BanTopics scanner, which is unproven
   (llm-guard-cpu-offline#2); do not promise it is refused.
-- **Break it (the last minutes, #690):** "We couldn't show everything in 30 minutes.
-  For the rest of the session, try to drive BurritoBot's bill up to its cap and break
-  the demo. You have our permission." A cap the room can reach in minutes is not
-  built yet (#690); until it is, say the line and let them try.
+- **Break it (the last minutes, #690):** in the public cluster's terminal, run
+  `finale-cap-on` (headroom $1.00 by default, or `finale-cap-on 0.50`). It sets the whole
+  cluster's cap to what the room has already spent plus the headroom, and prints both.
+  Then `cost-watch` on the screen: spent, cap, turns and a bar, every 2 seconds. Say:
+  "We couldn't show everything in 30 minutes. For the rest of the session, try to drive
+  BurritoBot's bill up to its cap and break the demo. You have our permission."
+  - **What the room sees when it trips:** BurritoBot stops calling the model for everyone,
+    `cost-watch` reads CAP HIT, and each phone gets "The kitchen tab is frozen. This
+    conversation hit its $X spend budget... Press Reset". Reset does not help, because the
+    cap is the cluster's; say so. Its own wording is asked on guard-proxy-agenticburn#25.
+  - **Measured 2026-10-30 on attackme:** 20 sessions on one address, sending as fast as
+    replies came back, put 83 turns through the model at about $0.004 each and crossed a
+    $0.30 cap in under 45 seconds; turns past the cap cost nothing. One venue address is
+    held to 120 turns a minute by nginx and the cluster to 150, so a room sending about
+    100 real turns a minute reaches the default $1.00 in two to three minutes (an estimate
+    from that per-turn cost, not a measurement with 50 phones).
+  - **Nothing lowers the cap until `finale-cap-on` runs**, and the tally starts at zero
+    whenever guard-proxy restarts. Afterwards run `finale-cap-off`, which restores the $25
+    `COST_CAP_USD`.
 - **The close (Michael):** every attack today was a plausible request, not an
   exploit. The controls that stopped them were RBAC, admission, runtime and egress
   policy, an input classifier and a tool allow-list, owned by the platform team, and
@@ -619,7 +634,7 @@ saying the same thing.
 | 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 to 5 (live, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
-ready: the pre-seeded traces (#648), the reachable cost cap for the finale (#690), and
+ready: the pre-seeded traces (#648) and
 the recorded half of point 9 (#452).
 
 ## Challenges shown live, and challenges cut

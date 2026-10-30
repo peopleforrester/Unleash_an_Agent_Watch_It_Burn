@@ -375,10 +375,13 @@
       </details>
     </article>
 
-    <div class="control"><b>Break it (the last minutes, #690):</b> "We couldn't show everything in 30 minutes.
-    For the rest of the session, try to drive BurritoBot's bill up to its cap and break the demo. You have our
-    permission." The cap the room can reach is not built yet (#690); until it is, say the line and let them
-    try.</div>
+    <div class="control"><b>Break it (the last minutes, #690):</b> in the public terminal run
+    <code>finale-cap-on</code> (the cap becomes what the room has spent plus $1.00), then <code>cost-watch</code> on
+    screen. Say: "We couldn't show everything in 30 minutes. For the rest of the session, try to drive BurritoBot's
+    bill up to its cap and break the demo. You have our permission." When it trips, BurritoBot stops calling the
+    model for everyone and <code>cost-watch</code> reads CAP HIT; the phones say "press Reset", which does not help,
+    so say the whole kitchen is closed. About $0.004 a turn: a room at 100 turns a minute takes two to three minutes.
+    Afterwards, <code>finale-cap-off</code>.</div>
 
     <div class="control"><b>The close (Michael):</b> every attack today was a plausible request, not an
     exploit. The controls that stopped them were RBAC, admission, runtime and egress policy, an input classifier
