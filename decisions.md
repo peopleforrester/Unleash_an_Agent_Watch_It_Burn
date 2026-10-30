@@ -5265,3 +5265,24 @@ purge step naming #647, the cluster tag, the deletion endpoint and retention. It
 taken out.
 
 **Not yet run.** The purge itself, after the talk on 2026-11-12, by Whitney or by Michael signed in to her org.
+
+## 2026-10-30 · #653 · Second pass: the KubeCon run-of-show's C2 fallback row names the promo/ Joker; the pull still waits on the package toggle
+
+The 2026-10-29 entry's change is on staging (7ffbc73, 1414255, e5bd6fe). Run 12561 checked what it left:
+- **One stale copy.** `facilitation/kubecon-na-2026-run-of-show.md`'s fallback table still said the C2 script denies
+  a Deployment of `docker.io/peopleforrester/joker:latest`. The script creates
+  `ghcr.io/peopleforrester/lab-platform/promo/joker:v1`, so the row now says that. `verify/test_promo_villains.py`
+  now reads the row and checks it names the image the fallback's `VILLAIN` resolves to and no `docker.io/` image.
+  With the row reverted, that check fails.
+- **Left as written on purpose.** `docs/RUN-OF-SHOW-2026-08.md` is the August record and says so in its banner. The
+  Docker Hub Joker in C6's ticket (`ticket_site.py`, lab.html's C6 section, LAB-TEXT.md, PROMPT-CATALOG.md and the
+  injection text) is the C6 follow-up the first entry named, not part of this issue.
+- **The packages are still private.** On 2026-10-30, `python3 verify/test_promo_villains_public.py` failed on all
+  ten with "token refused, HTTP 401 Unauthorized: the package is private or does not exist", as in #678. Until
+  Michael sets the ten promo/ packages in lab-platform to Public, a cluster admits the villain in Audit and then
+  leaves it in ImagePullBackOff, and the E2E tools tier stays red on that one test.
+
+**Not yet run on a cluster.** The checks the 2026-10-29 entry names, once the packages are public:
+`python3 verify/test_promo_villains_public.py`, then on an attendee cluster
+`CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and `CONTEXT=<admin-ctx>
+challenges/c2-villain-image/fallback.kubectl.sh`, whose denial now matches the run-of-show row.
