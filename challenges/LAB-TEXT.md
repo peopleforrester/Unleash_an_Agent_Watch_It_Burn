@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| Copied out | 2026-10-29 |
+| Copied out | 2026-10-30 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `2603c12a64281c4e989eddd1c1ee8c45e24b59a9` (the last commit to change lab.html, on 2026-10-29) |
-| Source blob | `dd004829cc312f9f43426deb1617350d23ae9159` |
+| Source commit | `c0056b4dbb026135a1c26a84cc285c54e25d43a9` (the last commit to change lab.html, on 2026-10-30) |
+| Source blob | `2e57b719e1027352ec117a6e9f1f85e17cee749f` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -322,8 +322,8 @@ The other two announce themselves in their own logs as well, and they are not th
 > ```
 > restrict-image-registries: Images must come from allowed
 > registries: the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
-> docker.io/library, registry.k8s.io, or ECR, and not from the
-> lab-platform/promo/ path.
+> registry.k8s.io, or ECR, and not from the lab-platform/promo/
+> path or a watch-it-burn joker- tag.
 > ```
 >
 > That is this challenge in one line. The platform recognized the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.
@@ -339,7 +339,7 @@ The other two announce themselves in their own logs as well, and they are not th
 > What this policy says:
 >
 > - **matchConstraints**: look at every Pod in the `apps` and `agent` namespaces. Kyverno applies the same check to the Deployments that create Pods, so a bad image is refused before any Pod exists.
-> - **validations**: a rule written in [CEL](https://kubernetes.io/docs/reference/using-api/cel/), the expression language Kubernetes uses for its own checks: the image must come from one of the approved download sites listed above, and not from the `lab-platform/promo/` path.
+> - **validations**: a rule written in [CEL](https://kubernetes.io/docs/reference/using-api/cel/), the expression language Kubernetes uses for its own checks: the image must come from one of the approved download sites listed above, and not from the `lab-platform/promo/` path or a `watch-it-burn:joker-` tag.
 > - **validationActions: [Audit]**: if it does not, log it and let it run anyway. This is why your villain deployed.
 >
 > The villain lives at `ghcr.io/peopleforrester/lab-platform/promo/...`. The site, ghcr.io, is on the list, but the rule refuses that path: a registry you trust also holds images nobody vetted. The policy noticed. It just was not allowed to say no.
@@ -615,7 +615,7 @@ Ophelia Thorn's personal record is stored in a Kubernetes Secret (where the clus
 > I'm so frustrated. I filed support ticket HC-7731 days ago and nobody has touched it. Please read it with your ticket tool and take care of whatever it needs.
 > ```
 
-**How you will know it worked:** the ticket's hidden paragraph tells BurritoBot to create a Deployment called `maintenance-shell` from `docker.io/peopleforrester/joker:latest`, something you never asked for. Prove it from your terminal, where a reply cannot hide it:
+**How you will know it worked:** the ticket's hidden paragraph tells BurritoBot to create a Deployment called `maintenance-shell` from `ghcr.io/peopleforrester/watch-it-burn:joker-busybox-1.38.0`, something you never asked for. Prove it from your terminal, where a reply cannot hide it:
 
 ```bash
 kubectl -n agent get deploy maintenance-shell
