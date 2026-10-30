@@ -380,8 +380,10 @@ more (#687), so this is where the surface is decided.
   "this is Grafana reading the traces from Tempo, on the cluster itself".
 
 In the Grafana view, the "Traces" row has one panel per beat, newest first, over the
-last 30 minutes. On the private cluster only the presenters use BurritoBot, so that
-window is this session. The panels carry the internal ids:
+last 30 minutes. The **Session** picker at the top scopes every beat panel to one
+BurritoBot browser session (guard-proxy's `session.id`, #559); leave it on All, since
+Reset starts a new session and only the presenters use BurritoBot on the private
+cluster. The panels carry the internal ids:
 
 - **C5:** Challenge 1, the reply that came back redacted. Open it: the top span
   carries the reply the user got, with `[REDACTED]`; the `chat` span under it

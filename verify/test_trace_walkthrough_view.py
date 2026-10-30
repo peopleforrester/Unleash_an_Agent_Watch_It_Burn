@@ -72,21 +72,53 @@ check("every beat query is TraceQL", all(p and all(x.get("queryType") == "traceq
 check("the default range covers a whole walk-through (30 minutes or more)",
       re.fullmatch(r"now-(\d+)m", dash["time"]["from"]) is not None and int(dash["time"]["from"][4:-1]) >= 30)
 
-print("== C6: a /chat root with no agent.forward under it ==")
+print("== C6: the /chat root an input guard decided ==")
 q6 = query(beat["C6"])
-check("C6 selects guard-proxy's /chat root and excludes traces that forwarded to the agent",
-      re.search(r'\{ name = "agent\.forward" \} !<< \{[^}]*resource\.service\.name = "burritobot"[^}]*span\.url\.path = "/chat"', q6) is not None)
-check("C6 leaves out the 400 for an empty prompt", "span.http.response.status_code = 200" in q6)
-check("guard-proxy names its forward span agent.forward", 'start_as_current_span("agent.forward"' in chat)
+check("C6 selects guard-proxy's /chat root whose witb.guard.decision is input_blocklist or input_classifier",
+      re.fullmatch(r'\{ resource\.service\.name = "burritobot" && span\.url\.path = "/chat" && span\.session\.id =~ "\$session"'
+                   r' && \(span\.witb\.guard\.decision = "input_blocklist" \|\| span\.witb\.guard\.decision = "input_classifier"\) \}',
+                   q6) is not None)
+check("C6 no longer infers a block from a missing agent.forward", "agent.forward" not in q6)
 check("guard-proxy's server span carries url.path", 'set_attribute("url.path", self.path)' in PROXY)
 check("guard-proxy's service name is burritobot",
       "service.name=burritobot," in (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"))
-# The input guards return before the forward exists; if a later edit moved the forward up, every request would
-# carry an agent.forward and the C6 panel would go empty.
+# _stamp writes to the HTTP SERVER span do_POST opens, which is the /chat root the panel selects.
+stamp = PROXY[PROXY.index("def _stamp("):]
+stamp = stamp[:stamp.index("\n    def ", 1)]
+check("guard-proxy's _stamp sets the attribute on the server span",
+      re.search(r'(\w+) = getattr\(self, "_server_span", None\)[\s\S]*?\1\.set_attribute\(key, value\)', stamp) is not None)
+check("do_POST keeps the server span for _stamp", "self._server_span = server_span" in PROXY)
+# Each input guard names itself before it answers, and answers before the forward exists, so a C6 row has no model
+# call under it. If a later edit moved the forward up, the row would carry a model call and stop meaning "blocked".
 first_forward = chat.index('start_as_current_span("agent.forward"')
-check("both /chat input guards answer before any agent.forward span is opened",
-      0 < chat.index('"input_blocklist_hit"') < first_forward and 0 < chat.index('"input_classifier_block"') < first_forward)
+for guard, event in (("input_blocklist", "input_blocklist_hit"), ("input_classifier", "input_classifier_block")):
+    at = chat.find(f'self._stamp("witb.guard.decision", "{guard}")')
+    check(f"the {guard} guard stamps its decision on the /chat root", at > chat.index(f'"{event}"') > 0)
+    check(f"the {guard} guard answers before any agent.forward span is opened", 0 < at < first_forward)
 check("a guarded /chat answer reports zero input tokens", '"guarded": True, "input_tokens": 0' in chat)
+# The other decisions stop a turn before the model too; C6 must not list them, or a rate-limited or capped turn
+# reads on stage as an injection blocked.
+decisions = set(re.findall(r'self\._stamp\("witb\.guard\.decision", "([a-z_]+)"\)', chat))
+check("guard-proxy's other decisions are the ones C6 leaves out",
+      {"rate_limit", "budget", "output_redacted"} <= decisions and not any(f'"{d}"' in q6 for d in decisions - {"input_blocklist", "input_classifier"}))
+
+print("== the session picker scopes every beat to one browser session ==")
+var = next((v for v in dash.get("templating", {}).get("list", []) if v.get("name") == "session"), None)
+check("the dashboard has a session variable", var is not None)
+var = var or {}
+check("it lists Tempo's session.id values", var.get("type") == "query" and var.get("datasource", {}).get("uid") == "tempo"
+      and var.get("query", {}).get("type") == 1 and var.get("query", {}).get("label") == "session.id")
+check("it defaults to All, which matches every session", var.get("includeAll") is True and var.get("allValue") == ".*"
+      and var.get("current", {}).get("value") == "$__all")
+check("one session at a time, and an id can be typed in", var.get("multi") is False and var.get("allowCustomValue") is True)
+check("every beat panel filters its /chat span on session.id",
+      all('span.url.path = "/chat" && span.session.id =~ "$session"' in query(p) for p in [*beat.values(), other]))
+check("guard-proxy stamps the storefront's session on the /chat root as session.id",
+      'session = body.get("session", "")' in chat and 'self._stamp("session.id", session)' in chat)
+check("it stamps the session before any guard answers, so a blocked turn carries it too",
+      chat.index('self._stamp("session.id", session)') < min(chat.index('self._stamp("witb.guard.decision"'), first_forward))
+check("the storefront sends its session with every /chat",
+      re.search(r"session:\s*getSession\(\)", (REPO / "gitops/ai-layer/web/burritbot.html").read_text(encoding="utf-8")) is not None)
 
 print("== C5: the root span carries the reply the user got ==")
 q5 = query(beat["C5"])
@@ -138,6 +170,7 @@ check("the console routes grafana-<cluster> to Grafana",
 check("it says Datadog when the pool is live and Grafana when not",
       "**Which surface is shown.**" in seg and "**Datadog pool live:**" in seg and "**No pool live:**" in seg)
 check("it walks each beat's panel", all(f"**{b}:**" in seg for b in ("C5", "C6", "C7")))
+check("it names the session picker", "**Session**" in seg)
 check("it no longer says the fallback is undecided", "fall back to Grafana or Tempo and say" not in seg)
 
 print("== the beats' row is titled Traces, in the challenges' run order ==")

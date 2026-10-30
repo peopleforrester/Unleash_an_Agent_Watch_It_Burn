@@ -5340,3 +5340,51 @@ scanners.yml. That waits on the offline image carrying the zero-shot model (llm-
 `verify/kubecon_probe.py`'s topic beats, run by hand on a presenter's admin cluster: `python3 verify/kubecon_probe.py
 admin burritobot-private.burritobot.co --context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile
 accen-dev`.
+
+## 2026-10-30 · #559 · The trace view's beats scope to one session, and C6 reads the guard decision guard-proxy stamps
+
+**Decision.** guard-proxy-agenticburn#8 (commit d98ad61) stamps two attributes on the `POST /chat` root span:
+`session.id`, the storefront's browser session id, and `witb.guard.decision`, the guard that decided the turn
+(input_blocklist, input_classifier, topic, rate_limit, budget or output_redacted; absent when no guard touched it).
+Michael moved the submodule pin by hand in ac68a12 (2026-10-27, now 000f57e, which holds d98ad61 and is on
+guard-proxy-agenticburn main). That was question 766's answer, "Michael pins, a run does the rest", because
+hecaton's forbidden gate refuses any change to a gitlink. This entry is the rest.
+
+**What changed.**
+- `observability-idp/grafana/dashboards/agent-observability.yaml` gains a `session` variable, labelled Session: a
+  Tempo label-values query (`type: 1`, `label: session.id`, unscoped, because Grafana's Tempo datasource looks the
+  scope up itself and prefixes it). It defaults to All with `allValue` `.*`, takes one session at a time, and
+  accepts a typed id. The C5, C6, C7 and C7-companion queries each add `span.session.id =~ "$session"` to their
+  burritobot `/chat` span. The gen_ai trace panel is kagent's spans, which carry no session.id, and stays unscoped.
+- C6 is now `{ burritobot /chat && session && (witb.guard.decision = input_blocklist || = input_classifier) }`. It
+  no longer infers a block from a `/chat` root with no `agent.forward` under it, which also listed rate-limit,
+  budget and on-topic stops as C6 rows. The 400 for an empty prompt carries no decision, so the status filter went.
+- `verify/test_trace_walkthrough_view.py` (the file #675 renamed from `test_segment6_view.py`, which the issue
+  names) holds the C6 query to that exact shape, holds the variable and the four session filters, and checks
+  proxy.py: `_stamp` writes to the server span, each input guard stamps its decision after its log line and before
+  any `agent.forward`, session.id is stamped before any guard answers, the other decisions are ones C6 leaves out,
+  and the storefront sends its session on every `/chat`. Against the old dashboard it fails 7 checks.
+- The run-of-show's trace-view section names the Session picker and says to leave it on All, since Reset starts a
+  new session. The sentence that called the 30-minute window "this session" is gone.
+
+**Checked against Tempo 3.0.3.** The release binary (SHA-256 7ac4f095…, matching the release's SHA256SUMS) ran
+locally on eleven synthetic traces: each decision, a sessionless block, a 400, a C5 redaction, C7 with and without
+read_internal_config, and a plain turn, across two sessions. Each of the four beat queries, run as All and for each
+session, returned exactly its intended traces (12 of 12). The old C6 query on the same traces also returned the
+rate_limit, budget and topic turns. `/api/v2/search/tag/span.session.id/values`, the call behind the picker,
+listed both sessions. Grafana's own variable query was not run against a live Grafana 13.2.2.
+
+**What differs from the draft.** Run 8269's commit da48d3c is gone from the remote (question 766), so nothing was
+reused. Staging has moved since: the segment 6 test became `test_trace_walkthrough_view.py` (#675), the row became
+"Traces" in C5, C6, C7 order, and proxy.py gained the topic decision, which C6 leaves out. The pin and
+checksum/proxy-py were Michael's commit, not this one.
+
+**Known gap, filed as a follow-up.** Since #676, KubeCon's Challenge 3 (C6, HC-666) is stopped inside
+`read_support_ticket`, which withholds the flagged ticket; the `/chat` prompt is innocent and the model is still
+called. That turn carries no input-guard decision, so this panel (like the old one) lists the direct-prompt block,
+not the HC-666 beat. Showing that beat needs a query on the tool span, which is outside this issue.
+
+**Not yet run on a cluster.** No E2E test covers the Grafana view. On the private cluster with guard-input-on,
+send a blocked `/chat` from the storefront and open
+`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`. The Session picker should list the
+storefront's `sess-…` id, and C6 should show the turn with All and with that id.

@@ -16,21 +16,23 @@
 #   C5  guard-proxy sets the ROOT span's gen_ai.output.messages to the reply the user got, after the output
 #       guard, so a redacted reply carries llm-guard's [REDACTED] (or the hard-block text). The chat child
 #       span keeps the model's own reply, which is the before/after.
-#   C6  An input-guard block returns from guard-proxy's /chat handler BEFORE the chat child span and its
-#       agent.forward exist, so the trace is a POST /chat root with no agent.forward under it: no model call,
-#       zero input tokens. The budget cap and the rate limit stop a request the same way and land here too;
-#       neither fires during segment 5 on an admin cluster. The 400 for an empty prompt is excluded.
+#   C6  guard-proxy stamps witb.guard.decision on the /chat root with the guard that decided the turn (#559).
+#       C6 lists input_blocklist and input_classifier, the two input guards, which answer before the chat
+#       child span and its agent.forward exist: no model call, zero input tokens. The rate limit, the budget
+#       caps and the on-topic guard stop a turn the same way but carry their own decision, so they stay out.
 #   C7  The weather-tool prompt (challenges/03-bad-mcp-excessive-agency/agent-prompt.txt) with no
 #       execute_tool read_internal_config span under it. The panel beside it lists the calls that DID reach
 #       the rogue tool, so the run with guard-mcp off appears there and the run after guard-mcp-on does not.
-# The negated ancestor operator (!<<) carries C6 and C7. Every query here was run against Tempo 3.0.3, the
+# The negated ancestor operator (!<<) carries C7. Every query here was run against Tempo 3.0.3, the
 # version gitops/bootstrap/apps/tempo.yaml deploys, on synthetic traces of these shapes, and returned only the trace it
 # names.
 #
-# "One session" is the time window. guard-proxy does not stamp the browser session id on its spans, and a C6
-# request never reaches kagent, which is the only component that records a conversation id, so no query can
-# join the three beats by session. On an admin cluster only the presenters use BurritoBot, so the last 30
-# minutes (the default range) are the session.
+# The session picker ($session) scopes the beat panels to one browser session. guard-proxy stamps the
+# storefront's session id on the /chat root as session.id (#559), and the root is the only span a blocked C6
+# turn has, so every beat query filters its /chat span on it. The default, All, matches any session.id
+# (.*), so the panels list the whole time range, as they did before the picker. A /chat with no session
+# (a curl with no "session" field) has no session.id and stays out; the storefront always sends one.
+# Reset mints a new session, so a run that pressed Reset spans two; pick All or type the id.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -42,7 +44,7 @@ data:
   agent-observability.json: |
     {
       "annotations": { "list": [] },
-      "description": "Cost, gen_ai traces, and the segment 5 guardrail beats (C5, C6, C7) from Tempo. The time range is the session: on an admin cluster only the presenters use BurritoBot.",
+      "description": "Cost, gen_ai traces, and the segment 5 guardrail beats (C5, C6, C7) from Tempo. The session picker scopes the beat panels to one BurritoBot browser session; All lists every session in the time range.",
       "editable": true,
       "graphTooltip": 1,
       "id": null,
@@ -52,6 +54,26 @@ data:
       "time": { "from": "now-30m", "to": "now" },
       "title": "Agent Observability (Watch It Burn)",
       "uid": "witb-agent-obs",
+      "templating": {
+        "list": [
+          {
+            "name": "session",
+            "label": "Session",
+            "type": "query",
+            "description": "The BurritoBot browser session, guard-proxy's session.id on the /chat root span. All lists every session.",
+            "datasource": { "type": "tempo", "uid": "tempo" },
+            "query": { "refId": "TempoDatasourceVariableQueryEditor-VariableQuery", "type": 1, "label": "session.id" },
+            "refresh": 2,
+            "includeAll": true,
+            "allValue": ".*",
+            "multi": false,
+            "allowCustomValue": true,
+            "current": { "selected": true, "text": "All", "value": "$__all" },
+            "options": [],
+            "sort": 0
+          }
+        ]
+      },
       "panels": [
         {
           "id": 1,
@@ -93,20 +115,20 @@ data:
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
               "queryType": "traceql", "tableType": "traces", "limit": 20,
-              "query": "{ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.gen_ai.output.messages =~ \".*(REDACTED|blocked by the output guardrail).*\" }" }
+              "query": "{ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" && span.gen_ai.output.messages =~ \".*(REDACTED|blocked by the output guardrail).*\" }" }
           ]
         },
         {
           "id": 6,
           "type": "table",
-          "title": "C6: blocked before the model. /chat requests with no model call under them (0 input tokens)",
-          "description": "guard-proxy's input guard answered without forwarding, so there is no agent.forward span and no model call in the trace. The cost panel does not move for these.",
+          "title": "C6: blocked before the model. /chat requests an input guard refused (0 input tokens)",
+          "description": "The /chat root's witb.guard.decision is input_blocklist or input_classifier: guard-proxy's input guard answered without forwarding, so there is no agent.forward span and no model call in the trace. The cost panel does not move for these.",
           "gridPos": { "h": 8, "w": 12, "x": 12, "y": 11 },
           "datasource": { "type": "tempo", "uid": "tempo" },
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
               "queryType": "traceql", "tableType": "traces", "limit": 20,
-              "query": "{ name = \"agent.forward\" } !<< { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.http.response.status_code = 200 }" }
+              "query": "{ resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" && (span.witb.guard.decision = \"input_blocklist\" || span.witb.guard.decision = \"input_classifier\") }" }
           ]
         },
         {
@@ -119,7 +141,7 @@ data:
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
               "queryType": "traceql", "tableType": "traces", "limit": 20,
-              "query": "{ name = \"execute_tool read_internal_config\" } !<< { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.gen_ai.input.messages =~ \".*weather tool.*\" }" }
+              "query": "{ name = \"execute_tool read_internal_config\" } !<< { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" && span.gen_ai.input.messages =~ \".*weather tool.*\" }" }
           ]
         },
         {
@@ -132,7 +154,7 @@ data:
           "targets": [
             { "refId": "A", "datasource": { "type": "tempo", "uid": "tempo" },
               "queryType": "traceql", "tableType": "traces", "limit": 20,
-              "query": "{ name = \"execute_tool read_internal_config\" } << { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" }" }
+              "query": "{ name = \"execute_tool read_internal_config\" } << { resource.service.name = \"burritobot\" && span.url.path = \"/chat\" && span.session.id =~ \"$session\" }" }
           ]
         }
       ]
