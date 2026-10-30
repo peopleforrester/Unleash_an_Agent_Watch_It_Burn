@@ -1,0 +1,73 @@
+# images.lock: every container image this repo depends on, pinned by digest.
+# Columns: ref  digest  source  saved   (whitespace-separated, one image per line)
+# source: repo:<owner/name[/path]>  build context in a repo we own
+#         build:<path>              built from <path> in this repo; digest may be -
+#         upstream:<url>            third-party image built from someone else's source
+#         none                      handed to us built: the saved tarball is the only copy
+#         not-an-image:<why>        a placeholder or deliberate bad example; digest -
+# Written by scripts/mirror-images.sh in llm-coding-workflow; the rule is
+# claude-config/rules/infra/image-retention.md there.
+#
+# Digests resolved anonymously from each registry on 2026-10-30 (#603). A tag-only reference gets the digest its
+# tag served that day; a digest-pinned one gets its pin. saved is - until `mirror-images.sh save .` runs on
+# netcup, which pulls each row by this digest and writes the date. verify/test_images_lock.py holds this file
+# to the repo's references, VERSIONS.lock, verify/mirror_copies.py and the ai-layer Application.
+
+# Base images the Dockerfiles here build FROM (Docker Hub official images).
+python:3.12-slim sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 upstream:https://github.com/docker-library/python -
+nginx:1.27-alpine sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 upstream:https://github.com/nginx/docker-nginx -
+node:24-trixie-slim sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
+debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts -
+docker.io/library/nginx:1.27-alpine sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 upstream:https://github.com/nginx/docker-nginx -
+
+# Images built from this repo and pushed to ghcr.io/peopleforrester/watch-it-burn.
+ghcr.io/peopleforrester/watch-it-burn:sample-app@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app -
+ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp -
+ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal -
+# The #480 spike's processor: never built or pushed yet, so there is nothing to pull or save (tool-pin.yaml says so).
+ghcr.io/peopleforrester/watch-it-burn:tool-pin - build:images/tool-pin -
+
+# Docker Hub images copied by digest into ghcr.io/peopleforrester/watch-it-burn (crane copy, research 04).
+ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox -
+ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python -
+ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx -
+
+# Third-party images the manifests pull directly.
+ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator -
+cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896 sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896 upstream:https://github.com/agentgateway/agentgateway -
+# vllm-openai-cpu with Qwen3-1.7B baked in, built by the sister platform.
+ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3 -
+
+# LLM Guard. "llm-guard" is the kustomize image name in gitops/ai-layer/resources.yaml; the ai-layer Application
+# sets it to lab-platform's llm-guard:v1 by this digest (#652), built from images/llm-guard, the
+# llm-guard-cpu-offline submodule. The package was private on 2026-10-30, so save needs a ghcr.io login.
+llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b repo:peopleforrester/llm-guard-cpu-offline -
+# The upstream image no manifest pulls any more; kept because VERSIONS.lock pins it and the build replaced it.
+# protectai/llm-guard was archived in July 2026; peopleforrester/llm-guard-upstream-mirror holds a copy of it.
+laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard -
+
+# lab-platform's mirror/ copies (#623, verify/mirror_copies.py), named as "{{ .Values.imageRegistry }}/mirror/...".
+# Each copy is the upstream's linux/amd64 manifest under the same digest. The first four are image: lines in
+# kubearmor.yaml; the snitch is the operator's RELATED_IMAGE_KUBEARMOR_SNITCH env value; the rest are Helm
+# registry/repository/tag splits. Each is written here as the reference it renders to, with whitespace removed.
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor:stable-bf867783eb30 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor@sha256:bf867783eb30368db13e6244e5cf42689997406d7f4fc11ef06479154fe00388 upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-init:stable-cdc3763f302d ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-init@sha256:cdc3763f302de555cb093238bb4a7d93dee64423e96459318ebfbf94c018c22d upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-relay-server:latest-e4fd875cc1e4 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-relay-server@sha256:e4fd875cc1e4f6f6a2a90c57655d3bda09fc7846eb82ea24e0296e578ee29f29 upstream:https://github.com/kubearmor/kubearmor-relay-server -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-controller:latest-89f52a3e9fc0 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-controller@sha256:89f52a3e9fc07af532c68019c028451a5986a63d128dccb560bf3aa3004c8922 upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-operator:v1.7.4-84626528c4d6 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-operator@sha256:84626528c4d6e6a11ba7082f0b87eb15bb73bb9b14b3b600a79f3c7dffe6e67a upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-snitch:latest-ec11d33057b1 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-snitch@sha256:ec11d33057b18aaec179aa32b8d689b8f732e422777df9c78d7ed5287cbf6e1a upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/falcosecurity/falco-talon:0.3.0-0a06b6a5e9f0 ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falco-talon@sha256:0a06b6a5e9f0e45d4ccdcf4c7a8c5ac4156e728f81ffd0122cb6675e3b525b40 upstream:https://github.com/falcosecurity/falco-talon -
+{{.Values.imageRegistry}}/mirror/falcosecurity/falcosidekick:2.32.0-399d95934a67 ghcr.io/peopleforrester/lab-platform/mirror/falcosecurity/falcosidekick@sha256:399d95934a67b1c6b57d3e1f678694b3407f89f878e8fd072dba51968fa9745f upstream:https://github.com/falcosecurity/falcosidekick -
+{{.Values.imageRegistry}}/mirror/library/postgres:18.6-alpine3.23-dd504ba15d33 ghcr.io/peopleforrester/lab-platform/mirror/library/postgres@sha256:dd504ba15d335bb17f83ed48a75899501be82726126a691f597fb91e1e505373 upstream:https://github.com/docker-library/postgres -
+{{.Values.imageRegistry}}/mirror/mcp/grafana:latest-208f8ea16064 ghcr.io/peopleforrester/lab-platform/mirror/mcp/grafana@sha256:208f8ea16064060f92e9960b2f060f5e37af5abda3ec14c1a8ebbc4d5cc8c718 upstream:https://github.com/grafana/mcp-grafana -
+{{.Values.imageRegistry}}/mirror/otel/opentelemetry-collector-contrib:0.160.0-5b66b0dc6921 ghcr.io/peopleforrester/lab-platform/mirror/otel/opentelemetry-collector-contrib@sha256:5b66b0dc6921f2a439cf50b942ccb9e2a4375f136239a9fdf709ef33e4bfc668 upstream:https://github.com/open-telemetry/opentelemetry-collector-releases -
+{{.Values.imageRegistry}}/mirror/otel/opentelemetry-collector-k8s:0.158.0-158b837a5e98 ghcr.io/peopleforrester/lab-platform/mirror/otel/opentelemetry-collector-k8s@sha256:158b837a5e9828c8a6ca00e657e6fffd9b9b24e4a5f7862d0713505cd99c7b42 upstream:https://github.com/open-telemetry/opentelemetry-collector-releases -
+{{.Values.imageRegistry}}/mirror/grafana/grafana:13.2.2-distroless-ada1141b386c ghcr.io/peopleforrester/lab-platform/mirror/grafana/grafana@sha256:ada1141b386c443192521bfed414c62209428361111f1505988930adf9dee751 upstream:https://github.com/grafana/grafana -
+{{.Values.imageRegistry}}/mirror/grafana/tempo:3.0.3-05321ebf1f19 ghcr.io/peopleforrester/lab-platform/mirror/grafana/tempo@sha256:05321ebf1f191fde34282b3dc86e68f511d489133df7963cd1670a2e1e11b33c upstream:https://github.com/grafana/tempo -
+
+# Not images: placeholders and deliberate bad examples.
+REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-placeholder-filled-in-at-build -
+docker.io/DOCKERHUB_USER/villain-joker:latest - not-an-image:villain-apps-placeholder-for-the-builders-own-Docker-Hub-account -
+busybox - not-an-image:challenge-03-clown-file-a-deliberately-untagged-image-Kyverno-denies -
+${{parameters.image}} - not-an-image:Backstage-scaffolder-parameter-the-user-fills-in -
+${{values.image}} - not-an-image:Backstage-skeleton-value-the-user-fills-in -

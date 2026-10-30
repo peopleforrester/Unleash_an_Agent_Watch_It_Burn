@@ -5120,3 +5120,54 @@ a session with the fleet's AWS profiles, labctl on PATH, `DATABASE_URL`, `USER` 
 failure, `labctl pool --customer agenticburn --event "$WIB_EVENT"` must list the same names with every claimed
 row still claimed (#655's fifth assumption), and the terminal login a claimed attendee is handed must be
 `agentic` / `agentic`.
+## 2026-10-30 · #603 · images.lock records every image this repo depends on; the tarballs wait on a netcup `save`
+
+The fleet's image-retention rule (llm-coding-workflow#182, `claude-config/rules/infra/image-retention.md`) gives
+each image a repo depends on an `images.lock` row with its digest, the place its source lives, and the date its
+tarball was saved. Hecaton run 12393 read `scripts/mirror-images.sh` from llm-coding-workflow (sha256
+`079fa909…cf67fed`) and ran its `refs` and `check` here. It could not run `save`: the host has docker on PATH but
+the run's user has no access to the daemon socket, and the archive at `~/repos/private/image-archive` is Michael's.
+
+- **What the lock holds.** 36 rows: the 25 references the script finds in tracked Dockerfiles and YAML, and 11
+  declared by hand. The hand-declared rows are `laiyer/llm-guard-api:0.3.16`, which no manifest pulls any more
+  but VERSIONS.lock pins, and the ten lab-platform `mirror/` copies that app files name through Helm
+  registry/repository/tag splits or, for the KubeArmor snitch, the operator's `RELATED_IMAGE_KUBEARMOR_SNITCH` env
+  value. The script's sweep sees neither form.
+- **Digests.** Every digest was resolved anonymously from its registry on 2026-10-30. A digest-pinned reference
+  gets its pin, and the registry served each pin that day. A tag-only Docker Hub base image (`python:3.12-slim`,
+  `nginx:1.27-alpine`, `node:24-trixie-slim`, `debian:bookworm-slim`) gets the index digest its tag served then,
+  which is what `save` would have recorded. One digest could not be read anonymously: lab-platform's
+  `llm-guard:v1` package, which was still private. Its row carries the digest the ai-layer Application pins (#652).
+  `watch-it-burn:web-terminal`'s tag has since moved to `ab4e9169…`, but the manifests pin `68004fb5…`, and so does
+  the lock.
+- **Sources.** The issue named two of them. laiyer/llm-guard-api is `upstream:https://github.com/protectai/llm-guard`.
+  The deployed `llm-guard` is `repo:peopleforrester/llm-guard-cpu-offline`, the `images/llm-guard` submodule that
+  lab-platform builds it from. It is `repo:` and not `build:`, because the rule's `build:` means never pulled, and
+  this image is pulled. Images built here are `repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/<dir>`,
+  and vllm-qwen3 is `repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3`. The `watch-it-burn` copies of
+  busybox, python and nginx, and every `mirror/` copy, are `upstream:` and give the vendor's source repo.
+  `watch-it-burn:tool-pin` is `build:images/tool-pin` with digest `-`, because the #480 spike never built it.
+- **Not images.** These rows are marked `not-an-image:`: `REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD`,
+  `docker.io/DOCKERHUB_USER/villain-joker:latest`, challenge 03's untagged `busybox` (the clown file Kyverno exists
+  to deny), and the two Backstage scaffolder parameters. The why after the prefix uses hyphens, because the
+  script splits rows on whitespace.
+- **What `check` says now.** There are 30 problems, each only "never saved". No row lacks a digest or a source. A
+  rehearsal in a scratch clone ran `save`, with a stub docker that only echoes, and it got 35 images and 0
+  failed. Afterwards `check` reported 0 problems, and `save` had changed no ref, digest or source. So the real
+  `save` only fills in the saved column.
+- **Test.** `verify/test_images_lock.py` (offline) is new. It reads references the way the script does, so an
+  image added without a row fails the gate here. It also holds each digest to its other copies: a reference's
+  own pin, VERSIONS.lock for laiyer/llm-guard-api, `verify/mirror_copies.py` for the `mirror/` rows, and the
+  ai-layer Application's `kustomize.images` entry for `llm-guard`. Chart-default images that no file here names
+  (cert-manager, kyverno, istio, datadog, kagent's ghcr images, the prometheus stack's quay images, falco 0.45.1)
+  are not in the lock yet. lab-platform's `deploy/mirror/pulled.tsv` lists them, but from a render at 01c1d9e,
+  before the falco bump, so adding them waits on a fresh render.
+
+- **Gates.** `bash verify/run-tests.sh` passes, 188 tests. `bash verify/run-e2e-tools.sh` passes everything except
+  `test_promo_villains_public.py`, which fails as it did before this change: ghcr.io answers an anonymous pull of the
+  ten lab-platform `promo/` villains with 401. That is #678 (lab-platform#293).
+
+**Not yet run on netcup.** Michael, on netcup, with ghcr.io logged in (the llm-guard package is private), and
+in a clone of staging that has this change, runs
+`~/repos/workflow/llm-coding-workflow/scripts/mirror-images.sh save .`. Then `check .` must print 0 problems, and
+he commits the `images.lock` it rewrote.
