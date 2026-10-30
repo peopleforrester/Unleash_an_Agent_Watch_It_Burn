@@ -104,23 +104,24 @@ else
     note "fleet.sh not executable; skipping the orphan survey"
 fi
 
-# --- 3b. Provisioning rows with no cluster behind them ------------------------------------------------
-# The admin page counts rows. A row whose cluster was destroyed without being deregistered still counts,
-# so "Available 2" read over one live cluster and one long-gone roster cluster from the retired round
-# naming (#391). Dry-run survey only: WIB_APPLY is stripped so this gate can never delete a row.
+# --- 3b. Pool rows with no cluster behind them ------------------------------------------------------
+# lab-platform's pool counts rows (labctl status). A row whose cluster was destroyed without being
+# deregistered still counts, so the old admin page read "Available 2" over one live cluster and one
+# long-gone roster cluster from the retired round naming (#391). reconcile-pool reads the pool through
+# labctl pool (#656). Dry-run survey only: WIB_APPLY is stripped so this gate can never delete a row.
 echo
-echo "== every provisioning row names a live cluster =="
+echo "== every row in lab-platform's pool names a live cluster =="
 if [[ -x "${REPO}/infra/terraform/fleet/fleet.sh" ]]; then
     out="$(env -u WIB_APPLY "${REPO}/infra/terraform/fleet/fleet.sh" reconcile-pool 2>&1 \
            | grep -E 'GHOST|name a live cluster|have no live cluster|pool:' || true)"
     if printf '%s' "${out}" | grep -q "name a live cluster"; then
-        ok "every provisioning row names a live EKS cluster"
+        ok "every row in lab-platform's pool names a live EKS cluster"
     elif printf '%s' "${out}" | grep -q "GHOST"; then
         printf '%s\n' "${out}" | sed 's/^/    /'
-        bad "provisioning rows with no cluster; the admin counts are too high. Remove with: WIB_APPLY=1 fleet.sh reconcile-pool"
+        bad "pool rows with no cluster; labctl status counts too many. Remove with: WIB_APPLY=1 fleet.sh reconcile-pool"
     else
         [[ -n "${out}" ]] && printf '%s\n' "${out}" | sed 's/^/    /'
-        note "reconcile-pool reached no verdict (no admin token or AWS credentials?)"
+        note "reconcile-pool reached no verdict (no labctl, DATABASE_URL or AWS credentials?)"
     fi
 else
     note "fleet.sh not executable; skipping the pool survey"

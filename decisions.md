@@ -5645,3 +5645,51 @@ interaction in Agent Observability and check: the trace list says 1 error; `exec
 `error.type:tool_error`, and its arguments and result are readable; the generate_content after it is not red; and
 `invocation` and `call_llm` carry `gen_ai.provider.name:aws.bedrock`. The offline half is
 `python3 verify/test_trace_shape_e2e.py`.
+
+## 2026-10-30 · #656 · `ingest pool` and `reconcile-pool` read lab-platform's pool through `labctl pool`
+
+The 2026-10-29 #656 entry above left two of the issue's three paths waiting on a labctl command that lists an
+event's pool. lab-platform#302 added it in lab-platform commit 227774f: `labctl pool --customer <c> --event <e>`
+writes every cluster imported into the event and still in its pool, claimed or not, as CSV under
+`cluster_name,state,region,reserved_for,claimed_by` (store.WritePoolCSV, Go's encoding/csv). The state is
+claimable, claimed, reserved, instructor or failed. An unknown event exits 1 with nothing written, and an empty
+pool writes the header alone. It is read-only and needs DATABASE_URL but no USER. That was read from
+`cmd/labctl/pool.go` and `internal/store/pool.go` through `sources`. Deregister moved in #624. With this, all three
+paths use lab-platform's pool.
+
+- **`pool_rows` runs `labctl pool`.** It runs `labctl pool --customer agenticburn --event "$WIB_EVENT"` and still
+  prints `<name>\t<state>`, so `reconcile_pool` and `cmd_ingest pool` are unchanged around it. It no longer scrapes
+  /admin/roster with the admin token. It parses the output with Python's csv module, so a quoted address with a
+  comma in it stays one field. It refuses output that has no `cluster_name` and `state` columns, and a row that
+  does not fit the header, rather than reading either as an empty pool. That is the same rule the old parse used
+  when its row count did not match. A labctl failure (an unknown event, a database that does not answer) is
+  `pool:unreadable`, as an unreachable page was.
+- **It checks labctl and DATABASE_URL, not USER.** `labctl_ready` also requires USER, because import, deregister
+  and release are audited. A dry run of `reconcile-pool`, which the hygiene gate makes, only reads, so it should
+  not need USER. Under WIB_APPLY=1 the deregister still goes through `labctl_deregister`, and that function still
+  requires USER.
+- **What the pool now holds.** labctl pool leaves out clusters that have already left the pool (released,
+  deregistered, torn down). So reconcile-pool no longer names a ghost that only the old roster still lists. Before,
+  it recorded `deregister:<name>` on every teardown, because labctl refuses a name the pool does not hold.
+- **The admin token stays.** `resolve_admin_token` and `WIB_PROVISIONING_URL` are still used by `serve-actions`,
+  the actions view and `ops`, which read the provisioning app for their own purposes. This issue did not ask for
+  those to move, so `reconcile-pool` and `ingest pool` are simply no longer among the token's users.
+  `cmd_reconcile_pool` now requires `aws labctl python3` in place of `aws curl jq python3`.
+- **Wording.** The usage text, the hygiene gate's section 3b (`verify/fleet-hygiene.sh`) and
+  `docs/GO-LIVE-CHECKLIST.md` now name lab-platform's pool and `labctl status` where they named the provisioning
+  rows and the admin page. The gate still matches the same reconcile-pool log lines.
+- **Tests.** `verify/test_fleet_pool_reconcile.sh` drops its /admin/roster HTML fixture. In its place a labctl shim
+  serves a `labctl pool` CSV. The checks show the pool is read through labctl for the fleet's event and never from
+  /admin/roster, and that a quoted comma does not break a row. A failed `labctl pool`, a missing DATABASE_URL (labctl
+  not run), a wrong header, empty output and a short row each fail with nothing deregistered. The header alone is a
+  clean empty pool, and a dry run with USER unset still names the ghost. The `ingest pool` case in
+  `verify/test_fleet_terminal_harvest.sh` reads its three rows from the same shim, and a failed `labctl pool` there
+  imports nothing.
+- **Earlier drafts.** `origin/agent/656-10488` and `origin/agent/656-10497` carry no commits beyond staging
+  (`verify/draft-drift.sh`: CLEAN), so nothing was reused.
+
+**Not yet run on a cluster.** This needs a session with the fleet's AWS profiles, labctl on PATH, DATABASE_URL and
+USER, against an attendee pool imported for the event. First run `infra/terraform/fleet/fleet.sh reconcile-pool` (a
+dry run). It must list the same names as `labctl pool --customer agenticburn --event "$WIB_EVENT"` and end with
+"all N row(s) name a live cluster". Then run `bash verify/fleet-hygiene.sh` and check that section 3b reports ok.
+Then run #532's live `fleet.sh ingest pool`, per the #532 entry above.

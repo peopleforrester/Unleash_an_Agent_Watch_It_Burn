@@ -553,9 +553,10 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       cluster: tell its attendee, then rerun with --release-claimed.
     release <email...>  Release a mis-claim, or reset after a rehearsal, through labctl release. The cluster
                       that email held leaves the pool for good; it is not claimable again.
-    reconcile-pool    Name every provisioning row whose cluster no longer exists in any fleet account
-                      (a ghost the admin page still counts), and with WIB_APPLY=1 deregister them.
-                      'down all' and 'down-fleet' end with it. Non-zero while a ghost remains.
+    reconcile-pool    Name every row in lab-platform's handout pool (labctl pool) whose cluster no longer
+                      exists in any fleet account (a ghost labctl status still counts), and with WIB_APPLY=1
+                      deregister them through labctl deregister. Needs labctl and DATABASE_URL, and USER
+                      under WIB_APPLY=1. 'down all' and 'down-fleet' end with it. Non-zero while a ghost remains.
     audit-zero        Assert every fleet account holds nothing billable beyond its lab VPC's NAT, its
                       address and the Bedrock endpoint ENIs; names anything else, attendee IAM users
                       whose cluster is gone included. 'down all' and
@@ -600,8 +601,8 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       labctl, DATABASE_URL and USER; a roster cluster goes in as role=instructor), the terminal
                       login harvested from each cluster's terminal-auth Secret
                       (\${WIB_PROVISION_DIR}/scripts/harvest_terminal_credential.sh). 'pool' re-ingests
-                      every row the live pool holds, claimed ones included, so a corrected login reaches
-                      students who already have a cluster.
+                      every cluster lab-platform's pool lists for the event (labctl pool), claimed ones
+                      included, so a corrected login reaches students who already have a cluster.
     aws-keys <n>     Mint the access key of each built cluster's attendee IAM user, in its OWN account (SAME
                       <n> + offset), into per-account CSVs. The cluster root makes the user, its policy and
                       its access entry (#549); a name with no user is skipped. DRY-RUN unless WIB_APPLY=1.
@@ -3602,7 +3603,7 @@ cmd_reap() {
     report_failures >&2 || true
 }
 
-# --- Pool reconcile (#391): every provisioning row must name a cluster that exists ---------------------
+# --- Pool reconcile (#391): every row in lab-platform's pool must name a cluster that exists -------------
 # Teardown deregisters what it destroys (down_one), and only that. A cluster deleted from the console, one
 # whose state was lost, or one torn down before deregistration existed keeps its row for good. Before the
 # tier-2 upgrade the admin page read "Total 2, Available 2" over ONE live cluster: the other row was
@@ -3613,63 +3614,40 @@ cmd_reap() {
 # roster and not a name pattern. A roster row whose cluster was never rebuilt looks as current as one that
 # is serving, and a retired name is only the case that happened to be visible this time.
 
-# Every row in the pool as "<name>\t<state>", read from /admin/roster, the one admin view that lists every
-# row (/admin/export lists claimed rows only). The page is HTML, so the parse is checked against the row
-# count the page prints itself: a template change that breaks the parse fails here, loudly, instead of
-# reading as an empty pool with nothing wrong in it.
+# Every cluster in lab-platform's handout pool for the fleet's event as "<name>\t<state>", claimed or not, from
+# `labctl pool --customer agenticburn --event <event>` (lab-platform#302). It is the pool ingest imports into and
+# teardown deregisters from, so reconcile-pool now judges the pool it changes (#656); it used to scrape the
+# provisioning app's /admin/roster with the admin token and deregister from lab-platform what that page listed.
+# labctl exits non-zero for an unknown event and writes the header alone for an empty pool, so a mistyped event
+# fails here instead of reading as a pool with nothing in it. The header is checked as well: output without
+# cluster_name and state columns is not the listing this reads, and is refused rather than read as empty.
+# Read-only, so it needs labctl and DATABASE_URL but not USER.
 pool_rows() {
-    local tok page rc=0
-    tok="$(resolve_admin_token)" || { log "pool: cannot resolve the provisioning admin token"; return 1; }
-    page="$(mktemp)"
-    if ! curl -sf --max-time 30 --get --data-urlencode "token=${tok}" \
-            "${WIB_PROVISIONING_URL%/}/admin/roster" -o "${page}"; then
-        log "pool: ${WIB_PROVISIONING_URL%/}/admin/roster did not answer"; rm -f "${page}"; return 1
+    local csv err rc=0
+    command -v labctl >/dev/null 2>&1 || { log "pool: labctl is not on PATH, so lab-platform's pool cannot be read"; return 1; }
+    [[ -n "${DATABASE_URL:-}" ]] || { log "pool: DATABASE_URL is not set, so labctl cannot read lab-platform's pool"; return 1; }
+    csv="$(mktemp)"; err="$(mktemp)"
+    if ! labctl pool --customer "${WIB_LABCTL_CUSTOMER}" --event "${WIB_EVENT}" >"${csv}" 2>"${err}"; then
+        log "pool: labctl pool --customer ${WIB_LABCTL_CUSTOMER} --event ${WIB_EVENT} failed: $(tail -n 1 "${err}")"
+        rm -f "${csv}" "${err}"; return 1
     fi
-    python3 - "${page}" <<'PY' || rc=$?
-import re, sys
-from html.parser import HTMLParser
+    python3 - "${csv}" <<'PY' || rc=$?
+import csv, sys
 
-class Roster(HTMLParser):
-    """The <td> texts of every row of the roster table (class "rt"); header rows hold only <th>."""
-    def __init__(self):
-        super().__init__()
-        self.rows, self.row, self.cell, self.inside = [], None, None, False
-    def handle_starttag(self, tag, attrs):
-        if tag == "table" and "rt" in (dict(attrs).get("class") or "").split():
-            self.inside = True
-        elif self.inside and tag == "tr":
-            self.row = []
-        elif self.row is not None and tag == "td":
-            self.cell = []
-    def handle_endtag(self, tag):
-        if tag == "td" and self.cell is not None:
-            self.row.append("".join(self.cell).strip())
-            self.cell = None
-        elif tag == "tr" and self.row is not None:
-            if self.row:
-                self.rows.append(self.row)
-            self.row = None
-        elif tag == "table":
-            self.inside = False
-    def handle_data(self, data):
-        if self.cell is not None:
-            self.cell.append(data)
-
-page = open(sys.argv[1], encoding="utf-8", errors="replace").read()
-parsed = Roster()
-parsed.feed(page)
-said = re.search(r"All (\d+) rows", page)
-if not said:
-    sys.exit("pool: /admin/roster printed no row count, so it is not the page this reads")
-if int(said.group(1)) != len(parsed.rows):
-    sys.exit(f"pool: /admin/roster says {said.group(1)} rows but {len(parsed.rows)} parsed; "
-             "refusing to judge a pool it cannot read")
-for row in parsed.rows:
-    if len(row) < 2 or not row[1]:
-        sys.exit(f"pool: a roster row carries no cluster name: {row}")
-    print(f"{row[1]}\t{row[0]}")
+with open(sys.argv[1], newline="", encoding="utf-8") as f:
+    rows = list(csv.reader(f))
+header = rows[0] if rows else []
+if "cluster_name" not in header or "state" not in header:
+    sys.exit(f"pool: labctl pool wrote no cluster_name,state header (got {header}), so it is not the listing this reads")
+name_at, state_at = header.index("cluster_name"), header.index("state")
+for row in rows[1:]:
+    if not row:
+        continue
+    if len(row) != len(header) or not row[name_at].strip():
+        sys.exit(f"pool: a labctl pool row does not fit its header {header}: {row}")
+    print(f"{row[name_at].strip()}\t{row[state_at].strip()}")
 PY
-    rm -f "${page}"
+    rm -f "${csv}" "${err}"
     return "${rc}"
 }
 
@@ -3699,7 +3677,7 @@ fleet_live_clusters() {
 # through the same deregister_one teardown uses. Returns 0 when the pool describes the live fleet (or every
 # ghost was removed), 1 when it does not, or could not be read.
 reconcile_pool() {
-    [[ -z "${WIB_NO_INGEST:-}" ]] || { log "pool: WIB_NO_INGEST set; the provisioning pool is not reconciled"; return 0; }
+    [[ -z "${WIB_NO_INGEST:-}" ]] || { log "pool: WIB_NO_INGEST set; lab-platform's pool is not reconciled"; return 0; }
     local rows live name state total=0 ghosts=0 dereg_before dereg_after
     rows="$(pool_rows)" || { record_fail "pool:unreadable"; return 1; }
     live="$(fleet_live_clusters)" || return 1
@@ -3725,7 +3703,7 @@ reconcile_pool() {
         log "pool: all ${total} row(s) name a live cluster"; return 0
     fi
     if [[ -z "${WIB_APPLY:-}" ]]; then
-        log "pool: ${ghosts} of ${total} row(s) have no live cluster, so the admin page's counts are ${ghosts} too high."
+        log "pool: ${ghosts} of ${total} row(s) have no live cluster, so labctl status counts ${ghosts} too many."
         log "      DRY-RUN; WIB_APPLY=1 fleet.sh reconcile-pool deregisters them."
         return 1
     fi
@@ -3735,12 +3713,12 @@ reconcile_pool() {
 }
 
 cmd_reconcile_pool() {
-    local t; for t in aws curl jq python3; do
+    local t; for t in aws labctl python3; do
         command -v "${t}" >/dev/null 2>&1 || { log "missing tool: ${t}"; exit 1; }
     done
     mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
     [[ -n "${WIB_APPLY:-}" ]] || log "reconcile-pool: DRY-RUN (set WIB_APPLY=1 to deregister the ghosts)"
-    log "reconcile-pool: ${WIB_PROVISIONING_URL%/} against ${WIB_ATTENDEE_ACCOUNTS},${WIB_DEFAULT_ACCOUNT}"
+    log "reconcile-pool: lab-platform's pool ${WIB_LABCTL_CUSTOMER}/${WIB_EVENT} against ${WIB_ATTENDEE_ACCOUNTS},${WIB_DEFAULT_ACCOUNT}"
     reconcile_pool || true
     report_failures
 }
@@ -3869,13 +3847,13 @@ ingest_one() {
     fi
 }
 
-# Harvest + push the fleet (or explicit names) into the live provisioning pool. Numeric arg = per-account
+# Harvest + push the fleet (or explicit names) into lab-platform's handout pool. Numeric arg = per-account
 # count form (honors WIB_NAME_OFFSET + WIB_ATTENDEE_ACCOUNTS); otherwise explicit cluster names (default account).
-# `ingest pool` re-ingests every row the provisioning app's pool holds, by name, read from its /admin/roster
-# (pool_rows, which still takes the admin token). It was how rows already claimed picked up a corrected
-# terminal login, because /admin/import upserted by name and never touched claim state: the bare-password
-# era left claimed rows showing agentic / sprouts (provisioning-agenticburn#16). The rows now go to labctl
-# import like every other ingest.
+# `ingest pool` re-ingests every cluster lab-platform's pool holds for the event, by name, claimed or not, read
+# through `labctl pool` (pool_rows, #656). It was how rows already claimed picked up a corrected terminal login,
+# because /admin/import upserted by name and never touched claim state: the bare-password era left claimed rows
+# showing agentic / sprouts (provisioning-agenticburn#16). The rows go to labctl import like every other ingest,
+# so the names now come from the pool they are written back to, not from the provisioning app's /admin/roster.
 cmd_ingest() {
     [[ $# -ge 1 ]] || { log "usage: ingest <clusters-per-account> | ingest pool | ingest <cluster-name...>"; exit 2; }
     labctl_ready || exit 1
@@ -3885,7 +3863,7 @@ cmd_ingest() {
         rows="$(pool_rows)" || { log "ingest pool: cannot read the live pool, nothing re-ingested"; exit 1; }
         mapfile -t _pool_names < <(cut -f1 <<<"${rows}" | awk 'NF' | sort -u)
         [[ "${#_pool_names[@]}" -gt 0 ]] || { log "ingest pool: the live pool holds no rows"; exit 1; }
-        log "ingest pool: re-ingesting ${#_pool_names[@]} row(s) from ${WIB_PROVISIONING_URL%/}/admin/roster"
+        log "ingest pool: re-ingesting ${#_pool_names[@]} row(s) from labctl pool --customer ${WIB_LABCTL_CUSTOMER} --event ${WIB_EVENT}"
         set -- "${_pool_names[@]}"
     fi
     POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# ABOUTME: Behavioural tests for fleet.sh reconcile-pool (#391): a provisioning row whose cluster is not in
-# ABOUTME: any fleet account's eks list-clusters is named, and deregistered only under WIB_APPLY=1. Uses shims.
-# ABOUTME: The deregister is `labctl deregister` against lab-platform's pool, not POST /admin/delete (#624).
+# ABOUTME: Behavioural tests for fleet.sh reconcile-pool (#391): a pool row whose cluster is not in any fleet
+# ABOUTME: account's eks list-clusters is named, and deregistered only under WIB_APPLY=1. Uses shims.
+# ABOUTME: The pool is read with `labctl pool` and deregistered with `labctl deregister`, both lab-platform's
+# ABOUTME: handout pool (#656, #624), not the provisioning app's /admin/roster and /admin/delete.
 #
 # Usage: verify/test_fleet_pool_reconcile.sh      (no cloud access; aws, curl and labctl are shims)
 set -uo pipefail
@@ -12,26 +13,16 @@ SHIM="${T}/bin"; mkdir -p "${SHIM}"; CALLS="${T}/calls"; : >"${CALLS}"
 fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
 
-# The pool as the provisioning app's /admin/roster renders it (templates/admin_roster.html): the state
-# cell, the name cell, then claimed-by, claimed-at, console and Datadog org. The org cell deliberately
-# carries a watch-it-burn-* string, so a parse that grabbed every name-shaped cell would count it as a row.
-roster_page() { # $1: the row count the page claims; remaining: "state|name" rows
-  local said="$1"; shift
-  printf '<div class="rsum"><span class="pill free">1 free</span></div>\n'
-  printf '<p style="font-size:13px;">\n  All %s rows, unclaimed first. Use your browser'"'"'s find.</p>\n' "${said}"
-  printf '<table class="rt">\n  <tr><th>State</th><th>Cluster</th><th>Claimed by</th><th>Claimed at (UTC)</th><th>Console</th><th>Datadog org</th></tr>\n'
-  local r st nm
-  for r in "$@"; do
-    st="${r%%|*}"; nm="${r#*|}"
-    printf '  <tr class="%s">\n    <td><span class="st %s">%s</span></td>\n    <td class="cn">%s</td>\n' "${st}" "${st}" "${st}" "${nm}"
-    printf '    <td class="who">&mdash;</td>\n    <td class="cn">&mdash;</td>\n'
-    printf '    <td class="cn"><a href="https://x.agenticburn.com" target="_blank" rel="noopener">https://x.agenticburn.com</a></td>\n'
-    printf '    <td class="cn">watch-it-burn-instructor-org</td>\n  </tr>\n'
-  done
-  printf '</table>\n'
+# The pool as `labctl pool --customer <c> --event <e>` writes it (lab-platform#302, store.WritePoolCSV): Go's
+# encoding/csv under the header cluster_name,state,region,reserved_for,claimed_by. Every row carries a
+# claimed_by address with a comma in it, which Go quotes, so a parse that split on commas would count six fields.
+pool_csv() { # remaining: "state|name" rows
+  printf 'cluster_name,state,region,reserved_for,claimed_by\n'
+  local r
+  for r in "$@"; do printf '%s,%s,us-west-2,,"a,b@example.com"\n' "${r#*|}" "${r%%|*}"; done
 }
 
-# ---- shims: aws answers list-clusters per profile from files; curl serves the roster or a status code ----
+# ---- shims: aws answers list-clusters per profile from files; curl answers a status code ----
 cat >"${SHIM}/aws" <<'S'
 #!/usr/bin/env bash
 echo "aws AWS_PROFILE=${AWS_PROFILE:-} $*" >>"${CALLS}"
@@ -45,18 +36,18 @@ S
 cat >"${SHIM}/curl" <<'S'
 #!/usr/bin/env bash
 echo "curl $*" >>"${CALLS}"
-case "$*" in
-  *"/admin/roster"*)
-    [[ -n "${ROSTER_DOWN:-}" ]] && exit 22
-    out=""; prev=""; for a in "$@"; do [[ "${prev}" == "-o" ]] && out="${a}"; prev="${a}"; done
-    cat "${T}/roster.html" >"${out}"; exit 0 ;;
-esac
 printf '%s' "${CURL_CODE:-200}"
 S
-# labctl: logs its arguments; LABCTL_RC makes it refuse with that code. Nothing may POST to /admin/delete any more.
+# labctl: logs its arguments, and whether it saw USER. `pool` writes ${T}/pool.csv, or fails as an unknown event
+# does when POOL_RC is set. Any other verb refuses with LABCTL_RC when that is set. Nothing may read /admin/roster
+# or POST to /admin/delete any more.
 cat >"${SHIM}/labctl" <<'S'
 #!/usr/bin/env bash
-echo "labctl $*" >>"${CALLS}"
+echo "labctl $* [USER=${USER:-}]" >>"${CALLS}"
+if [[ "${1:-}" == pool ]]; then
+  [[ -z "${POOL_RC:-}" ]] || { echo "labctl: no event agenticburn/test-event (test)" >&2; exit "${POOL_RC}"; }
+  cat "${T}/pool.csv"; exit 0
+fi
 [[ "${LABCTL_RC:-0}" -eq 0 ]] || { echo "labctl: ${!#} is claimed (test)" >&2; exit "${LABCTL_RC}"; }
 S
 for c in terraform railway; do printf '#!/usr/bin/env bash\necho "%s $*" >>"${CALLS}"\nexit 0\n' "$c" >"${SHIM}/$c"; done
@@ -70,11 +61,14 @@ src() { # $1: bash snippet to run after sourcing fleet.sh (its source guard keep
 }
 # The verdict, the failure ledger and the log of one reconcile_pool run.
 # Called as every caller in fleet.sh calls it (`reconcile_pool || ...`), so errexit is off inside it there too.
-run() { : >"${T}/log"; SRC_ERR="${T}/log" src 'mkdir -p "${LOG_DIR}"; rc=0; reconcile_pool || rc=$?; echo "rc=${rc}"; echo "--ledger"; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"' >"${T}/out"; }
+_RUN='mkdir -p "${LOG_DIR}"; rc=0; reconcile_pool || rc=$?; echo "rc=${rc}"; echo "--ledger"; cat "${FAIL_FILE}" 2>/dev/null; rm -f "${FAIL_FILE}"'
+run() { : >"${T}/log"; SRC_ERR="${T}/log" src "${_RUN}" >"${T}/out"; }
+run_without() { : >"${T}/log"; SRC_ERR="${T}/log" src "unset $1; ${_RUN}" >"${T}/out"; } # $1: a variable to unset
 reset() { : >"${CALLS}"; rm -f "${T}"/live.*; }
 
 # The state from the issue: one real attendee cluster, one roster row from the retired round naming.
-roster_page 2 "free|watch-it-burn-attendee-001" "instructor|watch-it-burn-r2-2" >"${T}/roster.html"
+pool_csv "claimable|watch-it-burn-attendee-001" "instructor|watch-it-burn-r2-2" >"${T}/pool.csv"
+dereg() { grep "^labctl deregister" "${CALLS}"; }
 
 echo "== a ghost is named, and only named, in a dry run =="
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
@@ -83,8 +77,12 @@ check "the dead roster row is named a ghost" 'grep -q "GHOST  instructor  watch-
 check "the live cluster is not" '! grep -q "GHOST.*attendee-001" "${T}/log"'
 check "the verdict is non-zero while a ghost remains" 'grep -qx "rc=1" "${T}/out"'
 check "the ghost is in the failure ledger as pool-ghost:<name>" 'grep -qx "pool-ghost:watch-it-burn-r2-2" "${T}/out"'
-check "nothing is deregistered without WIB_APPLY=1" '! grep -q "^labctl" "${CALLS}"'
-check "the Datadog org cell is not read as a row" '! grep -q "instructor-org" "${T}/log"'
+check "nothing is deregistered without WIB_APPLY=1" '[[ -z "$(dereg)" ]]'
+check "the pool is read from lab-platform through labctl pool, for the fleet's event" \
+  'grep -qxF "labctl pool --customer agenticburn --event test-event [USER=tester]" "${CALLS}"'
+check "and not from the provisioning app's /admin/roster" '! grep -q "admin/roster" "${CALLS}"'
+check "a quoted address with a comma in it is one field, so its row fits the header" \
+  '! grep -q "does not fit its header" "${T}/log" && ! grep -q "example.com" "${T}/log"'
 check "both accounts were asked, each with its own profile and the region" \
   'grep -q "AWS_PROFILE=acct-a eks list-clusters --region us-west-2" "${CALLS}" && grep -q "AWS_PROFILE=acct-b eks list-clusters --region us-west-2" "${CALLS}"'
 check "the default account is not listed twice when it is also an attendee account" \
@@ -93,7 +91,7 @@ check "the default account is not listed twice when it is also an attendee accou
 echo "== WIB_APPLY=1 deregisters exactly the ghost =="
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
 WIB_APPLY=1 run
-check "deregisters the ghost through labctl" 'grep -qxF "labctl deregister --customer agenticburn --event test-event watch-it-burn-r2-2" "${CALLS}"'
+check "deregisters the ghost through labctl" 'grep -qxF "labctl deregister --customer agenticburn --event test-event watch-it-burn-r2-2 [USER=tester]" "${CALLS}"'
 check "and nothing else" '[[ "$(grep -c "^labctl deregister" "${CALLS}")" -eq 1 ]] && ! grep -q "admin/delete" "${CALLS}"'
 check "a clean deregister is a zero verdict" 'grep -qx "rc=0" "${T}/out"'
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
@@ -105,38 +103,52 @@ echo "== a cluster in any fleet account keeps its row =="
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"; printf 'watch-it-burn-r2-2\twatch-it-burn-other\n' >"${T}/live.acct-b"
 WIB_APPLY=1 run
 check "a pool that matches the live fleet is clean" 'grep -qx "rc=0" "${T}/out" && grep -q "all 2 row(s) name a live cluster" "${T}/log"'
-check "and nothing is deregistered" '! grep -q "^labctl" "${CALLS}"'
+check "and nothing is deregistered" '[[ -z "$(dereg)" ]]'
 
 echo "== it judges nothing it cannot see =="
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
 WIB_APPLY=1 LIST_FAIL_PROFILE=acct-b run
 check "one account that cannot be listed stops the verdict, deregistering nothing" \
-  'grep -qx "rc=1" "${T}/out" && grep -qx "pool:list-clusters-failed:acct-b" "${T}/out" && ! grep -q "^labctl" "${CALLS}"'
+  'grep -qx "rc=1" "${T}/out" && grep -qx "pool:list-clusters-failed:acct-b" "${T}/out" && [[ -z "$(dereg)" ]]'
 reset
 WIB_APPLY=1 run
 check "every account empty while the pool holds rows is refused without the override" \
-  'grep -qx "rc=1" "${T}/out" && grep -qx "pool:zero-live-clusters" "${T}/out" && ! grep -q "^labctl" "${CALLS}"'
+  'grep -qx "rc=1" "${T}/out" && grep -qx "pool:zero-live-clusters" "${T}/out" && [[ -z "$(dereg)" ]]'
 reset
 WIB_APPLY=1 WIB_RECONCILE_EMPTY_FLEET=1 run
 check "with the override (teardown's case) every row goes" '[[ "$(grep -c "^labctl deregister" "${CALLS}")" -eq 2 ]]'
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
-WIB_APPLY=1 ROSTER_DOWN=1 run
-check "an unreachable roster page is a failure, not a clean pool" \
-  'grep -qx "rc=1" "${T}/out" && grep -qx "pool:unreadable" "${T}/out" && ! grep -q "^labctl" "${CALLS}"'
-roster_page 3 "free|watch-it-burn-attendee-001" "instructor|watch-it-burn-r2-2" >"${T}/roster.html"
+WIB_APPLY=1 POOL_RC=1 run
+check "an event labctl does not know is a failure, not a clean pool" \
+  'grep -qx "rc=1" "${T}/out" && grep -qx "pool:unreadable" "${T}/out" && grep -q "no event agenticburn/test-event" "${T}/log" && [[ -z "$(dereg)" ]]'
+reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
+WIB_APPLY=1 run_without DATABASE_URL
+check "no DATABASE_URL is a failure, and labctl is not run" \
+  'grep -qx "rc=1" "${T}/out" && grep -qx "pool:unreadable" "${T}/out" && grep -q "DATABASE_URL is not set" "${T}/log" && ! grep -q "^labctl" "${CALLS}"'
+reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
+run_without USER
+check "reading the pool needs no USER, so a dry run still names the ghost" \
+  'grep -qxF "labctl pool --customer agenticburn --event test-event [USER=]" "${CALLS}" && grep -q "GHOST  instructor  watch-it-burn-r2-2" "${T}/log"'
+printf 'name,status\nwatch-it-burn-attendee-001,ready\n' >"${T}/pool.csv"
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
 WIB_APPLY=1 run
-check "a page whose row count disagrees with the parse is refused" \
-  'grep -qx "rc=1" "${T}/out" && grep -q "says 3 rows but 2 parsed" "${T}/log" && ! grep -q "^labctl" "${CALLS}"'
-printf '<html><body>Admin</body></html>\n' >"${T}/roster.html"
+check "output without the cluster_name,state header is refused" \
+  'grep -qx "rc=1" "${T}/out" && grep -q "wrote no cluster_name,state header" "${T}/log" && [[ -z "$(dereg)" ]]'
+: >"${T}/pool.csv"
+reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
+WIB_APPLY=1 run
+check "empty output, not even the header, is refused" \
+  'grep -qx "rc=1" "${T}/out" && grep -q "wrote no cluster_name,state header" "${T}/log" && [[ -z "$(dereg)" ]]'
+printf 'cluster_name,state,region,reserved_for,claimed_by\nwatch-it-burn-attendee-001,claimable\n' >"${T}/pool.csv"
+reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
+WIB_APPLY=1 run
+check "a row that does not fit the header is refused" \
+  'grep -qx "rc=1" "${T}/out" && grep -q "does not fit its header" "${T}/log" && [[ -z "$(dereg)" ]]'
+pool_csv >"${T}/pool.csv"
 reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
 run
-check "a page that is not the roster is refused" 'grep -qx "rc=1" "${T}/out" && grep -q "printed no row count" "${T}/log"'
-roster_page 0 >"${T}/roster.html"
-reset; printf 'watch-it-burn-attendee-001\n' >"${T}/live.acct-a"
-run
-check "an empty pool is clean" 'grep -qx "rc=0" "${T}/out"'
-roster_page 2 "free|watch-it-burn-attendee-001" "instructor|watch-it-burn-r2-2" >"${T}/roster.html"
+check "an empty pool (the header alone) is clean" 'grep -qx "rc=0" "${T}/out" && grep -q "all 0 row(s)" "${T}/log"'
+pool_csv "claimable|watch-it-burn-attendee-001" "instructor|watch-it-burn-r2-2" >"${T}/pool.csv"
 reset
 WIB_NO_INGEST=1 WIB_APPLY=1 run
 check "WIB_NO_INGEST=1 opts out (no request made)" 'grep -qx "rc=0" "${T}/out" && ! grep -qE "^(curl|labctl)" "${CALLS}"'

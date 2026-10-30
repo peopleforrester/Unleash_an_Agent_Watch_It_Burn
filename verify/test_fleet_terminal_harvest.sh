@@ -43,26 +43,23 @@ esac
 exit 0
 S
 # labctl: every `import` keeps its stdin, numbered, for the assertions, and logs its arguments and whether it saw
-# DATABASE_URL and USER. LABCTL_RC makes every import fail with that exit code.
+# DATABASE_URL and USER. LABCTL_RC makes every import fail with that exit code. `pool` writes ${T}/pool.csv, the
+# event's pool as labctl pool lists it (#656), or fails as an unknown event does when POOL_RC is set.
 cat >"${SHIM}/labctl" <<'S'
 #!/usr/bin/env bash
 echo "labctl $* [DATABASE_URL=${DATABASE_URL:-} USER=${USER:-}]" >>"${CALLS}"
+if [[ "${1:-}" == pool ]]; then
+  [[ -z "${POOL_RC:-}" ]] || { echo "labctl: no event agenticburn/test-event (test)" >&2; exit "${POOL_RC}"; }
+  cat "${T}/pool.csv"; exit 0
+fi
 [[ "${LABCTL_RC:-0}" -eq 0 ]] || { echo "labctl: import refused (test)" >&2; exit "${LABCTL_RC}"; }
 n="$(ls "${T}/imports" | wc -l)"; cat >"${T}/imports/$((n + 1)).csv"
 S
-# curl: /admin/roster serves ${T}/roster.html. Nothing may POST to /admin/import any more.
+# curl: answers 404 to everything. Nothing may read /admin/roster or POST to /admin/import any more.
 cat >"${SHIM}/curl" <<'S'
 #!/usr/bin/env bash
 echo "curl $*" >>"${CALLS}"
-data=""; out=""; url=""; prev=""
-for a in "$@"; do
-  [[ "${prev}" == "--data" ]] && data="${a}"; [[ "${prev}" == "-o" ]] && out="${a}"
-  [[ "${a}" == http* ]] && url="${a}"; prev="${a}"
-done
-case "${url}" in
-  */admin/roster) [[ -n "${ROSTER_DOWN:-}" ]] && exit 22; cat "${T}/roster.html" >"${out}"; exit 0 ;;
-  *) printf 404 ;;
-esac
+printf 404
 S
 printf '#!/usr/bin/env bash\necho "terraform $*" >>"${CALLS}"\nexit 0\n' >"${SHIM}/terraform"
 chmod +x "${SHIM}"/* "${PROV}/scripts/harvest_terminal_credential.sh"
@@ -195,26 +192,24 @@ HARVEST_RC=1 AWS_PROFILE=accen-qa src "restart_pods() { :; }; terminal_password_
 check "a failed harvest fails the verb" '[[ "${rc}" -ne 0 ]]'
 
 echo "== ingest pool re-ingests every live row, claimed ones included =="
-cat >"${T}/roster.html" <<H
-<p>All 3 rows, unclaimed first.</p>
-<table class="rt">
-  <tr><th>State</th><th>Cluster</th><th>Claimed by</th></tr>
-  <tr class="claimed"><td>claimed</td><td class="cn">${A}</td><td>someone@example.com</td></tr>
-  <tr class="free"><td>free</td><td class="cn">${B}</td><td>&mdash;</td></tr>
-  <tr class="admin"><td>admin</td><td class="cn">${ADMIN}</td><td>&mdash;</td></tr>
-</table>
+cat >"${T}/pool.csv" <<H
+cluster_name,state,region,reserved_for,claimed_by
+${A},claimed,us-west-2,,someone@example.com
+${ADMIN},instructor,us-west-2,,
+${B},claimable,us-west-2,,
 H
 reset
 src "rc=0; cmd_ingest pool || rc=\$?; echo rc=\${rc}" >"${T}/out"
 check "exits 0 when every row re-ingested" 'grep -qx "rc=0" "${T}/out"'
-check "reads the live pool from /admin/roster" 'grep -q "https://prov.test/admin/roster" "${CALLS}"'
+check "reads the pool from lab-platform through labctl pool, for the fleet's event" \
+  'grep -q "^labctl pool --customer agenticburn --event test-event " "${CALLS}" && ! grep -q "admin/roster" "${CALLS}"'
 check "imports one row per pool row" '[[ "$(ls "${T}/imports" | wc -l)" -eq 3 ]]'
 check "the claimed row is re-sent with agentic/agentic" \
   '(for f in "${T}"/imports/*.csv; do ctrue "${f}" "d[\"name\"] == \"${A}\" and d[\"terminal_user\"] == \"agentic\" and d[\"terminal_password\"] == \"agentic\"" && exit 0; done; exit 1)'
 check "each row is harvested in its own account" \
   'grep -qxF "harvest ${A} us-west-2 ${POOL} [AWS_PROFILE=accen-qa]" "${CALLS}" && grep -qxF "harvest ${B} us-west-2 ${POOL} [AWS_PROFILE=acct-default]" "${CALLS}"'
 reset
-ROSTER_DOWN=1 src "rc=0; cmd_ingest pool || rc=\$?; echo rc=\${rc}" >"${T}/out"
+POOL_RC=1 src "rc=0; cmd_ingest pool || rc=\$?; echo rc=\${rc}" >"${T}/out"
 check "an unreadable pool is a failure, with nothing posted" \
   '! grep -qx "rc=0" "${T}/out" && [[ "$(ls "${T}/imports" | wc -l)" -eq 0 ]] && grep -q "cannot read the live pool" "${T}/stderr"'
 
