@@ -5840,3 +5840,45 @@ community cluster (`fleet.sh instructors up community`), run
 provision a fresh attendee cluster and confirm the same script prints `IMDS: BLOCKED`. Final stage placement in
 the run-of-show (which segment, how it flows in the 30-minute KubeCon demo vs the 2-hour format) is the
 presenters' choreography call and is left as a follow-up rather than written into the tightly-timed scripts here.
+
+## 2026-10-30 · #116 · C1 Round 2b DNS-exfil beat — design re-captured on current staging, build held for Barcelona
+
+#116 (C1 two-stage: naive NetworkPolicy defeated by DNS exfil, FQDN policy holds) is `deferred-barcelona`
+by Michael's 2026-09-07 decision (the Portland set of eight is closed; see Question 575 and
+`docs/research/2026-08-28-challenge-currency-review.md`), kept open because the design work is still wanted.
+A dispatched run has no cluster and cannot deploy, so the achievable deliverable is the engineering design,
+which is what the deferral kept the issue open for.
+
+- **What this run did.** Captured the design in `docs/research/2026-10-30-c1-dns-exfil-beat.md`: the Round 2b
+  attack (marketing intel base32-encoded into subdomain labels, shipped over the UDP/TCP-53-to-kube-system
+  allow in `agent-allow-dns.yaml` that Round 2's `agent-egress-allowlist.yaml` — namespace-wide since #108 —
+  cannot inspect), the authoritative-DNS collector (sibling of the beacon collector,
+  `docs/beacon-collector-spec.md`), and three fix options with their costs: A Cilium `toFQDNs` (a fleet CNI
+  migration off VPC-CNI with `enableNetworkPolicy`), B a forced egress proxy, and C a resolver lockdown
+  (CoreDNS with no arbitrary upstream) as the required floor under either.
+- **This is a re-draft of an earlier, un-promoted draft.** The prior attempt's design is on
+  `origin/agent/116-9446` (commit 7ebed3d, `docs/research/2026-10-26-c1-dns-exfil-beat.md`), never promoted
+  to staging; a later re-dispatch failed environmentally (a pool-level podman user-namespace fault, unrelated
+  to this issue's work, which touches no images). Per the re-dispatched-draft rule,
+  `bash verify/draft-drift.sh origin/agent/116-9446 origin/staging` was run: it flagged **one** drifted path,
+  `decisions.md` (append-only, moved 184 commits on staging), and no drift on the design-doc path. So the
+  design was remade on the current layout rather than cherry-picked. **What differs from the 9446 draft:**
+  (1) the doc is re-dated 2026-10-30 (the day of this run) and its filename with it; (2) every file reference
+  and technical claim was re-verified against current staging — the two NetworkPolicies, the `workshop-mcp`
+  tool surface (`get_marketing_intel`, `run_shell`), the `python:3.12-slim` image with `curl`/`ca-certificates`
+  but no `dnsutils`, and VPC-CNI `enableNetworkPolicy="true"` in `infra/terraform/aws/cluster/main.tf` all still
+  hold, so the design content is unchanged in substance; (3) the `round_shapes.py` citation now reads
+  #290/#291/#498/#560 to match the current file; (4) this decisions entry is written fresh rather than
+  cherry-picked, since it was the drifted path.
+- **What this run did NOT do, on purpose.** No student lab prose, no facilitation/run-of-show, no deploy
+  config, no CNI change, and no live beat. The build needs a cluster (option A needs a Cilium cluster) and is
+  scoped out of Portland; for Portland, Round 2b stays a narrated slide.
+- **Open decision, parked.** Which FQDN control (A/B over the C floor) is a fleet networking/architecture
+  call left to Michael and to the build being scheduled for the next event; it is not decided here.
+
+**Not yet run on a cluster.** The live build and its validation are deferred to Barcelona (KubeCon EU, not yet
+on the conference-knowledge registry with a workshop slot). Owed on a build with AWS access: implement the
+DNS-exfil path and the authoritative-DNS collector, the chosen FQDN control, and the CoreDNS lockdown; then a
+`verify/` live-tier check paralleling `verify/c1-exfil-block.sh` that confirms the DNS-exfil stage reaches the
+collector with the egress NetworkPolicy still enforced, and that after the fix the label-encoded lookups fail
+while Bedrock and legitimate in-cluster resolution still work.
