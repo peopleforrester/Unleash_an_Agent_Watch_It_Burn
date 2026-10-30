@@ -93,7 +93,8 @@ downloads into the gitignored `verify/.tools`. It needs network but no cluster, 
 fails when a fetch fails.
 
 The live-cluster suite, `bash verify/run-e2e.sh`, is run by hand during a cluster build, with CONTEXT,
-IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster. It is deliberately not
+IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set against a fresh attendee cluster, and DRIFT_PROFILE and
+ATTENDEE_CLUSTER naming the fleet account and attendee cluster the AWS-plane drift check uses (#205). It is deliberately not
 declared as the gate's E2E command: hecaton's promotion gate has no cluster, no AWS and none of its tools,
 so declaring it would hold main red for good (#543).
 

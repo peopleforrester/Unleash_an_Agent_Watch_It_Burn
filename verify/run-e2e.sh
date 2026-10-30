@@ -3,7 +3,11 @@
 # ABOUTME: verify/ (kubectl/helm renders, node, live Datadog), doc-link fetches, and Backstage Playwright.
 #
 # Usage: CONTEXT=<kube-context> IAM_PIPELINE_PROFILE=<aws-profile> IAM_PIPELINE_REGION=<region> \
-#            [NAMESPACE=agent] bash verify/run-e2e.sh
+#            DRIFT_PROFILE=<aws-profile> ATTENDEE_CLUSTER=<cluster> [NAMESPACE=agent] bash verify/run-e2e.sh
+#
+# The AWS-plane drift check (test_drift_aws_live.py, #205) needs DRIFT_PROFILE, an operator profile in
+# WIB_ATTENDEE_ACCOUNTS whose account has infra/terraform/aws/audit applied, and ATTENDEE_CLUSTER, a cluster in that
+# account whose attendee key is in infra/terraform/fleet/aws-pool/. They are prerequisites like the rest.
 #
 # The target cluster is never guessed. CONTEXT is required and is passed explicitly to every kubectl call;
 # the current-context is never read (see AGENTS.md, Kube-context safety). KUBECONFIG may be set for this
@@ -62,6 +66,8 @@ fi
 command -v aws >/dev/null 2>&1 || missing+=("the aws CLI is not on PATH")
 [[ -n "${IAM_PIPELINE_PROFILE:-}" && -n "${IAM_PIPELINE_REGION:-}" ]] \
     || missing+=("IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION must name the AWS profile and region the policy pipeline's AWS checks run as")
+[[ -n "${DRIFT_PROFILE:-}" && -n "${ATTENDEE_CLUSTER:-}" ]] \
+    || missing+=("DRIFT_PROFILE and ATTENDEE_CLUSTER must name the fleet account (audit root applied) and the attendee cluster whose key the AWS-plane drift check uses (test_drift_aws_live.py)")
 if [[ -z "${CONTEXT:-}" ]]; then
     missing+=("CONTEXT is not set: name the kube-context of the test attendee cluster to run against")
 elif [[ "${tools_ready}" -eq 1 ]] \

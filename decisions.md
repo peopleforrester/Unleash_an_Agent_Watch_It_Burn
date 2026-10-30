@@ -5840,3 +5840,75 @@ community cluster (`fleet.sh instructors up community`), run
 provision a fresh attendee cluster and confirm the same script prints `IMDS: BLOCKED`. Final stage placement in
 the run-of-show (which segment, how it flows in the 30-minute KubeCon demo vs the 2-hour format) is the
 presenters' choreography call and is left as a follow-up rather than written into the tightly-timed scripts here.
+## 2026-10-30 · #205 · Drift on both planes: a documented self-heal window, a daily refresh-only plan, and a Config and CloudTrail record that joins the IAM pipeline
+
+**What #205 asked.** Document and detect out-of-band change on both planes. Deleting a managed NetworkPolicy
+returns within the documented window; a hand-made bucket via attendee keys shows in AWS Config and the next
+drift plan; `docs/floor.md` gets an "unmanaged" register.
+
+**What differs from the draft.** The earlier draft is fa10d01 on `origin/agent/205-6695`, cut from the staging of
+2026-10-24. `bash verify/draft-drift.sh origin/agent/205-6695 origin/staging` named two drift lines,
+`infra/terraform/README.md` and `verify/run-e2e.sh`, and staging had moved 349 commits. The design was made again
+on today's layout, not cherry-picked:
+
+- **The apps are read from the chart.** The draft read `gitops/apps/` and four roots; since #609 the apps are
+  `gitops/bootstrap/apps/` and the one root is `lab-bootstrap`. `verify/test_drift_floor.py` reads them through
+  `verify/bootstrap_chart.py` and reads the root from `deploy-full-idp.sh`'s heredoc (`deploy_root`).
+- **The register has today's ignores.** Three ignores have been added since the draft: the Bedrock ModelConfigs'
+  `.spec.model` (#513), agentgateway's `BEDROCK_NOVA_MODEL` (#561) and `agentgateway-c7-config`'s `config.yaml`
+  (#496, #515). The Agent's `toolNames` ignore is now rendered only on `c7Control: toolnames` (#679), and the
+  Kyverno toggles moved to `/spec/validationActions`. The gate now reads every jqPathExpression's field, not
+  only the guard-proxy env regex.
+- **Two Argo CD installs, one window.** lab-platform installs Argo CD v3.5.6 (chart 10.11.3) on the clusters
+  it builds; `deploy-full-idp.sh` installs v3.5.2 (chart 10.8.4). Both sources were read on 2026-10-30
+  (`selfHealRemainingBackoff`, the self-heal backoff flags 2/3/300, and the default resync of 120 s plus 60 s of
+  jitter), and they are the same. `--self-heal-backoff-cooldown-seconds` is deprecated with no effect in both. A
+  lab-platform cluster is pinned to one commit, so a push never reaches it and its self-heal count never resets
+  in an event. That is harmless after 5 quiet minutes, and the doc says so.
+- **The audit root joins the IAM policy pipeline.** The draft's `aws/audit` made a role and a bucket policy
+  outside `pipeline.ROOTS`, which `verify/test_iam_policy_coverage.py` (#207, #549) now refuses. It is the
+  pipeline's third root, suite `audit`. The recorder's role carries the canonical boundary. Config delivers
+  through the role's own grant, `aws_iam_role_policy.config_delivery` (its prefix of its bucket, conditioned on
+  `aws:ResourceAccount`), so the bucket policy grants CloudTrail only. Every document is built from locals and is
+  known at plan time. The root takes `var.event` with no default (#494). `iam_plan_render.py` renders it,
+  `test_iam_policy_structural.py` holds its one bounded role and three documents, and `effect-tests.yaml` has an
+  `audit` suite (the recorder delivers to its prefix, nowhere else, cannot delete, and a bounded role cannot
+  stop the recorder). The cluster suite gains "the attendee user cannot make a bucket", which is the acceptance
+  case's refusal held offline. The recorded types add `AWS::IAM::UserPolicy`, `AWS::IAM::RolePolicy` and
+  `AWS::Config::ConfigurationRecorder`, read from the Config resource reference on 2026-10-30.
+- **The plan reads `resource_drift`.** The draft took exit 2 from `-detailed-exitcode`, which an output change
+  also gives. The report now saves each refresh-only plan and reads `resource_drift` from `terraform show -json`,
+  so drift is what the refresh found and never what the variables would change. The cluster root now requires
+  `hostname` and `role` (#602, #636), so each plan is given `event`, `hostname` and `role` from the cluster's own
+  `aws_eks_cluster` tags and `imds_hop_limit` from its launch template (#113). A state without those tags makes the
+  report incomplete, not guessed. The boundary states (`infra/org/boundary/states/`) are planned too. Init uses
+  `-lockfile=readonly`. The accounts and the default account are read from `fleet.sh`, not copied.
+- **The register follows the fleet.** Attendee users are the cluster root's since #549, and only the key is minted
+  outside Terraform (`mint_attendee_key`). `known-unmanaged.yaml` adds lab-platform's clusters and buckets
+  (`lab-platform:managed=true`), which `labctl event up` builds in the fleet accounts. The community cluster's
+  node-role exposure (#113) is named.
+- **The live suite asks for its inputs.** `verify/run-e2e.sh` lists DRIFT_PROFILE and ATTENDEE_CLUSTER as
+  prerequisites, and AGENTS.md's by-hand paragraph names them, as `verify/test_gate_commands.py` requires.
+
+**The schedule stays cron.** The question asked on #205 on 2026-10-24 (where the daily run lives) stands with its
+default. `infra/terraform/drift/scheduled-drift.sh` runs from cron on the machine that holds the states. #201,
+which would move state to a remote backend, is still open. `.github/workflows/plan-policy.yml` plans against a
+moto mock, which is right for policy and useless for drift.
+
+**Dependency.** The audit root's lock records hashicorp/aws 6.71.0, the newest 6.x on 2026-10-30, under the
+same `~> 6.0` constraint as the other roots; `terraform init` with the pinned Terraform v1.15.6 wrote it.
+
+**Tests.** `verify/test_drift_floor.py` (offline, new) was mutation-tested: a dropped register field, a disabled
+selfHeal, a Kyverno rule refusing NetworkPolicy deletes and a moved chart each fail it. `verify/test_drift_report.py`
+(offline, new) runs the report against terraform, aws and gh shims. `verify/test_drift_selfheal_live.py` and
+`verify/test_drift_aws_live.py` (E2E, new) fail by name without CONTEXT, DRIFT_PROFILE or ATTENDEE_CLUSTER.
+
+**Not yet run on a cluster.** Owed on a build with AWS access:
+- `CONTEXT=<ctx> python3 verify/test_drift_selfheal_live.py`, the NetworkPolicy drill, on a fresh attendee
+  cluster;
+- the boundary, then `terraform -chdir=infra/terraform/aws/audit apply -state=states/<profile>.tfstate -var
+  profile=<profile> -var event="${WIB_EVENT}"` in each fleet account, after checking for an existing recorder;
+- `DRIFT_PROFILE=<p> ATTENDEE_CLUSTER=<c> python3 verify/test_drift_aws_live.py`;
+- `IAM_PIPELINE_PROFILE=<p> IAM_PIPELINE_REGION=us-west-2 python3 verify/test_iam_policy_aws.py` for the new
+  audit suite and the new cluster case;
+- one `python3 infra/terraform/drift/drift-report.py` by hand, then the cron line from `docs/floor.md`.

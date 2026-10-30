@@ -274,3 +274,43 @@ cluster:
     action: eks:CreateAccessEntry
     resource: arn:aws:eks:${region}:${account_id}:cluster/watch-it-burn-attendee-999
     expect: denied
+  # #205's acceptance asks for "a hand-made bucket via attendee keys". The key's only grant is the two EKS reads
+  # above, so the attempt is refused, and what records it is CloudTrail (docs/floor.md, the acceptance case).
+  - name: the attendee user cannot make a bucket
+    identity: [aws_iam_user_policy.attendee_eks]
+    action: s3:CreateBucket
+    resource: arn:aws:s3:::wib-hand-made
+    expect: implicitDeny
+
+# Run against a plan of infra/terraform/aws/audit: the AWS Config recorder's role in one fleet account (#205).
+# Its identity grant is config_delivery; AWS_ConfigRole, attached by ARN, is AWS's read grant and not in the plan.
+audit:
+  - name: the recorder can deliver a snapshot to its own prefix of its own bucket
+    identity: [aws_iam_role_policy.config_delivery]
+    action: s3:PutObject
+    resource: arn:aws:s3:::watch-it-burn-audit-${account_id}-${region}/config/AWSLogs/${account_id}/Config/${region}/snapshot.json.gz
+    context: {aws:ResourceAccount: "${account_id}"}
+    expect: allowed
+  - name: the recorder cannot write into the trail's prefix
+    identity: [aws_iam_role_policy.config_delivery]
+    action: s3:PutObject
+    resource: arn:aws:s3:::watch-it-burn-audit-${account_id}-${region}/cloudtrail/AWSLogs/${account_id}/forged.json.gz
+    context: {aws:ResourceAccount: "${account_id}"}
+    expect: implicitDeny
+  - name: the recorder cannot write to any other bucket
+    identity: [aws_iam_role_policy.config_delivery]
+    action: s3:PutObject
+    resource: arn:aws:s3:::any-bucket/key
+    context: {aws:ResourceAccount: "${account_id}"}
+    expect: implicitDeny
+  - name: the recorder cannot delete what it delivered
+    identity: [aws_iam_role_policy.config_delivery]
+    action: s3:DeleteObject
+    resource: arn:aws:s3:::watch-it-burn-audit-${account_id}-${region}/config/AWSLogs/${account_id}/Config/${region}/snapshot.json.gz
+    context: {aws:ResourceAccount: "${account_id}"}
+    expect: implicitDeny
+  - name: the recorder cannot stop itself, whatever it is granted
+    identity: allow-all
+    action: config:StopConfigurationRecorder
+    resource: "*"
+    expect: explicitDeny

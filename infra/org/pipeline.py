@@ -7,8 +7,8 @@
   pipeline.py structural --show SHOW.json
   pipeline.py syntax     --show SHOW.json --profile P --region R
   pipeline.py diff       --show SHOW.json --base BASE.json --profile P --region R [--accept-new ADDRESS ...]
-  pipeline.py effect     --show SHOW.json --suite boundary|cluster --profile P --region R
-  pipeline.py run        --show SHOW.json --base BASE.json --suite boundary|cluster --profile P --region R
+  pipeline.py effect     --show SHOW.json --suite boundary|cluster|audit --profile P --region R
+  pipeline.py run        --show SHOW.json --base BASE.json --suite boundary|cluster|audit --profile P --region R
 
 SHOW.json is `terraform show -json` of a saved plan (`terraform plan -out x.tfplan; terraform show -json
 x.tfplan`) or of a state file. BASE.json is the same for merged main, planned from a worktree of it. The
@@ -37,11 +37,14 @@ POLICY_DIR = ORG / "policy"
 EXCEPTIONS = ORG / "exceptions.md"
 BOUNDARY_TEMPLATE = ORG / "permissions-boundary.json.tftpl"
 EFFECT_TESTS = ORG / "effect-tests.yaml"
-# Keep in step with infra/org/boundary/main.tf and infra/terraform/aws/cluster/main.tf.
+# Keep in step with infra/org/boundary/main.tf, infra/terraform/aws/cluster/main.tf and infra/terraform/aws/audit/main.tf.
 BOUNDARY_NAME = "watch-it-burn-permissions-boundary"
 # The Terraform roots the pipeline runs on, by --suite. A root that creates an IAM or org policy document
 # goes here and gets a suite in effect-tests.yaml; verify/test_iam_policy_coverage.py fails on one that does not.
-ROOTS = {"boundary": ORG / "boundary", "cluster": ORG.parents[1] / "infra/terraform/aws/cluster"}
+# audit is the per-account AWS Config recorder and CloudTrail trail (#205): its recorder role, that role's delivery
+# grant and the trail's bucket policy.
+ROOTS = {"boundary": ORG / "boundary", "cluster": ORG.parents[1] / "infra/terraform/aws/cluster",
+         "audit": ORG.parents[1] / "infra/terraform/aws/audit"}
 
 # The kinds whose statements grant permission. Check 3's rules apply to these; trust and resource policies
 # (a role's assume-role policy, a KMS key policy) are checked by Access Analyzer only, because their Allow
@@ -381,6 +384,9 @@ def effect_env(show: dict, suite: str) -> dict:
     env = {"account_id": account_id(show)}
     if suite == "cluster":
         env.update(cluster_name=cluster_name(show), region=plan_region(show))
+    elif suite == "audit":
+        # The audit bucket's name carries the region (watch-it-burn-audit-<account>-<region>).
+        env.update(region=plan_region(show))
     return env
 
 
