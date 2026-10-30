@@ -42,7 +42,8 @@ llm-guard-api          laiyer/llm-guard-api:0.3.16  (verdict envelope field is `
                        resolved from Docker Hub 2026-10-25 and checked against the body's sha256, #603; upstream protectai/llm-guard archived July 2026)
                        deployed image is not this one: lab-platform's ghcr.io/peopleforrester/lab-platform/llm-guard:v1, built there from
                        images/llm-guard at f2fcb8f (digest sha256:781a126b..., set by kustomize.images in gitops/bootstrap/apps/ai-layer.yaml, #652);
-                       the saved tarballs and images.lock rows wait on mirror-images.sh save on netcup (#603)
+                       both have images.lock rows by digest (2026-10-30, #603); their saved tarballs wait on
+                       mirror-images.sh save on netcup, which writes each row's saved date
 
 ## LIVE-VALIDATED (authoritative): Terraform cluster watch-it-burn-attendee-001 (2026-06-22)
 ## Supersedes the 2026-06-17 eksctl test-cluster snapshot (torn down). Full record: PROJECT_STATE.md.

@@ -5450,3 +5450,42 @@ WITB_DD_ADMIN_API_KEY=<watch-it-burn/datadog api-key> WITB_DD_ADMIN_APP_KEY=<wat
 verify/test_lab_pipeline_live.py`. Also owed on that cluster: the datadog-gate's log says datadog-secret found, and
 not dual (`kubectl -n monitoring logs ds/otel-collector-opentelemetry-collector-agent -c datadog-gate`).
 `verify/datadog-orgs.sh <context>` says one org by design, and a second `fleet.sh converge` repairs nothing.
+
+## 2026-10-30 · #603 · images.lock records all 25 image references and the declared llm-guard-api by digest and source; the tarballs wait on a netcup save
+
+The fleet rule from llm-coding-workflow#182 (claude-config/rules/infra/image-retention.md there) asks each repo for
+an `images.lock`: one row per image it depends on, with its registry digest, where its source lives and the date
+its tarball was saved, written by llm-coding-workflow's `scripts/mirror-images.sh`. VERSIONS.lock's digest TODO for
+laiyer/llm-guard-api was closed in the earlier run of this issue.
+
+- **`images.lock` at the root.** Its rows are the 25 references `mirror-images.sh refs .` finds, in its order, then
+  one declared row, laiyer/llm-guard-api:0.3.16 at sha256:bea3efb1…50ba, upstream protectai/llm-guard (the issue's
+  source; the rule would switch an archived upstream to a `repo:` fork, and llm-guard-upstream-mirror is a private
+  mirror of it, but nothing deploys that image now). Every digest was read from its registry on 2026-10-30 over the
+  registry API, and every pinned reference matched. Two were not readable anonymously: lab-platform's llm-guard:v1
+  package is private, so its row takes the digest ai-layer.yaml pins, and watch-it-burn:tool-pin is a 404.
+- **Sources.** The docker-library and vendor images are `upstream:` their Dockerfile repos; the watch-it-burn
+  mirror copies of python, nginx and busybox are `upstream:` the image they copy. workshop-mcp, web-terminal and
+  sample-app are `repo:` this repo's `images/<name>`; llm-guard (a kustomize name) is
+  `repo:peopleforrester/lab-platform/deploy/images` with lab-platform's name@sha256 as its digest; vllm-qwen3 is
+  `repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3`. The four KubeArmor references are templated on
+  `{{.Values.imageRegistry}}`, so their digests are the lab-platform mirror copies by name@sha256.
+- **Not images.** The two Backstage scaffolder parameters, challenge 03's `REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD`
+  and its untagged privileged `busybox` (a deliberate bad example the policies deny), and beat 02's
+  `docker.io/DOCKERHUB_USER/villain-joker:latest` are `not-an-image:` with digest `-`. The #480 spike's tag-only
+  `watch-it-burn:tool-pin` was never pushed, so it is `build:images/tool-pin` with digest `-`; when it is pushed by
+  digest it becomes a `repo:` row.
+- **`verify/test_images_lock.py`** finds references as the script does and fails when one has no row, when a row's
+  source, digest or saved column breaks the rule, when a digest disagrees with the one pinned in its reference, or
+  when the llm-guard-api row drifts from VERSIONS.lock. It finds the same 25 references in the same order as
+  `refs`. It accepts saved `-`, since the date is the netcup step; `mirror-images.sh check .` is what owes it, and
+  today it reports the 20 rows that need a tarball as "never saved" and nothing else.
+
+**Not yet saved.** This run is on netcup but cannot reach the Docker daemon (the socket is root:docker) or write
+`~/repos/private/image-archive`. As michael, after this reaches staging, in the talk's checkout:
+`mirror-images.sh save . && mirror-images.sh check .`, then commit images.lock with the dates it writes. The pull
+of lab-platform's llm-guard and mirror copies needs a ghcr login that can read lab-platform's packages, and
+vllm-qwen3 is about 5 GB.
+
+**Out of scope here.** Images a Helm chart pulls (Argo CD, Kyverno, Falco and the rest) are named by no tracked
+`image:` line, so they are not rows; lab-platform's mirror copies of the Docker Hub ones are its own to retain.

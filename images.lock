@@ -1,0 +1,44 @@
+# images.lock: every container image this repo depends on, pinned by digest.
+# Columns: ref  digest  source  saved   (whitespace-separated, one image per line)
+# source: repo:<owner/name[/path]>  build context in a repo we own
+#         build:<path>              built from <path> in this repo; digest may be -
+#         upstream:<url>            third-party image built from someone else's source
+#         none                      handed to us built: the saved tarball is the only copy
+#         not-an-image:<why>        a placeholder or deliberate bad example; digest -
+# Written by scripts/mirror-images.sh in llm-coding-workflow; the rule is
+# claude-config/rules/infra/image-retention.md there.
+#
+# This repo (#603): the rows below are the 25 references `mirror-images.sh refs .` finds, in its order, then the
+# declared rows. Each digest was read from its registry on 2026-10-30, except llm-guard's, whose package is private
+# and is taken from the pin in gitops/bootstrap/apps/ai-layer.yaml. A third-party tag (python:3.12-slim) is the
+# digest it pointed at that day. saved is - until `mirror-images.sh save .` runs on netcup and writes the date.
+# verify/test_images_lock.py holds every reference to a row here.
+python:3.12-slim sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 upstream:https://github.com/docker-library/python -
+nginx:1.27-alpine sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 upstream:https://github.com/nginx/docker-nginx -
+node:24-trixie-slim sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
+debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts -
+${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-types-in -
+ghcr.io/peopleforrester/watch-it-burn:sample-app@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app -
+${{values.image}} - not-an-image:backstage-skeleton-value-filled-from-parameters.image -
+busybox - not-an-image:challenge-03-deliberate-bad-example-untagged-and-privileged-for-the-policies-to-deny -
+REGISTRY/evil-mcp-shim@sha256:REPLACE_AT_BUILD - not-an-image:challenge-03-placeholder-the-facilitator-fills-in-at-build -
+ghcr.io/peopleforrester/watch-it-burn:tool-pin - build:images/tool-pin -
+docker.io/DOCKERHUB_USER/villain-joker:latest - not-an-image:beat-02-placeholder-account-set-at-build -
+ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1 sha256:b3921dc289d7040259cca76faa6e53c6712e21c146377d1c9980ce5704e32445 upstream:https://github.com/open-telemetry/opentelemetry-operator -
+cr.agentgateway.dev/agentgateway:v1.5.0@sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896 sha256:bf2f339ef326d32def2aaeb44b1b4549801293c19b89e764a4228667d97d9896 upstream:https://github.com/agentgateway/agentgateway -
+ghcr.io/peopleforrester/watch-it-burn:busybox-1.36@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662 upstream:https://github.com/docker-library/busybox -
+ghcr.io/peopleforrester/watch-it-burn:python-3.12-slim@sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e sha256:6c4dd321d176d61ea848dc8c73a4f7dbae8f70e0ee48bb411ea2f045b599fa8e upstream:https://github.com/docker-library/python -
+llm-guard ghcr.io/peopleforrester/lab-platform/llm-guard@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b repo:peopleforrester/lab-platform/deploy/images -
+ghcr.io/peopleforrester/watch-it-burn:workshop-mcp@sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e sha256:9a26c18cbfa5337441936720c892fe5fbf41f5bc52d359b3bb8f4615b799873e repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/workshop-mcp -
+ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf sha256:68004fb5ed2d58eeb7624262f58e47d4ffb3c800789cef749ba8d16e8ef6f6cf repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/web-terminal -
+ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 sha256:65e3e85dbaed8ba248841d9d58a899b6197106c23cb0ff1a132b7bfe0547e4c0 upstream:https://github.com/nginx/docker-nginx -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor:stable-bf867783eb30 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor@sha256:bf867783eb30368db13e6244e5cf42689997406d7f4fc11ef06479154fe00388 upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-init:stable-cdc3763f302d ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-init@sha256:cdc3763f302de555cb093238bb4a7d93dee64423e96459318ebfbf94c018c22d upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-relay-server:latest-e4fd875cc1e4 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-relay-server@sha256:e4fd875cc1e4f6f6a2a90c57655d3bda09fc7846eb82ea24e0296e578ee29f29 upstream:https://github.com/kubearmor/KubeArmor -
+{{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-controller:latest-89f52a3e9fc0 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-controller@sha256:89f52a3e9fc07af532c68019c028451a5986a63d128dccb560bf3aa3004c8922 upstream:https://github.com/kubearmor/KubeArmor -
+docker.io/library/nginx:1.27-alpine sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 upstream:https://github.com/nginx/docker-nginx -
+ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3 -
+# Declared: images no tracked file names as an image: key or FROM line.
+# The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
+# and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.
+laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard -
