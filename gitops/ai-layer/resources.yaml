@@ -378,6 +378,14 @@ spec:
         # view does not surface as prompts. PRD #20 M3 / #27.
         - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
           value: SPAN_AND_EVENT
+        # a2a-sdk's own spans off at source (#320). kagent 0.10.1 locks a2a-sdk 0.3.26, which reads this at import
+        # (a2a/utils/telemetry.py) and makes every trace_class span a no-op. They are protocol plumbing: four empty
+        # request-handler spans between kagent's server span and ADK's `invocation`, and the event-queue
+        # micro-spans #264 filtered. The collector used to drop all of them, and with them the parent link,
+        # which put the agent's work in a second root beside the student's own. Off, `invocation` hangs
+        # straight off the server span, and there is nothing for the collector to drop on the path.
+        - name: OTEL_INSTRUMENTATION_A2A_SDK_ENABLED
+          value: "false"
     # Committed tool config = the VULNERABLE default (challenge 7 "7a: see the weakness"), consistent
     # with the input/output guards which also boot OFF. C7 (beat-3) has one control per cluster (#496). On a
     # workshop cluster it is kagent's toolNames allowlist below. On an admin cluster (the KubeCon breakout) it

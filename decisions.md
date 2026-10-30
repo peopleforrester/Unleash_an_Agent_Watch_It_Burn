@@ -4776,3 +4776,51 @@ committed test, because it needs the sister repo's code, which the gate does not
 profiles, against a fleet that is up and the live app. Then press `restart-agent` on one attendee row of
 `/admin/console?token=` and see the action go `done` with a new Ready workshop-agent pod. That needs the fleet up and
 the admin token, so it waits for the next cluster build.
+
+## 2026-10-30 · #320 · One interaction is one root again: the noise filter was cutting the parent chain
+
+**What split the trace.** Nothing upstream. guard-proxy injects the W3C context inside `agent.forward`. agentgateway
+v1.5.0 emits one SERVER span per request, parented on the incoming traceparent, and forwards its own span id as the
+next one (`crates/agentgateway/src/telemetry/trc.rs`, read at the tag). kagent v0.10.1 runs `FastAPIInstrumentor` on
+the agent's app (`kagent-core` `tracing/_utils.py`). a2a-sdk 0.3.26, kagent's lock, runs the executor in a task that
+copies that context, and ADK's `invocation` starts under it. So kagent honours an incoming context on the A2A path,
+and nothing belongs with kagent-dev/kagent#2734. The collector's `filter/drop_noise` cut the chain in three places,
+each added for its own noise: every gateway span except `tools/call` (#265) took the gateway's A2A span, every
+burritobot-agent HTTP verb (#286) took the agent's server span for the message, and every `a2a.*` span (#264) took
+the request handlers between that span and `invocation`. With all three gone, `invocation` named a parent nothing
+exported, and Datadog drew it as a second root. The "No content" rows #286 removed were most likely those server
+spans as roots, orphaned by the #265 rule. That is inferred from the order the rules landed, not measured. If so,
+each drop moved the orphan down one level, until it reached `invocation`.
+
+**The change.** Each rule keeps its noise and lets the path through:
+- the gateway rule exempts a span whose `http.host` ends `:3000`, the A2A bind guard-proxy's AGENT_URL dials;
+- the agent HTTP rule exempts a POST of kind SERVER that has a parent. A server span with no parent, every client
+  span, and the ASGI send and receive leaves are still dropped;
+- the `a2a.*` rule exempts `a2a.server.request_handlers.*` spans that have a parent. The event-queue spans, and any
+  a2a span with no parent, are still dropped.
+
+The workshop-agent also sets `OTEL_INSTRUMENTATION_A2A_SDK_ENABLED=false`, which a2a-sdk 0.3.26 reads at import. Its
+spans are then never made, `invocation` hangs straight off the server span, and the tree loses four empty nodes. The
+a2a exemption only matters on a pod that does not honour the variable. The interim the issue offered, a lab sentence
+telling the student to press "Filter to Trace", is not added, because the context was reachable.
+
+**Held without a cluster.** `verify/test_collector_one_root_e2e.py` (tools tier) runs one interaction through the
+pinned otelcol-contrib v0.160.0 with each profile's traces processors: instructor, attendee and burn. It sends the
+interaction's spans, shaped from the three components' source, once with the a2a-sdk spans and once without, plus the noise traces.
+Each run comes out with one root, guard-proxy's `POST /chat`, every span on the path, and the noise still dropped.
+Against the config before this change, it reproduces the issue exactly: roots `burritobot POST /chat` and
+`burritobot-agent invocation`. Removing the `IsRootSpan()` guard from the agent rule fails it too.
+`verify/test_collector_one_root.py` (offline) holds the `:3000` in the gateway rule to AGENT_URL's port and to the
+gateway bind that proxies to workshop-agent, and pins the exemptions and the agent's variable.
+
+**Not yet run on a cluster:** `CONTEXT=<admin-context> python3 verify/one_root_probe.py` on an admin or full
+cluster. It sends one /chat through guard-proxy under a traceparent it picks, then reads that trace from Tempo. It
+expects one root, guard-proxy's POST /chat, with the gateway span, the agent's server span and `invocation` beneath
+it, and no a2a-sdk span. It is a by-hand probe, not a `test_*` file, because run-e2e.sh runs against an attendee
+cluster, which has no Tempo. Then open the interaction in Agent Observability: the "Trace contains multiple root
+spans" banner should be gone, and the list should show one row per interaction.
+
+**For PRD #412's M5.** The plan defers #320 against a recorded Python baseline of roots per interaction. With this
+change that baseline should be one, and `verify/one_root_probe.py` is the way to record it. The Go proxy keeps it
+only if it sends the traceparent on its forward and dials agentgateway on :3000. The second is what the gateway
+exemption keys on, and `verify/test_collector_one_root.py` follows AGENT_URL.

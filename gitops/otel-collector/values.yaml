@@ -75,7 +75,14 @@ config:
           # emitted without a parent, so each one showed up as its own trace beside the real one and
           # a student saw "three more traces generated at the same time" (Whitney, 2026-09-06). What
           # remains is the interaction: the guard-proxy root, invoke_agent, call_llm, execute_tool.
-          - 'IsMatch(name, "^a2a[.]")'
+          #
+          # Except the request-handler spans that HAVE a parent (#320). They are not internals: a2a-sdk's
+          # JSONRPCHandler and DefaultRequestHandler spans are the path from kagent's server span to ADK's
+          # `invocation`, whose parent is DefaultRequestHandler._run_event_stream (a2a-sdk 0.3.26, kagent
+          # 0.10.1's lock). Dropping them re-rooted the agent's whole subtree. The workshop-agent turns the
+          # a2a-sdk spans off at source (OTEL_INSTRUMENTATION_A2A_SDK_ENABLED, gitops/ai-layer/resources.yaml),
+          # so this exemption matters only on a pod that still emits them, where it keeps the trace whole.
+          - 'IsMatch(name, "^a2a[.]") and (IsRootSpan() or not IsMatch(name, "^a2a[.]server[.]request_handlers[.]"))'
           - 'IsMatch(name, "^GET /[.]well-known/agent-card[.]json")'
           # agentgateway's MCP session lifecycle (#265). kagent opens a fresh MCP session per tool use:
           # initialize, notifications/initialized, tools/list, the call, delete_session, each an HTTP
@@ -85,7 +92,15 @@ config:
           # BOTH names on purpose: the gateway is a Rust binary that has reported "agentgateway" whatever
           # the OTel env says, so a condition pinned to the new name alone would silently stop filtering
           # and the empty MCP-session traces would return (#265).
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call")'
+          #
+          # Except the A2A hop on :3000 (#320). guard-proxy -> agentgateway -> kagent is one request, and the
+          # gateway emits ONE span for it, parented on guard-proxy's call and named as kagent's parent: v1.5.0
+          # injects that span's own id as the traceparent it forwards (crates/agentgateway/src/telemetry/trc.rs).
+          # Dropping it with the MCP noise left kagent's side naming a parent nothing exported, and Datadog drew
+          # it as a second root in the same trace, so a student opened a fragment of their own interaction.
+          # http.host is the Host the request arrived with; guard-proxy's AGENT_URL is agentgateway :3000, and
+          # verify/test_collector_one_root.py holds the port here to that URL and to the gateway's A2A bind.
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-gateway|agentgateway)$") and not IsMatch(name, "^tools/call") and not IsMatch(attributes["http.host"], ":3000$")'
           # kagent's own agent-card GET server spans (the client side is dropped above), and every other
           # HTTP verb from the agent's ASGI instrumentation. Measured 2026-09-07 against the live org: 37 of
           # 50 sampled burritobot-agent spans were POST, "POST /", DELETE, "POST / http send" or
@@ -94,7 +109,16 @@ config:
           # it in Agent Observability as "input: No content / output: No content". That is what buried a
           # student's own hello in a list of blank rows. The conversation is unaffected: it lives on the
           # generate_content spans, which carry gen_ai.input.messages and gen_ai.output.messages.
-          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)( /.*)?$")'
+          #
+          # Except the server span for an A2A message that arrived with a caller's context (#320): a POST, kind
+          # SERVER, with a parent. It is the agent's end of the hop from agentgateway, and the parent of
+          # everything the agent does with the message; dropped, the agent's subtree re-rooted beside
+          # guard-proxy's. The blank rows above were most likely these spans as ROOTS, orphaned by the gateway
+          # rule (inferred from the rule order, not measured). As a child in one trace it is one empty node in
+          # the tree, not a row in the list. A server span with no
+          # parent (a caller that sent no context) is still dropped, as is every client span and both ASGI
+          # send/receive spans, which are leaves.
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, "^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)( /.*)?$") and not (kind == SPAN_KIND_SERVER and IsMatch(name, "^POST( |$)") and not IsRootSpan())'
           - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and IsMatch(name, " http (send|receive)$")'
           # The AWS SDK's own span for the Bedrock call. It is a LEAF under generate_content with no
           # gen_ai attributes and no children, so it renders as one more "No content" row per model call
@@ -125,8 +149,11 @@ config:
           # shows two spans, and puts the blocked tool call in a different root of the same trace. A
           # student who clicks their interaction gets a fragment. Restoring these two spans was tried as
           # the fix and DID NOT resolve it: the warning is still there afterwards, so the split is not
-          # caused by the missing parents. It is between the guard-proxy spans and the kagent spans, and
-          # is tracked separately.
+          # caused by the missing parents. It is between the guard-proxy spans and the kagent spans: this
+          # filter also dropped the gateway's A2A span, kagent's server span and the a2a request handlers
+          # between them, so `invocation` named a parent nothing exported (#320). The exemptions in the
+          # rules above keep that path, and verify/test_collector_one_root_e2e.py runs it through the
+          # collector and counts one root.
           #
           # They are restored anyway, on their own merits rather than as a fix. They are the agent's own
           # call hierarchy, transform/set_llmobs_workflow stamps gen_ai.operation.name=invoke_agent on
