@@ -5137,3 +5137,35 @@ that run is red and the room is not told the bot will answer until it is green a
 
 The C5 address judge's first live run on the admin kind was the same 10-27 bring-up (michael-admin, C5 leaks
 PASS) and the 10-28 watch-it-burn-private run (24 PASS), so both cluster kinds have now run it.
+
+## 2026-10-30 · #608 · The #607 Secret checks wait on a live run, and watch-it-burn-private can carry it now
+
+#608 asks for the first live run of `verify/test_llm_bypass_live.py`, which no cluster has run since #490
+(2026-10-24): the `container()` TypeError stopped it after its prerequisites, and #607 fixed that. Hecaton run 12398
+had no cluster and no AWS credentials (`kubectl config get-contexts` lists none, `aws sts get-caller-identity` finds
+no credentials), so the run is still owed. No code changed.
+
+- **The attendee build the issue waits for is not coming before KubeCon.** The platform rebuilt on 2026-10-28 is the
+  roster alone (PROJECT_STATE.md, "KubeCon platform up"), and no attendee lab runs at KubeCon (#532's entry above).
+- **watch-it-burn-private can run it today.** It is the admin profile (`role_of_instructor_name`, held by
+  `verify/test_cluster_roles.sh`), whose app list in `gitops/bootstrap/values-admin.yaml` has every app the attendee
+  profile has that the test reads: kyverno and kyverno-policies (both ValidatingPolicies it compares with
+  `policies/kyverno/`), namespaces (`agent`), and ai-layer (agent-sa and chat-path-ingress, for the #552 checks).
+  Arming the admin cluster flips only require-resource-limits and restrict-image-registries to Deny (`fleet.sh`,
+  `arm_infra_guardrails`). The test's pods set CPU and memory limits and use the signed busybox, so neither policy
+  should refuse a shape the test expects to be admitted.
+- **watch-it-burn-community cannot.** It is the burn profile, with no Kyverno, so the test fails its "ValidatingPolicy
+  deny-llm-endpoint-bypass is installed" prerequisite there, as designed.
+- **What a run touches.** The #607 checks are server-side dry runs and store nothing. The #333, #490 and #552 checks
+  create real Pods, Deployments and a ConfigMap in `agent`, labelled `wib.test/run=<id>`, and delete them on the way
+  out. Nothing calls a model.
+
+**Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it. A session with the accen-dev profile runs:
+
+    C=watch-it-burn-private; K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_llm_bypass_live.py
+
+and records here whether the three #607 checks pass (terminal-auth refused by volume and by secretKeyRef, each
+with its message; ceo-personal-record admitted), and whether the #490 and #552 checks the TypeError hid pass.
