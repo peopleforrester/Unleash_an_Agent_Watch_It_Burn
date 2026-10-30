@@ -5735,3 +5735,27 @@ Run `infra/terraform/fleet/fleet.sh ingest watch-it-burn-attendee-001` and `infr
 ingest-instructors`. Then `labctl status agenticburn <event>` must count the attendee as ready and each roster
 cluster as held. Claim once on `/c/agenticburn/<event>` and rerun the attendee ingest: it must log `0 added` with the
 claim still held. No attendee cluster is up today; the 2026-10-28 platform is the roster alone.
+
+## 2026-10-30 · #608 · First live run on watch-it-burn-private stops at a prerequisite: PyYAML and the cluster fold two expressions differently
+
+Hecaton's security tier ran the first #608 entry's guarded command (escalation 362), from staging at 8c44f5a. The
+credentials came through `sources-security aws-env accen-dev` as environment variables, the kubeconfig went to
+`/tmp/watch-it-burn-private.kubeconfig`, and the guard matched `arn:aws:eks:us-west-2:515966504359:cluster/watch-it-burn-private`.
+`python3 verify/test_llm_bypass_live.py` exited 1 after its prerequisites: 17 passed, and one failed, "live
+restrict-agent-spawned-workloads validation expressions are the repo's". So **the three #607 checks and the #490 and
+#552 checks did not run.** None of them passed or failed. The suite stopped before it created anything, and `agent`
+holds no `wib.test/run` pod, Deployment or ConfigMap.
+
+- **The policy did not drift.** Argo CD reports kyverno-policies Synced at 8c44f5a, the same commit. Validations 2 and 3
+  (the secret-volume and secretKeyRef rules from #606) are the same on the cluster as in the repo once whitespace is
+  collapsed. The one difference: each is a `>-` folded scalar whose second line is more indented than its first.
+  PyYAML reads the break between those two lines as one `\n`, and the stored policy has `\n\n` there (the Go YAML
+  parser on the way to the API server). CEL treats both the same, so the policy enforces what the repo says.
+- **The fault is in the test.** Its compare is exact (`verify/test_llm_bypass_live.py`, the `SPAWN` expressions check,
+  and the deny-llm-endpoint-bypass one before it), so it fails any cluster running a folded expression with a
+  more-indented line. It needs a follow-up: compare with whitespace collapsed, or write those expressions as `|-`.
+  That is code work, beyond what this escalation allowed, so nothing changed here.
+
+**Not yet run on a cluster:** the three #607 checks (terminal-auth refused by volume and by secretKeyRef,
+ceo-personal-record admitted), and the #490 and #552 checks. After the compare is fixed, run the same guarded command
+from the first #608 entry against watch-it-burn-private again.
