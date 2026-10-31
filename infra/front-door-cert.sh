@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Finds or requests the ACM certificate a roster cluster's console NLB presents (#638), prints the DNS
-# ABOUTME: validation records it waits on, and once ISSUED prints the ARN a root passes as frontDoor.certificateArn.
+# ABOUTME: validation records it waits on, and once ISSUED prints its bare ARN, the value labctl's --front-door-cert takes.
 #
 # Why. lab-platform's gateway proxies attackme and burritobot-private to the console Service lab-platform.yaml
 # declares as each roster profile's front_door, and verifies its certificate against the system roots. nginx's
@@ -18,6 +18,12 @@
 # Usage:
 #   infra/front-door-cert.sh <aws-profile> <region>
 # Exit 0 with the certificate ISSUED; 3 while it waits on its validation records; anything else is an error.
+#
+# Once issued, stdout is the ARN alone, so it goes straight into labctl:
+#   labctl event up ... --front-door-cert="$(infra/front-door-cert.sh <aws-profile> <region>)"
+# labctl hands it to each roster cluster's lab-bootstrap root as frontDoor.certificateArn, and refuses the pasted
+# 'frontDoor.certificateArn=<arn>' line this printed before (lab-platform#297). A root built by hand takes the same
+# ARN as --set frontDoor.certificateArn=<arn>.
 set -euo pipefail
 
 PROFILE="${1:?usage: front-door-cert.sh <aws-profile> <region>}"
@@ -55,8 +61,8 @@ done
 
 case "${status}" in
   ISSUED)
-    echo "ISSUED: pass it to the roster clusters' root in ${REGION}:" >&2
-    echo "frontDoor.certificateArn=${arn}"
+    echo "ISSUED: give it to labctl event up as --front-door-cert=<arn> for the roster clusters in ${REGION}:" >&2
+    echo "${arn}"
     ;;
   PENDING_VALIDATION)
     [[ -n "${records}" && "${records}" != *None* ]] || { echo "ERROR: ${arn} is pending with no validation records yet; run again" >&2; exit 1; }

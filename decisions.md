@@ -6002,3 +6002,25 @@ night before and nine six hours out. The reason given was that Portland narrowly
   from the region default, the design is the draft's. The run of show now also says that C6's maintenance-shell does not carry
   over to a promoted standby. The cloud-credential probe's fixed `region=us-west-2` (#203) was left alone: agent-sa's
   policy allows the `us.` system profiles in any region, so the probe reads the same on a standby.
+## 2026-10-31 · #638 · front-door-cert.sh prints the bare ARN, which labctl's --front-door-cert takes
+
+lab-platform#297 is merged (lab-platform 6214e66): `labctl event up` and `labctl dry-run` take
+`--front-door-cert=<arn>`, pass it to each roster cluster's `lab-bootstrap` root as `frontDoor.certificateArn`, and
+refuse the line `frontDoor.certificateArn=<arn>` by name, telling the operator to give only the ARN. That line is what
+`infra/front-door-cert.sh` printed once the certificate was issued (the 2026-10-28 entry above), so pasting its output
+was refused. It now prints the ARN alone on stdout, so
+`--front-door-cert="$(infra/front-door-cert.sh <aws-profile> <region>)"` works, and stderr names the flag. A root built
+by hand takes the same ARN as `--set frontDoor.certificateArn=<arn>`. Nothing in this repo read the old line.
+`verify/test_front_door_cert.sh` checks the bare ARN and the flag hint.
+
+lab-platform#297 also settled the assumption the 2026-10-28 entry left open. The gateway had verified each front door
+against the recorded `<nlb>.elb.amazonaws.com` name. It now sends the roster hostname (attackme, burritobot-private,
+and the same names under burritobot.co) as the TLS server name and verifies against it, which the ACM certificate for
+`*.agenticburn.com` and `*.burritobot.co` covers.
+
+**Not yet run on a cluster:** the definition of done's live leg, a billable `labctl event up` in AWS with Michael's
+go. First `infra/front-door-cert.sh accen-dev us-west-2`, writing its validation CNAMEs with
+`infra/dns/set-demo-dns.py` (dry run, then `--apply`) until it exits 0. Then `labctl event up ... --front-door-cert=<that
+ARN>`, whose bootstrap step must log `front doors: 2 roster clusters recorded`, and
+`labctl tls-check attackme.agenticburn.com burritobot-private.agenticburn.com --no-ws` once the roster hostnames route
+to lab-platform's gateway rather than apex-agenticburn's Caddy on Railway. Hecaton run 13101 has no AWS access.

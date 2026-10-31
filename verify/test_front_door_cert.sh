@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Behavioural test of infra/front-door-cert.sh (#638): it reuses or requests the one ACM certificate for
-# ABOUTME: both domains, prints the validation CNAMEs while pending, the ARN once issued, and passes profile and region.
+# ABOUTME: both domains, prints the validation CNAMEs while pending, the bare ARN once issued, and passes profile and region.
 #
 # Why. lab-platform's gateway verifies a roster cluster's front door against the system roots, so the console NLB
 # has to present a public certificate, and the root has to be handed its ARN. A second request for the same pair
@@ -49,14 +49,15 @@ check "it prints the agenticburn.com record as set-demo-dns.py arguments" \
   'grep -q "python3 infra/dns/set-demo-dns.py --domain agenticburn.com _a1b2=_c3d4.xyz.acm-validations.aws$" "${T}/err"'
 check "and the burritobot.co one" \
   'grep -q "python3 infra/dns/set-demo-dns.py --domain burritobot.co _e5f6=_a7b8.xyz.acm-validations.aws$" "${T}/err"'
-check "it prints no ARN for a root while pending" '! grep -q "frontDoor.certificateArn" "${T}/out"'
+check "it prints nothing on stdout while pending" '[[ ! -s "${T}/out" ]]'
 
 echo "== one exists and is issued: it is reused and its ARN printed =="
 printf '%s\n' "${ARN}" >"${T}/existing"; printf 'ISSUED\n' >"${T}/status"
 run accen-dev us-west-2
 check "it exits 0" '[[ "${rc}" -eq 0 ]]'
 check "it requests nothing" '! grep -q "request-certificate" "${CALLS}"'
-check "it prints the value a root passes" '[[ "$(cat "${T}/out")" == "frontDoor.certificateArn=${ARN}" ]]'
+check "stdout is the bare ARN, the value labctl's --front-door-cert takes" '[[ "$(cat "${T}/out")" == "${ARN}" ]]'
+check "stderr names the labctl flag it goes to" 'grep -q -- "--front-door-cert=" "${T}/err"'
 
 echo "== failures are loud =="
 printf 'FAILED\n' >"${T}/status"
