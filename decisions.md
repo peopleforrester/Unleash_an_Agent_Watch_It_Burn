@@ -7139,7 +7139,10 @@ named five drifted paths):
   case, `/kubecon` page, prompt catalog or LAB-TEXT line trips it. **New against the draft:** it runs `pii`'s in-pod
   script on the pinned proxy.py against a fake LLM Guard that applies the configured scanners (5 of 5 refused, the
   order passes), and serves the pinned proxy's `/chat` with the input classifier on, which refuses the stage prompt by
-  `Regex` with zero tokens. The draft only read the source for these.
+  `Regex` with zero tokens. The draft only read the source for these. `verify/test_input_pii_guard_llm_guard.py`
+  (E2E tools tier) builds the scanner with llm-guard 0.3.16 itself, through `get_scanner_by_name("Regex", params)`
+  as the API does: run 2026-10-31, its class is `Regex`, the five `pii` prompts are refused at risk 1.0 and left
+  unrewritten, and the order, the probe prompts, the topic cases and every ticket (44 texts) pass.
 - `stage_traces.py pii <host> --context ...` runs guard-proxy's own `blocklisted` and the `/analyze/prompt` call
   `input_verdict` makes, in its pod, on a card, an SSN, an e-mail, a phone number and the stage prompt, then a plain
   order. No model call, no toggle; it ends `PII GREEN: THE INPUT GUARD REFUSES 5 OF 5`. It refuses the room's host and
