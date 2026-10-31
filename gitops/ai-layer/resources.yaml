@@ -383,7 +383,11 @@ spec:
     metadata:
       # tags.datadoghq.com/*: the Datadog Agent tags this pod's logs with the service and env its spans carry
       # (#629). The service is the root span's name, burritobot, which Datadog takes as the LLM Obs ml_app.
-      labels: { app.kubernetes.io/name: guard-proxy, tags.datadoghq.com/service: burritobot, tags.datadoghq.com/env: burritobot-kubecon-na-26 }
+      # istio.io/dataplane-mode: ambient enrols this pod, and the console, in the Istio ambient mesh (#471), so
+      # the console-to-guard-proxy hop, which carries every chat message, is mutual TLS between two SPIFFE
+      # identities. Only these two pods: agentgateway and workshop-agent sit behind chat-path-ingress.yaml's
+      # port-exact Ingress rules, which mesh traffic (HBONE, port 15008) would not pass.
+      labels: { app.kubernetes.io/name: guard-proxy, tags.datadoghq.com/service: burritobot, tags.datadoghq.com/env: burritobot-kubecon-na-26, istio.io/dataplane-mode: ambient }
       # OTel Operator injects the Python SDK (init-container + PYTHONPATH) so proxy.py's manual spans
       # (PRD #22 M1) emit. The image carries no SDK; this annotation activates injection. References the
       # Instrumentation CR `watch-it-burn-python` in this namespace.
@@ -1323,7 +1327,8 @@ spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: console } }
   template:
-    metadata: { labels: { app.kubernetes.io/name: console, tags.datadoghq.com/service: burritobot-console, tags.datadoghq.com/env: burritobot-kubecon-na-26 } }
+    # Enrolled in the Istio ambient mesh with guard-proxy (#471; the comment on guard-proxy's labels says why).
+    metadata: { labels: { app.kubernetes.io/name: console, tags.datadoghq.com/service: burritobot-console, tags.datadoghq.com/env: burritobot-kubecon-na-26, istio.io/dataplane-mode: ambient } }
     spec:
       automountServiceAccountToken: false
       securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }

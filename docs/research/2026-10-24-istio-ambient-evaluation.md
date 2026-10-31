@@ -2,6 +2,13 @@
      ABOUTME: dropping them saves, and what enrolling a namespace would break. Static, from git and Istio docs. -->
 # Istio ambient: keep it for a real challenge, or drop it? (#238)
 
+> **Outcome (#471, question 947, Michael):** Istio stays, as part of the stack, and the mesh now carries one
+> hop. The console and guard-proxy pod templates are labeled `istio.io/dataplane-mode=ambient`, and agent's
+> PeerAuthentication is PERMISSIVE because of the NLB problem in section 3. agentgateway and workshop-agent
+> stay out, because of the port-exact Ingress rules #552 put on them. The apps STRICT policy, which applied
+> to nothing, is gone. The drop recommendation below was not taken. `verify/test_mesh_enrollment.py` holds the
+> manifests and `verify/test_mesh_live.py` the cluster.
+
 Michael, 2026-09-05, from the #236 audit: *"evaluate individually whether this could be useful rather than
 assume it is dead weight."*
 

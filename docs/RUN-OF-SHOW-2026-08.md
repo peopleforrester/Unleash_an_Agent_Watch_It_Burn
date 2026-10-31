@@ -232,7 +232,7 @@ Name the pieces they will touch today, and who owns each one:
 |---|---|---|
 | The agent | **kagent**, on Amazon Bedrock (Nova Pro), with MCP tool servers | the developer builds it |
 | Admission | **Kyverno** (registry allow-list, resource limits, drift blocking) | platform |
-| Network | **NetworkPolicy** default-deny egress, **Istio** ambient mesh | platform |
+| Network | **NetworkPolicy** default-deny egress, **Istio** ambient mesh (mTLS on the console-to-guard-proxy hop) | platform |
 | Runtime | **KubeArmor** (inline block), **Falco + Talon** (detect and respond) | platform |
 | AI guardrails | **guard-proxy** + **LLM Guard**: input, output, tool-authz, budget | platform |
 | Observability | **Datadog**, OpenTelemetry, Prometheus, Grafana, Tempo | platform |
