@@ -76,7 +76,24 @@ variable "budget_emails" {
   description = "Who is emailed at 50/80/100 percent of actual spend and at 100 percent forecasted."
 }
 
+variable "create_budget" {
+  type    = bool
+  default = true
+  # The budget is account-wide, so one lab VPC state per account creates it: the home region's. A second region's
+  # VPC (#643's us-east-2 and us-east-1) is applied with -var create_budget=false, or the apply fails on the
+  # duplicate name (verify/test_network_budget_once.py).
+  description = "Create this account's fleet budget. False for every region's state but the one that already holds it."
+}
+
+# The home region's state held the budget before it took a count; this keeps it in place instead of a destroy and
+# create of the same name.
+moved {
+  from = aws_budgets_budget.fleet
+  to   = aws_budgets_budget.fleet[0]
+}
+
 resource "aws_budgets_budget" "fleet" {
+  count        = var.create_budget ? 1 : 0
   name         = "watch-it-burn-fleet-monthly"
   budget_type  = "COST"
   limit_amount = tostring(var.budget_limit_usd)

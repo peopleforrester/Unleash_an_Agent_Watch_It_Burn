@@ -359,8 +359,8 @@ which is `2026-11-12T20:50:00Z` (conference-knowledge `kubecon-na-2026`).
    ```
    . infra/terraform/fleet/event.sh
    terraform -chdir=infra/terraform/aws/network init
-   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-2.tfstate -var profile=accen-dev -var region=us-east-2 -var event="${WIB_EVENT}"
-   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-1.tfstate -var profile=accen-dev -var region=us-east-1 -var event="${WIB_EVENT}"
+   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-2.tfstate -var profile=accen-dev -var region=us-east-2 -var event="${WIB_EVENT}" -var create_budget=false
+   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-1.tfstate -var profile=accen-dev -var region=us-east-1 -var event="${WIB_EVENT}" -var create_budget=false
    ```
 
    `event.sh` sets `WIB_EVENT` to `kubecon-na-2026`, the tag every fleet resource
