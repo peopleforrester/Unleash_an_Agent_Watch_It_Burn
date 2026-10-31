@@ -55,3 +55,6 @@ Service selects that label, the console serves it at `maintenance-shell-<cluster
 burritobot.co twin), `fleet.sh` publishes the host, and `deploy_app`'s reply names the address so the bot can
 hand it to the attendee. `verify/test_joker_web_busybox.py` runs `start.sh` on the pinned busybox's own binary.
 The image is amd64 only, as the cluster nodes are.
+
+`build.sh joker` pushes the Joker alone, and leaves the rest of the Docker Hub roster as it is. Run with no
+names, build.sh pushes all of them, the Joker last.

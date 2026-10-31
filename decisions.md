@@ -6078,3 +6078,31 @@ verify/test_kyverno_cel_live.py` and then `bash verify/run-e2e.sh` (with CONTEXT
 IAM_PIPELINE_REGION set). The live check reads the policy list from `policies/kyverno/` and `policies/floor/`, so it
 now expects eleven, not the issue's ten: #606 added `restrict-agent-spawned-workloads.yaml` after d8076da, and the
 check counts it with no edit.
+## 2026-10-31 · #664 · `build.sh joker` pushes the C6 Joker alone; the push still waits on a Docker Hub token
+
+On 2026-10-29 Michael checked the Joker page in a browser. The route, the console page and C6's reply all work.
+docker.io/peopleforrester/joker:latest is still the log-loop build from 2026-06-29: one layer, with no
+`/villain` layer from `build_joker_web`. So the Service has an endpoint and nothing answers on 8080. Both Docker
+Hub tokens on disk return `personal access token is expired`. He asked for a Joker-only push, since the rest of
+build.sh's roster does not need re-pushing. build.sh had no way to do that: run with no arguments, it pushes all
+nine log-loop villains before the Joker.
+
+- **`build.sh [name...]`.** With no names it pushes the whole roster as before, the Joker last. With names
+  (`joker`, or any key of `M` or `V`) it pushes only those, so `build.sh joker` is one `crane append` and one
+  `mutate` to `$ORG/joker:latest`. It checks every name before it pushes anything, and an unknown name exits 2
+  and lists the known ones.
+- **The previous run of this issue (hecaton run on pool claude-performantpro-3) failed before it changed any
+  code.** That pool's podman store could not re-exec into its existing user namespace. Nothing in this repo runs
+  podman, and podman works in the pool this run used, so the repo had nothing to fix.
+
+**Tests.** `verify/test_c6_villain_endpoint.py` now runs build.sh against a stand-in crane (`CRANE=`), and
+reads each call and the layer each `append` gets. `build.sh joker` makes only the Joker's two calls, and its
+layer holds `villain/start.sh` and `villain/www/index.html`. With no names, every key of `M` and `V` is pushed,
+then the Joker's two calls. `build.sh joker jokr` exits non-zero with no crane call. Against the old build.sh,
+the first and the last of these fail, which was tried and then reverted.
+
+**Not yet run on a cluster.** Still owed, in order. First, a fresh Docker Hub PAT with write on
+peopleforrester/joker: `echo "$DOCKERHUB_PAT" | crane auth login docker.io -u "$DOCKERHUB_USER" --password-stdin`,
+then `bash images/villains/build.sh joker`. Then
+`curl -s https://maintenance-shell-attackme.burritobot.co/ | grep 'HA HA HA'` once C6 has deployed the pod, and
+steps 3 and 4 of the 2026-10-29 #664 entry. The routes (step 2) went out on 2026-10-29 with `fleet.sh routes`.

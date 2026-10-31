@@ -7,6 +7,7 @@ set -euo pipefail
 # Auth: crane login with the Team PAT from ~/secrets (see ~/.claude/rules: secrets live in mrf-secrets).
 #   set -a; . ~/secrets/dockerhub/agenticburn.env; set +a
 #   echo "$DOCKERHUB_PAT" | crane auth login docker.io -u "$DOCKERHUB_USER" --password-stdin
+# Usage: build.sh [name...]   no names pushes the whole roster; `build.sh joker` pushes only the C6 Joker.
 CR="${CRANE:-crane}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE="docker.io/library/busybox:latest"
@@ -52,6 +53,23 @@ build_joker_web() {
   "$CR" mutate "$ORG/joker:latest" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 -t "$ORG/joker:latest"
   echo "pushed $ORG/joker:latest (serves :8080)"
 }
+# With no arguments it pushes the whole roster, the Joker last. With names (joker, or a key of M or V) it pushes
+# only those, so the C6 Joker can go up alone without re-pushing the rest (#664). Every name is checked before
+# anything is pushed.
+known() { [[ "$1" == joker || -v "M[$1]" || -v "V[$1]" ]]; }
+build_named() {
+  if [[ "$1" == joker ]]; then build_joker_web
+  elif [[ -v "M[$1]" ]]; then build_one "$1" "${M[$1]}"
+  else build_one "$1" "${V[$1]}"
+  fi
+}
+if (($#)); then
+  for name in "$@"; do
+    known "$name" || { echo "build.sh: no villain named '$name' (joker, ${!M[*]}, ${!V[*]})" >&2; exit 2; }
+  done
+  for name in "$@"; do build_named "$name"; done
+  exit 0
+fi
 for name in "${!M[@]}"; do build_one "$name" "${M[$name]}"; done
 for name in "${!V[@]}"; do build_one "$name" "${V[$name]}"; done
 build_joker_web

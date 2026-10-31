@@ -24,6 +24,7 @@ import pathlib
 import re
 import subprocess
 import sys
+import tempfile
 import types
 
 import yaml
@@ -120,6 +121,44 @@ check("the ticket asks for build.sh's $ORG/joker:latest", bool(org) and site.C6_
 v = re.search(r"^declare -A V=\((.*?)^\)", BUILD, re.M | re.S)
 check("the Joker is no longer a plain log loop in the V roster", bool(v) and "[joker]=" not in v.group(1))
 check("build_joker_web runs, after the loops", BUILD.rstrip().endswith("build_joker_web"))
+
+
+def run_build(*names: str) -> tuple[subprocess.CompletedProcess, list[list[str]], list[str]]:
+    """Run build.sh with a stand-in crane that logs each call and the members of each appended layer."""
+    with tempfile.TemporaryDirectory() as tmp:
+        log, layers = pathlib.Path(tmp, "calls"), pathlib.Path(tmp, "layers")
+        stub = pathlib.Path(tmp, "crane")
+        stub.write_text('#!/usr/bin/env bash\nprintf "%s\\x1f" "$@" >> "$LOG"; echo >> "$LOG"\n'
+                        'if [[ "$1" == append ]]; then while (($#)); do [[ "$1" == -f ]] && tar -tf "$2" >> "$LAYERS"; '
+                        'shift; done; fi\n', encoding="utf-8")
+        stub.chmod(0o755)
+        proc = subprocess.run(["bash", str(REPO / "images/villains/build.sh"), *names], capture_output=True, text=True,
+                              env={**os.environ, "CRANE": str(stub), "LOG": str(log), "LAYERS": str(layers),
+                                   "TMPDIR": tmp})
+        calls = [line.split("\x1f")[:-1] for line in log.read_text().splitlines()] if log.exists() else []
+        members = layers.read_text().split() if layers.exists() else []
+    return proc, calls, members
+
+
+def tags(calls: list[list[str]]) -> list[str]:
+    return [c[c.index("-t") + 1] for c in calls if "-t" in c]
+
+
+proc, calls, members = run_build("joker")
+check("`build.sh joker` pushes only the Joker: crane append then mutate, both to $ORG/joker:latest",
+      proc.returncode == 0 and [c[0] for c in calls] == ["append", "mutate"]
+      and set(tags(calls)) == {f"{org.group(1)}/joker:latest"}, f"rc={proc.returncode} {calls} {proc.stderr}")
+check("the Joker's layer holds start.sh and the page under villain/",
+      {"villain/start.sh", "villain/www/index.html"} <= set(members), str(members))
+proc, calls, _ = run_build()
+roster = sorted(re.findall(r"^\s+\[([a-z-]+)\]=", BUILD, re.M))
+check("with no names build.sh still pushes the whole roster, the Joker last",
+      proc.returncode == 0 and sorted(t.split("/")[-1].split(":")[0] for t in tags(calls)[:-2]) == roster
+      and tags(calls)[-2:] == [f"{org.group(1)}/joker:latest"] * 2, f"rc={proc.returncode} {tags(calls)}")
+proc, calls, _ = run_build("joker", "jokr")
+check("a name build.sh does not know fails before anything is pushed",
+      proc.returncode != 0 and calls == [] and "no villain named 'jokr'" in proc.stderr,
+      f"rc={proc.returncode} {calls} {proc.stderr}")
 base = re.search(r'^JOKER_BASE="(docker\.io/library/busybox@sha256:[0-9a-f]{64})"', BUILD, re.M)
 check("the Joker's base is busybox pinned by digest", base is not None)
 check("joker-web goes in as a layer under /villain",
