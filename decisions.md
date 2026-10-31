@@ -7064,3 +7064,33 @@ stopped before that sweep ran); `backups.py down` destroying without --apply (4e
 
 Still owed: install the schedule on the host that will carry it on 2026-11-12
 (`backups.py schedule 2026-11-12T20:50:00Z`). The two new-region lab VPCs are kept for it, about $0.07 an hour each.
+## 2026-10-31 · #608 · question 961's attendee cluster is the build #608 waits for: run the test on it before step 6
+
+Hecaton run 14342, the sixth on #608, again had no cluster and no AWS credentials (`kubectl config get-contexts`
+lists none, `aws sts get-caller-identity` returns NoCredentials), and `python3 verify/test_llm_bypass_live.py`
+stops at "CONTEXT names the cluster to run against", exit 1, as designed. The run before it failed on its pool's
+podman store ("cannot re-exec process to join the existing user namespace"), not on anything in this repo; podman
+answers in this run's pool. No code changed.
+
+- **The attendee build #608 asked for now has a date: question 961.** The 2026-10-31 #655 entry above has Michael
+  building one attendee cluster now, watch-it-burn-attendee-001 in accen-dev (us-west-2, the cluster module's default
+  region), for #655's labctl import and #532's pool ingest, torn down by its step 6. That is the attendee profile the
+  issue named, so the earlier entries' stand-in, watch-it-burn-private, is no longer needed.
+- **It carries everything the test reads.** `gitops/bootstrap/values-attendee.yaml` lists kyverno, kyverno-policies,
+  namespaces and ai-layer. An attendee cluster is not armed (restrict-image-registries stays Audit), so no policy
+  besides deny-llm-endpoint-bypass refuses the test's pods, and the #607 verdicts come from that policy alone.
+- **It changes nothing #655 or #532 checks.** The #607 checks are server-side dry runs. The #333, #490 and #552
+  checks create Pods, Deployments and a ConfigMap in `agent`, labelled `wib.test/run=<id>`, and delete them before
+  exit; no model is called and no pool row is touched.
+
+**Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it. The session that runs question 961's
+steps runs it between step 5 and step 6 (`fleet.sh down watch-it-burn-attendee-001`):
+
+    C=watch-it-burn-attendee-001; K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_llm_bypass_live.py
+
+and records here whether the three #607 checks pass (terminal-auth refused by volume and by secretKeyRef, each with
+its message; ceo-personal-record admitted), and whether the #490 and #552 checks the TypeError hid pass. The guarded
+command on watch-it-burn-private in the first #608 entry still stands if that build slips.
