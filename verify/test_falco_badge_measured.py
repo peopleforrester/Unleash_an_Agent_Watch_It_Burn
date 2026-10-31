@@ -11,13 +11,18 @@ agree for that to work, and each one lives in a different file:
 - The name: that DaemonSet is security/falco, which is what the Falco Application renders.
 - The page: the Falco badge needs infra.falco, not only KubeArmor, or a measured false is thrown away.
 
-The pinned guard-proxy (the submodule) still hardcodes falco:true. Until it moves, burritbot.html keeps
-its hostname override for the Community cluster. The last check ties the two together, so the bump that
-brings in the measurement fails here until the override is dropped, and dropping the override early
-fails here too.
+The pinned guard-proxy (the submodule) is what answers /controls. While it hardcodes falco:true,
+burritbot.html keeps its hostname override for the Community cluster; once it measures the DaemonSet,
+the override must go. The pin check ties the two together, so the bump that brings in the measurement
+fails here until the override is dropped, and dropping the override early fails here too.
+
+Measured also means ready. A DaemonSet whose only pod is crash-looping (michael-admin's Falco on
+kernel 6.18, #626) detects nothing, so the last section runs the pinned read_controls() against a fake
+cluster API and requires falco:false for a DaemonSet with no ready pod, and true only with one.
 """
 from __future__ import annotations
 
+import importlib.util
 import pathlib
 import re
 import sys
@@ -103,6 +108,40 @@ if hardcoded:
     check("proxy.py still hardcodes falco:true, so the Community override must stay", OVERRIDE in BB)
 else:
     check("proxy.py measures the falco DaemonSet, so the Community override must go", OVERRIDE not in BB)
+
+
+def pinned_read_controls(objects: dict[str, dict]):
+    """Run the pinned proxy.py's read_controls() against a fake cluster API that serves `objects` by
+    path and answers None (the proxy's 'could not read') for everything else."""
+    spec = importlib.util.spec_from_file_location("pinned_guard_proxy", REPO / "gitops/ai-layer/guard-proxy/proxy.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    mod._k8s_get = lambda path: objects.get(path)
+    mod._controls_cache["ts"], mod._controls_cache["val"] = 0.0, None
+    return mod.read_controls()
+
+
+def falco_daemonset(status: dict) -> dict:
+    return {"apiVersion": "apps/v1", "kind": "DaemonSet", "metadata": {"name": FALCO_DS, "namespace": FALCO_NS},
+            "status": status}
+
+
+if measured:
+    print("== measured means ready: a DaemonSet with no ready pod does not light the badge ==")
+    check("a DaemonSet with every pod ready reports falco:true",
+          pinned_read_controls({FALCO_PATH: falco_daemonset({"desiredNumberScheduled": 3, "numberReady": 3})})["falco"] is True)
+    check("one ready pod out of three is still true",
+          pinned_read_controls({FALCO_PATH: falco_daemonset({"desiredNumberScheduled": 3, "numberReady": 1})})["falco"] is True)
+    # michael-admin on 2026-10-27: the chart is installed, the DaemonSet exists, and its one pod is
+    # crash-looping on kernel 6.18 (#626). Nothing is watching, so the badge must not claim it.
+    check("a DaemonSet whose pods are all crash-looping (numberReady 0) reports falco:false",
+          pinned_read_controls({FALCO_PATH: falco_daemonset({"desiredNumberScheduled": 1, "numberReady": 0})})["falco"] is False)
+    check("a DaemonSet that has not reported readiness yet is false",
+          pinned_read_controls({FALCO_PATH: falco_daemonset({"desiredNumberScheduled": 1})})["falco"] is False)
+    check("a DaemonSet with an empty status is false",
+          pinned_read_controls({FALCO_PATH: falco_daemonset({})})["falco"] is False)
+    check("no DaemonSet at all (the Community cluster) is false, not None",
+          pinned_read_controls({})["falco"] is False)
 
 print()
 if failures:

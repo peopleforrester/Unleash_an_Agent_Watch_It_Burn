@@ -7021,3 +7021,28 @@ check: `kubectl -n monitoring logs ds/otel-collector-opentelemetry-collector-age
 (expect 0 or a rare ParseJSON warn), then in LLM Observability (or `/api/v2/llm-obs/v1/spans/events`, ml_app
 burritobot) that the `generate_content` rows show input, output and the system prompt. Also read the length of
 `gcp.vertex.agent.llm_request` on that span in Datadog: over 2048 confirms the Tempo reading above.
+
+## 2026-10-31 · #486 · A Falco DaemonSet with no ready pod reads as falco:false, and the test pins it
+
+Michael's 2026-10-27 probe of watch-it-burn-michael-admin (staging d2d75c5, guard-proxy 96f3203) found the
+badges matching the cluster and the Community override gone, but the cluster's Falco pod was crash-looping
+on kernel 6.18 (#626). The open question before closing #486: does `/controls` answer falco:true for a
+DaemonSet that exists but has no ready pod?
+
+**Answer: no.** The pinned proxy.py (submodule at 000f57e, which carries f1fbd46) reads
+`security/falco` and sets `falco` to `status.numberReady > 0`, so a crash-looping DaemonSet (numberReady 0),
+a DaemonSet that has not reported readiness, an empty status, a missing DaemonSet and a 403 all read false.
+guard-proxy-agenticburn's conformance suite pins the same five shapes
+(`conformance/test_admin_endpoints.py::test_controls_falco_reads_the_daemonset`); all eight Falco tests
+pass against the pinned commit.
+
+**What changes here:** `verify/test_falco_badge_measured.py` used to require only that the pinned proxy.py
+read the DaemonSet path. A later pin bump that regressed to "the DaemonSet exists" would have passed it. It
+now imports the pinned proxy.py, swaps its cluster read for a fake API and runs `read_controls()` for the
+six shapes above, requiring true only with a ready pod. Replacing the readiness gate with `ds is not None`
+fails three of them. The test stays in the offline gate: it needs the submodule, which
+`verify/ensure-submodules.sh` already checks out, and no cluster.
+
+**Not changed:** the Go rewrite's `/controls` still answers 501 (PRD #412, `internal/server/server.go`
+`unbuiltGET`); it is a later milestone of that PRD, and the workshop runs proxy.py. The crash loop itself is
+#626 (Falco 0.45.1 via chart 9.2.1, 89fce6a).
