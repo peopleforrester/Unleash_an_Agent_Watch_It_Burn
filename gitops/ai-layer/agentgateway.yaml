@@ -76,6 +76,11 @@ spec:
             # ai-layer ignores this one env entry so selfHeal keeps the ARN.
             - name: BEDROCK_NOVA_MODEL
               value: us.amazon.nova-pro-v1:0
+            # The region that model is called in, read by agentgateway-config as ${BEDROCK_REGION} (#643).
+            # Committed as the home region; pin_bedrock_profiles sets it to the region of this cluster's
+            # application profile ARN, and ai-layer ignores this entry too.
+            - name: BEDROCK_REGION
+              value: us-west-2
             # NOTE: tracing is configured in the config file's top-level `tracing` block (below), NOT via
             # OTEL_EXPORTER_OTLP_ENDPOINT. The env path emitted ZERO spans on the pre-v1.5.0 build (verified live 2026-06-26: a targeted
             # `service:agentgateway` Datadog span search returned 0). The config-file path is the working one.
@@ -223,8 +228,14 @@ data:
                   # application-inference-profile ARN that way. Read at tag v1.5.0 on 2026-10-25.
                   model: ${BEDROCK_NOVA_MODEL}
                   # Required by the bedrock provider; omitting it fails the whole config at startup
-                  # with "missing field `region`". Matches WIB_REGION and the cluster's own region.
-                  region: us-west-2
+                  # with "missing field `region`". From the container env like the model (#643): the
+                  # cluster's own region, which pin_bedrock_profiles sets from the profile ARN, so a
+                  # standby built outside us-west-2 calls its own region's profile. The default is not
+                  # optional: v1.7.0 expands the file with shellexpand::full and refuses the whole config
+                  # on an unset variable ("environment variable not found", crates/agentgateway/src/
+                  # config.rs, errors_on_unset_environment_variable). ai-layer ignores the env entry, so a
+                  # cluster built before #643 can sync this file without ever getting BEDROCK_REGION.
+                  region: ${BEDROCK_REGION:-us-west-2}
               # NO auth block here, and that is the correct configuration, not a gap. Read from the
               # v1.5.0 source rather than inferred from rejection messages (#394):
               # crates/agentgateway/src/llm/mod.rs, AIProvider::default_connector_policies, gives the

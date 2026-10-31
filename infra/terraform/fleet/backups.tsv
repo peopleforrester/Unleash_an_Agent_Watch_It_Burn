@@ -1,0 +1,33 @@
+# Standby clusters for the two roster hostnames (#643). Pipe-delimited:
+#   name|role|region|wave
+#
+# The order of the rows IS the promotion order within a role. When the cluster serving a role's hostname
+# fails its self-check, infra/terraform/fleet/backups.py hands the hostname to the first standby after it
+# that passes, so the rows alternate regions: the next standby is never in the same region as the one
+# before it, and an outage like the us-west-2 one Portland narrowly missed is skipped in one step.
+#
+# ROLE is the roster role the standby copies (roster.tsv): community stands in for attackme, admin for
+# burritobot-private. A standby is built exactly as its role's primary is, profile, pids and all.
+#
+# WAVE is when it stands up, counted back from the session start the operator passes `backups.py schedule`:
+#   night-before  about 18 hours out: three public standbys and all three private ones
+#   six-hours     six hours out: the other nine public standbys
+#
+# Every standby lives in WIB_DEFAULT_ACCOUNT, as the roster does (account_for_role). A region other than
+# WIB_HOME_REGION needs its own lab VPC first: `backups.py up` names the apply when it is missing.
+# Names stay under 30 characters: the cluster module's IAM name_prefix caps at 38 with "-cluster-" appended.
+watch-it-burn-community-b01|community|us-east-2|night-before
+watch-it-burn-community-b02|community|us-east-1|night-before
+watch-it-burn-community-b03|community|us-west-2|night-before
+watch-it-burn-community-b04|community|us-east-2|six-hours
+watch-it-burn-community-b05|community|us-east-1|six-hours
+watch-it-burn-community-b06|community|us-west-2|six-hours
+watch-it-burn-community-b07|community|us-east-2|six-hours
+watch-it-burn-community-b08|community|us-east-1|six-hours
+watch-it-burn-community-b09|community|us-west-2|six-hours
+watch-it-burn-community-b10|community|us-east-2|six-hours
+watch-it-burn-community-b11|community|us-east-1|six-hours
+watch-it-burn-community-b12|community|us-west-2|six-hours
+watch-it-burn-private-b01|admin|us-east-2|night-before
+watch-it-burn-private-b02|admin|us-east-1|night-before
+watch-it-burn-private-b03|admin|us-west-2|night-before

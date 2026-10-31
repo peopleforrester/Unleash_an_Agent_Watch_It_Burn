@@ -36,9 +36,11 @@ echo "== the per-account state split is honoured =="
 # Getting this wrong destroys the wrong account's networking, or silently no-ops.
 check "lab_vpc_state_for is defined"    "grep -q '^lab_vpc_state_for()' '${FLEET}'"
 check "default account uses terraform.tfstate" \
-      "grep -A4 '^lab_vpc_state_for()' '${FLEET}' | grep -q 'WIB_DEFAULT_ACCOUNT'"
+      "sed -n '/^lab_vpc_state_for() {/,/^}/p' '${FLEET}' | grep -q 'WIB_DEFAULT_ACCOUNT'"
 check "other accounts use states/<acct>.tfstate" \
-      "grep -A8 '^lab_vpc_state_for()' '${FLEET}' | grep -q 'states/%s.tfstate'"
+      "sed -n '/^lab_vpc_state_for() {/,/^}/p' '${FLEET}' | grep -q 'states/%s.tfstate'"
+check "outside the home region every account uses states/<acct>.<region>.tfstate (#643)" \
+      "sed -n '/^lab_vpc_state_for() {/,/^}/p' '${FLEET}' | grep -q 'states/%s.%s.tfstate'"
 
 echo "== EKS log groups are cleaned up too =="
 # /aws/eks/<cluster>/cluster OUTLIVES the cluster and nothing ever deleted one. 107 groups and about

@@ -39,6 +39,14 @@ probe: RED on both, about $0.05 of Bedrock. Its per-beat results are in
 fixed on staging. It was torn down the same day: `./fleet.sh audit-zero` ZERO in all five accounts (Michael's
 comment on #454), about $2.30 at list prices.
 
+## Standbys with automatic promotion (#643)
+
+`infra/terraform/fleet/backups.tsv` lists 12 standbys for attackme and 3 for burritobot-private, across us-east-2,
+us-east-1 and us-west-2. `backups.py` builds them in two waves, self-checks them, and its watcher hands a hostname
+to the next healthy standby with nobody acting. Not yet built or rehearsed: the lab VPCs in two new regions and both
+waves are spend waiting on Michael's go, and `verify/test_backups_promotion_live.py` is the owed rehearsal.
+Details are in decisions.md, 2026-10-31 · #643.
+
 ## KubeCon platform up (rebuilt 2026-10-28)
 
 `watch-it-burn-community` (attackme.agenticburn.com) and `watch-it-burn-private`

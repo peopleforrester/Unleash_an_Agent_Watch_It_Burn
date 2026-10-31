@@ -4,8 +4,9 @@
 # Terraform roots for this provider, relative to infra/terraform/ (the relocation put AWS under aws/).
 PROVIDER_NETWORK_SUBDIR="aws/network"
 PROVIDER_CLUSTER_SUBDIR="aws/cluster"
-# provider_write_kubeconfig <cluster> <kubeconfig-file> <account-profile>: fetch an isolated kubeconfig.
-# EKS: aws eks update-kubeconfig. Never writes the shared ~/.kube/config.
+# provider_write_kubeconfig <cluster> <kubeconfig-file> <account-profile> [region]: fetch an isolated kubeconfig.
+# EKS: aws eks update-kubeconfig. Never writes the shared ~/.kube/config. The region defaults to WIB_REGION; a
+# standby in another region (backups.tsv, #643) passes its own.
 provider_write_kubeconfig() {
-    AWS_PROFILE="$3" aws eks update-kubeconfig --kubeconfig "$2" --name "$1" --region "${WIB_REGION}" >/dev/null 2>&1
+    AWS_PROFILE="$3" aws eks update-kubeconfig --kubeconfig "$2" --name "$1" --region "${4:-${WIB_REGION}}" >/dev/null 2>&1
 }

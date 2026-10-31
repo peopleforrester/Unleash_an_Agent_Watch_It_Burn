@@ -19,7 +19,7 @@ fail=0; pass=0
 check() { if eval "$2"; then pass=$((pass+1)); echo "  PASS  $1"; else fail=$((fail+1)); echo "  FAIL  $1"; fi; }
 
 ACCT=111122223333
-arn() { echo "arn:aws:bedrock:us-west-2:${ACCT}:application-inference-profile/$1"; }
+arn() { echo "arn:aws:bedrock:${REGION:-us-west-2}:${ACCT}:application-inference-profile/$1"; }
 # The output as the cluster root writes it: system profile id -> this cluster's application profile ARN.
 cat >"${T}/output.json" <<J
 {"us.amazon.nova-pro-v1:0":"$(arn nova0001)","us.anthropic.claude-haiku-4-5-20251001-v1:0":"$(arn haiku001)",
@@ -31,7 +31,8 @@ echo "terraform $*" >>"${CALLS}"
 [[ "$*" == *"output -state="*"-json bedrock_application_profiles"* ]] || exit 1
 cat "${T}/output.json" 2>/dev/null || { echo "No outputs found" >&2; exit 1; }
 S
-# kubectl answers `get modelconfig <n>` from ${T}/live/<n>; a patch writes the new model there and is recorded.
+# kubectl answers `get modelconfig <n>` from ${T}/live/<n> and its .spec.bedrock.region from ${T}/live/<n>.region; a
+# patch writes the new model and region there and is recorded.
 # `get deployment agentgateway` answers the env var its jsonpath names from ${T}/live/gw-<VAR>; `set env` writes it.
 cat >"${SHIM}/kubectl" <<'S'
 #!/usr/bin/env bash
@@ -41,17 +42,20 @@ for i in "${!args[@]}"; do
   if [[ "${args[$i]}" == "modelconfig" ]]; then cfg="${args[$((i+1))]}"; fi
 done
 case "$*" in
+  *" get modelconfig "*"{.spec.bedrock.region}"*) [[ -f "${T}/live/${cfg}" ]] && cat "${T}/live/${cfg}.region" 2>/dev/null ;;
   *" get modelconfig "*) cat "${T}/live/${cfg}" 2>/dev/null ;;
   *" patch modelconfig "*)
     [[ -f "${T}/patch_fails" ]] && exit 1
     for i in "${!args[@]}"; do [[ "${args[$i]}" == "-p" ]] && body="${args[$((i+1))]}"; done
-    jq -r '.spec.model' <<<"${body}" >"${T}/live/${cfg}" ;;
+    jq -r '.spec.model' <<<"${body}" >"${T}/live/${cfg}"
+    jq -r '.spec.bedrock.region // empty' <<<"${body}" >"${T}/live/${cfg}.region" ;;
   *" get deployment agentgateway "*)
     var="$(grep -o '@.name=="[A-Z_]*"' <<<"$*" | tail -1 | cut -d'"' -f2)"
     if [[ -f "${T}/gw_late" ]]; then  # Argo has not created the Deployment yet; it appears after that many reads
       n="$(cat "${T}/gw_late")"
       if (( n > 0 )); then echo $(( n - 1 )) >"${T}/gw_late"; echo "deployments.apps \"agentgateway\" not found" >&2; exit 1; fi
-      rm -f "${T}/gw_late"; echo "us.amazon.nova-pro-v1:0" >"${T}/live/gw-${var}"
+      rm -f "${T}/gw_late"; echo "us.amazon.nova-pro-v1:0" >"${T}/live/gw-BEDROCK_NOVA_MODEL"
+      echo us-west-2 >"${T}/live/gw-BEDROCK_REGION"
     fi
     cat "${T}/live/gw-${var}" 2>/dev/null ;;
   *" set env deployment/agentgateway -c agentgateway "*)
@@ -60,8 +64,7 @@ case "$*" in
     if [[ -f "${T}/drift_armed" && "$*" != *"--as=system:serviceaccount:argocd:argocd-application-controller"* ]]; then
       echo "denied by block-argocd-drift" >&2; exit 1
     fi
-    kv=""; for a in "${args[@]}"; do [[ "${a}" == [A-Z_]*=* ]] && kv="${a}"; done
-    printf '%s\n' "${kv#*=}" >"${T}/live/gw-${kv%%=*}" ;;
+    for a in "${args[@]}"; do [[ "${a}" == [A-Z_]*=* ]] && printf '%s\n' "${a#*=}" >"${T}/live/gw-${a%%=*}"; done ;;
 esac
 exit 0
 S
@@ -80,6 +83,9 @@ fresh() { # the four Bedrock ModelConfigs and the gateway as Argo first creates 
   echo "us.anthropic.claude-sonnet-4-6" >"${T}/live/bedrock-sonnet"
   echo "us.anthropic.claude-opus-4-8" >"${T}/live/bedrock-opus"
   echo "us.amazon.nova-pro-v1:0" >"${T}/live/gw-BEDROCK_NOVA_MODEL"
+  # The region every ModelConfig and the gateway commit (#643).
+  for c in bedrock-nova bedrock-haiku bedrock-sonnet bedrock-opus; do echo us-west-2 >"${T}/live/${c}.region"; done
+  echo us-west-2 >"${T}/live/gw-BEDROCK_REGION"
 }
 
 echo "== the committed Bedrock ModelConfigs are what gets pinned =="
@@ -118,6 +124,43 @@ echo "== idempotent: a pinned cluster is left alone =="
 check "it succeeds again" '[[ "${rc}" == "0" ]]'
 check "and patches nothing" '! grep -q "patch modelconfig" "${CALLS}"'
 check "and leaves the gateway alone, so it does not roll on every converge" '! grep -q "set env" "${CALLS}"'
+
+echo "== a standby in another region calls Bedrock there (#643) =="
+# An application profile is created in the cluster's own region, so a us-east-2 standby's ARNs are us-east-2 ones,
+# and the committed us-west-2 region would send every call to a region that has no such profile.
+mkout() { REGION="$1" bash -c "$(declare -f arn); ACCT=${ACCT}; cat <<J
+{\"us.amazon.nova-pro-v1:0\":\"\$(arn nova0001)\",\"us.anthropic.claude-haiku-4-5-20251001-v1:0\":\"\$(arn haiku001)\",
+ \"us.anthropic.claude-sonnet-4-6\":\"\$(arn sonnet01)\",\"us.anthropic.claude-opus-4-8\":\"\$(arn opus0001)\"}
+J"; }
+cp "${T}/output.json" "${T}/output.west"; mkout us-east-2 >"${T}/output.json"
+fresh; rc="$(run watch-it-burn-community-b01)"
+check "it succeeds" '[[ "${rc}" == "0" ]]'
+check "bedrock-nova calls the standby's own us-east-2 profile" \
+  '[[ "$(cat "${T}/live/bedrock-nova")" == "$(REGION=us-east-2 arn nova0001)" ]]'
+check "in us-east-2, the ARN's region" '[[ "$(cat "${T}/live/bedrock-nova.region")" == us-east-2 ]]'
+check "every Bedrock ModelConfig moved region" \
+  '[[ "$(cat "${T}/live/"bedrock-*.region | sort -u)" == us-east-2 ]]'
+check "agentgateway's BEDROCK_REGION is us-east-2 too" '[[ "$(cat "${T}/live/gw-BEDROCK_REGION")" == us-east-2 ]]'
+check "set in the same set env as the model, so the gateway rolls once" \
+  'grep -q "set env deployment/agentgateway -c agentgateway BEDROCK_NOVA_MODEL=$(REGION=us-east-2 arn nova0001) BEDROCK_REGION=us-east-2" "${CALLS}"'
+check "and the log names the region" 'grep -q "in us-east-2" "${T}/stderr"'
+: >"${CALLS}"; rc="$(run watch-it-burn-community-b01)"
+check "a second pass changes nothing" '[[ "${rc}" == "0" ]] && ! grep -q "patch modelconfig\|set env" "${CALLS}"'
+echo us-west-2 >"${T}/live/bedrock-haiku.region"; : >"${CALLS}"; rc="$(run watch-it-burn-community-b01)"
+check "a ModelConfig on the right ARN but the wrong region is re-pinned" \
+  '[[ "${rc}" == "0" ]] && grep -q "patch modelconfig bedrock-haiku" "${CALLS}" && [[ "$(cat "${T}/live/bedrock-haiku.region")" == us-east-2 ]]'
+cp "${T}/output.west" "${T}/output.json"
+fresh; rc="$(run watch-it-burn-attendee-001)"
+check "a us-west-2 cluster keeps the committed region" \
+  '[[ "${rc}" == "0" && "$(cat "${T}/live/bedrock-nova.region")" == us-west-2 && "$(cat "${T}/live/gw-BEDROCK_REGION")" == us-west-2 ]]'
+cfg="$(cat "${REPO}/gitops/ai-layer/agentgateway.yaml")"
+check "agentgateway-config reads the region from BEDROCK_REGION" 'grep -qF "region: \${BEDROCK_REGION:-" <<<"${cfg}"'
+# v1.7.0 refuses the whole config on an unset ${VAR}, and ai-layer's ignore can keep the env entry off a cluster
+# built before #643, so the reference must carry the committed region as its default.
+check "with us-west-2 as the default, so a gateway without the env entry still loads its config" \
+  'grep -qF "region: \${BEDROCK_REGION:-us-west-2}" <<<"${cfg}"'
+check "and the agentgateway container commits it as us-west-2" \
+  'grep -A1 -- "- name: BEDROCK_REGION" <<<"${cfg}" | grep -q "value: us-west-2"'
 
 echo "== a pin with no tagged profile fails, it does not leave the spend untagged quietly =="
 fresh; jq 'del(."us.anthropic.claude-opus-4-8")' "${T}/output.json" >"${T}/o2" && cp "${T}/output.json" "${T}/output.full" && mv "${T}/o2" "${T}/output.json"
@@ -195,5 +238,8 @@ check "Argo ignores .spec.model on Bedrock ModelConfigs, so selfHeal keeps the A
   'grep -qF ".spec | select(.provider == \"Bedrock\") | .model" <<<"${app}"'
 check "Argo ignores agentgateway's BEDROCK_NOVA_MODEL env entry by name, so selfHeal keeps the ARN" \
   'grep -qF "select(.name==\"agentgateway\") | .env[] | select(.name == \"BEDROCK_NOVA_MODEL\")" <<<"${app}"'
+check "and the region beside it: the ModelConfigs' .bedrock.region and agentgateway's BEDROCK_REGION (#643)" \
+  'grep -qF ".spec | select(.provider == \"Bedrock\") | .bedrock.region" <<<"${app}" &&
+   grep -qF "select(.name==\"agentgateway\") | .env[] | select(.name == \"BEDROCK_REGION\")" <<<"${app}"'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

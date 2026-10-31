@@ -91,6 +91,26 @@ emit_service_hosts() {
 readonly WIB_TWIN_DOMAIN="burritobot.co"
 twin_rows() { sed -E "s/^([a-z0-9-]+)\.agenticburn\.com([[:space:]]|$)/\1.${WIB_TWIN_DOMAIN}\2/"; }
 is_presenter_name() { [[ "$1" == "${SHARED_ADMIN_NAME}" || "$1" =~ ^watch-it-burn-[a-z0-9-]+-${PRESENTER_SUFFIX}$ ]]; }
+# STANDBYS (#643): watch-it-burn-community-bNN stands in for attackme and watch-it-burn-private-bNN for
+# burritobot-private. backups.tsv lists them, with each one's region, wave and promotion order; backups.py
+# builds them, self-checks them and hands a role's hostname to the next healthy one. A standby answers to its
+# role's hostname from the start, so its cluster identity is already right the moment it is promoted.
+readonly WIB_BACKUPS_FILE="${WIB_BACKUPS_FILE:-${SCRIPT_DIR}/backups.tsv}"
+is_standby_name() { [[ "$1" =~ ^watch-it-burn-(community|private)-b[0-9][0-9]$ ]]; }
+# The cluster holding each role's hostname, when backups.py has promoted a standby: "<role>\t<name>" lines.
+# No line for a role means its roster cluster holds it. cmd_routes reads it, so a later `routes roster` keeps
+# the promotion instead of handing the hostname back to the cluster that failed.
+readonly WIB_PROMOTED_FILE="${WIB_PROMOTED_FILE:-${STATE_DIR}/promoted.tsv}"
+promoted_holder() {   # $1 role; prints the promoted cluster or nothing. ALWAYS exits 0.
+    [[ -r "${WIB_PROMOTED_FILE}" ]] || return 0
+    awk -F'\t' -v r="$1" '$1 == r { n = $2 } END { if (n != "") print n }' "${WIB_PROMOTED_FILE}"
+    return 0
+}
+standby_region() {   # $1 standby name; prints its region from backups.tsv, or nothing. ALWAYS exits 0.
+    [[ -r "${WIB_BACKUPS_FILE}" ]] || return 0
+    awk -F'|' -v n="$1" '!/^[[:space:]]*#/ && $1 == n { print $3; exit }' "${WIB_BACKUPS_FILE}"
+    return 0
+}
 presenter_owner_of() { local n="${1#watch-it-burn-}"; printf '%s' "${n%-${PRESENTER_SUFFIX}}"; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
 # 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
@@ -111,6 +131,12 @@ MAX_PARALLEL="${MAX_PARALLEL:-8}"
 # Defaults keep the existing SINGLE-account attendee flow unchanged (TF_PROFILE empty -> the cluster
 # module's default profile/region). WIB_ATTENDEE_ACCOUNTS spreads the attendee pool over the 5-account fleet.
 WIB_REGION="${WIB_REGION:-us-west-2}"
+# The region the fleet lives in by default (#643): the default account's lab VPC in the default state and the
+# Datadog keys in Secrets Manager are there. A run with WIB_REGION set elsewhere builds there (backups.tsv's
+# standbys do), reads its lab VPC from states/<account>.<region>.tfstate (lab_vpc_state_for) and still reads the
+# Datadog keys from here (WIB_SECRETS_REGION).
+WIB_HOME_REGION="${WIB_HOME_REGION:-us-west-2}"
+WIB_SECRETS_REGION="${WIB_SECRETS_REGION:-${WIB_HOME_REGION}}"
 # The `event` cost-allocation tag, from its one setting in event.sh (env WIB_EVENT overrides). Passed to
 # both Terraform roots as -var event=, on apply and destroy alike, since neither root has a default.
 # shellcheck source=SCRIPTDIR/event.sh
@@ -304,7 +330,7 @@ TF_TIER=""
 # (#291), as distinct from the numbered attendee pool (watch-it-burn-attendee-NNN). Several verbs need to
 # tell them apart, because the attendee path derives a pool slot from the trailing number and that is
 # meaningless for the roster. The admin half is is_presenter_name, not a second copy of its regex.
-is_instructor_name() { [[ "$1" == "watch-it-burn-community" ]] || is_presenter_name "$1"; }
+is_instructor_name() { [[ "$1" == "watch-it-burn-community" ]] || is_presenter_name "$1" || is_standby_name "$1"; }
 
 # --- Memorable attendee hostnames (#142) ---------------------------------------------------------
 # An attendee used to be handed a raw load-balancer hostname
@@ -381,6 +407,10 @@ public_host_for() {
     # is told: attackme.
     [[ "${name}" == "watch-it-burn-community" ]] && { printf 'attackme.agenticburn.com'; return 0; }
     [[ "${name}" == "${SHARED_ADMIN_NAME}" ]] && { printf '%s' "${SHARED_ADMIN_HOST}"; return 0; }
+    # A standby answers to the hostname it stands in for (#643). The router sends that hostname to it only
+    # once backups.py promotes it; until then nothing routes to it and its self-check goes to its own LB.
+    [[ "${name}" =~ ^watch-it-burn-community-b[0-9][0-9]$ ]] && { printf 'attackme.agenticburn.com'; return 0; }
+    [[ "${name}" =~ ^watch-it-burn-private-b[0-9][0-9]$ ]] && { printf '%s' "${SHARED_ADMIN_HOST}"; return 0; }
     if is_presenter_name "${name}"; then
         printf '%s-%s.agenticburn.com' "$(presenter_owner_of "${name}")" "${PRESENTER_SUFFIX}"; return 0
     fi
@@ -446,8 +476,8 @@ require_apply() {
 # `role="$(role_of_instructor_name ...)"`, with no message, which is exactly how `ingest <attendee-name>`
 # silently did nothing at all.
 role_of_instructor_name() {
-    if [[ "$1" == "watch-it-burn-community" ]]; then printf 'community'
-    elif is_presenter_name "$1"; then printf '%s' "${PRESENTER_SUFFIX}"
+    if [[ "$1" == "watch-it-burn-community" || "$1" =~ ^watch-it-burn-community-b[0-9][0-9]$ ]]; then printf 'community'
+    elif is_presenter_name "$1" || [[ "$1" =~ ^watch-it-burn-private-b[0-9][0-9]$ ]]; then printf '%s' "${PRESENTER_SUFFIX}"
     fi
     return 0
 }
@@ -485,7 +515,8 @@ bootstrap_profile_for_role() {
 # working control, so the same request is refused. This is role-derived like bootstrap_profile_for_role:
 # the burn-vs-armed posture follows the role, not a roster column (the ignored `bootstrap` column is
 # exactly the stale-column wart a second one would repeat). role_for_cluster returns community only for
-# watch-it-burn-community, so every other cluster (admin, every attendee seat) gets 1.
+# watch-it-burn-community and its standbys (watch-it-burn-community-bNN, #643), so attackme leaks the same way
+# after a promotion, and every other cluster (admin and its standbys, every attendee seat) gets 1.
 imds_hop_limit_for_role() {
     case "$1" in
         community) printf '2' ;;
@@ -783,14 +814,14 @@ datadog_keys_for() {
     local name="$1" slot api="" app="" admin_api="" admin_app="" _admin _dd
     slot="$(printf '%s' "${name}" | sed -n "s/^${NAME_PREFIX}-0*\([0-9][0-9]*\)$/\1/p")"
     _admin="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
-        --secret-id watch-it-burn/datadog --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || true)"
+        --secret-id watch-it-burn/datadog --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || true)"
     if [[ -n "${slot}" ]]; then
         admin_api="$(jq -r '."api-key" // empty' <<<"${_admin}" 2>/dev/null)"
         admin_app="$(jq -r '."app-key" // empty' <<<"${_admin}" 2>/dev/null)"
         [[ -n "${admin_api}" ]] || log "  WARN: ${name}: instructor org keys unreadable; no dual shipping"
         local pool1 pool2
-        pool1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-        pool2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        pool1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        pool2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
         read -r api app < <(jq -rn --argjson a "${pool1}" --argjson b "${pool2}" --argjson i "$(( slot - 1 ))" \
             '([$a[], $b[]] | map(select((.role // "") | startswith("admin") | not)))[$i] | "\(.["api-key"] // "") \(.["app-key"] // "")"' 2>/dev/null)
     else
@@ -1046,6 +1077,22 @@ PYEOF
 
 # The live model of one pin target, and setting it. $2 is modelconfig (the Bedrock ModelConfig named $3) or
 # gateway (the agentgateway container's env var $3).
+#
+# The REGION moves with the model (#643). An application profile lives in the cluster's own region, so a
+# standby built in us-east-2 has us-east-2 ARNs, and calling them in the committed us-west-2 fails. The pin
+# sets each Bedrock ModelConfig's .spec.bedrock.region and the gateway's BEDROCK_REGION env to the region in
+# the ARN, which is the cluster's: a us-west-2 cluster is left as git has it.
+readonly BEDROCK_REGION_ENV="BEDROCK_REGION"
+_live_bedrock_region() {
+    local kcfg="$1" kind="$2" target="$3"
+    if [[ "${kind}" == modelconfig ]]; then
+        KUBECONFIG="${kcfg}" kubectl -n agent get modelconfig "${target}" -o jsonpath='{.spec.bedrock.region}' 2>/dev/null || true
+    else
+        KUBECONFIG="${kcfg}" kubectl -n agent get deployment agentgateway -o \
+            jsonpath="{.spec.template.spec.containers[?(@.name==\"agentgateway\")].env[?(@.name==\"${BEDROCK_REGION_ENV}\")].value}" \
+            2>/dev/null || true
+    fi
+}
 _live_bedrock_model() {
     local kcfg="$1" kind="$2" target="$3"
     if [[ "${kind}" == modelconfig ]]; then
@@ -1057,21 +1104,22 @@ _live_bedrock_model() {
     fi
 }
 _set_bedrock_model() {
-    local kcfg="$1" kind="$2" target="$3" arn="$4"
+    local kcfg="$1" kind="$2" target="$3" arn="$4" region="$5"
     if [[ "${kind}" == modelconfig ]]; then
         KUBECONFIG="${kcfg}" kubectl -n agent patch modelconfig "${target}" --type merge \
-            -p "$(jq -cn --arg a "${arn}" '{spec: {model: $a}}')" >/dev/null 2>&1
+            -p "$(jq -cn --arg a "${arn}" --arg r "${region}" '{spec: {model: $a, bedrock: {region: $r}}}')" >/dev/null 2>&1
     else
         # A pod-template change, so the gateway rolls (maxUnavailable 0) and the new pod reads the ARN. The
         # Deployment is Argo-managed, and on an armed admin cluster block-argocd-drift denies the operator's
         # UPDATE (#630); the policy always admits the Argo controller, so the pin is made as it.
         KUBECONFIG="${kcfg}" kubectl -n agent set env deployment/agentgateway -c agentgateway \
-            "${target}=${arn}" --as=system:serviceaccount:argocd:argocd-application-controller >/dev/null 2>&1
+            "${target}=${arn}" "${BEDROCK_REGION_ENV}=${region}" \
+            --as=system:serviceaccount:argocd:argocd-application-controller >/dev/null 2>&1
     fi
 }
 
 pin_bedrock_profiles() {
-    local name="$1" kcfg="$2" map targets gateway kind target model label arn live bad=0 deadline
+    local name="$1" kcfg="$2" map targets gateway kind target model label arn live region bad=0 deadline
     map="$(terraform -chdir="${CLUSTER_DIR}" output -state="${STATE_DIR}/${name}.tfstate" \
         -json bedrock_application_profiles 2>/dev/null || true)"
     if ! jq -e 'type == "object" and length > 0' >/dev/null 2>&1 <<<"${map}"; then
@@ -1110,13 +1158,15 @@ pin_bedrock_profiles() {
             sleep "${WIB_MODELCONFIG_POLL:-10}"
             live="$(_live_bedrock_model "${kcfg}" "${kind}" "${target}")"
         done
-        [[ "${live}" == "${arn}" ]] && continue
+        # arn:aws:bedrock:<region>:<account>:application-inference-profile/<id>
+        region="$(cut -d: -f4 <<<"${arn}")"
+        [[ "${live}" == "${arn}" && "$(_live_bedrock_region "${kcfg}" "${kind}" "${target}")" == "${region}" ]] && continue
         if [[ -z "${live}" ]]; then
             log "  ${name}: ${label} never appeared in agent; its tagged profile is not pinned"
             bad=1; continue
         fi
-        if _set_bedrock_model "${kcfg}" "${kind}" "${target}" "${arn}"; then
-            log "  ${name}: ${label} now calls ${arn} (tagged copy of ${model})"
+        if _set_bedrock_model "${kcfg}" "${kind}" "${target}" "${arn}" "${region}"; then
+            log "  ${name}: ${label} now calls ${arn} (tagged copy of ${model}) in ${region}"
         else
             log "  ${name}: could not point ${label} at ${arn}"; bad=1
         fi
@@ -1247,7 +1297,8 @@ run_idp_script() { bash "${IDP_SCRIPT}" "$1"; }   # one line so the shim test ca
 
 # Install the IDP on a freshly-provisioned cluster: pull an isolated kubeconfig (never the shared
 # ~/.kube/config) and run deploy-full-idp.sh with the cluster's profile. Runs inside up_one, so the
-# concurrency pool provisions AND bootstraps each cluster in parallel.
+# concurrency pool provisions AND bootstraps each cluster in parallel. REGION is the cluster's: the script finds
+# the VPC for the load balancer controller by describing the cluster there, and defaults to us-west-2 (#643).
 bootstrap_one() {
     local name="$1" profile="$2"
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
@@ -1272,7 +1323,7 @@ bootstrap_one() {
     if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
         WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" \
-        CLUSTER_NAME="${name}" WITB_PUBLIC_HOST="$(public_host_for "${name}")" \
+        CLUSTER_NAME="${name}" WITB_PUBLIC_HOST="$(public_host_for "${name}")" REGION="${WIB_REGION}" \
         run_idp_script "${profile}" \
         >"${LOG_DIR}/${name}.bootstrap.log" 2>&1; then
         log "  bootstrapped: ${name} (${profile})"
@@ -1512,9 +1563,8 @@ _provision_spec_fleet() {
         mapfile -t group < <(printf '%s\n' "${group[@]}" | sort)
         # Preserve cmd_up_fleet's friendly skip: a missing per-account lab VPC is a recorded skip, not a
         # subshell that exits silently mid-run. The default account uses the default state, so it is exempt.
-        if [[ -z "${WIB_DRY_RUN}" && "${acct}" != "${WIB_DEFAULT_ACCOUNT}" \
-              && ! -f "${LAB_VPC_DIR}/states/${acct}.tfstate" ]]; then
-            log "  account '${acct}': NO lab VPC (apply states/${acct}.tfstate first); skipping its slice"
+        if [[ -z "${WIB_DRY_RUN}" ]] && ! lab_vpc_present "${acct}"; then
+            log "  account '${acct}': NO lab VPC in ${WIB_REGION} (apply $(lab_vpc_state_for "${acct}" | sed "s#^${LAB_VPC_DIR}/##") first); skipping its slice"
             record_fail "account:${acct}-no-vpc"; continue
         fi
         log "provisioning ${#group[@]} cluster(s) -> account '${acct}'"
@@ -1538,7 +1588,9 @@ _provision_spec_fleet() {
     # which for 'instructors up <owner>' is an owner name, not a cluster: the first live run after #251
     # waited ten minutes for a console named "" and then verified a cluster called "michael".
     local built=("${!PROVISION_SPEC[@]}")
-    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" ]]; then
+    # WIB_NO_ROUTES=1 leaves the router alone: backups.py builds standbys with it, since a standby is routed
+    # only when it is promoted (#643), and a table rendered from a roster of standbys alone would drop attackme.
+    if [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_ROUTES:-}" ]]; then
         wait_for_console_lbs "${built[@]}" || true
         cmd_routes || log "routes: run 'fleet.sh routes' manually once the console LBs are up"
     fi
@@ -2352,8 +2404,8 @@ register_with_provisioning() {
     local label="$1" ingest_fn="$2"; shift 2
     [[ -z "${WIB_DRY_RUN}" && -z "${WIB_NO_BOOTSTRAP:-}" && -z "${WIB_NO_INGEST:-}" ]] || return 0
     if labctl_ready; then
-        POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-        POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+        POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
         log_ingest_target
         "${ingest_fn}" "$@" || log "ingest: re-run the matching 'fleet.sh ingest' once the consoles are up"
     else
@@ -2459,9 +2511,17 @@ destroy_lab_vpc_for() {
 
 # accen-dev keeps its lab VPC in the DEFAULT terraform.tfstate; every other account has its own file
 # under states/. Mirrors read_vpc_for, which resolves the same split in the other direction.
+# Is there a lab VPC state for $1 in WIB_REGION? The default account in the home region always counts: its state
+# is the default one, which read_vpc reads.
+lab_vpc_present() {
+    [[ "${WIB_REGION}" == "${WIB_HOME_REGION}" && "$1" == "${WIB_DEFAULT_ACCOUNT}" ]] || [[ -f "$(lab_vpc_state_for "$1")" ]]
+}
 lab_vpc_state_for() {
     local acct="$1"
-    if [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
+    # Outside the home region every account, the default one included, keeps one state per region (#643).
+    if [[ "${WIB_REGION}" != "${WIB_HOME_REGION}" ]]; then
+        printf '%s/states/%s.%s.tfstate' "${LAB_VPC_DIR}" "${acct}" "${WIB_REGION}"
+    elif [[ "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
         printf '%s/terraform.tfstate' "${LAB_VPC_DIR}"
     else
         printf '%s/states/%s.tfstate' "${LAB_VPC_DIR}" "${acct}"
@@ -2718,12 +2778,15 @@ read_vpc_for() {
     # The default account (accen-dev) keeps its lab VPC in the DEFAULT lab-vpc state (terraform.tfstate),
     # not a per-account states/<acct>.tfstate (it was applied before the multi-account split). Fall back to
     # read_vpc() for it so it joins up-fleet/down-fleet/health like any other account, no duplicate state.
-    if [[ ! -f "${state}" && "${profile}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
+    # Outside the home region there is no default state to fall back to: every account has one per region (#643).
+    if [[ "${WIB_REGION}" != "${WIB_HOME_REGION}" ]]; then
+        state="$(lab_vpc_state_for "${profile}")"
+    elif [[ ! -f "${state}" && "${profile}" == "${WIB_DEFAULT_ACCOUNT}" ]]; then
         read_vpc; return
     fi
     if [[ ! -f "${state}" ]]; then
-        log "no lab VPC for account '${profile}'. Apply it first:"
-        log "  terraform -chdir=${LAB_VPC_DIR} apply -state=states/${profile}.tfstate \\"
+        log "no lab VPC for account '${profile}' in ${WIB_REGION}. Apply it first:"
+        log "  terraform -chdir=${LAB_VPC_DIR} apply -state=${state#"${LAB_VPC_DIR}"/} \\"
         log "    -var profile=${profile} -var region=${WIB_REGION} -var event=${WIB_EVENT}"
         exit 1
     fi
@@ -2781,10 +2844,10 @@ print_roster_lab_links() {
 datadog_row_for_role() {
     local role="$1" p1 p2
     p1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
-        --secret-id watch-it-burn/datadog-pool --region "${WIB_REGION}" \
+        --secret-id watch-it-burn/datadog-pool --region "${WIB_SECRETS_REGION}" \
         --query SecretString --output text 2>/dev/null || echo '[]')"
     p2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value \
-        --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" \
+        --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" \
         --query SecretString --output text 2>/dev/null || echo '[]')"
     case "${role}" in
         community|admin) : ;;
@@ -2985,7 +3048,7 @@ cmd_down_fleet() {
         acct="${acct// /}"; [[ -n "${acct}" ]] || continue
         start=$(( WIB_NAME_OFFSET + idx * per_account + 1 ))
         idx=$(( idx + 1 ))
-        [[ -f "${LAB_VPC_DIR}/states/${acct}.tfstate" || "${acct}" == "${WIB_DEFAULT_ACCOUNT}" ]] || { log "  account '${acct}': no lab VPC state, skipping"; continue; }
+        lab_vpc_present "${acct}" || { log "  account '${acct}': no lab VPC state, skipping"; continue; }
         names=(); for n in $(seq "${start}" $(( start + per_account - 1 ))); do
             names+=("$(printf '%s-%03d' "${NAME_PREFIX}" "${n}")")
         done
@@ -3891,8 +3954,8 @@ cmd_ingest() {
         log "ingest pool: re-ingesting ${#_pool_names[@]} row(s) from labctl pool --customer ${WIB_LABCTL_CUSTOMER} --event ${WIB_EVENT}"
         set -- "${_pool_names[@]}"
     fi
-    POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-    POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+    POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+    POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
     log_ingest_target
     if [[ "$1" =~ ^[0-9]+$ ]]; then
         local per_account="$1" accounts idx=0 acct start n name
@@ -3998,13 +4061,27 @@ cmd_routes() {
         echo "# ABOUTME: Host -> cluster LB routing for the agenticburn.com wildcard router."
         echo "# ABOUTME: AUTO-GENERATED by 'fleet.sh routes' from live cluster LBs. Do not hand-edit."
     } > "${tmp}"
-    local entry name rr bp acct h short n state
+    local entry name rr bp acct h short n state src src_region holder
     for entry in "${INSTRUCTORS[@]}"; do
         IFS='|' read -r name rr _tier _it _pid bp _owner <<<"${entry}"
         acct="$(account_for_role "${rr}")"
-        provider_write_kubeconfig "${name}" "${kcfg}" "${acct}" || continue
+        # A promoted standby keeps the role's hostname (#643): its console LB, in its own region, takes the rows
+        # this roster cluster would have had. Without this, the Night Before's `routes roster` run after a
+        # promotion would hand attackme straight back to the cluster that failed its self-check.
+        src="${name}"; src_region="${WIB_REGION}"
+        holder="$(promoted_holder "${rr}")"
+        if [[ -n "${holder}" && "${holder}" != "${name}" ]] && ! is_standby_name "${name}"; then
+            src_region="$(standby_region "${holder}")"
+            if [[ -n "${src_region}" ]]; then
+                src="${holder}"; log "  routes: $(public_host_for "${name}") is promoted to ${holder} (${src_region})"
+            else
+                src_region="${WIB_REGION}"
+                log "  routes: ${rr} is promoted to ${holder}, which backups.tsv does not list; routing ${name}"
+            fi
+        fi
+        provider_write_kubeconfig "${src}" "${kcfg}" "${acct}" "${src_region}" || continue
         h="$(KUBECONFIG="${kcfg}" kubectl -n agent get svc console -o jsonpath='{.status.loadBalancer.ingress[0].hostname}' 2>/dev/null)"
-        [[ -n "${h}" ]] || { log "  routes: ${name} console LB not ready, skipping"; continue; }
+        [[ -n "${h}" ]] || { log "  routes: ${src} console LB not ready, skipping"; continue; }
         # The name a presenter actually reads: attackme.agenticburn.com for the community cluster and
         # <owner>-admin.agenticburn.com for each presenter's. The old r1-1 form was a provisioning
         # artefact, not a name anyone can hold in their head mid-demo, and it says nothing about whose
@@ -4656,8 +4733,8 @@ main() {
         ingest-instructors)
             labctl_ready || exit 1
             require_tools; mkdir -p "${LOG_DIR}"; rm -f "${FAIL_FILE}"
-            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
-            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            POOL1="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool   --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
+            POOL2="$(AWS_PROFILE="${WIB_DEFAULT_ACCOUNT}" aws secretsmanager get-secret-value --secret-id watch-it-burn/datadog-pool-2 --region "${WIB_SECRETS_REGION}" --query SecretString --output text 2>/dev/null || echo '[]')"
             log_ingest_target
             cmd_ingest_instructors "$@"; report_failures ;;
         aws-keys) cmd_aws_keys "$@" ;;

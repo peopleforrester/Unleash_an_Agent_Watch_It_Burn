@@ -68,12 +68,15 @@ check("every ConfigMap ignore is named agentgateway-c7-config (an unnamed one wo
 check("nothing is ignored on agentgateway-config",
       not any(i.get("name") == "agentgateway-config" for i in ignores))
 # The one exception is the Bedrock pin (#561): the BEDROCK_NOVA_MODEL env entry of the agentgateway container,
-# which fleet.sh sets to the cluster's tagged profile ARN. Nothing else of the Deployment, and nothing of C7's.
-BEDROCK_PIN = '.spec.template.spec.containers[] | select(.name=="agentgateway") | .env[] | select(.name == "BEDROCK_NOVA_MODEL")'
-check("on the agentgateway Deployment only the BEDROCK_NOVA_MODEL env entry is ignored (every Deployment ignore is named)",
+# which fleet.sh sets to the cluster's tagged profile ARN, and BEDROCK_REGION beside it, the region that ARN is in
+# (#643). Nothing else of the Deployment, and nothing of C7's.
+BEDROCK_PIN = [f'.spec.template.spec.containers[] | select(.name=="agentgateway") | .env[] | select(.name == "{v}")'
+               for v in ("BEDROCK_NOVA_MODEL", "BEDROCK_REGION")]
+check("on the agentgateway Deployment only the BEDROCK_NOVA_MODEL and BEDROCK_REGION env entries are ignored "
+      "(every Deployment ignore is named)",
       all(i.get("name") for i in ignores if i.get("kind") == "Deployment")
       and [i for i in ignores if i.get("kind") == "Deployment" and i.get("name") == "agentgateway"]
-      == [{"group": "apps", "kind": "Deployment", "name": "agentgateway", "jqPathExpressions": [BEDROCK_PIN]}],
+      == [{"group": "apps", "kind": "Deployment", "name": "agentgateway", "jqPathExpressions": BEDROCK_PIN}],
       f"{[i for i in ignores if i.get('kind') == 'Deployment']}")
 check("RespectIgnoreDifferences is on, so a sync does not revert the edit either",
       "RespectIgnoreDifferences=true" in APP["spec"]["syncPolicy"]["syncOptions"])

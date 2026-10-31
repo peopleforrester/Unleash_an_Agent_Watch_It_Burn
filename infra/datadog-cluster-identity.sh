@@ -24,9 +24,13 @@ CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cl
 # Datadog cluster name should be unique. Named for the screen: the bot the room hacks is public, the presenters'
 # cluster they share is private, and any other admin cluster keeps its owner. cluster-name keeps the EKS name, which the
 # probes and fleet.sh compare against the cluster itself.
+# A standby (backups.tsv, #643) reports as the cluster it stands in for, so the room's tab and the presenters' tab
+# keep showing the bot the room reaches once the watcher promotes it.
 case "${CLUSTER_NAME}" in
     watch-it-burn-community)     DATADOG_CLUSTER_NAME="burritobot-public" ;;
     watch-it-burn-private)       DATADOG_CLUSTER_NAME="burritobot-private" ;;
+    watch-it-burn-community-b[0-9][0-9]) DATADOG_CLUSTER_NAME="burritobot-public" ;;
+    watch-it-burn-private-b[0-9][0-9])   DATADOG_CLUSTER_NAME="burritobot-private" ;;
     watch-it-burn-*-admin)       owner="${CLUSTER_NAME#watch-it-burn-}"; DATADOG_CLUSTER_NAME="burritobot-private-${owner%-admin}" ;;
     *)                           DATADOG_CLUSTER_NAME="burritobot-${CLUSTER_NAME#watch-it-burn-}" ;;
 esac
