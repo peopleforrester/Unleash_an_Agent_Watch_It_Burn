@@ -7,7 +7,7 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-docs = list(yaml.safe_load_all((REPO / "gitops" / "ai-layer" / "resources.yaml").read_text()))
+docs = list(yaml.safe_load_all((REPO / "gitops" / "workshop-agent" / "agent.yaml").read_text()))
 agent = next(d for d in docs if d and d.get("kind") == "Agent")
 tools = agent["spec"]["declarative"]["tools"]
 mcp = next(t["mcpServer"] for t in tools if t.get("type") == "McpServer")

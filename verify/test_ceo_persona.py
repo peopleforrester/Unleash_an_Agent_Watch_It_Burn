@@ -24,7 +24,7 @@ REPO = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO / "verify"))
 import kubecon_probe as kp  # noqa: E402
 
-RES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+RES = (REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8")  # the Agent's own bundle (#707)
 failures: list[str] = []
 
 

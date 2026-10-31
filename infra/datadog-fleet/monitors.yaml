@@ -70,7 +70,7 @@ monitors:
     priority: 2
     name: "[WIB fleet] BurritoBot agent pod not ready"
     type: metric alert
-    # kagent runs the Agent workshop-agent (gitops/ai-layer/resources.yaml) as a Deployment of the same name.
+    # kagent runs the Agent workshop-agent (gitops/workshop-agent/agent.yaml) as a Deployment of the same name.
     query: "max(last_5m):max:kubernetes_state.deployment.replicas_available{kube_cluster_name:burritobot-*,kube_namespace:agent,kube_deployment:workshop-agent} by {kube_cluster_name} < 1"
     message: |
       {{kube_cluster_name.name}}: the BurritoBot agent (kagent Agent workshop-agent, namespace agent) has had no ready pod for 5 minutes.

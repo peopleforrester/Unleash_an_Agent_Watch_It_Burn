@@ -16,7 +16,7 @@ metadata:
   namespace: ATTENDEE_NAMESPACE # attendee agent namespace (independent per-attendee cluster)
 spec:
   declarative:
-    modelConfig: bedrock-claude # NON-CANONICAL, nothing applies this file: the deployed Agent in gitops/ai-layer/resources.yaml is bound to bedrock-nova (#453)
+    modelConfig: bedrock-claude # NON-CANONICAL, nothing applies this file: the deployed Agent in gitops/workshop-agent/agent.yaml is bound to bedrock-nova (#453)
     systemMessage: >-
       You are a platform engineering assistant operating inside a single Kubernetes
       namespace. You help deploy and inspect workloads using the tools provided.

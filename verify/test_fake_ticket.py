@@ -31,7 +31,8 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 AI = REPO / "gitops/ai-layer"
-RES = [d for d in yaml.safe_load_all((AI / "resources.yaml").read_text()) if isinstance(d, dict)]
+RES = [d for p in (AI / "resources.yaml", REPO / "gitops/workshop-agent/agent.yaml")  # the Agent's own bundle (#707)
+       for d in yaml.safe_load_all(p.read_text()) if isinstance(d, dict)]
 KUST = yaml.safe_load((AI / "kustomization.yaml").read_text())
 SITE_SRC = (AI / "ticket_site.py").read_text()
 MCP_SRC = (AI / "workshop-mcp-server.py").read_text()

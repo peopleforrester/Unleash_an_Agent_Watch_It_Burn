@@ -45,7 +45,7 @@ CODE_FILES = (
     "verify/test_c7_gateway_toggle.py",
     "challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh",
 )
-RESOURCES = "gitops/ai-layer/resources.yaml"
+RESOURCES = "gitops/workshop-agent/agent.yaml"  # the Agent, in its own Application since #707
 DECISION_516 = "## 2026-10-25 · #516 ·"
 
 TOOLNAMES = re.compile(r"\btoolnames\b|\btool allow-?list\b|\bagent'?s (?:\w+ )?allow-?list\b|\bkagent'?s? (?:\w+ )?allow-?list\b",
@@ -106,7 +106,7 @@ def hash_blocks(lines: list[tuple[int, str]]) -> list[tuple[int, str]]:
 
 
 def agent_tools_comment(src: str) -> list[tuple[int, str]]:
-    """resources.yaml's Agent tools comment: the comment block right above workshop-agent's `tools:`, and the
+    """The Agent's tools comment: the comment block right above workshop-agent's `tools:`, and the
     comments inside that list."""
     lines = src.splitlines()
     agent = next((n for n, l in enumerate(lines) if l == "kind: Agent"

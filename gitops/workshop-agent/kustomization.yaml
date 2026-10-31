@@ -1,0 +1,9 @@
+# ABOUTME: Kustomize bundle for the workshop-agent Application (#707): the kagent Agent alone, in namespace 'agent'.
+# ABOUTME: Everything it names (ModelConfigs, RemoteMCPServers, agent-sa) ships in gitops/ai-layer, one wave earlier.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agent
+
+resources:
+  - agent.yaml

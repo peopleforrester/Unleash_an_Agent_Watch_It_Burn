@@ -153,7 +153,7 @@ echo "== converge alone turns Datadog on for clusters whose keys arrived after b
 # exist, and errexit ended each converge_one job before repair_datadog. This runs the real cmd_converge from
 # that directory through every real repair; only the cluster edges and pin_bedrock_profiles are stubbed.
 python3 -c 'import json; print(json.dumps({"items":[{"metadata":{"name":f"app-{i}"},"status":{"sync":{"status":"Synced"},"health":{"status":"Healthy"},"operationState":{"phase":"Succeeded"}}} for i in range(12)]}))' >"${T}/apps.json"
-python3 - "${HERE}/../gitops/ai-layer/resources.yaml" >"${T}/agent_tools" <<'PY'
+python3 - "${HERE}/../gitops/workshop-agent/agent.yaml" >"${T}/agent_tools" <<'PY'
 import json, sys, yaml
 for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
     if d and d.get("kind") == "Agent":
@@ -186,7 +186,7 @@ printf '%s' '["lookup_customer_records","check_inventory","reorder_supply","get_
 : >"${CALLS}"; : >"${T}/stderr"; src 'repair_agent_tools watch-it-burn-community /dev/null'
 check "the live eleven against git's twelve: the stale list is logged and the Agent CR is deleted for Argo to recreate" \
   'grep -qx "kubectl -n agent delete agent workshop-agent" "${CALLS}" && grep -q "watch-it-burn-community: agent tool list is stale" "${T}/stderr"'
-python3 - "${HERE}/../gitops/ai-layer/resources.yaml" >"${T}/agent_tools" <<'PY'
+python3 - "${HERE}/../gitops/workshop-agent/agent.yaml" >"${T}/agent_tools" <<'PY'
 import json, sys, yaml
 for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
     if d and d.get("kind") == "Agent":

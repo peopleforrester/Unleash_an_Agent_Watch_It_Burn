@@ -24,8 +24,8 @@ frontDoor:
 # Where Challenge 7's control sits on this profile (#679): toolnames, the kagent Agent's evil-mcp toolNames list,
 # which a student narrows live with guard-mcp-on, or gateway, agentgateway's :3003 rule, which only the admin
 # profile uses (#496) and which the web terminal picks by the root's lab-platform/profile=admin label. With
-# toolnames, ai-layer ignores drift on that one list so selfHeal keeps the student's fix. With gateway nothing
-# writes the list live, so ai-layer does not ignore it, and Argo CD syncs the Agent's whole tools array from git.
+# toolnames, the workshop-agent Application ignores drift on that one list so selfHeal keeps the student's fix (#707).
+# With gateway nothing writes the list live, so the Application does not ignore it, and a git change to it lands too.
 c7Control: toolnames
 # The action of the two guardrails an admin cluster arms, require-resource-limits and restrict-image-registries
 # (#638, lab-platform#310). Audit renders them as policies/kyverno writes them, and kyverno-policies ignores drift on

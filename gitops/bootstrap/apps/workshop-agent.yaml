@@ -1,0 +1,88 @@
+# ABOUTME: ArgoCD Application for BurritoBot's kagent Agent, workshop-agent (kustomize bundle in gitops/workshop-agent).
+# ABOUTME: Syncs after ai-layer, whose ModelConfigs and RemoteMCPServers it names, and without RespectIgnoreDifferences.
+#
+# Why the Agent has an Application of its own (#707). In ai-layer the Agent's ignore on evil-mcp's toolNames sat inside
+# its tools array, and ai-layer syncs with RespectIgnoreDifferences=true for its other live toggles. The Agent is a CRD,
+# so Argo CD v3.5.2 copied the ignored field back from live as a JSON merge patch, which cannot write one element of
+# an array: it carried the whole live tools array, and every sync applied the live tools (#679). On the toolnames
+# profiles (attendee, burn, full) no git change to a tool entry reached a running cluster until fleet.sh converge's
+# repair_agent_tools deleted and recreated the Agent, which also reset the student's C7 state. read_support_ticket
+# (#640) never reached either KubeCon cluster that way.
+#
+# Here the ignore stays and RespectIgnoreDifferences does not. The ignore works on the DIFF: a student's guard-mcp-on
+# narrows evil-mcp's toolNames live, the Agent still shows Synced, and selfHeal has nothing to revert. A sync applies
+# the committed Agent as git has it, so a git change to any other field of the Agent, a workshop-mcp tool included,
+# makes the Agent OutOfSync and auto-sync lands it, on every profile, with no converge. A separate Application is what
+# keeps that sync rare: a change to anything else in ai-layer (the console's pages, guard-proxy, a ModelConfig) syncs
+# ai-layer, not this.
+#
+# What it costs, accepted in #707:
+#   - A git change to evil-mcp's committed toolNames ALONE is still ignored by the diff, so it reaches new clusters
+#     only, the cost #515 accepted for agentgateway-c7-config.
+#   - A sync after any other change to the Agent applies git's evil-mcp list and git's modelConfig, so it resets a
+#     student's live guard-mcp-on and a live modelConfig tier patch along with it. #598 says no script applies a tier
+#     yet; a reset guard-mcp-on is the student running it again.
+#
+# verify/test_agent_tools_sync.py ports Argo CD's sync and models both, on every profile.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: workshop-agent
+  namespace: argocd
+  annotations:
+    # Wave 4, after ai-layer (wave 3): the Agent names the bedrock-nova ModelConfig, the workshop-mcp and evil-mcp
+    # RemoteMCPServers and the agent-sa ServiceAccount, all of which ai-layer creates. kagent makes the agent's
+    # Deployment when the Agent appears, so it is also admitted after ai-layer's otel-ordering-gate has seen the OTel
+    # Operator's webhook serving, and the pod is instrumented (the reason ai-layer itself is wave 3).
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/workshop-agent
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  ignoreDifferences:
+    # Beat-3 (C7) LIVE TOGGLE: challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh patches the Agent's MCP
+    # toolNames allowlist (ON excludes the rogue tools, --off lets them back in). The committed default
+    # (gitops/workshop-agent/agent.yaml) is the vulnerable "off" list: evil-mcp is wired with its full rogue toolset,
+    # and the toggle or the web terminal's guard-mcp-on narrows it live. On an admin cluster (c7Control: gateway)
+    # guard-mcp-on narrows agentgateway's rule instead (#496), nothing writes this list live, and the ignore is not
+    # rendered, so a git change to evil-mcp's list reaches admin clusters too.
+    #
+    # NARROWED to the evil-mcp entry only (#349). Ignoring `.spec.declarative.tools` wholesale also stopped OUR changes
+    # reaching a cluster, silently: when get_recipe was renamed to get_vault_entry the manifest updated and every live
+    # Agent CR kept pointing at the tool that no longer existed, so Challenge 5 was impossible while Argo reported
+    # Synced and Healthy throughout. Selecting that one server by NAME rather than by array index keeps it correct if
+    # the order ever changes.
+    - group: kagent.dev
+      kind: Agent
+      name: workshop-agent
+      jqPathExpressions:
+        # {{- if ne .Values.c7Control "gateway" }}
+        - '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
+        # {{- end }}
+        # Per-cluster model tier (cost-race demo): modelConfig can be patched live to another Bedrock tier on one
+        # cluster. Ignored so selfHeal keeps the per-cluster tier instead of reverting to the committed default
+        # (bedrock-nova); a sync for another Agent change resets it (above).
+        - '.spec.declarative.modelConfig'
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ServerSideApply=true
+      # ServerSideApply will not take a field another manager owns, and it says nothing when it declines: the sync
+      # reports "Succeeded: successfully synced (all tasks run)" and the resource stays OutOfSync forever. Measured on
+      # attendee-001 2026-09-08, three managers on the Agent CR:
+      #   argocd-controller / Apply
+      #   kubectl-patch     / Update   <- Challenge 7's `kubectl patch --type=json`, from a past run
+      #   app               / Update
+      # kubectl-patch owned .spec.declarative.tools, so the get_recipe -> get_vault_entry rename never reached a single
+      # live cluster and Challenge 5 was impossible on all of them (#349). Force lets Argo reclaim the field.
+      - Force=true
+      # No RespectIgnoreDifferences=true, on purpose (#707): on this CRD it applies the whole live tools array (above).

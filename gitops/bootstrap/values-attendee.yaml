@@ -65,3 +65,4 @@ apps:
   - otel-collector-attendee
   - otel-operator
   - prometheus
+  - workshop-agent

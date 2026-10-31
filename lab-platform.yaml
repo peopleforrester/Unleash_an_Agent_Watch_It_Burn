@@ -11,11 +11,13 @@
 # and restrict-image-registries at [Deny]: see guardrails.validationAction in gitops/bootstrap/values.yaml.
 #
 # instrumented (#696, lab-platform#216): on every profile, the workloads the OpenTelemetry operator injects through
-# their instrumentation.opentelemetry.io/inject-python annotation in gitops/ai-layer/resources.yaml. lab-platform's
+# their instrumentation.opentelemetry.io/inject-python annotation in gitops/ai-layer/resources.yaml and, for the Agent,
+# gitops/workshop-agent/agent.yaml (its own Application since #707). lab-platform's
 # observability step deletes their pods once the root has synced, so each comes back through the operator's webhook;
 # a pod that started before the operator was ready runs uninstrumented and sends no traces. guard-proxy is the
 # Deployment the bundle ships; workshop-agent is the one kagent makes for the Agent of that name. Every profile lists
-# ai-layer, ai-layer-otel and otel-operator, so both are on every cluster, and one missing fails that cluster by name.
+# ai-layer, workshop-agent, ai-layer-otel and otel-operator, so both are on every cluster, and one missing fails that
+# cluster by name.
 format: lab-platform/v1
 labs:
   - burn

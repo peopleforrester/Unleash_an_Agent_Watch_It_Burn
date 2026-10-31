@@ -87,7 +87,11 @@ check("both roster profiles install the ai-layer app that creates it", all(deplo
 INJECT = "instrumentation.opentelemetry.io/inject-python"
 ai_ns = yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text(encoding="utf-8"))["namespace"]
 injected = []
-for d in (d for d in yaml.safe_load_all(resources) if d):
+# The Agent is the workshop-agent Application's since #707, in its own bundle, the same namespace.
+agent_bundle = (REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8")
+check("the workshop-agent bundle lands in the ai-layer bundle's namespace",
+      yaml.safe_load((REPO / "gitops/workshop-agent/kustomization.yaml").read_text(encoding="utf-8"))["namespace"] == ai_ns)
+for d in (d for d in [*yaml.safe_load_all(resources), *yaml.safe_load_all(agent_bundle)] if d):
     if d.get("kind") == "Deployment":
         ann = ((d["spec"]["template"].get("metadata") or {}).get("annotations") or {})
     elif d.get("kind") == "Agent":
@@ -97,15 +101,17 @@ for d in (d for d in yaml.safe_load_all(resources) if d):
     if ann.get(INJECT) == "watch-it-burn-python":
         injected.append({"kind": "Deployment", "namespace": d["metadata"].get("namespace", ai_ns),
                          "name": d["metadata"]["name"]})
-check(f"the instrumented list is every workload gitops/ai-layer/resources.yaml annotates {INJECT}, no more and no "
+check(f"the instrumented list is every workload gitops/ai-layer/resources.yaml and gitops/workshop-agent/agent.yaml "
+      f"annotate {INJECT}, no more and no "
       f"fewer (found {[w['name'] for w in injected]})",
       sorted(injected, key=lambda w: w["name"]) == sorted(INSTRUMENTED, key=lambda w: w["name"]))
 instr = (REPO / "gitops/ai-layer-otel/instrumentation.yaml").read_text(encoding="utf-8")
 check("the annotation names the Instrumentation ai-layer-otel ships, watch-it-burn-python, in the same namespace",
       any(d and d.get("kind") == "Instrumentation" and d["metadata"]["name"] == "watch-it-burn-python"
           and d["metadata"].get("namespace", ai_ns) == ai_ns for d in yaml.safe_load_all(instr)))
-check("every profile installs ai-layer, ai-layer-otel and otel-operator, so both workloads are on each of its clusters",
-      all(deploys(p, a) for p in profiles() for a in ("ai-layer", "ai-layer-otel", "otel-operator")))
+check("every profile installs ai-layer, workshop-agent, ai-layer-otel and otel-operator, so both workloads are on each "
+      "of its clusters", all(deploys(p, a) for p in profiles()
+                             for a in ("ai-layer", "workshop-agent", "ai-layer-otel", "otel-operator")))
 # The strict subset: block style only and every value text, so a flow collection or a non-string scalar fails.
 body = [ln.split("#", 1)[0] for ln in text.splitlines()]
 check("block style only: no flow collection", not any(re.search(r"[\[\]{}]", ln) for ln in body))
@@ -167,9 +173,12 @@ check("kyverno-policies.yaml renders its kustomize patches only when armed, the 
 check("and its /spec/validationActions ignore only when not armed",
       re.search(rf"  # {re.escape(UNARMED_IF)}\n(  #.*\n)*  ignoreDifferences:\n", kyv) is not None
       and f"        - /spec/validationActions\n  # {ARM_END}\n  syncPolicy:" in kyv)
-check("ai-layer.yaml renders the Agent's evil-mcp toolNames ignore only when c7Control is not gateway (#679)",
+agent_app = (APPS / "workshop-agent.yaml").read_text(encoding="utf-8")
+check("workshop-agent.yaml renders the Agent's evil-mcp toolNames ignore only when c7Control is not gateway (#679, #707)",
       f"      jqPathExpressions:\n        # {C7_TOOLNAMES_IF}\n        - '.spec.declarative.tools[] | select("
-      f'.mcpServer.name == "evil-mcp") | .mcpServer.toolNames\'\n        # {C7_TOOLNAMES_END}\n' in ai_layer)
+      f'.mcpServer.name == "evil-mcp") | .mcpServer.toolNames\'\n        # {C7_TOOLNAMES_END}\n' in agent_app)
+check("and ai-layer.yaml no longer holds the c7Control guard, the Agent being out of its bundle (#707)",
+      C7_TOOLNAMES_IF not in ai_layer)
 check("ai-layer.yaml sets LLM Guard's image outside that guard, so every root renders it (#652)",
       "    kustomize:\n" in ai_layer and "      images:\n" in ai_layer
       and ai_layer.index("      images:\n") < ai_layer.index(FRONT_DOOR_IF))
@@ -209,12 +218,17 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
 # The selections the four globs made at b1fcb0e, less the overlay the excludes matched without meaning to,
 # less customer-stream, which every profile listed until #473 removed it,
 # and less loki and alloy, which #474 dropped from attendee, admin and full,
-# plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full.
+# plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full,
+# plus workshop-agent, the Agent's own Application, which #707 added to every profile.
 WANT = {
-    "attendee": 27, "burn": 18, "admin": 31, "full": 29,
+    "attendee": 28, "burn": 19, "admin": 32, "full": 30,
 }
 for profile, n in WANT.items():
-    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203", len(app_names(profile)) == n)
+    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203 and #707",
+          len(app_names(profile)) == n)
+for profile in all_profiles():
+    check(f"{profile} lists workshop-agent beside ai-layer (#707)",
+          ("workshop-agent" in app_names(profile)) == ("ai-layer" in app_names(profile)))
 for profile in WANT:
     check(f"{profile} {'lists' if profile != 'burn' else 'does not list'} cluster-network-policies (#203)",
           ("cluster-network-policies" in app_names(profile)) == (profile != "burn"))
@@ -229,13 +243,15 @@ for f in app_files:
     # (#622) and Prometheus' own, escaped.
     # ai-layer.yaml alone also holds the front door's guarded certificate patch (#638).
     # kyverno-policies.yaml alone holds the guardrails' armed and unarmed blocks (#638).
-    allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END, C7_TOOLNAMES_IF,
-                                             C7_TOOLNAMES_END) if f == "ai-layer.yaml" else ()) \
+    # workshop-agent.yaml alone holds the c7Control guard on the Agent's evil-mcp toolNames ignore (#679, #707).
+    allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END) if f == "ai-layer.yaml" else ()) \
+        + ((C7_TOOLNAMES_IF, C7_TOOLNAMES_END) if f == "workshop-agent.yaml" else ()) \
         + ((ARMED_IF, UNARMED_IF, ARM_END) if f == "kyverno-policies.yaml" else ())
     stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw))
              if m not in allowed]
     check(f"{f}: no template text but the revision and the image registry (Prometheus' {{{{ }}}} escaped)"
-          + (" and the front door's certificate and the c7Control guard" if f == "ai-layer.yaml" else "")
+          + (" and the front door's certificate" if f == "ai-layer.yaml" else "")
+          + (" and the c7Control guard" if f == "workshop-agent.yaml" else "")
           + (" and the guardrails' arm guards" if f == "kyverno-policies.yaml" else "")
           + f" {stray}", not stray)
     docs = [d for d in yaml.safe_load_all(raw) if d]

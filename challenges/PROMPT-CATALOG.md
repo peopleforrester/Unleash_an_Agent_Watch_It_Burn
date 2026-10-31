@@ -19,7 +19,7 @@ entry carries a kubectl-verifiable marker. A token count cannot tell you whether
 > **Model matters more than wording.** Every figure below was measured against **Amazon Nova Pro**
 > (`us.amazon.nova-pro-v1:0`), the workshop default. Claude refuses several of these outright; Llama and
 > Mistral leak tool-calls as text. If the bound model changes, **every number here is void** and has to be
-> re-measured. See `gitops/ai-layer/resources.yaml` (`modelConfig: bedrock-nova`).
+> re-measured. See `gitops/workshop-agent/agent.yaml` (`modelConfig: bedrock-nova`).
 
 > **A fresh conversation is the biggest reliability factor.** Measured on a live cluster: the same attack
 > lands about **83% of the time in a fresh conversation and 0% of the time after BurritoBot has refused

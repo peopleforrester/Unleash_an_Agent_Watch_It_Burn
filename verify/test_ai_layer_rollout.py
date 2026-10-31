@@ -83,7 +83,7 @@ with tempfile.TemporaryDirectory(dir=REPO) as tmp:
     after = next(d for d in render(copy) if d["kind"] == "Deployment" and d["metadata"]["name"] == "console")["spec"]["template"]
     check("editing lab.html changes the console pod template (so Argo CD rolls it)", before != after)
 
-print("== the OTel ordering gate runs before the Agent CR ==")
+print("== the OTel ordering gate runs before the AI layer's pods (and the Agent CR, a wave later since #707) ==")
 gate = [d for d in docs if d["kind"] == "Job" and d["metadata"]["name"] == "otel-gate"]
 check("otel-gate Job is a PreSync hook", bool(gate) and gate[0]["metadata"]["annotations"].get("argocd.argoproj.io/hook") == "PreSync")
 check("otel-gate waits on the webhook endpoints and the Instrumentation",

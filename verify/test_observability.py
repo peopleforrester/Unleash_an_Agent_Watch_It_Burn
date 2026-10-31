@@ -145,7 +145,7 @@ DD_ENV = "burritobot-kubecon-na-26"
 
 
 def _kagent_env():
-    docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+    docs = [d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text()) if d]  # #707
     agent = next(d for d in docs if d.get("kind") == "Agent")
     env = agent["spec"]["declarative"]["deployment"]["env"]
     return {e["name"]: e.get("value", "") for e in env}

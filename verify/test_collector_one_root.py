@@ -22,6 +22,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+AGENT_DOCS = [d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text()) if d]  # #707
 GATEWAY = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()) if d]
 VALUES = yaml.safe_load((REPO / "gitops/otel-collector/values.yaml").read_text())
 
@@ -72,7 +73,7 @@ check("the a2a rule exempts the request handlers that have a parent",
       f"{a2a}")
 
 print("== the workshop-agent emits no a2a-sdk spans ==")
-agent = next(d for d in RESOURCES if d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent")
+agent = next(d for d in AGENT_DOCS if d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent")
 agent_env = {e["name"]: e.get("value") for e in agent["spec"]["declarative"]["deployment"]["env"]}
 check("OTEL_INSTRUMENTATION_A2A_SDK_ENABLED is \"false\"",
       agent_env.get("OTEL_INSTRUMENTATION_A2A_SDK_ENABLED") == "false",

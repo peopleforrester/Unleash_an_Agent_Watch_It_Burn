@@ -36,7 +36,7 @@ CLUSTER = "watch-it-burn-attendee-001"
 CONTEXT = f"arn:aws:eks:us-west-2:515966504359:cluster/{CLUSTER}"
 EVENT = bpc.fleet_event(bpc.EVENT_SH.read_text(), {})
 TIERS = bpc.bedrock_tiers(bpc.CLUSTER_TF.read_text())
-CONFIGS, BOUND = bpc.committed_bedrock_configs(bpc.RESOURCES.read_text())
+CONFIGS, BOUND = bpc.committed_bedrock_configs(bpc.committed_manifests())
 ARN = "arn:aws:bedrock:us-west-2:515966504359:application-inference-profile/{}"
 FM = "arn:aws:bedrock:{}::foundation-model/{}"
 

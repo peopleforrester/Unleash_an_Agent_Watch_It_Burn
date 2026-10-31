@@ -28,12 +28,13 @@ def check(n, c):
 
 print("== every emitted service name is in the family ==")
 emitted = set()
-for path in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yaml"):
+MANIFESTS = ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yaml", "gitops/workshop-agent/agent.yaml")
+for path in MANIFESTS:
     for m in re.finditer(r"service\.name=([A-Za-z0-9_.-]+)", (REPO / path).read_text()):
         emitted.add(m.group(1))
 check(f"emitted service names {sorted(emitted)} are the family", emitted and emitted <= FAMILY)
 check("the root service (guard-proxy's span) is exactly 'burritobot'", ROOT_SERVICE in emitted)
-check("no old service name is emitted anywhere", not any(o in (REPO / p).read_text() for p in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yaml") for o in OLD))
+check("no old service name is emitted anywhere", not any(o in (REPO / p).read_text() for p in MANIFESTS for o in OLD))
 
 # The OTEL_SERVICE_NAME pin is checked on the kustomize render in test_service_naming_render.py, which
 # needs kubectl and so runs in the E2E suite.
@@ -46,7 +47,7 @@ vals = "\n".join(l for l in (REPO / "gitops/otel-collector/values.yaml").read_te
 LEGACY = {"agentgateway", "kagent", "guard-proxy", "evil-mcp-shim"}
 # kagent reports the Agent's metadata.name with "-" turned into "_" as service.name, whatever the env says
 # (#634), and transform/kagent_service_name maps exactly that name to burritobot-agent.
-agent_doc = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text())
+agent_doc = next(d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text())
                  if d and d.get("kind") == "Agent" and d.get("apiVersion", "").startswith("kagent.dev/"))
 kagent_name = agent_doc["metadata"]["name"].replace("-", "_")
 rename = yaml.safe_load((REPO / "gitops/otel-collector/values.yaml").read_text())["config"]["processors"]["transform/kagent_service_name"]

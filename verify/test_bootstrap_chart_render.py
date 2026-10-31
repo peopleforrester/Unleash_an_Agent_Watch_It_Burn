@@ -99,14 +99,20 @@ for profile in all_profiles():
                 check(f"{profile} {n}: {s['chart']} at one exact version", SEMVER.fullmatch(rev) is not None, rev)
             else:
                 check(f"{profile} {n}: {url} at a 40-digit commit", re.fullmatch(r"[0-9a-f]{40}", rev) is not None, rev)
-    # The Agent's ignore (#679): evil-mcp's toolNames inside the tools array only where C7 is that list.
-    ai = next((a for a in apps if a["metadata"]["name"] == "ai-layer"), {})
-    agent = [p for i in (ai.get("spec") or {}).get("ignoreDifferences") or [] if i.get("kind") == "Agent"
-             for p in i.get("jqPathExpressions") or []]
+    # The Agent's ignore (#679): evil-mcp's toolNames inside the tools array only where C7 is that list. Since #707
+    # it is the workshop-agent Application's, which syncs without RespectIgnoreDifferences; ai-layer has none.
+    def agent_ignores(name):
+        app = next((a for a in apps if a["metadata"]["name"] == name), {})
+        return app, [p for i in (app.get("spec") or {}).get("ignoreDifferences") or [] if i.get("kind") == "Agent"
+                     for p in i.get("jqPathExpressions") or []]
+    wa, agent = agent_ignores("workshop-agent")
     evil = '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
     want_agent = ([evil] if c7_control(profile) == "toolnames" else []) + [".spec.declarative.modelConfig"]
-    check(f"{profile}: ai-layer's Agent ignore is {want_agent} (c7Control {c7_control(profile)})", agent == want_agent,
-          str(agent))
+    check(f"{profile}: workshop-agent's Agent ignore is {want_agent} (c7Control {c7_control(profile)})",
+          agent == want_agent, str(agent))
+    check(f"{profile}: workshop-agent syncs without RespectIgnoreDifferences (#707)",
+          bool(wa) and "RespectIgnoreDifferences=true" not in ((wa["spec"].get("syncPolicy") or {}).get("syncOptions") or []))
+    check(f"{profile}: ai-layer ignores nothing on the Agent (#707)", not agent_ignores("ai-layer")[1])
     check(f"{profile}: no rendered Application keeps the c7Control guard",
           '.Values.c7Control' not in r.stdout)
     if profile == "admin":

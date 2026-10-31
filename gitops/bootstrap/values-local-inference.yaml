@@ -47,3 +47,4 @@ apps:
   - prometheus
   - tempo
   - vllm-qwen3
+  - workshop-agent

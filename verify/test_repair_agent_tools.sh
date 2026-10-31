@@ -20,7 +20,10 @@ check "repair_one calls it"                  'grep -q "repair_agent_tools \"\${n
 check "it runs alongside the other repairs"  'grep -A6 "^repair_one() {" <<<"$src" | grep -q repair_agent_tools'
 
 echo "== it is idempotent: it acts only on an actual difference =="
-check "it reads the committed list"          'grep -q "resources.yaml" <<<"$src"'
+check "it reads the committed list, from the workshop-agent bundle (#707)" \
+  'grep -q "python3 - \"\${REPO_ROOT}/gitops/workshop-agent/agent.yaml\"" <<<"$src"'
+check "it says it is no longer the only route on the toolnames profiles (#707)" \
+  'grep -q "This repair is no longer the only route on the toolnames profiles (attendee, burn, full) (#707)" <<<"$src"'
 check "it reads the live list"               'grep -q "kubectl -n agent get agent workshop-agent" <<<"$src"'
 check "it compares before deleting"          'grep -q "if \[\[ \"\${live}\" != \"\${want}\" \]\]" <<<"$src"'
 check "no live list means no action"         'grep -q "\[\[ -n \"\${live}\" \]\] || return 0" <<<"$src"'

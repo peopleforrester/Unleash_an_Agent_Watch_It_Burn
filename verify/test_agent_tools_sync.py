@@ -1,5 +1,5 @@
-# ABOUTME: Reproduces #679 offline: Argo CD's RespectIgnoreDifferences sync of the workshop-agent CRD, ported from
-# ABOUTME: v3.5.2, keeps the live tools array whenever an ignore sits inside it; admin no longer has one there.
+# ABOUTME: Shows git's Agent tools landing on every profile since #707: the workshop-agent Application keeps C7's ignore
+# ABOUTME: and drops RespectIgnoreDifferences, whose Argo CD v3.5.2 sync (ported here) froze the whole tools array (#679).
 #
 # Why (#679). Git gave workshop-mcp twelve tools, read_support_ticket among them (#640), and both KubeCon clusters
 # kept the older eleven. ai-layer showed Agent/workshop-agent OutOfSync, every auto-sync said serverside-applied,
@@ -10,12 +10,17 @@
 # toolNames puts the WHOLE live tools array in the patch. restoreNonIgnoredFields, which repairs that collateral,
 # walks maps only, and the tools array is a leaf to it, so the live array is what gets applied.
 #
-# This ports that function for a resource outside the scheme (the jq deletion is the real jq, as Argo CD's gojq
-# del(<expression>)) and runs it on the committed Agent and each profile's rendered ai-layer ignores. On the
-# toolnames profiles the hazard is kept on purpose, for the student's guard-mcp-on, and fleet.sh converge's
-# repair_agent_tools is the repair (its shim test is in test_fleet_converge_repairs.sh). On admin, where C7 is
-# agentgateway's rule (#496), the ignore is gone and the sync carries git's tools. The port is held to
-# VERSIONS.lock's Argo CD version: a version bump fails here until the port is read against the new sync.go.
+# The fix (#707). The Agent left ai-layer for an Application of its own, gitops/bootstrap/apps/workshop-agent.yaml,
+# which keeps the evil-mcp toolNames ignore (on the toolnames profiles) and the modelConfig ignore, and syncs without
+# RespectIgnoreDifferences. An ignore without it works on the diff alone: a student's guard-mcp-on leaves the Agent
+# Synced, so selfHeal has nothing to do, and a sync applies the committed Agent as git has it.
+#
+# This ports normalizeTargetResources for a resource outside the scheme (the jq deletion is the real jq, as Argo CD's
+# gojq del(<expression>)), shows it still reproduces #679 under ai-layer's old options, and then runs selfHeal on the
+# committed Agent with each profile's rendered workshop-agent ignores: git's tools land on attendee, burn, full and
+# admin with no fleet.sh converge, a student's guard-mcp-on survives a selfHeal with no git change, and the two costs
+# #707 accepted hold as recorded. The port is held to VERSIONS.lock's Argo CD version: a version bump fails here until
+# the port is read against the new sync.go.
 from __future__ import annotations
 
 import copy
@@ -134,14 +139,29 @@ def out_of_sync(target: dict, live: dict, expressions: list[str]) -> bool:
     return normalize(target, expressions)["spec"] != normalize(live, expressions)["spec"]
 
 
-# ---- the inputs: the committed Agent, and each profile's rendered ai-layer ignores -------------------------------
+def sync_applies(target: dict, live: dict | None, expressions: list[str], respect: bool) -> dict:
+    """What a sync applies: the RespectIgnoreDifferences merge above, or, without the option, the target as git has
+    it. Argo CD applies the desired state as-is unless RespectIgnoreDifferences is set; ServerSideApply with Force
+    writes every field the target holds, a field another manager took included (#349)."""
+    return synced_target(target, live, expressions) if respect else target
+
+
+def self_heal(target: dict, live: dict | None, expressions: list[str], respect: bool) -> dict:
+    """The live Agent after selfHeal: automated sync runs only when the diff shows the Agent OutOfSync."""
+    if live is not None and not out_of_sync(target, live, expressions):
+        return live
+    return sync_applies(target, live, expressions, respect)
+
+
+# ---- the inputs: the committed Agent, and each profile's rendered workshop-agent Application ---------------------
 print(f"== the port is of the Argo CD the clusters run ({PORTED_FROM}) ==")
 lock = (REPO / "VERSIONS.lock").read_text(encoding="utf-8")
 argocd = re.search(r"^argocd\s+chart \S+ / app (v\S+)", lock, re.M)
 check(f"VERSIONS.lock's argocd app is {PORTED_FROM}, the sync.go this ports (a bump: re-read normalizeTargetResources)",
       argocd is not None and argocd.group(1) == PORTED_FROM, argocd.group(1) if argocd else "no argocd line")
 
-AGENT = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"))
+AGENT_BUNDLE = REPO / "gitops/workshop-agent"
+AGENT = next(d for d in yaml.safe_load_all((AGENT_BUNDLE / "agent.yaml").read_text(encoding="utf-8"))
              if d and d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent")
 
 
@@ -150,12 +170,14 @@ def server(agent: dict, name: str) -> dict:
 
 
 GIT_TOOLS = server(AGENT, "workshop-mcp")["toolNames"]
+GIT_EVIL = server(AGENT, "evil-mcp")["toolNames"]
+GIT_MODEL = AGENT["spec"]["declarative"]["modelConfig"]
 check("git's workshop-mcp list is the stale eleven plus read_support_ticket (#640)",
       [t for t in GIT_TOOLS if t != "read_support_ticket"] == STALE_ELEVEN and "read_support_ticket" in GIT_TOOLS)
 
 
-def rendered_ai_layer(profile: str) -> dict:
-    raw = without_front_door(for_c7_control((APPS / "ai-layer.yaml").read_text(encoding="utf-8"), c7_control(profile)))
+def rendered(app_file: str, profile: str) -> dict:
+    raw = without_front_door(for_c7_control((APPS / app_file).read_text(encoding="utf-8"), c7_control(profile)))
     return yaml.safe_load(raw.replace(REVISION, "0" * 40).replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR))
 
 
@@ -163,6 +185,14 @@ def agent_ignores(app: dict) -> list[str]:
     return [e for i in app["spec"].get("ignoreDifferences") or []
             if i.get("group") == "kagent.dev" and i.get("kind") == "Agent" and i.get("name") in (None, "workshop-agent")
             for e in i.get("jqPathExpressions") or []]
+
+
+def sync_options(app: dict) -> list[str]:
+    return ((app["spec"].get("syncPolicy") or {}).get("syncOptions")) or []
+
+
+def wave(app: dict) -> int:
+    return int((app["metadata"].get("annotations") or {}).get("argocd.argoproj.io/sync-wave", "0"))
 
 
 def live_agent(workshop_tools: list[str] | None = None, evil_tools: list[str] | None = None,
@@ -180,56 +210,120 @@ def live_agent(workshop_tools: list[str] | None = None, evil_tools: list[str] | 
     return live
 
 
-ai_profiles = [p for p in profiles() if "ai-layer" in app_names(p)]
-check("every profile deploys ai-layer", ai_profiles == profiles(), str(ai_profiles))
-check("ai-layer syncs with RespectIgnoreDifferences=true, the option the port is",
-      all("RespectIgnoreDifferences=true" in rendered_ai_layer(p)["spec"]["syncPolicy"]["syncOptions"] for p in ai_profiles))
-check("only admin puts C7 on agentgateway's rule (c7Control gateway), the profile the web terminal's _c7gw names",
-      [p for p in ai_profiles if c7_control(p) == "gateway"] == ["admin"])
+def with_git(workshop_tools: list[str] | None = None, evil_tools: list[str] | None = None) -> dict:
+    """The committed Agent after a git change to one of its tool lists."""
+    target = copy.deepcopy(AGENT)
+    if workshop_tools is not None:
+        server(target, "workshop-mcp")["toolNames"] = list(workshop_tools)
+    if evil_tools is not None:
+        server(target, "evil-mcp")["toolNames"] = list(evil_tools)
+    return target
 
-for profile in ai_profiles:
-    control, ignores = c7_control(profile), agent_ignores(rendered_ai_layer(profile))
+
+NARROWED = ["get_weather"]  # what guard-mcp-on leaves evil-mcp on a toolnames cluster
+TIER = "bedrock-sonnet"  # a live modelConfig tier patch (#598: no script applies one yet)
+
+print("== the port still reproduces #679 under ai-layer's old options ==")
+# ai-layer carried the Agent with these two ignores and RespectIgnoreDifferences=true until #707. If the port stops
+# freezing the array here, it no longer models the sync, and every result below means nothing.
+OLD_IGNORES = [EVIL, ".spec.declarative.modelConfig"]
+stale = live_agent(workshop_tools=STALE_ELEVEN)
+frozen = self_heal(AGENT, stale, OLD_IGNORES, respect=True)
+check("with RespectIgnoreDifferences, git's twelve show as drift on the stale Agent (OutOfSync)",
+      out_of_sync(AGENT, stale, OLD_IGNORES))
+check("and the sync applies the LIVE tools array, so read_support_ticket never lands",
+      server(frozen, "workshop-mcp")["toolNames"] == STALE_ELEVEN, str(server(frozen, "workshop-mcp")["toolNames"]))
+check("so the Agent stays OutOfSync, every auto-sync after it the same",
+      out_of_sync(AGENT, self_heal(AGENT, frozen, OLD_IGNORES, respect=True), OLD_IGNORES))
+
+print("== the Agent is the workshop-agent Application's, out of ai-layer (#707) ==")
+ai_layer_docs = [d for f in sorted((REPO / "gitops/ai-layer").glob("*.yaml"))
+                 for d in yaml.safe_load_all(f.read_text(encoding="utf-8")) if isinstance(d, dict)]
+check("no kagent Agent is left in gitops/ai-layer, so an ai-layer sync never touches it",
+      not [d for d in ai_layer_docs if d.get("kind") == "Agent"])
+kust = yaml.safe_load((AGENT_BUNDLE / "kustomization.yaml").read_text(encoding="utf-8"))
+check("gitops/workshop-agent is a kustomize bundle of agent.yaml alone, in namespace agent",
+      kust.get("resources") == ["agent.yaml"] and kust.get("namespace") == "agent")
+deploying = [p for p in profiles() if "ai-layer" in app_names(p)]
+check("every profile deploys ai-layer", deploying == profiles(), str(deploying))
+check("and every profile that deploys ai-layer deploys workshop-agent",
+      all("workshop-agent" in app_names(p) for p in deploying))
+check("only admin puts C7 on agentgateway's rule (c7Control gateway), the profile the web terminal's _c7gw names",
+      [p for p in deploying if c7_control(p) == "gateway"] == ["admin"])
+
+for profile in deploying:
+    app, ai_layer = rendered("workshop-agent.yaml", profile), rendered("ai-layer.yaml", profile)
+    control, ignores, opts = c7_control(profile), agent_ignores(app), sync_options(app)
+    respect = "RespectIgnoreDifferences=true" in opts
+    print(f"== {profile} (c7Control {control}): the workshop-agent Application ==")
+    check(f"{profile}: it sources gitops/workshop-agent", app["spec"]["source"]["path"] == "gitops/workshop-agent")
+    check(f"{profile}: it syncs after ai-layer, whose ModelConfigs and RemoteMCPServers the Agent names "
+          f"(wave {wave(app)} after {wave(ai_layer)})", wave(app) > wave(ai_layer))
+    check(f"{profile}: selfHeal and prune are on",
+          (app["spec"]["syncPolicy"].get("automated") or {}) == {"prune": True, "selfHeal": True})
+    check(f"{profile}: it keeps ServerSideApply=true and Force=true (#349)",
+          "ServerSideApply=true" in opts and "Force=true" in opts)
+    check(f"{profile}: and leaves out RespectIgnoreDifferences, the option that froze the array (#679)", not respect)
+    check(f"{profile}: ai-layer ignores nothing on the Agent", not agent_ignores(ai_layer), str(agent_ignores(ai_layer)))
+
     stale = live_agent(workshop_tools=STALE_ELEVEN)
-    applied = synced_target(AGENT, stale, ignores)
+    healed = self_heal(AGENT, stale, ignores, respect)
+    check(f"{profile}: git's twelve show as drift on a stale Agent (OutOfSync), so selfHeal syncs it",
+          out_of_sync(AGENT, stale, ignores))
+    check(f"{profile}: and the sync lands git's workshop-mcp list, read_support_ticket included, with no converge",
+          server(healed, "workshop-mcp")["toolNames"] == GIT_TOOLS, str(server(healed, "workshop-mcp")["toolNames"]))
+    check(f"{profile}: and git's whole tools array, headersFrom included",
+          healed["spec"]["declarative"]["tools"] == AGENT["spec"]["declarative"]["tools"])
+    check(f"{profile}: after it the Agent is Synced", not out_of_sync(AGENT, healed, ignores))
+    renamed = with_git(workshop_tools=[t if t != "list_services" else "list_workloads" for t in GIT_TOOLS])
+    check(f"{profile}: a later git change to a workshop-mcp tool lands the same way",
+          server(self_heal(renamed, healed, ignores, respect), "workshop-mcp")["toolNames"]
+          == server(renamed, "workshop-mcp")["toolNames"])
+    check(f"{profile}: a fresh cluster (no live Agent) gets git's Agent as committed",
+          self_heal(AGENT, None, ignores, respect) == AGENT)
+
+    narrowed = live_agent(evil_tools=NARROWED)
+    tiered = live_agent(model_config=TIER)
+    check(f"{profile}: a live modelConfig tier patch with no git change leaves the Agent Synced, so selfHeal keeps it",
+          self_heal(AGENT, tiered, ignores, respect) == tiered)
     if control == "toolnames":
-        print(f"== {profile} (c7Control toolnames): #679 reproduced, and the student's C7 fix kept ==")
         check(f"{profile}: the Agent's ignores are evil-mcp's toolNames and modelConfig",
               ignores == [EVIL, ".spec.declarative.modelConfig"], str(ignores))
-        check(f"{profile}: git's twelve show as drift on the stale Agent (OutOfSync)", out_of_sync(AGENT, stale, ignores))
-        check(f"{profile}: the sync applies the LIVE tools array, so read_support_ticket never lands",
-              server(applied, "workshop-mcp")["toolNames"] == STALE_ELEVEN,
-              str(server(applied, "workshop-mcp")["toolNames"]))
-        check(f"{profile}: so the applied Agent is still OutOfSync, every auto-sync after it the same",
-              out_of_sync(AGENT, synced_target(AGENT, applied, ignores), ignores))
-        narrowed = live_agent(evil_tools=["get_weather"])
-        check(f"{profile}: a student's guard-mcp-on (evil-mcp narrowed to get_weather) survives a sync, why it is kept",
-              server(synced_target(AGENT, narrowed, ignores), "evil-mcp")["toolNames"] == ["get_weather"]
-              and not out_of_sync(AGENT, narrowed, ignores))
+        check(f"{profile}: a student's guard-mcp-on (evil-mcp narrowed to get_weather) leaves the Agent Synced",
+              not out_of_sync(AGENT, narrowed, ignores))
+        check(f"{profile}: so it survives a selfHeal with no git change",
+              server(self_heal(AGENT, narrowed, ignores, respect), "evil-mcp")["toolNames"] == NARROWED)
+        print(f"   the costs #707 accepted, on {profile}")
+        evil_change = with_git(evil_tools=GIT_EVIL[:-1])
+        check(f"{profile}: a git change to evil-mcp's committed toolNames alone is ignored by the diff, so a running "
+              "cluster's Agent keeps the old list", not out_of_sync(evil_change, live_agent(), ignores)
+              and server(self_heal(evil_change, live_agent(), ignores, respect), "evil-mcp")["toolNames"] == GIT_EVIL)
+        check(f"{profile}: and it reaches new clusters only, the cost #515 accepted for agentgateway-c7-config",
+              server(self_heal(evil_change, None, ignores, respect), "evil-mcp")["toolNames"] == GIT_EVIL[:-1])
+        both = live_agent(workshop_tools=STALE_ELEVEN, evil_tools=NARROWED, model_config=TIER)
+        reset = self_heal(AGENT, both, ignores, respect)
+        check(f"{profile}: a sync for any other Agent change resets the student's guard-mcp-on to git's evil-mcp list",
+              server(reset, "evil-mcp")["toolNames"] == GIT_EVIL)
+        check(f"{profile}: and a live modelConfig tier patch along with it (#598: no script applies a tier yet)",
+              reset["spec"]["declarative"]["modelConfig"] == GIT_MODEL)
     else:
-        print(f"== {profile} (c7Control gateway): the sync carries git's tools ==")
         check(f"{profile}: the Agent's only ignore is modelConfig, outside the tools array",
               ignores == [".spec.declarative.modelConfig"], str(ignores))
-        check(f"{profile}: the sync applies git's workshop-mcp list, read_support_ticket included",
-              server(applied, "workshop-mcp")["toolNames"] == GIT_TOOLS, str(server(applied, "workshop-mcp")["toolNames"]))
-        check(f"{profile}: and git's whole tools array, headersFrom included",
-              applied["spec"]["declarative"]["tools"] == AGENT["spec"]["declarative"]["tools"])
-        check(f"{profile}: after it the Agent is Synced", not out_of_sync(AGENT, applied, ignores))
-        tiered = live_agent(workshop_tools=STALE_ELEVEN, model_config="bedrock-claude")
-        got = synced_target(AGENT, tiered, ignores)
-        check(f"{profile}: a per-cluster modelConfig still survives the same sync (a field of a map, not an array)",
-              got["spec"]["declarative"]["modelConfig"] == "bedrock-claude"
-              and server(got, "workshop-mcp")["toolNames"] == GIT_TOOLS)
+        evil_change = with_git(evil_tools=GIT_EVIL[:-1])
+        check(f"{profile}: a git change to evil-mcp's toolNames lands too, nothing ignoring it",
+              server(self_heal(evil_change, live_agent(), ignores, respect), "evil-mcp")["toolNames"] == GIT_EVIL[:-1])
         check(f"{profile}: nothing on admin writes evil-mcp's list but the committed one, so selfHeal restoring it is right",
-              server(synced_target(AGENT, live_agent(evil_tools=["get_weather"]), ignores), "evil-mcp")["toolNames"]
-              == server(AGENT, "evil-mcp")["toolNames"])
-    check(f"{profile}: a fresh cluster (no live Agent) gets git's Agent as committed",
-          synced_target(AGENT, None, ignores) == AGENT)
+              server(self_heal(AGENT, narrowed, ignores, respect), "evil-mcp")["toolNames"] == GIT_EVIL)
 
-print("== the stale toolnames clusters are converge's to repair ==")
+print("== converge's repair is no longer the only route ==")
 fleet = (REPO / "infra/terraform/fleet/fleet.sh").read_text(encoding="utf-8")
-check("fleet.sh repair_one runs repair_agent_tools", re.search(
+check("fleet.sh repair_one still runs repair_agent_tools, for a cluster Argo has not reconciled", re.search(
     r"^repair_one\(\) \{\n(?:.*\n){0,8}?    repair_step repair_agent_tools \"\$\{name\}\" \"\$\{kcfg\}\"", fleet, re.M)
       is not None)
+check("and its comment says it is no longer the only route for the toolnames profiles (#707)",
+      "This repair is no longer the only route on the toolnames profiles (attendee, burn, full) (#707)" in fleet)
+check("and it reads the committed list from the workshop-agent bundle",
+      'python3 - "${REPO_ROOT}/gitops/workshop-agent/agent.yaml"' in fleet)
 check("and its shim test recreates the Agent from the #679 state",
       "#679" in (REPO / "verify/test_fleet_converge_repairs.sh").read_text(encoding="utf-8"))
 
@@ -254,8 +348,6 @@ for profile in profiles():
                 continue
             for i in app["spec"].get("ignoreDifferences") or []:
                 bad = [] if BUILTIN.search(i.get("group", "")) else into_array(i)
-                if (n, i.get("kind"), c7_control(profile)) == ("ai-layer", "Agent", "toolnames"):
-                    bad = [e for e in bad if e != EVIL]
                 check(f"{profile} {n}: {i.get('kind')} ignores reach into no array {bad}", not bad)
 
 print()

@@ -7,6 +7,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = (REPO / "gitops" / "ai-layer" / "resources.yaml").read_text()
+AGENT = (REPO / "gitops" / "workshop-agent" / "agent.yaml").read_text()  # the Agent's own bundle (#707)
 
 spec = importlib.util.spec_from_file_location("guard_proxy_tier", REPO / "gitops" / "ai-layer" / "guard-proxy" / "proxy.py")
 proxy = importlib.util.module_from_spec(spec)
@@ -22,8 +23,8 @@ def check(name, cond, detail=""):
 
 
 # What the agent is actually bound to, e.g. "modelConfig: bedrock-nova".
-m = re.search(r"^\s*modelConfig:\s*([A-Za-z0-9._-]+)", RESOURCES, re.M)
-check("resources.yaml declares the agent's modelConfig", m is not None)
+m = re.search(r"^\s*modelConfig:\s*([A-Za-z0-9._-]+)", AGENT, re.M)
+check("gitops/workshop-agent/agent.yaml declares the agent's modelConfig", m is not None)
 bound = m.group(1) if m else ""
 
 # What the proxy is told to price, e.g. '- { name: MODEL_TIER, value: "nova" }'.

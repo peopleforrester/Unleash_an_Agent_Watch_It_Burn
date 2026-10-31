@@ -239,8 +239,9 @@ uv run --with playwright python verify/browser-smoke.py hexhen-zelda sorcerizo-g
   run but does not apply it, and no script patches the Agent's `modelConfig`. The haiku/sonnet/opus
   instructor clusters this was meant for are gone too; the roster is the Community cluster and one admin
   cluster per presenter. What is in place is the hook for the live patch decisions.md recommends: the
-  ai-layer Application's `ignoreDifferences` covers the Agent's `.spec.declarative.modelConfig` and the
-  guard-proxy's `MODEL_TIER` env, so a cluster switched by hand keeps its tier. To switch one, change
+  workshop-agent Application's `ignoreDifferences` covers the Agent's `.spec.declarative.modelConfig` and the
+  ai-layer Application's the guard-proxy's `MODEL_TIER` env, so a cluster switched by hand keeps its tier until the
+  next workshop-agent sync, which any other change to the Agent brings and which applies the committed tier (#707). To switch one, change
   both together, or the counter prices the wrong model: patch Agent `workshop-agent` to `bedrock-<tier>`,
   then `kubectl set env deploy/guard-proxy MODEL_TIER=<tier>` behind the Kyverno flip in
   docs/GOTCHAS-FLEET-AND-DELIVERY.md. Not validated live.

@@ -1,10 +1,14 @@
-# ABOUTME: docs/MASTER-RECREATION-SPEC.md says how a model tier reaches a cluster the way gitops/bootstrap/apps/ai-layer.yaml
-# ABOUTME: delivers it: the committed default on a fresh cluster, a live patch of the Agent and MODEL_TIER on a running one.
+# ABOUTME: docs/MASTER-RECREATION-SPEC.md says how a model tier reaches a cluster the way ai-layer and workshop-agent deliver
+# ABOUTME: it: the committed default on a fresh cluster, a live patch of the Agent and MODEL_TIER on a running one.
 #
 # Why (#598). The spec's Key Decisions bullet said "Tier swaps by repointing the Agent modelConfig (commit + resync),
 # never kubectl patch live." The ai-layer Application ignores the Agent's .spec.declarative.modelConfig and
 # guard-proxy's MODEL_TIER env with RespectIgnoreDifferences=true, so on a running cluster a commit plus resync
 # changes nothing, and decisions.md (2026-07-07, §4.6-d) recommends the live patch the spec forbade.
+#
+# Since #707 the Agent is the workshop-agent Application's, which ignores its modelConfig in the diff and syncs
+# without RespectIgnoreDifferences: a commit of the tier alone still leaves the Agent Synced, and the next
+# workshop-agent sync, for any other Agent change, applies the committed modelConfig and resets a live patch.
 import pathlib, re, sys
 
 import yaml
@@ -12,6 +16,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 SPEC = "docs/MASTER-RECREATION-SPEC.md"
 APP = "gitops/bootstrap/apps/ai-layer.yaml"
+AGENT_APP = "gitops/bootstrap/apps/workshop-agent.yaml"
 failures = []
 
 
@@ -22,21 +27,27 @@ def check(n, c, detail=""):
 
 
 app = yaml.safe_load((REPO / APP).read_text(encoding="utf-8"))
-ignores = app["spec"].get("ignoreDifferences", [])
+agent_app = yaml.safe_load((REPO / AGENT_APP).read_text(encoding="utf-8"))
 
 
-def ignored(kind, name):
-    return [e for i in ignores if i.get("kind") == kind and i.get("name") == name
+def ignored(application, kind, name):
+    return [e for i in application["spec"].get("ignoreDifferences", []) if i.get("kind") == kind and i.get("name") == name
             for e in i.get("jqPathExpressions", [])]
 
 
-print(f"== {APP} keeps the tier off the sync path on a running cluster ==")
-check("the workshop-agent Agent's .spec.declarative.modelConfig is ignored",
-      ".spec.declarative.modelConfig" in ignored("Agent", "workshop-agent"))
-check("guard-proxy's MODEL_TIER env is ignored",
-      any("MODEL_TIER" in e for e in ignored("Deployment", "guard-proxy")))
-check("syncs respect the ignores (RespectIgnoreDifferences=true)",
-      "RespectIgnoreDifferences=true" in app["spec"].get("syncPolicy", {}).get("syncOptions", []))
+def options(application):
+    return application["spec"].get("syncPolicy", {}).get("syncOptions", [])
+
+
+print(f"== {APP} and {AGENT_APP} keep the tier off the sync path on a running cluster ==")
+check(f"{AGENT_APP} ignores the workshop-agent Agent's .spec.declarative.modelConfig",
+      ".spec.declarative.modelConfig" in ignored(agent_app, "Agent", "workshop-agent"))
+check(f"and syncs without RespectIgnoreDifferences, so a sync for another Agent change resets a live tier (#707)",
+      "RespectIgnoreDifferences=true" not in options(agent_app))
+check(f"{APP} ignores nothing on the Agent, which is not in its bundle (#707)", not ignored(app, "Agent", "workshop-agent"))
+check(f"{APP} ignores guard-proxy's MODEL_TIER env",
+      any("MODEL_TIER" in e for e in ignored(app, "Deployment", "guard-proxy")))
+check("and its syncs respect the ignores (RespectIgnoreDifferences=true)", "RespectIgnoreDifferences=true" in options(app))
 
 lines = (REPO / SPEC).read_text(encoding="utf-8").splitlines()
 
@@ -58,8 +69,10 @@ check(f"a line cites decisions.md §4.6-d for the tier swap on workshop-agent", 
       f"found {len(swap)}")
 line = swap[0] if swap else ""
 check("it says a fresh cluster gets the committed default", re.search(r"(?i)fresh cluster", line) is not None)
-check("it says a commit plus resync changes nothing on a running cluster",
-      re.search(r"(?i)running cluster.*commit plus resync changes neither", line) is not None)
+check("it says a commit of the tier alone changes nothing on a running cluster",
+      re.search(r"(?i)running cluster.*commit of the tier alone changes neither", line) is not None)
+check("it says the next workshop-agent sync applies the committed modelConfig and resets a live patch (#707)",
+      "workshop-agent sync" in line and "resets a live tier patch" in line and "#707" in line)
 check("it names the ignored fields and RespectIgnoreDifferences",
       all(t in line for t in (".spec.declarative.modelConfig", "MODEL_TIER", "RespectIgnoreDifferences=true")))
 check("it patches the Agent and guard-proxy's MODEL_TIER together",

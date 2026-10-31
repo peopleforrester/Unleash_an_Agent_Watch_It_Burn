@@ -24,7 +24,10 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 RES = list(yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")))
-APP = (REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text(encoding="utf-8")
+# The Agent and its ignores are the workshop-agent Application's since #707, out of ai-layer.
+AGENT_DOCS = list(yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8")))
+APP = (REPO / "gitops/bootstrap/apps/workshop-agent.yaml").read_text(encoding="utf-8")
+AI_LAYER_APP = (REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text(encoding="utf-8")
 
 # The tools each server actually defines, read from the source the container runs.
 SERVERS = {
@@ -41,8 +44,9 @@ def check(name: str, cond: bool) -> None:
         failures.append(name)
 
 
-agent = next((d for d in RES if d and d.get("kind") == "Agent"), None)
-check("the Agent CR is in the manifest", agent is not None)
+agent = next((d for d in AGENT_DOCS if d and d.get("kind") == "Agent"), None)
+check("the Agent CR is in gitops/workshop-agent/agent.yaml", agent is not None)
+check("and not in ai-layer's bundle any more (#707)", not any(d and d.get("kind") == "Agent" for d in RES))
 if agent is None:
     sys.exit(1)
 
@@ -114,6 +118,8 @@ check("only evil-mcp's toolNames is ignored",
 check("the ignore selects by server name, not array index",
       ".spec.declarative.tools[1]" not in APP and "tools/1/" not in APP)
 check("the comment records why it was narrowed", "Challenge 5 was" in APP and "Synced and Healthy" in APP)
+check("ai-layer ignores nothing on the Agent, which is not in its bundle (#707)",
+      not [i for i in yaml.safe_load(AI_LAYER_APP)["spec"].get("ignoreDifferences") or [] if i.get("kind") == "Agent"])
 
 print("== Challenge 7 still patches the list the ignore protects ==")
 TOGGLE = (REPO / "challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh").read_text(encoding="utf-8")

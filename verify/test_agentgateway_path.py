@@ -23,6 +23,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = list(yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()))
+AGENT_DOCS = list(yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text()))  # its own app (#707)
 GATEWAY = list(yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()))
 EVALUATION = "docs/research/2026-10-24-agentgateway-evaluation.md"
 
@@ -114,7 +115,7 @@ check("the agentgateway Service sends :3003 to the agentgateway-c7 container's p
       c7_ports.get(svc_ports.get(3003)) == 3003, f"service={svc_ports} c7={c7_ports}")
 
 # --- port 3002: model calls go through it only when the Agent is switched to a gateway-* ModelConfig ----
-agent = one(RESOURCES, "Agent", "workshop-agent").get("spec", {}).get("declarative", {})
+agent = one(AGENT_DOCS, "Agent", "workshop-agent").get("spec", {}).get("declarative", {})
 bound = one(RESOURCES, "ModelConfig", agent.get("modelConfig", "")).get("spec", {})
 bound_url = bound.get("openAI", {}).get("baseUrl", "")
 check("the agent's committed ModelConfig calls its provider directly, not agentgateway :3002",

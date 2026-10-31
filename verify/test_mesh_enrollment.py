@@ -101,7 +101,7 @@ check("console's public /a2a/ route is gone (#481), so /toggle is reachable only
       a2a is None, f"{a2a.group(0).strip() if a2a else ''}: update section 2.1 and recommendation 4 of {EVALUATION}")
 
 # --- section 2.3: identities are shared ---------------------------------------------------------------------
-AI = docs("gitops/ai-layer/resources.yaml")
+AI = docs("gitops/ai-layer/resources.yaml") + docs("gitops/workshop-agent/agent.yaml")  # #707
 
 
 def sa(kind: str, name: str) -> str:

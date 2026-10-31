@@ -7,7 +7,7 @@ metadata:
   namespace: argocd
   annotations:
     # Wave 3 (AFTER the OTel Operator + collector at wave 2). The Operator's mutating webhook injects the
-    # OTel SDK into guard-proxy/workshop-agent at pod-create; if this layer deploys in the SAME wave as the
+    # OTel SDK into guard-proxy (and workshop-agent, a wave later, #707) at pod-create; if this layer deploys in the SAME wave as the
     # Operator (it was wave 2), the app pods are admitted before the webhook is ready and get NO
     # instrumentation, so they export ZERO telemetry (the 2026-06-26 "Datadog is empty" root cause).
     # Deploying after the Operator is Healthy lets the webhook instrument the pods. Safety net for any
@@ -70,43 +70,11 @@ spec:
         # so renaming the service to burritobot never reached a cluster while Argo still reported the
         # Deployment Synced (#265). Anything not named here is managed by Git and syncs normally.
         - '.spec.template.spec.containers[] | select(.name=="proxy") | .env[] | select(.name | test("^(INPUT_BLOCKLIST|INPUT_CLASSIFIER|OUTPUT_GUARD|PROXY_FAIL_CLOSED|MODEL_TIER|RATE_LIMIT_RPM|COST_CAP_USD|STREAM_PROMPTS|OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT)$"))'
-    # Beat-3 (C7) LIVE TOGGLE: challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh patches
-    # the kagent Agent's MCP toolNames allowlist (ON excludes the rogue tools, --off lets them back in).
-    # Ignore drift on the Agent's tools so selfHeal does not revert the live toggle, same as the
-    # guard-proxy env toggles above. The committed default (resources.yaml) is the vulnerable "off" list:
-    # evil-mcp is wired with its full rogue toolset, and the toggle or the web terminal's guard-mcp-on
-    # narrows it live. On an admin cluster guard-mcp-on narrows the gateway rule instead (#496).
+    # The workshop-agent Agent is not in this bundle (#707). Its C7 toolNames and modelConfig ignores sat inside the
+    # Agent's tools array, and with this app's RespectIgnoreDifferences every sync applied the whole live array, so a
+    # git change to a tool never reached a toolnames cluster (#679). It is gitops/bootstrap/apps/workshop-agent.yaml,
+    # with those ignores and without RespectIgnoreDifferences. Do not move it back.
     #
-    # NARROWED to the evil-mcp entry only (#349). Ignoring `.spec.declarative.tools` wholesale also stopped
-    # OUR changes reaching a cluster, silently: when get_recipe was renamed to get_vault_entry the manifest
-    # updated and every live Agent CR kept pointing at the tool that no longer existed, so Challenge 5 was
-    # impossible while Argo reported Synced and Healthy throughout. Same shape as the guard-proxy env
-    # lesson two comments above, and as the Kyverno extraArgs key that applied cleanly and did nothing.
-    #
-    # Only Challenge 7 patches a tool list live, and only evil-mcp's. Selecting that one server by NAME
-    # rather than by array index keeps it correct if the order ever changes.
-    #
-    # Even narrowed, this ignore freezes the WHOLE tools array on sync (#679). The Agent is a CRD, so
-    # RespectIgnoreDifferences copies the ignored field back from live with a JSON merge patch, and a merge
-    # patch cannot write one element of an array: it carries the entire live array, and Argo CD v3.5.2's
-    # restoreNonIgnoredFields only walks maps. So every sync applies the live tools, a git change to any
-    # tool entry never lands, and the Agent stays OutOfSync while each auto-sync says serverside-applied.
-    # That is how read_support_ticket (#640) never reached either KubeCon cluster. On toolnames profiles
-    # the ignore stays, because selfHeal would otherwise undo a student's guard-mcp-on, and fleet.sh
-    # converge's repair_agent_tools recreates the Agent when its workshop-mcp list is stale. On the admin
-    # profile (c7Control: gateway) C7 is agentgateway's rule (#496), nothing writes this list live, and the
-    # ignore is not rendered, so Argo syncs the tools from git. verify/test_agent_tools_sync.py models it.
-    - group: kagent.dev
-      kind: Agent
-      name: workshop-agent
-      jqPathExpressions:
-        # {{- if ne .Values.c7Control "gateway" }}
-        - '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
-        # {{- end }}
-        # Per-cluster model tier (cost-race demo): modelConfig can be patched live to another Bedrock tier
-        # on one cluster. Ignore drift so selfHeal keeps the per-cluster tier instead of reverting to the
-        # committed default (bedrock-nova).
-        - '.spec.declarative.modelConfig'
     # Bedrock spend carries project/event (#513). Each Bedrock ModelConfig commits the system profile id,
     # which is the pin, and fleet.sh pin_bedrock_profiles sets the live .spec.model to this cluster's
     # tagged application profile ARN, which Bedrock picks at create time and git cannot know. Ignored on
@@ -166,14 +134,13 @@ spec:
       # kubectl-patch owned .spec.declarative.tools, so the get_recipe -> get_vault_entry rename never
       # reached a single live cluster and Challenge 5 was impossible on all of them (#349).
       #
-      # Force lets Argo reclaim the field. It is only safe because the ignore above is now narrowed to
-      # evil-mcp's toolNames: that one path stays ignored, so a student's Challenge 7 patch is still
-      # protected, while everything else about the agent reconciles again. Forcing with the old
-      # wholesale ignore would have reverted the student's fix mid-challenge.
+      # Force lets Argo reclaim the field. The Agent has since moved to the workshop-agent Application (#707),
+      # which keeps the same option; here it reclaims any field of this bundle a live kubectl edit took.
       - Force=true
-      # RespectIgnoreDifferences: honor the ignoreDifferences (guard-proxy env, Agent tools, modelConfig,
-      # the Bedrock ModelConfigs' model and region, agentgateway's BEDROCK_NOVA_MODEL and BEDROCK_REGION, agentgateway-c7-config's config.yaml)
-      # on SYNC too, not just on diff. Without it a sync re-applies the committed spec and can revert a
-      # live toggle (found 2026-07-10 for kyverno-policies; C7 MCP-authz toggle patches the Agent CR tools
-      # and has the same exposure — held in the stable window but a forced/initial-churn sync could revert).
+      # RespectIgnoreDifferences: honor the ignoreDifferences (guard-proxy env, the Bedrock ModelConfigs' model
+      # and region, agentgateway's BEDROCK_NOVA_MODEL and BEDROCK_REGION, agentgateway-c7-config's config.yaml,
+      # the workshop-agent Role's rules) on SYNC too, not just on diff. Without it a sync re-applies the
+      # committed spec and can revert a live toggle (found 2026-07-10 for kyverno-policies). It is safe for
+      # every ignore above: none reaches into an array element of a CRD, the shape that froze the Agent's
+      # tools (#679), and verify/test_agent_tools_sync.py fails if one ever does.
       - RespectIgnoreDifferences=true

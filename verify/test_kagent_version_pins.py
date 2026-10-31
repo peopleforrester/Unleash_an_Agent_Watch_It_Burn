@@ -64,7 +64,8 @@ print("== the manifests' comments name the version we deploy ==")
 # #586: these comments went on calling kagent 0.9.9 the chart the cluster runs, and kagent-crds.yaml's
 # targetRevision comment went on calling 0.10.1 the "current GA (2026-06" after the pin had moved under it.
 # Only the comments are read: a value pinned to some other component's 0.9.x is not a claim about kagent.
-COMMENTED_MANIFESTS = ("gitops/ai-layer/resources.yaml", "gitops/bootstrap/apps/kagent-crds.yaml")
+COMMENTED_MANIFESTS = ("gitops/ai-layer/resources.yaml", "gitops/workshop-agent/agent.yaml",  # the Agent's own bundle (#707)
+                       "gitops/bootstrap/apps/kagent-crds.yaml")
 
 
 def comment(line):

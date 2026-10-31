@@ -37,7 +37,7 @@ def deployment_attrs(rel, name):
 
 
 def kagent_attrs():
-    agent = next(d for d in docs("gitops/ai-layer/resources.yaml") if d.get("kind") == "Agent")
+    agent = next(d for d in docs("gitops/workshop-agent/agent.yaml") if d.get("kind") == "Agent")  # its own app (#707)
     return attrs(agent["spec"]["declarative"]["deployment"]["env"])
 
 

@@ -23,7 +23,8 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 BRIEF = (REPO / "gitops/ai-layer/web/brief.html").read_text(encoding="utf-8")
-RES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+RES = "\n".join((REPO / p).read_text(encoding="utf-8")  # the Agent has its own bundle since #707
+                for p in ("gitops/ai-layer/resources.yaml", "gitops/workshop-agent/agent.yaml"))
 FLAT = " ".join(BRIEF.split())
 
 failures: list[str] = []

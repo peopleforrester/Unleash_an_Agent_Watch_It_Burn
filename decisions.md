@@ -6465,3 +6465,84 @@ live org can settle: whether the read-only key may call `/api/v2/query/scalar` (
 already sends it the same way), and whether kube-state-metrics core reports `condition:ready` with a
 `status:true` series on a healthy node, as node-not-ready's signal assumes. If either is wrong, the live test
 fails naming that query.
+
+## 2026-10-31 · #707 · The workshop-agent Agent has an Application of its own, without RespectIgnoreDifferences
+
+Decided in peopleforrester/talks-knowledge#110 (talks-knowledge decisions.md, 2026-10-30, d0e9958), the structural fix
+#679 left open. In ai-layer the Agent's evil-mcp toolNames ignore sat inside its tools array, and ai-layer syncs with
+RespectIgnoreDifferences=true. Argo CD v3.5.2 copied the ignored field back from live as a JSON merge patch holding the
+whole live array, so on attendee, burn and full no git change to a tool entry reached a running cluster until
+`fleet.sh converge` recreated the Agent. The recreate also reset the student's C7 state. Option (2), moving C7's
+workshop control off the tools array, was not taken: `docs/MASTER-RECREATION-SPEC.md` row D14 keeps kagent `toolNames`
+as the workshop cluster's C7 control (#516).
+
+**What changed.**
+- **The Agent moved** out of `gitops/ai-layer/resources.yaml` into `gitops/workshop-agent/agent.yaml`, a kustomize
+  bundle of that one file in namespace `agent`. Its ModelConfigs, RemoteMCPServers, agent-sa and Role stay in ai-layer.
+- **`gitops/bootstrap/apps/workshop-agent.yaml`** is the new Application, at sync wave 4, after ai-layer's 3, since
+  the Agent names objects ai-layer creates. kagent makes the agent Deployment when the Agent appears, which is after
+  ai-layer's otel-ordering-gate, so the pod is still instrumented. It keeps the evil-mcp toolNames ignore, rendered
+  only when `c7Control` is not `gateway` as before, and the modelConfig ignore. Its sync options are
+  `ServerSideApply=true` and `Force=true` (#349), with no `RespectIgnoreDifferences`. ai-layer lost both Agent
+  ignores. Its RespectIgnoreDifferences comment now lists only the ignores it still has.
+- **Every profile** (attendee, burn, admin, full and local-inference) lists `workshop-agent` beside `ai-layer`. The
+  attendee count is 33 Applications, the instructor count 37: the run-of-show, the platform page and the design
+  glance say so. platform-baseline.yaml's demo-agent entry is now `adopted` by `workshop-agent.yaml`. The build
+  diagram's BurritoBot chip reads the new app.
+- **Readers of the Agent** were repointed: fleet.sh `repair_agent_tools`, `verify/kubecon_probe.py`,
+  `bedrock_profile_check.py` and `model_pin_check.py` (a `committed_manifests()` that reads both bundles), the C7
+  toggle's and fallback's comments and hint, `tool_audit.py`, the Datadog monitor comment, lab-platform.yaml's
+  instrumented note, the web terminal's toggle comment (both copies), and 30 offline tests that load the Agent.
+  `test_bootstrap_chart.py` reads the Agent's inject annotation from the new bundle. It also checks that every
+  profile listing ai-layer lists workshop-agent and that the c7Control guard is in workshop-agent.yaml alone.
+  `test_bootstrap_chart_render.py` reads the rendered Agent ignore from workshop-agent and checks that ai-layer has
+  none.
+- **fleet.sh's comment** on `repair_agent_tools` says it is no longer the only route on the toolnames profiles. It
+  stays in converge for a root pinned before this change, for an Agent whose list a field manager kept through a
+  sync, and for a cluster Argo has not reconciled. It reads the committed list from the new bundle.
+- **The spec** (`docs/MASTER-RECREATION-SPEC.md`) has workshop-agent at wave 4 in the components table, the Agent
+  bundle in recreation steps 3 and 4, and the ignores bullet. The tier paragraph (#598) says how a tier lands now,
+  and `docs/GO-LIVE-CHECKLIST.md` says the same.
+
+**How the sync works now.** Without RespectIgnoreDifferences an ignore acts on the diff alone. A student's
+guard-mcp-on narrows evil-mcp's toolNames live, the Agent still shows Synced, and selfHeal has nothing to do. A sync
+applies the Agent as git has it. A git change to a workshop-mcp tool makes the Agent OutOfSync, and auto-sync lands
+it on every profile with no converge. Because the Agent has its own Application, a change elsewhere in ai-layer
+syncs ai-layer and leaves the Agent alone.
+
+**Costs, accepted in #707.**
+- A git change to evil-mcp's committed toolNames alone is ignored by the diff, so on the toolnames profiles it
+  reaches new clusters only. #515 accepted the same cost for `agentgateway-c7-config`. On admin nothing ignores the
+  list, so such a change lands there too.
+- A sync after any other change to the Agent applies git's evil-mcp list and git's modelConfig. It resets a student's
+  live guard-mcp-on, and a live modelConfig tier patch with it. #598 says no script applies a tier yet. A student
+  whose guard-mcp-on is reset runs it again.
+
+**Tests.** `verify/test_agent_tools_sync.py` keeps the v3.5.2 port. It shows the port still reproduces #679 under
+ai-layer's old options, the check that keeps the port honest. It adds what a sync without the option applies, and
+selfHeal, which syncs only an OutOfSync Agent. For each of attendee, burn, full and admin it then checks the rendered
+workshop-agent Application: its path, its wave after ai-layer's, selfHeal and prune, ServerSideApply and Force, no
+RespectIgnoreDifferences, and no Agent ignore left on ai-layer. It checks that git's twelve tools land on a stale
+Agent and leave it Synced, and that a later workshop-mcp rename lands too. It checks that a fresh cluster gets the
+committed Agent and that a live tier survives selfHeal with no git change. On the toolnames profiles it checks that
+a student's guard-mcp-on survives a selfHeal with no git change, and it checks both costs above. On admin it checks
+that a git change to evil-mcp's list lands. The check that no RespectIgnoreDifferences app ignores into a CRD array
+now has no exception. `test_repair_agent_tools.sh` holds the new path and the comment. `test_agent_tools_exist.py`
+and `test_recreation_spec_tier_swap.py` read the new Application.
+
+**The previous attempt** (hecaton run on pool claude-performantpro-5) stopped before any work, because that pool's
+podman store had a RunRoot under another worktree (1270196839-481-7103) and no `crun`. The fault was in the pool's
+container setup. Nothing under `verify/` or `infra/` calls podman, and this run's pool answers `podman info` with
+crun, so the repo had nothing to fix.
+
+**Not yet run on a cluster.** The structure is proven offline; Argo CD's real sync on a live Agent is not. Owed on a
+burn or attendee cluster that is already up, in a session with AWS access: let the root move to a commit carrying
+this change and confirm `workshop-agent` is Synced and Healthy. Then change a workshop-mcp tool in git and, with no
+converge, run
+`KUBECONFIG=<file> kubectl --context <ctx> -n agent get agent workshop-agent -o jsonpath='{.spec.declarative.tools[0].mcpServer.toolNames}'`.
+It must print git's list. Then run guard-mcp-on in the web terminal, wait past a selfHeal (about a minute), and
+confirm evil-mcp's toolNames still reads `["get_weather"]`. On a cluster that is already up, the first sync after
+this change moves the Agent between Applications. If ai-layer's prune runs first, it deletes the Agent and
+workshop-agent creates it again, so the pod cycles once and the student's C7 state resets. If workshop-agent applies
+first, it rewrites the Agent's tracking annotation, and ai-layer no longer counts the Agent as its own to prune. The
+live check above should note which one happened.

@@ -40,6 +40,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = REPO / "gitops" / "ai-layer" / "resources.yaml"
+AGENT_MANIFEST = REPO / "gitops" / "workshop-agent" / "agent.yaml"
 CLUSTER_TF = REPO / "infra" / "terraform" / "aws" / "cluster" / "main.tf"
 EVENT_SH = REPO / "infra" / "terraform" / "fleet" / "event.sh"
 AGENT = "workshop-agent"
@@ -55,6 +56,11 @@ def bedrock_tiers(tf_text):
     """The cluster root's bedrock_tiers local: MODEL_TIER name -> system profile id. It names the profiles."""
     m = re.search(r"bedrock_tiers\s*=\s*\{(.*?)\}", tf_text, re.S)
     return dict(re.findall(r'^\s*([a-z0-9]+)\s*=\s*"([^"]+)"', m.group(1), re.M)) if m else {}
+
+
+def committed_manifests() -> str:
+    """ai-layer's bundle and the Agent's, one YAML stream: the Agent has its own Application since #707."""
+    return RESOURCES.read_text() + "\n---\n" + AGENT_MANIFEST.read_text()
 
 
 def committed_bedrock_configs(resources_text):
@@ -247,7 +253,7 @@ def main(argv=None):
         return 2
     tiers = bedrock_tiers(CLUSTER_TF.read_text())
     tier_of = {model: tier for tier, model in tiers.items()}
-    configs, bound = committed_bedrock_configs(RESOURCES.read_text())
+    configs, bound = committed_bedrock_configs(committed_manifests())
 
     results = []
 

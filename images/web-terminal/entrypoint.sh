@@ -64,8 +64,8 @@ unset STUDENT_AK STUDENT_SK STUDENT_REGION
 # /toggle (no new pod, ArgoCD-safe, the cost counter survives). The MCP guard (C7) has one control per
 # format (#496). On a workshop cluster it patches the kagent Agent's evil-mcp toolNames allow-list. On an
 # admin cluster (the KubeCon breakout) it rewrites agentgateway's mcpAuthorization rule for evil-mcp and
-# leaves the allow-list full, so the rogue call reaches the gateway and is refused there. The ai-layer app
-# ignores drift on both, so either toggle persists.
+# leaves the allow-list full, so the rogue call reaches the gateway and is refused there. Argo CD ignores drift
+# on both, so selfHeal keeps either toggle: the workshop-agent app on the allow-list, ai-layer on the rule (#707).
 #
 # _px <query> : hit the guard-proxy /toggle endpoint, swallow the JSON, return its exit code.
 # _pxkey <query> <key> : the same, then print what the proxy now reports for <key>: True, False, or missing

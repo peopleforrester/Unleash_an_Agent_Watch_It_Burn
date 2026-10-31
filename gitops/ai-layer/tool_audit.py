@@ -18,7 +18,7 @@ may never return: a `run_shell` fork bomb (C4) can take the pod down before any 
 attribution question is exactly "which agent started that".
 
 Identity comes from the `X-Agent-Identity` request header. The Agent CR sets it on its workshop-mcp tool
-entry with `headersFrom` (gitops/ai-layer/resources.yaml); kagent sends it on every MCP request, and
+entry with `headersFrom` (gitops/workshop-agent/agent.yaml); kagent sends it on every MCP request, and
 agentgateway, which workshop-mcp is reached through, forwards request headers to MCP targets. It is DECLARED, not authenticated: it says which agent config made the call,
 which is the attribution question, and a caller without it is logged as `unattributed` rather than guessed.
 That is itself a finding, since the only callers without it are things that are not the agent, such as a

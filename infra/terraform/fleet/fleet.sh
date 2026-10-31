@@ -357,7 +357,7 @@ is_instructor_name() { [[ "$1" == "watch-it-burn-community" ]] || is_presenter_n
 # This is usability, NOT access control. The consoles are unauthenticated: anyone who has a URL can talk
 # to that cluster's agent. A non-sequential name raises the cost of guessing and nothing more. If
 # enumeration ever matters, the answer is a credential on the console, not a cleverer name.
-# Menu words, from the Hex & Cauldron menu in gitops/ai-layer/resources.yaml. Hyphens are stripped
+# Menu words, from the Hex & Cauldron menu in gitops/workshop-agent/agent.yaml. Hyphens are stripped
 # because the hyphen is the separator between the two halves of the hostname.
 readonly WIB_ADJECTIVES=(bane bogbacoa bonfire blackbog cluck croak crowsfoot cursedcorn dragon faejita
                          ghastor ghoul goblin graveyard hagwrinkle hexhen imp kelpie ogre pixie
@@ -996,28 +996,35 @@ repair_agent_injection() {
     done <<<"${pods}"
 }
 
-# The agent's declared tools can go stale on a live cluster and gitops will not fix it. Argo cannot write
+# The agent's declared tools could go stale on a live cluster with gitops not fixing it. Argo cannot write
 # a single element of the .spec.declarative.tools array while RespectIgnoreDifferences is on, so a rename
-# lands in the manifest, the cluster keeps the old name, and Argo reports Synced and Healthy throughout.
+# landed in the manifest, the cluster kept the old name, and Argo reported Synced and Healthy throughout.
 # That is how get_recipe -> get_vault_entry left Challenge 5 impossible on every attendee cluster (#349):
 # converge did not touch the field, an explicit sync reported "no more tasks", and Force changed nothing
 # because no write was being attempted.
 #
-# #679 is the same wall, and why it stands: the Agent is a CRD, so RespectIgnoreDifferences carries the ignored
-# evil-mcp toolNames back as a JSON merge patch, which holds the whole live tools array, and every sync applies that
-# (verify/test_agent_tools_sync.py ports Argo CD v3.5.2's code). read_support_ticket (#640) never reached either
-# KubeCon cluster that way. The admin profile no longer renders that ignore, so Argo syncs its tools from git; the
-# toolnames profiles keep it for the student's guard-mcp-on, and this repair is what brings them back to git.
+# #679 was the same wall: the Agent is a CRD, so RespectIgnoreDifferences carried the ignored evil-mcp toolNames back
+# as a JSON merge patch, which holds the whole live tools array, and every sync applied that (verify/test_agent_tools_sync.py
+# ports Argo CD v3.5.2's code). read_support_ticket (#640) never reached either KubeCon cluster that way.
 #
-# Replacing the object is the only repair that works. Deleting the Agent CR makes Argo recreate it from the
+# This repair is no longer the only route on the toolnames profiles (attendee, burn, full) (#707). The Agent is the
+# workshop-agent Application's now (gitops/bootstrap/apps/workshop-agent.yaml), which keeps the evil-mcp ignore and
+# leaves RespectIgnoreDifferences out, so a git change to a workshop-mcp tool makes the Agent OutOfSync and auto-sync
+# lands it on every profile, admin included, without converge. What is left for this repair: a cluster whose root
+# still runs ai-layer with the Agent in it (a root pinned before #707), an Agent whose kubectl-patch field manager
+# kept a stale list through a sync, and any cluster Argo has not reconciled. On a cluster that synced, the live list
+# matches git and this does nothing.
+#
+# Replacing the object is the repair that always works. Deleting the Agent CR makes Argo recreate it from the
 # manifest; kagent owns the agent Deployment through an ownerRef, so the pod cycles with it (about a
-# minute). Idempotent: it only acts when the live tool list actually differs from the committed one.
+# minute), and the student's C7 state resets with it. Idempotent: it only acts when the live tool list actually
+# differs from the committed one.
 repair_agent_tools() {
     local name="$1" kcfg="$2"
     local want live
     # From REPO_ROOT, never the working directory: converge runs from infra/terraform/fleet, where the relative
     # path did not exist, and the failed read ended the whole converge_one job before repair_datadog (#635).
-    want="$(python3 - "${REPO_ROOT}/gitops/ai-layer/resources.yaml" <<'PYEOF'
+    want="$(python3 - "${REPO_ROOT}/gitops/workshop-agent/agent.yaml" <<'PYEOF'
 import sys, yaml
 for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
     if d and d.get("kind") == "Agent":

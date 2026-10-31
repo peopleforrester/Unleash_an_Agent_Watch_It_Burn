@@ -58,7 +58,7 @@ QUOTAS = [
 ]
 
 print("== the pin as the manifest declares it ==")
-pin = mpc.pinned(mpc.RESOURCES.read_text())
+pin = mpc.pinned(mpc.committed_manifests())
 tiers = mpc.load_tier_map()
 check("the real manifest's pin passes the offline judge", all_ok(mpc.judge_pin(pin, "us-west-2", tiers)),
       str(mpc.judge_pin(pin, "us-west-2", tiers)))

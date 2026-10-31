@@ -14,7 +14,8 @@ import re
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-RES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+RES = "\n".join((REPO / p).read_text(encoding="utf-8")  # the Agent has its own bundle since #707
+                for p in ("gitops/ai-layer/resources.yaml", "gitops/workshop-agent/agent.yaml"))
 PROXY = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text(encoding="utf-8")
 PROBE = (REPO / "verify/agent_probe.py").read_text(encoding="utf-8")
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")

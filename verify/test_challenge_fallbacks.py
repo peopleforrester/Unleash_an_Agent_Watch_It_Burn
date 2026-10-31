@@ -55,7 +55,9 @@ def check(name, cond, detail=""):
 
 
 # --- What is deployed ----------------------------------------------------------------------------------
-DOCS = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+# ai-layer's bundle and the Agent's, its own Application since #707.
+DOCS = [d for p in ("gitops/ai-layer/resources.yaml", "gitops/workshop-agent/agent.yaml")
+        for d in yaml.safe_load_all((REPO / p).read_text()) if d]
 
 
 def obj(kind, name):

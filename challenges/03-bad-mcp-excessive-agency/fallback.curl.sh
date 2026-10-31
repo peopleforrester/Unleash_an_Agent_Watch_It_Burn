@@ -351,7 +351,7 @@ workshop() {
         finish
     fi
     if [[ -z "$(agent_generation)" ]]; then
-        check "deploy/${AGENT} can be read in ${NS}" fail "nothing below can be proven; is the ai-layer synced?"
+        check "deploy/${AGENT} can be read in ${NS}" fail "nothing below can be proven; is the workshop-agent app synced?"
         finish
     fi
 

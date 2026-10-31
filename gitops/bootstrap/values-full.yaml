@@ -46,3 +46,4 @@ apps:
   - otel-operator
   - prometheus
   - tempo
+  - workshop-agent

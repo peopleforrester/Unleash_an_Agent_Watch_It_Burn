@@ -47,6 +47,7 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = REPO / "gitops" / "ai-layer" / "resources.yaml"
+AGENT_MANIFEST = REPO / "gitops" / "workshop-agent" / "agent.yaml"
 PROXY = REPO / "gitops" / "ai-layer" / "guard-proxy" / "proxy.py"
 EVENT_SH = REPO / "infra" / "terraform" / "fleet" / "event.sh"
 
@@ -61,6 +62,11 @@ CALLS_PER_TURN = 2
 TOKENS_PER_TURN = 3500
 # The geo prefixes Bedrock puts on a cross-region inference profile id.
 PROFILE_PREFIXES = ("us.", "eu.", "apac.", "global.")
+
+
+def committed_manifests() -> str:
+    """ai-layer's bundle and the Agent's, one YAML stream: the Agent has its own Application since #707."""
+    return RESOURCES.read_text() + "\n---\n" + AGENT_MANIFEST.read_text()
 
 
 def pinned(resources_text):
@@ -258,7 +264,7 @@ def main(argv=None):
             results.append(ok)
 
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    pin = pinned(RESOURCES.read_text())
+    pin = pinned(committed_manifests())
     print(f"== model pin check, {now} ==")
     print(f"  pin: workshop-agent -> {pin['model_config']} -> {pin['model_id']} in {pin['region']}, "
           f"MODEL_TIER={pin['model_tier']}, RATE_LIMIT_RPM={pin['rate_limit_rpm']}")

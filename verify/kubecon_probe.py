@@ -155,7 +155,9 @@ GATEWAY_MANIFEST = REPO / "gitops/ai-layer/agentgateway.yaml"
 
 
 def _resources() -> list[dict]:
-    return [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+    """What the agent namespace runs from git: ai-layer's bundle, and the Agent, its own Application since #707."""
+    return [d for path in ("gitops/ai-layer/resources.yaml", "gitops/workshop-agent/agent.yaml")
+            for d in yaml.safe_load_all((REPO / path).read_text()) if d]
 
 
 def _proxy_env() -> dict[str, str]:

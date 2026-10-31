@@ -26,6 +26,9 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parent.parent
 RES_TEXT = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
 RES = [d for d in yaml.safe_load_all(RES_TEXT) if isinstance(d, dict)]
+# The Agent is the workshop-agent Application's since #707, in its own bundle.
+AGENT_DOCS = [d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8"))
+              if isinstance(d, dict)]
 TF = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 CNP_DIR = REPO / "policies/cluster-network-policies"
@@ -42,7 +45,7 @@ def check(name: str, cond: bool) -> None:
 
 
 def find(kind: str, name: str) -> dict:
-    hits = [d for d in RES if d.get("kind") == kind and (d.get("metadata") or {}).get("name") == name]
+    hits = [d for d in RES + AGENT_DOCS if d.get("kind") == kind and (d.get("metadata") or {}).get("name") == name]
     return hits[0] if hits else {}
 
 
@@ -76,12 +79,12 @@ dep = ((agent.get("spec") or {}).get("declarative") or {}).get("deployment") or 
 check("BurritoBot runs as agent-sa", dep.get("serviceAccountName") == "agent-sa")
 check("and does not re-enable the token", "automountServiceAccountToken" not in dep)
 WORKLOADS = ("Pod", "Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job", "CronJob")
-bundle = [d for f in sorted((REPO / "gitops/ai-layer").glob("*.yaml"))
+bundle = [d for f in sorted([*(REPO / "gitops/ai-layer").glob("*.yaml"), *(REPO / "gitops/workshop-agent").glob("*.yaml")])
           for d in yaml.safe_load_all(f.read_text(encoding="utf-8")) if isinstance(d, dict)]
 as_agent_sa = [d["metadata"]["name"] for d in bundle if d.get("kind") in WORKLOADS
                and ((d.get("spec") or {}).get("serviceAccountName") == "agent-sa"
                     or pod_spec(d).get("serviceAccountName") == "agent-sa")]
-check(f"no Deployment, Job or other workload in gitops/ai-layer runs as agent-sa {as_agent_sa}", not as_agent_sa)
+check(f"no Deployment, Job or other workload in gitops/ai-layer or gitops/workshop-agent runs as agent-sa {as_agent_sa}", not as_agent_sa)
 mcp = pod_spec(find("Deployment", "workshop-mcp"))
 check("the tools that call the API run as workshop-mcp, not agent-sa (#553)", mcp.get("serviceAccountName") == "workshop-mcp")
 check("and keep their token (the account does not turn automount off)",

@@ -314,11 +314,13 @@ components:
 
   - name: demo-agent
     sister: [demo-agent]
-    status: equivalent
-    by: >
-      workshop-agent in gitops/ai-layer/resources.yaml. The sister's demo agent points a provider: OpenAI
-      ModelConfig at a local vLLM; the gateway-local-qwen3 ModelConfig here is the same thing through the
-      gateway, served on the local-inference profile (vllm entry).
+    status: adopted
+    apps: [workshop-agent.yaml]
+    why: >
+      BurritoBot, the kagent Agent workshop-agent in gitops/workshop-agent, an Application of its own since #707
+      so git's tool changes reach every profile. The sister's demo agent points a provider: OpenAI ModelConfig
+      at a local vLLM; the gateway-local-qwen3 ModelConfig here is the same thing through the gateway, served on
+      the local-inference profile (vllm entry).
 
   - name: kagent
     sister: [kagent, kagent-crds]

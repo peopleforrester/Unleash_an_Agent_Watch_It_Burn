@@ -77,7 +77,8 @@ for k in ("node-not-ready", "guard-proxy-erroring"):
 check("only the traces monitor is session-scoped", [k for k, m in mons.items() if m.get("session")] == ["no-traces"])
 
 print("== the names they watch exist in the platform ==")
-docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+docs = [d for p in ("gitops/ai-layer/resources.yaml", "gitops/workshop-agent/agent.yaml")  # the Agent's bundle (#707)
+        for d in yaml.safe_load_all((REPO / p).read_text()) if d]
 deployments = {d["metadata"]["name"] for d in docs if d.get("kind") == "Deployment"}
 agents = {d["metadata"]["name"] for d in docs if d.get("kind") == "Agent"}
 kust = yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text())

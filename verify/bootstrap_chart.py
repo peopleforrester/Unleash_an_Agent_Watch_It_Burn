@@ -34,7 +34,7 @@ FRONT_DOOR_END = "{{- end }}"
 
 
 # Where Challenge 7's control sits (#679): values.yaml's c7Control, toolnames unless a profile's values file says
-# gateway. ai-layer.yaml renders the Agent's evil-mcp toolNames ignore between these two guards, on toolnames only.
+# gateway. workshop-agent.yaml renders the Agent's evil-mcp toolNames ignore between these two guards, on toolnames only (#707).
 C7_TOOLNAMES_IF = '{{- if ne .Values.c7Control "gateway" }}'
 C7_TOOLNAMES_END = "{{- end }}"
 

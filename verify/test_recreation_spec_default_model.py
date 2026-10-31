@@ -1,5 +1,5 @@
 # ABOUTME: docs/MASTER-RECREATION-SPEC.md names as the workshop default model the ModelConfig the Agent in
-# ABOUTME: gitops/ai-layer/resources.yaml binds, and no line of it calls another tier the default.
+# ABOUTME: gitops/workshop-agent/agent.yaml binds, and no line of it calls another tier the default.
 #
 # Why (#573). eac3dbc (2026-07-05) moved the workshop-agent from bedrock-sonnet to bedrock-nova, and the
 # 2026-07-25 correction fixed the spec's ModelConfig paragraph and recreation step 5. Part VII's request-chain
@@ -21,8 +21,10 @@ def check(n, c, detail=""):
 
 
 docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")) if d]
-agents = [d for d in docs if d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent"]
-check("resources.yaml has one workshop-agent Agent", len(agents) == 1, f"found {len(agents)}")
+# The Agent is the workshop-agent Application's since #707; the ModelConfigs it names stay in ai-layer.
+agents = [d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8"))
+          if d and d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent"]
+check("gitops/workshop-agent/agent.yaml has one workshop-agent Agent", len(agents) == 1, f"found {len(agents)}")
 bound = agents[0]["spec"]["declarative"]["modelConfig"] if agents else ""
 configs = {d["metadata"]["name"]: d for d in docs if d.get("kind") == "ModelConfig"}
 check(f"the bound ModelConfig {bound} is defined in resources.yaml", bound in configs)

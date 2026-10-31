@@ -58,3 +58,4 @@ apps:
   - namespaces
   - otel-collector-burn
   - otel-operator
+  - workshop-agent
