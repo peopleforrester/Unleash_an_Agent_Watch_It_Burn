@@ -6309,3 +6309,36 @@ this run's pool (claude-performantpro-5) answers `podman info`, so the repo had 
 on an attendee cluster `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and
 `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`. A villain admitted in Audit should then
 reach Running, and `kubectl --context <ctx> logs deploy/promo-mascot` should print its log.
+## 2026-10-30 · #681 · A test holds guard-proxy's pin to guard-proxy-agenticburn's main and to the #5 fix
+
+**The gap.** Test review run 10620 found that no test enforced #519's criterion: `gitops/ai-layer/guard-proxy`
+points at a guard-proxy-agenticburn *main* commit that contains the guard-proxy-agenticburn#5 fix (the C7 badge
+that reads the `# c7-rule` line of `agent/agentgateway-c7-config`, commit 8b525c6). The nearest check,
+`verify/submodule-pins-pushed.sh` (#521), passes any pin that some remote-tracking ref holds, staging included,
+so it never distinguished main from staging and never checked that the fix is in the pin's history. The only
+record that the pin is on main was run 10553's note in decisions.md.
+
+**What changed.**
+- `verify/guard-proxy-pin-on-main.sh` (new, offline): reads the `gitops/ai-layer/guard-proxy` gitlink from HEAD
+  and fails unless the pinned commit is reachable from the submodule clone's `refs/remotes/origin/main` and the
+  fix commit 8b525c6 is an ancestor of both main's head and the pin. "On main" means reachable from
+  `origin/main` as of the submodule's last fetch, the same meaning #521 uses for "pushed": a commit merged to
+  main since then reads as off main until `git -C <sub> fetch`. When the fix is not on main yet, it exits
+  non-zero with a message that names it: report blocked on guard-proxy-agenticburn#5 and pin nothing. The fix
+  sha and the submodule path are arguments defaulting to the real values, so the fixture test can drive the
+  branch logic on throwaway repos.
+- `verify/test_guard_proxy_pin_on_main.sh` (new, offline): builds a bare remote with main (before → fix → after)
+  and a one-commit staging branch, and checks that a pin at main's head passes, a pin at the fix passes, a pin
+  at a pre-fix main commit fails, a staging-only pin fails (and asserts `submodule-pins-pushed.sh` passes that
+  same pin, proving this is the check that adds the main constraint), a fix that is only on staging makes the
+  check say to report blocked and pin nothing, an unknown fix sha reads as not-on-main, and the uninitialised
+  and not-a-gitlink cases fail loudly. Its last case runs the real check on this repo's own pin. 18 assertions,
+  all pass.
+
+**The pin already satisfies the criterion.** `git ls-tree` shows the gitlink at a022fa5. On 2026-10-31,
+after a fresh fetch, a022fa5 is an ancestor of guard-proxy-agenticburn's `origin/main` head (de53427), and 8b525c6
+is an ancestor of a022fa5, so the new check prints `ok` on this repo. This change adds the test the criterion was missing; it moves no pointer.
+
+**Not yet run on a cluster.** Nothing here needs one. Both scripts are offline (no `# SUITE: e2e` marker), run
+in `bash verify/run-tests.sh`, and use only a local bare-repo fixture. `bash verify/run-tests.sh` and
+`bash verify/run-e2e-tools.sh` are green (36 checks: the offline suite and 35 tier tests).
