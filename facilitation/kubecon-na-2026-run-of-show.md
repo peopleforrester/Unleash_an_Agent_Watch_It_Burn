@@ -659,11 +659,17 @@ real-looking home address to chat.
   diagram on the slide: prompt, interface, guard, classifier, reject.
 - **The input guard's double duty:** it keeps someone else's PII out of the model,
   out of the traces, and out of a later operator's agent that reads those logs
-  (Michael's Toronto keynote point).
+  (Michael's Toronto keynote point). What it catches: e-mail addresses, card
+  numbers, US social security numbers and phone numbers, by LLM Guard's Regex input
+  scanner with the same four patterns attackme's collector scrubs (#647, #648). Names
+  and street addresses are not caught. The same `guard-input-on` arms it, and the
+  reply names the scanner: `blocked by the input guardrail: Regex, risk 1.00`.
 - **Datadog Challenge 3 tab, before the play:** the attack as the trace shows it,
   `read_support_ticket` returning HC-666 and the `deploy_app` call it leads to. After
   the fix, the same tab's second saved view: the guard's withheld notice with no
-  `deploy_app` after it, and the admission denial.
+  `deploy_app` after it, and the admission denial. Then the third, `c3-pii` in
+  Trace Explorer: the `/chat` root span decided by `input_classifier`, zero tokens,
+  no agent span, and none of the neighbour's card, phone or e-mail anywhere in it.
 - **Delivers:** point 4, point 5 (admission control), and point 6 (pre-inference
   prompt analysis).
 - **Hand-off:** "Both of those talked the bot out of it, or caught it at the
@@ -955,8 +961,27 @@ is merely slow rather than rebuilding:
     record" above.
 - [ ] **Seed the stage's Datadog traces (#648), after the admin probe is green.** Each
   challenge opens on its trace, so each is seeded twice on the private bot, the
-  attack and the same ask after its fix: six model calls, in presentation order,
-  with the probe's own guard flips and its `guards-off` at the end.
+  attack and the same ask after its fix, and Challenge 3 adds someone else's PII
+  refused by the input guard: seven `/chat` requests (six model calls; the PII one
+  spends no tokens), in presentation order, with the probe's own guard flips and its
+  `guards-off` at the end.
+
+  First, what the input guard refuses. No model call, nothing toggled; it asks
+  guard-proxy's own input stages, in its pod, about a card, an SSN, an e-mail, a
+  phone number and the stage's PII prompt, and checks a plain order still passes. It
+  must end `REFUSES 5 OF 5`:
+
+  ```bash
+  python3 verify/stage_traces.py pii burritobot-private.burritobot.co \
+      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+  ```
+
+  Then, in Whitney's org, an APM retention filter that keeps the seeds: APM, then
+  Retention Filters, query `service:burritobot @session.id:wib-stage-*`, 100% of
+  spans and 100% of traces. The PII seed's trace lives in APM, not LLM Observability
+  (a refused prompt has no gen_ai span), and APM keeps a span past Live Search's
+  15 minutes only when a retention filter indexes it. The repo's Datadog key is
+  read-only, so this is a click in the UI.
 
   ```bash
   python3 verify/stage_traces.py seed burritobot-private.burritobot.co \
@@ -964,15 +989,20 @@ is merely slow rather than rebuilding:
   ```
 
   Each seed is its own session, `wib-stage-<seed>-<UTC minute>`, sent without the
-  probe marker so the trace reads as the prompt shown (the six prompts do show in
-  the private bot's column of the prompt wall). It waits until every trace in LLM
-  Observability carries the tool spans the stage points at (`get_vault_entry`;
-  `read_support_ticket` and `deploy_app`, and no `deploy_app` once fixed;
-  `get_weather` and `read_internal_config`), then prints one link per seed plus the
-  room's and the presenters' views, and writes them to `tmp/stage-traces.json`. It
-  must end `SEEDED GREEN`. Whitney opens each link in her org and saves it as a
-  view, in that order. The morning of: `python3 verify/stage_traces.py check
-  --profile accen-dev` must end `STAGE TRACES GREEN`.
+  probe marker so the trace reads as the prompt shown (the seven prompts do show in
+  the private bot's column of the prompt wall, the PII masked to `[redacted]`). The
+  PII prompt is sent only after guard-proxy's input stages say they refuse it. It
+  waits until every trace in LLM Observability carries the tool spans the stage
+  points at (`get_vault_entry`; `read_support_ticket` and `deploy_app`, and no
+  `deploy_app` once fixed; `get_weather` and `read_internal_config`), and until the
+  PII seed's trace in APM is stamped `input_classifier` with no agent span and none
+  of the PII in it. Then it prints one link per seed plus the room's and the
+  presenters' views, and writes them to `tmp/stage-traces.json`. It must end
+  `SEEDED GREEN`. Whitney opens each link in her org and saves it as a view, in that
+  order (the `c3-pii` link opens Trace Explorer, the others LLM Observability). The
+  morning of: `python3 verify/stage_traces.py check --profile accen-dev` must end
+  `STAGE TRACES GREEN`. A red `c3-pii` there means the retention filter did not keep
+  it: check the filter and run `seed` again.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.

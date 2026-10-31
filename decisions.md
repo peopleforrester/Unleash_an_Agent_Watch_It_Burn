@@ -7115,3 +7115,52 @@ pool (claude-gmail-8) answers `podman info`, so there was nothing to fix here.
 **Not yet run on a cluster.** Still owed by a session with AWS access: on an attendee cluster
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, then
 `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` on an admin cluster.
+
+## 2026-10-31T22:30:00Z · 3.1 · #648 The input guard refuses PII, `stage_traces.py pii` measures it, and `seed` adds the PII trace
+
+The coordinator's live check on 2026-10-31 found `stage_traces.py pii` missing (`invalid choice: 'pii'`) and the input
+guard's PII scanner absent: both were in 768f368 (origin/agent/648-12515), which 7d830b3 rebuilt only in part. Measured
+again from the repo and guard-proxy's pinned source: the input guard still caught no PII. Its block-list holds
+destructive verbs and recipe phrases, and LLM Guard's only input scanner was PromptInjection.
+
+**Rebuilt on the current layout, not cherry-picked** (`verify/draft-drift.sh origin/agent/648-12515 origin/staging`
+named five drifted paths):
+
+- `llm-guard-scanners` gains a Regex input scanner: one pattern, the burn collector's four scrub patterns (e-mail,
+  card, SSN, phone; `gitops/otel-collector/values-burn.yaml`, #647) joined as an alternation, `is_blocked`, no redact,
+  `match_type: search`. It sits under the existing `guard-input-on` and needs no guard-proxy change; the public bot's
+  input guard is never on, so attackme is unchanged. Same pattern as the draft.
+- **New against the draft:** llm-guard's pod template carries `checksum/scanners-yml`, sha256(scanners.yml)[:12]. The
+  API reads scanners.yml once at start and the ConfigMap's name is stable, so on the running private cluster the
+  scanner would have synced green and never loaded, which is exactly what `pii` would then have measured as MISSED
+  (guard-proxy's `checksum/proxy-py` is the same fix). `verify/test_input_pii_guard.py` holds the value.
+- `verify/test_input_pii_guard.py` holds the pattern equal to the scrub's, checks every scrub case, the five samples
+  and the stage prompt are refused and the untouched text is not, and that no support-desk ticket, probe prompt, topic
+  case, `/kubecon` page, prompt catalog or LAB-TEXT line trips it. **New against the draft:** it runs `pii`'s in-pod
+  script on the pinned proxy.py against a fake LLM Guard that applies the configured scanners (5 of 5 refused, the
+  order passes), and serves the pinned proxy's `/chat` with the input classifier on, which refuses the stage prompt by
+  `Regex` with zero tokens. The draft only read the source for these.
+- `stage_traces.py pii <host> --context ...` runs guard-proxy's own `blocklisted` and the `/analyze/prompt` call
+  `input_verdict` makes, in its pod, on a card, an SSN, an e-mail, a phone number and the stage prompt, then a plain
+  order. No model call, no toggle; it ends `PII GREEN: THE INPUT GUARD REFUSES 5 OF 5`. It refuses the room's host and
+  a missing context, and asks nothing when the identity check fails.
+- `seed` gains `c3-pii` after `c3-fixed` (the input guard is on): the neighbour's test card, 555 number and
+  example.com address. It is sent only once guard-proxy's input stages say they refuse it, so a guard that lets PII
+  through never sends PII to the model. Judged on the reply: guarded, `blocked by the input guardrail`, `Regex` named
+  (guard-proxy now names the flagged scanners, which it did not when the draft was written), zero input tokens.
+- **Differs from the draft:** the current seed reads LLM Observability, and a refused prompt never gets a gen_ai span,
+  so `c3-pii`'s view is APM's Trace Explorer on `service:burritobot @session.id:<session>`, read through
+  `/api/v2/spans/events/search`. Its trace must be stamped `input_classifier`, carry no `burritobot-agent` span and
+  hold none of the three PII values. The draft's `retention` subcommand is not rebuilt: it needs a write key the repo
+  does not have. The Night Before step has Whitney make the retention filter (`@session.id:wib-stage-*`, 100%) in the
+  UI before seeding, and the morning `check` goes red on `c3-pii` if it did not hold.
+
+**A side effect, accepted:** guard-proxy's topic stage calls `/analyze/prompt` suppressing only PromptInjection, so
+with `guard-topic-on` a PII prompt that matches no on-topic phrase is now refused as off-topic by the classifier step.
+That is a refusal the room would want anyway; changing it means a guard-proxy release, which this does not need.
+
+**Not yet run on a cluster.** Owed before 2026-11-11, by a session with AWS access on the private cluster, once this
+has synced (llm-guard restarts on the checksum): `python3 verify/stage_traces.py pii burritobot-private.burritobot.co
+--context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev`, which must end `REFUSES 5 OF 5`.
+Then, on the Night Before, the retention filter and `seed`, whose `c3-pii` read-back is the first live test of whether
+the read-only key may search APM spans and whether `@session.id` is the facet Trace Explorer finds the root span by.
