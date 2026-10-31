@@ -6078,3 +6078,52 @@ verify/test_kyverno_cel_live.py` and then `bash verify/run-e2e.sh` (with CONTEXT
 IAM_PIPELINE_REGION set). The live check reads the policy list from `policies/kyverno/` and `policies/floor/`, so it
 now expects eleven, not the issue's ten: #606 added `restrict-agent-spawned-workloads.yaml` after d8076da, and the
 check counts it with no edit.
+## 2026-10-31 · #644 · Load test one public cluster at 500 users: the replay harness, made again on #450's audience path
+
+The 2026-10-28 planning call agreed to load test one public cluster at 500 users by replaying the last delivery's
+recorded prompts. Built offline: `scripts/load-replay.py`, the record `facilitation/kubecon-na-2026-load-test.md`
+(method, the limits the configuration predicts, a Results section), `verify/test_load_replay.py` and
+`verify/test_load_replay_live.py`.
+
+- **The recording is the Portland harvest**, `.harvest/devopsdays-portland/prompts/`, which `scripts/harvest/run.sh`
+  wrote from each cluster's Datadog spans: 30 cluster files and 1,092 distinct prompts on 2026-10-31. Only each
+  span's last user entry is the turn's prompt (the earlier entries are the conversation's history), one turn's
+  several spans give one prompt, and earlier probes are dropped. The harvest stays gitignored, so the run happens
+  where the harvest is.
+- **No attendee text leaves the recording.** The results name a prompt by its index and a 10-hex-digit hash and
+  keep no reply, so `requests.jsonl`, `summary.json` and `summary.md` can be committed. Every replayed prompt
+  carries guard-proxy's `[[wib-probe]]` marker by default, which keeps the Portland text off the side-screen feed
+  and the prompt wall; `--on-wall` sends it bare.
+- **One user is one session**, started across a 60-second ramp, sending 3 prompts with 20 seconds of reading
+  between them, its session in the body and as `X-BurritoBot-Session`. Neighbouring prompts of one recorded
+  cluster go to the same user.
+- **Refusals are results, not stops.** guard-proxy answers its cluster window, its per-conversation limit and its
+  cost backstop with HTTP 200 and canned replies, and the console's nginx answers its own two limits the same way,
+  so the harness tells them apart by their words: `edge_limit` (nginx, "a minute from one network"),
+  `session_limit`, `cluster_limit`, `cost_cap`. The offline test checks those words against `proxy.py` and
+  `console.conf`, provokes each guard-proxy limit on its real handler on loopback, and serves console.conf's own
+  refusal body from a stub for nginx's. New turns stop only at `--duration` (900 s) or once replies report
+  `--budget-usd` (`$10`), which is below the cluster's `$25` backstop.
+- **Two runs, because one machine is one network.** Through the public host, the front door sends this machine's
+  address as the one `X-Forwarded-For`, and nginx holds one address to 120 a minute, under guard-proxy's 150. So
+  Run A measures the venue NAT, which is what a ballroom on Wi-Fi is. Run B goes straight at the console NLB with
+  `--networks 50`, ten users to each of 50 RFC 5737 addresses, so guard-proxy's window and Bedrock are what bind.
+- **The target is required**, as in #452's replay: a load test that guessed its cluster could saturate the wrong
+  one. After a run, `fleet.sh reset-bot` zeroes the cluster's counter.
+- **Standard library only**, one thread per user. The offline test sends 500 concurrent users through the real
+  handler in a few seconds, so the generator is not the bottleneck. No new dependency.
+
+**What differs from the draft** (`origin/agent/644-10397`, cut from staging at cb296cb, before #450 landed in
+7a7ae65). `verify/draft-drift.sh` named only PROJECT_STATE.md and decisions.md, but running the draft's test on
+today's staging failed three checks, and reading #450 found a fourth gap. The draft sent no `X-BurritoBot-Session`,
+so nginx's per-conversation zone would have seen no session. It would have recorded nginx's limit reply, which also
+says "per conversation", as guard-proxy's `session_limit`; `edge_limit` is new. Its 170 s timeout was under the new
+ladder (nginx 285 s, Railway 300 s), so it would have recorded its own timeouts; it is 320 s now. Its cost-cap check
+set `COST_CAP_USD`, which guard-proxy no longer reads at request time (the runtime `_cost_cap`). And its predictions
+had guard-proxy's 150 as the first limit, which the per-network ceiling now sits under for any one source; Run B
+and `--networks` are new for that.
+
+**Not yet run on a cluster.** `CONTEXT=<ctx> python3 verify/test_load_replay_live.py` (two users, one turn each,
+from a synthetic two-prompt recording) has not run, and neither has Run A or Run B. They need a public cluster up,
+the machine holding the Portland harvest, and Michael's go for the Bedrock spend. Their summaries go under Results
+in the record. Hecaton run 13156 has no cluster and no AWS.
