@@ -6546,3 +6546,66 @@ this change moves the Agent between Applications. If ai-layer's prune runs first
 workshop-agent creates it again, so the pod cycles once and the student's C7 state resets. If workshop-agent applies
 first, it rewrites the Agent's tracking annotation, and ai-layer no longer counts the Agent as its own to prune. The
 live check above should note which one happened.
+
+## 2026-10-31 · #715 · The five demo apps run lab-platform's web image by digest, set through kustomize.images at the root's registry
+
+**What changed.** The demo-app-{hedgehog,mantis-shrimp,spider,unicorn,wombat} Deployments pulled
+`docker.io/library/nginx:1.27-alpine` from Docker Hub. That was five anonymous pulls per cluster during an event,
+and lab-platform's `deploy/mirror/pulled.tsv` (lab-platform#335, PR #337) lists them as a gap. They now run
+`ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9`. That is the
+digest lab-platform's `deploy/watch-it-burn/images.tsv` pins, and on 2026-10-31 the `v1` tag on ghcr.io still served
+it. The image is a Go static file server on base-static (`cmd/web`, `internal/webserve`) that reads one routes file,
+`web.yaml`.
+
+**Why through kustomize.images and not a literal reference.** `verify/test_image_registry.py` (#622) forbids a
+literal `ghcr.io/peopleforrester/lab-platform` anywhere the root deploys. A root can pass an ECR pull-through cache
+path as `imageRegistry`, and only an apps/ file is rendered with that value. So each demo-app directory is now a
+kustomize bundle, with a `kustomization.yaml` over its three files. Its Deployment names the kustomize image `web`,
+and its `gitops/bootstrap/apps/demo-app-*.yaml` sets
+`web={{ .Values.imageRegistry }}/web@sha256:73cd…`. ai-layer.yaml sets llm-guard the same way (#652). The entry
+carries the digest and no tag, so that the reference is the exact one images.tsv records.
+
+**The routes file.** Each directory has a `web.yaml`, and the five copies are identical. It has the same shape as
+lab-platform's `internal/webserve/testdata/demo-app.web.yaml`: `listen: ":8080"`, `root: /srv/www`, `/` serving
+`index.html`, and `/healthz` answering `ok`. The kustomization generates it as `demo-app-<name>-web-<hash>`, mounted
+at `/etc/web`, where the image reads it by default. Because the name carries a hash, a routes change rolls the pod.
+The page ConfigMap is mounted read-only at `/srv/www`. `/index.html`, which nginx also served, is now a 404, and
+nothing links to it.
+
+**The port moved from 80 to 8080, and the Service did not.** The routes file listens on 8080 as lab-platform's
+example does, so a non-root process with every capability dropped does not need to bind a privileged port. Each
+Service keeps port 80, which console.conf proxies the `<app>-<cluster>` hostnames to, and now targets 8080.
+`apps-allow-ingress` already admitted 8080 from the VPC CIDR and kube-system. Its port 80 rule stays, because
+games/villain-apps still listens there. The comment now says so.
+
+**The container.** `NETWORK_BOUNDARY=sandbox` is set. Without it the image refuses the all-interfaces bind and exits,
+as a local run of the pinned binary showed. The root filesystem is read-only and nginx's cache, run and tmp
+emptyDirs are gone. The probes ask `/healthz` on the named port.
+
+**The allow-list.** restrict-image-registries already admits `ghcr.io/` and any ECR registry, and its comment already
+named the web image. The new test checks the reference at the default registry and through a cache path. The image
+is not added to verify-image-signatures. That policy adds a lab-platform image only once its signature has been
+checked (#669). A `sha256-<digest>.sig` tag exists for this digest on ghcr.io, but it has not been verified against
+the workshop key, so that is left as a follow-up.
+
+**images.lock.** The `docker.io/library/nginx:1.27-alpine` row, which nothing references now, is replaced in its
+position by `web ghcr.io/peopleforrester/lab-platform/web@sha256:73cd… repo:peopleforrester/lab-platform/cmd/web -`.
+The `nginx:1.27-alpine` row stays, for the Dockerfile FROM lines.
+
+**Tests.** `verify/test_demo_app_web_image.py` (offline) checks five things for each app. It checks the Application's
+one images entry and how it parses. It checks the bundle and its generator. It checks web.yaml's routes, which must
+be identical across the five. It checks the Deployment's image name, env, port, probes, mounts and securityContext,
+and the Service's 80 to 8080. It also checks the allow-list at both registries and the images.lock row. Last, it
+checks that no tracked file under gitops/ names Docker Hub nginx outside a comment, and that this sweep fires on the
+old manifest. `verify/test_bootstrap_chart_render.py` (tools tier) renders the burn profile with and without
+`imageRegistry`. It builds each bundle with the rendered entries as Argo CD does, and checks the Deployment's image
+and that the web volume is the generated ConfigMap holding web.yaml as written. Outside the suites, this run ran the
+pinned image's binary on its own against the wombat web.yaml, with only root and port changed for a non-root host.
+`/` answered 200 text/html with the full page, `/healthz` answered `ok`, and without NETWORK_BOUNDARY it exited 1,
+naming the bind.
+
+**Not yet run on a cluster.** No E2E test fetches a party page. Owed on an attendee or full cluster in a session with
+AWS access, after the root moves to a commit carrying this change:
+`KUBECONFIG=<file> kubectl --context <ctx> -n apps get pods -l 'app in (demo-app-hedgehog,demo-app-mantis-shrimp,demo-app-spider,demo-app-unicorn,demo-app-wombat)' -o jsonpath='{range .items[*]}{.metadata.name} {.status.containerStatuses[0].ready} {.status.containerStatuses[0].imageID}{"\n"}{end}'`
+must show five Ready pods on the `web@sha256:73cd…` image. Then `curl -s -o /dev/null -w '%{http_code}' https://hedgehog-<cluster>.agenticburn.com/`
+must print 200, and the page must draw in a browser. The same holds for each of the other four hostnames.

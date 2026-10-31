@@ -15,6 +15,12 @@ spec:
     repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
     targetRevision: "{{ .Values.revision }}"
     path: gitops/manifests/demo-app-unicorn
+    kustomize:
+      # lab-platform's web image (#715), by digest, at the registry the root passes down (#622): deployment.yaml names
+      # the kustomize image web and Argo CD sets it here. It replaces docker.io/library/nginx:1.27-alpine, one Docker
+      # Hub pull per app per cluster on the anonymous quota. verify/test_demo_app_web_image.py holds the reference.
+      images:
+        - "web={{ .Values.imageRegistry }}/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9"
   destination:
     server: https://kubernetes.default.svc
     namespace: apps

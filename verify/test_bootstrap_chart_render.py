@@ -293,6 +293,48 @@ for label, registry, args in (("unset", LAB_PLATFORM_GHCR, ()), ("at the cache p
 check("the bundle as written names llm-guard by the kustomize image name alone",
       workload_images(base.stdout).get("Deployment/llm-guard/llm-guard-api") == "llm-guard" if base else False)
 
+print("== the demo apps' web image, set the same way (#715) ==")
+# Each demo-app directory is a kustomize bundle whose Deployment names the kustomize image web; its app file's
+# kustomize.images sets lab-platform's web by digest at the root's registry, and the bundle generates web.yaml's ConfigMap.
+WEB = "web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9"
+DEMO = [n for n in app_names("burn") if n.startswith("demo-app-")]
+check(f"burn deploys the five demo apps {DEMO}", len(DEMO) == 5)
+for label, registry, args in (("unset", LAB_PLATFORM_GHCR, ()), ("at the cache path", CACHE,
+                                                                ("--set", f"imageRegistry={CACHE}"))):
+    r = render("-f", str(values_path("burn")), "--set", f"revision={COMMIT}", *args)
+    rendered = {d["metadata"]["name"]: d for d in yaml.safe_load_all(r.stdout) if d} if r.returncode == 0 else {}
+    for n in DEMO:
+        entries = kustomize_images(rendered.get(n, {}))
+        check(f"{label}: {n} sets one image, web, to {registry}/{WEB}",
+              entries == [{"name": "web", "newName": f"{registry}/web", "digest": WEB.split("@", 1)[1]}], str(entries))
+        if not (KUBECTL and entries):
+            continue
+        mdir = REPO / f"gitops/manifests/{n}"
+        own = subprocess.run([KUBECTL, "kustomize", str(mdir)], capture_output=True, text=True)
+        with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
+            (pathlib.Path(d) / "kustomization.yaml").write_text(yaml.safe_dump({
+                "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+                "resources": [os.path.relpath(mdir, d)], "images": entries}), encoding="utf-8")
+            k = subprocess.run([KUBECTL, "kustomize", d], capture_output=True, text=True)
+        check(f"{label}: {n} builds with kustomize, as written and with the image set",
+              own.returncode == 0 and k.returncode == 0, (own.stderr + k.stderr).strip()[:300])
+        if k.returncode != 0:
+            continue
+        built = [x for x in yaml.safe_load_all(k.stdout) if x]
+        check(f"{label}: the {n} Deployment runs {registry}/{WEB}",
+              workload_images(k.stdout) == {f"Deployment/{n}/{n}": f"{registry}/{WEB}"}, str(workload_images(k.stdout)))
+        check(f"{label}: and as written names it by the kustomize image name alone",
+              own.returncode == 0 and workload_images(own.stdout) == {f"Deployment/{n}/{n}": "web"})
+        check(f"{label}: restrict-image-registries allows it", allowed(f"{registry}/{WEB}"))
+        gen = [x for x in built if x.get("kind") == "ConfigMap" and x["metadata"]["name"].startswith(f"{n}-web-")]
+        dep = next((x for x in built if x.get("kind") == "Deployment"), {})
+        vols = {v["name"]: (v.get("configMap") or {}).get("name")
+                for v in (dep.get("spec") or {}).get("template", {}).get("spec", {}).get("volumes") or []}
+        check(f"{label}: the web volume is the generated {n}-web-<hash>, in apps, holding web.yaml as written",
+              len(gen) == 1 and vols.get("web") == gen[0]["metadata"]["name"]
+              and gen[0]["metadata"].get("namespace") == "apps"
+              and gen[0]["data"] == {"web.yaml": (mdir / "web.yaml").read_text(encoding="utf-8")}, str(vols))
+
 print("== the render refuses what it cannot pin ==")
 r = render("-f", str(values_path("attendee")))
 check("no revision: the render fails, naming it", r.returncode != 0

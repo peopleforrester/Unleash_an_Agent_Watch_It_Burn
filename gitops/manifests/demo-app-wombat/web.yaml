@@ -1,0 +1,9 @@
+# ABOUTME: The routes file lab-platform's web image reads at /etc/web/web.yaml: the page the html ConfigMap
+# ABOUTME: mounts at /srv/www and a health path, the whole of what nginx:1.27-alpine served here (#715).
+listen: ":8080"
+root: /srv/www
+routes:
+  - path: /
+    file: index.html
+  - path: /healthz
+    text: "ok\n"

@@ -5,8 +5,9 @@
 #
 #   1. matchImageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*, Harbor, and lab-platform's
 #      llm-guard image (at ghcr.io or an ECR pull-through cache). Third-party images the allowlist permits
-#      (docker.io/library/nginx, cr.agentgateway.dev, the OTel autoinstrumentation image) do not match
-#      this rule and are unaffected by it. Neither are lab-platform's other paths: see LAB-PLATFORM below.
+#      (docker.io/library, cr.agentgateway.dev, the OTel autoinstrumentation image) do not match
+#      this rule and are unaffected by it. Neither are lab-platform's other paths, the demo apps' web
+#      image (#715) among them: see LAB-PLATFORM below.
 #   2. All eight tags the manifests reference were signed and verified before this was flipped on, and
 #      llm-guard's pinned digest verified under the Kyverno CLI before it was added (#669).
 #      An unsigned image from our registry is now denied, which is the point.

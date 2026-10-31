@@ -1,0 +1,17 @@
+# ABOUTME: The demo-app-unicorn bundle Argo CD builds: its page, Deployment and Service, and web.yaml as a ConfigMap,
+# ABOUTME: so the Application's kustomize.images can set the web image at the root's registry (#715).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml
+configMapGenerator:
+  # The name takes a hash of web.yaml, and the Deployment's volume follows it, so a routes change rolls the pod.
+  - name: demo-app-unicorn-web
+    namespace: apps
+    options:
+      labels:
+        app: demo-app-unicorn
+    files:
+      - web.yaml
