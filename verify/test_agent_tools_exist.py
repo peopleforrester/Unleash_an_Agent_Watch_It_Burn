@@ -54,7 +54,7 @@ for entry in agent["spec"]["declarative"]["tools"]:
 print("== every declared tool exists in the server that serves it ==")
 for server, path in SERVERS.items():
     src = path.read_text(encoding="utf-8")
-    served = set(re.findall(r"^def ([a-z][a-z0-9_]*)\(", src, re.M))
+    served = set(re.findall(r"^(?:async )?def ([a-z][a-z0-9_]*)\(", src, re.M))
     names = declared.get(server)
     check(f"{server} is declared on the agent", names is not None)
     for tool in names or []:
@@ -63,7 +63,7 @@ for server, path in SERVERS.items():
 print("== the RemoteMCPServer description names only tools its server serves ==")
 # kagent shows this description beside the server. It listed list_pods, apply_manifest and get_secret long
 # after those tools were retired (#465), so a reader tracing the tool path read the wrong toolset.
-served_by = {s: set(re.findall(r"^def ([a-z][a-z0-9_]*)\(", p.read_text(encoding="utf-8"), re.M))
+served_by = {s: set(re.findall(r"^(?:async )?def ([a-z][a-z0-9_]*)\(", p.read_text(encoding="utf-8"), re.M))
              for s, p in SERVERS.items()}
 described = {d["metadata"]["name"]: set(re.findall(r"\b[a-z]+(?:_[a-z0-9]+)+\b", d["spec"].get("description", "")))
              for d in RES if d and d.get("kind") == "RemoteMCPServer"}

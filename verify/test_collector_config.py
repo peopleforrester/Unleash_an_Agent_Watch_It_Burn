@@ -111,6 +111,13 @@ print("== the lab describes what the trace actually contains ==")
 # That predates #463: run_shell then returned a non-zero exit as text (isError=false) and raised only on a
 # timeout. It now raises on both, with "command FAILED" kept in the text, so the expected trace is the same.
 #
+# Re-measured on burritobot-private, 2026-10-31, egress policies on, out of Tempo and Datadog (#701):
+#   execute_tool run_shell           STATUS_CODE_ERROR   20.0 s, "command FAILED: it did not complete within 20s"
+#   execute_tool run_shell           STATUS_CODE_ERROR   0.03 s, "command FAILED with exit code 6" (a DNS miss)
+#   generate_content (after either)  UNSET               the model call ends fine; the block is one error
+# Both errors are in Datadog's indexed spans (its Error Default retention filter). The fast failure is the
+# shape #463 changed: before it, exit 6 was a success holding text.
+#
 # WHAT THIS BLOCK USED TO PIN, AND WHY IT NO LONGER DOES. It required Challenge 1 to walk the student
 # through the span by name: "execute_tool run_shell", the arguments carrying the stolen payload, the
 # quoted "command FAILED..." result, and the contrast with get_marketing_intel. Whitney replaced that

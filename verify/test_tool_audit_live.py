@@ -201,6 +201,49 @@ if len(calls) == 4:
     check("the inventory itself is not in the trail", all("ghost_pepper" not in json.dumps(r) for r in lines))
 
 
+async def concurrent(url: str) -> tuple[float, float]:
+    """Seconds a check_inventory took while another session's run_shell slept 3 s, and that run_shell's own."""
+    from mcp import ClientSession
+    from mcp.client.streamable_http import streamablehttp_client
+
+    async def timed(tool: str, args: dict) -> float:
+        # From before the connect: a stalled server holds up initialize as much as the call itself.
+        t0 = time.monotonic()
+        async with streamablehttp_client(url) as (r, w, _):
+            async with ClientSession(r, w) as s:
+                await s.initialize()
+                await s.call_tool(tool, args)
+                return time.monotonic() - t0
+
+    async def quick() -> float:
+        await asyncio.sleep(0.5)
+        return await timed("check_inventory", {})
+
+    slow, fast = await asyncio.gather(timed("run_shell", {"command": "sleep 3"}), quick())
+    return fast, slow
+
+
+print("== a slow run_shell does not hold up another session's call ==")
+# A plain-def tool runs on FastMCP's event loop, so a curl the egress policy hung for 20 s stalled every other
+# tools/call, and agentgateway cut those at 10 s with HTTP 500 (burritobot-private, 2026-10-31).
+with tempfile.TemporaryDirectory() as tmp:
+    port = free_port()
+    proc = subprocess.Popen([sys.executable, "-c", SERVE, str(port)], stdout=subprocess.DEVNULL,
+                            stderr=subprocess.DEVNULL, env={**os.environ, "WORKSHOP_DATA_DIR": f"{tmp}/data"})
+    try:
+        deadline = time.time() + 30
+        while time.time() < deadline and proc.poll() is None:
+            with socket.socket() as s:
+                if s.connect_ex(("127.0.0.1", port)) == 0:
+                    break
+            time.sleep(0.2)
+        fast, slow = asyncio.run(concurrent(f"http://127.0.0.1:{port}/mcp")) if proc.poll() is None else (99, 0)
+    finally:
+        proc.terminate()
+        proc.wait(timeout=10)
+check(f"check_inventory answered in {fast:.2f}s while run_shell slept", fast < 1.5)
+check(f"and the sleeping run_shell still took its 3 s ({slow:.2f}s)", slow >= 2.9)
+
 # ----- live half ---------------------------------------------------------------------------------------
 print("== cluster prerequisites ==")
 check("kubectl is on PATH", shutil.which("kubectl") is not None)

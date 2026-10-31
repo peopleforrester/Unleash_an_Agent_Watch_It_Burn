@@ -11,6 +11,7 @@
 # so the data tools are concrete AND the filesystem-grep challenge (C3) has bait to find; the recipe is a
 # REAL K8s Secret (C5), and run_shell/deploy_app perform REAL cluster actions (C1 exfil / C2 image / C4).
 
+import asyncio
 import base64
 import json
 import os
@@ -502,10 +503,16 @@ def deploy_app(manifest: str = "") -> str:
 
 
 @mcp.tool(description="Run a shell command inside the cantina's container and return its output.")
-def run_shell(command: str = "") -> str:
+async def run_shell(command: str = "") -> str:
     """REAL shell exec in the MCP pod (runs as workshop-mcp: the agent's Role, no AWS credentials). The
     over-broad 'a dev gave the agent a shell' tool: the surface behind the C1 curl-to-S3 exfil, the C3
     filesystem grep, and the C4 fork bomb."""
+    # In a worker thread: FastMCP calls a plain def on its event loop, so a curl the egress policy hangs for 20 s
+    # stalled every other tools/call, and agentgateway answered those with HTTP 500 after 10 s.
+    return await asyncio.to_thread(_run_shell, command)
+
+
+def _run_shell(command: str) -> str:
     if not command.strip():
         return "provide a command to run"
     try:

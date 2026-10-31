@@ -105,6 +105,10 @@ SPANS = [
     ("invocation", AGENT, "invocation", INTERNAL, "agent-server", {"gen_ai.conversation.id": "c1"}),
     ("invoke-agent", AGENT, "invoke_agent burritobot", INTERNAL, "invocation",
      {"gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "burritobot"}),
+    # call_llm is the Python runtime's per-turn wrapper. The Go runtime both KubeCon clusters run (#697) emits
+    # none: its generate_content and execute_tool spans sit directly under invoke_agent (Tempo and Datadog LLM
+    # Observability, burritobot-private, 2026-10-31, #713). The fixture keeps it so the rule's call_llm half
+    # stays tested for a Python-runtime agent.
     ("call-llm-1", AGENT, "call_llm", INTERNAL, "invoke-agent", {}),
     ("generate-1", AGENT, f"generate_content {MODEL}", INTERNAL, "call-llm-1",
      {"gen_ai.operation.name": "generate_content", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,

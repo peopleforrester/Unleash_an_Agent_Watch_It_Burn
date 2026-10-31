@@ -16,8 +16,10 @@ The server is loaded with a stand-in for tool_audit, since the offline suite has
 """
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import pathlib
+import time
 import re
 import subprocess
 import sys
@@ -54,7 +56,7 @@ spec.loader.exec_module(server)
 def call(command: str):
     """Run the tool and return (result, exception)."""
     try:
-        return server.run_shell(command), None
+        return asyncio.run(server.run_shell(command)), None
     except Exception as e:  # noqa: BLE001
         return None, e
 
@@ -85,6 +87,26 @@ def _hang(*_a, **_k):
 def _broken(*_a, **_k):
     raise OSError("no /bin/sh")
 
+
+print("== a slow command does not stall the server (the tool runs off the event loop) ==")
+# FastMCP awaits an async tool and calls a plain def on the event loop itself (mcp 1.29, func_metadata.py), so a
+# blocked curl held every other tools/call for its 20 s, and agentgateway cut those at 10 s with HTTP 500: the
+# second Challenge 1 run on burritobot-private, 2026-10-31, read get_marketing_intel as "Internal Server Error".
+check("run_shell is a coroutine function, so FastMCP awaits it", asyncio.iscoroutinefunction(server.run_shell))
+
+
+async def _concurrent() -> tuple[float, float]:
+    t0 = time.monotonic()
+    slow = asyncio.ensure_future(server.run_shell("sleep 1.5; echo slow"))
+    await asyncio.sleep(0.2)
+    tick = time.monotonic() - t0
+    await slow
+    return tick, time.monotonic() - t0
+
+
+tick, total = asyncio.run(_concurrent())
+check(f"another coroutine runs while sleep 1.5 is in flight (resumed after {tick:.2f}s)", tick < 1.0)
+check(f"and the slow command still completes ({total:.2f}s)", total >= 1.4)
 
 print("== a timeout still raises ==")
 server.subprocess.run = _hang

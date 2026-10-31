@@ -5840,3 +5840,41 @@ community cluster (`fleet.sh instructors up community`), run
 provision a fresh attendee cluster and confirm the same script prints `IMDS: BLOCKED`. Final stage placement in
 the run-of-show (which segment, how it flows in the 30-minute KubeCon demo vs the 2-hour format) is the
 presenters' choreography call and is left as a follow-up rather than written into the tightly-timed scripts here.
+
+## 2026-10-31T00:30:00Z · 3.1 · Cluster readings for #701, #711, #713, and run_shell off the event loop
+
+**#701, Challenge 1 trace (burritobot-private, egress NetworkPolicies on).** Three runs, read out of Tempo and
+Datadog. A blocked POST to the beacon: `execute_tool run_shell` STATUS_CODE_ERROR at 20.0 s with "command FAILED:
+it did not complete within 20s". A fast failure (curl exit 6, a DNS miss): STATUS_CODE_ERROR at 0.03 s with
+"command FAILED with exit code 6", the shape #463 changed. Both error spans are in Datadog's indexed spans. The
+issue's first check (the model call after the block is status:error) no longer applies: question 925 removed
+transform/mark_tool_failure, and every generate_content span read UNSET, as intended. Recorded beside the
+2026-09-07 measurement in `verify/test_collector_config.py`.
+
+**run_shell blocked the whole tool server.** The second Challenge 1 run had Nova call run_shell and
+get_marketing_intel together. run_shell was a plain `def`, which FastMCP (mcp 1.29.1, func_metadata.py) calls on
+its event loop, so the 20 s hung curl stalled every other tools/call; agentgateway cut get_marketing_intel at
+10 s ("upstream call timeout", HTTP 500) and the model told the room "internal server error" instead of the
+NetworkPolicy's message. run_shell is now `async` and runs its subprocess in a worker thread.
+`verify/test_tool_audit_live.py` drives the real server on the pinned library: a second session's check_inventory
+took 2.58 s while run_shell slept 3 s before the change and 0.05 s after. The other tools are still plain `def`
+(deploy_app, read_support_ticket and the web search make network calls); none was seen to stall.
+
+**#711, service names in Whitney's sandbox org.** Datadog's own usage metric
+(`datadog.estimated_usage.apm.ingested_spans` by service) last saw `workshop_agent` in the 2026-10-30 04:00 UTC
+hour and has seen only burritobot, burritobot-agent and burritobot-gateway since. `verify/test_datadog_sandbox_live.py`
+span check passed on both clusters. Tempo, fed by the same processors, holds no ASGI send/receive spans and no
+empty `chat` spans for a fresh /chat. The same run failed two checks outside #711: logs from argocd, kubearmor and
+aws-load-balancer-controller carry their own service names (#629's log rule), and ml_obs.trace had not reported
+inside the 60-minute window yet (it shows 5 burritobot traces for 10-31 a few minutes later).
+
+**#713, call_llm as invoke_agent.** Moot on the deployed runtime. The Go runtime emits no call_llm span; LLM
+Observability draws one interaction as workflow POST, agent invocation, agent workshop_agent, then llm
+generate_content and tool rows under it. Kept `transform/set_llmobs_workflow` as it is: unstamping invocation
+would bring back Datadog's "No operation was reported" note on every trace, and the call_llm half still serves
+a Python-runtime agent. Not read in the Datadog UI itself (the sandbox org is Whitney's login); read from the LLM
+Observability spans API.
+
+**Found while reading, filed separately:** every generate_content row in LLM Observability has no input and no
+output. The Go runtime writes the request and response to gcp.vertex.agent.llm_request and llm_response,
+truncated at 2048 characters, not to gen_ai.input.messages and gen_ai.output.messages.
