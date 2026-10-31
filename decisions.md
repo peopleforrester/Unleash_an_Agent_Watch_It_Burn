@@ -6381,3 +6381,40 @@ planning `-var max_pods=250` for watch-it-burn-community and `=110` for watch-it
 `KUBECONFIG=/tmp/community.kubeconfig kubectl --context <community-ctx> get nodes -o jsonpath='{.items[*].status.allocatable.pods}'`
 must print `250`, and `python3 verify/kubecon_probe.py community attackme.agenticburn.com --context <community-ctx>
 --kubeconfig /tmp/community.kubeconfig --profile accen-dev` must end `KUBECON PROBE GREEN`.
+
+## 2026-10-31 · #704 · The local-inference cold build is still owed; its deploy command must be given an isolated kubeconfig
+
+**No code changed.** #704 asks for a timed cold build of the local-inference profile on a fresh t3.2xlarge cluster,
+then `verify/local-inference-live.py`, then the measured wall-clock and requests in `platform-baseline.yaml`'s vllm
+entry as `measured: true`, and a teardown. All of it is a bring-up, a live run and a teardown. Hecaton run 13379 has
+no AWS profile and no kubeconfig, so it left the vllm entry at `measured: false`. Writing a number nobody measured
+would make that entry false.
+
+- **The issue's first command does not choose its cluster.** `infra/deploy-full-idp.sh` never reads `CONTEXT`. Its
+  `kubectl` and `helm` calls, and those of `infra/datadog-cluster-identity.sh`, which it calls, run against the
+  kubeconfig's current-context, and it derives `CLUSTER_NAME` from that context. Run as the issue writes it,
+  `CONTEXT=<ctx> bash infra/deploy-full-idp.sh local-inference` builds whatever cluster `~/.kube/config` currently
+  points at. That may be another session's cluster. fleet.sh's `bootstrap_one` is safe because it passes
+  `KUBECONFIG=<isolated file>`, and the commands below do the same. Making the script take `CONTEXT` changes fleet.sh's
+  call as well, so it is a follow-up and was left out of this run.
+- **The previous attempt** stopped before any work, on the podman store in pool claude-performantpro-5 (`default OCI
+  runtime "crun" not found`, RunRoot under worktree 1270196839-481-7103 not writable). That is a hecaton pool's
+  container setup. Nothing under `verify/` or `infra/` calls podman, and in this run the same pool answers
+  `podman info`, so the repo had nothing to fix.
+
+**Not yet run on a cluster.** A session with accen-dev, in us-west-2, the lab VPC applied and Michael's go for the
+spend (one t3.2xlarge node and its EKS control plane for about an hour), runs from `infra/terraform/fleet`:
+
+1. `WIB_NO_BOOTSTRAP=1 ./fleet.sh up watch-it-burn-attendee-099`. This builds a bare cluster. `WIB_NO_BOOTSTRAP`
+   also keeps it out of lab-platform's pool, the router and the walkthrough. Use any attendee slot no pool row holds.
+2. `aws eks update-kubeconfig --kubeconfig /tmp/watch-it-burn-attendee-099.kubeconfig --name watch-it-burn-attendee-099 --region us-west-2 --profile accen-dev`,
+   then confirm `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig kubectl config current-context` ends in
+   `cluster/watch-it-burn-attendee-099`.
+3. From the repo root, start the clock and run
+   `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig AWS_PROFILE=accen-dev REGION=us-west-2 CLUSTER_NAME=watch-it-burn-attendee-099 bash infra/deploy-full-idp.sh local-inference`.
+   Stop the clock when `kubectl --context <that context> -n argocd get applications` shows every Application Healthy.
+4. `KUBECONFIG=/tmp/watch-it-burn-attendee-099.kubeconfig CONTEXT=<that context> python3 verify/local-inference-live.py`.
+   It must end with no FAIL. It prints the vLLM pod's time from creation to Ready and its live footprint.
+5. Write the wall-clock from step 3, the time to Ready and the footprint from step 4, and the requests (4 CPU / 10Gi
+   in `gitops/manifests/vllm-qwen3/`) into the vllm entry's `cost`, with `measured: true`.
+6. `./fleet.sh down watch-it-burn-attendee-099`, then `./cleanup-log-groups.sh --delete`.
