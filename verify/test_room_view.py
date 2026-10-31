@@ -42,13 +42,28 @@ def check(name: str, cond: bool, detail: str = "") -> None:
 
 defs = rv.load()
 dash = defs["dashboard"]
-qs = [q["query"] for _, q in rv.queries(dash)]
+qs = [q["query"] for _, q in rv.queries(dash) if q["data_source"] == "metrics"]
+log_qs = [q for _, q in rv.queries(dash) if q["data_source"] == "logs"]
+titles = [(w["definition"].get("title") or "").lower() for w in dash["widgets"]]
 
 print("== the definition is fenced to attackme ==")
 check("room_view.yaml validates clean", rv.validate(defs, NOW) == [], str(rv.validate(defs, NOW)))
 check("it has queries to fence", len(qs) >= 4)
-check("every query is a metric query on kube_cluster_name:burritobot-public",
-      all(q["data_source"] == "metrics" and rv.CLUSTER_TAG in rv.filter_tags(q["query"]) for _, q in rv.queries(dash)))
+check("every metric query is filtered on kube_cluster_name:burritobot-public",
+      all(rv.CLUSTER_TAG in rv.filter_tags(q) for q in qs))
+check("every logs query searches kube_cluster_name:burritobot-public at the top level",
+      log_qs and all(rv.CLUSTER_TAG in rv.top_level(q["search"]["query"]).split() for q in log_qs))
+check("every query is metrics or logs", all(q["data_source"] in ("metrics", "logs") for _, q in rv.queries(dash)))
+check("no query anywhere names a content attribute",
+      not [m for _, q in rv.queries(dash) for m in rv.CONTENT_MARKERS if m in json.dumps(q).lower()])
+check("no query groups by anything but span name or event name",
+      all(set(rv.group_keys(q)) <= set(rv.GROUP_KEYS) for q in qs)
+      and all({g["facet"] for g in q.get("group_by") or []} <= set(rv.LOG_GROUP_FACETS) for q in log_qs))
+check("the logs queries only count", all(q["compute"] == {"aggregation": "count"} for q in log_qs))
+for what, needle in (("request count", "chats sent"), ("tool calls", "tools the bot ran"),
+                     ("tool calls by name", "which tools"), ("guard decisions", "guards stopped"),
+                     ("errors", "failed"), ("cost", "bill")):
+    check(f"the page shows {what}", any(needle in t for t in titles), str(titles))
 check("no template variables", not dash.get("template_variables"))
 check("the share is open, with nothing selectable", defs["share"]["share_type"] == "open"
       and defs["share"]["global_time_selectable_enabled"] is False and defs["share"]["selectable_template_vars"] == [])
@@ -90,7 +105,44 @@ check("an LLM Observability metric (no cluster tag on ml_obs.*)",
 check("a group by anything but span name (a content attribute would print prompts)",
       refused(set_query("sum:x{kube_cluster_name:burritobot-public} by {gen_ai.input.messages}"), "grouped by"))
 check("an LLM Observability or spans event query",
-      refused(lambda d: first_query(d).update(data_source="llm_observability"), "is not metrics"))
+      refused(lambda d: first_query(d).update(data_source="llm_observability"), "is not metrics or logs"))
+check("a filter on a content attribute",
+      refused(set_query("sum:x{kube_cluster_name:burritobot-public,gen_ai.input.messages:*burrito*}"),
+              "content attribute"))
+
+
+def log_query(d):
+    return next(q for _, q in rv.queries(d["dashboard"]) if q["data_source"] == "logs")
+
+
+def set_search(text):
+    return lambda d: log_query(d)["search"].__setitem__("query", text)
+
+
+check("a logs query with no cluster term", refused(set_search("kube_namespace:agent @event:output_scrub"),
+                                                   "not filtered to"))
+check("a logs query on the presenters' cluster",
+      refused(set_search("kube_cluster_name:burritobot-private @event:output_scrub"), "not filtered to"))
+check("a logs query that ORs the cluster term away",
+      refused(set_search("kube_cluster_name:burritobot-public OR @event:output_scrub"), "not filtered to"))
+check("a logs query whose cluster term sits only inside a group",
+      refused(set_search("(kube_cluster_name:burritobot-public OR kube_namespace:agent) @event:output_scrub"),
+              "not filtered to"))
+check("a logs query that also names a second cluster",
+      refused(set_search("kube_cluster_name:burritobot-public (kube_cluster_name:burritobot-private OR @event:x)"),
+              "other than burritobot-public"))
+check("a logs query that excludes a cluster",
+      refused(set_search("kube_cluster_name:burritobot-public -kube_cluster_name:burritobot-private"),
+              "other than burritobot-public"))
+check("a logs query grouped by message text",
+      refused(lambda d: log_query(d)["group_by"].append({"facet": "@tool_input.command"}), "grouped by"))
+check("a logs query grouped by a ticket id",
+      refused(lambda d: log_query(d).__setitem__("group_by", [{"facet": "@ticket_id"}]), "content attribute"))
+check("a logs query that measures an attribute instead of counting",
+      refused(lambda d: log_query(d).__setitem__("compute", {"aggregation": "max", "metric": "@duration"}),
+              "may only count"))
+check("a logs query searching on message text",
+      refused(set_search("kube_cluster_name:burritobot-public @message:*card*"), "content attribute"))
 check("a list widget (does not render on a shared dashboard, and would list traces)",
       refused(lambda d: d["dashboard"]["widgets"][1]["definition"].update(type="list_stream"), "is not one of"))
 check("a template variable",
@@ -128,6 +180,15 @@ res = (REPO / "gitops/ai-layer/resources.yaml").read_text()
 check("guard-proxy's service is burritobot", "service.name=burritobot," in res)
 check("tool spans are execute_tool <tool> (the toplist's wildcard)",
       "execute_tool read_internal_config" in (REPO / "verify/test_trace_walkthrough_view.py").read_text())
+mcp = (REPO / "gitops/ai-layer/workshop-mcp-server.py").read_text()
+events = [n.strip() for grp, one in re.findall(r"@event:(?:\(([^)]*)\)|([a-z_]+))", log_qs[0]["search"]["query"])
+          for n in (grp.split(" OR ") if grp else [one])]
+check("the guard search names the four guard events", len(events) == 4, str(events))
+for name in events:
+    check(f"guard event {name} is one the platform logs", f'"{name}"' in proxy or f'"{name}"' in mcp)
+check("errors read the span_metrics status.code dimension, lower-cased as Datadog stores it",
+      any("status.code:status_code_error" in q for q in qs)
+      and "dimensions" not in (col["connectors"]["span_metrics"] or {}))
 for t in sorted({t for q in qs for t in rv.filter_tags(q) if t.startswith("service:")}):
     check(f"service filter {t} is a service in the bundle", f"service.name={t.split(':', 1)[1]}," in res)
 

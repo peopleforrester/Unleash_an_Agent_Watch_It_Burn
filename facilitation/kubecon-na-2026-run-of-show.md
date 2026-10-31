@@ -464,7 +464,9 @@ burrito chain. Put the QR and `attackme.burritobot.co` on screen and leave them 
   `https://attackme.burritobot.co/display` instead.
 - Put up the second QR, the room's read-only Datadog view (#665): a public
   dashboard of attackme only (`burritobot-public`), with no login, showing chats,
-  the tools the bot ran, the tools by name and the bill. It shows counts, not traces.
+  the tools the bot ran, the tools by name, what the guards stopped, the chats that
+  failed and the bill. It shows counts, not traces or prompts. The guards panel reads
+  zero until a presenter turns a guard on for attackme.
   Its URL is `public_url` in `infra/datadog-room/share.json`, and the QR is
   `facilitation/kubecon-na-2026-room-view-qr.svg`. Neither exists until the Night
   Before step builds the view; without it, show only the attackme QR.
@@ -904,8 +906,13 @@ is merely slow rather than rebuilding:
   the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the
   "Traces" row shows a row. Say on the day which surface is shown.
 - [ ] **The room's Datadog view (#665).** Whitney (or Michael signed in to her org)
-  builds it once with a write application key from her own user:
-  `WIB_ROOM_VIEW_APP_KEY=<key> python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --apply`,
+  builds it once with a write application key from her own user. First the dry run,
+  `python3 infra/datadog-room/room_view.py`, which prints every query and touches nothing; then
+  `WIB_ROOM_VIEW_APP_KEY=<key> python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --apply`.
+  If the share step answers 403, an org admin has turned public sharing off
+  (Organization Settings, Public Sharing) or the key's user lacks `dashboards_public_share`.
+  The link goes where segment 1 puts it, the second QR on screen; it is not added to the
+  /kubecon page. It expires 2026-11-13.
   commits the `share.json` it writes, and renders the QR (`infra/datadog-room/README.md`).
   Then `python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --check`
   must end `OK`. Open the URL on a phone with no Datadog session, send a prompt to

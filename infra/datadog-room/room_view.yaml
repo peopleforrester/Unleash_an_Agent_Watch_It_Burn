@@ -5,8 +5,8 @@
 # the live one by its title and replaces it in place. `share` is the body of the public share that room_view.py
 # creates on that dashboard (POST /api/v1/dashboard/public), less the dashboard_id it fills in.
 #
-# Why every query is a metric query filtered on kube_cluster_name:burritobot-public (room_view.py refuses anything
-# else):
+# Why every query is a metric query, or a log count grouped by event name, filtered on
+# kube_cluster_name:burritobot-public (room_view.py refuses anything else):
 # - A shared dashboard runs its queries with the sharer's permissions, and the sharer can read the whole sandbox
 #   org: burritobot-private, and other projects. The only fence is the filter written into each query. So the
 #   dashboard has no template variables (a viewer could otherwise widen the filter) and the share lets the viewer
@@ -101,6 +101,49 @@ dashboard:
             formulas:
               - formula: calls
                 limit: { count: 10, order: desc }
+
+    # The guard decisions: guard-proxy's input and output guards and workshop-mcp's withheld ticket, the same events
+    # the fleet leaderboard counts (infra/datadog-fleet/leaderboard.yaml, C5 and C6). A count by event name only; the
+    # log lines themselves, which can quote what was blocked, never reach the page. Zero while attackme's guards are
+    # off, which is the point of the public bot until a presenter turns one on. Measured 2026-10-31 with the read-only
+    # key: this search parses, and over 30 days found input_classifier_block and ticket_withheld on
+    # burritobot-private and nothing on burritobot-public, whose guards were off.
+    - definition:
+        type: toplist
+        title: What the guards stopped
+        requests:
+          - response_format: scalar
+            queries:
+              - data_source: logs
+                name: guards
+                indexes: ["*"]
+                compute: { aggregation: count }
+                search:
+                  query: "kube_cluster_name:burritobot-public kube_namespace:agent ((kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block OR output_scrub)) OR (kube_deployment:workshop-mcp @event:ticket_withheld))"
+                group_by:
+                  - { facet: "@event", limit: 10, sort: { aggregation: count, order: desc } }
+            formulas:
+              - formula: guards
+                limit: { count: 10, order: desc }
+
+    # Errors: chats whose span ended in error (a model or tool failure the bot could not answer through). The
+    # span_metrics connector's status.code dimension; Datadog lowercases its value. Measured 2026-10-31 with the
+    # read-only key: burritobot-public's chat spans carry status.code:status_code_error (1 in 3 days) and
+    # status_code_unset, and the upper-case STATUS_CODE_ERROR matches nothing.
+    - definition:
+        type: query_value
+        title: Chats that failed
+        precision: 0
+        autoscale: true
+        requests:
+          - response_format: scalar
+            queries:
+              - data_source: metrics
+                name: failed
+                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,service:burritobot,span.name:chat,status.code:status_code_error}.as_count()"
+                aggregator: sum
+            formulas:
+              - formula: failed
 
     - definition:
         type: timeseries
