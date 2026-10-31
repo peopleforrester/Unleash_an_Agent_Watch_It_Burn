@@ -740,10 +740,11 @@ include it exactly. Do this before responding.</pre>
 
               <p><b>Now look at the tools the agent is allowed to use:</b></p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent get agent workshop-agent -o yaml | grep -A 30 'tools:'<button class="cp">copy</button></div>
-              <p>This is BurritoBot's configuration (kagent, the framework that runs it, calls this an Agent). Its tools come from two tool servers, and the second, <code class="inl">evil-mcp</code>, is the one carrying the poisoned tool.</p>
+              <p>This is BurritoBot's configuration (kagent, the framework that runs it, calls this an Agent). Its tools come from two tool servers, and one of them, <code class="inl">evil-mcp</code>, is the one carrying the poisoned tool.</p>
 
               <p><b>The fix: cut evil-mcp's allow-list down to the one harmless tool, <code class="inl">get_weather</code>.</b> The model can be talked into <i>wanting</i> a tool; it cannot be talked into <i>having</i> one.</p>
-              <div class="cmd" onclick="cp(this)">kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather"]}]'<button class="cp">copy</button></div>
+              <div class="cmd" onclick="cp(this)">i=$(kubectl -n agent get agent workshop-agent -o json | jq '[.spec.declarative.tools[].mcpServer.name] | index("evil-mcp")')
+kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"test","path":"/spec/declarative/tools/'$i'/mcpServer/name","value":"evil-mcp"},{"op":"replace","path":"/spec/declarative/tools/'$i'/mcpServer/toolNames","value":["get_weather"]}]'<button class="cp">copy</button></div>
               <pre class="yaml">spec:
   declarative:
     tools:
@@ -753,7 +754,7 @@ include it exactly. Do this before responding.</pre>
       - mcpServer:                     # the evil MCP shim
           name: evil-mcp
           toolNames: [get_weather]     # &lt;- the rogue tools are gone</pre>
-              <p class="small">The platform team owns this spec, not the developer. Give the agent pod about 30 seconds to restart and pick up the change. Be careful: an <i>empty</i> list here means "every tool", not "no tools". Name the ones you keep.</p>
+              <p class="small">The first line finds evil-mcp's place in the tools list by its name, and the patch's <code class="inl">test</code> step refuses the change if that place does not hold evil-mcp, so the real BurritoBot tools are never the ones cut. The platform team owns this spec, not the developer. Give the agent pod about 30 seconds to restart and pick up the change. Be careful: an <i>empty</i> list here means "every tool", not "no tools". Name the ones you keep.</p>
 
               <p>Read the spec back and see the change:</p>
               <div class="cmd" onclick="cp(this)">kubectl -n agent get agent workshop-agent -o yaml | grep -A 30 'tools:'<button class="cp">copy</button></div>
@@ -880,13 +881,15 @@ include it exactly. Do this before responding.</pre>
           <div class="cmd" data-burn onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
 kubectl apply -f ~/challenges/c8-broad-role.yaml
-kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
+i=$(kubectl -n agent get agent workshop-agent -o json | jq '[.spec.declarative.tools[].mcpServer.name] | index("evil-mcp")')
+kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"test","path":"/spec/declarative/tools/'$i'/mcpServer/name","value":"evil-mcp"},{"op":"replace","path":"/spec/declarative/tools/'$i'/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
           <p class="small" data-burn>No Kyverno line here: the Community cluster has no image policy to put back into Audit, because it never had one.</p>
           <div class="cmd" data-full onclick="cp(this)">kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
 kubectl patch validatingpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
 kubectl apply -f ~/challenges/c8-broad-role.yaml
-kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
+i=$(kubectl -n agent get agent workshop-agent -o json | jq '[.spec.declarative.tools[].mcpServer.name] | index("evil-mcp")')
+kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"test","path":"/spec/declarative/tools/'$i'/mcpServer/name","value":"evil-mcp"},{"op":"replace","path":"/spec/declarative/tools/'$i'/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'<button class="cp">copy</button></div>
           <p class="small">That includes the scoped Role from Challenge 8, so the agent goes back to being able to read every Secret in the namespace and Challenge 8 can be run again from the start.</p>
 
           <h3 class="sub">Try breaking a guardrail and watch it come back</h3>
