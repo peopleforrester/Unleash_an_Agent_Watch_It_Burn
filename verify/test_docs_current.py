@@ -68,7 +68,9 @@ def tracked_markdown() -> list[pathlib.Path]:
     out = []
     for p in sorted(REPO.rglob("*.md")):
         rel = p.relative_to(REPO).as_posix()
-        if rel.startswith((".git/", ".venv/")) or "/.feedback/" in f"/{rel}" or "/node_modules/" in f"/{rel}":
+        # .claude/worktrees/ holds other checkouts of this repo (git worktrees), each read in its own run.
+        if rel.startswith((".git/", ".venv/", ".claude/worktrees/")) or "/.feedback/" in f"/{rel}" \
+                or "/node_modules/" in f"/{rel}":
             continue
         if rel in EXEMPT or rel.startswith(TRANSCRIPTS):
             continue
