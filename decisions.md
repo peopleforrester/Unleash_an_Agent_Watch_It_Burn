@@ -6148,3 +6148,26 @@ changed.
 
 **Not yet run on a cluster.** Nothing new is owed by this entry. #664's owed steps (the `build.sh joker` push and the
 `curl … | grep 'HA HA HA'` check) still stand as that entry lists them.
+## 2026-10-31 · #672 · The host fix is in: every dispatched run user can write the shared browsers directory
+
+Hecaton run 13263 checked the host fix that the 2026-10-29 #672 entry escalated. The two earlier drafts,
+`origin/agent/672-10518` and `origin/agent/672-10529`, are both already in staging, so there was nothing to redo.
+
+- **The group now holds every run user.** `getent group hecaton-tools` lists each `hecaton-run-` and `hecaton-sN-`
+  user of the performantpro, gmail and certkraken pools: slots 1 to 12 and the tier slots 90, 91 and 92. The
+  certkraken users the earlier entry found missing are in it. The only users outside it are
+  `hecaton-s0-claude-performantpro` and `hecaton-s0-claude-gmail`. Slot 0 is a pool's session user, which runs the
+  usage probe, the canary and insights sessions and never a dispatched run (hecaton's `deploy/netcup/setup.sh`,
+  `all_sessions`). So no dispatched run is left out.
+- **The step that failed now works.** As `hecaton-s6-claude-performantpro`, `mkdir` and `rmdir` of a probe directory
+  in `/var/lib/hecaton/ms-playwright` both succeeded. `uv run --no-project --with playwright==1.64.1 playwright
+  install chromium`, which run 10488 saw fail on `__dirlock`, exited 0. `bash verify/run-e2e-tools.sh` was green,
+  `test_mobile_titles_e2e.py` included.
+- **Nothing in this repo changes.** `verify/playwright_browsers.py` still refuses with the directory's owner, group
+  and mode when it is not writable, with no fallback directory.
+- **The previous attempt, run 13263's first try,** stopped on `podman store in
+  /var/lib/hecaton/pools/claude-performantpro-3: cannot re-exec process to join the existing user namespace`. That
+  is the slot-3 pool's container store on the host. It is not this repo's code: nothing under `verify/` calls
+  podman. This retry ran in slot 6.
+
+**Not yet run on a cluster:** nothing is owed. Nothing changes in this repo besides this record.
