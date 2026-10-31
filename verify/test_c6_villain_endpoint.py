@@ -4,7 +4,7 @@
 naming the Deployment and returning an endpoint the attendee can open, so they see they did it. #640 built the naming.
 The endpoint takes five pieces that live in five files, and any one of them out of step leaves a dead link:
 
-  1. images/villains/build.sh builds docker.io/peopleforrester/joker:latest, the image the ticket asks for, from
+  1. images/villains/build.sh builds ghcr.io/peopleforrester/villains/joker:busybox-1.38.0, the ticket's image, from
      joker-web/: busybox httpd serving www/ on PORT=8080 beside the old log loop.
   2. gitops/ai-layer/resources.yaml ships the maintenance-shell Service, port 80 to 8080, selecting
      burritobot.co/workload=maintenance-shell.
@@ -115,9 +115,19 @@ def c6_deployment(labels: dict | None = None, name: str | None = None) -> dict:
 
 
 print("== 1. the image the ticket names is the one build.sh builds to serve a page ==")
-org = re.search(r'^ORG="([^"]+)"', BUILD, re.M)
-check("the ticket asks for build.sh's $ORG/joker:latest", bool(org) and site.C6_IMAGE == f"{org.group(1)}/joker:latest",
-      site.C6_IMAGE)
+ref = re.search(r'^JOKER_REF="([^"]+)"', BUILD, re.M)
+check("the ticket asks for build.sh's $JOKER_REF", bool(ref) and site.C6_IMAGE == ref.group(1), site.C6_IMAGE)
+check("the Joker is built for GHCR, never Docker Hub (#671)", bool(ref) and ref.group(1).startswith("ghcr.io/")
+      and '-t "$ORG/joker' not in BUILD)
+_base_ver = re.search(r"busybox release in JOKER_BASE \(([0-9.]+)", BUILD)
+check("the Joker's tag is the busybox release inside it", bool(ref and _base_ver)
+      and ref.group(1).endswith(f":busybox-{_base_ver.group(1)}"), ref.group(1) if ref else "")
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import registry_allowlist  # noqa: E402
+check("restrict-image-registries refuses the ticket's image, so the private cluster's second tier holds (#671)",
+      not registry_allowlist.allowed(site.C6_IMAGE) and "/peopleforrester/villains/" in registry_allowlist.refused_paths())
+check("and still admits the platform's own ghcr.io images",
+      registry_allowlist.allowed("ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:" + "0" * 64))
 v = re.search(r"^declare -A V=\((.*?)^\)", BUILD, re.M | re.S)
 check("the Joker is no longer a plain log loop in the V roster", bool(v) and "[joker]=" not in v.group(1))
 check("build_joker_web runs, after the loops", BUILD.rstrip().endswith("build_joker_web"))
@@ -147,14 +157,14 @@ def tags(calls: list[list[str]]) -> list[str]:
 proc, calls, members = run_build("joker")
 check("`build.sh joker` pushes only the Joker: crane append then mutate, both to $ORG/joker:latest",
       proc.returncode == 0 and [c[0] for c in calls] == ["append", "mutate"]
-      and set(tags(calls)) == {f"{org.group(1)}/joker:latest"}, f"rc={proc.returncode} {calls} {proc.stderr}")
+      and set(tags(calls)) == {ref.group(1)}, f"rc={proc.returncode} {calls} {proc.stderr}")
 check("the Joker's layer holds start.sh and the page under villain/",
       {"villain/start.sh", "villain/www/index.html"} <= set(members), str(members))
 proc, calls, _ = run_build()
 roster = sorted(re.findall(r"^\s+\[([a-z-]+)\]=", BUILD, re.M))
 check("with no names build.sh still pushes the whole roster, the Joker last",
       proc.returncode == 0 and sorted(t.split("/")[-1].split(":")[0] for t in tags(calls)[:-2]) == roster
-      and tags(calls)[-2:] == [f"{org.group(1)}/joker:latest"] * 2, f"rc={proc.returncode} {tags(calls)}")
+      and tags(calls)[-2:] == [ref.group(1)] * 2, f"rc={proc.returncode} {tags(calls)}")
 proc, calls, _ = run_build("joker", "jokr")
 check("a name build.sh does not know fails before anything is pushed",
       proc.returncode != 0 and calls == [] and "no villain named 'jokr'" in proc.stderr,
@@ -166,7 +176,7 @@ check("joker-web goes in as a layer under /villain",
 check("the layer is amd64, the nodes' architecture",
       "--platform linux/amd64" in BUILD
       and 'ami_type       = "AL2023_x86_64_STANDARD"' in (REPO / "infra/terraform/aws/cluster/main.tf").read_text())
-mut = re.search(r'"\$CR" mutate "\$ORG/joker:latest" (.*) -t "\$ORG/joker:latest"', BUILD)
+mut = re.search(r'"\$CR" mutate "\$JOKER_REF" (.*) -t "\$JOKER_REF"', BUILD)
 check("the entrypoint runs start.sh with the image's own sh", bool(mut) and '--entrypoint "/bin/sh,/villain/start.sh"' in mut.group(1))
 port = re.search(r"--env PORT=(\d+)", mut.group(1) if mut else "")
 check("the image sets PORT, which start.sh requires", port is not None and ': "${PORT:?' in START)

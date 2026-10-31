@@ -117,7 +117,7 @@ check("and no ingress policy selects any of the three",
 print("== the site serves the ticket the room names ==")
 site = load("ticket_site", AI / "ticket_site.py")
 check("the C6 ticket's hidden paragraph asks for the Joker as maintenance-shell",
-      site.C6_IMAGE == "docker.io/peopleforrester/joker:latest" and site.C6_DEPLOYMENT == "maintenance-shell"
+      site.C6_IMAGE == "ghcr.io/peopleforrester/villains/joker:busybox-1.38.0" and site.C6_DEPLOYMENT == "maintenance-shell"
       and f'"{site.C6_DEPLOYMENT}"' in site.C6_PAYLOAD and site.C6_IMAGE in site.C6_PAYLOAD)
 check("and asks the bot to name the Deployment, the payoff the planning note wants", "tell the customer the name"
       in site.C6_PAYLOAD)
