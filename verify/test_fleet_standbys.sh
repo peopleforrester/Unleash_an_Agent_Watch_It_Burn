@@ -108,7 +108,11 @@ check "a community standby plans imds_hop_limit=2 and role=community" \
   '[[ "${out}" == *"-var imds_hop_limit=2"* && "${out}" == *"-var role=community"* ]]'
 check "under attackme's hostname, in us-east-2" \
   '[[ "${out}" == *"-var hostname=attackme.agenticburn.com"* && "${out}" == *"-var region=us-east-2"* ]]'
+check "its node is planned in its backups.tsv zone, a" '[[ "${out}" == *"-var node_subnet_ids=[<lab subnet a>]"* ]]'
+out="$(plan watch-it-burn-community us-west-2)"
+check "a roster cluster plans no node_subnet_ids, so the module keeps every subnet" '[[ "${out}" != *node_subnet_ids* ]]'
 out="$(plan watch-it-burn-private-b02 us-east-1)"
+check "a private standby's node is planned in zone b" '[[ "${out}" == *"-var node_subnet_ids=[<lab subnet b>]"* ]]'
 check "a private standby plans imds_hop_limit=1 and role=admin, in us-east-1" \
   '[[ "${out}" == *"-var imds_hop_limit=1"* && "${out}" == *"-var role=admin"* && "${out}" == *"-var region=us-east-1"* ]]'
 

@@ -63,6 +63,47 @@ for role, pool in pools.items():
           all(x != y for x, y in zip(regions, regions[1:])), str(regions))
     check(f"{role}: the first standby is outside us-west-2, where the roster cluster is",
           pool[1].region != "us-west-2", pool[1].region)
+print("== and across zones: the standbys up at any moment cover both lab zones of every region ==")
+check("every standby names zone a or b", all(c.zone in ("a", "b") for c in pub + priv),
+      str([(c.name, c.zone) for c in pub + priv if c.zone not in ("a", "b")]))
+for label, up_now in (("the night before", [c for c in pub + priv if c.wave == "night-before"]),
+                      ("from six hours out", pub + priv)):
+    for region in sorted({c.region for c in pub + priv}):
+        zs = {c.zone for c in up_now if c.region == region}
+        check(f"{label}: {region} has standbys in both zones", zs == {"a", "b"}, str(zs))
+for region in sorted({c.region for c in pub}):
+    zs = [c.zone for c in pub if c.region == region]
+    check(f"public standbys in {region} alternate zones down the pool", all(x != y for x, y in zip(zs, zs[1:])), str(zs))
+T0 = pathlib.Path(tempfile.mkdtemp(prefix=".backups-zone.", dir=REPO))
+(T0 / "b.tsv").write_text("watch-it-burn-community-b01|community|us-east-2|night-before|c\n")
+try:
+    b.load_pools(FLEET_DIR / "roster.tsv", T0 / "b.tsv", "us-west-2")
+    check("a zone other than a or b is refused", False)
+except SystemExit as e:
+    check("a zone other than a or b is refused", "zone 'c'" in str(e), str(e))
+(T0 / "b.tsv").write_text("watch-it-burn-community-b01|community|us-east-2|night-before\n")
+try:
+    b.load_pools(FLEET_DIR / "roster.tsv", T0 / "b.tsv", "us-west-2")
+    check("and so is a row with no zone", False)
+except SystemExit as e:
+    check("and so is a row with no zone", "zone ''" in str(e), str(e))
+import shutil as _sh  # noqa: E402
+_sh.rmtree(T0, ignore_errors=True)
+tf = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
+check("the cluster module takes node_subnet_ids, null by default (every private subnet)",
+      'variable "node_subnet_ids"' in tf and "default     = null" in tf.split('variable "node_subnet_ids"')[1][:200])
+check("and the node group places its node in them",
+      "subnet_ids = var.node_subnet_ids" in " ".join(tf.split("eks_managed_node_groups = {")[1][:800].split()))
+check("fleet.sh reads a standby's zone from backups.tsv", fleet("standby_zone", pub[3].name) == pub[3].zone == "b")
+check("a roster cluster has no zone", fleet("standby_zone", "watch-it-burn-community") == "")
+SUBS = '\'["subnet-a1","subnet-b2"]\''
+check("zone a is the lab VPC's first private subnet", fleet("node_subnets_for", pub[0].name, SUBS) == '["subnet-a1"]')
+check("zone b is its second", fleet("node_subnets_for", priv[0].name, SUBS) == '["subnet-b2"]')
+check("a roster cluster gets nothing, so the module keeps every subnet",
+      fleet("node_subnets_for", "watch-it-burn-community", SUBS) == "")
+check("a lab VPC with no subnet for the zone fails rather than landing elsewhere",
+      fleet("node_subnets_for", priv[0].name, "'[\"subnet-a1\"]' || echo refused") == "refused")
+
 names = [c.name for p in pools.values() for c in p]
 check("every name is unique", len(names) == len(set(names)))
 check("every name is under 30 characters (the IAM name_prefix cap)", all(len(n) < 30 for n in names),
@@ -259,6 +300,53 @@ check("a drill on the roster cluster promotes b01 with every console healthy",
       routed("attackme.agenticburn.com") == "lb-b01-community:443")
 check("and leaves the private bot alone", routed("burritobot-private.agenticburn.com") == "lb-private:443")
 
+print("== a region outage does not stall or blind the watcher ==")
+import time as _t  # noqa: E402
+w = watcher()
+w.lb_of = lambda c: (_t.sleep(0.4), LBS.get(c.name))[1]
+t0 = _t.monotonic(); w.refresh(); took = _t.monotonic() - t0
+check("every console LB is read at once, not one after another (17 slow lookups in well under 17 x 0.4 s)",
+      took < 2.5, f"{took:.1f}s")
+w.lb_of = lambda c: None if c.region == "us-east-2" else LBS.get(c.name)
+w.refresh()
+check("a lookup that fails keeps the LB already known", w.lbs["watch-it-burn-community-b01"] == LBS["watch-it-burn-community-b01"])
+
+
+def boom(c):
+    if c.name == "watch-it-burn-community-b02":
+        raise RuntimeError("EKS API unreachable")
+    return LBS.get(c.name)
+
+
+w.lb_of = boom
+w.refresh()
+check("a lookup that raises fails only its own cluster", w.lbs["watch-it-burn-community-b03"] == LBS["watch-it-burn-community-b03"])
+w2 = b.Watcher(pools, HOSTS, b.Router(apex, retries=1, backoff=0), T / "promoted.tsv", T / "events.jsonl",
+               lb_of=lambda c: None, check=fake_check)
+w2.refresh()
+check("a cluster never seen has no LB, so it is never a candidate", w2.lbs["watch-it-burn-community-b01"] is None)
+
+w = watcher()
+w._check = lambda lb, host, chat: (_ for _ in ()).throw(RuntimeError("socket exploded"))
+try:
+    w.tick(); survived = True
+except Exception:  # noqa: BLE001
+    survived = False
+check("a tick that hits an unexpected error logs it and the watcher carries on", survived)
+
+w = watcher()
+(apex / "scripts/reload-routes.sh").write_text("#!/usr/bin/env bash\nsleep 5\n")
+w.router.timeout = 0.5
+down.add("lb-primary")
+for _ in range(3):
+    w.tick()
+check("a reload that hangs counts as refused: the table is put back", (apex / "routes.map").read_text() == TABLE)
+check("and promoted.tsv is not written", not (T / "promoted.tsv").exists())
+(apex / "scripts/reload-routes.sh").write_text(
+    "#!/usr/bin/env bash\n"
+    f'[[ -f "{T}/reload_fails" ]] && exit 1\n'
+    f'cp "$1" "{T}/live.map"; echo "$1" >>"{reload_log}"\n')
+
 print("== the self-check, against a local console ==")
 
 
@@ -330,15 +418,25 @@ start = dt.datetime(2030, 3, 5, 18, 0, tzinfo=dt.timezone.utc)   # a sample star
 lines = b.schedule_lines(start, dt.timezone.utc, pathlib.Path("/fleet"))
 by = {l.split(b.CRON_TAG)[1].split()[0]: l for l in lines[1:]}
 check("one line per wave, the watcher and the teardown", sorted(by) == ["down", "night-before", "six-hours", "watch"])
-check("night-before stands up 18 hours out", by["night-before"].startswith("0 0 5 3 * /fleet/backups.py up night-before"))
-check("six-hours stands up 6 hours out", by["six-hours"].startswith("0 12 5 3 * /fleet/backups.py up six-hours"))
-check("the watcher starts an hour after the night-before wave and stops 90 minutes after the start",
-      by["watch"].startswith("0 1 5 3 * /fleet/backups.py watch --until 2030-03-05T19:30:00Z"))
+check("night-before stands up 18 hours out", by["night-before"].startswith("0 0 5 3 * mkdir -p /fleet/logs; /fleet/backups.py up night-before"))
+check("six-hours stands up 6 hours out", by["six-hours"].startswith("0 12 5 3 * mkdir -p /fleet/logs; /fleet/backups.py up six-hours"))
+check("the watcher runs from an hour after the night-before wave until 90 minutes after the start",
+      "/fleet/backups.py watch --from 2030-03-05T01:00:00Z --until 2030-03-05T19:30:00Z" in by["watch"], by["watch"])
+check("and cron starts it again every 5 minutes, so a watcher that died is back with nobody acting",
+      by["watch"].startswith("*/5 * * * * mkdir -p /fleet/logs; /fleet/backups.py watch "), by["watch"])
 check("the standbys come down two hours after the start, and the lines remove themselves",
-      by["down"].startswith("0 20 5 3 * /fleet/backups.py down all --apply") and "unschedule" in by["down"])
+      by["down"].startswith("0 20 5 3 * mkdir -p /fleet/logs; /fleet/backups.py down all --apply") and "unschedule" in by["down"])
 mt = b.schedule_lines(start, zoneinfo.ZoneInfo("America/Denver"), pathlib.Path("/fleet"))
-check("in the cron host's own time zone", any(l.startswith("0 17 4 3 * /fleet/backups.py up night-before") for l in mt))
+check("in the cron host's own time zone", any(l.startswith("0 17 4 3 * mkdir -p /fleet/logs; /fleet/backups.py up night-before") for l in mt))
 check("every line is tagged so unschedule finds it", all(b.CRON_TAG in l for l in lines))
+# Run each line's command the way cron does, with sh, on a checkout that has no logs directory yet.
+fresh = T / "fresh"; fresh.mkdir()
+(fresh / "backups.py").write_text(f'#!/bin/sh\necho "$@" >>"{fresh}/ran"\n'); os.chmod(fresh / "backups.py", 0o755)
+for l in b.schedule_lines(start, dt.timezone.utc, fresh)[1:]:
+    subprocess.run(["sh", "-c", " ".join(l.split()[5:])], capture_output=True, text=True, timeout=30)
+ran = (fresh / "ran").read_text().splitlines() if (fresh / "ran").exists() else []
+check("on a fresh checkout with no logs directory, cron's shell still runs every line",
+      [r.split()[0] for r in ran] == ["up", "up", "watch", "down", "unschedule"] and (fresh / "logs").is_dir(), str(ran))
 try:
     b.parse_when("2030-03-05T18:00:00")
     check("a start with no UTC offset is refused", False)
@@ -372,7 +470,50 @@ downs = [l for l in r.stdout.splitlines() if l.endswith("instructors down all")]
 check("down all destroys every standby, region by region", len(downs) == 3 and
       sum(l.count("|") // 6 for l in downs) == 15, r.stdout)
 check("and without --apply it is fleet.sh's dry run", all("WIB_APPLY" not in l for l in downs))
-check("a dry run writes no roster file", not any(p.name.startswith("backups-") for p in pathlib.Path(tempfile.gettempdir()).iterdir()))
+print("== preflight before any spend, in each region ==")
+r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "up", "six-hours", "--dry-run"],
+                   capture_output=True, text=True, timeout=120)
+pre = [l for l in r.stdout.splitlines() if " preflight " in l]
+check("up runs fleet.sh preflight once per region, for the default account alone",
+      len(pre) == 3 and all("WIB_ATTENDEE_ACCOUNTS=accen-dev" in l for l in pre), r.stdout)
+check("sized to that region's clusters in the wave (three each for six-hours)",
+      all(l.endswith("fleet.sh preflight 3") for l in pre), str(pre))
+lines_ = r.stdout.splitlines()
+check("and each preflight comes before its region's build",
+      all(lines_.index(p) < lines_.index(next(l for l in lines_ if l.endswith("instructors up all")
+                                              and l.split("WIB_REGION=")[1].split()[0] == p.split("WIB_REGION=")[1].split()[0]))
+          for p in pre))
+r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "up", "six-hours", "--dry-run", "--no-preflight"],
+                   capture_output=True, text=True, timeout=120)
+check("--no-preflight leaves it out", " preflight " not in r.stdout)
+r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "preflight", "night-before", "--dry-run"],
+                   capture_output=True, text=True, timeout=120)
+check("backups.py preflight night-before: two clusters in each of three regions",
+      sorted(l.split("WIB_REGION=")[1].split()[0] for l in r.stdout.splitlines() if l.endswith("preflight 2"))
+      == ["us-east-1", "us-east-2", "us-west-2"], r.stdout + r.stderr)
+
+print("== the teardown keeps a promoted standby and destroys the rest ==")
+prom = T / "promoted-down.tsv"
+prom.write_text("community\twatch-it-burn-community-b01\n")
+r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "down", "all", "--dry-run"],
+                   capture_output=True, text=True, timeout=120, env={**os.environ, "WIB_PROMOTED_FILE": str(prom)})
+downs = [l for l in r.stdout.splitlines() if l.endswith("instructors down all")]
+check("the other 14 still come down", sum(l.count("|") // 6 for l in downs) == 14, r.stdout)
+check("the holder is not among them", "watch-it-burn-community-b01|" not in r.stdout)
+check("and the run says so and fails, so the cron log shows it",
+      r.returncode == 1 and "KEEPING watch-it-burn-community-b01" in r.stderr, r.stderr[-400:])
+
+print("== cron's restarts of the watcher outside its window exit at once ==")
+far = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=30)).strftime("%Y-%m-%dT%H:%M:%SZ")
+gone = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=1)).strftime("%Y-%m-%dT%H:%M:%SZ")
+r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "watch", "--from", far, "--until", far],
+                   capture_output=True, text=True, timeout=120)
+check("before --from it exits 0 and does nothing", r.returncode == 0 and "watch:" not in r.stderr, r.stderr[-300:])
+r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "watch", "--until", gone],
+                   capture_output=True, text=True, timeout=120)
+check("after --until it exits 0 and does nothing", r.returncode == 0 and "watch:" not in r.stderr, r.stderr[-300:])
+
+check("a dry run writes no roster file",not any(p.name.startswith("backups-") for p in pathlib.Path(tempfile.gettempdir()).iterdir()))
 
 import shutil  # noqa: E402
 shutil.rmtree(T, ignore_errors=True)

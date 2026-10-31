@@ -321,7 +321,14 @@ them and moves a hostname when its cluster fails:
   prints the crontab lines (the start is conference-knowledge's `kubecon-na-2026`
   entry). The 3 private and 3 public standbys stand up 18 hours out, the other 9
   public ones 6 hours out. The watcher runs from 17 hours out until 90 minutes after
-  the start, and every standby comes down two hours after the start.
+  the start; cron starts it again every 5 minutes in that window, so one that died is
+  back within 5 minutes with nobody acting. Every standby comes down two hours after
+  the start, except one that holds a hostname, which is kept and named in
+  `infra/terraform/fleet/logs/backups-down.log`.
+- **Zones and regions.** Each region holds standbys in both of its lab zones (the
+  `zone` column), and consecutive standbys in promotion order are never in the same
+  region. Each wave runs `fleet.sh preflight` in a region before building there, and
+  skips a region that fails it.
 - **Self-check.** Run on each console's own load balancer: `/healthz`, the
   storefront, `/controls`, and a chat that carries the probe marker, so it never
   reaches the wall. `backups.py check` runs it on demand.
@@ -338,6 +345,84 @@ them and moves a hostname when its cluster fails:
   page exist only where the room landed them, so a C6 already shown on the old
   cluster has to land again before `maintenance-shell-` answers. A presenter's open
   terminal still points at the old cluster, so reopen it from the hostname.
+
+#### Bring-up and teardown commands
+
+Run from the repo root, on the host whose crontab will carry the schedule (it needs
+the `accen-dev` profile in `~/.aws` and the apex checkout `fleet.sh routes` uses).
+None of these commands has been run yet. The KubeCon start is 2026-11-12 13:50 MST,
+which is `2026-11-12T20:50:00Z` (conference-knowledge `kubecon-na-2026`).
+
+1. **Lab VPCs in the two new regions** (us-west-2 already has one). Do this any time
+   before the night-before wave; each one bills about $0.07 an hour while idle.
+
+   ```
+   . infra/terraform/fleet/event.sh
+   terraform -chdir=infra/terraform/aws/network init
+   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-2.tfstate -var profile=accen-dev -var region=us-east-2 -var event="${WIB_EVENT}"
+   AWS_PROFILE=accen-dev terraform -chdir=infra/terraform/aws/network apply -state=states/accen-dev.us-east-1.tfstate -var profile=accen-dev -var region=us-east-1 -var event="${WIB_EVENT}"
+   ```
+
+   `event.sh` sets `WIB_EVENT` to `kubecon-na-2026`, the tag every fleet resource
+   carries.
+
+2. **Preflight, read-only:** `infra/terraform/fleet/backups.py preflight all`.
+   Then `infra/terraform/fleet/backups.py up night-before --dry-run` shows each
+   region's build.
+3. **Rehearsal, once** (the done-when of #643). Build both waves by hand, run the
+   drill, take them down:
+
+   ```
+   infra/terraform/fleet/backups.py up night-before
+   infra/terraform/fleet/backups.py up six-hours
+   python3 verify/test_backups_promotion_live.py
+   infra/terraform/fleet/backups.py down all --apply
+   ```
+
+   The drill moves attackme and burritobot-private for a few minutes each and fails
+   them back, so run it on a day with no session. It needs no scheduled watcher
+   running: do it before step 4, or after `backups.py unschedule`.
+4. **Install the KubeCon schedule:**
+   `(crontab -l 2>/dev/null; infra/terraform/fleet/backups.py schedule 2026-11-12T20:50:00Z) | crontab -`,
+   then `crontab -l | grep wib-backups` shows four lines. In UTC: night-before wave
+   02:50, six-hours wave 14:50, watcher 03:50 to 22:20, teardown 22:50, all on
+   2026-11-12.
+5. **During:** `backups.py status` (who holds each hostname), `backups.py check`
+   (every console's self-check), and `infra/terraform/fleet/logs/failover.jsonl` (every promotion).
+6. **Teardown.** The 22:50 line runs `backups.py down all --apply` and removes the
+   schedule. If it kept a promoted standby, fail back and run it again:
+   `backups.py promote community watch-it-burn-community` (or
+   `promote admin watch-it-burn-private`), then `backups.py down all --apply`. Then
+   the two lab VPCs, and the audit that each region is empty:
+
+   ```
+   WIB_REGION=us-east-2 WIB_APPLY=1 infra/terraform/fleet/fleet.sh down-infra accen-dev
+   WIB_REGION=us-east-1 WIB_APPLY=1 infra/terraform/fleet/fleet.sh down-infra accen-dev
+   WIB_REGION=us-east-2 WIB_ATTENDEE_ACCOUNTS=accen-dev infra/terraform/fleet/fleet.sh audit-zero
+   WIB_REGION=us-east-1 WIB_ATTENDEE_ACCOUNTS=accen-dev infra/terraform/fleet/fleet.sh audit-zero
+   ```
+
+#### What the standbys cost
+
+On-demand list prices, the same in us-east-1, us-east-2 and us-west-2, read
+2026-10-31:
+
+| Item | Per hour | Source |
+|---|---|---|
+| EKS control plane, standard support | $0.10 | aws.amazon.com/eks/pricing |
+| One t3.2xlarge node, Linux | $0.3328 | AWS public price list (`ec2-ondemand-without-sec-sel`, published 2026-10-29) |
+| 100 GiB gp3 root volume ($0.08 a GB-month) | $0.011 | AWS public price list (`ebs.json`) |
+| Console NLB, idle, plus its two public IPv4 addresses | $0.0225 + $0.01 | aws.amazon.com/elasticloadbalancing/pricing, aws.amazon.com/vpc/pricing |
+| **One standby** | **about $0.48** | |
+| Lab VPC in a new region: NAT gateway, its address, the Bedrock endpoint in two zones | $0.045 + $0.005 + $0.02 = $0.07 | aws.amazon.com/vpc/pricing, aws.amazon.com/privatelink/pricing |
+
+So 6 standbys the night before cost about $2.90 an hour, and all 15 from six hours
+out about $7.20 an hour, plus $0.14 for the two new lab VPCs. For KubeCon that is
+about 12 hours at 6 and 8 hours at 15: roughly $95, with the VPCs. The rehearsal,
+15 standbys for about 3 hours, is roughly $22. Not included: NAT and endpoint data
+($0.045 and $0.01 a GB), which image pulls drive at build time; T3 surplus CPU
+credits if a standby runs hot (t3 launches Unlimited); and the self-check's
+Bedrock calls. Those are estimates, not measured.
 
 Terminal login on the private cluster is `sprouts` / `sprouts`, the presenter login
 every roster cluster gets (`agentic` is the attendee pool's). Read it off the
