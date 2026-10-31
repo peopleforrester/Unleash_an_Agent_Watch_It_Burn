@@ -32,7 +32,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import PROFILE_APP, REPO, collector_config  # noqa: E402
+from collector_render import PROFILE_APP, REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -115,7 +115,7 @@ def run(profile: str, tmp: pathlib.Path) -> tuple[dict, set, set]:
     }
     cf = tmp / f"{profile}-cfg.yaml"
     cf.write_text(yaml.safe_dump(cfg), encoding="utf-8")
-    proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}"], env=ENV, stdout=subprocess.DEVNULL,
+    proc = subprocess.Popen([str(OTELCOL), f"--config=file:{cf}", *feature_gate_args(profile)], env=ENV, stdout=subprocess.DEVNULL,
                             stderr=subprocess.PIPE, text=True)
 
     def post(path: str, body: dict) -> int:

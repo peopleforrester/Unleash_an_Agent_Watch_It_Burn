@@ -43,7 +43,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import REPO, collector_config  # noqa: E402
+from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -219,11 +219,11 @@ def run_collector(profile: str) -> tuple[list[dict], str]:
         cfg_file = pathlib.Path(d) / "config.yaml"
         cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
         env = {**os.environ, "WIB_CLUSTER_NAME": f"burritobot-{profile}"}
-        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}"], capture_output=True, text=True,
+        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *feature_gate_args(profile)], capture_output=True, text=True,
                              env=env)
         check(f"the collector accepts the {profile} traces processors", val.returncode == 0, val.stderr)
         log = (pathlib.Path(d) / "collector.log").open("w")
-        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}"], stdout=log, stderr=subprocess.STDOUT,
+        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log, stderr=subprocess.STDOUT,
                                 env=env)
         got: list[dict] = []
         try:

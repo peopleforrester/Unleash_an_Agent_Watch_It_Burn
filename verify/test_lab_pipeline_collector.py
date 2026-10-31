@@ -76,7 +76,9 @@ with tempfile.TemporaryDirectory() as tmp:
         f = tmp / "cfg.yaml"
         f.write_text(yaml.safe_dump(collector_render.collector_config(profile, secret, admin)), encoding="utf-8")
         env = ENV if admin else {k: v for k, v in ENV.items() if k != "DD_ADMIN_API_KEY"}
-        r = subprocess.run([binary, "validate", f"--config=file:{f}"], capture_output=True, text=True, env=env, timeout=60)
+        # The chart's --feature-gates too: transform/adk_model_content needs the lambda gate (#721).
+        r = subprocess.run([binary, "validate", f"--config=file:{f}", *collector_render.feature_gate_args(profile)],
+                           capture_output=True, text=True, env=env, timeout=60)
         check(f"{label} validates", r.returncode == 0)
         if r.returncode:
             print("        " + (r.stderr or r.stdout).strip()[-400:])
