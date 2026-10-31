@@ -6687,3 +6687,33 @@ segment-6 close still runs `finale-cap-on`/`cost-watch`/`finale-cap-off`), `veri
 community cluster, run `steal-node-creds.sh` and confirm a node-role ARN; run it against a fresh attendee
 cluster and confirm `IMDS: BLOCKED`). This issue adds only the stage placement, so it owes no new live
 check of its own.
+
+## 2026-10-31 · #655 · question 961: build one attendee cluster now for the live labctl import check
+
+**Answer:** Build one attendee cluster now. Decided by Michael (overridden in the web view; the run had recommended
+waiting for the next workshop build).
+
+**What it changes.** The live half of #655 no longer waits for a booked workshop. It runs on one attendee cluster built
+for it, in accen-dev, where the roster's lab VPC is already applied. A dispatched run still brings up no cluster
+(CLAUDE.md, "Dispatched runs", point 1), so the bring-up, the check and the teardown are owed to a session with the
+fleet's AWS profiles, labctl on PATH, `DATABASE_URL` at lab-platform's database and `USER` set. The same cluster also
+serves #532's live `ingest pool` run, which waits only on an attendee pool (the 2026-10-31 #532 entry above), so both
+run before the teardown. Nothing in fleet.sh changes.
+
+**The run, in order.**
+
+1. `labctl create-event agenticburn burn@2.1.0 <event> <attendance> <hours>`, then `export WIB_EVENT=<event>` in that
+   session's shell only.
+2. `infra/terraform/fleet/fleet.sh up watch-it-burn-attendee-001`. With labctl and `DATABASE_URL` set, `up` ingests
+   the cluster itself; it must log `ingested: watch-it-burn-attendee-001` and no `ingest:` failure.
+3. `infra/terraform/fleet/fleet.sh ingest watch-it-burn-attendee-001` and `infra/terraform/fleet/fleet.sh
+   ingest-instructors`. `labctl status agenticburn <event>` must count the attendee as ready and each roster cluster as
+   held.
+4. Claim once on `/c/agenticburn/<event>`, then rerun `fleet.sh ingest watch-it-burn-attendee-001`: it must log
+   `0 added` and `labctl pool --customer agenticburn --event <event>` must still show the claim.
+5. #532's live run on the same pool: `fleet.sh reconcile-pool`, `bash verify/fleet-hygiene.sh`, then `fleet.sh ingest
+   pool`, as the #532 entry above says.
+6. `infra/terraform/fleet/fleet.sh down watch-it-burn-attendee-001`, which removes its pool row. Not `down all`: that
+   also destroys accen-dev's lab VPC, which the two roster clusters run on.
+
+**Not yet run on a cluster:** all six steps. The result goes on #655 (and #532) with the labctl status output.
