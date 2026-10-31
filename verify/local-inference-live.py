@@ -8,8 +8,9 @@ vLLM, so this would fail there by design. It is run by hand against the one loca
 
 Why. verify/test_local_inference.py proves offline that the server, the route and the ModelConfig agree on a host, a
 port and a model name. Only a cluster shows that the 4.95 GB image pulls, that the model loads on CPU beside the rest
-of the platform on one t3.2xlarge, and that agentgateway's /local backend speaks to it. The call is made from the
-workshop-agent pod, the one peer chat-path-ingress admits to :3002 (#552), and asks for at most 5 tokens. The pod's
+of the platform on one t3.2xlarge, and that agentgateway's /local backend speaks to it. The call asks for at most 5
+tokens and goes from this host over a port-forward to the gateway's :3002 (verify/gateway_forward.py), not from
+inside the workshop-agent pod, whose kagent container would not exec python3 on watch-it-burn-community (#583). The pod's
 start and Ready times are printed so the cold build's cost can go into platform-baseline.yaml's vllm entry.
 
 Usage: CONTEXT=<kube-context> [NAMESPACE=agent] python3 verify/local-inference-live.py
@@ -22,6 +23,8 @@ import os
 import shutil
 import subprocess
 import sys
+
+import gateway_forward
 
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
@@ -96,21 +99,9 @@ if failures:
 
 print("== a chat call through agentgateway :3002/local reaches it ==")
 # The OpenAI wire format kagent speaks to the gateway (gateway-local-qwen3); the gateway names qwen3-1.7b to vLLM.
-CALL = (
-    "import json,sys,urllib.request,urllib.error\n"
-    "body=json.dumps({'model':'local-qwen3','max_tokens':5,"
-    "'messages':[{'role':'user','content':'Reply with the single word OK.'}]}).encode()\n"
-    "req=urllib.request.Request(sys.argv[1],data=body,headers={'content-type':'application/json'})\n"
-    "try:\n"
-    "    r=urllib.request.urlopen(req,timeout=120); print(r.status); print(r.read().decode()[:400])\n"
-    "except urllib.error.HTTPError as e:\n"
-    "    print(e.code); print(e.read().decode()[:400])\n"
-)
-url = f"http://agentgateway.{NS}.svc.cluster.local:3002/local/v1/chat/completions"
-r = kubectl("-n", NS, "exec", "deploy/workshop-agent", "--", "python3", "-c", CALL, url, timeout=180)
-lines = r.stdout.splitlines()
-code, reply = (lines[0] if lines else ""), "\n".join(lines[1:])
-check("the call ran from the workshop-agent pod", r.returncode == 0, " ".join(r.stderr.split()))
+code, reply, err = gateway_forward.chat([KUBECTL, "--context", CONTEXT], NS, "deploy/agentgateway", "local",
+                                        "local-qwen3", timeout=120)
+check("the call reached agentgateway :3002 over a port-forward", not err, err)
 check(f"the gateway answered 200 from vLLM (got {code or 'nothing'})", code == "200", reply)
 try:
     body = json.loads(reply) if code == "200" else {}

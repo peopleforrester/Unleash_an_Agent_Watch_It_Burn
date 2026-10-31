@@ -12,8 +12,9 @@ cluster, that the running gateway pod carries it, and that a call through the ga
 
 The last one is the part only a cluster can show. agentgateway v1.5.0 puts the model into the request path and
 escapes the ARN's '/' as %2F (crates/llm/src/bedrock.rs, get_path_for_route); a 200 from Bedrock through that
-path is the confirmation that it takes the escaped ARN. The call is made from the workshop-agent pod, the one peer
-chat-path-ingress admits to :3002 (#552), and asks for at most 5 tokens.
+path is the confirmation that it takes the escaped ARN. The call asks for at most 5 tokens and goes from this host
+over a port-forward to a Ready gateway pod's :3002 (verify/gateway_forward.py). It used to be made from inside the
+workshop-agent pod, whose kagent container would not exec python3 on watch-it-burn-community (#583).
 
 Usage: CONTEXT=<kube-context> [NAMESPACE=agent] python3 verify/test_gateway_bedrock_tagged_live.py
 """
@@ -25,6 +26,8 @@ import re
 import shutil
 import subprocess
 import sys
+
+import gateway_forward
 
 CONTEXT = os.environ.get("CONTEXT", "")
 NS = os.environ.get("NAMESPACE", "agent")
@@ -94,21 +97,10 @@ if failures:
 print("== a model call through agentgateway :3002 succeeds on it ==")
 # The OpenAI wire format kagent speaks to the gateway (gateway-bedrock-nova); the gateway replaces the model
 # with BEDROCK_NOVA_MODEL and re-speaks Bedrock Converse.
-CALL = (
-    "import json,sys,urllib.request,urllib.error\n"
-    "body=json.dumps({'model':'bedrock-nova','max_tokens':5,"
-    "'messages':[{'role':'user','content':'Reply with the single word OK.'}]}).encode()\n"
-    "req=urllib.request.Request(sys.argv[1],data=body,headers={'content-type':'application/json'})\n"
-    "try:\n"
-    "    r=urllib.request.urlopen(req,timeout=60); print(r.status); print(r.read().decode()[:400])\n"
-    "except urllib.error.HTTPError as e:\n"
-    "    print(e.code); print(e.read().decode()[:400])\n"
-)
-url = f"http://agentgateway.{NS}.svc.cluster.local:3002/bedrock/v1/chat/completions"
-r = kubectl("-n", NS, "exec", "deploy/workshop-agent", "--", "python3", "-c", CALL, url, timeout=120)
-lines = r.stdout.splitlines()
-status, reply = (lines[0] if lines else ""), "\n".join(lines[1:])
-check("the call ran from the workshop-agent pod", r.returncode == 0, " ".join(r.stderr.split()))
+pod = ready[0]["metadata"]["name"]
+status, reply, err = gateway_forward.chat([KUBECTL, "--context", CONTEXT], NS, f"pod/{pod}", "bedrock", "bedrock-nova",
+                                          timeout=60)
+check(f"the call reached {pod} :3002 over a port-forward", not err, err)
 check(f"Bedrock answered 200 through the ARN path (got {status or 'nothing'})", status == "200", reply)
 try:
     choices = json.loads(reply).get("choices") if status == "200" else None

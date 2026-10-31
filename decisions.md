@@ -7115,3 +7115,56 @@ pool (claude-gmail-8) answers `podman info`, so there was nothing to fix here.
 **Not yet run on a cluster.** Still owed by a session with AWS access: on an attendee cluster
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, then
 `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` on an admin cluster.
+## 2026-10-31 · #583 · The live Bedrock check sends its model call over a port-forward to the gateway, not from inside workshop-agent
+
+**Context.** The coordinator ran `verify/test_gateway_bedrock_tagged_live.py` on watch-it-burn-community on
+2026-10-31 (accen-dev, us-west-2, main at 6ffb4df) and it exited 1 with 7 PASS and 3 FAIL. The pin is live:
+agentgateway's `BEDROCK_NOVA_MODEL` is the cluster's application inference profile ARN, and every Ready gateway pod
+carries it. The model call never ran, though. The test ran `python3 -c` in workshop-agent's default container,
+`kagent`, and got `exec: "python3": executable file not found in $PATH`. The two checks after it failed because
+there was no response to read.
+
+**What the image has.** The published `ghcr.io/kagent-dev/kagent/app:0.10.1` (index sha256:d39d5c948386...,
+linux/amd64 sha256:252f241eea11..., pulled and listed with podman on 2026-10-31, never run) puts
+`/.kagent/.venv/bin` first on its PATH. Its `python3` there resolves through `python` and
+`/python/cpython-3.13-linux-x86_64-gnu` to `/python/cpython-3.13.15-linux-x86_64-gnu/bin/python3.13`, which is a
+real file. So the image alone does not explain the failure. The kagent 0.10.1 controller sets no PATH on the
+container (go/core/internal/controller/translator/agent/manifest_builder.go, buildPodTemplate). Nothing in this repo
+does either: not the Agent's `deployment.env`, not the watch-it-burn-python Instrumentation, and no KubeArmorPolicy
+selects the pod. Why the live exec found no python3 is still open. The same listing shows the image has nothing in
+`/bin` or `/usr/bin`, so there is no shell, curl, wget, env, grep or ls. No other command run inside that
+container would have got round it.
+
+**Decision.** The call is sent from the host the test runs on, by `verify/gateway_forward.py`. It starts a
+`kubectl --context <ctx> -n agent port-forward --address 127.0.0.1 pod/<a Ready gateway pod> :3002`, reads the
+local port from kubectl's `Forwarding from` line, POSTs the same 5-token chat to `/bedrock/v1/chat/completions`,
+returns the status and Bedrock's whole reply, and stops the port-forward. The request goes through the same :3002
+listener, the same `/bedrock` route and the same backend as the agent's call. The gateway signs it with its own Pod
+Identity credentials whoever sends it, and the model in the path is its `BEDROCK_NOVA_MODEL`. So a 200 answers the
+issue's question (does Bedrock take the %2F-escaped ARN through agentgateway) just as one sent from the agent pod
+would. `verify/local-inference-live.py` had the same exec and now uses the same helper, with `deploy/agentgateway`
+and the `/local` route.
+
+**What it gives up.** The call no longer goes over the pod-to-pod hop from workshop-agent, so it no longer touches
+chat-path-ingress (#552). A port-forward reaches the gateway pod's loopback through the kubelet, which no
+NetworkPolicy judges. That ingress rule's live check is `verify/test_llm_bypass_live.py`, which reads off the live
+policies that workshop-agent is admitted to :3002 and that other pods are not.
+
+**REJECTED: an ephemeral debug container in the workshop-agent pod, or a short-lived pod with workshop-agent's
+label.** Each would keep the agent-pod hop. But an ephemeral container stays in the running agent pod's spec until
+that pod is replaced, and the clusters this runs on are the KubeCon breakout's, up through 2026-11-12. A pod with
+`app.kubernetes.io/name: workshop-agent` falls under the workshop-agent Service's selector and would be handed
+students' A2A traffic. Both also need an image the armed admin profile admits. The port-forward changes nothing on
+the cluster.
+
+**Tests.** `verify/test_gateway_forward.py` (offline, 17 checks) runs the helper against a stub kubectl. The stub
+refuses any call without the expected `--context` and takes only a loopback port-forward to :3002. The test covers
+the path, the model and `max_tokens` the request carries; a 200 reply longer than 400 characters still parsing as
+JSON; a 403 coming back with Bedrock's message; a port-forward that never comes up (an error with kubectl's reason,
+and no request); and no port-forward left running after any of them. It also holds both live checks to the helper,
+with no exec into workshop-agent.
+
+**Not yet run on a cluster.** The coordinator re-runs `CONTEXT=<ctx> python3 verify/test_gateway_bedrock_tagged_live.py`
+on watch-it-burn-community (kubeconfig from `aws eks update-kubeconfig --kubeconfig /tmp/community.kubeconfig --name
+watch-it-burn-community --region us-west-2 --profile accen-dev`). A 200 through the port-forward closes #583. Any other
+status prints Bedrock's reply, and that reply says what encoding the path needs on agentgateway v1.7.0.
