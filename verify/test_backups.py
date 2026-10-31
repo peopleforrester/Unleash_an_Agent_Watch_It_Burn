@@ -17,6 +17,7 @@ import http.server
 import json
 import os
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -444,8 +445,16 @@ except SystemExit:
     check("a start with no UTC offset is refused", True)
 
 print("== up and down, dry run: one fleet.sh run per region, standbys kept out of the router ==")
+# A lab VPC directory holding the home region's state and no us-east-2 one, whatever is deployed today: #643
+# applied the real us-east-2 and us-east-1 VPCs on 2026-10-31, and the refusal below is about a region without one.
+_net = pathlib.Path(tempfile.mkdtemp(prefix=".backups-net-", dir=REPO))
+(_net / "states").mkdir()
+_home_state = REPO / "infra/terraform/aws/network/terraform.tfstate"
+if _home_state.exists():
+    (_net / "terraform.tfstate").symlink_to(_home_state)
 r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "up", "night-before", "--dry-run"],
-                   capture_output=True, text=True, timeout=120)
+                   capture_output=True, text=True, timeout=120, env={**os.environ, "WIB_LAB_VPC_DIR": str(_net)})
+shutil.rmtree(_net)
 out = r.stdout.splitlines()
 ups = [l for l in out if l.endswith("instructors up all")]
 check("three regions, three builds", len(ups) == 3, r.stdout + r.stderr)

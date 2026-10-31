@@ -77,9 +77,11 @@ check "in us-east-2 the default account has states/accen-dev.us-east-2.tfstate" 
   '[[ "$(vpc us-east-2 accen-dev lab_vpc_state_for)" == */aws/network/states/accen-dev.us-east-2.tfstate ]]'
 check "the default account at home always has a VPC to read" \
   '( cd "$(dirname "${FLEET}")" && WIB_REGION=us-west-2 bash -c "source \"${FLEET}\" >/dev/null 2>&1; lab_vpc_present accen-dev" )'
+# A lab VPC directory with no us-east-2 state, whatever is deployed today: #643 applied the real one on 2026-10-31.
+mkdir -p "${T}/net/states"
 check "in a region with no state it has none" \
-  '! ( cd "$(dirname "${FLEET}")" && WIB_REGION=us-east-2 bash -c "source \"${FLEET}\" >/dev/null 2>&1; lab_vpc_present accen-dev" )'
-out="$(vpc us-east-2 accen-dev read_vpc_for)"
+  '! ( cd "$(dirname "${FLEET}")" && WIB_LAB_VPC_DIR="${T}/net" WIB_REGION=us-east-2 bash -c "source \"${FLEET}\" >/dev/null 2>&1; lab_vpc_present accen-dev" )'
+out="$(WIB_LAB_VPC_DIR="${T}/net" vpc us-east-2 accen-dev read_vpc_for)"
 check "read_vpc_for there fails with the apply that makes it" \
   'grep -q "no lab VPC for account .accen-dev. in us-east-2" <<<"${out}" &&
    grep -q "apply -state=states/accen-dev.us-east-2.tfstate" <<<"${out}" && grep -q -- "-var region=us-east-2" <<<"${out}"'

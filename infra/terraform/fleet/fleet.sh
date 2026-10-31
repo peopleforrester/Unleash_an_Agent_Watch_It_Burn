@@ -43,7 +43,8 @@ readonly TERMINAL_HARVEST_SCRIPT="${WIB_PROVISION_DIR}/scripts/harvest_terminal_
 readonly PUSH_VTT_SCRIPT="${WIB_PROVISION_DIR}/scripts/push_vtt_aws_creds.sh"
 readonly AWS_POOL_DIR="${WIB_AWS_POOL_DIR:-${SCRIPT_DIR}/aws-pool}"   # gitignored: holds live access keys; WIB_AWS_POOL_DIR for the shim tests
 readonly CLUSTER_DIR="${PROVISION_DIR}/${PROVIDER_CLUSTER_SUBDIR}"
-readonly LAB_VPC_DIR="${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}"
+# WIB_LAB_VPC_DIR: the shim tests point this at a temp dir, so "a region with no lab VPC" stays true once one exists
+readonly LAB_VPC_DIR="${WIB_LAB_VPC_DIR:-${PROVISION_DIR}/${PROVIDER_NETWORK_SUBDIR}}"
 readonly STATE_DIR="${WIB_STATE_DIR:-${SCRIPT_DIR}/states}"   # WIB_STATE_DIR: the shim tests point this at a temp dir
 readonly LOG_DIR="${WIB_LOG_DIR:-${SCRIPT_DIR}/logs}"   # WIB_LOG_DIR: the shim tests point this at a temp dir
 # One failure ledger PER PROCESS. Two fleet.sh runs side by side (an attendee down beside an instructors
