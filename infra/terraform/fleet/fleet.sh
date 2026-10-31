@@ -526,7 +526,7 @@ imds_hop_limit_for_role() {
 # The node kubelet maxPods a cluster's ROLE gets (#686). community (attackme) gets 250: every attendee's
 # Joker (#685) lands on its one node, and at 110 the ~53 platform pods leave room for only ~55 of them.
 # admin and attendee get 110 (the cluster module's var.max_pods default), which the IDP fits in. VPC-CNI
-# prefix delegation is on for every cluster, so the cap is kubelet's alone. It sits in node user data, so a
+# prefix delegation is on for every cluster, so kubelet's maxPods sets the cap. It sits in node user data, so a
 # changed value replaces the node: the community cluster picks it up at its next rebuild.
 max_pods_for_role() {
     case "$1" in

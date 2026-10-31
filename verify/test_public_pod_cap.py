@@ -40,10 +40,10 @@ vbody = var.group(1) if var else ""
 check("it is a number defaulting to 110", re.search(r"type\s*=\s*number", vbody) is not None
       and re.search(r"default\s*=\s*110\b", vbody) is not None)
 check("it is validated to 110..250", "var.max_pods >= 110" in vbody and "var.max_pods <= 250" in vbody)
-check("the nodeadm NodeConfig reads it, not a literal",
+check("the nodeadm NodeConfig reads it and holds no literal maxPods",
       "maxPods: ${var.max_pods}" in TF and re.search(r"maxPods:\s*\d", TF) is None)
 
-print("== prefix delegation is on, so the cap is kubelet's and not the node's IPs ==")
+print("== prefix delegation is on, so kubelet's maxPods sets the cap ==")
 cni = re.search(r"vpc-cni\s*=\s*\{(.*?)\n    \}", TF, re.S)
 cbody = cni.group(1) if cni else ""
 check("the vpc-cni addon sets ENABLE_PREFIX_DELEGATION = \"true\"",

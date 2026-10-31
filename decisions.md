@@ -6356,18 +6356,18 @@ changed there. The second, the kubelet's max-pods, was the literal `maxPods: 110
 **What changed.**
 - **Terraform** (`infra/terraform/aws/cluster/main.tf`): new `variable "max_pods"` (number, default 110, validated
   to 110..250), and the NodeConfig reads `maxPods: ${var.max_pods}`. Admin and attendee clusters are unchanged
-  at 110. With prefix delegation a t3.2xlarge has 4 ENIs x 14 slots x 16 = 896 pod IPs, so 250 is a kubelet cap,
-  not an address one; at 250 pods the node holds about 17 /28 prefixes (~272 IPs) of the shared /18s.
+  at 110. With prefix delegation a t3.2xlarge has 4 ENIs x 14 slots x 16 = 896 pod IPs, so the node has addresses for all 250 and
+  kubelet sets the cap; at 250 pods the node holds about 17 /28 prefixes (~272 IPs) of the shared /18s.
 - **fleet.sh**: new `max_pods_for_role` (community -> 250, everything else -> 110), a sibling of
   `imds_hop_limit_for_role` (#113) and role-derived for the same reason: the burn-cluster posture follows the
-  role, not a roster column. `up_one` passes `-var max_pods=<n>` on every apply and in the dry-run plan line.
+  role, and the roster carries no column for it. `up_one` passes `-var max_pods=<n>` on every apply and in the dry-run plan line.
 - **docs/MASTER-RECREATION-SPEC.md**: the node-sizing and cluster-root paragraphs name `var.max_pods` and the 250.
 
 **Trade-off, stated once.** AWS's max-pods calculator recommends at most 110 pods on an instance under 30 vCPUs
-(a t3.2xlarge has 8). It is a recommendation about kubelet and container-runtime load, not a limit EKS enforces,
+(a t3.2xlarge has 8). It is a recommendation about kubelet and container-runtime load that EKS does not enforce,
 and the issue sets 250 on purpose; the community node runs mostly idle, scaled-to-zero Jokers. If the rebuilt node
-shows kubelet or PLEG trouble under load, the lever is a larger community instance (roster `instance_type`), not
-a lower cap.
+shows kubelet or PLEG trouble under load, the lever is a larger community instance (roster `instance_type`); the
+cap stays at 250.
 
 **Tests.** `verify/test_public_pod_cap.py` (offline, new): `var.max_pods` exists, defaults to 110, is bounded,
 and is what the NodeConfig reads (no literal maxPods left); prefix delegation is on in the vpc-cni addon before

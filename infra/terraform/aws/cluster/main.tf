@@ -178,8 +178,8 @@ variable "imds_hop_limit" {
 # ceiling for an instance under 30 vCPUs) and is what admin and attendee clusters keep. fleet.sh passes 250 for
 # the community cluster (attackme.agenticburn.com): the room's per-attendee Jokers (#685) all land on its one
 # node, and at 110 with ~53 platform pods only ~55 of them fit at once. Prefix delegation gives a t3.2xlarge
-# 4 ENIs x 14 slots x 16 = 896 pod IPs, so 250 is a kubelet cap, not an address one. The value lives in node
-# user data, so changing it replaces the node: it lands at a rebuild, never as a live change.
+# 4 ENIs x 14 slots x 16 = 896 pod IPs, so the node has addresses for all 250 and kubelet sets the cap. The
+# value lives in node user data, so changing it replaces the node; it lands at the next rebuild.
 variable "max_pods" {
   type    = number
   default = 110
