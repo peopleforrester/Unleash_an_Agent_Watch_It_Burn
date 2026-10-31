@@ -6291,3 +6291,21 @@ date from the app itself (`app.py`'s `admin_console` and `RUNNING_ALIVE_SECONDS 
 the app's behaviour is held by provisioning-agenticburn's `test_app.py`.
 
 **Not yet run on a cluster:** nothing is owed. The page behaviour lives in the provisioning app and is tested there.
+## 2026-10-31 · #678 · The ten promo/ villains answer an anonymous pull now, so the tools tier is green on them
+
+**No code changed.** On 2026-10-31 hecaton run 13276 ran `python3 verify/test_promo_villains_public.py` with no
+credential, and all twenty checks passed. ghcr.io issued an anonymous token for each of the ten promo/ packages in
+lab-platform (promo-mascot, festival-promo, loyalty-rewards, joker, gargamel, skeletor, mumm-ra, shredder,
+cobra-commander and megatron). Each `:v1` served the digest `verify/promo_villains.py` pins, which is lab-platform#55's
+umask-022 republish (0dfcbef). The 2026-10-29 entry found the packages private, and they are public now, so the fix
+it named has been made. `verify/ghcr_pull.py` and its offline test stay as 6c41ea9 left them. The next time a
+package goes private, the failure line will say so.
+
+The previous attempt at this run stopped on the host, not in the repo: the podman store in pool
+claude-performantpro-3 could not re-exec into its existing user namespace. Nothing in `verify/` runs podman, and
+this run's pool (claude-performantpro-5) answers `podman info`, so the repo had nothing to fix.
+
+**Not yet run on a cluster.** The cluster checks #653 owes are still owed now that a node can pull the villains:
+on an attendee cluster `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and
+`CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`. A villain admitted in Audit should then
+reach Running, and `kubectl --context <ctx> logs deploy/promo-mascot` should print its log.
