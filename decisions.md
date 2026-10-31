@@ -6053,3 +6053,27 @@ reconcile-pool` (dry run; it must end "all N row(s) name a live cluster"), `bash
 3b ok), then `infra/terraform/fleet/fleet.sh ingest pool`. That must end with no `ingest:<name>` or
 `terminal-open:<name>` failure, `labctl pool --customer agenticburn --event "$WIB_EVENT"` must list the same names
 with every claimed row still claimed, and a claimed attendee's terminal login must be `agentic` / `agentic`.
+## 2026-10-31 · #467 · The promo villains repinned to lab-platform#55's republish; the CEL migration's live run is still owed
+
+**Why.** Hecaton run 13049, dispatched on #467 (validate the Kyverno CEL policy migration on a live cluster), ran
+`bash verify/run-e2e-tools.sh` and it failed on `test_promo_villains_public.py` alone. All ten
+`ghcr.io/peopleforrester/lab-platform/promo/<name>:v1` tags still answer an anonymous pull, but each serves a digest
+other than the one `verify/promo_villains.py` held from #653. The tags moved on purpose: lab-platform#55 rebuilt
+every published v1 image under `umask 022` on 2026-10-30, the ten promo/ villains included (lab-platform
+decisions.md, entry 2026-10-30T18:04:37Z, "promo/* (ten): the digests in `deploy/watch-it-burn/images.tsv`"). That
+file's ten `villain` rows match what ghcr.io served on 2026-10-31, digest for digest.
+
+**Changed.** `verify/promo_villains.py`'s `DIGESTS` takes those ten digests, and its docstring names lab-platform#55
+as the hand-over. `test_promo_villains_public.py` stops calling the digest "the digest handed over on #653". The lab
+still names villains by `:v1`, so nothing a student copies changes.
+
+**Not changed.** `images.lock`'s `ghcr.io/peopleforrester/lab-platform/llm-guard` row still records `781a126b…`.
+lab-platform#55 lists `llm-guard:v1` at `6cdbf3a2…`. `test_images_lock.py` is offline and does not read the
+registry, so it stays green. That row is a separate record and is filed as a follow-up, not changed here.
+
+**Not yet run on a cluster.** #467's own checks need two fresh clusters, a full-profile one and an attendee one, and
+a session with AWS access. This run has none: `kubectl config get-contexts` is empty and `aws sts
+get-caller-identity` says NoCredentials. Against each cluster, run `CONTEXT=<ctx> python3
+verify/test_kyverno_cel_live.py` and then `bash verify/run-e2e.sh` (with CONTEXT, IAM_PIPELINE_PROFILE and
+IAM_PIPELINE_REGION set). The live check reads the policy list from `policies/kyverno/` and `policies/floor/`, so
+the policies added since d8076da (#490, #203) are inside its count with no edit.

@@ -30,7 +30,7 @@ for name, want in DIGESTS.items():
     digest, why = served_digest(ref(name))
     check(f"{ref(name)} answers an anonymous pull", digest is not None, why)
     if digest is not None:
-        check(f"{ref(name)} serves {want[:19]}..., the digest handed over on #653", digest == want, digest)
+        check(f"{ref(name)} serves {want[:19]}..., the digest lab-platform pinned", digest == want, digest)
 
 print()
 if failures:
