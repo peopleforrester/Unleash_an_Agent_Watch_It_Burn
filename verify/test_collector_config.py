@@ -125,6 +125,13 @@ for shape in ("isError", "command FAILED"):
     check(f"a tool call that failed on {shape} carries error.type tool_error",
           any('attributes["error.type"], "tool_error"' in s and "tool_response" in s and shape in s for s in adk))
 
+# ADK's "execute_tool (merged)" span wraps parallel tool calls and its tool_response holds all their responses, the
+# failed one's included, so without this a block read as 2 errors on burritobot-private (#265, 2026-10-31).
+# verify/test_trace_shape_e2e.py runs it through the collector.
+marking = [s for s in adk if "STATUS_CODE_ERROR" in s or "status.message" in s or 'attributes["error.type"]' in s]
+check(f"every status statement skips ADK's merged tool span ({len(marking)} statements)",
+      len(marking) == 6 and all('where name != "execute_tool (merged)" and ' in s for s in marking))
+
 print("== a blocked tool call is ONE error: nothing marks the model call that read it (question 925) ==")
 # transform/mark_tool_failure set STATUS_CODE_ERROR on the next model call too, so one block read as "2 errors"
 # (#320). That model call ended without an error, and the semconv says its status MUST be left unset.

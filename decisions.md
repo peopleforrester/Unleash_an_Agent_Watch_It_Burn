@@ -7241,3 +7241,47 @@ answered on the issue on 2026-11-01: "Already done. It works great"
   notes that the agenticburn.com name still serves the same bot as its twin.
 - **Tests.** `verify/test_audience_event.py` (offline) now also checks that the checklist names `publicUrl`
   in all three places it gives the address, and that the sign-off and its source are recorded.
+## 2026-10-31 · #265 · ADK's merged tool span is not marked, so a block is one error in the trace list
+
+**What the live check found.** The coordinator ran the check list the 2026-10-30 #265 entry left owed, on
+watch-it-burn-private (host burritobot-private) at staging `0934f27`, and posted it on #265. `verify/c1-exfil-block.sh`
+and `verify/one_root_probe.py` passed, `execute_tool run_shell` was red with `error.type:tool_error` and its arguments
+and result on the span, and the generate_content after it was not red. But Agent Observability's trace list read
+**2** errors. The second was `execute_tool (merged)` (LLM Observability name `(merged tools)`), the parent of
+`execute_tool run_shell`.
+
+**Why.** When the model asks for more than one tool in a turn, adk-go opens one span around them
+(`internal/llminternal/base_flow.go` handleFunctionCalls, read on google/adk-go main 2026-10-31), and
+`TraceMergedToolCallsResult` (`internal/telemetry/telemetry.go`) gives it `gen_ai.tool.name` "(merged tools)",
+`tool_call_args` "N/A" and, as `gcp.vertex.agent.tool_response`, the whole merged function-response event: every
+call's response, the failed run_shell's "command FAILED" included. Both of `transform/adk_tool_content`'s status
+rules matched that text. The merged span is not the call that failed, so by question 925's rule (status is left
+unset on an operation that ended without an error) it stays unmarked. ADK still sets its status itself when the
+merge returns a Go error (`RecordError`), which this does not touch.
+
+**What changed.**
+- `gitops/otel-collector/values.yaml`: the six status, message and `error.type` statements of
+  `transform/adk_tool_content` now start `where name != "execute_tool (merged)" and`. The argument and result copies
+  still run on the merged span, so its row shows every response.
+- `verify/test_trace_shape_e2e.py`: the two Challenge 1 tool calls now sit under a merged span shaped as adk-go writes
+  it. The new checks are that the merged span is not red and that run_shell is the trace's only error span. The
+  event is written with json.dumps' spaces so both rules, isError and the text, would match it; adk-go writes it
+  compact, which only the text rule matches. Against `0934f27`'s config it fails 9 checks (3 per profile); with this
+  change it passes.
+- `verify/test_collector_config.py` (offline) pins the exclusion on all six statements.
+
+**The check list, corrected.** The 2026-10-30 entry's list names `call_llm`. The Go runtime the clusters run emits
+none (#713, above); its agent step is `invoke_agent workshop_agent`. The criterion is now: `invocation` and
+`invoke_agent workshop_agent` carry `gen_ai.provider.name:aws.bedrock`, as every execute_tool and generate_content
+span does. The live check found that already true. The fixture keeps a `call_llm` for the Python runtime.
+
+**Not yet run on a cluster:** the trace list reading 1. On a cluster with this collector config rolled out and Datadog
+on: `bash verify/c1-exfil-block.sh <host> <ctx> <profile>`, then open that interaction in Agent Observability and
+check that the trace list shows 1 error and Span Errors in Trace is 1, and that `execute_tool (merged)` is not red.
+`CONTEXT=<ctx> python3 verify/one_root_probe.py` should still pass. Whether Agent Observability's side panel shows
+run_shell's arguments and result is still a look by eye. Offline: `python3 verify/test_trace_shape_e2e.py`.
+
+**Also seen, not changed here.** The live check found two root-level spans in Agent Observability: guard-proxy's
+`POST` (kind llm, holding a `chat` on amazon.nova-pro-v1:0) and a `POST` (kind workflow) holding `invocation`. The
+root row reads "No content" for input and output. Tempo and APM have one root, so this is how LLM Observability
+groups spans, not a split trace. It is filed as a follow-up.

@@ -25,7 +25,8 @@ noise are verify/test_collector_one_root_e2e.py's; both result shapes of a block
 
 The interaction's spans and parentage are test_collector_one_root_e2e.py's (read from agentgateway v1.5.0, kagent
 v0.10.1 and a2a-sdk 0.3.26), with the a2a-sdk spans off as the workshop-agent runs, and the content of Challenge 1:
-the student's prompt, a run_shell curl to the beacon that the egress block stops, and get_marketing_intel.
+the student's prompt, a run_shell curl to the beacon that the egress block stops, and get_marketing_intel, the two
+called in one turn and so wrapped in ADK's "execute_tool (merged)" span, which holds both responses and stays unmarked.
 
 Fails when the binary is missing: run verify/fetch-e2e-tools.sh (verify/run-e2e-tools.sh does).
 """
@@ -113,10 +114,26 @@ SPANS = [
     ("generate-1", AGENT, f"generate_content {MODEL}", INTERNAL, "call-llm-1",
      {"gen_ai.operation.name": "generate_content", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,
       "gen_ai.output.messages": messages("assistant", "I'll post the list, then pull the loyalty intel.")}),
-    ("run-shell", AGENT, "execute_tool run_shell", INTERNAL, "call-llm-1",
+    # The model asked for both tools in one turn, so ADK wraps their spans in one of its own (adk-go
+    # internal/llminternal/base_flow.go handleFunctionCalls, TraceMergedToolCallsResult in internal/telemetry): named
+    # "execute_tool (merged)", tool name "(merged tools)", args "N/A", and as its response the whole merged event,
+    # every call's response in it, the failed one's included. Live on burritobot-private, 2026-10-31, the collector
+    # marked it too and one block read as 2 errors (#265). adk-go writes the event compact; it is written here with
+    # json.dumps' spaces so that both of adk_tool_content's rules, isError and the text, would match it.
+    ("merged", AGENT, "execute_tool (merged)", INTERNAL, "call-llm-1",
+     {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "(merged tools)",
+      "gen_ai.tool.description": "(merged tools)", "gcp.vertex.agent.tool_call_args": "N/A",
+      "gcp.vertex.agent.event_id": "evt-merged-1",
+      "gcp.vertex.agent.tool_response": json.dumps({
+          "content": {"parts": [
+              {"functionResponse": {"id": "run-shell-1", "name": "run_shell", "response": json.loads(BLOCKED_RESULT)}},
+              {"functionResponse": {"id": "intel-1", "name": "get_marketing_intel",
+                                    "response": json.loads(INTEL_RESULT)}}], "role": "user"},
+          "id": "evt-merged-1", "author": "burritobot", "actions": {}})}),
+    ("run-shell", AGENT, "execute_tool run_shell", INTERNAL, "merged",
      {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "run_shell",
       "gcp.vertex.agent.tool_call_args": BLOCKED_ARGS, "gcp.vertex.agent.tool_response": BLOCKED_RESULT}),
-    ("intel", AGENT, "execute_tool get_marketing_intel", INTERNAL, "call-llm-1",
+    ("intel", AGENT, "execute_tool get_marketing_intel", INTERNAL, "merged",
      {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "get_marketing_intel",
       "gcp.vertex.agent.tool_call_args": INTEL_ARGS, "gcp.vertex.agent.tool_response": INTEL_RESULT}),
     ("call-llm-2", AGENT, "call_llm", INTERNAL, "invoke-agent", {}),
@@ -276,6 +293,12 @@ for profile in PROFILES:
     red = sorted(s.get("name", key) for key, s in span.items()
                  if key != "run-shell" and (is_error(s) or "error.type" in attrs(s)))
     check(f"{profile}: the block is the trace's one error; the model call that read it ended fine", not red, str(red))
+    merged = span["merged"]
+    check(f"{profile}: the merged span holding the failed call's response is not red, it is not the call that failed",
+          not is_error(merged) and "error.type" not in attrs(merged), f"{merged.get('status')} error.type={attrs(merged).get('error.type')}")
+    errors = [s.get("name") for s in span.values() if is_error(s)]
+    check(f"{profile}: exactly one error span, the count Agent Observability's trace list shows",
+          errors == ["execute_tool run_shell"], str(errors))
 
 print()
 if failures:

@@ -275,16 +275,24 @@ config:
             # gen_ai.tool.call.result is still copied on a failure, though the semconv describes it as the
             # result "if execution was successful": the failure text is what a student reads to see the block,
             # and the status message stays a pointer to it rather than a copy of tool output.
-            - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
-            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
-            - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+            #
+            # Every status statement skips "execute_tool (merged)". When the model asks for several tools in one turn,
+            # ADK wraps their spans in one named that (gen_ai.tool.name "(merged tools)"), and its tool_response is the
+            # whole function-response event, every call's response in it, the failed one's "command FAILED" included
+            # (adk-go internal/telemetry TraceMergedToolCallsResult). Marking it too made one block read as 2 errors
+            # in Agent Observability's trace list (coordinator's live check on #265, burritobot-private, 2026-10-31).
+            # The merged span is not the call that failed; the conventions' reason for leaving the model call unmarked
+            # holds for it too. ADK still marks it itself when the merge returns a Go error (RecordError).
+            - 'set(status.code, STATUS_CODE_ERROR) where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
+            - 'set(attributes["error.type"], "tool_error") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             # The same, keyed on workshop-mcp's own wording (#264): every failure run_shell raises starts
             # "command FAILED" (test_run_shell_failure.py holds that), and a refused deploy_app raises "deploy failed
             # for " (#712), so the blocked exfiltration and the blocked deploy read as errors on their execute_tool
             # spans whether ADK hands the result over as MCP's isError or as the exception's text.
-            - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
-            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
-            - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+            - 'set(status.code, STATUS_CODE_ERROR) where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+            - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+            - 'set(attributes["error.type"], "tool_error") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
     # The model call's own content, for Datadog's LLM Observability (#721). kagent's Go runtime (v0.10.1,
     # go/adk/pkg/telemetry/attributes.go) writes the model request and response to gcp.vertex.agent.llm_request and
     # gcp.vertex.agent.llm_response as json.Marshal of ADK's model.LLMRequest / model.LLMResponse (adk-go v2.1.0):
