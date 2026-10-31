@@ -78,6 +78,32 @@ check "down_one calls sweep_orphan_sgs" \
 check "audit-zero reports leftover k8s groups" \
       "grep -q 'zero:\${acct}:sg' '${FLEET}'"
 
+echo "== a group a live load balancer uses is never touched =="
+# 2026-10-31: the us-west-2 standby teardown was stopped before its sweep, because the lab VPC there also holds
+# attackme's and burritobot-private's live NLB groups, and the sweep revokes every k8s-* group's rules before it
+# tries the delete. Revoking a live LB's ingress cuts the room off. A group on a network interface is in use.
+: >"${CALLS}"
+cat >"${SHIM}/aws" <<'S'
+#!/usr/bin/env bash
+echo "aws $*" >>"${CALLS}"
+case "$*" in
+  *describe-security-groups*group-name*) echo -e "sg-live\tsg-orphan" ;;
+  *describe-network-interfaces*sg-live*) echo "eni-0abc" ;;
+  *describe-network-interfaces*) echo "" ;;
+  *describe-security-groups*IpPermissionsEgress*) echo '[{"IpProtocol":"-1"}]' ;;
+  *describe-security-groups*IpPermissions*)      echo '[{"IpProtocol":"tcp"}]' ;;
+  *delete-security-group*) exit 0 ;;
+  *) : ;;
+esac
+S
+read_vpc_id_for() { echo vpc-123; }
+sweep_orphan_sgs "watch-it-burn-community-b03" "acct-x" >/dev/null 2>&1
+check "it asks which groups are on a network interface" "grep -q 'describe-network-interfaces.*sg-live' '${CALLS}'"
+check "a group on an interface has no rule revoked" "! grep -E 'revoke-security-group-(ingress|egress).*sg-live' '${CALLS}' >/dev/null"
+check "and is not deleted" "! grep -q 'delete-security-group.*sg-live' '${CALLS}'"
+check "an unattached group is still revoked and deleted" \
+      "grep -q 'revoke-security-group-ingress.*sg-orphan' '${CALLS}' && grep -q 'delete-security-group.*sg-orphan' '${CALLS}'"
+
 echo "== a parallel teardown's leak reports are re-checked once every destroy is done =="
 # 2026-10-31, the #643 standbys: five us-east-2 clusters in one lab VPC were destroyed at once. Each sweep is
 # VPC-wide, so each one met its siblings' groups while those clusters were still going, failed to delete them, and

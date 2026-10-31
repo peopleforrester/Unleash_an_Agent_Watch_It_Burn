@@ -2237,6 +2237,22 @@ sweep_orphan_sgs() {
                 --filters "Name=group-name,Values=k8s-traffic-${squashed}-*,k8s-${squashed}-*" \
                 --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true)"
     fi
+    # Only groups on no network interface. The lab VPC is shared: in the home region it also holds attackme's and
+    # burritobot-private's live load balancers, whose groups are k8s-* too, and the rules are stripped below before
+    # any delete is tried. A group a live LB uses sits on that LB's interfaces (verify/test_sg_sweep.sh).
+    local free="" eni
+    for sg in ${sgs}; do
+        [[ "${sg}" != "None" ]] || continue
+        eni="$(AWS_PROFILE="${acct}" aws ec2 describe-network-interfaces --region "${WIB_REGION}" \
+               --filters "Name=group-id,Values=${sg}" --query 'NetworkInterfaces[].NetworkInterfaceId' \
+               --output text 2>/dev/null || echo "unknown")"
+        if [[ -n "${eni}" && "${eni}" != "None" ]]; then
+            log "  ${name}: ${sg} is on a network interface (${eni}), so it is in use and left alone"
+            continue
+        fi
+        free+="${sg} "
+    done
+    sgs="${free}"
     for sg in ${sgs}; do
         [[ "${sg}" != "None" ]] || continue
         found=$(( found + 1 ))
