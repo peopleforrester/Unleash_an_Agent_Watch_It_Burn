@@ -5,7 +5,8 @@
 # ref against the pinned upstream registry (manifest.yaml -> otel v1.37.0); a typo or a renamed upstream
 # attribute fails the check in CI. `weaver live-check` (docs/weaver-live-check.md) then compares real
 # telemetry from the running proxy against this same contract. Keep these groups in lockstep with the
-# set_attribute(...) calls in proxy.py.
+# set_attribute(...) and _stamp(...) calls in proxy.py; verify/test_weaver_guard_proxy_stamps.py holds the
+# server span's _stamp attributes and witb.guard.decision's members to proxy.py offline (#710).
 groups:
   # --- The inbound HTTP hop. agentgateway -> guard-proxy, joined to the upstream trace via W3C context. ---
   - id: span.witb.guard_proxy.http
@@ -31,6 +32,54 @@ groups:
       - ref: http.response.status_code
         requirement_level: required
         note: Set by _send at every exit (200 pass, 403 block, 502 upstream failure).
+      - ref: session.id
+        requirement_level:
+          conditionally_required: When the /chat request body carries a string `session`.
+        note: >-
+          The storefront's per-browser-session id, set by proxy.py's _stamp on the /chat root, so a dashboard
+          can join one browser session's traces. A blocked turn ends before any agent span exists, so this
+          span is the only place the session is recorded for it.
+      - ref: witb.guard.decision
+        requirement_level:
+          conditionally_required: When a guard blocked or rewrote the turn.
+        note: Absent on a turn no guard touched. Set by proxy.py's _stamp.
+
+  # --- Attributes the watch-it-burn proxy defines itself (no upstream semconv equivalent). ---
+  - id: registry.witb.guard
+    type: attribute_group
+    stability: development
+    brief: Attributes guard-proxy sets to name which guardrail decided a /chat turn.
+    attributes:
+      - id: witb.guard.decision
+        type:
+          members:
+            - id: input_blocklist
+              value: input_blocklist
+              brief: The input guard's blocklist refused the prompt.
+              stability: development
+            - id: input_classifier
+              value: input_classifier
+              brief: The input guard's prompt-injection classifier refused the prompt.
+              stability: development
+            - id: topic
+              value: topic
+              brief: The topic guard refused a prompt outside BurritoBot's subject.
+              stability: development
+            - id: rate_limit
+              value: rate_limit
+              brief: A rate limit refused the turn, the per-session one or the proxy-wide one.
+              stability: development
+            - id: budget
+              value: budget
+              brief: A spend cap refused the turn, the Challenge 4 budget guard or the always-on cost cap.
+              stability: development
+            - id: output_redacted
+              value: output_redacted
+              brief: The output guard redacted or withheld the agent's reply.
+              stability: development
+        stability: development
+        brief: Which guardrail decided the turn, on the guard-proxy HTTP SERVER span.
+        examples: [input_classifier, output_redacted]
 
   # --- The guard decision + forward, modelled as a gen_ai "chat" span so Datadog renders the LLM panel. ---
   #
