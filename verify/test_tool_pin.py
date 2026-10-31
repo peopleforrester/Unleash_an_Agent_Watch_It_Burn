@@ -1,6 +1,6 @@
 # ABOUTME: Offline checks for the #480 spike's tool-pin ExtMCP processor: the hash, the strip/deny verdicts,
 # ABOUTME: the hand-written protobuf wire format, the pinned baseline against evil-mcp, and the rendered bind.
-"""What the spike's local bed measured against the real agentgateway v1.5.0 binary, held offline.
+"""What the spike's local bed measured against the real agentgateway binary, held offline.
 
 docs/research/2026-10-24-tool-pin-spike/README.md has the measurement. This keeps the parts that do not
 need the binary, grpcio or mcp from drifting:
@@ -13,7 +13,8 @@ need the binary, grpcio or mcp from drifting:
   list alone did not stop a direct call on the bed;
 - baseline.json still pins what evil-mcp's server.py serves. Editing a description in server.py fails
   here until the baseline is re-pinned, which is the control working on its own repository;
-- the cluster config the spike renders validates against the vendored v1.5.0 schema.
+- the cluster config the spike renders validates against the vendored schema;
+- the local bed runs the agentgateway release the cluster deploys, with the cluster's session setting.
 """
 from __future__ import annotations
 
@@ -32,7 +33,7 @@ sys.path.insert(0, str(SPIKE))
 sys.path.insert(0, str(REPO / "verify"))
 import tool_pin  # noqa: E402
 import gateway_bind  # noqa: E402
-from agentgateway_schema import Invalid, load_schema, validate  # noqa: E402
+from agentgateway_schema import SCHEMA_VERSION, Invalid, load_schema, validate  # noqa: E402
 
 failures: list[str] = []
 
@@ -180,9 +181,9 @@ root = load_schema()
 cfg = gateway_bind.cluster_config()
 try:
     validate(cfg, root, root)
-    check("the committed config plus the pinned bind validates against the v1.5.0 schema", True)
+    check(f"the committed config plus the pinned bind validates against the {SCHEMA_VERSION} schema", True)
 except Invalid as e:
-    check(f"the committed config plus the pinned bind validates against the v1.5.0 schema ({e})", False)
+    check(f"the committed config plus the pinned bind validates against the {SCHEMA_VERSION} schema ({e})", False)
 committed = gateway_bind.committed_config()[1]
 check("it adds exactly one bind and leaves the committed ones as they are",
       cfg["binds"][:-1] == committed["binds"] and len(cfg["binds"]) == len(committed["binds"]) + 1)
@@ -233,6 +234,28 @@ for label, mutate in (
 phase = root["$defs"]["Phase"]
 phases = set(phase.get("enum") or [o["const"] for o in phase.get("oneOf", []) if "const" in o])
 check("every phase the bind uses is one the schema lists", set(proc["methods"].values()) <= phases and len(phases) >= 4)
+
+print("== the local bed runs the gateway the cluster runs ==")
+# #698 moved the cluster from v1.5.0 to v1.7.0 after the bed was first measured; re-measured on v1.7.0
+# 2026-10-31, two answers changed (README.md). A bed on an older release would mislead the live check.
+deployed = next(d for d in yaml.safe_load_all(gateway_bind.GATEWAY.read_text(encoding="utf-8"))
+                if (d or {}).get("kind") == "Deployment" and d["metadata"]["name"] == "agentgateway")
+version = deployed["spec"]["template"]["spec"]["containers"][0]["image"].split(":", 1)[1].split("@", 1)[0]
+bed = (SPIKE / "local-bed.sh").read_text(encoding="utf-8")
+readme = (SPIKE / "README.md").read_text(encoding="utf-8")
+check(f"local-bed.sh asks for the {version} release asset, the deployed gateway's",
+      f"the {version} release asset agentgateway-linux-amd64" in bed)
+check(f"the README's reproduce steps download {version}",
+      f"releases/download/{version}/agentgateway-linux-amd64" in readme)
+check(f"the vendored schema is the deployed release's ({SCHEMA_VERSION})", SCHEMA_VERSION == version)
+local = gateway_bind.local_config("http://127.0.0.1:8000/mcp", "http://127.0.0.1:8010/mcp", "127.0.0.1:9001")
+check("the bed's config keeps the cluster's session setting, so v1.7.0 does not write a key into it",
+      local.get("config", {}).get("session") == committed["config"]["session"] == {"key": "disabled"})
+try:
+    validate(local, root, root)
+    check(f"the bed's config validates against the {SCHEMA_VERSION} schema", True)
+except Invalid as e:
+    check(f"the bed's config validates against the {SCHEMA_VERSION} schema ({e})", False)
 
 print("== live-check.sh against the current layout ==")
 # The cluster half is run by hand and has never run, so the names it acts on drift unseen as staging moves:

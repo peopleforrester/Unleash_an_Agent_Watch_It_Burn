@@ -146,7 +146,10 @@ What it costs, for the Barcelona design:
 binary on a local bed: it strips or denies a rug-pulled `get_weather`, and on its own bind it fails closed
 without affecting the other binds. The bed also settled two of section 2's unknowns. The binary watches
 its config file, and it keeps the last good config when a reload is bad. It still exits on a bad config
-at startup. kagent's side is read from source and has not yet been checked live.
+at startup. kagent's side is read from source and has not yet been checked live. Re-measured on v1.7.0,
+the deployed release since #698, on 2026-10-31: the same, except that a refused `tools/call` now comes back
+as an `isError` tool result rather than JSON-RPC `-32001`, and the fail-closed message no longer names the
+cause.
 
 ## Not changed by this evaluation
 

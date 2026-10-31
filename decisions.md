@@ -7046,3 +7046,41 @@ fails three of them. The test stays in the offline gate: it needs the submodule,
 **Not changed:** the Go rewrite's `/controls` still answers 501 (PRD #412, `internal/server/server.go`
 `unbuiltGET`); it is a later milestone of that PRD, and the workshop runs proxy.py. The crash loop itself is
 #626 (Falco 0.45.1 via chart 9.2.1, 89fce6a).
+
+## 2026-10-31 · #480 · The tool-pin spike re-measured on agentgateway v1.7.0, the release the cluster now runs
+
+**Why this run changed anything.** The issue's open part is still the live kagent check, which needs a cluster this
+run does not have. Since the last #480 run, #698 (0ad8d1a, 2026-10-30) moved the deployed gateway from v1.5.0 to
+v1.7.0, so the cluster check would have run a release the spike had never seen. The local bed was re-run on the
+v1.7.0 release binary (sha256 1b2fc01a…42f8, git revision 26f5aeb) on 2026-10-31. `ext_mcp.proto` is byte-identical
+at both tags, so tool_pin.py's hand-written wire format is unchanged. Most answers were the same as on v1.5.0. Two
+changed:
+
+- **A refused `tools/call` is now an `isError` tool result**, text "tool-pin: evil-mcp tool get_weather is not an
+  approved definition", as the ExtMCP docs say. v1.5.0 returned JSON-RPC -32001. The tools/list deny is still -32001
+  with tool-pin's reason, which is what kagent's `Accepted=False` message would carry.
+- **failClosed now says only "guardrail check failed"** (-32603). v1.5.0 named the connection error.
+
+**What changes here:**
+
+- **The bed matches the cluster's session setting.** Without `config.session.key`, v1.7.0 generates a key and writes
+  it into its own config file. The bed's file is writable, but the cluster's ConfigMap is read-only and sets
+  `disabled` (#698). `gateway_bind.local_config` now copies the committed config's `session` block, and the bed checks
+  that the gateway left its config file as rendered.
+- **The startup check had never been in the script.** The README's "exit 1 on a bad config at startup" came from
+  v1.5.0 by hand. local-bed.sh now runs it last, with the running gateway stopped. The first v1.7.0 attempt ran it
+  beside the live gateway, and it died on the readiness port before the config was parsed, which read as a pass. On
+  v1.7.0 it exits 1 with the parse error, the same as v1.5.0.
+- **Records and docs.** The output is `local-bed-2026-10-31.txt`; the v1.5.0 record stays. The spike README's table
+  now has a column for each release, finding 2 says v1.7.0 follows the docs, live-check item 5 asks whether kagent
+  sends a call for a stripped tool at all, and the reproduce steps download v1.7.0 with absolute paths, because the
+  script changes directory before it runs the python it was given. The evaluation's section 3 and tool_pin.py's
+  docstring carry the same note.
+- **Held offline.** `verify/test_tool_pin.py` gains a section that fails when local-bed.sh, the README's reproduce
+  steps or the vendored schema name a different agentgateway release from the one the agentgateway Deployment
+  runs, or when the bed's config drops the cluster's session block. The pre-change bed fails two of these checks.
+
+**Not yet run on a cluster:** `live-check.sh` on v1.7.0, phases setup, observe, rugpull, observe, deny, observe,
+restore, on a fresh attendee cluster with the tool-pin image built, pushed and signed. Its item 5 is now whether
+kagent ever sends a `tools/call` for a stripped tool, and if one does arrive, how the agent shows the `isError` result.
+The badge decision still follows that check.

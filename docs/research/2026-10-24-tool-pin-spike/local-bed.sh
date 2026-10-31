@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# ABOUTME: The #480 spike's local bed: the real agentgateway v1.5.0 binary, evil-mcp, a tampered copy and
+# ABOUTME: The #480 spike's local bed: the real agentgateway v1.7.0 binary, evil-mcp, a tampered copy and
 # ABOUTME: tool-pin, all on 127.0.0.1, with no cluster. Prints what a client sees on each bind in each mode.
 #
 # Usage: local-bed.sh <agentgateway-binary> <python> <scratch-dir>
-#   <agentgateway-binary>  the v1.5.0 release asset agentgateway-linux-amd64
-#                          (sha256 daca5cda76e8c5ab0c1a75912fecf2d6365095403f810db72029c49d14a37e7b)
+#   <agentgateway-binary>  the v1.7.0 release asset agentgateway-linux-amd64, the version the cluster runs
+#                          (sha256 1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8)
+#                          The 2026-10-24 record ran v1.5.0 (daca5cda76e8c5ab0c1a75912fecf2d6365095403f810db72029c49d14a37e7b)
 #   <python>               a python with mcp==1.29.1 (the workshop-mcp image's pin), grpcio and PyYAML
 #   <scratch-dir>          an empty directory for logs, the tampered server and the generated config
 #
@@ -67,6 +68,7 @@ mkdir -p cfg/..v1
 "${PY}" "${HERE}/gateway_bind.py" local > cfg/..v1/config.yaml
 ln -s ..v1 cfg/..data
 ln -s ..data/config.yaml cfg/config.yaml
+cp cfg/..v1/config.yaml rendered.yaml
 start_pin strip
 "${AGW}" -f cfg/config.yaml > agw.log 2>&1 & agw_pid=$!; pids+=("${agw_pid}")
 wait_port 3001; wait_port 3003; wait_port 3004
@@ -116,7 +118,7 @@ swap() {  # $1 version dir name, $2 file holding the new config: kubelet's atomi
 }
 
 echo "== a bad edit to the gateway config while it runs (ConfigMap-style symlink swap)"
-printf 'binds:\n- port: 3001\n  listeners: [ {protocol: HTTP, routes: [ {backends: [ {mcp: {targets: [ {name: x, mcp: {hots: nope}} ]}} ]} ]} ]\n' > bad.yaml
+printf 'config:\n  session:\n    key: disabled\nbinds:\n- port: 3001\n  listeners: [ {protocol: HTTP, routes: [ {backends: [ {mcp: {targets: [ {name: x, mcp: {hots: nope}} ]}} ]} ]} ]\n' > bad.yaml
 swap ..v2 bad.yaml
 sleep 5
 if kill -0 "${agw_pid}" 2>/dev/null; then echo "gateway still running after the bad edit"; else echo "gateway EXITED after the bad edit"; fi
@@ -141,6 +143,17 @@ if wait_port 3005; then
 else
     echo "bind 3005 never opened: the swap was not picked up"
 fi
+# v1.7.0 writes a generated session key into its config file unless config.session.key is set; the cluster's
+# ConfigMap is read-only and sets it to disabled (#698), so the bed's file must come through untouched.
+if cmp -s rendered.yaml cfg/..v1/config.yaml; then echo "the gateway left its config file as rendered"; else echo "the gateway REWROTE its config file"; fi
 echo "-- gateway log, config lines:"; grep -E "state_manager" agw.log | sed 's/\t/ /g' | cut -c1-220
 echo "-- gateway log, tools/list lines (route names the bind):"
 grep "mcp.method.name=tools/list" agw.log | sed 's/\t/ /g' | grep -oE "route=[^ ]+|mcp.error.code=[^ ]+" | paste -sd' ' | fold -w 200
+
+# Last, with the running gateway stopped: its admin, stats and readiness ports would otherwise fail a second
+# process before its config is parsed, which is how the first v1.7.0 run of this step misread it.
+kill "${agw_pid}"; wait "${agw_pid}" 2>/dev/null || true
+echo "== the same bad config at startup, the running gateway stopped"
+if timeout 10 "${AGW}" -f bad.yaml > agw-bad-start.log 2>&1; then rc=0; else rc=$?; fi
+if [ "${rc}" -eq 124 ]; then echo "gateway STARTED on the bad config"; else echo "gateway exited ${rc} on the bad config at startup"; fi
+grep -m1 -oE "host or backend is required for MCP target backend configuration|Address in use" agw-bad-start.log || tail -n 2 agw-bad-start.log
