@@ -923,6 +923,27 @@ is merely slow rather than rebuilding:
   The QR on the slide is `facilitation/kubecon-na-2026-audience-qr.svg`, and the
   Feedback button opens the session survey, both set in
   `gitops/ai-layer/web/event.js`.
+- [ ] **The community bot at room scale (#644), before the reset below.** From the repo
+  root, replay the DevOpsDays Portland prompts at attackme as 500 phones, each its own
+  session, three turns each. The harvest is gitignored, so pass its path. Without
+  `--yes` it prints the plan and the estimated cost and sends nothing; with it, it
+  sends at most `--max-calls` (1500) turns, every one carrying the probe marker so the
+  prompt wall stays clean, and stops new turns once `/cost` has risen $10 or 900 s
+  have passed.
+
+  ```bash
+  python3 verify/load_replay.py attackme.burritobot.co --yes --harvest ~/repos/talks/Unleash_an_Agent_Watch_It_Burn/.harvest/devopsdays-portland/prompts --json-out tmp/load-replay-attackme.json
+  ```
+
+  The estimate: at most $7.50 if all 1500 turns reached the model at $0.005 a call;
+  about $1.80 predicted, because from one machine every turn leaves through one
+  address and nginx lets about 120 a minute through, which is what a venue NAT does
+  too. The report gives latency percentiles, outcomes by limit (nginx per network or
+  conversation, guard-proxy per session and per cluster, the cost cap), errors by
+  HTTP status (502, 504, 429), timeouts, and the `/cost` spend before and after. It
+  must end `LOAD REPLAY GREEN`: a refusal is a sentence a phone can read and passes,
+  a 502, 504, timeout or empty reply fails. Record the run on #644. `--source catalog`
+  replays the stage's own asks instead when the harvest is not on this machine.
 - [ ] **Reset the community bot, last (#539).** The probe, the phone check and any
   rehearsal all spend on attackme, and guard-proxy keeps that spend in memory. Once
   nothing else will touch attackme before the session, from `infra/terraform/fleet/`:

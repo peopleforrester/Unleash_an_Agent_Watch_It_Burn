@@ -6824,3 +6824,18 @@ Deny, and still read Deny 20 s later with kyverno-policies Synced, so Argo CD le
 **deploy_app's manifest refusals now raise** (7d830b3): measured from the public cluster's deploy_app spans on
 2026-10-30, two of four calls sent a manifest missing its closing braces, and the parse error returned as text was
 read as a success (the probe's "narrated, not obeyed" FAIL on Challenge 3). Not yet re-run on the community probe.
+
+
+## 2026-10-31T18:00:00Z · 2.3 · #644 load replay tool built and tested offline
+
+`verify/load_replay.py` replays recorded prompts at one cluster's `/chat` as N phones (default 500, 3 turns, 60 s
+ramp, 15 to 45 s think time), each its own session in the body and as X-BurritoBot-Session. The prompts are the
+DevOpsDays Portland harvest (`.harvest/devopsdays-portland/prompts/`, gitignored, 30 cluster files, 1,144 prompts
+read on 2026-10-31), or `--source catalog` for the stage's asks; a missing harvest is an error, not a switch.
+Every prompt carries `[[wib-probe]]`; `--max-calls` caps sends; the estimate prints before anything is sent and
+nothing is sent without `--yes`; new turns stop at `--max-usd` of `/cost` rise or `--deadline`. Results hold no
+prompt text. The limits it predicts are read from console.conf and resources.yaml, not copied.
+`verify/test_load_replay.py` runs it as a command against a fake `/chat` and `/cost` on loopback at 500 users.
+
+Not yet run on a cluster: the 500-user run on attackme (Night Before step in the KubeCon run-of-show), worst
+case $7.50, about $1.80 predicted.
