@@ -7046,3 +7046,21 @@ fails three of them. The test stays in the offline gate: it needs the submodule,
 **Not changed:** the Go rewrite's `/controls` still answers 501 (PRD #412, `internal/server/server.go`
 `unbuiltGET`); it is a later milestone of that PRD, and the workshop runs proxy.py. The crash loop itself is
 #626 (Falco 0.45.1 via chart 9.2.1, 89fce6a).
+
+## 2026-10-31T22:00:00Z · 3.1 · #643 rehearsal run live: 15 standbys built, the drill passed, all torn down
+
+Lab VPCs applied in us-east-2 and us-east-1; the account-wide budget is now created from the home region's state
+only (653155e). Night-before wave (6) and six-hours wave (9) built across us-east-2, us-east-1 and us-west-2;
+`backups.py check` passed all 17 consoles. `verify/test_backups_promotion_live.py` passed on its second run: the
+watcher moved attackme and burritobot-private to standbys with nobody acting, both answered 200 through the live
+router, and both failed back. Teardown left no standby in any region; attackme and burritobot-private answered 200
+throughout.
+
+Fixed on the way, each with a test: istiod's autoscaler (no metrics-server, so Degraded everywhere, 9de7583); a
+failed build skipping its region's converge (dc56e8c); the drill stopping the watcher mid-apply (dec86cb);
+parallel teardown sweeps reporting siblings' groups as leaks (4e5c3e6); the sweep stripping rules from groups a
+live load balancer uses, which in us-west-2 would have reached attackme's and private's (e3ff464; the teardown was
+stopped before that sweep ran); `backups.py down` destroying without --apply (4e6df69).
+
+Still owed: install the schedule on the host that will carry it on 2026-11-12
+(`backups.py schedule 2026-11-12T20:50:00Z`). The two new-region lab VPCs are kept for it, about $0.07 an hour each.
