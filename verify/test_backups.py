@@ -445,6 +445,8 @@ except SystemExit:
     check("a start with no UTC offset is refused", True)
 
 print("== up and down, dry run: one fleet.sh run per region, standbys kept out of the router ==")
+# A live `backups.py up` on this host writes its own backups-* roster files; only the dry runs' would be a fault.
+_tmp_before = {p.name for p in pathlib.Path(tempfile.gettempdir()).iterdir() if p.name.startswith("backups-")}
 # A lab VPC directory holding the home region's state and no us-east-2 one, whatever is deployed today: #643
 # applied the real us-east-2 and us-east-1 VPCs on 2026-10-31, and the refusal below is about a region without one.
 _net = pathlib.Path(tempfile.mkdtemp(prefix=".backups-net-", dir=REPO))
@@ -522,7 +524,8 @@ r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "watch", "--u
                    capture_output=True, text=True, timeout=120)
 check("after --until it exits 0 and does nothing", r.returncode == 0 and "watch:" not in r.stderr, r.stderr[-300:])
 
-check("a dry run writes no roster file",not any(p.name.startswith("backups-") for p in pathlib.Path(tempfile.gettempdir()).iterdir()))
+check("a dry run writes no roster file",
+      not {p.name for p in pathlib.Path(tempfile.gettempdir()).iterdir() if p.name.startswith("backups-")} - _tmp_before)
 
 import shutil  # noqa: E402
 shutil.rmtree(T, ignore_errors=True)

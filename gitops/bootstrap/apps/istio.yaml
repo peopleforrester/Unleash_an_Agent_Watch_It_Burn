@@ -70,6 +70,9 @@ spec:
       valuesObject:
         profile: ambient
         pilot:
+          # No autoscaler: no profile installs metrics-server, so the HPA never reads CPU and Argo CD reports istiod
+          # Degraded, which fails fleet.sh converge (verify/test_istiod_no_hpa.py). One replica, as autoscaleMin gave.
+          autoscaleEnabled: false
           # Datadog Unified Service Tagging (PRD #28): puts the Istio control plane (istiod) on the
           # service catalog / map under the same service as ztunnel. Pod labels, not annotations: the
           # Agent reads tags.datadoghq.com/{service,env,version} off pod labels (#661).
