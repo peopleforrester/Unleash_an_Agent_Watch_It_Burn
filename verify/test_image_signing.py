@@ -12,20 +12,33 @@ again: a placeholder attestor, a key that has drifted from the one we sign with,
 catches third-party images, and a Rekor dependency that would make admission fail the moment attendees
 seal the cluster in Challenge 1.
 
+Since #669 the scope also takes lab-platform's llm-guard, which lab-platform signs with this same key, at
+ghcr.io and through an ECR cache, and nothing else of lab-platform's: its mirror/ vendor copies are unsigned
+and its promo/ villains are refused by path, not by signature (question 878).
+
 What this file does NOT check is whether the images are actually signed. That needs the registry, so it
 lives in `verify/sign-images.sh --check`, which is the thing to run before deploying.
 """
 from __future__ import annotations
 
+import fnmatch
 import pathlib
 import sys
 
 import yaml
 
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import promo_villains  # noqa: E402
+import registry_allowlist  # noqa: E402
+from bootstrap_chart import APPS, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, kustomize_images  # noqa: E402
+from mirror_copies import COPIES  # noqa: E402
+
 REPO = pathlib.Path(__file__).resolve().parents[1]
 POLICY = REPO / "policies/kyverno/verify-image-signatures.yaml"
 PUBKEY = REPO / "policies/cosign/watch-it-burn.pub"
 OUR_REGISTRY = "ghcr.io/peopleforrester/watch-it-burn"
+# The ECR pull-through cache path a root can pass as imageRegistry, as test_image_registry_render.py renders it.
+CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
 
 failures: list[str] = []
 
@@ -94,6 +107,13 @@ check("no TUF mirror or Rekor URL is configured", "tuf" not in cosign and "url" 
 
 print("== the scope catches our images and nothing else ==")
 refs = [m.get("glob") for m in spec.get("matchImageReferences") or []]
+
+
+def matched(image: str) -> bool:
+    # Kyverno's glob, like fnmatch's, lets '*' cross a '/'.
+    return any(fnmatch.fnmatchcase(image, r) for r in refs)
+
+
 check("every image reference is a glob (no CEL matcher to reason about)", all(refs))
 check(f"scoped to our registry ({refs})", f"{OUR_REGISTRY}*" in refs)
 check("not scoped to everything", "*" not in refs)
@@ -104,12 +124,35 @@ check("harbor is still required to be signed", "harbor.agenticburn.com/*" in ref
 for foreign in ("docker.io/library/nginx:1.27-alpine", "cr.agentgateway.dev/agentgateway:v1.5.0",
                 "ghcr.io/open-telemetry/opentelemetry-operator/autoinstrumentation-python:0.63b1",
                 "registry.k8s.io/pause:3.9"):
-    # A glob of the form "prefix*" matches only references starting with that prefix.
-    matched = any(foreign.startswith(r.rstrip("*")) for r in refs)
-    check(f"does not demand a signature from {foreign.split('/')[0]}", not matched)
+    check(f"does not demand a signature from {foreign.split('/')[0]}", not matched(foreign))
 ours = f"{OUR_REGISTRY}:workshop-mcp@sha256:" + "0" * 64
-check("does demand one from our own registry",
-      any(ours.startswith(r.rstrip("*")) for r in refs))
+check("does demand one from our own registry", matched(ours))
+
+print("== lab-platform's llm-guard is in scope, at ghcr.io and through a cache, and nothing else of lab-platform's ==")
+# The ai-layer Application names the guard at the root's imageRegistry (#622, #652); render both values it takes.
+ai_layer = yaml.safe_load((APPS / "ai-layer.yaml").read_text(encoding="utf-8"))
+guard = next((i for i in kustomize_images(ai_layer) if i["name"] == "llm-guard"), None)
+check("the ai-layer Application names llm-guard by digest at the root's registry",
+      bool(guard) and guard["newName"] == f"{IMAGE_REGISTRY}/llm-guard" and "digest" in guard)
+if guard:
+    tail = f"llm-guard:{guard['newTag']}@{guard['digest']}" if guard.get("newTag") else f"llm-guard@{guard['digest']}"
+    for registry in (LAB_PLATFORM_GHCR, CACHE, "123456789012.dkr.ecr.us-west-2.amazonaws.com/peopleforrester/lab-platform"):
+        image = f"{registry}/{tail}"
+        check(f"demands one from the guard at {registry}", matched(image))
+        check(f"  and the registry allowlist admits it there", registry_allowlist.allowed(image))
+    check("demands one from the guard by digest alone", matched(f"{LAB_PLATFORM_GHCR}/llm-guard@{guard['digest']}"))
+# Question 878: lab-platform/* would deny the unsigned vendor copies, which run Falco, KubeArmor and the rest.
+check("lab-platform as a whole is not in scope",
+      not any(r.startswith(f"{LAB_PLATFORM_GHCR}/*") or r.endswith("/lab-platform/*") for r in refs))
+for registry in (LAB_PLATFORM_GHCR, CACHE):
+    caught = [c.path for c in COPIES if matched(f"{registry}/{c.path}")]
+    check(f"none of the {len(COPIES)} unsigned mirror/ copies at {registry.split('/')[0]} is asked for a signature",
+          not caught)
+    villains = [promo_villains.ref(n).replace(LAB_PLATFORM_GHCR, registry) for n in promo_villains.COVERS]
+    check(f"no promo/ villain at {registry.split('/')[0]} is asked for one (the registry path refuses those)",
+          not any(matched(v) for v in villains))
+    check(f"a lookalike, llm-guard-next, at {registry.split('/')[0]} is not asked for one",
+          not matched(f"{registry}/llm-guard-next:v1"))
 
 print("== it applies wherever our images run, not in one namespace ==")
 # The old rule was scoped to the `apps` namespace while the ai-layer runs in `agent`, so the control
@@ -126,7 +169,10 @@ allow_pat = next(v["expression"] for v in allow["spec"]["variables"] if v["name"
 check("the allowlist permits Harbor", "'harbor.agenticburn.com/'" in allow_pat)
 check("the allowlist still permits the public demo registries", "'docker.io/library/'" in allow_pat)
 check("every registry the signature rule names is allowlisted",
-      all(r.rstrip("*").split("/")[0] in allow_pat for r in refs))
+      all(r.rstrip("*").split("/")[0] in allow_pat for r in refs if not r.startswith("*.dkr.ecr.")))
+check("and an ECR host the signature rule names is one the allowlist's ECR pattern admits",
+      all(registry_allowlist.ecr_regex().search(r.replace("*", "123456789012", 1).replace("*", "us-west-2", 1))
+          for r in refs if r.startswith("*.dkr.ecr.")))
 
 print("== the signing procedure is written down and runnable ==")
 script = REPO / "verify/sign-images.sh"

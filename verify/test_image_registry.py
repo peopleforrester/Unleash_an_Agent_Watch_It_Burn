@@ -13,6 +13,7 @@
 # Helm values as "{{ .Values.imageRegistry }}/<path>:<tag>". A plain manifest a directory source applies cannot
 # take it. test_image_registry_render.py renders the chart with and without the value.
 import pathlib
+import re
 import sys
 
 import yaml
@@ -65,6 +66,11 @@ check("the sweep reaches beyond gitops/ (policies/, security/, observability-idp
 # into a chat, and the cluster pulls it as typed: it is the unvetted image the lesson is about, not one the root
 # deploys, and restrict-image-registries refuses it wherever it appears, a cache path included.
 PROMO = f"{LAB_PLATFORM_GHCR}/promo/"
+# A Kyverno matchImageReferences glob is a pattern an image is matched against, not an image anything pulls, and
+# verify-image-signatures names lab-platform's llm-guard at ghcr.io and at an ECR cache on purpose (#669).
+KYVERNO = REPO / "policies/kyverno"
+GLOB = re.compile(r'\s*-\s*glob:\s*"[^"]*"\s*')
+globbed = []
 literal = []
 scanned = 0
 for root in sorted(roots):
@@ -78,12 +84,17 @@ for root in sorted(roots):
         scanned += 1
         for i, line in enumerate(text.splitlines(), 1):
             if LAB_PLATFORM_GHCR in uncommented(line).replace(PROMO, ""):
+                if p.parent == KYVERNO and GLOB.fullmatch(uncommented(line)):
+                    globbed.append(f"{p.relative_to(REPO)}:{i}")
+                    continue
                 literal.append(f"{p.relative_to(REPO)}:{i}")
 check(f"files were read ({scanned})", scanned > 100)
 check(f"no file names {LAB_PLATFORM_GHCR} outside a comment or {PROMO}; an app file says {IMAGE_REGISTRY} instead "
       f"{literal}", not literal)
 handed = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")
 check(f"the {PROMO} exemption is in use: /lab hands out the C2 villains there", PROMO in handed)
+check(f"the Kyverno glob exemption is in use, and only by verify-image-signatures {globbed}",
+      bool(globbed) and all(g.startswith("policies/kyverno/verify-image-signatures.yaml:") for g in globbed))
 
 print("== the value is only used where tpl renders it ==")
 # A plain manifest or a $values file reaches the cluster as written, so the template text would be the image.

@@ -1,6 +1,6 @@
 # ABOUTME: Runs every Kyverno CEL policy through the Kyverno CLI against fixture requests: the villain image,
-# ABOUTME: Beat 1's limit-less Deployment, drift by agent-sa, the floor, and a real signed image on ghcr.io.
-# SUITE: e2e (needs the kyverno CLI v1.19.1 on PATH, and network to ghcr.io for the signature check)
+# ABOUTME: Beat 1's limit-less Deployment, drift by agent-sa, the floor, and real signed images on ghcr.io.
+# SUITE: e2e (needs the kyverno CLI v1.19.1 on PATH, and network to ghcr.io and ECR for the signature checks)
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 #
 # Why (#206). The policies moved from kyverno.io/v1 ClusterPolicy patterns to CEL ValidatingPolicy and
@@ -17,6 +17,11 @@
 #
 # The CLI is the same evaluation engine the admission controller runs, and is pinned to the deployed version.
 import json, os, pathlib, shutil, subprocess, sys, tempfile
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from bootstrap_chart import APPS, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, kustomize_images  # noqa: E402
+from mirror_copies import COPIES  # noqa: E402
+import yaml  # noqa: E402
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 POL = REPO / "policies/kyverno"
@@ -68,6 +73,15 @@ LIMITS = {"limits": {"cpu": "100m", "memory": "64Mi"}}
 VILLAIN = "ghcr.io/peopleforrester/lab-platform/promo/promo-mascot:v1"
 SIGNED = ("ghcr.io/peopleforrester/watch-it-burn:busybox-1.36"
           "@sha256:73aaf090f3d85aa34ee199857f03fa3a95c8ede2ffd4cc2cdb5b94e566b11662")
+# lab-platform's llm-guard as the ai-layer Application pins it (#652), signed by lab-platform with the workshop
+# key (#669), at the chart's default registry and at an ECR pull-through cache path a root can pass instead.
+_GUARD = next(i for i in kustomize_images(yaml.safe_load((APPS / "ai-layer.yaml").read_text(encoding="utf-8")))
+              if i["name"] == "llm-guard")
+GUARD = f"{_GUARD['newName']}:{_GUARD['newTag']}@{_GUARD['digest']}".replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
+CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
+GUARD_CACHE = GUARD.replace(LAB_PLATFORM_GHCR, CACHE)
+# A mirror/ copy by digest, as an unsigned image of lab-platform's that the scope must leave out (question 878).
+MIRROR = next(f"{LAB_PLATFORM_GHCR}/{x.path}@{x.digest}" for x in COPIES if "falcosidekick" in x.path)
 
 
 def pod(name, ns, containers, labels=None, init=None):
@@ -404,6 +418,12 @@ g = run(SIG, [pod("ours-signed", "agent", [c(SIGNED)]),
               pod("third-party", "agent", [c("docker.io/library/nginx:1.27-alpine")])])
 expect("our signed image passes against policies/cosign/watch-it-burn.pub", g, "ours-signed", "pass")
 expect("a third-party image is not asked for our signature", g, "third-party", "pass")
+g = run(SIG, [pod("llm-guard", "agent", [c(GUARD)]), pod("llm-guard-cache", "agent", [c(GUARD_CACHE)])])
+expect(f"lab-platform's llm-guard ({GUARD.split('@')[0]}) passes against the same key", g, "llm-guard", "pass")
+# The fixture's ECR account is no one's, so Kyverno's read of the guard there is refused. That it reads there at
+# all is what says the cache path is in scope; a reference out of scope is never fetched.
+expect("the guard at an ECR cache path is in scope: Kyverno reads its manifest from the cache", g, "llm-guard-cache",
+       "error", f"{CACHE.split('/')[0]}/v2/lp-shared/peopleforrester/lab-platform/llm-guard/manifests/")
 # The negative: the same image under a key that did not sign it must fail, or "pass" above proves nothing.
 with tempfile.TemporaryDirectory() as tmp:
     key = pathlib.Path(tmp) / "k"
@@ -419,9 +439,14 @@ with tempfile.TemporaryDirectory() as tmp:
         indent = " " * (start - text.rfind("\n", 0, start) - 1)
         wrong = pathlib.Path(tmp) / "wrong-key.yaml"
         wrong.write_text(text[:start] + ("\n" + indent).join(pub.splitlines()) + text[end:])
-        g = run(wrong, [pod("ours-signed", "agent", [c(SIGNED)])])
+        g = run(wrong, [pod("ours-signed", "agent", [c(SIGNED)]), pod("llm-guard", "agent", [c(GUARD)]),
+                        pod("mirror", "agent", [c(MIRROR)]), pod("villain", "agent", [c(VILLAIN)])])
         expect("the same image under a different key fails with the named message", g, "ours-signed", "fail",
                "must carry a valid cosign signature")
+        expect("so does lab-platform's llm-guard", g, "llm-guard", "fail", "must carry a valid cosign signature")
+        # Under a key that signed nothing, an image in scope fails; these pass because they are out of it.
+        expect(f"an unsigned lab-platform mirror/ copy ({MIRROR.split('@')[0]}) is not in scope", g, "mirror", "pass")
+        expect("nor is a promo/ villain, which restrict-image-registries refuses by path", g, "villain", "pass")
 
 print()
 if failures:

@@ -1,13 +1,29 @@
-# ABOUTME: Kyverno image-signature verification: every image from our own registry must carry a valid
-# ABOUTME: cosign signature made with the key in policies/cosign/, or admission denies the pod.
+# ABOUTME: Kyverno image-signature verification: every image from our own registry, and lab-platform's llm-guard
+# ABOUTME: at ghcr.io or an ECR cache, must carry a cosign signature made with the key in policies/cosign/.
 #
 # This is Enforce, and it is scoped so that it can be. Two facts make that safe rather than reckless:
 #
-#   1. matchImageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*. Third-party images the
-#      allowlist permits (docker.io/library/nginx, cr.agentgateway.dev, the OTel autoinstrumentation
-#      image) do not match this rule and are unaffected by it.
-#   2. All eight tags the manifests reference were signed and verified before this was flipped on.
+#   1. matchImageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*, Harbor, and lab-platform's
+#      llm-guard image (at ghcr.io or an ECR pull-through cache). Third-party images the allowlist permits
+#      (docker.io/library/nginx, cr.agentgateway.dev, the OTel autoinstrumentation image) do not match
+#      this rule and are unaffected by it. Neither are lab-platform's other paths: see LAB-PLATFORM below.
+#   2. All eight tags the manifests reference were signed and verified before this was flipped on, and
+#      llm-guard's pinned digest verified under the Kyverno CLI before it was added (#669).
 #      An unsigned image from our registry is now denied, which is the point.
+#
+# LAB-PLATFORM (#669)
+#
+# Since #652 the llm-guard Deployment runs ghcr.io/peopleforrester/lab-platform/llm-guard:v1 by digest,
+# at whatever registry the root passes as imageRegistry, which may be an ECR pull-through cache
+# (<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/lab-platform). lab-platform signs
+# with this same workshop key (its deploy/images/cosign.pub is this key byte for byte, and its
+# decisions.md entry "Images are signed with the workshop key" says why), so no second attestor is
+# needed: the one below verifies it, offline, as it does ours.
+#
+# Only llm-guard is matched, not lab-platform/* (question 878). Kyverno's glob crosses the slash, so
+# lab-platform/* would also catch the 14 vendor copies under lab-platform/mirror/ (Falco's sidekick and
+# Talon, KubeArmor, the collectors, Grafana, Tempo, kagent's postgres), which carry no signature, and
+# deny all of them. A further lab-platform image gets its own pattern once its signature is checked.
 #
 # WHY A KEY AND NOT KEYLESS
 #
@@ -42,8 +58,9 @@ metadata:
     policies.kyverno.io/title: Verify Image Signatures
     policies.kyverno.io/category: Supply Chain / CNCF
     policies.kyverno.io/description: >-
-      Requires a valid cosign signature on every image from ghcr.io/peopleforrester/watch-it-burn, in
-      any namespace. Verification is key-based and needs no Sigstore network access.
+      Requires a valid cosign signature on every image from ghcr.io/peopleforrester/watch-it-burn and on
+      lab-platform's llm-guard image, in any namespace. Verification is key-based and needs no Sigstore
+      network access.
 spec:
   validationActions:
     - Deny
@@ -58,9 +75,10 @@ spec:
         apiVersions: ["v1"]
         operations: ["CREATE", "UPDATE"]
         resources: ["pods"]
-  # Both registries we publish to, under ONE key. Deliberately NOT namespaced: an image of ours running in
-  # any namespace must be signed, so the control cannot be sidestepped by deploying somewhere else. Only
-  # images matching these globs are verified; every other image is left to restrict-image-registries.
+  # Both registries we publish to, and lab-platform's llm-guard, under ONE key. Deliberately NOT
+  # namespaced: an image of ours running in any namespace must be signed, so the control cannot be
+  # sidestepped by deploying somewhere else. Only images matching these globs are verified; every other
+  # image is left to restrict-image-registries.
   #
   # Harbor is here because the version of this policy before this one enforced signatures on
   # harbor.agenticburn.com and nothing else. Harbor is documented (infra/harbor/) and permitted by the
@@ -70,6 +88,14 @@ spec:
   matchImageReferences:
     - glob: "ghcr.io/peopleforrester/watch-it-burn*"
     - glob: "harbor.agenticburn.com/*"
+    # lab-platform's llm-guard (#669), by tag or by digest, and the same path through an ECR pull-through
+    # cache. The ':' and '@' keep a lookalike such as llm-guard-next out; the '*' before peopleforrester
+    # takes the cache rule's prefix, or none. A cache serves the upstream manifest, so the digest and the
+    # sha256-<digest>.sig tag Kyverno reads are the same there; that read through a real cache is still owed.
+    - glob: "ghcr.io/peopleforrester/lab-platform/llm-guard:*"
+    - glob: "ghcr.io/peopleforrester/lab-platform/llm-guard@*"
+    - glob: "*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/llm-guard:*"
+    - glob: "*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/llm-guard@*"
   validationConfigurations:
     required: true
     verifyDigest: true
@@ -93,5 +119,6 @@ spec:
         (images.containers + images.initContainers + images.ephemeralContainers).all(image,
         verifyImageSignatures(image, [attestors.workshopKey]) > 0)
       message: >-
-        Images from ghcr.io/peopleforrester/watch-it-burn and harbor.agenticburn.com must carry a valid
-        cosign signature made with the workshop key (policies/cosign/watch-it-burn.pub).
+        Images from ghcr.io/peopleforrester/watch-it-burn and harbor.agenticburn.com, and lab-platform's
+        llm-guard image, must carry a valid cosign signature made with the workshop key
+        (policies/cosign/watch-it-burn.pub).

@@ -3,6 +3,11 @@
 Every image we publish to `ghcr.io/peopleforrester/watch-it-burn` is signed with cosign, and
 `policies/kyverno/verify-image-signatures.yaml` requires a valid signature at admission.
 
+lab-platform signs its images with this same key (its `deploy/images/cosign.pub` is `watch-it-burn.pub`), so
+the policy also requires it on lab-platform's `llm-guard`, at ghcr.io and through an ECR pull-through cache
+(#669). It does not on the rest of `ghcr.io/peopleforrester/lab-platform/`: the `mirror/` vendor copies are
+unsigned, and the challenge 2 villains under `promo/` are refused by path in `restrict-image-registries`.
+
 ## The public key
 
 `watch-it-burn.pub` is the verification key. It is public by design and is embedded verbatim in the

@@ -6171,3 +6171,65 @@ Hecaton run 13263 checked the host fix that the 2026-10-29 #672 entry escalated.
   podman. This retry ran in slot 6.
 
 **Not yet run on a cluster:** nothing is owed. Nothing changes in this repo besides this record.
+
+## 2026-10-31 · #669 · verify-image-signatures checks lab-platform's llm-guard, at ghcr.io and an ECR cache, under the workshop key
+
+Since #652 the llm-guard Deployment runs `ghcr.io/peopleforrester/lab-platform/llm-guard:v1` by digest, at the
+registry the root passes as `imageRegistry` (#622), and `verify-image-signatures` matched only
+`ghcr.io/peopleforrester/watch-it-burn*` and Harbor. So the guard went unchecked at admission. The #652 entry
+above says lab-platform signs "with its own identity". It does not.
+
+- **lab-platform's signing identity is this repo's workshop key.** Read through `sources` on 2026-10-31.
+  lab-platform's `deploy/images/cosign.pub` is `policies/cosign/watch-it-burn.pub` byte for byte, with two
+  ABOUTME lines above the PEM. Its decisions.md entry "Images are signed with the workshop key, by digest"
+  (lab-platform#88, 2026-10-28) chose that key so this policy would admit its images once
+  `matchImageReferences` named them. It signs with cosign v2.6.5, by digest, with the private key in mrf-secrets.
+  So no second attestor is added. The `workshopKey` attestor, with `insecureIgnoreTlog` and `insecureIgnoreSCT`
+  as before, verifies the guard offline, so Challenge 1's default-deny egress does not break admission.
+- **question 878: Should verify-image-signatures check only lab-platform's llm-guard image, or every image under
+  ghcr.io/peopleforrester/lab-platform/ as issue #669 asks?** Answer: only llm-guard and its cache path. Decided by
+  hecaton's research under Michael's standing rules, not by Michael. What it changes: the policy gains four globs,
+  `ghcr.io/peopleforrester/lab-platform/llm-guard:*` and `...llm-guard@*`, and the same two under
+  `*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/`. The `:` and `@` keep a lookalike out. The `*` before
+  `peopleforrester` takes a cache rule's prefix, or none. `lab-platform/*` is not added. Kyverno's glob crosses the
+  slash, so it would deny the 14 unsigned `mirror/` vendor copies and catch the `promo/` villains. A further
+  lab-platform image gets its own glob once its signature is checked in the registry.
+- **Measured before it was written.** The Kyverno CLI v1.19.1 ran against a scratch copy of the policy with
+  these globs. The pinned guard digest (`sha256:781a126b…`) passed under the workshop key, both as `:v1@digest`
+  and as `@digest` alone. At the cache path, Kyverno went to the ECR host for the manifest, which shows it is in
+  scope, and got 401 for the fixture's account. The falcosidekick mirror copy, `promo/promo-mascot:v1` and an
+  `llm-guardx` lookalike were not matched. A tag with no digest fails ("does not have a digest"), as it already
+  did for watch-it-burn images. The Application pins the digest, so this changes nothing deployed.
+- **The previous run of this issue (hecaton run on pool claude-performantpro-3) failed before it changed any
+  code.** That pool's podman store could not re-exec into its existing user namespace. Nothing in this repo runs
+  podman, and podman works in the pool this run used (claude-performantpro-7), so the repo had nothing to fix.
+  The run before that (needs-decision, which asked question 878) could not read lab-platform: `sources` refused
+  with `sudo: a password is required`. This run's reads went through. A third run wrote this change and then
+  stalled. It waited on `bash verify/run-e2e-tools.sh` in the background with no output of its own, the tier runs
+  longer than 15 minutes, and hecaton's 900-second stall check stopped it. That was the run's waiting, not the
+  repo. The run that committed this ran the tier while still reporting its progress.
+
+**Tests.** `verify/test_image_signing.py` (offline) now matches with fnmatch, whose `*` crosses `/` as Kyverno's
+does, instead of a prefix test. It takes the guard's reference from the ai-layer Application's `kustomize.images`
+and checks the guard is in scope, and allowed by `restrict-image-registries`, at ghcr.io, at
+`123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform` and at a cache path with
+no prefix. It checks that `lab-platform/*` is not a glob, and that none of the 14 `mirror/` copies, no `promo/`
+cover villain and no `llm-guard-next` lookalike is in scope, at ghcr.io or the cache. It also checks that an
+ECR glob's host is one the allowlist's `ecr` regex admits. `verify/test_kyverno_cel_policies.py` (E2E, tools
+tier) runs the real guard digest through the CLI, where it passes under the policy's key. It runs the cache path,
+which errors at the ECR host. Under a minted wrong key the guard fails with the policy's message, and the
+falcosidekick copy by digest and the villain pass. Both files were also run against the old policy, which was
+then restored. The offline file failed four checks: the guard at each of the three registries, and by digest
+alone. The CLI file failed two: the cache case and the guard under the wrong key. A scope widened to
+`lab-platform/*` failed four offline checks. `verify/test_image_registry.py`, #622's gate against a literal
+`ghcr.io/peopleforrester/lab-platform` in what the root deploys, now skips a `- glob: "..."` line in
+`policies/kyverno/`. A match pattern is not an image anything pulls, and this one names the ghcr.io host on
+purpose. A new check fails if the skip goes unused, or is used outside `verify-image-signatures.yaml`.
+
+**Not yet run on a cluster.** Owed: a read of the guard's signature through a real ECR pull-through cache. That
+means Kyverno's ECR credential, plus the cache serving the `sha256-<digest>.sig` tag from ghcr.io. The test for it
+is `verify/test_kyverno_cel_policies.py`, which uses the fixture's dead account. On a cluster built with an
+ECR `imageRegistry`, check that the llm-guard pod in `agent` is admitted:
+`KUBECONFIG=<file> kubectl --context "$CONTEXT" -n agent get pods -l app.kubernetes.io/name=llm-guard`, with
+no `verify-image-signatures` denial in `kubectl --context "$CONTEXT" -n agent get events`. At the default
+registry, `bash verify/run-e2e.sh` on a fresh attendee cluster covers it.
