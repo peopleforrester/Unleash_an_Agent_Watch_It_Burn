@@ -6075,5 +6075,6 @@ registry, so it stays green. That row is a separate record and is filed as a fol
 a session with AWS access. This run has none: `kubectl config get-contexts` is empty and `aws sts
 get-caller-identity` says NoCredentials. Against each cluster, run `CONTEXT=<ctx> python3
 verify/test_kyverno_cel_live.py` and then `bash verify/run-e2e.sh` (with CONTEXT, IAM_PIPELINE_PROFILE and
-IAM_PIPELINE_REGION set). The live check reads the policy list from `policies/kyverno/` and `policies/floor/`, so
-the policies added since d8076da (#490, #203) are inside its count with no edit.
+IAM_PIPELINE_REGION set). The live check reads the policy list from `policies/kyverno/` and `policies/floor/`, so it
+now expects eleven, not the issue's ten: #606 added `restrict-agent-spawned-workloads.yaml` after d8076da, and the
+check counts it with no edit.
