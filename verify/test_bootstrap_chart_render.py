@@ -246,7 +246,7 @@ print("== LLM Guard's image, set through kustomize.images at the root's registry
 # resources.yaml names the container by the kustomize image name llm-guard; ai-layer.yaml's kustomize.images sets it.
 # Argo CD runs `kustomize edit set image` with each entry, which writes the entries kustomize_images() returns
 # (measured with kustomize v5.8.1, Argo CD v3.4.4's), so the scratch overlay below is what Argo CD builds.
-LLM_GUARD = "llm-guard:v1@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b"
+LLM_GUARD = "llm-guard:v1@sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
 CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
 
 

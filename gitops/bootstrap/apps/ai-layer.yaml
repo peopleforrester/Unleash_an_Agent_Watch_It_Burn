@@ -27,7 +27,7 @@ spec:
       # (`kustomize edit set image`) sets that name here, so a root passing an ECR pull-through cache path gets
       # the cache's copy. The package is lab-platform's; verify/test_llm_guard_image.py holds the reference.
       images:
-        - "llm-guard={{ .Values.imageRegistry }}/llm-guard:v1@sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b"
+        - "llm-guard={{ .Values.imageRegistry }}/llm-guard:v1@sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
       # The front door's certificate (#638). With frontDoor.certificateArn set, the console Service's 443 becomes a
       # TLS listener on the NLB with that ACM certificate, re-encrypting to nginx, so lab-platform's gateway, which
       # verifies against the system roots, accepts it. Unset, these patches are not rendered and 443 stays the TCP

@@ -6938,3 +6938,26 @@ output_redacted), as of the guard-proxy submodule pinned at a022fa5. `weaver reg
 passed with weaver v0.24.2, the sha256 the CI workflow pins, and `weaver registry resolve` lists both attributes on
 the span. `verify/test_weaver_guard_proxy_stamps.py` holds the stamped keys and the enum members to proxy.py both
 ways, offline, so a new stamp value fails the suite before CI's weaver job.
+## 2026-10-31 · #730 · llm-guard moves to lab-platform#55's republish, 6cdbf3a2, in the Application and images.lock
+
+**Why.** The ai-layer Application, images.lock and VERSIONS.lock pinned lab-platform's `llm-guard:v1` at
+`sha256:781a126b…`, the digest from before lab-platform#55 rebuilt every published v1 image under `umask 022`.
+Read anonymously on 2026-10-31 (`crane digest` with an empty `DOCKER_CONFIG`), `ghcr.io/peopleforrester/lab-platform/llm-guard:v1`
+serves `sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad`. That is the digest lab-platform's
+decisions.md entry 2026-10-30T18:04:37Z lists for llm-guard and the `llm-guard` row of its
+`deploy/watch-it-burn/images.tsv`, so it is the hand-over, not a stray push. The lock row is a record of what the
+Application runs, so the row alone was not repinned: the Deployment's pin moved with it.
+
+**Changed.** `gitops/bootstrap/apps/ai-layer.yaml`'s `kustomize.images`, the `llm-guard` row and header of
+`images.lock`, and the VERSIONS.lock note take `6cdbf3a2…`. `verify/test_llm_guard_image.py` and
+`verify/test_bootstrap_chart_render.py` pin it, and the first gains a check that images.lock's `llm-guard` row names
+the digest the Application pins, the drift nothing caught before.
+
+**Checked.** `verify-image-signatures` is Deny, so the new digest was run through `verify/test_kyverno_cel_policies.py`
+with the pinned Kyverno CLI v1.19.1 and no stored credential: it passes under `policies/cosign/watch-it-burn.pub` and
+fails under a minted wrong key. The lock's other lab-platform rows were read the same way and have not moved: the
+four `mirror/kubearmor/` tags serve their locked digests, and `web:v1` serves `73cd1565…`.
+
+**Not yet run on a cluster.** The guard pod pulling `6cdbf3a2…`, passing admission and answering on a fresh
+attendee cluster: `bash verify/run-e2e.sh` with CONTEXT, IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set, then
+`verify/input-guard.sh <host> <kube-context>` (a benign prompt passes, an injection is blocked).
