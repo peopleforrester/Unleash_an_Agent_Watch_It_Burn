@@ -38,7 +38,7 @@ for rel in ("VERSIONS.lock", "docs/TECH-STATUS.md", "cost/README.md"):
           claims and all(c.lower() == "kagent" for c in claims))
 
 print("== the workshop-agent runs the runtime that emits kagent_usage_metadata ==")
-docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")) if d]
+docs = [d for d in yaml.safe_load_all(((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8") + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text(encoding="utf-8"))) if d]
 agents = [d for d in docs if d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent"]
 check("resources.yaml has one workshop-agent Agent", len(agents) == 1, f"found {len(agents)}")
 runtime = (agents[0]["spec"].get("declarative") or {}).get("runtime", "python") if agents else None

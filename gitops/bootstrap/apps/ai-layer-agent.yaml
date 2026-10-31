@@ -1,0 +1,70 @@
+# ABOUTME: ArgoCD Application for the workshop-agent Agent CR alone (gitops/ai-layer-agent), split from ai-layer (#679).
+# ABOUTME: It syncs WITHOUT RespectIgnoreDifferences, so a change to the Agent's tools in git reaches a live cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ai-layer-agent
+  namespace: argocd
+  annotations:
+    # Wave 4, after ai-layer (wave 3). The Agent names ai-layer's ModelConfig (bedrock-nova), its RemoteMCPServers
+    # (workshop-mcp, evil-mcp) and agent-sa, and kagent creates the agent pod from it. ai-layer's otel-ordering-gate
+    # PreSync hook is what holds pod creation until the OTel webhook serves, so the Agent comes after ai-layer, as it
+    # did inside the bundle, and BurritoBot's pod is admitted instrumented.
+    argocd.argoproj.io/sync-wave: "4"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: gitops/ai-layer-agent
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: agent
+  # Why this is its own Application (#679). In ai-layer, with RespectIgnoreDifferences=true, Argo CD v3.5.2 copied the
+  # ignored evil-mcp toolNames back from the live Agent before each sync. The Agent is a CRD, so that copy is a JSON
+  # merge patch, and a merge patch cannot write one element of an array: it carried the whole live tools array, and
+  # restoreNonIgnoredFields walks maps only. Every sync re-applied the live tools, so a git change to any tool entry
+  # never landed and the Agent stayed OutOfSync while each auto-sync said serverside-applied. That is how
+  # read_support_ticket (#640) never reached either KubeCon cluster. verify/test_agent_tools_sync.py runs that code.
+  #
+  # Here the two ignores below act on the DIFF only. A student's guard-mcp-on narrows evil-mcp's toolNames live; the
+  # diff ignores that one list, the Agent reads Synced, and selfHeal never fires for it. A commit that changes this
+  # Agent makes it OutOfSync, and the sync applies git's Agent whole: git's tools land, and with them evil-mcp's
+  # committed (vulnerable) list and the committed modelConfig. That is the cost, and it is the right one: a change
+  # to the Agent in git resets a student's C7 fix only when someone commits a change to the Agent mid-challenge.
+  #
+  # Nothing in this app is a list an ignore reaches into while the sync respects ignores, and nothing may become one:
+  # verify/test_agent_tools_sync.py fails any Application that both respects ignores on sync and ignores a field
+  # inside a CRD's array, on any profile.
+  ignoreDifferences:
+    - group: kagent.dev
+      kind: Agent
+      name: workshop-agent
+      jqPathExpressions:
+        # Challenge 7's live control on a toolnames profile: the student narrows evil-mcp's toolNames with guard-mcp-on
+        # (challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh). NARROWED to the evil-mcp entry only (#349).
+        # Ignoring `.spec.declarative.tools` wholesale also stopped OUR changes reaching a cluster, silently: when
+        # get_recipe was renamed to get_vault_entry the manifest updated and every live Agent CR kept pointing at the
+        # tool that no longer existed, so Challenge 5 was impossible while Argo reported Synced and Healthy throughout.
+        # Selected by server NAME rather than array index, so it stays correct if the order ever changes.
+        # On the admin profile (c7Control: gateway) C7 is agentgateway's rule (#496), nothing writes this list live,
+        # and the ignore is not rendered, so selfHeal also restores evil-mcp's list from git there.
+        # {{- if ne .Values.c7Control "gateway" }}
+        - '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
+        # {{- end }}
+        # Per-cluster model tier (cost-race demo): modelConfig can be patched live to another Bedrock tier on one
+        # cluster. Ignored so selfHeal keeps it; a commit to the Agent resets it to the committed bedrock-nova.
+        - '.spec.declarative.modelConfig'
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # Server-side apply, as in ai-layer, so a sync reclaims .spec.declarative.tools from a manager that took it
+      # (kubectl-patch, from a past Challenge 7 patch; #349). Force is kept for the same reason ai-layer keeps it.
+      - ServerSideApply=true
+      - Force=true
+      # NOT RespectIgnoreDifferences=true. That option is what froze the tools array (above). Do not add it here.

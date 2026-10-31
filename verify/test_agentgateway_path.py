@@ -22,7 +22,7 @@ from urllib.parse import urlparse
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-RESOURCES = list(yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()))
+RESOURCES = list(yaml.safe_load_all(((REPO / "gitops/ai-layer/resources.yaml").read_text() + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text())))
 GATEWAY = list(yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()))
 EVALUATION = "docs/research/2026-10-24-agentgateway-evaluation.md"
 

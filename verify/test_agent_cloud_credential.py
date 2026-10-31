@@ -24,7 +24,7 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-RES_TEXT = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+RES_TEXT = ((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8") + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text(encoding="utf-8"))
 RES = [d for d in yaml.safe_load_all(RES_TEXT) if isinstance(d, dict)]
 TF = (REPO / "infra/terraform/aws/cluster/main.tf").read_text(encoding="utf-8")
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")

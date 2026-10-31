@@ -19,7 +19,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import (APPS, ARM_END, ARM_PARAMETER, ARM_VALUE, ARMED_IF, C7_TOOLNAMES_END,  # noqa: E402
                              C7_TOOLNAMES_IF, CHART, CONFIG, DEPLOY_ONLY_PROFILES, UNARMED_IF,
                              FRONT_DOOR_ARN, FRONT_DOOR_END, FRONT_DOOR_IF, IMAGE_REGISTRY, LAB_PLATFORM_GHCR, REPO, REPO_URL,
-                             REVISION, TEMPLATES, all_profiles, app_names, deploy_root, deploys, profiles, values_path)
+                             REVISION, TEMPLATES, all_profiles, app_names, deploy_root, deploys, for_c7_control, profiles,
+                             values_path)
 
 failures = []
 
@@ -136,9 +137,13 @@ check("kyverno-policies.yaml renders its kustomize patches only when armed, the 
 check("and its /spec/validationActions ignore only when not armed",
       re.search(rf"  # {re.escape(UNARMED_IF)}\n(  #.*\n)*  ignoreDifferences:\n", kyv) is not None
       and f"        - /spec/validationActions\n  # {ARM_END}\n  syncPolicy:" in kyv)
-check("ai-layer.yaml renders the Agent's evil-mcp toolNames ignore only when c7Control is not gateway (#679)",
-      f"      jqPathExpressions:\n        # {C7_TOOLNAMES_IF}\n        - '.spec.declarative.tools[] | select("
-      f'.mcpServer.name == "evil-mcp") | .mcpServer.toolNames\'\n        # {C7_TOOLNAMES_END}\n' in ai_layer)
+agent_app = (APPS / "ai-layer-agent.yaml").read_text(encoding="utf-8")
+check("ai-layer-agent.yaml renders the Agent's evil-mcp toolNames ignore only when c7Control is not gateway (#679)",
+      f"        # {C7_TOOLNAMES_IF}\n        - '.spec.declarative.tools[] | select("
+      f'.mcpServer.name == "evil-mcp") | .mcpServer.toolNames\'\n        # {C7_TOOLNAMES_END}\n' in agent_app)
+check("ai-layer.yaml ignores nothing on the Agent any more: it is ai-layer-agent's (#679)",
+      not [i for i in yaml.safe_load(for_c7_control(ai_layer, "toolnames"))["spec"].get("ignoreDifferences") or []
+           if i.get("kind") == "Agent"])
 check("ai-layer.yaml sets LLM Guard's image outside that guard, so every root renders it (#652)",
       "    kustomize:\n" in ai_layer and "      images:\n" in ai_layer
       and ai_layer.index("      images:\n") < ai_layer.index(FRONT_DOOR_IF))
@@ -178,12 +183,17 @@ check("the act 2 OTTL overlay left apps/ (it is not an Application)",
 # The selections the four globs made at b1fcb0e, less the overlay the excludes matched without meaning to,
 # less customer-stream, which every profile listed until #473 removed it,
 # and less loki and alloy, which #474 dropped from attendee, admin and full,
-# plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full.
+# plus cluster-network-policies, the agent namespace's IMDS deny, which #203 added to attendee, admin and full,
+# plus ai-layer-agent, the workshop-agent Agent split out of ai-layer on every profile (#679).
 WANT = {
-    "attendee": 27, "burn": 18, "admin": 31, "full": 29,
+    "attendee": 28, "burn": 19, "admin": 32, "full": 30,
 }
 for profile, n in WANT.items():
-    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203", len(app_names(profile)) == n)
+    check(f"{profile} lists {n} apps, the old root's selection less #473 and #474, plus #203 and #679",
+          len(app_names(profile)) == n)
+for profile in all_profiles():
+    check(f"{profile} lists ai-layer-agent wherever it lists ai-layer (#679)",
+          ("ai-layer-agent" in app_names(profile)) == ("ai-layer" in app_names(profile)))
 for profile in WANT:
     check(f"{profile} {'lists' if profile != 'burn' else 'does not list'} cluster-network-policies (#203)",
           ("cluster-network-policies" in app_names(profile)) == (profile != "burn"))
@@ -198,13 +208,14 @@ for f in app_files:
     # (#622) and Prometheus' own, escaped.
     # ai-layer.yaml alone also holds the front door's guarded certificate patch (#638).
     # kyverno-policies.yaml alone holds the guardrails' armed and unarmed blocks (#638).
-    allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END, C7_TOOLNAMES_IF,
-                                             C7_TOOLNAMES_END) if f == "ai-layer.yaml" else ()) \
+    allowed = (REVISION, IMAGE_REGISTRY) + ((FRONT_DOOR_IF, FRONT_DOOR_ARN, FRONT_DOOR_END) if f == "ai-layer.yaml" else ()) \
+        + ((C7_TOOLNAMES_IF, C7_TOOLNAMES_END) if f == "ai-layer-agent.yaml" else ()) \
         + ((ARMED_IF, UNARMED_IF, ARM_END) if f == "kyverno-policies.yaml" else ())
     stray = [m for m in re.findall(r"\{\{.*?\}\}", re.sub(r"\{\{`\{\{.*?\}\}`\}\}", "", raw))
              if m not in allowed]
     check(f"{f}: no template text but the revision and the image registry (Prometheus' {{{{ }}}} escaped)"
-          + (" and the front door's certificate and the c7Control guard" if f == "ai-layer.yaml" else "")
+          + (" and the front door's certificate" if f == "ai-layer.yaml" else "")
+          + (" and the c7Control guard" if f == "ai-layer-agent.yaml" else "")
           + (" and the guardrails' arm guards" if f == "kyverno-policies.yaml" else "")
           + f" {stray}", not stray)
     docs = [d for d in yaml.safe_load_all(raw) if d]

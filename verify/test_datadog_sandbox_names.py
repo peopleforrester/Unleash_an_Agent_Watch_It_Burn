@@ -99,7 +99,7 @@ print("== every BurritoBot pod labels its logs with the env and the service its 
 # service is the image short name (nginx, workshop-mcp) and sits outside BurritoBot in the shared org.
 # guard-proxy's service is the root span's, burritobot, which Datadog takes as the LLM Obs ml_app.
 pods = {}
-for path in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer/agentgateway.yaml",
+for path in ("gitops/ai-layer/resources.yaml", "gitops/ai-layer-agent/workshop-agent.yaml", "gitops/ai-layer/agentgateway.yaml",
              "gitops/ai-layer/argocd-managed-app.yaml"):
     for d in yaml.safe_load_all((REPO / path).read_text()):
         if not d or d.get("kind") not in ("Deployment", "Agent"):

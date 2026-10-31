@@ -40,6 +40,7 @@
 # Each name is gitops/bootstrap/apps/<name>.yaml. The list is explicit (#609): a new app file reaches no
 # profile until a line here names it, and a name with no file fails the render.
 apps:
+  - ai-layer-agent
   - ai-layer-otel
   - ai-layer
   - cert-manager

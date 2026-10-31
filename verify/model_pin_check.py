@@ -47,6 +47,13 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = REPO / "gitops" / "ai-layer" / "resources.yaml"
+# The workshop-agent Agent, its own bundle since #679 (the ai-layer-agent Application).
+AGENT_CR = REPO / "gitops" / "ai-layer-agent" / "workshop-agent.yaml"
+
+
+def committed_text():
+    """The ModelConfigs' and guard-proxy's bundle and the Agent's, as one multi-document YAML."""
+    return RESOURCES.read_text() + "\n---\n" + AGENT_CR.read_text()
 PROXY = REPO / "gitops" / "ai-layer" / "guard-proxy" / "proxy.py"
 EVENT_SH = REPO / "infra" / "terraform" / "fleet" / "event.sh"
 
@@ -258,7 +265,7 @@ def main(argv=None):
             results.append(ok)
 
     now = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    pin = pinned(RESOURCES.read_text())
+    pin = pinned(committed_text())
     print(f"== model pin check, {now} ==")
     print(f"  pin: workshop-agent -> {pin['model_config']} -> {pin['model_id']} in {pin['region']}, "
           f"MODEL_TIER={pin['model_tier']}, RATE_LIMIT_RPM={pin['rate_limit_rpm']}")

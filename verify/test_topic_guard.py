@@ -27,7 +27,7 @@ def check(name: str, cond: bool, detail: str = "") -> None:
         failures.append(name)
 
 
-docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+docs = [d for d in yaml.safe_load_all(((REPO / "gitops/ai-layer/resources.yaml").read_text() + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text())) if d]
 
 
 def obj(kind: str, name: str) -> dict:

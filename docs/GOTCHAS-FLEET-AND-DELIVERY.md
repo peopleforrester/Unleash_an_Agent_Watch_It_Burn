@@ -153,30 +153,43 @@ is correct from the start. If you ever see this on an OLD pod predating the fix,
 `kubectl -n agent exec deploy/web-terminal -- bash -c 'export HOME=/home/student; kubectl config unset users.me.token; kubectl config set users.me.tokenFile /var/run/secrets/kubernetes.io/serviceaccount/token'`
 then re-run the toggle. But the code fix means fresh clusters never need it.
 
-## guard-proxy env changes never arrive via Git (MODEL_TIER, COST_CAP_USD, RATE_LIMIT_RPM)
+## guard-proxy env: what git delivers, and never adding an entry live (#679)
 
-**Symptom:** you change an env var on the guard-proxy in `gitops/ai-layer/resources.yaml`, ArgoCD reports
-the ai-layer app **Synced and Healthy** at your commit, and the live Deployment still has the old value
-forever.
+**What git delivers.** The ai-layer Application ignores nine guard-proxy env entries BY NAME (INPUT_BLOCKLIST,
+INPUT_CLASSIFIER, OUTPUT_GUARD, PROXY_FAIL_CLOSED, MODEL_TIER, RATE_LIMIT_RPM, COST_CAP_USD, STREAM_PROMPTS,
+OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT) and syncs with `RespectIgnoreDifferences=true`, so a live value
+of one of those nine survives every sync, and a committed change to one of them reaches new clusters only. Every
+other entry is git's: a changed value or a new entry lands on the next sync, in git's place (run through Argo CD
+v3.5.2's own code, `docs/research/2026-10-30-argo-sync-replay/`). Before #265 the whole env was ignored, which is
+why this section used to say git delivers nothing here.
 
-**Cause, and it is deliberate:** the ai-layer Application carries an `ignoreDifferences` entry for
-`.spec.template.spec.containers[] | select(.name=="proxy") | .env` on Deployment/guard-proxy. It exists so
-runtime guard toggles are not reverted by selfHeal. The side effect is that **git is not a delivery
-channel for anything in that env block**. Synced does not mean applied, for that path only.
+**Never add an env entry live.** Under `RespectIgnoreDifferences` a list with an ignored element is synced in its
+LIVE order: Argo CD copies the ignored entries back with a strategic merge patch that carries `$setElementOrder/env`
+from the live object. `kubectl set env` of a name the live list does not have appends it, so the live order stops
+matching git's, and no sync can put it back while the diff predicts git's order. The Deployment then reads OutOfSync
+for good and selfHeal syncs it, alone, every few seconds; on 2026-10-29 those partial syncs held back every later
+ai-layer commit on both KubeCon clusters while each reported Succeeded. That is what the `CONSOLE_ORIGIN` stopgap did.
+Changing the value of an entry the list already has (`kubectl set env` of one of the nine) is in place and is fine.
+agentgateway's env, where `BEDROCK_NOVA_MODEL` is ignored, is the same.
 
-**The correct procedure** (verified fleet-wide 2026-08-30 rolling MODEL_TIER=nova):
+**The repair** is `fleet.sh converge`: `repair_env_order` writes the live entries, values kept, in git's order, as
+the Argo controller (block-argocd-drift admits no one else), and the next sync reads Synced. The pod rolls, so
+guard-proxy's runtime guard toggles and cost counter start again from its env. `verify_one` then reads the hashed
+ConfigMap and Secret names of the commit ai-layer says it synced, so a cluster that reports Succeeded without
+running it is a converge failure (`<name>:ai-layer-rollout`), not a green line.
 
-1. `kubectl -n agent set env deploy/guard-proxy <VAR>=<value>` on the cluster. It sticks precisely because
-   ArgoCD ignores that path.
-2. On any cluster with policies (admin and attendee) that patch is **denied by Kyverno**
-   `block-argocd-drift` ("This resource is managed by ArgoCD. Change it in Git"). The Community cluster
-   (`burn` profile) has no policies and accepts it directly. It is a Kyverno ValidatingPolicy (#206) and the enforcing field is
-   `spec.validationActions`.
-3. So: `kubectl patch validatingpolicy block-argocd-drift --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'`,
-   apply the env change, then patch it straight back to `["Deny"]`. Allow a few
-   seconds after the policy patch for the webhook to pick it up, and retry the `set env` in a short loop:
-   two of eight clusters raced it on the first pass and needed a retry.
-4. Changing env restarts the pod, which also remounts the ConfigMap, so a separate pod delete is only
+**Changing one of the nine on a running cluster** (verified fleet-wide 2026-08-30 rolling MODEL_TIER=nova):
+
+1. `kubectl -n agent set env deploy/guard-proxy <VAR>=<value>` on the cluster, for a VAR the Deployment already has.
+   It sticks because ai-layer ignores that entry.
+2. On an armed cluster that patch is **denied by Kyverno** `block-argocd-drift` ("This resource is managed by
+   ArgoCD. Change it in Git"). The Community cluster (`burn` profile) has no policies and accepts it directly. Either
+   make the change as `--as=system:serviceaccount:argocd:argocd-application-controller`, which the policy always
+   admits, or set the policy to Audit around it:
+   `kubectl patch validatingpolicy block-argocd-drift --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'`,
+   apply the env change, then patch it straight back to `["Deny"]`. Allow a few seconds after the policy patch for the
+   webhook to pick it up, and retry the `set env` in a short loop: two of eight clusters raced it on the first pass.
+3. Changing env restarts the pod, which also remounts the ConfigMap, so a separate pod delete is only
    needed when the ONLY change is ConfigMap content (proxy.py, the web pages).
 
 Always verify after: `kubectl -n agent exec deploy/guard-proxy -- sh -c 'echo $MODEL_TIER'` and confirm

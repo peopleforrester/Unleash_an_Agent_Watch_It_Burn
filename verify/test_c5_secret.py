@@ -14,7 +14,7 @@ import re
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-RES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+RES = ((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8") + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text(encoding="utf-8"))
 PROXY = (REPO / "gitops/ai-layer/guard-proxy/proxy.py").read_text(encoding="utf-8")
 PROBE = (REPO / "verify/agent_probe.py").read_text(encoding="utf-8")
 LAB = (REPO / "gitops/ai-layer/web/lab.html").read_text(encoding="utf-8")

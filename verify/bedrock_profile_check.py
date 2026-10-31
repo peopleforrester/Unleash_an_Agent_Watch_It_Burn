@@ -40,6 +40,13 @@ import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 RESOURCES = REPO / "gitops" / "ai-layer" / "resources.yaml"
+# The workshop-agent Agent, its own bundle since #679 (the ai-layer-agent Application).
+AGENT_CR = REPO / "gitops" / "ai-layer-agent" / "workshop-agent.yaml"
+
+
+def committed_text():
+    """The ModelConfigs' bundle and the Agent's, as one multi-document YAML."""
+    return RESOURCES.read_text() + "\n---\n" + AGENT_CR.read_text()
 CLUSTER_TF = REPO / "infra" / "terraform" / "aws" / "cluster" / "main.tf"
 EVENT_SH = REPO / "infra" / "terraform" / "fleet" / "event.sh"
 AGENT = "workshop-agent"
@@ -247,7 +254,7 @@ def main(argv=None):
         return 2
     tiers = bedrock_tiers(CLUSTER_TF.read_text())
     tier_of = {model: tier for tier, model in tiers.items()}
-    configs, bound = committed_bedrock_configs(RESOURCES.read_text())
+    configs, bound = committed_bedrock_configs(committed_text())
 
     results = []
 

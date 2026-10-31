@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
-RESOURCES = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text()) if d]
+RESOURCES = [d for d in yaml.safe_load_all(((REPO / "gitops/ai-layer/resources.yaml").read_text() + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text())) if d]
 GATEWAY = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/agentgateway.yaml").read_text()) if d]
 VALUES = yaml.safe_load((REPO / "gitops/otel-collector/values.yaml").read_text())
 

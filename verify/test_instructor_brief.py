@@ -23,7 +23,7 @@ import sys
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
 BRIEF = (REPO / "gitops/ai-layer/web/brief.html").read_text(encoding="utf-8")
-RES = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+RES = ((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8") + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text(encoding="utf-8"))
 FLAT = " ".join(BRIEF.split())
 
 failures: list[str] = []

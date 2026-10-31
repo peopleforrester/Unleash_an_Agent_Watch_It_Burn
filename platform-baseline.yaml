@@ -316,7 +316,7 @@ components:
     sister: [demo-agent]
     status: equivalent
     by: >
-      workshop-agent in gitops/ai-layer/resources.yaml. The sister's demo agent points a provider: OpenAI
+      workshop-agent in gitops/ai-layer-agent/workshop-agent.yaml. The sister's demo agent points a provider: OpenAI
       ModelConfig at a local vLLM; the gateway-local-qwen3 ModelConfig here is the same thing through the
       gateway, served on the local-inference profile (vllm entry).
 
@@ -426,6 +426,12 @@ components:
     status: local
     apps: [ai-layer-otel.yaml]
     why: The AI layer's OTel Instrumentation CR, so the agent pod is traced from admission.
+
+  - name: ai-layer-agent
+    sister: []
+    status: local
+    apps: [ai-layer-agent.yaml]
+    why: The workshop-agent Agent CR alone, synced without RespectIgnoreDifferences so its tools reach a live cluster (#679).
 
   - name: cluster-network-policies
     sister: []

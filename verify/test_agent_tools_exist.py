@@ -23,8 +23,9 @@ import sys
 import yaml
 
 REPO = pathlib.Path(__file__).resolve().parent.parent
-RES = list(yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")))
-APP = (REPO / "gitops/bootstrap/apps/ai-layer.yaml").read_text(encoding="utf-8")
+RES = list(yaml.safe_load_all(((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8") + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text(encoding="utf-8"))))
+# The Agent's ignores are ai-layer-agent's since #679, the app that syncs it without RespectIgnoreDifferences.
+APP = (REPO / "gitops/bootstrap/apps/ai-layer-agent.yaml").read_text(encoding="utf-8")
 
 # The tools each server actually defines, read from the source the container runs.
 SERVERS = {

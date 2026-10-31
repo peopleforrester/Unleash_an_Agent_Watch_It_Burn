@@ -20,7 +20,7 @@ def check(n, c, detail=""):
         failures.append(n)
 
 
-docs = [d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")) if d]
+docs = [d for d in yaml.safe_load_all(((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8") + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text(encoding="utf-8"))) if d]
 agents = [d for d in docs if d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent"]
 check("resources.yaml has one workshop-agent Agent", len(agents) == 1, f"found {len(agents)}")
 bound = agents[0]["spec"]["declarative"]["modelConfig"] if agents else ""

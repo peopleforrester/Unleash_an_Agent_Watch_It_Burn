@@ -1,0 +1,13 @@
+# ABOUTME: Kustomize bundle carrying ONLY the workshop-agent Agent CR, for the ai-layer-agent Application (#679).
+# ABOUTME: Split out of gitops/ai-layer so the Agent syncs without RespectIgnoreDifferences; see workshop-agent.yaml.
+#
+# Nothing here is generated, so no name carries a kustomize hash, and the Agent names nothing the ai-layer bundle
+# generates: its ModelConfig (bedrock-nova), its RemoteMCPServers (workshop-mcp, evil-mcp) and its ServiceAccount
+# (agent-sa) all keep their plain names in gitops/ai-layer/resources.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: agent
+
+resources:
+  - workshop-agent.yaml

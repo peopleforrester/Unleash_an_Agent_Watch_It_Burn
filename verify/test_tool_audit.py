@@ -175,7 +175,7 @@ check("workshop-mcp-src mounts tool_audit.py beside server.py",
       "tool_audit.py" in gens.get("workshop-mcp-src", []) and "server.py=workshop-mcp-server.py" in gens.get("workshop-mcp-src", []))
 
 print("== the agent declares who it is to workshop-mcp ==")
-RES = [d for d in yaml.safe_load_all((AI / "resources.yaml").read_text(encoding="utf-8")) if d]
+RES = [d for d in yaml.safe_load_all(((AI / "resources.yaml").read_text(encoding="utf-8") + "\n---\n" + (REPO / "gitops/ai-layer-agent/workshop-agent.yaml").read_text(encoding="utf-8"))) if d]
 agent = next(d for d in RES if d.get("kind") == "Agent")
 entries = {(e.get("mcpServer") or {}).get("name"): e for e in agent["spec"]["declarative"]["tools"]}
 good = entries.get("workshop-mcp", {})

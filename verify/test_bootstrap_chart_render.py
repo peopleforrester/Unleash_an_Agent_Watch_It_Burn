@@ -99,14 +99,21 @@ for profile in all_profiles():
                 check(f"{profile} {n}: {s['chart']} at one exact version", SEMVER.fullmatch(rev) is not None, rev)
             else:
                 check(f"{profile} {n}: {url} at a 40-digit commit", re.fullmatch(r"[0-9a-f]{40}", rev) is not None, rev)
-    # The Agent's ignore (#679): evil-mcp's toolNames inside the tools array only where C7 is that list.
-    ai = next((a for a in apps if a["metadata"]["name"] == "ai-layer"), {})
-    agent = [p for i in (ai.get("spec") or {}).get("ignoreDifferences") or [] if i.get("kind") == "Agent"
-             for p in i.get("jqPathExpressions") or []]
+    # The Agent's ignore (#679): evil-mcp's toolNames inside the tools array only where C7 is that list, in
+    # ai-layer-agent, which syncs without RespectIgnoreDifferences; ai-layer ignores nothing on the Agent.
+    def agent_ignores(app_name):
+        app = next((a for a in apps if a["metadata"]["name"] == app_name), {})
+        return [p for i in (app.get("spec") or {}).get("ignoreDifferences") or [] if i.get("kind") == "Agent"
+                for p in i.get("jqPathExpressions") or []]
     evil = '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcpServer.toolNames'
     want_agent = ([evil] if c7_control(profile) == "toolnames" else []) + [".spec.declarative.modelConfig"]
-    check(f"{profile}: ai-layer's Agent ignore is {want_agent} (c7Control {c7_control(profile)})", agent == want_agent,
-          str(agent))
+    check(f"{profile}: ai-layer-agent's Agent ignore is {want_agent} (c7Control {c7_control(profile)})",
+          agent_ignores("ai-layer-agent") == want_agent, str(agent_ignores("ai-layer-agent")))
+    check(f"{profile}: ai-layer has no Agent ignore", agent_ignores("ai-layer") == [], str(agent_ignores("ai-layer")))
+    agent_app = next((a for a in apps if a["metadata"]["name"] == "ai-layer-agent"), {})
+    check(f"{profile}: ai-layer-agent does not respect its ignores on sync",
+          "RespectIgnoreDifferences=true" not in ((agent_app.get("spec") or {}).get("syncPolicy") or {}).get("syncOptions", [])
+          and bool(agent_app))
     check(f"{profile}: no rendered Application keeps the c7Control guard",
           '.Values.c7Control' not in r.stdout)
     if profile == "admin":

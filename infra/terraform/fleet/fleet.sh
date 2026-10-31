@@ -900,6 +900,8 @@ verify_one() {
     else
         log "  ${name}: no serving OTel webhook on this cluster (burn profile, or operator still starting); injection not judged"
     fi
+    # Delivery, read from the hashed names the commit generates, not from the sync phase (#679).
+    ai_layer_rollout "${name}" "${kcfg}" || record_fail "${name}:ai-layer-rollout"
 }
 
 # Argo CD's automated sync retries a failed operation five times and then waits for a NEW revision.
@@ -958,13 +960,14 @@ repair_agent_injection() {
 # converge did not touch the field, an explicit sync reported "no more tasks", and Force changed nothing
 # because no write was being attempted.
 #
-# #679 is the same wall, and why it stands: the Agent is a CRD, so RespectIgnoreDifferences carries the ignored
-# evil-mcp toolNames back as a JSON merge patch, which holds the whole live tools array, and every sync applies that
-# (verify/test_agent_tools_sync.py ports Argo CD v3.5.2's code). read_support_ticket (#640) never reached either
-# KubeCon cluster that way. The admin profile no longer renders that ignore, so Argo syncs its tools from git; the
-# toolnames profiles keep it for the student's guard-mcp-on, and this repair is what brings them back to git.
+# #679 was the same wall: the Agent is a CRD, so RespectIgnoreDifferences carried the ignored evil-mcp toolNames back
+# as a JSON merge patch, which holds the whole live tools array, and every sync applied that. read_support_ticket (#640)
+# never reached either KubeCon cluster. Since #679 the Agent is its own Application, ai-layer-agent, which does not
+# respect its ignores on sync, so on a root at or after that commit Argo writes git's tools itself and this finds
+# nothing to do. It stays for a cluster whose root is pinned before the split (a labctl event pin), where the old
+# freeze still holds; verify/test_agent_tools_sync.py runs Argo CD v3.5.2's sync on both layouts.
 #
-# Replacing the object is the only repair that works. Deleting the Agent CR makes Argo recreate it from the
+# Replacing the object is the only repair that works there. Deleting the Agent CR makes Argo recreate it from the
 # manifest; kagent owns the agent Deployment through an ownerRef, so the pod cycles with it (about a
 # minute). Idempotent: it only acts when the live tool list actually differs from the committed one.
 repair_agent_tools() {
@@ -972,7 +975,7 @@ repair_agent_tools() {
     local want live
     # From REPO_ROOT, never the working directory: converge runs from infra/terraform/fleet, where the relative
     # path did not exist, and the failed read ended the whole converge_one job before repair_datadog (#635).
-    want="$(python3 - "${REPO_ROOT}/gitops/ai-layer/resources.yaml" <<'PYEOF'
+    want="$(python3 - "${REPO_ROOT}/gitops/ai-layer-agent/workshop-agent.yaml" <<'PYEOF'
 import sys, yaml
 for d in yaml.safe_load_all(open(sys.argv[1], encoding="utf-8")):
     if d and d.get("kind") == "Agent":
@@ -992,6 +995,160 @@ PYEOF
         log "  ${name}: agent tool list is stale; recreating the Agent CR so Argo rewrites it"
         KUBECONFIG="${kcfg}" kubectl -n agent delete agent workshop-agent >/dev/null 2>&1 || true
     fi
+}
+
+# An env list Argo CD cannot put back in order (#679). ai-layer ignores some env entries BY NAME (guard-proxy's live
+# toggles, agentgateway's BEDROCK_NOVA_MODEL pin) and syncs with RespectIgnoreDifferences=true. Argo CD v3.5.2 copies
+# those entries back from live as a strategic merge patch that also carries `$setElementOrder/env` from live, so the
+# list it applies is in the LIVE order. Git's own changes land (a new entry goes where git puts it), but once the live
+# order differs from git's, no sync corrects it, while the diff predicts git's order: the Deployment reads OutOfSync
+# forever and selfHeal syncs it, alone, every few seconds. On 2026-10-29 that was guard-proxy on both KubeCon clusters,
+# after CONSOLE_ORIGIN was added live with `kubectl set env`, which appends. The partial selfHeal syncs then held back
+# every later commit while each reported Succeeded (see ai_layer_rollout). verify/test_agent_tools_sync.py reproduces
+# the freeze and holds every ignored list element in ai-layer to a row here.
+#
+# The repair writes the live entries, values untouched, in git's order (entries git does not have go last), so the
+# next sync applies git's order and the Deployment reads Synced. It is a pod-template change, so the pod rolls, and
+# guard-proxy's runtime guard toggles and cost counter start again from its env. As the Argo controller, like the
+# Bedrock pin, because block-argocd-drift admits no one else on an armed cluster. Idempotent: it acts only when the
+# order differs. Each row: Deployment, container, the file in REPO_ROOT that commits it.
+ENV_ORDER_LISTS=(
+    "guard-proxy proxy gitops/ai-layer/resources.yaml"
+    "agentgateway agentgateway gitops/ai-layer/agentgateway.yaml"
+)
+repair_env_order() {
+    local name="$1" kcfg="$2" row dep ctr file live patch bad=0
+    for row in "${ENV_ORDER_LISTS[@]}"; do
+        read -r dep ctr file <<<"${row}"
+        live="$(mktemp -t "${name}.${dep}.XXXX")"
+        if ! KUBECONFIG="${kcfg}" kubectl -n agent get deployment "${dep}" -o json >"${live}" 2>/dev/null || [[ ! -s "${live}" ]]; then
+            rm -f "${live}"; continue   # not deployed yet (Argo still creating it) is no list to order
+        fi
+        patch="$(python3 - "${REPO_ROOT}/${file}" "${dep}" "${ctr}" "${live}" <<'PYEOF'
+import json, sys, yaml
+src, dep, ctr, live_path = sys.argv[1:5]
+git = next(d for d in yaml.safe_load_all(open(src, encoding="utf-8"))
+           if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == dep)
+order = [e["name"] for c in git["spec"]["template"]["spec"]["containers"] if c["name"] == ctr for e in c.get("env") or []]
+live = json.load(open(live_path, encoding="utf-8"))
+containers = live["spec"]["template"]["spec"]["containers"]
+i = next((n for n, c in enumerate(containers) if c["name"] == ctr), None)
+if i is None or not order:
+    sys.exit(0)
+env = containers[i].get("env") or []
+want = [e for n in order for e in env if e["name"] == n] + [e for e in env if e["name"] not in order]
+if [e["name"] for e in want] != [e["name"] for e in env]:
+    print(json.dumps([{"op": "test", "path": f"/spec/template/spec/containers/{i}/name", "value": ctr},
+                      {"op": "replace", "path": f"/spec/template/spec/containers/{i}/env", "value": want}],
+                     separators=(",", ":")))
+PYEOF
+)"
+        rm -f "${live}"
+        [[ -n "${patch}" ]] || continue
+        log "  ${name}: ${dep}'s ${ctr} env is out of git's order, which Argo CD cannot correct (#679); reordering it, values kept"
+        if ! KUBECONFIG="${kcfg}" kubectl -n agent patch deployment "${dep}" --type json -p "${patch}" \
+                --as=system:serviceaccount:argocd:argocd-application-controller >/dev/null 2>&1; then
+            log "  ${name}: could not reorder ${dep}'s ${ctr} env"; bad=1
+        fi
+    done
+    return "${bad}"
+}
+
+# Whether the cluster runs the ai-layer commit Argo CD says it synced (#679). The sync phase is not delivery: on
+# 2026-10-29 every ai-layer sync after ed8dbf8 reported Succeeded on both KubeCon clusters and applied nothing new,
+# because each was a selfHeal sync of the one stuck Deployment (repair_env_order above), and the pods kept the old code.
+# What a commit delivers is visible in the names: every generated ConfigMap and Secret carries a content hash (#252),
+# so the rendered commit names exactly which ones must exist and which each Deployment must mount.
+#
+# Judged only when ai-layer's sync revision is this checkout's HEAD and gitops/ai-layer has no uncommitted change, so
+# the local render is the commit Argo CD compared (a cluster pinned elsewhere is reported, not judged). Fails when the
+# render cannot be made, when a generated object of the commit is missing, or when a Deployment mounts other hashed
+# names than the commit's. Read-only.
+ai_layer_rollout() {
+    local name="$1" kcfg="$2" head rev render deps objs out rc
+    head="$(git -C "${REPO_ROOT}" rev-parse HEAD 2>/dev/null || true)"
+    rev="$(KUBECONFIG="${kcfg}" kubectl -n argocd get application ai-layer -o jsonpath='{.status.sync.revision}' 2>/dev/null || true)"
+    if [[ -z "${rev}" ]]; then
+        log "  ${name}: ai-layer reports no sync revision; its rollout is not judged"; return 0
+    fi
+    if [[ "${rev}" != "${head}" ]]; then
+        log "  ${name}: ai-layer compares ${rev:0:7} and this checkout is ${head:0:7}; its rollout is not judged"; return 0
+    fi
+    if ! git -C "${REPO_ROOT}" diff --quiet HEAD -- gitops/ai-layer 2>/dev/null; then
+        log "  ${name}: gitops/ai-layer has uncommitted changes here; the rollout of ${rev:0:7} is not judged"; return 0
+    fi
+    render="$(mktemp -t "${name}.render.XXXX")"; deps="$(mktemp -t "${name}.deps.XXXX")"; objs="$(mktemp -t "${name}.objs.XXXX")"
+    if ! kubectl kustomize "${REPO_ROOT}/gitops/ai-layer" >"${render}" 2>/dev/null || [[ ! -s "${render}" ]]; then
+        log "  ${name}: could not render gitops/ai-layer at ${rev:0:7} to judge its rollout"
+        rm -f "${render}" "${deps}" "${objs}"; return 1
+    fi
+    KUBECONFIG="${kcfg}" kubectl -n agent get deployments -o json >"${deps}" 2>/dev/null || true
+    KUBECONFIG="${kcfg}" kubectl -n agent get configmaps,secrets -o name >"${objs}" 2>/dev/null || true
+    rc=0
+    out="$(python3 - "${REPO_ROOT}/gitops/ai-layer/kustomization.yaml" "${render}" "${deps}" "${objs}" <<'PYEOF'
+import json, sys, yaml
+kust, render, deps, objs = sys.argv[1:5]
+k = yaml.safe_load(open(kust, encoding="utf-8"))
+gens = {("configmap", g["name"]) for g in k.get("configMapGenerator") or []} | \
+       {("secret", g["name"]) for g in k.get("secretGenerator") or []}
+docs = [d for d in yaml.safe_load_all(open(render, encoding="utf-8")) if d]
+
+
+def generated(kind, n):
+    return any(kind == gk and n.startswith(gn + "-") for gk, gn in gens)
+
+
+want = sorted(f"{d['kind'].lower()}/{d['metadata']['name']}" for d in docs
+              if d.get("kind") in ("ConfigMap", "Secret") and generated(d["kind"].lower(), d["metadata"]["name"]))
+have = {line.strip() for line in open(objs, encoding="utf-8") if line.strip()}
+problems = [f"{w} is missing" for w in want if w not in have]
+
+
+def mounts(dep):
+    spec = dep["spec"]["template"]["spec"]
+    names = set()
+    for v in spec.get("volumes") or []:
+        if "configMap" in v:
+            names.add(("configmap", v["configMap"].get("name", "")))
+        if "secret" in v:
+            names.add(("secret", v["secret"].get("secretName", "")))
+    for c in (spec.get("containers") or []) + (spec.get("initContainers") or []):
+        for e in c.get("env") or []:
+            ref = e.get("valueFrom") or {}
+            if "configMapKeyRef" in ref:
+                names.add(("configmap", ref["configMapKeyRef"].get("name", "")))
+            if "secretKeyRef" in ref:
+                names.add(("secret", ref["secretKeyRef"].get("name", "")))
+    return {f"{kind}/{n}" for kind, n in names if generated(kind, n)}
+
+
+try:
+    live = {d["metadata"]["name"]: d for d in json.load(open(deps, encoding="utf-8")).get("items") or []}
+except ValueError:
+    live = {}
+for d in docs:
+    if d.get("kind") != "Deployment":
+        continue
+    n = d["metadata"]["name"]
+    if n not in live:
+        problems.append(f"deployment/{n} is missing")
+        continue
+    w, h = mounts(d), mounts(live[n])
+    if w != h:
+        problems.append(f"deployment/{n} mounts {sorted(h - w)} where the commit mounts {sorted(w - h)}")
+print("\n".join(problems))
+PYEOF
+)" || rc=1
+    rm -f "${render}" "${deps}" "${objs}"
+    if [[ "${rc}" -ne 0 ]]; then
+        log "  ${name}: could not judge the ai-layer rollout of ${rev:0:7}"; return 1
+    fi
+    if [[ -n "${out}" ]]; then
+        log "  ${name}: ai-layer says it synced ${rev:0:7}, and the cluster does not run it (the sync phase is not delivery, #679):"
+        while IFS= read -r line; do log "    ${line}"; done <<<"${out}"
+        return 1
+    fi
+    log "  ${name}: ai-layer ${rev:0:7} is rolled out (every hashed ConfigMap and Secret of the commit is live and mounted)"
 }
 
 # Bedrock spend carries project/event (#513). A system-defined inference profile cannot be tagged, so a
@@ -1146,6 +1303,7 @@ repair_one() {
     repair_step repair_failed_syncs "${name}" "${kcfg}"
     repair_step repair_agent_injection "${name}" "${kcfg}"
     repair_step repair_agent_tools "${name}" "${kcfg}"
+    repair_step repair_env_order "${name}" "${kcfg}"
     # Not a step: it records its own ledger line when it fails, and a step would record a second one.
     pin_bedrock_profiles "${name}" "${kcfg}" || true
     repair_step repair_stuck_pods "${name}" "${kcfg}"
