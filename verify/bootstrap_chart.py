@@ -123,7 +123,7 @@ def is_template(path: pathlib.Path) -> bool:
 def deploy_root(profile: str) -> dict:
     """The lab-bootstrap Application infra/deploy-full-idp.sh step [4] applies for a profile, from its heredoc."""
     deploy = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
-    m = re.search(r"kubectl apply -f - <<EOF\n(.*?)\nEOF", deploy[deploy.index('log "[4]'):], re.S)
+    m = re.search(r'kubectl --context "\$\{CONTEXT\}" apply -f - <<EOF\n(.*?)\nEOF', deploy[deploy.index('log "[4]'):], re.S)
     if not m:
         return {}
     return yaml.safe_load(m.group(1).replace("${REPO_URL}", REPO_URL).replace("${PROFILE}", profile)

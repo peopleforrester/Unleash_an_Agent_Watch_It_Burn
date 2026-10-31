@@ -295,7 +295,7 @@ code = "\n".join(ln for ln in deploy.splitlines() if not ln.lstrip().startswith(
 check("it never reads `gh auth token`", "gh auth" not in code)
 check("it writes no repository Secret (no password, no secret-type label)",
       "password:" not in code and "secret-type" not in code)
-check("it removes a witb-repo Secret an earlier build wrote", "kubectl -n argocd delete secret witb-repo --ignore-not-found" in code)
+check("it removes a witb-repo Secret an earlier build wrote", 'kubectl --context "${CONTEXT}" -n argocd delete secret witb-repo --ignore-not-found' in code)
 for profile in all_profiles():
     check(f"`{profile}` picks values-{profile}.yaml", re.search(rf'{profile}\)\s+VALUES="values-{profile}\.yaml"', code) is not None)
 root = deploy_root("admin")
@@ -317,7 +317,7 @@ step4 = code[code.index('log "[4]'):]
 check("an old root is stripped of its finalizer, then deleted, before lab-bootstrap is applied",
       "for old in app-of-apps app-of-apps-attendee app-of-apps-burn app-of-apps-admin; do" in step4
       and step4.index('"metadata":{"finalizers":null}') < step4.index('delete application "${old}"')
-      < step4.index("kubectl apply -f - <<EOF"))
+      < step4.index('kubectl --context "${CONTEXT}" apply -f - <<EOF'))
 
 print("== tempo and falco-talon: admin and full only (#475) ==")
 for app_file in ("tempo.yaml", "falco-talon.yaml"):

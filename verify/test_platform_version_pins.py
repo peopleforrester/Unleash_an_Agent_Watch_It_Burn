@@ -52,7 +52,7 @@ def lock_app(label, pins, count, chart):
 
 print("== Argo CD: deploy-full-idp.sh, VERSIONS.lock, argocd-values.yaml ==")
 deploy = (REPO / "infra/deploy-full-idp.sh").read_text(encoding="utf-8")
-m = re.search(r"helm upgrade --install argocd argo/argo-cd --version (\S+)", deploy)
+m = re.search(r'helm --kube-context "\$\{CONTEXT\}" upgrade --install argocd argo/argo-cd --version (\S+)', deploy)
 check("deploy-full-idp.sh installs argo/argo-cd at a pinned --version", m is not None)
 argo_chart = m.group(1) if m else None
 # Two lines: "argocd                 chart X / app Y" (component versions) and "argo-cd  chart X  app Y" (IDP foundation).

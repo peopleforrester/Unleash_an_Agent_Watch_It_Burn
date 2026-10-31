@@ -26,31 +26,36 @@ case "${PROFILE}" in
 esac
 [[ -f "${REPO}/gitops/bootstrap/${VALUES}" ]] || { echo "gitops/bootstrap/${VALUES} is missing" >&2; exit 1; }
 log() { printf '\n==> %s\n' "$*" >&2; }
+# The target is named, never taken from the kubeconfig (CLAUDE.md kube-context rule 5, #732): another session may have
+# moved ~/.kube/config's current-context. Every kubectl call below carries --context and every helm call
+# --kube-context, and datadog-cluster-identity.sh, called below, takes the same CONTEXT from the environment.
+: "${CONTEXT:?set CONTEXT to the kube context of the target cluster, see CLAUDE.md rule 5 (#732)}"
+export CONTEXT
 
 log "[1] default gp3 StorageClass"
-kubectl apply -f "${REPO}/infra/gp3-storageclass.yaml"
+kubectl --context "${CONTEXT}" apply -f "${REPO}/infra/gp3-storageclass.yaml"
 
 log "[2] ArgoCD (chart 10.8.4 / app v3.5.2)"
-helm repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
-helm repo update >/dev/null
+helm --kube-context "${CONTEXT}" repo add argo https://argoproj.github.io/argo-helm >/dev/null 2>&1 || true
+helm --kube-context "${CONTEXT}" repo update >/dev/null
 # NOTE: do NOT use --wait here. On EKS the helm install with --wait repeatedly hangs in
 # pending-install (zero pods, no events, >15min) and times out; installing without --wait completes
 # immediately and the pods come up normally. Wait on the core components explicitly afterwards.
 # argocd-values.yaml carries dex.enabled=false + the Datadog Agent Autodiscovery annotation on
 # argocd-server (PRD #26 M2). Folded in here because ArgoCD is bootstrap-installed, not Application-managed.
-helm upgrade --install argocd argo/argo-cd --version 10.8.4 \
+helm --kube-context "${CONTEXT}" upgrade --install argocd argo/argo-cd --version 10.8.4 \
   -n argocd --create-namespace --values "${SCRIPT_DIR}/argocd-values.yaml"
 log "    waiting for ArgoCD core components..."
-kubectl -n argocd rollout status statefulset/argocd-application-controller --timeout=180s
-kubectl -n argocd rollout status deploy/argocd-repo-server --timeout=180s
-kubectl -n argocd rollout status deploy/argocd-server --timeout=180s
+kubectl --context "${CONTEXT}" -n argocd rollout status statefulset/argocd-application-controller --timeout=180s
+kubectl --context "${CONTEXT}" -n argocd rollout status deploy/argocd-repo-server --timeout=180s
+kubectl --context "${CONTEXT}" -n argocd rollout status deploy/argocd-server --timeout=180s
 
 # [3] No repository Secret (#609). The repo is public and Argo CD reads it anonymously, as labctl does, so no
 # credential is written here; this step used to write the operator's own `gh auth token` into witb-repo on every
 # cluster, attendee clusters included. A cluster built before that change still holds it, so it is removed. The
 # credential-free ghcr-kagent-oci repository Secret kagent needs is now a template of the gitops/bootstrap chart.
 log "[3] no repository credential: remove any witb-repo Secret an earlier build wrote"
-kubectl -n argocd delete secret witb-repo --ignore-not-found
+kubectl --context "${CONTEXT}" -n argocd delete secret witb-repo --ignore-not-found
 
 log "[3.6] per-cluster secrets, created DIRECTLY in the cluster (no ESO / no Secrets Manager from the"
 log "      cluster, no cross-account). The secret exists BEFORE lab-bootstrap, so consumers never"
@@ -68,10 +73,10 @@ if [[ -z "${DD_API_KEY}" || -z "${DD_APP_KEY}" ]]; then
 fi
 if [[ -n "${DD_API_KEY}" && -n "${DD_APP_KEY}" ]]; then
   for ns in datadog monitoring security; do
-    kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-    kubectl -n "${ns}" create secret generic datadog-secret \
+    kubectl --context "${CONTEXT}" create namespace "${ns}" --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
+    kubectl --context "${CONTEXT}" -n "${ns}" create secret generic datadog-secret \
       --from-literal=api-key="${DD_API_KEY}" --from-literal=app-key="${DD_APP_KEY}" \
-      --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+      --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
   done
   log "    datadog-secret created in datadog/monitoring/security (datadog agent + falcosidekick read it)"
 else
@@ -107,13 +112,13 @@ log "[3.5] AWS Load Balancer Controller (NLB for the console Service)"
 # fetch VPC ID from instance metadata" (found live 2026-06-26). Deriving them via the EKS API avoids
 # IMDS entirely. chart 1.14.0 = controller v2.14.x (the Service+Ingress line; v3.x is Gateway API).
 REGION="${REGION:-us-west-2}"
-CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cluster/##')}"
-[[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "could not derive cluster name from context (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
+CLUSTER_NAME="${CLUSTER_NAME:-${CONTEXT##*cluster/}}"
+[[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "could not derive cluster name from CONTEXT (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
 VPC_ID="$(aws eks describe-cluster --name "${CLUSTER_NAME}" --region "${REGION}" --query 'cluster.resourcesVpcConfig.vpcId' --output text)"
 [[ "${VPC_ID}" == vpc-* ]] || { echo "could not derive vpcId for ${CLUSTER_NAME} (got '${VPC_ID}')" >&2; exit 1; }
-helm repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
-helm repo update >/dev/null
-helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller --version 1.14.0 \
+helm --kube-context "${CONTEXT}" repo add eks https://aws.github.io/eks-charts >/dev/null 2>&1 || true
+helm --kube-context "${CONTEXT}" repo update >/dev/null
+helm --kube-context "${CONTEXT}" upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller --version 1.14.0 \
   -n kube-system --values "${SCRIPT_DIR}/aws-load-balancer-controller-values.yaml" \
   --set clusterName="${CLUSTER_NAME}" \
   --set region="${REGION}" \
@@ -121,7 +126,7 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set serviceAccount.create=true \
   --set serviceAccount.name=aws-load-balancer-controller
 # Non-fatal: the controller reconciles the console Service whenever it is ready; it must NOT gate lab-bootstrap.
-kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
+kubectl --context "${CONTEXT}" -n kube-system rollout status deploy/aws-load-balancer-controller --timeout=180s \
   || log "WARN: LB controller not ready yet; continuing. The console Service reconciles once it is up."
 
 # [4] One root on every profile, named and shaped like the one labctl creates (lab-platform docs/talk-config.md
@@ -133,13 +138,13 @@ kubectl -n kube-system rollout status deploy/aws-load-balancer-controller --time
 # delete, and the children stay for lab-bootstrap to adopt.
 log "[4] apply lab-bootstrap (gitops/bootstrap, ${VALUES}, revision staging), ArgoCD deploys the components"
 for old in app-of-apps app-of-apps-attendee app-of-apps-burn app-of-apps-admin; do
-  if [[ -n "$(kubectl -n argocd get application "${old}" --ignore-not-found -o name)" ]]; then
+  if [[ -n "$(kubectl --context "${CONTEXT}" -n argocd get application "${old}" --ignore-not-found -o name)" ]]; then
     log "    replacing the old root ${old}: finalizer removed, deleted without its children"
-    kubectl -n argocd patch application "${old}" --type merge -p '{"metadata":{"finalizers":null}}'
-    kubectl -n argocd delete application "${old}" --wait=true
+    kubectl --context "${CONTEXT}" -n argocd patch application "${old}" --type merge -p '{"metadata":{"finalizers":null}}'
+    kubectl --context "${CONTEXT}" -n argocd delete application "${old}" --wait=true
   fi
 done
-kubectl apply -f - <<EOF
+kubectl --context "${CONTEXT}" apply -f - <<EOF
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -178,7 +183,7 @@ spec:
       - RespectIgnoreDifferences=true
 EOF
 
-log "Deploy issued. Watch sync with: kubectl get applications -n argocd"
+log "Deploy issued. Watch sync with: kubectl --context ${CONTEXT} get applications -n argocd"
 log "NOTE: agent Bedrock access is provisioned by Terraform (infra/terraform/aws/cluster) as an EKS Pod"
 log "  Identity association for agent:agent-sa, no SA annotation or kubectl step needed. The"
 log "  eks-pod-identity-agent addon injects creds via the AWS SDK chain kagent already uses."

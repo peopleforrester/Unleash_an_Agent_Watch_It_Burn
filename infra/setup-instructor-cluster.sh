@@ -62,7 +62,7 @@ CONTEXT="$(KUBECONFIG="${KCFG}" kubectl config current-context)"
 log "    context: ${CONTEXT}"
 
 log "[2] bootstrap IDP with the '${BOOT}' profile (${ROLE} cluster)"
-KUBECONFIG="${KCFG}" AWS_PROFILE="${PROFILE}" bash "${REPO}/infra/deploy-full-idp.sh" "${BOOT}"
+KUBECONFIG="${KCFG}" CONTEXT="${CONTEXT}" AWS_PROFILE="${PROFILE}" bash "${REPO}/infra/deploy-full-idp.sh" "${BOOT}"
 
 if [[ "${ROLE}" == "community" ]]; then
     log "Community cluster ready: ${NAME} has NO guardrails. Point the room at it and let it burn."
