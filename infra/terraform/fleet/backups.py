@@ -46,6 +46,7 @@ import json
 import os
 import pathlib
 import shlex
+import shutil
 import ssl
 import subprocess
 import sys
@@ -718,10 +719,28 @@ def schedule_lines(start: dt.datetime, tz: dt.tzinfo, here: pathlib.Path = HERE,
     return lines
 
 
+# What a scheduled wave runs: fleet.sh's tools and the python3 this script runs on.
+CRON_TOOLS = ("terraform", "kubectl", "aws", "helm", "jq", "curl", "python3")
+
+
+def cron_path(which=shutil.which) -> str:
+    """The PATH a crontab line runs under: each tool's own directory, then the standard ones. Not the whole
+    interactive PATH, which made a line too long for cron to install (crontab: "command too long")."""
+    dirs: list[str] = []
+    for tool in CRON_TOOLS:
+        found = which(tool)
+        if not found:
+            raise SystemExit(f"schedule: {tool} is not on PATH here, so a scheduled wave could not run it")
+        d = str(pathlib.Path(found).parent)
+        if d not in dirs:
+            dirs.append(d)
+    return ":".join(dirs + [d for d in ("/usr/local/bin", "/usr/bin", "/bin") if d not in dirs])
+
+
 def cmd_schedule(_x, a) -> int:
     start = parse_when(a.session_start)
     tz = zoneinfo.ZoneInfo(a.tz) if a.tz else dt.datetime.now().astimezone().tzinfo
-    print("\n".join(schedule_lines(start, tz, path=os.environ.get("PATH", ""))))
+    print("\n".join(schedule_lines(start, tz, path=cron_path())))
     log("schedule: append these to the crontab of the host that holds the fleet profiles: "
         "(crontab -l; backups.py schedule <start>) | crontab -")
     return 0

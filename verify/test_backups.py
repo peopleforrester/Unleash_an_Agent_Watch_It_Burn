@@ -436,7 +436,21 @@ check("every line is tagged so unschedule finds it", all(b.CRON_TAG in l for l i
 pl = b.schedule_lines(start, dt.timezone.utc, pathlib.Path("/fleet"), path="/opt/brew/bin:/usr/bin")
 check("with a PATH given, every scheduled command runs under it",
       all(" export PATH=/opt/brew/bin:/usr/bin; " in f" {' '.join(l.split()[5:])}" for l in pl[1:]), str(pl[1:2]))
-check("cmd_schedule passes the PATH it runs with", "path=os.environ" in (FLEET_DIR / "backups.py").read_text())
+check("cmd_schedule passes cron_path()", "path=cron_path()" in (FLEET_DIR / "backups.py").read_text())
+_fake_which = {"terraform": "/home/linuxbrew/.linuxbrew/bin/terraform", "kubectl": "/home/linuxbrew/.linuxbrew/bin/kubectl",
+               "aws": "/home/linuxbrew/.linuxbrew/bin/aws", "helm": "/home/linuxbrew/.linuxbrew/bin/helm",
+               "jq": "/usr/bin/jq", "curl": "/usr/bin/curl", "python3": "/home/linuxbrew/.linuxbrew/bin/python3"}.get
+check("cron_path names each tool's directory once, then the standard ones",
+      b.cron_path(_fake_which) == "/home/linuxbrew/.linuxbrew/bin:/usr/bin:/usr/local/bin:/bin", b.cron_path(_fake_which))
+try:
+    b.cron_path(lambda t: None if t == "helm" else "/x/" + t)
+    check("a tool missing from PATH stops schedule", False)
+except SystemExit as e:
+    check("a tool missing from PATH stops schedule", "helm" in str(e))
+_long = b.schedule_lines(start, dt.timezone.utc, pathlib.Path("/home/michael/repos/talks/Unleash_an_Agent_Watch_It_Burn/infra/terraform/fleet"),
+                         path=b.cron_path(_fake_which))
+check("every line fits cron's limit (crontab refused one on 2026-10-31 with the whole interactive PATH)",
+      max(len(l) for l in _long) < 900, str(max(len(l) for l in _long)))
 # Run each line's command the way cron does, with sh, on a checkout that has no logs directory yet.
 fresh = T / "fresh"; fresh.mkdir()
 (fresh / "backups.py").write_text(f'#!/bin/sh\necho "$@" >>"{fresh}/ran"\n'); os.chmod(fresh / "backups.py", 0o755)
