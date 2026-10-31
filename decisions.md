@@ -6772,3 +6772,46 @@ terminal `guard-mcp-on` then `guard-mcp-off`, reading evil-mcp's toolNames back 
 `kubectl -n agent get agent workshop-agent -o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`.
 The one thing only a cluster settles is that kagent's Agent CRD accepts the `test` op on `mcpServer/name`, which is
 standard JSON patch on any custom resource.
+
+## 2026-10-31 · #723 · C1 DNS-exfil beat: the build-design note is landed; the build stays deferred to Barcelona
+
+**Why.** #116 (C1 two-stage: a naive L3/L4 NetworkPolicy is bypassed over DNS, an FQDN-aware control
+holds) is `deferred-barcelona` by Michael's 2026-09-07 decision and was kept open because the design work
+was still wanted for the next event. A dispatched run brings up no cluster and cannot deploy
+(CLAUDE.md, "Dispatched runs", point 1), so the deliverable this run can finish is the engineering design.
+#723 was split from #116 by planning run 13133.
+
+**What landed.** `docs/research/2026-10-31-c1-dns-exfil-beat.md` records the design at defensive
+build-spec altitude, in the shape of `docs/beacon-collector-spec.md`: the agent is social-engineered into
+calling `get_marketing_intel` (`gitops/ai-layer/workshop-mcp-server.py:190`), and the returned JSON leaves
+the cluster inside DNS resolver requests over the port-53-to-kube-system allow in
+`agent-allow-dns.yaml`, which the namespace-wide `agent-egress-allowlist.yaml` (#108) does not read. A
+sibling authoritative-DNS collector, modelled on the beacon collector, logs the requests and renders the
+reassembled payload at `GET /dns/view`. The fix is FQDN-aware egress (option A Cilium `toFQDNs`, or option
+B a forced egress proxy) over the option C resolver-lockdown floor. The FQDN-control choice is a fleet
+networking decision left for the build being scheduled. The note names no step-by-step tooling and gives
+no encoding recipe, so it stays at the same altitude as the beacon spec.
+
+**Facts re-verified against staging at `6ffb4df`.** `get_marketing_intel` is at
+`gitops/ai-layer/workshop-mcp-server.py:190`. `images/workshop-mcp/Dockerfile` installs only `curl` and
+`ca-certificates` (`dnsutils` absent, so `nslookup` and `dig` are not in the image). `enableNetworkPolicy
+= "true"` is at `infra/terraform/aws/cluster/main.tf:322` (the issue cited line 306; the file has since
+moved and the current line is 322). `agent-egress-allowlist.yaml` selects the whole `agent` namespace
+(`podSelector: {}`) since #108, covering the `workshop-mcp` pod where `run_shell` runs.
+`agent-allow-dns.yaml` opens UDP and TCP port 53 to `kube-system`, namespace-wide.
+
+**Owed live check.** On a Cilium-capable attendee cluster: the DNS stage lands at the DNS collector with
+the egress NetworkPolicy still green; after the FQDN fix, the resolver requests carry nothing out and the
+collector stops receiving, while Bedrock and in-cluster resolution still work. This is a new `verify/`
+check in the `run-e2e.sh` live-cluster tier (with `CONTEXT` set), paralleling `verify/c1-exfil-block.sh`.
+A dispatched run cannot run it (no cluster, no AWS).
+
+**Re-made on current staging, not cherry-picked.** Earlier drafts are on `origin/agent/116-12979` (commit
+`5aa8d3c`) and `origin/agent/116-13099` (commit `41d9ba2`); both were blocked at the ai-isms prose gate
+(em-dashes, en-dashes outside numeric ranges, antithesis reframes), and one tripped a safety classifier on
+altitude. `bash verify/draft-drift.sh origin/agent/116-12979 origin/staging` and the same against
+`origin/agent/116-13099` each named one drift line, `decisions.md` (append-only), with the design-doc path
+untouched. The design was re-made on the current layout and carried through the prose gate
+(`python3 ~/.claude/skills/check-ai-isms/check.py` reports `clean` on the note). What differs from the
+drafts: the note is dated 2026-10-31 and re-worded to pass the gate; the altitude is pulled back to the
+beacon-spec level with no encoding steps; the `enableNetworkPolicy` citation is corrected to line 322.
