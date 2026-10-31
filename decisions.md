@@ -5840,3 +5840,41 @@ community cluster (`fleet.sh instructors up community`), run
 provision a fresh attendee cluster and confirm the same script prints `IMDS: BLOCKED`. Final stage placement in
 the run-of-show (which segment, how it flows in the 30-minute KubeCon demo vs the 2-hour format) is the
 presenters' choreography call and is left as a follow-up rather than written into the tightly-timed scripts here.
+
+## 2026-10-31 · #441 · The promo/ villain pins follow lab-platform#55's 2026-10-30 republish; the cluster run is still owed
+
+**Context.** #441 asks for `CONTEXT=<ctx> bash verify/run-e2e.sh` to be run green on a fresh attendee cluster, and
+for whatever fails to be fixed. Hecaton runs 13033 and 13341 have no AWS credentials and no kube context, the same
+as the two earlier #441 runs, so they fix what fails without a cluster. Two attempts stopped on the run host, not on
+this repo. The first stopped before any work, on a podman user-namespace error in another hecaton pool's container
+store (`/var/lib/hecaton/pools/claude-performantpro-3`). Nothing in this repo runs podman, and in the next pool podman
+read its store without error. The second (13033) was stopped for 900 seconds of silence while it waited on a
+background run of both suites, after the Monitor tool was denied. Run 13341 runs each suite in the foreground
+instead. Nothing in this repo was changed for either.
+
+**What failed.** `bash verify/run-e2e-tools.sh` ran 36 checks, and 35 passed. The red one was
+`test_promo_villains_public.py`, with a different failure from #678's. Michael made the ten promo/ packages public on
+2026-10-30 (lab-platform#293), so every anonymous pull now answers. But every `:v1` served a digest other than the
+#653 hand-over in `verify/promo_villains.py`. The test's own header says "a rebuild that moves it is a new
+hand-over", and lab-platform recorded one: its decisions.md entry of 2026-10-30T18:04:37Z (lab-platform#55)
+republished every v1 tag under umask 022, read each one back, signed each one, and repinned the ten villain rows
+of its `deploy/watch-it-burn/images.tsv` to the digests the tags now serve.
+
+**What changed.** `verify/promo_villains.py`'s `DIGESTS` now holds those ten digests, and its docstring names
+lab-platform#55 and images.tsv as their source. `test_promo_villains_public.py`'s check now says "the digest
+verify/promo_villains.py pins" instead of naming #653. Read back from ghcr.io on 2026-10-31 with no credential,
+each of the ten `:v1` tags serves the digest in images.tsv, and each digest has its cosign `sha256-<digest>.sig` tag.
+The lab still hands out the tag and never the digest, so lab.html, the C2 fallback and the prompt catalog do not change.
+
+**Not changed.** `images.lock` pins `lab-platform/llm-guard@sha256:781a126bf7c7…`, while lab-platform#55's
+republish moved `llm-guard:v1` to `sha256:6cdbf3a2272d…`. The old digest still pulls, and no check fails on it. Moving
+it changes the image a cluster runs, which needs its own live check, so it is a follow-up and not part of this change.
+
+**Checked here.** `python3 verify/test_promo_villains_public.py` passes 20 of 20 checks, and
+`python3 verify/test_promo_villains.py` passes. `bash verify/run-tests.sh` passes (194 tests).
+`bash verify/run-e2e-tools.sh` passes all 36 checks.
+
+**Not yet run on a cluster.** The commands in the 2026-10-29 #441 entry above still stand, and a session with AWS
+access owes all of them: `fleet.sh up`, an isolated `aws eks update-kubeconfig`, then
+`KUBECONFIG=… CONTEXT=… IAM_PIPELINE_PROFILE=accen-dev IAM_PIPELINE_REGION=us-west-2 bash verify/run-e2e.sh`,
+then `fleet.sh down`.
