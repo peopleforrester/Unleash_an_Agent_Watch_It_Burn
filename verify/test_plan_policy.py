@@ -154,6 +154,21 @@ _plan_fleet = (PLAN / "plan-fleet.py").read_text(encoding="utf-8")
 check("plan-fleet.py copies each root without its local state",
       re.search(r'ignore_patterns\([^)]*"\*\.tfstate\*"', _plan_fleet) is not None)
 
+# Every variable a fleet root requires (no default) must be one plan-fleet.py sets, or CI's plan stops at "No value
+# for required variable". #636 made the cluster root's role required on 2026-10-28 and plan-policy went red on
+# staging from then until 2026-10-31.
+def _required_vars(root: str) -> set[str]:
+    tf = (REPO / "infra/terraform/aws" / root / "main.tf").read_text(encoding="utf-8")
+    return {m.group(1) for m in re.finditer(r'^variable "([^"]+)" \{(.*?)^\}', tf, re.S | re.M)
+            if not re.search(r"^\s*default\s*=", m.group(2), re.M)}
+
+
+for _root in ("network", "cluster"):
+    _block = re.search(rf'"{_root}": \{{(.*?)\}},?\n', _plan_fleet, re.S)
+    _set = set(re.findall(r'"([a-z_]+)":', _block.group(1))) if _block else set()
+    _missing = sorted(_required_vars(_root) - _set)
+    check(f"plan-fleet.py sets every variable aws/{_root} requires (missing: {_missing})", _block is not None and not _missing)
+
 if failures:
     print(f"\nFAILED: {len(failures)} check(s)")
     sys.exit(1)

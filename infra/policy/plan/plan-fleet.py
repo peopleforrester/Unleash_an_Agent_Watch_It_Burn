@@ -195,7 +195,7 @@ def main() -> None:
             tfvars = {
                 "network": {"profile": "plan-fleet", "event": event},
                 "cluster": {"profile": "plan-fleet", "event": event, "name": CLUSTER_NAME, "vpc_id": vpc,
-                            "private_subnet_ids": subnets, "hostname": CLUSTER_HOST},
+                            "private_subnet_ids": subnets, "hostname": CLUSTER_HOST, "role": "attendee"},
             }
             for root, src in ROOTS.items():
                 # A copy, so init never writes .terraform or a lock file into the repo, and without the local
