@@ -2,14 +2,15 @@
 # ABOUTME: Writes the per-cluster Datadog identity (cluster-identity ConfigMap) and, on attendee pool
 # ABOUTME: clusters, datadog-admin-secret with the instructor org's keys for dual shipping (#242).
 #
-# Runs against the cluster in KUBECONFIG. Idempotent, so it can be re-run on a live cluster after the fact
+# Runs against the cluster CONTEXT names, never the kubeconfig's current-context (#732). Idempotent, so it can be re-run on a live cluster after the fact
 # (infra/reload-datadog-consumers.sh restarts the readers). Called by deploy-full-idp.sh; fleet.sh supplies the
 # admin keys for attendee pool clusters only (a presenter's student cluster is a claimed one, #295). An
 # instructor cluster ships to the instructor org already, so it gets the ConfigMap and any stale admin secret
 # is removed, never a second copy of itself.
 #
 # Env:
-#   CLUSTER_NAME             derived from the kube context when unset (arn:...:cluster/<name>)
+#   CONTEXT                  required: the target cluster's kube context, passed on every kubectl call
+#   CLUSTER_NAME             derived from CONTEXT when unset (arn:...:cluster/<name>)
 #   WITB_DD_API_KEY          the cluster's own key; the admin secret is skipped when it equals the admin key
 #   WITB_DD_ADMIN_API_KEY    instructor org api key (empty = no dual shipping)
 #   WITB_DD_ADMIN_APP_KEY    instructor org app key. NOT written to any cluster: verify/datadog-orgs.sh
@@ -18,7 +19,8 @@
 set -euo pipefail
 log() { printf '    %s\n' "$*" >&2; }
 
-CLUSTER_NAME="${CLUSTER_NAME:-$(kubectl config current-context | sed -E 's#^.*cluster/##')}"
+: "${CONTEXT:?set CONTEXT to the kube context of the target cluster, see CLAUDE.md rule 5 (#732)}"
+CLUSTER_NAME="${CLUSTER_NAME:-${CONTEXT##*cluster/}}"
 [[ "${CLUSTER_NAME}" == watch-it-burn-* ]] || { echo "cannot derive cluster name (got '${CLUSTER_NAME}'); set CLUSTER_NAME=" >&2; exit 1; }
 # What Datadog calls the cluster (#629): Whitney's sandbox org filters BurritoBot by a burritobot prefix, and a
 # Datadog cluster name should be unique. Named for the screen: the bot the room hacks is public, the presenters'
@@ -50,16 +52,16 @@ readonly NAMESPACES="datadog monitoring agent"
 PUBLIC_HOST="${WITB_PUBLIC_HOST:-}"
 
 for ns in ${NAMESPACES}; do
-    kubectl create namespace "${ns}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
-    kubectl -n "${ns}" create configmap cluster-identity --from-literal=cluster-name="${CLUSTER_NAME}" \
+    kubectl --context "${CONTEXT}" create namespace "${ns}" --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
+    kubectl --context "${CONTEXT}" -n "${ns}" create configmap cluster-identity --from-literal=cluster-name="${CLUSTER_NAME}" \
         --from-literal=datadog-cluster-name="${DATADOG_CLUSTER_NAME}" \
-        --from-literal=public-host="${PUBLIC_HOST}" --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+        --from-literal=public-host="${PUBLIC_HOST}" --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
 done
 log "cluster-identity=${CLUSTER_NAME} public-host=${PUBLIC_HOST:-<unset>} in ${NAMESPACES// /\/}"
 
 if [[ -z "${ADMIN_API}" || "${ADMIN_API}" == "${WITB_DD_API_KEY:-}" ]]; then
     for ns in ${NAMESPACES}; do
-        kubectl -n "${ns}" delete secret datadog-admin-secret --ignore-not-found >/dev/null
+        kubectl --context "${CONTEXT}" -n "${ns}" delete secret datadog-admin-secret --ignore-not-found >/dev/null
     done
     log "no dual shipping on ${CLUSTER_NAME} (no distinct admin key); datadog-admin-secret absent"
     exit 0
@@ -72,12 +74,12 @@ process_json="$(jq -cn --arg k "${ADMIN_API}" --arg s "${SITE}" '{("https://proc
 orch_json="$(jq -cn --arg k "${ADMIN_API}" --arg s "${SITE}" '{("https://orchestrator."+$s): [$k]}')"
 logs_json="$(jq -cn --arg k "${ADMIN_API}" --arg s "${SITE}" '[{api_key: $k, Host: ("agent-http-intake.logs."+$s), Port: 443, is_reliable: true}]')"
 for ns in ${NAMESPACES}; do
-    kubectl -n "${ns}" create secret generic datadog-admin-secret \
+    kubectl --context "${CONTEXT}" -n "${ns}" create secret generic datadog-admin-secret \
         --from-literal=api-key="${ADMIN_API}" \
         --from-literal=additional-endpoints="${metrics_json}" \
         --from-literal=process-additional-endpoints="${process_json}" \
         --from-literal=orchestrator-additional-endpoints="${orch_json}" \
         --from-literal=logs-additional-endpoints="${logs_json}" \
-        --dry-run=client -o yaml | kubectl apply -f - >/dev/null
+        --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
 done
 log "datadog-admin-secret in ${NAMESPACES// /\/}: ${CLUSTER_NAME} dual-ships to the instructor org"

@@ -221,7 +221,7 @@ for release, chart, repo, values in (
         ("argocd", "argo-cd", "https://argoproj.github.io/argo-helm", "argocd-values.yaml"),
         ("aws-load-balancer-controller", "aws-load-balancer-controller", "https://aws.github.io/eks-charts",
          "aws-load-balancer-controller-values.yaml")):
-    m = re.search(rf"helm upgrade --install {release} \S+/{chart} --version (\S+)((?:.*\\\n)*.*)", deploy)
+    m = re.search(rf"helm --kube-context \S+ upgrade --install {release} \S+/{chart} --version (\S+)((?:.*\\\n)*.*)", deploy)
     check(f"deploy-full-idp.sh installs {chart} with {values}", bool(m) and f'"${{SCRIPT_DIR}}/{values}"' in m.group(2))
     if not m:
         continue

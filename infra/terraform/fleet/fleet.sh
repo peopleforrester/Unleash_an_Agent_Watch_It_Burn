@@ -907,9 +907,9 @@ repair_datadog() {
             --from-literal=api-key="${api}" --from-literal=app-key="${app}" \
             --dry-run=client -o yaml | KUBECONFIG="${kcfg}" kubectl apply -f - >/dev/null 2>&1 || true
     done
-    KUBECONFIG="${kcfg}" CLUSTER_NAME="${name}" WITB_DD_API_KEY="${api}" WITB_PUBLIC_HOST="${want_host}" \
-        WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" run_identity_script 2>&1 | sed 's/^/    /' >&2 || true
     local ctx; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
+    KUBECONFIG="${kcfg}" CONTEXT="${ctx}" CLUSTER_NAME="${name}" WITB_DD_API_KEY="${api}" WITB_PUBLIC_HOST="${want_host}" \
+        WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" run_identity_script 2>&1 | sed 's/^/    /' >&2 || true
     KUBECONFIG="${kcfg}" reload_datadog_consumers "${ctx}" "${acct}" >/dev/null 2>&1 || log "  ${name}: consumer reload failed; agents pick the change up on their next restart"
     log "  ${name}: datadog repaired"
 }
@@ -1343,6 +1343,8 @@ bootstrap_one() {
     local acct_profile="${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}"
     local kcfg; kcfg="$(mktemp -t "${name}.kcfg.XXXX")"
     provider_write_kubeconfig "${name}" "${kcfg}" "${acct_profile}"
+    # deploy-full-idp.sh requires CONTEXT and passes it on every call (#732): this is the isolated file's only context.
+    local ctx; ctx="$(KUBECONFIG="${kcfg}" kubectl config current-context 2>/dev/null || true)"
     # Datadog keys, read from the central pool on the PROVISIONING box (default account); deploy-full-idp
     # injects them as a plain K8s Secret (the cluster's own account never touches Secrets Manager).
     # Attendee clusters (watch-it-burn-attendee-NNN) get their OWN org, indexed by slot N to match
@@ -1359,7 +1361,7 @@ bootstrap_one() {
         fi
         log "  WARN: ${name}: no Datadog keys (watch-it-burn/datadog unresolved); bootstrapping without Datadog"
     fi
-    if KUBECONFIG="${kcfg}" AWS_PROFILE="${acct_profile}" \
+    if KUBECONFIG="${kcfg}" CONTEXT="${ctx}" AWS_PROFILE="${acct_profile}" \
         WITB_DD_API_KEY="${api}" WITB_DD_APP_KEY="${app}" \
         WITB_DD_ADMIN_API_KEY="${admin_api}" WITB_DD_ADMIN_APP_KEY="${admin_app}" \
         CLUSTER_NAME="${name}" WITB_PUBLIC_HOST="$(public_host_for "${name}")" REGION="${WIB_REGION}" \

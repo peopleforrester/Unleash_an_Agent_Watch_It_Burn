@@ -43,7 +43,8 @@ def identity_literals(cluster: str) -> list[str]:
         shim.write_text(f'#!/usr/bin/env bash\necho "$*" >> "{log}"\n'
                         '[[ "$*" == *apply* ]] && cat >/dev/null\nexit 0\n')
         shim.chmod(0o755)
-        env = {**os.environ, "PATH": f"{d}:{os.environ['PATH']}", "CLUSTER_NAME": cluster}
+        env = {**os.environ, "PATH": f"{d}:{os.environ['PATH']}", "CLUSTER_NAME": cluster,
+               "CONTEXT": f"arn:aws:eks:us-west-2:111122223333:cluster/{cluster}"}
         env.pop("WITB_DD_ADMIN_API_KEY", None)
         subprocess.run(["bash", str(IDENTITY)], env=env, capture_output=True, text=True, check=True)
         calls = log.read_text().splitlines()

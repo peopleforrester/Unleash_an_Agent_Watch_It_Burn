@@ -229,10 +229,12 @@ check "and names it" 'grep -q "reads BEDROCK_NOVA_MODEL, which the agentgateway 
 
 echo "== it runs where the cluster's ModelConfigs are set up and repaired =="
 src="$(cat "${FLEET}")"
+# grep reads all of sed's output, not -q: a function body over sed's 4 KB pipe buffer made -q's early exit SIGPIPE
+# sed, and pipefail failed the check on a match (#732 lengthened bootstrap_one past it).
 check "bootstrap_one pins after the IDP is installed" \
-  'sed -n "/^bootstrap_one() {/,/^}/p" <<<"${src}" | grep -q "pin_bedrock_profiles \"\${name}\" \"\${kcfg}\""'
+  'sed -n "/^bootstrap_one() {/,/^}/p" <<<"${src}" | grep "pin_bedrock_profiles \"\${name}\" \"\${kcfg}\"" >/dev/null'
 check "converge's repair_one pins too" \
-  'sed -n "/^repair_one() {/,/^}/p" <<<"${src}" | grep -q "pin_bedrock_profiles \"\${name}\" \"\${kcfg}\""'
+  'sed -n "/^repair_one() {/,/^}/p" <<<"${src}" | grep "pin_bedrock_profiles \"\${name}\" \"\${kcfg}\"" >/dev/null'
 app="$(cat "${REPO}/gitops/bootstrap/apps/ai-layer.yaml")"
 check "Argo ignores .spec.model on Bedrock ModelConfigs, so selfHeal keeps the ARN" \
   'grep -qF ".spec | select(.provider == \"Bedrock\") | .model" <<<"${app}"'

@@ -6913,3 +6913,18 @@ it, and runs it against the fake kubectl in the committed order, reversed, and w
 **Not yet run on a cluster.** In a fresh attendee cluster's web terminal, paste the C7 fix from /lab, then read
 evil-mcp's toolNames back with
 `kubectl -n agent get agent workshop-agent -o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`.
+
+## 2026-10-31 · #732 · deploy-full-idp.sh and datadog-cluster-identity.sh require CONTEXT
+
+Both scripts now stop at once without `CONTEXT`, pass `--context "${CONTEXT}"` on every kubectl call and
+`--kube-context "${CONTEXT}"` on every helm call, and take `CLUSTER_NAME` from `CONTEXT` (`${CONTEXT##*cluster/}`)
+instead of `kubectl config current-context`. Their callers pass it: fleet.sh's `bootstrap_one` reads the one context of
+its isolated kubeconfig, as `repair_datadog` already did for the reload, and `repair_datadog` now passes it to the
+identity script; `setup-instructor-cluster.sh` passes the CONTEXT it already read. `verify/test_deploy_full_idp_context.py`
+runs both scripts with recording fakes for kubectl, helm and aws on PATH that refuse a call without the context. The
+source-shape checks in `verify/bootstrap_chart.py`, `test_bootstrap_chart.py`, `test_platform_version_pins.py`,
+`test_datadog_sandbox_names.py` and `test_datadog_log_services_render.py` now read the flagged calls.
+
+**Not yet run on a cluster.** `bash infra/terraform/fleet/fleet.sh up` of one attendee cluster (bootstrap_one), then
+`fleet.sh converge` against it for repair_datadog; or by hand,
+`CONTEXT=<ctx> KUBECONFIG=<isolated> AWS_PROFILE=<p> bash infra/deploy-full-idp.sh attendee`.
