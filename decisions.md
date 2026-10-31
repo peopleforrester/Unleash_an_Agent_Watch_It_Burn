@@ -6987,3 +6987,37 @@ among lab-platform's images, so the demo apps went unchecked at admission.
 `bash verify/run-e2e.sh` with CONTEXT, IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set, which includes
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and each demo app's Deployment Available. The read of
 web's signature through a real ECR pull-through cache is owed in the same way #669's is for llm-guard.
+
+## 2026-10-31 · #721 · The collector writes generate_content's input and output from kagent's ADK payloads
+
+**What changed.** A new processor, `transform/adk_model_content` (gitops/otel-collector/values.yaml), runs after
+`transform/adk_tool_content` on every profile (and before burn's `transform/scrub_pii`). On a `generate_content`
+span it parses `gcp.vertex.agent.llm_request` / `llm_response` and writes `gen_ai.input.messages`,
+`gen_ai.output.messages` and `gen_ai.system_instructions` in the GenAI semconv message shape (roles
+user/assistant/tool; parts text, reasoning, tool_call, tool_call_response; finish_reason). Datadog's OpenTelemetry
+instrumentation page, read 2026-10-31, names those three attributes as the first source of an LLM span's messages,
+JSON strings, then the `gen_ai.client.inference.operation.details` event. It copies, never moves, and leaves a span
+that already has `gen_ai.input.messages` alone.
+
+**Why the collector, not the runtime (option 1 on the issue).** kagent v0.10.1's Go runtime stamps the two ADK
+attributes itself (`go/adk/pkg/telemetry/attributes.go`) on adk-go v2.1.0, which has no gen_ai message attributes.
+adk-go main does (`internal/telemetry/genaimessages.go`, behind its content-capture switches), so a later kagent may
+make this processor redundant; the `== nil` guards keep it from overwriting that.
+
+**The 2048 cut.** kagent's own cap is 32 KiB, over which it writes `{"original_size","payload_prefix","truncated"}`.
+2048 is Tempo's `max_attribute_bytes` default, so the cut read in Tempo is likely Tempo's and the collector sees the
+whole payload. Not confirmed on a cluster. Whatever arrives cut: the HasPrefix/HasSuffix guard skips it, a cut that
+ends in `}` fails ParseJSON (error_mode ignore, one warn line), and in every case nothing is written and the span
+goes on unchanged. verify/test_adk_model_content_e2e.py drives each case through the pinned otelcol-contrib 0.160.0.
+
+**The feature gate.** The statements use OTTL lambdas (MapEach, Filter, Any, When), alpha behind
+`ottl.functions.enableLambda`, now in `command.extraArgs`. Without the gate the collector refuses the whole config,
+so `collector_render.feature_gate_args()` reads that list and every E2E test that runs the traces processors passes
+it. verify/test_trace_shape_e2e.py's second model call now carries the Go runtime's ADK attributes instead of
+gen_ai messages, as the issue noted.
+
+**Not yet run on a cluster.** After rollout on a cluster with Datadog (collector pods restarted), send one /chat and
+check: `kubectl -n monitoring logs ds/otel-collector-opentelemetry-collector-agent | grep -c adk_model_content`
+(expect 0 or a rare ParseJSON warn), then in LLM Observability (or `/api/v2/llm-obs/v1/spans/events`, ml_app
+burritobot) that the `generate_content` rows show input, output and the system prompt. Also read the length of
+`gcp.vertex.agent.llm_request` on that span in Datadog: over 2048 confirms the Tempo reading above.

@@ -70,6 +70,7 @@ config:
           - transform/set_llmobs_workflow
           - transform/set_genai_provider
           - transform/adk_tool_content
+          - transform/adk_model_content
           - transform/scrub_pii
         exporters:
           - span_metrics # feed the connector so it can derive metrics from these spans

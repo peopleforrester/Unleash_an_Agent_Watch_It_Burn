@@ -45,7 +45,7 @@ import urllib.request
 import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-from collector_render import REPO, collector_config  # noqa: E402
+from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -120,12 +120,23 @@ SPANS = [
      {"gen_ai.operation.name": "execute_tool", "gen_ai.tool.name": "get_marketing_intel",
       "gcp.vertex.agent.tool_call_args": INTEL_ARGS, "gcp.vertex.agent.tool_response": INTEL_RESULT}),
     ("call-llm-2", AGENT, "call_llm", INTERNAL, "invoke-agent", {}),
-    # The model call that reads the failure: its input carries the tool's "command FAILED" result.
+    # The model call that reads the failure: its input carries the tool's "command FAILED" result. Written as the
+    # Go runtime writes it (#721): ADK's request and response under gcp.vertex.agent.*, no gen_ai messages, which
+    # transform/adk_model_content makes. generate-1 keeps the gen_ai shape a Python-runtime agent sends.
     ("generate-2", AGENT, f"generate_content {MODEL}", INTERNAL, "call-llm-2",
      {"gen_ai.operation.name": "generate_content", "gen_ai.request.model": MODEL,
-      "gen_ai.input.messages": messages("tool", BLOCKED_RESULT),
-      "gen_ai.output.messages": messages("assistant", "The POST to the beacon did not go through.")}),
+      "gcp.vertex.agent.llm_request": json.dumps(
+          {"Model": MODEL, "Contents": [{"parts": [{"functionResponse": {
+              "id": "run-shell-1", "name": "run_shell", "response": json.loads(BLOCKED_RESULT)}}], "role": "user"}],
+           "Config": {}}, separators=(",", ":")),
+      "gcp.vertex.agent.llm_response": json.dumps(
+          {"Content": {"parts": [{"text": "The POST to the beacon did not go through."}], "role": "model"},
+           "FinishReason": "STOP"}, separators=(",", ":"))}),
 ]
+GENERATE_2_IN = [{"role": "tool", "parts": [{"type": "tool_call_response", "id": "run-shell-1",
+                                             "response": json.loads(BLOCKED_RESULT)}]}]
+GENERATE_2_OUT = [{"role": "assistant", "finish_reason": "stop",
+                   "parts": [{"type": "text", "content": "The POST to the beacon did not go through."}]}]
 
 
 def sid(key: str) -> str:
@@ -177,11 +188,11 @@ def run_collector(profile: str) -> tuple[dict[str, dict], str]:
         cfg_file = pathlib.Path(d) / "config.yaml"
         cfg_file.write_text(yaml.safe_dump(cfg, sort_keys=False))
         env = {**os.environ, "WIB_CLUSTER_NAME": f"burritobot-{profile}"}
-        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}"], capture_output=True, text=True,
+        val = subprocess.run([str(OTELCOL), "validate", f"--config={cfg_file}", *feature_gate_args(profile)], capture_output=True, text=True,
                              env=env)
         check(f"{profile}: the collector accepts the traces processors", val.returncode == 0, val.stderr)
         log = (pathlib.Path(d) / "collector.log").open("w")
-        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}"], stdout=log, stderr=subprocess.STDOUT,
+        proc = subprocess.Popen([str(OTELCOL), f"--config={cfg_file}", *feature_gate_args(profile)], stdout=log, stderr=subprocess.STDOUT,
                                 env=env)
         try:
             sent, deadline = False, time.time() + 30
@@ -247,6 +258,12 @@ for profile in PROFILES:
               a.get("gen_ai.tool.call.arguments") == args, str(a.get("gen_ai.tool.call.arguments")))
         check(f"{profile}: {tool}'s result is where Datadog reads a tool's output",
               a.get("gen_ai.tool.call.result") == result, str(a.get("gen_ai.tool.call.result")))
+
+    g2 = attrs(span["generate-2"])
+    check(f"{profile}: the Go runtime's model call gets its input where Datadog reads it (gen_ai.input.messages)",
+          json.loads(g2.get("gen_ai.input.messages") or "null") == GENERATE_2_IN, str(g2.get("gen_ai.input.messages")))
+    check(f"{profile}: and its output (gen_ai.output.messages)",
+          json.loads(g2.get("gen_ai.output.messages") or "null") == GENERATE_2_OUT, str(g2.get("gen_ai.output.messages")))
 
     blocked = span["run-shell"]
     check(f"{profile}: the blocked run_shell is status ERROR on its own span", is_error(blocked),

@@ -285,6 +285,104 @@ config:
             - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
             - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+    # The model call's own content, for Datadog's LLM Observability (#721). kagent's Go runtime (v0.10.1,
+    # go/adk/pkg/telemetry/attributes.go) writes the model request and response to gcp.vertex.agent.llm_request and
+    # gcp.vertex.agent.llm_response as json.Marshal of ADK's model.LLMRequest / model.LLMResponse (adk-go v2.1.0):
+    # {"Model":..,"Contents":[{"parts":[..],"role":"user|model"}],"Config":{"systemInstruction":{"parts":[..]}}} and
+    # {"Content":{"parts":[..],"role":"model"},..,"FinishReason":"STOP",..}, each part a genai.Part ({"text":..},
+    # {"functionCall":{"id","args","name"}}, {"functionResponse":{"id","name","response"}}). Nothing is written to
+    # gen_ai.input.messages / gen_ai.output.messages, which is where Datadog reads a model span's input and output
+    # (docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation, read 2026-10-31: those attributes and
+    # gen_ai.system_instructions first, as JSON strings, then the gen_ai.client.inference.operation.details event), so
+    # every generate_content row showed no input and no output. These statements write the three attributes in the
+    # GenAI semconv message shape: role user/assistant/tool, and parts of type text, reasoning, tool_call (id, name,
+    # arguments) and tool_call_response (id, response). Copy, never move, as above. A span that already carries
+    # gen_ai.input.messages (the Python runtime, guard-proxy) is left as it is.
+    #
+    # When the payload does not parse, nothing is written and the span goes on unchanged. kagent replaces a payload
+    # over 32 KiB with {"original_size":..,"payload_prefix":..,"truncated":true}, and a payload cut anywhere else is
+    # not JSON. The 2048-character cut read in Tempo matches Tempo's own max_attribute_bytes default (2048), which would
+    # make it Tempo's and not on the way to Datadog; not yet confirmed on a cluster. Either way, the HasPrefix /
+    # HasSuffix guard skips both without an error; a cut that happens to end in "}" fails ParseJSON, which error_mode
+    # ignore logs once and moves past. Every part is built through ParseJSON, so a message that cannot be made valid
+    # JSON leaves the attribute unset rather than half-written. verify/test_adk_model_content_e2e.py runs it.
+    #
+    # MapEach, Filter, Any and When are OTTL lambdas, which need the ottl.functions.enableLambda feature gate: it is
+    # set in command.extraArgs below, and a collector started without it refuses this whole config.
+    #
+    # Each statement is a folded block scalar (>-): a string, never a mapping (test_collector_config.py), and every
+    # continuation line has the same indent, so folding joins them with one space and never inside a string literal.
+    transform/adk_model_content:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - >-
+              set(cache["adk_req"], ParseJSON(attributes["gcp.vertex.agent.llm_request"]))
+              where IsMatch(name, "^generate_content") and attributes["gcp.vertex.agent.llm_request"] != nil
+              and HasPrefix(attributes["gcp.vertex.agent.llm_request"], "{\"Model\":")
+              and HasSuffix(attributes["gcp.vertex.agent.llm_request"], "}")
+            - >-
+              set(cache["adk_resp"], ParseJSON(attributes["gcp.vertex.agent.llm_response"]))
+              where IsMatch(name, "^generate_content") and attributes["gcp.vertex.agent.llm_response"] != nil
+              and HasPrefix(attributes["gcp.vertex.agent.llm_response"], "{\"Content\":")
+              and HasSuffix(attributes["gcp.vertex.agent.llm_response"], "}")
+            # Input: one message per ADK Content. ADK's "model" is the semconv's assistant, and a user turn that
+            # carries a functionResponse is the tool's turn.
+            - >-
+              set(attributes["gen_ai.input.messages"], String(MapEach(Filter(cache["adk_req"]["Contents"],
+              (_, c) => IsMap(c) and ContainsValue(Keys(c), "parts") and IsList(c["parts"])),
+              (_, c) => ParseJSON(Concat(["{\"role\":\"",
+              When(() => ContainsValue(Keys(c), "role") and c["role"] == "model", "assistant",
+              When(() => Any(c["parts"], (_, p) => IsMap(p) and ContainsValue(Keys(p), "functionResponse")), "tool", "user")),
+              "\",\"parts\":",
+              String(MapEach(Filter(c["parts"], (_, p) => IsMap(p) and (ContainsValue(Keys(p), "text")
+              or ContainsValue(Keys(p), "functionCall") or ContainsValue(Keys(p), "functionResponse"))),
+              (_, p) => When(() => ContainsValue(Keys(p), "text"),
+              {"type": When(() => ContainsValue(Keys(p), "thought") and p["thought"] == true, "reasoning", "text"), "content": p["text"]},
+              When(() => ContainsValue(Keys(p), "functionCall"),
+              ParseJSON(Concat(["{\"type\":\"tool_call\",", TrimPrefix(String(MapKeys(Filter(p["functionCall"],
+              (k, _) => k == "id" or k == "name" or k == "args"), (k, _) => When(() => k == "args", "arguments", k))), "{")], "")),
+              ParseJSON(Concat(["{\"type\":\"tool_call_response\",", TrimPrefix(String(Filter(p["functionResponse"],
+              (k, _) => k == "id" or k == "response")), "{")], "")))))),
+              "}"], "")))))
+              where attributes["gen_ai.input.messages"] == nil and IsMap(cache["adk_req"]) and IsList(cache["adk_req"]["Contents"])
+            - >-
+              set(attributes["gen_ai.system_instructions"], String(MapEach(Filter(cache["adk_req"]["Config"]["systemInstruction"]["parts"],
+              (_, p) => IsMap(p) and ContainsValue(Keys(p), "text")), (_, p) => {"type": "text", "content": p["text"]})))
+              where attributes["gen_ai.system_instructions"] == nil and IsMap(cache["adk_req"]) and IsMap(cache["adk_req"]["Config"])
+              and ContainsValue(Keys(cache["adk_req"]["Config"]), "systemInstruction") and IsMap(cache["adk_req"]["Config"]["systemInstruction"])
+              and ContainsValue(Keys(cache["adk_req"]["Config"]["systemInstruction"]), "parts")
+              and IsList(cache["adk_req"]["Config"]["systemInstruction"]["parts"])
+            # Output: the one Content, as the assistant, with the semconv finish_reason. ADK leaves FinishReason ""
+            # when the model adapter did not set one; then a reply that calls a tool is tool_call and any other stop.
+            - >-
+              set(cache["adk_ok"], true) where IsMap(cache["adk_resp"]) and IsMap(cache["adk_resp"]["Content"])
+              and ContainsValue(Keys(cache["adk_resp"]["Content"]), "parts") and IsList(cache["adk_resp"]["Content"]["parts"])
+            - 'set(cache["adk_fr"], "stop") where cache["adk_ok"] == true'
+            - >-
+              set(cache["adk_fr"], "tool_call") where cache["adk_ok"] == true
+              and Any(cache["adk_resp"]["Content"]["parts"], (_, p) => IsMap(p) and ContainsValue(Keys(p), "functionCall"))
+            - >-
+              set(cache["adk_fr"], When(() => cache["adk_resp"]["FinishReason"] == "STOP", "stop",
+              When(() => cache["adk_resp"]["FinishReason"] == "MAX_TOKENS", "length",
+              When(() => IsMatch(cache["adk_resp"]["FinishReason"], "^(SAFETY|RECITATION|BLOCKLIST|PROHIBITED_CONTENT|SPII|IMAGE_SAFETY)$"),
+              "content_filter", ToLowerCase(cache["adk_resp"]["FinishReason"])))))
+              where cache["adk_ok"] == true and ContainsValue(Keys(cache["adk_resp"]), "FinishReason")
+              and IsString(cache["adk_resp"]["FinishReason"]) and cache["adk_resp"]["FinishReason"] != ""
+            - >-
+              set(attributes["gen_ai.output.messages"], String(ParseJSON(Concat(["[{\"role\":\"assistant\",\"parts\":",
+              String(MapEach(Filter(cache["adk_resp"]["Content"]["parts"], (_, p) => IsMap(p) and (ContainsValue(Keys(p), "text")
+              or ContainsValue(Keys(p), "functionCall") or ContainsValue(Keys(p), "functionResponse"))),
+              (_, p) => When(() => ContainsValue(Keys(p), "text"),
+              {"type": When(() => ContainsValue(Keys(p), "thought") and p["thought"] == true, "reasoning", "text"), "content": p["text"]},
+              When(() => ContainsValue(Keys(p), "functionCall"),
+              ParseJSON(Concat(["{\"type\":\"tool_call\",", TrimPrefix(String(MapKeys(Filter(p["functionCall"],
+              (k, _) => k == "id" or k == "name" or k == "args"), (k, _) => When(() => k == "args", "arguments", k))), "{")], "")),
+              ParseJSON(Concat(["{\"type\":\"tool_call_response\",", TrimPrefix(String(Filter(p["functionResponse"],
+              (k, _) => k == "id" or k == "response")), "{")], "")))))),
+              ",", TrimPrefix(String({"finish_reason": cache["adk_fr"]}), "{"), "]"], ""))))
+              where attributes["gen_ai.output.messages"] == nil and cache["adk_ok"] == true
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
@@ -400,6 +498,7 @@ config:
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
           - transform/set_genai_provider # after the line above, so the spans it names get aws.bedrock too
           - transform/adk_tool_content # tool args/result under gen_ai.*, and a failed tool call as its one error
+          - transform/adk_model_content # #721: the model call's request and reply as gen_ai.input/output.messages
         exporters:
           - otlp_grpc/tempo # the fallback, and the only trace sink without Datadog
           - span_metrics  # feed the connector so it can derive metrics from these spans
@@ -560,6 +659,9 @@ initContainers:
 command:
   extraArgs:
     - --config=/datadog-gate/datadog.yaml
+    # transform/adk_model_content's MapEach, Filter, Any and When are OTTL lambdas, alpha behind this gate (#721).
+    # verify/collector_render.py reads this list, so the E2E tier runs the collector with the same gates.
+    - --feature-gates=ottl.functions.enableLambda
 extraVolumes:
   - name: datadog-overlay
     configMap:

@@ -81,6 +81,36 @@ for needed in ("filter/drop_noise", "transform/adk_tool_content"):
 check("the ADK tool-content copy runs after the noise filter",
       traces.index("transform/adk_tool_content") > traces.index("filter/drop_noise"))
 
+print("== the model call's content reaches Datadog's LLM Observability (#721) ==")
+# verify/test_adk_model_content_e2e.py runs the statements through the real collector; this is the half that runs
+# everywhere: the processor is wired in on every profile, after the tool copy, before burn's scrub, and the
+# collector is started with the lambda gate its statements need.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+from collector_render import collector_config, feature_gate_args  # noqa: E402
+
+MODEL_CONTENT = "transform/adk_model_content"
+for profile in ("instructor", "attendee", "burn"):
+    for secret in (False, True):
+        procs = collector_config(profile, datadog_secret=secret)["service"]["pipelines"]["traces"]["processors"]
+        label = f"{profile} {'with' if secret else 'without'} datadog-secret"
+        check(f"{label}: {MODEL_CONTENT} runs after transform/adk_tool_content",
+              MODEL_CONTENT in procs and procs.index(MODEL_CONTENT) > procs.index("transform/adk_tool_content"))
+        if "transform/scrub_pii" in procs:
+            check(f"{label}: and before transform/scrub_pii, so the messages it writes are scrubbed",
+                  procs.index(MODEL_CONTENT) < procs.index("transform/scrub_pii"))
+    check(f"{profile}: the collector is started with --feature-gates=ottl.functions.enableLambda",
+          any("ottl.functions.enableLambda" in a for a in feature_gate_args(profile)))
+mc = [s for g in CFG["processors"][MODEL_CONTENT]["trace_statements"] for s in g["statements"]]
+for key in ("gen_ai.input.messages", "gen_ai.output.messages", "gen_ai.system_instructions"):
+    check(f"it writes {key}, and only where the span has none",
+          any(f'set(attributes["{key}"]' in s and f'attributes["{key}"] == nil' in s for s in mc))
+for src, prefix in (("gcp.vertex.agent.llm_request", '{\\"Model\\":'), ("gcp.vertex.agent.llm_response", '{\\"Content\\":')):
+    check(f"it parses {src} only when it starts and ends like a whole payload, so a cut one is skipped",
+          any(f"ParseJSON(attributes[\"{src}\"])" in s and f'HasPrefix(attributes["{src}"], "{prefix}")' in s
+              and f'HasSuffix(attributes["{src}"], "}}")' in s for s in mc))
+check("lambda statements are lambdas (MapEach, Filter, When), so the gate is not decoration",
+      any("MapEach(" in s and "=>" in s for s in mc))
+
 print("== a blocked tool call is an error on its own span, in either result shape (#264) ==")
 # verify/test_tool_failure_status_e2e.py runs both shapes through the real collector; this is the half that runs
 # everywhere.

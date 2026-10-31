@@ -68,6 +68,12 @@ def datadog_overlay(vals: dict, admin_secret: bool = True) -> dict:
     return yaml.safe_load(data["datadog-dual.yaml" if admin_secret and "datadog-dual.yaml" in data else "datadog.yaml"]) or {}
 
 
+def feature_gate_args(profile: str) -> list[str]:
+    """The --feature-gates arguments the profile's chart passes the collector (command.extraArgs). A test that runs
+    the traces processors passes them too: without ottl.functions.enableLambda the collector refuses the config."""
+    return [a for a in helm_values(profile).get("command", {}).get("extraArgs", []) if a.startswith("--feature-gates=")]
+
+
 def collector_config(profile: str, datadog_secret: bool, admin_secret: bool = True) -> dict:
     """The config the collector runs: relay.yaml, then what the gate wrote. admin_secret matters on the attendee
     profile only: True is a pool of per-student orgs (dual shipping), False one org for the cluster and the
