@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| Copied out | 2026-10-29 |
+| Copied out | 2026-10-31 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `2603c12a64281c4e989eddd1c1ee8c45e24b59a9` (the last commit to change lab.html, on 2026-10-29) |
-| Source blob | `dd004829cc312f9f43426deb1617350d23ae9159` |
+| Source commit | `b3debd5e24de64a2220387cde4126692d8c017da` (the last commit to change lab.html, on 2026-10-31) |
+| Source blob | `66a3f85b5327a779f975c3bb348258ecec61e1a2` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -104,7 +104,7 @@ There is a lot here and you are not expected to know what all of it is. But here
 
 *[Community cluster only]* The Community cluster carries a shorter list on purpose. Istio is not installed here, and neither is anything that defends the agent: no Kyverno, no Falco, no NetworkPolicy until you apply one.
 
-- *[Not on the Community cluster]* [Istio ambient mesh](https://istio.io/latest/docs/ambient/overview/) is installed, but no namespace is enrolled in it yet, so it is not encrypting anything. Run `kubectl get ns -L istio.io/dataplane-mode` and see.
+- *[Not on the Community cluster]* [Istio ambient mesh](https://istio.io/latest/docs/ambient/overview/) carries the hop from the console to guard-proxy, which every chat message crosses. On that hop the traffic is mutual TLS: each pod proves who it is with a certificate that names its ServiceAccount. Only those two pods are in the mesh. Run `kubectl get pods -n agent -L istio.io/dataplane-mode` to see which, then send BurritoBot a message and run `kubectl -n istio-system logs -l app=ztunnel --tail=500 | grep 'connection complete' | grep guard-proxy-reader | tail -1` to see that connection, with both identities.
 - [cert-manager](https://cert-manager.io/docs/) issues and renews the TLS certificates that services present (for example the console's HTTPS).
 - [OpenTelemetry](https://opentelemetry.io/docs/) collects the traces and metrics. We send them to Datadog, but OpenTelemetry is vendor neutral. You can send the collected data to any observability backend.
 - [External Secrets](https://external-secrets.io/latest/) pulls your Datadog keys out of AWS Secrets Manager, so no credential is committed anywhere.
