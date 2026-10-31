@@ -6609,3 +6609,21 @@ AWS access, after the root moves to a commit carrying this change:
 `KUBECONFIG=<file> kubectl --context <ctx> -n apps get pods -l 'app in (demo-app-hedgehog,demo-app-mantis-shrimp,demo-app-spider,demo-app-unicorn,demo-app-wombat)' -o jsonpath='{range .items[*]}{.metadata.name} {.status.containerStatuses[0].ready} {.status.containerStatuses[0].imageID}{"\n"}{end}'`
 must show five Ready pods on the `web@sha256:73cd…` image. Then `curl -s -o /dev/null -w '%{http_code}' https://hedgehog-<cluster>.agenticburn.com/`
 must print 200, and the page must draw in a browser. The same holds for each of the other four hostnames.
+
+## 2026-10-31 · #718 · The promo villain digests already match lab-platform's hand-over, so nothing is repinned
+
+**No code changed.** #718 was filed from a run whose staging still pinned #653's digests (promo-mascot at
+`sha256:9f9051…`). 0dfcbef (#467) has since repinned all ten `verify/promo_villains.py` `DIGESTS` to
+lab-platform#55's umask-022 republish. That republish is the hand-over the issue asks for, not whatever happens to be
+live. On 2026-10-31 hecaton run 13613 checked it two ways:
+
+- lab-platform's `deploy/watch-it-burn/images.tsv`, read on its main, has ten `villain` rows. Their digests equal
+  `DIGESTS` name for name. The row file is what lab-platform#55's decisions.md entry ("promo/* (ten): the digests in
+  `deploy/watch-it-burn/images.tsv`") names as the record.
+- `python3 verify/test_promo_villains_public.py`, run with no credential, passes all twenty checks. Each `:v1`
+  answers an anonymous pull and serves the pinned digest.
+
+**Not yet run on a cluster.** Same as #678's entry: on an attendee cluster, run
+`CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, then `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`.
+A villain admitted in Audit should then reach Running, and `kubectl --context <ctx> logs deploy/promo-mascot` should
+print its log.
