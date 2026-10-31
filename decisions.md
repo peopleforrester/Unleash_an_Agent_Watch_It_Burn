@@ -12722,3 +12722,49 @@ its four commits onto staging 12b31cd and merged the three files by hand.
   them. In the tier, `test_weaver_registry_check.py` (weaver 0.24.2 on the v1.41.1 pin, the chat group resolving with
   both token counts), `test_collector_act2_redaction_e2e.py`, `test_adk_model_content_e2e.py`,
   `test_trace_shape_e2e.py`, `test_collector_pii_scrub_e2e.py` and `test_collector_one_root_e2e.py` passed.
+## 2026-10-31 · question 947 · #471: Istio stays, and the console and guard-proxy are enrolled in the ambient mesh
+
+**Question 947:** Should the workshop drop the Istio ambient mesh, enroll the agent and apps namespaces in it,
+or keep it installed and unenrolled?
+
+**Answer:** "So why are you recommending that we drop Istio when this is part of the stack? I know we don't have
+any agents and apps in there but we could enroll at least one application in there. Why wouldn't we do that? Why
+is this being brought up as a thing to talk about? I don't understand. What's the problem with just leaving it
+there? What is the issue exactly?"
+
+**Decided by:** Michael (verdict: overridden; the recommendation was to drop Istio).
+
+**Read as:** keep Istio, and enroll at least one application in it. To answer the question in the reply: leaving
+Istio installed was never the problem. The problem was that the pages said it encrypted traffic while it
+encrypted nothing, because no pod or namespace carried `istio.io/dataplane-mode=ambient`. Drop was recommended
+because enrolling looked like more work than the one sentence it made true. Enrolling the right pods turned out
+to be smaller than that.
+
+**What it changes.**
+- **Enrolled: the console and guard-proxy, per pod.** Both pod templates in `gitops/ai-layer/resources.yaml`
+  carry `istio.io/dataplane-mode: ambient`, and no Namespace does. That hop carries every chat message, and it
+  is now mutual TLS between `spiffe://cluster.local/ns/agent/sa/default` (the console) and
+  `.../sa/guard-proxy-reader`. On the burn profile, which has no Istio, the label does nothing.
+- **Not enrolled: agentgateway, workshop-agent and the rest of `agent`, and all of `apps`.** Mesh traffic
+  arrives on HBONE port 15008. `gitops/ai-layer/chat-path-ingress.yaml` (#552) admits only app ports into
+  agentgateway and workshop-agent, so enrolling them would cut the chat path. `apps` ingress has the same
+  problem on the admin profile. Either can be enrolled later with a 15008 rule.
+- **agent is PERMISSIVE, not STRICT.** `security/istio/peer-authentication.yaml` sets PERMISSIVE because the
+  console's ip-target NLB, the beat scripts and the agent's tool pod reach the enrolled pods from outside the
+  mesh, and STRICT would refuse them. Between the two enrolled pods, traffic is still mutual TLS. The apps
+  STRICT policy applied to nothing and was removed.
+- **The pages say what it carries.** The lab tour bullet (and `challenges/LAB-TEXT.md`) names the hop and gives
+  two commands: `kubectl get pods -n agent -L istio.io/dataplane-mode`, and a ztunnel `connection complete`
+  line. The same correction went into the `docs/STACK-WALKTHROUGH.md` row and SPIFFE note, the
+  `facilitation/governance-map.md` row 1d, the August run-of-show layer table, the `links.html` entry and
+  `docs/MASTER-RECREATION-SPEC.md`. The #238 evaluation carries an outcome note.
+- **Tests.** `verify/test_mesh_enrollment.py` now holds that exactly those two pod templates carry the label,
+  no namespace does, no Ingress NetworkPolicy in `agent` selects an enrolled pod without admitting 15008, agent
+  is PERMISSIVE, and the tour names the hop. `verify/test_mesh.py` checks the mode. The new E2E check
+  `verify/test_mesh_live.py` checks four things on a cluster: istio-cni redirected those two pods and no others
+  on the chat path, they are Ready, the console reaches guard-proxy, and ztunnel logged that connection with
+  both identities.
+- **Not yet run on a cluster.** This run could not deploy. The live check is
+  `CONTEXT=<ctx> python3 verify/test_mesh_live.py`, plus the existing chat beats (`verify/run-all.sh`) and
+  `verify/test_console_no_toggle_live.py`, which go through the console and guard-proxy. Install time and app
+  count do not change: the five Istio apps stay.
