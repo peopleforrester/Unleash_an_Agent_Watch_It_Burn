@@ -430,6 +430,13 @@ check("the standbys come down two hours after the start, and the lines remove th
 mt = b.schedule_lines(start, zoneinfo.ZoneInfo("America/Denver"), pathlib.Path("/fleet"))
 check("in the cron host's own time zone", any(l.startswith("0 17 4 3 * mkdir -p /fleet/logs; /fleet/backups.py up night-before") for l in mt))
 check("every line is tagged so unschedule finds it", all(b.CRON_TAG in l for l in lines))
+# 2026-10-31: netcup's crontab sets PATH=~/.local/bin:/usr/local/bin:/usr/bin:/bin, and terraform, kubectl, aws,
+# helm and python3 are all in /home/linuxbrew/.linuxbrew/bin, so the night-before wave would have died at 02:50 UTC
+# on the day. Each line carries the PATH `schedule` was run with.
+pl = b.schedule_lines(start, dt.timezone.utc, pathlib.Path("/fleet"), path="/opt/brew/bin:/usr/bin")
+check("with a PATH given, every scheduled command runs under it",
+      all(" export PATH=/opt/brew/bin:/usr/bin; " in f" {' '.join(l.split()[5:])}" for l in pl[1:]), str(pl[1:2]))
+check("cmd_schedule passes the PATH it runs with", "path=os.environ" in (FLEET_DIR / "backups.py").read_text())
 # Run each line's command the way cron does, with sh, on a checkout that has no logs directory yet.
 fresh = T / "fresh"; fresh.mkdir()
 (fresh / "backups.py").write_text(f'#!/bin/sh\necho "$@" >>"{fresh}/ran"\n'); os.chmod(fresh / "backups.py", 0o755)

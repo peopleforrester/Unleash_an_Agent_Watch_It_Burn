@@ -688,13 +688,15 @@ def cmd_promote(x: Ctx, a) -> int:
     return 0 if w.promote(a.role, c, up, table, why="by hand", failed=held.name if held else up) else 1
 
 
-def schedule_lines(start: dt.datetime, tz: dt.tzinfo, here: pathlib.Path = HERE) -> list[str]:
+def schedule_lines(start: dt.datetime, tz: dt.tzinfo, here: pathlib.Path = HERE, path: str = "") -> list[str]:
     """Crontab lines for one session, in the cron host's time zone. Cron has no year, so `unschedule` (the
-    teardown line runs it) removes them once the session is over."""
+    teardown line runs it) removes them once the session is over. `path` is the PATH each command runs under."""
     # Each line makes the log directory first: on a fresh checkout it does not exist yet, and a redirection into
-    # a missing directory stops cron's shell before the command runs, silently.
+    # a missing directory stops cron's shell before the command runs, silently. Then it takes the PATH the
+    # schedule was made with: cron's own PATH (netcup's crontab sets ~/.local/bin:/usr/local/bin:/usr/bin:/bin)
+    # has no terraform, kubectl, aws, helm or the python3 this script runs on (verify/test_backups.py).
     logs = shlex.quote(str(here / "logs"))
-    mk = f"mkdir -p {logs}; "
+    mk = f"mkdir -p {logs}; " + (f"export PATH={shlex.quote(path)}; " if path else "")
 
     def at(t: dt.datetime, cmd: str, what: str) -> str:
         lt = t.astimezone(tz)
@@ -719,7 +721,7 @@ def schedule_lines(start: dt.datetime, tz: dt.tzinfo, here: pathlib.Path = HERE)
 def cmd_schedule(_x, a) -> int:
     start = parse_when(a.session_start)
     tz = zoneinfo.ZoneInfo(a.tz) if a.tz else dt.datetime.now().astimezone().tzinfo
-    print("\n".join(schedule_lines(start, tz)))
+    print("\n".join(schedule_lines(start, tz, path=os.environ.get("PATH", ""))))
     log("schedule: append these to the crontab of the host that holds the fleet profiles: "
         "(crontab -l; backups.py schedule <start>) | crontab -")
     return 0
