@@ -21,7 +21,7 @@ import yaml
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from bootstrap_chart import APPS, IMAGE_REGISTRY, REPO, kustomize_images  # noqa: E402
 
-DIGEST = "sha256:781a126bf7c7da6b8460d48b1fba1e0823673b85b186a165b36e0b23eb3f4d7b"
+DIGEST = "sha256:6cdbf3a2272d1bc5e9ed0fbffc3d644d4109e9df3c709458e25ffd108ecf72ad"
 WANT = f"llm-guard={IMAGE_REGISTRY}/llm-guard:v1@{DIGEST}"
 AI = REPO / "gitops/ai-layer"
 
@@ -88,6 +88,13 @@ scanners = yaml.safe_load(cm["data"]["scanners.yml"])
 pi = next((s for s in scanners["input_scanners"] if s["type"] == "PromptInjection"), {})
 check("PromptInjection loads the classifier from /home/user/models/prompt-injection, where the image has it",
       (pi.get("params") or {}).get("model_path") == "/home/user/models/prompt-injection")
+
+print("== images.lock records the digest the Application pins (#730) ==")
+lock = {ln.split()[0]: ln.split()[1:] for ln in (REPO / "images.lock").read_text(encoding="utf-8").splitlines()
+        if ln.strip() and not ln.startswith("#")}
+check("the kustomize image name llm-guard has a row naming lab-platform's reference at that digest",
+      lock.get("llm-guard", [])[:2] == [f"ghcr.io/peopleforrester/lab-platform/llm-guard@{DIGEST}",
+                                        "repo:peopleforrester/lab-platform/deploy/images"], str(lock.get("llm-guard")))
 
 print()
 if failures:
