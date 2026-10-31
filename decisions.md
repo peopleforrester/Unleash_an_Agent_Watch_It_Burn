@@ -6627,3 +6627,63 @@ live. On 2026-10-31 hecaton run 13613 checked it two ways:
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, then `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`.
 A villain admitted in Audit should then reach Running, and `kubectl --context <ctx> logs deploy/promo-mascot` should
 print its log.
+## 2026-10-31 · #716 · Place the IMDS credential-theft beat in the KubeCon and DevOpsDays run-of-show
+
+**Context.** #113 built the IMDS credential-theft challenge (`challenges/imds-node-creds/`: `FACILITATOR.md`
+and `steal-node-creds.sh`) and the infra that makes it land on the community cluster alone (hop limit 2,
+no `agent-deny-imds`). #113's decisions.md entry deferred the stage placement explicitly: "Final stage
+placement in the run-of-show (which segment, how it flows in the 30-minute KubeCon demo vs the 2-hour
+format) is the presenters' choreography call and is left as a follow-up." This issue, #716, is that
+follow-up. The beat runs on the community cluster (`attackme`) as a watch-the-screen presenter beat. The
+audience cannot do it from a phone, so it has the same shape as the C4 fork bomb "on our box only". That
+same phone limit is why Challenge 8 (terminal RBAC) was cut from the KubeCon breakout.
+
+**Decision.**
+- **KubeCon 30-minute breakout** (`facilitation/kubecon-na-2026-run-of-show.md`, driven from `/kubecon`):
+  the beat goes in **Segment 6, the OWASP/ASI close**, as the issue directed ("the natural slot is the
+  OWASP/ASI close"). It is added after the OWASP Kubernetes Top 10 bullet and before "Burritos only", as an
+  optional 1-minute watch-the-screen beat pegged to OWASP Agentic Security Initiative **ASI03, Identity and
+  Privilege Abuse** (the same id the lab names in Challenge 8), run from a presenter checkout against the
+  community kube-context, with the command and the owed caveats pointing at
+  `challenges/imds-node-creds/FACILITATOR.md`. It is marked "the first thing to drop if the clock is behind"
+  because segment 6 is already time-pressured and the break-it finale must win the remaining minutes. The
+  same block is added to `gitops/ai-layer/web/kubecon.html` so the surface the presenters drive from carries
+  it; the block is a `<div class="control">` prose block like the finale, because the beat is terminal-driven
+  and has no copy-ready phone prompt, so it carries no `data-beat` article. A row was added to the "Challenges
+  shown live, and challenges cut" table, internal id `ASI03`.
+- **DevOpsDays 2-hour format.** DevOpsDays Portland 2026 is already delivered (conference-knowledge
+  `devopsdays-portland-2026`, status delivered 2026-09-08 to 10), and the beat was built after it, so this
+  is forward-looking for the next 2-hour run. The live 2-hour surface is `/brief`
+  (`gitops/ai-layer/web/brief.html`), with `docs/RUN-OF-SHOW-2026-08.md` the retired-but-named artifact
+  pointing at it. The beat is placed in both as the **watch-the-screen companion to Challenge 8** (ASI03):
+  Challenge 8's own cloud-credential probe ends `IMDS: BLOCKED` on the student cluster (the control
+  working); the presenters turn it inside out on the Community cluster where both IMDS controls are off.
+  Framed as presenter-run, optional, and read-only, and kept off the numbered student challenge list
+  (brief.html still says "no bonus challenges by design").
+
+**The eight-challenge count is unchanged.** The beat is never numbered C9: a numbered C9 would collide with
+the lab's existing "Challenge 9" feedback step and cascade the eight-challenge counts
+(`docs/CHALLENGE-ASSETS.md`, `verify/test_challenge_assets.py`'s `range(1,9)`, `docs/DESIGN-GLANCE.md`,
+`lab.html`), exactly as #113 reasoned. Its id stays ASI03, which lives in the facilitator doc and the
+terraform/values comments. No challenge-count file was touched.
+
+**The deck is a separate follow-up (rounds-agenticburn).** Per the issue thread (rounds-agenticburn,
+2026-10-31): the KubeCon deck (`peopleforrester/rounds-agenticburn`) has no IMDS beat, and its owner asked
+that placing the beat in the deck's close be filed as an issue there with the slide wording. This repo
+builds no slide HTML, so the deck change is handled by a follow-up on rounds-agenticburn.
+
+**Not changed.** `brief.html`'s eight-challenge list, the segment-count and minutes of the KubeCon segment
+table (still six segments, 30 minutes), the abstract-points table, and all challenge-count files are
+untouched. No numbered challenge was added anywhere.
+
+**Tests.** No new offline test: this is choreography prose added to run-of-show docs and the two served
+surfaces. `verify/test_instructor_brief.py` (which pins both `/brief` and `/kubecon` to the run-of-show,
+including the segment table summing to 30 and segment 6's OWASP close), `verify/test_finale_cap.py` (the
+segment-6 close still runs `finale-cap-on`/`cost-watch`/`finale-cap-off`), `verify/test_docs_current.py`
+(the RUN-OF-SHOW-2026-08 banner) and `verify/test_kubecon_abstract_readiness.py` all still pass under
+`bash verify/run-tests.sh`.
+
+**Not yet run on a cluster.** The live half remains the one #113 named in the facilitator doc (provision the
+community cluster, run `steal-node-creds.sh` and confirm a node-role ARN; run it against a fresh attendee
+cluster and confirm `IMDS: BLOCKED`). This issue adds only the stage placement, so it owes no new live
+check of its own.

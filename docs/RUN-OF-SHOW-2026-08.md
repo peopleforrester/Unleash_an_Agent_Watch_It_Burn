@@ -65,6 +65,18 @@ service-account token and dumps every Secret straight from the API, bypassing ev
 the student then scopes the agent's RBAC Role so its token can read only the recipe by name. It is the
 strongest "the guard is only worth what it sits in front of" beat and pairs with C5 (which it bypasses).
 
+**The IMDS credential-theft companion to Challenge 8 (ASI03, #113/#716).** Challenge 8 is Kubernetes
+identity abuse; the OWASP Agentic Security Initiative calls that class **ASI03, Identity and Privilege
+Abuse**, and its cloud sibling is the node credential. Challenge 8's own cloud-credential probe
+(`~/challenges/cloud-credential-probe.yaml`) ends with `IMDS: BLOCKED` on the student's cluster, the
+control working. Turn that inside out as a presenter watch-the-screen beat on the shared Community
+cluster, where both IMDS controls are deliberately off, the way the fork bomb survives as a demo "on our
+box only": from a presenter checkout, `CONTEXT=<community-ctx> challenges/imds-node-creds/steal-node-creds.sh`
+steals the node instance-role credentials and `aws sts get-caller-identity` returns a node role. It is
+read-only and presenter-driven, **not a ninth student challenge** (the canonical count stays eight) and
+not a phone step: every student cluster blocks it, which is the lesson. Show the student probe's `BLOCKED`
+first, then this on the Community cluster. Full runbook: `challenges/imds-node-creds/FACILITATOR.md`.
+
 The two consequences that drive the platform work:
 
 1. **Attendee clusters start with no controls applied, for every challenge.** The student attacks, sees it

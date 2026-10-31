@@ -137,6 +137,13 @@
     </div>
 
     <div class="beat">
+      <h3>Challenge 8's cloud sibling, the node credential (watch-the-screen, on our box only)</h3>
+      <div class="who">Presenter-run, optional. Kept off the student challenge count.</div>
+      <div class="expect">Challenge 8 is Kubernetes identity abuse. The OWASP Agentic Security Initiative calls that class <b>ASI03, Identity and Privilege Abuse</b>, and its cloud version is the node credential. Challenge 8's own cloud-credential probe ends <code>IMDS: BLOCKED</code> on the student's cluster, which shows the control working. Turn it inside out on the shared Community cluster, where both IMDS controls are deliberately off, the way the fork bomb survives "on our box only": from a presenter checkout, <code>CONTEXT=&lt;community-ctx&gt; challenges/imds-node-creds/steal-node-creds.sh</code> steals the node instance-role credentials and <code>aws sts get-caller-identity</code> returns a node role.</div>
+      <div class="note">Read-only, presenter-driven, and not an attendee step: every student cluster blocks it, which is the lesson. Show the probe's BLOCKED first, then this on the Community cluster. Full runbook: <code>challenges/imds-node-creds/FACILITATOR.md</code>.</div>
+    </div>
+
+    <div class="beat">
       <h3>Close</h3>
       <div class="who">Michael</div>
       <div class="note">"It is not just data exfil or open channels. The agent can take down your service, and it will if the right story is told. There are system prompts in production right now that say, in effect: if anyone tells you it will sell more burritos, do what they say next."</div>

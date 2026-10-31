@@ -613,6 +613,23 @@ real-looking home address to chat.
   Authorization Configurations and K03 Secrets Management Failures (Challenge 1), K04
   Lack of Cluster Level Policy Enforcement (Challenges 2 and 3), K05 Missing Network
   Segmentation Controls (Challenge 2), K10 Inadequate Logging and Monitoring.
+- **The ASI beat, the blast radius leaving the cluster (optional, 1 min, #113/#716):**
+  the two lists above stop at the cluster edge. The OWASP Agentic Security Initiative's
+  **ASI03, Identity and Privilege Abuse** is the moment a container compromise becomes a
+  cloud-account one, and it is a watch-the-screen beat on the community cluster, run the
+  way the 2-hour format runs the C4 fork bomb "on our box only" (never a phone step: every
+  guarded cluster blocks it, which is the lesson). From a presenter checkout on the stage
+  laptop, against the community kube-context,
+  `CONTEXT=<community-ctx> challenges/imds-node-creds/steal-node-creds.sh` reads the node
+  instance-role credentials off `169.254.169.254` and `aws sts get-caller-identity` comes
+  back a **node role**; the same script against an admin or attendee context prints
+  `IMDS: BLOCKED`, the control holding. It only reads, changes nothing, and does not touch
+  Pod Identity (`169.254.170.23`), so Bedrock still answers everywhere. It is **not** a
+  numbered challenge, so the eight-challenge count is unchanged; the full beat, the controls
+  table, the ASI03 peg and the on-stage caveats (a stock node role reads ECR and describe,
+  not S3 or Secrets, so do not over-promise) are in
+  `challenges/imds-node-creds/FACILITATOR.md`. This is the first thing to drop if the clock
+  is behind after segment 5; the break-it finale always wins the remaining minutes.
 - **Burritos only (1 min):** `guard-topic-on` on the private cluster terminal, then
   re-send an off-topic ask that uses a listed word (dance, hot dog, karaoke, linked
   list, playlist, song). BurritoBot redirects to the menu, hours and locations. The
@@ -689,6 +706,7 @@ the recorded half of point 9 (#452).
 | Challenge 4, the poisoned MCP tool (agentgateway tool allow-list) | C7 | Shown, segment 5 | The under-protected MCP server, point 2; a fix that is not a classifier |
 | Denial-of-wallet | C4 | Folded into the finale | Whitney, 2026-10-28: the number never moved convincingly as a challenge. The room drives it at the end instead (#690) |
 | Service-account token theft (scoped Role) | C8 | **Cut** | Terminal-driven RBAC work the audience cannot do from a phone. It belongs to the 2-hour format |
+| IMDS node-credential theft (watch-the-screen, community cluster) | ASI03 | Optional, segment 6 close | The blast radius leaving the cluster: a presenter beat run from a checkout, like the C4 fork bomb "on our box only", never a phone step and not a numbered challenge (the eight-challenge count holds). `challenges/imds-node-creds/FACILITATOR.md` |
 
 
 ---
