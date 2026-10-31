@@ -6233,3 +6233,38 @@ ECR `imageRegistry`, check that the llm-guard pod in `agent` is admitted:
 `KUBECONFIG=<file> kubectl --context "$CONTEXT" -n agent get pods -l app.kubernetes.io/name=llm-guard`, with
 no `verify-image-signatures` denial in `kubectl --context "$CONTEXT" -n agent get events`. At the default
 registry, `bash verify/run-e2e.sh` on a fresh attendee cluster covers it.
+## 2026-10-31 · #696 · Every profile declares guard-proxy and workshop-agent as `instrumented` for lab-platform's observability step
+
+**What changes.** `lab-platform.yaml` now lists two workloads under `instrumented` on each of the four profiles
+(attendee, burn, admin, full): `{kind: Deployment, namespace: agent, name: guard-proxy}` and
+`{kind: Deployment, namespace: agent, name: workshop-agent}`. lab-platform's `labctl event up` observability step
+(lab-platform#216, field described in lab-platform `docs/talk-config.md` section 3) deletes the pods of each one after
+the root syncs. Each replacement pod then goes through the OpenTelemetry operator's webhook, so a pod that started
+before the operator was ready is no longer left running with no traces.
+
+- **Why these two.** They are the only workloads in `gitops/ai-layer/resources.yaml` that carry
+  `instrumentation.opentelemetry.io/inject-python: "watch-it-burn-python"`. One is the guard-proxy Deployment's pod
+  template. The other is the `workshop-agent` Agent's `spec.declarative.deployment.annotations`, which kagent copies
+  onto the Deployment it creates under the Agent's name. That Deployment is the `deploy/workshop-agent` that
+  `verify/test_challenge_fallbacks.py` and the runbooks roll and exec into. The bundle's namespace is `agent`
+  (`gitops/ai-layer/kustomization.yaml`).
+- **Why every profile.** All four values files list `ai-layer`, `ai-layer-otel` (the Instrumentation CR) and
+  `otel-operator`. So both workloads are on every cluster, and none would fail the step for being missing (lab-platform
+  fails a cluster by name when a listed workload is missing). Admin is the profile that lab-platform#306's live check
+  needs: it arms `block-argocd-drift` with Deny.
+- **Test.** `verify/test_bootstrap_chart.py` now holds the exact list on each profile. It also checks that the list
+  equals the set of workloads the bundle annotates, so a new injected workload that nobody lists fails, and so does a
+  listed one whose annotation was dropped. It checks that the annotation names the `watch-it-burn-python`
+  Instrumentation that `gitops/ai-layer-otel` ships in the same namespace, and that every profile installs the three
+  apps. With one entry removed from a profile, the test failed on that profile.
+
+**The previous attempt.** Run 13304's earlier attempt failed before it changed any code. The podman store in pool
+claude-performantpro-5 had a RunRoot under another run's worktree (`1270196839-481-7103/tmp`), and `crun` was not
+found. That was the host's container setup, not this repo: nothing under `verify/` runs podman. In this run
+`podman info` reports the `crun` runtime and RunRoot `/run/user/113/containers`, so the host fault is cleared and the
+repo had nothing to fix for it.
+
+**Not yet run on a cluster.** lab-platform's live check
+`go test -tags live -timeout 180m -run TheObservabilityRestartOnAnArmedCluster ./cmd/labctl/`, at a pin that includes
+this commit, run by a session with AWS access. It shows that both Deployments' pods are replaced, with
+`block-argocd-drift` armed, and that ArgoCD reports no drift afterwards.

@@ -52,13 +52,18 @@ check("the profiles are attendee, burn, admin and full", profiles() == ["attende
 # whose hostname lab-platform records as the cluster's front door. The attendee profile declares none, and full,
 # which no roster cluster runs, none either.
 FRONT_DOOR = {"burn": {"namespace": "agent", "service": "console"}, "admin": {"namespace": "agent", "service": "console"}}
+# instrumented (#696, lab-platform#216): every profile names the two workloads the OpenTelemetry operator injects, which
+# lab-platform's observability step restarts by deleting their pods so each comes back through the operator's webhook.
+INSTRUMENTED = [{"kind": "Deployment", "namespace": "agent", "name": "guard-proxy"},
+                {"kind": "Deployment", "namespace": "agent", "name": "workshop-agent"}]
 for p in boot.get("profiles") or []:
     name = p.get("name")
-    want = {"name": name, "root": "gitops/bootstrap", "values": f"values-{name}.yaml"}
+    want = {"name": name, "root": "gitops/bootstrap", "values": f"values-{name}.yaml", "instrumented": INSTRUMENTED}
     if name in FRONT_DOOR:
         want["front_door"] = FRONT_DOOR[name]
-    check(f"profile {name}: root gitops/bootstrap, values values-{name}.yaml"
-          + (", front_door agent/console" if name in FRONT_DOOR else ", no front_door"), p == want)
+    check(f"profile {name}: root gitops/bootstrap, values values-{name}.yaml, instrumented agent/guard-proxy and "
+          "agent/workshop-agent" + (", front_door agent/console" if name in FRONT_DOOR else ", no front_door"),
+          p == want)
 # arm (#638, lab-platform#310): the Helm parameter lab-platform's arm step sets on the admin role's root, and its value.
 # labctl event up refuses a burn event whose talk config has none, since burn's admin role arms (lab-platform#312).
 arm = cfg.get("arm") or {}
@@ -75,6 +80,32 @@ check("the front door is the console Service, a LoadBalancer with an https port,
       and yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text(encoding="utf-8"))["namespace"]
       == "agent")
 check("both roster profiles install the ai-layer app that creates it", all(deploys(p, "ai-layer") for p in FRONT_DOOR))
+# What lab-platform restarts has to be what the operator injects, and on every cluster the profile builds: a workload
+# listed and missing fails the cluster by name, and one injected and not listed keeps the pod that started before the
+# operator was ready, which sends no traces. guard-proxy is a Deployment in the bundle; kagent makes a Deployment named
+# after each Agent (deploy/workshop-agent, as the challenge fallbacks roll it), with the Agent's deployment annotations.
+INJECT = "instrumentation.opentelemetry.io/inject-python"
+ai_ns = yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text(encoding="utf-8"))["namespace"]
+injected = []
+for d in (d for d in yaml.safe_load_all(resources) if d):
+    if d.get("kind") == "Deployment":
+        ann = ((d["spec"]["template"].get("metadata") or {}).get("annotations") or {})
+    elif d.get("kind") == "Agent":
+        ann = (((d.get("spec") or {}).get("declarative") or {}).get("deployment") or {}).get("annotations") or {}
+    else:
+        continue
+    if ann.get(INJECT) == "watch-it-burn-python":
+        injected.append({"kind": "Deployment", "namespace": d["metadata"].get("namespace", ai_ns),
+                         "name": d["metadata"]["name"]})
+check(f"the instrumented list is every workload gitops/ai-layer/resources.yaml annotates {INJECT}, no more and no "
+      f"fewer (found {[w['name'] for w in injected]})",
+      sorted(injected, key=lambda w: w["name"]) == sorted(INSTRUMENTED, key=lambda w: w["name"]))
+instr = (REPO / "gitops/ai-layer-otel/instrumentation.yaml").read_text(encoding="utf-8")
+check("the annotation names the Instrumentation ai-layer-otel ships, watch-it-burn-python, in the same namespace",
+      any(d and d.get("kind") == "Instrumentation" and d["metadata"]["name"] == "watch-it-burn-python"
+          and d["metadata"].get("namespace", ai_ns) == ai_ns for d in yaml.safe_load_all(instr)))
+check("every profile installs ai-layer, ai-layer-otel and otel-operator, so both workloads are on each of its clusters",
+      all(deploys(p, a) for p in profiles() for a in ("ai-layer", "ai-layer-otel", "otel-operator")))
 # The strict subset: block style only and every value text, so a flow collection or a non-string scalar fails.
 body = [ln.split("#", 1)[0] for ln in text.splitlines()]
 check("block style only: no flow collection", not any(re.search(r"[\[\]{}]", ln) for ln in body))

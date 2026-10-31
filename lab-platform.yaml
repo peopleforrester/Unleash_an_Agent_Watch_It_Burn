@@ -9,6 +9,13 @@
 # arm (#638, lab-platform#310): the Helm parameter lab-platform's arm step sets on the lab-bootstrap root of each
 # cluster whose role arms its guardrails, the admin role, and its value. The chart then renders require-resource-limits
 # and restrict-image-registries at [Deny]: see guardrails.validationAction in gitops/bootstrap/values.yaml.
+#
+# instrumented (#696, lab-platform#216): on every profile, the workloads the OpenTelemetry operator injects through
+# their instrumentation.opentelemetry.io/inject-python annotation in gitops/ai-layer/resources.yaml. lab-platform's
+# observability step deletes their pods once the root has synced, so each comes back through the operator's webhook;
+# a pod that started before the operator was ready runs uninstrumented and sends no traces. guard-proxy is the
+# Deployment the bundle ships; workshop-agent is the one kagent makes for the Agent of that name. Every profile lists
+# ai-layer, ai-layer-otel and otel-operator, so both are on every cluster, and one missing fails that cluster by name.
 format: lab-platform/v1
 labs:
   - burn
@@ -19,21 +26,49 @@ bootstrap:
     - name: attendee
       root: gitops/bootstrap
       values: values-attendee.yaml
+      instrumented:
+        - kind: Deployment
+          namespace: agent
+          name: guard-proxy
+        - kind: Deployment
+          namespace: agent
+          name: workshop-agent
     - name: burn
       root: gitops/bootstrap
       values: values-burn.yaml
+      instrumented:
+        - kind: Deployment
+          namespace: agent
+          name: guard-proxy
+        - kind: Deployment
+          namespace: agent
+          name: workshop-agent
       front_door:
         namespace: agent
         service: console
     - name: admin
       root: gitops/bootstrap
       values: values-admin.yaml
+      instrumented:
+        - kind: Deployment
+          namespace: agent
+          name: guard-proxy
+        - kind: Deployment
+          namespace: agent
+          name: workshop-agent
       front_door:
         namespace: agent
         service: console
     - name: full
       root: gitops/bootstrap
       values: values-full.yaml
+      instrumented:
+        - kind: Deployment
+          namespace: agent
+          name: guard-proxy
+        - kind: Deployment
+          namespace: agent
+          name: workshop-agent
 arm:
   parameter: guardrails.validationAction
   value: Deny
