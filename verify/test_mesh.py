@@ -1,5 +1,5 @@
-# ABOUTME: Render-gate check for the Istio service mesh: all ambient charts on ONE pinned version + STRICT mTLS
-# ABOUTME: (whose certs are SPIFFE identities). Structural, no cluster needed.
+# ABOUTME: Render-gate check for the Istio service mesh: all ambient charts on ONE pinned version + the agent
+# ABOUTME: namespace's mTLS mode (the certs are SPIFFE identities). Structural, no cluster needed.
 import pathlib, sys, yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 apps = [d for d in yaml.safe_load_all((REPO/"gitops/bootstrap/apps/istio.yaml").read_text()) if d]
@@ -21,9 +21,10 @@ check("no istio chart has drifted from the others", len(_revs) == 1)
 check("cni + istiod use ambient profile",
       byname["istio-cni"]["spec"]["source"]["helm"]["valuesObject"].get("profile") == "ambient"
       and byname["istiod"]["spec"]["source"]["helm"]["valuesObject"].get("profile") == "ambient")
-strict = {d["metadata"]["namespace"]: d for d in pa if d.get("kind") == "PeerAuthentication"}
-check("STRICT mTLS in agent + apps namespaces",
-      strict.get("agent", {}).get("spec", {}).get("mtls", {}).get("mode") == "STRICT"
-      and strict.get("apps", {}).get("spec", {}).get("mtls", {}).get("mode") == "STRICT")
+# PERMISSIVE in agent, where the console and guard-proxy are enrolled (#471): mutual TLS between them, and the
+# NLB and unenrolled callers still get in. No policy for a namespace with nothing enrolled (verify/test_mesh_enrollment.py).
+modes = {d["metadata"]["namespace"]: d.get("spec", {}).get("mtls", {}).get("mode")
+         for d in pa if d.get("kind") == "PeerAuthentication"}
+check("PERMISSIVE mTLS in agent, and no policy elsewhere", modes == {"agent": "PERMISSIVE"})
 if failures: print(f"\nFAILED: {len(failures)}"); sys.exit(1)
 print("\nAll mesh checks passed.")

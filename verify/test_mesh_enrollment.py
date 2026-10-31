@@ -1,21 +1,22 @@
-# ABOUTME: Render gate for the facts the Istio ambient evaluation (#238) rests on: the mesh enrols nothing,
-# ABOUTME: the tool pod can reach guard-proxy's /toggle, and why enrolling `agent` is not a one-label change.
-"""Why this exists (#238).
+# ABOUTME: Render gate for what the Istio ambient mesh carries (#471): the console and guard-proxy are enrolled and
+# ABOUTME: nothing else is, no Ingress rule refuses their mesh traffic, and the pages say exactly that.
+"""Why this exists (#238, #471).
 
-The tour used to say the mesh "encrypts all traffic between containers inside the cluster, automatically",
-and no file has ever enrolled a namespace (#482 reworded it). docs/research/2026-10-24-istio-ambient-evaluation.md weighs keeping
-the five Istio apps for a challenge against dropping them. Its answer depends on the facts below:
+For months the mesh enrolled nothing while the tour said it "encrypts all traffic between containers inside
+the cluster, automatically". #482 made the tour admit that, and on #471 Michael chose to keep Istio and
+enroll an application in it (question 947). The console and guard-proxy pods are enrolled: that hop carries
+every chat message, and neither pod sits behind an Ingress NetworkPolicy. These checks hold that state:
 
-- nothing is enrolled, so today the mesh changes no traffic;
-- the agent's tool pod can call guard-proxy, whose /toggle switches the guards. The console's public
-  /a2a/ route used to forward every guard-proxy path too; #481 removed it, so the tool pod's in-cluster
-  call is the path a waypoint policy would close;
-- the ServiceAccounts are shared, so an identity rule cannot single out the console or tell the agent
-  from its tool pod;
-- STRICT plus an ip-target NLB, the apps ingress ports and the missing Gateway API CRDs are why enrolling
-  is a build, not a label.
+- exactly those two pod templates carry the ambient label, and no namespace does;
+- no Ingress NetworkPolicy selects an enrolled pod without admitting HBONE port 15008, which is how mesh
+  traffic arrives (agentgateway and workshop-agent are behind port-exact rules, so they stay out);
+- agent's PeerAuthentication is PERMISSIVE, because the console is an ip-target NLB that the room reaches
+  from outside the mesh;
+- the tour, and C1's README, say no more than that.
 
-If any check here fails, the matching section of the evaluation is out of date. Re-read it then.
+The facts behind docs/research/2026-10-24-istio-ambient-evaluation.md (shared ServiceAccounts, the tool
+pod's reach to /toggle, what a waypoint would need) are checked further down. If one fails, the matching
+section of the evaluation is out of date. Re-read it then.
 """
 from __future__ import annotations
 
@@ -28,6 +29,9 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parents[1]
 EVALUATION = "docs/research/2026-10-24-istio-ambient-evaluation.md"
 LABEL = "istio.io/dataplane-mode"
+RESOURCES = "gitops/ai-layer/resources.yaml"
+ENROLLED = ("console", "guard-proxy")  # Deployment names in RESOURCES (#471, question 947)
+HBONE = 15008
 
 failures: list[str] = []
 
@@ -56,32 +60,62 @@ def has_key(node, key: str) -> bool:
     return False
 
 
-# --- section 1: no namespace or workload is enrolled in ambient ---------------------------------------
+AI = docs(RESOURCES) + docs("gitops/workshop-agent/agent.yaml")  # #707
+
+# --- enrolment: the console and guard-proxy, nothing else ------------------------------------------------
 # A text scan, not a YAML walk: Helm templates and shell scripts do not parse as YAML, and a label set in
-# one of them enrols a namespace just the same. Comment lines are exempt, which is where
-# peer-authentication.yaml's own "verify-at-build" note says the label still has to be added.
-enrolled = []
+# one of them enrols a workload just the same. Comment lines are exempt.
+carriers = []
 for root in ("gitops", "security", "policies", "infra", "challenges", "scripts", "teardown", "verify"):
     for path in sorted((REPO / root).rglob("*")):
         if not path.is_file() or path.suffix not in (".yaml", ".yml", ".sh", ".tpl", ".tf"):
             continue
         live = [ln for ln in path.read_text(errors="replace").splitlines() if not ln.lstrip().startswith("#")]
         if any(LABEL in ln for ln in live):
-            enrolled.append(str(path.relative_to(REPO)))
-check(f"no manifest or script sets {LABEL}", not enrolled,
-      f"{enrolled}: the mesh may now capture traffic; re-read sections 1, 3 and 4 of {EVALUATION}")
-ns_docs = docs("gitops/namespaces/namespaces.yaml")
-check("no Namespace object carries the label", not any(has_key(d, LABEL) for d in ns_docs) and len(ns_docs) > 0)
+            carriers.append(str(path.relative_to(REPO)))
+check(f"only {RESOURCES} sets {LABEL}", carriers == [RESOURCES],
+      f"{carriers}: a new workload may be in the mesh; check its Ingress rules and the tour")
 
-# While nothing is enrolled, the student pages say so (#482, question 702): the tour no longer claims the mesh
-# encrypts traffic and hands the student the command that shows the label is missing, and C1's README no longer
-# lists mesh mTLS as one of its controls. Enrolling a namespace fails the check above first; rewrite both then.
+enrolled_labels: dict[str, dict] = {}
+for d in AI:
+    labels = d.get("spec", {}).get("template", {}).get("metadata", {}).get("labels") or {}
+    if LABEL in labels:
+        enrolled_labels[d["metadata"]["name"]] = labels
+check("the console and guard-proxy pod templates, and only they, are enrolled",
+      sorted(enrolled_labels) == sorted(ENROLLED)
+      and all(v[LABEL] == "ambient" for v in enrolled_labels.values()), f"{enrolled_labels}")
+ns_docs = docs("gitops/namespaces/namespaces.yaml")
+check("no Namespace object carries the label, so enrolment stays per pod",
+      not any(has_key(d, LABEL) for d in ns_docs) and len(ns_docs) > 0)
+
+# Mesh traffic reaches an enrolled pod on HBONE port 15008 (istio.io/latest/docs/ambient/usage/networkpolicy/).
+# An Ingress rule that admits only the app's own ports refuses it, so no such rule may select an enrolled pod.
+policies = [(str(p.relative_to(REPO)), d) for p in sorted((REPO / "policies/network-policies").rglob("*.yaml"))
+            for d in docs(str(p.relative_to(REPO)))]
+policies += [("gitops/ai-layer/chat-path-ingress.yaml", d) for d in docs("gitops/ai-layer/chat-path-ingress.yaml")]
+blocking = []
+for rel, d in policies:
+    if d.get("kind") != "NetworkPolicy" or d.get("metadata", {}).get("namespace", "agent") != "agent":
+        continue
+    spec = d.get("spec", {})
+    if "Ingress" not in spec.get("policyTypes", []):
+        continue
+    want = (spec.get("podSelector") or {}).get("matchLabels") or {}
+    admits = any(not r.get("ports") or any(p.get("port") == HBONE for p in r["ports"]) for r in spec.get("ingress", []))
+    for name, labels in enrolled_labels.items():
+        if all(labels.get(k) == v for k, v in want.items()) and not admits:
+            blocking.append(f"{rel}:{d['metadata']['name']} selects {name}")
+check(f"no Ingress NetworkPolicy in agent selects an enrolled pod without admitting {HBONE}", not blocking,
+      f"{blocking}")
+
+# The pages say what is enrolled (#482 made the tour stop claiming more; #471 enrolled the hop).
 lab = (REPO / "gitops/ai-layer/web/lab.html").read_text()
 mesh_li = re.search(r'<li data-full><a href="https://istio\.io/[^"]*"[^>]*>Istio ambient mesh</a>(.*?)</li>', lab, re.S)
-tour = " ".join(mesh_li.group(1).split()) if mesh_li else ""
-check("the tour says the mesh is installed but enrols no namespace",
-      "no namespace is enrolled" in tour and "not encrypting anything" in tour
-      and f"kubectl get ns -L {LABEL}" in tour and "encrypts all traffic" not in tour, tour or "no Istio tour bullet")
+tour = " ".join(re.sub(r"<[^>]+>", "", mesh_li.group(1)).split()) if mesh_li else ""
+check("the tour names the enrolled hop and how to see it, and claims nothing wider",
+      "console" in tour and "guard-proxy" in tour and "mutual TLS" in tour
+      and f"kubectl get pods -n agent -L {LABEL}" in tour and "connection complete" in tour
+      and "encrypts all traffic" not in tour and "no namespace is enrolled" not in tour, tour or "no Istio tour bullet")
 c1 = (REPO / "challenges/c1-exfil-s3/README.md").read_text()
 check("C1's README does not list mesh mTLS as a control", not re.search(r"(?i)istio.*mtls|mtls.*istio", c1))
 
@@ -101,7 +135,6 @@ check("console's public /a2a/ route is gone (#481), so /toggle is reachable only
       a2a is None, f"{a2a.group(0).strip() if a2a else ''}: update section 2.1 and recommendation 4 of {EVALUATION}")
 
 # --- section 2.3: identities are shared ---------------------------------------------------------------------
-AI = docs("gitops/ai-layer/resources.yaml") + docs("gitops/workshop-agent/agent.yaml")  # #707
 
 
 def sa(kind: str, name: str) -> str:
@@ -120,11 +153,12 @@ check("workshop-agent runs as agent-sa, and workshop-mcp as its own workshop-mcp
       f"the identity table in section 2.3 of {EVALUATION} has changed")
 check("guard-proxy runs as guard-proxy-reader", sa("Deployment", "guard-proxy") == "guard-proxy-reader")
 
-# --- section 3: why enrolling `agent` and `apps` is a build, not a label --------------------------------------
+# --- section 3: why agent is PERMISSIVE and apps is not enrolled ---------------------------------------------
 pa = {d["metadata"]["namespace"]: d for d in docs("security/istio/peer-authentication.yaml")
       if d.get("kind") == "PeerAuthentication"}
-check("STRICT mTLS is what agent would get on enrolment",
-      pa.get("agent", {}).get("spec", {}).get("mtls", {}).get("mode") == "STRICT")
+check("agent's mTLS mode is PERMISSIVE, so callers outside the mesh still reach the enrolled pods",
+      pa.get("agent", {}).get("spec", {}).get("mtls", {}).get("mode") == "PERMISSIVE")
+check("no PeerAuthentication names a namespace with nothing enrolled", sorted(pa) == ["agent"], f"{sorted(pa)}")
 kust = yaml.safe_load((REPO / "gitops/ai-layer/kustomization.yaml").read_text())
 svc = one(AI, "Service", "console")
 ann = svc.get("metadata", {}).get("annotations", {})
@@ -136,8 +170,8 @@ check("apps is default-deny on ingress", "Ingress" in deny.get("spec", {}).get("
 ingress = one(docs("policies/network-policies/per-namespace/apps-allow-ingress.yaml"),
               "NetworkPolicy", "allow-ingress-controller").get("spec", {}).get("ingress", [])
 ports = {p.get("port") for r in ingress for p in r.get("ports", [])}
-check("apps ingress admits neither HBONE 15008 nor the probe SNAT address", 15008 not in ports and
-      not any("169.254.7.127" in str(r) for r in ingress), f"ports={sorted(ports)}")
+check("apps ingress admits neither HBONE 15008 nor the probe SNAT address, so apps stays out of the mesh",
+      HBONE not in ports and not any("169.254.7.127" in str(r) for r in ingress), f"ports={sorted(ports)}")
 
 # --- section 2.4: what a waypoint challenge would still need ------------------------------------------------
 gw_api = [str(p.relative_to(REPO)) for root in ("gitops", "infra") for p in (REPO / root).rglob("*")
@@ -152,4 +186,4 @@ check("the student's terminal cannot write Istio security policy", not istio_wri
 if failures:
     print(f"\nFAIL: {len(failures)} check(s) failed: {failures}")
     sys.exit(1)
-print("\nPASS: the mesh enrols nothing, and the facts behind the #238 evaluation still hold")
+print("\nPASS: the mesh carries the console-to-guard-proxy hop and nothing else, and the pages say so")

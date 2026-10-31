@@ -1,24 +1,20 @@
-# ABOUTME: Istio STRICT mTLS for the agent + apps namespaces. The workload certs Istio issues ARE
-# ABOUTME: SPIFFE identities (spiffe://cluster.local/ns/<ns>/sa/<sa>), so this is the SPIFFE identity layer.
+# ABOUTME: Istio mTLS mode for the agent namespace, where the console and guard-proxy are enrolled in ambient (#471).
+# ABOUTME: The workload certs Istio issues ARE SPIFFE identities (spiffe://cluster.local/ns/<ns>/sa/<sa>).
 #
-# verify-at-build: the agent + apps namespaces must be enrolled in ambient
-#   (label `istio.io/dataplane-mode=ambient`); add that label to those Namespace objects on the live
-#   cluster (or in gitops/namespaces). STRICT requires every peer in the namespace to be in the mesh.
+# Enrolment is per pod: the console and guard-proxy pod templates in gitops/ai-layer/resources.yaml carry
+# `istio.io/dataplane-mode=ambient`, and no namespace does. Between those two pods traffic is mutual TLS.
+#
+# PERMISSIVE, not STRICT. The console is an ip-target NLB, so the room's traffic reaches it from outside the
+# mesh, and guard-proxy is also called from pods that are not enrolled (the guard toggles in verify/beat-*.sh,
+# the agent's tool pod workshop-mcp). STRICT would refuse all of them. PERMISSIVE still sends mutual TLS whenever both ends are
+# in the mesh, which is the console-to-guard-proxy hop. The apps namespace used to carry a STRICT policy too;
+# nothing in apps is enrolled, so it applied to no traffic and was removed (#471).
 ---
 apiVersion: security.istio.io/v1
 kind: PeerAuthentication
 metadata:
-  name: strict-mtls
+  name: agent-mtls
   namespace: agent
 spec:
   mtls:
-    mode: STRICT
----
-apiVersion: security.istio.io/v1
-kind: PeerAuthentication
-metadata:
-  name: strict-mtls
-  namespace: apps
-spec:
-  mtls:
-    mode: STRICT
+    mode: PERMISSIVE
