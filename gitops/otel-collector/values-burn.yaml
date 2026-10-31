@@ -59,7 +59,9 @@ config:
           - debug
       traces:
         # values.yaml's traces processors, in order, with the scrub last: after transform/adk_tool_content has
-        # copied the tool content to gen_ai.*, so both copies are scrubbed, and before every exporter.
+        # copied the tool content to gen_ai.*, and transform/adk_llm_content the model's request and response to
+        # gen_ai.input.messages and gen_ai.output.messages (#721), so both copies are scrubbed, and before every
+        # exporter.
         processors:
           - memory_limiter
           - transform/kagent_service_name
@@ -70,6 +72,7 @@ config:
           - transform/set_llmobs_workflow
           - transform/set_genai_provider
           - transform/adk_tool_content
+          - transform/adk_llm_content
           - transform/scrub_pii
         exporters:
           - span_metrics # feed the connector so it can derive metrics from these spans

@@ -210,7 +210,10 @@ spec:
         # (not bare EVENT_ONLY) so the content lands as gen_ai.input.messages / gen_ai.output.messages SPAN
         # ATTRIBUTES: that is what Datadog LLM Observability renders as the input/output panels, and what the
         # PRD #22 Act-2 OTTL redaction targets. EVENT_ONLY alone emits only span events, which the trace
-        # view does not surface as prompts. PRD #20 M3 / #27.
+        # view does not surface as prompts. PRD #20 M3 / #27. That is the Python runtime. The Go runtime the Agent
+        # runs (#697) writes neither: kagent stamps the request and response as gcp.vertex.agent.llm_request and
+        # llm_response unless this is "false", and the collector's transform/adk_llm_content turns them into
+        # gen_ai.input.messages and gen_ai.output.messages (#721).
         - name: OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT
           value: SPAN_AND_EVENT
         # a2a-sdk's own spans off at source (#320). kagent 0.10.1 locks a2a-sdk 0.3.26, which reads this at import

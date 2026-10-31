@@ -76,7 +76,7 @@ with tempfile.TemporaryDirectory() as tmp:
         f = tmp / "cfg.yaml"
         f.write_text(yaml.safe_dump(collector_render.collector_config(profile, secret, admin)), encoding="utf-8")
         env = ENV if admin else {k: v for k, v in ENV.items() if k != "DD_ADMIN_API_KEY"}
-        r = subprocess.run([binary, "validate", f"--config=file:{f}"], capture_output=True, text=True, env=env, timeout=60)
+        r = subprocess.run([binary, "validate", f"--config=file:{f}", *collector_render.feature_gate_args(profile)], capture_output=True, text=True, env=env, timeout=60)
         check(f"{label} validates", r.returncode == 0)
         if r.returncode:
             print("        " + (r.stderr or r.stdout).strip()[-400:])
@@ -105,7 +105,7 @@ with tempfile.TemporaryDirectory() as tmp:
         lab["processors"].setdefault(k, full["processors"][k])
     cf = tmp / "lab.yaml"
     cf.write_text(yaml.safe_dump(lab), encoding="utf-8")
-    proc = subprocess.Popen([binary, f"--config=file:{cf}"], env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
+    proc = subprocess.Popen([binary, f"--config=file:{cf}", *collector_render.feature_gate_args("attendee")], env=ENV, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     url = f"http://127.0.0.1:{port}/v1/traces"
 
     def post(body: dict) -> int:

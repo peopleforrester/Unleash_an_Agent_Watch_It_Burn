@@ -138,7 +138,8 @@ config:
           # Datadog has no operation name to classify them by, files each as a generic workflow, and renders
           # it in Agent Observability as "input: No content / output: No content". That is what buried a
           # student's own hello in a list of blank rows. The conversation is unaffected: it lives on the
-          # generate_content spans, which carry gen_ai.input.messages and gen_ai.output.messages.
+          # generate_content spans, which carry gen_ai.input.messages and gen_ai.output.messages (on the Go runtime,
+          # written by transform/adk_llm_content from ADK's own attributes, #721).
           #
           # Except the server span for an A2A message that arrived with a caller's context (#320): a POST, kind
           # SERVER, with a parent. It is the agent's end of the hop from agentgateway, and the parent of
@@ -285,6 +286,87 @@ config:
             - 'set(status.code, STATUS_CODE_ERROR) where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
             - 'set(attributes["error.type"], "tool_error") where attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "command FAILED|deploy failed for ")'
+    # The model call's input and output, for the Go runtime (#721). Every `llm generate_content` row in LLM
+    # Observability showed no input and no output on burritobot-private (2026-10-31): Datadog reads
+    # gen_ai.input.messages and gen_ai.output.messages, and the Go runtime both KubeCon clusters run (#697) writes
+    # neither. Read at the pinned sources on 2026-10-31:
+    #
+    #   - kagent v0.10.1 (go/adk/pkg/telemetry/attributes.go) stamps the request and the response on the
+    #     generate_content span as ADK's own JSON, gcp.vertex.agent.llm_request ({"Model", "Contents": [{"parts":
+    #     [{"text"} | {"functionCall"} | {"functionResponse"}], "role"}], "Config"}) and gcp.vertex.agent.llm_response
+    #     ({"Content": {"parts", "role"}, "FinishReason", ...}). It caps each at 32 KiB: a longer payload becomes
+    #     {"original_size", "payload_prefix", "truncated": true}. Only a CAPTURE_MESSAGE_CONTENT of "false" blanks them.
+    #   - ADK Go v2.1.0, which that kagent builds on, puts message content only in OTel LOG events (gen_ai.user.message,
+    #     gen_ai.choice, semconv 1.36), and only when OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT is "true" or
+    #     "1"; kagent's logs are off (gitops/bootstrap/apps/kagent.yaml) and Datadog does not read log events as a span's
+    #     input. No ADK or kagent setting puts the semconv message attributes on the span, so it is done here.
+    #   - The 2048-character cut read in Tempo is Tempo's: its distributor truncates every attribute at
+    #     max_attribute_bytes, 2048 by default (grafana/tempo v3.0.3, modules/distributor/config.go). The collector
+    #     and Datadog get the payload whole, so the request parses on most turns, not only the short response.
+    #
+    # So this parses both and writes them in the semconv message shape, which verify/test_adk_llm_content_e2e.py
+    # runs through the pinned collector: "model" is the assistant, a user turn that carries a functionResponse is
+    # the tool's, and each part becomes text, tool_call or tool_call_response. A request over 32 KiB still gives its
+    # input when the conversation itself fits: kagent marshals Contents before Config (the system prompt and the
+    # tool declarations, most of the size), so the conversation is the head of payload_prefix. The system prompt is
+    # left out of the input (no gen_ai.system_instructions): it is 11.8k characters of agent.yaml, the same on every
+    # turn, and on a truncated request it is the part that is cut. Nothing is overwritten: a runtime that writes
+    # gen_ai.input.messages itself (the Python one) keeps its own. Copy, never move, as for the tool content.
+    #
+    # The statements use OTTL's lambdas (MapEach, Filter, Reduce, When, Any), alpha in 0.160.0 and off unless the
+    # collector runs with --feature-gates=ottl.functions.enableLambda (command.extraArgs below). Without the gate
+    # the collector refuses the whole config and does not start. A map literal cannot hold a list in 0.160.0
+    # ("Invalid value type pcommon.Slice"), so each part is serialized with String() and the lists are joined with
+    # Concat. Indexing a key that is absent fails a whole statement, and Go's JSON drops an empty map (omitempty:
+    # a call with no arguments has no "args"), so optional keys are read through When(ContainsValue(Keys(...))).
+    # Each statement is a single-quoted YAML scalar over several lines; YAML folds the line breaks to spaces.
+    transform/adk_llm_content:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'set(cache["req"], ParseJSON(attributes["gcp.vertex.agent.llm_request"])) where attributes["gen_ai.input.messages"] == nil and attributes["gcp.vertex.agent.llm_request"] != nil'
+            - 'set(cache["contents"], cache["req"]["Contents"]) where IsList(cache["req"]["Contents"])'
+            # Over 32 KiB: the conversation from the head of the prefix. Inside a JSON string every quote is
+            # escaped, so `],"Config":` can only be the key that follows Contents.
+            - 'set(cache["head"], ExtractPatterns(cache["req"]["payload_prefix"], "^[{]\"Model\":\"[^\"]*\",\"Contents\":(?P<contents>\\[.*?\\]),\"Config\":")) where cache["req"]["truncated"] == true and IsString(cache["req"]["payload_prefix"])'
+            - 'set(cache["contents"], ParseJSON(cache["head"]["contents"])) where IsString(cache["head"]["contents"])'
+            - 'set(attributes["gen_ai.input.messages"], Concat(["[",
+                 Reduce(MapEach(cache["contents"], (_, m) => Concat(["{\"role\":\"",
+                   When(() => m["role"] == "model", "assistant",
+                     When(() => Any(m["parts"], (_, p) => ContainsValue(Keys(p), "functionResponse")), "tool", m["role"])),
+                   "\",\"parts\":[",
+                   Reduce(MapEach(Filter(m["parts"], (_, p) => ContainsValue(Keys(p), "text") or ContainsValue(Keys(p), "functionCall") or ContainsValue(Keys(p), "functionResponse")), (_, p) =>
+                     When(() => ContainsValue(Keys(p), "functionCall"),
+                       String({"type": "tool_call",
+                               "id": When(() => ContainsValue(Keys(p["functionCall"]), "id"), p["functionCall"]["id"], ""),
+                               "name": p["functionCall"]["name"],
+                               "arguments": When(() => ContainsValue(Keys(p["functionCall"]), "args"), p["functionCall"]["args"], {})}),
+                     When(() => ContainsValue(Keys(p), "functionResponse"),
+                       String({"type": "tool_call_response",
+                               "id": When(() => ContainsValue(Keys(p["functionResponse"]), "id"), p["functionResponse"]["id"], ""),
+                               "response": When(() => ContainsValue(Keys(p["functionResponse"]), "response"), p["functionResponse"]["response"], {})}),
+                       String({"type": "text", "content": p["text"]})))),
+                     "", (acc, i, s) => Concat([acc, When(() => i > 0, ",", ""), s], "")),
+                   "]}"], "")),
+                   "", (acc, i, s) => Concat([acc, When(() => i > 0, ",", ""), s], "")),
+                 "]"], "")) where IsList(cache["contents"])'
+            - 'set(cache["resp"], ParseJSON(attributes["gcp.vertex.agent.llm_response"])) where attributes["gen_ai.output.messages"] == nil and attributes["gcp.vertex.agent.llm_response"] != nil'
+            # An error response has "Content": null, and indexing into a null fails the statement.
+            - 'set(cache["content"], cache["resp"]["Content"]) where IsMap(cache["resp"]["Content"]) and IsList(cache["resp"]["Content"]["parts"])'
+            - 'set(attributes["gen_ai.output.messages"], Concat(["[{\"role\":\"assistant\",\"parts\":[",
+                 Reduce(MapEach(Filter(cache["content"]["parts"], (_, p) => ContainsValue(Keys(p), "text") or ContainsValue(Keys(p), "functionCall")), (_, p) =>
+                   When(() => ContainsValue(Keys(p), "functionCall"),
+                     String({"type": "tool_call",
+                             "id": When(() => ContainsValue(Keys(p["functionCall"]), "id"), p["functionCall"]["id"], ""),
+                             "name": p["functionCall"]["name"],
+                             "arguments": When(() => ContainsValue(Keys(p["functionCall"]), "args"), p["functionCall"]["args"], {})}),
+                     String({"type": "text", "content": p["text"]}))),
+                   "", (acc, i, s) => Concat([acc, When(() => i > 0, ",", ""), s], "")),
+                 "],\"finish_reason\":\"",
+                 When(() => Any(cache["content"]["parts"], (_, p) => ContainsValue(Keys(p), "functionCall")), "tool_call",
+                   When(() => cache["resp"]["FinishReason"] == "MAX_TOKENS", "length", "stop")),
+                 "\"}]"], "")) where cache["content"] != nil'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
@@ -400,6 +482,7 @@ config:
           - transform/set_llmobs_workflow # promote call_llm to invoke_agent so LLM Obs shows clean hierarchy
           - transform/set_genai_provider # after the line above, so the spans it names get aws.bedrock too
           - transform/adk_tool_content # tool args/result under gen_ai.*, and a failed tool call as its one error
+          - transform/adk_llm_content # #721: the Go runtime's model request and response as gen_ai.*.messages
         exporters:
           - otlp_grpc/tempo # the fallback, and the only trace sink without Datadog
           - span_metrics  # feed the connector so it can derive metrics from these spans
@@ -560,6 +643,9 @@ initContainers:
 command:
   extraArgs:
     - --config=/datadog-gate/datadog.yaml
+    # transform/adk_llm_content's lambdas (#721). Without this gate the collector refuses relay.yaml and never
+    # starts; verify/collector_render.py passes the same flags to every test that runs the binary.
+    - --feature-gates=ottl.functions.enableLambda
 extraVolumes:
   - name: datadog-overlay
     configMap:

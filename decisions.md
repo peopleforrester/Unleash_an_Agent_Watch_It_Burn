@@ -6687,3 +6687,73 @@ segment-6 close still runs `finale-cap-on`/`cost-watch`/`finale-cap-off`), `veri
 community cluster, run `steal-node-creds.sh` and confirm a node-role ARN; run it against a fresh attendee
 cluster and confirm `IMDS: BLOCKED`). This issue adds only the stage placement, so it owes no new live
 check of its own.
+
+## 2026-10-31 · #721 · The collector gives the Go runtime's generate_content spans gen_ai.input.messages and gen_ai.output.messages
+
+**The problem.** Every `llm generate_content` row in Datadog LLM Observability had no input and no output on
+burritobot-private (the 3.1 entry above). Datadog reads `gen_ai.input.messages` and `gen_ai.output.messages`
+(direct attributes first, then `gen_ai.client.inference.operation.details` span events; docs.datadoghq.com
+llm_observability/instrumentation/otel_instrumentation, read 2026-10-31). kagent's Go runtime (#697) writes neither.
+
+**The issue's three options, measured at the pinned sources (read 2026-10-31):**
+
+1. *An ADK Go or kagent setting.* There is none. kagent v0.10.1 (`go/adk/pkg/telemetry/attributes.go`) stamps
+   `gcp.vertex.agent.llm_request` and `llm_response` as ADK's own JSON on the generate_content span, from every
+   model adapter (bedrock.go calls it for the request and for a non-streamed response). ADK Go v2.1.0, which that
+   kagent builds on (`go.mod`: `google.golang.org/adk/v2 v2.1.0`), sets no message attribute on any span: it puts
+   content only into OTel log events (`internal/telemetry/logger.go`: gen_ai.user.message, gen_ai.system.message,
+   gen_ai.choice, semconv 1.36), only when `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` is `true` or `1`
+   (the Agent's `SPAN_AND_EVENT` is neither), and kagent's logs are off (`gitops/bootstrap/apps/kagent.yaml`).
+   **The 2048 cap is not kagent's.** kagent caps each payload at 32 KiB (`maxSpanPayloadBytes`) and wraps a longer
+   one as `{"original_size", "payload_prefix", "truncated": true}`. The 2048-character cut the issue read is
+   Tempo's: its distributor truncates every attribute at `max_attribute_bytes`, 2048 by default (grafana/tempo
+   v3.0.3, `modules/distributor/config.go`). The collector, which sits before Tempo and Datadog, gets the payload
+   whole, so the request parses on most turns, not only the response.
+2. *A collector transform.* Taken, for the request as well as the response, since the request is not cut at 2048.
+3. *Accept it.* Not needed; the run-of-show is unchanged.
+
+**What changed.** `transform/adk_llm_content` in `gitops/otel-collector/values.yaml`, after
+`transform/adk_tool_content` in every profile's traces pipeline (and before `transform/scrub_pii` on burn, so the
+derived messages are scrubbed too). It parses both attributes and writes the semconv message shape: `model` is
+`assistant`, a user turn carrying a `functionResponse` is `tool`, and each part becomes `text`, `tool_call`
+(id, name, arguments) or `tool_call_response` (id, response); the output carries `finish_reason` (`tool_call`
+when the reply calls a tool, `length` for MAX_TOKENS, else `stop`). A request over 32 KiB still gives its input
+when the conversation fits: kagent marshals `Contents` before `Config` (the 11.8k-character system prompt and
+the fifteen tool declarations, most of the size), so the conversation is read from the head of `payload_prefix`.
+A conversation that is itself over the cap gives no input rather than a partial one. Nothing is overwritten: a span
+that brings its own gen_ai messages (the Python runtime) keeps them. Copy, never move, as for the tool content.
+
+**Choices made here.**
+- *No `gen_ai.system_instructions`.* Datadog would prepend it to every row's input as a system message: 11.8k
+  characters of agent.yaml, the same on every turn, and absent on exactly the truncated turns. The conversation is
+  what a reader of the row needs; the prompt is in git.
+- *An alpha feature gate.* Mapping a list of messages needs OTTL's lambdas (MapEach, Filter, Reduce, When, Any),
+  which 0.160.0 ships behind `ottl.functions.enableLambda`. The collector now runs with
+  `--feature-gates=ottl.functions.enableLambda` (values.yaml `command.extraArgs`, which no overlay restates).
+  Without it the collector refuses the whole config and does not start, so a collector bump that renames or drops
+  the gate shows at once: every E2E test that runs the binary passes the chart's gates through
+  `collector_render.feature_gate_args`, and `verify/test_adk_llm_content.py` holds the gate on every profile.
+- *Strings, not lists, inside map literals.* 0.160.0 refuses a list as a map literal's value ("Invalid value type
+  pcommon.Slice", measured), so each part is serialized with `String()` (which JSON-escapes) and joined with
+  `Reduce`/`Concat`. Optional keys (Go's `omitempty` drops `args` for a call with no arguments) are read through
+  `When(ContainsValue(Keys(...)))`, because indexing an absent key on a lambda parameter fails the statement.
+- *Tempo's 2048 cut left alone.* Tempo is the fallback sink; its truncation of the long ADK attributes is what
+  made the payload look capped, and is filed separately rather than changed here.
+
+**Tests.** `verify/test_adk_llm_content_e2e.py` (tools tier) sends eight generate_content cases through each
+profile's processors on the pinned otelcol-contrib 0.160.0 with the chart's gate: the full request (with the
+deployed system prompt), the over-32-KiB wrapper (text containing `],"Config":`, quotes, a newline and non-ASCII,
+and a call with no arguments), a conversation too long to recover, capture off (`{}`), an error response
+(`"Content": null`), a span with its own messages, MAX_TOKENS, and an e-mail address (scrubbed on burn, kept on the
+others); it also requires the processor to log no error. `verify/test_trace_shape_e2e.py`'s fixture now gives its
+generate_content spans the Go runtime's attributes instead of gen_ai.input.messages, which the deployed runtime
+does not emit, and checks the rows' input and output. `verify/test_adk_llm_content.py` (offline) holds the
+placement and the gate. Removing the processor from the pipeline fails the trace-shape checks, and removing the
+gate fails the collector's validate (both tried).
+
+**Not yet run on a cluster.** The live check: on burritobot-private with a fresh /chat, LLM Observability's
+generate_content rows for ml_app burritobot show the student's prompt as input and the reply (or the tool call) as
+output, read from the LLM Obs spans API as #713 was. `verify/test_datadog_sandbox_live.py` does not read span
+content yet; a check of its own is filed as a follow-up. Also owed at that run: `kubectl -n monitoring logs
+ds/otel-collector-opentelemetry-collector-agent -c opentelemetry-collector` shows the collector started with the
+gate and logs no `transform/adk_llm_content` error on a real turn.
