@@ -23,7 +23,7 @@ KCTL=(kubectl --context "${CONTEXT}" -n "${NS}")
 #
 # Rogue tools (induced by the poisoned MCP description; read_internal_config leaks
 # FAKE-MCP-EXFIL-sentinel-4c1d): read_internal_config, apply_optimization.
-# Legit tools the good agent needs: the eleven workshop-mcp tools in GOOD_TOOL below.
+# Legit tools the good agent needs: workshop-mcp's, which this script never writes (its toolNames stay as the cluster has them).
 
 STATE="on"
 case "${1:-}" in
@@ -40,11 +40,6 @@ esac
 # does not serve, which is why the earlier version never let the attack land). The legit workshop-mcp
 # tools are present in both states.
 #
-# The merge patch REPLACES the tools array, so GOOD_TOOL is the whole committed workshop-mcp entry from
-# gitops/workshop-agent/agent.yaml, headersFrom included: dropping X-Agent-Identity would turn every later
-# tool call into an `unattributed` audit line (#190). verify/test_tool_audit.py keeps the two identical.
-readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"workshop-mcp","toolNames":["lookup_customer_records","check_inventory","reorder_supply","get_order_history","get_marketing_intel","search_web","read_support_ticket","post_marketing","get_vault_entry","list_services","deploy_app","run_shell"]},"headersFrom":[{"name":"X-Agent-Identity","value":"workshop-agent"}]}'
-
 # evil-mcp (the look-alike supply-chain MCP) stays WIRED in both states; this script's control is its toolNames
 # allowlist, C7's control on a workshop cluster (an admin cluster's is the gateway rule, see WHY). The benign get_weather is always present (it is the injection entrypoint), so the demo's
 # attack chain fires in both states — what changes is whether read_internal_config / apply_optimization
@@ -52,19 +47,39 @@ readonly GOOD_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","a
 if [[ "${STATE}" == "on" ]]; then
   # Defended ("after"): allowlist only get_weather. The injection still fires, but the rogue tools are
   # filtered out of the agent's toolset ("the rogue tool is filtered from list_tools"), so the leak fails.
-  EVIL_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"evil-mcp","toolNames":["get_weather"]}}'
+  EVIL_TOOLS='["get_weather"]'
 else
   # Vulnerable ("before"): the full rogue toolset is reachable; get_weather's injection chains into
   # read_internal_config and the sentinel walks out.
-  EVIL_TOOL='{"type":"McpServer","mcpServer":{"kind":"RemoteMCPServer","apiGroup":"kagent.dev","name":"evil-mcp","toolNames":["get_weather","read_internal_config","apply_optimization"]}}'
+  EVIL_TOOLS='["get_weather","read_internal_config","apply_optimization"]'
 fi
-TOOLS="[${GOOD_TOOL},${EVIL_TOOL}]"
 
-# JSON merge patch replaces the tools array wholesale (full entries given, preserving discriminators).
-PATCH="{\"spec\":{\"declarative\":{\"tools\":${TOOLS}}}}"
+# Only evil-mcp's toolNames is written, found by name on the live Agent and never by its place in the tools array
+# (#708). The patch tests that entry's name before it replaces the list, so a reorder of the tools in
+# gitops/workshop-agent/agent.yaml, or one between this read and the patch, fails the patch instead of narrowing
+# workshop-mcp. workshop-mcp's entry, headersFrom included, is left exactly as the cluster holds it, so this
+# script carries no copy of it to keep equal to git. PATCH_PY is the web terminal's .evilpatch.py, which
+# verify/test_evil_tools_by_name.py holds identical.
+read -r -d '' PATCH_PY <<'PY' || true
+import json, sys
+tools = json.load(sys.stdin)["spec"]["declarative"]["tools"]
+hits = [i for i, t in enumerate(tools) if (t.get("mcpServer") or {}).get("name") == "evil-mcp"]
+names = json.loads(sys.argv[1]) if len(sys.argv) == 2 else None
+if len(hits) != 1 or not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+    sys.exit(1)
+entry = "/spec/declarative/tools/%d/mcpServer" % hits[0]
+print(json.dumps([
+    {"op": "test", "path": entry + "/name", "value": "evil-mcp"},
+    {"op": "replace", "path": entry + "/toolNames", "value": names},
+]))
+PY
+command -v python3 >/dev/null 2>&1 || { echo "python3 not found on PATH" >&2; exit 1; }
+PATCH="$("${KCTL[@]}" get agent "${AGENT}" -o json | python3 -c "${PATCH_PY}" "${EVIL_TOOLS}")" || {
+  echo "ERROR: could not read ${AGENT}, or it has no single tools entry whose mcpServer.name is evil-mcp; nothing was patched" >&2
+  exit 1; }
 
 echo "==> Setting MCP tool authorization: ${STATE} (evil-mcp $([[ "${STATE}" == on ]] && echo 'UNwired' || echo 'WIRED'))"
-"${KCTL[@]}" patch agent "${AGENT}" --type=merge -p "${PATCH}"
+"${KCTL[@]}" patch agent "${AGENT}" --type=json -p "${PATCH}"
 
 echo "==> Done. kagent reconciles the Agent; the rogue tools are $([[ "${STATE}" == on ]] && echo 'now excluded' || echo 'reachable again')."
 echo "==> Verify by re-asking the weather question once deploy/${AGENT} has rolled out. fallback.curl.sh asks it both ways and puts the list back."

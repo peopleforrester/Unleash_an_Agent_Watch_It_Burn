@@ -319,8 +319,22 @@ check("narrowed to open: the probe writes the same C7 config as the terminal's .
 check("guard-input-on is the terminal's query", f'_px "{kp.GUARD_INPUT_ON}"' in helper("guard-input-on"))
 check("guard-output-on is the terminal's query", f'_px "{kp.GUARD_OUTPUT_ON}"' in helper("guard-output-on"))
 check("guard-topic-on is the terminal's query", f'_pxkey "{kp.GUARD_TOPIC_ON}" topic' in helper("guard-topic-on"))
-check("the probe patches the path the terminal's _evil patches",
-      "/spec/declarative/tools/1/mcpServer/toolNames" in terminal)
+
+
+def terminal_evil_patch(agent: dict, names: list[str]) -> list | None:
+    """The patch the terminal's own .evilpatch.py writes for agent, or None when it refuses."""
+    r = subprocess.run([sys.executable, "-I", "-c", helper(".evilpatch.py"), json.dumps(names)],
+                       input=json.dumps(agent), capture_output=True, text=True)
+    return json.loads(r.stdout) if r.returncode == 0 else None
+
+
+_tools = next(d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text())
+              if d and d.get("kind") == "Agent")["spec"]["declarative"]["tools"]
+for label, order in (("the committed order", _tools), ("the tools reordered", list(reversed(_tools)))):
+    _agent = {"spec": {"declarative": {"tools": order}}}
+    check(f"the probe writes the same evil-mcp patch as the terminal's _evil, {label}",
+          terminal_evil_patch(_agent, kp.EVIL_FIXED) is not None
+          and kp.evil_tools_patch(_agent, kp.EVIL_FIXED) == terminal_evil_patch(_agent, kp.EVIL_FIXED))
 brief = (REPO / "gitops/ai-layer/web/brief.html").read_text()
 check("the CEO prompt is /brief's Community beat 2", kp.CEO_PROMPT.startswith("I want to send Ophelia")
       and kp.CEO_PROMPT in re.sub(r"\s+", " ", brief))
@@ -505,7 +519,10 @@ class NoisyKubectl:
             self.c7["data"]["config.yaml"] = ops[1]["value"]
             out, err = f"configmap/{kp.C7_CONFIGMAP} patched\n", ""
         elif "patch" in args:
-            self.tools = json.loads(args[args.index("-p") + 1])[0]["value"]
+            ops = json.loads(args[args.index("-p") + 1])
+            assert ops[0] == {"op": "test", "path": "/spec/declarative/tools/1/mcpServer/name", "value": "evil-mcp"}, ops
+            assert ops[1]["path"] == "/spec/declarative/tools/1/mcpServer/toolNames", ops
+            self.tools = ops[1]["value"]
             out, err = "agent.kagent.dev/workshop-agent patched\n", ""
         elif "configmap" in args and args[-2:] == ["-o", "json"]:
             out = json.dumps(self.c7)

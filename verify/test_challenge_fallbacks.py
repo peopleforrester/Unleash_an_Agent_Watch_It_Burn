@@ -282,7 +282,7 @@ if "exec" in args:
 if ns == "argocd" and args[4:7] == ["get", "application", "lab-bootstrap"] \
         and "jsonpath={.metadata.labels.lab-platform/profile}" in args:
     sys.stdout.write("attendee" if scenario.startswith("workshop") else "admin"); sys.exit(0)
-# C7 on a workshop cluster: the Agent's tools, the toggle's merge patch, and kagent rolling workshop-agent. kagent
+# C7 on a workshop cluster: the Agent's tools, the toggle's JSON patch of evil-mcp's toolNames, and kagent rolling workshop-agent. kagent
 # bumps the Deployment's generation KAGENT_DELAY fake seconds after a patch that changed evil-mcp's list (never, on
 # "workshop-norollout"); the roll serves the new list (an "workshop-open" kagent keeps serving the full one).
 def evil(tools):
@@ -290,8 +290,19 @@ def evil(tools):
 if ns == "agent" and args[4:7] == ["get", "agent", "workshop-agent"] and flag("-o") == "json":
     print(json.dumps({"metadata": {"name": "workshop-agent"}, "spec": {"declarative": {"tools": state["tools"]}}}))
     sys.exit(0)
-if ns == "agent" and args[4:7] == ["patch", "agent", "workshop-agent"] and "--type=merge" in args:
-    tools = json.loads(flag("-p"))["spec"]["declarative"]["tools"]
+if ns == "agent" and args[4:7] == ["patch", "agent", "workshop-agent"] and "--type=json" in args:
+    # The toggle's JSON patch (#708): a test op on evil-mcp's name, then a replace of its toolNames. Any other op,
+    # or a test that does not hold, is refused the way the API server refuses it.
+    tools = json.loads(json.dumps(state["tools"]))
+    for op in json.loads(flag("-p")):
+        m = re.fullmatch(r"/spec/declarative/tools/(\d+)/mcpServer/(name|toolNames)", op["path"])
+        at = tools[int(m.group(1))]["mcpServer"] if m and int(m.group(1)) < len(tools) else None
+        if at is None or op["op"] not in ("test", "replace") or m.group(2) not in at \
+                or (op["op"] == "test" and at[m.group(2)] != op["value"]):
+            sys.stderr.write("The request is invalid: the server rejected our request due to an error in our request\n")
+            sys.exit(1)
+        if op["op"] == "replace":
+            at[m.group(2)] = op["value"]
     names = evil(tools)
     state["patches"].append(names)
     if names != evil(state["tools"]):

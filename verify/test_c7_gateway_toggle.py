@@ -165,8 +165,14 @@ if "patch" in args and "configmap" in args:
             state["config"] = op["value"]
     state["rv"] += 1
     done()
+if "get" in args and "workshop-agent" in args:
+    # _evil reads the Agent to find evil-mcp's entry by name (#708); a read alone leaves toolNames untouched.
+    print(json.dumps({"spec": {"declarative": {"tools": [
+        {"mcpServer": {"name": "workshop-mcp", "toolNames": ["run_shell"]}},
+        {"mcpServer": {"name": "evil-mcp", "toolNames": state["toolNames"] or []}}]}}}))
+    done()
 if "patch" in args and "workshop-agent" in args:
-    state["toolNames"] = json.loads(args[args.index("-p") + 1])[0]["value"]
+    state["toolNames"] = next(op["value"] for op in json.loads(args[args.index("-p") + 1]) if op["op"] == "replace")
     done()
 done()
 """

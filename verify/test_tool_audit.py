@@ -189,12 +189,15 @@ check("headersFrom sits on the tool entry, where kagent 0.9.9 reads it, not insi
 check("the rogue server is not handed the agent's identity",
       not (entries.get("evil-mcp") or {}).get("headersFrom"))
 
-print("== Challenge 7's toggle writes the same workshop-mcp entry back ==")
+print("== Challenge 7's toggle leaves the workshop-mcp entry, header included, as the cluster has it ==")
+# It used to merge-patch the whole tools array from its own copy of this entry, so dropping X-Agent-Identity from
+# that copy would have turned every later tool call into an `unattributed` audit line (#190). Since #708 it writes
+# only evil-mcp's toolNames; verify/test_evil_tools_by_name.py runs it and holds the rest of the Agent unchanged.
 TOGGLE = (REPO / "challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh").read_text(encoding="utf-8")
-m = re.search(r"^readonly GOOD_TOOL='(.*)'$", TOGGLE, re.M)
-check("the toggle defines GOOD_TOOL", m is not None)
-toggle_good = json.loads(m.group(1)) if m else {}
-check("the toggle's workshop-mcp entry is identical to the committed one, header included", toggle_good == good)
+check("the toggle carries no copy of the workshop-mcp entry to write back",
+      "GOOD_TOOL" not in TOGGLE and '"name":"workshop-mcp"' not in TOGGLE and "X-Agent-Identity" not in TOGGLE)
+check("the toggle's patch is a JSON patch, which names one field, not a merge patch of the tools array",
+      "--type=json" in TOGGLE and "--type=merge" not in TOGGLE)
 
 print("== the trail reaches Datadog Logs, the only log store ==")
 DDA = yaml.safe_load((REPO / "gitops/manifests/datadog/datadog-agent.yaml").read_text(encoding="utf-8"))

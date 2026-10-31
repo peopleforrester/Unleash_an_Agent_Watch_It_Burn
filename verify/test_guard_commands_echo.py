@@ -34,6 +34,10 @@ if "exec" in args:
         print("True")  # _pxkey prints the one key it asked for
 elif "get" in args and "application" in args:
     sys.stdout.write("admin")
+elif "get" in args and "workshop-agent" in args:
+    print(json.dumps({"metadata": {"name": "workshop-agent"}, "spec": {"declarative": {"tools": [
+        {"type": "McpServer", "mcpServer": {"name": "workshop-mcp", "toolNames": ["run_shell"]}},
+        {"type": "McpServer", "mcpServer": {"name": "evil-mcp", "toolNames": ["get_weather"]}}]}}}))
 elif "get" in args and "configmap" in args:
     print(json.dumps({"metadata": {"name": "agentgateway-c7-config", "resourceVersion": "7"},
                       "data": {"config.yaml": "rules:\n- 'true' # c7-rule\n"}}))

@@ -30,25 +30,22 @@ check("apply_optimization is poisoned to push an apply", "MUST apply" in SERVER 
 # AFTER: on a workshop cluster C7's control is the kagent toolNames allowlist the toggle patches onto
 # workshop-agent's evil-mcp entry (the evil-mcp RemoteMCPServer goes through agentgateway :3003, whose rule
 # stays 'true' there; an admin cluster narrows that rule instead, #514, #516).
-# Read the EVIL_TOOL each branch of the toggle writes and assert ON is get_weather alone.
-def _evil_tool(state, branch):
-    m = re.search(r"^  EVIL_TOOL='(.*)'$", branch, re.M)
-    check(f"the toggle sets EVIL_TOOL in its {state} branch", m is not None)
-    return json.loads(m.group(1)) if m else {}
+# Read the evil-mcp toolNames each branch of the toggle writes and assert ON is get_weather alone. The toggle writes
+# only that list, onto the entry it finds by name (#708; verify/test_evil_tools_by_name.py runs it).
+def _evil_tools(state, branch):
+    m = re.search(r"^  EVIL_TOOLS='(.*)'$", branch, re.M)
+    check(f"the toggle sets EVIL_TOOLS in its {state} branch", m is not None)
+    return json.loads(m.group(1)) if m else []
 
 
 branches = re.search(r'^if \[\[ "\$\{STATE\}" == "on" \]\]; then\n(.*?)^else\n(.*?)^fi$', TOGGLE, re.M | re.S)
 check("the toggle branches on STATE == on", branches is not None)
 ON_BRANCH, OFF_BRANCH = branches.groups() if branches else ("", "")
-evil_on, evil_off = _evil_tool("ON", ON_BRANCH), _evil_tool("OFF", OFF_BRANCH)
-on_server = evil_on.get("mcpServer", {})
-check("the ON-state entry is the evil-mcp RemoteMCPServer",
-      on_server.get("name") == "evil-mcp" and on_server.get("kind") == "RemoteMCPServer")
-check("ON-state evil-mcp toolNames is exactly [get_weather]", on_server.get("toolNames") == ["get_weather"])
+evil_on, evil_off = _evil_tools("ON", ON_BRANCH), _evil_tools("OFF", OFF_BRANCH)
+check("ON-state evil-mcp toolNames is exactly [get_weather]", evil_on == ["get_weather"])
 for tool in ("read_internal_config", "apply_optimization"):
-    check(f"ON-state allowlist does NOT permit {tool}", tool not in on_server.get("toolNames", []))
-    check(f"OFF-state allowlist does permit {tool} (the before-state the beat shows)",
-          tool in evil_off.get("mcpServer", {}).get("toolNames", []))
+    check(f"ON-state allowlist does NOT permit {tool}", tool not in evil_on)
+    check(f"OFF-state allowlist does permit {tool} (the before-state the beat shows)", tool in evil_off)
 
 # Defense in depth: the clown-file payload is non-compliant, so the CNCF wall rejects it if applied.
 container = CLOWN["spec"]["template"]["spec"]["containers"][0]

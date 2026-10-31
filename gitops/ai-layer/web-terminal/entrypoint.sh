@@ -93,10 +93,15 @@ _px() { local c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
 _pxkey() { local c=(kubectl -n agent exec deploy/guard-proxy -- python3 -c \
   "import json,urllib.request;print(json.load(urllib.request.urlopen('http://localhost:8080/toggle?$1',timeout=10)).get('$2','missing'))")
   _show "${c[@]}"; "${c[@]}" 2>/dev/null | tail -1; }
-# _evil <json-array> : set ONLY the evil-mcp toolNames (index 1 of the tools array). workshop-mcp
-# (index 0, the real BurritoBot tools) is never touched, so the recipe/customer/shell tools survive.
-_evil() { local c=(kubectl -n agent patch agent workshop-agent --type=json \
-  -p "[{\"op\":\"replace\",\"path\":\"/spec/declarative/tools/1/mcpServer/toolNames\",\"value\":$1}]")
+# _evil <json-array> : set ONLY the evil-mcp toolNames. It reads the live Agent, finds the tools entry whose
+# mcpServer.name is evil-mcp (.evilpatch.py, never a fixed place in the array), and JSON-patches that entry's
+# toolNames after a test op on its name, so a reorder in gitops/workshop-agent/agent.yaml, or one between the read
+# and the patch, fails instead of narrowing workshop-mcp (#708). The real BurritoBot tools are never touched.
+_evil() { local p c
+  printf '$ kubectl -n agent get agent workshop-agent -o json | python3 "$HOME/.evilpatch.py" %s\n' "'$1'" >&2
+  p="$(kubectl -n agent get agent workshop-agent -o json 2>/dev/null \
+  | python3 "$HOME/.evilpatch.py" "$1")" || return 1
+  c=(kubectl -n agent patch agent workshop-agent --type=json -p "$p")
   _show "${c[@]}"; "${c[@]}" >/dev/null 2>&1; }
 # _c7gw : C7's control on this cluster. Returns 0 on an admin cluster, whose Argo CD root lab-bootstrap is
 # labelled lab-platform/profile=admin (gitops/bootstrap/values-admin.yaml): there it is agentgateway's rule. Returns 1 anywhere else: there
@@ -150,6 +155,23 @@ lines[hits[0]] = line[:len(line) - len(line.lstrip())] + "- " + RULES[sys.argv[1
 print(json.dumps([
     {"op": "test", "path": "/metadata/resourceVersion", "value": cm["metadata"]["resourceVersion"]},
     {"op": "replace", "path": "/data/config.yaml", "value": "\n".join(lines)},
+]))
+EOS
+
+# The patch behind _evil. Reads the Agent as JSON on stdin and the new toolNames as a JSON array in argv[1], and
+# prints the JSON patch for the one tools entry whose mcpServer.name is evil-mcp. No such entry, two of them, or
+# an argument that is not a list of names is an error, never a guess. verify/test_evil_tools_by_name.py runs it.
+cat > "$HOME/.evilpatch.py" <<'EOS'
+import json, sys
+tools = json.load(sys.stdin)["spec"]["declarative"]["tools"]
+hits = [i for i, t in enumerate(tools) if (t.get("mcpServer") or {}).get("name") == "evil-mcp"]
+names = json.loads(sys.argv[1]) if len(sys.argv) == 2 else None
+if len(hits) != 1 or not isinstance(names, list) or not all(isinstance(n, str) for n in names):
+    sys.exit(1)
+entry = "/spec/declarative/tools/%d/mcpServer" % hits[0]
+print(json.dumps([
+    {"op": "test", "path": entry + "/name", "value": "evil-mcp"},
+    {"op": "replace", "path": entry + "/toolNames", "value": names},
 ]))
 EOS
 

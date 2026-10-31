@@ -6717,3 +6717,58 @@ run before the teardown. Nothing in fleet.sh changes.
    also destroys accen-dev's lab VPC, which the two roster clusters run on.
 
 **Not yet run on a cluster:** all six steps. The result goes on #655 (and #532) with the labctl status output.
+## 2026-10-31 · #708 · The terminal's `_evil` and `toggle-mcp-authz-on.sh` write evil-mcp's toolNames on the entry they find by name
+
+**Why.** Two writers set the workshop-agent Agent's evil-mcp toolNames, C7's control on a workshop cluster. The web
+terminal's `_evil` JSON-patched `/spec/declarative/tools/1/mcpServer/toolNames`, so a reorder of the tools in
+the Agent's manifest (`gitops/workshop-agent/agent.yaml` since #707) would have made guard-mcp-on narrow
+workshop-mcp instead of evil-mcp.
+`toggle-mcp-authz-on.sh` merge-patched the whole tools array from its own copy (`GOOD_TOOL` and `EVIL_TOOL`), which
+`verify/test_tool_audit.py` held equal to git, so every git change to any tool needed the copy changed too. From
+peopleforrester/talks-knowledge#110, which takes it from #679.
+
+**What changed.**
+- Both writers read the live Agent with `kubectl get agent workshop-agent -o json`, find the one tools entry whose
+  `mcpServer.name` is `evil-mcp`, and send a JSON patch: a `test` op on that entry's name, then a `replace` of its
+  toolNames. Nothing else in the Agent is written. No evil-mcp entry, two of them, or a reorder between the read
+  and the patch (the `test` op fails) leaves the Agent as it was and exits non-zero.
+- The patch is built by the same Python in both: the terminal writes it to `~/.evilpatch.py`, beside
+  `~/.c7rule.py`, and the toggle carries it as `PATCH_PY`. Python and not jq because the terminal already runs
+  `.c7rule.py` with python3, `fallback.curl.sh` beside the toggle already requires python3, and one program in two
+  places can be held identical by a test. The toggle now sets only `EVIL_TOOLS`, the list; `GOOD_TOOL` is gone.
+- `_evil` prints `$ kubectl -n agent get agent workshop-agent -o json | python3 "$HOME/.evilpatch.py" '<list>'`
+  and then the patch it sends, as `_c7rule` does, so the room still sees each kubectl it runs.
+- `verify/kubecon_probe.py`'s `set_evil_tools` used the same index 1 (after checking the name there); it now builds
+  the same patch with `evil_tools_patch`, and `verify/test_kubecon_probe.py` holds it equal to `.evilpatch.py` in
+  the committed order and with the tools reversed.
+
+**Tests.** New `verify/test_evil_tools_by_name.py`. It fails on a tools index (`tools/<n>`, `tools[<n>]`) in either
+entrypoint copy, the toggle or the probe, on any JSON tools entry, tools array or workshop-mcp name in the toggle's
+code, on a merge patch, and on the toggle's `PATCH_PY` differing from `.evilpatch.py`. It then runs the toggle
+(`--on`, `--off`) and the terminal's guard-mcp-on and guard-mcp-off against a kubectl that holds an Agent and
+applies JSON patches as the API server does, in the committed order and with the tools reversed: each sets
+evil-mcp's list and leaves every other field equal. With evil-mcp missing, and with the tools reordered between
+the read and the patch, each fails and patches nothing. Run against the old two files it fails six checks. The
+stubs in `test_challenge_fallbacks.py`, `test_guard_commands_echo.py` and `test_kubecon_probe.py` now take the JSON
+patch; `test_tool_audit.py`, `test_beat3_mcp.py` and `test_agent_tools_exist.py` check the new shape instead of
+the copy and the index.
+
+**Redone on #707's layout.** The first draft (run 13481, commit 75959bb) was cut from staging at 5e8dc1a. Its
+rebase failed on the toggle: #707 (813404e), which moved the Agent out of `gitops/ai-layer/resources.yaml` into its
+own `workshop-agent` Application at `gitops/workshop-agent/agent.yaml`, edited the path in the `GOOD_TOOL` comment
+that this change deletes. `verify/draft-drift.sh` named nine drifted files. The design is the same, re-applied on
+813404e. The differences from the draft: the conflict resolves to the deletion; the toggle's and `_evil`'s
+comments, and `verify/test_evil_tools_by_name.py` and `verify/test_kubecon_probe.py`, which read the committed
+Agent, now name `gitops/workshop-agent/agent.yaml` (the draft read `resources.yaml`, which no longer holds the
+Agent). The #707 changes to the same tests (their two-file reads) are kept as staging has them.
+
+**Not changed.** `challenges/LAB-TEXT.md` still gives students the by-hand
+`kubectl patch ... tools/1/mcpServer/toolNames` line. It is reading for a person who has just listed the tools, not
+one of the two writers, and it is filed as its own follow-up.
+
+**Not yet run on a cluster.** On a fresh attendee cluster, `bash verify/beat-03.sh <context> agent` (its workshop
+branch runs `toggle-mcp-authz-on.sh --off`, then `--on`, through `fallback.curl.sh`), and in that cluster's web
+terminal `guard-mcp-on` then `guard-mcp-off`, reading evil-mcp's toolNames back with
+`kubectl -n agent get agent workshop-agent -o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`.
+The one thing only a cluster settles is that kagent's Agent CRD accepts the `test` op on `mcpServer/name`, which is
+standard JSON patch on any custom resource.

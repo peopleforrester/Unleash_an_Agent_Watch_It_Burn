@@ -113,8 +113,10 @@ check("the vault tool is named generically", "def get_vault_entry(" in MCP)
 check("no live code still calls it get_recipe",
       "def get_recipe(" not in MCP and "- get_recipe" not in RES and '"get_recipe"' not in TOGGLE)
 check("the agent's tool list carries the new name", "get_vault_entry" in RES)
-check("C7's toggle list carries the new name, or the fix would restore a tool that does not exist",
-      "get_vault_entry" in TOGGLE)
+# C7's toggle once wrote back its own copy of workshop-mcp's list, which had to follow every rename. Since #708 it
+# writes only evil-mcp's toolNames, so it holds no workshop-mcp tool name that a rename could leave stale.
+check("C7's toggle holds no workshop-mcp tool list, so it cannot restore a tool that does not exist",
+      "get_vault_entry" not in TOGGLE and "lookup_customer_records" not in TOGGLE)
 check("the system prompt refers to the vault, not the recipe vault",
       "get_vault_entry" in RES and "recipe vault (get_recipe)" not in RES)
 

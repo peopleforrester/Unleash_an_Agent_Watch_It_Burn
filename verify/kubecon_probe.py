@@ -354,6 +354,19 @@ def c7_config_with_rule(text: str, rule: str) -> str:
     return "\n".join(lines)
 
 
+def evil_tools_patch(agent: dict, names: list[str]) -> list[dict]:
+    """The JSON patch that sets evil-mcp's toolNames to names: the terminal's _evil (.evilpatch.py), on the same Agent.
+    The entry is found by name, never by its place in the tools array, and its name is tested before the replace,
+    so a reorder fails the patch instead of narrowing workshop-mcp (#708)."""
+    tools = agent["spec"]["declarative"]["tools"]
+    hits = [i for i, t in enumerate(tools) if (t.get("mcpServer") or {}).get("name") == "evil-mcp"]
+    if len(hits) != 1:
+        raise RuntimeError(f"expected one evil-mcp entry in workshop-agent's tools, found {len(hits)}")
+    entry = f"/spec/declarative/tools/{hits[0]}/mcpServer"
+    return [{"op": "test", "path": f"{entry}/name", "value": "evil-mcp"},
+            {"op": "replace", "path": f"{entry}/toolNames", "value": list(names)}]
+
+
 def identity_name(host: str | None) -> str | None:
     """The name a cluster calls itself: its agenticburn.com host, which burritobot.co twins (#651)."""
     if host and host.endswith(".burritobot.co"):
@@ -629,12 +642,8 @@ class KubeconCluster(Cluster):
         raise RuntimeError("workshop-agent has no evil-mcp tool entry")
 
     def set_evil_tools(self, names: list[str]) -> None:
-        """The terminal's _evil: replace index 1's toolNames, after checking index 1 is evil-mcp."""
-        tools = self._agent()["spec"]["declarative"]["tools"]
-        if len(tools) < 2 or (tools[1].get("mcpServer") or {}).get("name") != "evil-mcp":
-            raise RuntimeError("tools[1] is not evil-mcp; the terminal's guard-mcp-on would patch the wrong entry")
-        patch = json.dumps([{"op": "replace", "path": "/spec/declarative/tools/1/mcpServer/toolNames",
-                             "value": names}])
+        """The terminal's _evil: evil-mcp's toolNames, on the entry found by name on the live Agent."""
+        patch = json.dumps(evil_tools_patch(self._agent(), names))
         self._kubectl("-n", "agent", "patch", "agent", "workshop-agent", "--type=json", "-p", patch)
 
     def measure(self) -> dict:

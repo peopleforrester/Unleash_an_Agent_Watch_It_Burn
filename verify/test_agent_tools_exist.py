@@ -124,8 +124,8 @@ check("ai-layer ignores nothing on the Agent, which is not in its bundle (#707)"
 print("== Challenge 7 still patches the list the ignore protects ==")
 TOGGLE = (REPO / "challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh").read_text(encoding="utf-8")
 check("C7's toggle targets evil-mcp's toolNames", "toolNames" in TOGGLE)
-check("evil-mcp is the second server, which is what C7's JSON pointer assumes",
-      list(declared.keys())[1] == "evil-mcp")
+check("C7's toggle finds evil-mcp's entry by name, not by its place in the tools array (#708)",
+      'get("name") == "evil-mcp"' in TOGGLE and "tools/1/" not in TOGGLE and "tools[1]" not in TOGGLE)
 
 print()
 if failures:
