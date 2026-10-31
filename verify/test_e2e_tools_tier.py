@@ -15,8 +15,8 @@ failed fetch or a missing prerequisite before any test runs, and that includes P
 from a directory `playwright install` cannot write (#658), with `uv` stubbed to list them.
 
 run-e2e.sh, the by-hand live suite, runs the same fetch in its prerequisite check (#585), so a cluster build runs
-the gate's binaries, otelcol-contrib included since #654. Its scratch copy is run with a fixture lock of the six tools: the fetched kubectl, not one
-already on PATH, is what checks the cluster, and a failed fetch is listed as missing with no kubectl run at all.
+the gate's binaries, otelcol-contrib included since #654 and weaver since #710. Its scratch copy is run with a
+fixture lock of six of the tools: the fetched kubectl, not one already on PATH, is what checks the cluster, and a failed fetch is listed as missing with no kubectl run at all.
 Some prerequisite is always left missing there, so the run stops before any check or cluster call.
 """
 from __future__ import annotations
@@ -58,8 +58,8 @@ def lock_rows(text: str) -> list[list[str]]:
 print("== the lock pins what VERSIONS.lock and the tests pin ==")
 rows = lock_rows(LOCK.read_text())
 tools = {r[0]: r for r in rows}
-check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm and otelcol-contrib ({sorted(tools)})",
-      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib"})
+check(f"e2e-tools.lock pins kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and weaver ({sorted(tools)})",
+      set(tools) == {"kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib", "weaver"})
 for name, row in tools.items():
     check(f"{name}: five fields (name, version, sha256, url, member)", len(row) == 5, str(row))
     if len(row) != 5:
@@ -67,7 +67,8 @@ for name, row in tools.items():
     _, version, sha, url, _member = row
     check(f"{name}: a 64-hex SHA-256", re.fullmatch(r"[0-9a-f]{64}", sha) is not None, sha)
     check(f"{name}: an https URL naming {version}", url.startswith("https://") and version.lstrip("v") in url, url)
-    check(f"{name}: a linux x86_64 artifact", re.search(r"linux[_/-](amd64|x86_64)", url, re.I) is not None, url)
+    check(f"{name}: a linux x86_64 artifact",
+          re.search(r"linux[_/-](amd64|x86_64)|x86_64-unknown-linux", url, re.I) is not None, url)
 
 # otelcol-contrib runs the PII scrub test (#647) on the collector the clusters run, so its pin is the image tag
 # every gitops/bootstrap/apps/otel-collector*.yaml file names (lab-platform's mirror tag is <version>-<digest>).
@@ -79,6 +80,18 @@ check(f"otelcol-contrib is the collector image's version {sorted(collector_tags)
 want = re.search(r'^OTELCOL_VERSION = "([^"]+)"', (VERIFY / "test_lab_pipeline_collector.py").read_text(), re.M)
 check("otelcol-contrib is the version test_lab_pipeline_collector.py demands",
       bool(want) and "otelcol-contrib" in tools and tools["otelcol-contrib"][1] == f"v{want.group(1)}")
+
+# weaver checks the semconv registry (#710) as the weaver-registry-check workflow does, so its pin is that workflow's.
+workflow = (REPO / ".github/workflows/weaver-registry-check.yml").read_text()
+wf_version = re.search(r"^\s+WEAVER_VERSION: (\S+)", workflow, re.M)
+wf_sha = re.search(r"^\s+WEAVER_SHA256: ([0-9a-f]{64})", workflow, re.M)
+check(f"weaver is the version and SHA-256 weaver-registry-check.yml pins "
+      f"({wf_version.group(1) if wf_version else None})",
+      bool(wf_version and wf_sha) and "weaver" in tools and tools["weaver"][1] == wf_version.group(1)
+      and tools["weaver"][2] == wf_sha.group(1))
+check("weaver is the asset the workflow downloads",
+      "weaver" in tools and tools["weaver"][3].endswith("/weaver-x86_64-unknown-linux-gnu.tar.xz")
+      and "weaver-x86_64-unknown-linux-gnu.tar.xz" in workflow)
 
 versions_lock = (REPO / "VERSIONS.lock").read_text()
 for name in ("terraform", "conftest", "kubectl", "helm"):
@@ -110,7 +123,7 @@ tier = [t for t in tests if re.search(r"^# E2E TIER: tools", t.read_text(), re.M
 names = {t.name for t in tier}
 for need in ("test_kyverno_cel_policies.py", "test_iam_policy_structural.py", "test_service_naming_render.py",
              "test_terraform_lock_init.py", "test_party_refresh_rate.py", "test_lab_pipeline_collector.py",
-             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py"):
+             "test_collector_pii_scrub_e2e.py", "test_trace_shape_e2e.py", "test_weaver_registry_check.py"):
     check(f"{need} is in the tier", need in names)
 for t in tier:
     text = t.read_text()
@@ -132,7 +145,7 @@ for var in ("CONTEXT", "IAM_PIPELINE_PROFILE", "IAM_PIPELINE_REGION", "AWS_PROFI
     check(f"run-e2e-tools.sh runs each tier test with {var} unset", f"-u {var}" in code)
 check("run-e2e-tools.sh runs each tier test with KUBECONFIG=/dev/null", "KUBECONFIG=/dev/null" in code)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("WEAVER", "weaver")):
     check(f"run-e2e-tools.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in code)
 check("run-e2e-tools.sh puts the fetched tools first on PATH", 'PATH="${TOOLS_BIN}:${PATH}"' in code)
 
@@ -180,6 +193,15 @@ def tgz(member: str, data: bytes) -> bytes:
     return buf.getvalue()
 
 
+def txz(member: str, data: bytes) -> bytes:
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:xz") as tf:
+        info = tarfile.TarInfo(member)
+        info.size = len(data)
+        tf.addfile(info, io.BytesIO(data))
+    return buf.getvalue()
+
+
 def zipped(member: str, data: bytes) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w") as zf:
@@ -195,6 +217,8 @@ FIXTURES = {
     "alpha-linux_x86_64.tar.gz": tgz("pkg/alpha", b"#!/bin/sh\necho alpha\n"),
     "beta_linux_amd64.zip": zipped("beta", b"#!/bin/sh\necho beta\n"),
     "gamma-linux-amd64": b"#!/bin/sh\necho gamma\n",
+    "epsilon-x86_64-unknown-linux-gnu.tar.xz": txz("epsilon-x86_64-unknown-linux-gnu/epsilon",
+                                                   b"#!/bin/sh\necho epsilon\n"),
 }
 # run-e2e.sh's six tools. The fetched kubectl logs each call and fails, as an unreachable cluster would.
 SIX = ("kyverno", "conftest", "terraform", "kubectl", "helm", "otelcol-contrib")
@@ -208,6 +232,8 @@ GOOD_LOCK = (
     f"alpha v1 {sha(FIXTURES['alpha-linux_x86_64.tar.gz'])} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
     f"beta  v2 {sha(FIXTURES['beta_linux_amd64.zip'])} https://fixture.invalid/beta_linux_amd64.zip beta\n"
     f"gamma v3 {sha(FIXTURES['gamma-linux-amd64'])} https://fixture.invalid/gamma-linux-amd64 -\n"
+    f"epsilon v5 {sha(FIXTURES['epsilon-x86_64-unknown-linux-gnu.tar.xz'])} "
+    "https://fixture.invalid/epsilon-x86_64-unknown-linux-gnu.tar.xz epsilon-x86_64-unknown-linux-gnu/epsilon\n"
 )
 BAD_LOCK = (
     f"alpha v1 {'0' * 64} https://fixture.invalid/alpha-linux_x86_64.tar.gz pkg/alpha\n"
@@ -247,11 +273,12 @@ with tempfile.TemporaryDirectory() as t:
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
     check(f"a lock whose artifacts match installs every tool (exit {r.returncode})", r.returncode == 0,
           r.stdout + r.stderr)
-    for name, body in (("alpha", b"echo alpha"), ("beta", b"echo beta"), ("gamma", b"echo gamma")):
+    for name, body in (("alpha", b"echo alpha"), ("beta", b"echo beta"), ("gamma", b"echo gamma"),
+                       ("epsilon", b"echo epsilon")):
         b = vdir / ".tools" / "bin" / name
         check(f"{name} is in .tools/bin, executable, holding the archive's member",
               b.is_file() and os.access(b, os.X_OK) and body in b.read_bytes())
-    check("each artifact was downloaded once", len(curl_calls(tmp)) == 3, str(curl_calls(tmp)))
+    check("each artifact was downloaded once", len(curl_calls(tmp)) == 4, str(curl_calls(tmp)))
     first = len(curl_calls(tmp))
     r = run(vdir / FETCH.name, tmp, tmp / "bin")
     check(f"a second run reuses the verified downloads and fetches nothing (exit {r.returncode})",
@@ -356,7 +383,7 @@ check("run-e2e.sh runs fetch-e2e-tools.sh", 'bash "${SCRIPT_DIR}/fetch-e2e-tools
 check("run-e2e.sh fetches into the directory the tier runs from", 'TOOLS_BIN="${SCRIPT_DIR}/.tools/bin"' in live)
 check("run-e2e.sh puts the fetched tools first on PATH", 'export PATH="${TOOLS_BIN}:${PATH}"' in live)
 for var, tool in (("KYVERNO_CLI", "kyverno"), ("CONFTEST", "conftest"), ("TERRAFORM", "terraform"),
-                  ("OTELCOL_CONTRIB", "otelcol-contrib")):
+                  ("OTELCOL_CONTRIB", "otelcol-contrib"), ("WEAVER", "weaver")):
     check(f"run-e2e.sh points {var} at the fetched {tool}", f'{var}="${{TOOLS_BIN}}/{tool}"' in live)
 check("run-e2e.sh never looks for otelcol-contrib on PATH (#654)",
       "command -v" not in "\n".join(line for line in live.splitlines() if "otelcol" in line.lower()))
@@ -405,7 +432,8 @@ with tempfile.TemporaryDirectory() as t:
           r.returncode == 1 and LIVE_CANNOT_RUN in r.stderr and "E2E checks ran" not in r.stdout + r.stderr,
           r.stdout + r.stderr)
     check("it lists the failed fetch as missing",
-          "  - the pinned kyverno, conftest, terraform, kubectl, helm and otelcol-contrib could not be fetched" in r.stderr,
+          "  - the pinned kyverno, conftest, terraform, kubectl, helm, otelcol-contrib and weaver could not be fetched"
+          in r.stderr,
           r.stderr)
     check("the fetch's own reasons are shown", "delta v4: download failed" in r.stderr, r.stderr)
     check("no kubectl runs, not even the host's", kubectl_calls(tmp) == [], str(kubectl_calls(tmp)))

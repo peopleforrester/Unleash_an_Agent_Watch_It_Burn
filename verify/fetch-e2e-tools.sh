@@ -49,6 +49,9 @@ fetch_one() { # name version sha256 url member
         -:*)        cp "${file}" "${tmp}" ;;
         *:*.tar.gz) tar -xzOf "${file}" "${member}" >"${tmp}" ;;
         *:*.zip)    unzip -p "${file}" "${member}" >"${tmp}" ;;
+        # GNU tar needs an xz binary for .tar.xz; python3's tarfile does not, and both runners already need python3.
+        *:*.tar.xz) python3 -I -c 'import sys, tarfile; sys.stdout.buffer.write(tarfile.open(sys.argv[1], "r:xz").extractfile(sys.argv[2]).read())' \
+                        "${file}" "${member}" >"${tmp}" ;;
         *)          false ;;
     esac || {
         rm -f "${tmp}"

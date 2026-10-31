@@ -31,6 +31,20 @@ groups:
       - ref: http.response.status_code
         requirement_level: required
         note: Set by _send at every exit (200 pass, 403 block, 502 upstream failure).
+      - ref: session.id
+        requirement_level:
+          conditionally_required: >-
+            On a `POST /chat` turn whose JSON body carries a non-empty string `session`.
+        note: >-
+          The storefront's per-browser-session id, set by _stamp in _chat_turn before any guard runs, so
+          every turn of one browser session can be joined, blocked turns included. The A2A path does not set it.
+      - ref: witb.guard.decision
+        requirement_level:
+          conditionally_required: >-
+            On a `POST /chat` turn that a guard blocked or rewrote. Absent when no guard touched the turn.
+        note: >-
+          Set by _stamp in _chat_turn. A blocked turn ends before any agent span exists, so this server span
+          is the only span a dashboard can name the deciding guard from.
 
   # --- The guard decision + forward, modelled as a gen_ai "chat" span so Datadog renders the LLM panel. ---
   #
@@ -101,3 +115,45 @@ groups:
           The logical name of the downstream service ("agentgateway" in the target topology). This is the
           Service Map edge signal; defined in the upstream OTel semconv registry (resolved via the
           manifest.yaml dependency), no local definition needed.
+
+  # --- Attributes the workshop defines itself (no upstream semconv equivalent). ---
+  - id: registry.witb.guard
+    type: attribute_group
+    stability: development
+    brief: Attributes describing which guard-proxy guardrail decided a storefront chat turn.
+    attributes:
+      - id: witb.guard.decision
+        type:
+          members:
+            - id: input_blocklist
+              value: "input_blocklist"
+              brief: The input block-list matched the prompt and the turn was refused.
+              stability: development
+            - id: input_classifier
+              value: "input_classifier"
+              brief: The input classifier (LLM Guard scanners) flagged the prompt and the turn was refused.
+              stability: development
+            - id: topic
+              value: "topic"
+              brief: The topic guard refused the prompt as off-topic.
+              stability: development
+            - id: rate_limit
+              value: "rate_limit"
+              brief: The per-session or the cluster-wide request rate limit stopped the turn.
+              stability: development
+            - id: budget
+              value: "budget"
+              brief: >-
+                A spend cap stopped the turn: the always-on cost cap, or the demo budget cap when the budget
+                guard is on.
+              stability: development
+            - id: output_redacted
+              value: "output_redacted"
+              brief: The output guard redacted or blocked the model's reply.
+              stability: development
+        stability: development
+        brief: The guard that blocked or rewrote a storefront chat turn.
+        note: >-
+          Absent when no guard touched the turn. Only one value is set per turn: an input-side guard ends the
+          turn, and output_redacted is set only on a turn that reached the model.
+        examples: ["input_blocklist", "budget"]

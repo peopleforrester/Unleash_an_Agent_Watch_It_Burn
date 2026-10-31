@@ -6546,3 +6546,40 @@ this change moves the Agent between Applications. If ai-layer's prune runs first
 workshop-agent creates it again, so the pod cycles once and the student's C7 state resets. If workshop-agent applies
 first, it rewrites the Agent's tracking annotation, and ai-layer no longer counts the Agent as its own to prune. The
 live check above should note which one happened.
+
+## 2026-10-31 · #710 · The weaver registry declares session.id and witb.guard.decision on the guard-proxy HTTP server span, checked by a pinned weaver
+
+**What changed.** guard-proxy-agenticburn#8 made proxy.py's `_stamp` set two attributes on the `POST <path>` server
+span, `span.witb.guard_proxy.http`: `session.id`, which is OTel semconv, and `witb.guard.decision`, which is ours.
+`weaver/registry/guard-proxy-spans.yaml` declared neither. The span group now refs both, each as
+`conditionally_required`, because `_chat_turn` sets them only on `/chat`: `session.id` when the body carries a non-empty
+string `session`, and `witb.guard.decision` when a guard blocked or rewrote the turn. A new `registry.witb.guard`
+attribute group defines `witb.guard.decision` as an enum. Its members are input_blocklist, input_classifier, topic,
+rate_limit, budget and output_redacted, each id equal to its value. `session.id` stays upstream's, resolved through
+manifest.yaml's v1.37.0 dependency.
+
+**The pinned weaver.** weaver v0.24.2 is now in `verify/e2e-tools.lock`, at the version and SHA-256 that
+`.github/workflows/weaver-registry-check.yml` pins. Its download was checked against that SHA-256 on 2026-10-31.
+v0.28.0 is the latest release, but it is not used, so the gate and the workflow run the same binary. Its asset is a
+`.tar.xz`, and `fetch-e2e-tools.sh` reads it with python3's tarfile, because GNU tar would need an xz binary that
+neither runner checks for. Both runners pass `WEAVER` to the tests.
+
+**Tests.** `verify/test_weaver_registry_lockstep.py` is offline and reads the pinned submodule's proxy.py. Every key that
+do_POST, `_send` or `_stamp` sets on the server span must be declared on the span group. Every `witb.*` ref must be
+defined locally, and the enum's members must be exactly the values proxy.py stamps. It fails when a member is
+removed. `verify/test_weaver_registry_check.py` is in the E2E tools tier. It runs the pinned `weaver registry check`
+on `weaver/registry/`, which passed on 2026-10-31, and checks that a misspelt `witb.guard.decision` ref fails the
+check. Then it resolves the registry and reads both attributes on the span, the enum with its six members.
+`test_e2e_tools_tier.py` holds weaver to the workflow's pin and fetches a `.tar.xz` fixture.
+`test_e2e_toolchain.py` reads run-e2e.sh's new tool list.
+
+**Not covered here.** proxy.py also sets `gen_ai.request.model` on the sanitize span and `error.type` on the egress span,
+and the registry declares neither. Those are other span groups, outside #710, and are filed as a follow-up.
+
+**The previous attempt** stopped before any work. It ran on pool claude-performantpro-5, whose podman store had a
+RunRoot under another worktree (1270196839-481-7103) and no `crun`. #707's entry records the same pool fault. Nothing in
+this repo calls podman, and this run's pool answers `podman info` with crun, so there was nothing in the repo to fix.
+
+**Not yet run on a cluster.** `weaver registry live-check` against a running proxy's `/chat` spans (docs/weaver-live-check.md)
+has not been run with the new attributes. It is owed in a session with a cluster: capture a blocked and a passing
+`/chat` turn's server spans and run the live check on them.

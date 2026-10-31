@@ -6,7 +6,7 @@ contract for those spans, pinned to OpenTelemetry semantic conventions **v1.37.0
 
 | Check | What it proves | When it runs |
 |---|---|---|
-| `weaver registry check` | The contract itself is well-formed and every `ref:` resolves against upstream semconv v1.37.0. Catches a typo'd or renamed attribute. | CI, on any change under `weaver/` (`.github/workflows/weaver-registry-check.yml`). |
+| `weaver registry check` | The contract itself is well-formed and every `ref:` resolves against upstream semconv v1.37.0. Catches a typo'd or renamed attribute. | CI, on any change under `weaver/` (`.github/workflows/weaver-registry-check.yml`), and the gate's E2E command (`verify/test_weaver_registry_check.py`, with the weaver `verify/e2e-tools.lock` pins, #710). |
 | `weaver registry live-check` | The spans the **running** proxy actually emits match the contract. Catches drift between `proxy.py` and the registry. | Manually, against live telemetry from a deployed cluster. |
 
 ## Toolchain
@@ -33,7 +33,9 @@ weaver registry check --registry weaver/registry/
 
 This resolves `weaver/registry/manifest.yaml` (which pins the upstream registry to the v1.37.0 tag
 archive) and validates `weaver/registry/guard-proxy-spans.yaml`. Every `ref:` in the span groups must
-name a real upstream attribute. A clean run prints `No after_resolution policy violation` and exits 0.
+name a real upstream attribute, or one the registry defines itself: `witb.guard.decision` is in the
+`registry.witb.guard` attribute group (#710). A clean run prints `No after_resolution policy violation` and exits 0.
+`verify/test_weaver_registry_lockstep.py` holds the HTTP `SERVER` span's attributes to the ones proxy.py sets, offline.
 The check needs network access to fetch the pinned semconv archive on the first run; weaver caches it
 under `~/.weaver/` afterward.
 
