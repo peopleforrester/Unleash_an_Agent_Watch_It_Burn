@@ -6002,3 +6002,41 @@ night before and nine six hours out. The reason given was that Portland narrowly
   from the region default, the design is the draft's. The run of show now also says that C6's maintenance-shell does not carry
   over to a promoted standby. The cloud-credential probe's fixed `region=us-west-2` (#203) was left alone: agent-sa's
   policy allows the `us.` system profiles in any region, so the probe reads the same on a standby.
+## 2026-10-31 · #116 · C1 two-stage DNS-exfil beat: the design is captured; the build stays deferred to Barcelona
+
+**Design only, no deploy and no lab/slide change.** #116 asks for a three-stage C1 beat: the HTTP beacon
+leaks (stage 1), the L3/L4 egress NetworkPolicy blocks it (stage 2), DNS exfil defeats the still-enforced
+policy (stage 2b), and an FQDN-aware control holds (the fix). Michael deferred this NEW challenge to
+Barcelona on 2026-09-07 — Portland ships a closed set of eight — and kept the issue open because "the
+design work here is still wanted, just for the next event" (Question 575; the #116 row in
+`docs/research/2026-08-28-challenge-currency-review.md`). The coordinator's Question 948 on the issue told
+this run to proceed with the achievable work. A dispatched run has no cluster and cannot deploy, so the
+achievable deliverable is the engineering design, now at `docs/research/2026-10-31-c1-dns-exfil-beat.md`.
+It records the two measured stages as they stand, why the L3/L4 policy is blind to DNS (the
+`agent-allow-dns.yaml` 53-to-kube-system allow plus CoreDNS's default upstream forwarding), the stage-2b
+attack at design altitude, the authoritative-DNS collector as a sibling of the beacon collector
+(`docs/beacon-collector-spec.md`), and the fix options: Cilium `toFQDNs` (a fleet CNI migration off
+VPC-CNI `enableNetworkPolicy`), a forced egress proxy, over a required CoreDNS resolver-lockdown floor.
+
+**What differs from the earlier draft (draft-drift, `origin/agent/116-12979`).** That draft's design note
+is sound and was re-made on current staging rather than cherry-picked. Its branch was cut from an older
+staging and also carried changes to `gitops/ai-layer/workshop-mcp-server.py` and
+`verify/test_agent_tools_exist.py` that reverted `run_shell` from `async def` back to a plain `def`; those
+are stale-base drift, not #116 work — current staging already made `run_shell` async in a worker thread
+(`06f27da`), so none of that is reproduced here. The design note is re-dated to today, every referenced
+path and fact re-verified against current staging (`get_marketing_intel` at
+`workshop-mcp-server.py:190`; the Dockerfile installs only `curl ca-certificates`, no `dnsutils`;
+`enableNetworkPolicy = "true"` at `infra/terraform/aws/cluster/main.tf:306`), and the wording kept clear
+of the retired "round" vocabulary (`verify/round_shapes.py`).
+
+**Open decision, parked until the Barcelona build is scheduled:** which FQDN control to build (Cilium
+`toFQDNs` vs. a forced egress proxy, over the CoreDNS resolver-lockdown floor). This is a fleet
+networking/architecture call with real cost; it is deliberately not decided here and waits on Michael and
+on the build being scheduled.
+
+**Not yet run on a cluster:** the live build and its validation are Barcelona-scoped and need a Cilium
+cluster for the `toFQDNs` option. When the build is scheduled, the acceptance mirrors C1 today — the
+DNS-exfil stage lands at the DNS collector with the egress NetworkPolicy still enforced, and after the fix
+the label-encoded lookups stop exfiltrating while Bedrock and legitimate in-cluster resolution still
+work — and it gets a `verify/` check in the live-cluster tier (`run-e2e.sh`, with CONTEXT), paralleling
+`verify/c1-exfil-block.sh`.
