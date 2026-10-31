@@ -191,15 +191,20 @@ for bad in ("2026-09-08T16:00/2026-09-08T19:30", "2026-09-08T19:30Z/2026-09-08T1
 class FakeOrg:
     """A Datadog org in memory. Records every call; rejects validation for the queries in `reject`."""
 
-    def __init__(self, monitors=(), dashboards=(), downtimes=(), reject=(), org="Datadog Whitney Sandbox"):
+    def __init__(self, monitors=(), dashboards=(), downtimes=(), reject=(), org="Datadog Whitney Sandbox",
+                 data=None, groups=None):
         self.calls, self.reject, self.org = [], set(reject), org
         self.monitors = {m["id"]: m for m in monitors}
         self.dashboards, self.downtimes, self.next_id = list(dashboards), list(downtimes), 100
+        # data: query text -> {cluster: value}, or {"": value} for an ungrouped answer; what /api/v2/query/scalar
+        # answers. groups: monitor key -> {cluster: status}; what group_states=all adds to each monitor.
+        self.data, self.groups, self.scalars, self.urls = dict(data or {}), dict(groups or {}), [], []
 
     def __call__(self, method, url, headers, body):
         path = url.split("datadoghq.com", 1)[1]
         data = json.loads(body) if body else None
         self.calls.append((method, path.split("?")[0], headers))
+        self.urls.append(path)
         p = path.split("?")[0]
         if p == "/api/v1/org":
             # What the sandbox org's read-only key gets here (#629): the loader must name the org another way.
@@ -209,7 +214,24 @@ class FakeOrg:
         if p == "/api/v1/monitor/validate":
             return (400, {"errors": ["bad query"]}) if data["query"] in self.reject else (200, {})
         if p == "/api/v1/monitor" and method == "GET":
-            return 200, list(self.monitors.values())
+            if "group_states=all" not in path:
+                return 200, list(self.monitors.values())
+            return 200, [{**m, "state": {"groups": {
+                f"kube_cluster_name:{c}": {"name": f"kube_cluster_name:{c}", "status": st}
+                for c, st in self.groups.get(fm.key_of(m), {}).items()}}} for m in self.monitors.values()]
+        if p == "/api/v2/query/scalar":
+            a = data["data"]["attributes"]
+            text = fm.query_text(a["queries"][0])
+            self.scalars.append((text, a["to"] - a["from"], a["queries"][0]))
+            vals = self.data.get(text, {})
+            if "" in vals:
+                cols = [{"name": "q", "type": "number", "values": [vals[""]]}]
+            elif vals:
+                cols = [{"name": "kube_cluster_name", "type": "group", "values": [[c] for c in vals]},
+                        {"name": "q", "type": "number", "values": list(vals.values())}]
+            else:
+                cols = []
+            return 200, {"data": {"type": "scalar_response", "attributes": {"columns": cols}}}
         if p == "/api/v1/monitor" and method == "POST":
             self.next_id += 1
             self.monitors[self.next_id] = {**data, "id": self.next_id, "overall_state": "OK"}
@@ -324,6 +346,137 @@ rc, text = run(["--check"], FakeOrg())
 check("an empty org fails the check, naming every monitor and both dashboards",
       rc == 1 and text.count("MISSING") == len(mons) + 2 and "MISSING  challenge leaderboard" in text)
 
+print("== data: every query returns data for every cluster (#706) ==")
+CLUSTERS = ["burritobot-public", "burritobot-private"]
+DATA_ARGS = ["--data", "--cluster", CLUSTERS[0], "--cluster", CLUSTERS[1]]
+fleet_queries = [(w["definition"], q) for w in dash["widgets"]
+                 for r in w["definition"].get("requests", []) for q in r.get("queries", [])]
+signals = {k: m["signal"] for k, m in mons.items() if m.get("signal")}
+absence = [k for k in mons if k not in signals]
+
+
+def is_grouped(q):
+    if q.get("data_source") == "logs":
+        return fm.GROUP_BY in {g.get("facet") for g in q.get("group_by") or []}
+    return "by {kube_cluster_name}" in q["query"] and not q["query"].startswith("count_not_null(")
+
+
+def shipping():
+    """What the org answers when both clusters ship and each has had a /chat inside the window."""
+    data = {}
+    for q in [q for _, q in fleet_queries] + list(signals.values()):
+        data[fm.query_text(q)] = {c: 1.0 for c in CLUSTERS} if is_grouped(q) else {"": 2.0}
+    return data, {k: {c: "OK" for c in CLUSTERS} for k in absence}
+
+
+check("the monitors that fire on a rising count are the ones with a signal",
+      sorted(signals) == sorted(k for k, m in mons.items() if fm.fires_on_rise(m["query"]))
+      and sorted(signals) == ["guard-proxy-erroring", "node-not-ready"])
+check("node-not-ready's signal is its metric without the status filter",
+      fm.query_text(signals.get("node-not-ready", {"query": ""})) ==
+      "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready} by {kube_cluster_name}")
+check("guard-proxy-erroring's signal is its log search without status:error",
+      fm.query_text(signals.get("guard-proxy-erroring", {})) ==
+      "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy")
+check("no repo-only signal leaks into the API body",
+      all("signal" not in fm.render_monitor(m, []) for m in mons.values()))
+
+org = FakeOrg()
+run(["--apply"], org)
+org.data, org.groups = shipping()
+calls_before = len(org.calls)
+rc, text = run(DATA_ARGS, org, env={})
+check("an org where both clusters fill every query passes", rc == 0 and "NO DATA" not in text and "MISSING" not in text)
+check("every absence monitor's state is read, with its groups",
+      text.count("DATA     monitor") == len(mons) and any("group_states=all" in u for u in org.urls[calls_before:]))
+sent = [t for t, _, _ in org.scalars]
+check("every fleet-dashboard query and every signal is sent to the scalar API",
+      sorted(sent) == sorted([fm.query_text(q) for _, q in fleet_queries] + [fm.query_text(q) for q in signals.values()]))
+check("no leaderboard query is sent: its cells are blank until the room plays",
+      not any("workshop-mcp" in t or "kube_namespace:security" in t for t in sent))
+# The traces query is both a table column (5 minutes) and the timeseries widget (no window of its own).
+table = next(q for d, q in fleet_queries if d.get("title") == "Every cluster, last 5 minutes" and q["name"] == "traces")
+check("the traces query is read over the table's 5 minutes and the picker's default hour",
+      sorted(w for t, w, _ in org.scalars if t == fm.query_text(table)) == [300_000, 3_600_000])
+check("a signal is read over its monitor's window",
+      [w for t, w, _ in org.scalars if t == fm.query_text(signals["node-not-ready"])] == [300_000])
+check("data needs no write key: it reads with the secret's read-only application key",
+      all(h.get("DD-APPLICATION-KEY") == "APPKEY654321" for _, _, h in org.calls[calls_before:]))
+check("data never writes", all(m == "GET" or p == "/api/v2/query/scalar" for m, p, _ in org.calls[calls_before:]))
+rc, text = run(["--check"], org, env={})
+check("the same org passes --check", rc == 0)
+
+
+def blanked(mutate):
+    o = FakeOrg()
+    run(["--apply"], o)
+    o.data, o.groups = shipping()
+    mutate(o)
+    rc, text = run(DATA_ARGS, o, env={})
+    crc, _ = run(["--check"], o, env={})
+    return rc, text, crc
+
+
+rc, text, crc = blanked(lambda o: o.data[fm.query_text(table)].pop(CLUSTERS[1]))
+check("a fleet-dashboard column blank for one cluster fails, naming the column and the cluster",
+      rc == 1 and "NO DATA  fleet dashboard / Every cluster, last 5 minutes / traces: burritobot-private" in text)
+check("--check alone passes that org: loaded is not fed", crc == 0)
+rc, text, crc = blanked(lambda o: o.groups["cluster-silent"].update({CLUSTERS[0]: "No Data"}))
+check("a monitor whose group for a cluster is No Data fails, naming both",
+      rc == 1 and "NO DATA  monitor cluster-silent" in text and "burritobot-public" in text.split("NO DATA  monitor cluster-silent", 1)[1].splitlines()[0])
+check("--check alone passes an org whose monitor is No Data", crc == 0)
+rc, text, _ = blanked(lambda o: o.groups["console-unavailable"].pop(CLUSTERS[1]))
+check("a monitor with no group for a cluster fails", rc == 1 and "NO DATA  monitor console-unavailable" in text)
+rc, text, _ = blanked(lambda o: o.data[fm.query_text(signals["guard-proxy-erroring"])].pop(CLUSTERS[0]))
+check("a signal that answers nothing for a cluster fails",
+      rc == 1 and "NO DATA  monitor guard-proxy-erroring (its signal): burritobot-public" in text)
+spend = next(q for d, q in fleet_queries if d.get("title") == "Room spend so far (USD)")
+rc, text, _ = blanked(lambda o: o.data.update({fm.query_text(spend): {"": None}}))
+check("an ungrouped tile that answers null fails", rc == 1 and "NO DATA  fleet dashboard / Room spend so far (USD)" in text)
+rc, text, _ = blanked(lambda o: o.data.pop(fm.query_text(table)))
+check("a column that answers nothing at all fails", rc == 1 and "NO DATA  fleet dashboard / Every cluster, last 5 minutes / traces" in text)
+rc, text, _ = blanked(lambda o: o.monitors.pop(next(i for i, m in o.monitors.items() if "wib-monitor:no-traces" in m["tags"])))
+check("a monitor not in the org fails --data too", rc == 1 and "MISSING  monitor no-traces" in text)
+o3 = FakeOrg()
+run(["--apply"], o3)
+o3.data, o3.groups = shipping()
+rc, text = run([*DATA_ARGS, "--cluster", "burritobot-attendee-007"], o3, env={})
+check("a named cluster that ships nothing fails every per-cluster query",
+      rc == 1 and text.count("burritobot-attendee-007") >= len(absence) + 1)
+
+def keys_unread(*_):
+    raise AssertionError("keys read before the arguments were checked")
+org = FakeOrg()
+rc, text = run(["--data"], org, env={}, keys=keys_unread)
+check("--data without a --cluster exits 1 and calls nothing", rc == 1 and "--cluster" in text and org.calls == [])
+rc, text = run(["--data", "--cluster", "watch-it-burn-community"], org, env={}, keys=keys_unread)
+check("a --cluster outside the queries' filter is refused", rc == 1 and "could never fill" in text and org.calls == [])
+rc, text = run(["--check", "--cluster", CLUSTERS[0]], org, env={})
+check("--cluster without --data is refused", rc == 1 and "only means something with --data" in text)
+
+print("== validation: a bad-news monitor needs a signal on its own source ==")
+def broken_signal(key, **over):
+    d = json.loads(json.dumps(defs))
+    m = next(m for m in d["monitors"] if m["key"] == key)
+    for k, v in over.items():
+        if v is None:
+            m.pop(k, None)
+        else:
+            m[k] = v
+    return fm.validate_monitors(d)
+check("a monitor that fires on a rising count without a signal is refused",
+      any("give it a signal" in p for p in broken_signal("node-not-ready", signal=None)))
+check("a signal on another metric is refused", any("not the monitor's metric" in p for p in broken_signal(
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.count{kube_cluster_name:burritobot-*} by {kube_cluster_name}"})))
+check("a signal filtering on a tag the monitor does not is refused", any("which the monitor does not" in p for p in broken_signal(
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:memorypressure} by {kube_cluster_name}"})))
+check("an ungrouped signal is refused", any("signal is not grouped" in p for p in broken_signal(
+      "node-not-ready", signal={"data_source": "metrics", "query": "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready}"})))
+check("a logs signal searching a term the monitor does not is refused", any("which the monitor does not" in p for p in broken_signal(
+      "guard-proxy-erroring", signal={**signals["guard-proxy-erroring"], "search": {"query": "kube_cluster_name:burritobot-* kube_deployment:console"}})))
+check("a signal on a monitor that fires on absence is refused",
+      any("fires on absence" in p for p in broken_signal("cluster-silent", signal=signals["node-not-ready"])))
+
 print("== apply needs the write key, and only ever the sandbox org ==")
 def no_keys_read(*_):
     raise AssertionError("keys read before the write key was checked")
@@ -356,6 +509,7 @@ check("fleet.sh has a monitors verb", re.search(r"^\s+monitors\) exec python3 .*
 verb = fleet_src.split("monitors) exec python3", 1)[1].split(";;", 1)[0] if "monitors) exec python3" in fleet_src else ""
 check("it passes the account and region explicitly", '--profile "${WIB_DEFAULT_ACCOUNT}"' in verb and '--region "${WIB_REGION}"' in verb)
 check("usage documents it", "monitors [--apply|--check]" in fleet_src)
+check("usage documents the data check", "monitors --data --cluster NAME" in fleet_src)
 
 print()
 if failures:

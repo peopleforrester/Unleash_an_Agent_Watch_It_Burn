@@ -14,6 +14,12 @@ Same shape as the Datadog pool loader (provisioning-agenticburn scripts/load_dat
                        definition aborts the load before any write.
     --check            read-only against the live org: every defined monitor and both dashboards exist, the
                        monitors with the queries in this repo. Prints each monitor's state. Exit 1 on any drift.
+    --data --cluster NAME [--cluster NAME ...]
+                       read-only: every query returns data for every named cluster (#706). Each monitor that
+                       fires on absence has a group per cluster in a state other than No Data; each monitor that
+                       fires on a rising count, which is empty on a healthy cluster, has its `signal` (the same
+                       source without the bad-news filter) answer for each cluster; every query on the fleet
+                       dashboard answers for each cluster over its widget's window. Exit 1 on any blank.
 
 The org. For KubeCon NA 2026 the instructor org is Whitney's sandbox org: Datadog no longer issues per-student
 orgs, so both clusters ship there (#629, #454), and its keys are Secrets Manager watch-it-burn/datadog (the secret
@@ -35,6 +41,7 @@ Usage (fleet.sh passes the profile and region; it is the normal way in):
     fleet.sh monitors                                                   # dry run
     WIB_FLEET_MONITORS_APP_KEY=<key> fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
     fleet.sh monitors --check
+    fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private   # after a /chat on each
     python3 infra/datadog-fleet/fleet_monitors.py --profile accen-dev --region us-west-2 [--apply|--check]
 """
 from __future__ import annotations
@@ -71,6 +78,11 @@ DOWNTIME_MARK = "[wib-fleet-monitors]"
 GROUP_BY = "kube_cluster_name"
 TYPES = ("metric alert", "query alert", "log alert")
 KEY_RE = re.compile(r"^[a-z0-9][a-z0-9-]*$")
+# The dashboards --data reads. The leaderboard counts challenge outcomes, so it is blank until the room plays.
+DATA_DASHBOARDS = ("fleet dashboard",)
+# A widget without its own time follows the dashboard's time picker, which opens on the last hour.
+DEFAULT_SPAN_S = 3600
+SPAN_RE = re.compile(r"^([0-9]+)([mhd])$")
 
 
 # ---- definitions: pure, offline ------------------------------------------------------------------------
@@ -128,11 +140,63 @@ def validate_monitors(defs: dict) -> list[str]:
                 problems.append(f"{where}: query does not end in a comparison with a threshold")
             elif float(tail.group(2)) != float(th["critical"]):
                 problems.append(f"{where}: query threshold {tail.group(2)} != options.thresholds.critical {th['critical']}")
+        problems += validate_signal(where, m, flt)
         opts = m["options"]
         if opts.get("notify_no_data") and not opts.get("no_data_timeframe"):
             problems.append(f"{where}: notify_no_data without no_data_timeframe")
         if "{{" + GROUP_BY + ".name}}" not in m["message"]:
             problems.append(f"{where}: message does not name the cluster ({{{{{GROUP_BY}.name}}}})")
+    return problems
+
+
+def fires_on_rise(query: str) -> bool:
+    return re.search(r">=?\s*-?[0-9.]+\s*$", query.rstrip()) is not None
+
+
+def metric_source(q: str) -> tuple[str, set[str]]:
+    """(metric name, tag filters) of the first metric{...} in a query."""
+    m = re.search(r"([A-Za-z_][\w.]*)\{([^}]*)\}", q)
+    return (m.group(1), {t.strip() for t in m.group(2).split(",") if t.strip()}) if m else ("", set())
+
+
+def log_search(q: str) -> str:
+    m = re.search(r'logs\("((?:[^"\\]|\\.)*)"\)', q)
+    return m.group(1) if m else ""
+
+
+def validate_signal(where: str, m: dict, flt: str) -> list[str]:
+    """A monitor that fires on a rising count reads nothing on a healthy cluster, so --data cannot tell a right name
+    from a wrong one by its state. Its `signal` is a dashboard-style query on the same source with the bad-news
+    filter dropped: the same metric with a subset of its tags, or a subset of its log search terms."""
+    sig = m.get("signal")
+    if not fires_on_rise(m["query"]):
+        return [f"{where}: a signal on a monitor that fires on absence; --data reads its own state"] if sig else []
+    if not sig:
+        return [f"{where}: fires on a rising count, so its query is empty on a healthy cluster; "
+                "give it a signal (the same source without the bad-news filter) for --data to read"]
+    problems = []
+    text = query_text(sig)
+    if flt not in text:
+        problems.append(f"{where}: signal is not filtered to {flt}")
+    if sig.get("data_source", "metrics") == "metrics":
+        name, tags = metric_source(text)
+        want, have = metric_source(m["query"])
+        if m["type"] == "log alert" or not name or name != want:
+            problems.append(f"{where}: signal reads '{name}', not the monitor's metric '{want}'")
+        elif not tags <= have:
+            problems.append(f"{where}: signal filters on {sorted(tags - have)}, which the monitor does not")
+        if not re.search(r"\bby \{" + GROUP_BY + r"\}", text):
+            problems.append(f"{where}: signal is not grouped by {{{GROUP_BY}}}")
+    elif sig.get("data_source") == "logs":
+        have = set(log_search(m["query"]).split())
+        if m["type"] != "log alert":
+            problems.append(f"{where}: a logs signal on a monitor that is not a log alert")
+        elif not set(text.split()) <= have:
+            problems.append(f"{where}: signal searches {sorted(set(text.split()) - have)}, which the monitor does not")
+        if GROUP_BY not in {g.get("facet") for g in sig.get("group_by") or []}:
+            problems.append(f"{where}: signal is not grouped by {GROUP_BY}")
+    else:
+        problems.append(f"{where}: signal data_source must be metrics or logs")
     return problems
 
 
@@ -320,9 +384,11 @@ def org_name(dd: Datadog) -> str:
     return next((i["attributes"]["name"] for i in me.get("included", []) if i.get("type") == "orgs"), "?")
 
 
-def managed_monitors(dd: Datadog) -> list[dict]:
-    q = urllib.parse.urlencode({"monitor_tags": MANAGED_TAG})
-    return dd.call("GET", f"/api/v1/monitor?{q}")
+def managed_monitors(dd: Datadog, group_states: bool = False) -> list[dict]:
+    params = {"monitor_tags": MANAGED_TAG}
+    if group_states:
+        params["group_states"] = "all"  # state.groups: one entry per kube_cluster_name, with its status
+    return dd.call("GET", f"/api/v1/monitor?{urllib.parse.urlencode(params)}")
 
 
 def all_downtimes(dd: Datadog, limit: int = 100) -> list[dict]:
@@ -435,6 +501,95 @@ def check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], say=print) ->
     return 1 if drift else 0
 
 
+def span_seconds(widget: dict) -> int:
+    live = str((widget.get("time") or {}).get("live_span") or "")
+    m = SPAN_RE.match(live)
+    if not live:
+        return DEFAULT_SPAN_S
+    if not m:
+        raise RuntimeError(f"widget '{widget.get('title')}': live_span '{live}' is not <n>m, <n>h or <n>d")
+    return int(m.group(1)) * {"m": 60, "h": 3600, "d": 86400}[m.group(2)]
+
+
+def monitor_span(query: str) -> int:
+    """The window a monitor evaluates: max(last_5m):... or ....last("5m")."""
+    m = re.search(r'last(?:_|\(")([0-9]+[mhd])', query)
+    if not m:
+        raise RuntimeError(f"cannot read the evaluation window of '{query[:60]}'")
+    return span_seconds({"time": {"live_span": m.group(1)}})
+
+
+def scalar(dd: Datadog, query: dict, span: int, now: dt.datetime) -> tuple[bool, dict[str, float]]:
+    """One query through POST /api/v2/query/scalar, the API the dashboard widgets use. Returns (grouped, values):
+    grouped when the answer has a kube_cluster_name column, values per cluster then, else under ''. A null cell
+    is no data."""
+    q = {**query, "name": "q"}
+    if q.get("data_source", "metrics") == "metrics":
+        q.setdefault("aggregator", "avg")
+    to_ms = int(now.timestamp() * 1000)
+    body = {"data": {"type": "scalar_request", "attributes": {
+        "from": to_ms - span * 1000, "to": to_ms, "queries": [q], "formulas": [{"formula": "q"}]}}}
+    resp = dd.call("POST", "/api/v2/query/scalar", body)
+    cols = ((resp.get("data") or {}).get("attributes") or {}).get("columns")
+    if cols is None:
+        raise RuntimeError(f"scalar answer has no data.attributes.columns: {json.dumps(resp)[:200]}")
+    groups = [c for c in cols if c.get("type") == "group" and c.get("name") == GROUP_BY]
+    numbers = [c.get("values") or [] for c in cols if c.get("type") == "number"]
+    nums = numbers[0] if numbers else []
+    if not groups:
+        return False, ({"": float(nums[0])} if nums and nums[0] is not None else {})
+    out = {}
+    for g, v in zip(groups[0].get("values") or [], nums):
+        name = g[0] if isinstance(g, list) and g else g
+        if isinstance(name, str) and v is not None:
+            out[name] = float(v)
+    return True, out
+
+
+def data_check(dd: Datadog, defs: dict, dashes: list[tuple[str, dict]], clusters: list[str], now: dt.datetime,
+               say=print) -> int:
+    """Read-only: does every query return data for every named cluster (#706)? Exit 1 on any blank.
+
+    A blank is a wrong metric, tag or log name, a cluster that is not shipping, or (for traces and spend) nobody
+    having chatted with that cluster inside the window: drive one /chat on each cluster before running it."""
+    blank = 0
+
+    def need(what: str, grouped: bool, got: dict) -> None:
+        nonlocal blank
+        missing = [c for c in clusters if c not in got] if grouped else ([] if got else ["(no value)"])
+        if missing:
+            say(f"  NO DATA  {what}: {', '.join(missing)}")
+            blank += 1
+        else:
+            say(f"  DATA     {what}")
+
+    live = {key_of(m): m for m in managed_monitors(dd, group_states=True) if key_of(m)}
+    for m in defs["monitors"]:
+        if m.get("signal"):
+            need(f"monitor {m['key']} (its signal)", *scalar(dd, m["signal"], monitor_span(m["query"]), now))
+            continue
+        lm = live.get(m["key"])
+        if lm is None:
+            say(f"  MISSING  monitor {m['key']}: not in the org (run fleet.sh monitors --apply)")
+            blank += 1
+            continue
+        # Keyed kube_cluster_name:<name>. No Data, Unknown and Skipped all mean the query answered nothing for it.
+        groups = ((lm.get("state") or {}).get("groups") or {}).items()
+        evaluated = {str(g.get("name") or k).split(":", 1)[-1]: 1.0 for k, g in groups
+                     if g.get("status") in ("OK", "Warn", "Alert")}
+        need(f"monitor {m['key']} ({lm.get('overall_state', '?')})", True, evaluated)
+    for label, dash in dashes:
+        if label not in DATA_DASHBOARDS:
+            continue
+        for w in dash.get("widgets") or []:
+            d = w.get("definition") or {}
+            for r in d.get("requests") or []:
+                for q in r.get("queries") or []:
+                    need(f"{label} / {d.get('title', d.get('type'))} / {q.get('name')}",
+                         *scalar(dd, q, span_seconds(d), now))
+    return 1 if blank else 0
+
+
 def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--profile", required=True, help="AWS profile that can read the instructor org secret")
@@ -442,6 +597,10 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     mode = p.add_mutually_exclusive_group()
     mode.add_argument("--apply", action="store_true", help="validate with Datadog, then write (default: dry run)")
     mode.add_argument("--check", action="store_true", help="read-only: compare the live org with this repo")
+    mode.add_argument("--data", action="store_true",
+                      help="read-only: every monitor and fleet-dashboard query returns data for every --cluster")
+    p.add_argument("--cluster", action="append", default=[],
+                   help="a kube_cluster_name that must be shipping, for --data (repeatable, at least one)")
     p.add_argument("--session", help="START/END in ISO-8601 UTC; session monitors are muted outside it")
     p.add_argument("--notify", action="append", default=[],
                    help="a Datadog handle to page, e.g. @someone@example.com (repeatable; default: none)")
@@ -459,16 +618,25 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
     bad_handles = [h for h in a.notify if not h.startswith("@")]
     if bad_handles:
         problems.append(f"--notify handles must start with @: {bad_handles}")
+    flt_prefix = str(defs.get("cluster_filter", "")).split(":", 1)[-1].rstrip("*")
+    if a.data and not a.cluster:
+        problems.append("--data needs every cluster that should be shipping, one --cluster each")
+    if a.cluster and not a.data:
+        problems.append("--cluster only means something with --data")
+    outside = [c for c in a.cluster if not c.startswith(flt_prefix)]
+    if outside:
+        problems.append(f"--cluster {outside} is outside the queries' filter {defs.get('cluster_filter')}, "
+                        "so it could never fill")
     if problems:
         print(f"REFUSING: {len(problems)} problem(s) in the definitions", file=sys.stderr)
         for pr in problems:
             print(f"  - {pr}", file=sys.stderr)
         return 1
 
-    label = "APPLY" if a.apply else "CHECK" if a.check else "DRY-RUN"
+    label = "APPLY" if a.apply else "CHECK" if a.check else "DATA" if a.data else "DRY-RUN"
     print(f"[{label}] {len(defs['monitors'])} monitor(s) and dashboards "
           + ", ".join(f"'{d['title']}'" for _, d in dashes))
-    if not (a.apply or a.check):
+    if not (a.apply or a.check or a.data):
         for m in defs["monitors"]:
             print(f"  P{m.get('priority', '-')} {m['key']:<22} {m['type']:<12} {m['name']}")
         windows = mute_windows(session, now or dt.datetime.now(dt.timezone.utc))
@@ -496,6 +664,9 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None) -> int:
               + (f", application key from {APP_KEY_ENV}" if a.apply else ""))
         if a.check:
             return check(dd, defs, dashes)
+        if a.data:
+            print(f"  every query must answer for: {', '.join(a.cluster)}")
+            return data_check(dd, defs, dashes, a.cluster, now or dt.datetime.now(dt.timezone.utc))
         return apply(dd, defs, dashes, a.notify, session, now or dt.datetime.now(dt.timezone.utc))
     except RuntimeError as e:
         print(f"FAILED: {e}", file=sys.stderr)

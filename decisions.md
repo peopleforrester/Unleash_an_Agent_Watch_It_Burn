@@ -6418,3 +6418,50 @@ spend (one t3.2xlarge node and its EKS control plane for about an hour), runs fr
 5. Write the wall-clock from step 3, the time to Ready and the footprint from step 4, and the requests (4 CPU / 10Gi
    in `gitops/manifests/vllm-qwen3/`) into the vllm entry's `cost`, with `measured: true`.
 6. `./fleet.sh down watch-it-burn-attendee-099`, then `./cleanup-log-groups.sh --delete`.
+## 2026-10-31 · #706 · `fleet.sh monitors --data`: every fleet monitor and fleet-dashboard query must answer for every named cluster
+
+**Why.** #485's criterion is "apply the fleet monitors to the next event's instructor org and confirm every query
+returns data". Nothing checked the second half. `--check` failed only on a monitor that was missing, drifted or
+extra; for one that was present it printed the state and passed, No Data included, and it never ran a dashboard
+query. So a monitor or column on a wrong metric, tag or log name passed every test, and its silence read as health.
+
+**What changed.**
+- `infra/datadog-fleet/fleet_monitors.py` has a new read-only mode, `--data --cluster NAME [--cluster NAME ...]`,
+  which uses the secret's read-only key as `--check` does. It exits 1 on any blank and prints one line per query.
+  - A monitor that fires on absence (`< 1`) is read by its own per-cluster state (`GET /api/v1/monitor` with
+    `group_states=all`). Every named cluster needs a group in OK, Warn or Alert. No Data, Unknown, Skipped or no
+    group at all is a blank.
+  - A monitor that fires on a rising count (`> n`) has no series on a healthy cluster, so its state cannot tell
+    a right name from a wrong one. node-not-ready reads `!status:true`, and kube-state-metrics core sends
+    `by_condition` only for the status a node is in. guard-proxy-erroring counts error logs. Each now carries
+    a `signal` in `monitors.yaml`: the same source without the bad-news filter (the Ready condition in every
+    status, and every guard-proxy log line). `--data` sends it through `POST /api/v2/query/scalar` over the
+    monitor's window. Validation refuses a rising-count monitor without a signal, a signal on another metric,
+    on a tag or log term the monitor does not filter on, or ungrouped, and a signal on an absence monitor. A
+    new bad-news monitor therefore cannot slip past the data check.
+  - Every query on the fleet dashboard goes through the same scalar API over its widget's `live_span`. A widget
+    with none (the spans timeseries) uses the time picker's opening hour. A grouped answer must hold every named
+    cluster with a non-null value, and an ungrouped tile must hold a non-null value.
+  - The leaderboard is left out (`DATA_DASHBOARDS`). Its cells count challenge outcomes, so they are blank
+    until the room plays, and a setup check cannot require them.
+  - `--data` without `--cluster`, `--cluster` without `--data`, and a cluster outside `kube_cluster_name:burritobot-*`
+    are refused before any key is read.
+- `fleet.sh` usage, `infra/datadog-fleet/README.md` and `docs/GO-LIVE-CHECKLIST.md` step d2 give the command.
+
+**Tests.** `verify/test_fleet_monitors.py`'s fake org now answers `group_states=all` and `/api/v2/query/scalar`.
+Two shipping clusters pass `--data`, and every fleet-dashboard query and both signals are sent, each over its
+window, with the read-only key and no write. Each of these fails, naming the query and the cluster: one table
+column blank for one cluster, a monitor group in No Data (which `--check` passes), a monitor with no group for a
+cluster, a signal that answers nothing, a tile that answers null, a column that answers nothing at all, a
+missing monitor, and a third named cluster that ships nothing. The validation cases above are each a check.
+Weakening the loader to accept No Data, or to return 0 on a blank, or to skip the signals, fails the file.
+`verify/test_fleet_monitors_live.py` runs `--data` after `--check` for `WIB_FLEET_CLUSTERS` (default
+burritobot-public,burritobot-private, the two clusters in Whitney's sandbox org, #629).
+
+**Not yet run on a cluster.** With both KubeCon clusters up and shipping, and one /chat on each within 5 minutes,
+a session with the accen-dev profile runs `WIB_DEFAULT_ACCOUNT=accen-dev WIB_REGION=us-west-2 python3
+verify/test_fleet_monitors_live.py` (in `bash verify/run-e2e.sh`). It needs #485's apply first. Two things only a
+live org can settle: whether the read-only key may call `/api/v2/query/scalar` (`infra/ops-view/ops_view.py`
+already sends it the same way), and whether kube-state-metrics core reports `condition:ready` with a
+`status:true` series on a healthy node, as node-not-ready's signal assumes. If either is wrong, the live test
+fails naming that query.

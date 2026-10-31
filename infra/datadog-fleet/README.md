@@ -12,7 +12,7 @@ nothing looked at it. These files are what looks.
 | `monitors.yaml` | Six monitors, each one alert group per `kube_cluster_name` |
 | `dashboard.yaml` | The fleet dashboard: one row per cluster, plus the alert list and the room's spend |
 | `leaderboard.yaml` | The challenge leaderboard (#307): one row per cluster, one green cell per challenge done |
-| `fleet_monitors.py` | The loader. Dry run by default, `--apply` writes, `--check` compares the live org |
+| `fleet_monitors.py` | The loader. Dry run by default, `--apply` writes, `--check` compares the live org, `--data` checks every query answers |
 
 ## Loading
 
@@ -21,7 +21,16 @@ infra/terraform/fleet/fleet.sh monitors                                   # dry 
 WIB_FLEET_MONITORS_APP_KEY=<key> \
   infra/terraform/fleet/fleet.sh monitors --apply --session 2026-09-08T16:00Z/2026-09-08T19:30Z
 infra/terraform/fleet/fleet.sh monitors --check                           # read-only
+infra/terraform/fleet/fleet.sh monitors --data \
+  --cluster burritobot-public --cluster burritobot-private                # read-only, after a /chat on each
 ```
+
+`--check` says the org holds what the repo defines; `--data` says it is fed (#706). It fails on any blank:
+a monitor that fires on absence must have a group for every `--cluster` in a state other than No Data, a
+monitor that fires on a rising count (empty when healthy) must have its `signal` answer for every cluster, and
+every query on the fleet dashboard must answer for every cluster over its widget's window. A blank is a wrong
+name, a cluster that is not shipping, or, for traces and spend, no /chat on that cluster inside the window.
+The leaderboard is left out: its cells are blank until the room plays.
 
 It follows the Datadog pool loader's pattern (#256): `--apply` reads the instructor org's API key from Secrets
 Manager `watch-it-burn/datadog`, asks Datadog to validate every monitor, and writes nothing if any one is

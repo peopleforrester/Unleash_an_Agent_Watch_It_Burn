@@ -565,11 +565,14 @@ Usage: ${0##*/} <up|down|status|instructors> [count|names...|<up|down> [role|own
                       JSON report at logs/verify-<ts>.json (WIB_VERIFY_REPORT to place it,
                       WIB_VERIFY_CHAT=N to also send N real prompts).
     monitors [--apply|--check] [--session START/END] [--notify @handle]
+    monitors --data --cluster NAME [--cluster NAME ...]
                       The continuous version of 'verify' (#267): the fleet monitors and the fleet
                       dashboard in the INSTRUCTOR Datadog org, from infra/datadog-fleet/. Dry run by
                       default; --apply validates every monitor with Datadog before writing any;
-                      --check compares the live org with the repo. Run --apply once per event, after
-                      the Datadog pool is loaded, with the session window in UTC.
+                      --check compares the live org with the repo; --data fails on any monitor or
+                      fleet-dashboard query that returns nothing for a named cluster (#706). Run
+                      --apply once per event, after the Datadog pool is loaded, with the session
+                      window in UTC, and --data after one /chat on each cluster.
     ops [terms...] [--watch S] [--json]
                       The shared ops view (#308): per cluster, who claimed it (provisioning), whether its
                       console answers (apex table + /cost) and which challenges it has done (the

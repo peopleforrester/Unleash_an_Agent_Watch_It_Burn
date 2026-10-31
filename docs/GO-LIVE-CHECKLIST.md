@@ -74,6 +74,8 @@ AWS_PROFILE=accen-dev verify/datadog-pool-check.sh
 infra/terraform/fleet/fleet.sh monitors                      # dry run: what would be written
 WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply --session <start>Z/<end>Z [--notify @handle]
 infra/terraform/fleet/fleet.sh monitors --check              # the org holds exactly the repo (read-only key)
+# after one /chat on each cluster: every monitor and fleet-dashboard query answers for each (#706)
+infra/terraform/fleet/fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private
 ```
 
 - [ ] The apply printed a `fleet dashboard:` URL. Open it on the instructor screen; every live cluster has

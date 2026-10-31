@@ -27,6 +27,11 @@
 #
 # session: true marks a monitor that only means something while students are at their keyboards. Outside
 # the declared session window the script mutes it with a downtime (see fleet_monitors.py, --session).
+#
+# signal: is what `fleet_monitors.py --data` reads for a monitor that fires on a rising count (#706). Such a
+# query is empty on a healthy cluster, so its state cannot tell a right name from a wrong one. The signal is a
+# dashboard-style query on the same source without the bad-news filter, and must answer for every cluster. A
+# monitor that fires on absence needs none: --data reads its own per-cluster state, which must not be No Data.
 cluster_filter: "kube_cluster_name:burritobot-*"
 
 monitors:
@@ -88,6 +93,15 @@ monitors:
       thresholds: { critical: 2 }
       enable_logs_sample: true
       groupby_simple_monitor: false
+    # Healthy is no error logs, so --data reads every guard-proxy log line instead: the names, minus status:error.
+    signal:
+      data_source: logs
+      indexes: ["*"]
+      compute: { aggregation: count }
+      search:
+        query: "kube_cluster_name:burritobot-* kube_namespace:agent kube_deployment:guard-proxy"
+      group_by:
+        - { facet: kube_cluster_name, limit: 500 }
 
   - key: node-not-ready
     priority: 2
@@ -102,6 +116,11 @@ monitors:
       notify_no_data: false
       new_group_delay: 600
       require_full_window: false
+    # Healthy is no series at all: kube-state-metrics core sends by_condition only for the status a node is in. So
+    # --data reads the Ready condition in every status, which a node in any state reports.
+    signal:
+      data_source: metrics
+      query: "max:kubernetes_state.node.by_condition{kube_cluster_name:burritobot-*,condition:ready} by {kube_cluster_name}"
 
   - key: no-traces
     priority: 3
