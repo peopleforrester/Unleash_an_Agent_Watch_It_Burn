@@ -98,6 +98,13 @@ for role, primary in (("community", "watch-it-burn-community"), ("admin", "watch
     while after == before and time.monotonic() < deadline and w.poll() is None:
         time.sleep(5)
         after = b.upstream_of(router.read(), host)
+    # The table on disk changes before the router has applied it, and promote() logs PROMOTED and writes
+    # promoted.tsv only after the apply. Stopping the watcher on the table alone cut it off mid-apply on the
+    # 2026-10-31 rehearsal, so it is stopped once promoted.tsv names the standby (or the apply is given up on).
+    recorded = time.monotonic() + 180
+    while after != before and time.monotonic() < recorded and w.poll() is None \
+            and not b.read_promoted(x.promoted).get(role):
+        time.sleep(3)
     w.terminate(); err = w.communicate(timeout=30)[1]
     check(f"the watcher repointed {host}", after not in (None, before), err[-800:])
     check("and logged the promotion", "PROMOTED" in err, err[-800:])
