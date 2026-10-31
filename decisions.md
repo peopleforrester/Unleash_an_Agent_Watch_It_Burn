@@ -6106,3 +6106,45 @@ peopleforrester/joker: `echo "$DOCKERHUB_PAT" | crane auth login docker.io -u "$
 then `bash images/villains/build.sh joker`. Then
 `curl -s https://maintenance-shell-attackme.burritobot.co/ | grep 'HA HA HA'` once C6 has deployed the pod, and
 steps 3 and 4 of the 2026-10-29 #664 entry. The routes (step 2) went out on 2026-10-29 with `fleet.sh routes`.
+## 2026-10-31 · question 879 · #671: C6's ticket waits for a page-serving promo/ Joker before it leaves Docker Hub
+
+**Answer:** Wait for a page-serving promo/ Joker.
+
+**Decided by:** hecaton's research under Michael's standing rules, not by Michael.
+
+**The question.** #671 asks to move Challenge 6's support ticket HC-7731 (`gitops/ai-layer/ticket_site.py`,
+`C6_IMAGE`) from `docker.io/peopleforrester/joker:latest` to lab-platform's `promo/` Joker, as #653 did for Challenge
+2, so C6 can still pull once the Docker Hub villains are retired. #664 landed after #671 was filed and rebuilt the
+Docker Hub Joker in place to serve the "HA HA HA" page on 8080 that the maintenance-shell Service, the console's
+`maintenance-shell-<cluster>` host and deploy_app's reply depend on. lab-platform's `promo/joker:v1` is the older
+catchphrase loop from build.sh at 45e62f0 (lab-platform#92) and listens on no port. Run 10516 asked whether to move
+now with the page dark or wait.
+
+**What it changes.**
+- **Nothing in the ticket yet.** `C6_IMAGE` stays `docker.io/peopleforrester/joker:latest`, and so do kubecon.html,
+  lab.html's C6 section, LAB-TEXT.md, PROMPT-CATALOG.md, `challenges/02-sanitization/agent-prompt-injection.txt`, the
+  run-of-show, `verify/test_kubecon_probe.py`, `verify/test_fake_ticket.py` and `verify/test_c6_villain_endpoint.py`.
+  The page from #664 stays the one the attendee is sent to.
+- **The move waits on lab-platform.** It happens once lab-platform publishes a public `promo/` Joker built from
+  `images/villains/joker-web` (for example `promo/joker:v2`) that serves the page on 8080. A follow-up on
+  peopleforrester/lab-platform asks for that image. On 2026-10-31 lab-platform has none: `deploy/images/build-promo.sh`
+  builds only the catchphrase loop, and `deploy/watch-it-burn/images.tsv` row `promo/joker` replaces
+  `docker.io/peopleforrester/joker:latest` with that loop. When it is published, the move is `C6_IMAGE`, the files
+  listed above, the fake-ticket and endpoint tests, and a rerun of `verify/test_injection_classifier.py` against the
+  deployed classifier, since the payload text changes.
+- **#714 is a second path off Docker Hub, and is not on staging.** Its run 12873 branch (`origin/agent/714-12873`,
+  partial, unmerged) moves `C6_IMAGE` to `ghcr.io/peopleforrester/watch-it-burn:joker-busybox-1.38.0`, built by this
+  repo's build.sh with the page, not to lab-platform's `promo/` path. If #714 lands first, C6 no longer depends on
+  Docker Hub and the breakage that motivated #671 is gone. The move to `promo/` would then be from that tag, and is
+  redone on that layout (`bash verify/draft-drift.sh`) rather than from this entry's file list.
+
+**The previous attempt.** Run 13261's earlier attempt failed before it changed any code. The podman store in pool
+claude-performantpro-3 could not re-exec into its existing user namespace. Nothing in this repo runs podman, and
+podman works in the pool this run used (`podman info` reads its graph root under pool claude-performantpro), so the
+repo had nothing to fix.
+
+**Tests.** `bash verify/run-tests.sh` is green with no change to code. No test changes, because nothing the tests read
+changed.
+
+**Not yet run on a cluster.** Nothing new is owed by this entry. #664's owed steps (the `build.sh joker` push and the
+`curl … | grep 'HA HA HA'` check) still stand as that entry lists them.
