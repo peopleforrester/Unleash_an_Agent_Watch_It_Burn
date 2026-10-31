@@ -6024,3 +6024,32 @@ go. First `infra/front-door-cert.sh accen-dev us-west-2`, writing its validation
 ARN>`, whose bootstrap step must log `front doors: 2 roster clusters recorded`, and
 `labctl tls-check attackme.agenticburn.com burritobot-private.agenticburn.com --no-ws` once the roster hostnames route
 to lab-platform's gateway rather than apex-agenticburn's Caddy on Railway. Hecaton run 13101 has no AWS access.
+## 2026-10-31 · #532 · `ingest pool` now reads the pool it writes to; the live run waits only on an attendee pool
+
+The 2026-10-30 #532 entry above held the live run on two things. One is gone: #656 landed on staging as a71afae, so
+`cmd_ingest pool` takes its names from `pool_rows`, which runs `labctl pool --customer agenticburn --event
+"$WIB_EVENT"`, and writes them back through `labctl import`. The command reads and writes the same pool now, so
+running it would no longer re-import names from a pool fleet.sh does not fill. Hecaton run 13062 still did not run
+it, and no code changed.
+
+- **No attendee pool is up, and none is scheduled.** PROJECT_STATE.md's "KubeCon platform up" still lists only
+  `watch-it-burn-community` and `watch-it-burn-private`, the roster clusters, which `WIB_NO_INGEST=1` keeps out of
+  the pool. In conference-knowledge `events/registry.yaml`, `aiewf-2026-watch-it-burn` and
+  `devopsdays-portland-2026` are delivered, and `kubecon-na-2026` (2026-11-09 to 11-12) is a 30-minute session with
+  no attendee lab. The run waits on Michael bringing up an attendee pool, which is spend.
+- **The harvester's source is still unread.** `sources repo-cat agenticburn/provisioning-agenticburn/scripts/harvest_terminal_credential.sh`
+  is still refused as "looks like a secret", and `repo-ls` of that directory still does not list it. Its
+  interface (`<cluster> [region] [out-dir]`, AWS_PROFILE from the environment, exits 0/3/1) is confirmed by the
+  live run alone.
+- **The previous attempt's failure was the host's.** Run 13062's predecessor stopped before any work because
+  podman could not join the user namespace of the store in `/var/lib/hecaton/pools/claude-performantpro-3`. That is
+  a hecaton pool's container store, not this repo. Nothing in `verify/` calls podman, and the store in the pool this
+  run used answers `podman info`.
+
+**Not yet run on a cluster.** With an attendee pool imported for the event and its clusters up, a session with the
+fleet's AWS profiles, labctl on PATH, `DATABASE_URL`, `USER` and `WIB_EVENT` set, and `WIB_PROVISION_DIR` at a
+provisioning-agenticburn checkout holding commit 3462ba2 runs, in order: `infra/terraform/fleet/fleet.sh
+reconcile-pool` (dry run; it must end "all N row(s) name a live cluster"), `bash verify/fleet-hygiene.sh` (section
+3b ok), then `infra/terraform/fleet/fleet.sh ingest pool`. That must end with no `ingest:<name>` or
+`terminal-open:<name>` failure, `labctl pool --customer agenticburn --event "$WIB_EVENT"` must list the same names
+with every claimed row still claimed, and a claimed attendee's terminal login must be `agentic` / `agentic`.
