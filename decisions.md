@@ -6301,11 +6301,11 @@ umask-022 republish (0dfcbef). The 2026-10-29 entry found the packages private, 
 it named has been made. `verify/ghcr_pull.py` and its offline test stay as 6c41ea9 left them. The next time a
 package goes private, the failure line will say so.
 
-The previous attempt at this run stopped on the host, not in the repo: the podman store in pool
+The previous attempt at this run stopped on a host fault: the podman store in pool
 claude-performantpro-3 could not re-exec into its existing user namespace. Nothing in `verify/` runs podman, and
 this run's pool (claude-performantpro-5) answers `podman info`, so the repo had nothing to fix.
 
-**Not yet run on a cluster.** The cluster checks #653 owes are still owed now that a node can pull the villains:
+**Not yet run on a cluster.** A node can pull the villains, and the cluster checks #653 owes are still owed:
 on an attendee cluster `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and
 `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`. A villain admitted in Audit should then
 reach Running, and `kubectl --context <ctx> logs deploy/promo-mascot` should print its log.
