@@ -287,6 +287,43 @@ for label, registry, args in (("unset", LAB_PLATFORM_GHCR, ()), ("at the cache p
 check("the bundle as written names llm-guard by the kustomize image name alone",
       workload_images(base.stdout).get("Deployment/llm-guard/llm-guard-api") == "llm-guard" if base else False)
 
+print("== the demo apps' web image, set through each app file's kustomize.images (#668) ==")
+from web_image import DEMO_APPS, DIGEST as WEB_DIGEST  # noqa: E402
+
+
+def app_doc(name: str, *args: str) -> dict:
+    r = render("-f", str(values_path("attendee")), "--set", f"revision={COMMIT}", *args)
+    return next((d for d in yaml.safe_load_all(r.stdout) if d and d["metadata"]["name"] == name), {}) \
+        if r.returncode == 0 else {}
+
+
+for app in DEMO_APPS:
+    name = f"demo-app-{app}"
+    bundle = REPO / f"gitops/manifests/{name}"
+    plain_build = subprocess.run([KUBECTL, "kustomize", str(bundle)], capture_output=True, text=True) \
+        if KUBECTL else None
+    check(f"{name}: its directory builds with kustomize", plain_build is not None and plain_build.returncode == 0,
+          plain_build.stderr.strip()[:300] if plain_build else "no kubectl")
+    if not (plain_build and plain_build.returncode == 0):
+        continue
+    key = f"Deployment/{name}/{name}"
+    check(f"{name}: as written, its container names the kustomize image web alone",
+          workload_images(plain_build.stdout) == {key: "web"}, str(workload_images(plain_build.stdout)))
+    for label, registry, args in (("unset", LAB_PLATFORM_GHCR, ()),
+                                  ("at the cache path", CACHE, ("--set", f"imageRegistry={CACHE}"))):
+        entries = kustomize_images(app_doc(name, *args))
+        (REPO / "tmp").mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=REPO / "tmp") as d:
+            (pathlib.Path(d) / "kustomization.yaml").write_text(yaml.safe_dump({
+                "apiVersion": "kustomize.config.k8s.io/v1beta1", "kind": "Kustomization",
+                "resources": [os.path.relpath(bundle, d)], "images": entries}), encoding="utf-8")
+            k = subprocess.run([KUBECTL, "kustomize", d], capture_output=True, text=True)
+        got = workload_images(k.stdout) if k.returncode == 0 else {}
+        want = f"{registry}/web:v1@{WEB_DIGEST}"
+        check(f"{name} {label}: the Deployment runs {want[:60]}...", got == {key: want},
+              k.stderr.strip()[:300] or str(got))
+        check(f"{name} {label}: restrict-image-registries allows it", allowed(got.get(key, "")))
+
 print("== the render refuses what it cannot pin ==")
 r = render("-f", str(values_path("attendee")))
 check("no revision: the render fails, naming it", r.returncode != 0

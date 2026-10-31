@@ -39,7 +39,7 @@ def check(name: str, cond: bool) -> None:
 
 def page(app: str) -> str:
     doc = yaml.safe_load((REPO / f"gitops/manifests/demo-app-{app}/configmap.yaml").read_text(encoding="utf-8"))
-    return next(iter(doc["data"].values()))
+    return doc["data"]["index.html"]
 
 
 def script(app: str) -> str:

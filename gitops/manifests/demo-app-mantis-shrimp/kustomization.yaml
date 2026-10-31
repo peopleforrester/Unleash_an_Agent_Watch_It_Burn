@@ -1,0 +1,8 @@
+# ABOUTME: The demo-app-mantis-shrimp bundle as a kustomization, so its app file's kustomize.images can set the web image
+# ABOUTME: (#668); a plain directory source has nothing for `kustomize edit set image` to write into (#622).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - service.yaml

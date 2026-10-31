@@ -15,6 +15,12 @@ spec:
     repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
     targetRevision: "{{ .Values.revision }}"
     path: gitops/manifests/demo-app-spider
+    kustomize:
+      # The web image (#668): lab-platform's web:v1, by digest, at the registry the root passes down (#622).
+      # deployment.yaml names it by the kustomize image name web, and Argo CD's kustomize sets that name here.
+      # verify/test_demo_app_web_image.py holds the reference.
+      images:
+        - "web={{ .Values.imageRegistry }}/web:v1@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9"
   destination:
     server: https://kubernetes.default.svc
     namespace: apps

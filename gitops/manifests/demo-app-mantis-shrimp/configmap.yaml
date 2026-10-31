@@ -1,5 +1,5 @@
 # ABOUTME: ConfigMap containing themed HTML5 Canvas animation for demo-app-mantis-shrimp.
-# ABOUTME: Mounted into nginx container to replace default index.html.
+# ABOUTME: Its page is served at / by lab-platform's web server, which reads the web.yaml beside it.
 apiVersion: v1
 kind: ConfigMap
 metadata:
@@ -8,6 +8,16 @@ metadata:
   labels:
     app: demo-app-mantis-shrimp
 data:
+  # lab-platform's demo-app routes file (#650): the page at / and a liveness answer. Nothing else under
+  # the root is served, so a path the routes do not name is a 404.
+  web.yaml: |
+    listen: ":8080"
+    root: /srv/www
+    routes:
+      - path: /
+        file: index.html
+      - path: /healthz
+        text: "ok\n"
   index.html: |
     <!DOCTYPE html>
     <html lang="en">

@@ -21,11 +21,10 @@ spec:
           port: 8080
         - protocol: TCP
           port: 5000
-        # The party apps serve on 80 and the console nginx (agent namespace, in-VPC) proxies the
-        # <app>-<cluster>.agenticburn.com hostnames to them (#233). Without 80 here every party
-        # hostname on a full-profile cluster timed out behind default-deny (2026-09-06).
-        - protocol: TCP
-          port: 80
+        # The party apps serve on 8080, the entry above, since they moved from nginx to lab-platform's web (#668).
+        # The console (agent namespace, in-VPC) proxies the <app>-<cluster>.agenticburn.com hostnames to them
+        # (#233); without their pod port here every party hostname timed out behind default-deny (2026-09-06,
+        # when it was nginx's 80). Nothing in apps serves 80 now, so 80 is no longer admitted.
     # Also allow from kube-system for internal ingress controller routing
     - from:
         - namespaceSelector:
@@ -36,8 +35,7 @@ spec:
           port: 8080
         - protocol: TCP
           port: 5000
-        # The party apps serve on 80 and the console nginx (agent namespace, in-VPC) proxies the
-        # <app>-<cluster>.agenticburn.com hostnames to them (#233). Without 80 here every party
-        # hostname on a full-profile cluster timed out behind default-deny (2026-09-06).
-        - protocol: TCP
-          port: 80
+        # The party apps serve on 8080, the entry above, since they moved from nginx to lab-platform's web (#668).
+        # The console (agent namespace, in-VPC) proxies the <app>-<cluster>.agenticburn.com hostnames to them
+        # (#233); without their pod port here every party hostname timed out behind default-deny (2026-09-06,
+        # when it was nginx's 80). Nothing in apps serves 80 now, so 80 is no longer admitted.

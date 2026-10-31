@@ -1,5 +1,5 @@
 # ABOUTME: Kubernetes Deployment for the demo-app-spider demo application.
-# ABOUTME: Kyverno-compliant with security contexts, resource limits, and health probes.
+# ABOUTME: lab-platform's web server on 8080, Kyverno-compliant with security contexts, resource limits and probes.
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -29,9 +29,16 @@ spec:
         fsGroup: 1000
       containers:
         - name: demo-app-spider
-          image: docker.io/library/nginx:1.27-alpine  # restrict-image-registries allows docker.io/library, not public ECR
+          # lab-platform's web server (#668), named by the kustomize image `web`: the app file's kustomize.images
+          # sets it to web:v1 by digest at the registry the root passes down (#622). It reads /etc/web/web.yaml.
+          image: web
+          env:
+            # Every lab-platform image that listens refuses an all-interfaces bind without it, so the pod would
+            # exit at start rather than serve.
+            - name: NETWORK_BOUNDARY
+              value: sandbox
           ports:
-            - containerPort: 80
+            - containerPort: 8080
               protocol: TCP
           securityContext:
             allowPrivilegeEscalation: false
@@ -47,36 +54,38 @@ spec:
               memory: 128Mi
           volumeMounts:
             - name: html
-              mountPath: /usr/share/nginx/html
-            - name: nginx-cache
-              mountPath: /var/cache/nginx
-            - name: nginx-run
-              mountPath: /var/run
-            - name: tmp
-              mountPath: /tmp
+              mountPath: /srv/www
+              readOnly: true
+            - name: web-config
+              mountPath: /etc/web
+              readOnly: true
           readinessProbe:
             httpGet:
               path: /
-              port: 80
+              port: 8080
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           livenessProbe:
             httpGet:
-              path: /
-              port: 80
+              path: /healthz
+              port: 8080
             initialDelaySeconds: 10
             periodSeconds: 15
             timeoutSeconds: 3
             failureThreshold: 3
+      # One ConfigMap, two mounts: the page alone under the document root, and the routes file where web reads it.
       volumes:
         - name: html
           configMap:
             name: demo-app-spider-html
-        - name: nginx-cache
-          emptyDir: {}
-        - name: nginx-run
-          emptyDir: {}
-        - name: tmp
-          emptyDir: {}
+            items:
+              - key: index.html
+                path: index.html
+        - name: web-config
+          configMap:
+            name: demo-app-spider-html
+            items:
+              - key: web.yaml
+                path: web.yaml

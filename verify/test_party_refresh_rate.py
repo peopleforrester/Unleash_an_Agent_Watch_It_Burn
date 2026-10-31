@@ -25,7 +25,7 @@ def check(n, c):
 
 def script(app):
     doc = yaml.safe_load((REPO / f"gitops/manifests/demo-app-{app}/configmap.yaml").read_text(encoding="utf-8"))
-    return "\n".join(re.findall(r"<script>(.*?)</script>", next(iter(doc["data"].values())), re.S))
+    return "\n".join(re.findall(r"<script>(.*?)</script>", doc["data"]["index.html"], re.S))
 
 
 print("== the speed is the same on a 60 Hz screen and a 144 Hz one ==")

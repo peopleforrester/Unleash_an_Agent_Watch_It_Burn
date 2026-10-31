@@ -6078,3 +6078,99 @@ verify/test_kyverno_cel_live.py` and then `bash verify/run-e2e.sh` (with CONTEXT
 IAM_PIPELINE_REGION set). The live check reads the policy list from `policies/kyverno/` and `policies/floor/`, so it
 now expects eleven, not the issue's ten: #606 added `restrict-agent-spawned-workloads.yaml` after d8076da, and the
 check counts it with no edit.
+
+## 2026-10-31 · #668 · The five demo apps run lab-platform's `web`; the console stays on nginx until `web.yaml` can say what `console.conf` does
+
+lab-platform#278 built `ghcr.io/peopleforrester/lab-platform/web`, a Go static server and reverse proxy that reads one
+`web.yaml`, to replace nginx for the console and the five demo apps. Run 10510's draft (765bcae, on
+`origin/agent/668-10510`) moved nothing, because lab-platform could not be read and the package was private.
+`verify/draft-drift.sh` found one drift line (decisions.md). The draft was a decisions entry only, so this one
+replaces it, and the draft's image-reference design is used below on today's layout. The previous dispatch failed before it
+started (a podman user-namespace error in another pool's store). Nothing in this repo caused that, and podman works
+in this run's pool.
+
+**What changed since run 10510.**
+- **The package is public.** An anonymous token for `repository:peopleforrester/lab-platform/web:pull` and a `GET`
+  of `v1` both answered 200 on 2026-10-31.
+- **`v1` has moved.** It is now `sha256:73cd15652cb8…fbd9`, built from lab-platform 1a16639 on 2026-10-30. That is
+  lab-platform#55's umask-022 republish (lab-platform PR #336), the same republish that moved the promo villains
+  (0dfcbef). The digest the issue names, `sha256:74885296c746…a24a29` (3dd635a, the build #650 read), still pulls.
+  This repo pins the current one.
+- **lab-platform is readable through `sources`.** Its `internal/webserve` (config.go, server.go) and `cmd/web` were
+  read. Nobody has answered #650's nine points on #650 or on lab-platform#278, so the answer below is the published
+  binary's behaviour. It was measured by running `/ko-app/web` out of the pinned image on loopback.
+
+**The demo apps moved.** Their file is lab-platform's demo-app file (#650): `listen: ":8080"`, `root: /srv/www`, `/`
+to `index.html` and `/healthz` answering `ok`. Each `gitops/manifests/demo-app-<name>/` changes like this:
+- The ConfigMap gains `web.yaml` beside `index.html`.
+- The Deployment mounts the ConfigMap twice, by `items`. The page alone goes at `/srv/www`, and the routes file at
+  `/etc/web/web.yaml`, so the routes file is not served as a page. A test checks that, though web serves only
+  named routes anyway.
+- The container is on 8080, with `NETWORK_BOUNDARY=sandbox`. Readiness asks `/`, liveness asks `/healthz`, and
+  uid 1000 is unchanged. nginx's three emptyDirs are gone.
+- The Service keeps port 80, which `console.conf`'s host map names, and targets 8080.
+- `apps-allow-ingress.yaml` already admitted 8080. It no longer admits 80, which nothing in `apps` serves now.
+
+Measured with podman on the pinned digest, run as uid 1000 with the wombat ConfigMap's two files mounted:
+- `/` answers 200 `text/html` with the page, and `/healthz` answers 200 `ok`.
+- `/index.html`, `/..data/index.html` and any other path answer 404. web serves nothing the routes do not name.
+- Without `NETWORK_BOUNDARY` the binary exits 1 before it serves: "bind address ":8080" is every interface …
+  declare NETWORK_BOUNDARY=sandbox".
+
+**How the image reference reaches a directory source** (the issue's fourth bullet). #622 says only an `apps/` file
+can name a lab-platform image, because `imageRegistry` is a Helm value. A plain directory source gives Argo CD
+nothing to run `kustomize edit set image` in. So each demo-app directory gets a `kustomization.yaml` that lists its
+three files. The container names the kustomize image `web`, and each `gitops/bootstrap/apps/demo-app-<name>.yaml`
+sets it in `kustomize.images` to `{{ .Values.imageRegistry }}/web:v1@sha256:73cd…`, as #652 does for llm-guard.
+`verify/test_image_registry.py` needs no exemption. images.lock gains the `web` row.
+
+**The console did not move**, because no `web.yaml` can do what `console.conf` does today. `console.conf` has grown
+since lab-platform wrote its console file at 9ad5cd4. #450 added the room's `/chat` limits, and #664 and #685 added
+two host servers. Against the binary at 1a16639:
+1. **`/chat`'s two keyed limits (#450).** One is 10 a minute, burst 9, keyed on `X-BurritoBot-Session`. The other is
+   120 a minute, burst 60, keyed on the `X-Forwarded-For` the apex router sends. A request is counted only when both
+   pass, and one with neither header is not held. A web route has one unkeyed bucket.
+2. **`/chat`'s own replies.** A 429 becomes a guarded 200 in guard-proxy's JSON shape. A 502 or 503, and a 504,
+   become guard-proxy-shaped JSON with those codes, so the phone shows a sentence (BurritoBot#110). web has no
+   per-route error body.
+3. **`X-Forwarded-For`.** web sets it on every proxied request: `/up` received `X-Forwarded-For: 127.0.0.1`. It
+   drops the inbound value. `console.conf` sends none on `/lab-events` (`test_lab_events.py`), and appends to the
+   inbound one on `/jupyter/` and the support host.
+4. **Host rules take only `match` and `proxy`.** `methods` on one is refused at parse ("hosts[0].methods: not a field
+   here"), and a POST passed a host rule. `maintenance-shell-<cluster>` (#664) needs GET/HEAD only, a 10s timeout,
+   and its own fallback page, not `@wib_not_here`. `support[-<cluster>]` (#685) needs GET/POST only, `/landed`
+   refused, a 32k body cap, a 10s timeout, `X-Forwarded-For` appended, and a bare 502 with no fallback page.
+   web has one fallback page for every host rule and a fixed 3600s timeout.
+5. **Host case.** web matches the Host as sent, port stripped, but not lowercased. An upper-case service host fell
+   through to the console's routes. The file can fix this with `(?i)` in each `match`. `/whoami` echoes the Host
+   with its port, where nginx's `$host` drops the port.
+
+#650's other points hold in the binary. Unmatched paths are 404s, so dot paths are 404s, and the six assets need a
+route each, which the file can say. A host route sends the caller's Host, `X-Forwarded-Proto: https`,
+`X-Forwarded-Host`, the upgrade and 3600s. The fallback page is for host routes only. A route with no timeout gets
+60s. The run's follow-up asks lab-platform for points 1 to 4. The console's `web.yaml`, its mounts, `not-here.html`
+and moving the ~15 tests that parse `console.conf` wait on that answer.
+
+**Tests.** `verify/test_demo_app_web_image.py` (offline, new) holds these for each app:
+- the `kustomize.images` entry and its digest;
+- a kustomization that lists every manifest in its directory;
+- one container named `web`;
+- `NETWORK_BOUNDARY=sandbox`, 8080, the probes and the two mounts by `items`;
+- `web.yaml` using only fields lab-platform's parser accepts;
+- the Service's 80 to 8080.
+
+`verify/test_demo_app_web_serve.py` (tools tier, new) pulls the pinned digest anonymously and checks the manifest's
+and each layer's hash. It then runs the image's own `/ko-app/web` on each app's `web.yaml`, with listen and root
+moved to loopback and a temp dir, and checks the page, `/healthz` and the 404s. It also checks that the file as
+written exits naming `NETWORK_BOUNDARY=sandbox`. `verify/test_bootstrap_chart_render.py` builds each demo bundle
+through kustomize with the entry Argo CD writes, unset and at an ECR cache path. `test_party_apps.py` and
+`test_party_refresh_rate.py` now read `index.html` by key, not the ConfigMap's first value. `verify/web_image.py`
+holds the digest and the parser's field lists.
+
+**Not yet run on a cluster.** No cluster was up for this run. Owed on the next attendee bring-up:
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py`. Each party host
+(`hedgehog-<cluster>.agenticburn.com` and the other four) must answer the page through the console's host map and
+the new 8080 target. Also,
+`kubectl --context <ctx> -n apps get deploy -o jsonpath='{range .items[*]}{.spec.template.spec.containers[0].image}{"\n"}{end}'`
+must print `ghcr.io/peopleforrester/lab-platform/web:v1@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9`
+five times. `verify/test_console_no_toggle_live.py` is owed when the console moves.
