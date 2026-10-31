@@ -40,6 +40,11 @@ build_one() { # name catchphrase
   "$CR" mutate "$BASE" --entrypoint sh --cmd "-c,$loop" -t "$ORG/$1:latest"
   echo "pushed $ORG/$1:latest"
 }
+# The C6 Joker goes to GHCR, never Docker Hub (#671), under villains/, a path restrict-image-registries refuses,
+# so the private cluster still refuses it at admission. Its tag is the busybox release in JOKER_BASE (1.38.0,
+# read from the binary on 2026-10-31). Auth: echo "$(gh auth token)" | crane auth login ghcr.io -u peopleforrester
+# --password-stdin. The package must be public, or the public cluster's nodes cannot pull it.
+JOKER_REF="ghcr.io/peopleforrester/villains/joker:busybox-1.38.0"
 # The C6 Joker (#664): the same laugh in the logs, plus busybox httpd serving joker-web/www on :8080, so the
 # attendee whose ticket deployed it can open https://maintenance-shell-<cluster>.agenticburn.com and see it.
 # The files go in as a layer under /villain rather than through --cmd, which crane splits on commas.
@@ -49,9 +54,9 @@ build_joker_web() {
   layer="$(mktemp -d)/joker-web.tar"
   tar --owner=0 --group=0 --numeric-owner --mtime=@0 --sort=name -C "${HERE}" \
     --transform 's,^joker-web,villain,' -cf "${layer}" joker-web
-  "$CR" append --platform linux/amd64 -b "$JOKER_BASE" -f "${layer}" -t "$ORG/joker:latest"
-  "$CR" mutate "$ORG/joker:latest" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 -t "$ORG/joker:latest"
-  echo "pushed $ORG/joker:latest (serves :8080)"
+  "$CR" append --platform linux/amd64 -b "$JOKER_BASE" -f "${layer}" -t "$JOKER_REF"
+  "$CR" mutate "$JOKER_REF" --entrypoint "/bin/sh,/villain/start.sh" --env PORT=8080 -t "$JOKER_REF"
+  echo "pushed $JOKER_REF (serves :8080)"
 }
 # With no arguments it pushes the whole roster, the Joker last. With names (joker, or a key of M or V) it pushes
 # only those, so the C6 Joker can go up alone without re-pushing the rest (#664). Every name is checked before

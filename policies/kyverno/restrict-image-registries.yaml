@@ -58,9 +58,10 @@ spec:
     # (#653): an allowed host and our own org, on a path nothing vetted. The lesson is the path, so the path is
     # refused wherever it appears, which also covers it pulled through an ECR cache
     # (<account>.dkr.ecr.<region>.amazonaws.com/<prefix>/peopleforrester/lab-platform/promo/...). The rest of
-    # ghcr.io stays allowed: lab-platform's mirror/ copies and its web image run in these namespaces.
+    # ghcr.io stays allowed: lab-platform's mirror/ copies and its web image run in these namespaces. villains/ is
+    # this repo's own unvetted path, where Challenge 3's page-serving Joker lives (#671).
     - name: refusedPaths
-      expression: "['/peopleforrester/lab-platform/promo/']"
+      expression: "['/peopleforrester/lab-platform/promo/', '/peopleforrester/villains/']"
     - name: imageAllowed
       expression: >-
         object.spec.containers.all(c,
@@ -78,4 +79,4 @@ spec:
       message: >-
         Images must come from allowed registries:
         the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev, docker.io/library,
-        registry.k8s.io, or ECR, and not from the lab-platform/promo/ path.
+        registry.k8s.io, or ECR, and not from the lab-platform/promo/ or villains/ paths.
