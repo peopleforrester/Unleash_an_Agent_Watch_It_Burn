@@ -38,7 +38,7 @@ fact is confirmed against docs but not yet on a live cluster it is tagged **[ver
 | Supply chain | Kyverno ImageValidatingPolicy (cosign) | require signed images | `policies/kyverno/verify-image-signatures.yaml` | cosign key attestor, Deny, verifies offline |
 | Runtime | Falco 0.45.1 (chart 9.2.1) | detect shell/exec, sentinel reads, exfil | `gitops/bootstrap/apps/falco.yaml` | eBPF syscall rules, agent-pod scoped |
 | Network | NetworkPolicy | default-deny pod traffic | `policies/network-policies/` | enforced by VPC-CNI |
-| Mesh | Istio 1.30.4 (ambient) | encrypted pod-to-pod (mTLS) + workload identity | `gitops/bootstrap/apps/istio.yaml`, `security/istio/` | PeerAuthentication STRICT; the mTLS certs ARE SPIFFE SVIDs |
+| Mesh | Istio 1.30.4 (ambient) | mTLS + workload identity on the console-to-guard-proxy hop, the one every chat message crosses (#471) | `gitops/bootstrap/apps/istio.yaml`, `security/istio/`, the two pod labels in `gitops/ai-layer/resources.yaml` | only those two pods are enrolled; PeerAuthentication PERMISSIVE so the NLB and unenrolled callers still get in; the mTLS certs ARE SPIFFE SVIDs; see it with `kubectl get pods -n agent -L istio.io/dataplane-mode` and one ztunnel `connection complete` line |
 | Secrets | External Secrets Operator | pull secrets from a store | `security/eso/` | ExternalSecret CRs; creds via EKS Pod Identity |
 | Identity | scoped RBAC + EKS Pod Identity | least privilege; Bedrock creds | `gitops/ai-layer/resources.yaml` | tight ServiceAccount; Pod Identity for Bedrock (IRSA only for EBS CSI) |
 | Agent | kagent 0.10.1 (v1alpha2) | the agent runtime | `gitops/workshop-agent/agent.yaml` | `Agent` CRD, `declarative.modelConfig` + `tools[]` |
@@ -132,8 +132,8 @@ the guard layer.
 - **"Can we configure these at the platform level?"** Yes, and that is the thesis: the guardrails live
   at the cluster abstraction layer, so they apply to every workload, not per-app.
 - **SPIFFE/SPIRE?** We get workload identity from **Istio**: its mTLS certificates ARE SPIFFE
-  identities (`spiffe://cluster.local/ns/<ns>/sa/<sa>`), so adding Istio (ambient, STRICT mTLS)
-  delivers the SPIFFE identity layer. A standalone SPIRE deployment stays narrated (it is the same
+  identities (`spiffe://cluster.local/ns/<ns>/sa/<sa>`), so Istio ambient delivers the SPIFFE identity
+  layer for the pods it enrolls: today the console and guard-proxy (#471), shown in ztunnel's log. A standalone SPIRE deployment stays narrated (it is the same
   identity model, more than we need live for a 2-hour workshop).
 - **"What is the trace re-leak trap?"** Output sanitization scrubs the sentinel from the reply, but if
   OTel content-capture is on, the sentinel lands in the trace span. Observability becomes a second,
