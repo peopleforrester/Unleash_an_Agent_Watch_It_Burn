@@ -13,8 +13,9 @@ catches third-party images, and a Rekor dependency that would make admission fai
 seal the cluster in Challenge 1.
 
 Since #669 the scope also takes lab-platform's llm-guard, which lab-platform signs with this same key, at
-ghcr.io and through an ECR cache, and nothing else of lab-platform's: its mirror/ vendor copies are unsigned
-and its promo/ villains are refused by path, not by signature (question 878).
+ghcr.io and through an ECR cache, and since #734 its web image, the demo apps' (#715), the same way. Nothing
+else of lab-platform's is in scope: its mirror/ vendor copies are unsigned and its promo/ villains are refused by
+path, not by signature (question 878).
 
 What this file does NOT check is whether the images are actually signed. That needs the registry, so it
 lives in `verify/sign-images.sh --check`, which is the thing to run before deploying.
@@ -128,7 +129,7 @@ for foreign in ("docker.io/library/nginx:1.27-alpine", "cr.agentgateway.dev/agen
 ours = f"{OUR_REGISTRY}:workshop-mcp@sha256:" + "0" * 64
 check("does demand one from our own registry", matched(ours))
 
-print("== lab-platform's llm-guard is in scope, at ghcr.io and through a cache, and nothing else of lab-platform's ==")
+print("== lab-platform's llm-guard and web are in scope, at ghcr.io and through a cache, and nothing else of lab-platform's ==")
 # The ai-layer Application names the guard at the root's imageRegistry (#622, #652); render both values it takes.
 ai_layer = yaml.safe_load((APPS / "ai-layer.yaml").read_text(encoding="utf-8"))
 guard = next((i for i in kustomize_images(ai_layer) if i["name"] == "llm-guard"), None)
@@ -141,6 +142,20 @@ if guard:
         check(f"demands one from the guard at {registry}", matched(image))
         check(f"  and the registry allowlist admits it there", registry_allowlist.allowed(image))
     check("demands one from the guard by digest alone", matched(f"{LAB_PLATFORM_GHCR}/llm-guard@{guard['digest']}"))
+# #734: the demo apps name lab-platform's web image by digest at the root's registry (#715); the same three paths.
+web = next((i for i in kustomize_images(yaml.safe_load((APPS / "demo-app-hedgehog.yaml").read_text(encoding="utf-8")))
+            if i["name"] == "web"), None)
+check("the demo apps name web by digest at the root's registry",
+      bool(web) and web["newName"] == f"{IMAGE_REGISTRY}/web" and "digest" in web)
+if web:
+    for registry in (LAB_PLATFORM_GHCR, CACHE, "123456789012.dkr.ecr.us-west-2.amazonaws.com/peopleforrester/lab-platform"):
+        image = f"{registry}/web@{web['digest']}"
+        check(f"demands one from web at {registry}", matched(image))
+        check(f"  and the registry allowlist admits it there", registry_allowlist.allowed(image))
+    check("demands one from web by tag", matched(f"{LAB_PLATFORM_GHCR}/web:v1"))
+for registry in (LAB_PLATFORM_GHCR, CACHE):
+    check(f"a lookalike, web-next, at {registry.split('/')[0]} is not asked for one",
+          not matched(f"{registry}/web-next:v1") and not matched(f"{registry}/webhook@sha256:" + "0" * 64))
 # Question 878: lab-platform/* would deny the unsigned vendor copies, which run Falco, KubeArmor and the rest.
 check("lab-platform as a whole is not in scope",
       not any(r.startswith(f"{LAB_PLATFORM_GHCR}/*") or r.endswith("/lab-platform/*") for r in refs))

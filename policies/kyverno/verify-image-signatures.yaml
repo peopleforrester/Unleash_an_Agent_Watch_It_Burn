@@ -1,15 +1,14 @@
 # ABOUTME: Kyverno image-signature verification: every image from our own registry, and lab-platform's llm-guard
-# ABOUTME: at ghcr.io or an ECR cache, must carry a cosign signature made with the key in policies/cosign/.
+# ABOUTME: and web at ghcr.io or an ECR cache, must carry a cosign signature made with the key in policies/cosign/.
 #
 # This is Enforce, and it is scoped so that it can be. Two facts make that safe rather than reckless:
 #
 #   1. matchImageReferences names ONLY ghcr.io/peopleforrester/watch-it-burn*, Harbor, and lab-platform's
-#      llm-guard image (at ghcr.io or an ECR pull-through cache). Third-party images the allowlist permits
-#      (docker.io/library, cr.agentgateway.dev, the OTel autoinstrumentation image) do not match
-#      this rule and are unaffected by it. Neither are lab-platform's other paths, the demo apps' web
-#      image (#715) among them: see LAB-PLATFORM below.
+#      llm-guard and web images (at ghcr.io or an ECR pull-through cache). Third-party images the allowlist
+#      permits (docker.io/library, cr.agentgateway.dev, the OTel autoinstrumentation image) do not match
+#      this rule and are unaffected by it. Neither are lab-platform's other paths: see LAB-PLATFORM below.
 #   2. All eight tags the manifests reference were signed and verified before this was flipped on, and
-#      llm-guard's pinned digest verified under the Kyverno CLI before it was added (#669).
+#      llm-guard's and web's pinned digests verified under the Kyverno CLI before each was added (#669, #734).
 #      An unsigned image from our registry is now denied, which is the point.
 #
 # LAB-PLATFORM (#669)
@@ -21,8 +20,8 @@
 # decisions.md entry "Images are signed with the workshop key" says why), so no second attestor is
 # needed: the one below verifies it, offline, as it does ours.
 #
-# Only llm-guard is matched, not lab-platform/* (question 878). Kyverno's glob crosses the slash, so
-# lab-platform/* would also catch the 14 vendor copies under lab-platform/mirror/ (Falco's sidekick and
+# Only llm-guard and, since #734, the demo apps' web image (#715) are matched, not lab-platform/*
+# (question 878). Kyverno's glob crosses the slash, so lab-platform/* would also catch the 14 vendor copies under lab-platform/mirror/ (Falco's sidekick and
 # Talon, KubeArmor, the collectors, Grafana, Tempo, kagent's postgres), which carry no signature, and
 # deny all of them. A further lab-platform image gets its own pattern once its signature is checked.
 #
@@ -97,6 +96,12 @@ spec:
     - glob: "ghcr.io/peopleforrester/lab-platform/llm-guard@*"
     - glob: "*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/llm-guard:*"
     - glob: "*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/llm-guard@*"
+    # lab-platform's web (#734), the five demo apps' image since #715, written the same way. Its pinned digest
+    # passed the Kyverno CLI under this key before these were added.
+    - glob: "ghcr.io/peopleforrester/lab-platform/web:*"
+    - glob: "ghcr.io/peopleforrester/lab-platform/web@*"
+    - glob: "*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/web:*"
+    - glob: "*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/web@*"
   validationConfigurations:
     required: true
     verifyDigest: true

@@ -80,6 +80,11 @@ _GUARD = next(i for i in kustomize_images(yaml.safe_load((APPS / "ai-layer.yaml"
 GUARD = f"{_GUARD['newName']}:{_GUARD['newTag']}@{_GUARD['digest']}".replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
 CACHE = "123456789012.dkr.ecr.us-west-2.amazonaws.com/lp-shared/peopleforrester/lab-platform"
 GUARD_CACHE = GUARD.replace(LAB_PLATFORM_GHCR, CACHE)
+# lab-platform's web image as the demo apps pin it (#715), by digest alone, signed with the same key (#734).
+_WEB = next(i for i in kustomize_images(yaml.safe_load((APPS / "demo-app-hedgehog.yaml").read_text(encoding="utf-8")))
+            if i["name"] == "web")
+WEB = f"{_WEB['newName']}@{_WEB['digest']}".replace(IMAGE_REGISTRY, LAB_PLATFORM_GHCR)
+WEB_CACHE = WEB.replace(LAB_PLATFORM_GHCR, CACHE)
 # A mirror/ copy by digest, as an unsigned image of lab-platform's that the scope must leave out (question 878).
 MIRROR = next(f"{LAB_PLATFORM_GHCR}/{x.path}@{x.digest}" for x in COPIES if "falcosidekick" in x.path)
 
@@ -424,6 +429,10 @@ expect(f"lab-platform's llm-guard ({GUARD.split('@')[0]}) passes against the sam
 # all is what says the cache path is in scope; a reference out of scope is never fetched.
 expect("the guard at an ECR cache path is in scope: Kyverno reads its manifest from the cache", g, "llm-guard-cache",
        "error", f"{CACHE.split('/')[0]}/v2/lp-shared/peopleforrester/lab-platform/llm-guard/manifests/")
+g = run(SIG, [pod("web", "apps", [c(WEB)]), pod("web-cache", "apps", [c(WEB_CACHE)])])
+expect(f"lab-platform's web ({WEB.split('@')[0]}), the demo apps' image, passes against the same key", g, "web", "pass")
+expect("web at an ECR cache path is in scope: Kyverno reads its manifest from the cache", g, "web-cache",
+       "error", f"{CACHE.split('/')[0]}/v2/lp-shared/peopleforrester/lab-platform/web/manifests/")
 # The negative: the same image under a key that did not sign it must fail, or "pass" above proves nothing.
 with tempfile.TemporaryDirectory() as tmp:
     key = pathlib.Path(tmp) / "k"
@@ -440,10 +449,11 @@ with tempfile.TemporaryDirectory() as tmp:
         wrong = pathlib.Path(tmp) / "wrong-key.yaml"
         wrong.write_text(text[:start] + ("\n" + indent).join(pub.splitlines()) + text[end:])
         g = run(wrong, [pod("ours-signed", "agent", [c(SIGNED)]), pod("llm-guard", "agent", [c(GUARD)]),
-                        pod("mirror", "agent", [c(MIRROR)]), pod("villain", "agent", [c(VILLAIN)])])
+                        pod("web", "apps", [c(WEB)]), pod("mirror", "agent", [c(MIRROR)]), pod("villain", "agent", [c(VILLAIN)])])
         expect("the same image under a different key fails with the named message", g, "ours-signed", "fail",
                "must carry a valid cosign signature")
         expect("so does lab-platform's llm-guard", g, "llm-guard", "fail", "must carry a valid cosign signature")
+        expect("and lab-platform's web", g, "web", "fail", "must carry a valid cosign signature")
         # Under a key that signed nothing, an image in scope fails; these pass because they are out of it.
         expect(f"an unsigned lab-platform mirror/ copy ({MIRROR.split('@')[0]}) is not in scope", g, "mirror", "pass")
         expect("nor is a promo/ villain, which restrict-image-registries refuses by path", g, "villain", "pass")

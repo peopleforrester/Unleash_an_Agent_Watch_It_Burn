@@ -6961,3 +6961,29 @@ four `mirror/kubearmor/` tags serve their locked digests, and `web:v1` serves `7
 **Not yet run on a cluster.** The guard pod pulling `6cdbf3a2…`, passing admission and answering on a fresh
 attendee cluster: `bash verify/run-e2e.sh` with CONTEXT, IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set, then
 `verify/input-guard.sh <host> <kube-context>` (a benign prompt passes, an injection is blocked).
+## 2026-10-31 · #734 · verify-image-signatures checks lab-platform's web, the demo apps' image, under the workshop key
+
+Since #715 the five demo apps run `ghcr.io/peopleforrester/lab-platform/web@sha256:73cd1565…`, set by each demo-app
+Application's `kustomize.images` at the root's `imageRegistry`, and `verify-image-signatures` matched only llm-guard
+among lab-platform's images, so the demo apps went unchecked at admission.
+
+- **Measured before it was written.** ghcr.io serves `sha256-73cd15652cb8….sig` for the pinned digest (read with
+  `crane ls`, no credential, 2026-10-31). The Kyverno CLI v1.19.1 from `verify/e2e-tools.lock`, run with an empty
+  `DOCKER_CONFIG` against the policy with the new globs, passes that digest under `policies/cosign/watch-it-burn.pub`
+  and fails it under a minted wrong key. cosign itself is not pinned in `e2e-tools.lock`, so the CLI is the check, as
+  it was for llm-guard in #669.
+- **Changed.** The policy gains `ghcr.io/peopleforrester/lab-platform/web:*` and `...web@*`, and the same two under
+  `*.dkr.ecr.*.amazonaws.com/*peopleforrester/lab-platform/`, written as llm-guard's are. `lab-platform/*` is still
+  not a glob (question 878). The policy header and the recreation spec name web beside llm-guard.
+- **Tests.** `verify/test_image_signing.py` (offline) reads web's reference from `demo-app-hedgehog.yaml` and checks
+  it is in scope, and admitted by `restrict-image-registries`, at ghcr.io, at the `lp-shared` cache path and at a
+  cache path with no prefix, by digest and by tag, and that `web-next` and `webhook` lookalikes are not. Against
+  the policy before the change it failed four checks. `verify/test_kyverno_cel_policies.py` (tools tier) runs web
+  by digest through the CLI (passes), at the cache path (in scope: Kyverno reads its manifest from the ECR host) and
+  under the wrong key (fails); before the change the last two failed. `verify/test_image_registry.py`'s glob
+  exemption still holds: the new lines are `- glob:` lines in `verify-image-signatures.yaml` only.
+
+**Not yet run on a cluster.** The five demo apps admitted under Deny on a fresh attendee cluster:
+`bash verify/run-e2e.sh` with CONTEXT, IAM_PIPELINE_PROFILE and IAM_PIPELINE_REGION set, which includes
+`CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, and each demo app's Deployment Available. The read of
+web's signature through a real ECR pull-through cache is owed in the same way #669's is for llm-guard.
