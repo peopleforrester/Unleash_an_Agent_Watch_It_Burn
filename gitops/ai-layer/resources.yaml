@@ -1104,6 +1104,28 @@ data:
         resources: ["secrets"]
         resourceNames: ["ceo-personal-record"]
         verbs: ["get"]
+  c5-scoped-role.yaml: |
+    # The CEO's record fix (Challenge 1 at KubeCon, C5 in the lab), applied by guard-rbac-on. agent-sa was given
+    # every Secret in its namespace so it could read its own config, and ceo-personal-record landed there too.
+    # This Role names the one Secret the agent reads, workshop-agent (kagent's config for this Agent), with get
+    # and no list, so get_vault_entry('ceo-personal-record') comes back Forbidden. It keeps every other rule of
+    # the shipped Role at the top of this file. guard-rbac-off applies c8-broad-role.yaml to put that back.
+    apiVersion: rbac.authorization.k8s.io/v1
+    kind: Role
+    metadata:
+      name: workshop-agent
+      namespace: agent
+    rules:
+      - apiGroups: ["apps"]
+        resources: ["deployments"]
+        verbs: ["create", "get", "list", "patch"]
+      - apiGroups: [""]
+        resources: ["pods", "configmaps", "services"]
+        verbs: ["create", "get", "list", "patch"]
+      - apiGroups: [""]
+        resources: ["secrets"]
+        resourceNames: ["workshop-agent"]
+        verbs: ["get"]
   cloud-credential-probe.yaml: |
     # Challenge 8, "and its cloud credential?" (#203). READ-ONLY: it changes nothing on the cluster or in AWS
     # beyond one five-token Nova Pro reply. It runs as agent-sa, so it gets exactly the AWS credential

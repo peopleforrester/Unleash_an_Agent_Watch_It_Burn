@@ -32,6 +32,8 @@ with open(calls, "a") as f:
 if "exec" in args:
     if ".get('" in args[-1]:
         print("True")  # _pxkey prints the one key it asked for
+elif "get" in args and "validatingpolicy" in args:
+    sys.stdout.write("Deny" if "admission-on" in os.environ.get("FAKE_CALLS", "") else "Audit")
 elif "get" in args and "application" in args:
     sys.stdout.write("admin")
 elif "get" in args and "workshop-agent" in args:
@@ -68,7 +70,8 @@ with tempfile.TemporaryDirectory() as tmp:
     (fakebin / "kubectl").chmod(0o755)
     env = {**os.environ, "HOME": str(home), "PATH": f"{fakebin}:{os.environ['PATH']}"}
 
-    for cmd in ("guard-input-on", "guard-output-on", "guard-topic-on", "guard-mcp-on", "guard-input-off"):
+    for cmd in ("guard-input-on", "guard-output-on", "guard-topic-on", "guard-mcp-on", "guard-input-off",
+                "guard-rbac-on", "guard-rbac-off", "guard-admission-on", "guard-admission-off"):
         print(f"== {cmd} ==")
         real = pathlib.Path(tmp, f"{cmd}.real")
         r = subprocess.run(["bash", str(home / cmd)], env={**env, "FAKE_CALLS": str(real)},
@@ -95,6 +98,52 @@ with tempfile.TemporaryDirectory() as tmp:
     check("guard-input-on shows the /toggle query it sends",
           "$ kubectl -n agent exec deploy/guard-proxy -- python3 -c" in out
           and "toggle?input_blocklist=on&input_classifier=on" in out, out)
+
+    print("== Challenge 1's and Challenge 3's cluster fixes are commands too ==")
+    for cmd, verb, target in (("guard-rbac-on", "apply", "c5-scoped-role.yaml"),
+                              ("guard-rbac-off", "apply", "c8-broad-role.yaml"),
+                              ("guard-admission-on", "patch", "restrict-image-registries"),
+                              ("guard-admission-off", "patch", "restrict-image-registries")):
+        ran = calls_of(pathlib.Path(tmp, f"{cmd}.real"))
+        check(f"{cmd} runs kubectl {verb} on {target}",
+              any(verb in c and any(target in a for a in c) for c in ran), str(ran))
+    for cmd, action in (("guard-admission-on", "Deny"), ("guard-admission-off", "Audit")):
+        ran = calls_of(pathlib.Path(tmp, f"{cmd}.real"))
+        check(f"{cmd} sets validationActions to [{action}]",
+              any("patch" in c and any(f'"value":["{action}"]' in a for a in c) for c in ran), str(ran))
+
+print("== the guard messages name the attack, not a challenge number ==")
+# One terminal serves the KubeCon cut (Challenge 1 to 4) and the 2-hour lab (C1 to C8), which number the same
+# attack differently, so a message that names a number is wrong in one of them. Each names its attack instead.
+docs = heredocs()
+for cmd, attack in (("guard-rbac-on", "CEO's record"), ("guard-rbac-off", "CEO's record"),
+                    ("guard-admission-on", "support ticket"), ("guard-admission-off", "support ticket"),
+                    ("guard-input-on", "support ticket"), ("guard-input-off", "support ticket"),
+                    ("guard-mcp-on", "weather tool"), ("guard-mcp-off", "weather tool")):
+    check(f"{cmd} names the {attack}", attack in docs.get(cmd, ""), docs.get(cmd, "<missing>")[:200])
+for cmd, body in docs.items():
+    if cmd.startswith("guard") or cmd in ("platform", "guards-on", "guards-off"):
+        nums = re.findall(r"Challenge [0-9]\b|\(C[0-9]\)", body)
+        check(f"{cmd} names no challenge number", not nums, str(nums))
+        check(f"{cmd} prints no em-dash", "\u2014" not in body)
+
+print("== Challenge 1's scoped Role ==")
+import yaml  # noqa: E402
+res = (REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8")
+fixes = next(d for d in yaml.safe_load_all(res) if d and d.get("kind") == "ConfigMap"
+             and d["metadata"]["name"] == "challenge-fixes")["data"]
+broad = next(d for d in yaml.safe_load_all(res) if d and d.get("kind") == "Role"
+             and d["metadata"]["name"] == "workshop-agent")
+scoped = yaml.safe_load(fixes.get("c5-scoped-role.yaml", "{}")) or {}
+srules = [r for r in scoped.get("rules", []) if "secrets" in r.get("resources", [])]
+check("c5-scoped-role.yaml is the workshop-agent Role in agent",
+      scoped.get("kind") == "Role" and scoped.get("metadata") == {"name": "workshop-agent", "namespace": "agent"})
+check("it reads one Secret, the agent's own workshop-agent config, with get and nothing else",
+      srules == [{"apiGroups": [""], "resources": ["secrets"], "resourceNames": ["workshop-agent"], "verbs": ["get"]}],
+      str(srules))
+check("it keeps every other rule of the shipped Role",
+      [r for r in scoped.get("rules", []) if "secrets" not in r.get("resources", [])]
+      == [r for r in broad["rules"] if "secrets" not in r.get("resources", [])])
 
 print("== both copies of the entrypoint ==")
 check("images/web-terminal/entrypoint.sh is byte-identical to gitops/ai-layer/web-terminal/entrypoint.sh",

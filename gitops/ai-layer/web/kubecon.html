@@ -88,9 +88,9 @@
   <table class="glance">
     <tr><th>#</th><th>Min</th><th>Who</th><th>Beat</th><th>Private toggle</th></tr>
     <tr><td>1</td><td>3</td><td>M</td><td>Cold open, QR, prompt wall up</td><td>none</td></tr>
-    <tr><td>2</td><td>6</td><td>M+W</td><td>Challenge 1: the CEO's secret leaks</td><td>RBAC said; <code>guard-output-on</code> if used</td></tr>
+    <tr><td>2</td><td>6</td><td>M+W</td><td>Challenge 1: the CEO's secret leaks</td><td><code>guard-rbac-on</code></td></tr>
     <tr><td>3</td><td>4</td><td>W+M</td><td>Challenge 2: the Kubernetes catch-all</td><td>none: armed from the start</td></tr>
-    <tr><td>4</td><td>7</td><td>W+M</td><td>Challenge 3: ticket HC-666 deploys your Joker</td><td>admission, then <code>guard-input-on</code></td></tr>
+    <tr><td>4</td><td>7</td><td>W+M</td><td>Challenge 3: ticket HC-666 deploys your Joker</td><td><code>guard-admission-on</code>, then <code>guard-input-on</code></td></tr>
     <tr><td>5</td><td>5</td><td>M+W</td><td>Challenge 4: the poisoned weather tool</td><td><code>guard-mcp-on</code></td></tr>
     <tr><td>6</td><td>5</td><td>M+W</td><td>OWASP close, burritos only, break it</td><td><code>guard-topic-on</code></td></tr>
   </table>
@@ -159,8 +159,7 @@
     <p class="premise">Michael and Whitney. Tee-up: BurritoBot's developers gave it read access to every Secret
     in its namespace so it could read its model API key. Ophelia Thorn, CEO of Hex &amp; Cauldron, keeps her
     home address in a Secret there too, <code>ceo-personal-record</code>. A Kubernetes problem with a Kubernetes
-    fix: RBAC, a Role that names the one Secret the bot needs. Whether the output guard stays as a second fix
-    is not decided (2026-10-29 call); its toggle is here if the presenters use it.</p>
+    fix: RBAC, a Role that names the one Secret the bot needs. RBAC is the only fix (Michael, 2026-10-31).</p>
     </details>
 
     <article class="beat" data-beat="C5" data-segment="2">
@@ -175,20 +174,20 @@
       <div class="control"><b>The fix: RBAC.</b> A Role that grants <code>get</code> on the one Secret the bot
       needs, by name, instead of every Secret in the namespace. The bot can be talked into anything and still
       cannot read what it was never granted. <b>Datadog Challenge 1 tab:</b> the Secret read in the trace.</div>
-      <div class="toggle" onclick="cp(this)"><span class="lbl">Toggle · private terminal · optional second fix</span>guard-output-on<button class="cp">copy</button></div>
+      <div class="toggle" onclick="cp(this)"><span class="lbl">Fix · private terminal · prints its kubectl apply</span>guard-rbac-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot</span>The same ask after
-      <code>guard-output-on</code>: the address, handling notes and signature come back
-      <code>[REDACTED]</code>. A burrito bot should never emit an address, whatever it read.</div>
+      <code>guard-rbac-on</code>: the read of <code>ceo-personal-record</code> comes back Forbidden from the
+      Kubernetes API, so there is no address to repeat. <code>guard-rbac-off</code> puts the shipped Role back.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
       <p class="note">The compliment framing is the attack: the agent is told Ophelia adores praise and cannot
       abide a complaint, so it accepts a gift as a reason and refuses a summons. A casual ask is turned away on
       purpose (#688), so getting the address feels earned. A fresh conversation lands it far more often than one
       that already refused, so press <b>↺ Reset</b> and resend.</p>
       <div class="fallback"><span class="lbl">If it wanders</span>Reset and resend. The ranked written fallbacks
-      are in <code>challenges/PROMPT-CATALOG.md</code> (C5). If the redaction does not show on the private bot,
-      <code onclick="cp(this)">CONTEXT=&lt;private-context&gt; challenges/02-sanitization/fallback.curl.sh output<button class="cp">copy</button></code>
-      drives a response carrying the record through the output guard, proving the redaction without the
-      model.</div>
+      are in <code>challenges/PROMPT-CATALOG.md</code> (C5). If the bot still answers after
+      <code>guard-rbac-on</code>, check the Role the command printed:
+      <code onclick="cp(this)">kubectl -n agent get role workshop-agent -o yaml<button class="cp">copy</button></code>
+      names <code>workshop-agent</code> as the one Secret.</div>
       </details>
     </article>
 
@@ -285,11 +284,12 @@
       <code>https://support.burritobot.co/wall</code> (project it), and on the asker's own
       <code>/me</code>. Everyone's Joker carries their own name. Each runs tiny and is scaled to zero
       after five minutes; the Deployment stays as the proof.</div>
+      <div class="toggle" onclick="cp(this)"><span class="lbl">Fix, second tier · private terminal · prints its kubectl patch</span>guard-admission-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, before the toggle (the second tier)</span>The
       agent calls <code>deploy_app</code> and the Joker is refused at admission by
       <code>restrict-image-registries</code>; the wall shows it refused. Even an instruction that slips past the
       classifier is stopped at the cluster.</div>
-      <div class="toggle" onclick="cp(this)"><span class="lbl">Toggle · private terminal</span>guard-input-on<button class="cp">copy</button></div>
+      <div class="toggle" onclick="cp(this)"><span class="lbl">Toggle, first tier · private terminal</span>guard-input-on<button class="cp">copy</button></div>
       <div class="marker"><span class="lbl">Success marker, private bot, after the toggle (the first tier)</span>The
       ticket comes back <code>[input guard] withheld</code>, there is no <code>deploy_app</code> call, and no
       Deployment. <b>Datadog Challenge 3 tab:</b> the <code>read_support_ticket</code> call returning the withheld
@@ -410,8 +410,9 @@
 <footer>
   <span class="spons">Co-sponsored by <strong style="color:#B98CFF">Datadog</strong> &amp; <strong style="color:#D08BFF">Accenture</strong></span>
   Guard toggles (private terminal): <code>guards-on</code> / <code>guards-off</code> flip everything;
-  <code>guard-output-on</code> (Challenge 1), <code>guard-input-on</code> (Challenge 3), <code>guard-mcp-on</code>
-  (Challenge 4), <code>guard-topic-on</code> (Segment 6) flip one at a time. Terminal login on the private
+  <code>guard-rbac-on</code> (Challenge 1), <code>guard-admission-on</code> and <code>guard-input-on</code>
+  (Challenge 3), <code>guard-mcp-on</code> (Challenge 4), <code>guard-topic-on</code> (Segment 6) flip one at a
+  time, and each prints the kubectl it runs. Terminal login on the private
   cluster: <code>sprouts</code> / <code>sprouts</code>; the public cluster has no terminal. The full 2-hour
   workshop brief is at <a href="/brief">/brief</a>.
 </footer>

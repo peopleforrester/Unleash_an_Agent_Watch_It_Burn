@@ -149,7 +149,7 @@ for b in SHOWN_BEATS:
 # The toggles, where one applies, on the private terminal, each inside its beat's block (C5, C6 and C7 in
 # segments 2, 4 and 5; the on-topic guard in segment 6). C1, C2, C3 and the off-topic beat have no live toggle on
 # purpose: the Kubernetes controls start armed on the private cluster and the public cluster is wide open.
-BEAT_TOGGLE = {"C6": "guard-input-on", "C5": "guard-output-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
+BEAT_TOGGLE = {"C6": "guard-input-on", "C5": "guard-rbac-on", "C7": "guard-mcp-on", "on-topic": "guard-topic-on"}
 for b, cmd in BEAT_TOGGLE.items():
     in_a_block = any(f'class="toggle"' in blk and cmd in blk for blk in beat_blocks.get(b, []))
     check(f"{b} carries its toggle ({cmd}) inside the beat block", in_a_block)
@@ -210,8 +210,12 @@ for b, n in (("C5", 1), ("C6", 3), ("C7", 4)):
     check(f"{b} is played on the public bot and fixed on the private bot",
           "public bot" in blk and "private bot" in blk)
     check(f"{b} names its Datadog tab as Challenge {n}", f"Datadog Challenge {n} tab" in blk)
-check("Challenge 1 teaches RBAC, and keeps the output guard as an optional second fix",
-      "RBAC" in " ".join(beat_blocks.get("C5", [])) and "optional second fix" in " ".join(beat_blocks.get("C5", [])))
+# Michael, 2026-10-31: RBAC is Challenge 1's only fix, run as guard-rbac-on; the output guard is not a second fix.
+check("Challenge 1 teaches RBAC as its only fix, run with guard-rbac-on, and offers no output guard",
+      "RBAC" in " ".join(beat_blocks.get("C5", [])) and "guard-rbac-on" in " ".join(beat_blocks.get("C5", []))
+      and "guard-output-on" not in " ".join(beat_blocks.get("C5", [])))
+check("Challenge 3 runs its admission tier as guard-admission-on",
+      "guard-admission-on" in " ".join(beat_blocks.get("C6", [])))
 print("== the per-challenge pattern and the OWASP close (#687) ==")
 check("the page states the pattern once: tee-up, play, attack, fix, keep trying",
       all(w in KUBECON for w in ("<b>tee-up</b>", "<b>play</b>", "<b>attack</b>", "<b>fix</b>", "<b>keeps trying</b>")))
@@ -243,17 +247,19 @@ def _before(text: str, first: str, then: str) -> bool:
     return first in text and then in text and text.index(first) < text.index(then)
 
 
-check("the run-of-show's Challenge 3 row puts Kyverno before guard-input-on",
-      _before(_ros_row3, "Kyverno armed", "`guard-input-on`"))
+check("the run-of-show's Challenge 3 row puts guard-admission-on before guard-input-on",
+      _before(_ros_row3, "`guard-admission-on`", "`guard-input-on`"))
 check("the run-of-show's C6 fix shows the admission denial, then guard-input-on",
       _before(_ros_fix, "denies the Joker image at admission", "Then `guard-input-on`"))
 check("the run-of-show names admission the second tier and the input classifier the first",
       _before(_ros_fix, "That is the second tier", "`guard-input-on`, the first tier"))
 check("the page's C6 premise puts admission control before guard-input-on",
       _before(_premise, "admission control", "guard-input-on"))
-check("the page's C6 block shows the admission deny, then the toggle, then the withheld ticket",
-      _before(_c6, "restrict-image-registries</code>", 'class="toggle"')
-      and _before(_c6, 'class="toggle"', "[input guard] withheld"))
+check("the page's C6 block runs guard-admission-on, shows the admission deny, then guard-input-on, then the "
+      "withheld ticket",
+      _before(_c6, "guard-admission-on", "restrict-image-registries</code>")
+      and _before(_c6, "restrict-image-registries</code>", "guard-input-on")
+      and _before(_c6, "guard-input-on", "[input guard] withheld"))
 check("the page names the before-toggle marker the second tier and the after-toggle one the first",
       _before(_c6, "before the toggle (the second tier)", "after the toggle (the first tier)"))
 check("C6's admission tier names the C2 fallback, not the retired workshop Beat 1 (#499)",
@@ -274,7 +280,8 @@ check("a glance table lists the six segments in order",
       and re.findall(r"<tr><td>(\d)</td>", _glance.group(1)) == ["1", "2", "3", "4", "5", "6"])
 check("it names each challenge's toggle",
       _glance is not None and all(t in _glance.group(1) for t in
-                                  ("guard-output-on", "guard-input-on", "guard-mcp-on", "guard-topic-on")))
+                                  ("guard-rbac-on", "guard-admission-on", "guard-input-on", "guard-mcp-on",
+                                   "guard-topic-on")))
 _visible = re.sub(r"<details.*?</details>|<!--.*?-->|<style>.*?</style>|<script>.*?</script>", "",
                   KUBECON, flags=re.S)
 check("every fallback is folded", '<div class="fallback">' in KUBECON

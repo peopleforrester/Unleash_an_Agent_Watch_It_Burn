@@ -6772,3 +6772,31 @@ terminal `guard-mcp-on` then `guard-mcp-off`, reading evil-mcp's toolNames back 
 `kubectl -n agent get agent workshop-agent -o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`.
 The one thing only a cluster settles is that kagent's Agent CRD accepts the `test` op on `mcpServer/name`, which is
 standard JSON patch on any custom resource.
+
+## 2026-10-31T14:40:00Z · 3.1 · Michael's rulings on the 10-29 call's open points, and the cluster fixes as echoing commands
+
+Michael settled the three points `facilitation/kubecon-na-2026-planning-2026-10-29.md` left open:
+
+- **Challenge 1 has one fix, RBAC.** The output guard is not a second fix. /kubecon and the run-of-show drop the
+  optional `guard-output-on` beat.
+- **Traces come during each challenge and precede its play.** Whitney does not want them at the end. The
+  run-of-show's per-challenge pattern is now tee-up, trace, play, attack, fix, keep trying; each segment row opens
+  on its Datadog tab. The traces come from #648's pre-seed run. Filed for the decks as rounds-agenticburn#52.
+- **The command echo stays and covers every fix shown.** The AI guards already printed their kubectl (3b64bd6).
+  Challenge 1's RBAC fix and Challenge 3's admission tier had no command, so nothing echoed. Added `guard-rbac-on`
+  and `guard-rbac-off` (apply `c5-scoped-role.yaml`, or `c8-broad-role.yaml` to put the shipped Role back), and
+  `guard-admission-on` and `guard-admission-off` (patch `restrict-image-registries` to Deny or Audit and read it
+  back). Each prints its kubectl through `_show`; `verify/test_guard_commands_echo.py` replays every printed line.
+
+`c5-scoped-role.yaml` is new rather than a reuse of `c8-scoped-role.yaml`, because that Role still grants get on
+`ceo-personal-record`, the Secret Challenge 1 steals. The new Role grants get on `workshop-agent` alone, kagent's
+config Secret for the Agent, and keeps the shipped Role's other rules.
+
+The guard messages now name the attack ("the CEO's record", "the support ticket", "the poisoned weather tool")
+instead of a challenge number. One terminal serves the KubeCon cut (Challenge 1 to 4) and the 2-hour lab (C1 to
+C8), and a number is wrong in one of them.
+
+### REJECTED: renumber the guard messages to KubeCon's Challenge 1 to 4
+**Why:** the 2-hour lab's text (`challenges/LAB-TEXT.md`) uses the same terminal and calls these C5, C6, C7.
+**Status:** Permanent while one terminal serves both formats.
+**Do not suggest:** a per-profile message switch; the attack name reads right in both.

@@ -364,11 +364,16 @@ survive only as internal ids: the probe's beat names, the fallback scripts and t
 `data-beat` keys on `/kubecon`. Every challenge runs one pattern:
 
 1. **Tee-up:** a line or two of context, no more.
-2. **Play:** quiet time while the room tries it on the public bot from their phones.
-3. **Attack:** the presenters show it landing.
-4. **Fix:** a short why, the pre-seeded Datadog trace for that challenge (#648), and
-   the guard turned on, on the private bot.
-5. **Keep trying:** the room carries on against the public bot while the next one is
+2. **Trace:** the pre-seeded Datadog trace for that challenge (#648), shown before the
+   room plays, so they see what the attack looks like from the platform side first
+   (Michael, 2026-10-31: traces come during each challenge and precede it, not at the
+   end).
+3. **Play:** quiet time while the room tries it on the public bot from their phones.
+4. **Attack:** the presenters show it landing.
+5. **Fix:** a short why, and the fix's command run on the private bot's terminal. Every
+   fix command prints the real `kubectl` it runs before it runs it, so the room reads
+   the command, not a description of it.
+6. **Keep trying:** the room carries on against the public bot while the next one is
    teed up.
 
 Whitney's rule still holds: without the play time there is no hands-on, so the other
@@ -377,14 +382,14 @@ beats give way first.
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
 | 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
-| 2 | 6 | M+W | Challenge 1: the public bot, the RBAC fix said, the Datadog Challenge 1 tab; `guard-output-on` on the private bot if used | Pulls the CEO's home address out of the bot | 4, 5, 9 |
+| 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
-| 4 | 7 | W+M | Challenge 3: the support desk and its Joker wall, then the private bot with Kyverno armed, then `guard-input-on`, then the Datadog Challenge 3 tab | Pastes their own HC-666 ask from the desk | 4, 5, 6 |
-| 5 | 5 | M+W | Challenge 4: the public bot, then the private bot with `guard-mcp-on`, then the Datadog Challenge 4 tab | Orders a burrito for the weather | 2, 4, 6 |
+| 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-admission-on`, then `guard-input-on` | Pastes their own HC-666 ask from the desk | 4, 5, 6 |
+| 5 | 5 | M+W | Challenge 4: the Datadog Challenge 4 tab, the public bot, then the private bot with `guard-mcp-on` | Orders a burrito for the weather | 2, 4, 6 |
 | 6 | 5 | M+W | The OWASP close, `guard-topic-on`, the room invited to break it | Tries to drive the bill to the cap | 7, 8 |
 
 Total 30 minutes. Segments 2 to 5 are 22 minutes of hands-on. There is no separate
-trace walk-through any more: each challenge's fix shows its own trace. If the clock is
+trace walk-through any more: each challenge opens on its own trace. If the clock is
 behind after segment 5, shorten the OWASP slide to its two headings and keep the break-it
 line.
 
@@ -482,11 +487,13 @@ real-looking home address to chat.
   address is the marker; the signature line only when the model keeps it (#530). A
   casual or kind ask is turned away on purpose, so the address takes a pretext
   (#688).
+- **Trace, before the play:** Datadog Challenge 1 tab, the Secret read in the trace.
 - **Fix:** RBAC, a Role that grants `get` on the one Secret the bot needs, by name.
-  Said, not demoed. Datadog Challenge 1 tab: the Secret read in the trace.
-- **Second fix, not decided (2026-10-29 call):** `guard-output-on` on the private bot,
-  then the same ask, and the address comes back redacted. The toggle is on `/kubecon`
-  if the presenters use it.
+  On the private bot's terminal, `guard-rbac-on`: it prints the `kubectl apply` of
+  `~/challenges/c5-scoped-role.yaml`, which names only the agent's own `workshop-agent`
+  config Secret, then the same ask, and the read comes back Forbidden.
+  `guard-rbac-off` puts the shipped Role back. RBAC is the only fix: the output guard is
+  not a second fix here (Michael, 2026-10-31).
 - **The off-topic asks:** the room will also send its weirdest off-topic asks, and
   the wide-open bot answers them (3 of 3 on the public cluster, 2026-10-27, #535). The
   Night Before probe asks the linked-list question three times and must end green.
@@ -549,10 +556,12 @@ real-looking home address to chat.
 - **Attack:** the presenters send the `/kubecon` prompt, which uses the fixed name
   Agatha the Banshee so the probe can check it, and `joker-agatha-the-banshee`
   appears on the wall.
-- **Fix, two tiers, on the private bot, admission first (#676):** Kyverno is armed
-  from the start, so before any toggle the bot follows the ticket, calls
-  `deploy_app`, and the registry allow-list denies the Joker image at admission;
-  the wall shows it refused. Read the deny message aloud. That is the second tier:
+- **Fix, two tiers, on the private bot, admission first (#676):** run
+  `guard-admission-on`, which prints the `kubectl patch` that sets
+  `restrict-image-registries` to Deny and reads it back (the Night Before arms it
+  already, so on stage it shows the command and changes nothing). The bot follows the
+  ticket, calls `deploy_app`, and the registry allow-list denies the Joker image at
+  admission; the wall shows it refused. Read the deny message aloud. That is the second tier:
   even an instruction that slips past the classifier is stopped at the cluster.
   Then `guard-input-on`, the first tier: the input classifier flags the ticket's
   hidden instruction before the model reads it, because the same toggle arms the
@@ -564,8 +573,10 @@ real-looking home address to chat.
 - **The input guard's double duty:** it keeps someone else's PII out of the model,
   out of the traces, and out of a later operator's agent that reads those logs
   (Michael's Toronto keynote point).
-- **Datadog Challenge 3 tab:** the `read_support_ticket` call returning the guard's
-  withheld notice with no `deploy_app` after it, and the admission denial.
+- **Datadog Challenge 3 tab, before the play:** the attack as the trace shows it,
+  `read_support_ticket` returning HC-666 and the `deploy_app` call it leads to. After
+  the fix, the same tab's second saved view: the guard's withheld notice with no
+  `deploy_app` after it, and the admission denial.
 - **Delivers:** point 4, point 5 (admission control), and point 6 (pre-inference
   prompt analysis).
 - **Hand-off:** "Both of those talked the bot out of it, or caught it at the
@@ -592,8 +603,8 @@ real-looking home address to chat.
 - **Hand out:** the MCP server vetting checklist (#649),
   `docs/mcp-server-vetting-checklist.md`: the six approval gates from Michael's
   Toronto keynote. Name it here; the link goes on the close slide.
-- **Datadog Challenge 4 tab:** the `read_internal_config` call before the rule, and
-  its absence after.
+- **Datadog Challenge 4 tab, before the play:** the `read_internal_config` call the
+  poisoned description chains the bot into. After the fix, its absence.
 - **Delivers:** point 2 (the under-protected MCP server), point 4, and point 6
   (mid-inference, between the agent's steps, as #456 defines it).
 

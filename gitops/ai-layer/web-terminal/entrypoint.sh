@@ -234,10 +234,10 @@ echo "Your AI guardrails right now:"
 printf '%s' "$raw" | python3 -c '
 import json,sys
 g=json.load(sys.stdin)
-label={"output":"C5 output guard (scrubs secrets on the way out)",
-       "input_blocklist":"C6 input block-list (cheap, pre-model)",
-       "input_classifier":"C6 injection classifier (model-based)",
-       "budget":"C4 spend budget (freezes cost at the cap)",
+label={"output":"Output guard (scrubs secrets on the way out)",
+       "input_blocklist":"Input block-list (cheap, pre-model)",
+       "input_classifier":"Injection classifier (model-based, reads support tickets too)",
+       "budget":"Spend budget (freezes cost at the cap)",
        "topic":"On-topic guard (BurritoBot sells burritos only)"}
 for k in ("output","input_blocklist","input_classifier","budget","topic"):
     on=g.get(k)
@@ -245,6 +245,7 @@ for k in ("output","input_blocklist","input_classifier","budget","topic"):
 '
 echo
 echo "Flip them with: guard-output-on  guard-input-on  guard-mcp-on  guard-budget-on  guard-topic-on  (or guards-on / guards-off)"
+echo "Cluster fixes: guard-rbac-on (the CEO's record)  guard-admission-on (the support ticket's image)"
 EOS
 
 # Combined: flip EVERY AI guard at once (the "reset and explore" convenience). guards-on leaves the on-topic
@@ -255,11 +256,11 @@ cat > "$HOME/guards-on" <<'EOS'
 source "$HOME/.guardlib"
 _px "output=on" && _px "input_blocklist=on&input_classifier=on" && _px "budget=on"
 if ! _mcp on >/dev/null; then
-  echo "⚠️  The MCP tool restriction (C7) did not switch on; it is left as it was. The other AI guards were"
-  echo "    switched on. Run 'guard-mcp-on' to retry C7."; exit 1
+  echo "⚠️  The MCP tool restriction did not switch on; it is left as it was. The other AI guards were"
+  echo "    switched on. Run 'guard-mcp-on' to retry it."; exit 1
 fi
-echo "🛡️  ALL AI guards ON: output scrubbing (C5), input block-list + injection classifier (C6), MCP tool"
-echo "    restriction (C7), and the spend budget (C4). Re-run any challenge to watch it get blocked, redacted,"
+echo "🛡️  ALL AI guards ON: output scrubbing, input block-list + injection classifier, MCP tool"
+echo "    restriction, and the spend budget. Re-run any challenge to watch it get blocked, redacted,"
 echo "    or frozen on cost."
 EOS
 cat > "$HOME/guards-off" <<'EOS'
@@ -267,18 +268,18 @@ cat > "$HOME/guards-off" <<'EOS'
 source "$HOME/.guardlib"
 _px "output=off" && _px "input_blocklist=off&input_classifier=off" && _px "budget=off" && _px "topic=off"
 if ! _mcp off >/dev/null; then
-  echo "⚠️  The MCP tool restriction (C7) did not switch off; it is left as it was. The other AI guards were"
-  echo "    switched off. Run 'guard-mcp-off' to retry C7."; exit 1
+  echo "⚠️  The MCP tool restriction did not switch off; it is left as it was. The other AI guards were"
+  echo "    switched off. Run 'guard-mcp-off' to retry it."; exit 1
 fi
 echo "🔓 ALL AI guards OFF: the agent is back to wide open. Re-run any challenge prompt to see the weakness."
 EOS
 
-# Challenge 5 — OUTPUT guard (scrubs the leaked Bat Spit Amazing Awesome Sauce from replies).
+# OUTPUT guard (scrubs the leaked Bat Spit Amazing Awesome Sauce from replies).
 cat > "$HOME/guard-output-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 if _px "output=on"; then
-  echo "🛡️  Challenge 5 — OUTPUT guard ON. The agent's replies are now scanned on the way out: the recipe"
+  echo "🛡️  OUTPUT guard ON. The agent's replies are now scanned on the way out: the recipe"
   echo "    amounts, the ogre-toenails ingredient, and the signature are redacted before they reach you."
   echo "    Re-send the recipe prompt; the reply comes back scrubbed (and Datadog shows the guard fired)."
 else
@@ -289,19 +290,19 @@ cat > "$HOME/guard-output-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 if _px "output=off"; then
-  echo "🔓 Challenge 5 — OUTPUT guard OFF. Replies are no longer scrubbed. Re-send the recipe prompt and the"
+  echo "🔓 OUTPUT guard OFF. Replies are no longer scrubbed. Re-send the recipe prompt and the"
   echo "    full secret recipe leaks straight through."
 else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-output-off' again."
 fi
 EOS
 
-# Challenge 6 — INPUT guards (deterministic block-list + prompt-injection classifier), upstream of the model.
+# INPUT guards, the support ticket's fix (deterministic block-list + prompt-injection classifier), upstream of the model.
 cat > "$HOME/guard-input-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 if _px "input_blocklist=on&input_classifier=on"; then
-  echo "🛡️  Challenge 6 — INPUT guards ON (two stages): (1) a block-list rejects prompts containing"
+  echo "🛡️  INPUT guards ON, the support ticket's first tier (two stages): (1) a block-list rejects prompts containing"
   echo "    destructive commands or the secret-recipe phrases, and (2) a prompt-injection classifier catches"
   echo "    poisoned instructions, both in a prompt and in a support ticket as the ticket tool reads it."
   echo "    Re-send the ticket ask: the ticket comes back withheld, so the model never sees the hidden"
@@ -314,14 +315,14 @@ cat > "$HOME/guard-input-off" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 if _px "input_blocklist=off&input_classifier=off"; then
-  echo "🔓 Challenge 6 — INPUT guards OFF. Prompts go straight to the model. Re-send the poisoned ticket and"
+  echo "🔓 INPUT guards OFF. Prompts go straight to the model. Re-send the poisoned support ticket and"
   echo "    the injected instructions ride right in (and you pay tokens for it)."
 else
   echo "⚠️  Could not reach the guard-proxy. Wait a moment and try 'guard-input-off' again."
 fi
 EOS
 
-# Challenge 7 — MCP tool authorization. Only get_weather stays usable on evil-mcp; the rogue tools
+# MCP tool authorization, the poisoned weather tool's fix. Only get_weather stays usable on evil-mcp; the rogue tools
 # (read_internal_config, apply_optimization) are stopped. workshop-mcp is left fully intact. Where they are
 # stopped depends on the cluster (_mcp in .guardlib): at agentgateway on an admin cluster, in the agent's
 # allow-list everywhere else.
@@ -330,18 +331,18 @@ cat > "$HOME/guard-mcp-on" <<'EOS'
 source "$HOME/.guardlib"
 case "$(_mcp on)" in
   gateway)
-    echo "🛡️  Challenge 7 — MCP tool authorization ON, at the gateway. agentgateway now allows only get_weather"
+    echo "🛡️  MCP tool authorization ON, at the gateway, against the poisoned weather tool. agentgateway now allows only get_weather"
     echo "    on evil-mcp: the rogue tools drop out of the tool list it hands the agent, and a call to"
     echo "    read_internal_config is refused before evil-mcp ever runs it. Your real BurritoBot tools are"
     echo "    untouched. Re-ask the weather question: the poisoned description still tries, and the gateway"
     echo "    says no, so the sentinel never appears. The gateway reloads its rule without a restart." ;;
   toolnames)
-    echo "🛡️  Challenge 7 — MCP tool authorization ON. The rogue evil-mcp tools (read_internal_config,"
+    echo "🛡️  MCP tool authorization ON, against the poisoned weather tool. The rogue evil-mcp tools (read_internal_config,"
     echo "    apply_optimization) are removed from the agent's allow-list; only get_weather remains. Your real"
     echo "    BurritoBot tools are untouched. Re-ask the weather question: the poisoned description still tries,"
     echo "    but the rogue tool is gone, so the sentinel never appears." ;;
   *)
-    echo "⚠️  The MCP tool restriction (C7) did not switch on. Wait a moment and try 'guard-mcp-on' again."; exit 1 ;;
+    echo "⚠️  The MCP tool restriction did not switch on. Wait a moment and try 'guard-mcp-on' again."; exit 1 ;;
 esac
 EOS
 cat > "$HOME/guard-mcp-off" <<'EOS'
@@ -349,18 +350,18 @@ cat > "$HOME/guard-mcp-off" <<'EOS'
 source "$HOME/.guardlib"
 case "$(_mcp off)" in
   gateway)
-    echo "🔓 Challenge 7 — MCP tool authorization OFF, at the gateway. agentgateway lets every evil-mcp tool"
+    echo "🔓 MCP tool authorization OFF, at the gateway, for the poisoned weather tool. agentgateway lets every evil-mcp tool"
     echo "    through again. Re-ask the weather question and the agent gets chained into read_internal_config,"
     echo "    leaking the sentinel." ;;
   toolnames)
-    echo "🔓 Challenge 7 — MCP tool authorization OFF. The rogue evil-mcp tools are back in the allow-list."
+    echo "🔓 MCP tool authorization OFF for the poisoned weather tool. The rogue evil-mcp tools are back in the allow-list."
     echo "    Re-ask the weather question and the agent gets chained into read_internal_config, leaking the"
     echo "    sentinel." ;;
   *)
-    echo "⚠️  The MCP tool restriction (C7) did not switch off. Wait a moment and try 'guard-mcp-off' again."; exit 1 ;;
+    echo "⚠️  The MCP tool restriction did not switch off. Wait a moment and try 'guard-mcp-off' again."; exit 1 ;;
 esac
 EOS
-# Challenge 4 — DENIAL-OF-WALLET. The agent does not have to crash your cluster to hurt you; it can just
+# DENIAL-OF-WALLET. The agent does not have to crash your cluster to hurt you; it can just
 # run up the bill. On the community cluster there is no cap and the cost counter on BurritoBot climbs
 # with no ceiling. The control is a per-agent budget at the gateway: once this cluster's spend crosses
 # its cap, further requests are refused BEFORE the model is called, so a blocked request costs nothing.
@@ -368,7 +369,7 @@ cat > "$HOME/guard-budget-on" <<'EOS'
 #!/bin/bash
 source "$HOME/.guardlib"
 if _px "budget=on"; then
-  echo "🛡️  Challenge 4 — BUDGET guard ON. This cluster now has a spend cap at the gateway. Keep chatting;"
+  echo "🛡️  BUDGET guard ON. This cluster now has a spend cap at the gateway. Keep chatting;"
   echo "    once the tab crosses the cap, BurritoBot refuses further requests BEFORE calling the model, so"
   echo "    the cost counter stops dead and a blocked request costs \$0. The agent is not down; the bill is"
   echo "    capped. That is denial-of-wallet stopped at the platform, not in the app."
@@ -470,10 +471,76 @@ case "$(_pxkey "topic=off" topic)" in
     echo "⚠️  The guard-proxy still reports the on-topic guard on. Try 'guard-topic-off' again."; exit 1 ;;
 esac
 EOS
+# The cluster fixes, beside the AI guards. Each prints its kubectl before it runs, as the AI guards do.
+#
+# guard-rbac-on: the CEO's record. agent-sa ships with get and list on every Secret in the namespace, so the bot
+# reads ceo-personal-record. The fix is a Role that names the one Secret the agent reads, its own workshop-agent
+# config; c5-scoped-role.yaml is that Role. guard-rbac-off puts back the shipped Role (c8-broad-role.yaml). The
+# workshop-agent Application ignores the Role's rules, so Argo CD leaves the live Role as applied.
+cat > "$HOME/guard-rbac-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+c=(kubectl apply -f "$HOME/challenges/c5-scoped-role.yaml")
+_show "${c[@]}"
+if "${c[@]}" >/dev/null 2>&1; then
+  echo "🛡️  RBAC fix ON for the CEO's record. agent-sa's Role now reads one Secret by name, the agent's own"
+  echo "    workshop-agent config, and lists none. Re-ask for the CEO's record: the read comes back Forbidden"
+  echo "    from the Kubernetes API, so there is nothing for the bot to repeat."
+else
+  echo "⚠️  The Role did not change. Wait a moment and try 'guard-rbac-on' again."; exit 1
+fi
+EOS
+cat > "$HOME/guard-rbac-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+c=(kubectl apply -f "$HOME/challenges/c8-broad-role.yaml")
+_show "${c[@]}"
+if "${c[@]}" >/dev/null 2>&1; then
+  echo "🔓 RBAC fix OFF for the CEO's record. agent-sa can read every Secret in the namespace again, so the"
+  echo "    CEO's record is back in reach."
+else
+  echo "⚠️  The Role did not change. Wait a moment and try 'guard-rbac-off' again."; exit 1
+fi
+EOS
+# guard-admission-on: the support ticket's second tier. Kyverno's restrict-image-registries denies the Joker image
+# the ticket asks deploy_app for. On sets its validationActions to Deny, off to Audit (admitted, only reported);
+# both read the action back. Argo CD ignores /spec/validationActions, so the live flip stays.
+cat > "$HOME/guard-admission-on" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+c=(kubectl patch validatingpolicy restrict-image-registries --type=json \
+  -p '[{"op":"replace","path":"/spec/validationActions","value":["Deny"]}]')
+g=(kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}')
+_show "${c[@]}"; "${c[@]}" >/dev/null 2>&1
+_show "${g[@]}"
+if [ "$("${g[@]}" 2>/dev/null)" = Deny ]; then
+  echo "🛡️  Admission control ON for the support ticket. Kyverno's registry allow-list now denies any image"
+  echo "    from outside the allowed registries, so the Joker the ticket asks for is refused at admission."
+  echo "    Re-send the ticket ask: the deploy is denied, and the deny message names restrict-image-registries."
+else
+  echo "⚠️  restrict-image-registries is not in Deny. Wait a moment and try 'guard-admission-on' again."; exit 1
+fi
+EOS
+cat > "$HOME/guard-admission-off" <<'EOS'
+#!/bin/bash
+source "$HOME/.guardlib"
+c=(kubectl patch validatingpolicy restrict-image-registries --type=json \
+  -p '[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]')
+g=(kubectl get validatingpolicy restrict-image-registries -o 'jsonpath={.spec.validationActions[0]}')
+_show "${c[@]}"; "${c[@]}" >/dev/null 2>&1
+_show "${g[@]}"
+if [ "$("${g[@]}" 2>/dev/null)" = Audit ]; then
+  echo "🔓 Admission control OFF for the support ticket. The registry allow-list only reports now, so the"
+  echo "    Joker the ticket asks for is admitted and lands on the wall."
+else
+  echo "⚠️  restrict-image-registries is not in Audit. Wait a moment and try 'guard-admission-off' again."; exit 1
+fi
+EOS
 chmod +x "$HOME/platform" "$HOME/guards-status" "$HOME/guards-on" "$HOME/guards-off" \
   "$HOME"/guard-output-on "$HOME"/guard-output-off "$HOME"/guard-input-on "$HOME"/guard-input-off \
   "$HOME"/guard-mcp-on "$HOME"/guard-mcp-off "$HOME"/guard-budget-on "$HOME"/guard-budget-off \
-  "$HOME"/guard-topic-on "$HOME"/guard-topic-off "$HOME"/finale-cap-on "$HOME"/finale-cap-off "$HOME"/cost-watch
+  "$HOME"/guard-topic-on "$HOME"/guard-topic-off "$HOME"/guard-rbac-on "$HOME"/guard-rbac-off \
+  "$HOME"/guard-admission-on "$HOME"/guard-admission-off "$HOME"/finale-cap-on "$HOME"/finale-cap-off "$HOME"/cost-watch
 
 # No banner. The shell opens on a prompt and nothing else (#342).
 #

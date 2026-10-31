@@ -294,8 +294,8 @@ print("== when Argo CD cannot be asked, nothing is guessed ==")
 for name in TOGGLES:
     state, (r,) = run("unreachable", name)
     direction = name.rsplit("-", 1)[1]
-    check(f"{name} exits non-zero and says C7 did not switch {direction}",
-          r.returncode != 0 and f"(C7) did not switch {direction}" in r.stdout, r.stdout + r.stderr)
+    check(f"{name} exits non-zero and says the MCP tool restriction did not switch {direction}",
+          r.returncode != 0 and f"MCP tool restriction did not switch {direction}" in r.stdout, r.stdout + r.stderr)
     check(f"and {name} touched neither control", state["toolNames"] is None and not patched_cm(state),
           f"{state['toolNames']}")
 
@@ -303,8 +303,8 @@ print("== a stale read is refused, not written over ==")
 for name in TOGGLES:
     state, (r,) = run("admin", name, race=True)
     direction = name.rsplit("-", 1)[1]
-    check(f"{name} exits non-zero and says C7 did not switch {direction} when the ConfigMap changed under it",
-          r.returncode != 0 and f"(C7) did not switch {direction}" in r.stdout, r.stdout + r.stderr)
+    check(f"{name} exits non-zero and says the MCP tool restriction did not switch {direction} when the ConfigMap changed under it",
+          r.returncode != 0 and f"MCP tool restriction did not switch {direction}" in r.stdout, r.stdout + r.stderr)
     check(f"and {name} left the other writer's config and the allow-list as they were",
           state["config"] == COMMITTED and state["toolNames"] is None, f"{state['toolNames']}")
 
