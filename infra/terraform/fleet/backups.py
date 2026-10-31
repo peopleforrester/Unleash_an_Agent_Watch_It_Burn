@@ -602,7 +602,9 @@ def cmd_down(x: Ctx, a) -> int:
         targets = [c for c in targets if c.name not in held]
         rc = 1
     for region, cs in by_region(targets).items():
-        rc |= run_steps(x, region, cs, region_steps(x, region, cs, "down", a.apply), a.dry_run)
+        # Without --apply this prints the plan and runs nothing, as the usage says. It used to rely on fleet.sh
+        # refusing without WIB_APPLY, which `instructors down` did not, and five standbys went (2026-10-31).
+        rc |= run_steps(x, region, cs, region_steps(x, region, cs, "down", a.apply), a.dry_run or not a.apply)
     return rc
 
 

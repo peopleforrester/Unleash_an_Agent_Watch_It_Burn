@@ -504,6 +504,17 @@ downs = [l for l in r.stdout.splitlines() if l.endswith("instructors down all")]
 check("down all destroys every standby, region by region", len(downs) == 3 and
       sum(l.count("|") // 6 for l in downs) == 15, r.stdout)
 check("and without --apply it is fleet.sh's dry run", all("WIB_APPLY" not in l for l in downs))
+# `down` with neither --apply nor --dry-run is a dry run too (2026-10-31: it destroyed five us-west-2 standbys,
+# because it ran `instructors down all`, which did not check WIB_APPLY). It must print the plan and run nothing.
+_ran_down: list = []
+_ctx = b.Ctx()
+_real_run2 = b.subprocess.run
+b.subprocess.run = lambda cmd, **kw: _ran_down.append(cmd) or type("R", (), {"returncode": 0})()
+try:
+    _rc = b.cmd_down(_ctx, type("A", (), {"selectors": ["all"], "apply": False, "force": False, "dry_run": False})())
+finally:
+    b.subprocess.run = _real_run2
+check("down without --apply runs no fleet.sh step at all", _rc == 0 and _ran_down == [], str(_ran_down)[:300])
 print("== preflight before any spend, in each region ==")
 r = subprocess.run([sys.executable, str(FLEET_DIR / "backups.py"), "up", "six-hours", "--dry-run"],
                    capture_output=True, text=True, timeout=120)

@@ -114,7 +114,11 @@ echo "== teardown takes the same selector as the build (#88) =="
 down() { q "require_tools() { :; }; terraform() { :; }; report_failures() { :; }
             read_vpc_for() { VPC_ID=vpc-test; SUBNETS_JSON='[]'; }
             run_pool() { shift; printf '%s\n' \"\$@\"; }
-            cmd_instructors down $1" | sort | tr '\n' ' '; }
+            WIB_APPLY=1 cmd_instructors down $1" | sort | tr '\n' ' '; }
+check "without WIB_APPLY instructors down destroys nothing and says it is a dry run" \
+  '( out="$( cd "$(dirname "${FLEET}")" && WIB_ROSTER_FILE="${ROSTER}" bash -c "source \"${FLEET}\" >/dev/null 2>&1; load_roster
+       require_tools() { :; }; terraform() { :; }; report_failures() { :; }; read_vpc_for() { VPC_ID=v; SUBNETS_JSON=\"[]\"; }
+       run_pool() { echo RAN; }; unset WIB_APPLY; cmd_instructors down" 2>&1 )"; ! grep -q RAN <<<"${out}" && grep -q "DRY-RUN" <<<"${out}" )'
 check "down with no selector destroys the whole roster" \
   '[[ "$(down "")" == "watch-it-burn-community watch-it-burn-private " ]]'
 check "down both destroys the whole roster" \

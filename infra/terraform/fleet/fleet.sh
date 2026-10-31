@@ -3069,6 +3069,13 @@ _instructors_down() {
     done
     # Same contract as up: an empty selection is a message and exit 0, never a silent no-op.
     [[ "${total}" -gt 0 ]] || { log "no roster clusters for the requested selection"; return 0; }
+    # The same gate as `fleet.sh down`. Without it, backups.py's documented dry run of `down` destroyed five
+    # us-west-2 standbys on 2026-10-31 (verify/test_cluster_roles.sh).
+    local sel=() n
+    for r in "${roles[@]}"; do
+        while IFS= read -r n; do [[ -n "${n}" ]] && sel+=("${n}"); done < <(_roster_names_for "${r}" "${owner_filter}")
+    done
+    require_apply "instructors down" "${sel[@]}" || return 0
     log "destroying ${total} roster cluster(s)..."
     terraform -chdir="${CLUSTER_DIR}" init -input=false >/dev/null
     for r in "${roles[@]}"; do
