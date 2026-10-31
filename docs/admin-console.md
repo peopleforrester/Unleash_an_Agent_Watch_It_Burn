@@ -34,7 +34,7 @@ infra/terraform/fleet/fleet.sh serve-actions --once   # one health report and on
 ```
 
 Start it before the doors open and leave it up. While it is down, actions stay pending and the health
-report ages, and the page shows both (below). Tuning: `WIB_ACTIONS_POLL` (queue poll, default 10 s),
+report ages, and the page shows both (below; a long action that is still running holds both alarms). Tuning: `WIB_ACTIONS_POLL` (queue poll, default 10 s),
 `WIB_ACTIONS_HEALTH_EVERY` (health report, default 300 s), `WIB_RESTART_WAIT` (how long a restart waits
 for a Ready replacement, default 180 s). It needs `curl`, `python3`, `aws` and `kubectl`, plus `terraform`
 for `converge`.
@@ -105,4 +105,17 @@ id, who, action, cluster, exit code), which survives the app being unreachable.
 **What the page shows.** One row per cluster from the latest health report, with the four columns above,
 each row's actions, and the age of the report. It also shows the oldest pending action's age. A report
 older than three health intervals, or an action pending for more than a minute, means the runner is not
-up, and the page should say so instead of looking calm.
+up, and the page says so instead of looking calm. No health report ever received is always that alarm.
+
+One thing holds both of those alarms: an action that is still `running` (claimed, no result yet) and was
+claimed within the last 2700 s (`RUNNING_ALIVE_SECONDS` in provisioning-agenticburn's `app.py`, #45 there).
+`serve-actions` runs one action at a time and starts no health report until that action ends, so behind a
+long `converge` the queue waits and the report ages while the runner is alive. The page then says "The
+runner is busy: <action> on <cluster>, requested by <who>, has run N s", and how long the oldest queued
+action has waited behind it. The longest action is a `converge` that fails every round: at the default
+waits, 3 rounds (`WIB_CONVERGE_ROUNDS`) of `WIB_MODELCONFIG_WAIT` 300 s, `WIB_CONVERGE_LB_WAIT` 180 s and
+`WIB_CONVERGE_DNS_WAIT` 300 s, with 30 s between rounds, about 2400 s; 2700 s leaves margin. A claim older
+than that proves nothing, because the runner may have died mid-action and left it claimed, so the two
+alarms apply again. Raising `WIB_CONVERGE_ROUNDS` or those waits past about 2700 s in total needs a
+matching raise of `RUNNING_ALIVE_SECONDS` in the app, or the page calls a busy runner down. The runner
+itself needs no change.

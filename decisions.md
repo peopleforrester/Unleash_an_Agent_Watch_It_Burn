@@ -6268,3 +6268,26 @@ repo had nothing to fix for it.
 `go test -tags live -timeout 180m -run TheObservabilityRestartOnAnArmedCluster ./cmd/labctl/`, at a pin that includes
 this commit, run by a session with AWS access. It shows that both Deployments' pods are replaced, with
 `block-argocd-drift` armed, and that ArgoCD reports no drift afterwards.
+## 2026-10-31 · #702 · docs/admin-console.md: a recent claim of a still-running action holds the runner-down alarms
+
+provisioning-agenticburn#45 (its commit b9ec3d4) changed how `/admin/console` decides the runner is down, and
+"What the page shows" in `docs/admin-console.md` still gave only the old rule. Hecaton run 13305 brought it up to
+date from the app itself (`app.py`'s `admin_console` and `RUNNING_ALIVE_SECONDS = 2700`, and
+`templates/admin_console.html`, read through `sources`).
+
+- **The section now says** that an action still `running` and claimed within 2700 s holds both the pending-action
+  and the stale-report alarm, that the page then names what the queue waits behind ("The runner is busy: …, has
+  run N s") and how long the oldest queued action has waited, that an older claim proves nothing and the old alarms
+  apply again, and that no health report ever received is still an alarm.
+- **Why 2700 s, and what to keep in step.** A `converge` failing every round is about 2400 s at the defaults
+  (`fleet.sh`: `WIB_CONVERGE_ROUNDS` 3, `WIB_MODELCONFIG_WAIT` 300, `WIB_CONVERGE_LB_WAIT` 180,
+  `WIB_CONVERGE_DNS_WAIT` 300, `sleep 30` between rounds). The doc says that raising those past about 2700 s in
+  total needs a matching raise of `RUNNING_ALIVE_SECONDS` in the app, and that the runner needs no change.
+- **The previous attempt** stopped on the podman store in pool claude-performantpro-5 (`default OCI runtime "crun"
+  not found`, RunRoot under another worktree not writable). That is the host's container setup, not this repo:
+  nothing under `verify/` calls podman, so there was nothing here to fix.
+
+**Tests.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`. No test changes: the change is prose, and
+the app's behaviour is held by provisioning-agenticburn's `test_app.py`.
+
+**Not yet run on a cluster:** nothing is owed. The page behaviour lives in the provisioning app and is tested there.
