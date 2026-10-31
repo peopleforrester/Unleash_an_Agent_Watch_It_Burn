@@ -7,10 +7,10 @@
 
 | | |
 |---|---|
-| Copied out | 2026-10-29 |
+| Copied out | 2026-10-31 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `2603c12a64281c4e989eddd1c1ee8c45e24b59a9` (the last commit to change lab.html, on 2026-10-29) |
-| Source blob | `dd004829cc312f9f43426deb1617350d23ae9159` |
+| Source commit | `88759de74facc83d405e0429b055caa312e752d6` (the last commit to change lab.html, on 2026-10-31) |
+| Source blob | `65efbbd790e9251dfca892f9002d075608599dd8` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -741,12 +741,13 @@ You will see a span called `execute_tool read_internal_config`, a tool you never
 > kubectl -n agent get agent workshop-agent -o yaml | grep -A 30 'tools:'
 > ```
 >
-> This is BurritoBot's configuration (kagent, the framework that runs it, calls this an Agent). Its tools come from two tool servers, and the second, `evil-mcp`, is the one carrying the poisoned tool.
+> This is BurritoBot's configuration (kagent, the framework that runs it, calls this an Agent). Its tools come from two tool servers, and one of them, `evil-mcp`, is the one carrying the poisoned tool.
 >
 > **The fix: cut evil-mcp's allow-list down to the one harmless tool, `get_weather`.** The model can be talked into *wanting* a tool; it cannot be talked into *having* one.
 >
 > ```bash
-> kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather"]}]'
+> i=$(kubectl -n agent get agent workshop-agent -o json | jq '[.spec.declarative.tools[].mcpServer.name] | index("evil-mcp")')
+> kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"test","path":"/spec/declarative/tools/'$i'/mcpServer/name","value":"evil-mcp"},{"op":"replace","path":"/spec/declarative/tools/'$i'/mcpServer/toolNames","value":["get_weather"]}]'
 > ```
 >
 > ```
@@ -761,7 +762,7 @@ You will see a span called `execute_tool read_internal_config`, a tool you never
 >           toolNames: [get_weather]     # <- the rogue tools are gone
 > ```
 >
-> The platform team owns this spec, not the developer. Give the agent pod about 30 seconds to restart and pick up the change. Be careful: an *empty* list here means "every tool", not "no tools". Name the ones you keep.
+> The first line finds evil-mcp's place in the tools list by its name, and the patch's `test` step refuses the change if that place does not hold evil-mcp, so the real BurritoBot tools are never the ones cut. The platform team owns this spec, not the developer. Give the agent pod about 30 seconds to restart and pick up the change. Be careful: an *empty* list here means "every tool", not "no tools". Name the ones you keep.
 >
 > Read the spec back and see the change:
 >
@@ -944,7 +945,8 @@ To put the cluster back the way it started:
 kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns agent-allow-otel-egress agent-allow-kagent-egress agent-allow-intra-namespace
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
 kubectl apply -f ~/challenges/c8-broad-role.yaml
-kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'
+i=$(kubectl -n agent get agent workshop-agent -o json | jq '[.spec.declarative.tools[].mcpServer.name] | index("evil-mcp")')
+kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"test","path":"/spec/declarative/tools/'$i'/mcpServer/name","value":"evil-mcp"},{"op":"replace","path":"/spec/declarative/tools/'$i'/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'
 ```
 
 *[Community cluster only]* No Kyverno line here: the Community cluster has no image policy to put back into Audit, because it never had one.
@@ -956,7 +958,8 @@ kubectl -n agent delete networkpolicy agent-egress-allowlist agent-allow-dns age
 kubectl patch validatingpolicy restrict-image-registries --type=json -p='[{"op":"replace","path":"/spec/validationActions","value":["Audit"]}]'
 kubectl -n agent delete kubearmorpolicy block-recipe-snoop
 kubectl apply -f ~/challenges/c8-broad-role.yaml
-kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'
+i=$(kubectl -n agent get agent workshop-agent -o json | jq '[.spec.declarative.tools[].mcpServer.name] | index("evil-mcp")')
+kubectl -n agent patch agent workshop-agent --type=json -p='[{"op":"test","path":"/spec/declarative/tools/'$i'/mcpServer/name","value":"evil-mcp"},{"op":"replace","path":"/spec/declarative/tools/'$i'/mcpServer/toolNames","value":["get_weather","read_internal_config","apply_optimization"]}]'
 ```
 
 That includes the scoped Role from Challenge 8, so the agent goes back to being able to read every Secret in the namespace and Challenge 8 can be run again from the start.

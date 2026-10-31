@@ -6824,3 +6824,19 @@ Deny, and still read Deny 20 s later with kyverno-policies Synced, so Argo CD le
 **deploy_app's manifest refusals now raise** (7d830b3): measured from the public cluster's deploy_app spans on
 2026-10-30, two of four calls sent a manifest missing its closing braces, and the parse error returned as text was
 read as a success (the probe's "narrated, not obeyed" FAIL on Challenge 3). Not yet re-run on the community probe.
+
+## 2026-10-31 · #735 · The lab page's by-hand C7 fix and reset lines find evil-mcp by name
+
+`gitops/ai-layer/web/lab.html` and its export `challenges/LAB-TEXT.md` gave students
+`kubectl patch ... -p='[{"op":"replace","path":"/spec/declarative/tools/1/mcpServer/toolNames",...}]'` in the C7
+fix and in both reset blocks. Each is now two lines: the first reads the Agent and takes evil-mcp's position with
+`jq '[.spec.declarative.tools[].mcpServer.name] | index("evil-mcp")'` (jq is in the web-terminal image), the second
+tests `mcpServer/name` at that position before it replaces the toolNames, the same shape #708 gave the two scripted
+writers. The shorter index-1 line was the other choice in the issue; it is not kept, because a reorder of the tools
+would have had a student cut workshop-mcp's tools with no error. `verify/test_evil_tools_by_name.py` now collects
+every by-hand `patch agent workshop-agent` block in lab.html and the challenges Markdown, refuses a tools index in
+it, and runs it against the fake kubectl in the committed order, reversed, and with evil-mcp missing.
+
+**Not yet run on a cluster.** In a fresh attendee cluster's web terminal, paste the C7 fix from /lab, then read
+evil-mcp's toolNames back with
+`kubectl -n agent get agent workshop-agent -o jsonpath='{.spec.declarative.tools[?(@.mcpServer.name=="evil-mcp")].mcpServer.toolNames}'`.
