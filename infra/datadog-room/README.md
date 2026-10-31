@@ -17,9 +17,12 @@ projects' data. This view needs no login. It is a public shared dashboard: anyon
 
 ## What the room sees
 
-Six widgets: a note saying what the page is, the number of chats, the number of tool calls the bot made, the
-model bill so far, a top list of the tools the room talked the bot into calling, and chats per minute. The
-window is the last hour. It refreshes about once a minute, which is Datadog's fixed rate for shared dashboards.
+Eight widgets: a note saying what the page is, the number of chats, the number of tool calls the bot made, the
+model bill so far, a top list of the tools the room talked the bot into calling, a top list of what the guards
+stopped (guard-proxy's `input_blocklist_hit`, `input_classifier_block` and `output_scrub`, and workshop-mcp's
+`ticket_withheld`, by event name), the number of chats that failed (chat spans with
+`status.code:status_code_error`), and chats per minute. The guards list is empty while attackme's guards are off,
+which they are until a presenter turns one on. The window is the last hour. It refreshes about once a minute, which is Datadog's fixed rate for shared dashboards.
 
 The room does not see individual traces or prompts. Datadog lists the widgets a shared dashboard renders
 (docs.datadoghq.com/dashboards/sharing/shared_dashboards, read 2026-10-29). The List widget, which lists LLM
@@ -33,14 +36,20 @@ A shared dashboard runs its queries with its author's permissions, and Whitney c
 the only thing that keeps the page to attackme is the filter in each query. `room_view.py` refuses to load a
 definition that breaks any of these rules:
 
-- Every query is a metric query whose filter carries `kube_cluster_name:burritobot-public` and no other cluster.
-  This tag is the only one that tells attackme apart from the presenters' cluster: the two share `env`, `ml_app` and
-  every service name.
+- Every query is a metric query whose filter carries `kube_cluster_name:burritobot-public` and no other cluster,
+  or a logs count whose search has that term at its top level, with no top-level `OR` that could bypass it, and
+  names or excludes no other cluster. This tag is the only one that tells attackme apart from the presenters'
+  cluster: the two share `env`, `ml_app` and every service name.
+- A logs query only counts (no measure), grouped by `@event` only. The log lines themselves can quote what a
+  guard blocked, so they never reach the page.
+- No query names a content attribute (`gen_ai.input*`, `gen_ai.output*`, `message`, `prompt`, `tool_input`,
+  `arguments`, `content` and the rest of `CONTENT_MARKERS`) in its filter, grouping or measure.
 - No `ml_obs.*` metric. Datadog's LLM Observability metrics do not carry span tags ("Other tags set on spans are
   not available as tags on Agent Observability metrics", docs.datadoghq.com/llm_observability/monitoring/metrics,
   read 2026-10-29), so they cannot be limited to one cluster. The counts come from the collector's `span_metrics`
   connector (`traces.span.metrics.calls`), which keeps the resource attributes, the cluster name among them.
-- Results are grouped by `span.name` only, never by a content attribute, so no attendee text reaches the page.
+- Metric results are grouped by `span.name` only, never by a content attribute, so no attendee text reaches the
+  page.
 - Only widget types a shared dashboard renders (note, query value, timeseries, top list). Datadog accepts any other
   type without an error and then shows it empty.
 - No template variables, and the share lets the viewer select neither a time nor a variable.
@@ -63,6 +72,14 @@ python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 -
 `--apply` refuses any org whose name does not start with `WIB_DD_POOL_PREFIX` (default `Datadog`, as in
 `verify/datadog-orgs.sh`). It prints the public URL and writes `share.json`; commit that file. A second `--apply`
 updates the dashboard and the share in place, so the URL and its QR code stay the same.
+
+Sharing in the sandbox org. Datadog's shared dashboards page (read 2026-10-31) says nothing about sandbox or
+trial orgs; it says an org admin can turn sharing types off on the Public Sharing settings page, and that a
+public share lasts a year unless given an expiry. The permissions page (docs.datadoghq.com/account_management/rbac/permissions,
+read 2026-10-31) gives `dashboards_public_share` and `dashboards_write` to the Standard role, which Admin inherits,
+and not to Read Only. So a share from Whitney's user should be allowed unless public sharing is off in her org,
+which only the apply shows: a 403 on the share step means it is. On 2026-10-31 the read-only key named the org
+`Datadog`, so the prefix guard passes.
 
 Built by hand instead: `room_view.py --json > room-view.json`, then use Import dashboard JSON on a new dashboard.
 Then choose Share, Share dashboard, Public. Set the time to Past 1 Hour and leave the time unselectable. Add no

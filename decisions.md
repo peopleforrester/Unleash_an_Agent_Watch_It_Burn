@@ -6871,3 +6871,30 @@ lab VPC, roughly $95 for KubeCon and $22 for one rehearsal, from AWS list prices
 applies, `backups.py preflight all`, both waves, `verify/test_backups_promotion_live.py` (which now also checks
 each region's standbys landed in two distinct AZs, and that no scheduled watcher holds the lock), and the schedule.
 `node_subnet_ids` has not been through `terraform plan`.
+## 2026-10-31 · #665 · The room's view gains guard decisions and failed chats, and its fence covers log counts and content attributes
+
+The view's spec asks for request count, tool calls by name, guard decisions, errors and cost. The 2026-10-29 build had
+all but guard decisions and errors. Two widgets are added to `infra/datadog-room/room_view.yaml`:
+
+- **What the guards stopped:** a logs count of guard-proxy's `input_blocklist_hit`, `input_classifier_block` and
+  `output_scrub`, and workshop-mcp's `ticket_withheld`, grouped by `@event` only: the events the fleet leaderboard
+  counts. Measured 2026-10-31 with the read-only key: the search parses, and over 30 days it found
+  `input_classifier_block` and `ticket_withheld` on `burritobot-private` and nothing on `burritobot-public`, whose
+  guards were off. So it reads zero until a presenter turns a guard on for attackme.
+- **Chats that failed:** chat spans with `status.code:status_code_error` from the `span_metrics` connector. Measured
+  the same day: Datadog stores the value lower-cased (`status_code_error`, `status_code_unset`); the upper-case
+  OTel spelling matches nothing.
+
+`room_view.py`'s fence now admits a logs query only as a count, grouped by `@event`, with
+`kube_cluster_name:burritobot-public` as a top-level term and no top-level `OR`, naming or excluding no other
+cluster. Every query, metrics or logs, is refused if it names a content attribute (`CONTENT_MARKERS`).
+`verify/test_room_view.py` covers each refusal, and checks that every guard event is one the platform logs.
+
+Public sharing in the sandbox org: Datadog's shared dashboards and permissions pages (read 2026-10-31) name no
+sandbox or trial limit. An admin can turn sharing types off under Public Sharing settings, and
+`dashboards_public_share` is a Standard-role permission. Whether sharing is on in Whitney's org shows only at the
+apply. The read-only key named the org `Datadog` on 2026-10-31, so the prefix guard passes.
+
+Not yet run on an org: `--apply`, `--check` and `verify/test_room_view_live.py`, which need a write key from
+Whitney's user. Not measured: whether a logs-backed top list renders on a public share. The shared dashboards page
+lists Top List as supported and says nothing about data sources.

@@ -23,9 +23,10 @@ environment, a key Whitney issues from her own user (the share's author is the k
 stops showing data if its author is deactivated). Key values are never printed.
 
 The fence. A shared dashboard runs its queries with its author's permissions, and the author can read the whole
-sandbox org. validate() is what keeps the page to attackme: metric queries only, each one's filter carrying
-kube_cluster_name:burritobot-public and no other cluster, no LLM Observability metric (ml_obs.* carry no cluster
-tag), grouped by nothing but span name, only widget types Datadog renders on a shared dashboard, no template
+sandbox org. validate() is what keeps the page to attackme: metric queries, and log counts for the guard decisions,
+each one's filter carrying kube_cluster_name:burritobot-public and no other cluster, no LLM Observability metric
+(ml_obs.* carry no cluster tag), grouped by nothing but span name (metrics) or event name (logs), no query naming a
+prompt, reply or tool-argument attribute, only widget types Datadog renders on a shared dashboard, no template
 variables, and a share that lets the viewer select neither a time nor a variable.
 
 Usage:
@@ -50,7 +51,9 @@ import yaml
 
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "datadog-fleet"))
-from fleet_monitors import SECRET_ID, Datadog, find_dashboard, norm, org_name, read_keys  # noqa: E402
+from fleet_monitors import (  # noqa: E402
+    SECRET_ID, Datadog, find_dashboard, norm, org_name, query_text, read_keys,
+)
 
 DEF_FILE = HERE / "room_view.yaml"
 SHARE_FILE = HERE / "share.json"
@@ -61,6 +64,14 @@ APP_KEY_ENV = "WIB_ROOM_VIEW_APP_KEY"
 WIDGET_TYPES = ("note", "query_value", "timeseries", "toplist")
 # Group by span name only: a group on a content attribute would print attendee text on a public page.
 GROUP_KEYS = ("span.name",)
+# A logs query (the guard decisions) may only count, and only group by the event name a guard writes
+# (input_blocklist_hit, output_scrub, ...): an enum in the code, never text an attendee typed.
+LOG_GROUP_FACETS = ("@event",)
+# Attribute names that carry prompt, reply or tool-argument text. No query may name one in its filter, its grouping
+# or its measure, so no widget can show, or even select on, attendee text.
+CONTENT_MARKERS = ("gen_ai.input", "gen_ai.output", "gen_ai.prompt", "gen_ai.completion", "message", "prompt",
+                   "completion", "tool_input", "tool_output", "tool_args", "arguments", "input.value",
+                   "output.value", "content", "ticket_id")
 LIVE_SPANS = ("15m", "1h", "4h", "1d", "2d", "1w", "1mo", "3mo")
 
 
@@ -84,6 +95,35 @@ def queries(dash: dict):
         for r in (w.get("definition") or {}).get("requests") or []:
             for q in r.get("queries") or []:
                 yield i, q
+
+
+def top_level(search: str) -> str:
+    """A log search with every parenthesized group removed: what is left is ANDed at the top."""
+    prev = None
+    while prev != search:
+        prev, search = search, re.sub(r"\([^()]*\)", " ", search)
+    return search
+
+
+def validate_logs(where: str, q: dict) -> list[str]:
+    """A logs query counts guard decisions. Fenced by a top-level kube_cluster_name:burritobot-public term that no OR
+    can bypass, naming no other cluster, counting and nothing else, grouped by the event name only."""
+    problems: list[str] = []
+    search = query_text(q).strip()
+    top = top_level(search).split()
+    if CLUSTER_TAG not in top or "OR" in top:
+        problems.append(f"{where}: not filtered to {CLUSTER_TAG} (a top-level term, with no top-level OR)")
+    others = [c for neg, c in re.findall(r"([-!]?)kube_cluster_name:([^\s()]+)", search)
+              if neg or c != "burritobot-public"]
+    if others:
+        problems.append(f"{where}: names a cluster other than burritobot-public, or excludes one: {others}")
+    compute = q.get("compute") or {}
+    if compute.get("aggregation") != "count" or compute.get("metric"):
+        problems.append(f"{where}: a logs query may only count, not measure an attribute")
+    bad = [g.get("facet") for g in q.get("group_by") or [] if g.get("facet") not in LOG_GROUP_FACETS]
+    if bad:
+        problems.append(f"{where}: grouped by {bad}; only {LOG_GROUP_FACETS} is allowed")
+    return problems
 
 
 def validate(defs: dict, now: dt.datetime) -> list[str]:
@@ -111,8 +151,14 @@ def validate(defs: dict, now: dt.datetime) -> list[str]:
                     problems.append(f"widget {i}: formula '{f.get('formula')}' names a query that does not exist")
     for i, q in queries(dash):
         where = f"widget {i} query {q.get('name')}"
+        marked = [m for m in CONTENT_MARKERS if m in json.dumps(q).lower()]
+        if marked:
+            problems.append(f"{where}: names a content attribute {marked}; no attendee text on a public page")
+        if q.get("data_source") == "logs":
+            problems.extend(validate_logs(where, q))
+            continue
         if q.get("data_source") != "metrics":
-            problems.append(f"{where}: data source '{q.get('data_source')}' is not metrics")
+            problems.append(f"{where}: data source '{q.get('data_source')}' is not metrics or logs")
             continue
         text = q.get("query", "")
         tags = filter_tags(text)
@@ -159,7 +205,7 @@ def share_body(defs: dict, dashboard_id: str) -> dict:
 
 
 def live_queries(dash: dict) -> list[str]:
-    return [norm(q.get("query", "")) for _, q in queries(dash)]
+    return [norm(query_text(q)) for _, q in queries(dash)]
 
 
 def fetch_public(url: str) -> int:
@@ -297,7 +343,7 @@ def main(argv=None, keys=read_keys, http=None, now=None, env=None, share_file: p
           f"every query on {CLUSTER_TAG}, shared {defs['share']['share_type']} until {defs['share']['expiration']}")
     if not (a.apply or a.check):
         for i, q in queries(defs["dashboard"]):
-            print(f"  widget {i}: {q['query']}")
+            print(f"  widget {i} ({q.get('data_source')}): {query_text(q)}")
         print("  dry run: nothing read or written. Re-run with --apply, or --json to build it by hand.")
         return 0
     if not (a.profile and a.region):
