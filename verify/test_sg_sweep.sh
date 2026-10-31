@@ -78,6 +78,40 @@ check "down_one calls sweep_orphan_sgs" \
 check "audit-zero reports leftover k8s groups" \
       "grep -q 'zero:\${acct}:sg' '${FLEET}'"
 
+echo "== a parallel teardown's leak reports are re-checked once every destroy is done =="
+# 2026-10-31, the #643 standbys: five us-east-2 clusters in one lab VPC were destroyed at once. Each sweep is
+# VPC-wide, so each one met its siblings' groups while those clusters were still going, failed to delete them, and
+# recorded sg-leak; afterwards the VPC held nothing but its own Bedrock endpoint group.
+check "fleet.sh defines recheck_sg_leaks" "declare -F recheck_sg_leaks >/dev/null"
+mkdir -p "$(dirname "${FAIL_FILE}")"   # fleet.sh's own, read-only path
+printf 'sg-leak:watch-it-burn-community-b01\nsg-leak:watch-it-burn-private-b01\nother-cluster\n' >"${FAIL_FILE}"
+record_fail() { echo "${1}" >>"${FAIL_FILE}"; }
+cat >"${SHIM}/aws" <<'S'
+#!/usr/bin/env bash
+echo "aws $*" >>"${CALLS}"
+case "$*" in *describe-security-groups*group-name*) echo "None" ;; *) : ;; esac
+S
+read_vpc_id_for() { echo vpc-123; }
+recheck_sg_leaks >/dev/null 2>&1
+check "with the groups gone, both sg-leak reports are dropped" "! grep -q '^sg-leak:' '${FAIL_FILE}'"
+check "and every other failure is kept" "grep -qx 'other-cluster' '${FAIL_FILE}'"
+printf 'sg-leak:watch-it-burn-community-b01\n' >"${FAIL_FILE}"
+cat >"${SHIM}/aws" <<'S'
+#!/usr/bin/env bash
+echo "aws $*" >>"${CALLS}"
+case "$*" in
+  *describe-security-groups*group-name*) echo "sg-stuck" ;;
+  *describe-security-groups*) echo '[]' ;;
+  *delete-security-group*) exit 1 ;;
+  *) : ;;
+esac
+S
+recheck_sg_leaks >/dev/null 2>&1
+check "a group that still will not delete keeps its sg-leak report" "grep -qx 'sg-leak:watch-it-burn-community-b01' '${FAIL_FILE}'"
+rm -f "${FAIL_FILE}"
+check "_instructors_down and the cluster down both re-check before reporting" \
+      "[ \$(grep -c 'recheck_sg_leaks$' '${FLEET}') -ge 2 ]"
+
 echo
 if [ "${fail}" -gt 0 ]; then echo "FAILED: ${fail} check(s), ${pass} passed"; exit 1; fi
 echo "All security-group sweep checks passed (${pass})."

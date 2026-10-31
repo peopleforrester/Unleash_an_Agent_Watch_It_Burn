@@ -2273,6 +2273,22 @@ sweep_orphan_sgs() {
     return 0
 }
 
+# A teardown runs clusters in parallel, and sweep_orphan_sgs is VPC-wide, so a cluster's sweep meets its siblings'
+# groups while those clusters are still being destroyed, fails to delete them, and records sg-leak (2026-10-31: five
+# us-east-2 standbys reported leaks; afterwards the VPC held only its own Bedrock endpoint group). Once every destroy
+# is done, sweep again for each cluster that reported one, and keep only the reports a group still survives.
+recheck_sg_leaks() {
+    [[ -s "${FAIL_FILE}" ]] || return 0
+    local leaked n
+    leaked="$(sed -n 's/^sg-leak://p' "${FAIL_FILE}" | sort -u)"
+    [[ -n "${leaked}" ]] || return 0
+    sed -i '/^sg-leak:/d' "${FAIL_FILE}"
+    for n in ${leaked}; do
+        log "  ${n}: re-sweeping security groups now that every destroy in this run is done"
+        sweep_orphan_sgs "${n}" "$(read_membership "${n}" 2>/dev/null || true)"
+    done
+}
+
 down_one() {
     local name="$1"; assert_ours "${name}"
     [[ -f "${STATE_DIR}/${name}.tfstate" ]] || { log "  no state for ${name}, skipping"; return 0; }
@@ -2679,6 +2695,7 @@ cmd_down() {
         done
         wait
     fi
+    recheck_sg_leaks
     # The router table must describe what exists NOW. A teardown is the one legitimate shrink, so the
     # guard is lifted here and nowhere else; a host that pointed at a destroyed cluster 502s either way.
     if [[ -z "${WIB_NO_ROUTES:-}" ]]; then
@@ -3043,6 +3060,7 @@ _instructors_down() {
         [[ -n "${WIB_SERIAL}" ]] && wait
     done
     wait || true
+    recheck_sg_leaks
     report_failures
 }
 
