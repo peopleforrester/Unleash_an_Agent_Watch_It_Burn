@@ -6627,3 +6627,61 @@ live. On 2026-10-31 hecaton run 13613 checked it two ways:
 `CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, then `CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh`.
 A villain admitted in Audit should then reach Running, and `kubectl --context <ctx> logs deploy/promo-mascot` should
 print its log.
+## 2026-10-31 · #719 · BanTopics for #455 runs in lab-platform's llm-guard after lab-platform#341; images/llm-guard moves to 31962f2
+
+llm-guard-cpu-offline reported its state on #719. Its main is at `31962f2`. `llm-guard-0.3.16-cpu.5`
+(`sha256:4c66fd0f…8579791`) bakes BanTopics' zero-shot model and is past GHSA-xcq7-p3pf-p88h, the unbounded
+tracestate parsing advisory in OpenTelemetry. It is not signed yet (llm-guard-cpu-offline#15). The deployed guard,
+lab-platform's `llm-guard:v1` (`sha256:781a126b…`, #652), has neither. The issue asks two things: which image BanTopics
+will run in for #455, the on-topic guard, and whether to move this repo's submodule pin.
+
+**Decision 1: BanTopics runs in lab-platform's llm-guard image, once lab-platform#341 rebuilds and signs it.**
+cpu.5 is the fallback, used only if that build does not land. #652 settles this: lab-platform builds the guard image,
+"so llm-guard-cpu-offline no longer has to build or sign it for the talk". The rest of the repo is built around that
+image. The ai-layer Application sets it through `kustomize.images` at the root's `imageRegistry` (#622).
+`verify-image-signatures` checks its globs under the workshop key (#669). images.lock and VERSIONS.lock record it.
+Moving to cpu.5 would undo #652 for one scanner. cpu.5 is a watch-it-burn image, so it would not take the root's
+registry. Either path needs the same act from Michael, a signature with the workshop key. lab-platform's
+`build-llm-guard.sh` will not build without that key, and cpu.5 waits on it too. So cpu.5 is not ready any sooner.
+- **lab-platform has adopted both requests.** Read on lab-platform#341 on 2026-10-31. Its run report is partial,
+  with commit `27f4a49`. Its lock moves the OpenTelemetry set to api/sdk/OTLP-HTTP 1.45.1 and instrumentation 0.66b1,
+  past the advisory. Its build bakes `MoritzLaurer/deberta-v3-base-zeroshot-v2.0` at `8e7e5af5` into
+  `/home/user/models/zero-shot` and sets `WIB_ZS_MODEL_DIR`, which is the path and variable cpu.5 uses
+  (`images/llm-guard/Dockerfile`). So the scanner entry #455 adds is the same for either image:
+  `model_path: /home/user/models/zero-shot`. Still open there is the rebuilt and signed digest, which needs the
+  workshop key and a GHCR push.
+- **What lands here once it builds.** Repin the ai-layer `kustomize.images` entry, images.lock, VERSIONS.lock and
+  `verify/test_llm_guard_image.py` to the new digest. Then do #455's step 3: the BanTopics entry, guard-proxy's
+  `scanners_suppress`, and the probe on an admin cluster both ways. That is #455's work, not #719's.
+
+**Decision 2: images/llm-guard moves from f2fcb8f to 31962f2 now.** lab-platform's `build-llm-guard.sh` reads the
+API's source "at the llm-guard-cpu-offline commit Unleashed's submodule pins". lab-platform `27f4a49` moved its
+`SOURCE_COMMIT` to 31962f2, for the zero-shot model's licence file. Keeping this pin at f2fcb8f would break that
+pairing. The move changes nothing deployed. `git diff --quiet f2fcb8f 31962f2 -- src` is clean in the submodule,
+so the files lab-platform builds from are the same at both commits, and nothing in this repo builds from the
+submodule. What the move brings into `images/llm-guard` is llm-guard-cpu-offline's tests, its `config/`, its
+`overrides.txt` and the `model-zero-shot/` mirror. 31962f2 is on llm-guard-cpu-offline's main
+(`git ls-remote`, 2026-10-31), so `verify/submodule-pins-pushed.sh` holds. Not done: waiting to move the pin until
+lab-platform hands over its new digest. That would let the pin name the exact commit `781a126b` was built from. But
+the API files are the same at both commits, and lab-platform's main already reads 31962f2.
+
+**images.lock.** #719 named three digests for #603, the image-retention record. They are now declared rows: cpu.4,
+cpu.5 and `llm-guard-model-zeroshot-8e7e5af5` (`sha256:c01ca964…`), each with its source in llm-guard-cpu-offline. No
+tracked file deploys them. cpu.5 is the fallback, and the scratch image is the input
+`images/llm-guard/Dockerfile` names. Their tarballs wait on `mirror-images.sh save` like every other row.
+
+**Tests.** `verify/test_llm_guard_bantopics_image.py` (offline, new) adds a gate. A BanTopics entry in
+`llm-guard-scanners` fails while the ai-layer Application pins a digest known to lack the zero-shot model, which today
+is `781a126b`. It also fails unless its `model_path` is `/home/user/models/zero-shot`. The gate is shown to fire on
+copies of the scanners with BanTopics added at v1, at a Hub id and with no `model_path`, and to pass at a digest that
+is not on the list. The test also checks four things about the submodule. The gitlink is 31962f2. `src/` is the same
+tree as at f2fcb8f. The Dockerfile sets `WIB_PI_MODEL_DIR` and `WIB_ZS_MODEL_DIR` to the two directories, with the
+zero-shot scratch image pinned by digest. `config/scanners.yml` loads BanTopics from `${WIB_ZS_MODEL_DIR}`. Before the
+gitlink was committed, the gitlink check failed on f2fcb8f. Comments in `resources.yaml` and VERSIONS.lock, and the
+BanTopics notes in PROJECT_STATE.md, the readiness table row 8 and the run-of-show, now name lab-platform#341's image
+in place of llm-guard-cpu-offline#2.
+
+**Not yet run on a cluster.** Nothing deployed changes here. What is owed belongs to #455, after lab-platform#341's
+signed digest is pinned: `bash verify/run-e2e.sh` on a fresh attendee cluster, where `verify/test_topic_classifier.py`
+and the probe (#503) judge BanTopics' real scores, and `verify/input-guard.sh` checks that the injection classifier
+still blocks through the new image.

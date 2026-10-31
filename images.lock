@@ -43,3 +43,9 @@ ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3
 # The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
 # and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.
 laiyer/llm-guard-api:0.3.16 sha256:bea3efb1220ad18149b73de625c55e6d835bf8b45023a089a3762012a86550ba upstream:https://github.com/protectai/llm-guard -
+# llm-guard-cpu-offline's images as that repo reported them on 2026-10-31 (#719): cpu.4 (PromptInjection only, signed),
+# cpu.5 (PromptInjection and BanTopics, the fallback for #455, not yet signed, llm-guard-cpu-offline#15), and the
+# zero-shot weights' scratch image that images/llm-guard/Dockerfile builds cpu.5 from.
+ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.4 sha256:3322db6af60c2fc935f2208d0c4a84198b29e93307ab2e88debdd045a919ae9f repo:peopleforrester/llm-guard-cpu-offline -
+ghcr.io/peopleforrester/watch-it-burn:llm-guard-0.3.16-cpu.5 sha256:4c66fd0f0846c2c829952e562fd076f37ca8f7e41fb6ecfbb5a1f28cb8579791 repo:peopleforrester/llm-guard-cpu-offline -
+ghcr.io/peopleforrester/watch-it-burn:llm-guard-model-zeroshot-8e7e5af5 sha256:c01ca9644bb1c93601a1b333339a3a2aacd63a287e057a4a124f5f08b33c7ca8 repo:peopleforrester/llm-guard-cpu-offline/model-zero-shot -
