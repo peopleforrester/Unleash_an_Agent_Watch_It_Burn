@@ -7094,3 +7094,24 @@ steps runs it between step 5 and step 6 (`fleet.sh down watch-it-burn-attendee-0
 and records here whether the three #607 checks pass (terminal-auth refused by volume and by secretKeyRef, each with
 its message; ceo-personal-record admitted), and whether the #490 and #552 checks the TypeError hid pass. The guarded
 command on watch-it-burn-private in the first #608 entry still stands if that build slips.
+
+## 2026-10-31 · #653 · Third pass: the promo/ villains pull, so Challenge 2's handout is done
+
+**No code changed.** The handout is on staging and main: 7ffbc73, 1414255, e5bd6fe and f6e3037 point lab.html,
+LAB-TEXT.md, PROMPT-CATALOG.md, the C2 fallback and README, the KubeCon probe and the KubeCon run-of-show at
+`ghcr.io/peopleforrester/lab-platform/promo/<name>:v1`, and `restrict-image-registries` refuses that path. The two
+earlier passes stopped short only because the ten packages were private. #678's entry above records that they answer
+an anonymous pull now. On 2026-10-31 hecaton run 14419 ran `python3 verify/test_promo_villains_public.py` with no
+credential again, and all twenty checks passed: each `:v1` answers and serves the digest `verify/promo_villains.py`
+pins (lab-platform#55's republish, not the issue body's first digests, per the #718 entry). No Challenge 2 file
+still names `docker.io/peopleforrester`. The Joker that C6's ticket names is #671's, held there on purpose.
+
+Lab-platform's fold inventory row for the villains can move off `not folded`: the lab points at the promo/ images.
+
+The previous attempt at this run stopped on the same host fault #678's entry names (the podman store in pool
+claude-performantpro-3 could not re-exec into its user namespace). Nothing in this repo runs podman, and this run's
+pool (claude-gmail-8) answers `podman info`, so there was nothing to fix here.
+
+**Not yet run on a cluster.** Still owed by a session with AWS access: on an attendee cluster
+`CONTEXT=<ctx> python3 verify/test_kyverno_cel_live.py`, then
+`CONTEXT=<admin-ctx> challenges/c2-villain-image/fallback.kubectl.sh` on an admin cluster.
