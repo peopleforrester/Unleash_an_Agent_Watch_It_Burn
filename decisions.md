@@ -6824,3 +6824,36 @@ Deny, and still read Deny 20 s later with kyverno-policies Synced, so Argo CD le
 **deploy_app's manifest refusals now raise** (7d830b3): measured from the public cluster's deploy_app spans on
 2026-10-30, two of four calls sent a manifest missing its closing braces, and the parse error returned as text was
 read as a success (the probe's "narrated, not obeyed" FAIL on Challenge 3). Not yet re-run on the community probe.
+
+## 2026-10-31T16:10:00Z · 2.3 · #643 · The standbys' gaps against the 10-28 call: zones, a watcher that cannot stay down, preflight, a teardown that finishes
+
+An audit of 0061642 against #643's done-when and the 10-28 call ("12 public and 3 private, across zones and
+regions ... no manual failover") found six gaps, each closed in code with an offline test:
+
+- **Zones.** Every cluster is one node, and the node group used both lab subnets, so a standby's zone was the Auto
+  Scaling group's pick. backups.tsv gains a `zone` column (a or b, the lab VPC's first or second private subnet); the
+  cluster module takes `node_subnet_ids` (null keeps today's behavior for every other cluster, through the eks
+  module's `coalesce(each.value.subnet_ids, var.subnet_ids)`); fleet.sh's `node_subnets_for` passes the one subnet
+  and fails the build if the lab VPC lacks it. The standbys up at any moment cover both zones of every region.
+- **The watcher could stay down.** Cron started it once; any exception, a reload that hung past its timeout
+  (TimeoutExpired was uncaught), or a reboot ended automatic promotion until a person noticed. Now a tick's error is
+  logged and retried, a hung reload is a failed attempt, and cron runs `watch --from --until` every 5 minutes; the
+  lock keeps it to one, and a restart that finds it alive exits silently.
+- **A region outage stalled the watcher.** Console-LB lookups ran one after another, each waiting out its own
+  timeouts, so a us-west-2 outage could hold ticks off for minutes; a failed lookup also erased the known LB. Lookups
+  now run concurrently and a failed one keeps the LB already known (the self-check decides health).
+- **No preflight before spend.** A wave now runs `fleet.sh preflight` per region (the default account only, sized to
+  that region's clusters) and skips a region that fails. `backups.py preflight` runs it alone.
+- **The teardown refused everything after any promotion,** and its cron line removed the schedule anyway, leaving all
+  15 standbys billing. It now keeps only the holder, destroys the rest, and exits 1 naming the holder.
+- **Cron lines into a missing logs directory never ran** (the redirection fails before the command). Each line now
+  makes the directory first; a test runs every line with sh on a checkout that has none.
+
+The run of show gains the exact bring-up, rehearsal, schedule and teardown commands and a cost table: about $0.48
+a standby-hour (EKS $0.10, t3.2xlarge $0.3328, 100 GiB gp3, the NLB and its two addresses), $0.07 an hour per new
+lab VPC, roughly $95 for KubeCon and $22 for one rehearsal, from AWS list prices read 2026-10-31.
+
+**Not yet run on a cluster.** Everything above is offline. Owed, with Michael's go for the spend: the two lab VPC
+applies, `backups.py preflight all`, both waves, `verify/test_backups_promotion_live.py` (which now also checks
+each region's standbys landed in two distinct AZs, and that no scheduled watcher holds the lock), and the schedule.
+`node_subnet_ids` has not been through `terraform plan`.

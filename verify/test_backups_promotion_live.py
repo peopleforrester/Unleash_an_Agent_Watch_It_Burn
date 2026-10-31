@@ -47,6 +47,46 @@ print(r.stdout)
 check("all 17 consoles pass (two roster clusters, 15 standbys)", r.returncode == 0 and r.stdout.count("PASS") == 17,
       r.stderr[-500:])
 
+print("== across zones: in each region the standbys' nodes sit in the two zones backups.tsv names ==")
+
+
+def node_zone(c: b.Cluster) -> str:
+    """The availability zone of the cluster's node, read with an isolated kubeconfig and an explicit context."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        kcfg = os.path.join(d, "kubeconfig"); env = {**os.environ, "AWS_PROFILE": x.account}
+        subprocess.run(["aws", "eks", "update-kubeconfig", "--kubeconfig", kcfg, "--name", c.name, "--region", c.region],
+                       capture_output=True, text=True, timeout=60, env=env)
+        ctx = subprocess.run(["kubectl", "--kubeconfig", kcfg, "config", "current-context"],
+                             capture_output=True, text=True, timeout=15, env=env).stdout.strip()
+        if not ctx.endswith(f"/{c.name}"):
+            return ""
+        return subprocess.run(["kubectl", "--kubeconfig", kcfg, "--context", ctx, "get", "nodes", "-o",
+                               "jsonpath={.items[*].metadata.labels.topology\\.kubernetes\\.io/zone}"],
+                              capture_output=True, text=True, timeout=30, env=env).stdout.strip()
+
+
+for region in sorted({c.region for c in x.standbys()}):
+    by_zone: dict[str, set[str]] = {}
+    for c in (c for c in x.standbys() if c.region == region):
+        by_zone.setdefault(c.zone, set()).add(node_zone(c))
+    check(f"{region}: every standby of one zone letter is in one AZ, and a and b are different AZs",
+          all(len(v) == 1 and "" not in v for v in by_zone.values())
+          and len(set().union(*by_zone.values())) == len(by_zone), str(by_zone))
+
+print("== no scheduled watcher may be running: the drill has to be the watcher ==")
+lock = x.logs / ".backups-watch.lock"
+free = True
+if lock.exists():
+    import fcntl
+    with lock.open("w") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB); fcntl.flock(f, fcntl.LOCK_UN)
+        except OSError:
+            free = False
+check("the watcher lock is free (run before `backups.py schedule` is installed, or `backups.py unschedule` and stop it)",
+      free)
+
 for role, primary in (("community", "watch-it-burn-community"), ("admin", "watch-it-burn-private")):
     host = x.hosts[role]
     print(f"== drill: {primary} fails, and {host} moves with nobody acting ==")

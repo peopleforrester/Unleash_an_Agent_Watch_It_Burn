@@ -121,6 +121,16 @@ variable "private_subnet_ids" {
   description = "Shared lab private subnet ids (from the lab-vpc root)."
 }
 
+# The subnets the node group may place its node in. Null keeps every private subnet (the control plane's own
+# list), which leaves a one-node cluster's zone to the Auto Scaling group. A standby (#643) passes the one
+# subnet of its zone column in backups.tsv, so the standbys in a region are spread over both lab zones by
+# design rather than by chance, and one zone failing cannot take every standby a role has in that region.
+variable "node_subnet_ids" {
+  type        = list(string)
+  default     = null
+  description = "Private subnet ids for the node group; null means private_subnet_ids."
+}
+
 # Node sizing. Default mirrors Packt's validated single-node AI-platform shape (1x t3.2xlarge +
 # prefix delegation). verify-at-build: the full Watch It Burn IDP (Istio, Kyverno, Falco DaemonSet,
 # ESO, cert-manager, ArgoCD, observability, kagent + AI layer, burn targets) was validated on a
@@ -345,9 +355,11 @@ module "eks" {
     default = {
       ami_type       = "AL2023_x86_64_STANDARD"
       instance_types = var.instance_types
-      min_size       = var.node_min_size
-      max_size       = var.node_max_size
-      desired_size   = var.node_desired_size
+      # The module falls back to the cluster's subnet_ids when this is null (coalesce in node_groups.tf).
+      subnet_ids   = var.node_subnet_ids
+      min_size     = var.node_min_size
+      max_size     = var.node_max_size
+      desired_size = var.node_desired_size
 
       iam_role_permissions_boundary = data.aws_iam_policy.permissions_boundary.arn
       # Force the rolling update past pod-eviction blockers. On a single-node cluster the IDP's

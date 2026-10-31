@@ -111,6 +111,24 @@ standby_region() {   # $1 standby name; prints its region from backups.tsv, or n
     awk -F'|' -v n="$1" '!/^[[:space:]]*#/ && $1 == n { print $3; exit }' "${WIB_BACKUPS_FILE}"
     return 0
 }
+standby_zone() {   # $1 standby name; prints its lab zone (a or b) from backups.tsv, or nothing. ALWAYS exits 0.
+    [[ -r "${WIB_BACKUPS_FILE}" ]] || return 0
+    awk -F'|' -v n="$1" '!/^[[:space:]]*#/ && $1 == n { print $5; exit }' "${WIB_BACKUPS_FILE}"
+    return 0
+}
+# The node group's subnets for a standby: the one lab subnet its zone names (a = the first private subnet, b the
+# second), as a JSON list for -var node_subnet_ids. Prints nothing for a cluster with no zone, which keeps the
+# module default (every private subnet). $1 name, $2 the lab VPC's private_subnet_ids JSON. Exits 1 when the zone
+# names a subnet the lab VPC does not have, so the build fails rather than landing in an unplanned zone.
+node_subnets_for() {
+    local zone idx sub
+    zone="$(standby_zone "$1")"
+    [[ -n "${zone}" ]] || return 0
+    case "${zone}" in a) idx=0 ;; b) idx=1 ;; *) log "  ${1}: zone '${zone}' in backups.tsv is not a or b"; return 1 ;; esac
+    sub="$(jq -r --argjson i "${idx}" '.[$i] // empty' <<<"${2:-[]}" 2>/dev/null)"
+    [[ -n "${sub}" ]] || { log "  ${1}: the lab VPC has no private subnet for zone ${zone}"; return 1; }
+    printf '["%s"]' "${sub}"
+}
 presenter_owner_of() { local n="${1#watch-it-burn-}"; printf '%s' "${n%-${PRESENTER_SUFFIX}}"; }
 # Per-ACCOUNT cap (up-fleet runs all accounts concurrently, so total concurrent = #accounts x this).
 # 15 x 5 accounts = 75 concurrent cluster builds. Most of each build is an idle ~10-15 min wait on the
@@ -1707,12 +1725,22 @@ up_one() {
     local hop; hop="$(imds_hop_limit_for_role "${role}")"
     # The node pod cap, role-derived (#686): community=250 (the room's Jokers share its node), admin/attendee=110.
     local maxpods; maxpods="$(max_pods_for_role "${role}")"
+    # A standby's node is pinned to its backups.tsv zone (#643); every other cluster leaves it to the module.
+    local zn=() zone; zone="$(standby_zone "${name}")"
     if [[ -n "${WIB_DRY_RUN}" ]]; then
-        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} -var max_pods=${maxpods} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
+        [[ -n "${zone}" ]] && zn=(-var "node_subnet_ids=[<lab subnet ${zone}>]")
+        log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} -var max_pods=${maxpods} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]} ${zn[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"
         return 0
     fi
+    if [[ -n "${zone}" ]]; then
+        local nsub
+        if ! nsub="$(node_subnets_for "${name}" "${SUBNETS_JSON}")" || [[ -z "${nsub}" ]]; then
+            log "  FAILED: ${name} (no lab subnet for its zone '${zone}')"; record_fail "${name}"; return 0
+        fi
+        zn=(-var "node_subnet_ids=${nsub}")
+    fi
     local tfvars=(-var "name=${name}" -var "hostname=${host}" -var "role=${role}" -var "imds_hop_limit=${hop}" -var "max_pods=${maxpods}" -var "vpc_id=${VPC_ID}" -var "private_subnet_ids=${SUBNETS_JSON}"
-                  "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}")
+                  "${prof[@]}" "${pids[@]}" "${it[@]}" "${ns[@]}" "${dk[@]}" "${dh[@]}" "${zn[@]}")
     # An IAM user of this cluster's name made before #549 would fail the apply on EntityAlreadyExists.
     if ! adopt_attendee_iam_user "${name}" "${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}" -var "event=${WIB_EVENT}" "${tfvars[@]}"; then
         log "  FAILED: ${name} (its attendee IAM user is in the way of the apply)"; record_fail "${name}"; return 0

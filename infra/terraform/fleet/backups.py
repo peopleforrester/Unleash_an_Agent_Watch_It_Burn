@@ -5,8 +5,9 @@
 
     backups.py list                         the standbys, their region, wave and promotion order
     backups.py up <wave|name...>            build them, one fleet.sh run per region, then self-check each one
-    backups.py down <wave|all|name...>      destroy them (dry run unless --apply); refuses a cluster that
-                                            holds a hostname
+    backups.py down <wave|all|name...>      destroy them (dry run unless --apply); keeps a cluster that holds
+                                            a hostname and destroys the rest
+    backups.py preflight <wave|name...>     fleet.sh preflight in each region the standbys are built in
     backups.py check [name...]              self-check clusters on their own console LB; exit 1 on any failure
     backups.py status                       which cluster each hostname is routed to now
     backups.py watch [--until T]            the automatic promotion loop
@@ -38,6 +39,7 @@ explicit AWS_PROFILE and --region (AGENTS.md, kube-context safety).
 from __future__ import annotations
 
 import argparse
+import concurrent.futures
 import datetime as dt
 import fcntl
 import json
@@ -59,11 +61,13 @@ HERE = pathlib.Path(__file__).resolve().parent
 FLEET = HERE / "fleet.sh"
 ROLES = ("community", "admin")
 WAVES = ("night-before", "six-hours")
+ZONES = ("a", "b")         # the two private subnets of a region's lab VPC, in its private_subnet_ids order
 # Hours before the session start each wave stands up, and when the watcher starts and the standbys come down.
 WAVE_LEAD_HOURS = {"night-before": 18, "six-hours": 6}
 WATCH_FROM_HOURS = 17      # an hour after the night-before wave starts, once its standbys can be checked
 WATCH_UNTIL_MINUTES = 90   # after the session start: the 30-minute session and an hour's margin
 DOWN_AFTER_MINUTES = 120
+WATCH_RESTART_MINUTES = 5  # cron re-runs `watch` this often across its window; the lock keeps it to one
 CRON_TAG = "# wib-backups (#643)"
 PROBE_MARKER = "[[wib-probe]]"   # guard-proxy answers it normally and keeps it out of the feed the room sees
 CHAT_PROMPT = f"{PROBE_MARKER} name one salsa"
@@ -83,6 +87,7 @@ class Cluster:
     role: str
     region: str
     wave: str          # "roster" for the role's own roster cluster
+    zone: str = ""     # a or b, the lab subnet its node runs in; "" for a roster cluster (the module decides)
 
 
 # --- the fleet's own settings and naming rules, read from fleet.sh rather than restated ------------------------
@@ -122,12 +127,14 @@ def load_pools(roster: pathlib.Path, backups: pathlib.Path, home_region: str) ->
         if row[1] in pools and not pools[row[1]]:
             pools[row[1]].append(Cluster(row[0], row[1], home_region, "roster"))
     for row in read_rows(backups):
-        name, role, region, wave = (row + ["", "", "", ""])[:4]
+        name, role, region, wave, zone = (row + ["", "", "", "", ""])[:5]
         if role not in pools:
             raise SystemExit(f"backups: {name} has role '{role}', not one of {', '.join(ROLES)}")
         if wave not in WAVES:
             raise SystemExit(f"backups: {name} has wave '{wave}', not one of {', '.join(WAVES)}")
-        pools[role].append(Cluster(name, role, region, wave))
+        if zone not in ZONES:
+            raise SystemExit(f"backups: {name} has zone '{zone}', not one of {', '.join(ZONES)}")
+        pools[role].append(Cluster(name, role, region, wave, zone))
     return pools
 
 
@@ -246,10 +253,10 @@ def console_lb(c: Cluster, account: str) -> str | None:
 class Router:
     """The apex router's table: the checkout's routes.map, applied with the apex repo's reload script."""
 
-    def __init__(self, apex_dir: pathlib.Path, retries: int = 3, backoff: float = 20):
+    def __init__(self, apex_dir: pathlib.Path, retries: int = 3, backoff: float = 20, timeout: float = 300):
         self.table = apex_dir / "routes.map"
         self.reload = apex_dir / "scripts" / "reload-routes.sh"
-        self.retries, self.backoff = retries, backoff
+        self.retries, self.backoff, self.timeout = retries, backoff, timeout
 
     def read(self) -> str:
         return self.table.read_text(encoding="utf-8")
@@ -264,10 +271,15 @@ class Router:
             log(f"  router: no reload script at {self.reload}; the table is NOT live")
             return False
         for attempt in range(1, self.retries + 1):
-            if subprocess.run(["bash", str(self.reload), str(self.table)], timeout=300).returncode == 0:
+            # A reload that hangs or cannot start is a failed attempt, never an exception that ends the watcher.
+            try:
+                rc = subprocess.run(["bash", str(self.reload), str(self.table)], timeout=self.timeout).returncode
+            except (subprocess.TimeoutExpired, OSError) as e:
+                rc = f"{type(e).__name__}"
+            if rc == 0:
                 log(f"  router: applied (attempt {attempt})")
                 return True
-            log(f"  router: reload attempt {attempt} failed")
+            log(f"  router: reload attempt {attempt} failed ({rc})")
             if attempt < self.retries:
                 time.sleep(self.backoff)
         return False
@@ -286,9 +298,23 @@ class Watcher:
         self.lbs: dict[str, str | None] = {}
 
     def refresh(self) -> None:
-        for pool in self.pools.values():
-            for c in pool:
-                self.lbs[c.name] = self.lb_of(c)
+        """Re-read every console LB, all at once. In a region outage each lookup there waits out its own
+        timeouts, and one after another they would hold the watcher off its ticks for minutes, exactly when a
+        promotion is due. A lookup that fails keeps the LB already known: a console's LB name does not change
+        while its cluster lives, and whether it answers is the self-check's question, not the lookup's."""
+        clusters = [c for pool in self.pools.values() for c in pool]
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, len(clusters))) as ex:
+            found = dict(zip((c.name for c in clusters), ex.map(self._lb_or_none, clusters)))
+        for name, lb in found.items():
+            if lb or name not in self.lbs:
+                self.lbs[name] = lb
+
+    def _lb_or_none(self, c: Cluster) -> str | None:
+        try:
+            return self.lb_of(c)
+        except Exception as e:  # noqa: BLE001 - one cluster's lookup must not stop the others'
+            log(f"  {c.name}: console LB lookup failed: {e}")
+            return None
 
     def check(self, upstream: str, host: str, chat: bool) -> tuple[bool, str]:
         lb = upstream.rsplit(":", 1)[0]
@@ -310,7 +336,11 @@ class Watcher:
 
     def tick(self, chat: bool = True) -> None:
         for role in self.pools:
-            self.tick_role(role, chat)
+            # Nothing one role's tick runs into may stop the watcher: it is the only thing that promotes.
+            try:
+                self.tick_role(role, chat)
+            except Exception as e:  # noqa: BLE001 - logged and retried next tick
+                log(f"{role}: the tick failed ({type(e).__name__}: {e}); the next tick tries again")
 
     def tick_role(self, role: str, chat: bool) -> None:
         host = self.hosts[role]
@@ -441,7 +471,7 @@ def cmd_list(x: Ctx, _a) -> int:
     for role, pool in x.pools.items():
         print(f"{role}  ->  {x.hosts.get(role, '?')}")
         for i, c in enumerate(pool):
-            print(f"  {i:>2}  {c.name:<30} {c.region:<10} {c.wave}")
+            print(f"  {i:>2}  {c.name:<30} {c.region:<10} {c.wave:<13} {('zone ' + c.zone) if c.zone else ''}")
     return 0
 
 
@@ -483,9 +513,34 @@ def run_steps(x: Ctx, region: str, cs: list[Cluster], steps: list[tuple[dict, li
     return 0
 
 
+def preflight_step(x: Ctx, region: str, cs: list[Cluster]) -> tuple[dict, list[str]]:
+    """fleet.sh preflight for one region's standbys: the account resolves to its pinned id, quota headroom for
+    this many clusters in this region, the permissions boundary, and the region's lab VPC, before any spend."""
+    return ({"WIB_REGION": region, "WIB_ATTENDEE_ACCOUNTS": x.account}, [str(FLEET), "preflight", str(len(cs))])
+
+
+def run_preflight(x: Ctx, region: str, cs: list[Cluster], dry_run: bool) -> int:
+    e, cmd = preflight_step(x, region, cs)
+    line = " ".join(f"{k}={shlex.quote(v)}" for k, v in e.items()) + " " + shlex.join(cmd)
+    if dry_run:
+        print(line); return 0
+    log(f"{region}: {line}")
+    if subprocess.run(cmd, env={**run_env(), **e}, cwd=HERE).returncode != 0:
+        log(f"{region}: preflight FAILED, so nothing is built there; its standbys are skipped"); return 1
+    return 0
+
+
+def cmd_preflight(x: Ctx, a) -> int:
+    rc = 0
+    for region, cs in by_region(x.select(a.selectors, allow_all=True)).items():
+        rc |= run_preflight(x, region, cs, getattr(a, "dry_run", False))
+    return rc
+
+
 def cmd_up(x: Ctx, a) -> int:
     targets = x.select(a.selectors)
     rc = 0
+    built: list[Cluster] = []
     for region, cs in by_region(targets).items():
         state = vpc_state(x, region)
         if state is not None and not state.exists():
@@ -496,10 +551,14 @@ def cmd_up(x: Ctx, a) -> int:
             rc = 1
             if not a.dry_run:
                 continue
+        if not a.no_preflight and run_preflight(x, region, cs, a.dry_run) != 0:
+            rc = 1; continue
         rc |= run_steps(x, region, cs, region_steps(x, region, cs, "up"), a.dry_run)
+        built += cs
     if a.dry_run:
         return rc
-    return check_clusters(x, targets) | rc
+    # Self-check what was built; a region that was skipped has already failed the run and said why.
+    return (check_clusters(x, built) if built else 0) | rc
 
 
 def check_clusters(x: Ctx, cs: list[Cluster], chat: bool = True) -> int:
@@ -524,10 +583,14 @@ def cmd_down(x: Ctx, a) -> int:
     targets = x.select(a.selectors, allow_all=True)
     holders = set(read_promoted(x.promoted).values())
     held = [c.name for c in targets if c.name in holders]
-    if held and not a.force:
-        log(f"down: REFUSING: {', '.join(held)} holds a hostname now. Promote another cluster first, or pass --force.")
-        return 1
     rc = 0
+    if held and not a.force:
+        # The rest still come down. Refusing the whole run would leave every standby billing after a session in
+        # which one was promoted, with the cron line that would have removed them already gone.
+        log(f"down: KEEPING {', '.join(held)}: it holds a hostname now. Fail back with `backups.py promote <role> "
+            f"<roster cluster>` and run down again, or pass --force. The other standbys come down.")
+        targets = [c for c in targets if c.name not in held]
+        rc = 1
     for region, cs in by_region(targets).items():
         rc |= run_steps(x, region, cs, region_steps(x, region, cs, "down", a.apply), a.dry_run)
     return rc
@@ -562,12 +625,20 @@ def parse_when(s: str) -> dt.datetime:
 
 def cmd_watch(x: Ctx, a) -> int:
     until = parse_when(a.until) if a.until else None
+    since = parse_when(a.since) if a.since else None
+    now = dt.datetime.now(dt.timezone.utc)
+    # Cron starts the watcher every few minutes across its window (schedule_lines), so one that died is back
+    # within minutes with nobody acting; outside the window, or with a watcher already running, it just exits.
+    if (since and now < since) or (until and now >= until):
+        return 0
     x.logs.mkdir(parents=True, exist_ok=True)
     lock = (x.logs / ".backups-watch.lock").open("w")
     try:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
     except OSError:
-        log("watch: another watcher holds the lock; exiting"); return 1
+        if a.drill:   # a drill needs to be the watcher; the scheduled one has to be stopped first
+            log("watch: another watcher holds the lock, so the drill cannot run; stop it first"); return 1
+        return 0      # the running watcher has it; this is cron's every-few-minutes restart finding it alive
     w = make_watcher(x, a)
     log(f"watch: {', '.join(f'{r} {h}' for r, h in x.hosts.items())}; every {a.interval}s, chat every "
         f"{a.chat_every} tick(s), promoting after {a.fail_after} failures in a row"
@@ -608,19 +679,26 @@ def cmd_promote(x: Ctx, a) -> int:
 def schedule_lines(start: dt.datetime, tz: dt.tzinfo, here: pathlib.Path = HERE) -> list[str]:
     """Crontab lines for one session, in the cron host's time zone. Cron has no year, so `unschedule` (the
     teardown line runs it) removes them once the session is over."""
+    # Each line makes the log directory first: on a fresh checkout it does not exist yet, and a redirection into
+    # a missing directory stops cron's shell before the command runs, silently.
+    logs = shlex.quote(str(here / "logs"))
+    mk = f"mkdir -p {logs}; "
+
     def at(t: dt.datetime, cmd: str, what: str) -> str:
         lt = t.astimezone(tz)
-        return f"{lt.minute} {lt.hour} {lt.day} {lt.month} * {cmd}  {CRON_TAG} {what} {t.astimezone(dt.timezone.utc):%Y-%m-%dT%H:%MZ}"
+        return f"{lt.minute} {lt.hour} {lt.day} {lt.month} * {mk}{cmd}  {CRON_TAG} {what} {t.astimezone(dt.timezone.utc):%Y-%m-%dT%H:%MZ}"
     me = shlex.quote(str(here / "backups.py"))
-    logs = shlex.quote(str(here / "logs"))
     until = start + dt.timedelta(minutes=WATCH_UNTIL_MINUTES)
     lines = [f"{CRON_TAG} session {start.astimezone(dt.timezone.utc):%Y-%m-%dT%H:%MZ}"]
     for wave in WAVES:
         lines.append(at(start - dt.timedelta(hours=WAVE_LEAD_HOURS[wave]),
                         f"{me} up {wave} >>{logs}/backups-{wave}.log 2>&1", wave))
-    lines.append(at(start - dt.timedelta(hours=WATCH_FROM_HOURS),
-                    f"{me} watch --until {until.astimezone(dt.timezone.utc):%Y-%m-%dT%H:%M:%SZ} >>{logs}/backups-watch.log 2>&1",
-                    "watch"))
+    since = start - dt.timedelta(hours=WATCH_FROM_HOURS)
+    # Every WATCH_RESTART_MINUTES across the window, not once: the lock keeps it to one watcher, and a watcher
+    # that died (a reboot, an OOM kill) is back within minutes, so promotion never waits on a person.
+    lines.append(f"*/{WATCH_RESTART_MINUTES} * * * * {mk}{me} watch --from {since.astimezone(dt.timezone.utc):%Y-%m-%dT%H:%M:%SZ}"
+                 f" --until {until.astimezone(dt.timezone.utc):%Y-%m-%dT%H:%M:%SZ} >>{logs}/backups-watch.log 2>&1"
+                 f"  {CRON_TAG} watch {since.astimezone(dt.timezone.utc):%Y-%m-%dT%H:%MZ}")
     lines.append(at(start + dt.timedelta(minutes=DOWN_AFTER_MINUTES),
                     f"{me} down all --apply >>{logs}/backups-down.log 2>&1; {me} unschedule", "down"))
     return lines
@@ -648,6 +726,8 @@ def main(argv: list[str] | None = None) -> int:
     sub = p.add_subparsers(dest="cmd", required=True)
     sub.add_parser("list")
     s = sub.add_parser("up"); s.add_argument("selectors", nargs="+"); s.add_argument("--dry-run", action="store_true")
+    s.add_argument("--no-preflight", action="store_true", help="skip fleet.sh preflight in each region")
+    s = sub.add_parser("preflight"); s.add_argument("selectors", nargs="+"); s.add_argument("--dry-run", action="store_true")
     s = sub.add_parser("down"); s.add_argument("selectors", nargs="+"); s.add_argument("--apply", action="store_true")
     s.add_argument("--force", action="store_true"); s.add_argument("--dry-run", action="store_true")
     s = sub.add_parser("check"); s.add_argument("names", nargs="*"); s.add_argument("--no-chat", action="store_true")
@@ -658,6 +738,7 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--fail-after", type=int, default=3)
     s.add_argument("--refresh", type=float, default=300, help="seconds between re-reading every console LB")
     s.add_argument("--until", help="UTC time to exit, e.g. 2030-01-01T19:30:00Z")
+    s.add_argument("--from", dest="since", help="UTC time before which it exits at once (cron starts it early)")
     s.add_argument("--drill", help="treat this cluster as failing: the rehearsal of a promotion")
     s = sub.add_parser("promote"); s.add_argument("role"); s.add_argument("name"); s.add_argument("--force", action="store_true")
     s = sub.add_parser("schedule"); s.add_argument("session_start"); s.add_argument("--tz")
@@ -669,6 +750,7 @@ def main(argv: list[str] | None = None) -> int:
         return {"schedule": cmd_schedule, "unschedule": cmd_unschedule}[a.cmd](None, a)
     x = Ctx()
     return {"list": cmd_list, "up": cmd_up, "down": cmd_down, "check": cmd_check, "status": cmd_status,
+            "preflight": cmd_preflight,
             "watch": cmd_watch, "promote": cmd_promote}[a.cmd](x, a)
 
 
