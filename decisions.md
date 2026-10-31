@@ -6928,3 +6928,13 @@ source-shape checks in `verify/bootstrap_chart.py`, `test_bootstrap_chart.py`, `
 **Not yet run on a cluster.** `bash infra/terraform/fleet/fleet.sh up` of one attendee cluster (bootstrap_one), then
 `fleet.sh converge` against it for repair_datadog; or by hand,
 `CONTEXT=<ctx> KUBECONFIG=<isolated> AWS_PROFILE=<p> bash infra/deploy-full-idp.sh attendee`.
+
+## 2026-10-31 · #710 · The Weaver registry declares session.id and witb.guard.decision on the guard-proxy server span
+
+`span.witb.guard_proxy.http` now refs `session.id` (OTel semconv) and `witb.guard.decision`, both
+conditionally required, and a new `registry.witb.guard` attribute group defines `witb.guard.decision` as an enum of
+the six values proxy.py's `_stamp` sets (input_blocklist, input_classifier, topic, rate_limit, budget,
+output_redacted), as of the guard-proxy submodule pinned at a022fa5. `weaver registry check --registry weaver/registry/`
+passed with weaver v0.24.2, the sha256 the CI workflow pins, and `weaver registry resolve` lists both attributes on
+the span. `verify/test_weaver_guard_proxy_stamps.py` holds the stamped keys and the enum members to proxy.py both
+ways, offline, so a new stamp value fails the suite before CI's weaver job.
