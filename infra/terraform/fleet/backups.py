@@ -490,6 +490,7 @@ def region_steps(x: Ctx, region: str, cs: list[Cluster], verb: str, apply: bool 
 def run_steps(x: Ctx, region: str, cs: list[Cluster], steps: list[tuple[dict, list[str]]], dry_run: bool) -> int:
     rows = "".join(roster_row_for(c, pathlib.Path(x.env["WIB_ROSTER_FILE"])) + "\n" for c in cs)
     tmp = None
+    failed = False
     try:
         for e, cmd in steps:
             if e.get("WIB_ROSTER_FILE") == "<roster>":
@@ -504,9 +505,18 @@ def run_steps(x: Ctx, region: str, cs: list[Cluster], steps: list[tuple[dict, li
             line = " ".join(f"{k}={shlex.quote(v)}" for k, v in e.items()) + " " + shlex.join(cmd)
             if dry_run:
                 print(line); continue
+            if failed and cmd[1:2] != ["converge"]:
+                continue
             log(f"{region}: {line}")
             if subprocess.run(cmd, env={**run_env(), **e}, cwd=HERE).returncode != 0:
-                log(f"{region}: that step failed"); return 1
+                log(f"{region}: that step failed")
+                if failed or not any(c[1:2] == ["converge"] for _, c in steps):
+                    return 1
+                # The converge after it is the repair step (a late ModelConfig, an app still settling), so it
+                # still runs, and the region is green only if it converges (verify/test_backups.py).
+                failed = True
+            elif failed:
+                failed = False
     finally:
         if tmp:
             os.unlink(tmp)

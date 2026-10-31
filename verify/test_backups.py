@@ -444,6 +444,29 @@ try:
 except SystemExit:
     check("a start with no UTC offset is refused", True)
 
+print("== a failed build still runs the region's converge, the repair step ==")
+# 2026-10-31, the #643 rehearsal: watch-it-burn-private-b02's build failed on bedrock-profiles (two ModelConfigs
+# arrived after the 300 s wait) and run_steps returned before the converge that pins them.
+_x = type("X", (), {"env": {"WIB_ROSTER_FILE": "/dev/null"}})()
+_ran: list[str] = []
+_converge_rc = {"rc": 0}
+_real_run = b.subprocess.run
+def _fake(cmd, **kw):  # noqa: E306
+    _ran.append(cmd[1])
+    return type("R", (), {"returncode": _converge_rc["rc"] if cmd[1] == "converge" else 1})()
+b.subprocess.run = _fake
+_steps = [({}, ["fleet.sh", "instructors", "up", "all"]), ({}, ["fleet.sh", "converge", "watch-it-burn-private-b02"])]
+try:
+    rc_repaired = b.run_steps(_x, "us-east-1", [], _steps, False)
+    ran_repaired = list(_ran); _ran.clear(); _converge_rc["rc"] = 1
+    rc_broken = b.run_steps(_x, "us-east-1", [], _steps, False)
+    ran_broken = list(_ran)
+finally:
+    b.subprocess.run = _real_run
+check("after a failed build the converge still runs", ran_repaired == ["instructors", "converge"], str(ran_repaired))
+check("a converge that repairs it makes the region green", rc_repaired == 0)
+check("a converge that cannot repair it leaves the region failed", rc_broken == 1 and ran_broken == ["instructors", "converge"])
+
 print("== up and down, dry run: one fleet.sh run per region, standbys kept out of the router ==")
 # A live `backups.py up` on this host writes its own backups-* roster files; only the dry runs' would be a fault.
 _tmp_before = {p.name for p in pathlib.Path(tempfile.gettempdir()).iterdir() if p.name.startswith("backups-")}
