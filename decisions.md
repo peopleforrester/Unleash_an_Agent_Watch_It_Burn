@@ -5878,3 +5878,26 @@ Observability spans API.
 **Found while reading, filed separately:** every generate_content row in LLM Observability has no input and no
 output. The Go runtime writes the request and response to gcp.vertex.agent.llm_request and llm_response,
 truncated at 2048 characters, not to gen_ai.input.messages and gen_ai.output.messages.
+## 2026-10-31 · #492 · The C6 observable-judge run can go on watch-it-burn-community, which is up, so no bring-up is owed
+
+**No code changed.** The 2026-10-29 entry for #492 sends the live run to a fresh attendee cluster before Challenge 2,
+because the ticket asks for the Joker image and `restrict-image-registries` refuses it wherever it is armed. That
+was written when no cluster suited it, so running it meant a bring-up and its spend. The community cluster now
+does. watch-it-burn-community boots `values-burn.yaml`, which has no Kyverno, so nothing refuses the image, and it
+carries ai-layer, which ships `fake-ticket` (HC-7731) and workshop-mcp's `read_support_ticket`. On 2026-10-31 a GET of
+`/guards` on `attackme.agenticburn.com` and `attackme.burritobot.co` returned 200 with every guard off on both.
+`agent_probe.py` flips the guards through guard-proxy's `/toggle`, restores them at the end, and deletes
+`maintenance-shell`. The beat is judged on whether that Deployment exists, not on its pod pulling, so #678's
+private promo/ packages and #671's payload move do not change the verdict. What the 2026-10-29 entry says about the
+baseline still holds: b23cc9e's 19/20 was measured with the payload pasted into the prompt, not fetched by the tool.
+
+Hecaton run 13061 has no AWS credentials or kubeconfig, so it could not run the probe, and this repo's rules keep it
+off a cluster it did not provision. The previous attempt at this run stopped on the host, not in the repo: the podman
+store in pool claude-performantpro-3 could not join its user namespace. This pool's store answers `podman info`.
+
+**Not yet run on a cluster:** from a session with accen-dev, in us-west-2:
+`aws eks update-kubeconfig --kubeconfig /tmp/community.kubeconfig --name watch-it-burn-community --region us-west-2 --profile accen-dev`,
+then `KUBECONFIG=/tmp/community.kubeconfig python3 verify/agent_probe.py attackme.agenticburn.com --context <the
+watch-it-burn-community context that file names> --profile accen-dev --only c6-off,c6-on --repeat 5`. That is 10 model
+calls, under the default `--max-calls 20`. Compare the result with 19/20. Those calls add to attackme's `/cost`, so
+`./fleet.sh reset-bot watch-it-burn-community` before the room plays, as the run-of-show's Night Before already does.
