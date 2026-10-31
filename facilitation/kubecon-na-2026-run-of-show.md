@@ -844,7 +844,8 @@ is merely slow rather than rebuilding:
     before flipping anything); the start state (every AI guard off; Kyverno Deny,
     NetworkPolicy and KubeArmor Block armed); the `/controls` badges agree with the
     cluster; then the challenges in stage order, with the guards turned on
-    cumulatively as segments 2 to 5 do: C5 off then on; C1, C2 and C3 (Challenge 2)
+    cumulatively as segments 2 to 5 do: C5 leaking, then out of reach once the probe
+    applies `guard-rbac-on`'s Role; C1, C2 and C3 (Challenge 2)
     blocked; C6's two tiers (the ticket's
     villain refused at admission by a server-side dry run, then, after
     `guard-input-on`, `read_support_ticket` withholding the ticket when called in
@@ -855,7 +856,8 @@ is merely slow rather than rebuilding:
     `workshop-mcp`, a server-side dry run as `workshop-mcp`, and the C3 fallback).
     Then the on-topic guard redirecting the four canonical off-topic asks
     and letting "what are your hours" and "do you have mild salsa" through. Its last
-    act is `guards-off`, run even when a beat fails, so the stage starts clean.
+    act is `guards-off`, run even when a beat fails, so the stage starts clean; it
+    also puts the shipped Role back.
   - Every prompt it sends carries guard-proxy's probe marker, so none of them shows
     up in the feed the room sees.
   - Each run must end `KUBECON PROBE GREEN`. A FAIL is a beat to fix or to plan its
@@ -864,6 +866,26 @@ is merely slow rather than rebuilding:
     on-topic beats (#455), have passed on every run since 2026-10-27. Record the
     date, the clusters, each beat's result and the spend it prints under "Probe
     record" above.
+- [ ] **Seed the stage's Datadog traces (#648), after the admin probe is green.** Each
+  challenge opens on its trace, so each is seeded twice on the private bot, the
+  attack and the same ask after its fix: six model calls, in presentation order,
+  with the probe's own guard flips and its `guards-off` at the end.
+
+  ```bash
+  python3 verify/stage_traces.py seed burritobot-private.burritobot.co \
+      --context <private-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev
+  ```
+
+  Each seed is its own session, `wib-stage-<seed>-<UTC minute>`, sent without the
+  probe marker so the trace reads as the prompt shown (the six prompts do show in
+  the private bot's column of the prompt wall). It waits until every trace in LLM
+  Observability carries the tool spans the stage points at (`get_vault_entry`;
+  `read_support_ticket` and `deploy_app`, and no `deploy_app` once fixed;
+  `get_weather` and `read_internal_config`), then prints one link per seed plus the
+  room's and the presenters' views, and writes them to `tmp/stage-traces.json`. It
+  must end `SEEDED GREEN`. Whitney opens each link in her org and saves it as a
+  view, in that order. The morning of: `python3 verify/stage_traces.py check
+  --profile accen-dev` must end `STAGE TRACES GREEN`.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.

@@ -595,6 +595,7 @@ class Fake:
         self.rule = kp.C7_OPEN
         self.c6 = False
         self.kyverno = True
+        self.role = kp.RBAC_SHIPPED
         self.usd = 1.0
 
     def get_json(self, path):
@@ -654,6 +655,11 @@ class Fake:
     def run_c3_fallback(self):
         return 0, C3_OK
 
+    def apply_fix(self, name):
+        self.log.append(f"role {name}")
+        self.role = name
+        return 0, "role.rbac.authorization.k8s.io/workshop-agent configured\n"
+
     def clear_room_joker(self):
         self.c6 = False
 
@@ -678,6 +684,8 @@ class Fake:
             self.c6 = not self.kyverno
             return chat(f"Done! I created {kp.ROOM_JOKER}.")
         if p == kp.CEO_PROMPT:
+            if self.role == kp.RBAC_FIX:  # the Secret read is Forbidden, so there is nothing to repeat
+                return chat("I couldn't open Ophelia's record: I'm not allowed to read that vault entry.")
             return chat(CEO_REDACTED if self.g["output"] else CEO_LEAK)
         if p == kp.MCP_PROMPT:
             # the gateway refuses the rogue call when its rule is narrowed, and the allow-list hides it when narrowed
@@ -699,7 +707,7 @@ res = run_admin(f)
 keys = [r["key"] for r in res]
 check("a well-behaved admin cluster passes every beat", all(r["verdict"] == kp.PASS for r in res),
       str([(r["key"], r["note"]) for r in res if r["verdict"] != kp.PASS]))
-want = ["identity", "start-state", "badges", "gateway", "c5-off", "guard-output-on", "c5-on", "c1", "c2", "c3",
+want = ["identity", "start-state", "badges", "gateway", "c5-off", "guard-rbac-on", "c5-on", "c1", "c2", "c3",
         "c6-admission", "guard-input-on", "c6-withheld", "c6-on", "c7-off", "guard-mcp-on", "c7-on",
         "guard-topic-on", "topic-off-1", "topic-off-2", "topic-off-3", "topic-off-4", "topic-on-1", "topic-on-2",
         "guards-off"]
@@ -722,9 +730,21 @@ check("the C7 gateway rule is narrowed by the run and open again at the end",
       f"rule {kp.C7_NARROWED}" in f.log and f.rule == kp.C7_OPEN)
 check("no beat narrows toolNames on an admin cluster: the gateway is what stops C7 (#496)",
       f"tools {kp.EVIL_FIXED}" not in f.log)
-check("guards-off is the last thing done to the cluster",
-      f.log[-len(kp.GUARDS_OFF) - 2:] == [f"toggle {q}" for q in kp.GUARDS_OFF] + [f"rule {kp.C7_OPEN}",
-                                                                              f"tools {kp.EVIL_ALL}"])
+check("guards-off is the last thing done to the cluster, and puts the shipped Role back",
+      f.log[-len(kp.GUARDS_OFF) - 3:] == [f"toggle {q}" for q in kp.GUARDS_OFF] + [f"rule {kp.C7_OPEN}",
+                                                                              f"tools {kp.EVIL_ALL}",
+                                                                              f"role {kp.RBAC_SHIPPED}"])
+# Challenge 1's fix is RBAC (Michael, 2026-10-31): the probe applies the terminal's own file, then the same ask
+# must come back with no part of the record. The output guard is never turned on for it.
+check("Challenge 1 is fixed by guard-rbac-on, never by the output guard",
+      f"role {kp.RBAC_FIX}" in f.log and f"toggle {kp.GUARD_OUTPUT_ON}" not in f.log)
+check("guard-rbac-on is the terminal's file", kp.RBAC_FIX in helper("guard-rbac-on")
+      and kp.RBAC_SHIPPED in helper("guard-rbac-off"))
+check("the probe applies the same bytes the terminal mounts",
+      kp.challenge_fix(kp.RBAC_FIX).startswith("# The CEO's record fix")
+      and "resourceNames: [\"workshop-agent\"]" in kp.challenge_fix(kp.RBAC_FIX))
+check("an admin cluster whose Role stays broad fails c5-on",
+      not passes(kp.judge_ceo_unreadable(chat(CEO_LEAK))) and passes(kp.judge_ceo_unreadable(chat("Forbidden."))))
 
 
 

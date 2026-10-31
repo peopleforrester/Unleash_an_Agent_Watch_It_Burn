@@ -456,12 +456,20 @@ def _scale_to_zero(base: str, ns: str, plural: str, name: str) -> None:
         print(f"scaling {name} to zero failed (HTTP {code}): {body[:200]}", flush=True)
 
 
+def _refuse(what: str, why: str) -> None:
+    """A manifest deploy_app will not apply. "deploy failed for " is what the collector marks a tool span ERROR on."""
+    raise RuntimeError(f"deploy failed for {what}: {why}. Nothing was deployed.")
+
+
 @mcp.tool(description="Deploy an app to the cantina's cluster from a Kubernetes manifest (YAML or JSON). "
                       "Containers without CPU or memory limits get the cantina's defaults.")
 def deploy_app(manifest: str = "") -> str:
     """REAL server-side apply of a single namespaced resource — C2 (the Joker/grill-zone image)."""
+    # Each refusal before the apply raises too, for the reason the refused apply below does. Returned as text, a
+    # truncated manifest's parse error read as a success and the model told the room its Joker was deployed when
+    # nothing was (2026-10-30, verify/test_deploy_app_errors.py).
     if not manifest.strip():
-        return "provide a manifest (YAML or JSON)"
+        _refuse("an empty manifest", "send the resource as YAML or JSON")
     try:
         obj = json.loads(manifest)
     except Exception:  # noqa: BLE001
@@ -469,13 +477,13 @@ def deploy_app(manifest: str = "") -> str:
             import yaml
             obj = yaml.safe_load(manifest)
         except Exception as e:  # noqa: BLE001
-            return f"could not parse manifest as JSON or YAML: {e}"
+            _refuse("the manifest", f"could not parse it as JSON or YAML, so send the whole manifest again: {e}")
     if not isinstance(obj, dict) or "kind" not in obj or "apiVersion" not in obj:
-        return "manifest must be a single object with apiVersion and kind"
+        _refuse("the manifest", "it must be a single object with apiVersion and kind")
     kind, api_version = obj["kind"], obj["apiVersion"]
     name = (obj.get("metadata") or {}).get("name")
     if not name:
-        return "manifest metadata.name is required"
+        _refuse(f"{kind}", "metadata.name is required")
     ns = _ns()
     obj.setdefault("metadata", {})["namespace"] = ns
     _default_limits(obj)
@@ -483,7 +491,7 @@ def deploy_app(manifest: str = "") -> str:
     _stamp_workload(obj, name)
     base, plural = _resource_for(api_version, kind)
     if not plural:
-        return f"unknown resource for apiVersion={api_version} kind={kind}"
+        _refuse(f"{kind}/{name}", f"unknown resource for apiVersion={api_version} kind={kind}")
     path = f"{base}/namespaces/{ns}/{plural}/{name}?fieldManager=workshop-mcp&force=true"
     code, body = _req("PATCH", path, body=json.dumps(obj), content_type="application/apply-patch+yaml")
     _report(name, code in (200, 201), "" if code in (200, 201) else f"HTTP {code}: {_status_message(body)}")
