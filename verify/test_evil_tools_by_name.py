@@ -13,10 +13,12 @@ tools reversed, with evil-mcp missing, and with the tools reordered between the 
 from __future__ import annotations
 
 import copy
+import html
 import json
 import os
 import pathlib
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -26,6 +28,7 @@ import yaml
 REPO = pathlib.Path(__file__).resolve().parent.parent
 ENTRYPOINTS = ("images/web-terminal/entrypoint.sh", "gitops/ai-layer/web-terminal/entrypoint.sh")
 TOGGLE_REL = "challenges/03-bad-mcp-excessive-agency/toggle-mcp-authz-on.sh"
+LAB_HTML = "gitops/ai-layer/web/lab.html"
 TOGGLE = (REPO / TOGGLE_REL).read_text(encoding="utf-8")
 ENTRYPOINT = (REPO / ENTRYPOINTS[1]).read_text(encoding="utf-8")
 CONTEXT = "ctx-708"
@@ -52,7 +55,8 @@ if "get" in args and "workshop-agent" in args and args[-2:] == ["-o", "json"]:
     sys.exit(0)
 if "patch" in args and "workshop-agent" in args and "--type=json" in args:
     doc = json.loads(json.dumps(state["agent"]))
-    for op in json.loads(args[args.index("-p") + 1]):
+    body = args[args.index("-p") + 1] if "-p" in args else next(a[3:] for a in args if a.startswith("-p="))
+    for op in json.loads(body):
         parts = [p.replace("~1", "/").replace("~0", "~") for p in op["path"].split("/")[1:]]
         node = doc
         for p in parts[:-1]:
@@ -213,6 +217,43 @@ with tempfile.TemporaryDirectory() as tmp:
     rc, out, after, n = run(["bash", str(home / "guard-mcp-on")], open_agent, FAKE_REORDER_AFTER_GET="1")
     check("guard-mcp-on, tools reordered after its read: the patch is refused, workshop-mcp is not narrowed",
           rc != 0 and n == 0 and after == raced, out)
+
+    # The lab text is a third writer, by hand: a student copies the by-hand C7 fix and the reset line out of
+    # lab.html, or reads them in LAB-TEXT.md, its export (#735). Each is held to the same by-name patch and run.
+    print("== the by-hand commands a student is told to type ==")
+    if not shutil.which("jq"):
+        check("jq is on PATH (the web terminal has it, and the lab's by-hand C7 fix finds evil-mcp with it)", False)
+    blocks: list[tuple[str, str]] = []
+    for m in re.finditer(r'<div class="cmd[^"]*"[^>]*>(.*?)<button', (REPO / LAB_HTML).read_text(encoding="utf-8"),
+                         re.S):
+        blocks.append((LAB_HTML, html.unescape(re.sub(r"<[^>]+>", "", m.group(1)))))
+    for md in sorted((REPO / "challenges").rglob("*.md")):
+        fence: list[str] | None = None
+        for line in md.read_text(encoding="utf-8").splitlines():
+            line = re.sub(r"^>\s?", "", line)
+            if line.startswith("```"):
+                if fence is not None:
+                    blocks.append((str(md.relative_to(REPO)), "\n".join(fence)))
+                fence = None if fence is not None else []
+            elif fence is not None:
+                fence.append(line)
+    typed = [(src, b) for src, b in blocks if "patch agent workshop-agent" in b]
+    check("the lab page and its export each hand a student the by-hand evil-mcp patch",
+          any(s == LAB_HTML for s, _ in typed) and any(s == "challenges/LAB-TEXT.md" for s, _ in typed),
+          ", ".join(sorted({s for s, _ in typed})))
+    for src, body in typed:
+        lines = [l for l in body.splitlines() if "workshop-agent" in l or l.startswith("i=")]
+        hits = [l[:120] for l in lines if INDEX.search(l)]
+        check(f"{src}: the by-hand patch names no tools index", not hits, "; ".join(hits))
+        want = json.loads(re.findall(r'toolNames","value":(\[[^\]]*\])', body)[-1])
+        script = "\n".join(lines)
+        for label, agent in (("committed order", AGENT), ("tools reversed", REVERSED)):
+            start = with_evil(agent, ["get_weather"] if want != ["get_weather"] else EVIL_ALL)
+            rc, out, after, n = run(["bash", "-c", script], start)
+            check(f"{src} ({want[0]}{'...' if len(want) > 1 else ''}), {label}: it sets evil-mcp to {want} "
+                  "and touches nothing else", rc == 0 and after == with_evil(agent, want), out)
+        rc, out, after, n = run(["bash", "-c", script], NO_EVIL)
+        check(f"{src}: with no evil-mcp entry it fails and patches nothing", rc != 0 and n == 0, out)
 
 print()
 if failures:
