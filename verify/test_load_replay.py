@@ -175,9 +175,9 @@ with tempfile.TemporaryDirectory(dir=REPO / "tmp") as _t:
         check(f"{name} is in guard-proxy's /chat reply (proxy.py)", getattr(lr, name) in _proxy)
     check("PROBE_MARKER equals proxy.py's", f'PROBE_MARKER = "{lr.PROBE_MARKER}"' in _proxy)
     lim = lr.deployed_limits()
-    check("limits read from git: nginx 120/min per network, burst 60",
-          (lim["edge_network_rpm"], lim["edge_network_burst"]) == (120, 60), str(lim))
-    check("limits read from git: nginx 10/min per conversation", lim["edge_session_rpm"] == 10, str(lim))
+    check("limits read from git: nginx 10/min per conversation, burst 9, and no per-network zone",
+          (lim["edge_session_rpm"], lim["edge_session_burst"]) == (10, 9) and not any("network" in k for k in lim),
+          str(lim))
     check("limits read from git: guard-proxy 150/min cluster, 10/min session, $25 cap",
           (lim["proxy_cluster_rpm"], lim["proxy_session_rpm"], lim["cost_cap_usd"]) == (150, 10, 25.0), str(lim))
     check("client timeout outlasts nginx's 285s /chat read timeout",

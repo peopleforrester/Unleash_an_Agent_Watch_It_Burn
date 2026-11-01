@@ -1,13 +1,13 @@
-# ABOUTME: Holds the KubeCon audience path to a ballroom (#450): the per-conversation and per-network limits on /chat,
-# ABOUTME: the timeout ladder from Railway's edge down to guard-proxy's worst turn, and refusals a phone can read.
+# ABOUTME: Holds the KubeCon audience path to a ballroom (#450): the per-conversation limit on /chat and no per-network
+# ABOUTME: one, the timeout ladder from Railway's edge down to guard-proxy's worst turn, and refusals a phone can read.
 """A ballroom of phones on one venue NAT reaches attackme through Railway's edge, the apex Caddy, the NLB and the
 console's nginx, then guard-proxy. Three things break there without anything on the platform being wrong:
 
-- The limits. guard-proxy's cluster window is one budget for the whole room, and its per-conversation limit is
-  keyed on a session the client chooses, so a script rotating sessions can spend the room's window. nginx adds a
-  per-network ceiling under that window, keyed on the one X-Forwarded-For entry the apex sends
-  (apex-agenticburn#40), and a per-conversation zone in front of it so a phone over its own 10 does not spend
-  its network's ceiling.
+- The limits. The room's limit is per person: nginx holds one conversation to 10 a minute, keyed on the
+  X-BurritoBot-Session header the page sends, as guard-proxy's RATE_LIMIT_SESSION_RPM does. Under that are
+  guard-proxy's cluster window and the cost cap. nginx sets no per-network limit (Michael, 2026-11-01): the venue
+  Wi-Fi leaves through one NAT address, so a per-address zone is one bucket for the whole ballroom, and the #644
+  load run saw it refuse 1,164 of 1,500 turns. Nothing on /chat may rewrite the prompt on its way to the model.
 - The timeouts. /chat sends nothing until the turn is done, so every hop in front must wait longer than
   guard-proxy's slowest turn, or the phone gets the outer hop's bare error. guard-proxy's PROXY_TIMEOUT is per
   call, and a turn makes several in a row: this counts them in proxy.py, so a new retry fails here.
@@ -155,17 +155,23 @@ check("and no single call can outlast the turn", per_call <= worst_turn)
 
 # --- the limits ---------------------------------------------------------------------------------------------
 s_key, s_rpm = zone("wib_chat_session")
-a_key, a_rpm = zone("wib_chat_address")
 window, session_rpm = int(ENV["RATE_LIMIT_RPM"]), int(ENV["RATE_LIMIT_SESSION_RPM"])
 check("the conversation zone keys on the page's X-BurritoBot-Session", s_key == "$http_x_burritobot_session")
-check("the network zone keys on the apex's X-Forwarded-For, not nginx's peer (the NLB)",
-      a_key == "$http_x_forwarded_for")
 check(f"nginx's per-conversation rate is guard-proxy's RATE_LIMIT_SESSION_RPM ({s_rpm:g} vs {session_rpm})",
       s_rpm == session_rpm)
-check(f"the per-network ceiling ({a_rpm:g}/min) is under the cluster window ({window}/min) and holds ten phones",
-      session_rpm * 10 <= a_rpm < window)
+check(f"guard-proxy's cluster window is 150 a minute and its cost cap $25 (Michael, 2026-11-01; got {window}, "
+      f"${ENV.get('COST_CAP_USD')})", window == 150 and float(ENV.get("COST_CAP_USD") or 0) == 25)
 limits = re.findall(r"limit_req zone=(\S+)", chat_loc)
-check("/chat applies the conversation zone, then the network zone", limits == ["wib_chat_session", "wib_chat_address"])
+check(f"/chat applies the conversation zone and nothing else (found {limits})", limits == ["wib_chat_session"])
+# The limit is per person (#450, 2026-11-01): no zone in this file is keyed on an address, whichever way an
+# address reaches nginx (its peer, the apex's X-Forwarded-For, or a real_ip rewrite of the peer).
+address_keys = re.findall(r"^limit_req_zone (\S*(?:remote_addr|forwarded_for|realip)\S*) ", CONF, re.M)
+check(f"no limit_req_zone is keyed on a client address (found {address_keys})", not address_keys)
+check("no limit_conn caps connections per address", re.search(r"^\s*limit_conn", CONF, re.M) is None)
+# Prompts reach the model as the attendee typed them: nothing on /chat rewrites, truncates or replaces the body.
+rewrites = [d for d in ("proxy_set_body", "proxy_pass_request_body off", "client_max_body_size", "sub_filter",
+                        "rewrite ", "njs", "js_", "mirror") if d in chat_loc]
+check(f"/chat forwards the request body untouched (found {rewrites})", not rewrites)
 check("/chat answers a limit as 429 into its refusal", "limit_req_status 429;" in chat_loc
       and re.search(r"error_page 429 = @chat_slow_down;", chat_loc) is not None)
 check("/chat passes the caller's X-Forwarded-For to guard-proxy as it came",
@@ -174,7 +180,10 @@ check("/chat passes the caller's X-Forwarded-For to guard-proxy as it came",
 # --- the words on the phone ---------------------------------------------------------------------------------
 status, body = returned("@chat_slow_down")
 check("a limit is a guarded 200 in the /chat shape", status == 200 and body.get("guarded") is True
-      and isinstance(body.get("reply"), str) and str(session_rpm) in body["reply"] and f"{a_rpm:g}" in body["reply"])
+      and isinstance(body.get("reply"), str) and str(session_rpm) in body["reply"]
+      and "network" not in body["reply"])
+check("the limit's sentence tells the phone to wait and send again",
+      re.search(r"\bwait\b", body.get("reply", ""), re.I) is not None and "send that again" in body.get("reply", ""))
 for loc, code, statuses in (("@chat_kitchen_down", 502, "502 503"), ("@chat_kitchen_slow", 504, "504")):
     status, body = returned(loc)
     check(f"nginx's own {statuses} is a {code} in the /chat shape that the probes read as a failure",

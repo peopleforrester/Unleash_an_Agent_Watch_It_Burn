@@ -69,7 +69,7 @@ MAX_PROMPT_CHARS = 8000
 
 # Outcomes, by what the phone would see. The refusal texts are guard-proxy's and the console nginx's own
 # (proxy.py _chat_turn and console.conf @chat_slow_down); verify/test_load_replay.py holds them to the source.
-EDGE_LIMIT_TEXT = "a minute from one network"           # console.conf @chat_slow_down
+EDGE_LIMIT_TEXT = "a minute per conversation. Wait"     # console.conf @chat_slow_down
 SESSION_LIMIT_TEXT = "/min per conversation.)"           # proxy.py, RATE_LIMIT_SESSION_RPM
 CLUSTER_LIMIT_TEXT = "/min cap on this cluster.)"        # proxy.py, RATE_LIMIT_RPM
 BUDGET_TEXT = "The kitchen tab is frozen."               # proxy.py, COST_CAP_USD or the C4 budget guard
@@ -157,7 +157,6 @@ def deployed_limits() -> dict:
             env = {e["name"]: e.get("value") or "" for e in proxy["env"]}
     return {
         "edge_session_rpm": zone["wib_chat_session"], "edge_session_burst": burst["wib_chat_session"],
-        "edge_network_rpm": zone["wib_chat_address"], "edge_network_burst": burst["wib_chat_address"],
         "proxy_session_rpm": int(env["RATE_LIMIT_SESSION_RPM"]), "proxy_cluster_rpm": int(env["RATE_LIMIT_RPM"]),
         "cost_cap_usd": float(env["COST_CAP_USD"]), "model_tier": env.get("MODEL_TIER", ""),
     }
@@ -187,11 +186,12 @@ class Plan:
         think = (self.think_min + self.think_max) / 2
         return (self.ramp + self.turns * latency_s + (self.turns - 1) * think) / 60.0
 
-    def predicted_served(self, limits: dict, networks: int = 1) -> int:
-        """Turns the limits let through if every phone leaves through `networks` addresses, as a venue NAT does.
-        nginx's per-network zone allows its burst then its rate; guard-proxy's cluster window its rate."""
+    def predicted_served(self, limits: dict) -> int:
+        """Turns the limits let through. nginx's per-conversation zone allows each phone its burst then its rate,
+        and guard-proxy's cluster window its rate. Nothing keys on the address (#450), so one machine sending as
+        every phone is held the way a venue NAT is."""
         m = self.minutes()
-        edge = networks * (limits["edge_network_burst"] + limits["edge_network_rpm"] * m)
+        edge = self.users * (limits["edge_session_burst"] + 1 + limits["edge_session_rpm"] * m)
         cluster = limits["proxy_cluster_rpm"] * max(m, 1.0)
         return int(min(self.sends, edge, cluster))
 
@@ -205,12 +205,12 @@ def plan_lines(plan: Plan, limits: dict, source: str, stats: dict, target: str) 
         + (f" ({stats['too_long']} over {MAX_PROMPT_CHARS} chars and {stats['probes_left_out']} probes left out)"
            if "too_long" in stats else ""),
         f"model-call ceiling (--max-calls): {plan.max_calls}; sends at most {plan.sends}",
-        f"limits in git: nginx {limits['edge_network_rpm']}/min per network (burst {limits['edge_network_burst']}), "
-        f"{limits['edge_session_rpm']}/min per conversation; guard-proxy {limits['proxy_cluster_rpm']}/min per "
+        f"limits in git: nginx {limits['edge_session_rpm']}/min per conversation "
+        f"(burst {limits['edge_session_burst']}); guard-proxy {limits['proxy_cluster_rpm']}/min per "
         f"cluster, {limits['proxy_session_rpm']}/min per session, COST_CAP_USD ${limits['cost_cap_usd']:g}",
         f"estimated cost: worst case ${plan.sends * plan.usd_per_call:.2f} (every send reaches the model at "
         f"${plan.usd_per_call:g} a call); predicted ${served * plan.usd_per_call:.2f} for about {served} served "
-        f"turns from one network over about {plan.minutes():.1f} min",
+        f"turns over about {plan.minutes():.1f} min",
     ]
 
 
@@ -458,7 +458,7 @@ def report_lines(s: dict) -> list[str]:
         f"{s['not_sent_ceiling']}, stopping held back {s['not_sent_stopped']}"
         + (f" ({s['stop_reason']})" if s["stop_reason"] else ""),
         "outcomes: " + ", ".join(f"{k} {v}" for k, v in o.items() if v),
-        f"rate-limit refusals {s['rate_limit_refusals']}: nginx per network or conversation {o['edge_limit']}, "
+        f"rate-limit refusals {s['rate_limit_refusals']}: nginx per conversation {o['edge_limit']}, "
         f"guard-proxy per session {o['session_limit']}, guard-proxy per cluster {o['cluster_limit']}; "
         f"cost cap {o['budget']}",
         "HTTP status: " + ", ".join(f"{k} {v}" for k, v in s["statuses"].items()),

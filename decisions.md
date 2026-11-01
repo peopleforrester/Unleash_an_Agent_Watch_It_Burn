@@ -7454,3 +7454,61 @@ festival-ops image and serves the page. Then `python3 verify/kubecon_probe.py ad
 --context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev`, where C6's second tier refuses
 the festival-ops path at admission and the deployed classifier refuses the new payload. Also
 `verify/input-guard.sh <host> <kube-context>`.
+
+## 2026-11-01 · #450 · The KubeCon /chat limit is per person: the console's nginx drops its per-network zone
+
+**Michael's ruling, 2026-11-01, on #450.** Switch the chat limit from per network to per person. The #644 load run
+sent 1,500 turns from 500 sessions on one address: 291 were served and 1,164 were refused by the console nginx's
+per-network zone (`wib_chat_address`, 120 a minute, burst 60). On venue Wi-Fi that zone is one bucket for the whole
+ballroom, and he expects about 150 people in the room. This replaces the per-network ceiling in the 2026-10-29 #450
+entry above. The timeout ladder and the readable refusals from that entry stay as they are.
+
+**What changes.**
+- `gitops/ai-layer/console.conf`: the `wib_chat_address` zone and its `limit_req` on `/chat` are gone. `/chat` keeps
+  `wib_chat_session`, 10 a minute per conversation (burst 9), keyed on the `X-BurritoBot-Session` header the
+  storefront sends. guard-proxy keeps its own 10 a minute per conversation, its 150-a-minute cluster window and the
+  $25 `COST_CAP_USD`; resources.yaml is not touched. With about 150 people, the 150 a minute is the limit the room
+  reaches first.
+- nginx's refusal now reads "Slow down, hungry traveler. BurritoBot takes 10 a minute per conversation. Wait a few
+  seconds and send that again." It is still a guarded 200 in guard-proxy's `/chat` shape, and it no longer names a
+  per-network figure.
+- Nothing touches the prompt. `/chat` has no body directive, and guard-proxy and the prompt wall's feed are
+  unchanged, so a prompt reaches the model and the wall as before. More of the room's prompts now reach guard-proxy,
+  and so the wall, because nginx no longer refuses them first.
+- `verify/test_audience_path.py` now checks that no `limit_req_zone` in console.conf is keyed on an address (the peer,
+  X-Forwarded-For or a real_ip rewrite), that there is no `limit_conn`, that `/chat` applies the conversation zone
+  only, that it has no body-rewriting directive, that guard-proxy keeps 150 a minute and $25, and that the refusal
+  says to wait and send again. Against the old console.conf, four of these checks fail.
+- `verify/load_replay.py` reads the per-conversation zone in place of the network zone, and predicts served turns from
+  it and the cluster window. For the run-of-show's 500 phones and 3 turns each, the prediction is now about 375
+  served turns for $1.88. `verify/test_load_replay.py` holds the new limits.
+- `verify/test_audience_path_live.py` replaces its per-network check: 80 fresh conversations sent at once from one
+  address must all get past nginx. Before this change, the zone's burst let 61 through. It also compares guard-proxy's
+  PROXY_TIMEOUT, TURN_TIMEOUT, the two rate limits and the cost cap with git. Until now it checked for a
+  PROXY_TIMEOUT of 45, which #694 had already raised to 120.
+- The run-of-show hop table and the load-replay estimate, readiness row 9, PROJECT_STATE and the storefront's comment
+  are updated to match.
+
+**Checked on a real nginx.** `nginx -t` passed for this console.conf on nginxinc/nginx-unprivileged:1.27-alpine, the
+console's image line. A copy with guard-proxy pointed at a closed port was then sent 80 fresh conversations at once
+from one X-Forwarded-For address. All 80 reached the upstream; none were refused. Twelve requests at once from one
+conversation gave 10 through and 2 refusals, and the refusal body was the sentence above.
+
+**What the room gives up.** A script that rotates sessions from one address can now take the whole 150-a-minute
+window, where before it could take 120. It is still held by the cluster window and the cost cap. Every turn nginx
+lets through now runs guard-proxy's block-list, injection classifier and topic classifier (LLM Guard, on the cluster's
+CPU) before guard-proxy's own rate limits refuse it, so a full room loads LLM Guard harder than the 120-a-minute zone
+let it. The #644 rerun's 502, 504 and timeout counts are where that would show.
+
+**The private cluster.** Both roster clusters render `gitops/ai-layer` from the same revision, so
+watch-it-burn-private's console takes this console.conf on its next Argo CD sync, as it does any console change.
+This run did not touch it, and none of the commands below name it.
+
+**Not yet run on a cluster.** The deploy to watch-it-burn-community: Argo CD's ai-layer Application syncs this commit
+once it is on the revision attackme tracks. Then `CONTEXT=<community ctx> python3 verify/test_audience_path_live.py`
+must pass, including "all 80 fresh conversations from one address get through nginx". Then the #644 replay again,
+`python3 verify/load_replay.py attackme.burritobot.co --yes --harvest <harvest> --json-out
+tmp/load-replay-attackme.json`, which should show `edge_limit` at 0 (each phone sends 3 turns), about 150 served a
+minute, and must end `LOAD REPLAY GREEN`. Run it before `./fleet.sh reset-bot watch-it-burn-community`.
+
+---

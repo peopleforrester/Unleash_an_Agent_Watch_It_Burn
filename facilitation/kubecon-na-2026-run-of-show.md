@@ -298,14 +298,17 @@ timeouts on that path, outside in:
 | Railway edge | 300 s with no data (15 min while data flows) | none |
 | apex Caddy | no response timeout; dial 2 s, retried for 5 s | none; sends the phone's address as the one X-Forwarded-For (apex-agenticburn#40) |
 | NLB | 350 s TCP idle (AWS default) | none |
-| console nginx `/chat` | 285 s | 10 a minute per conversation, then 120 a minute per network address |
+| console nginx `/chat` | 285 s | 10 a minute per conversation; none per network address |
 | guard-proxy | 270 s for the whole turn (`TURN_TIMEOUT`), each of up to six calls at most 120 s (#694) | 10 a minute per conversation, 150 a minute for the cluster, $25 cost cap |
 
-Most of the room leaves the venue Wi-Fi through one NAT address, so the room on
-Wi-Fi shares the 120 a minute, and phones on cellular and the stage keep the
-other 30 of the cluster's 150. A phone over its own 10 is refused without
-spending its network's 120. Every refusal shows on the phone as a sentence,
-"Slow down, hungry traveler.", and a turn that runs out of time reads "BurritoBot's
+The limit is per person (Michael, 2026-11-01), and none is per network. Most of the
+room leaves the venue Wi-Fi through one NAT address, so a per-address limit is
+one bucket for the whole ballroom: the #644 load run sent 1,500 turns from 500
+sessions on one address and the old 120-a-minute address zone refused 1,164 of
+them. Each phone gets its own 10 a minute, and the room as a whole shares
+guard-proxy's 150 a minute and the $25 cost cap. With about 150 people in the
+room, the 150 a minute is the limit that binds. Every refusal shows on the phone
+as a sentence, "Slow down, hungry traveler.", and a turn that runs out of time reads "BurritoBot's
 kitchen isn't answering", never a bare status code. `verify/test_audience_path.py`
 holds all of this offline; `CONTEXT=<community ctx> python3
 verify/test_audience_path_live.py` checks it through the apex on the live cluster.
@@ -1027,9 +1030,10 @@ is merely slow rather than rebuilding:
   ```
 
   The estimate: at most $7.50 if all 1500 turns reached the model at $0.005 a call;
-  about $1.80 predicted, because from one machine every turn leaves through one
-  address and nginx lets about 120 a minute through, which is what a venue NAT does
-  too. The report gives latency percentiles, outcomes by limit (nginx per network or
+  about $1.90 predicted for about 375 served turns, because guard-proxy's cluster
+  window lets about 150 a minute through over the run's 2.5 minutes. From one
+  machine every turn leaves through one address, as a venue NAT's do, and nothing
+  in front of guard-proxy keys on the address any more (#450, 2026-11-01). The report gives latency percentiles, outcomes by limit (nginx per
   conversation, guard-proxy per session and per cluster, the cost cap), errors by
   HTTP status (502, 504, 429), timeouts, and the `/cost` spend before and after. It
   must end `LOAD REPLAY GREEN`: a refusal is a sentence a phone can read and passes,
