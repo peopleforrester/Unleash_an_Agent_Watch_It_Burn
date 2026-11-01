@@ -1,11 +1,14 @@
-# ABOUTME: Runs the storefront's own witchName block in node with the support desk's real cookie, so the chat page is
-# ABOUTME: proven to show the name the desk gave this browser and link to that visitor's Jokers (#685).
+# ABOUTME: Runs the storefront's own witch-name code in node with the support desk's real cookie, so the chat page is
+# ABOUTME: proven to show the desk's name as plain text, and to assign a name the desk accepts on a first visit (#685, #762).
 # SUITE: e2e
 # E2E TIER: tools (no cluster, no AWS: run-e2e-tools.sh runs it with the pinned tools, #572)
 """The desk (gitops/ai-layer/ticket_site.py) hands each browser a generated name in the wib_witch cookie on
 .burritobot.co. The chat page on the same domain reads it. Here the cookie comes from the real desk: the ticket site
-runs on localhost and its Set-Cookie value is fed to the page's block, cut from burritbot.html, in a node vm with a
-stub element.
+runs on localhost, its Set-Cookie value is fed to the page's witch-name code, cut from burritbot.html, in a node vm
+with a stub element, and the name the desk gave is read from its /me page.
+
+Since #763 the name is plain text with no link to the desk, and since #762 a visitor with no name, or with a cookie
+the vocabulary did not make, gets a fresh one from the page itself, written back to wib_witch for the desk to read.
 
 Needs node. A missing node is a failure, not a skip. Nothing here touches the network or a cluster.
 """
@@ -36,10 +39,10 @@ if shutil.which("node") is None:
     print("FAILED: node is not on PATH; this E2E check cannot run, which is a failure, not a skip")
     sys.exit(1)
 
-start = PAGE.find("  (function witchName(){")
+start = PAGE.find("  var WITCH_FIRST=")
 end = PAGE.find("  greet();", start)
-if start < 0 or end < 0:
-    print("FAILED: no witchName block before greet() in burritbot.html to execute")
+if start < 0 or end < 0 or "(function witchName(){" not in PAGE[start:end]:
+    print("FAILED: no witch-name vocabulary and witchName block before greet() in burritbot.html to execute")
     sys.exit(1)
 BLOCK = PAGE[start:end]
 
@@ -49,25 +52,31 @@ spec.loader.exec_module(site)
 site.Handler.log_message = lambda *a: None
 srv = ThreadingHTTPServer(("127.0.0.1", 0), site.Handler)
 threading.Thread(target=srv.serve_forever, daemon=True).start()
-req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/",
-                             headers={"Host": "support-attackme.burritobot.co", "User-Agent": "phone",
-                                      "X-Forwarded-For": "203.0.113.9"})
+DESK_HEADERS = {"Host": "support-attackme.burritobot.co", "User-Agent": "phone", "X-Forwarded-For": "203.0.113.9"}
+req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/", headers=DESK_HEADERS)
 with urllib.request.urlopen(req, timeout=5) as r:
-    set_cookie = r.headers["Set-Cookie"]
-    desk_page = r.read().decode()
-srv.shutdown()
+    set_cookie = r.headers["Set-Cookie"] or ""
 cookie = set_cookie.split(";", 1)[0]
-given = desk_page.split('id="witch-name">', 1)[1].split("<", 1)[0]
+req = urllib.request.Request(f"http://127.0.0.1:{srv.server_address[1]}/me", headers={**DESK_HEADERS, "Cookie": cookie})
+with urllib.request.urlopen(req, timeout=5) as r:
+    me_page = r.read().decode()
+srv.shutdown()
+if 'id="witch-name">' not in me_page:
+    print("FAILED: the desk's /me page shows no witch-name element to read the given name from")
+    sys.exit(1)
+given = me_page.split('id="witch-name">', 1)[1].split("<", 1)[0]
 
 HARNESS = r"""
 const vm = require('vm');
 const [src, cases] = JSON.parse(require('fs').readFileSync(0, 'utf8'));
 const out = cases.map(([host, cookie]) => {
-  const el = {hidden: true, textContent: '', href: ''};
-  const ctx = {location: {hostname: host}, document: {cookie, getElementById: (id) => id === 'witch' ? el : null}};
+  const el = {hidden: true, textContent: '', href: '', removeAttribute(a) { this[a] = ''; }};
+  const ctx = {location: {hostname: host}, Math,
+               document: {cookie, getElementById: (id) => id === 'witch' ? el : null}};
   vm.createContext(ctx);
   vm.runInContext(src, ctx);
-  return el;
+  return {hidden: el.hidden, textContent: el.textContent, href: el.href, cookie: ctx.document.cookie,
+          sent: ctx.WITCH_NAME};
 });
 process.stdout.write(JSON.stringify(out));
 """
@@ -84,21 +93,39 @@ if r.returncode != 0:
     sys.exit(1)
 named, none, other_domain, private, rude = json.loads(r.stdout)
 
-print("== the chat page shows the name the desk gave this browser (#685) ==")
+
+
+def written_name(case: dict) -> str | None:
+    """The name the page wrote back to wib_witch, as the desk reads it, or None when it wrote none it accepts."""
+    if not case["cookie"].startswith("wib_witch="):
+        return None
+    return site.name_from_slug(case["cookie"].split(";", 1)[0].split("=", 1)[1])
+
+
+print("== the chat page shows the name the desk gave this browser, as plain text (#685, #763) ==")
 check("the desk set wib_witch on .burritobot.co", "Domain=.burritobot.co" in set_cookie, set_cookie)
-check("the page shows that exact name", not named["hidden"] and f"You are {given} " in named["textContent"],
+check("the page shows that exact name", not named["hidden"] and named["textContent"].endswith(f"You are {given}"),
       f"{given!r} / {named['textContent']!r}")
-check("and links to this cluster's desk /me", named["href"] == "https://support-attackme.burritobot.co/me", named["href"])
-check("the private bot links to its own desk", private["href"] == "https://support-burritobot-private.burritobot.co/me")
-print("== without a name, the page points at the desk; off the domain, it shows nothing ==")
-check("no cookie: a link to get a name", not none["hidden"] and "Get your witch name" in none["textContent"]
-      and none["href"] == "https://support-attackme.burritobot.co/")
-check("a cookie that is not a generated name is not shown", "rude" not in rude["textContent"]
-      and "Get your witch name" in rude["textContent"])
-check("agenticburn.com shows nothing (the cookie is not sent there)", other_domain["hidden"] is True)
+check("and sends that name with each /chat call", named["sent"] == given, repr(named["sent"]))
+check("and links nowhere", named["href"] == "", named["href"])
+check("and keeps the desk's cookie as it was", named["cookie"] == f"other=1; {cookie}", named["cookie"])
+check("the private bot shows the same name, with no link", not private["hidden"]
+      and private["textContent"].endswith(f"You are {given}") and private["href"] == "", repr(private))
+
+print("== without a name the page assigns one the desk accepts; off the domain it shows nothing (#762) ==")
+fresh = written_name(none)
+check("no cookie: the page writes a vocabulary name to wib_witch", fresh is not None, none["cookie"])
+check("on .burritobot.co, for the desk to read", "; Domain=.burritobot.co" in none["cookie"], none["cookie"])
+check("and shows and sends that name", not none["hidden"] and none["textContent"].endswith(f"You are {fresh}")
+      and none["sent"] == fresh, repr(none))
+replaced = written_name(rude)
+check("a cookie that is not a generated name is replaced with one", replaced is not None
+      and "rude" not in rude["textContent"] and rude["textContent"].endswith(f"You are {replaced}"), repr(rude))
+check("agenticburn.com shows nothing (the cookie is not sent there)", other_domain["hidden"] is True
+      and other_domain["sent"] == "", repr(other_domain))
 
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
     sys.exit(1)
-print("The chat page shows the support desk's name for this browser.")
+print("The chat page shows the support desk's name for this browser, and assigns one the desk accepts.")

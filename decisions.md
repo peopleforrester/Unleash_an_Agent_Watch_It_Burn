@@ -8251,3 +8251,15 @@ question goes to the coordinator.
 
 **Nothing owed on a cluster for #756.** The live checks belong to #746: Whitney's five, read in her sandbox org once
 a cluster has synced run 15333's change, as its decisions.md entry lists.
+
+**The E2E tier's witch-name check, brought up to the page (run 15439).** `bash verify/run-e2e-tools.sh` failed on
+staging 6324488 in `verify/test_storefront_witch_name_e2e.py`, from three commits that changed the page and the desk
+on purpose. #763 (5e454f7) took the link to the desk off the chat page's name, #762 (2d3b8d4) has the page assign a
+name on a first visit, and #764 (6324488) took the witch-name box off the desk's front page, where the test read the
+given name. The test also cut its code from `witchName()` alone, which no longer holds the vocabulary and helpers it
+calls. It now cuts from `var WITCH_FIRST=`, reads the given name from the desk's `/me` page with the desk's cookie,
+and checks what the page does today: the desk's name shown as plain text with no link and sent with each /chat call,
+the same on the private bot, a fresh name written to wib_witch on .burritobot.co (one the desk's `name_from_slug`
+accepts) when there is no cookie or a cookie the vocabulary did not make, and nothing on agenticburn.com. With the
+first-visit assignment removed from the page, five checks fail, which I confirmed on a temporary edit that was
+restored. No page or desk code changed.
