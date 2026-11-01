@@ -8655,3 +8655,39 @@ own KUBECONFIG and `--context`.
 
 **Not yet run on a cluster.** All of #544: points 1 and 2 and the attendee half of point 4 on a fresh attendee
 cluster, and point 3 and the admin half of point 4 (`verify/test_service_hosts_live.py`) on `watch-it-burn-private`.
+## 2026-11-01 · #520 · Re-probed from outside eight days before KubeCon: the public half still passes, the in-cluster half is still owed
+
+**No code changed.** Run 15599 took #520 up again. Its first attempt stalled (no output for 15 minutes); this
+attempt found no command in the run that hangs: `aws` with no profile fails in about 3 seconds, `kubectl` with an
+unknown context in well under a second, and each public probe answers in about 0.3 seconds. Long commands in this
+run were given hard caps and run in the background, which is how a run avoids the stall whatever its cause.
+
+**The public half, probed again on 2026-11-01 at about 20:30Z** with the test's own requests (GET, no query, so
+nothing flips) on `attackme` and `burritobot-private` under agenticburn.com and burritobot.co, 20 requests in
+all:
+- `/guards` returned 200 on all four hosts, with every guard off on both clusters: `input_blocklist`,
+  `input_classifier`, `output`, `budget` and `topic` all false.
+- `/a2a/toggle`, `/a2a/guards`, `/a2a/` and `/toggle` returned 404 on all four hosts, the console's own
+  nginx/1.27.5 page with no guard key. The result is the same as on 2026-10-30, so the consoles the KubeCon
+  platform runs (rebuilt 2026-10-28, PROJECT_STATE.md "KubeCon platform up") still carry #481, and no
+  roll-console run is needed for them.
+
+The clusters are the ones the issue means: michael-admin is gone since #632, and the admin cluster is
+watch-it-burn-private (`burritobot-private`), beside watch-it-burn-community (`attackme`). KubeCon is 2026-11-09 to
+11-12 (conference-knowledge `events/registry.yaml`, entry `kubecon-na-2026`), and the talk is on 11-12.
+
+**Not yet run on a cluster:** the test's in-cluster half, unchanged from the 2026-10-30 entry: the
+`cluster-identity` public host, guard-proxy's `/guards` read over `kubectl exec`, the terminal's `_px` and
+`guards-status` helpers, and the check that the guards did not move. A dispatched run has no AWS profile and no
+kubeconfig, and the accen-dev profile is not something a run can be handed, so the run is Michael's, or a session
+with that profile, once for each of watch-it-burn-private and watch-it-burn-community:
+
+    C=watch-it-burn-private; K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_console_no_toggle_live.py
+
+Expected on each: ten PASS lines and `All live /toggle exposure checks passed.`, with the guards the same
+before and after. The tool pod's in-cluster call to guard-proxy:8080/toggle stays open on purpose, the mesh
+challenge candidate in `docs/research/2026-10-24-istio-ambient-evaluation.md` section 2.1; closing it is
+Michael's decision and is not part of #520.
