@@ -1,0 +1,98 @@
+# ABOUTME: The five *-party demo apps: ordinary neighbours that share the cluster with BurritoBot. Each is
+# ABOUTME: nginx serving one animated page from a ConfigMap, at <animal>-<cluster>.agenticburn.com.
+apiVersion: backstage.io/v1alpha1
+kind: System
+metadata:
+  name: party-apps
+  title: The party apps
+  description: >-
+    Deliberate filler, so the cluster is not suspiciously empty and a misbehaving agent has neighbours to
+    hurt. Never mind what the mantis shrimp is doing.
+spec:
+  owner: party-planners
+  domain: hex-and-cauldron
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: unicorn-party
+  title: Unicorn Party
+  description: One animated page, served by nginx at unicorn-<cluster>.agenticburn.com.
+  annotations:
+    backstage.io/kubernetes-label-selector: app=demo-app-unicorn
+    backstage.io/kubernetes-namespace: apps
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/gitops/manifests/demo-app-unicorn/
+  tags: [nginx]
+spec:
+  type: website
+  lifecycle: production
+  owner: party-planners
+  system: party-apps
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: hedgehog-party
+  title: Hedgehog Party
+  description: One animated page, served by nginx at hedgehog-<cluster>.agenticburn.com.
+  annotations:
+    backstage.io/kubernetes-label-selector: app=demo-app-hedgehog
+    backstage.io/kubernetes-namespace: apps
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/gitops/manifests/demo-app-hedgehog/
+  tags: [nginx]
+spec:
+  type: website
+  lifecycle: production
+  owner: party-planners
+  system: party-apps
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: wombat-party
+  title: Wombat Party
+  description: One animated page, served by nginx at wombat-<cluster>.agenticburn.com.
+  annotations:
+    backstage.io/kubernetes-label-selector: app=demo-app-wombat
+    backstage.io/kubernetes-namespace: apps
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/gitops/manifests/demo-app-wombat/
+  tags: [nginx]
+spec:
+  type: website
+  lifecycle: production
+  owner: party-planners
+  system: party-apps
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: spider-party
+  title: Spider Party
+  description: One animated page, served by nginx at spider-<cluster>.agenticburn.com.
+  annotations:
+    backstage.io/kubernetes-label-selector: app=demo-app-spider
+    backstage.io/kubernetes-namespace: apps
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/gitops/manifests/demo-app-spider/
+  tags: [nginx]
+spec:
+  type: website
+  lifecycle: production
+  owner: party-planners
+  system: party-apps
+---
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: mantis-shrimp-party
+  title: Mantis Shrimp Party
+  description: One animated page, served by nginx at mantis-shrimp-<cluster>.agenticburn.com.
+  annotations:
+    backstage.io/kubernetes-label-selector: app=demo-app-mantis-shrimp
+    backstage.io/kubernetes-namespace: apps
+    backstage.io/source-location: url:https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/tree/staging/gitops/manifests/demo-app-mantis-shrimp/
+  tags: [nginx]
+spec:
+  type: website
+  lifecycle: production
+  owner: party-planners
+  system: party-apps

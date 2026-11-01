@@ -47,17 +47,21 @@ ADMIN_API="${WITB_DD_ADMIN_API_KEY:-}"
 # shell commands. The verifier now takes it from the operator's environment. See #272.
 ADMIN_APP_UNUSED_ON_CLUSTER="${WITB_DD_ADMIN_APP_KEY:-}"
 readonly NAMESPACES="datadog monitoring agent"
+# Namespaces that read cluster-identity and nothing else (#244). Backstage names this cluster on every Kubernetes
+# tab from cluster-name (backstage/app-config.yaml). It is a public portal, so datadog-admin-secret, which the loops
+# below write into NAMESPACES, never goes here.
+readonly IDENTITY_ONLY_NAMESPACES="backstage"
 # WITB_PUBLIC_HOST: this cluster's public console hostname (fleet.sh public_host_for), printed by the
 # web terminal's catalogue so every address a student sees is complete. Empty on a manual run.
 PUBLIC_HOST="${WITB_PUBLIC_HOST:-}"
 
-for ns in ${NAMESPACES}; do
+for ns in ${NAMESPACES} ${IDENTITY_ONLY_NAMESPACES}; do
     kubectl --context "${CONTEXT}" create namespace "${ns}" --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
     kubectl --context "${CONTEXT}" -n "${ns}" create configmap cluster-identity --from-literal=cluster-name="${CLUSTER_NAME}" \
         --from-literal=datadog-cluster-name="${DATADOG_CLUSTER_NAME}" \
         --from-literal=public-host="${PUBLIC_HOST}" --dry-run=client -o yaml | kubectl --context "${CONTEXT}" apply -f - >/dev/null
 done
-log "cluster-identity=${CLUSTER_NAME} public-host=${PUBLIC_HOST:-<unset>} in ${NAMESPACES// /\/}"
+log "cluster-identity=${CLUSTER_NAME} public-host=${PUBLIC_HOST:-<unset>} in ${NAMESPACES// /\/} ${IDENTITY_ONLY_NAMESPACES}"
 
 if [[ -z "${ADMIN_API}" || "${ADMIN_API}" == "${WITB_DD_API_KEY:-}" ]]; then
     for ns in ${NAMESPACES}; do

@@ -17,7 +17,7 @@
 # verify/test_images_lock.py holds every reference to a row here.
 python:3.12-slim sha256:aa943ce411423c7582288f18707ff66eddcbaeb510502d747a72aeb34f30d159 upstream:https://github.com/docker-library/python -
 nginx:1.27-alpine sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10 upstream:https://github.com/nginx/docker-nginx -
-node:24-trixie-slim sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
+node:24.22.2-trixie-slim@sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 sha256:54f84b4cf8432b21aaffd5d3ce8d41e12cea0d10d33c09d2f3c9879d49d6b446 upstream:https://github.com/nodejs/docker-node -
 debian:bookworm-slim sha256:99c0b25c46d0214d5a2091092e7908907dcaecd6a962cde0ac700acee222b6f3 upstream:https://github.com/debuerreotype/docker-debian-artifacts -
 ${{parameters.image}} - not-an-image:backstage-scaffolder-parameter-the-user-types-in -
 ghcr.io/peopleforrester/watch-it-burn:sample-app@sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 sha256:556e176dd1ac742009bddf70407cb92c84214179a6f45742e67d50523caa2c24 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/sample-app -
@@ -40,6 +40,8 @@ ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine@sha256:65e3e85dbaed8ba24
 {{.Values.imageRegistry}}/mirror/kubearmor/kubearmor-controller:latest-89f52a3e9fc0 ghcr.io/peopleforrester/lab-platform/mirror/kubearmor/kubearmor-controller@sha256:89f52a3e9fc07af532c68019c028451a5986a63d128dccb560bf3aa3004c8922 upstream:https://github.com/kubearmor/KubeArmor -
 web ghcr.io/peopleforrester/lab-platform/web@sha256:73cd15652cb8b8eb706bd43f8877541db7f7c9e5f810ef0739636a27fc34fbd9 repo:peopleforrester/lab-platform/cmd/web -
 ghcr.io/peopleforrester/vllm-qwen3:v0.23.0-qwen3-1.7b@sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce sha256:eaf45d273e1c4a41ba3fc437f2d5f92bd6edac327d06b7210c170e9c88f19fce repo:peopleforrester/packt-agentic-devops/images/vllm-qwen3 -
+ghcr.io/peopleforrester/watch-it-burn:backstage-1.52.0-node24.22.2@sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9 repo:peopleforrester/Unleash_an_Agent_Watch_It_Burn/images/watch-it-burn-backstage -
+docker.io/library/postgres:18.6-alpine@sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5 sha256:10a5c69a83035ab5239f5620d708520e8b28f5aa1f2b20143e6024532edadfb5 upstream:https://github.com/docker-library/postgres -
 # Declared: images no tracked file names as an image: key or FROM line.
 # The upstream image the deployed llm-guard replaced (VERSIONS.lock); protectai/llm-guard was archived in July 2026,
 # and peopleforrester/llm-guard-upstream-mirror holds a private copy of its source.

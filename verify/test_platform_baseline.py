@@ -202,7 +202,10 @@ def rejection_without_record(b: dict) -> None:
 
 
 def disabled_app_claimed_as_live(b: dict) -> None:
-    entry(b, "backstage")["status"] = "adopted"
+    # No component is parked in gitops/apps-disabled since #244 brought Backstage back, so the same check is driven
+    # from the other side: an installed app claimed as disabled is looked for there and not found.
+    entry(b, "backstage")["status"] = "disabled"
+    entry(b, "backstage")["revisit"] = "never"
 
 
 def opt_in_on_a_fleet_profile(b: dict) -> None:

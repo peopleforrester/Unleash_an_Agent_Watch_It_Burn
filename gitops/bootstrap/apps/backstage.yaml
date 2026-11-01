@@ -1,0 +1,38 @@
+# ABOUTME: ArgoCD Application for the Backstage developer portal (#244): every app on the cluster that is not
+# ABOUTME: infrastructure, who owns it and its live pods, at backstage-<cluster>. Deploys backstage/ via kustomize.
+#
+# Listed by values-attendee, values-full and values-admin; values-burn leaves it out (a burn cluster is the agent,
+# the AI layer and the burn targets only). The image is ours, pinned by digest in backstage/k8s/backstage.yaml, and
+# signed under policies/cosign/watch-it-burn.pub: verify-image-signatures denies an unsigned one in any namespace.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: backstage
+  namespace: argocd
+  annotations:
+    # Wave 6: after the AI layer (3) and the Agent (4), so the first catalog read finds their pods, and before the
+    # party apps (7), which it does not need. The namespace comes from the namespaces app (-10).
+    argocd.argoproj.io/sync-wave: "6"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn.git
+    targetRevision: "{{ .Values.revision }}"
+    path: backstage
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: backstage
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=false
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m

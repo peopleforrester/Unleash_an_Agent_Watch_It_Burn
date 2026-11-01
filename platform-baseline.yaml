@@ -126,12 +126,11 @@ components:
 
   - name: backstage
     sister: [backstage]
-    status: disabled
-    apps: [backstage.yaml, backstage-resources.yaml]
+    status: adopted
+    apps: [backstage.yaml]
     why: >
-      Moved to gitops/apps-disabled on 2026-06-27 (32a30e2): no challenge needed it and it needs secrets
-      the per-cluster bootstrap does not provision.
-    revisit: "#244 (Backstage on every cluster, with the party apps in its catalog)."
+      Back from gitops/apps-disabled for #244 on the attendee, admin and full profiles: our image, guest sign-in,
+      read-only RBAC and a disposable Postgres, so it needs no secret the per-cluster bootstrap does not have.
 
   - name: cert-manager
     sister: [cert-manager]

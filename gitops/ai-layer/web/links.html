@@ -129,7 +129,9 @@
     {nm:'MCP servers', p:4, ns:'agent', desc:'The agent tools. One of them carries a poisoned description on purpose (Challenge 7).',
      cmd:'kubectl -n agent get pods -l app=workshop-mcp', auth:'Tool servers, not a UI.'},
     {nm:'BurritoBot', p:4, ns:'agent', desc:'The customer-facing app under attack. Open it from the button at the top of your lab.',
-     cmd:'kubectl -n agent get svc console', auth:'No login (that is part of the lesson).'}
+     cmd:'kubectl -n agent get svc console', auth:'No login (that is part of the lesson).'},
+    {nm:'Backstage', p:4, ns:'backstage', desc:'The developer portal: every app on this cluster that is not infrastructure, which team owns it, and its live pods.',
+     svc:'backstage', auth:'No login: everyone is the guest user, and it can only read.'}
   ];
 
   var cur = 8;

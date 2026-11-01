@@ -7168,3 +7168,59 @@ with no exec into workshop-agent.
 on watch-it-burn-community (kubeconfig from `aws eks update-kubeconfig --kubeconfig /tmp/community.kubeconfig --name
 watch-it-burn-community --region us-west-2 --profile accen-dev`). A 200 through the port-forward closes #583. Any other
 status prints Bedrock's reply, and that reply says what encoding the path needs on agentgateway v1.7.0.
+
+## 2026-11-01 · #244 #483 · Backstage on attendee, full and admin as one chart app, on a rebuilt Node 24.22.2 image
+
+Michael, 2026-11-01: Backstage done and working, with no open security holes, before the KubeCon breakout on
+2026-11-12. The approved #244 design (agent/244-6778 and the later 8367324, 4f04545, 32759e9, which are not on any
+ref this session could fetch) was made again on staging's layout: `verify/draft-drift.sh origin/agent/244-6778
+origin/staging` named 14 drifted paths, mainly #609's move of gitops/apps/ into the lab-bootstrap chart.
+
+**What deploys.** `gitops/bootstrap/apps/backstage.yaml` (wave 6) builds `backstage/` with kustomize, and
+values-attendee, values-full and values-admin list it; values-burn does not. Our image by digest, Postgres 18.6 on an
+emptyDir behind a NetworkPolicy that admits only the Backstage pod, read-only RBAC with no logs, ConfigMaps or
+Secrets, guest sign-in, and the catalog and config as hashed ConfigMaps. gitops/apps-disabled/ and the old
+1300-line catalog ConfigMap are gone. Counts: attendee 29 apps (34 Applications with the root and the
+multi-Application files), admin 33, full 31.
+
+**What differs from the draft.**
+- One chart app at the root's revision, not a gitops/apps file on `staging`.
+- customer-stream is not catalogued: #473 removed it, and the customer-data team went with it. The support desk
+  (fake-ticket, #640) and the weather feed (#642) are added, and evil-mcp's API now names agentgateway:3003 (#515).
+- The test scans gitops/workshop-agent for the Agent (#707), and checks each source-location path exists.
+- cluster-identity reaches the backstage namespace through a separate IDENTITY_ONLY_NAMESPACES list in
+  infra/datadog-cluster-identity.sh, so datadog-admin-secret is never written into the public portal's namespace.
+- backstage-<cluster> is routed on both domains (#651); apex-agenticburn's derive-roster.sh already skips the
+  backstage- prefix. The Backstage pod carries burritobot-backstage Datadog labels (#629, #662); its Postgres does
+  not, because the DatadogAgent's image-keyed log config names every postgres container burritobot-kagent-postgres
+  and would override them. The local-inference profile, the full build plus vllm-qwen3, lists backstage too. Linked from /platform, /links, the lab
+  tour and both copies of the terminal's platform command.
+
+**The image (#483).** ghcr.io/peopleforrester/watch-it-burn:backstage-1.52.0-node24.22.2@sha256:65b2315c4668a1999ea99eb21df64b068ffa5c01ce8fff502c4bc476870871b9,
+the tag naming Backstage 1.52.0 and Node 24.22.2. Built rootless with buildah: the yarn install, tsc and
+build:backend steps inside node:24.22.2-trixie-slim, then the Dockerfile, whose base is pinned by digest. The Node
+pin is #483's node-fetch fix: 24.17.0 failed every Kubernetes tab with "Premature close" on keep-alive chunked
+responses, 24.22.x does not (measured 2026-10-24). Run with this config on 2026-11-01: 45 entities, 19 Components,
+no processing errors, guest sign-in and the frontend served. Anonymous pulls of the tag work.
+
+**Dependabot.** @azure/msal-node 7.1.2 (GHSA-xcx6-jx8p-x3h5, fixed 7.1.0) via a resolution, with @azure/identity
+held at 4.14.0. Identity 4.14.1 is the first release to ask for msal-node ^7, but it was two days old and the repo's
+npmMinimalAgeGate is three. msal-node 7's only identity-facing change is the interactive browser flow, which a
+Backstage backend never runs. node-forge 1.4.2: the alert lists no patched version, but forge's CHANGELOG puts the
+fix for CVE-2026-85393 (this alert) in 1.4.1, released 2026-10-27. Inside the image each resolves to one copy, 7.1.2
+and 1.4.2. The fifteen open Dependabot version PRs (#423 to #437) were already at or below what staging's lockfile
+resolves. react-router stays on 6 (PR #62 asks for 8.3.0): Backstage 1.52's core-app-api and its siblings depend on
+react-router-dom ^6.30.2 in the lockfile, and v7 folded react-router-dom into react-router.
+
+**REJECTED: the Backstage Helm chart for the portal.**
+**Why:** it takes the image as registry, repository and tag keys, so no `image:` line names it, and both
+verify/test_image_pins.py and verify/sign-images.sh read `image:` lines. Its bundled Postgres tag answered 404 on
+Docker Hub when the draft checked it on 2026-10-24.
+**Status:** Permanent while those two checks read `image:` lines.
+**Do not suggest:** the chart with an image override, or the chart's PostgreSQL subchart.
+
+**Not yet run on a cluster.** The image is not yet signed: this session's guard refused to read the cosign key.
+`verify/sign-images.sh` signs it, and `verify/sign-images.sh --check` must then show backstage-1.52.0-node24.22.2
+verified, or verify-image-signatures denies the pod on every profile that lists it. Then, on an attendee cluster,
+`CONTEXT=<ctx> bash verify/backstage-footprint.sh` (#484): the pods Ready, the footprint, and the Kubernetes tab
+listing pods for unicorn-party and workshop-agent.
