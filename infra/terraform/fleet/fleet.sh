@@ -2405,9 +2405,9 @@ sweep_orphan_sgs() {
                    --filters "${vpcf[@]}" "${tagf}" \
                    --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true
            done | tr '\t' '\n' | awk '$0 != "" && $0 != "None"' | sort -u)"
-    # Only groups on no network interface. The rules are stripped below before any delete is tried, and a group a
-    # live load balancer still uses sits on that LB's interfaces (verify/test_sg_sweep.sh). The tag selection
-    # already keeps the sweep off the roster clusters' groups in the shared lab VPC; this is the second guard.
+    # Only groups on no network interface: a group a live load balancer still uses sits on that LB's interfaces,
+    # so it is in use and left completely alone (verify/test_sg_sweep.sh). The tag selection already keeps the
+    # sweep off the roster clusters' groups in the shared lab VPC; this is the second guard.
     local free="" eni
     for sg in ${sgs}; do
         [[ "${sg}" != "None" ]] || continue
@@ -2421,34 +2421,34 @@ sweep_orphan_sgs() {
         free+="${sg} "
     done
     sgs="${free}"
-    for sg in ${sgs}; do
-        [[ "${sg}" != "None" ]] || continue
-        found=$(( found + 1 ))
-        # Strip rules first: a group referenced by another group refuses to delete.
-        local ing egr
-        ing="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
-               --group-ids "${sg}" --query 'SecurityGroups[0].IpPermissions' --output json 2>/dev/null || echo '[]')"
-        egr="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
-               --group-ids "${sg}" --query 'SecurityGroups[0].IpPermissionsEgress' --output json 2>/dev/null || echo '[]')"
-        [[ "${ing}" == "[]" ]] || AWS_PROFILE="${acct}" aws ec2 revoke-security-group-ingress \
-            --region "${WIB_REGION}" --group-id "${sg}" --ip-permissions "${ing}" >/dev/null 2>&1 || true
-        [[ "${egr}" == "[]" ]] || AWS_PROFILE="${acct}" aws ec2 revoke-security-group-egress \
-            --region "${WIB_REGION}" --group-id "${sg}" --ip-permissions "${egr}" >/dev/null 2>&1 || true
-    done
-    # Retry deletion: cross-references resolve as siblings go away.
-    local attempt
+    for sg in ${sgs}; do [[ "${sg}" != "None" ]] && found=$(( found + 1 )); done
+    # Delete first, and never revoke a rule on a group whose delete fails (#754). The #752 incident was the sweep
+    # revoking rules on groups it then could not delete, which on 2026-11-01 were the roster clusters' live
+    # agent-console and traffic groups. Owning rules does not block a group's own deletion, so a genuine orphan
+    # deletes directly with nothing revoked; cross-references among this cluster's own orphans resolve across the
+    # retry passes as each sibling goes away. A group that still refuses to delete is in use or referenced, so it
+    # keeps its rules and is named as a survivor rather than stripped. A true reference cycle survives intact and
+    # is reported, for recheck_sg_leaks and a human to clear.
+    local attempt todo="${sgs}" survivors=""
     for attempt in 1 2 3; do
-        survived=0
-        for sg in ${sgs}; do
+        survivors=""
+        for sg in ${todo}; do
             [[ "${sg}" != "None" ]] || continue
-            AWS_PROFILE="${acct}" aws ec2 delete-security-group --region "${WIB_REGION}" \
-                --group-id "${sg}" >/dev/null 2>&1 || survived=$(( survived + 1 ))
+            if AWS_PROFILE="${acct}" aws ec2 delete-security-group --region "${WIB_REGION}" \
+                   --group-id "${sg}" >/dev/null 2>&1; then
+                :   # deleted; its own rules went with it, and nothing was revoked first
+            else
+                survivors+="${sg} "
+            fi
         done
-        [[ "${survived}" -eq 0 ]] && break
+        todo="${survivors}"
+        [[ -z "${survivors// }" ]] && break
     done
+    survived=0; for sg in ${survivors}; do [[ -n "${sg}" ]] && survived=$(( survived + 1 )); done
     if [[ "${found}" -gt 0 ]]; then
         if [[ "${survived}" -gt 0 ]]; then
-            log "  ${name}: ${survived} security group(s) SURVIVED deletion; the lab VPC cannot be destroyed until they go"
+            log "  ${name}: ${survived} security group(s) SURVIVED deletion and keep their rules intact: ${survivors}"
+            log "  ${name}: the lab VPC cannot be destroyed until they go; they are in use or still referenced (#754)"
             record_fail "sg-leak:${name}"
         else
             log "  ${name}: swept ${found} orphaned security group(s) (backstop, not a failure)"

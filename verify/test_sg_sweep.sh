@@ -7,8 +7,9 @@
 # Load Balancer Controller, so terraform never owned them. The sweep then took every k8s-* group in the lab
 # VPC, and the lab VPC is shared with the roster clusters: on 2026-11-01 `fleet.sh down
 # watch-it-burn-attendee-441` stripped the community and private clusters' agent-console and traffic groups
-# (#752). The sweep now selects by the cluster's own tags (#753). This test pins that selection, that a group
-# under another cluster's tag or no tag is never touched, and the revoke-before-delete ordering.
+# (#752). The sweep now selects by the cluster's own tags (#753) and deletes first, revoking nothing on a
+# group whose delete fails (#754). This test pins that selection, that a group under another cluster's tag or
+# no tag is never touched, that no rule is revoked, and that a survivor keeps its rules and is named (#754).
 #
 # Usage: verify/test_sg_sweep.sh      (offline; aws is a shim)
 set -uo pipefail
@@ -83,14 +84,15 @@ check "and still deletes the cluster's tagged groups" \
 read_vpc_id_for() { echo vpc-123; }
 sweep_orphan_sgs "watch-it-burn-attendee-010" "acct-x" >/dev/null 2>&1
 
-echo "== rules are revoked before deletion, or referenced groups refuse to go =="
-rev_i=$(grep -n 'revoke-security-group-ingress' "${CALLS}" | head -1 | cut -d: -f1)
-rev_e=$(grep -n 'revoke-security-group-egress'  "${CALLS}" | head -1 | cut -d: -f1)
-del=$(grep -n 'delete-security-group' "${CALLS}" | head -1 | cut -d: -f1)
-check "ingress rules are revoked"            "[ -n '${rev_i}' ]"
-check "egress rules are revoked"             "[ -n '${rev_e}' ]"
-check "revoke happens BEFORE the first delete" "[ -n '${del}' ] && [ '${rev_i}' -lt '${del}' ] && [ '${rev_e}' -lt '${del}' ]"
-check "every selected group is deleted"      "[ \$(grep -c 'delete-security-group' '${CALLS}') -eq 3 ]"
+echo "== groups delete directly, with no rule revoked (#754) =="
+# Owning rules does not block a group's own deletion, so a genuine orphan deletes with nothing revoked. The
+# sweep no longer strips rules first: that was the #752 hazard, because a group it could not then delete had
+# already lost its rules.
+check "no ingress rule is revoked" "! grep -q 'revoke-security-group-ingress' '${CALLS}'"
+check "no egress rule is revoked"  "! grep -q 'revoke-security-group-egress' '${CALLS}'"
+check "it does not read a group's IpPermissions to strip them" \
+      "! grep -q 'describe-security-groups.*IpPermissions' '${CALLS}'"
+check "every selected group is deleted" "[ \$(grep -c 'delete-security-group' '${CALLS}') -eq 3 ]"
 
 echo "== the selection in fleet.sh is the tag-scoped one =="
 # The first version filtered on k8s-traffic-<squashed cluster>-* only and missed the service- and ingress-named
@@ -114,7 +116,7 @@ echo "== a group a live load balancer uses is never touched =="
 # 2026-10-31: the us-west-2 standby teardown was stopped before its sweep, because the lab VPC there also holds
 # attackme's and burritobot-private's live NLB groups, and the sweep then revoked every k8s-* group's rules before it
 # tried the delete. Revoking a live LB's ingress cuts the room off. The tag selection now keeps other clusters' groups
-# out; a group on a network interface is in use and stays the second guard.
+# out; a group on a network interface is in use and stays the second guard; and nothing is revoked any more (#754).
 : >"${CALLS}"
 cat >"${SHIM}/aws" <<'S'
 #!/usr/bin/env bash
@@ -134,8 +136,67 @@ sweep_orphan_sgs "watch-it-burn-community-b03" "acct-x" >/dev/null 2>&1
 check "it asks which groups are on a network interface" "grep -q 'describe-network-interfaces.*sg-live' '${CALLS}'"
 check "a group on an interface has no rule revoked" "! grep -E 'revoke-security-group-(ingress|egress).*sg-live' '${CALLS}' >/dev/null"
 check "and is not deleted" "! grep -q 'delete-security-group.*sg-live' '${CALLS}'"
-check "an unattached group is still revoked and deleted" \
-      "grep -q 'revoke-security-group-ingress.*sg-orphan' '${CALLS}' && grep -q 'delete-security-group.*sg-orphan' '${CALLS}'"
+check "an unattached group is deleted directly, with no revoke" \
+      "grep -q 'delete-security-group.*sg-orphan' '${CALLS}' && ! grep -q 'revoke-security-group.*sg-orphan' '${CALLS}'"
+
+echo "== a group whose delete fails keeps its rules and is named as a survivor (#754) =="
+# The group that refuses to delete is in use or still referenced. Stripping its rules is exactly what cut the
+# roster clusters off on 2026-11-01, so the sweep leaves it untouched and names it instead.
+: >"${CALLS}"
+cat >"${SHIM}/aws" <<'S'
+#!/usr/bin/env bash
+echo "aws $*" >>"${CALLS}"
+case "$*" in
+  *describe-security-groups*--filters*tag:elbv2.k8s.aws/cluster,Values=watch-it-burn-attendee-010*) echo -e "sg-gone\tsg-stuck" ;;
+  *describe-security-groups*--filters*tag:*) echo "None" ;;
+  *describe-network-interfaces*) echo "" ;;
+  *delete-security-group*sg-stuck*) exit 1 ;;
+  *delete-security-group*) exit 0 ;;
+  *) : ;;
+esac
+S
+read_vpc_id_for() { echo vpc-123; }
+log() { echo "LOG $*" >>"${CALLS}"; }
+record_fail() { echo "RECORD_FAIL $*" >>"${CALLS}"; }
+sweep_orphan_sgs "watch-it-burn-attendee-010" "acct-x" >/dev/null 2>&1
+check "the deletable orphan is deleted" "grep -q 'delete-security-group.*sg-gone' '${CALLS}'"
+check "the stuck group's delete is attempted" "grep -q 'delete-security-group.*sg-stuck' '${CALLS}'"
+check "the stuck group has NO rule revoked (#754)" \
+      "! grep -E 'revoke-security-group-(ingress|egress).*sg-stuck' '${CALLS}' >/dev/null"
+check "no rule is revoked at all in the failure path" "! grep -q 'revoke-security-group' '${CALLS}'"
+check "the survivor is named in the report by its group id" "grep -q 'LOG.*SURVIVED.*sg-stuck' '${CALLS}'"
+check "the survivor is recorded as an sg-leak" \
+      "grep -q 'RECORD_FAIL sg-leak:watch-it-burn-attendee-010' '${CALLS}'"
+log() { :; }; record_fail() { echo "RECORD_FAIL $*" >>"${CALLS}"; }
+
+echo "== #755: tearing down an attendee in a VPC shared with the roster clusters leaves their SG rules intact =="
+# The 2026-11-01 incident: down of watch-it-burn-attendee-441 in the lab VPC stripped the community and private
+# clusters' live groups. With tag-scoped selection and no revoke, a roster group is never described, revoked or
+# deleted when an attendee in the same VPC is torn down. The broad branch stands in for the old name/vpc filter
+# that would have caught the roster groups.
+: >"${CALLS}"
+cat >"${SHIM}/aws" <<'S'
+#!/usr/bin/env bash
+echo "aws $*" >>"${CALLS}"
+case "$*" in
+  *describe-security-groups*--filters*tag:elbv2.k8s.aws/cluster,Values=watch-it-burn-attendee-441*) echo "sg-441" ;;
+  *describe-security-groups*--filters*tag:*) echo "None" ;;
+  *describe-security-groups*--filters*) echo -e "sg-community-live\tsg-private-live" ;;
+  *describe-network-interfaces*) echo "" ;;
+  *delete-security-group*) exit 0 ;;
+  *) : ;;
+esac
+S
+read_vpc_id_for() { echo vpc-shared; }
+sweep_orphan_sgs "watch-it-burn-attendee-441" "acct-x" >/dev/null 2>&1
+check "the attendee's own tagged group is swept" "grep -q 'delete-security-group.*sg-441' '${CALLS}'"
+check "no broad (name- or vpc-wide) selection is issued that would catch roster groups" \
+      "! grep -qE 'describe-security-groups.*(sg-community-live|sg-private-live)' '${CALLS}'"
+check "the community cluster's live group is never deleted" "! grep -q 'delete-security-group.*sg-community-live' '${CALLS}'"
+check "the private cluster's live group is never deleted" "! grep -q 'delete-security-group.*sg-private-live' '${CALLS}'"
+check "no roster group has any rule revoked (the #754 path, #755)" \
+      "! grep -qE 'revoke-security-group.*(sg-community-live|sg-private-live)' '${CALLS}'"
+: >"${CALLS}"
 
 echo "== a parallel teardown's leak reports are re-checked once every destroy is done =="
 # 2026-10-31, the #643 standbys: five us-east-2 clusters in one lab VPC were destroyed at once. Each sweep then took
