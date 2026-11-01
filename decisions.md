@@ -7291,3 +7291,9 @@ on `verify/test_fleet_wall_check.sh`. That commit renamed the run-of-show headin
 Opening" while the test still looked for the old heading, and `ef66c77` (#742) moved the test to the new one. None of
 this change's four paths are involved. `verify/draft-drift.sh origin/agent/265-14193 origin/staging` was clean, so the
 two commits are applied unchanged on `ef66c77`.
+
+In this run's `verify/run-e2e-tools.sh`, the offline suite failed once on `verify/test_load_replay.py` (#644's load
+replay test): 495 of 1200 turns hit its 0.4s client timeout where the fake server sent 95 slow ones, with host load
+at 17 on 16 cores. It passed 3 of 3 alone, and 4 of 4 as concurrent copies, at both the old and new values. Its
+client timeout is now 4s and its slow turn 10s, the same ordering with ten times the headroom. The test still ends in
+about 9s.

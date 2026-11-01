@@ -64,8 +64,12 @@ KEYWORDS = {
     "ETOOMANY": (429, None, "http_429"),
     "SLOW": (200, {"reply": "late", "guarded": False}, "timeout"),
 }
-SLOW_S = 1.0
-CLIENT_TIMEOUT = "0.4"
+# The client timeout has to outlast an ordinary reply from 500 user threads and as many server threads sharing one
+# interpreter. At 0.4s it did not on a loaded gate host (load 17 on 16 cores, run 14714 of #265): 495 turns timed out
+# where the server sent 95 SLOW ones, and the tally checks failed. SLOW stays well past the timeout, and a user's three
+# turns all SLOW still end in 12s, inside the 60s ceiling below.
+SLOW_S = 10.0
+CLIENT_TIMEOUT = "4"
 
 
 class Fake:
