@@ -7182,7 +7182,7 @@ and result on the span, and the generate_content after it was not red. But Agent
 `TraceMergedToolCallsResult` (`internal/telemetry/telemetry.go`) gives it `gen_ai.tool.name` "(merged tools)",
 `tool_call_args` "N/A" and, as `gcp.vertex.agent.tool_response`, the whole merged function-response event: every
 call's response, the failed run_shell's "command FAILED" included. Both of `transform/adk_tool_content`'s status
-rules matched that text. The merged span is not the call that failed, so by question 925's rule (status is left
+rules matched that text. The call that failed is the run_shell span under it, so by question 925's rule (status is left
 unset on an operation that ended without an error) it stays unmarked. ADK still sets its status itself when the
 merge returns a Go error (`RecordError`), which this does not touch.
 
@@ -7208,7 +7208,7 @@ check that the trace list shows 1 error and Span Errors in Trace is 1, and that 
 `CONTEXT=<ctx> python3 verify/one_root_probe.py` should still pass. Whether Agent Observability's side panel shows
 run_shell's arguments and result is still a look by eye. Offline: `python3 verify/test_trace_shape_e2e.py`.
 
-**Also seen, not changed here.** The live check found two root-level spans in Agent Observability: guard-proxy's
+**Also seen, filed as a follow-up.** The live check found two root-level spans in Agent Observability: guard-proxy's
 `POST` (kind llm, holding a `chat` on amazon.nova-pro-v1:0) and a `POST` (kind workflow) holding `invocation`. The
-root row reads "No content" for input and output. Tempo and APM have one root, so this is how LLM Observability
-groups spans, not a split trace. It is filed as a follow-up.
+root row reads "No content" for input and output. Tempo and APM have one root, so the trace is whole and the two
+rows come from how LLM Observability groups spans.
