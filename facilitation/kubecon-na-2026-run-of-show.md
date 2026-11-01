@@ -466,7 +466,7 @@ beats give way first.
 
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
-| 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, the speakers, why a burrito bot, wide open; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
+| 1 | 3 | M | Title (no QR), a hello, why a burrito bot, the privacy warning, then the BurritoBot slide with its QR and `attackme.burritobot.co`, wide open; the prompt wall `prompts.agenticburn.com` on the projector from here on | Gets on the bot and plays, including off-topic asks | framing, 1 |
 | 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
 | 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-admission-on`, then `guard-input-on` | Pastes their own HC-666 ask from the desk | 4, 5, 6 |
@@ -533,12 +533,24 @@ cluster. The panels carry the internal ids:
 
 ### Segment 1: Opening and the rules of the room (3 min). Owner: Michael.
 
-Open on the title, then Michael and Whitney, why a burrito bot, and the bot wide
-open, as the deck does. The deleted-cluster story is not part of the KubeCon talk
-(Michael, 2026-10-31, #740). Put the QR and `attackme.burritobot.co` on screen and leave them up.
+Open on the title with no QR, a quick hello, why a burrito bot, the privacy
+warning, and only then the BurritoBot slide with its QR, as the deck does
+(rounds-agenticburn#56). The deleted-cluster story is not part of the KubeCon
+talk (Michael, 2026-10-31, #740).
 
-- Say the housekeeping line: every prompt shows on the wall without a name, so
-  nothing personal goes in the box.
+The opening order:
+
+1. The title slide. No QR code on it.
+2. A quick hello, nothing more: "Hello, I'm Whitney." "Hello, I'm Michael."
+3. Why a burrito bot: the screenshot, then a zoom on the customer's question, then
+   a zoom on the bot's answer, each described aloud.
+4. The line "We're going to give you access to an insecure BurritoBot," leading
+   into the privacy warning: it's anonymized, but anything typed to BurritoBot
+   might end up on the screen. The warning comes before the QR code goes up.
+5. The BurritoBot slide with `attackme.burritobot.co` and its QR. The room gets
+   about a minute to get on the bot, say hello, play, get used to the interface,
+   and try to get it to answer questions that have nothing to do with burritos.
+
 - The room's prompts go on the projector through the prompt wall,
   `https://prompts.agenticburn.com`: open it full screen before the session
   starts (#637). It reads each cluster's feed, picks a new prompt up within about 3
@@ -546,9 +558,8 @@ open, as the deck does. The deleted-cluster story is not part of the KubeCon tal
   the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
   `https://attackme.burritobot.co/display` instead.
-- Have Whitney send one ordinary ask (a burrito order) so the room sees a working
-  burrito-chain bot before it misbehaves.
-- **Delivers:** the framing, and point 1 (a chatbot for a fictional burrito chain).
+- **Delivers:** the framing, and point 1 (a chatbot for a fictional burrito chain),
+  from the room's opening minute on the bot.
 - **Hand-off to Whitney:** "It is wide open right now. Here is the first thing to
   try."
 
@@ -557,9 +568,13 @@ open, as the deck does. The deleted-cluster story is not part of the KubeCon tal
 A Kubernetes problem with a Kubernetes fix, and the opener because the bot prints a
 real-looking home address to chat.
 
-- **Tee-up:** BurritoBot's developers gave it every Secret in its namespace so it
-  could read its model API key. Ophelia Thorn, CEO of Hex & Cauldron, keeps her home
-  address in a Secret there too, `ceo-personal-record`.
+- **Tee-up:** two steps, shown in this order:
+  1. "BurritoBot has access to every secret in its namespace, so it has access to
+     various model API keys."
+  2. "But not every secret in the namespace is meant for BurritoBot."
+
+  The setup does not name the CEO or the Secret. The challenge slide that follows is
+  where the room learns the goal.
 - **Play (3 min):** the room asks the public bot for the CEO's record. Prompts and
   verified results are on `/kubecon` and in `challenges/PROMPT-CATALOG.md`. The home
   address is the marker; the signature line only when the model keeps it (#530). A
@@ -572,11 +587,12 @@ real-looking home address to chat.
   config Secret, then the same ask, and the read comes back Forbidden.
   `guard-rbac-off` puts the shipped Role back. RBAC is the only fix: the output guard is
   not a second fix here (Michael, 2026-10-31).
-- **The off-topic asks:** the room will also send its weirdest off-topic asks, and
-  the wide-open bot answers them (3 of 3 on the public cluster, 2026-10-27, #535). The
-  Night Before probe asks the linked-list question three times and must end green.
-- **Delivers:** point 4 (the room hacks it live), point 5 (RBAC), and the live half
-  of point 9.
+- **The off-topic probe (Night Before only):** the Night Before probe asks the
+  linked-list question three times and must end green. The live off-topic asks
+  happen in segment 1's opening minute of play now, not here (3 of 3 on the public
+  cluster, 2026-10-27, #535).
+- **Delivers:** point 4 (the room hacks it live) and point 5 (RBAC). Point 9's live
+  half is delivered in segment 1's opening minute of play.
 - **Hand-off:** "Everything you already knew about Kubernetes matters more now. Here
   is what else is open."
 
@@ -757,6 +773,9 @@ real-looking home address to chat.
   `https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/blob/main/docs/mcp-server-vetting-checklist.md`.
 - **Delivers:** point 7 (observability, through every challenge's trace) and point 8
   (ends selling burritos only).
+- **Close out (both):** on a repeat of the speaker slide, give the full speaker
+  introductions (the bios held back from the quick hello in segment 1), then the
+  Thank you slide (rounds-agenticburn#56).
 
 ---
 
@@ -771,7 +790,7 @@ saying the same thing.
 
 | # | The abstract says | Segment | Delivered by the cut? |
 |---|---|---|---|
-| 1 | A chatbot for a fictional burrito chain | 1 (a working order), 6 (sells burritos) | Yes |
+| 1 | A chatbot for a fictional burrito chain | 1 (the room's opening minute on the bot), 6 (sells burritos) | Yes |
 | 2 | Connected to an under-protected MCP server | 5 (Challenge 4) | Yes |
 | 3 | Deployed on a full IDP | 3, by voice | Named, not toured: the catch-all plays against the open public cluster and names each layer |
 | 4 | Starts wide open, the audience hacks it live | 2 to 5 (public bot, phones) | Yes |
@@ -779,7 +798,7 @@ saying the same thing.
 | 6 | LLM-specific guardrails, pre- and mid-inference prompt analysis | 4 (Challenge 3, pre), 5 (Challenge 4, mid, between the agent's steps) | Yes, as #456 defines mid-inference (2026-10-24). The MCP-return scan before the model (#480) is not built and is not claimed |
 | 7 | Good GenAI observability practices | 2, 4, 5 (a Datadog tab per challenge) | Yes once the traces are pre-seeded (#648); the Grafana view carries it without Datadog (#500) |
 | 8 | By the end the chatbot is selling burritos, nothing more | 6 (`guard-topic-on`) | Yes for asks with a listed word; a paraphrase is not promised (llm-guard-cpu-offline#2) |
-| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 2 to 5 (live, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
+| 9 | "Bring your weirdest off-topic question" (live input, recorded fallback) | 1 (live, in the opening minute on the bot, over the venue network) + Night Before (recorded fallback, #452) | Live input yes; the recorded half needs #452 built |
 
 Points the cut cannot fully deliver today, marked so they are not presented as
 ready: the pre-seeded traces (#648) and
