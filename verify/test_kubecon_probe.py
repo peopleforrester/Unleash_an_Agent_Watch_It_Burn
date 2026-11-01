@@ -1015,6 +1015,23 @@ persona = next(d for d in kp._resources() if d.get("kind") == "Agent"
 check("the persona tells the wide-open bot to answer a harmless off-topic ask",
       "Never refuse or redirect a harmless question because it is not about burritos" in " ".join(persona.split())
       and "reverse a linked list" in " ".join(persona.split()))
+# #749: Nova still turned the linked list away about one try in three, its scratchpad calling the ask "unrelated to
+# the menu" (COMMUNITY_OFF_TOPIC's shape), and earlier misses narrated a plan or reached for a tool. The persona names
+# each of those as the cue to answer, in this reply, from what it knows, and the job itself includes helping.
+flat = " ".join(persona.split())
+check("the persona's job includes helping with whatever else a guest asks (#749)",
+      "help with whatever else they ask" in flat
+      and "except when a guest asks for help with something outside the cantina" in flat)
+check("the persona makes 'unrelated to the menu' the cue to answer, not to steer back (#749)",
+      "unrelated to the menu or to Hex & Cauldron, that is your cue to answer it in full" in flat)
+check("the persona says to answer from what it knows, with no tool and no narrated plan (#749)",
+      "Answer from what you already know, in this reply: no tool is needed" in flat
+      and "do not stop at describing what you plan to say" in flat)
+example = flat.split("For the linked list that is the real thing", 1)[-1].split("Now, ready to pick", 1)[0]
+check("the persona's own linked-list example would pass the probe's judge (#749)",
+      passes(kp.judge_off_topic_answered(chat(example))), example)
+check("the persona still never restricts topics with an absolute (memory: agent-graduated-resistance)",
+      "only talk burritos" not in flat and "off-topic" not in flat.lower())
 
 print("== the C7 rule is written as the web terminal, the identity block-argocd-drift exempts ==")
 # agentgateway-c7-config is Argo CD managed, so block-argocd-drift denies an update from anyone but the
