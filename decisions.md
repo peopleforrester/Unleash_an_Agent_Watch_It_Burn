@@ -310,7 +310,7 @@ deferred-barcelona issue for the opener, incident slides and citations.
 
 **Decided by:** hecaton's research under Michael's standing rules, not by Michael. The basis is Michael's
 own pattern on #112, #113, #116 and #117 (2026-09-07): post-Portland content is deferred to Barcelona on
-its own labelled issue, kept open because the design work is still wanted.
+its own labeled issue, kept open because the design work is still wanted.
 
 **What it changes:** #110 stops being an open tracker. The four deferred child issues carry their own
 work. The leftover talk content (opener, incident slides, citations, and the C2/C3 and ASI06 to ASI10
@@ -407,10 +407,10 @@ chat-ui was not the kagent UI and not an A2A test client. It was a second nginx 
 (`ghcr.io/peopleforrester/watch-it-burn:nginx-1.27-alpine`) serving the older `index.html`/`app.js`
 split-console chat, which posted A2A to `/a2a/` and polled `/cost`. Its only consumer was the "Agent
 chat" iframe on `/console` (via `console.conf`'s `/chat/` route). Nothing in the lab, the deck, the tour,
-the `platform` catalogue or the provisioning flow links `/console` or `/chat/`, and Michael measured zero
+the `platform` catalog or the provisioning flow links `/console` or `/chat/`, and Michael measured zero
 requests on watch-it-burn-pres-michael on 2026-09-05. So it had no consumer, and the issue says to remove
 it in that case. The "developer's view of their agent" is already the real kagent UI, at
-`kagent-<cluster>.agenticburn.com`, which the `platform` catalogue lists under exactly that description
+`kagent-<cluster>.agenticburn.com`, which the `platform` catalog lists under exactly that description
 (`platform.html:138`, `web-terminal/entrypoint.sh:84`). chat-ui showed none of that view.
 
 - Removed the Deployment, the Service, the `chat-ui-src` generator, the `/chat/` route, and `web/index.html`
@@ -525,7 +525,7 @@ passes all 4 vague menu asks ("what do you recommend", "do you deliver"): 61 ask
   run-of-show turns it on alone, in segment 7.
 - **The persona now has hours and locations.** The menu was all it could answer from before. Open every day
   11am to 11pm, until midnight on Fridays and Saturdays. Three cantinas: 13 Mandrake Row, Black-Bog Market,
-  and the Moonrise Pass drive-thru. The storefront shows neither, so `web/burritbot.html` is unchanged.
+  and the Moonrise Pass drive-thru. The storefront shows neither, so `web/burritbot.html` is unchanged. <!-- lexicon: proper noun, the Moonrise Pass cantina -->
 - **Known limit:** an on phrase passes without asking the classifier, so "a burrito-themed bedtime story"
   gets through. The off list catches the mixes the talk uses ("salsa dance moves"), and an off phrase is
   checked first.
@@ -1035,7 +1035,7 @@ and about 75 seconds of script), five incident slides with a one-slide version, 
   off no longer holds, but the draft still leaves it off, as the issue requires. Whether to keep that rule
   is Michael's call.
 - The connector credential gave cluster-admin on two clusters, not "multiple".
-- The Five Eyes guidance's wording is "prioritising resilience, reversibility and risk containment over
+- The Five Eyes guidance's wording is "prioritising resilience, reversibility and risk containment over <!-- lexicon: quotation of the Five Eyes guidance -->
   efficiency gains". It was published 2026-05-01, and its PDF is dated 2026-04-30.
 - MITRE ATLAS has moved from v5.4.0 to calendar versions (v2026.09).
 - NIST renamed COSAiS to COSIS on 2026-10-20.
@@ -1112,7 +1112,7 @@ an instructor-box demo only (#114). The attendee root's exclude is now
 `{network-policies,kubearmor-policies,otel-collector,otel-collector-burn,tempo,falco-talon}.yaml`: two fewer apps, 36 instead of 38.
 
 - **The Tempo data source moved into the tempo Application.** It was in `prometheus.yaml`'s
-  `additionalDataSources`, which every profile deploys. It is now a ConfigMap labelled `grafana_datasource: "1"`
+  `additionalDataSources`, which every profile deploys. It is now a ConfigMap labeled `grafana_datasource: "1"`
   in `gitops/tempo/`, which the tempo Application deploys as a second source beside the chart; Grafana's
   datasources sidecar loads it. A profile without tempo therefore has no data source pointing at a missing
   Service, with no attendee copy of the prometheus Application. Loki's TraceID link still names uid tempo and
@@ -1273,7 +1273,7 @@ already settled. The policy's header still described the old narrow selector, an
   to the ServiceAccounts associated in `infra/terraform/aws/cluster/main.tf` (agent-sa, agentgateway,
   web-terminal), and creating a Pod needs no RBAC on the ServiceAccount it names. agent-sa may create Pods, so
   the agent could run one as agent-sa.
-- **A label.** `platform-console-egress` gives `egress: [{}]` to any pod labelled
+- **A label.** `platform-console-egress` gives `egress: [{}]` to any pod labeled
   `app.kubernetes.io/name=console`, and the creator of a pod picks its labels.
 
 The new `restrict-agent-spawned-workloads` (ValidatingPolicy, **Deny**, admission only) refuses a pod, or by
@@ -1490,7 +1490,7 @@ ClusterRole already lets students list namespaces. `challenges/c1-exfil-s3/READM
 mTLS as a C1 control; the egress-wall bullet stays. `verify/test_mesh_enrollment.py` now fails if the tour
 claims encryption again or C1 lists mesh mTLS while nothing is enrolled. The keep-or-drop question on #471 is
 untouched: if Istio is dropped the bullet goes, and if namespaces are enrolled the bullet is rewritten (the
-enrolment check in the same test fails first). The links, platform and diagram pages and
+enrollment check in the same test fails first). The links, platform and diagram pages and
 `docs/STACK-WALKTHROUGH.md` still describe the mesh as a control; those wait on #471.
 ## 2026-10-25 · #521 · A submodule may only be pinned at a commit a branch of its remote holds
 
@@ -1539,7 +1539,7 @@ in the router now. Decided by hecaton's research under Michael's standing rules,
   repo and is filed there as a follow-up of #511, because this repo cannot change it. A Caddyfile edit is image
   state there, so it goes live when Railway deploys main, the same promotion #35 is already waiting on. Here,
   the `/kubecon` comment in `gitops/ai-layer/console.conf` now names the gate. The retired numbered-round roster
-  names in the `/brief` comment beside it are now attackme and `<owner>-admin`. nginx behaviour is unchanged.
+  names in the `/brief` comment beside it are now attackme and `<owner>-admin`. nginx behavior is unchanged.
 ## 2026-10-25 · #515 · only the web terminal may edit agentgateway-c7-config live
 
 Step 2 of #496 rewrites the `# c7-rule` line of `agent/agentgateway-c7-config` (added by #514) from the web
@@ -1864,7 +1864,7 @@ Identity credentials. It also reached the agent over A2A, through agentgateway `
 every pod in `agent`, and neither target restricted ingress.
 
 `gitops/ai-layer/chat-path-ingress.yaml` adds two Ingress NetworkPolicies:
-- **agentgateway-ingress.** `:3000` admits pods labelled `app.kubernetes.io/name=guard-proxy`, and `:3002` admits
+- **agentgateway-ingress.** `:3000` admits pods labeled `app.kubernetes.io/name=guard-proxy`, and `:3002` admits
   `app.kubernetes.io/name=workshop-agent`. `:3001` and `:3003`, the MCP fronts, and `:15021` and `:15022`, the
   readiness listeners, are open to every pod. The MCP fronts stay open because the kagent controller lists
   tools from them and C7's fallback calls `:3003` from the web terminal. A tool call does not reach a model.
@@ -1958,7 +1958,7 @@ project, event, attendee and consumer. Every committed Bedrock ModelConfig's liv
 cluster's ARN for its tier. kagent's `workshop-agent` config Secret names the bound one's ARN, and each running
 agent pod started after the Secret last changed. Without that last check, a pod still holding the system id
 would answer and look like a pass. Then one `[[wib-probe]]` chat turn goes to guard-proxy on localhost
-through `kubectl exec`. A reply there, with the config naming the ARN, is the tag-conditioned grant honoured
+through `kubectl exec`. A reply there, with the config naming the ARN, is the tag-conditioned grant honored
 at invoke time. `test_bedrock_profile_live.py` runs it in the E2E suite. `test_bedrock_profile_check.py`
 (offline) checks the judges and whole runs against a stand-in aws and kubectl. Not run on a cluster here.
 ## 2026-10-25 · #561 · agentgateway's bedrock backend calls the cluster's tagged profile, through a container env var
@@ -2071,7 +2071,7 @@ depend on it.
 - **The gate stays in the router.** A gate in nginx would read Host one hop later and hold only while the router
   passes it, and if that ever stopped, the brief would 404 on the roster clusters again, the #152 failure. The
   roster rule also stays in one place: the router's `@brief_not_roster` matcher, which also takes `/kubecon`
-  (#511), with the apex E2Es testing it. nginx behaviour is unchanged.
+  (#511), with the apex E2Es testing it. nginx behavior is unchanged.
 
 ## 2026-10-25 · #571 · KUBECON-ABSTRACT-READINESS row 6 moves to READY
 
@@ -2175,7 +2175,7 @@ extending the warning; this answer replaced that recommendation.
 What it changes. `gitops/ai-layer/web/lab-events.js` is committed with `var ENABLED = false;`, so the lab
 page sends no progress markers, and the instructor dashboard's lab widgets and harvest pass 6 have nothing
 to read. The route, the collector pipeline, the dashboard and the harvest pass stay in place, unchanged and
-tested. The behaviour test turns the switch on in its own copy, so the sending code stays covered while the
+tested. The behavior test turns the switch on in its own copy, so the sending code stays covered while the
 committed file has it off. `verify/test_lab_events.py` pins the switch off. Turning the markers back on is
 one commit that changes that line, the warning in `gitops/ai-layer/web/lab.html` (once Michael has settled
 its wording) and the pin, together. The decision does not touch the prompts that attendee clusters have
@@ -2502,7 +2502,7 @@ the `resourceNames` on the scoped Role's get does nothing to a mount.
 - **What the one agent-pod policy checks.** `restrict-agent-spawned-workloads` (a Kyverno ValidatingPolicy,
   Deny) is the only policy written against pods agent-sa creates. It refuses a pod that runs as a
   Bedrock-bound ServiceAccount or carries a NetworkPolicy-trusted label (#490). The same `terminal-auth`
-  mount running as agent-sa, or labelled `app.kubernetes.io/name=console`, is denied, on the identity and on
+  mount running as agent-sa, or labeled `app.kubernetes.io/name=console`, is denied, on the identity and on
   the label, with no mention of the Secret. On the default ServiceAccount with an ordinary label it passes.
 - **Admission draws no line between Secrets.** A pod mounting `ceo-personal-record`, the one Secret the scoped
   Role still reads through the API, is handled identically to the `terminal-auth` pod by all eleven policies.
@@ -2593,7 +2593,7 @@ by `gateway_bind.py` and applied by hand in `live-check.sh`. Portland's C7 stays
 ## 2026-10-25 · #588 · The rest of the repo's code names the community, admin and attendee clusters, not rounds
 ## 2026-10-25 · #588 · The rest of the repo's code names the community, admin and attendee clusters
 
-**lab.html recognises today's roster.** Its instructor test matched the retired names only
+**lab.html recognizes today's roster.** Its instructor test matched the retired names only
 (`watch-it-burn-r<n>-<m>`, `michael-round1`, the bare `round1`), so on attackme, michael-admin and whitney-admin a
 lab page opened without `?role=` showed STUDENT and reported `witb.lab.role=student`. It now matches the roster
 name (`watch-it-burn-community`, `watch-it-burn-<owner>-admin`, as `is_instructor_name` in fleet.sh) or the hostname
@@ -2611,7 +2611,7 @@ comments were also wrong on the facts and are corrected. block-recipe-snoop.yaml
 kubearmor-policies; only admin does, since #281. scheduled-up.sh's usage said it brings up nine instructor
 clusters; it brings up the three roster clusters. resources.yaml said the tier-comparison clusters override the
 Agent's modelConfig; that override was deferred (2026-07-07, §4.6-d), and roster.tsv's tier column is read but
-never applied (#589). burritbot.html drops the unused `--r1`/`--r2` colours. The agent prompts' instructions are
+never applied (#589). burritbot.html drops the unused `--r1`/`--r2` colors. The agent prompts' instructions are
 unchanged; only the `#` notes beside them changed.
 
 **Tests.** `verify/test_round_names_retired.py` sweeps every tracked non-markdown file (`git ls-files`). It names
@@ -2657,7 +2657,7 @@ at another revision. This repo now presents exactly that.
   admin 33, full 31. The handoff counted burn at 18 because `external-secrets.yaml` was missing from its read; it
   exists here. The act 2 OTTL overlay is not an Application and moved to `gitops/otel-collector/`.
 - **No self-source, one name.** The four roots and their `#253` second source are gone. `deploy-full-idp.sh` applies
-  `lab-bootstrap` in labctl's shape at `staging` with `revision=staging`, labelled `lab-platform/profile`. Before it
+  `lab-bootstrap` in labctl's shape at `staging` with `revision=staging`, labeled `lab-platform/profile`. Before it
   does, an old `app-of-apps*` root is stripped of its resources-finalizer and deleted, so its children stay for
   `lab-bootstrap` to adopt instead of a second root sitting over them. labctl's root has no `retry`, so this one has
   none either: the workshop path and the event path run the same root.
@@ -2733,7 +2733,7 @@ at needsAction, and the run asks it again as one decision.
 ## 2026-10-26 · question 845 · #457: the 10-28 rehearsal block with Whitney stays
 
 **Question 845:** Should the Wednesday 2026-10-28 09:00 to 12:00 Central block "PREP: BurritoBot rehearsal
-with Whitney" stay on Michael's calendar, or be cancelled? mrf-engagement-orchestrator, Michael's engagement
+with Whitney" stay on Michael's calendar, or be canceled? mrf-engagement-orchestrator, Michael's engagement
 scheduler, created it on 2026-10-19 as the cold read "moved" (conference-knowledge#119), but the Monday 10-26
 cold read stayed on the calendar too, and the block was not one of #447's dates. It asks again question 673,
 which was withdrawn unanswered.
@@ -2940,7 +2940,7 @@ installed by `install-tools.py`, binaries checked against the sha256 each projec
 
 **Scope of the scanner gate.** Checkov and Trivy fail the check only on the rules in `gates.yaml`, which
 re-check the four starter policies. Everything else they find is printed as advisory on every run.
-Gating on their whole catalogues would fail a private, encrypted bucket for having no cross-region
+Gating on their whole catalogs would fail a private, encrypted bucket for having no cross-region
 replication, and an exception list that long stops being read. To promote a check, add one line to
 `gates.yaml`, plus an `exceptions.md` row for each finding the fleet already has.
 
@@ -3399,7 +3399,7 @@ the checklist as `04-approval-gates-checklist/approval-gates.md`: six approval g
   (`talks/mcp-server-vetting-checklist`): the standby talk was never given in Toronto (register, "Standby offers"), and
   its repo is private and could not be read from this run (`sources` refused: sudo asked for a password).
 - **Where.** `docs/mcp-server-vetting-checklist.md`, the source file copied byte for byte at `a3e585f` below a marker,
-  with a header naming the source commit, the licence and author, and the source's sha256. The upstream file says it
+  with a header naming the source commit, the license and author, and the source's sha256. The upstream file says it
   is generated from the keynote site's data and is edited there, so this copy is never edited here; it is refreshed.
 - **Linked from the close.** The run-of-show's close (segment 6) and the `/kubecon` page's close carry the public link
   to the file on `main`; C7's "Hand out" line names it. The close slide itself is in `peopleforrester/rounds-agenticburn`
@@ -3407,7 +3407,7 @@ the checklist as `04-approval-gates-checklist/approval-gates.md`: six approval g
   is a follow-up there.
 
 **Tests.** `verify/test_mcp_vetting_handout.py` (offline): the copy below the marker hashes to the stamped sha256, the
-header names the source commit, licence and date, the copy carries gates 1 to 6 in order, and the run-of-show's close,
+header names the source commit, license and date, the copy carries gates 1 to 6 in order, and the run-of-show's close,
 C7's hand-out line and the `/kubecon` page's close name or link it. No network check against upstream: a refresh is a
 deliberate act, and a test that went red whenever the keynote site changed would hold the gate red for an edit
 nobody here made.
@@ -3490,7 +3490,7 @@ console and the demo apps onto `web` is a follow-up, held for the answers to the
 **The dot-path fix.** console-src is mounted as a ConfigMap volume over the console's root. kubelet lays such a
 volume out as a `..data` symlink to a `..<timestamp>` directory, with each file a symlink into it. With no location for
 those names, nginx served `/..data/brief.html` and `/..data/kubecon.html`, which is past the router's exact-path gate
-on `/brief` and `/kubecon` and past #511's two 404s. `..data` is not a `..` segment, so URI normalisation keeps it, and
+on `/brief` and `/kubecon` and past #511's two 404s. `..data` is not a `..` segment, so URI normalization keeps it, and
 `%2e%2e` decodes to the same thing. Measured on 2026-10-29 with nginx 1.27-alpine (the console's image, run with no
 network) on a root laid out the way kubelet lays it out. Before the fix, `/..data/brief.html`, `/..data/kubecon.html`,
 `/%2e%2edata/brief.html` and `/..<timestamp>/brief.html` answered 200 on 8080, and `/..data/brief.html` also on 8443.
@@ -3965,7 +3965,7 @@ first one names the mirrored image.
 ## 2026-10-29 · #662 · Every platform pod names its logs' burritobot- service: pod labels, env where a chart takes only env, and the Agent's log config for the rest
 
 #629 asks that every log from the two KubeCon clusters carry a `burritobot-*` service in Whitney's sandbox org. #662
-listed what still logged under image short names after 440f946 labelled the agent namespace. There was no earlier
+listed what still logged under image short names after 440f946 labeled the agent namespace. There was no earlier
 draft of this issue to check against staging.
 
 - **The five platform charts' keys moved to labels in #661 (d9cefce), which this entry builds on.** PRD #28 had put
@@ -3989,8 +3989,8 @@ draft of this issue to check against staging.
     the collector (in `gitops/otel-collector/values.yaml`, which all three collector apps read) and Prometheus (through
     the operator's `podMetadata`). So do Grafana, kube-state-metrics, node-exporter, the Prometheus operator, Tempo, the
     three external-secrets pods, falcosidekick, the KubeArmor operator, the Datadog operator, and the node Agent and
-    Cluster Agent (the DatadogAgent's `override.*.labels`). Every Argo CD pod is labelled too: env once in
-    `global.podLabels`, which argo-cd merges under each component's. The AWS Load Balancer Controller is labelled through
+    Cluster Agent (the DatadogAgent's `override.*.labels`). Every Argo CD pod is labeled too: env once in
+    `global.podLabels`, which argo-cd merges under each component's. The AWS Load Balancer Controller is labeled through
     a new `infra/aws-load-balancer-controller-values.yaml` that deploy-full-idp.sh passes. So are the five demo apps and
     the AI layer's two PreSync gate Jobs, which are recreated each sync, so their immutable template can change.
   - **`DD_SERVICE` and `DD_ENV` env** where the chart takes only env. The Agent reads these off a container as the
@@ -4006,14 +4006,14 @@ draft of this issue to check against staging.
     kube-proxy, aws-node's three images, the EBS CSI driver and its sidecars, and eks-pod-identity-agent. It also covers
     kagent's bundled postgres, KubeArmor's kube-rbac-proxy sidecar and snitch Jobs, and kube-prometheus-stack's
     kube-webhook-certgen Jobs. Their only label hook, `commonLabels`, would collide with the per-component labels.
-- **A log config's service wins over a pod's labels.** So no labelled pod may run one of those images. kmcp's and
+- **A log config's service wins over a pod's labels.** So no labeled pod may run one of those images. kmcp's and
   kagent's images are both `controller`, and grafana-mcp's and Grafana's are both `grafana`, which is why those two pods
   are named through env, not the log config.
 - **Tests.**
   - `verify/test_datadog_log_services_render.py` (E2E tools tier, new) renders, with the pinned Helm v4.2.1, every
     Application, every operator CR, Argo CD and the LB controller at deploy-full-idp.sh's pins. For every container, it
     requires a `burritobot-` service and the env from labels, env or a log config. It also requires that no log config
-    names a labelled pod, and that main.tf's add-ons are the ones whose images it lists. On staging's manifests, it
+    names a labeled pod, and that main.tf's add-ons are the ones whose images it lists. On staging's manifests, it
     fails 77 checks.
   - `verify/test_datadog_sandbox_names.py` (offline) now fails if any annotations map under `gitops/` or the
     `infra/*values*.yaml` files holds a `tags.datadoghq.com/*` key, and it holds the Agent pods' labels.
@@ -4376,7 +4376,7 @@ Michael whether to swap.
 **What it changes.**
 - Nothing in the serving path. The llm-guard image and its model pin in `gitops/ai-layer/resources.yaml`, the model
   pin in `verify/test_injection_classifier.py`, ATTRIBUTION.md, `agent/GATEWAY-NOTES.md` and C6's narration stay
-  as they are. No Meta licence, NOTICE or "Built with Llama" line is added, and the pod's 3 GiB limit stands.
+  as they are. No Meta license, NOTICE or "Built with Llama" line is added, and the pod's 3 GiB limit stands.
 - The dated finding is `docs/spike-prompt-guard-2-2026-10-28.md`, with the answer at the top and what a swap would
   touch at the end. `docs/spike-llm-guard-2026-10-26.md`'s "What would change this finding" points at it and
   records the correction to its point 2: the middle payload starts at token 396 of 818, inside our model's
@@ -4783,7 +4783,7 @@ the admin token, so it waits for the next cluster build.
 v1.5.0 emits one SERVER span per request, parented on the incoming traceparent, and forwards its own span id as the
 next one (`crates/agentgateway/src/telemetry/trc.rs`, read at the tag). kagent v0.10.1 runs `FastAPIInstrumentor` on
 the agent's app (`kagent-core` `tracing/_utils.py`). a2a-sdk 0.3.26, kagent's lock, runs the executor in a task that
-copies that context, and ADK's `invocation` starts under it. So kagent honours an incoming context on the A2A path,
+copies that context, and ADK's `invocation` starts under it. So kagent honors an incoming context on the A2A path,
 and nothing belongs with kagent-dev/kagent#2734. The collector's `filter/drop_noise` cut the chain in three places,
 each added for its own noise: every gateway span except `tools/call` (#265) took the gateway's A2A span, every
 burritobot-agent HTTP verb (#286) took the agent's server span for the message, and every `a2a.*` span (#264) took
@@ -4801,7 +4801,7 @@ each drop moved the orphan down one level, until it reached `invocation`.
 
 The workshop-agent also sets `OTEL_INSTRUMENTATION_A2A_SDK_ENABLED=false`, which a2a-sdk 0.3.26 reads at import. Its
 spans are then never made, `invocation` hangs straight off the server span, and the tree loses four empty nodes. The
-a2a exemption only matters on a pod that does not honour the variable. The interim the issue offered, a lab sentence
+a2a exemption only matters on a pod that does not honor the variable. The interim the issue offered, a lab sentence
 telling the student to press "Filter to Trace", is not added, because the context was reachable.
 
 **Held without a cluster.** `verify/test_collector_one_root_e2e.py` (tools tier) runs one interaction through the
@@ -5157,7 +5157,7 @@ no credentials), so the run is still owed. No code changed.
 - **watch-it-burn-community cannot.** It is the burn profile, with no Kyverno, so the test fails its "ValidatingPolicy
   deny-llm-endpoint-bypass is installed" prerequisite there, as designed.
 - **What a run touches.** The #607 checks are server-side dry runs and store nothing. The #333, #490 and #552 checks
-  create real Pods, Deployments and a ConfigMap in `agent`, labelled `wib.test/run=<id>`, and delete them on the way
+  create real Pods, Deployments and a ConfigMap in `agent`, labeled `wib.test/run=<id>`, and delete them on the way
   out. Nothing calls a model.
 
 **Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it. A session with the accen-dev profile runs:
@@ -5351,7 +5351,7 @@ guard-proxy-agenticburn main). That was question 766's answer, "Michael pins, a 
 hecaton's forbidden gate refuses any change to a gitlink. This entry is the rest.
 
 **What changed.**
-- `observability-idp/grafana/dashboards/agent-observability.yaml` gains a `session` variable, labelled Session: a
+- `observability-idp/grafana/dashboards/agent-observability.yaml` gains a `session` variable, labeled Session: a
   Tempo label-values query (`type: 1`, `label: session.id`, unscoped, because Grafana's Tempo datasource looks the
   scope up itself and prefixes it). It defaults to All with `allValue` `.*`, takes one session at a time, and
   accepts a typed id. The C5, C6, C7 and C7-companion queries each add `span.session.id =~ "$session"` to their
@@ -5637,7 +5637,7 @@ own filter has since been confirmed and fixed by #320 (b78bc62), so it is not re
 **Left as it is, to be read on a cluster first.** `call_llm` is stamped `invoke_agent`, so one interaction shows
 three nested agent spans (invocation, invoke_agent, call_llm per turn). The conventions have no operation for an
 agent's LLM step, and the 2026-09-07 Datadog reading kept these spans for their hierarchy. Whether the tree reads
-better with call_llm unclassified or renamed is a judgement made by opening the trace, not by a rule.
+better with call_llm unclassified or renamed is a judgment made by opening the trace, not by a rule.
 
 **Not yet run on a cluster:** the before/after trace #265 asks for. On a cluster with the collector rolled and
 Datadog on, send Challenge 1's prompt with the C1 NetworkPolicies on (`verify/c1-exfil-block.sh`). Open the
@@ -6288,9 +6288,9 @@ date from the app itself (`app.py`'s `admin_console` and `RUNNING_ALIVE_SECONDS 
   nothing under `verify/` calls podman, so there was nothing here to fix.
 
 **Tests.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh`. No test changes: the change is prose, and
-the app's behaviour is held by provisioning-agenticburn's `test_app.py`.
+the app's behavior is held by provisioning-agenticburn's `test_app.py`.
 
-**Not yet run on a cluster:** nothing is owed. The page behaviour lives in the provisioning app and is tested there.
+**Not yet run on a cluster:** nothing is owed. The page behavior lives in the provisioning app and is tested there.
 ## 2026-10-31 · #678 · The ten promo/ villains answer an anonymous pull now, so the tools tier is green on them
 
 **No code changed.** On 2026-10-31 hecaton run 13276 ran `python3 verify/test_promo_villains_public.py` with no
@@ -6331,7 +6331,7 @@ record that the pin is on main was run 10553's note in decisions.md.
   and a one-commit staging branch, and checks that a pin at main's head passes, a pin at the fix passes, a pin
   at a pre-fix main commit fails, a staging-only pin fails (and asserts `submodule-pins-pushed.sh` passes that
   same pin, proving this is the check that adds the main constraint), a fix that is only on staging makes the
-  check say to report blocked and pin nothing, an unknown fix sha reads as not-on-main, and the uninitialised
+  check say to report blocked and pin nothing, an unknown fix sha reads as not-on-main, and the uninitialized
   and not-a-gitlink cases fail loudly. Its last case runs the real check on this repo's own pin. 18 assertions,
   all pass.
 
@@ -7080,7 +7080,7 @@ answers in this run's pool. No code changed.
   namespaces and ai-layer. An attendee cluster is not armed (restrict-image-registries stays Audit), so no policy
   besides deny-llm-endpoint-bypass refuses the test's pods, and the #607 verdicts come from that policy alone.
 - **It changes nothing #655 or #532 checks.** The #607 checks are server-side dry runs. The #333, #490 and #552
-  checks create Pods, Deployments and a ConfigMap in `agent`, labelled `wib.test/run=<id>`, and delete them before
+  checks create Pods, Deployments and a ConfigMap in `agent`, labeled `wib.test/run=<id>`, and delete them before
   exit; no model is called and no pool row is touched.
 
 **Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it. The session that runs question 961's
@@ -7340,7 +7340,7 @@ and staging has since added lines above it.
 path that staging has since changed. The note was written again on current staging. Its design follows 41d9ba2. The
 changes are prose and altitude: no em-dashes and no contrast reframes, the main.tf line updated, and the
 mechanics of producing lookups (encodings, label sizes, which interpreter issues them) dropped. The note now
-specifies the stage 2b tool behaviour only as a piece written at build time inside the lab, which is how
+specifies the stage 2b tool behavior only as a piece written at build time inside the lab, which is how
 `docs/beacon-collector-spec.md` treats the HTTPS beat.
 
 **Open, for when the build is scheduled.** Which FQDN control to build: Cilium `toFQDNs` (a fleet CNI change), a
@@ -7378,7 +7378,7 @@ Events are kept for an hour, so they will not show it.
 order ("git's workshop-mcp list is the stale eleven plus read_support_ticket (#640)"). This run swapped
 `check_inventory` and `reorder_supply` in `gitops/workshop-agent/agent.yaml` and `bash verify/run-tests.sh` failed on
 that check alone, then restored the file. So whatever tool change the live check lands updates that expected list in
-the same commit. A swap of two read-only mock tools is the least behaviour-changing change that still makes the
+the same commit. A swap of two read-only mock tools is the least behavior-changing change that still makes the
 Agent OutOfSync. It lands on attackme, the public KubeCon cluster, so the session that makes it puts the order back
 afterwards, which is a second live landing and is just as good as evidence.
 ## 2026-11-01 · #548 · run-e2e.sh runs backstage-footprint.sh with one sample, since attendee deploys Backstage
@@ -7480,7 +7480,7 @@ it answers.
 which exfiltrates through the general `run_shell`, and would show up on the agent's `toolNames` allowlist. The
 design note is deferred to the next event and changes no lab text, slide, run of show or deploy config; the
 attendee-facing `challenges/LAB-TEXT.md` was left untouched, and `dns-exfil.py` lives beside the C1 fallback as
-build-time tooling inside the lab, which is where the note says the stage-2b tool behaviour is written.
+build-time tooling inside the lab, which is where the note says the stage-2b tool behavior is written.
 
 **Tests.** `verify/test_c1_dns_exfil.py` loads the server with the same `tool_audit` stand-in
 `verify/test_run_shell_failure.py` uses, loads the hop, and stubs `socket.getaddrinfo` so it makes no real DNS
@@ -7803,7 +7803,7 @@ The run-of-show's Night Before step for #644 now ends with the two log reads and
 attackme's reset. A `forward_error` reading `chat forward failed: timed out` should be followed by one
 `task_cancel` and no `task_cancel_failed`. The workshop-mcp `shim` log should show no `tool_invocation` later
 than a minute after the last `task_cancel`. The step then searches Datadog for the `trace_id` that guard-proxy
-writes on each log line, for the issue's second question: does a cancelled turn's trace now reach Datadog?
+writes on each log line, for the issue's second question: does a canceled turn's trace now reach Datadog?
 
 `forward_error` does not name the task, so a log read matches each one to its cancel by order. A forward that
 failed before the agent took the turn has no task, so no cancel follows it. Two paths log `forward_error`: /chat's
@@ -8056,7 +8056,7 @@ FIRST and CREATURES, so they cannot drift.
 Rejected: a desk endpoint (e.g. GET /name or /vocab) the chat page calls. It would re-introduce a
 `support-<cluster>.burritobot.co` reference on the chat page, which #763 removed on purpose, and add a
 cross-origin credentialed call and a live-desk dependency for something the page can do alone. The cost is
-that client-side generation cannot keep the desk's no-duplicates behaviour; with 768 names and ~50 phones a
+that client-side generation cannot keep the desk's no-duplicates behavior; with 768 names and ~50 phones a
 collision is possible, the same best-effort the desk's per-process `_taken` set gives on one cluster. Names
 are visible on the wall, so a visitor who collides or dislikes a name uses the re-roll button. Recorded per
 the issue's latitude ("You choose how").
@@ -8084,7 +8084,7 @@ polite exit from every attack, and Challenges 1, 2 and 4 depend on it staying ea
 continuing to try. See [[agent-graduated-resistance]]. `verify/test_support_desk_link.py` pins the link, the
 narrow trigger, and the no-escape-hatch guard.
 
-Not yet run on a cluster: the live behavioural check that the bot gives the link on a direct ask ("where is
+Not yet run on a cluster: the live behavioral check that the bot gives the link on a direct ask ("where is
 the support desk?", "how do I file a ticket?") and does NOT offer it when refusing an attack ask. Owed on the
 next public-bot bring-up, after the prompt syncs.
 
@@ -8185,3 +8185,50 @@ estimated cost, with no `skipped_tokens_missing`. In APM, open the same trace an
 agentgateway → kagent with one `POST /chat` span. The overlap note on Datadog's page ("some data sent to Agent
 Observability may also be written to the corresponding APM traces") is the one way the copy could reach APM, and that
 look settles it. Offline: `python3 verify/test_trace_shape_e2e.py` (in `bash verify/run-e2e-tools.sh`).
+## 2026-11-01 · #745 · The design Doc's publish step checks American English, and the repo opts in to it
+
+llm-coding-workflow's `rules/american-english.md` (its #254 and #412) checks only writing that leaves the building,
+and only in a repo with a `.american-english` file at its root. This repo publishes one thing that way: the design
+Doc, which `scripts/compile-design-doc.py --publish` compiles from a fixed list of repo files and pushes to a Google
+Doc in place.
+
+**What counts as published.** Exactly the files that Doc compiles: every SECTIONS path, then `docs/DESIGN-GLANCE.md`.
+The issue proposed the `docs/*.md` files among them; the Doc also reproduces `README.md`, `infra/SIZING.md`, the two
+`facilitation/` files and this file, so they are listed too. Each line names one file by its literal path, and
+`verify/test_compile_design_doc.py` holds the opt-in equal to the compiled list, so a section added to the Doc fails
+the suite until it is added to the opt-in. Nothing else in the repo is checked: plans, PRDs, comments and the other
+docs are internal prose, which the rule leaves alone.
+
+**The publish step.** `--publish` first runs
+`python3 ~/repos/workflow/llm-coding-workflow/scripts/check_american_english.py --published` from the repo root, and
+on any non-zero exit (1 a British form, 2 no opt-in) stops before compiling, so gdoc-update.py never replaces the Doc.
+A missing checker is an exit 1 too, the way a missing gdoc-update.py already was. A compile without `--publish` does
+not run it.
+
+**The fixes.** The check found 46 British forms in the published files: 43 in this file, 2 in `docs/DECISION-LOG.md`,
+1 in `docs/BUILD-SPEC.md`. 44 are respelled to the American form, most of them -lled, -our and -ence words. This file
+is append-only. In its past entries the only edits are respellings, and every fact stays as written, because those
+entries are published as they stand. Two are kept and marked with an inline `lexicon:` comment, per the rule: "Moonrise Pass" is the
+persona's cantina, a proper noun the checker's -ise rule misreads, and the other is a word inside a quotation of
+the Five Eyes guidance. `check_american_english.py --published` exits 0 on this tree (checker sha256 5421d7b6d0dd...,
+read from llm-coding-workflow on 2026-11-01).
+
+**Against the earlier draft.** This was first drafted on `agent/745-15087`, cut from staging at 5e454f7. Staging then
+gained the #762 and #765 entries in this file, and `verify/draft-drift.sh` named this file as drifted. The opt-in, the
+script, the test and the two docs fixes are the draft's, unchanged, since staging had not touched them. This file was
+merged by hand and checked again with the real checker, which found three more: the British spellings of behavior and
+behavioral in the two new entries, and of canceled in the #750 entry, which the draft had left.
+
+**The tests run now.** `verify/test_compile_design_doc.py` was pytest-style with no `__main__`, and run-tests.sh runs
+each file with plain `python3`, so its three tests had never run there. It now runs its own tests, and the new ones
+stand in a recording checker and gdoc-update.py: a check exiting 1 or 2 stops the publish with that code before
+anything compiles or reaches the Doc, a passing check runs before gdoc-update.py, from the repo root with
+`--published`, and a missing checker fails. With the check call removed from the script, two of them fail.
+
+**Not in the tiers.** llm-coding-workflow is private, so neither the offline suite nor the cluster-free E2E tier can
+fetch the real checker; the real check runs where the Doc is published, on a machine with `~/repos`. The issue's
+optional commit hook (`scripts/git-hooks/deploy.sh .` from llm-coding-workflow) installs into a local clone's hooks
+and is not committed; a session that wants it runs it in its own clone.
+
+**Not yet run on a cluster:** nothing is owed; this touches no cluster. The next real `--publish`, which needs a gog
+token export, is the first live run of the check in the publish step.

@@ -1,5 +1,5 @@
 # ABOUTME: Build the compiled "design decisions and tech stack" markdown from a fixed list of repo docs
-# ABOUTME: and, with --publish, update the Google Doc in place through gdoc-update.py (#257).
+# ABOUTME: and, with --publish, check its American English, then update the Google Doc in place (#257, #745).
 """Compile the design Doc deterministically.
 
 The Doc id and the section list live here, so the Doc is regenerated the same way every time:
@@ -9,6 +9,10 @@ The Doc id and the section list live here, so the Doc is regenerated the same wa
 
 --publish needs a gog token export in the working directory (gdoc-update.py's contract):
     gog auth tokens export michaelrishiforrester@gmail.com --out tok.json   # delete it afterwards
+
+--publish first runs llm-coding-workflow's American English check from the repo root, over the paths listed
+in .american-english (the same files as SECTIONS and DESIGN-GLANCE.md), and stops before compiling or touching
+the Doc on any non-zero exit: 1 is a British form, 2 is a missing opt-in (#745).
 """
 from __future__ import annotations
 
@@ -22,6 +26,7 @@ import sys
 REPO = pathlib.Path(__file__).resolve().parents[1]
 DOC_ID = "18xDmjUyA5OYOSMI1-EkHEeG7RLUQTN6Ev_ZTrD7_P04"
 GDOC_UPDATE = pathlib.Path.home() / "repos/workflow/scripts-knowledge/bin/gdoc-update.py"
+CHECKER = pathlib.Path.home() / "repos/workflow/llm-coding-workflow/scripts/check_american_english.py"
 TITLE = "Unleash an Agent, Watch It Burn: design decisions and tech stack"
 SECTIONS: list[tuple[str, str]] = [
     ("What the workshop is", "README.md"),
@@ -71,6 +76,14 @@ def main(argv=None) -> int:
     p.add_argument("--out", type=pathlib.Path, default=pathlib.Path("witb-design-and-stack.md"))
     p.add_argument("--publish", action="store_true", help="update the Google Doc in place after compiling")
     a = p.parse_args(argv)
+    if a.publish:
+        if not CHECKER.exists():
+            print(f"missing {CHECKER}", file=sys.stderr)
+            return 1
+        rc = subprocess.run([sys.executable, str(CHECKER), "--published"], cwd=REPO).returncode
+        if rc != 0:
+            print(f"American English check exited {rc}; the Doc is not published", file=sys.stderr)
+            return rc
     md = compile_doc()
     a.out.write_text(md)
     print(f"compiled {len(md)} bytes to {a.out} ({len(SECTIONS)} sections)", file=sys.stderr)
