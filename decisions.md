@@ -8051,7 +8051,7 @@ Doc in place.
 
 **What counts as published.** Exactly the files that Doc compiles: every SECTIONS path, then `docs/DESIGN-GLANCE.md`.
 The issue proposed the `docs/*.md` files among them; the Doc also reproduces `README.md`, `infra/SIZING.md`, the two
-`facilitation/` files and this file, so they are listed too. Each is a literal path, not a glob, and
+`facilitation/` files and this file, so they are listed too. Each line names one file by its literal path, and
 `verify/test_compile_design_doc.py` holds the opt-in equal to the compiled list, so a section added to the Doc fails
 the suite until it is added to the opt-in. Nothing else in the repo is checked: plans, PRDs, comments and the other
 docs are internal prose, which the rule leaves alone.
@@ -8064,8 +8064,8 @@ not run it.
 
 **The fixes.** The check found 43 British forms in the published files: 40 in this file, 2 in `docs/DECISION-LOG.md`,
 1 in `docs/BUILD-SPEC.md`. 41 are respelled to the American form, most of them -lled, -our and -ence words. This file
-is append-only, and the past entries changed here change spelling only, no word and no fact, because they are
-published as written. Two are kept and marked with an inline `lexicon:` comment, per the rule: "Moonrise Pass" is the
+is append-only. In its past entries the only edits are respellings, and every fact stays as written, because those
+entries are published as they stand. Two are kept and marked with an inline `lexicon:` comment, per the rule: "Moonrise Pass" is the
 persona's cantina, a proper noun the checker's -ise rule misreads, and the other is a word inside a quotation of
 the Five Eyes guidance. `check_american_english.py --published` exits 0 on this tree (checker sha256 5421d7b6d0dd...,
 read from llm-coding-workflow on 2026-11-01).
