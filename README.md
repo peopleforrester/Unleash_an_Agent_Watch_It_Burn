@@ -1,6 +1,6 @@
 # Build a Platform, Unleash an Agent on it... and Watch it Burn! 🔥
 
-![Watch It Burn: a Kubernetes cluster ablaze while a smug AI agent calmly roasts a marshmallow over the fire](docs/assets/watch-it-burn-hero.png)
+![Watch It Burn: the Kubernetes helm wheel cracked and burning in a firestorm, with Michael Forrester and Whitney Lee in circles on either side](docs/assets/watch-it-burn-hero.png)
 
 > **Give an AI agent the keys to a real Kubernetes platform, dare it to do damage, and watch which guardrails actually stop it, and which ones just watch it burn.**
 

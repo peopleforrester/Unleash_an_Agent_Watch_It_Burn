@@ -466,7 +466,7 @@ beats give way first.
 
 | # | Min | Who | On screen | The room | Abstract points |
 |---|-----|-----|-----------|----------|-----------------|
-| 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, then the deleted-cluster hook; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
+| 1 | 3 | M | Title with the QR and `attackme.burritobot.co`, the speakers, why a burrito bot, wide open; the prompt wall `prompts.agenticburn.com` on the projector from here on | Opens the bot on their phones | framing, 1 |
 | 2 | 6 | M+W | Challenge 1: the Datadog Challenge 1 tab, the public bot, then `guard-rbac-on` on the private bot | Pulls the CEO's home address out of the bot | 4, 5, 9 |
 | 3 | 4 | W+M | Challenge 2, the Kubernetes catch-all: three minutes of play, then admission, runtime and egress policy named | Deploys a villain image, reads the recipe file, posts to the beacon | 3, 4, 5 |
 | 4 | 7 | W+M | Challenge 3: the Datadog Challenge 3 tab, the support desk and its Joker wall, then on the private bot `guard-admission-on`, then `guard-input-on` | Pastes their own HC-666 ask from the desk | 4, 5, 6 |
@@ -531,12 +531,11 @@ cluster. The panels carry the internal ids:
   `read_internal_config`. The panel beside it lists the calls that did reach it; the
   ask sent before `guard-mcp-on` is there, and the one sent after is not.
 
-### Segment 1: Cold open and the rules of the room (3 min). Owner: Michael.
+### Segment 1: Opening and the rules of the room (3 min). Owner: Michael.
 
-The hook before any introductions, compressed from
-`facilitation/cold-open-script.md`: the night an agent deleted a cluster, then one
-line that moves it to production stakes. Introduce Michael and Whitney and the
-burrito chain. Put the QR and `attackme.burritobot.co` on screen and leave them up.
+Open on the title, then Michael and Whitney, why a burrito bot, and the bot wide
+open, as the deck does. The deleted-cluster story is not part of the KubeCon talk
+(Michael, 2026-10-31, #740). Put the QR and `attackme.burritobot.co` on screen and leave them up.
 
 - Say the housekeeping line: every prompt shows on the wall without a name, so
   nothing personal goes in the box.
@@ -798,7 +797,7 @@ the recorded half of point 9 (#452).
 
 | Challenge | Internal id | In the cut? | Why |
 |---|---|---|---|
-| Challenge 1, the CEO's record (RBAC said, output guard optional) | C5 | Shown, segment 2 | The opener: it prints something that feels real |
+| Challenge 1, the CEO's record (RBAC, `guard-rbac-on`; no output guard) | C5 | Shown, segment 2 | The opener: it prints something that feels real |
 | Challenge 2, the Kubernetes catch-all (admission, runtime, egress) | C2, C3, C1 | Played, segment 3 | The room plays against the open public cluster; each layer is named, not toggled |
 | Challenge 3, prompt injection through support ticket HC-666 (Kyverno, then the input guard) | C6 | Shown, segment 4 | Pre-inference analysis, point 6, with a cluster tier behind it and a Joker per attendee |
 | Challenge 4, the poisoned MCP tool (agentgateway tool allow-list) | C7 | Shown, segment 5 | The under-protected MCP server, point 2; a fix that is not a classifier |

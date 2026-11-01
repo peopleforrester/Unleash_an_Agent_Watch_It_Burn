@@ -87,16 +87,17 @@
 <main>
   <table class="glance">
     <tr><th>#</th><th>Min</th><th>Who</th><th>Beat</th><th>Private toggle</th></tr>
-    <tr><td>1</td><td>3</td><td>M</td><td>Cold open, QR, prompt wall up</td><td>none</td></tr>
+    <tr><td>1</td><td>3</td><td>M</td><td>Opening, QR, prompt wall up</td><td>none</td></tr>
     <tr><td>2</td><td>6</td><td>M+W</td><td>Challenge 1: the CEO's secret leaks</td><td><code>guard-rbac-on</code></td></tr>
     <tr><td>3</td><td>4</td><td>W+M</td><td>Challenge 2: the Kubernetes catch-all</td><td>none: armed from the start</td></tr>
     <tr><td>4</td><td>7</td><td>W+M</td><td>Challenge 3: ticket HC-666 deploys your Joker</td><td><code>guard-admission-on</code>, then <code>guard-input-on</code></td></tr>
     <tr><td>5</td><td>5</td><td>M+W</td><td>Challenge 4: the poisoned weather tool</td><td><code>guard-mcp-on</code></td></tr>
     <tr><td>6</td><td>5</td><td>M+W</td><td>OWASP close, burritos only, break it</td><td><code>guard-topic-on</code></td></tr>
   </table>
-  <p class="note">Every challenge runs one pattern: <b>tee-up</b> (a line or two), <b>play</b> (quiet time, the room
-  on the public bot), <b>attack</b> (the presenters show it), <b>fix</b> (a short why, the pre-seeded trace, the
-  guard on the private bot), then the room <b>keeps trying</b>. iPad: <a href="?sheet=1">prompt sheet</a>.</p>
+  <p class="note">Every challenge runs one pattern: <b>tee-up</b> (a line or two), <b>trace</b> (the pre-seeded Datadog trace,
+  before the room plays), <b>play</b> (quiet time, the room on the public bot), <b>attack</b> (the presenters show
+  it), <b>fix</b> (a short why, and the fix's command on the private bot, which prints its kubectl), then the room
+  <b>keeps trying</b>. iPad: <a href="?sheet=1">prompt sheet</a>.</p>
   <details class="more"><summary>Setup: the two clusters, Datadog on stage</summary>
   <p class="note">The 30-minute KubeCon NA 2026 breakout (Sessionize session 1249553). This page is the demo
   cut of the 2-hour workshop: <b>two clusters, the room on their phones, and no hands-on lab setup for anyone
@@ -124,12 +125,12 @@
   Names and other free text are not scrubbed.</div>
   </details>
 
-  <!-- SEGMENT 1: cold open, the QR and the prompt wall, one working order -->
+  <!-- SEGMENT 1: the opening, the QR and the prompt wall, one working order -->
   <section class="seg">
-    <h2><span class="n">SEGMENT 1 · 3 min</span> Cold open and the rules of the room</h2>
+    <h2><span class="n">SEGMENT 1 · 3 min</span> Opening and the rules of the room</h2>
     <details class="more"><summary>The story</summary>
-    <p class="premise">Michael. The deleted-cluster hook first, then Michael and Whitney and the burrito
-    chain. The QR and <b>attackme.burritobot.co</b> go on screen and stay up. Housekeeping line before anyone
+    <p class="premise">Michael. The title, then Michael and Whitney, why a burrito bot, and the bot wide
+    open. The QR and <b>attackme.burritobot.co</b> go on screen and stay up. Housekeeping line before anyone
     types: every prompt shows on the wall without a name, so nothing personal in the box. Project the prompt
     wall from here on,
     <a href="https://prompts.agenticburn.com" target="_blank" rel="noopener"><code>https://prompts.agenticburn.com</code></a>,
@@ -145,7 +146,7 @@
       chain, with the menu's first choice (a base). The room sees a working bot.</div>
       <details class="more"><summary>Notes · if it wanders</summary>
       <div class="fallback"><span class="lbl">If it wanders</span>An empty reply means the MCP servers are
-      down. Say so in one line and hand off to Challenge 1; the hook does not depend on it.</div>
+      down. Say so in one line and hand off to Challenge 1; the opening does not depend on it.</div>
       </details>
     </article>
     <p class="note"><b>Hand-off to Whitney:</b> "It is wide open right now. Here is the first thing to

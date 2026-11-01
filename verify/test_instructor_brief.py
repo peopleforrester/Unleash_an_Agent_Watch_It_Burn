@@ -217,8 +217,16 @@ check("Challenge 1 teaches RBAC as its only fix, run with guard-rbac-on, and off
 check("Challenge 3 runs its admission tier as guard-admission-on",
       "guard-admission-on" in " ".join(beat_blocks.get("C6", [])))
 print("== the per-challenge pattern and the OWASP close (#687) ==")
-check("the page states the pattern once: tee-up, play, attack, fix, keep trying",
-      all(w in KUBECON for w in ("<b>tee-up</b>", "<b>play</b>", "<b>attack</b>", "<b>fix</b>", "<b>keeps trying</b>")))
+check("the page states the pattern once: tee-up, trace, play, attack, fix, keep trying",
+      all(w in KUBECON for w in ("<b>tee-up</b>", "<b>trace</b>", "<b>play</b>", "<b>attack</b>", "<b>fix</b>",
+                                 "<b>keeps trying</b>")))
+_pat = KUBECON.split('<p class="note">Every challenge runs one pattern:', 1)[-1].split("</p>", 1)[0]
+check("the trace comes before the room plays (Michael, 2026-10-31)", _pat.find("<b>trace</b>") < _pat.find("<b>play</b>"))
+check("the KubeCon opening carries no deleted-cluster story (#740)",
+      "deleted-cluster" not in KUBECON and "Cold open" not in KUBECON
+      and "deleted-cluster hook" not in ROS and "### Segment 1: Opening" in ROS)
+check("Challenge 1's row in the run-of-show names guard-rbac-on, not an optional output guard (#739)",
+      "output guard optional" not in ROS and "`guard-rbac-on`; no output guard" in ROS)
 _seg6 = KUBECON.split('<span class="n">SEGMENT 6', 1)[1]
 _llm = ("LLM01</b> Prompt Injection", "LLM02</b> Sensitive Information Disclosure", "LLM03</b> Supply Chain",
         "LLM04 Data and Model Poisoning", "LLM05 Improper Output Handling", "LLM06</b> Excessive Agency",
