@@ -71,9 +71,11 @@ config:
           - transform/set_genai_provider
           - transform/adk_tool_content
           - transform/adk_model_content
+          - transform/llmobs_apm_off
           - transform/scrub_pii
         exporters:
           - span_metrics # feed the connector so it can derive metrics from these spans
+          - forward/llmobs # #746: the Agent Observability copy, forwarded after the scrub so it is scrubbed too
           - debug
 # The single-org Datadog overlay from values.yaml, with prometheusremotewrite and otlp_grpc/tempo removed.
 extraManifests:
@@ -88,6 +90,11 @@ extraManifests:
             api:
               key: ${env:DD_API_KEY}
               site: ${env:DD_SITE}
+          otlp_http/llmobs:
+            traces_endpoint: https://otlp.${env:DD_SITE}/v1/traces
+            headers:
+              dd-api-key: ${env:DD_API_KEY}
+              dd-otlp-source: llmobs
         connectors:
           datadog/connector:
             traces:
@@ -108,6 +115,11 @@ extraManifests:
                 - datadog # the only trace sink on burn
                 - span_metrics
                 - datadog/connector
+                - forward/llmobs
+                - debug
+            traces/llmobs:
+              exporters:
+                - otlp_http/llmobs
                 - debug
             # Lab progress markers (#150), as on the instructor overlay. The Community cluster's lab is shared by the
             # room, so the fleet dashboard leaves it out by default (its cluster filter is the attendee slots).

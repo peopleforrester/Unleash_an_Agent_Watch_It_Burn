@@ -41,8 +41,9 @@ def check(name: str, cond: bool) -> None:
 
 # Exporters whose backend runs in the cluster: the gitops/bootstrap/apps Application that installs it.
 IN_CLUSTER = {"prometheusremotewrite": "prometheus.yaml", "otlp_grpc/tempo": "tempo.yaml"}
-# Exporters that need nothing installed: Datadog is SaaS, debug writes to the collector's own log.
-NO_BACKEND = {"datadog", "datadog/admin", "debug"}
+# Exporters that need nothing installed: Datadog is SaaS (its Agent Observability intake too, #746), debug writes to
+# the collector's own log.
+NO_BACKEND = {"datadog", "datadog/admin", "otlp_http/llmobs", "otlp_http/llmobs_admin", "debug"}
 
 
 def selected(profile: str) -> set[str]:

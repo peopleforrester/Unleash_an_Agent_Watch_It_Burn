@@ -42,6 +42,7 @@ config:
       traces:
         exporters:
           - span_metrics
+          - forward/llmobs
           - debug
 extraManifests:
   - apiVersion: v1
@@ -55,6 +56,11 @@ extraManifests:
             api:
               key: ${env:DD_API_KEY}
               site: ${env:DD_SITE}
+          otlp_http/llmobs:
+            traces_endpoint: https://otlp.${env:DD_SITE}/v1/traces
+            headers:
+              dd-api-key: ${env:DD_API_KEY}
+              dd-otlp-source: llmobs
         connectors:
           datadog/connector:
             traces:
@@ -76,6 +82,11 @@ extraManifests:
                 - datadog
                 - span_metrics
                 - datadog/connector
+                - forward/llmobs
+                - debug
+            traces/llmobs:
+              exporters:
+                - otlp_http/llmobs
                 - debug
             # Lab progress markers (#150). With one org the cluster's own org is the instructor's fleet view.
             traces/lab:
@@ -97,6 +108,25 @@ extraManifests:
             api:
               key: ${env:DD_ADMIN_API_KEY}
               site: ${env:DD_SITE}
+            retry_on_failure:
+              enabled: true
+              initial_interval: 1s
+              max_interval: 10s
+              max_elapsed_time: 30s
+            sending_queue:
+              enabled: true
+              queue_size: 200
+          otlp_http/llmobs:
+            traces_endpoint: https://otlp.${env:DD_SITE}/v1/traces
+            headers:
+              dd-api-key: ${env:DD_API_KEY}
+              dd-otlp-source: llmobs
+          # Agent Observability's copy to the instructor org (#746), held to the same short retry as datadog/admin.
+          otlp_http/llmobs_admin:
+            traces_endpoint: https://otlp.${env:DD_SITE}/v1/traces
+            headers:
+              dd-api-key: ${env:DD_ADMIN_API_KEY}
+              dd-otlp-source: llmobs
             retry_on_failure:
               enabled: true
               initial_interval: 1s
@@ -128,6 +158,13 @@ extraManifests:
                 - datadog/admin # the instructor org, secondary
                 - span_metrics
                 - datadog/connector
+                - forward/llmobs
+                - debug
+            # Agent Observability's copy (#746), to both orgs, the student's first.
+            traces/llmobs:
+              exporters:
+                - otlp_http/llmobs
+                - otlp_http/llmobs_admin
                 - debug
             # Lab progress markers (#150) go to the instructor org ONLY. They describe what the student did in the
             # lab guide, for the instructor's fleet view; the student's org is for the student's own workload.

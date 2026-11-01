@@ -392,6 +392,57 @@ config:
               (k, _) => k == "id" or k == "response")), "{")], "")))))),
               ",", TrimPrefix(String({"finish_reason": cache["adk_fr"]}), "{"), "]"], ""))))
               where attributes["gen_ai.output.messages"] == nil and cache["adk_ok"] == true
+    # One BurritoBot turn is one root in Agent Observability (#746), and APM keeps the true path. Datadog converts
+    # the gen_ai spans of an APM trace into Agent Observability on its own, drops every span with no gen_ai.*
+    # attribute, and maps parent_span_id to parent_id as it is (docs.datadoghq.com/llm_observability/instrument/
+    # otel_instrumentation, read 2026-11-01). The four hops between guard-proxy and kagent (agent.forward, the urllib
+    # POST, the gateway's POST / and Http) carry none, so kagent's request span named a parent that was never kept and
+    # Agent Observability drew it as a second root: 14 ms, no content, holding every tool call. The guard root, kind llm
+    # with no token counts, read cost_estimate_status:skipped_tokens_missing. Question 1034 kept APM's parentage, and
+    # it stays kept: this processor marks every span for APM only, and the copy below is the one Agent Observability
+    # reads. The same page: "An explicit false on any span prevents conversion of the entire trace."
+    transform/llmobs_apm_off:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'set(attributes["dd_llmobs_enabled"], false)'
+    # The Agent Observability copy (pipeline traces/llmobs, fed by forward/llmobs after every processor above has run,
+    # PII scrub on burn included). The Datadog overlay sends it to Datadog's OTLP intake with dd-otlp-source: llmobs.
+    # It never reaches APM, Tempo or the service map, so moving a parent here changes no waterfall.
+    #
+    # The collector sees one span at a time, and the guard's spans and kagent's are handled on different nodes, so the
+    # link cannot be looked up. It is computed instead: the guard span that holds the turn takes the low 64 bits of
+    # the trace id as its span id, and kagent's invocation names the same id as its parent. Both come from the trace
+    # id alone. The span that holds the turn is POST /chat, the storefront's turn (proxy.py, pin fb6e2bf, _handle_chat),
+    # or sanitize on the raw A2A pass-through (_handle_post), whose own POST / server span has no gen_ai.* attribute.
+    # Either one carries the prompt and the final reply, and lasts the whole turn. It becomes invoke_agent, Datadog's
+    # agent kind: guard-proxy makes no model call of its own, and as an llm row with no tokens it made the trace
+    # PARTIAL COST. The token counts are on kagent's generate_content spans (adk-go v2.1.0 TraceGenerateContentResult),
+    # which now sit under the root, and Datadog prices those (aws.bedrock and amazon.nova-pro are in its catalog).
+    # A self-heal retry forwards again inside the same turn, so its invocation lands under the same root. An A2A
+    # message that did not come through guard-proxy names a parent that is not there and shows as its own root, as
+    # every kagent turn did before this. verify/test_trace_shape_e2e.py runs both copies through the collector.
+    transform/llmobs_one_root:
+      error_mode: ignore
+      trace_statements:
+        - context: span
+          statements:
+            - 'delete_key(attributes, "dd_llmobs_enabled")'
+            - 'set(span_id.string, Substring(trace_id.string, 16, 16)) where resource.attributes["service.name"] == "burritobot" and attributes["gen_ai.operation.name"] == "chat" and ((kind == SPAN_KIND_SERVER and IsMatch(name, "^POST /chat/?$")) or name == "sanitize")'
+            - 'set(attributes["gen_ai.operation.name"], "invoke_agent") where resource.attributes["service.name"] == "burritobot" and attributes["gen_ai.operation.name"] == "chat" and ((kind == SPAN_KIND_SERVER and IsMatch(name, "^POST /chat/?$")) or name == "sanitize")'
+            - 'set(parent_span_id.string, Substring(trace_id.string, 16, 16)) where IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and name == "invocation" and not IsRootSpan()'
+    # What else leaves the Agent Observability copy. guard-proxy's chat span is the storefront turn's inner wrapper: the
+    # same prompt and reply as its root, an llm row with no tokens. kagent's server span is the 14 ms message/send row
+    # whose invocation now hangs from the root. Every span with no gen_ai.* attribute is one Datadog would drop anyway,
+    # so it is not sent twice.
+    filter/llmobs_one_root:
+      error_mode: ignore
+      traces:
+        span:
+          - 'resource.attributes["service.name"] == "burritobot" and name == "chat" and kind == SPAN_KIND_INTERNAL'
+          - 'IsMatch(resource.attributes["service.name"], "^(burritobot-agent|kagent)$") and kind == SPAN_KIND_SERVER and attributes["gen_ai.operation.name"] == nil'
+          - 'not Any(Keys(attributes), (_, k) => HasPrefix(k, "gen_ai."))'
     # The lab-marker contract (#150), applied before anything is exported. The route is public, so the collector
     # does not trust the page: anything not named lab.* is dropped, span events are dropped, the resource is
     # reset to burritobot-lab, and only the attributes gitops/ai-layer/web/lab-events.js documents survive.
@@ -461,6 +512,8 @@ config:
         - name: witb.lab.challenge
         - name: witb.lab.kind
         - name: witb.lab.control
+    # The traces pipeline's spans, after its processors, into traces/llmobs: Agent Observability's copy (#746).
+    forward/llmobs: {}
     # datadog/connector (APM trace.* metrics) is in the Datadog overlay below, with the exporter it feeds.
   service:
     telemetry:
@@ -508,9 +561,21 @@ config:
           - transform/set_genai_provider # after the line above, so the spans it names get aws.bedrock too
           - transform/adk_tool_content # tool args/result under gen_ai.*, and a failed tool call as its one error
           - transform/adk_model_content # #721: the model call's request and reply as gen_ai.input/output.messages
+          - transform/llmobs_apm_off # #746: APM's copy makes no Agent Observability rows; traces/llmobs does
         exporters:
           - otlp_grpc/tempo # the fallback, and the only trace sink without Datadog
           - span_metrics  # feed the connector so it can derive metrics from these spans
+          - forward/llmobs # #746: the Agent Observability copy
+          - debug
+      # Agent Observability's copy of the traces (#746), one root per turn. Without Datadog it ends at debug, as the
+      # lab pipelines do; the Datadog overlay below adds the intake.
+      traces/llmobs:
+        receivers:
+          - forward/llmobs
+        processors:
+          - transform/llmobs_one_root
+          - filter/llmobs_one_root
+        exporters:
           - debug
       # Lab progress markers (#150). Defined here with their processors, exporting to debug only, so a cluster
       # with no datadog-secret receives the markers and drops them. The Datadog overlay below adds the org they
@@ -555,7 +620,7 @@ config:
 #   kubectl -n monitoring logs ds/otel-collector-opentelemetry-collector-agent -c datadog-gate
 #
 # The collector replaces lists when it merges, so the overlay restates in full the exporter lists it changes
-# (traces, metrics, and the two lab pipelines, #150) and the metrics receivers; the processors lists are not
+# (traces, metrics, the two lab pipelines, #150, and traces/llmobs, #746) and the metrics receivers; the processors lists are not
 # touched and come from relay.yaml. values-dual.yaml (attendee) restates
 # this ConfigMap with Tempo taken out (the attendee profile has no Tempo, #475), and adds a second file,
 # datadog-dual.yaml, with the instructor org added; the gate loads that one only when datadog-admin-secret
@@ -575,6 +640,14 @@ extraManifests:
             api:
               key: ${env:DD_API_KEY}
               site: ${env:DD_SITE}
+          # Agent Observability's own intake (#746), for traces/llmobs: Datadog's OTLP traces endpoint for the site
+          # (otlp_trace_endpoint in DataDog/documentation shared/regions.yaml, read 2026-11-01: otlp.<site>), with
+          # the header that routes spans to Agent Observability. Protobuf over HTTP, the only encoding it documents.
+          otlp_http/llmobs:
+            traces_endpoint: https://otlp.${env:DD_SITE}/v1/traces
+            headers:
+              dd-api-key: ${env:DD_API_KEY}
+              dd-otlp-source: llmobs
         connectors:
           # datadog/connector computes APM Trace Metrics (the trace.* namespace used by SLOs/monitors).
           # Required since otelcol-contrib v0.95.0: the Datadog exporter no longer derives these itself.
@@ -600,6 +673,12 @@ extraManifests:
                 - otlp_grpc/tempo # secondary / fallback
                 - span_metrics
                 - datadog/connector # feed the APM-stats connector (trace.* metrics); PRD #13 M2
+                - forward/llmobs    # #746: the Agent Observability copy
+                - debug
+            # Agent Observability's copy (#746): relay.yaml ends it at debug; this adds the intake.
+            traces/llmobs:
+              exporters:
+                - otlp_http/llmobs
                 - debug
             # Lab progress markers (#150). relay.yaml has the two lab pipelines exporting to debug only; this adds
             # Datadog, which on this profile (admin and full, the instructor clusters) IS the instructor org.

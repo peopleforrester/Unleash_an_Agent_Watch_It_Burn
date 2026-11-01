@@ -19,7 +19,9 @@ only when datadog-secret exists. This checks the pieces offline:
   - attendee clusters still dual-ship when the instructor org is a second org, and still fail loudly without
     their own datadog-secret, and name no Tempo exporter, because the attendee profile installs no Tempo (#475);
   - an attendee cluster whose own org IS the instructor org (no datadog-admin-secret, #587) starts and ships to
-    that one org once, lab markers included. Before #587 the admin key was required there and the pod never started.
+    that one org once, lab markers included. Before #587 the admin key was required there and the pod never started;
+  - Agent Observability's copy of the traces (#746) goes to each org's dd-otlp-source llmobs intake, the org's own
+    key on each, and to debug only when there is no key.
 
 The merged-config validity check is a reference check, not the collector's own validator. Both configs were also
 run through `otelcol-contrib validate` 0.160.0 (this chart's appVersion) against the real chart render when this
@@ -287,6 +289,39 @@ for lab in ("traces/lab", "metrics/lab"):
           att_one_ov["service"]["pipelines"][lab] == ovp[lab])
 check("the one-org file changes no pipeline the dual one does not", set(att_one_ov["service"]["pipelines"])
       == set(att_ov["service"]["pipelines"]))
+
+print("== Agent Observability's copy (#746): one intake per Datadog org, on every profile ==")
+# traces/llmobs carries the copy with one root per turn (verify/test_trace_shape_e2e.py runs it). Without the key it
+# ends at debug, as the lab pipelines do; with it, each org APM ships to gets the copy at its own llmobs intake.
+for prof, admin in (("instructor", False), ("attendee", False), ("attendee", True), ("burn", False)):
+    label = f"{prof}{' (two orgs)' if admin else ''}"
+    relay_pipes = collector_config(prof, datadog_secret=False)["service"]["pipelines"]
+    check(f"{label} without the key: traces/llmobs takes forward/llmobs and ends at debug",
+          relay_pipes.get("traces/llmobs", {}).get("receivers") == ["forward/llmobs"]
+          and relay_pipes["traces/llmobs"].get("exporters") == ["debug"]
+          and "forward/llmobs" in relay_pipes["traces"]["exporters"])
+    cfg = collector_config(prof, datadog_secret=True, admin_secret=admin)
+    pipes = cfg["service"]["pipelines"]
+    orgs = [e for e in pipes["traces"]["exporters"] if e in ("datadog", "datadog/admin")]
+    want = ["otlp_http/llmobs"] + (["otlp_http/llmobs_admin"] if "datadog/admin" in orgs else [])
+    check(f"{label} with the key: traces/llmobs ships to {want}, one per org APM ships to ({orgs})",
+          pipes["traces/llmobs"]["exporters"] == want + ["debug"])
+    check(f"{label}: the copy is forwarded after every traces processor, so burn's PII scrub covers it",
+          "forward/llmobs" in pipes["traces"]["exporters"] and pipes["traces/llmobs"]["receivers"] == ["forward/llmobs"])
+    check(f"{label}: APM's copy is marked dd_llmobs_enabled false and Agent Observability's is not",
+          "transform/llmobs_apm_off" in pipes["traces"]["processors"]
+          and "transform/llmobs_apm_off" not in pipes["traces/llmobs"]["processors"])
+    for exp_name in want:
+        exp = cfg["exporters"][exp_name]
+        key = "${env:DD_ADMIN_API_KEY}" if exp_name.endswith("_admin") else "${env:DD_API_KEY}"
+        check(f"{label}: {exp_name} posts protobuf to otlp.<site>/v1/traces with dd-otlp-source llmobs and its org's key",
+              exp.get("traces_endpoint") == "https://otlp.${env:DD_SITE}/v1/traces"
+              and exp.get("headers") == {"dd-api-key": key, "dd-otlp-source": "llmobs"}
+              and exp.get("encoding", "proto") == "proto")
+    if admin:
+        check(f"{label}: the instructor org's intake retries no longer than datadog/admin does",
+              cfg["exporters"]["otlp_http/llmobs_admin"].get("retry_on_failure")
+              == cfg["exporters"]["datadog/admin"].get("retry_on_failure"))
 
 print()
 if failures:
