@@ -8263,3 +8263,24 @@ the same on the private bot, a fresh name written to wib_witch on .burritobot.co
 accepts) when there is no cookie or a cookie the vocabulary did not make, and nothing on agenticburn.com. With the
 first-visit assignment removed from the page, five checks fail, which I confirmed on a temporary edit that was
 restored. No page or desk code changed.
+
+## 2026-11-01 · 2.2 · #779 Join background threads before test_room_jokers.py exits (SIGABRT at shutdown)
+
+Run 15361 of #745 failed the tests gate with test_room_jokers.py exit 134 after every check had passed. Exit
+134 is SIGABRT. The file's last section points TICKET_SITE_URL at http://127.0.0.1:9 and deploys a room Joker,
+so deploy_app starts two daemon threads in gitops/ai-layer/workshop-mcp-server.py: the _report sender, which
+fails to connect and prints its failure, and a short scale-down threading.Timer. The test called
+desk.shutdown() and exited without waiting for either. When a daemon thread held stdout's buffer lock as the
+interpreter finalized, Python 3.13 aborted with "could not acquire lock for <_io.BufferedWriter ...> at
+interpreter shutdown".
+
+Fix, in verify/test_room_jokers.py only: after desk.shutdown(), join every thread other than the main thread
+with a bounded timeout, then fail naming any still alive. workshop-mcp-server.py is unchanged; its five-minute
+scale-down Timers are long-lived daemon threads by design, and the one test that covers what the desk is told
+keeps the real _report (the #441 entry stubbed it in test_c6_villain_endpoint.py and test_deploy_app_limits.py).
+
+Forced-race counts, from a scratch wrapper that was never committed. It replaces urllib.request.urlopen so a
+port-9 send holds stdout's buffer lock with continuous unflushed writes for three seconds and then raises
+URLError, and it runs the file through runpy as __main__. On origin/staging the pre-fix file exited 134 in 8 of
+8 runs. The changed file exited 0 in 8 of 8. Without the forcing, 100 plain runs of the changed file exited 0.
+Nothing is owed on a cluster.

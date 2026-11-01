@@ -155,6 +155,17 @@ reply = m.deploy_app(joker(f"joker-{site.slug(site.NAME_SPACE[2])}"))
 check("deploy_app still reports the deploy", reply.startswith("deployed Deployment/"), reply)
 
 desk.shutdown()
+# deploy_app starts daemon threads (the _report sender to the desk, and a short scale-down threading.Timer).
+# If the interpreter finalizes while one of them holds stdout's lock, Python 3.13 aborts with SIGABRT (exit
+# 134) at shutdown, which failed the gate after every check had passed (#779). Join every thread other than
+# the main thread with a bounded timeout, then fail naming any still alive, so the run never exits while a
+# _report sender or a scale-down Timer is still running. workshop-mcp-server.py itself is unchanged: it is
+# long-lived and its scale-down Timers are rightly daemon threads.
+_main = threading.main_thread()
+for _t in [t for t in threading.enumerate() if t is not _main]:
+    _t.join(timeout=5.0)
+_still_alive = [t.name for t in threading.enumerate() if t is not _main and t.is_alive()]
+check(f"no background thread outlives the test (#779): {_still_alive}", not _still_alive)
 print()
 if failures:
     print(f"FAILED: {len(failures)} check(s)")
