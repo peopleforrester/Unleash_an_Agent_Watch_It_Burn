@@ -8263,3 +8263,35 @@ the same on the private bot, a fresh name written to wib_witch on .burritobot.co
 accepts) when there is no cookie or a cookie the vocabulary did not make, and nothing on agenticburn.com. With the
 first-visit assignment removed from the page, five checks fail, which I confirmed on a temporary edit that was
 restored. No page or desk code changed.
+
+## 2026-11-01 · #744 · The pin already answers "the kitchen is closed"; the finale copy and the load replay now say so
+
+**The repin the issue asks for was already made.** guard-proxy-agenticburn#25's change is 92b0587 on guard-proxy main,
+and the pin here, fb6e2bf (ef66c77, #742), descends from it. `proxy.py` at the pin answers the cluster-wide cap with
+"The kitchen is closed: this cluster hit its $X spend cap, so BurritoBot isn't sending anything else to the model for
+anyone. A blocked request costs nothing." and stamps `cost_cap`. The "Press Reset" line the issue quotes is still in
+`proxy.py`, but only on the C4 per-conversation budget guard, where Reset does help. The issue was written against
+the a022fa5 pin. The repo was not repinned further: guard-proxy main's later commits (4f36dd3 and the witch-name
+forward, guard-proxy-agenticburn#34) belong to their own repin, as the 2026-11-01 rollout entry above says.
+
+**Deployed already.** The 2026-11-01 rollout entry synced ai-layer on both up clusters (community attackme, and
+private) to staging 7452788, which contains ef66c77. ef66c77 moved `checksum/proxy-py`, so guard-proxy restarted on
+fb6e2bf there. This run deploys nothing.
+
+**What was stale, and is fixed here.**
+- The KubeCon run-of-show's finale and `/kubecon`'s close told the presenters the phones read "Press Reset". Both now
+  quote the closed-kitchen reply. `verify/test_finale_cap.py` holds both to it.
+- `verify/test_finale_cap.py` now sends a /chat to the pinned proxy once the room crosses the finale cap, and the reply
+  must start "The kitchen is closed: this cluster hit its $" with no Reset, `guarded` true and no input tokens. On the
+  a022fa5 build that check fails with the old reply, which I confirmed by checking that commit out in the submodule
+  and back.
+- `verify/load_replay.py` (#644) read "The kitchen tab is frozen." as the COST_CAP_USD refusal. Since #25 the cap
+  sends the closed-kitchen reply, so a load run that reached COST_CAP_USD would have counted every refusal as
+  `guarded`. A new `cost_cap` outcome reads "The kitchen is closed:", and `budget` is now only the per-conversation
+  guard. `verify/test_load_replay.py` serves both replies and checks each text is in the pinned `proxy.py`.
+
+No guard-proxy conformance test needed a change: `conformance/test_spend.py` at the pin already asserts the new reply.
+
+**Not yet run on a cluster:** nothing new needs it. The live reply was not read on a phone in this run, because a run
+has no cluster. The next finale rehearsal on attackme shows it: `finale-cap-on 0.05` from the public terminal, one
+/chat turn past the cap, then `finale-cap-off`.

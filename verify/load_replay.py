@@ -72,8 +72,9 @@ MAX_PROMPT_CHARS = 8000
 EDGE_LIMIT_TEXT = "a minute from one network"           # console.conf @chat_slow_down
 SESSION_LIMIT_TEXT = "/min per conversation.)"           # proxy.py, RATE_LIMIT_SESSION_RPM
 CLUSTER_LIMIT_TEXT = "/min cap on this cluster.)"        # proxy.py, RATE_LIMIT_RPM
-BUDGET_TEXT = "The kitchen tab is frozen."               # proxy.py, COST_CAP_USD or the C4 budget guard
-OUTCOMES = ("served", "edge_limit", "session_limit", "cluster_limit", "budget", "guarded", "empty",
+COST_CAP_TEXT = "The kitchen is closed:"                 # proxy.py, COST_CAP_USD (guard-proxy-agenticburn#25)
+BUDGET_TEXT = "The kitchen tab is frozen."               # proxy.py, the C4 per-conversation budget guard
+OUTCOMES = ("served", "edge_limit", "session_limit", "cluster_limit", "cost_cap", "budget", "guarded", "empty",
             "http_502", "http_504", "http_429", "http_other", "timeout", "transport")
 LIMIT_OUTCOMES = ("edge_limit", "session_limit", "cluster_limit")
 ERROR_OUTCOMES = ("empty", "http_502", "http_504", "http_429", "http_other", "timeout", "transport")
@@ -228,6 +229,8 @@ def classify(status: int | None, body: dict | None, error: str = "") -> str:
             return "session_limit"
         if CLUSTER_LIMIT_TEXT in reply:
             return "cluster_limit"
+        if COST_CAP_TEXT in reply:
+            return "cost_cap"
         if BUDGET_TEXT in reply:
             return "budget"
         if (body or {}).get("guarded"):
@@ -460,7 +463,7 @@ def report_lines(s: dict) -> list[str]:
         "outcomes: " + ", ".join(f"{k} {v}" for k, v in o.items() if v),
         f"rate-limit refusals {s['rate_limit_refusals']}: nginx per network or conversation {o['edge_limit']}, "
         f"guard-proxy per session {o['session_limit']}, guard-proxy per cluster {o['cluster_limit']}; "
-        f"cost cap {o['budget']}",
+        f"cost cap {o['cost_cap']}, conversation budget {o['budget']}",
         "HTTP status: " + ", ".join(f"{k} {v}" for k, v in s["statuses"].items()),
         f"errors: 502 {o['http_502']}, 504 {o['http_504']}, 429 {o['http_429']}, other HTTP {o['http_other']}, "
         f"timeout {o['timeout']}, transport {o['transport']}, empty reply {o['empty']}",

@@ -51,6 +51,14 @@ def cost() -> dict:
         return json.load(r)
 
 
+def chat(prompt: str, session: str) -> dict:
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}/chat", method="POST",
+                                 data=json.dumps({"prompt": prompt, "session": session}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=5) as r:
+        return json.load(r)
+
+
 def spend(input_tokens: int, output_tokens: int = 0) -> None:
     proxy.record_usage({"result": {"metadata": {"kagent_usage_metadata": {
         "promptTokenCount": input_tokens, "candidatesTokenCount": output_tokens,
@@ -107,6 +115,11 @@ with tempfile.TemporaryDirectory() as tmp:
     spend(int(0.6 / proxy.COST_PER_1K_IN * 1000))  # the room spends past the headroom
     check("past it, guard-proxy refuses before the model for everyone", proxy.cost_capped())
     check("and a session with a budget of its own is refused too", proxy.cost_capped("phone-17"))
+    phone = chat("one burrito", "phone-17")
+    check("each phone reads that the kitchen is closed, with no Reset offered (guard-proxy-agenticburn#25)",
+          phone.get("reply", "").startswith("The kitchen is closed: this cluster hit its $")
+          and "Reset" not in phone.get("reply", "") and phone.get("guarded") is True
+          and phone.get("input_tokens") == 0, str(phone))
 
     print("== cost-watch shows spend against the cap ==")
     try:
@@ -138,6 +151,9 @@ check("the run-of-show's close runs finale-cap-on, shows cost-watch and ends wit
       all(f"`{c}" in close for c in ("finale-cap-on", "cost-watch", "finale-cap-off")))
 check("it says what the room sees when the cap trips, and that Reset does not help (guard-proxy-agenticburn#25)",
       "CAP HIT" in close and "Reset does not help" in close and "guard-proxy-agenticburn#25" in close)
+check("it quotes the cap's own reply, not the per-conversation 'Press Reset' one",
+      '"The kitchen is closed: this cluster' in close and "Press Reset" not in close
+      and "kitchen tab is frozen" not in close)
 check("it carries the 2026-10-30 measurement, labeled, and the estimate as an estimate",
       "Measured 2026-10-30 on attackme" in close and "an estimate" in close)
 check("it no longer says the cap is not built", "not built yet" not in close)
@@ -147,6 +163,8 @@ kclose = kclose[:kclose.index("</div>")]
 check("/kubecon's close names the same three commands",
       all(f"<code>{c}</code>" in kclose for c in ("finale-cap-on", "cost-watch", "finale-cap-off"))
       and "not built yet" not in kclose)
+check("/kubecon's close quotes the closed-kitchen reply and no longer says the phones read 'press Reset'",
+      "The kitchen is closed: this cluster" in kclose and "press Reset" not in kclose)
 
 srv.shutdown()
 print()

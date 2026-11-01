@@ -53,7 +53,10 @@ KEYWORDS = {
                       "input_tokens": 0, "output_tokens": 0}, "session_limit"),
     "CLUSTER": (200, {"reply": "Slow down, hungry traveler. (150/min cap on this cluster.)", "guarded": True,
                       "input_tokens": 0, "output_tokens": 0}, "cluster_limit"),
-    "BUDGET": (200, {"reply": "The kitchen tab is frozen. This conversation hit its $25.00 spend budget.",
+    "CLOSED": (200, {"reply": "The kitchen is closed: this cluster hit its $25.00 spend cap, so BurritoBot isn't "
+                              "sending anything else to the model for anyone. A blocked request costs nothing.",
+                     "guarded": True, "input_tokens": 0, "output_tokens": 0}, "cost_cap"),
+    "BUDGET": (200, {"reply": "The kitchen tab is frozen. This conversation hit its $0.03 spend budget.",
                      "guarded": True, "input_tokens": 0, "output_tokens": 0}, "budget"),
     "GUARD": (200, {"reply": "I'm BurritoBot, and I only talk burritos!", "guarded": True,
                     "input_tokens": 0, "output_tokens": 0}, "guarded"),
@@ -171,7 +174,7 @@ with tempfile.TemporaryDirectory(dir=REPO / "tmp") as _t:
     check("the tool reads nginx's refusal as edge_limit",
           lr.classify(200, NGINX_SLOW_DOWN) == "edge_limit", str(NGINX_SLOW_DOWN))
     check("EDGE_LIMIT_TEXT is in console.conf's refusal", lr.EDGE_LIMIT_TEXT in NGINX_SLOW_DOWN.get("reply", ""))
-    for name in ("SESSION_LIMIT_TEXT", "CLUSTER_LIMIT_TEXT", "BUDGET_TEXT"):
+    for name in ("SESSION_LIMIT_TEXT", "CLUSTER_LIMIT_TEXT", "COST_CAP_TEXT", "BUDGET_TEXT"):
         check(f"{name} is in guard-proxy's /chat reply (proxy.py)", getattr(lr, name) in _proxy)
     check("PROBE_MARKER equals proxy.py's", f'PROBE_MARKER = "{lr.PROBE_MARKER}"' in _proxy)
     lim = lr.deployed_limits()
