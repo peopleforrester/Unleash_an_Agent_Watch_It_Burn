@@ -7562,14 +7562,14 @@ approved that port's scope on 2026-10-31 as "port /chat as-is": spend metered af
 deselected for Go. The milestone table no longer said where the rewrite stands, so it is amended through
 `/prd 3_amend` path B (the PRD was sealed): snapshot, edit, this diff, header back to draft.
 Old checksum: sha256:3a5aa82f1a71
-New checksum: sha256:47ccae9543fc
+New checksum: sha256:2be621494b07
 
 **What changed.** The milestone table gains a Status column, and a "Milestone status" subsection under it gives
 the reasons. M0 to M2 are marked done, as the 2026-10-11 entry and the two 2026-10-14 entries above record. Then the three
 amendments #722 asks for:
 1. **M4** is done. Its done-when now reads "the conformance suite passes against the Go build, less the span
    tests (M5)".
-2. **M3** is blocked on a design decision, not unstarted. guard-proxy fronts the agent (kagent at `AGENT_URL`,
+2. **M3** is blocked on a design decision. guard-proxy fronts the agent (kagent at `AGENT_URL`,
    which is agentgateway `:3000`) and reads token usage from the agent's reply after the turn. It never holds a
    model request to count with `CountTokens` or to cap `max_tokens` on. Either guard-proxy or a second hop has to
    go between kagent and Bedrock first. The embedded store (decision 2) does not depend on the hop.
@@ -7583,7 +7583,7 @@ the five decisions or the out-of-scope list.
 The Go build has the cluster and per-conversation RPM limits and the `MODEL_TIER` switch, which is what
 `proxy.py` has and what the conformance suite pins. It has no TPM limit and no LiteLLM-style routing (checked in
 guard-proxy-agenticburn `internal/config/config.go` and `internal/server/`, read through `sources` on 2026-11-01).
-The status note says so, rather than letting "done" imply them. Where they go is not decided here. Routing, like
+The status note says so. Where they go is not decided here. Routing, like
 the reservation, needs a request bound for a model, so it lands wherever the M3 hop does.
 
 **Checksum note.** This PRD has no `## Context` section, so `prd-contract.sh body-sha`, which hashes from
@@ -7651,7 +7651,7 @@ goes to Michael in this run's report.
 +conformance suite pins, so the TPM limits and LiteLLM-style routing in M4's deliverable were not built: the
 +Go build has request-count limits and the `MODEL_TIER` switch, as `proxy.py` does.
 +
-+**M3 is blocked on a design decision, not unstarted.** The reservation (count the request with Bedrock
++**M3 is blocked on a design decision.** The reservation (count the request with Bedrock
 +`CountTokens`, cap `max_tokens`, refuse before the model is called) cannot be built where guard-proxy sits.
 +guard-proxy fronts the agent (kagent at `AGENT_URL`, through agentgateway `:3000`) and reads token usage
 +from the agent's reply after the turn, so it never holds a model request it could count or cap. The model

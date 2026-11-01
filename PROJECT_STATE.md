@@ -253,7 +253,7 @@ each gated by the M0 conformance suite.)
 - [ ] 3.3 Promote
 
 ## Contracts
-- 2026-10-10T23:36:09Z · PRD #412 guard-proxy Go rewrite, approved by Michael, sha256:3a5aa82f1a71f5c30360c684aa873704df14374e9468b63e50bc7d5fd118ac73 (`prds/412-guard-proxy-go-rewrite.md`). **Amended 2026-11-01 (#736), pending re-approval**: amended file sha256:47ccae9543fc, which a re-seal recomputes with its header.
+- 2026-10-10T23:36:09Z · PRD #412 guard-proxy Go rewrite, approved by Michael, sha256:3a5aa82f1a71f5c30360c684aa873704df14374e9468b63e50bc7d5fd118ac73 (`prds/412-guard-proxy-go-rewrite.md`). **Amended 2026-11-01 (#736), pending re-approval**: amended file sha256:2be621494b07, which a re-seal recomputes with its header.
 - 2026-07-03T19:59:22Z · sha256:5e110e425e70 · PRD 35 multi-cloud (AKS + GKE) incl. §3.7 hardening parity + §4.6 cluster-shape parameterization. APPROVED, read-only; changes need /prd-amend.
 - PRD 36 · multi-cloud attack -> control -> signal matrix (reference/acceptance spine; sibling of 35, no separate gate).
 - PRD 37 · curl/wget missing from workshop-mcp image (open NOTE, small fixture fix).

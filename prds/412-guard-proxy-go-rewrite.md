@@ -174,7 +174,7 @@ tests, marked `spans` and deselected for Go (CI runs `-m "not spans"`); they are
 conformance suite pins, so the TPM limits and LiteLLM-style routing in M4's deliverable were not built: the
 Go build has request-count limits and the `MODEL_TIER` switch, as `proxy.py` does.
 
-**M3 is blocked on a design decision, not unstarted.** The reservation (count the request with Bedrock
+**M3 is blocked on a design decision.** The reservation (count the request with Bedrock
 `CountTokens`, cap `max_tokens`, refuse before the model is called) cannot be built where guard-proxy sits.
 guard-proxy fronts the agent (kagent at `AGENT_URL`, through agentgateway `:3000`) and reads token usage
 from the agent's reply after the turn, so it never holds a model request it could count or cap. The model
