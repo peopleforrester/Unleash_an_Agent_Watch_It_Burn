@@ -7888,3 +7888,38 @@ second root is kagent's `POST /` carrying `gen_ai.task.id` and `gen_ai.conversat
 names the gateway's `Http` span, which is absent from Agent Observability. Then record which root row shows "No
 content" for input and output, and whether that row is the guard's `POST /chat` (which the source says carries the
 prompt and reply) or kagent's workflow `POST /`. Offline: `python3 verify/test_trace_shape_e2e.py`.
+
+## 2026-11-01 · #746 · question 1034: keep the true parentage, so Agent Observability keeps two roots per interaction
+
+**Question.** Should the collector re-parent kagent's request span onto guard-proxy's `chat` span, so that Agent
+Observability shows one root per BurritoBot interaction, at the cost of Datadog APM showing the agent's request
+skipping the agentgateway hop?
+
+**Answer: keep the true parentage.** No re-parenting. APM, Tempo and the service map keep the path guard-proxy,
+agentgateway, kagent, as the tracing is written today.
+
+**Decided by** hecaton's research under Michael's standing rules, not by Michael. The ruling rests on
+`docs/observability-priorities.md` (commit 05427b9, 2026-06-23, unrevised since): its Must-have 1 is the AI agent trace
+chain in Datadog APM, `guard-proxy → agentgateway → kagent → Bedrock` as a connected waterfall, and its Must-have 3 is the
+Service Map showing the same chain. One root per interaction in Agent Observability is not on that list. Re-parenting
+would break Must-haves 1 and 3, since the waterfall would skip agentgateway. The answer was posted on
+issue #746 as question 1034, with the same sources and the same decider.
+
+**What it changes.**
+- No collector transform re-parents kagent's span. `gitops/otel-collector/values.yaml` is unchanged by this entry.
+- The Datadog-visible shape stays as pinned in `verify/test_trace_shape_e2e.py` (commit 0b11a9c): guard-proxy's
+  `POST /chat` is an llm row with the prompt and reply; the four hops carry no `gen_ai.*` attribute and are dropped;
+  kagent's `POST /` keeps its conversation id and is a workflow row with no operation name.
+- The copied `gen_ai.task.id` and `gen_ai.conversation.id` stay on kagent's server span. The 0b11a9c entry above
+  planned to strip them as a tidy step. It is not built. With the ids stripped, Datadog would drop that span, and
+  `invocation` would become the root: an agent row with no `gen_ai.input.messages` or `gen_ai.output.messages`, so the
+  root row would still read "No content" and the trace would still show two roots. The strip would also remove the
+  conversation id from the APM span. It does not meet the criterion, so it is a followup for the coordinator if wanted.
+- Issue #746's acceptance criterion, "LLM Observability shows a BurritoBot interaction as two root-level rows, and the
+  root row reads 'No content'", stays unmet under this answer. The criterion as worded describes the symptom, so
+  whether the issue closes on this finding or its criterion is reworded is the coordinator's call. The #746 entry above
+  is the record of the research.
+
+**Live look still owed.** The "Not yet run on a cluster" reading in the #746 entry above stands unchanged: on a cluster
+with Datadog on, send one /chat, confirm that the second root is kagent's `POST /` with `gen_ai.task.id` and
+`gen_ai.conversation.id` and a `parent_id` naming the gateway's `Http` span, and record which root row shows "No content".
