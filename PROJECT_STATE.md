@@ -119,7 +119,9 @@ Next, in order:
   or routing beyond `MODEL_TIER`. **M3 is blocked** on where the model-path hop goes (guard-proxy, or
   a second hop, between kagent and Bedrock), a question put to Michael; the embedded store does not
   depend on it. **M5 is next.** The PRD was amended for all three on 2026-11-01 (#736) and awaits
-  re-approval (decisions.md, 2026-11-01T05:00:33Z).
+  re-approval (decisions.md, 2026-11-01T05:00:33Z). The Go build's bbolt spend store (guard-proxy#32)
+  needs a PVC, `SPEND_STORE_PATH` and Recreate: staged as `gitops/ai-layer/go-spend-store/`, a Component
+  the #738 cutover lists in the ai-layer kustomization (#751; decisions.md, 2026-11-01 · #751).
 - Closed this cycle: #331, #415, #393, #406, #408, #409, #410, #411, #413, #414, #416.
 
 ## Current cycle (2026-09-21, post-event defect burn-down)
