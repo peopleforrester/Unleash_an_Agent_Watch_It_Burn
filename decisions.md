@@ -8284,3 +8284,23 @@ port-9 send holds stdout's buffer lock with continuous unflushed writes for thre
 URLError, and it runs the file through runpy as __main__. On origin/staging the pre-fix file exited 134 in 8 of
 8 runs. The changed file exited 0 in 8 of 8. Without the forcing, 100 plain runs of the changed file exited 0.
 Nothing is owed on a cluster.
+
+## 2026-11-01 · 2.2 · #665 #629 Scope the room's Datadog view to Whitney's env tag as well as the public cluster
+
+Whitney gave Michael the Admin role in her Datadog sandbox on 2026-10-27 and asked, in that email and again in
+her 2026-11-01 reply, that BurritoBot tag everything env:burritobot-kubecon-na-26 and that the room's dashboard
+scope to that env so it shows only BurritoBot's data in her shared account. The telemetry tag was already in
+place across the gitops manifests (#629). The room view was not: infra/datadog-room's loader and definition
+fenced every query to kube_cluster_name:burritobot-public alone.
+
+Fix: room_view.py now requires env:burritobot-kubecon-na-26 as well as kube_cluster_name:burritobot-public on
+every metric and logs query, and room_view.yaml carries both tags on all seven queries. Both are required on
+purpose. The env tag separates BurritoBot's data from the rest of Whitney's account, which is what she asked
+for. The cluster tag keeps the presenters' private bot off this public no-login page, which #647 requires,
+because the private bot carries the same env tag and env alone would include it. verify/test_room_view.py pins
+both fences and refuses a query that carries the cluster tag without the env tag.
+
+Remaining step, owed and not done here: the dashboard is not applied to Datadog yet because the application key
+does not exist. Michael creates it under his own user with dashboards_read, dashboards_write and
+dashboards_public_share, since Whitney gave him Admin in the sandbox on 2026-10-27. Then
+room_view.py --apply builds the dashboard and hands back the share URL for segment 1.

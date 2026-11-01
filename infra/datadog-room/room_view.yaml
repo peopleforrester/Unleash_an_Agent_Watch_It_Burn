@@ -52,7 +52,7 @@ dashboard:
             queries:
               - data_source: metrics
                 name: chats
-                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,service:burritobot,span.name:chat}.as_count()"
+                query: "sum:traces.span.metrics.calls{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public,service:burritobot,span.name:chat}.as_count()"
                 aggregator: sum
             formulas:
               - formula: chats
@@ -67,7 +67,7 @@ dashboard:
             queries:
               - data_source: metrics
                 name: tools
-                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,span.name:execute_tool*}.as_count()"
+                query: "sum:traces.span.metrics.calls{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public,span.name:execute_tool*}.as_count()"
                 aggregator: sum
             formulas:
               - formula: tools
@@ -83,7 +83,7 @@ dashboard:
             queries:
               - data_source: metrics
                 name: spend
-                query: "sum:gen_ai.client.cost{kube_cluster_name:burritobot-public}"
+                query: "sum:gen_ai.client.cost{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public}"
                 aggregator: last
             formulas:
               - formula: spend
@@ -96,7 +96,7 @@ dashboard:
             queries:
               - data_source: metrics
                 name: calls
-                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,span.name:execute_tool*} by {span.name}.as_count()"
+                query: "sum:traces.span.metrics.calls{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public,span.name:execute_tool*} by {span.name}.as_count()"
                 aggregator: sum
             formulas:
               - formula: calls
@@ -119,7 +119,7 @@ dashboard:
                 indexes: ["*"]
                 compute: { aggregation: count }
                 search:
-                  query: "kube_cluster_name:burritobot-public kube_namespace:agent ((kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block OR output_scrub)) OR (kube_deployment:workshop-mcp @event:ticket_withheld))"
+                  query: "env:burritobot-kubecon-na-26 kube_cluster_name:burritobot-public kube_namespace:agent ((kube_deployment:guard-proxy @event:(input_blocklist_hit OR input_classifier_block OR output_scrub)) OR (kube_deployment:workshop-mcp @event:ticket_withheld))"
                 group_by:
                   - { facet: "@event", limit: 10, sort: { aggregation: count, order: desc } }
             formulas:
@@ -140,7 +140,7 @@ dashboard:
             queries:
               - data_source: metrics
                 name: failed
-                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,service:burritobot,span.name:chat,status.code:status_code_error}.as_count()"
+                query: "sum:traces.span.metrics.calls{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public,service:burritobot,span.name:chat,status.code:status_code_error}.as_count()"
                 aggregator: sum
             formulas:
               - formula: failed
@@ -155,7 +155,7 @@ dashboard:
             queries:
               - data_source: metrics
                 name: chats
-                query: "sum:traces.span.metrics.calls{kube_cluster_name:burritobot-public,service:burritobot,span.name:chat}.as_count()"
+                query: "sum:traces.span.metrics.calls{env:burritobot-kubecon-na-26,kube_cluster_name:burritobot-public,service:burritobot,span.name:chat}.as_count()"
             formulas:
               - formula: chats
 

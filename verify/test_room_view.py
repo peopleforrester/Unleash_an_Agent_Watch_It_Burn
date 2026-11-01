@@ -53,6 +53,10 @@ check("every metric query is filtered on kube_cluster_name:burritobot-public",
       all(rv.CLUSTER_TAG in rv.filter_tags(q) for q in qs))
 check("every logs query searches kube_cluster_name:burritobot-public at the top level",
       log_qs and all(rv.CLUSTER_TAG in rv.top_level(q["search"]["query"]).split() for q in log_qs))
+check("every metric query is also filtered on env:burritobot-kubecon-na-26 (Whitney's Oct 27 tag, #629)",
+      all(rv.ENV_TAG in rv.filter_tags(q) for q in qs))
+check("every logs query searches env:burritobot-kubecon-na-26 at the top level",
+      log_qs and all(rv.ENV_TAG in rv.top_level(q["search"]["query"]).split() for q in log_qs))
 check("every query is metrics or logs", all(q["data_source"] in ("metrics", "logs") for _, q in rv.queries(dash)))
 check("no query anywhere names a content attribute",
       not [m for _, q in rv.queries(dash) for m in rv.CONTENT_MARKERS if m in json.dumps(q).lower()])
@@ -98,6 +102,8 @@ check("a second cluster beside burritobot-public",
               "other than burritobot-public"))
 check("a formula over two metrics where one is unfenced",
       refused(set_query("sum:a{kube_cluster_name:burritobot-public} + sum:b{*}"), "not filtered to"))
+check("a query fenced to the cluster but missing Whitney's env tag",
+      refused(set_query("sum:x{kube_cluster_name:burritobot-public}"), "not filtered to env"))
 check("an exclusion filter",
       refused(set_query("sum:x{kube_cluster_name:burritobot-public,!service:burritobot}"), "exclusion"))
 check("an LLM Observability metric (no cluster tag on ml_obs.*)",

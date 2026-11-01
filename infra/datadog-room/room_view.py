@@ -58,6 +58,11 @@ from fleet_monitors import (  # noqa: E402
 DEF_FILE = HERE / "room_view.yaml"
 SHARE_FILE = HERE / "share.json"
 CLUSTER_TAG = "kube_cluster_name:burritobot-public"
+# Whitney's sandbox org holds other projects' data too, so she asked (Oct 27 email, #629) that BurritoBot
+# tag everything env:burritobot-kubecon-na-26 and that this view scope to that env. Both tags are required
+# on every query: the env tag separates BurritoBot's data from the rest of her account, and the cluster tag
+# keeps the presenters' private bot off this public no-login page (#647). Env alone would include it.
+ENV_TAG = "env:burritobot-kubecon-na-26"
 APP_KEY_ENV = "WIB_ROOM_VIEW_APP_KEY"
 # Datadog's list of widgets a shared dashboard renders (docs.datadoghq.com/dashboards/sharing/shared_dashboards,
 # read 2026-10-29), narrowed to the ones this view uses. Anything else shows no data when shared, silently.
@@ -113,6 +118,8 @@ def validate_logs(where: str, q: dict) -> list[str]:
     top = top_level(search).split()
     if CLUSTER_TAG not in top or "OR" in top:
         problems.append(f"{where}: not filtered to {CLUSTER_TAG} (a top-level term, with no top-level OR)")
+    if ENV_TAG not in top:
+        problems.append(f"{where}: not filtered to {ENV_TAG} (Whitney's env tag, a top-level term)")
     others = [c for neg, c in re.findall(r"([-!]?)kube_cluster_name:([^\s()]+)", search)
               if neg or c != "burritobot-public"]
     if others:
@@ -164,9 +171,13 @@ def validate(defs: dict, now: dt.datetime) -> list[str]:
         tags = filter_tags(text)
         if not tags:
             problems.append(f"{where}: no tag filter")
-        elif not all(CLUSTER_TAG in [t.strip() for t in f.split(",")]
-                     for f in re.findall(r"\{([^}]*)\}", text.split(" by ")[0])):
-            problems.append(f"{where}: not filtered to {CLUSTER_TAG}")
+        else:
+            per_filter = [[t.strip() for t in f.split(",")]
+                          for f in re.findall(r"\{([^}]*)\}", text.split(" by ")[0])]
+            if not all(CLUSTER_TAG in f for f in per_filter):
+                problems.append(f"{where}: not filtered to {CLUSTER_TAG}")
+            if not all(ENV_TAG in f for f in per_filter):
+                problems.append(f"{where}: not filtered to {ENV_TAG} (Whitney's env tag)")
         if [t for t in tags if t.startswith("kube_cluster_name:") and t != CLUSTER_TAG]:
             problems.append(f"{where}: names a cluster other than burritobot-public")
         if [t for t in tags if t.startswith("!") or t.startswith("-")]:
