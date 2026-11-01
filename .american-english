@@ -1,0 +1,21 @@
+# The paths this repo publishes, for the American English check (llm-coding-workflow rules/american-english.md, #745).
+# One glob per line, relative to the repo root. These are exactly the files scripts/compile-design-doc.py compiles
+# into the design Google Doc: every SECTIONS path, then DESIGN-GLANCE.md. verify/test_compile_design_doc.py holds the
+# two lists equal, so a section added to the Doc is checked before it is published.
+README.md
+docs/STACK-WALKTHROUGH.md
+docs/DESIGN-DECISIONS.md
+docs/BUILD-SPEC.md
+docs/GITOPS-RECONCILIATION.md
+docs/attendee-access-design.md
+infra/SIZING.md
+docs/observability-priorities.md
+docs/external-apps.md
+docs/GOTCHAS-FLEET-AND-DELIVERY.md
+facilitation/governance-map.md
+facilitation/self-assessment.md
+docs/TECH-STATUS.md
+docs/ROADMAP.md
+docs/DECISION-LOG.md
+decisions.md
+docs/DESIGN-GLANCE.md
