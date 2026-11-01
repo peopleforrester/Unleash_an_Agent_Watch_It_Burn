@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ABOUTME: Heavy suite: the live beat harness (run-all.sh) on a cluster, every `# SUITE: e2e` check in
-# ABOUTME: verify/ (kubectl/helm renders, node, live Datadog), doc-link fetches, and Backstage Playwright.
+# ABOUTME: verify/ (kubectl/helm renders, node, live Datadog), doc-link fetches, Backstage's footprint and Playwright.
 #
 # Usage: CONTEXT=<kube-context> IAM_PIPELINE_PROFILE=<aws-profile> IAM_PIPELINE_REGION=<region> \
 #            [NAMESPACE=agent] bash verify/run-e2e.sh
@@ -102,6 +102,12 @@ for t in "${SCRIPT_DIR}"/test_*.py "${SCRIPT_DIR}"/test_*.sh; do
 done
 # The half of the doc-link check the offline suite leaves out on purpose: fetching every documentation root.
 run_one "test_doc_links.py (WIB_CHECK_LINKS=1, network)" env WIB_CHECK_LINKS=1 python3 "${SCRIPT_DIR}/test_doc_links.py"
+
+# The attendee profile deploys Backstage (#244), so its live check runs here (#548): both pods Ready, a usage reading
+# for every container, and the Kubernetes tab listing pods for unicorn-party and workshop-agent. One sample keeps the
+# suite fast; the script's default of six readings ten seconds apart sleeps for 50 seconds. Run it alone for a peak.
+run_one "backstage-footprint.sh (SAMPLES=1)" \
+    env CONTEXT="${CONTEXT}" SAMPLES=1 bash "${SCRIPT_DIR}/backstage-footprint.sh"
 
 # CI is unset on purpose: with CI set, playwright.config.ts starts no web servers and expects one to be
 # running already on :7007. Chained with && because set -e does not apply inside a `|| rc=$?` call.

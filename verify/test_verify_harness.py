@@ -53,6 +53,13 @@ check("run-e2e.sh requires Node 24", '!= "24"' in rune2e)
 pwconfig = (REPO / "images/watch-it-burn-backstage/playwright.config.ts").read_text()
 check("playwright.config.ts launches the Chromium run-e2e.sh installs",
       "playwright install chromium" in rune2e and "generateProjects({ channel: 'chromium' })" in pwconfig)
+# Backstage's live check (#548) runs in the suite because the attendee profile deploys Backstage (#244). It takes one
+# sample so the suite stays fast, and the command names the cluster itself.
+attendee = (REPO / "gitops/bootstrap/values-attendee.yaml").read_text()
+check("the attendee profile deploys backstage", "\n  - backstage\n" in attendee)
+check("run-e2e.sh runs backstage-footprint.sh as a run_one step with SAMPLES=1 and CONTEXT",
+      'run_one "backstage-footprint.sh' in rune2e
+      and 'env CONTEXT="${CONTEXT}" SAMPLES=1 bash "${SCRIPT_DIR}/backstage-footprint.sh"' in rune2e)
 e2e = sorted(p.name for p in VERIFY.glob("test_*") if "\n# SUITE: e2e" in p.read_text())
 check(f"the render and live checks are in the E2E suite ({', '.join(e2e)})",
       {"test_ai_layer_rollout.py", "test_enforce_floor.py", "test_service_naming_render.py",

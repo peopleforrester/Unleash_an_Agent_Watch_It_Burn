@@ -7381,3 +7381,22 @@ that check alone, then restored the file. So whatever tool change the live check
 the same commit. A swap of two read-only mock tools is the least behaviour-changing change that still makes the
 Agent OutOfSync. It lands on attackme, the public KubeCon cluster, so the session that makes it puts the order back
 afterwards, which is a second live landing and is just as good as evidence.
+## 2026-11-01 · #548 · run-e2e.sh runs backstage-footprint.sh with one sample, since attendee deploys Backstage
+
+#244 put Backstage on the attendee, full and admin profiles (its entry is above). #548 waited on that: before it,
+Backstage sat in gitops/apps-disabled/ and the footprint check (#484) would have failed on every cluster.
+`verify/run-e2e.sh` runs `env CONTEXT="${CONTEXT}" SAMPLES=1 bash verify/backstage-footprint.sh` as a run_one step,
+after the doc-link fetch and before the Playwright run. The command line sets CONTEXT itself, so the step names its
+cluster explicitly, as every other step does. SAMPLES=1 takes one kubelet reading. The default takes six readings ten
+seconds apart and sleeps for 50 seconds between them. The pass conditions are the same at any sample count: every
+backstage pod Ready, a reading for every container, and both Kubernetes tabs listing pods. To see a working peak, run
+the script alone with its defaults while clicking around the portal. `verify/test_verify_harness.py` checks the step
+and that values-attendee.yaml lists backstage.
+
+Runs 14794 and 14817 failed the ai-isms gate on this entry. The second run's fixup added a plain heading but left the
+first heading in place, so the file kept the flagged phrase. Run 14844 makes the same change as one commit on 5df1200,
+with this entry written once. `verify/draft-drift.sh origin/agent/548-14776 origin/staging` was clean.
+
+**Not yet run on a cluster.** `CONTEXT=<ctx> IAM_PIPELINE_PROFILE=<profile> IAM_PIPELINE_REGION=<region> bash
+verify/run-e2e.sh` on a fresh attendee cluster, after the Backstage image is signed (`verify/sign-images.sh --check`),
+must show `backstage-footprint.sh (SAMPLES=1)` green.
