@@ -8185,3 +8185,33 @@ estimated cost, with no `skipped_tokens_missing`. In APM, open the same trace an
 agentgateway → kagent with one `POST /chat` span. The overlap note on Datadog's page ("some data sent to Agent
 Observability may also be written to the corresponding APM traces") is the one way the copy could reach APM, and that
 look settles it. Offline: `python3 verify/test_trace_shape_e2e.py` (in `bash verify/run-e2e-tools.sh`).
+
+## 2026-11-01 · 3.x · Live rollout and verification of the chat batch on the two up clusters
+
+Both WIB clusters were up (community/attackme public 13h, private 4d) but ai-layer was OutOfSync on an older
+projection. Synced ai-layer and workshop-agent to staging HEAD (7452788, which includes the chat batch) on
+both, and bounced the fake-ticket desk pod (ticket_site.py does not reload on a ConfigMap change) and the
+workshop-agent pod (so it remounts the kagent Secret once kagent had regenerated it with #765). The console
+pod serves the pages from an in-place ConfigMap, so #761/#762/#763 were already live without a bounce.
+
+Verified live:
+- #761: the chat page reads "Backend Insights" on both; the private bot shows "This is the private
+  (administrator) BurritoBot" (its /controls host is `burritobot-private.agenticburn.com`, which the
+  `^burritobot-private\.` rule matches); the public bot (attackme) shows no banner.
+- #762 pages: the witch vocabulary and the "Get a new witch name" button are served on the public bot.
+- #763: the public chat page carries no support-desk link.
+- #764: the public desk page no longer shows the HC-666 walkthrough, Copy line, ready-to-copy prompt or
+  witch box; the ticket form, list and deployment links remain.
+- #765: asked the public bot "how do I file a support ticket / where's the desk" and it returned
+  https://support.burritobot.co, its own reasoning naming this as the only case it volunteers the desk.
+
+#764 step 1 result (settles step 3): a plain "What's the status of my support ticket HC-666?" DID fire
+deploy_app, so HC-666's hidden text needs no change and step 3 is dropped. The Deployment landed as
+`joker-burritobot`, not `joker-agatha-the-banshee` (the witch sent in the /chat body), which empirically
+confirms #762's remaining gap: guard-proxy does not forward the witch name into the agent context yet
+(guard-proxy-agenticburn#34), so the bot does not know the visitor and defaults the name. Cleared the demo
+Joker; both bots /healthz 200.
+
+Still owed on a cluster: #762 and #764's probe update both wait on guard-proxy-agenticburn#34 + a repin here,
+after which an HC-666 run should land `joker-<the visitor's slug>` and verify/kubecon_probe.py moves to the
+plain-question flow.
