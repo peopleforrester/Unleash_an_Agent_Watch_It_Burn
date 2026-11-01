@@ -1,5 +1,5 @@
 <!-- ABOUTME: The #480 spike: an agentgateway ExtMCP processor that pins tool-definition hashes (the #117 rug-pull
-     ABOUTME: control), what the real v1.5.0 binary did with it on a local bed, and what the cluster check must confirm. -->
+     ABOUTME: control), what the real v1.5.0 and v1.7.0 binaries did with it on a local bed, and what the cluster check must confirm. -->
 # Spike: pin tool definitions at the gateway (#480, design for #117)
 
 #117 is the rug-pull. A tool is approved, then its **description** changes while its **name** stays the
@@ -12,6 +12,11 @@ release binary, evil-mcp's own `server.py` and a rug-pulled copy of it. kagent's
 v0.9.9 source, not watched live: this run had no cluster. `live-check.sh` is the cluster half. It is
 written but has not been run.
 
+**Re-measured on 2026-11-01 on v1.7.0.** #698 moved the cluster's gateway to v1.7.0 on 2026-10-30. The ExtMCP
+proto is byte-identical at both tags, and the same bed on the v1.7.0 binary gave the same results with two
+differences: a refused `tools/call` now comes back as an `isError` tool result, and the failClosed error no
+longer says why the processor failed. See "Re-measured on v1.7.0" below.
+
 ## What is here
 
 | File | What it is |
@@ -23,11 +28,14 @@ written but has not been run.
 | `tool-pin.yaml`, `kustomization.yaml` | The processor's Deployment, Service and baseline ConfigMap, for `live-check.sh`. No Argo CD Application points here |
 | `probe.py` | An MCP client (mcp 1.29.1, the workshop-mcp image's pin) that lists tools, or calls one, and prints the outcome as JSON |
 | `local-bed.sh` | The local bed (see "Reproduce") |
-| `local-bed-2026-10-24.txt` | The bed's output from the run these findings come from |
+| `local-bed-2026-10-24.txt` | The bed's output on v1.5.0, from the run these findings come from |
+| `local-bed-2026-11-01-v1.7.0.txt` | The same bed's output on v1.7.0, the version the cluster runs since #698 |
 | `live-check.sh` | The cluster check, in phases: `setup`, `observe`, `rugpull`, `deny`, `restore` |
 
 `verify/test_tool_pin.py` holds the parts that need no binary offline: the hash, the verdicts, the
-protobuf bytes, the baseline against `server.py`, and the rendered bind against the vendored v1.5.0 schema.
+protobuf bytes, the baseline against `server.py`, and the rendered bind against the vendored schema (v1.7.0
+since #698). It also checks that `local-bed.sh` and the reproduce steps below name the gateway version the
+cluster pins.
 
 ## The processor
 
@@ -45,7 +53,8 @@ backend's name. The gateway sends that name unprefixed, as `service_names: ["evi
 - It reads the baseline on every call, so re-approving means editing the ConfigMap. No restart is needed.
 
 It encodes the protobuf messages by hand, with the field numbers from `crates/protos/proto/ext_mcp.proto`
-at the v1.5.0 tag. The image therefore needs grpcio and nothing else, and the offline suite needs neither.
+at the v1.5.0 tag, unchanged at v1.7.0 (sha256 `4ba750cc…3f563584` at both tags, compared 2026-11-01). The
+image therefore needs grpcio and nothing else, and the offline suite needs neither.
 
 ## Measured on the local bed, 2026-10-24
 
@@ -75,12 +84,41 @@ Four things the docs did not say, or said differently:
    kubelet's ConfigMap sync.
 2. **A request-phase deny on `tools/call` comes back as a JSON-RPC error (`-32001`).** The ExtMCP page
    (docs "latest", read 2026-10-24) says the client gets a tool result with `isError: true`. v1.5.0 does
-   not do that.
+   not do that. v1.7.0 does (next section).
 3. **Stripping a tool from the list does not stop a call to it.** The gateway forwards a `tools/call`
    for a name it never listed. kagent's model only ever sees listed tools, but the pin is only a
    control on the wire once the call phase is checked as well.
 4. **One target per bind keeps the names.** The gateway did not prefix the tool names, and it named the
    backend `evil-mcp` to the processor. Both match the proto comment about the "native (unmuxed) namespace".
+
+## Re-measured on v1.7.0, 2026-11-01
+
+#698 moved the cluster's gateway to v1.7.0 (`cr.agentgateway.dev/agentgateway:v1.7.0`, pinned by digest in
+`gitops/ai-layer/agentgateway.yaml`), so the cluster check would no longer run the binary the bed measured.
+The same `local-bed.sh` ran on the v1.7.0 release asset (`agentgateway-linux-amd64`, sha256
+`1b2fc01a…2f42f8`, git revision `26f5aeb`), with mcp 1.29.1 and grpcio 1.84.1 as before. The full output is
+`local-bed-2026-11-01-v1.7.0.txt`. The bed's config now carries the committed `config.session.key: disabled`,
+as the cluster's does: without it, v1.7.0 wrote a generated key into the bed's config file on the first try,
+which a pod's read-only ConfigMap would not allow. Every row of the table above is the same on v1.7.0 except two:
+
+| Case | v1.5.0 | v1.7.0 |
+|---|---|---|
+| Calling the stripped `get_weather` by name | JSON-RPC `-32001` "tool get_weather is not an approved definition" | a tool result with `isError: true` and the same text, as the ExtMCP docs say |
+| tool-pin down, pinned bind | JSON-RPC `-32603` "mcpGuardrails checkResponse failed: … Connection refused" | JSON-RPC `-32603` "guardrail check failed". The cause is no longer in the client's error |
+
+A deny on `tools/list` is still JSON-RPC `-32001` with tool-pin's reason, so kagent's `Accepted=False`
+condition should still carry "changed since approval: get_weather". The hot reload, keeping the last good
+config on a bad reload, the 0.4 s pickup and the unprefixed names are unchanged. A bad config at startup
+still exits 1 with the same error (run by hand with the bed's `bad.yaml`; `local-bed.sh` does not run it).
+
+Two consequences for the design:
+
+- **A refused call is now a tool result the model reads.** On v1.5.0 a call refusal was a JSON-RPC
+  protocol error. On v1.7.0 it is an ordinary tool result marked `isError`, whose text is tool-pin's
+  reason, so the model is likely to see that text. Open item 5 below changes with it.
+- **The student cannot read a processor outage from the client side.** "guardrail check failed" does not
+  say whether tool-pin is down or its baseline is broken. Only tool-pin's own log and the gateway log say
+  which, so a lesson that breaks the processor on purpose has to point the student at those logs.
 
 ## kagent's side, read from the v0.9.9 source (not yet seen live)
 
@@ -155,8 +193,10 @@ to show:
 4. **After `deny`.** The RemoteMCPServer shows `Accepted=False` with tool-pin's reason, and
    `discoveredTools` is stale. The agent log has "Failed to get tools from toolset", and the chat still
    answers.
-5. **The `tools/call` phase.** See how kagent-adk handles a `-32001` on a call: a failed tool turn or a
-   failed request. The source reading did not cover this.
+5. **The `tools/call` phase.** On v1.7.0 a refused call is an `isError` tool result carrying tool-pin's
+   reason, not a `-32001` (local bed, 2026-11-01). See what the agent does with it: whether the model
+   repeats the reason to the student, retries, or goes on without the tool. The source reading did not
+   cover this.
 
 `restore` deletes tool-pin and turns Argo CD auto-sync back on, and selfHeal reverts the rest.
 
@@ -168,8 +208,8 @@ are rechecked against staging by `verify/test_tool_pin.py` (last changed 2026-10
 
 ```bash
 mkdir -p tmp/agw && curl -sSL -o tmp/agw/agentgateway \
-  https://github.com/agentgateway/agentgateway/releases/download/v1.5.0/agentgateway-linux-amd64
-echo "daca5cda76e8c5ab0c1a75912fecf2d6365095403f810db72029c49d14a37e7b  tmp/agw/agentgateway" | sha256sum -c
+  https://github.com/agentgateway/agentgateway/releases/download/v1.7.0/agentgateway-linux-amd64
+echo "1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8  tmp/agw/agentgateway" | sha256sum -c
 chmod +x tmp/agw/agentgateway
 uv venv tmp/venv --python 3.12 && uv pip install --python tmp/venv/bin/python 'mcp==1.29.1' 'grpcio==1.84.1' 'pyyaml==6.0.2'
 bash docs/research/2026-10-24-tool-pin-spike/local-bed.sh tmp/agw/agentgateway tmp/venv/bin/python "$PWD/tmp/bed"

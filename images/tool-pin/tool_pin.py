@@ -2,9 +2,9 @@
 # ABOUTME: Hashes each tool's name, description and inputSchema, and strips or denies any not in the pinned baseline.
 """Pin the tool definitions at approval and refuse on mismatch (#117's proposed control).
 
-agentgateway v1.5.0 calls this server over gRPC (`agentgateway.dev.ext_mcp.ExtMcp`, the proto at
-crates/protos/proto/ext_mcp.proto at the v1.5.0 tag) when a route's `mcpGuardrails.processors` maps
-`tools/list: response` to it. Once per backend, it hands over the upstream JSON-RPC `result` as raw JSON.
+agentgateway v1.7.0 calls this server over gRPC (`agentgateway.dev.ext_mcp.ExtMcp`, the proto at
+crates/protos/proto/ext_mcp.proto, byte-identical at the v1.5.0 and v1.7.0 tags) when a route's
+`mcpGuardrails.processors` maps `tools/list: response` to it. Once per backend, it hands over the upstream JSON-RPC `result` as raw JSON.
 For each tool in it this computes
 
     sha256( canonical JSON of {"name", "description", "inputSchema"} )
@@ -20,7 +20,8 @@ gateway's failureMode (failClosed by default) refuses the list, so a broken pin 
 
 Stripping a tool from the list does not stop a client calling it by name: on the local bed the gateway
 forwarded a tools/call for the stripped get_weather and the rug-pulled tool answered. So the bind also
-maps `tools/call: request` here, and a call is refused (the client gets a tool result with isError) unless
+maps `tools/call: request` here, and a call is refused (on v1.7.0 the client gets a tool result with isError;
+v1.5.0 returned JSON-RPC -32001 instead) unless
 the tool was approved in the most recent tools/list for that backend. Before any list has been judged,
 nothing is approved.
 

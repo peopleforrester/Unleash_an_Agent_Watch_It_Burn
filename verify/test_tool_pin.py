@@ -1,6 +1,6 @@
 # ABOUTME: Offline checks for the #480 spike's tool-pin ExtMCP processor: the hash, the strip/deny verdicts,
 # ABOUTME: the hand-written protobuf wire format, the pinned baseline against evil-mcp, and the rendered bind.
-"""What the spike's local bed measured against the real agentgateway v1.5.0 binary, held offline.
+"""What the spike's local bed measured against the real agentgateway binary, held offline.
 
 docs/research/2026-10-24-tool-pin-spike/README.md has the measurement. This keeps the parts that do not
 need the binary, grpcio or mcp from drifting:
@@ -13,7 +13,9 @@ need the binary, grpcio or mcp from drifting:
   list alone did not stop a direct call on the bed;
 - baseline.json still pins what evil-mcp's server.py serves. Editing a description in server.py fails
   here until the baseline is re-pinned, which is the control working on its own repository;
-- the cluster config the spike renders validates against the vendored v1.5.0 schema.
+- the cluster config the spike renders validates against the vendored schema;
+- the bed runs the gateway version the cluster pins (v1.5.0 on 2026-10-24, v1.7.0 since #698), so a gateway
+  bump turns this red until the bed is rerun on the new binary.
 """
 from __future__ import annotations
 
@@ -32,7 +34,7 @@ sys.path.insert(0, str(SPIKE))
 sys.path.insert(0, str(REPO / "verify"))
 import tool_pin  # noqa: E402
 import gateway_bind  # noqa: E402
-from agentgateway_schema import Invalid, load_schema, validate  # noqa: E402
+from agentgateway_schema import SCHEMA_VERSION, Invalid, load_schema, validate  # noqa: E402
 
 failures: list[str] = []
 
@@ -180,9 +182,9 @@ root = load_schema()
 cfg = gateway_bind.cluster_config()
 try:
     validate(cfg, root, root)
-    check("the committed config plus the pinned bind validates against the v1.5.0 schema", True)
+    check(f"the committed config plus the pinned bind validates against the {SCHEMA_VERSION} schema", True)
 except Invalid as e:
-    check(f"the committed config plus the pinned bind validates against the v1.5.0 schema ({e})", False)
+    check(f"the committed config plus the pinned bind validates against the {SCHEMA_VERSION} schema ({e})", False)
 committed = gateway_bind.committed_config()[1]
 check("it adds exactly one bind and leaves the committed ones as they are",
       cfg["binds"][:-1] == committed["binds"] and len(cfg["binds"]) == len(committed["binds"]) + 1)
@@ -233,6 +235,29 @@ for label, mutate in (
 phase = root["$defs"]["Phase"]
 phases = set(phase.get("enum") or [o["const"] for o in phase.get("oneOf", []) if "const" in o])
 check("every phase the bind uses is one the schema lists", set(proc["methods"].values()) <= phases and len(phases) >= 4)
+
+print("== the local bed runs the gateway the cluster runs ==")
+# #698 moved the cluster to v1.7.0 after the bed ran on v1.5.0, and v1.7.0 answers a refused tools/call
+# differently (README, "Re-measured on v1.7.0"). The bed's binary has to follow the image pin.
+import re  # noqa: E402
+images = set(re.findall(r"image: cr\.agentgateway\.dev/agentgateway:(v[0-9.]+)@", gateway_bind.GATEWAY.read_text(encoding="utf-8")))
+bed = (SPIKE / "local-bed.sh").read_text(encoding="utf-8")
+readme = (SPIKE / "README.md").read_text(encoding="utf-8")
+bed_pin = re.search(r"the (v[0-9.]+) release asset agentgateway-linux-amd64\n#\s+\(sha256 ([0-9a-f]{64})\)", bed)
+check(f"the agentgateway image is one version ({sorted(images)}), the schema's", images == {SCHEMA_VERSION})
+check("local-bed.sh names the release asset and sha256 of that version",
+      bed_pin is not None and bed_pin.group(1) == SCHEMA_VERSION)
+check("the README's reproduce steps download that version and check that sha256",
+      bed_pin is not None
+      and f"releases/download/{SCHEMA_VERSION}/agentgateway-linux-amd64" in readme
+      and f'echo "{bed_pin.group(2)}  tmp/agw/agentgateway" | sha256sum -c' in readme)
+record = SPIKE / f"local-bed-2026-11-01-{SCHEMA_VERSION}.txt"
+check(f"the bed's output on {SCHEMA_VERSION} is committed, and its refused call is an isError result",
+      record.exists() and "call the stripped tool       :3004  isError" in record.read_text(encoding="utf-8"))
+local = gateway_bind.local_config("http://a/mcp", "http://b/mcp", "c:9001")
+check("the bed's config keeps the committed session setting (key: disabled), as the cluster's does",
+      local.get("config", {}).get("session") == committed["config"]["session"] == {"key": "disabled"}
+      and cfg["config"]["session"] == {"key": "disabled"})
 
 print("== live-check.sh against the current layout ==")
 # The cluster half is run by hand and has never run, so the names it acts on drift unseen as staging moves:

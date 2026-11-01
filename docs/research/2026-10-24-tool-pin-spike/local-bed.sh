@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# ABOUTME: The #480 spike's local bed: the real agentgateway v1.5.0 binary, evil-mcp, a tampered copy and
-# ABOUTME: tool-pin, all on 127.0.0.1, with no cluster. Prints what a client sees on each bind in each mode.
+# ABOUTME: The #480 spike's local bed: the real agentgateway binary the cluster pins, evil-mcp, a tampered copy
+# ABOUTME: and tool-pin, all on 127.0.0.1, with no cluster. Prints what a client sees on each bind in each mode.
 #
 # Usage: local-bed.sh <agentgateway-binary> <python> <scratch-dir>
-#   <agentgateway-binary>  the v1.5.0 release asset agentgateway-linux-amd64
-#                          (sha256 daca5cda76e8c5ab0c1a75912fecf2d6365095403f810db72029c49d14a37e7b)
+#   <agentgateway-binary>  the v1.7.0 release asset agentgateway-linux-amd64
+#                          (sha256 1b2fc01a2de29ca113bbb6258b5cae7b1eb3c724071c09d687a449132f2f42f8)
+#                          v1.7.0 is the image gitops/ai-layer/agentgateway.yaml pins (#698). The first run, on
+#                          v1.5.0 (sha256 daca5cda76e8c5ab0c1a75912fecf2d6365095403f810db72029c49d14a37e7b),
+#                          is local-bed-2026-10-24.txt.
 #   <python>               a python with mcp==1.29.1 (the workshop-mcp image's pin), grpcio and PyYAML
 #   <scratch-dir>          an empty directory for logs, the tampered server and the generated config
 #

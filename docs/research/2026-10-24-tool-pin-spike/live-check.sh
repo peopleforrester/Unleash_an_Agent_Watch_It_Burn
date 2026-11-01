@@ -3,7 +3,8 @@
 # ABOUTME: own gateway bind and records what kagent's discovery and the agent's list_tools do in each mode.
 #
 # NOT YET RUN. Written 2026-10-24 by a run that had no cluster; the local bed (local-bed.sh) is what has been
-# measured. Expect to fix things the first time through, and record what you saw in README.md.
+# measured, on v1.5.0 and again on v1.7.0, the version the cluster runs. Expect to fix things the first time
+# through, and record what you saw in README.md.
 #
 # Usage: CONTEXT=<kube-context> [IMAGE=<tool-pin image@digest>] live-check.sh <phase>
 #   setup     pause Argo CD auto-sync on the root and ai-layer, deploy tool-pin, add bind 3004 to the

@@ -75,10 +75,13 @@ def cluster_config() -> dict:
 
 def local_config(evil: str, tampered: str, processor: str) -> dict:
     """The local bed: 3001 is evil-mcp with NO processor (the stand-in for an unrelated bind), 3003 the
-    pinned evil-mcp, 3004 the same pin in front of a copy whose get_weather description was edited."""
+    pinned evil-mcp, 3004 the same pin in front of a copy whose get_weather description was edited.
+    It keeps the committed `config.session` (key: disabled since #698): v1.7.0 otherwise writes a generated
+    key into its config file, which a pod's read-only ConfigMap cannot take."""
     unguarded = pinned_bind(3001, evil, processor, "unguarded")
     del unguarded["listeners"][0]["routes"][0]["policies"]
-    return {"binds": [unguarded, pinned_bind(3003, evil, processor), pinned_bind(3004, tampered, processor, "rug-pulled")]}
+    return {"config": {"session": committed_config()[1]["config"]["session"]},
+            "binds": [unguarded, pinned_bind(3003, evil, processor), pinned_bind(3004, tampered, processor, "rug-pulled")]}
 
 
 def as_configmap(cfg: dict) -> dict:
