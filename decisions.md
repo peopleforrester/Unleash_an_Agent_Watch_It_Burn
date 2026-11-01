@@ -8185,3 +8185,32 @@ estimated cost, with no `skipped_tokens_missing`. In APM, open the same trace an
 agentgateway → kagent with one `POST /chat` span. The overlap note on Datadog's page ("some data sent to Agent
 Observability may also be written to the corresponding APM traces") is the one way the copy could reach APM, and that
 look settles it. Offline: `python3 verify/test_trace_shape_e2e.py` (in `bash verify/run-e2e-tools.sh`).
+## 2026-11-01 · #544 · The live check of the attendee profile without Tempo and Talon is still owed; the witch-name tier test caught up with #762, #763 and #764
+
+#544 asks for a live run: one attendee cluster and one admin cluster, checking the #475 shape (no tempo or falco-talon
+Application on attendee, the attendee collector with `otlp_grpc/tempo` defined but in no pipeline, the multi-source
+tempo Application's `tempo-grafana-datasource` ConfigMap loaded by Grafana on admin, and
+`verify/test_service_hosts_live.py` on both). Hecaton runs 15438 and 15453 have no cluster and no AWS profile and may
+not deploy (AGENTS.md, "Dispatched runs"), so there is no code for the issue itself; the exact commands are in the
+run report on the issue, and the go on the spend (about $1 for two hours of one attendee cluster) is Michael's. Three
+things the issue states have moved since it was filed: an attendee cluster shows 34 Argo CD Applications and an admin
+cluster 38 (`verify/test_fleet_contract.py`), not 36; Loki's TraceID derived field is no longer a leftover, since #474
+removed loki from every profile; the remaining Tempo names on an attendee cluster are the four Tempo panels in
+`observability-idp/grafana/dashboards/agent-observability.yaml` and falcosidekick's Talon output. The admin half needs
+no new cluster: `watch-it-burn-private` is the admin profile and is up. The attendee half needs one non-admin row in
+the `watch-it-burn/datadog-pool` secret first, because `fleet.sh`'s bootstrap refuses an attendee cluster whose pool
+slot does not resolve, and KubeCon has no pool (#629).
+
+**What changed.** `verify/test_storefront_witch_name_e2e.py`, the E2E tools tier's check of the chat page's witch-name
+block, had not followed three page changes and made `bash verify/run-e2e-tools.sh` red on staging since 6324488: it
+read the name from the desk's front page, which #764 stopped printing (it is on `/me`, for the cookie the front page
+sets); it cut the block from `(function witchName(){`, below the helpers #762 moved ahead of it, so node failed on
+`witchFromSlug`; and it expected a "Get your witch name" link, which #763 replaced with plain text and #762 with a
+name the page assigns itself. The test now reads the given name from `/me` with the desk's cookie, runs the block
+from `var WITCH_FIRST=` to `greet();` with a stub element that records stripped attributes and the cookie written,
+and holds the current behaviour: the desk's name shown unchanged and its cookie left alone; href, target and rel
+stripped and none set; without a cookie, or with a slug outside the vocabulary, a vocabulary name shown and
+`wib_witch` set to its slug on `.burritobot.co`; nothing shown or set on agenticburn.com. Its vocabulary check uses
+`ticket_site.py`'s own `name_from_slug`, so the two vocabularies stay one.
+
+**Not yet run on a cluster.** The whole of #544: the commands in the run report, under Michael's go.
