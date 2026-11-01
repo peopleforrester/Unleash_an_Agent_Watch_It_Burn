@@ -8263,3 +8263,44 @@ the same on the private bot, a fresh name written to wib_witch on .burritobot.co
 accepts) when there is no cookie or a cookie the vocabulary did not make, and nothing on agenticburn.com. With the
 first-visit assignment removed from the page, five checks fail, which I confirmed on a temporary edit that was
 restored. No page or desk code changed.
+
+## 2026-11-01 · #757 · A test that reads #746's criterion as Agent Observability shows it
+
+**Why.** Test review run 15311 found that no test checked #746's criterion, "LLM Observability shows a BurritoBot
+interaction as two root-level rows, and the root row reads 'No content'", as done. The checks it reviewed (runs 15236
+and 15280) pinned the two-root shape, and `verify/test_trace_shape_e2e.py` read only what the collector emits, not the
+rows Datadog makes from it. Run 15333's copy (the #746 entry above) since checks the copy for one root with content,
+but still as spans, not as rows.
+
+**What was added.**
+- `verify/llmobs_view.py` turns OTLP spans into the rows Agent Observability builds from them, by the conversion rules
+  the first #746 entry lists from Datadog's OTel instrumentation page. Those are the qualifying attributes, the whole-trace
+  `dd_llmobs_enabled` false, the drop of spans with no `gen_ai.*`, the parent kept as sent, the kind from the operation
+  name and the content attributes per kind. It also reads the LLM Observability export API's spans
+  (docs.datadoghq.com/llm_observability/evaluations/export_api, read 2026-11-01). One judge, `problems`, checks the
+  criterion on rows from either source: exactly one root-level row per interaction, and that row has an input and an
+  output, so it does not read "No content".
+- `verify/test_trace_shape_e2e.py` (tools tier) builds the rows from what the real collector sends both intakes, on all
+  three profiles, for the storefront turn and the pass-through turn. APM's copy makes no rows, and the turn shows as one
+  root row, guard-proxy's span as an agent row. As a negative control, the same judge on APM's copy with the marker
+  removed (the one export Datadog converted before #746) must find two roots and "root row POST / (workflow) reads No
+  content for its input and output". Taking out the re-parent, the filter or the APM marker each turned the new checks
+  red, on temporary edits of the collector values that were then restored.
+- `verify/test_llmobs_one_root_live.py` (`# SUITE: e2e`, so it runs in `run-e2e.sh` and not in the tools tier) reads
+  the sandbox org's spans under `ml_app:burritobot` from the export API, with watch-it-burn/datadog's keys as
+  `test_datadog_sandbox_live.py` reads them, and judges every interaction in the window. It fails on no interaction
+  found, a refused query, or any two-root or empty-root trace.
+- `verify/test_llmobs_view.py` (offline suite) checks the conversion rule by rule and the judge on #746's evidence shape
+  (trace `c943363f5467508c8bfc14c6a40c4b59`: guard-proxy's `POST /chat` and kagent's empty workflow `POST /` as roots),
+  which must fail, and on each half-fix, one root with no content or a root with no reply, which must fail too. It also
+  runs the live check's logic against a fake org: paging, the query, an empty window and a 403.
+
+**No collector or platform code changed.** The test's model of Datadog is its documented rules, not its code. The page
+does not say whether Datadog moves a dropped span's children up to a kept ancestor. The model takes the reading the
+#746 entry takes, which is that such a child becomes a root, and the live check is what settles it.
+
+**Not yet run on a cluster.** `python3 verify/test_llmobs_one_root_live.py` has run only against the fake org. Owed in
+a session with read access to Whitney's sandbox org (#759 is the run-side access), after a KubeCon cluster has synced
+run 15333's collector change and its pods have rolled. Send one /chat, then run it with `WIB_DD_LOOKBACK_MIN` set so
+the window starts after the roll. Every interaction must read PASS. A 403 from `/api/v2/llm-obs/v1/spans/events`
+means watch-it-burn/datadog's application key lacks LLM Observability read, which is then the thing to fix.

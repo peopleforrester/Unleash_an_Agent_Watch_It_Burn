@@ -34,6 +34,11 @@ it; the tool calls under it; its duration the whole turn; every llm row with tok
 The storefront turn (POST /chat, then guard-proxy's chat wrapper) and the raw A2A pass-through (POST /, then sanitize)
 are both sent.
 
+#757 reads the result as Agent Observability shows it. llmobs_view.py builds the rows Datadog makes from both intakes'
+copies by its documented conversion, and judges #746's criterion on them: one root-level row per interaction, and that
+row not reading "No content". The same judge on APM's copy without dd_llmobs_enabled, the one export Datadog converted
+before #746, must find the two roots and the empty workflow root, so a judge that passes anything fails here.
+
 The interaction's spans and parentage are test_collector_one_root_e2e.py's (read from agentgateway v1.5.0, kagent
 v0.10.1 and a2a-sdk 0.3.26), with the a2a-sdk spans off as the workshop-agent runs, and the content of Challenge 1:
 the student's prompt, a run_shell curl to the beacon that the egress block stops, and get_marketing_intel, the two
@@ -58,6 +63,7 @@ import yaml
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 from collector_render import REPO, collector_config, feature_gate_args  # noqa: E402
+import llmobs_view as view  # noqa: E402
 
 OTELCOL = REPO / "verify/.tools/bin/otelcol-contrib"
 LOCK = REPO / "verify/e2e-tools.lock"
@@ -423,6 +429,28 @@ for profile in PROFILES:
         check(f"{label}: every span sent has a gen_ai.* attribute, so none is one Datadog drops", not bare, str(bare))
         flagged = sorted(s.get("name") for s in copy.values() if "dd_llmobs_enabled" in values(s))
         check(f"{label}: no span in the copy carries APM's dd_llmobs_enabled false", not flagged, str(flagged))
+
+        # What Agent Observability shows of the turn (#757): the rows Datadog builds from what reaches both intakes.
+        apm_trace = [s for k, s in got.items() if k.startswith(trace + "/")]
+        apm_rows = view.from_otlp(apm_trace)
+        check(f"{label}: Datadog builds no Agent Observability row from APM's copy", not apm_rows,
+              str(sorted(r["name"] for r in apm_rows)))
+        shown = apm_rows + view.from_otlp(list(copy.values()))
+        found = view.problems(shown)
+        check(f"{label}: Agent Observability shows the turn as one root row holding the prompt and the reply",
+              not found, "; ".join(found))
+        top = [(r["service"], r["name"], r["kind"]) for r in view.roots(shown)]
+        check(f"{label}: that root row is guard-proxy's {turn_name}, an agent row", top == [(GUARD, turn_name, "agent")],
+              str(top))
+        # Before #746 Datadog converted APM's copy, which had no marker. The judge must see #746's symptom in it.
+        unmarked_trace = [{**s, "attributes": [a for a in s.get("attributes", []) if a["key"] != "dd_llmobs_enabled"]}
+                          for s in apm_trace]
+        before_rows = view.from_otlp(unmarked_trace)
+        before = view.problems(before_rows)
+        first = "POST /chat" if turn_key == "chat-root" else "sanitize"
+        check(f"{label}: without the marker the judge reads #746's symptom, two roots and kagent's POST / reading No content",
+              sorted((r["name"], r["kind"]) for r in view.roots(before_rows)) == sorted([(first, "llm"), ("POST /", "workflow")])
+              and "root row POST / (workflow) reads No content for its input and output" in before, str(before))
 
     for key, tool, args, result in (("run-shell", "run_shell", BLOCKED_ARGS, BLOCKED_RESULT),
                                     ("intel", "get_marketing_intel", INTEL_ARGS, INTEL_RESULT)):
