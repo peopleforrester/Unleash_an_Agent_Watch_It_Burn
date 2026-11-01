@@ -8215,3 +8215,39 @@ Joker; both bots /healthz 200.
 Still owed on a cluster: #762 and #764's probe update both wait on guard-proxy-agenticburn#34 + a repin here,
 after which an HC-666 run should land `joker-<the visitor's slug>` and verify/kubecon_probe.py moves to the
 plain-question flow.
+## 2026-11-01 · #756 · #746 stays open on Whitney's five live checks, and the gen_ai id strip is dropped
+
+**Question.** Does #746 close on the finding that question 1034's entry records (Agent Observability keeps two roots
+per BurritoBot interaction because the true parentage is kept), or is its criterion reworded?
+
+**Answer: #746 stays open.** Whitney Lee, the talk's co-presenter, answered it in her comment on #746 on 2026-11-01,
+which names #756: "#746 does not close on the finding recorded under question 1034." Her comment replaces the
+issue's title-as-criterion with five checks, each read on live traces in her sandbox org's LLM Observability:
+- One chat is one root row.
+- That row shows the user's prompt as input and the bot's final reply as output, where today it reads "No content".
+- The tool calls, `read_support_ticket` and `deploy_app` for example, sit under that root.
+- The root row's duration covers the whole chat. Today kagent's row lasts 14 ms.
+- Tokens and cost appear. Today the guard-proxy row carries `cost_estimate_status:skipped_tokens_missing`.
+
+Her evidence is the probe's HC-666 chat (LLM Observability trace `c943363f5467508c8bfc14c6a40c4b59`) and the
+linked-list probe chat, both showing the two roots, in `ml_app:burritobot` on cluster `burritobot-public`. The
+presenters open these traces in front of the room for every challenge at KubeCon NA 2026.
+
+**Decided by** Whitney, a collaborator on this repo, in writing on #746. This run only records the ruling, so no
+question goes to the coordinator.
+
+**What it changes.**
+- #746's done-bar is her five checks. A partial outcome does not close it, and a run cannot meet the bar without
+  read access to her sandbox org, which #759 is giving dispatched runs. Her comment asks that #746 not be re-labelled
+  `agent-task` before #759 is done.
+- Question 1034's answer still stands for APM, Tempo and the service map. Run 15333 on #746 (branch
+  `agent/746-15333`, commits 241f8e6 and 7452788, not yet in staging when this entry was written) builds the one-root
+  view in a second copy of the traces that only Agent Observability receives, and marks APM's copy
+  `dd_llmobs_enabled` false. Its own decisions.md entry carries the design and the live look it owes.
+- The optional tidy step #756 also named, stripping the copied `gen_ai.task.id` and `gen_ai.conversation.id` from
+  kagent's `POST /` server span, is dropped. On its own it leaves two roots and an empty root row, so it meets none of
+  the five checks, and it would take the conversation id off the APM span. Run 15333's filter removes that span from
+  the Agent Observability copy alone, which leaves APM's span and its ids as they are.
+
+**Nothing owed on a cluster for #756.** The live checks belong to #746: Whitney's five, read in her sandbox org once
+a cluster has synced run 15333's change, as its decisions.md entry lists.
