@@ -8015,3 +8015,30 @@ for a banner on the public bot.
 
 Not yet run on a cluster: the live check that the public bot shows no banner and the private bot shows the
 warning, driven by the real `WIB_PUBLIC_HOST` each reports. Owed on the next community/private bring-up.
+
+## 2026-11-01 · 2.2 · #754/#755 Delete orphan security groups first, revoke nothing on a survivor
+
+`sweep_orphan_sgs` in `infra/terraform/fleet/fleet.sh` revoked a group's ingress and egress rules before it
+tried to delete it. A group it then could not delete had already lost its rules, and on 2026-11-01 those were
+the roster clusters' live agent-console and traffic groups in the shared lab VPC (#752).
+
+Fix (#754): delete first, revoke nothing. Owning rules does not block a group's own deletion, so a genuine
+orphan deletes directly; cross-references among this cluster's own orphans resolve across the three retry
+passes as each sibling goes away. A group that still refuses to delete is in use or still referenced, so it
+keeps its rules and is named as a survivor (its group ids in the log) and recorded as `sg-leak:<name>` for
+`recheck_sg_leaks` and a human. The rule-stripping path, and the `describe` of a group's IpPermissions it
+needed, are gone.
+
+Rejected: keeping a revoke step as a last resort for groups that survive all three passes. A group that
+cannot be deleted is in use or referenced, and revoking its rules is exactly the #752 harm; a true reference
+cycle among orphans is rare and safe to leave for the re-check. Hecaton's split (2026-11-01) set this.
+
+#755 is the regression: `verify/test_sg_sweep.sh` now checks that tearing down an attendee cluster whose lab
+VPC also holds community/private never describes, revokes or deletes their groups, and that a survivor keeps
+its rules (the #754 path). 44 offline checks.
+
+Not yet run on a cluster: a real `fleet.sh down` of an attendee cluster in a lab VPC that also holds a roster
+cluster's load balancer, in a session with AWS access. Expected: the attendee's own `k8s-*` groups go, the
+roster cluster's groups keep their rules, a group still on a live LB's interface is left alone, and
+`bash verify/run-e2e.sh` against the roster cluster still passes afterwards. Must not be tested against
+anything live except a deliberate attendee teardown.
