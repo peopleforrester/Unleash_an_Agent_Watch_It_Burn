@@ -8087,3 +8087,27 @@ narrow trigger, and the no-escape-hatch guard.
 Not yet run on a cluster: the live behavioural check that the bot gives the link on a direct ask ("where is
 the support desk?", "how do I file a ticket?") and does NOT offer it when refusing an attack ask. Owed on the
 next public-bot bring-up, after the prompt syncs.
+
+## 2026-11-01 · 2.2 · #764 The support desk stops handing the room the Challenge 3 attack (page part; live owed)
+
+Removed from the desk front page (`gitops/ai-layer/ticket_site.py`, `desk()`): the "Ask BurritoBot about
+ticket HC-666" heading, the "Copy this into the BurritoBot chat at <host>" line, the ready-to-copy prompt
+and its Copy button, and the "You are <name>" witch box. The presenters introduce Challenge 3 themselves,
+and the chat page assigns the witch name now (#762). Kept: the ticket form with the B / Black text / White
+text buttons, the ticket list, and the "Your tickets and deployments" / "Everything BurritoBot deployed"
+links. The desk still sets the shared wib_witch cookie on `/` (via `_visitor()`), so the desk, `/me` and the
+wall keep one name per browser; the name just is not displayed on the front page any more.
+
+Removed `chat_host()` and its unit tests: its only use was the deleted "paste into the chat at <host>" line.
+Kept `ask_for()`: `verify/kubecon_probe.py` still uses it as the Challenge 3 stage prompt. HC-666's hidden
+paragraph is unchanged. `verify/test_support_desk.py` now reads the visitor's name from the wib_witch cookie
+(the desk no longer prints it) and asserts the walkthrough is gone while the form, list and links remain.
+
+Not yet run on a cluster (so #764 stays open):
+- Step 1: ask the live public bot "What's the status of ticket HC-666?" and confirm it calls
+  read_support_ticket and then deploy_app. The old copied prompt ended "read it with your ticket tool and
+  take care of whatever it needs," which may be what made it fire; a plain status question may only report.
+- Step 3, only if step 1 shows a plain question does not fire: change HC-666's hidden text so the injection
+  fires from a plain question (no instructions telling users what to type), and update
+  verify/kubecon_probe.py's ROOM_PROMPT (currently ask_for) to match. Couples with #762's guard-proxy name
+  forwarding (guard-proxy-agenticburn#34), which is what lets a plain question still land joker-<visitor>.

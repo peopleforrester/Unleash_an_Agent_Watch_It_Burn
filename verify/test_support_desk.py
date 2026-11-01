@@ -75,9 +75,12 @@ def post_json(path: str, body: dict) -> int:
         return e.code
 
 
-def name_on(page: str) -> str:
-    m = re.search(r'id="witch-name">([^<]+)<', page)
-    return m.group(1) if m else ""
+def cookie_name(phone: "Phone") -> str:
+    """The display name the desk set in this browser's wib_witch cookie, or '' if none/unknown."""
+    for c in phone.jar:
+        if c.name == "wib_witch":
+            return site.name_from_slug(c.value) or ""
+    return ""
 
 
 print("== every visitor gets a generated witchy name, kept by their browser ==")
@@ -85,11 +88,13 @@ IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) Mobile/15E148"
 a, b = Phone(IPHONE, "203.0.113.7"), Phone(IPHONE, "203.0.113.7")  # one venue NAT, one phone model
 _, page_a = a.get("/")
 _, page_b = b.get("/")
-na, nb = name_on(page_a), name_on(page_b)
-check("the desk shows the visitor a name", bool(na), page_a[:200])
+na, nb = cookie_name(a), cookie_name(b)
+# The desk no longer displays the name (#764): the chat page shows it and the desk sets the shared cookie.
+check("the desk gives the visitor a name in the wib_witch cookie", bool(na), page_a[:200])
 check("the name reads '<First> the <Creature>'", re.fullmatch(r"[A-Z][a-z]+ the [A-Z][a-z]+", na) is not None, na)
 check("two phones behind one NAT with the same User-Agent get different names", na != nb, f"{na} / {nb}")
-check("the same browser keeps its name on the next visit", name_on(a.get("/")[1]) == na)
+a.get("/")  # a second visit from the same browser
+check("the same browser keeps its name on the next visit", cookie_name(a) == na)
 check("a name the desk did not generate is not honored from a cookie",
       site.name_from_slug("big-rude-word") is None and site.name_from_slug(site.slug(na)) == na)
 names = {site.slug(site.generate_name(f"seed-{i}")) for i in range(400)}
@@ -97,23 +102,15 @@ check("the vocabulary yields hundreds of distinct names", len(site.NAME_SPACE) >
 check("every generated name makes a valid Kubernetes name as joker-<slug>",
       all(re.fullmatch(r"[a-z0-9]([-a-z0-9]*[a-z0-9])?", f"joker-{s}") and len(f"joker-{s}") <= 63 for s in names))
 
-print("== the desk hands the visitor the exact ask, with their name in it ==")
-ask = re.search(r'id="ask">([^<]+)<', page_a)
-check("the page carries a ready-to-copy ask", ask is not None)
-check("the ask names the visitor and ticket HC-666", ask is not None and na in ask.group(1) and "HC-666" in ask.group(1))
-
-print("== the ask points at the bot of the cluster the desk belongs to ==")
-# Walked in Chrome 2026-10-30: the private desk told the visitor to paste into attackme.burritobot.co.
-check("the bare desk sends the room to the public bot", site.chat_host("support.burritobot.co") == "attackme.burritobot.co")
-check("support-<cluster> sends the visitor to that cluster's bot",
-      site.chat_host("support-burritobot-private.burritobot.co") == "burritobot-private.burritobot.co"
-      and site.chat_host("support-attackme.agenticburn.com") == "attackme.agenticburn.com")
-check("an unknown host falls to the public bot", site.chat_host("127.0.0.1") == "attackme.burritobot.co")
-priv = Phone(IPHONE, "203.0.113.8")
-priv.headers["Host"] = "support-burritobot-private.burritobot.co"
-_, priv_page = priv.get("/")
-check("the private desk's page names the private bot", "chat at burritobot-private.burritobot.co" in priv_page
-      and "attackme" not in priv_page, re.search(r"chat at [^<]+", priv_page).group(0) if "chat at" in priv_page else "")
+print("== the desk no longer hands the room the Challenge 3 attack (#764) ==")
+check("the front page has no 'Ask BurritoBot about ticket HC-666' heading", "Ask BurritoBot about ticket" not in page_a)
+check("it has no 'Copy this into the BurritoBot chat' line", "Copy this into" not in page_a)
+check("it carries no ready-to-copy ask box", 'id="ask"' not in page_a)
+check("it shows no witch-name box on the desk front page", 'id="witch-name"' not in page_a)
+check("the ticket form and its rich-text buttons stay",
+      "File a ticket" in page_a and ">Black text<" in page_a and ">White text<" in page_a)
+check("the ticket list and both deployment links stay",
+      "Open and recent tickets" in page_a and 'href="/me"' in page_a and 'href="/wall"' in page_a)
 
 print("== HC-666: a plain complaint in black, the injection in white on white ==")
 code, t666 = a.get("/HC-666")

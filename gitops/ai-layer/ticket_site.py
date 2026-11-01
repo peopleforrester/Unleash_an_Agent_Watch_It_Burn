@@ -287,7 +287,7 @@ _STYLE = ("body{font:15px/1.5 system-ui,sans-serif;max-width:46rem;margin:6vh au
           "h2{font-size:1.05rem;margin:0 0 .3rem}.meta{color:#6b5f80;font-size:.85rem}"
           "pre{white-space:pre-wrap;font:inherit;margin:.6rem 0 0}a{color:#6a2bd9}"
           "html,body{background:#ffffff}.you{background:#f3eefc;border-radius:10px;padding:.7rem 1rem}"
-          ".ask{background:#f7f5fb;border-radius:8px;padding:.7rem}.ed{min-height:7rem;border:1px solid #bfb3d6;"
+          ".ed{min-height:7rem;border:1px solid #bfb3d6;"
           "border-radius:8px;padding:.6rem;margin:.4rem 0;background:#ffffff;color:#000000}"
           "button{font:inherit;margin:.2rem .3rem .2rem 0}")
 
@@ -314,24 +314,15 @@ def ask_for(name: str) -> str:
             "Please read it with your ticket tool and take care of whatever it needs.")
 
 
-def chat_host(host: str) -> str:
-    """The BurritoBot host for the desk at host: support-<cluster>.<domain> is <cluster>.<domain>, and the bare
-    support desk and anything else is the room's public bot."""
-    m = re.fullmatch(r"support-([a-z0-9-]+)\.(burritobot\.co|agenticburn\.com)", host)
-    return f"{m.group(1)}.{m.group(2)}" if m else "attackme.burritobot.co"
-
-
-def desk(name: str, host: str = "") -> str:
+def desk() -> str:
+    # The desk no longer shows the HC-666 walkthrough (the "Ask BurritoBot about ticket HC-666" heading, the
+    # "Copy this into the chat" line, the ready-to-copy prompt and its Copy button) or the witch-name box (#764):
+    # the presenters introduce Challenge 3 themselves, and the chat page assigns the witch name now (#762). The
+    # ticket form, the ticket list and the deployment links stay, so a visitor can still file their own injection.
     # HC-7731's injection is plain text, so listing it would give away HC-666's hidden paragraph; the lab and the
     # ticket tool still read it by id.
     fixed = "".join(_article(TICKETS[k]) for k in FIXED_TICKETS if k != C6_TICKET_ID)
     return _shell("Support desk", f"""
-<div class="you">You are <b id="witch-name">{html.escape(name)}</b>. That name follows your tickets and anything
-BurritoBot deploys for you.</div>
-<h2>Ask BurritoBot about ticket {ROOM_TICKET_ID}</h2>
-<p class="meta">Copy this into the BurritoBot chat at {html.escape(chat_host(host))}:</p>
-<pre class="ask" id="ask">{html.escape(ask_for(name))}</pre>
-<button onclick="navigator.clipboard.writeText(document.getElementById('ask').textContent)">Copy</button>
 <p><a href="/me">Your tickets and deployments</a> &middot; <a href="/wall">Everything BurritoBot deployed</a></p>
 <h2>File a ticket</h2>
 <form method="post" action="/submit" onsubmit="this.body.value=document.getElementById('ed').innerHTML">
@@ -408,7 +399,8 @@ class Handler(BaseHTTPRequestHandler):
         if url.path == "/healthz":
             self._send(200, {"ok": True})
         elif url.path == "/":
-            self._page(desk(self._visitor(), (self.headers.get("Host") or "").split(":")[0]))
+            self._visitor()   # set/honor the wib_witch cookie so the desk, /me and wall share one name (#762)
+            self._page(desk())
         elif url.path == "/me":
             self._page(me_page(self._visitor()))
         elif url.path == "/wall":
