@@ -7297,3 +7297,25 @@ replay test): 495 of 1200 turns hit its 0.4s client timeout where the fake serve
 at 17 on 16 cores. It passed 3 of 3 alone, and 4 of 4 as concurrent copies, at both the old and new values. Its
 client timeout is now 4s and its slow turn 10s, the same ordering with ten times the headroom. The test still ends in
 about 9s.
+
+## 2026-11-01 · #670 · The heavy gate's CI check is green on staging again
+
+**No code changed.** The gate went red at 3b7fa6a on one test, `verify/test_promo_villains_public.py`, because the
+ten lab-platform promo/ villain packages answered an anonymous pull with HTTP 401. #678's 2026-10-31 entry records
+that they are public now. The dispatcher promoted dbbfdc8 to main once the gate passed there. The earlier #670 run's
+record (8c2dd64, "blocked on the private packages") never reached staging, and this entry replaces it.
+
+**Why run 14663's first branch failed the gate.** It was this entry, appended on e5d0a7d. The gate failed two tests
+there, and neither came from the append. `test_fleet_wall_check.sh` still looked for the run-of-show heading
+"Segment 1: Cold open", which e5d0a7d renamed. ef66c77 (#742) moved the test to the new heading. `test_load_replay.py`
+timed out ordinary replies on a loaded host, and 4935f7d gave it ten times the headroom. Resumed run 14783 rebased
+the entry onto 4935f7d. One detour is worth recording. A stale guard-proxy submodule checkout (a022fa5 left behind
+after ef66c77 pinned fb6e2bf) fails `test_proxy_checksum.py` and `test_weaver_guard_proxy_stamps.py`, and
+`git submodule update --init gitops/ai-layer/guard-proxy` clears it. It does not fail `test_load_replay.py`: on
+e5d0a7d that test passed twice with each checkout, with host load near 31. One failure seen there earlier was the
+load timeout.
+
+**Tests.** On the rebased branch, `bash verify/run-tests.sh` passed and `bash verify/run-e2e-tools.sh` exited 0,
+including all twenty promo villain pull checks. The tools tier takes more than ten minutes on a hecaton host
+(test_enforce_floor.py and test_topic_classifier.py are the slow ones), so a background start needs a longer timeout
+than the ten-minute default.
