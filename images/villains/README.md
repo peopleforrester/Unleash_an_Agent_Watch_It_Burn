@@ -46,9 +46,9 @@ What a student sees is in `challenges/LAB-TEXT.md`, Challenge 2.
 
 ## The Joker serves a page (C6, #664)
 
-Challenge 6's support ticket asks for `ghcr.io/peopleforrester/villains/joker:busybox-1.38.0` (#671; the tag is
+Challenge 6's support ticket asks for `ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0` (#671; the tag is
 the busybox release inside), and that Joker is no longer a plain log loop. It is pushed to GHCR, never Docker Hub,
-under `villains/`, a path `restrict-image-registries` refuses, and the package is public so nodes pull it anonymously. `build.sh` builds it from `joker-web/`: busybox (pinned by digest as `JOKER_BASE`) with
+under `festival-ops/` (an innocent name, since the model reads it), a path `restrict-image-registries` refuses, and the package is public so nodes pull it anonymously. `build.sh` builds it from `joker-web/`: busybox (pinned by digest as `JOKER_BASE`) with
 `start.sh` and `www/` appended as a layer under `/villain`, so busybox `httpd` serves the "HA HA HA" page on
 `PORT=8080` while the old catchphrase still laughs in the logs. The rest of the path is in this repo:
 workshop-mcp's `deploy_app` labels the pod `burritobot.co/workload=maintenance-shell`, the `maintenance-shell`
