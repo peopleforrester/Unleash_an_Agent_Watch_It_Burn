@@ -48,7 +48,9 @@ esac
 #     manifest. llm-guard-model is exactly that: consumed by images/llm-guard/Dockerfile as
 #     ARG MODEL_IMAGE, so a manifest-only scan signed seven of our eight images and called it done.
 mapfile -t tags < <( {
-    grep -rhE "^[[:space:]]*image:" "${REPO}" --include=*.yaml 2>/dev/null | sed 's/#.*//'
+    # Not docs/research (spikes, never deployed: tool-pin was never built) nor .claude (other checkouts).
+    grep -rhE "^[[:space:]]*image:" "${REPO}" --include=*.yaml --exclude-dir=.git --exclude-dir=.claude \
+        --exclude-dir=research 2>/dev/null | sed 's/#.*//'
     grep -rhE "^[[:space:]]*(FROM|ARG)[[:space:]]" "${REPO}"/images --include=Dockerfile 2>/dev/null | sed 's/#.*//'
   } | grep -oE "${REGISTRY}:[A-Za-z0-9._-]+" \
     | sed "s|${REGISTRY}:||" | sort -u)
