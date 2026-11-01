@@ -7749,3 +7749,44 @@ watch-it-burn-private` from infra/terraform/fleet. If `CONSOLE_ORIGIN` is still 
 of git's order" line per cluster. Then guard-proxy should read Synced, and the run should print "ai-layer <sha> is
 rolled out". Also confirm the workshop-agent Application is Synced with twelve workshop-mcp tools (#707's owed
 check). On a fresh attendee cluster run `bash verify/run-e2e.sh` with CONTEXT set.
+## 2026-11-01T00:00:00Z · build · Challenge 8 reads BurritoBot's env off the pod spec, not by exec (#743)
+
+**The bug.** Challenge 8's "look inside BurritoBot's own container" beat told the student to run
+`kubectl -n agent exec deploy/workshop-agent -c kagent -- sh -c 'env | grep ^AWS_; ls -a ~/.aws
+/var/run/secrets/kubernetes.io/serviceaccount'` in `challenges/LAB-TEXT.md`, `gitops/ai-layer/web/lab.html`
+and `verify/test_agent_cloud_credential_live.py`. The kagent app image the chart deploys,
+`ghcr.io/kagent-dev/kagent/app:0.10.1`, has no shell and no `env`, `grep` or `ls` anywhere on its
+filesystem (exported and listed with podman during #583); its only interpreter is
+`/.kagent/.venv/bin/python3`. So the exec fails on every cluster and the beat shows the student nothing.
+
+**The fix.** The beat now reads the same facts off the pod spec, which does not exec into the container:
+`kubectl -n agent get pod -l app.kubernetes.io/name=workshop-agent -o jsonpath='{range
+.items[0].spec.containers[?(@.name=="kagent")].env[*]}{.name}={.value}{"\n"}{end}'`. The EKS Pod Identity
+webhook injects `AWS_CONTAINER_CREDENTIALS_FULL_URI` (the 169.254.170.23 agent) and
+`AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` into the kagent container's env at admission, so they are on the
+pod spec and the jsonpath surfaces them, along with the absence of any static key. The prose no longer
+claims "no ~/.aws directory" (a filesystem fact the read cannot show) and leans on the ServiceAccount
+step just above it for the no-token point; the live test already asserts no container mounts the default
+Kubernetes token off the same pod spec (`TOKEN_DIR not in mounts`).
+
+**Files changed together.** `gitops/ai-layer/web/lab.html` (the beat's command and prose).
+`verify/test_agent_cloud_credential_live.py` (the regex that lifts the beat's command out of the page now
+matches the `get pod ... jsonpath` form; the output checks drop the two `No such file or directory` lines
+and keep the pointer, token-file and no-static-key assertions). `challenges/LAB-TEXT.md` is a generated
+export of `lab.html` (#419), so it was re-made with `bash verify/export-lab-text.sh` after `lab.html` was
+committed, re-stamping its source blob and commit. One file the issue did not name had to change too:
+`verify/test_agent_cloud_credential.py` (the offline render gate) pins the beat's commands verbatim in
+`LAB_CMDS`, so its exec entry was replaced with the new read command to keep `verify/run-tests.sh` green.
+
+**Tests.** `bash verify/run-tests.sh` is green, including the two render gates
+(`test_agent_cloud_credential.py`, `test_lab_text_export.py`).
+
+**Not yet run on a cluster.** This run has no cluster, so the live half was not exercised. The owed check
+is `CONTEXT=<ctx> IAM_PIPELINE_PROFILE=<p> IAM_PIPELINE_REGION=<r> python3
+verify/test_agent_cloud_credential_live.py` (driven by `bash verify/run-e2e.sh`) against a fresh attendee
+cluster: it lifts the new command out of the live `lab.html`, runs it, and asserts the output carries the
+Pod Identity pointer and token-file env and no static key. The issue also asked to first read the live
+pod's image and try the command as written; on a cluster run `kubectl --context <ctx> -n agent get pod -l
+app.kubernetes.io/name=workshop-agent -o jsonpath='{.items[0].spec.containers[0].image}'` to confirm the
+deployed digest, which would also explain the separate `exec ... python3` "executable file not found"
+seen on watch-it-burn-community in #583.
