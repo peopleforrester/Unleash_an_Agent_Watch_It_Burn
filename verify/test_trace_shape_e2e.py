@@ -90,7 +90,11 @@ INTEL_RESULT = json.dumps({"content": [{"type": "text", "text": "Top segment: we
 
 # (key, service, name, kind, parent key or None, attributes). Every span here is on the interaction's path.
 SPANS = [
-    ("chat-root", GUARD, "POST /chat", SERVER, None, {}),
+    # guard-proxy's POST /chat root: proxy.py sets gen_ai.operation.name chat and the prompt on it (CAPTURE_CONTENT on, as
+    # resources.yaml's EVENT_ONLY arms), and the reply at the end of the turn.
+    ("chat-root", GUARD, "POST /chat", SERVER, None,
+     {"gen_ai.operation.name": "chat", "gen_ai.request.model": MODEL, "gen_ai.input.messages": PROMPT,
+      "gen_ai.output.messages": messages("assistant", "The POST to the beacon did not go through.")}),
     ("sanitize", GUARD, "sanitize", INTERNAL, "chat-root",
      {"gen_ai.operation.name": "chat", "gen_ai.input.messages": PROMPT, "gen_ai.output.messages": PROMPT}),
     ("forward", GUARD, "agent.forward", CLIENT, "sanitize", {"http.request.method": "POST"}),
@@ -102,7 +106,10 @@ SPANS = [
     # v1.7.0's outbound span for the A2A backend call, whose id it forwards (log.rs start_outbound, tag v1.7.0).
     ("gateway-out", GATEWAY, "Http", CLIENT, "gateway",
      {"agentgateway.outbound.kind": "Primary", "agentgateway.outbound.subtype": "Http"}),
-    ("agent-server", AGENT, "POST /", SERVER, "gateway-out", {"http.method": "POST", "http.route": "/"}),
+    # kagent's executor copies gen_ai.task.id and gen_ai.conversation.id onto the current span, which is this otelhttp
+    # server span (kagent v0.10.1 go/adk/pkg/a2a/executor.go Execute, SetKAgentSpanAttributes). It has no operation name.
+    ("agent-server", AGENT, "POST /", SERVER, "gateway-out",
+     {"http.method": "POST", "http.route": "/", "gen_ai.task.id": "t1", "gen_ai.conversation.id": "c1"}),
     ("invocation", AGENT, "invocation", INTERNAL, "agent-server", {"gen_ai.conversation.id": "c1"}),
     ("invoke-agent", AGENT, "invoke_agent burritobot", INTERNAL, "invocation",
      {"gen_ai.operation.name": "invoke_agent", "gen_ai.agent.name": "burritobot"}),
@@ -264,6 +271,26 @@ for profile in PROFILES:
     unstamped = sorted(s.get("name", key) for key, s in agent.items()
                        if attrs(s).get("gen_ai.provider.name") != "aws.bedrock")
     check(f"{profile}: every agent span names its provider, aws.bedrock", not unstamped, str(unstamped))
+
+    # The two roots #746 reads in Agent Observability. Datadog drops a span with no gen_ai.* attribute, and the child of a
+    # dropped span becomes a root (docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation, read
+    # 2026-11-01). So these pin what it receives: the guard root is an llm row with the prompt and reply; the four hops
+    # between it and invocation carry no gen_ai attribute, so they are dropped; kagent's request span is kept, with no
+    # operation name, so it is a workflow row. Which row reads "No content" in the live list is not measured yet.
+    root = attrs(span["chat-root"])
+    check(f"{profile}: guard-proxy's POST /chat is kind llm (gen_ai.operation.name chat)",
+          root.get("gen_ai.operation.name") == "chat", str(root.get("gen_ai.operation.name")))
+    check(f"{profile}: and carries the prompt and the reply as its input and output",
+          json.loads(root.get("gen_ai.input.messages") or "null") == json.loads(PROMPT)
+          and "gen_ai.output.messages" in root, str(root.get("gen_ai.input.messages")))
+    for key in ("forward", "forward-http", "gateway", "gateway-out"):
+        check(f"{profile}: {span[key].get('name')} carries no gen_ai.* attribute, so Datadog drops it",
+              not any(k.startswith("gen_ai.") for k in attrs(span[key])), str(sorted(attrs(span[key]))))
+    kagent = attrs(span["agent-server"])
+    check(f"{profile}: kagent's POST / keeps gen_ai.conversation.id, so Datadog keeps it",
+          kagent.get("gen_ai.conversation.id") == "c1", str(kagent.get("gen_ai.conversation.id")))
+    check(f"{profile}: and has no gen_ai.operation.name, so it is a workflow row with no content",
+          "gen_ai.operation.name" not in kagent, str(kagent.get("gen_ai.operation.name")))
 
     for key, tool, args, result in (("run-shell", "run_shell", BLOCKED_ARGS, BLOCKED_RESULT),
                                     ("intel", "get_marketing_intel", INTEL_ARGS, INTEL_RESULT)):

@@ -7823,8 +7823,8 @@ during #644's re-run. Those readings close #750.
 - In a trace that qualifies, "spans without any `gen_ai.*` attribute are also dropped individually". Their other,
   non-gen_ai attributes are dropped too.
 - `parent_span_id` maps to `parent_id`. The page says nothing about moving a dropped span's children up to the
-  nearest span that was kept. The live check on #265 shows they are not moved: the child of a dropped span becomes
-  a root.
+  nearest span that was kept. The two roots on #265's live check are consistent with the child of a dropped span
+  becoming a root, which is the reading this entry takes.
 - Span kind comes from `gen_ai.operation.name`: chat, generate_content, text_completion and completion are llm;
   execute_tool is tool; invoke_agent and create_agent are agent; anything else, or no operation at all, is workflow.
 - An llm span takes its input and output from `gen_ai.input.messages` and `gen_ai.output.messages`, with
@@ -7847,8 +7847,9 @@ during #644's re-run. Those readings close #750.
   otelhttp server span (kagent v0.10.1, `go/adk/pkg/a2a/executor.go` Execute and
   `go/adk/pkg/telemetry/tracing.go`). It has no operation name, so it is a workflow, and it has no content
   attributes. Its parent, the gateway's `Http` span, was dropped, so it becomes a root. That matches #713's reading,
-  "workflow POST, agent invocation, agent workshop_agent". By the source, this is the row that reads "No content".
-  Which root the trace list puts in its row is still to be read on a cluster.
+  "workflow POST, agent invocation, agent workshop_agent". The source reading makes this span the workflow root, but
+  nobody has read which root row shows "No content". The issue's text says "the root row", and the live look below
+  settles it.
 
 Grouping by kind or by ml_app does not cause the split. Changing the guard span's kind does not move `invocation`
 under it, and the guard root already carries the prompt and the reply. So neither option the issue named makes one
@@ -7859,8 +7860,8 @@ root.
   Since ef66c77 (guard-proxy fb6e2bf, #742), the forward is a non-blocking message/send polled by tasks/get, at 0.25 s
   doubling to 1 s. Every poll repeats the urllib `POST`, gateway `POST /` and gateway `Http` spans with the same
   attributes as the message/send's. The collector sees one span at a time, so it cannot stamp the message/send hops
-  without stamping every poll's. A Challenge 1 turn, held for 20 s by the blocked curl, would gain about sixty empty
-  rows. agentgateway records `a2a.method` only on the request span and only behind an `a2a` route policy (v1.7.0,
+  without stamping every poll's. A Challenge 1 turn held for 20 s by the blocked curl would gain about twenty polls of
+  three spans each, an estimate from the 0.25 s to 1 s poll schedule and not measured. agentgateway records `a2a.method` only on the request span and only behind an `a2a` route policy (v1.7.0,
   `proxy/httpproxy.rs` and `telemetry/log.rs`), and never on the outbound `Http` span, whose id is the one forwarded
   to kagent.
 - **Re-parent.** The collector can give guard-proxy's `chat` a span id derived from the trace id and point kagent's
@@ -7870,10 +7871,20 @@ root.
   name a parent that does not exist.
 
 Each of these trades away something the workshop shows elsewhere, so the choice goes to the coordinator as a
-question in run 15156's report. The trace-shape test is unchanged until the shape is chosen.
+question in the run's report. The fixes are not built.
+
+**Pinned now, in `verify/test_trace_shape_e2e.py` (run 15236).** The fixture gives guard-proxy's `POST /chat` root
+`gen_ai.operation.name` chat, the prompt and the reply, and gives kagent's `POST /` server span
+`gen_ai.task.id` and `gen_ai.conversation.id`. The checks pin the shape Datadog receives, on all three profiles:
+the guard root is kind llm with its content; `agent.forward`, the urllib `POST`, the gateway's `POST /` and `Http`
+carry no `gen_ai.*` attribute, so Datadog drops them; kagent's `POST /` keeps its conversation id and has no
+operation name, so it is a workflow row. Adding a `gen_ai.operation.name` to a hop span fails three checks, one per
+profile, which I confirmed with a temporary copy of the test that was then removed. Whichever shape is chosen, these
+checks change with it.
 
 **Not yet run on a cluster:** the reading this diagnosis rests on. On a cluster with Datadog on, send one /chat. Read
 that interaction's spans from the LLM Observability spans API, or open it in Agent Observability. Confirm that the
 second root is kagent's `POST /` carrying `gen_ai.task.id` and `gen_ai.conversation.id`, and that its `parent_id`
-names the gateway's `Http` span, which is absent from Agent Observability. Then record which root's input and output
-the trace list row shows.
+names the gateway's `Http` span, which is absent from Agent Observability. Then record which root row shows "No
+content" for input and output, and whether that row is the guard's `POST /chat` (which the source says carries the
+prompt and reply) or kagent's workflow `POST /`. Offline: `python3 verify/test_trace_shape_e2e.py`.
