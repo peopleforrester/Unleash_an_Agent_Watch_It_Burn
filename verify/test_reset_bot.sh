@@ -22,6 +22,7 @@ cat >"${SHIM}/kubectl" <<'S'
 echo "kubectl $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"
 case "$*" in
   "config current-context") echo "${KCTX}" ;;
+  *"get deployments,services,configmaps,pods"*) if [[ -n "${BOTMADE:-}" ]]; then printf '%s' "${BOTMADE}"; else echo '{"items":[]}'; fi ;;
   *"get pods"*"-o jsonpath"*) echo "guard-proxy-old" ;;
   *"get pods"*"-o json"*)
       if [[ "${READY:-1}" == 1 ]]; then
@@ -109,6 +110,22 @@ echo "== an admin cluster is read on its own host =="
 replies "${ZERO}"
 KCTX="$(ctx_of "${ADMIN}")" src "cmd_reset_bot ${ADMIN}"; rc=$?
 check "michael-admin reads burritobot-private.agenticburn.com/cost" '[[ "${rc}" -eq 0 ]] && grep -q "^curl https://burritobot-private.agenticburn.com/cost$" "${CALLS}"'
+
+echo "== it clears what the bot deployed, and nothing Argo CD owns (2026-11-01) =="
+# The 2026-10-31 load replay left promo-mascot and two loyalty-rewards Deployments on attackme, made by the bot
+# through deploy_app, and a rehearsal leaves Jokers on the wall. The room has to open on a clean cluster.
+mf() { printf '{"kind":"%s","metadata":{"name":"%s","managedFields":[%s]}}' "$1" "$2" "$3"; }
+MCP='{"manager":"workshop-mcp","operation":"Apply"}'; ARGO='{"manager":"argocd-controller","operation":"Apply"}'
+BOTMADE="{\"items\":[$(mf Deployment promo-mascot "${MCP}"),$(mf Deployment joker-agatha-the-banshee "${MCP}"),$(mf Service maintenance-shell "${ARGO}"),$(mf Deployment guard-proxy "${ARGO},${MCP}"),$(mf ConfigMap note-from-bot "${MCP}")]}"
+replies "${ZERO}"
+BOTMADE="${BOTMADE}" KCTX="$(ctx_of "${C}")" src "cmd_reset_bot ${C}"; rc=$?
+check "exits 0" '[[ "${rc}" -eq 0 ]]'
+check "deletes the Deployments and ConfigMap the bot applied" \
+  'grep -q "delete deployment/promo-mascot" "${CALLS}" && grep -q "delete deployment/joker-agatha-the-banshee" "${CALLS}" && grep -q "delete configmap/note-from-bot" "${CALLS}"'
+check "never deletes an object Argo CD manages, even one the bot also patched" \
+  '! grep -q "delete deployment/guard-proxy\|delete service/maintenance-shell" "${CALLS}"'
+check "in ns agent with an explicit context" 'grep "delete deployment/promo-mascot" "${CALLS}" | grep -q -- "--context $(ctx_of "${C}") -n agent"'
+check "and says how many it cleared" 'grep -q "cleared 3 object(s) the bot deployed" "${T}/stderr"'
 
 echo "== wired into the driver =="
 src_txt="$(cat "${FLEET}")"; usage_txt="$(sed -n '/^usage() {/,/^}/p' "${FLEET}")"

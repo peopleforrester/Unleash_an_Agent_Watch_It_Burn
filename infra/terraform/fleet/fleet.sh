@@ -4506,8 +4506,30 @@ restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTO
 # refuse. A restart is not taken as proof: the counter is read back from the public /cost the room sees,
 # and anything but $0 over 0 requests inside RESTART_WAIT fails (the old pod can answer for a moment
 # while it terminates).
+# What the bot itself deployed (deploy_app applies as field manager workshop-mcp): the room's Jokers, a rehearsal's
+# villains, the load replay's leftovers (promo-mascot and two loyalty-rewards Deployments on 2026-10-31). The
+# reset clears them so the room opens on a clean cluster and an empty Joker wall. An object Argo CD also manages
+# is never touched, even if the bot patched it: Argo CD's own spec is the one to keep (verify/test_reset_bot.sh).
+clear_bot_workloads() {
+    local name="$1" kcfg="$2" ctx="$3" json objs o n=0
+    json="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent get deployments,services,configmaps,pods \
+            -o json 2>/dev/null)" || { log "  ${name}: could not list what the bot deployed"; return 1; }
+    objs="$(python3 -c '
+import json, sys
+for o in json.loads(sys.argv[1] or "{}").get("items", []):
+    m = {f.get("manager") for f in o["metadata"].get("managedFields") or []}
+    if "workshop-mcp" in m and not any(x.startswith("argocd") for x in m):
+        print(o["kind"].lower() + "/" + o["metadata"]["name"])' "${json}")" || return 1
+    for o in ${objs}; do
+        KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent delete "${o}" --wait=false >/dev/null 2>&1 \
+            && n=$(( n + 1 )) || log "  ${name}: could not delete ${o}"
+    done
+    log "  ${name}: cleared ${n} object(s) the bot deployed"
+}
+
 reset_bot_one() {
     local name="$1" kcfg="$2" ctx="$3" host url body verdict waited=0
+    clear_bot_workloads "${name}" "${kcfg}" "${ctx}" || return 1
     restart_pods "${name}" "${kcfg}" "${ctx}" agent "${GUARD_PROXY_POD_SELECTOR}" || return 1
     host="$(public_host_for "${name}")"; url="https://${host}/cost"
     while :; do
