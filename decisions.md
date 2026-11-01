@@ -8346,3 +8346,46 @@ either. The test is split by need, as the repo's test rules ask. The opt-in and 
 `# SUITE: e2e` without the tools tier. `run-e2e.sh` runs it, and it fails, naming the path, when the checker is
 missing. `compile-design-doc.py --publish` still runs the checker before the Doc is replaced, so nothing published
 goes unchecked.
+## 2026-11-01 · #744 · guard-proxy repinned to main 88b9b52 for the witch name (#762); the cap reply was already in
+
+**What #744 asked, and what staging already had.** #744 asked for a guard-proxy pin past
+guard-proxy-agenticburn#25, the cluster-wide cap's own reply ("The kitchen is closed: this cluster hit its $X spend
+cap, ..."). The issue was filed against the a022fa5 pin. ef66c77 (#742) pinned fb6e2bf on 2026-11-01, which already
+contains #25's change (92b0587): fb6e2bf's proxy.py answers the cluster cap with that reply and stamps
+`witb.guard.decision=cost_cap`. The "Press Reset" line the issue quotes is the per-session budget reply, which still
+offers Reset, correctly. So #25's part of #744 was already on staging when this run started.
+
+**The repin.** Whitney's comment on #744 adds guard-proxy-agenticburn#34: forwarding the /chat body's witch name to
+the agent as a second A2A text part, so HC-666 lands `joker-<visitor slug>` and not `joker-burritobot` (#762).
+Michael's comment on #762 already says to repin here once #34 lands. This commit pins `gitops/ai-layer/guard-proxy` at
+88b9b52, the head of guard-proxy main, with conformance CI green on main (run 41348271248). `checksum/proxy-py` moves
+from 659ff019071f to 5ef84f383407, so the pod restarts on the new proxy.py.
+
+**Why the 8 commits are safe for the KubeCon clusters.** Whitney asked whether the Go build work in those commits
+(guard-proxy-agenticburn#30 and #36: OpenTelemetry in Go, the spend tally kept in a bbolt file) is safe to take. None
+of it runs on a cluster. The guard-proxy Deployment runs `python /app/proxy.py` from the `guard-proxy-src`
+ConfigMap, which kustomize builds from the pinned proxy.py alone. The Go binary, go.mod and the bbolt store are not
+deployed. In proxy.py the only change from fb6e2bf to 88b9b52 is the witch name. /chat reads `witch` from the body,
+keeps it only when it is shaped `<First> the <Creature>` (each word capitalized, 2 to 16 letters), and adds "The person
+chatting with you gave their name as <name>." as a second text part. parts[0] is still the prompt as the visitor
+typed it, and that prompt is the only text the guards scan. A name of any other shape is dropped and logged as
+`witch_name_refused`.
+
+**The finale's words follow the reply.** The KubeCon run-of-show close (#690) and the /kubecon page still told the
+presenters that each phone reads "...Press Reset" when the cap trips. Both now quote the new reply.
+`verify/test_finale_cap.py` now sends a /chat to the pinned proxy.py past the lowered cap and checks that the reply
+starts with "The kitchen is closed: this cluster hit its $<cap> spend cap" and has no "Reset" in it. It also checks
+that both pages quote that reply and no longer say "press Reset".
+
+**What differs from run 15626's draft.** Run 15626's draft also split `verify/test_american_english_gate.py`, whose
+shared-checker run needs ~/repos and failed the offline Test command. Run 15624 made the same split on staging first
+(076d7be, `verify/test_american_english_published.py`), and the two collided on rebase. This commit keeps staging's
+split as it is and drops the draft's copy, `verify/test_american_english_tree_e2e.py`. The repin, the checksum, the
+finale wording and `test_finale_cap.py` are as in the draft.
+
+**Not yet run on a cluster.** Argo CD on the KubeCon clusters tracks staging, so the redeploy is this commit reaching
+staging. After that, the following are still owed on a cluster:
+- `verify/test_proxy_checksum.py`'s annotation shows up live as a new guard-proxy ReplicaSet.
+- An HC-666 chat from the storefront lands `joker-<the visitor's slug>` (#762's live check).
+- `finale-cap-on` on the public cluster shows "The kitchen is closed" on a phone. `bash verify/run-e2e.sh` covers the
+  storefront and chat-path checks.

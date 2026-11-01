@@ -107,6 +107,19 @@ with tempfile.TemporaryDirectory() as tmp:
     spend(int(0.6 / proxy.COST_PER_1K_IN * 1000))  # the room spends past the headroom
     check("past it, guard-proxy refuses before the model for everyone", proxy.cost_capped())
     check("and a session with a budget of its own is refused too", proxy.cost_capped("phone-17"))
+    # What each phone reads: /chat with no model and no scanner behind it, every guard off, so the cap is
+    # the one thing that answers (guard-proxy-agenticburn#25).
+    guards = dict(proxy.GUARDS)
+    proxy.GUARDS.update(dict.fromkeys(proxy.GUARDS, False))
+    req = urllib.request.Request(f"http://127.0.0.1:{PORT}/chat", method="POST",
+                                 data=json.dumps({"prompt": "one burrito", "session": "phone-17"}).encode(),
+                                 headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=10) as r:
+        capped_reply = json.load(r).get("reply", "")
+    proxy.GUARDS.update(guards)
+    check(f"the phones read that the kitchen is closed at the cluster's cap, with no Reset in it ({capped_reply!r})",
+          capped_reply.startswith(f"The kitchen is closed: this cluster hit its ${cost()['cap_usd']:.2f} spend cap")
+          and "Reset" not in capped_reply)
 
     print("== cost-watch shows spend against the cap ==")
     try:
@@ -136,8 +149,10 @@ ros = (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text(encoding=
 close = ros[ros.index("- **Break it (the last minutes, #690):**"):ros.index("- **The close (Michael):**")]
 check("the run-of-show's close runs finale-cap-on, shows cost-watch and ends with finale-cap-off",
       all(f"`{c}" in close for c in ("finale-cap-on", "cost-watch", "finale-cap-off")))
-check("it says what the room sees when the cap trips, and that Reset does not help (guard-proxy-agenticburn#25)",
-      "CAP HIT" in close and "Reset does not help" in close and "guard-proxy-agenticburn#25" in close)
+check("it says what the room sees when the cap trips, guard-proxy's own reply, and that Reset does not help "
+      "(guard-proxy-agenticburn#25)",
+      "CAP HIT" in close and '"The kitchen is closed: this cluster hit\n    its $X spend cap' in close
+      and "Reset does not help" in close and "guard-proxy-agenticburn#25" in close and "Press Reset" not in close)
 check("it carries the 2026-10-30 measurement, labeled, and the estimate as an estimate",
       "Measured 2026-10-30 on attackme" in close and "an estimate" in close)
 check("it no longer says the cap is not built", "not built yet" not in close)
@@ -147,6 +162,8 @@ kclose = kclose[:kclose.index("</div>")]
 check("/kubecon's close names the same three commands",
       all(f"<code>{c}</code>" in kclose for c in ("finale-cap-on", "cost-watch", "finale-cap-off"))
       and "not built yet" not in kclose)
+check("/kubecon quotes the same capped reply and does not tell the phones to press Reset",
+      '"The kitchen is closed: this cluster\n    hit its $X spend cap"' in kclose and "press Reset" not in kclose)
 
 srv.shutdown()
 print()
