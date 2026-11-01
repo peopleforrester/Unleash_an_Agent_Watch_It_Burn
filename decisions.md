@@ -8304,3 +8304,45 @@ Remaining step, owed and not done here: the dashboard is not applied to Datadog 
 does not exist. Michael creates it under his own user with dashboards_read, dashboards_write and
 dashboards_public_share, since Whitney gave him Admin in the sandbox on 2026-10-27. Then
 room_view.py --apply builds the dashboard and hands back the share URL for segment 1.
+## 2026-11-01 · #480 · The tool-pin spike's local bed reruns on agentgateway v1.7.0, the version #698 put on the cluster
+
+**Why this run changed anything.** The spike's code and its runbook are on staging (400a13e, #290's :3004, 239b40b's
+lab-bootstrap pause). The issue's only open part is still the live kagent check and the badge decision, which need a
+cluster this run does not have. Since the last #480 run, #698 (0ad8d1a, 2026-10-30) moved the cluster's gateway from
+v1.5.0 to v1.7.0. The bed had measured only v1.5.0, so `live-check.sh` would have run against a binary nobody had
+put the processor in front of.
+
+- **The contract did not move.** `crates/protos/proto/ext_mcp.proto` is byte-identical at v1.5.0 and v1.7.0
+  (sha256 `4ba750cc…3f563584`, raw.githubusercontent.com, read 2026-11-01), so tool-pin's hand-written messages
+  stand as they are.
+- **The bed reran on the v1.7.0 release asset** (sha256 `1b2fc01a…2f42f8`, checked against the release's
+  `.sha256`; git revision `26f5aeb`), with mcp 1.29.1 and grpcio 1.84.1. Output in
+  `docs/research/2026-10-24-tool-pin-spike/local-bed-2026-11-01-v1.7.0.txt`. Every row matched v1.5.0 except two. A
+  refused `tools/call` is now an `isError` tool result carrying tool-pin's reason, as the ExtMCP docs say, where
+  v1.5.0 gave JSON-RPC -32001. The failClosed error with tool-pin down is now a bare "guardrail check failed". A
+  `tools/list` deny is still -32001 with tool-pin's reason, and a bad config at startup still exits 1. The README's
+  findings, its open item 5 (what the agent does with a refused call) and its reproduce steps follow.
+- **The bed's config keeps `config.session.key: disabled`.** On the first v1.7.0 run the gateway wrote a generated
+  session key into the bed's config file. `gateway_bind.local_config` now carries the committed `config.session`, as
+  `cluster_config` always did, so the bed runs unencrypted session ids as the pod does. The rerun's results were the
+  same.
+- **Held offline.** `verify/test_tool_pin.py` checks that `local-bed.sh` and the README's reproduce steps name the
+  version and sha256 of the image `agentgateway.yaml` pins, that the bed's output for that version is committed, and
+  that the bed's config keeps the session setting. With the old `local-bed.sh`, README and `gateway_bind.py` those
+  three checks fail. The next gateway bump turns this red until the bed is rerun.
+
+**Not yet run on a cluster:** `live-check.sh`, all phases, on a fresh attendee cluster with the tool-pin image built,
+pushed and signed (`images/tool-pin/Dockerfile`). The issue's remaining acceptance is unchanged: kagent's discovery
+and the agent's list_tools seen through the processor, kagent's handling of the deny's JSON-RPC error, what the agent
+does with v1.7.0's `isError` call refusal, and then the badge decision the spike README recommends.
+
+## 2026-11-01 · #745 · The American English checker run moves to the E2E suite; the publish-step wiring stays offline
+
+`verify/test_american_english_gate.py` (a4935ef) ran `~/repos/workflow/llm-coding-workflow/scripts/check_american_english.py`
+and failed when that file was missing, so `bash verify/run-tests.sh` failed on any machine without Michael's repos,
+the hecaton gate and every dispatched run included. llm-coding-workflow is private, so the tools tier cannot fetch it
+either. The test is split by need, as the repo's test rules ask. The opt-in and publish-step checks stay in
+`test_american_english_gate.py`, offline. The checker run is `test_american_english_published.py`, marked
+`# SUITE: e2e` without the tools tier. `run-e2e.sh` runs it, and it fails, naming the path, when the checker is
+missing. `compile-design-doc.py --publish` still runs the checker before the Doc is replaced, so nothing published
+goes unchecked.
