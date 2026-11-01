@@ -7285,3 +7285,9 @@ run_shell's arguments and result is still a look by eye. Offline: `python3 verif
 `POST` (kind llm, holding a `chat` on amazon.nova-pro-v1:0) and a `POST` (kind workflow) holding `invocation`. The
 root row reads "No content" for input and output. Tempo and APM have one root, so the trace is whole and the two
 rows come from how LLM Observability groups spans.
+
+**Replayed on staging `ef66c77` (run 14714).** Run 14665's branch sat on staging `e5d0a7d`, and its tests gate failed
+on `verify/test_fleet_wall_check.sh`. That commit renamed the run-of-show heading "Segment 1: Cold open" to "Segment 1:
+Opening" while the test still looked for the old heading, and `ef66c77` (#742) moved the test to the new one. None of
+this change's four paths are involved. `verify/draft-drift.sh origin/agent/265-14193 origin/staging` was clean, so the
+two commits are applied unchanged on `ef66c77`.
