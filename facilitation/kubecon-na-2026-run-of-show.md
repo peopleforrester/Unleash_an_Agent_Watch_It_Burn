@@ -982,6 +982,23 @@ is merely slow rather than rebuilding:
   so the AI guardrails start off and the live toggles in segments 2 to 6 are real. The
   probe above ends with it already; run it again if anyone has touched the guards
   since.
+- [ ] **No public path into `/toggle` on either cluster (#481, #520).** From the repo
+  root, once per cluster on stage, with the kubeconfigs the probe step pulled. Each run
+  must end `All live /toggle exposure checks passed.` It reads the guards over
+  `kubectl exec`, sends `/a2a/toggle`, `/a2a/guards`, `/a2a/` and `/toggle` through the
+  router and expects the console's own 404 on each, expects `/guards` to answer 200,
+  runs the terminal's `_px` and `guards-status` helpers, and fails if the guards moved.
+  It flips nothing, so it can run before or after `guards-off`. Not run at the
+  2026-10-24 or 2026-10-27 bring-ups; from outside only, the four 404s and the
+  `/guards` 200 held on both clusters on 2026-10-30 and 2026-11-01. Write the result
+  into the probe record above, and the run closes #520.
+
+  ```bash
+  KUBECONFIG=/tmp/private.kubeconfig AWS_PROFILE=accen-dev CONTEXT=<private-context> \
+      python3 verify/test_console_no_toggle_live.py
+  KUBECONFIG=/tmp/community.kubeconfig AWS_PROFILE=accen-dev CONTEXT=<community-context> \
+      python3 verify/test_console_no_toggle_live.py
+  ```
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
   are applied (#454, #485; `WIB_FLEET_MONITORS_APP_KEY=<key> ./fleet.sh monitors --apply`
   with an application key from Whitney's user, then `./fleet.sh monitors --check`). If no

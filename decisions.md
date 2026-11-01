@@ -8185,3 +8185,26 @@ estimated cost, with no `skipped_tokens_missing`. In APM, open the same trace an
 agentgateway → kagent with one `POST /chat` span. The overlap note on Datadog's page ("some data sent to Agent
 Observability may also be written to the corresponding APM traces") is the one way the copy could reach APM, and that
 look settles it. Offline: `python3 verify/test_trace_shape_e2e.py` (in `bash verify/run-e2e-tools.sh`).
+
+## 2026-11-01 · #520 · #481's live check is on the Night Before list; the public half held again, the in-cluster half is still owed
+
+**Changed: `facilitation/kubecon-na-2026-run-of-show.md` only.** The Night Before checklist gains an item, after
+"Guard start state on the admin cluster", that runs `verify/test_console_no_toggle_live.py` once per cluster on
+stage with the kubeconfigs the probe step pulls, and says what the run must print and where to write the result.
+Hecaton runs 12348 (2026-10-30, entry above) and this one, 15384, each found the same thing: no run has the
+accen-dev profile, so the test's `kubectl exec` half cannot run from a run, and the commands handed to `escalate`
+on 2026-10-30 were not run by anyone in the two days between. The issue is titled "at KubeCon bring-up", and the
+bring-up is the Night Before list, so the test now sits where the person doing the bring-up reads. The two earlier
+bring-ups (2026-10-24, 2026-10-27) both skipped it, which the probe record already says.
+
+**The public half was probed again from outside on 2026-11-01 at 16:05Z**, with the test's requests (GET, no
+query, so nothing flips), on `attackme` and `burritobot-private` under both agenticburn.com and burritobot.co:
+`/guards` 200 with the guard JSON on all four hosts, every guard off; `/a2a/toggle`, `/a2a/guards`, `/a2a/` and
+`/toggle` 404 on all four, the console's own nginx/1.27.5 page with no guard key. Same as 2026-10-30.
+
+**Not yet run on a cluster:** the whole of `verify/test_console_no_toggle_live.py` as one run per cluster: the
+`cluster-identity` public host, guard-proxy's `/guards` over `kubectl exec`, the terminal's `_px` and `guards-status`
+helpers, and the guards unchanged after. The commands are the checklist item's, and the 2026-10-30 entry's
+`aws eks update-kubeconfig` lines pull the kubeconfigs when the probe step has not. Hecaton holds #520 until
+2026-11-11, the Night Before, unless a session with accen-dev runs the two commands sooner; the run that gets
+`All live /toggle exposure checks passed.` on both clusters closes it.
