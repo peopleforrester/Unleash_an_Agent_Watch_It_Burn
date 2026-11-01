@@ -546,14 +546,6 @@ open, as the deck does. The deleted-cluster story is not part of the KubeCon tal
   the Night Before's `wall-check` is what proves both clusters are on it. If the
   wall is down, project attackme's own feed at
   `https://attackme.burritobot.co/display` instead.
-- Put up the second QR, the room's read-only Datadog view (#665): a public
-  dashboard of attackme only (`burritobot-public`), with no login, showing chats,
-  the tools the bot ran, the tools by name, what the guards stopped, the chats that
-  failed and the bill. It shows counts, not traces or prompts. The guards panel reads
-  zero until a presenter turns a guard on for attackme.
-  Its URL is `public_url` in `infra/datadog-room/share.json`, and the QR is
-  `facilitation/kubecon-na-2026-room-view-qr.svg`. Neither exists until the Night
-  Before step builds the view; without it, show only the attackme QR.
 - Have Whitney send one ordinary ask (a burrito order) so the room sees a working
   burrito-chain bot before it misbehaves.
 - **Delivers:** the framing, and point 1 (a chatbot for a fictional burrito chain).
@@ -989,19 +981,6 @@ is merely slow rather than rebuilding:
   (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
   the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the
   "Traces" row shows a row. Say on the day which surface is shown.
-- [ ] **The room's Datadog view (#665).** Whitney (or Michael signed in to her org)
-  builds it once with a write application key from her own user. First the dry run,
-  `python3 infra/datadog-room/room_view.py`, which prints every query and touches nothing; then
-  `WIB_ROOM_VIEW_APP_KEY=<key> python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --apply`.
-  If the share step answers 403, an org admin has turned public sharing off
-  (Organization Settings, Public Sharing) or the key's user lacks `dashboards_public_share`.
-  The link goes where segment 1 puts it, the second QR on screen; it is not added to the
-  /kubecon page. It expires 2026-11-13.
-  commits the `share.json` it writes, and renders the QR (`infra/datadog-room/README.md`).
-  Then `python3 infra/datadog-room/room_view.py --profile accen-dev --region us-west-2 --check`
-  must end `OK`. Open the URL on a phone with no Datadog session, send a prompt to
-  attackme and see the chat count move, then send one to the private bot and see it not
-  move. Re-applying keeps the URL, so a QR printed earlier stays good.
 - [ ] **Recorded fallback proven once (#452).** The replayable prompt set and the
   per-segment videos and screenshots deck must exist and be rehearsed once, so a
   dead venue network does not end the session. The repo paths for these are not
@@ -1117,8 +1096,7 @@ hosts at peak, down to 1 within three hours).
   `POST /api/v2/llm-obs/deletion/data/llmobs` (in preview, so confirm the call on the
   day). APM spans have no delete-by-query, so ask Datadog support to remove them or
   let retention expire them. Then post on #647 what was deleted and what is left to
-  retention. The room's shared view expires on its own the next morning
-  (`infra/datadog-room`).
+  retention.
 - Record the real spend for the delivery window with
   `teardown/cost-report.sh --start <YYYY-MM-DD> --end <YYYY-MM-DD>` once the `event`
   or `project` cost-allocation tag is activated on the payer account (Portland could
