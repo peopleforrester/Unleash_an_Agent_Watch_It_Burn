@@ -22,7 +22,9 @@ cat >"${SHIM}/kubectl" <<'S'
 echo "kubectl $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"
 case "$*" in
   "config current-context") echo "${KCTX}" ;;
-  *"get deployments,services,configmaps,pods"*) if [[ -n "${BOTMADE:-}" ]]; then printf '%s' "${BOTMADE}"; else echo '{"items":[]}'; fi ;;
+  *"get deployments,services,configmaps,pods"*)
+      if [[ -n "${BOTMADE_FILE:-}" ]]; then cat "${BOTMADE_FILE}"
+      elif [[ -n "${BOTMADE:-}" ]]; then printf '%s' "${BOTMADE}"; else echo '{"items":[]}'; fi ;;
   *"get pods"*"-o jsonpath"*) echo "guard-proxy-old" ;;
   *"get pods"*"-o json"*)
       if [[ "${READY:-1}" == 1 ]]; then
@@ -126,6 +128,14 @@ check "never deletes an object Argo CD manages, even one the bot also patched" \
   '! grep -q "delete deployment/guard-proxy\|delete service/maintenance-shell" "${CALLS}"'
 check "in ns agent with an explicit context" 'grep "delete deployment/promo-mascot" "${CALLS}" | grep -q -- "--context $(ctx_of "${C}") -n agent"'
 check "and says how many it cleared" 'grep -q "cleared 3 object(s) the bot deployed" "${T}/stderr"'
+
+echo "== a live namespace's list is megabytes, which must not hit the argument limit =="
+BIG="{\"items\":[$(for i in $(seq 1 4000); do printf '%s,' "$(mf ConfigMap "argo-cm-${i}" "${ARGO}")"; done)$(mf Deployment promo-mascot "${MCP}")]}"
+printf '%s' "${BIG}" >"${T}/big.json"; unset BIG
+replies "${ZERO}"
+BOTMADE_FILE="${T}/big.json" KCTX="$(ctx_of "${C}")" src "cmd_reset_bot ${C}"; rc=$?
+check "a $(( $(wc -c <"${T}/big.json") / 1024 )) KiB list still clears the one bot object" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "delete deployment/promo-mascot" "${CALLS}" && grep -q "cleared 1 object" "${T}/stderr"'
 
 echo "== wired into the driver =="
 src_txt="$(cat "${FLEET}")"; usage_txt="$(sed -n '/^usage() {/,/^}/p' "${FLEET}")"

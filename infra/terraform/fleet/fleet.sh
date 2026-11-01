@@ -4514,12 +4514,13 @@ clear_bot_workloads() {
     local name="$1" kcfg="$2" ctx="$3" json objs o n=0
     json="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent get deployments,services,configmaps,pods \
             -o json 2>/dev/null)" || { log "  ${name}: could not list what the bot deployed"; return 1; }
+    # On stdin: a live namespace's list runs to megabytes, past the argument limit (2026-11-01, attackme).
     objs="$(python3 -c '
 import json, sys
-for o in json.loads(sys.argv[1] or "{}").get("items", []):
+for o in json.loads(sys.stdin.read() or "{}").get("items", []):
     m = {f.get("manager") for f in o["metadata"].get("managedFields") or []}
     if "workshop-mcp" in m and not any(x.startswith("argocd") for x in m):
-        print(o["kind"].lower() + "/" + o["metadata"]["name"])' "${json}")" || return 1
+        print(o["kind"].lower() + "/" + o["metadata"]["name"])' <<<"${json}")" || return 1
     for o in ${objs}; do
         KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent delete "${o}" --wait=false >/dev/null 2>&1 \
             && n=$(( n + 1 )) || log "  ${name}: could not delete ${o}"
