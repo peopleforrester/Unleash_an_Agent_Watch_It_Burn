@@ -7812,3 +7812,68 @@ forward failed`), which does not. The room's turns take the first.
 
 **Not yet run on a cluster.** The whole of #750: the two reads above and the Datadog search, on attackme
 during #644's re-run. Those readings close #750.
+## 2026-11-01 · #746 · Why Agent Observability draws one BurritoBot interaction as two roots, and why neither collector option joins them
+
+**No code changed.** This entry records what was read, and the question it leaves for the coordinator.
+
+**How Datadog builds the Agent Observability tree from OTLP spans.** Datadog's OTel instrumentation page
+(docs.datadoghq.com/llm_observability/instrumentation/otel_instrumentation, read 2026-11-01) sets these rules:
+- A trace is converted only if some span has `gen_ai.operation.name`, `gen_ai.provider.name`,
+  `openinference.span.kind`, `langfuse.observation.type` or `gen_ai.system`.
+- In a trace that qualifies, "spans without any `gen_ai.*` attribute are also dropped individually". Their other,
+  non-gen_ai attributes are dropped too.
+- `parent_span_id` maps to `parent_id`. The page says nothing about moving a dropped span's children up to the
+  nearest span that was kept. The live check on #265 shows they are not moved: the child of a dropped span becomes
+  a root.
+- Span kind comes from `gen_ai.operation.name`: chat, generate_content, text_completion and completion are llm;
+  execute_tool is tool; invoke_agent and create_agent are agent; anything else, or no operation at all, is workflow.
+- An llm span takes its input and output from `gen_ai.input.messages` and `gen_ai.output.messages`, with
+  `gen_ai.system_instructions` put in front of the input. Workflow and agent spans take theirs from the same two
+  attributes. A tool span takes `gen_ai.tool.call.arguments` and `gen_ai.tool.call.result`.
+- `ml_app` is the service of the root span. When the APM trace's top-most span is not a gen_ai span, Datadog makes a
+  separate Agent Observability trace for each top-level gen_ai span.
+
+**What that does to one /chat.** The path from guard-proxy's `chat` to kagent's `invocation` is
+`chat` → `agent.forward` → urllib `POST` → gateway `POST /` → gateway `Http` → kagent `POST /` → `invocation`.
+- **Root 1, guard-proxy's `POST /chat`.** It is llm because proxy.py sets `gen_ai.operation.name` chat on it.
+  proxy.py also writes the student's prompt and the final reply to it as `gen_ai.input.messages` and
+  `gen_ai.output.messages`. The guard runs with `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=EVENT_ONLY`, and
+  proxy.py counts that as capture on (proxy.py, pin fb6e2bf).
+- **The dropped hops.** `agent.forward`, the urllib `POST` and the gateway's two spans carry no `gen_ai.*` attribute,
+  so Datadog drops all four.
+- **Root 2, kagent's `POST /`.** This is kagent's HTTP server span for the message/send. It has `gen_ai.*`
+  attributes because kagent's Go executor calls `telemetry.SetKAgentSpanAttributes` before it opens `invocation`, and
+  that call writes `gen_ai.task.id` and `gen_ai.conversation.id` onto whatever span is current. That span is the
+  otelhttp server span (kagent v0.10.1, `go/adk/pkg/a2a/executor.go` Execute and
+  `go/adk/pkg/telemetry/tracing.go`). It has no operation name, so it is a workflow, and it has no content
+  attributes. Its parent, the gateway's `Http` span, was dropped, so it becomes a root. That matches #713's reading,
+  "workflow POST, agent invocation, agent workshop_agent". By the source, this is the row that reads "No content".
+  Which root the trace list puts in its row is still to be read on a cluster.
+
+Grouping by kind or by ml_app does not cause the split. Changing the guard span's kind does not move `invocation`
+under it, and the guard root already carries the prompt and the reply. So neither option the issue named makes one
+root.
+
+**What would join them, and why the collector cannot do it cleanly.**
+- **Bridge the hops.** This means putting a `gen_ai.*` attribute on the four hop spans so that Datadog keeps them.
+  Since ef66c77 (guard-proxy fb6e2bf, #742), the forward is a non-blocking message/send polled by tasks/get, at 0.25 s
+  doubling to 1 s. Every poll repeats the urllib `POST`, gateway `POST /` and gateway `Http` spans with the same
+  attributes as the message/send's. The collector sees one span at a time, so it cannot stamp the message/send hops
+  without stamping every poll's. A Challenge 1 turn, held for 20 s by the blocked curl, would gain about sixty empty
+  rows. agentgateway records `a2a.method` only on the request span and only behind an `a2a` route policy (v1.7.0,
+  `proxy/httpproxy.rs` and `telemetry/log.rs`), and never on the outbound `Http` span, whose id is the one forwarded
+  to kagent.
+- **Re-parent.** The collector can give guard-proxy's `chat` a span id derived from the trace id and point kagent's
+  message/send server span at it. That makes one root, but every backend would then show the agent's request going
+  around the gateway. That includes Datadog APM, and its service map would draw an edge from burritobot to
+  burritobot-agent that PRD #27's three edges leave out. A message/send that did not come through guard-proxy would
+  name a parent that does not exist.
+
+Each of these trades away something the workshop shows elsewhere, so the choice goes to the coordinator as a
+question in run 15156's report. The trace-shape test is unchanged until the shape is chosen.
+
+**Not yet run on a cluster:** the reading this diagnosis rests on. On a cluster with Datadog on, send one /chat. Read
+that interaction's spans from the LLM Observability spans API, or open it in Agent Observability. Confirm that the
+second root is kagent's `POST /` carrying `gen_ai.task.id` and `gen_ai.conversation.id`, and that its `parent_id`
+names the gateway's `Http` span, which is absent from Agent Observability. Then record which root's input and output
+the trace list row shows.
