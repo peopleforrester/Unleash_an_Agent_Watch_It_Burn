@@ -805,6 +805,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@azure/core-process@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "@azure/core-process@npm:1.0.0"
+  checksum: 10c0/351283f1a9214a68ba6b6b2c0ce38fb42edc5adb861c350b1308b6bca6a790fc6d57f7aba3aa4fbaacbb2ae6dd095b0e014c0a5cf83e5e2e5c742813e17ce687
+  languageName: node
+  linkType: hard
+
 "@azure/core-rest-pipeline@npm:^1.17.0, @azure/core-rest-pipeline@npm:^1.19.1, @azure/core-rest-pipeline@npm:^1.22.0":
   version: 1.24.0
   resolution: "@azure/core-rest-pipeline@npm:1.24.0"
@@ -850,22 +857,23 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@azure/identity@npm:^4.0.0":
-  version: 4.13.1
-  resolution: "@azure/identity@npm:4.13.1"
+"@azure/identity@npm:4.14.0":
+  version: 4.14.0
+  resolution: "@azure/identity@npm:4.14.0"
   dependencies:
     "@azure/abort-controller": "npm:^2.0.0"
     "@azure/core-auth": "npm:^1.9.0"
     "@azure/core-client": "npm:^1.9.2"
+    "@azure/core-process": "npm:^1.0.0"
     "@azure/core-rest-pipeline": "npm:^1.17.0"
     "@azure/core-tracing": "npm:^1.0.0"
     "@azure/core-util": "npm:^1.11.0"
     "@azure/logger": "npm:^1.0.0"
     "@azure/msal-browser": "npm:^5.5.0"
-    "@azure/msal-node": "npm:^5.1.0"
-    open: "npm:^10.1.0"
+    "@azure/msal-node": "npm:^6.0.0"
+    open: "npm:^11.0.0"
     tslib: "npm:^2.2.0"
-  checksum: 10c0/924b3b545cbffd1b22a5f28593b2024075f0aa3fc52ed6a96aa4e33f358c2f112da0cdd4d90d1a47cbcfc13a5ccfb8854d511dfed2330e1c463b642b6a362d70
+  checksum: 10c0/0968fa00e442033c62aecbb57a9aec0729bf33157236e877769472697d5dbdcb9d54161ce611449db471cbd35f6c78a16929789e01f8ce7f76fa08962fb859d3
   languageName: node
   linkType: hard
 
@@ -888,6 +896,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@azure/msal-common@npm:16.15.0":
+  version: 16.15.0
+  resolution: "@azure/msal-common@npm:16.15.0"
+  checksum: 10c0/591323eb7c169252744b8c955438903f06ca271cc2b1f3f3c63948a4d0f3bb17ef3b214197ca8883125a6ab3a5e527652c5d1190332412ede48a76db97563dc4
+  languageName: node
+  linkType: hard
+
 "@azure/msal-common@npm:16.9.0":
   version: 16.9.0
   resolution: "@azure/msal-common@npm:16.9.0"
@@ -895,13 +910,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@azure/msal-node@npm:^5.1.0":
-  version: 5.2.5
-  resolution: "@azure/msal-node@npm:5.2.5"
+"@azure/msal-node@npm:7.1.2":
+  version: 7.1.2
+  resolution: "@azure/msal-node@npm:7.1.2"
   dependencies:
-    "@azure/msal-common": "npm:16.9.0"
+    "@azure/msal-common": "npm:16.15.0"
     jsonwebtoken: "npm:^9.0.0"
-  checksum: 10c0/00288d66355e0256e03f54845ce923a108a04c943f9ae597a5fca49e33c3e7fd790678d3823e08a8dcf4561461276bf853c35a77b2385d7405d48d7fb0cc156d
+  checksum: 10c0/fa554cdce9fa9b5993311492a23cd807f4a0a2aa28559720d6277a80d1f2778a1bac75fddf3ef8367256a143c0a805f524bfb64e9a5e752086cc710f3f87160b
   languageName: node
   linkType: hard
 
@@ -15999,6 +16014,16 @@ __metadata:
   languageName: node
   linkType: hard
 
+"default-browser@npm:^5.5.1":
+  version: 5.5.1
+  resolution: "default-browser@npm:5.5.1"
+  dependencies:
+    bundle-name: "npm:^4.1.0"
+    default-browser-id: "npm:^5.0.0"
+  checksum: 10c0/feb5e7a6a6f2fcbc7a6c5c78e071a4f7a3ab136e6244b9637e58fe6170f6e1254ae099cbe2ebc2b2823c387ed50fda176ce31d386f4f2ebbd43d8fb1cb6aacf7
+  languageName: node
+  linkType: hard
+
 "defaults@npm:^1.0.3":
   version: 1.0.4
   resolution: "defaults@npm:1.0.4"
@@ -20259,6 +20284,13 @@ __metadata:
   languageName: node
   linkType: hard
 
+"is-in-ssh@npm:^1.0.0":
+  version: 1.0.0
+  resolution: "is-in-ssh@npm:1.0.0"
+  checksum: 10c0/fbb4c25d85c543df09997fbe7aeca410ae0c839c5825bba2d4c672df765e9ce0e7558e781b371c0a21d6ef9bbac39b31875617a68eaaea5504438d07db9a2ffa
+  languageName: node
+  linkType: hard
+
 "is-inside-container@npm:^1.0.0":
   version: 1.0.0
   resolution: "is-inside-container@npm:1.0.0"
@@ -24029,10 +24061,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"node-forge@npm:^1, node-forge@npm:^1.2.1, node-forge@npm:^1.3.2":
-  version: 1.4.0
-  resolution: "node-forge@npm:1.4.0"
-  checksum: 10c0/67330a5f1f95257a4c8a93b7d555abe87b5f15e350123aa396c97a21a8ca94f9c6549008eb2c73668a91e0d7e3a905785acbd8f8bd0751c29401292011f8f8e1
+"node-forge@npm:1.4.2":
+  version: 1.4.2
+  resolution: "node-forge@npm:1.4.2"
+  checksum: 10c0/fb80d5eac8018f413647e17e6278876d0bfff8b32e8e51c4132584ddcef6b1881cc647a278072af3c2611744397e7844fc0f87f940ed818ec423f4d0c48db10a
   languageName: node
   linkType: hard
 
@@ -24474,7 +24506,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"open@npm:^10.0.3, open@npm:^10.1.0":
+"open@npm:^10.0.3":
   version: 10.2.0
   resolution: "open@npm:10.2.0"
   dependencies:
@@ -24483,6 +24515,20 @@ __metadata:
     is-inside-container: "npm:^1.0.0"
     wsl-utils: "npm:^0.1.0"
   checksum: 10c0/5a36d0c1fd2f74ce553beb427ca8b8494b623fc22c6132d0c1688f246a375e24584ea0b44c67133d9ab774fa69be8e12fbe1ff12504b1142bd960fb09671948f
+  languageName: node
+  linkType: hard
+
+"open@npm:^11.0.0":
+  version: 11.0.4
+  resolution: "open@npm:11.0.4"
+  dependencies:
+    default-browser: "npm:^5.5.1"
+    define-lazy-prop: "npm:^3.0.0"
+    is-in-ssh: "npm:^1.0.0"
+    is-inside-container: "npm:^1.0.0"
+    powershell-utils: "npm:^0.2.1"
+    wsl-utils: "npm:^1.0.0"
+  checksum: 10c0/5be0a902323ea9266cf7323edf8d714b516f739519485e98b2508e38e1ffe6f98e3426aeb182fc88239bf98777258b27abbfe5cb1938bff8dbccec2fd603aca5
   languageName: node
   linkType: hard
 
@@ -25893,6 +25939,13 @@ __metadata:
   dependencies:
     xtend: "npm:^4.0.0"
   checksum: 10c0/c1734c3cb79e7f22579af0b268a463b1fa1d084e742a02a7a290c4f041e349456f3bee3b4ee0bb3f226828597f7b76deb615c1b857db9a742c45520100456272
+  languageName: node
+  linkType: hard
+
+"powershell-utils@npm:^0.2.0, powershell-utils@npm:^0.2.1":
+  version: 0.2.1
+  resolution: "powershell-utils@npm:0.2.1"
+  checksum: 10c0/be60cd95e78aa143256bfa5ce88736caf874f9b4ac1b9bb3a041749bf8eebb49cdbd1a9859ff7462f2c6421e15f96f711c1e60bd323998fe98d978a4a3116376
   languageName: node
   linkType: hard
 
@@ -31514,6 +31567,16 @@ __metadata:
   dependencies:
     is-wsl: "npm:^3.1.0"
   checksum: 10c0/44318f3585eb97be994fc21a20ddab2649feaf1fbe893f1f866d936eea3d5f8c743bec6dc02e49fbdd3c0e69e9b36f449d90a0b165a4f47dd089747af4cf2377
+  languageName: node
+  linkType: hard
+
+"wsl-utils@npm:^1.0.0":
+  version: 1.0.1
+  resolution: "wsl-utils@npm:1.0.1"
+  dependencies:
+    is-wsl: "npm:^3.1.0"
+    powershell-utils: "npm:^0.2.0"
+  checksum: 10c0/535a7684d63d9dd0b4349997f81ebb38705809031f354bd0d3ec2e74ebaf94d21f2fbbf4f149e1832474827867ced07b5aadc256a17f9cfd3e70d2f9047dee8e
   languageName: node
   linkType: hard
 
