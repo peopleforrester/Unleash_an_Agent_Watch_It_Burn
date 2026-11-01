@@ -1,0 +1,19 @@
+# ABOUTME: The two domains: the company in the story (Hex & Cauldron) and the workshop that runs it.
+# ABOUTME: Infrastructure (Argo CD, Kyverno, Falco, the observability stack) is deliberately not catalogued.
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: hex-and-cauldron
+  title: Hex & Cauldron
+  description: Everything the company builds and runs on this cluster.
+spec:
+  owner: hex-and-cauldron
+---
+apiVersion: backstage.io/v1alpha1
+kind: Domain
+metadata:
+  name: watch-it-burn-workshop
+  title: Watch It Burn workshop
+  description: What exists only to run the session. Two of its systems live outside the cluster entirely.
+spec:
+  owner: workshop-crew

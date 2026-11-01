@@ -1,5 +1,19 @@
-# ABOUTME: RBAC resources for Backstage Kubernetes plugin.
-# ABOUTME: Grants read-only access to workload resources across all namespaces.
+# ABOUTME: RBAC for Backstage's Kubernetes plugin: read-only on workload objects in every namespace, so each
+# ABOUTME: catalog page can show its own pods. No write verb, no Secrets, no ConfigMaps and no pod logs.
+#
+# THIS ROLE IS THE WHOLE BOUNDARY. The portal is public at backstage-<cluster>.agenticburn.com, everyone is
+# the guest user, and the permission policy allows all, so the plugin's /api/kubernetes/proxy will forward
+# any request a visitor sends, with this service account's credentials. Whatever this role can read, the
+# internet can read. Hence what is missing on purpose:
+#   - pods/log: guard-proxy and the agent log attendee prompts, and projecting those is gated on
+#     STREAM_PROMPTS (default off) everywhere else. A public log viewer would route around that.
+#   - configmaps: they hold the workshop's source and lab content, and nothing a pod page needs.
+# kubernetes.objectTypes in backstage/app-config.yaml asks for exactly what is granted here, so the
+# Kubernetes tab never reports a 403 for something it was never meant to read.
+#
+# No token Secret either. The plugin is configured with authProvider: serviceAccount and no token, which
+# makes it read the token kubelet mounts into the pod (backstage/app-config.yaml). The long-lived
+# kubernetes.io/service-account-token Secret this file used to create was a credential with nothing using it.
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -19,13 +33,10 @@ rules:
   - apiGroups: [""]
     resources:
       - pods
-      - pods/log
       - services
-      - configmaps
-      - namespaces
-      - events
       - endpoints
-      - serviceaccounts
+      - events
+      - namespaces
     verbs: ["get", "list", "watch"]
   - apiGroups: ["apps"]
     resources:
@@ -42,7 +53,6 @@ rules:
   - apiGroups: ["networking.k8s.io"]
     resources:
       - ingresses
-      - networkpolicies
     verbs: ["get", "list", "watch"]
   - apiGroups: ["autoscaling"]
     resources:
@@ -63,12 +73,3 @@ subjects:
   - kind: ServiceAccount
     name: backstage
     namespace: backstage
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: backstage-sa-token
-  namespace: backstage
-  annotations:
-    kubernetes.io/service-account.name: backstage
-type: kubernetes.io/service-account-token

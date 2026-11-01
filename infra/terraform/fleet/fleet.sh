@@ -72,8 +72,10 @@ readonly SHARED_ADMIN_HOST="burritobot-private.agenticburn.com"
 readonly PRESENTER_OWNER_MAX=10
 # Service hostnames (#233): <service>-<label>.agenticburn.com for every cluster, riding the cluster's
 # console LB; the console's nginx fans out on Host. One label deep because the router's wildcard cert
-# covers one label. Keep in step with the server block in gitops/ai-layer/console.conf.
-readonly WIB_SERVICE_HOSTS="grafana argocd kagent hedgehog wombat unicorn spider mantis-shrimp"
+# covers one label. Keep in step with the server block in gitops/ai-layer/console.conf, and with the service-host
+# filter in apex-agenticburn's derive-roster.sh, which already skips backstage- (#244): a prefix that filter does
+# not know is scored as a cluster name and would rename a cluster on the instructor console.
+readonly WIB_SERVICE_HOSTS="grafana argocd kagent backstage hedgehog wombat unicorn spider mantis-shrimp"
 # Hosts for C6's story, not what the platform installs: the Joker the attack deploys, maintenance-shell (#664), and
 # support, the ticket desk the room can open to read what the bot read (2026-10-28 call). Routed like a service
 # host, but the console gives each its own server.

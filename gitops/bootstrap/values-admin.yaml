@@ -43,6 +43,7 @@ c7Control: gateway
 apps:
   - ai-layer-otel
   - ai-layer
+  - backstage
   - cert-manager
   - cluster-network-policies
   - datadog-agent-cr
