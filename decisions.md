@@ -7224,3 +7224,20 @@ Docker Hub when the draft checked it on 2026-10-24.
 verified, or verify-image-signatures denies the pod on every profile that lists it. Then, on an attendee cluster,
 `CONTEXT=<ctx> bash verify/backstage-footprint.sh` (#484): the pods Ready, the footprint, and the Kubernetes tab
 listing pods for unicorn-party and workshop-agent.
+## 2026-11-01 · #451 · The real-phone check is signed off by Michael; the checklist names attackme.burritobot.co
+
+The #451 check (the audience page on a real iPhone in Safari and a real Android phone in Chrome, the projector
+QR scanned from the back of a room, and the Feedback link) is a person's job, and a run cannot do it. Michael
+answered on the issue on 2026-11-01: "Already done. It works great"
+(https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/451#issuecomment-6551797906).
+
+- **What is recorded.** `facilitation/kubecon-na-2026-phone-check.md` now has a Result section that quotes
+  him, links his comment and dates it. His comment does not list phone models, OS versions, networks or
+  scan distances, so the run leaves the per-row tables empty instead of making those up. They stay in the
+  file for the next event.
+- **The checklist's address was out of date.** It still named `https://attackme.agenticburn.com/` as the page
+  the room opens and the address the QR encodes. #651 changed `publicUrl` in `gitops/ai-layer/web/event.js`,
+  and the committed QR, to `https://attackme.burritobot.co/`. The checklist now names that address and
+  notes that the agenticburn.com name still serves the same bot as its twin.
+- **Tests.** `verify/test_audience_event.py` (offline) now also checks that the checklist names `publicUrl`
+  in all three places it gives the address, and that the sign-off and its source are recorded.

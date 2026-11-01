@@ -4,7 +4,7 @@
 # KubeCon NA 2026: real-phone check for the audience page
 
 The room opens one page from their phones: the community BurritoBot at
-**https://attackme.agenticburn.com/** (segment 2 of
+**https://attackme.burritobot.co/** (segment 2 of
 `facilitation/kubecon-na-2026-run-of-show.md`). This file is the check that the
 page, the QR code on the projector and the Feedback button work for them. A
 person does it, on the live community cluster, after the Night Before bring-up.
@@ -13,11 +13,22 @@ person does it, on the live community cluster, after the Night Before bring-up.
 only in Chromium emulation (320, 390 and 412 px) and left this row open. Every
 row below is one real phone, in hand, on the network named.
 
+## Result
+
+**Signed off by Michael on 2026-11-01:** "Already done. It works great"
+([#451 comment](https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/451#issuecomment-6551797906)).
+He ran the check himself on real phones. His comment does not give the
+per-row detail (phone models, OS versions, distances), so the tables below are
+left blank rather than filled in from a guess. They stay here for the next
+event's check.
+
 ## Where the two addresses come from
 
 Both come from one file, `gitops/ai-layer/web/event.js`:
 
-- `publicUrl`, `https://attackme.agenticburn.com/`, is what the QR encodes.
+- `publicUrl`, `https://attackme.burritobot.co/`, is what the QR encodes.
+  burritobot.co is the displayed domain (#651); `attackme.agenticburn.com`
+  still serves the same bot as its twin.
 - `feedbackUrl`, the Sessionize survey for session 1249553, is where the
   storefront's Feedback button goes. It opens in a new tab, so the chat is still
   there afterwards, and no cluster or user is added to it.
@@ -40,9 +51,9 @@ student's cluster and user again.
 
 ## Before you start
 
-- [ ] The community cluster is up and `https://attackme.agenticburn.com/` shows
+- [ ] The community cluster is up and `https://attackme.burritobot.co/` shows
   the storefront on a laptop.
-- [ ] `curl -s https://attackme.agenticburn.com/event.js` returns the `event.js`
+- [ ] `curl -s https://attackme.burritobot.co/event.js` returns the `event.js`
   in this repo. If it does not, the console pod has not rolled yet.
 
 ## Real devices
@@ -79,7 +90,7 @@ use, in a room at least as deep as the session's room (conference-knowledge (`ev
 or as close as you can get.
 Scan it with each phone's own camera app, not a QR app, from the back row.
 
-| Phone | Distance from the screen | Scans first try | Opens https://attackme.agenticburn.com/ | Checked by, date |
+| Phone | Distance from the screen | Scans first try | Opens https://attackme.burritobot.co/ | Checked by, date |
 |---|---|---|---|---|
 | iPhone, camera | | | | |
 | Android, camera | | | | |

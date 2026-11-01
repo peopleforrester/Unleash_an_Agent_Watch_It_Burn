@@ -93,6 +93,10 @@ for dev in ("iPhone", "Android"):
 check("a row for scanning the QR from the back of the room", "back of the room" in doc)
 check("a row confirming the survey shows this talk once rating opens", "1249553" in doc and "rating opens" in doc)
 check("headless emulation is ruled out in writing", "emulation does not count" in doc)
+check("the checklist names publicUrl as the address the room opens and the QR encodes",
+      f"**{PUBLIC}**" in doc and f"`publicUrl`, `{PUBLIC}`" in doc and f"Opens {PUBLIC} |" in doc)
+check("the real-phone sign-off is recorded with its source (Michael, 2026-11-01)",
+      "Signed off by Michael on 2026-11-01" in doc and "issuecomment-6551797906" in doc)
 check("the run-of-show points at the checklist", "kubecon-na-2026-phone-check.md" in ROS)
 
 print()
