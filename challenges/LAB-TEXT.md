@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-11-01 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `2059129609b13524b1a935bb65f94cf03989101f` (the last commit to change lab.html, on 2026-11-01) |
-| Source blob | `eeb5c5efc94be358a776d20c4b95329fb914c6a4` |
+| Source commit | `b0ea748955dcf4cec8f7ef317287dd81d95ab259` (the last commit to change lab.html, on 2026-11-01) |
+| Source blob | `978d2c66d258801969233805103576427cd92ed5` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -467,7 +467,7 @@ A direct order tends to go nowhere. A reason tends to work.
 
 Every message BurritoBot answers costs money, because every message is a call to an AI model that charges by the amount of text in and out. A long, rambling answer costs more than a short one.
 
-**Go to BurritoBot and make it expensive.** Ask for something that forces a very long answer, then send it again. And again. Watch the **Cost** counter in the Workshop Panel on the right of the BurritoBot tab while you do it. Nothing is going to stop you.
+**Go to BurritoBot and make it expensive.** Ask for something that forces a very long answer, then send it again. And again. Watch the **Cost** counter in the Backend Insights panel on the right of the BurritoBot tab while you do it. Nothing is going to stop you.
 
 This is the attack that does not look like one. Every request is legitimate, the service stays up, and the damage arrives at the end of the month.
 
