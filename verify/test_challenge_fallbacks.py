@@ -137,6 +137,15 @@ check("block-argocd-drift lets the web terminal edit agentgateway-c7-config",
 check("the C7 sentinel is the one evil-mcp returns", MCP_SENTINEL == "FAKE-MCP-EXFIL-sentinel-4c1d")
 _beacon = re.search(r'^BEACON = "([^"]+)"', (REPO / "verify/c1-winrate.py").read_text(), re.M).group(1)
 check("C1 posts to the beacon the C1 beat uses", f'BEACON="{_beacon}"' in (REPO / C1).read_text())
+# The count is read where the Night Before checks the view answers 200. provisioning.agenticburn.com was retired
+# on 2026-10-29 (#651) and answers the apex router's 404, so a fallback reading it fails before its POST (#720).
+_view = re.search(r"`curl [^`\n]*?(https://\S+/beacon/view)`",
+                  (REPO / "facilitation/kubecon-na-2026-run-of-show.md").read_text())
+check("the Night Before curls a beacon view", _view is not None)
+_view = _view.group(1) if _view else ""
+check("C1 reads the count from the beacon view the Night Before checks", f'BEACON_VIEW="{_view}"' in (REPO / C1).read_text())
+check("C1 calls no URL on the retired provisioning.agenticburn.com",
+      "https://provisioning.agenticburn.com" not in (REPO / C1).read_text())
 
 _spec = importlib.util.spec_from_file_location("ticket_site", REPO / "gitops/ai-layer/ticket_site.py")
 ticket_site = importlib.util.module_from_spec(_spec)
@@ -525,7 +534,7 @@ def run(script, argv, scenario, with_context=True, rule=C7_OPEN, tools=None, out
         p.write_text(src)
         p.chmod(0o755)
     (work / "fixture.json").write_text(json.dumps({
-        "beacon": _beacon, "view": "https://provisioning.agenticburn.com/beacon/view",
+        "beacon": _beacon, "view": _view,
         "record": RECORD, "redact": REDACT.pattern, "allowed": ALLOWED, "refused": REFUSED,
         "gateway": EVIL_URL, "fake_gateway": FAKE_URL, "c7_config": C7_CONFIG, "open": C7_OPEN,
         "narrowed": C7_NARROWED, "terminal_says": TERMINAL_SAYS, "fake_agent": FAKE_AGENT_URL,

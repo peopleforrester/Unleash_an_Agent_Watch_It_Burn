@@ -22,7 +22,9 @@ readonly NS="agent"
 readonly POD="deploy/workshop-mcp"
 readonly CONTAINER="shim"
 readonly BEACON="https://agenticburn.com/beacon"
-readonly BEACON_VIEW="https://provisioning.agenticburn.com/beacon/view"
+# The router forwards /beacon/view to the collector, as it does /beacon. provisioning.agenticburn.com, the
+# old view host, was retired on 2026-10-29 (#651) and answers the router's 404 (#720).
+readonly BEACON_VIEW="https://agenticburn.com/beacon/view"
 # The collector's 200 body ends "(HC-204 OK)" in both its old and current wording (#692).
 readonly BEACON_OK="(HC-204 OK)"
 

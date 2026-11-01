@@ -214,7 +214,7 @@ and getting it wrong 502s every attendee URL while the router itself keeps looki
 while everything else is fine:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' https://provisioning.agenticburn.com/   # 200 = router is healthy
+curl -s -o /dev/null -w '%{http_code}\n' https://start.agenticburn.com/roster.json # 200 = router is healthy
 curl -sk -o /dev/null -w '%{http_code}\n' https://<cluster-lb>/                  # 200 = upstream is healthy
 curl -s  -o /dev/null -w '%{http_code}\n' https://attackme.agenticburn.com/ # 502 = the hop config
 ```

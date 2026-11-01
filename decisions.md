@@ -7350,3 +7350,43 @@ forced egress proxy, either one over a CoreDNS resolver lockdown. The note lists
 `<host> <kube-context>` like `verify/c1-exfil-block.sh`. It asserts that the DNS collector records stage 2b with the
 stage 2 policy applied, that it records nothing new once the FQDN control is on, and that Bedrock and in-cluster
 resolution still work with that control on.
+## 2026-11-01 · #720 · KubeCon needs no pool row, no presenter bundle and no serve-actions runner; the C1 fallback reads the live beacon view
+
+peopleforrester/provisioning-agenticburn reported where the provisioning service stands for KubeCon (2026-11-12):
+the app answers only at `https://watch-it-burn-provisioning-production.up.railway.app`, its pool has 0 rows,
+and its fleet console has never received a health report. It asked two questions. The records already answer both,
+so neither went to Michael.
+
+1. **KubeCon uses neither `/eks-claim` nor the presenter bundle.** The KubeCon run-of-show says nobody in the room
+   provisions a cluster and nobody is pointed at the provisioning distributor or its pages
+   (`facilitation/kubecon-na-2026-run-of-show.md`, its header, "The one platform, and the two clusters on it" and
+   open question 9). The Night Before list brings up the roster alone and says the attendee pool is not provisioned
+   for this session. The presenters reach the private cluster as `sprouts` / `sprouts` from the cluster itself. The
+   service stays up only as the C1 beacon collector (#502, question 714). The empty pool is correct, and no ingest
+   is owed for KubeCon. The unset `ADMIN_DATADOG_EMAIL` and `ADMIN_DATADOG_PASSWORD` do not matter for the same
+   reason: both KubeCon clusters ship to Whitney's sandbox org (#629), and nobody opens the presenter page.
+2. **`fleet.sh serve-actions` does not run during the talk, and the admin console is outside the run of show.**
+   Neither the run-of-show nor `/kubecon` names the console or the runner. Every action the session needs is a
+   direct `fleet.sh` verb run by a presenter: `reset-bot`, `converge instructors`, `routes roster`, `router-check`,
+   `wall-check`, `check-tls` and `monitors --check`. The console's "runner is not up" line is expected here and
+   raises no alarm for this session. The 2-hour workshop format still runs the runner (question 629).
+
+**What changed.** The report showed that one KubeCon path still used the retired host.
+`challenges/c1-exfil-s3/fallback.kubectl.sh`, the C1 fallback named in the run-of-show, read its before-and-after
+count from `https://provisioning.agenticburn.com/beacon/view`. That name has answered the apex router's 404 since
+2026-10-29 (#651), so the fallback's "beacon view readable" check failed and it stopped before its POST. It now
+reads `https://agenticburn.com/beacon/view`, the URL its POST's host forwards and the one the Night Before curls
+for `200`. `verify/test_challenge_fallbacks.py` reads the stub's view URL from that same Night Before line. It
+fails when the fallback reads any other view, or calls any `https://provisioning.agenticburn.com` URL. With the
+old script it fails 7 checks. `docs/GOTCHAS-FLEET-AND-DELIVERY.md`'s "router is healthy" probe pointed at the same
+retired name, where a healthy router now answers 404. It now reads `https://start.agenticburn.com/roster.json`,
+which the router builds itself on every reload (#502).
+
+**What stayed.** The pool, the presenter bundle, the Railway variables and the console stay as they are.
+`docs/RUN-OF-SHOW-2026-08.md`, `docs/MASTER-RECREATION-SPEC.md`, `docs/GO-LIVE-CHECKLIST.md`, `docs/ROADMAP.md`,
+`PROJECT_STATE.md` and `PROGRESS.md` still name `provisioning.agenticburn.com`. They describe the August delivery
+or the history of the build, so nobody runs them as a KubeCon step.
+
+**Not yet run on a cluster.** With watch-it-burn-private up and the provisioning service answering, run
+`CONTEXT=<watch-it-burn-private context> challenges/c1-exfil-s3/fallback.kubectl.sh`. It must end `C1 PROVEN`,
+with a beacon count read before and after.
