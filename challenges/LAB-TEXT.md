@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-11-01 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `b0ea748955dcf4cec8f7ef317287dd81d95ab259` (the last commit to change lab.html, on 2026-11-01) |
-| Source blob | `978d2c66d258801969233805103576427cd92ed5` |
+| Source commit | `6eaeb89c065199a6a79e7bddaf41c545e3bda37a` (the last commit to change lab.html, on 2026-11-01) |
+| Source blob | `49f56395159ff3b33a49d44be05c6be99c4f035e` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
