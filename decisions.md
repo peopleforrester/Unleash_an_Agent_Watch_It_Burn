@@ -7790,3 +7790,25 @@ pod's image and try the command as written; on a cluster run `kubectl --context 
 app.kubernetes.io/name=workshop-agent -o jsonpath='{.items[0].spec.containers[0].image}'` to confirm the
 deployed digest, which would also explain the separate `exec ... python3` "executable file not found"
 seen on watch-it-burn-community in #583.
+## 2026-11-01 · #750 · The proxy's half of #742's cancel is read during #644's re-run, from the run-of-show
+
+#750 is a live check: after a turn passes `PROXY_TIMEOUT`, guard-proxy should log `task_cancel` and
+workshop-mcp should log no tool call after it. A dispatched run has no cluster and no AWS, so this run adds no
+code. The check needs turns that run past 120 s, and the next run that will make them is #644's load replay
+re-run. Michael gave his go for that re-run on #644 on 2026-11-01, after #450 lifts the per-network limit. The
+first replay, on 2026-10-31, had 4 such turns. This check is read during that re-run and does not ask for a
+spend of its own.
+
+The run-of-show's Night Before step for #644 now ends with the two log reads and what they should show, before
+attackme's reset. A `forward_error` reading `chat forward failed: timed out` should be followed by one
+`task_cancel` and no `task_cancel_failed`. The workshop-mcp `shim` log should show no `tool_invocation` later
+than a minute after the last `task_cancel`. The step then searches Datadog for the `trace_id` that guard-proxy
+writes on each log line, for the issue's second question: does a cancelled turn's trace now reach Datadog?
+
+`forward_error` does not name the task, so a log read matches each one to its cancel by order. A forward that
+failed before the agent took the turn has no task, so no cancel follows it. Two paths log `forward_error`: /chat's
+`_forward` (`chat forward failed`), which sends the cancel, and the raw A2A pass-through in `do_POST` (`agent
+forward failed`), which does not. The room's turns take the first.
+
+**Not yet run on a cluster.** The whole of #750: the two reads above and the Datadog search, on attackme
+during #644's re-run. Those readings close #750.

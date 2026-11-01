@@ -1035,6 +1035,24 @@ is merely slow rather than rebuilding:
   must end `LOAD REPLAY GREEN`: a refusal is a sentence a phone can read and passes,
   a 502, 504, timeout or empty reply fails. Record the run on #644. `--source catalog`
   replays the stage's own asks instead when the harvest is not on this machine.
+
+  Then, before the reset, read whether a turn that ran past `PROXY_TIMEOUT` (120 s)
+  stopped the agent (#750). The last run had 4 such turns. With attackme's credentials
+  in their own kubeconfig, as the probe step above has them:
+
+  ```bash
+  KUBECONFIG=/tmp/community.kubeconfig kubectl --context <community-context> -n agent logs deploy/guard-proxy -c proxy --since=30m | grep -E '"event": "(forward_error|task_cancel|task_cancel_failed)"'
+  KUBECONFIG=/tmp/community.kubeconfig kubectl --context <community-context> -n agent logs deploy/workshop-mcp -c shim --since=30m | grep '"event":"tool_invocation"'
+  ```
+
+  Each `forward_error` reading `chat forward failed: timed out` should be followed by
+  one `task_cancel` and no `task_cancel_failed`. The workshop-mcp log should show no
+  `tool_invocation` later than a minute after the last `task_cancel`. A
+  `forward_error` with no `task_cancel` after it is a forward that failed before the
+  agent took the turn, which leaves nothing to cancel. Then search Datadog APM for
+  the `trace_id` on a timed-out turn's `forward_error` line. The 2026-10-31 14:45 UTC
+  sighting found that such a turn's trace never reached Datadog. Record all three
+  readings on #750.
 - [ ] **Reset the community bot, last (#539).** The probe, the phone check and any
   rehearsal all spend on attackme, and guard-proxy keeps that spend in memory. Once
   nothing else will touch attackme before the session, from `infra/terraform/fleet/`:
