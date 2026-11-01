@@ -54,7 +54,7 @@ pwconfig = (REPO / "images/watch-it-burn-backstage/playwright.config.ts").read_t
 check("playwright.config.ts launches the Chromium run-e2e.sh installs",
       "playwright install chromium" in rune2e and "generateProjects({ channel: 'chromium' })" in pwconfig)
 # Backstage's live check (#548) belongs in the suite once the attendee profile deploys Backstage (#244), with one
-# sample so the suite stays fast, and the cluster named explicitly rather than inherited.
+# sample so the suite stays fast, and with the cluster named explicitly on the command.
 attendee = (REPO / "gitops/bootstrap/values-attendee.yaml").read_text()
 check("the attendee profile deploys backstage", "\n  - backstage\n" in attendee)
 check("run-e2e.sh runs backstage-footprint.sh as a run_one step with SAMPLES=1 and CONTEXT",

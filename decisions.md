@@ -7320,16 +7320,17 @@ including all twenty promo villain pull checks. The tools tier takes more than t
 (test_enforce_floor.py and test_topic_classifier.py are the slow ones), so a background start needs a longer timeout
 than the ten-minute default.
 ## 2026-11-01 · #548 · run-e2e.sh runs backstage-footprint.sh, one sample, now that attendee deploys Backstage
+## 2026-11-01 · #548 · run-e2e.sh runs backstage-footprint.sh with one sample, since attendee deploys Backstage
 
 #244 put Backstage on the attendee, full and admin profiles (the entry above), which was the condition #548 waited
 on: before it, Backstage sat in gitops/apps-disabled/ and the footprint check (#484) would have failed on every
-cluster. `verify/run-e2e.sh` now runs `env CONTEXT="${CONTEXT}" SAMPLES=1 bash verify/backstage-footprint.sh` as a
-run_one step after the doc-link fetch and before the Playwright run. CONTEXT is passed on the command, not inherited,
-so the step names its cluster like every other. SAMPLES=1 takes one kubelet reading instead of six ten seconds apart,
-so the step adds a port-forward and a few HTTP calls rather than 50 seconds of sleeps; the pass conditions (pods Ready,
-a reading per container, both Kubernetes tabs listing pods) are the same at any sample count. A working peak still
-means running the script alone with its defaults while clicking around the portal. `verify/test_verify_harness.py`
-holds the step and that values-attendee.yaml lists backstage.
+cluster. `verify/run-e2e.sh` runs `env CONTEXT="${CONTEXT}" SAMPLES=1 bash verify/backstage-footprint.sh` as a
+run_one step after the doc-link fetch and before the Playwright run. The command line sets CONTEXT itself, so the
+step names its cluster explicitly, as every other step does. SAMPLES=1 takes one kubelet reading where the default
+takes six, ten seconds apart, which saves 50 seconds of sleeping; the step still opens a port-forward and makes a few
+HTTP calls. The pass conditions (pods Ready, a reading per container, both Kubernetes tabs listing pods) are the same
+at any sample count. A working peak still means running the script alone with its defaults while clicking around the
+portal. `verify/test_verify_harness.py` holds the step and that values-attendee.yaml lists backstage.
 
 **Not yet run on a cluster.** `CONTEXT=<ctx> IAM_PIPELINE_PROFILE=<profile> IAM_PIPELINE_REGION=<region> bash
 verify/run-e2e.sh` on a fresh attendee cluster, after the Backstage image is signed (`verify/sign-images.sh --check`),
