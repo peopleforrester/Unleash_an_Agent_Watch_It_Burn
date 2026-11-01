@@ -7350,3 +7350,64 @@ forced egress proxy, either one over a CoreDNS resolver lockdown. The note lists
 `<host> <kube-context>` like `verify/c1-exfil-block.sh`. It asserts that the DNS collector records stage 2b with the
 stage 2 policy applied, that it records nothing new once the FQDN control is on, and that Bedrock and in-cluster
 resolution still work with that control on.
+
+## 2026-11-01 · #724 · FQDN-aware egress control for the C1 fix: dated inputs refreshed; the call stays Michael's and parked
+
+**No decision made here.** #724 asks which FQDN-aware egress control to build for the C1 fix: option A, Cilium
+`toFQDNs`; option B, a forced egress proxy enforcing an FQDN allowlist at L7; both over option C, the required floor
+of a locked resolver that will not relay arbitrary names upstream. The design note that tees these up is
+`docs/research/2026-10-31-c1-dns-exfil-beat.md` (#723). The issue states the choice is Michael's fleet networking
+call, parked until the next event (the `deferred-barcelona` build, Question 575, 2026-09-07) is scheduled, and that a
+dispatched run may refresh the dated inputs but does not make the call. This run refreshes those inputs and surfaces
+the choice as a question; it does not pick an option. The choice gates the fix build.
+
+**The parking condition has not been met.** The next event is not scheduled. The conference registry
+(conference-knowledge, `events/registry.yaml`, read 2026-11-01 through `sources`) holds no Barcelona entry and no
+future Watch It Burn slot: `aiewf-2026-watch-it-burn` is the delivered San Francisco run (2026-06-29 to 07-02,
+`status: delivered`), and there is no scheduled successor. "Barcelona" is the name the deferral tag gives the next
+event, not a booked date. So the decision remains parked by its own terms, and this run leaves it parked rather than
+forcing it.
+
+**Platform facts re-checked on staging 5df1200 and the web, 2026-11-01.**
+
+- The fleet enforces NetworkPolicy through VPC-CNI: `enableNetworkPolicy = "true"` in the `vpc-cni` addon
+  configuration, now at `infra/terraform/aws/cluster/main.tf:332` (the issue and the #116 drafts cite line 306;
+  staging has since added lines above it, as #723 already recorded). This engine is L3/L4 only and has no DNS- or
+  name-aware rule type, which is the whole reason a name-carried channel survives stage 2's policy.
+- The cluster is a standard EKS cluster with managed node groups, the VPC-CNI addon, prefix delegation and an
+  explicit `max_pods`. It is **not** EKS Auto Mode.
+- **Option A, Cilium, current support.** Cilium can run on EKS either as the primary CNI (the cluster is created
+  without the default VPC-CNI) or chained over VPC-CNI; `toFQDNs` policy needs Cilium to own the dataplane, and
+  chaining behaves differently from primary mode. Either path is a fleet CNI migration away from
+  `main.tf:332`'s VPC-CNI enforcement, with every policy under `policies/network-policies/` and every other beat
+  retested on it. Sources: Cilium EKS ENI-mode install guide (cilium.io/blog/2025/06/19/eks-eni-install), VPC-CNI
+  chaining guides (oneuptime.com, 2026-03-13). Third-party; versions and exact steps to be re-confirmed against
+  Cilium and AWS docs at build time.
+- **A newly surfaced option (not in the design note): native EKS FQDN egress.** AWS now offers an
+  `ApplicationNetworkPolicy` CRD (`networking.eks.amazonaws.com/v1alpha1`) that filters egress by FQDN / DNS-name
+  pattern at the namespace level. Per the AWS EKS User Guide (docs.aws.amazon.com/eks/latest/userguide/auto-net-pol.html,
+  read 2026-11-01) the DNS/FQDN rules apply **only to workloads on EKS Auto Mode nodes**; standard EKS clusters with
+  the VPC-CNI addon (this fleet) stay limited to L3/L4 Kubernetes NetworkPolicy. The containers-roadmap request for
+  the same on standard clusters (aws/containers-roadmap#2801) is still open. The `v1alpha1` API and the Auto-Mode-only
+  scope mean this is not a drop-in for the fleet: it would require an Auto Mode migration, comparable in fleet reach
+  to the Cilium migration, and rides an alpha API. It belongs in front of Michael as a possible option D, not as a
+  settled answer. To be re-confirmed against the AWS "What's new" page and release notes at build time.
+- **Option B, forced egress proxy / egress gateway**, and **option C, resolver lockdown** (CoreDNS forward-only for
+  the lab's zones, or NodeLocal DNSCache with an allowlist), need no CNI change and no Auto Mode. B adds an always-on
+  L7 component; C is the floor under A, B or D and on its own only closes the upstream relay, leaving egress
+  decisions at L3/L4.
+
+**Fleet impact to weigh (input to the decision, not a choice).** A and the native-FQDN option both change the CNI or
+cluster mode across the fleet, so every per-namespace policy under `policies/network-policies/`
+(`agent-egress-allowlist.yaml` and the `agent-allow-*` / `apps-*` set) and every other challenge beat that leans on
+the default-deny + allowlist shape (C1's existing stage 2, and the egress assumptions behind C2, C3, C6, C7) would be
+retested on the new dataplane; the `verify/` egress checks (`c1-exfil-block.sh` and kin) would be rerun. B and C leave
+the CNI and those policies as they are and add components beside them. Whichever is chosen also settles criterion 3
+of #724 — whether the live build earns its place at the next event or stays a narrated "show it, do not run it"
+walkthrough if the migration is not affordable — because that answer follows from the chosen control's cost; it is
+not a separate call.
+
+**Status.** Criterion 2 (dated facts re-checked and recorded) is met by this entry. Criteria 1 and 3 (naming the
+control, and settling live-vs-walkthrough) are the parked decision itself, which criterion 4 bars a run from making;
+they are surfaced as a question for Michael's call and recorded here as open. No lab text, policy, slide or deploy
+config changed.
