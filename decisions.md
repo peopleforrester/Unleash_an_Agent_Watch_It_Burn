@@ -8263,3 +8263,37 @@ the same on the private bot, a fresh name written to wib_witch on .burritobot.co
 accepts) when there is no cookie or a cookie the vocabulary did not make, and nothing on agenticburn.com. With the
 first-visit assignment removed from the page, five checks fail, which I confirmed on a temporary edit that was
 restored. No page or desk code changed.
+
+## 2026-11-01 · #485 · The run-of-show's monitors apply carries the KubeCon session window
+
+**Why.** #485 was dispatched again after an answer that belongs to lab-platform#172 (the Microsoft 365 test inbox,
+which Michael ruled out in favor of Resend). That answer does not touch #485. Its work is still the live apply,
+which a dispatched run cannot do: it has no `accen-dev` profile to read `watch-it-burn/datadog`, and no write
+application key in Whitney's sandbox org. Reading the apply's instructions turned up one gap that a run can close.
+The KubeCon run-of-show gave `fleet.sh monitors --apply` with no `--session`, both in the "Datadog sandbox org" row
+and in the Night Before item. Without a window the loader mutes the no-traces monitor indefinitely, so an apply
+copied from the run-of-show would leave that monitor silent through the session it exists for.
+
+**What changed.** Both places now give `--session 2026-11-12T20:50Z/2026-11-12T21:20Z`, the 30-minute slot from the start
+the run-of-show already gives (conference-knowledge `kubecon-na-2026`). The Night Before item also gives the `--data` check from #706.
+`verify/test_fleet_monitors.py` checks that every `monitors --apply` in the run-of-show carries a `--session` that
+`parse_session` accepts, and that it is the 30-minute slot from the start the run-of-show states in "Bring-up and
+teardown commands". Both new checks fail against the previous run-of-show. No metric or tag name changed, because
+none has been measured yet.
+
+**Not yet run on a cluster.** With both clusters up and shipping, someone signed in to Whitney's sandbox org
+(Michael has its Admin role, per #759) issues an unscoped application key. Then a session with `accen-dev` runs
+these from the repo root: `WIB_FLEET_MONITORS_APP_KEY=<key> infra/terraform/fleet/fleet.sh monitors --apply
+--session 2026-11-12T20:50Z/2026-11-12T21:20Z`, then `infra/terraform/fleet/fleet.sh monitors --check`, then one
+/chat on each bot, then `infra/terraform/fleet/fleet.sh monitors --data --cluster burritobot-public --cluster
+burritobot-private`. After that, `verify/test_fleet_monitors_live.py` (in `bash verify/run-e2e.sh`) must pass, and
+the fleet dashboard URL the apply prints must show every column filled for both clusters. A blank column means a
+wrong name, fixed in `infra/datadog-fleet/` and `verify/test_fleet_monitors.py` together.
+
+**The American English test split by need (run 15625).** `bash verify/run-tests.sh` failed on staging d849d67 in
+`verify/test_american_english_gate.py`, added by a4935ef for #745. Its last check runs the shared checker from
+`~/repos/workflow/llm-coding-workflow`, which a dispatched run and the promotion gate do not have, so the offline
+suite failed on any machine without that checkout. The tree-only checks (the opt-in file, the publish step running
+the check before the Doc is replaced) stay in the offline file. The checker run moved to
+`verify/test_american_english_tree.py`, marked `# SUITE: e2e`, which fails with the path printed when the checkout
+is missing. It is not in the tools tier, since the gate has no `~/repos`.

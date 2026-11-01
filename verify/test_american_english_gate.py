@@ -6,18 +6,19 @@ scripts/compile-design-doc.py --publish compiles the SECTIONS docs and pushes th
 leaves the building. Per claude-config/rules/american-english.md a repo that publishes writing opts in with
 a root .american-english listing the published paths, and its publish step runs
 scripts/check_american_english.py --published from the repo root, stopping on a non-zero exit.
+
+This half needs nothing but the tree. The run of the shared checker over the tree reads
+~/repos/workflow/llm-coding-workflow, so it is test_american_english_tree.py in the E2E suite.
 """
 from __future__ import annotations
 
 import pathlib
 import re
-import subprocess
 import sys
 
 REPO = pathlib.Path(__file__).resolve().parents[1]
 OPT_IN = REPO / ".american-english"
 PUBLISH = (REPO / "scripts/compile-design-doc.py").read_text(encoding="utf-8")
-CHECKER = pathlib.Path.home() / "repos/workflow/llm-coding-workflow/scripts/check_american_english.py"
 
 failures: list[str] = []
 
@@ -53,14 +54,6 @@ check("it passes --published", "--published" in PUBLISH)
 check("the check runs BEFORE the Doc is replaced (gdoc-update)", 0 <= checker_at < gdoc_run_at)
 check("a non-zero exit stops the publish before the Doc is replaced (returns the checker's code)",
       0 <= abort_at < gdoc_run_at and re.search(r"if rc != 0:\s*\n[^\n]*\n\s*return rc", PUBLISH) is not None)
-
-print("== the check passes on the current tree ==")
-if not CHECKER.exists():
-    check("the shared checker is present", False, str(CHECKER))
-else:
-    r = subprocess.run([sys.executable, str(CHECKER), "--published"], cwd=REPO, capture_output=True, text=True)
-    check("check_american_english.py --published exits 0", r.returncode == 0,
-          (r.stdout + r.stderr).strip()[-300:])
 
 print()
 if failures:

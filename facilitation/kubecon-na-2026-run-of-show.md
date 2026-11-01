@@ -49,7 +49,7 @@ Dates are for people only:
 |---|---|---|---|
 | Cold read of this run-of-show | Whitney | Once the platform is live. The calendar holds Mon 2026-10-26, 10:00 to 16:00 Central | She reads this file cold against the live platform, not on paper, and each stop is filed as an issue here. Record it under "Run-through record" below |
 | Rehearsal with Whitney | Michael and Whitney | The calendar holds Wed 2026-10-28, 09:00 to 12:00 Central (kept by Michael, question 845 on #457) | If the cold read has not yet run against the live platform, it runs here; otherwise this is run-through 1. Either way it goes under "Run-through record" below |
-| Datadog sandbox org (abstract point 7) | Whitney | By 2026-11-08 | Both KubeCon clusters ship to Whitney's sandbox org (#629). A write application key from her user is in place, `./fleet.sh monitors --apply` has run with `WIB_FLEET_MONITORS_APP_KEY` (#485), and the room view is saved (#665) |
+| Datadog sandbox org (abstract point 7) | Whitney | By 2026-11-08 | Both KubeCon clusters ship to Whitney's sandbox org (#629). A write application key from her user is in place, `./fleet.sh monitors --apply --session 2026-11-12T20:50Z/2026-11-12T21:20Z` has run with `WIB_FLEET_MONITORS_APP_KEY` (#485), and the room view is saved (#665) |
 | Two timed run-throughs | Michael and Whitney | By 2026-11-08 | Two full runs, demo included, each timed against the 30-minute slot, with the timings in the record below and what broke filed as issues here |
 | Delivered | Michael and Whitney | 2026-11-12 | The session runs live. Its slot and room are in conference-knowledge (`kubecon-na-2026`, `schedule`) |
 
@@ -994,8 +994,13 @@ is merely slow rather than rebuilding:
   probe above ends with it already; run it again if anyone has touched the guards
   since.
 - [ ] **Datadog org** for the observability segment is loaded and the fleet monitors
-  are applied (#454, #485; `WIB_FLEET_MONITORS_APP_KEY=<key> ./fleet.sh monitors --apply`
-  with an application key from Whitney's user, then `./fleet.sh monitors --check`). If no
+  are applied (#454, #485; `WIB_FLEET_MONITORS_APP_KEY=<key> ./fleet.sh monitors --apply
+  --session 2026-11-12T20:50Z/2026-11-12T21:20Z` with an application key from Whitney's
+  user, then `./fleet.sh monitors --check`, and after one /chat on each cluster
+  `./fleet.sh monitors --data --cluster burritobot-public --cluster burritobot-private`).
+  The window is the 30-minute slot from the start under "Bring-up and teardown commands"
+  (conference-knowledge `kubecon-na-2026`). Without `--session` the no-traces monitor
+  stays muted for good, so it never fires in the room. If no
   pool is live, each challenge's trace is shown on the admin cluster's Grafana view
   (`https://grafana-burritobot-private.agenticburn.com/d/witb-agent-obs`): open it, run
   the Challenge 1, 3 and 4 beats once, and confirm each of the three panels in the
