@@ -7400,3 +7400,57 @@ with this entry written once. `verify/draft-drift.sh origin/agent/548-14776 orig
 **Not yet run on a cluster.** `CONTEXT=<ctx> IAM_PIPELINE_PROFILE=<profile> IAM_PIPELINE_REGION=<region> bash
 verify/run-e2e.sh` on a fresh attendee cluster, after the Backstage image is signed (`verify/sign-images.sh --check`),
 must show `backstage-footprint.sh (SAMPLES=1)` green.
+
+## 2026-11-01 · #671 · C6's ticket is off Docker Hub, on festival-ops/ rather than lab-platform's promo/
+
+**Done by Michael's own commits; this run adds the check that the published image is the page Joker.** #671 asked to
+move Challenge 6's ticket image off `docker.io/peopleforrester/joker:latest` so the Deployment the ticket causes still
+pulls once the Docker Hub villains are retired. Question 879 (the 2026-10-31 entry above) held that move until
+lab-platform published a page-serving `promo/` Joker. Michael then made the move himself, on a different path, in
+three commits that each name #671:
+- 8560d41 (2026-10-31) moved `C6_IMAGE` in `gitops/ai-layer/ticket_site.py` to `ghcr.io/peopleforrester/villains/joker`.
+  `images/villains/build.sh` now pushes the page Joker from `joker-web/` to GHCR as `$JOKER_REF`, never to Docker Hub.
+- 0be1738 (2026-11-01) renamed it `ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0`. The model
+  reads the image path in the ticket, and a name with "villains" or "joker" in it invites a refusal.
+  `restrict-image-registries` refuses `/peopleforrester/festival-ops/` beside lab-platform's `promo/`, so the private
+  cluster's second tier, refusal at admission, still holds. The same commit updated lab.html, PROMPT-CATALOG.md,
+  `challenges/02-sanitization/agent-prompt-injection.txt`, `verify/test_kubecon_probe.py` and the endpoint, fake-ticket,
+  support-desk and room-Joker tests.
+- 9ee6486 exported LAB-TEXT.md with the new name.
+
+These commits replace question 879's answer. That answer was hecaton's research, not Michael's call, and the "wait for
+a page-serving `promo/` Joker" it chose is no longer needed. The image the ticket names serves the #664 page and is
+not on Docker Hub. lab-platform#345, which asks lab-platform for a public `promo/joker:v2` that serves the page, is
+no longer what C6 waits on. A `promo/` path would also bring back the menacing word 0be1738 took out. Both ticket
+payloads name `C6_IMAGE`: HC-7731's `C6_PAYLOAD` and the room's HC-666 `ROOM_PAYLOAD`. No file still names
+`docker.io/peopleforrester/joker`.
+
+**What this run adds.** `verify/test_c6_joker_public.py`, a new tools-tier test. It reads `C6_IMAGE` from ghcr.io
+with no credential, the way a node with no pull secret does, and checks four things:
+- the image answers an anonymous pull;
+- its config is linux/amd64, with entrypoint `/bin/sh /villain/start.sh` and build.sh's `PORT=8080`;
+- every layer under the top one is the linux/amd64 layer of build.sh's pinned `JOKER_BASE` busybox;
+- the top layer holds this checkout's `joker-web/start.sh` (executable) and `www/index.html`, byte for byte.
+
+build.sh's push is done by hand, so an edit to `joker-web/` that was never pushed fails here and names the push. The
+offline `verify/test_c6_villain_endpoint.py` holds the ticket to build.sh, and `verify/test_joker_web_busybox.py`
+runs the entrypoint on the base, but until now nothing read what was actually published. On 2026-11-01 it passed
+against the manifest ghcr.io serves for the tag, sha256:d8dae795e606.... Adding one line to `www/index.html` made it fail on that file
+alone, and the line was then removed.
+
+**The classifier measurement, rerun.** The payload text changed with the image name, so
+`verify/test_injection_classifier.py` (tools tier) measured the new HC-7731 body again. This run's
+`bash verify/run-e2e-tools.sh` ran it: see Tests.
+
+**Tests.** `bash verify/run-tests.sh` passed (209 tests). `bash verify/run-e2e-tools.sh` passed: 38 checks, the offline
+suite and 37 tier tests, the new one included. In it, `verify/test_injection_classifier.py` refused the new HC-7731
+body at risk 1.0 in 564 ms, under PromptInjection threshold 0.5 as deployed. The same ticket with its payload removed
+passed at risk -1.0, and so did every on-topic ask.
+
+**Not yet run on a cluster.** Owed by a session with AWS access, on the next community and admin bring-up:
+`python3 verify/kubecon_probe.py community attackme.burritobot.co --context <community-context> --kubeconfig
+/tmp/community.kubeconfig --profile accen-dev`. HC-666 lands `joker-<stage name>`, and that pod pulls the
+festival-ops image and serves the page. Then `python3 verify/kubecon_probe.py admin burritobot-private.burritobot.co
+--context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev`, where C6's second tier refuses
+the festival-ops path at admission and the deployed classifier refuses the new payload. Also
+`verify/input-guard.sh <host> <kube-context>`.

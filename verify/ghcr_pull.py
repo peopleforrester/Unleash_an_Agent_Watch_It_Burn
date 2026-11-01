@@ -1,5 +1,5 @@
 # ABOUTME: Asks ghcr.io, with no credential, which digest a reference serves: what a node with no pull secret gets.
-# ABOUTME: Shared by the tools-tier checks that lab-platform's mirror/ copies and promo/ villains are public.
+# ABOUTME: Shared by the tools-tier checks that lab-platform's mirror/ copies, promo/ villains and C6's Joker are public.
 from __future__ import annotations
 
 import json

@@ -13,7 +13,8 @@ The endpoint takes five pieces that live in five files, and any one of them out 
   4. console.conf serves maintenance-shell-<cluster> from that Service, with its own page while nothing answers.
   5. fleet.sh publishes the host in the routes table (WIB_VILLAIN_HOSTS).
 
-The image runs for real in verify/test_joker_web_busybox.py (tools tier); this file is offline.
+The image runs for real in verify/test_joker_web_busybox.py, and the published one is read anonymously from ghcr.io in
+verify/test_c6_joker_public.py (both tools tier); this file is offline.
 """
 from __future__ import annotations
 
