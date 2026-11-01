@@ -7958,3 +7958,43 @@ has synced this commit, a session with AWS access runs `python3 verify/kubecon_p
 --context <community-context> --kubeconfig /tmp/community.kubeconfig --profile accen-dev`. The off-topic beat should
 read "answered 3 of 3". If it misses again on several nights, loosening the probe is the remaining option, and that
 is Michael's call.
+
+## 2026-11-01 · #753 · sweep_orphan_sgs selects only the torn-down cluster's tagged groups
+
+`sweep_orphan_sgs` in `infra/terraform/fleet/fleet.sh` took every `k8s-*` security group in the lab VPC whenever
+`read_vpc_id_for` returned a VPC id. The lab VPC is shared with the roster clusters, so on 2026-11-01 `fleet.sh down
+watch-it-burn-attendee-441` stripped the rules from the community and private clusters' agent-console and traffic
+groups (#752, the parent). The sweep now selects with two `describe-security-groups` calls,
+`Name=tag:elbv2.k8s.aws/cluster,Values=<name>` and `Name=tag:kubernetes.io/cluster/<name>,Values=owned`, each with
+`Name=vpc-id,Values=<lab vpc>` when the VPC id is known and without it when it is not. AWS ANDs different filter
+names, so the two tags cannot share one call; the results are merged and de-duplicated, because a group carrying
+both tags would otherwise be deleted twice and its second, failing delete recorded as an `sg-leak`. The no-VPC
+branch and its squashed-name filter (`k8s-traffic-<squashed>-*,k8s-<squashed>-*`) are gone. The load balancer
+controller tags the service- and ingress-named groups (`k8s-agent-console-*`, `k8s-watchitburningres-*`) with
+`elbv2.k8s.aws/cluster`, so those are still covered when they carry the cluster's tag. `owned` is required on the
+`kubernetes.io/cluster/<name>` tag so a `shared` group is never taken.
+
+**Untagged leftovers are no longer swept per cluster.** The Portland leftovers carried no tags (105 of 105), and the
+VPC-wide `k8s-*` filter was what caught them. A tagless group is now left in place by `down`, and audit-zero's
+`zero:<acct>:sg` line, which still counts every `k8s-*` group in the account, reports it as a failure, so it is not
+silent. Removing such a group is a by-hand step until a later change decides how.
+
+**Found while testing.** The merge pipeline first used `grep -v` to drop `None` and blank lines. Under fleet.sh's
+`set -euo pipefail` that fails the assignment when no group matches, which would have ended the teardown on every
+clean cluster. It uses `awk` instead, and `verify/test_sg_sweep.sh` now runs an empty sweep under errexit.
+
+**Not changed here.** The revoke-then-delete ordering and the network-interface guard are as they were; a follow-up
+child of #752 changes the ordering. `recheck_sg_leaks` stays: a cluster's own group can still be held by a sibling's
+cross-reference during a parallel teardown. Its comment and the one in `sweep_orphan_sgs` no longer call the sweep
+VPC-wide.
+
+**Tests.** `verify/test_sg_sweep.sh` now pins the tag-scoped selection instead of the `k8s-*` name filter and the
+absence of a `tag:kubernetes.io/cluster` filter. Its aws shim answers the tag filters only, and any other filter
+returns a roster cluster's group and a tagless group; the checks assert that the tagged `k8s-agent-console-*` and
+`k8s-watchitburningres-*` groups are deleted and the other two are never touched, with and without a VPC id. Against
+the old fleet.sh, 17 of its checks fail.
+
+**Not yet run on a cluster.** The selection has only met the shim. The owed check is a `fleet.sh down` of one
+attendee cluster in a lab VPC that also holds a roster cluster's load balancer, in a session with AWS access: the
+torn-down cluster's `k8s-*` groups should go, the roster cluster's groups should keep their rules, and
+`bash verify/run-e2e.sh` against the roster cluster should still pass afterwards.

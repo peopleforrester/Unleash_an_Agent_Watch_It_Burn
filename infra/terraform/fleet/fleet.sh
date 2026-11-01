@@ -2386,30 +2386,28 @@ cmd_reap_iam_users() {
 
 sweep_orphan_sgs() {
     local name="$1" acct="${2:-${TF_PROFILE:-${WIB_DEFAULT_ACCOUNT}}}" found=0 survived=0
-    local squashed sgs sg
-    squashed="${name//-/}"
-    # The name filter used to be k8s-traffic-<squashed>-* and k8s-<squashed>-*, which catches the
-    # per-cluster traffic groups and MISSES the ones named after a service or an ingress:
-    # k8s-agent-console-43c584a1f2 and k8s-watchitburningres-11bfcbd899 both survived a sweep and then
-    # blocked the lab VPC from deleting. Found by running this sweep, which is the useful kind of bug.
+    local sgs sg
+    # Only the groups tagged for THIS cluster: elbv2.k8s.aws/cluster=<name> (the load balancer controller's own
+    # groups, including the ones named after a service or an ingress, k8s-agent-console-* and
+    # k8s-watchitburningres-*) or kubernetes.io/cluster/<name>=owned. The sweep used to take every k8s-* group in
+    # the lab VPC, and the lab VPC is shared with the roster clusters: on 2026-11-01 `fleet.sh down
+    # watch-it-burn-attendee-441` stripped the rules from the community and private clusters' agent-console and
+    # traffic groups (#752, #753). The name-only filter before that missed the service- and ingress-named groups.
     #
-    # The filter is now every k8s-* group in the LAB VPC. Scoping by vpc-id is what makes that safe: it
-    # cannot reach a co-tenant's groups, and this account holds a packt-lab-vpc that is not ours. A
-    # cluster-name filter was never the right shape, because the controller does not put the cluster
-    # name in every group it creates.
-    local vpc; vpc="$(read_vpc_id_for "${acct}" 2>/dev/null || true)"
-    if [[ -n "${vpc}" ]]; then
-        sgs="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
-                --filters "Name=vpc-id,Values=${vpc}" "Name=group-name,Values=k8s-*" \
-                --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true)"
-    else
-        sgs="$(AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
-                --filters "Name=group-name,Values=k8s-traffic-${squashed}-*,k8s-${squashed}-*" \
-                --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true)"
-    fi
-    # Only groups on no network interface. The lab VPC is shared: in the home region it also holds attackme's and
-    # burritobot-private's live load balancers, whose groups are k8s-* too, and the rules are stripped below before
-    # any delete is tried. A group a live LB uses sits on that LB's interfaces (verify/test_sg_sweep.sh).
+    # A leftover that carries neither tag (the Portland leftovers carried none) is no longer swept per cluster;
+    # audit-zero's zero:<acct>:sg line still reports it. AWS ANDs different filter names, so the two tags are two
+    # calls, merged and de-duplicated. The vpc-id filter is added when the lab VPC is known.
+    local vpc vpcf=(); vpc="$(read_vpc_id_for "${acct}" 2>/dev/null || true)"
+    [[ -z "${vpc}" ]] || vpcf=("Name=vpc-id,Values=${vpc}")
+    local tagf
+    sgs="$(for tagf in "Name=tag:elbv2.k8s.aws/cluster,Values=${name}" "Name=tag:kubernetes.io/cluster/${name},Values=owned"; do
+               AWS_PROFILE="${acct}" aws ec2 describe-security-groups --region "${WIB_REGION}" \
+                   --filters "${vpcf[@]}" "${tagf}" \
+                   --query 'SecurityGroups[?GroupName!=`default`].GroupId' --output text 2>/dev/null || true
+           done | tr '\t' '\n' | awk '$0 != "" && $0 != "None"' | sort -u)"
+    # Only groups on no network interface. The rules are stripped below before any delete is tried, and a group a
+    # live load balancer still uses sits on that LB's interfaces (verify/test_sg_sweep.sh). The tag selection
+    # already keeps the sweep off the roster clusters' groups in the shared lab VPC; this is the second guard.
     local free="" eni
     for sg in ${sgs}; do
         [[ "${sg}" != "None" ]] || continue
@@ -2459,10 +2457,12 @@ sweep_orphan_sgs() {
     return 0
 }
 
-# A teardown runs clusters in parallel, and sweep_orphan_sgs is VPC-wide, so a cluster's sweep meets its siblings'
-# groups while those clusters are still being destroyed, fails to delete them, and records sg-leak (2026-10-31: five
-# us-east-2 standbys reported leaks; afterwards the VPC held only its own Bedrock endpoint group). Once every destroy
-# is done, sweep again for each cluster that reported one, and keep only the reports a group still survives.
+# A teardown runs clusters in parallel, and a cluster's group can refuse to delete while a sibling still being
+# destroyed holds a reference to it or an interface on it, so its sweep records sg-leak (2026-10-31: five us-east-2
+# standbys reported leaks while the sweep still took every k8s-* group in the lab VPC; afterwards the VPC held only
+# its own Bedrock endpoint group). The sweep now takes only the cluster's own tagged groups (#753), and the re-check
+# stays for those cross-references. Once every destroy is done, sweep again for each cluster that reported one, and
+# keep only the reports a group still survives.
 recheck_sg_leaks() {
     [[ -s "${FAIL_FILE}" ]] || return 0
     local leaked n
