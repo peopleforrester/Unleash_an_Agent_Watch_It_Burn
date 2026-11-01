@@ -7906,7 +7906,7 @@ would break Must-haves 1 and 3, since the waterfall would skip agentgateway. The
 issue #746 as question 1034, with the same sources and the same decider.
 
 **What it changes.**
-- No collector transform re-parents kagent's span. `gitops/otel-collector/values.yaml` is unchanged by this entry.
+- No collector processor re-parents kagent's span. `gitops/otel-collector/values.yaml` is unchanged by this entry.
 - The Datadog-visible shape stays as pinned in `verify/test_trace_shape_e2e.py` (commit 0b11a9c): guard-proxy's
   `POST /chat` is an llm row with the prompt and reply; the four hops carry no `gen_ai.*` attribute and are dropped;
   kagent's `POST /` keeps its conversation id and is a workflow row with no operation name.
