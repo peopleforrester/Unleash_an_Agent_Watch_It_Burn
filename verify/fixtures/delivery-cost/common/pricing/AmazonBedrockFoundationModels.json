@@ -1,0 +1,2114 @@
+[
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_read_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "ZFR8W937RA37SH55"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "ZFR8W937RA37SH55.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "ZFR8W937RA37SH55.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.5000000000"
+       },
+       "rateCode": "ZFR8W937RA37SH55.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "ZFR8W937RA37SH55",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "CV5Z6A6R7KA2M2NG"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "CV5Z6A6R7KA2M2NG.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "CV5Z6A6R7KA2M2NG.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Response Tokens Regional CRIS",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "16.5000000000"
+       },
+       "rateCode": "CV5Z6A6R7KA2M2NG.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "CV5Z6A6R7KA2M2NG",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_input_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "WHNZQT7Y2WFPKGSP"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "WHNZQT7Y2WFPKGSP.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "WHNZQT7Y2WFPKGSP.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "5.0000000000"
+       },
+       "rateCode": "WHNZQT7Y2WFPKGSP.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "WHNZQT7Y2WFPKGSP",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_output_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "SESRDECAU7RE3JEU"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "SESRDECAU7RE3JEU.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "SESRDECAU7RE3JEU.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "25.0000000000"
+       },
+       "rateCode": "SESRDECAU7RE3JEU.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "SESRDECAU7RE3JEU",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWrite1hInputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "WEAT29DBEZWNU59B"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "WEAT29DBEZWNU59B.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "WEAT29DBEZWNU59B.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million 1 hour Cache Write Input Tokens Regional CRIS",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "6.6000000000"
+       },
+       "rateCode": "WEAT29DBEZWNU59B.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "WEAT29DBEZWNU59B",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_output_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "6UDDGZ9Z7EKYR5TT"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "6UDDGZ9Z7EKYR5TT.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "6UDDGZ9Z7EKYR5TT.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "11.0000000000"
+       },
+       "rateCode": "6UDDGZ9Z7EKYR5TT.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "6UDDGZ9Z7EKYR5TT",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount_Global_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "KFWBRN292ZAH2ENK"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "KFWBRN292ZAH2ENK.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "KFWBRN292ZAH2ENK.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.5000000000"
+       },
+       "rateCode": "KFWBRN292ZAH2ENK.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "KFWBRN292ZAH2ENK",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "Z75AXGZJZPKYMB9J"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "Z75AXGZJZPKYMB9J.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "Z75AXGZJZPKYMB9J.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Response Tokens Regional",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.7500000000"
+       },
+       "rateCode": "Z75AXGZJZPKYMB9J.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "Z75AXGZJZPKYMB9J",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWriteInputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "E6HQN9B6PKSUH5E6"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "E6HQN9B6PKSUH5E6.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "E6HQN9B6PKSUH5E6.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Write Input Tokens Regional CRIS",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "4.1250000000"
+       },
+       "rateCode": "E6HQN9B6PKSUH5E6.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "E6HQN9B6PKSUH5E6",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount_Global_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "GNSRM9V5UPCKC9ZC"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "GNSRM9V5UPCKC9ZC.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "GNSRM9V5UPCKC9ZC.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.5000000000"
+       },
+       "rateCode": "GNSRM9V5UPCKC9ZC.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "GNSRM9V5UPCKC9ZC",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_input_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "ZGEWTYGDYRCYH62B"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "ZGEWTYGDYRCYH62B.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "ZGEWTYGDYRCYH62B.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "5.5000000000"
+       },
+       "rateCode": "ZGEWTYGDYRCYH62B.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "ZGEWTYGDYRCYH62B",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWriteInputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "73F7XT6NJRHUGT6P"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "73F7XT6NJRHUGT6P.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "73F7XT6NJRHUGT6P.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Write Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.2500000000"
+       },
+       "rateCode": "73F7XT6NJRHUGT6P.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "73F7XT6NJRHUGT6P",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheReadInputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "ME4HX3NVJ6K5SKM5"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "ME4HX3NVJ6K5SKM5.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "ME4HX3NVJ6K5SKM5.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Read Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3000000000"
+       },
+       "rateCode": "ME4HX3NVJ6K5SKM5.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "ME4HX3NVJ6K5SKM5",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "CEFVF9AGX63DZ82A"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "CEFVF9AGX63DZ82A.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "CEFVF9AGX63DZ82A.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Input Tokens Regional",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.1000000000"
+       },
+       "rateCode": "CEFVF9AGX63DZ82A.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "CEFVF9AGX63DZ82A",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "4FYY43WJWMU3P34D"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "4FYY43WJWMU3P34D.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "4FYY43WJWMU3P34D.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Input Tokens Regional CRIS",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "3.3000000000"
+       },
+       "rateCode": "4FYY43WJWMU3P34D.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "4FYY43WJWMU3P34D",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWrite1hInputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "C22SPV8ZQB3N6EAA"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "C22SPV8ZQB3N6EAA.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "C22SPV8ZQB3N6EAA.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million 1 hour Cache Write Input Tokens Regional",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.2000000000"
+       },
+       "rateCode": "C22SPV8ZQB3N6EAA.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "C22SPV8ZQB3N6EAA",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "Q5UU45JHGS2TST7K"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "Q5UU45JHGS2TST7K.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "Q5UU45JHGS2TST7K.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Input Tokens Regional",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.5500000000"
+       },
+       "rateCode": "Q5UU45JHGS2TST7K.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "Q5UU45JHGS2TST7K",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_output_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "9ST5Z3ABUQHUTXB4"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "9ST5Z3ABUQHUTXB4.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "9ST5Z3ABUQHUTXB4.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "27.5000000000"
+       },
+       "rateCode": "9ST5Z3ABUQHUTXB4.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "9ST5Z3ABUQHUTXB4",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_read_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "264Q8EYZHTHD3JED"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "264Q8EYZHTHD3JED.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "264Q8EYZHTHD3JED.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2200000000"
+       },
+       "rateCode": "264Q8EYZHTHD3JED.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "264Q8EYZHTHD3JED",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWrite1hInputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "68HWT9R4XYRCD8UE"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "68HWT9R4XYRCD8UE.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "68HWT9R4XYRCD8UE.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million 1 hour Cache Write Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.0000000000"
+       },
+       "rateCode": "68HWT9R4XYRCD8UE.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "68HWT9R4XYRCD8UE",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWrite1hInputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "NXZQ5JJCTEA6KZ4K"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "NXZQ5JJCTEA6KZ4K.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "NXZQ5JJCTEA6KZ4K.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million 1 hour Cache Write Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "6.0000000000"
+       },
+       "rateCode": "NXZQ5JJCTEA6KZ4K.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "NXZQ5JJCTEA6KZ4K",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheReadInputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "PZ222SVPZTY3JUFH"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "PZ222SVPZTY3JUFH.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "PZ222SVPZTY3JUFH.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Read Input Tokens Regional",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1100000000"
+       },
+       "rateCode": "PZ222SVPZTY3JUFH.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "PZ222SVPZTY3JUFH",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWriteInputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "K8PZ593B3CNYJUPC"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "K8PZ593B3CNYJUPC.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "K8PZ593B3CNYJUPC.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Write Input Tokens Regional",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.3750000000"
+       },
+       "rateCode": "K8PZ593B3CNYJUPC.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "K8PZ593B3CNYJUPC",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "AR59AC3SEAVXXWYC"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "AR59AC3SEAVXXWYC.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "AR59AC3SEAVXXWYC.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Response Tokens Regional",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "5.5000000000"
+       },
+       "rateCode": "AR59AC3SEAVXXWYC.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "AR59AC3SEAVXXWYC",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_1h_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "BFURJ8QUW3Z8N3Q2"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "BFURJ8QUW3Z8N3Q2.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "BFURJ8QUW3Z8N3Q2.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "4.4000000000"
+       },
+       "rateCode": "BFURJ8QUW3Z8N3Q2.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "BFURJ8QUW3Z8N3Q2",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "VMF242N5PA87XH2P"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "VMF242N5PA87XH2P.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "VMF242N5PA87XH2P.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "6.8750000000"
+       },
+       "rateCode": "VMF242N5PA87XH2P.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "VMF242N5PA87XH2P",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_read_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "FCG5FG2ZRCJ24Z5S"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "FCG5FG2ZRCJ24Z5S.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "FCG5FG2ZRCJ24Z5S.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.5500000000"
+       },
+       "rateCode": "FCG5FG2ZRCJ24Z5S.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "FCG5FG2ZRCJ24Z5S",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "V7UBTKQYGQ8PEHAB"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "V7UBTKQYGQ8PEHAB.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "V7UBTKQYGQ8PEHAB.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.7500000000"
+       },
+       "rateCode": "V7UBTKQYGQ8PEHAB.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "V7UBTKQYGQ8PEHAB",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "BF732VQAH768SH3X"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "BF732VQAH768SH3X.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "BF732VQAH768SH3X.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Response Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "15.0000000000"
+       },
+       "rateCode": "BF732VQAH768SH3X.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "BF732VQAH768SH3X",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheReadInputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "JWC87WDBUGJS96NF"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "JWC87WDBUGJS96NF.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "JWC87WDBUGJS96NF.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Read Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1000000000"
+       },
+       "rateCode": "JWC87WDBUGJS96NF.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "JWC87WDBUGJS96NF",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheWriteInputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "YDMM7A3ZN9NADW35"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "YDMM7A3ZN9NADW35.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "YDMM7A3ZN9NADW35.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Write Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "3.7500000000"
+       },
+       "rateCode": "YDMM7A3ZN9NADW35.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "YDMM7A3ZN9NADW35",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_input_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "4U5CK3KMDTP4HQCK"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "4U5CK3KMDTP4HQCK.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "4U5CK3KMDTP4HQCK.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.0000000000"
+       },
+       "rateCode": "4U5CK3KMDTP4HQCK.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "4U5CK3KMDTP4HQCK",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "JRZBRVPV4WU854WK"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "JRZBRVPV4WU854WK.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "JRZBRVPV4WU854WK.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Response Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "5.0000000000"
+       },
+       "rateCode": "JRZBRVPV4WU854WK.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "JRZBRVPV4WU854WK",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount_Global_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "V78XJQWWVMCC5KG8"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "V78XJQWWVMCC5KG8.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "V78XJQWWVMCC5KG8.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Response Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "7.5000000000"
+       },
+       "rateCode": "V78XJQWWVMCC5KG8.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "V78XJQWWVMCC5KG8",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "MYNN2XT37HRHRMUU"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "MYNN2XT37HRHRMUU.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "MYNN2XT37HRHRMUU.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Input Tokens Regional CRIS",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.6500000000"
+       },
+       "rateCode": "MYNN2XT37HRHRMUU.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "MYNN2XT37HRHRMUU",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "BCMEZTWTT9CC7E52"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "BCMEZTWTT9CC7E52.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "BCMEZTWTT9CC7E52.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "3.0000000000"
+       },
+       "rateCode": "BCMEZTWTT9CC7E52.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "BCMEZTWTT9CC7E52",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "H3T5SKM3XTTUB9QV"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "H3T5SKM3XTTUB9QV.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "H3T5SKM3XTTUB9QV.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "6.2500000000"
+       },
+       "rateCode": "H3T5SKM3XTTUB9QV.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "H3T5SKM3XTTUB9QV",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "M6GX7DWXSZ8KRRAM"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "M6GX7DWXSZ8KRRAM.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "M6GX7DWXSZ8KRRAM.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Response Tokens Regional CRIS",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "8.2500000000"
+       },
+       "rateCode": "M6GX7DWXSZ8KRRAM.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "M6GX7DWXSZ8KRRAM",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_InputTokenCount_Global-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "4JSTB8J9NP4VP73F"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "4JSTB8J9NP4VP73F.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "4JSTB8J9NP4VP73F.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Input Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.0000000000"
+       },
+       "rateCode": "4JSTB8J9NP4VP73F.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "4JSTB8J9NP4VP73F",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "V37HPTFM3U8U6R5Q"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "V37HPTFM3U8U6R5Q.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "V37HPTFM3U8U6R5Q.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.5000000000"
+       },
+       "rateCode": "V37HPTFM3U8U6R5Q.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "V37HPTFM3U8U6R5Q",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_1h_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "BV3Z8MBFSQ9MZWMZ"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "BV3Z8MBFSQ9MZWMZ.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "BV3Z8MBFSQ9MZWMZ.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "11.0000000000"
+       },
+       "rateCode": "BV3Z8MBFSQ9MZWMZ.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "BV3Z8MBFSQ9MZWMZ",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_read_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "FE9NURQFT8H5EBAB"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "FE9NURQFT8H5EBAB.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "FE9NURQFT8H5EBAB.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Read Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2000000000"
+       },
+       "rateCode": "FE9NURQFT8H5EBAB.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "FE9NURQFT8H5EBAB",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_output_tokens_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "AFSM38SX2BJATHC4"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "AFSM38SX2BJATHC4.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "AFSM38SX2BJATHC4.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Output Tokens - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "10.0000000000"
+       },
+       "rateCode": "AFSM38SX2BJATHC4.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "AFSM38SX2BJATHC4",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_input_tokens_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "AU4URCAV6WH4GCMP"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "AU4URCAV6WH4GCMP.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "AU4URCAV6WH4GCMP.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Input Tokens - Standard",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.2000000000"
+       },
+       "rateCode": "AU4URCAV6WH4GCMP.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "AU4URCAV6WH4GCMP",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Haiku 4.5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Haiku 4.5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_OutputTokenCount_Global_Batch-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "FPNGA7TKD79EVMQE"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "FPNGA7TKD79EVMQE.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "FPNGA7TKD79EVMQE.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Batch Response Tokens Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "2.5000000000"
+       },
+       "rateCode": "FPNGA7TKD79EVMQE.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "FPNGA7TKD79EVMQE",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 4.6",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 4.6 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_CacheReadInputTokenCount-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "YBH6QHKCAR34NPCP"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "YBH6QHKCAR34NPCP.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "YBH6QHKCAR34NPCP.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Million Cache Read Input Tokens Regional CRIS",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3300000000"
+       },
+       "rateCode": "YBH6QHKCAR34NPCP.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "YBH6QHKCAR34NPCP",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Sonnet 5",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Sonnet 5 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_1h_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "8ZU2SHREVBBGXGM4"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "8ZU2SHREVBBGXGM4.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "8ZU2SHREVBBGXGM4.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "4.0000000000"
+       },
+       "rateCode": "8ZU2SHREVBBGXGM4.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "8ZU2SHREVBBGXGM4",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Claude Opus 4.8",
+    "operation": "",
+    "provider": "Anthropic",
+    "regionCode": "us-west-2",
+    "servicename": "Claude Opus 4.8 (Amazon Bedrock Edition)",
+    "usagetype": "USW2-MP:USW2_cache_write_tokens_1h_global_standard-Units"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "TZB5H3Y32FE9YW52"
+  },
+  "publicationDate": "2026-10-12T08:40:08Z",
+  "serviceCode": "AmazonBedrockFoundationModels",
+  "terms": {
+   "OnDemand": {
+    "TZB5H3Y32FE9YW52.4799GE89SK": {
+     "effectiveDate": "2026-09-01T00:00:00Z",
+     "offerTermCode": "4799GE89SK",
+     "priceDimensions": {
+      "TZB5H3Y32FE9YW52.4799GE89SK.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "AWS Marketplace software usage|us-west-2|Cache Write Tokens (1h TTL) - Standard, Global",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "10.0000000000"
+       },
+       "rateCode": "TZB5H3Y32FE9YW52.4799GE89SK.6YS6EN2CT7",
+       "unit": "1M tokens"
+      }
+     },
+     "sku": "TZB5H3Y32FE9YW52",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261012084008"
+ }
+]

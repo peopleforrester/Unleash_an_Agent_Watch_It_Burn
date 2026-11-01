@@ -1,0 +1,34 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T16:00:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"CreateVolume\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"size\": 10, \"volumeType\": \"gp3\", \"encrypted\": true, \"tagSpecificationSet\": {\"items\": [{\"resourceType\": \"volume\", \"tags\": [{\"key\": \"kubernetes.io/cluster/watch-it-burn-attendee-001\", \"value\": \"owned\"}, {\"key\": \"ebs.csi.aws.com/cluster\", \"value\": \"true\"}, {\"key\": \"kubernetes.io/created-for/pvc/name\", \"value\": \"data-postgres-0\"}]}]}}, \"responseElements\": {\"volumeId\": \"vol-0fixturepvc0001\", \"size\": \"10\", \"volumeType\": \"gp3\", \"createTime\": 1757260800000, \"status\": \"creating\"}, \"eventID\": \"00000000-0000-0000-0000-000000000012\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000012",
+   "EventName": "CreateVolume",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-07T16:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T16:01:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"CreateVolume\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"size\": 500, \"volumeType\": \"gp3\", \"tagSpecificationSet\": {\"items\": [{\"resourceType\": \"volume\", \"tags\": [{\"key\": \"Workshop\", \"value\": \"packt\"}]}]}}, \"responseElements\": {\"volumeId\": \"vol-0packt00000001\", \"size\": \"500\", \"volumeType\": \"gp3\"}, \"eventID\": \"00000000-0000-0000-0000-000000000013\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000013",
+   "EventName": "CreateVolume",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-07T16:01:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-10T01:00:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"CreateVolume\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"eventID\": \"00000000-0000-0000-0000-000000000099\", \"readOnly\": false, \"eventType\": \"AwsApiCall\", \"requestParameters\": {\"size\": 10, \"volumeType\": \"gp3\", \"tagSpecificationSet\": {\"items\": [{\"resourceType\": \"volume\", \"tags\": [{\"key\": \"kubernetes.io/cluster/watch-it-burn-attendee-001\", \"value\": \"owned\"}, {\"key\": \"ebs.csi.aws.com/cluster\", \"value\": \"true\"}]}]}}, \"responseElements\": {\"volumeId\": \"vol-0kubeconpvc0001\", \"size\": \"10\", \"volumeType\": \"gp3\"}}",
+   "EventId": "00000000-0000-0000-0000-000000000099",
+   "EventName": "CreateVolume",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-10T01:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "ebs-csi"
+  }
+ ]
+}

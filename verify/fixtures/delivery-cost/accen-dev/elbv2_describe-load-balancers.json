@@ -1,0 +1,9 @@
+{
+ "LoadBalancers": [
+  {
+   "CreatedTime": "2026-05-01T00:00:00+00:00",
+   "LoadBalancerArn": "arn:aws:elasticloadbalancing:us-west-2:111111111111:loadbalancer/app/packt-old/1111111111111111",
+   "Type": "application"
+  }
+ ]
+}

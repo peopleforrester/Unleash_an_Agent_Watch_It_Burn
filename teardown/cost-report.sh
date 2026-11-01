@@ -27,6 +27,8 @@ TAG_VALUE="${COST_TAG_VALUE:-watch-it-burn}"  # tag value identifying this works
 # Explorer cannot group or filter by it and a tag-filtered query is structurally empty. The unfiltered fallback below is the honest answer
 # available from here: it is the WHOLE account, so on a co-tenant account it is an upper bound that
 # includes the other project, never a workshop-only figure.
+# The payer is the lab-account provider's, and nobody asks them to activate anything (Michael's ruling on #392,
+# 2026-11-01). A delivery is costed from member-account data instead: teardown/delivery-cost-estimate.py.
 GRANULARITY="DAILY"                        # DAILY | MONTHLY
 GROUP_BY_SERVICE=false                     # --by-service to break the total down per AWS service
 
@@ -55,6 +57,9 @@ Notes:
   * The cost-allocation tag MUST be activated on the PAYER account before it can be queried:
     teardown/activate-cost-tags.sh, run with the payer's credentials. Activation counts forward
     only; that script also requests a backfill, which recovers up to the previous twelve months.
+    The payer here is the lab-account provider's and is not asked (#392), so until then this
+    filtered total is 0.00. To cost a delivery from the member accounts themselves, run
+    teardown/delivery-cost-estimate.py (an estimate, priced from the AWS Price List API).
   * Cost Explorer get-cost-and-usage incurs a small per-request charge.
 EOF
 }
@@ -151,8 +156,8 @@ if [[ -z "${TOTAL_SUM:-}" ]] || awk -v v="${TOTAL_SUM:-0}" 'BEGIN{exit !(v+0==0)
   echo
   echo ">> Tag-filtered total is 0.00, which on this account almost certainly means the"
   echo "   '${TAG_KEY}' cost-allocation tag is not activated on the PAYER account rather than"
-  echo "   that nothing was spent. A linked account cannot activate it; the payer account runs"
-  echo "   teardown/activate-cost-tags.sh, which activates it and backfills the past months."
+  echo "   that nothing was spent. A linked account cannot activate it, and the payer is not asked (#392)."
+  echo "   For a per-delivery figure from member-account data, run teardown/delivery-cost-estimate.py."
   echo ">> Unfiltered total for the same window (WHOLE ACCOUNT, includes any co-tenant project):"
   aws ce get-cost-and-usage --region us-east-1 \
       --time-period "Start=${START},End=${END}" --granularity MONTHLY --metrics UnblendedCost \

@@ -1,0 +1,44 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:00:00Z\", \"eventSource\": \"eks.amazonaws.com\", \"eventName\": \"CreateCluster\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"name\": \"watch-it-burn-attendee-001\", \"tags\": {\"project\": \"watch-it-burn\", \"event\": \"devopsdays-portland-2026\", \"attendee\": \"watch-it-burn-attendee-001\"}, \"version\": \"1.33\"}, \"responseElements\": {\"cluster\": {\"name\": \"watch-it-burn-attendee-001\", \"arn\": \"arn:aws:eks:us-west-2:111111111111:cluster/watch-it-burn-attendee-001\", \"status\": \"CREATING\"}}, \"eventID\": \"00000000-0000-0000-0000-000000000001\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000001",
+   "EventName": "CreateCluster",
+   "EventSource": "eks.amazonaws.com",
+   "EventTime": "2026-09-07T15:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:05:00Z\", \"eventSource\": \"eks.amazonaws.com\", \"eventName\": \"CreateCluster\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"name\": \"packt-lab-01\", \"tags\": {\"Workshop\": \"packt\"}}, \"responseElements\": {\"cluster\": {\"name\": \"packt-lab-01\"}}, \"eventID\": \"00000000-0000-0000-0000-000000000002\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000002",
+   "EventName": "CreateCluster",
+   "EventSource": "eks.amazonaws.com",
+   "EventTime": "2026-09-07T15:05:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:06:00Z\", \"eventSource\": \"ecs.amazonaws.com\", \"eventName\": \"CreateCluster\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"clusterName\": \"watch-it-burn-attendee-001\"}, \"responseElements\": {\"cluster\": {\"clusterName\": \"watch-it-burn-attendee-001\"}}, \"eventID\": \"00000000-0000-0000-0000-000000000003\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000003",
+   "EventName": "CreateCluster",
+   "EventSource": "ecs.amazonaws.com",
+   "EventTime": "2026-09-07T15:06:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-10T00:00:00Z\", \"eventSource\": \"eks.amazonaws.com\", \"eventName\": \"CreateCluster\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"name\": \"watch-it-burn-attendee-001\", \"tags\": {\"project\": \"watch-it-burn\", \"event\": \"kubecon-na-2026\"}}, \"responseElements\": {\"cluster\": {\"name\": \"watch-it-burn-attendee-001\"}}, \"eventID\": \"00000000-0000-0000-0000-000000000004\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000004",
+   "EventName": "CreateCluster",
+   "EventSource": "eks.amazonaws.com",
+   "EventTime": "2026-09-10T00:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

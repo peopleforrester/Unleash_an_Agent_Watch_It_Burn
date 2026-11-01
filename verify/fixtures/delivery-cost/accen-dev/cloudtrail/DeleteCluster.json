@@ -1,0 +1,14 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-09T03:00:00Z\", \"eventSource\": \"eks.amazonaws.com\", \"eventName\": \"DeleteCluster\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"name\": \"watch-it-burn-attendee-001\"}, \"responseElements\": {\"cluster\": {\"name\": \"watch-it-burn-attendee-001\", \"status\": \"DELETING\"}}, \"eventID\": \"00000000-0000-0000-0000-000000000005\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000005",
+   "EventName": "DeleteCluster",
+   "EventSource": "eks.amazonaws.com",
+   "EventTime": "2026-09-09T03:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

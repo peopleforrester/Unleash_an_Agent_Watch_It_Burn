@@ -1,0 +1,14 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-07T15:15:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"RunInstances\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"222222222222\", \"requestParameters\": {\"instancesSet\": {\"items\": [{\"minCount\": 1, \"maxCount\": 1}]}, \"launchTemplate\": {\"launchTemplateId\": \"lt-0fixture\", \"version\": \"1\"}}, \"responseElements\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0fixture00000002\", \"instanceType\": \"t3.2xlarge\", \"launchTime\": 0, \"instanceState\": {\"code\": 0, \"name\": \"pending\"}, \"tagSet\": {\"items\": [{\"key\": \"project\", \"value\": \"watch-it-burn\"}, {\"key\": \"event\", \"value\": \"devopsdays-portland-2026\"}, {\"key\": \"attendee\", \"value\": \"watch-it-burn-attendee-002\"}, {\"key\": \"eks:cluster-name\", \"value\": \"watch-it-burn-attendee-002\"}]}}, {\"instanceId\": \"i-0fixture00000003\", \"instanceType\": \"t3.2xlarge\", \"launchTime\": 0, \"instanceState\": {\"code\": 0, \"name\": \"pending\"}, \"tagSet\": {\"items\": [{\"key\": \"project\", \"value\": \"watch-it-burn\"}, {\"key\": \"event\", \"value\": \"devopsdays-portland-2026\"}, {\"key\": \"attendee\", \"value\": \"watch-it-burn-attendee-002\"}, {\"key\": \"eks:cluster-name\", \"value\": \"watch-it-burn-attendee-002\"}]}}]}, \"ownerId\": \"222222222222\"}, \"eventID\": \"00000000-0000-0000-0000-000000000019\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000019",
+   "EventName": "RunInstances",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-07T15:15:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

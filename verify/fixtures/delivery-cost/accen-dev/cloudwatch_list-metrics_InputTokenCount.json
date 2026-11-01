@@ -1,0 +1,19 @@
+{
+ "Metrics": [
+  {
+   "Dimensions": [
+    {
+     "Name": "ModelId",
+     "Value": "us.meta.llama3-3-70b-instruct-v1:0"
+    }
+   ],
+   "MetricName": "InputTokenCount",
+   "Namespace": "AWS/Bedrock"
+  },
+  {
+   "Dimensions": [],
+   "MetricName": "InputTokenCount",
+   "Namespace": "AWS/Bedrock"
+  }
+ ]
+}

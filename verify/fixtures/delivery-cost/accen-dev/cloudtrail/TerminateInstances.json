@@ -1,0 +1,24 @@
+{
+ "Events": [
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-06T12:00:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"TerminateInstances\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0beforelookback1\"}]}}, \"responseElements\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0beforelookback1\", \"currentState\": {\"code\": 32, \"name\": \"shutting-down\"}}]}}, \"eventID\": \"00000000-0000-0000-0000-000000000010\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000010",
+   "EventName": "TerminateInstances",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-06T12:00:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  },
+  {
+   "CloudTrailEvent": "{\"eventVersion\": \"1.10\", \"eventTime\": \"2026-09-09T02:50:00Z\", \"eventSource\": \"ec2.amazonaws.com\", \"eventName\": \"TerminateInstances\", \"awsRegion\": \"us-west-2\", \"recipientAccountId\": \"111111111111\", \"requestParameters\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0fixture00000001\"}]}}, \"responseElements\": {\"instancesSet\": {\"items\": [{\"instanceId\": \"i-0fixture00000001\", \"currentState\": {\"code\": 32, \"name\": \"shutting-down\"}}]}}, \"eventID\": \"00000000-0000-0000-0000-000000000011\", \"readOnly\": false, \"eventType\": \"AwsApiCall\"}",
+   "EventId": "00000000-0000-0000-0000-000000000011",
+   "EventName": "TerminateInstances",
+   "EventSource": "ec2.amazonaws.com",
+   "EventTime": "2026-09-09T02:50:00+00:00",
+   "ReadOnly": "false",
+   "Resources": [],
+   "Username": "eks-nodegroup.amazonaws.com"
+  }
+ ]
+}

@@ -1,0 +1,24 @@
+{
+ "NatGateways": [
+  {
+   "CreateTime": "2026-07-01T00:00:00+00:00",
+   "NatGatewayId": "nat-0fixturelab0001",
+   "State": "available",
+   "Tags": [
+    {
+     "Key": "project",
+     "Value": "watch-it-burn"
+    },
+    {
+     "Key": "event",
+     "Value": "devopsdays-portland-2026"
+    },
+    {
+     "Key": "Purpose",
+     "Value": "lab-shared-vpc"
+    }
+   ],
+   "VpcId": "vpc-0fixture"
+  }
+ ]
+}

@@ -1,0 +1,2620 @@
+[
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - CloudWANVPC",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANVPC",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "9MBVP3QFCE84PJ9P"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "9MBVP3QFCE84PJ9P.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "9MBVP3QFCE84PJ9P.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (CloudWANVPC)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "9MBVP3QFCE84PJ9P.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "9MBVP3QFCE84PJ9P",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "RegionalNatGateway",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "2RJB63NCY63YKDUY"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "2RJB63NCY63YKDUY.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "2RJB63NCY63YKDUY.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Hourly charge for Regional NAT Gateways",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "2RJB63NCY63YKDUY.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "2RJB63NCY63YKDUY",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways with provisioned bandwidth",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "NatGateway",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-NatGateway-Prvd-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "8343CZA99BSCRAXK"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "8343CZA99BSCRAXK.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "8343CZA99BSCRAXK.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.00 per GB Data Processed by NAT Gateways with Provisioned Bandwidth",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "8343CZA99BSCRAXK.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "8343CZA99BSCRAXK",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "maxIopsvolume": "80000",
+    "maxThroughputvolume": "2000 MiB/s",
+    "maxVolumeSize": "64 TiB",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "storageMedia": "SSD-backed",
+    "usagetype": "USW2-EBS:VolumeUsage.gp3",
+    "volumeApiName": "gp3",
+    "volumeType": "General Purpose"
+   },
+   "productFamily": "Storage",
+   "sku": "BB8UJWJ4XPFJB95G"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "BB8UJWJ4XPFJB95G.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "BB8UJWJ4XPFJB95G.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.08 per GB-month of General Purpose (gp3) provisioned storage - US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0800000000"
+       },
+       "rateCode": "BB8UJWJ4XPFJB95G.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB-Mo"
+      }
+     },
+     "sku": "BB8UJWJ4XPFJB95G",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - TransitGatewayDirectConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayDirectConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "PX7Y75HEY9G8N72Q"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "PX7Y75HEY9G8N72Q.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "PX7Y75HEY9G8N72Q.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (TransitGatewayDirectConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "PX7Y75HEY9G8N72Q.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "PX7Y75HEY9G8N72Q",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "maxIopsBurstPerformance": "3000 for volumes <= 1 TiB",
+    "maxIopsvolume": "16000",
+    "maxThroughputvolume": "250 MiB/s",
+    "maxVolumeSize": "16 TiB",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "storageMedia": "SSD-backed",
+    "usagetype": "USW2-EBS:VolumeUsage.gp2",
+    "volumeApiName": "gp2",
+    "volumeType": "General Purpose"
+   },
+   "productFamily": "Storage",
+   "sku": "AUJG8J97AVK3PF8K"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "AUJG8J97AVK3PF8K.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "AUJG8J97AVK3PF8K.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.10 per GB-month of General Purpose SSD (gp2) provisioned storage - US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1000000000"
+       },
+       "rateCode": "AUJG8J97AVK3PF8K.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB-Mo"
+      }
+     },
+     "sku": "AUJG8J97AVK3PF8K",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - TransitGatewayConcentratorVPN",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayConcentratorVPN",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "ND5NCRBWBCRD3QWN"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "ND5NCRBWBCRD3QWN.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "ND5NCRBWBCRD3QWN.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (TransitGatewayConcentratorVPN)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "ND5NCRBWBCRD3QWN.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "ND5NCRBWBCRD3QWN",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - TransitGatewayConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "GHCHXG6BC5QZXW4X"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "GHCHXG6BC5QZXW4X.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "GHCHXG6BC5QZXW4X.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (TransitGatewayConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "GHCHXG6BC5QZXW4X.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "GHCHXG6BC5QZXW4X",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "availabilityzone": "NA",
+    "capacitystatus": "Used",
+    "classicnetworkingsupport": "false",
+    "clockSpeed": "3.1 GHz",
+    "currentGeneration": "Yes",
+    "dedicatedEbsThroughput": "Up to 2780 Mbps",
+    "dedicatedEbsThroughputDescription": "695 Mbps",
+    "ecu": "NA",
+    "enhancedNetworkingSupported": "No",
+    "gpuMemory": "NA",
+    "instanceFamily": "General purpose",
+    "instanceFamilyCategory": "General Purpose",
+    "instanceType": "t3.2xlarge",
+    "intelAvx2Available": "Yes",
+    "intelAvxAvailable": "Yes",
+    "intelTurboAvailable": "Yes",
+    "licenseModel": "No License required",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "marketoption": "OnDemand",
+    "memory": "32 GiB",
+    "networkPerformance": "Up to 5 Gigabit",
+    "normalizationSizeFactor": "16",
+    "operatingSystem": "RHEL",
+    "operation": "RunInstances:0010",
+    "physicalProcessor": "Intel Skylake E5 2686 v5",
+    "preInstalledSw": "NA",
+    "processorArchitecture": "64-bit",
+    "processorFeatures": "AVX; AVX2; Intel AVX; Intel AVX2; Intel AVX512; Intel Turbo",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "storage": "EBS only",
+    "tenancy": "Shared",
+    "usagetype": "USW2-BoxUsage:t3.2xlarge",
+    "vcpu": "8",
+    "vpcnetworkingsupport": "true"
+   },
+   "productFamily": "Compute Instance",
+   "sku": "DH77342BG5QJWJVU"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "DH77342BG5QJWJVU.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.448 per On Demand RHEL t3.2xlarge Instance Hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.4480000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {}
+    }
+   },
+   "Reserved": {
+    "DH77342BG5QJWJVU.38NPMPTW36": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "38NPMPTW36",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.38NPMPTW36.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1749"
+       },
+       "rateCode": "DH77342BG5QJWJVU.38NPMPTW36.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.38NPMPTW36.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1818000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.38NPMPTW36.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.4NA7Y494T4": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "4NA7Y494T4",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.4NA7Y494T4.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3238000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.4NA7Y494T4.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.6QCMYABX3D": {
+     "effectiveDate": "2026-10-29T18:17:24Z",
+     "offerTermCode": "6QCMYABX3D",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.6QCMYABX3D.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "2715"
+       },
+       "rateCode": "DH77342BG5QJWJVU.6QCMYABX3D.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.6QCMYABX3D.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.6QCMYABX3D.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.7NE97W5U4E": {
+     "effectiveDate": "2026-10-29T18:17:24Z",
+     "offerTermCode": "7NE97W5U4E",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.7NE97W5U4E.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3551000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.7NE97W5U4E.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.BPH4J8HBKS": {
+     "effectiveDate": "2026-10-29T18:17:24Z",
+     "offerTermCode": "BPH4J8HBKS",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.BPH4J8HBKS.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2590000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.BPH4J8HBKS.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.CUZHX8X6JH": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "CUZHX8X6JH",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.CUZHX8X6JH.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1001"
+       },
+       "rateCode": "DH77342BG5QJWJVU.CUZHX8X6JH.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.CUZHX8X6JH.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2295000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.CUZHX8X6JH.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.HU7G6KETJZ": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "HU7G6KETJZ",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.HU7G6KETJZ.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "870"
+       },
+       "rateCode": "DH77342BG5QJWJVU.HU7G6KETJZ.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.HU7G6KETJZ.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2145000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.HU7G6KETJZ.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.MZU6U2429S": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "MZU6U2429S",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.MZU6U2429S.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "6966"
+       },
+       "rateCode": "DH77342BG5QJWJVU.MZU6U2429S.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.MZU6U2429S.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.MZU6U2429S.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.NQ3QZPMQV9": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "NQ3QZPMQV9",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.NQ3QZPMQV9.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "6316"
+       },
+       "rateCode": "DH77342BG5QJWJVU.NQ3QZPMQV9.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.NQ3QZPMQV9.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.NQ3QZPMQV9.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.R5XV2EPZQZ": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "R5XV2EPZQZ",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.R5XV2EPZQZ.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "2010"
+       },
+       "rateCode": "DH77342BG5QJWJVU.R5XV2EPZQZ.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.R5XV2EPZQZ.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1917000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.R5XV2EPZQZ.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.VJWZNREJX2": {
+     "effectiveDate": "2026-10-29T18:17:25Z",
+     "offerTermCode": "VJWZNREJX2",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.VJWZNREJX2.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "2971"
+       },
+       "rateCode": "DH77342BG5QJWJVU.VJWZNREJX2.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DH77342BG5QJWJVU.VJWZNREJX2.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.VJWZNREJX2.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DH77342BG5QJWJVU.Z2E3P23VKM": {
+     "effectiveDate": "2026-10-29T18:17:24Z",
+     "offerTermCode": "Z2E3P23VKM",
+     "priceDimensions": {
+      "DH77342BG5QJWJVU.Z2E3P23VKM.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Red Hat Enterprise Linux (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2804000000"
+       },
+       "rateCode": "DH77342BG5QJWJVU.Z2E3P23VKM.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DH77342BG5QJWJVU",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "No Upfront"
+     }
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NatGateways",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "NatGateway",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-NatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "9AXD6XJT8GZWPQED"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "9AXD6XJT8GZWPQED.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "9AXD6XJT8GZWPQED.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB Data Processed by NAT Gateways",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "9AXD6XJT8GZWPQED.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "9AXD6XJT8GZWPQED",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "availabilityzone": "NA",
+    "capacitystatus": "Used",
+    "classicnetworkingsupport": "false",
+    "clockSpeed": "3.1 GHz",
+    "currentGeneration": "Yes",
+    "dedicatedEbsThroughput": "Up to 2780 Mbps",
+    "dedicatedEbsThroughputDescription": "695 Mbps",
+    "ecu": "NA",
+    "enhancedNetworkingSupported": "No",
+    "gpuMemory": "NA",
+    "instanceFamily": "General purpose",
+    "instanceFamilyCategory": "General Purpose",
+    "instanceType": "t3.2xlarge",
+    "intelAvx2Available": "Yes",
+    "intelAvxAvailable": "Yes",
+    "intelTurboAvailable": "Yes",
+    "licenseModel": "Bring your own license",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "marketoption": "OnDemand",
+    "memory": "32 GiB",
+    "networkPerformance": "Up to 5 Gigabit",
+    "normalizationSizeFactor": "16",
+    "operatingSystem": "Windows",
+    "operation": "RunInstances:0800",
+    "physicalProcessor": "Intel Skylake E5 2686 v5",
+    "preInstalledSw": "NA",
+    "processorArchitecture": "64-bit",
+    "processorFeatures": "AVX; AVX2; Intel AVX; Intel AVX2; Intel AVX512; Intel Turbo",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "storage": "EBS only",
+    "tenancy": "Shared",
+    "usagetype": "USW2-BoxUsage:t3.2xlarge",
+    "vcpu": "8",
+    "vpcnetworkingsupport": "true"
+   },
+   "productFamily": "Compute Instance",
+   "sku": "TFWN9773NCPWDVEB"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "TFWN9773NCPWDVEB.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "TFWN9773NCPWDVEB.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.3328 per On Demand Windows BYOL t3.2xlarge Instance Hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3328000000"
+       },
+       "rateCode": "TFWN9773NCPWDVEB.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "TFWN9773NCPWDVEB",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - CloudWANS2SVPN",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANS2SVPN",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "5QY4Y67PT7VJHDXM"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "5QY4Y67PT7VJHDXM.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "5QY4Y67PT7VJHDXM.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (CloudWANS2SVPN)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "5QY4Y67PT7VJHDXM.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "5QY4Y67PT7VJHDXM",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - TransitGatewayConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "787FWC6Z8Y8QYN89"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "787FWC6Z8Y8QYN89.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "787FWC6Z8Y8QYN89.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (TransitGatewayConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "787FWC6Z8Y8QYN89.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "787FWC6Z8Y8QYN89",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - CloudWANConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "E4FJ62JQQFQ2W3MM"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "E4FJ62JQQFQ2W3MM.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "E4FJ62JQQFQ2W3MM.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (CloudWANConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "E4FJ62JQQFQ2W3MM.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "E4FJ62JQQFQ2W3MM",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "availabilityzone": "NA",
+    "capacitystatus": "Used",
+    "classicnetworkingsupport": "false",
+    "clockSpeed": "3.1 GHz",
+    "currentGeneration": "Yes",
+    "dedicatedEbsThroughput": "Up to 2780 Mbps",
+    "dedicatedEbsThroughputDescription": "695 Mbps",
+    "ecu": "NA",
+    "enhancedNetworkingSupported": "No",
+    "gpuMemory": "NA",
+    "instanceFamily": "General purpose",
+    "instanceFamilyCategory": "General Purpose",
+    "instanceType": "t3.2xlarge",
+    "intelAvx2Available": "Yes",
+    "intelAvxAvailable": "Yes",
+    "intelTurboAvailable": "Yes",
+    "licenseModel": "No License required",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "marketoption": "OnDemand",
+    "memory": "32 GiB",
+    "networkPerformance": "Up to 5 Gigabit",
+    "normalizationSizeFactor": "16",
+    "operatingSystem": "Windows",
+    "operation": "RunInstances:0002",
+    "physicalProcessor": "Intel Skylake E5 2686 v5",
+    "preInstalledSw": "NA",
+    "processorArchitecture": "64-bit",
+    "processorFeatures": "AVX; AVX2; Intel AVX; Intel AVX2; Intel AVX512; Intel Turbo",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "storage": "EBS only",
+    "tenancy": "Shared",
+    "usagetype": "USW2-BoxUsage:t3.2xlarge",
+    "vcpu": "8",
+    "vpcnetworkingsupport": "true"
+   },
+   "productFamily": "Compute Instance",
+   "sku": "DWUNJJKW39TGSYXC"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "DWUNJJKW39TGSYXC.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.48 per On Demand Windows t3.2xlarge Instance Hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.4800000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {}
+    }
+   },
+   "Reserved": {
+    "DWUNJJKW39TGSYXC.38NPMPTW36": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "38NPMPTW36",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.38NPMPTW36.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "3683"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.38NPMPTW36.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.38NPMPTW36.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1402000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.38NPMPTW36.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.4NA7Y494T4": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "4NA7Y494T4",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.4NA7Y494T4.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3558000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.4NA7Y494T4.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.6QCMYABX3D": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "6QCMYABX3D",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.6QCMYABX3D.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "2995"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.6QCMYABX3D.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.6QCMYABX3D.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.6QCMYABX3D.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.7NE97W5U4E": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "7NE97W5U4E",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.7NE97W5U4E.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3871000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.7NE97W5U4E.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.BPH4J8HBKS": {
+     "effectiveDate": "2026-10-29T18:17:25Z",
+     "offerTermCode": "BPH4J8HBKS",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.BPH4J8HBKS.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2910000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.BPH4J8HBKS.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.CUZHX8X6JH": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "CUZHX8X6JH",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.CUZHX8X6JH.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1646"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.CUZHX8X6JH.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.CUZHX8X6JH.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1879000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.CUZHX8X6JH.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.HU7G6KETJZ": {
+     "effectiveDate": "2026-10-29T18:17:24Z",
+     "offerTermCode": "HU7G6KETJZ",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.HU7G6KETJZ.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1515"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.HU7G6KETJZ.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.HU7G6KETJZ.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1729000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.HU7G6KETJZ.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.MZU6U2429S": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "MZU6U2429S",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.MZU6U2429S.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "7807"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.MZU6U2429S.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.MZU6U2429S.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.MZU6U2429S.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.NQ3QZPMQV9": {
+     "effectiveDate": "2026-10-29T18:17:25Z",
+     "offerTermCode": "NQ3QZPMQV9",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.NQ3QZPMQV9.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "7157"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.NQ3QZPMQV9.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.NQ3QZPMQV9.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.NQ3QZPMQV9.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.R5XV2EPZQZ": {
+     "effectiveDate": "2026-10-29T18:17:25Z",
+     "offerTermCode": "R5XV2EPZQZ",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.R5XV2EPZQZ.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "3944"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.R5XV2EPZQZ.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.R5XV2EPZQZ.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1501000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.R5XV2EPZQZ.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.VJWZNREJX2": {
+     "effectiveDate": "2026-10-29T18:17:28Z",
+     "offerTermCode": "VJWZNREJX2",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.VJWZNREJX2.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "3251"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.VJWZNREJX2.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "DWUNJJKW39TGSYXC.VJWZNREJX2.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.VJWZNREJX2.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "DWUNJJKW39TGSYXC.Z2E3P23VKM": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "Z2E3P23VKM",
+     "priceDimensions": {
+      "DWUNJJKW39TGSYXC.Z2E3P23VKM.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Windows (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3124000000"
+       },
+       "rateCode": "DWUNJJKW39TGSYXC.Z2E3P23VKM.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "DWUNJJKW39TGSYXC",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "No Upfront"
+     }
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "RegionalNatGateway",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "FPRDSFEN2479HXAA"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "FPRDSFEN2479HXAA.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "FPRDSFEN2479HXAA.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Charge for per GB data processed by NAT Gateways",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "FPRDSFEN2479HXAA.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "FPRDSFEN2479HXAA",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - CloudWANS2SVPN",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANS2SVPN",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "X7S2YC2DRRZTDA8B"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "X7S2YC2DRRZTDA8B.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "X7S2YC2DRRZTDA8B.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (CloudWANS2SVPN)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "X7S2YC2DRRZTDA8B.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "X7S2YC2DRRZTDA8B",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - CloudWANDirectConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANDirectConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "8WCBSXHBGSG8UBKE"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "8WCBSXHBGSG8UBKE.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "8WCBSXHBGSG8UBKE.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (CloudWANDirectConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "8WCBSXHBGSG8UBKE.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "8WCBSXHBGSG8UBKE",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - TransitGatewayVPN",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayVPN",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "RJH82AKE7WCTEE6B"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "RJH82AKE7WCTEE6B.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "RJH82AKE7WCTEE6B.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (TransitGatewayVPN)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "RJH82AKE7WCTEE6B.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "RJH82AKE7WCTEE6B",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for NAT Gateways",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "NatGateway",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-NatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "44T683R45QPT8RYQ"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "44T683R45QPT8RYQ.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "44T683R45QPT8RYQ.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per NAT Gateway Hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "44T683R45QPT8RYQ.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "44T683R45QPT8RYQ",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "availabilityzone": "NA",
+    "capacitystatus": "Used",
+    "classicnetworkingsupport": "false",
+    "clockSpeed": "3.1 GHz",
+    "currentGeneration": "Yes",
+    "dedicatedEbsThroughput": "Up to 2780 Mbps",
+    "dedicatedEbsThroughputDescription": "695 Mbps",
+    "ecu": "NA",
+    "enhancedNetworkingSupported": "No",
+    "gpuMemory": "NA",
+    "instanceFamily": "General purpose",
+    "instanceFamilyCategory": "General Purpose",
+    "instanceType": "t3.2xlarge",
+    "intelAvx2Available": "Yes",
+    "intelAvxAvailable": "Yes",
+    "intelTurboAvailable": "Yes",
+    "licenseModel": "License Included - Infrastructure",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "marketoption": "OnDemand",
+    "memory": "32 GiB",
+    "networkPerformance": "Up to 5 Gigabit",
+    "normalizationSizeFactor": "16",
+    "operatingSystem": "Windows",
+    "operation": "RunInstances:0002:box",
+    "physicalProcessor": "Intel Skylake E5 2686 v5",
+    "preInstalledSw": "NA",
+    "processorArchitecture": "64-bit",
+    "processorFeatures": "AVX; AVX2; Intel AVX; Intel AVX2; Intel AVX512; Intel Turbo",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "storage": "EBS only",
+    "tenancy": "Shared",
+    "usagetype": "USW2-BoxUsage:t3.2xlarge",
+    "vcpu": "8",
+    "vpcnetworkingsupport": "true"
+   },
+   "productFamily": "Compute Instance",
+   "sku": "AV73JU6XYWJ7FQKJ"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "AV73JU6XYWJ7FQKJ.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "AV73JU6XYWJ7FQKJ.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.3328 per On Demand Windows without licenses t3.2xlarge Instance Hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3328000000"
+       },
+       "rateCode": "AV73JU6XYWJ7FQKJ.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "AV73JU6XYWJ7FQKJ",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - TransitGatewayPeering",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayPeering",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "UZ66647H2T8CBTBA"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "UZ66647H2T8CBTBA.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "UZ66647H2T8CBTBA.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (TransitGatewayPeering)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "UZ66647H2T8CBTBA.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "UZ66647H2T8CBTBA",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - CloudWANConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "NNWWASQ5SU5PE2D3"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "NNWWASQ5SU5PE2D3.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "NNWWASQ5SU5PE2D3.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (CloudWANConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "NNWWASQ5SU5PE2D3.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "NNWWASQ5SU5PE2D3",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - TransitGatewayVPC",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayVPC",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "399YGQCV3HKU42RV"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "399YGQCV3HKU42RV.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "399YGQCV3HKU42RV.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (TransitGatewayVPC)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "399YGQCV3HKU42RV.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "399YGQCV3HKU42RV",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - CloudWANVPC",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANVPC",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "GX2V9H9M643996ZK"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "GX2V9H9M643996ZK.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "GX2V9H9M643996ZK.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (CloudWANVPC)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "GX2V9H9M643996ZK.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "GX2V9H9M643996ZK",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - TransitGatewayDirectConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayDirectConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "K83TV9XJ6X54VVA2"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "K83TV9XJ6X54VVA2.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "K83TV9XJ6X54VVA2.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (TransitGatewayDirectConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "K83TV9XJ6X54VVA2.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "K83TV9XJ6X54VVA2",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - CloudWANDirectConnect",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "CloudWANDirectConnect",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "JTMNSW7ZT2ZAR3A8"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "JTMNSW7ZT2ZAR3A8.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "JTMNSW7ZT2ZAR3A8.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (CloudWANDirectConnect)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "JTMNSW7ZT2ZAR3A8.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "JTMNSW7ZT2ZAR3A8",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Per hour and per Gbps charge for NAT Gateways with provisioned bandwidth",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "NatGateway",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-NatGateway-Prvd-Gbps"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "ZFN34ETJUDYPEZAD"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "ZFN34ETJUDYPEZAD.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "ZFN34ETJUDYPEZAD.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$1.076 per Gbps-hour of NAT Gateways with Provisioned Bandwidth",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "1.0760000000"
+       },
+       "rateCode": "ZFN34ETJUDYPEZAD.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Gbps-hrs"
+      }
+     },
+     "sku": "ZFN34ETJUDYPEZAD",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - Transit Gateway",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayVPC",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "XTAZEZTWPTTKC7WT"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "XTAZEZTWPTTKC7WT.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "XTAZEZTWPTTKC7WT.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (TransitGatewayVPC)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "XTAZEZTWPTTKC7WT.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "XTAZEZTWPTTKC7WT",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - TransitGatewayPeering",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayPeering",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "4F92372AAVGSZGJ4"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "4F92372AAVGSZGJ4.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "4F92372AAVGSZGJ4.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (TransitGatewayPeering)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "4F92372AAVGSZGJ4.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "4F92372AAVGSZGJ4",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "availabilityzone": "NA",
+    "capacitystatus": "Used",
+    "classicnetworkingsupport": "false",
+    "clockSpeed": "3.1 GHz",
+    "currentGeneration": "Yes",
+    "dedicatedEbsThroughput": "Up to 2780 Mbps",
+    "dedicatedEbsThroughputDescription": "695 Mbps",
+    "ecu": "NA",
+    "enhancedNetworkingSupported": "No",
+    "gpuMemory": "NA",
+    "instanceFamily": "General purpose",
+    "instanceFamilyCategory": "General Purpose",
+    "instanceType": "t3.2xlarge",
+    "intelAvx2Available": "Yes",
+    "intelAvxAvailable": "Yes",
+    "intelTurboAvailable": "Yes",
+    "licenseModel": "No License required",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "marketoption": "OnDemand",
+    "memory": "32 GiB",
+    "networkPerformance": "Up to 5 Gigabit",
+    "normalizationSizeFactor": "16",
+    "operatingSystem": "Linux",
+    "operation": "RunInstances",
+    "physicalProcessor": "Intel Skylake E5 2686 v5",
+    "preInstalledSw": "NA",
+    "processorArchitecture": "64-bit",
+    "processorFeatures": "AVX; AVX2; Intel AVX; Intel AVX2; Intel AVX512; Intel Turbo",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "storage": "EBS only",
+    "tenancy": "Shared",
+    "usagetype": "USW2-BoxUsage:t3.2xlarge",
+    "vcpu": "8",
+    "vpcnetworkingsupport": "true"
+   },
+   "productFamily": "Compute Instance",
+   "sku": "8XZPEU2QRPPKMP9G"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "8XZPEU2QRPPKMP9G.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.3328 per On Demand Linux t3.2xlarge Instance Hour",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.3328000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {}
+    }
+   },
+   "Reserved": {
+    "8XZPEU2QRPPKMP9G.38NPMPTW36": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "38NPMPTW36",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.38NPMPTW36.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1749"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.38NPMPTW36.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.38NPMPTW36.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0666000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.38NPMPTW36.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.4NA7Y494T4": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "4NA7Y494T4",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.4NA7Y494T4.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2086000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.4NA7Y494T4.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.6QCMYABX3D": {
+     "effectiveDate": "2026-10-29T18:17:24Z",
+     "offerTermCode": "6QCMYABX3D",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.6QCMYABX3D.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1706"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.6QCMYABX3D.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.6QCMYABX3D.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.6QCMYABX3D.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.7NE97W5U4E": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "7NE97W5U4E",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.7NE97W5U4E.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.2399000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.7NE97W5U4E.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.BPH4J8HBKS": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "BPH4J8HBKS",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.BPH4J8HBKS.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1438000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.BPH4J8HBKS.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "No Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.CUZHX8X6JH": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "CUZHX8X6JH",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.CUZHX8X6JH.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1001"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.CUZHX8X6JH.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.CUZHX8X6JH.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1143000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.CUZHX8X6JH.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.HU7G6KETJZ": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "HU7G6KETJZ",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.HU7G6KETJZ.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "870"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.HU7G6KETJZ.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.HU7G6KETJZ.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0993000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.HU7G6KETJZ.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.MZU6U2429S": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "MZU6U2429S",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.MZU6U2429S.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "3939"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.MZU6U2429S.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.MZU6U2429S.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.MZU6U2429S.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.NQ3QZPMQV9": {
+     "effectiveDate": "2026-10-29T18:17:24Z",
+     "offerTermCode": "NQ3QZPMQV9",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.NQ3QZPMQV9.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "3288"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.NQ3QZPMQV9.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.NQ3QZPMQV9.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.NQ3QZPMQV9.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "standard",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.R5XV2EPZQZ": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "R5XV2EPZQZ",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.R5XV2EPZQZ.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "2010"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.R5XV2EPZQZ.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.R5XV2EPZQZ.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0765000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.R5XV2EPZQZ.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "Partial Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.VJWZNREJX2": {
+     "effectiveDate": "2026-10-29T18:17:27Z",
+     "offerTermCode": "VJWZNREJX2",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.VJWZNREJX2.2TG2D8R56U": {
+       "appliesTo": [],
+       "description": "Upfront Fee",
+       "pricePerUnit": {
+        "USD": "1962"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.VJWZNREJX2.2TG2D8R56U",
+       "unit": "Quantity"
+      },
+      "8XZPEU2QRPPKMP9G.VJWZNREJX2.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "USD 0.0 per Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.VJWZNREJX2.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "1yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "All Upfront"
+     }
+    },
+    "8XZPEU2QRPPKMP9G.Z2E3P23VKM": {
+     "effectiveDate": "2026-10-29T18:17:26Z",
+     "offerTermCode": "Z2E3P23VKM",
+     "priceDimensions": {
+      "8XZPEU2QRPPKMP9G.Z2E3P23VKM.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "Linux/UNIX (Amazon VPC), t3.2xlarge reserved instance applied",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.1652000000"
+       },
+       "rateCode": "8XZPEU2QRPPKMP9G.Z2E3P23VKM.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "8XZPEU2QRPPKMP9G",
+     "termAttributes": {
+      "LeaseContractLength": "3yr",
+      "OfferingClass": "convertible",
+      "PurchaseOption": "No Upfront"
+     }
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Hourly charge for Regional NAT Gateways - TransitGatewayConcentratorVPN",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayConcentratorVPN",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Hours"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "5XKWQFFNKADA8UHP"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "5XKWQFFNKADA8UHP.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "5XKWQFFNKADA8UHP.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per Regional NAT Gateway Hour (TransitGatewayConcentratorVPN)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "5XKWQFFNKADA8UHP.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "Hrs"
+      }
+     },
+     "sku": "5XKWQFFNKADA8UHP",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ },
+ {
+  "product": {
+   "attributes": {
+    "group": "NGW:NatGateway",
+    "groupDescription": "Charge for per GB data processed by NAT Gateways - TransitGatewayVPN",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "operation": "TransitGatewayVPN",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonEC2",
+    "servicename": "Amazon Elastic Compute Cloud",
+    "usagetype": "USW2-RegionalNatGateway-Bytes"
+   },
+   "productFamily": "NAT Gateway",
+   "sku": "53K3E25HFQDDTZ9M"
+  },
+  "publicationDate": "2026-10-29T17:56:34Z",
+  "serviceCode": "AmazonEC2",
+  "terms": {
+   "OnDemand": {
+    "53K3E25HFQDDTZ9M.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "53K3E25HFQDDTZ9M.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.045 per GB data processed by Regional NAT Gateways (TransitGatewayVPN)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0450000000"
+       },
+       "rateCode": "53K3E25HFQDDTZ9M.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "GB"
+      }
+     },
+     "sku": "53K3E25HFQDDTZ9M",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261029175634"
+ }
+]

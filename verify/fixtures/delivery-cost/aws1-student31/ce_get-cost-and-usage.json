@@ -1,0 +1,19 @@
+{
+ "DimensionValueAttributes": [],
+ "ResultsByTime": [
+  {
+   "Estimated": false,
+   "Groups": [],
+   "TimePeriod": {
+    "End": "2026-09-12",
+    "Start": "2026-09-06"
+   },
+   "Total": {
+    "UnblendedCost": {
+     "Amount": "300.00",
+     "Unit": "USD"
+    }
+   }
+  }
+ ]
+}

@@ -1,0 +1,706 @@
+[
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens priority",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-cache-write-input-token-count-priority"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "NAMTFX46ZUESCJUF"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "NAMTFX46ZUESCJUF.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "NAMTFX46ZUESCJUF.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.00 per 1K tokens for USW2-NovaPro-cache-write-input-token-count-priority in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "NAMTFX46ZUESCJUF.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "NAMTFX46ZUESCJUF",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens flex",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-cache-write-input-token-count-flex"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "XVP3UXZ8KN7777NK"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "XVP3UXZ8KN7777NK.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "XVP3UXZ8KN7777NK.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.00 per 1K tokens for USW2-NovaPro-cache-write-input-token-count-flex in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "XVP3UXZ8KN7777NK.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "XVP3UXZ8KN7777NK",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens priority",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-output-tokens-priority"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "F4XXXBMPMV8VZTTP"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "F4XXXBMPMV8VZTTP.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "F4XXXBMPMV8VZTTP.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0056 per 1K tokens for USW2-NovaPro-output-tokens-priority in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0056000000"
+       },
+       "rateCode": "F4XXXBMPMV8VZTTP.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "F4XXXBMPMV8VZTTP",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro Latency Optimized",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-output-tokens-latency-optimized"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "UVC4SMC94RFD6X6Z"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "UVC4SMC94RFD6X6Z.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "UVC4SMC94RFD6X6Z.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.004 per 1K tokens for USW2-NovaPro-output-tokens-latency-optimized in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0040000000"
+       },
+       "rateCode": "UVC4SMC94RFD6X6Z.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "UVC4SMC94RFD6X6Z",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-input-tokens-batch"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "5DG7PBJPY9MCXGYV"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "5DG7PBJPY9MCXGYV.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "5DG7PBJPY9MCXGYV.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$ 0.0004 per 1K tokens for Nova Pro-input-tokens in us-west-2 (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0004000000"
+       },
+       "rateCode": "5DG7PBJPY9MCXGYV.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "5DG7PBJPY9MCXGYV",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens priority",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-input-tokens-priority"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "WNG9USAUAS2KM7VM"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "WNG9USAUAS2KM7VM.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "WNG9USAUAS2KM7VM.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0014 per 1K tokens for USW2-NovaPro-input-tokens-priority in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0014000000"
+       },
+       "rateCode": "WNG9USAUAS2KM7VM.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "WNG9USAUAS2KM7VM",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "Batch Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-output-tokens-batch"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "JMHKC26WU6K5EBRW"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "JMHKC26WU6K5EBRW.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "JMHKC26WU6K5EBRW.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$ 0.0016 per 1K tokens for Nova Pro-output-tokens in us-west-2 (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0016000000"
+       },
+       "rateCode": "JMHKC26WU6K5EBRW.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "JMHKC26WU6K5EBRW",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-cache-read-input-token-count"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "WPHJAQC2S9VW3FBS"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "WPHJAQC2S9VW3FBS.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "WPHJAQC2S9VW3FBS.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0002 per 1K cache read input tokens of Nova Pro in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0002000000"
+       },
+       "rateCode": "WPHJAQC2S9VW3FBS.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "WPHJAQC2S9VW3FBS",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens flex",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-cache-read-input-token-count-flex"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "3NMHPMBM22G4CFFJ"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "3NMHPMBM22G4CFFJ.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "3NMHPMBM22G4CFFJ.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0001 per 1K tokens for USW2-NovaPro-cache-read-input-token-count-flex in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0001000000"
+       },
+       "rateCode": "3NMHPMBM22G4CFFJ.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "3NMHPMBM22G4CFFJ",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens flex",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-input-tokens-flex"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "UR6FSF325SX92JED"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "UR6FSF325SX92JED.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "UR6FSF325SX92JED.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0004 per 1K tokens for USW2-NovaPro-input-tokens-flex in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0004000000"
+       },
+       "rateCode": "UR6FSF325SX92JED.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "UR6FSF325SX92JED",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens flex",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-output-tokens-flex"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "PVFR329D75C6EMQB"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "PVFR329D75C6EMQB.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "PVFR329D75C6EMQB.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.0016 per 1K tokens for USW2-NovaPro-output-tokens-flex in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0016000000"
+       },
+       "rateCode": "PVFR329D75C6EMQB.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "PVFR329D75C6EMQB",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro Latency Optimized",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-input-tokens-latency-optimized"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "8PD6H5TFU3NTC8EV"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "8PD6H5TFU3NTC8EV.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "8PD6H5TFU3NTC8EV.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.001 per 1K tokens for USW2-NovaPro-input-tokens-latency-optimized in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0010000000"
+       },
+       "rateCode": "8PD6H5TFU3NTC8EV.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "8PD6H5TFU3NTC8EV",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-input-tokens"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "BUM882XYWY38Y3QY"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "BUM882XYWY38Y3QY.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "BUM882XYWY38Y3QY.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$ 0.0008 per 1K tokens for Nova Pro-input-tokens in us-west-2 (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0008000000"
+       },
+       "rateCode": "BUM882XYWY38Y3QY.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "BUM882XYWY38Y3QY",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Output tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-output-tokens"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "WQNS4BUT932RY5UM"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "WQNS4BUT932RY5UM.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "WQNS4BUT932RY5UM.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$ 0.0008 per 1K tokens for Nova Pro-input-tokens in us-west-2 (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0032000000"
+       },
+       "rateCode": "WQNS4BUT932RY5UM.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "WQNS4BUT932RY5UM",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache read input tokens priority",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-cache-read-input-token-count-priority"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "CNTH6SWXUQ7CGDXV"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "CNTH6SWXUQ7CGDXV.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "CNTH6SWXUQ7CGDXV.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.00035 per 1K tokens for USW2-NovaPro-cache-read-input-token-count-priority in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0003500000"
+       },
+       "rateCode": "CNTH6SWXUQ7CGDXV.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "CNTH6SWXUQ7CGDXV",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ },
+ {
+  "product": {
+   "attributes": {
+    "feature": "On-demand Inference",
+    "inferenceType": "Prompt cache write input tokens",
+    "location": "US West (Oregon)",
+    "locationType": "AWS Region",
+    "model": "Nova Pro",
+    "operation": "",
+    "regionCode": "us-west-2",
+    "servicecode": "AmazonBedrock",
+    "servicename": "Amazon Bedrock",
+    "usagetype": "USW2-NovaPro-cache-write-input-token-count"
+   },
+   "productFamily": "Amazon Bedrock",
+   "sku": "R34DD6DF6G4EAF9D"
+  },
+  "publicationDate": "2026-10-30T16:04:56Z",
+  "serviceCode": "AmazonBedrock",
+  "terms": {
+   "OnDemand": {
+    "R34DD6DF6G4EAF9D.JRTCKXETXF": {
+     "effectiveDate": "2026-10-01T00:00:00Z",
+     "offerTermCode": "JRTCKXETXF",
+     "priceDimensions": {
+      "R34DD6DF6G4EAF9D.JRTCKXETXF.6YS6EN2CT7": {
+       "appliesTo": [],
+       "beginRange": "0",
+       "description": "$0.00 per 1K tokens for USW2-NovaPro-cache-write-input-token-count in US West (Oregon)",
+       "endRange": "Inf",
+       "pricePerUnit": {
+        "USD": "0.0000000000"
+       },
+       "rateCode": "R34DD6DF6G4EAF9D.JRTCKXETXF.6YS6EN2CT7",
+       "unit": "1K tokens"
+      }
+     },
+     "sku": "R34DD6DF6G4EAF9D",
+     "termAttributes": {}
+    }
+   }
+  },
+  "version": "20261030160456"
+ }
+]

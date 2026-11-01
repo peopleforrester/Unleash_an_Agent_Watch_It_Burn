@@ -1,0 +1,11 @@
+{
+ "cluster": {
+  "createdAt": "2026-10-20T10:00:00.000000+00:00",
+  "name": "watch-it-burn-community",
+  "status": "ACTIVE",
+  "tags": {
+   "event": "kubecon-na-2026",
+   "project": "watch-it-burn"
+  }
+ }
+}
