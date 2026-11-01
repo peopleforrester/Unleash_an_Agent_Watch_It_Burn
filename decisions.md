@@ -7350,3 +7350,33 @@ forced egress proxy, either one over a CoreDNS resolver lockdown. The note lists
 `<host> <kube-context>` like `verify/c1-exfil-block.sh`. It asserts that the DNS collector records stage 2b with the
 stage 2 policy applied, that it records nothing new once the FQDN control is on, and that Bedrock and in-cluster
 resolution still work with that control on.
+## 2026-11-01 · #733 · #707's live check: what it reads on watch-it-burn-community, and what it cannot watch any more
+
+Not run. A dispatched run has no cluster and no AWS credentials (`kubectl config get-contexts` lists no context,
+`aws sts get-caller-identity` returns NoCredentials), so this entry records what the check needs to do. It adds to the
+#707 entry (2026-10-31) and does not replace it. Nothing else changed.
+
+**Which cluster.** `watch-it-burn-community` (roster.tsv, profile burn) is the only burn or attendee cluster
+PROJECT_STATE.md lists as up. `watch-it-burn-private` is admin, where evil-mcp's list has no ignore and C7 is the
+gateway rule, so the guard-mcp-on half of the check does not apply there. If community has been torn down since
+2026-10-28, the check waits for the next burn or attendee bring-up, which is spend.
+
+**The first sync has already happened, so it is read, not watched.** deploy-full-idp.sh's root, `lab-bootstrap`,
+tracks `staging` with automated prune and selfHeal, and passes `revision=staging` to every child. 4cd52ed reached
+staging as 813404e on 2026-10-31, so community's root moved without anyone acting, and the Agent moved between
+Applications then. What survives:
+- the Agent's `metadata.creationTimestamp`: from the 2026-10-28 build means workshop-agent took the Agent over;
+  from 2026-10-31 or later means ai-layer pruned it and workshop-agent made it again.
+- the kagent Deployment `agent/workshop-agent`'s `metadata.creationTimestamp`, which says the same thing for the pod
+  (kagent makes the Deployment when the Agent appears, per the #707 entry, so a recreated Agent means a new pod).
+- the Agent's `argocd.argoproj.io/tracking-id` annotation, which must start `workshop-agent:`.
+- `workshop-agent`'s `.status.history`, whose first `deployedAt` is the first sync.
+Events are kept for an hour, so they will not show it.
+
+**The git change needs a test change with it.** `verify/test_agent_tools_sync.py` holds workshop-mcp's list in
+order ("git's workshop-mcp list is the stale eleven plus read_support_ticket (#640)"). This run swapped
+`check_inventory` and `reorder_supply` in `gitops/workshop-agent/agent.yaml` and `bash verify/run-tests.sh` failed on
+that check alone, then restored the file. So whatever tool change the live check lands updates that expected list in
+the same commit. A swap of two read-only mock tools is the least behaviour-changing change that still makes the
+Agent OutOfSync. It lands on attackme, the public KubeCon cluster, so the session that makes it puts the order back
+afterwards, which is a second live landing and is just as good as evidence.
