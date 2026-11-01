@@ -96,5 +96,7 @@ PROBE="${REPO}/verify/agent_probe.py"; WALK="${REPO}/verify/fleet-walkthrough.sh
 check "the probe removes the Deployment its C6 beat creates" 'grep -q "remove_c6_artifact" "${PROBE}"'
 check "it does so in the same restore path as the guards" 'grep -q "c6 artifact:" "${PROBE}"'
 check "the acceptance pass fails a cluster that still has one" 'grep -q "c6-artifact-present" "${WALK}"'
+check "the acceptance pass expects the public host to hide the terminal (#645), and fails it if exposed" \
+  'grep -q "terminal-exposed=" "${WALK}" && grep -q "role_for_cluster \"\${name}\")\" == community" "${WALK}"'
 
 echo; echo "  ${pass} passed, ${fail} failed"; [[ "${fail}" -eq 0 ]]

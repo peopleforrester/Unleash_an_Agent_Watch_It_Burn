@@ -23,7 +23,10 @@ echo "kubectl $* [AWS_PROFILE=${AWS_PROFILE:-}]" >>"${CALLS}"
 case "$*" in
   "config current-context") echo "${KCTX}" ;;
   *"get deployments,services,configmaps,pods"*)
-      if [[ -n "${BOTMADE_FILE:-}" ]]; then cat "${BOTMADE_FILE}"
+      # Real kubectl leaves managedFields out of -o json unless --show-managed-fields is passed (2026-11-01:
+      # reset-bot cleared 0 objects on attackme while a bot-made maintenance-shell stood there).
+      if [[ "$*" != *--show-managed-fields* ]]; then echo '{"items":[]}'
+      elif [[ -n "${BOTMADE_FILE:-}" ]]; then cat "${BOTMADE_FILE}"
       elif [[ -n "${BOTMADE:-}" ]]; then printf '%s' "${BOTMADE}"; else echo '{"items":[]}'; fi ;;
   *"get pods"*"-o jsonpath"*) echo "guard-proxy-old" ;;
   *"get pods"*"-o json"*)

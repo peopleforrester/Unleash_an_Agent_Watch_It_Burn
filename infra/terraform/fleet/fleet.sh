@@ -4525,7 +4525,7 @@ restart_console_one() { restart_pods "$1" "$2" "$3" agent "${CONSOLE_POD_SELECTO
 # is never touched, even if the bot patched it: Argo CD's own spec is the one to keep (verify/test_reset_bot.sh).
 clear_bot_workloads() {
     local name="$1" kcfg="$2" ctx="$3" json objs o n=0
-    json="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent get deployments,services,configmaps,pods \
+    json="$(KUBECONFIG="${kcfg}" kubectl --context "${ctx}" -n agent get deployments,services,configmaps,pods --show-managed-fields \
             -o json 2>/dev/null)" || { log "  ${name}: could not list what the bot deployed"; return 1; }
     # On stdin: a live namespace's list runs to megabytes, past the argument limit (2026-11-01, attackme).
     objs="$(python3 -c '

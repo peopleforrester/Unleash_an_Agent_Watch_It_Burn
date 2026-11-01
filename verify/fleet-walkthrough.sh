@@ -77,9 +77,14 @@ for name in "${names[@]}"; do
     [[ "${code}" == "200" ]] || issues="${issues} console=${code}"
     lab="$(curl -s --max-time 20 "https://${host}/lab.html" || true)"
     grep -q "Challenge 1" <<<"${lab}" || issues="${issues} lab-content"
-    # 2. the terminal answers and demands its password
+    # 2. the terminal answers and demands its password. On the community cluster the router hides it from the
+    # room on purpose (#645), so there the public host must answer 404 and nothing else.
     tcode="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "https://${host}/terminal/" || echo 000)"
-    [[ "${tcode}" == "401" || "${tcode}" == "200" ]] || issues="${issues} terminal=${tcode}"
+    if [[ "$(role_for_cluster "${name}")" == community ]]; then
+        [[ "${tcode}" == "404" ]] || issues="${issues} terminal-exposed=${tcode}"
+    else
+        [[ "${tcode}" == "401" || "${tcode}" == "200" ]] || issues="${issues} terminal=${tcode}"
+    fi
     # 3. the platform converged
     kc="${KDIR}/${name}.kubeconfig"
     if AWS_PROFILE="${acct}" aws eks update-kubeconfig --kubeconfig "${kc}" --name "${name}" --region "${WIB_REGION}" >/dev/null 2>&1; then
