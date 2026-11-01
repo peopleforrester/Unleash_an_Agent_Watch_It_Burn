@@ -185,7 +185,7 @@ check(f"no selector matches nothing, which would show an empty Kubernetes tab ({
 
 print("== the application ships on attendee, full and admin, and not on burn ==")
 sys.path.insert(0, str(REPO / "verify"))
-from bootstrap_chart import all_profiles, app_names  # noqa: E402
+from bootstrap_chart import all_profiles, app_names, profiles  # noqa: E402
 
 app = docs(REPO / "gitops/bootstrap/apps/backstage.yaml")[0]
 check("the Application deploys backstage/ at the root's revision",
@@ -194,8 +194,12 @@ check("into the backstage namespace", app["spec"]["destination"]["namespace"] ==
 check("which the namespaces app creates", any(o.get("kind") == "Namespace" and o["metadata"]["name"] == "backstage"
                                               for o in docs(REPO / "gitops/namespaces/namespaces.yaml")))
 want_on = {"attendee", "full", "admin"}
-on = {p for p in all_profiles() if "backstage" in app_names(p)}
-check(f"it is listed by exactly {sorted(want_on)} ({sorted(on)})", on == want_on)
+on = {p for p in profiles() if "backstage" in app_names(p)}
+check(f"of the profiles lab-platform presents, exactly {sorted(want_on)} list it ({sorted(on)})", on == want_on)
+# local-inference (#394) is deploy-only and is the full build plus vllm-qwen3, so it takes what full takes.
+deploy_only = sorted(set(all_profiles()) - set(profiles()))
+check(f"each deploy-only profile {deploy_only} lists it as full does",
+      all(("backstage" in app_names(p)) == ("backstage" in app_names("full")) for p in deploy_only))
 check("templates and the test service are not deployed", all("templat" not in r for r in kust["resources"]))
 
 print("== backstage-<cluster> reaches the Service, and the fleet publishes the same hosts the console serves ==")
