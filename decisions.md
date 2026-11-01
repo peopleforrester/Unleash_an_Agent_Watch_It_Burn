@@ -8232,3 +8232,18 @@ and is not committed; a session that wants it runs it in its own clone.
 
 **Not yet run on a cluster:** nothing is owed; this touches no cluster. The next real `--publish`, which needs a gog
 token export, is the first live run of the check in the publish step.
+
+## 2026-11-01 · #745 · The witch-name E2E check follows the #762 and #763 chat page
+
+`verify/test_storefront_witch_name_e2e.py` still checked the #685 page: a header link to the desk's `/me` and a
+"Get your witch name" link when the visitor had no cookie. #763 removed both links and #762 made the page give the
+name itself, so the cluster-free E2E tier failed on staging at 0b2b923 with `witchName` calling a helper the cut
+block did not include. Run 15361 for #745 found it while running that tier.
+
+The check now cuts the vocabulary, its helpers and the `witchName` block from `burritbot.html` and runs them in node
+with the real desk's Set-Cookie value. It holds that the desk's name is shown, sent with `/chat` and kept; that the
+header carries no href, target or rel; that a visitor with no cookie, or with a slug from another vocabulary, is given
+a name from `ticket_site.py`'s FIRST and CREATURES and a matching `wib_witch` cookie on `.burritobot.co`; that the
+re-roll button sets a fresh one; and that agenticburn.com shows nothing. It changes no page code.
+
+**Not yet run on a cluster:** nothing is owed for this check; #762's own live check stands as its entry says.
