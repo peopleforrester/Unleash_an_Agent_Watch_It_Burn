@@ -100,8 +100,14 @@ check("a roster cluster has no zone", fleet("standby_zone", "watch-it-burn-commu
 SUBS = '\'["subnet-a1","subnet-b2"]\''
 check("zone a is the lab VPC's first private subnet", fleet("node_subnets_for", pub[0].name, SUBS) == '["subnet-a1"]')
 check("zone b is its second", fleet("node_subnets_for", priv[0].name, SUBS) == '["subnet-b2"]')
-check("a roster cluster gets nothing, so the module keeps every subnet",
-      fleet("node_subnets_for", "watch-it-burn-community", SUBS) == "")
+# A roster cluster's node stays in the zone its EBS volumes live in (kagent-postgresql, student-work, Tempo): a node
+# that rolls into the other zone leaves them unattachable and the bot down. Measured 2026-11-01: community's node
+# and volumes in us-west-2a (zone a, the first private subnet), private's in us-west-2b (zone b).
+check("the community roster cluster is pinned to zone a, where its volumes are",
+      fleet("node_subnets_for", "watch-it-burn-community", SUBS) == '["subnet-a1"]')
+check("the private roster cluster is pinned to zone b, where its volumes are",
+      fleet("node_subnets_for", "watch-it-burn-private", SUBS) == '["subnet-b2"]')
+check("an attendee cluster keeps every subnet", fleet("node_subnets_for", "watch-it-burn-attendee-007", SUBS) == "")
 check("a lab VPC with no subnet for the zone fails rather than landing elsewhere",
       fleet("node_subnets_for", priv[0].name, "'[\"subnet-a1\"]' || echo refused") == "refused")
 

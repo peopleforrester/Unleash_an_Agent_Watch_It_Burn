@@ -32,7 +32,7 @@ case " $* " in
     fi
     echo "{}" >"$(printf '%s\n' "$@" | sed -n 's/^-state=//p')"; exit 0 ;;
   *" output "*"vpc_id"*) printf 'vpc-test' ;;
-  *" output "*"private_subnet_ids"*) printf '["subnet-a"]' ;;
+  *" output "*"private_subnet_ids"*) printf '["subnet-a","subnet-b"]' ;;
 esac
 exit 0
 S
@@ -44,7 +44,10 @@ case "$*" in
 esac
 exit 0
 S
-printf '#!/usr/bin/env bash\nexit 0\n' >"${SHIM}/jq"
+# jq answers nothing, except node_subnets_for's zone lookup (a roster cluster's node is pinned to its volumes'
+# zone, roster_zone), which runs the real jq so the build gets its subnet.
+REAL_JQ="$(command -v jq)"
+printf '#!/usr/bin/env bash\ncase "$*" in *--argjson*) exec %q "$@" ;; esac\nexit 0\n' "${REAL_JQ}" >"${SHIM}/jq"
 chmod +x "${SHIM}"/*
 export T PATH="${SHIM}:${PATH}"
 

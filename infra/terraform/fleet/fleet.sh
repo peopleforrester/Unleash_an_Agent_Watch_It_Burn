@@ -123,9 +123,20 @@ standby_zone() {   # $1 standby name; prints its lab zone (a or b) from backups.
 # second), as a JSON list for -var node_subnet_ids. Prints nothing for a cluster with no zone, which keeps the
 # module default (every private subnet). $1 name, $2 the lab VPC's private_subnet_ids JSON. Exits 1 when the zone
 # names a subnet the lab VPC does not have, so the build fails rather than landing in an unplanned zone.
+# A roster cluster's node stays in the zone of its EBS volumes (kagent-postgresql, student-work, Tempo's): rolled
+# into the other zone, they cannot attach and the bot is down. Measured 2026-11-01: community's node and volumes in
+# us-west-2a (zone a), private's in us-west-2b (zone b). A rebuild from nothing gets the same zone, so it holds.
+roster_zone() {
+    case "$1" in
+        watch-it-burn-community) echo a ;;
+        watch-it-burn-private) echo b ;;
+    esac
+    return 0
+}
 node_subnets_for() {
     local zone idx sub
     zone="$(standby_zone "$1")"
+    [[ -n "${zone}" ]] || zone="$(roster_zone "$1")"
     [[ -n "${zone}" ]] || return 0
     case "${zone}" in a) idx=0 ;; b) idx=1 ;; *) log "  ${1}: zone '${zone}' in backups.tsv is not a or b"; return 1 ;; esac
     sub="$(jq -r --argjson i "${idx}" '.[$i] // empty' <<<"${2:-[]}" 2>/dev/null)"
@@ -1731,7 +1742,7 @@ up_one() {
     # The node pod cap, role-derived (#686): community=250 (the room's Jokers share its node), admin/attendee=110.
     local maxpods; maxpods="$(max_pods_for_role "${role}")"
     # A standby's node is pinned to its backups.tsv zone (#643); every other cluster leaves it to the module.
-    local zn=() zone; zone="$(standby_zone "${name}")"
+    local zn=() zone; zone="$(standby_zone "${name}")"; [[ -n "${zone}" ]] || zone="$(roster_zone "${name}")"
     if [[ -n "${WIB_DRY_RUN}" ]]; then
         [[ -n "${zone}" ]] && zn=(-var "node_subnet_ids=[<lab subnet ${zone}>]")
         log "  DRY-RUN ${name}: apply -state=${name}.tfstate -var event=${WIB_EVENT} -var hostname=${host} -var role=${role} -var imds_hop_limit=${hop} -var max_pods=${maxpods} ${prof[*]} ${pids[*]} ${it[*]} ${ns[*]} ${dk[*]} ${zn[*]}${WIB_DOCKERHUB_AUTH_B64:+ -var dockerhub_auth_b64=<redacted>} [tier=${TF_TIER:-<gitops default>}]"

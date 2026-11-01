@@ -112,7 +112,7 @@ check "under attackme's hostname, in us-east-2" \
   '[[ "${out}" == *"-var hostname=attackme.agenticburn.com"* && "${out}" == *"-var region=us-east-2"* ]]'
 check "its node is planned in its backups.tsv zone, a" '[[ "${out}" == *"-var node_subnet_ids=[<lab subnet a>]"* ]]'
 out="$(plan watch-it-burn-community us-west-2)"
-check "a roster cluster plans no node_subnet_ids, so the module keeps every subnet" '[[ "${out}" != *node_subnet_ids* ]]'
+check "the community roster cluster plans its volumes' zone, a (roster_zone)" '[[ "${out}" == *"-var node_subnet_ids=[<lab subnet a>]"* ]]'
 out="$(plan watch-it-burn-private-b02 us-east-1)"
 check "a private standby's node is planned in zone b" '[[ "${out}" == *"-var node_subnet_ids=[<lab subnet b>]"* ]]'
 check "a private standby plans imds_hop_limit=1 and role=admin, in us-east-1" \
