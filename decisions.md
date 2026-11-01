@@ -8111,3 +8111,77 @@ Not yet run on a cluster (so #764 stays open):
   fires from a plain question (no instructions telling users what to type), and update
   verify/kubecon_probe.py's ROOM_PROMPT (currently ask_for) to match. Couples with #762's guard-proxy name
   forwarding (guard-proxy-agenticburn#34), which is what lets a plain question still land joker-<visitor>.
+## 2026-11-01 · #746 · Agent Observability gets its own copy of the traces, one root per turn, and APM keeps the true path
+
+**Why this reopened.** Whitney's comment on #746 (2026-11-01, which also answers #756) keeps the issue open until five
+things are true in her sandbox org's LLM Observability on live traces: one chat is one root row; that row shows the
+prompt as input and the final reply as output; the tool calls sit under it; its duration covers the whole chat, not
+14 ms; tokens and cost appear, where the guard row read `cost_estimate_status:skipped_tokens_missing`. Question 1034
+above kept the true parentage because a re-parent in the one export path would have moved APM's waterfall and service
+map too. That answer stands. This change re-parents only in a second copy that APM never receives.
+
+**What Datadog documents (read 2026-11-01).**
+- docs.datadoghq.com/opentelemetry/compatibility: OpenTelemetry traces with gen_ai attributes "are automatically
+  converted into Agent Observability traces". That conversion is what turned APM's spans into the two roots.
+- docs.datadoghq.com/llm_observability/instrument/otel_instrumentation: "An explicit `false` on any span prevents
+  conversion of the entire trace" (`dd_llmobs_enabled`). The same page sends spans to Agent Observability through the
+  OTLP traces endpoint with the header `dd-otlp-source=llmobs`, maps `parent_span_id` to `parent_id` unchanged, drops
+  spans with no `gen_ai.*` attribute, and reads tokens from `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens`.
+- The endpoint per site is `otlp_trace_endpoint` in DataDog/documentation `shared/regions.yaml`:
+  `https://otlp.datadoghq.com/v1/traces` for datadoghq.com, the same shape for the other sites.
+- docs.datadoghq.com/llm_observability/investigate/cost: each llm span is priced on its own, and a trace with an llm
+  span lacking a cost reads PARTIAL COST. The catalog it prices from (pydantic/genai-prices `prices/providers/aws.yml`)
+  matches provider names containing `bedrock` and models containing `amazon.nova-pro`.
+- adk-go v2.1.0 (kagent v0.10.1's pin) writes `gen_ai.usage.input_tokens` and `gen_ai.usage.output_tokens` on each
+  `generate_content` span (`internal/telemetry/telemetry.go`, TraceGenerateContentResult).
+
+**What changed** (`gitops/otel-collector/values.yaml`, `values-dual.yaml`, `values-burn.yaml`).
+- `transform/llmobs_apm_off`, last in the traces processors (before burn's PII scrub), sets `dd_llmobs_enabled` false on
+  every span, so the datadog exporter's copy makes no Agent Observability rows. Tempo receives the attribute too, which
+  changes nothing there.
+- `forward/llmobs`, a forward connector on the traces exporters, hands the processed spans to a new pipeline,
+  `traces/llmobs`. It follows the lab pipelines' pattern: relay.yaml ends it at debug, and the Datadog overlay adds
+  `otlp_http/llmobs` (the cluster's org) and, in datadog-dual.yaml, `otlp_http/llmobs_admin` (the instructor org,
+  with datadog/admin's short retry). The copy leaves after every traces processor, so burn's PII scrub covers it.
+- `transform/llmobs_one_root`, on the copy only. The guard span that holds the turn takes the trace id's low 64 bits
+  as its span id, and kagent's `invocation` (when it has a parent) names that id as its parent. Both values come from
+  the trace id alone, which matters because the collector is a DaemonSet and guard-proxy's and kagent's spans pass
+  through different pods. The span that holds the turn is `POST /chat` on the storefront path (proxy.py at pin
+  fb6e2bf, `_handle_chat`) or `sanitize` on the raw A2A pass-through (`_handle_post`), which the facilitator fallbacks
+  and beat scripts send. That span becomes `invoke_agent`, Datadog's agent kind: guard-proxy makes no model call of its
+  own, and as an llm row with no tokens it made the trace PARTIAL COST.
+- `filter/llmobs_one_root`, on the copy only, removes guard-proxy's inner `chat` wrapper (the same prompt and reply as
+  the root, an llm row with no tokens), kagent's server span (the 14 ms message/send row), and every span with no
+  `gen_ai.*` attribute, which Datadog would drop anyway.
+
+**How the five read offline.** `verify/test_trace_shape_e2e.py` now runs both copies through each profile's real
+pipelines (otelcol-contrib 0.160.0), for a storefront turn and a pass-through turn. APM's copy keeps every id and
+parent as sent and carries the marker on every span. In the copy, each turn has one root, guard-proxy's span under its
+derived id, kind agent, with the prompt and the reply. `invocation` hangs from it, so both tool calls sit under it. Its
+duration is the guard span's own and contains every row. Every llm row carries its token counts. No span lacks a
+`gen_ai.*` attribute, and none carries the marker. Removing the re-parent, the marker, the filter or the kind change
+each fails its checks, which I confirmed on temporary edits of values.yaml that were then restored.
+`verify/test_collector_no_datadog.py` holds the wiring offline: one intake per org APM ships to, on every profile,
+each with its own org's key, `dd-otlp-source: llmobs` and `https://otlp.${env:DD_SITE}/v1/traces`.
+
+**What differs from the earlier draft and its pins.** Runs 15236 and 15280 pinned the two-root shape: the guard root
+as kind llm, kagent's `POST /` kept as a workflow row. Those checks are replaced by the five above. The fixture's
+`sanitize` under `POST /chat` was not what proxy.py writes on that path; the storefront turn now has the `chat`
+wrapper, and `sanitize` appears in the pass-through turn, where it is written. The re-parent that question 1034 turned
+down moved APM's parentage. This one is on a copy only Agent Observability receives, so APM, Tempo and the service map
+keep guard-proxy → agentgateway → kagent.
+
+**Open edges.** An A2A message that did not come through guard-proxy names a parent that is not in the copy, and it
+shows as its own root, as every kagent turn did before. The new pipeline adds no dependency.
+
+**Not yet run on a cluster.** Owed in a session that can read Whitney's sandbox org (#759 is the run-side access):
+once a KubeCon cluster's root has synced this commit and the collector pods have rolled (the config checksum rolls
+them), check the collector log for `otlp_http/llmobs` export errors with
+`kubectl --context <ctx> -n monitoring logs ds/otel-collector-opentelemetry-collector-agent -c opentelemetry-collector | grep -i llmobs`.
+A 403 there means the org's key is not accepted at the llmobs intake. Send one chat (the probe's HC-666 turn), then in
+LLM Observability under `ml_app:burritobot` confirm Whitney's five: one root row; the prompt and the reply on it;
+`read_support_ticket` and `deploy_app` under it; a duration matching guard-proxy's `POST /chat`; tokens and an
+estimated cost, with no `skipped_tokens_missing`. In APM, open the same trace and confirm it still runs guard-proxy →
+agentgateway → kagent with one `POST /chat` span. The overlap note on Datadog's page ("some data sent to Agent
+Observability may also be written to the corresponding APM traces") is the one way the copy could reach APM, and that
+look settles it. Offline: `python3 verify/test_trace_shape_e2e.py` (in `bash verify/run-e2e-tools.sh`).
