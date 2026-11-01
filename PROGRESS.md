@@ -6,6 +6,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Added
+- (2026-11-01) #765: BurritoBot now gives the support-desk link (https://support.burritobot.co) only when a customer asks for the desk directly or how to file a ticket, and never as a way out of a request it will not do. Narrow instruction in the deployed agent prompt; pinned by verify/test_support_desk_link.py. Live behavioural check owed.
 - (2026-11-01) #762: the BurritoBot chat page now assigns every visitor a witch name on first visit (from the desk's vocabulary, mirrored into the page and pinned by a test), shows it as plain text, sets the shared .burritobot.co cookie, offers a label-only "Get a new witch name" re-roll, and sends the name with each /chat call. Agent-side consumption is guard-proxy-agenticburn#34 (owed, with a live check); #762 stays open until then.
 - (2026-11-01) #763: removed every support-desk link from the BurritoBot chat page (the `/` and `/me` "see your Jokers" links in witchName); the witch name now shows as plain text only, so Challenge 3 is not given away from the first minute.
 - (2026-11-01) #761: renamed the chat page side panel "Workshop Panel" -> "Backend Insights", retired the public-bot community banner, and added a private-bot "This is the private (administrator) BurritoBot." warning driven by the `burritobot-private.` host guard-proxy reports. Updated lab.html, the phone check, and the banner/no-internal-abstractions tests.

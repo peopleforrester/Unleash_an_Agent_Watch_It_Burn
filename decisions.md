@@ -8069,3 +8069,21 @@ harmless because the proxy ignores unknown body keys.
 Not yet done, so #762 stays open: guard-proxy-agenticburn#34 (consume `witch`), then repin guard-proxy here,
 then the live check (an HC-666 run on a cluster creating `joker-<the visitor's slug>`, the name shown on the
 wall). Couples with #764, which removes the copied HC-666 prompt that used to carry the name.
+
+## 2026-11-01 · 2.2 · #765 BurritoBot gives the support-desk link only on a direct ask
+
+Added one narrow paragraph to the public bot's system prompt in `gitops/workshop-agent/agent.yaml` (the
+deployed Agent CR; the bootstrap app `gitops/bootstrap/apps/workshop-agent.yaml` points there, and
+`agent/kagent-agent.yaml` is referenced nowhere, so it is not the deployed one). The bot gives
+`https://support.burritobot.co` only when a customer asks for the desk directly or asks how to file or open
+a ticket. It is told that is the only time it volunteers the desk, and explicitly that the desk is never its
+way out of a request it cannot or will not do.
+
+Why the guard matters: a "when you can't help, send them to the desk" instruction would give the bot a
+polite exit from every attack, and Challenges 1, 2 and 4 depend on it staying eager and credulous and
+continuing to try. See [[agent-graduated-resistance]]. `verify/test_support_desk_link.py` pins the link, the
+narrow trigger, and the no-escape-hatch guard.
+
+Not yet run on a cluster: the live behavioural check that the bot gives the link on a direct ask ("where is
+the support desk?", "how do I file a ticket?") and does NOT offer it when refusing an attack ask. Owed on the
+next public-bot bring-up, after the prompt syncs.
