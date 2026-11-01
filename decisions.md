@@ -8263,3 +8263,56 @@ the same on the private bot, a fresh name written to wib_witch on .burritobot.co
 accepts) when there is no cookie or a cookie the vocabulary did not make, and nothing on agenticburn.com. With the
 first-visit assignment removed from the page, five checks fail, which I confirmed on a temporary edit that was
 restored. No page or desk code changed.
+
+## 2026-11-01 · #759 · Dispatched runs read BurritoBot's traces through a hecaton read verb, on a new read-only key
+
+#759 asks that a dispatched run read BurritoBot's traces in Whitney's sandbox org itself, so a trace fix such as
+#746 no longer ends by handing the Datadog look to a person. Whitney's rules for her org (#629) hold: read-only
+scopes, no existing key used, rotated or revoked, nothing touched that is not BurritoBot's. The issue leaves the
+mechanism to Michael (an API key, the Datadog MCP server, or both). This run, 15550, has no Datadog access, so it
+builds the repo's half and names the two acts outside the repo that are still owed.
+
+**The mechanism: the API, through a hecaton read verb, so the run never holds the key.** A run is locked out of
+`~/secrets` and `~/.config/secrets` and gets no credential in its environment (hecaton's `docs/spec/01-executor.md`,
+"Workspace"). It reads GitHub through `sources gh`, where the wrapper holds the token and runs a fixed list of read
+commands. Datadog is read the same way: a new verb, `sudo -n -u michael /var/lib/hecaton/cli/sources datadog GET
+<path?query>`, which adds the key pair itself, allows GET only on `/api/v2/current_user`,
+`/api/v2/llm-obs/v1/spans/events` and `/api/v2/spans/events`, and prints `{"status": <http status>, "body": <json>}`.
+That verb is hecaton's code, so it is a follow-up in peopleforrester/hecaton, not a change here. The MCP server was
+not chosen: it needs an OAuth consent or the same key pair in the run's own tool config, which would put the key in
+the run, and a run's tool set is fixed by hecaton per pool.
+
+**The credential.** A new application key in Whitney's sandbox org, created by Michael's user (he holds Admin there),
+named `burritobot-dispatched-runs-read`, scoped to `llm_observability_read` ("View Agent Observability"), `apm_read`
+("Read and query APM and Trace Analytics") and `user_self_profile_read` (for `/api/v2/current_user`, which names the
+org), with a new API key of the same name. API keys carry no scopes in Datadog; this one is new so that no existing
+key is used, and nothing in this repo sends with it. Both live in `/home/michael/.config/secrets/datadog-burritobot-read.json`
+on the hecaton host (`{"api-key", "app-key", "site": "datadoghq.com"}`, mode 0600), which only the `sources` wrapper
+running as michael reads. It is not watch-it-burn/datadog's pair: the clusters ship with that, and it stays untouched.
+Scope names are from Datadog's permissions list (docs.datadoghq.com/account_management/rbac/permissions, read
+2026-11-01); the span endpoints are from the LLM Observability Export API and the Spans API references, read the same
+day.
+
+**The reader: `verify/dd_traces.py`.** `--via sources` (a run) or `--via env` (a session holding
+`WIB_DD_TRACES_API_KEY` and `WIB_DD_TRACES_APP_KEY`); there is no default and no fallback to watch-it-burn/datadog.
+It names the org from `/api/v2/current_user` and refuses an org not named with `WIB_DD_POOL_PREFIX` (default
+`Datadog`, as `fleet_monitors.py` and `room_view.py` do) before reading anything. It then lists LLM Observability spans
+for `ml_app:burritobot` over `--minutes` (default 60), picks the `--traces` newest traces (default 3), reads each whole
+by trace id and prints it as its roots and children with kind, name, duration, status and tokens, which is the shape
+#746 is judged on. `--apm` adds the newest APM spans for `env:burritobot-kubecon-na-26 service:burritobot*`, `--trace
+<id>` prints one trace, `--json` prints the spans raw. Every call is a GET. A run reads traces with:
+
+    python3 verify/dd_traces.py --via sources --minutes 1440 --traces 3 --apm
+
+**Tests.** `verify/test_dd_traces.py` (offline) runs the reader against a fake org: GETs only, the org named first,
+the new env pair sent and neither key missing allowed, the two newest of three traces read by id and the oldest not,
+children printed under their root, another org refused after one lookup, no span and an unknown `--trace` failing,
+the APM query and the JSON shape, and through a fake `sources` the exact argv, no key on the run's side, a refused
+verb, a malformed answer and a 403 each failing. `verify/test_dd_traces_live.py` (`# SUITE: e2e`) reads the newest
+trace and its APM spans with `WIB_DD_TRACES_VIA` set, which it requires. Today `python3 verify/dd_traces.py --via
+sources` exits 1 with `REFUSED sources datadog: unknown verb or wrong arguments`, which is the gap the follow-up closes.
+
+**Not yet run on a cluster.** Owed, in order: Michael creates the key pair in Whitney's org and writes the file above
+on the hecaton host; hecaton adds the `sources datadog` verb; then a dispatched run, with one /chat on either KubeCon
+cluster in the last day, runs `WIB_DD_TRACES_VIA=sources python3 verify/test_dd_traces_live.py`, which must print a
+`trace <id>` block for ml_app burritobot. Until then #746's live checks still need a person.
