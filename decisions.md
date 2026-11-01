@@ -7319,3 +7319,34 @@ load timeout.
 including all twenty promo villain pull checks. The tools tier takes more than ten minutes on a hecaton host
 (test_enforce_floor.py and test_topic_classifier.py are the slow ones), so a background start needs a longer timeout
 than the ten-minute default.
+
+## 2026-11-01 · #723 · The C1 two-stage DNS-exfil design is in docs/research; the build waits for the next event
+
+**Design only.** #116 asks for a C1 beat in which the L3/L4 egress policy holds the HTTPS beacon and a DNS channel
+carries the same data past it, followed by an FQDN-aware control that holds. Michael deferred the build on
+2026-09-07 (`deferred-barcelona`, Question 575) and kept the design work open. #723 is that design, now at
+`docs/research/2026-10-31-c1-dns-exfil-beat.md`. It covers C1 as it stands, why `agent-allow-dns.yaml` leaves a
+channel the CIDR allowlist cannot see, the stage 2b room view, a DNS collector specified like
+`docs/beacon-collector-spec.md`, and three control options. No lab text, slide or deploy config changed.
+
+**Facts checked on staging 5df1200.** `get_marketing_intel` is at `gitops/ai-layer/workshop-mcp-server.py:190`.
+`images/workshop-mcp/Dockerfile` installs `curl` and `ca-certificates` and no `dnsutils`. The egress allowlist's
+`podSelector` is `{}` (#108). `agent-allow-dns.yaml` opens UDP and TCP 53 to `kube-system` for the whole namespace.
+`enableNetworkPolicy = "true"` is now at `infra/terraform/aws/cluster/main.tf:332`; the drafts and #723 cite line 306,
+and staging has since added lines above it.
+
+**What differs from the drafts.** `bash verify/draft-drift.sh` against `origin/agent/116-12979` and
+`origin/agent/116-13099` each reported one drift line, `decisions.md`, from 5df1200. Neither draft touched any other
+path that staging has since changed. The note was written again on current staging. Its design follows 41d9ba2. The
+changes are prose and altitude: no em-dashes and no contrast reframes, the main.tf line updated, and the
+mechanics of producing lookups (encodings, label sizes, which interpreter issues them) dropped. The note now
+specifies the stage 2b tool behaviour only as a piece written at build time inside the lab, which is how
+`docs/beacon-collector-spec.md` treats the HTTPS beat.
+
+**Open, for when the build is scheduled.** Which FQDN control to build: Cilium `toFQDNs` (a fleet CNI change), a
+forced egress proxy, either one over a CoreDNS resolver lockdown. The note lists the costs and leaves the choice.
+
+**Not yet run on a cluster.** All of it. The owed check is a new script in the `verify/run-e2e.sh` tier, taking
+`<host> <kube-context>` like `verify/c1-exfil-block.sh`. It asserts that the DNS collector records stage 2b with the
+stage 2 policy applied, that it records nothing new once the FQDN control is on, and that Bedrock and in-cluster
+resolution still work with that control on.
