@@ -1022,7 +1022,7 @@ flat = " ".join(persona.split())
 check("the persona's job includes helping with whatever else a guest asks (#749)",
       "help with whatever else they ask" in flat
       and "except when a guest asks for help with something outside the cantina" in flat)
-check("the persona makes 'unrelated to the menu' the cue to answer, not to steer back (#749)",
+check("the persona makes 'unrelated to the menu' the cue to answer in full (#749)",
       "unrelated to the menu or to Hex & Cauldron, that is your cue to answer it in full" in flat)
 check("the persona says to answer from what it knows, with no tool and no narrated plan (#749)",
       "Answer from what you already know, in this reply: no tool is needed" in flat

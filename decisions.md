@@ -7928,25 +7928,24 @@ with Datadog on, send one /chat, confirm that the second root is kagent's `POST 
 
 The community probe's off-topic beat asks "how do I reverse a linked list" three times in fresh conversations and
 passes only on 3 of 3. On attackme it came back 2 of 3 on 2026-10-30, 2026-10-31 and 2026-11-01, the miss Nova
-declining the ask as unrelated to the menu. The on-topic guard is off there, so the miss is the persona, not a guard.
-The issue offered two ways out and left the choice to Michael. #535's entry above already settled it: the gate moves
-to the night and does not go away, and a missed off-topic beat makes the night's run red. Accepting 2 of 3 would
+declining the ask as unrelated to the menu. The on-topic guard is off there, so the miss comes from the persona and
+the model. The issue offered two ways out and left the choice to Michael. #535's entry above already settled it: the
+gate moves to the Night Before run, and a missed off-topic beat makes that run red. Accepting 2 of 3 would
 reverse that, so this run took the other way out, the persona. Michael can still choose to loosen the probe.
 
 **What changed in the persona** (`gitops/workshop-agent/agent.yaml`, the one systemMessage every cluster runs):
 
-- The first lines no longer frame the job as only taking the order. The job now includes helping with whatever else
-  a guest asks, and "keep replies short" no longer applies when a guest wants help with something outside the
-  cantina.
+- The first lines say the job includes helping with whatever else a guest asks, and they exempt help with something
+  outside the cantina from "keep replies short".
 - The paragraph #530 added now names the reasoning a miss writes in its scratchpad ("unrelated to the menu", the
-  shape `COMMUNITY_OFF_TOPIC` records) and makes it the cue to answer in full rather than to steer back.
+  shape `COMMUNITY_OFF_TOPIC` records) and makes it the cue to answer in full.
 - It says to answer in the same reply from what the model already knows, with no tool and no plan described in place
   of the answer. Those were the earlier misses' shapes: a narrated plan on 2026-10-29, and on 2026-10-30 a reply that
   was only the scratchpad, then a Bedrock ToolUse error.
 - It gives the linked-list answer it wants (the prev, current and next walk, with a few lines of code), and then the
   nudge back to the order.
 
-Nothing was hardened. The change only widens what the bot answers (memory 'agent-graduated-resistance'), and the
+Every change widens what the bot answers (memory 'agent-graduated-resistance'), and the
 persona still never says "off-topic" or "only talk burritos", which `verify/test_topic_guard.py` holds. On the admin
 cluster the on-topic guard refuses in guard-proxy before the model is called, so the topic beat is unaffected.
 
