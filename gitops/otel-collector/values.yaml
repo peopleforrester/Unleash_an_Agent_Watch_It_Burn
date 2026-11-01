@@ -281,8 +281,9 @@ config:
             # whole function-response event, every call's response in it, the failed one's "command FAILED" included
             # (adk-go internal/telemetry TraceMergedToolCallsResult). Marking it too made one block read as 2 errors
             # in Agent Observability's trace list (coordinator's live check on #265, burritobot-private, 2026-10-31).
-            # The merged span is not the call that failed; the conventions' reason for leaving the model call unmarked
-            # holds for it too. ADK still marks it itself when the merge returns a Go error (RecordError).
+            # The call that failed is the run_shell span under it, and the conventions' reason for leaving the model
+            # call unmarked holds for the merged span too. ADK still marks it itself when the merge returns a Go error
+            # (RecordError).
             - 'set(status.code, STATUS_CODE_ERROR) where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             - 'set(status.message, "the tool call failed (see gen_ai.tool.call.result)") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'
             - 'set(attributes["error.type"], "tool_error") where name != "execute_tool (merged)" and attributes["gcp.vertex.agent.tool_response"] != nil and IsMatch(attributes["gcp.vertex.agent.tool_response"], "isError.: true")'

@@ -294,7 +294,7 @@ for profile in PROFILES:
                  if key != "run-shell" and (is_error(s) or "error.type" in attrs(s)))
     check(f"{profile}: the block is the trace's one error; the model call that read it ended fine", not red, str(red))
     merged = span["merged"]
-    check(f"{profile}: the merged span holding the failed call's response is not red, it is not the call that failed",
+    check(f"{profile}: the merged span holding the failed call's response is not red; the error is on run_shell under it",
           not is_error(merged) and "error.type" not in attrs(merged), f"{merged.get('status')} error.type={attrs(merged).get('error.type')}")
     errors = [s.get("name") for s in span.values() if is_error(s)]
     check(f"{profile}: exactly one error span, the count Agent Observability's trace list shows",
