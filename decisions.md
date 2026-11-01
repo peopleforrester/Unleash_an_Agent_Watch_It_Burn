@@ -7998,3 +7998,20 @@ the old fleet.sh, 17 of its checks fail.
 attendee cluster in a lab VPC that also holds a roster cluster's load balancer, in a session with AWS access: the
 torn-down cluster's `k8s-*` groups should go, the roster cluster's groups should keep their rules, and
 `bash verify/run-e2e.sh` against the roster cluster should still pass afterwards.
+## 2026-11-01 · 2.2 · #761 Backend Insights rename and the private-bot banner
+
+Renamed the chat page's side panel from "Workshop Panel" to "Backend Insights" (the KubeCon talk is a
+breakout, not a workshop), in `gitops/ai-layer/web/burritbot.html` and its comments, with the stale
+references in `gitops/ai-layer/web/lab.html`, `verify/test_no_internal_abstractions.py` and
+`facilitation/kubecon-na-2026-phone-check.md` updated to match.
+
+Retired the public-bot community banner and replaced it with a private-bot warning. Rule chosen: the
+warning (`#privatebanner`, "This is the private (administrator) BurritoBot.") shows only when the host
+guard-proxy reports matches `/^burritobot-private\./`. The public bot (`attackme.`) and every attendee
+cluster match no rule and show no banner. The warning reuses the red `.combanner` style, so it is the one
+red element on an otherwise purple page. `verify/test_community_banner.py` rewritten to pin the inverted
+behavior (public none, private warned, attendee none). The phone check no longer tells testers to look
+for a banner on the public bot.
+
+Not yet run on a cluster: the live check that the public bot shows no banner and the private bot shows the
+warning, driven by the real `WIB_PUBLIC_HOST` each reports. Owed on the next community/private bring-up.

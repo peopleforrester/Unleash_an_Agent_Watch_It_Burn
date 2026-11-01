@@ -80,7 +80,8 @@ for name, text in PAGES.items():
 
 print("== the guardrail panel states the student's own cluster, and starts empty ==")
 bot = PAGES.get("burritbot.html", "")
-check("the panel is labelled as the workshop's, not the shop's", "Workshop Panel" in bot)
+check("the panel is labelled as the backend's, not the shop's (renamed from Workshop Panel, #761)",
+      "Backend Insights" in bot)
 check("it says guardrails appear once installed", "Guardrails will appear here when you install them" in bot)
 # Grayed-out placeholders give away the punchline: a student would see the whole list before earning any.
 check("it does not preannounce the controls they have not installed",

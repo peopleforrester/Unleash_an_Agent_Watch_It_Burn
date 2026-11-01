@@ -66,7 +66,8 @@ wrong, plus the phone model and OS version.
 What each column means:
 
 - **Loads:** the storefront appears within a few seconds, with the menu and the
-  chat box, and the red "This is the Community BurritoBot." banner is showing.
+  chat box. The public bot carries no banner (the community banner was retired in
+  #761; only the private administrator bot shows one).
 - **No overlap:** in portrait, scrolled top to bottom, no text sits on top of
   other text, nothing is cut off at the side, and the keyboard does not cover the
   send button.

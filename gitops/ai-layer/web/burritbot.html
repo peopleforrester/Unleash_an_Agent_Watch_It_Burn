@@ -85,8 +85,8 @@
   .bdg.on{opacity:1;background:var(--r3);color:#fff;border-color:var(--r3)}
   .bdg.on .bdot{background:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.35)}
   .badgesnote{font-size:11.5px;color:var(--mid);margin:4px 0 2px;line-height:1.35;font-style:italic}
-  /* Workshop Panel header (#212): marks the right column as workshop/infra, visually apart from the
-     BurritoBot storefront so a first-time student does not read it as part of the app. */
+  /* Backend Insights header (#212, renamed #761): marks the right column as backend/infra, visually
+     apart from the BurritoBot storefront so a first-time viewer does not read it as part of the app. */
   .panelhdr{display:flex;flex-direction:column;gap:2px;font-weight:800;font-size:13px;color:#0d3b2e;
             background:#e6f4ec;border:1px solid #bfe3d0;border-left:4px solid var(--r3);
             border-radius:10px;padding:9px 12px;margin-bottom:2px}
@@ -251,7 +251,7 @@
     .menu .mscroll{max-height:none;overflow:visible}
     .infra{border-left:4px solid var(--r3);padding:14px}
     /* The one place a bounded scroller earns its keep: a long conversation should not push the composer
-       and the workshop panel miles down the page. Cap the stream and let it scroll inside the chat card;
+       and the Backend Insights panel miles down the page. Cap the stream and let it scroll inside the chat card;
        everything else flows. */
     .chatcol{order:-1}
     .stream{max-height:60vh}
@@ -375,20 +375,20 @@
       </div>
     </div>
     </div><!-- /.store -->
-    <!-- WORKSHOP PANEL. Deliberately distinct from the BurritoBot storefront: a first-time student must
-         read this column as the workshop watching the app, not as part of the app they are ordering from
-         (Whitney, 2026-09-05, #212). No round selector: students only ever use their own cluster, and
+    <!-- BACKEND INSIGHTS panel. Deliberately distinct from the BurritoBot storefront: a first-time viewer
+         must read this column as the backend watching the app, not as part of the app they are ordering
+         from (Whitney, 2026-09-05, #212; renamed from "Workshop Panel" in #761 since the KubeCon talk is a
+         breakout, not a workshop). No round selector: students only ever use their own cluster, and
          "rounds" is admin-only jargon (#213). -->
     <aside class="infra">
-      <div class="panelhdr">&#128295; Workshop Panel</div>
-      <!-- Shown ONLY on the community cluster (#292). The whole room shares this one bot, so someone
-           else's prompt can change what you see; on your own cluster nothing you do touches anyone.
-           Those two situations look identical on screen, and a student who assumes this is theirs reads
-           another person's answer as their bot misbehaving.
-           Deliberately ONE sentence. An earlier draft added "This is not the student BurritoBot", which
-           gives away that they will get their own cluster later, and at this point they have not been
-           told (Whitney, 2026-09-07). -->
-      <div id="communitybanner" class="combanner" hidden>This is the Community BurritoBot.</div>
+      <div class="panelhdr">&#128295; Backend Insights</div>
+      <!-- Shown ONLY on the private (administrator) bot (#761). The public bot carries no banner: the
+           room only ever uses the public bot, so a "this is the community bot" line told them nothing
+           (that was the old #292 banner, retired here). The two presenters switch between the public and
+           private bots mid-demo, and nothing on the private bot told them which one they were on. This
+           warning does, driven by the host guard-proxy reports, so attendee clusters and the public bot
+           never show it. -->
+      <div id="privatebanner" class="combanner" hidden>This is the private (administrator) BurritoBot.</div>
       <!-- Guardrails the student has installed. A badge APPEARS only when its control is on; nothing is
            shown grayed-out, because dim placeholders telegraph how many controls exist and spoil the arc
            (Whitney, 2026-09-05, #211). The empty-state header is shown until the first control goes in. -->
@@ -470,11 +470,12 @@
   // telegraph how many controls exist and spoil the arc (Whitney, 2026-09-05, #211). The panel starts
   // empty with a header, and fills in one badge at a time as the student installs each control.
   function applyControls(c){
-    // The community cluster announces itself, driven by the host guard-proxy reports rather than anything
-    // baked into this page: the same page ships to every cluster, and a stray banner on fifty student
-    // clusters would be worse than none at all.
-    var ban=document.getElementById('communitybanner');
-    if(ban){ ban.hidden = !(c && typeof c.host === 'string' && /^attackme\./.test(c.host)); }
+    // The private (administrator) bot announces itself, driven by the host guard-proxy reports rather than
+    // anything baked into this page: the same page ships to every cluster, so the condition is the private
+    // bot's host (burritobot-private.) and nothing else. The public bot (attackme.) and every attendee
+    // cluster match no host rule here and show no banner at all (#761).
+    var ban=document.getElementById('privatebanner');
+    if(ban){ ban.hidden = !(c && typeof c.host === 'string' && /^burritobot-private\./.test(c.host)); }
     var strip=document.getElementById('badges'); if(!strip) return;
     var ai    = (c && c.ai)    ? c.ai    : (c || {});
     var infra = (c && c.infra) ? c.infra : {};
