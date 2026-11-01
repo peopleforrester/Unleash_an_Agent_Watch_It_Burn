@@ -758,23 +758,21 @@
     try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
     setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
   })();
-  // The support desk's witchy name (#685). The desk sets wib_witch on .burritobot.co, so the chat page on the same
-  // domain shows the name the desk gave this browser, linked to the visitor's own Jokers on the cluster's desk
-  // (support-<cluster label>). Without the cookie it points at the desk to get one. Other domains show nothing.
+  // The visitor's witchy name (#685), shown as PLAIN TEXT with no link (#763). The name lives in the wib_witch
+  // cookie on .burritobot.co. Linking the header to the support desk gave away Challenge 3 before the presenters
+  // reached it, and "see your Jokers" named a Joker before the room had heard of one, so every support-desk link
+  // is gone from this page. People reach the desk by asking the bot or from the Challenge 3 slide. #762 gives
+  // every visitor a name on their first visit, so the no-cookie branch here (nothing shown) is transient.
   (function witchName(){
     var host=location.hostname||'', el=document.getElementById('witch');
     if(!el || !/\.burritobot\.co$/.test(host))return;
-    var desk='https://support-'+host.split('.')[0]+'.burritobot.co';
+    el.removeAttribute('href'); el.removeAttribute('target'); el.removeAttribute('rel');
     var m=/(?:^|;\s*)wib_witch=([a-z]+-the-[a-z]+)(?:;|$)/.exec(document.cookie||'');
     if(m){
       var name=m[1].split('-').map(function(w){return w==='the'?w:w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
-      el.textContent='\uD83E\uDDD9 You are '+name+' \u00b7 see your Jokers';
-      el.href=desk+'/me';
-    }else{
-      el.textContent='\uD83E\uDDD9 Get your witch name at the support desk';
-      el.href=desk+'/';
+      el.textContent='\uD83E\uDDD9 You are '+name;
+      el.hidden=false;
     }
-    el.hidden=false;
   })();
   greet();
 </script>
