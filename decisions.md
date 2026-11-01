@@ -7351,17 +7351,18 @@ forced egress proxy, either one over a CoreDNS resolver lockdown. The note lists
 stage 2 policy applied, that it records nothing new once the FQDN control is on, and that Bedrock and in-cluster
 resolution still work with that control on.
 ## 2026-11-01 · #733 · #707's live check: what it reads on watch-it-burn-community, and what it cannot watch any more
+## 2026-11-01 · #733 · #707's live check reads the first Agent move on watch-it-burn-community from what it left behind
 
 Not run. A dispatched run has no cluster and no AWS credentials (`kubectl config get-contexts` lists no context,
 `aws sts get-caller-identity` returns NoCredentials), so this entry records what the check needs to do. It adds to the
-#707 entry (2026-10-31) and does not replace it. Nothing else changed.
+#707 entry (2026-10-31). Nothing else changed.
 
 **Which cluster.** `watch-it-burn-community` (roster.tsv, profile burn) is the only burn or attendee cluster
 PROJECT_STATE.md lists as up. `watch-it-burn-private` is admin, where evil-mcp's list has no ignore and C7 is the
 gateway rule, so the guard-mcp-on half of the check does not apply there. If community has been torn down since
 2026-10-28, the check waits for the next burn or attendee bring-up, which is spend.
 
-**The first sync has already happened, so it is read, not watched.** deploy-full-idp.sh's root, `lab-bootstrap`,
+**The first sync has already happened, so the check reads what it left.** deploy-full-idp.sh's root, `lab-bootstrap`,
 tracks `staging` with automated prune and selfHeal, and passes `revision=staging` to every child. 4cd52ed reached
 staging as 813404e on 2026-10-31, so community's root moved without anyone acting, and the Agent moved between
 Applications then. What survives:
