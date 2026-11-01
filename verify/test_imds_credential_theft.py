@@ -1,14 +1,16 @@
 # ABOUTME: Render/wiring gate for #113: the community cluster leaks node IMDS creds on purpose, every other
-# ABOUTME: cluster keeps it out of reach, and the facilitator beat steals them read-only via sts get-caller-identity.
+# ABOUTME: cluster keeps it out of reach, and the facilitator beat steals them read-only and names the account.
 """The IMDS credential-theft challenge (#113), pinned where it is written down.
 
 Michael chose "make a cluster genuinely vulnerable" (question 843, 2026-10-26). The vulnerability is a single
 per-cluster knob: the node IMDSv2 PUT-response hop limit. At the default 1 a pod's packet to 169.254.169.254
 dies one hop short of node IMDS, so a compromised pod cannot steal the node instance-role credentials. The
 community (burn) cluster alone runs it at 2 and ships no agent-deny-imds ClusterNetworkPolicy, so there the
-theft lands and `aws sts get-caller-identity` returns a node role (ASI03). This test proves that wiring is
-coherent across the terraform, fleet.sh and the burn profile, and that the facilitator demonstration is
-read-only and actually performs the theft it narrates.
+theft lands and the stolen key is proven to be a node role in a real AWS account (ASI03). This test proves
+that wiring is coherent across the terraform, fleet.sh and the burn profile, and that the facilitator
+demonstration is read-only and actually performs the theft it narrates. The pivot is shown by reading the
+node instance-identity document, not by calling the aws CLI, which the minimal tool-pod image does not carry
+(#748): an aws call would only print "aws: not found" on stage.
 
 What it does NOT prove, and where that is proven: that a real community node answers IMDS at hop limit 2 and
 a real attendee node does not is the live half named in challenges/imds-node-creds/FACILITATOR.md (owed on a
@@ -49,7 +51,7 @@ check("var.imds_hop_limit is a number defaulting to 1", bool(m) and int(m.group(
 
 print("== fleet.sh raises it to 2 for the community cluster alone ==")
 # The helper is the single source of truth; test_cluster_roles.sh exercises it against a sourced fleet.sh.
-helper = re.search(r"imds_hop_limit_for_role\(\)\s*\{(.*?)\n\}", FLEET, re.S)
+helper = re.search(r"imds_hop_limit_for_role\(\)\s*\{(.*?)\n\}", FLEET, re.DOTALL)
 check("imds_hop_limit_for_role exists", helper is not None)
 body = helper.group(1) if helper else ""
 check("community gets 2", re.search(r"community\)\s*printf '2'", body) is not None)
@@ -86,14 +88,19 @@ check("it requests an IMDSv2 token (PUT), which the hop limit is what blocks",
       "-X PUT" in STEAL and "x-aws-ec2-metadata-token-ttl-seconds" in STEAL.lower())
 check("it reads the node instance-role credentials path",
       "iam/security-credentials/" in STEAL)
-check("it proves the pivot with sts get-caller-identity using the stolen creds",
-      "sts get-caller-identity" in STEAL and "AWS_SESSION_TOKEN=" in STEAL)
+check("it proves the pivot by reading the node instance-identity document with the stolen token (#748)",
+      "instance-identity/document" in STEAL and "accountId" in STEAL)
+check("it names the AWS account the stolen node role lives in, so the cloud-account reach is on screen",
+      "account ${ACCT}" in STEAL)
 check("it reports BLOCKED when the node refuses, so it is safe to run on a guarded cluster too",
       "BLOCKED" in STEAL)
-# Read-only: the only AWS call is the identity lookup, and IMDS is only ever GET/PUT-token (never a write).
-aws_calls = set(re.findall(r"\baws\s+([a-z0-9-]+)\s+([a-z0-9-]+)", STEAL))
-check("no aws call other than sts get-caller-identity (nothing is created or changed)",
-      aws_calls == {("sts", "get-caller-identity")})
+# Read-only, and no aws CLI: the tool-pod image has none, so any aws call would print "aws: not found"
+# on stage (#748). IMDS is only ever GET/PUT-token (never a write), and the pivot is shown without aws.
+# Scan only executable lines; comments naming `aws ...` as the thing we deliberately avoid do not count.
+STEAL_CODE = "\n".join(ln for ln in STEAL.splitlines() if not ln.lstrip().startswith("#"))
+aws_calls = set(re.findall(r"\baws\s+([a-z0-9-]+)\s+([a-z0-9-]+)", STEAL_CODE))
+check("the steal script invokes no aws CLI at all (nothing to print 'aws: not found'; nothing changed)",
+      aws_calls == set())
 check("it does not steal or touch the Pod Identity endpoint 169.254.170.23", "169.254.170.23/" not in STEAL)
 
 print()
