@@ -75,6 +75,14 @@ def main(argv=None) -> int:
     a.out.write_text(md)
     print(f"compiled {len(md)} bytes to {a.out} ({len(SECTIONS)} sections)", file=sys.stderr)
     if a.publish:
+        # American English gate (#745): check the published writing BEFORE the Doc is replaced, and stop on a
+        # non-zero exit. Exit 1 means a British form was found; exit 2 means the .american-english opt-in is
+        # missing or its globs match no file the checker reads.
+        checker = pathlib.Path.home() / "repos/workflow/llm-coding-workflow/scripts/check_american_english.py"
+        rc = subprocess.run([sys.executable, str(checker), "--published"], cwd=REPO).returncode
+        if rc != 0:
+            print(f"American English check failed (exit {rc}); not publishing", file=sys.stderr)
+            return rc
         if not GDOC_UPDATE.exists():
             print(f"missing {GDOC_UPDATE}", file=sys.stderr)
             return 1

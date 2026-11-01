@@ -1,0 +1,15 @@
+README.md
+docs/STACK-WALKTHROUGH.md
+docs/DESIGN-DECISIONS.md
+docs/BUILD-SPEC.md
+docs/GITOPS-RECONCILIATION.md
+docs/attendee-access-design.md
+infra/SIZING.md
+docs/observability-priorities.md
+docs/external-apps.md
+docs/GOTCHAS-FLEET-AND-DELIVERY.md
+facilitation/governance-map.md
+facilitation/self-assessment.md
+docs/TECH-STATUS.md
+docs/ROADMAP.md
+docs/DECISION-LOG.md

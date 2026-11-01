@@ -787,7 +787,7 @@ Whitney's "Datadog is not receiving any traces from BurritoBot" was the OTel ope
 open: nine of ten fresh clusters admitted the agent pod before the webhook served, so it was never
 instrumented while guard-proxy still traced. Fixed with a PreSync gate in ai-layer and a converge repair;
 kagent spans now arrive in every cluster's own org. Her wording edits landed in the lab, the BurritoBot
-panel and the terminal catalogue, which now prints real hostnames from the identity ConfigMap and is
+panel and the terminal catalog, which now prints real hostnames from the identity ConfigMap and is
 mounted as a hashed ConfigMap so a wording change rolls the pod.
 
 ## 2026-09-07 · Presenter clusters renamed owner-first, and Challenge 2 reveals the platform catching the villain
@@ -876,7 +876,7 @@ Choices:
   and the view inverts it. A Python copy of the grid would be the two-namers failure of #265 and #272.
 - **Unknown is not no.** A failed source is named at the top and its cells read `?`, never `-` (unclaimed)
   or `.` (not done), and a one-shot run exits 1. The rest of the view still renders, because in the room a
-  partial answer with its gap labelled beats no answer.
+  partial answer with its gap labeled beats no answer.
 - **The export, not a scrape of `/admin/roster`.** The roster page is HTML for a person. The export lists
   claimed rows only, so free seats are counted from the routing table, and a provisioning-reserved seat counts
   as free here. The roster page stays the authority at the door; a JSON roster would close the gap, and
