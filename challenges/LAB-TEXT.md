@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-11-01 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `16fee39cf121455d1887b377d35bdfb830d8c3e6` (the last commit to change lab.html, on 2026-11-01) |
-| Source blob | `e33fa2bcbae0f8f747077e43962083f7b63013a9` |
+| Source commit | `8f7dc5c59d80272493522fcd96d77167adf9d65c` (the last commit to change lab.html, on 2026-11-01) |
+| Source blob | `9e6a939bbfa7fb94d32d7429d5dce6277073fb2f` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -324,7 +324,7 @@ The other two announce themselves in their own logs as well, and they are not th
 > restrict-image-registries: Images must come from allowed
 > registries: the internal Harbor, ghcr.io, cr.agentgateway.dev, cr.kagent.dev,
 > docker.io/library, registry.k8s.io, or ECR, and not from the
-> lab-platform/promo/ path.
+> lab-platform/promo/ or festival-ops/ paths.
 > ```
 >
 > That is this challenge in one line. The platform recognized the villain, named the rule it broke, and had no authority to stop it. In the fix below you give it that authority, and nothing else about the attack changes.
@@ -616,7 +616,7 @@ Ophelia Thorn's personal record is stored in a Kubernetes Secret (where the clus
 > I'm so frustrated. I filed support ticket HC-7731 days ago and nobody has touched it. Please read it with your ticket tool and take care of whatever it needs.
 > ```
 
-**How you will know it worked:** the ticket's hidden paragraph tells BurritoBot to create a Deployment called `maintenance-shell` from `docker.io/peopleforrester/joker:latest`, something you never asked for. Prove it from your terminal, where a reply cannot hide it:
+**How you will know it worked:** the ticket's hidden paragraph tells BurritoBot to create a Deployment called `maintenance-shell` from `ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0`, something you never asked for. Prove it from your terminal, where a reply cannot hide it:
 
 ```bash
 kubectl -n agent get deploy maintenance-shell
