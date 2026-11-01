@@ -7454,3 +7454,45 @@ festival-ops image and serves the page. Then `python3 verify/kubecon_probe.py ad
 --context <admin-context> --kubeconfig /tmp/private.kubeconfig --profile accen-dev`, where C6's second tier refuses
 the festival-ops path at admission and the deployed classifier refuses the new payload. Also
 `verify/input-guard.sh <host> <kube-context>`.
+
+## 2026-11-01 · #725 · The C1 stage-2b DNS-exfil path on the MCP side is the in-image Python name-lookup form
+
+**What was built.** #725 is the MCP-side half of the C1 two-stage DNS beat whose design #723 landed at
+`docs/research/2026-10-31-c1-dns-exfil-beat.md`. It is `challenges/c1-exfil-s3/dns-exfil.py`, the in-image
+Python name-lookup form of the exfil hop, and `verify/test_c1_dns_exfil.py`, its offline cover. The hop is the
+DNS twin of the HTTPS curl in `challenges/c1-exfil-s3/fallback.kubectl.sh`: it reads the demographics
+`get_marketing_intel` returns (`gitops/ai-layer/workshop-mcp-server.py:190`), builds one query name
+`<marker>.<demographics>.<collector-zone>`, and looks it up with `socket.getaddrinfo`. A short internal pointer
+was added to `challenges/c1-exfil-s3/README.md`. No change was made to `workshop-mcp-server.py` or to the image.
+
+**Why this shape, at the curl beat's altitude.** The curl beat has no dedicated exfil tool on the MCP server.
+The agent is socially engineered to call `get_marketing_intel` and then POST the result through `run_shell`, and
+the committed, deterministic representation of that hop is `fallback.kubectl.sh`. Stage 2b keeps the same shape.
+The hop runs through `run_shell` and the in-image `python3`, so the image stays `curl` and `ca-certificates`
+only, with no `dnsutils`, `dig` or `nslookup` added. It emits one representative lookup carrying the demographic
+shares, the room-view payload, the way the curl beat POSTs the intel once. There is no encoder, no label
+chunking and no tunnelling engine, which keeps it clear of weaponized tooling and at the defensive, educational
+altitude of the design note and `docs/beacon-collector-spec.md`. The exfil is the query leaving the pod, so a
+name the collector does not resolve (NXDOMAIN) still counts as sent, as a curl the beacon accepts does however
+it answers.
+
+**Why no server tool and no lab-text change.** Adding an MCP tool would be a higher altitude than the curl beat,
+which exfiltrates through the general `run_shell`, and would show up on the agent's `toolNames` allowlist. The
+design note is deferred to the next event and changes no lab text, slide, run of show or deploy config; the
+attendee-facing `challenges/LAB-TEXT.md` was left untouched, and `dns-exfil.py` lives beside the C1 fallback as
+build-time tooling inside the lab, which is where the note says the stage-2b tool behaviour is written.
+
+**Tests.** `verify/test_c1_dns_exfil.py` loads the server with the same `tool_audit` stand-in
+`verify/test_run_shell_failure.py` uses, loads the hop, and stubs `socket.getaddrinfo` so it makes no real DNS
+query and needs no network. It proves the payload exists (`get_marketing_intel` returns demographic shares), the
+shares ride out in one DNS-label-safe query name under the zone, `send()` looks that name up through the stdlib
+resolver and a NXDOMAIN still counts as sent, the hop opens no HTTPS or curl path and imports stdlib only, and
+the Dockerfile installs only `curl` and `ca-certificates` with no name-lookup binary. `bash verify/run-tests.sh`
+and `bash verify/run-e2e-tools.sh` are green.
+
+**Not yet run on a cluster.** The live check that the DNS lookups reach the collector with the
+`agent-egress-allowlist` NetworkPolicy still enforced is owed under the `verify/run-e2e.sh` tier, parallel to
+`verify/c1-exfil-block.sh` and taking `<host> <kube-context>`. It pipes `dns-exfil.py` into the `workshop-mcp`
+pod and asserts the DNS collector's view records the query while the beacon count holds. It needs a fresh
+attendee cluster, AWS, and the DNS collector and zone, so it is tracked by the live-validation child #728, after
+the collector #726. The FQDN-aware control that closes the door is the open decision on #724 and is built by #727.

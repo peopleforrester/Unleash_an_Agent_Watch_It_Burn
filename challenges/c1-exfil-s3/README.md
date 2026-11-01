@@ -65,3 +65,19 @@ that tried to *exfiltrate* the data over the network is blocked, which is what t
 To prove the
 network block when the agent wanders, run `CONTEXT=<ctx> fallback.kubectl.sh`: it POSTs to the beacon from
 the workshop-mcp pod, where `run_shell` runs, and checks the POST fails and the beacon count does not move.
+
+## C1 stage-2b: the DNS door the egress allowlist cannot see (build in progress, #116)
+
+The egress allowlist in part 2 matches addresses and ports, so it holds the HTTPS beacon. It does not watch
+the query name in a DNS lookup, and `agent-allow-dns.yaml` keeps UDP and TCP 53 open to `kube-system` so the
+pods can resolve names. Stage 2b is the same social-engineering ask as part 2, sent over that door: the beacon
+count holds while the demographics ride out in a query name. The design is in
+`docs/research/2026-10-31-c1-dns-exfil-beat.md` and the full beat is deferred to the next event.
+
+The MCP-side exfil path is `dns-exfil.py` (#725): the in-image Python name-lookup form, the DNS twin of the
+curl in `fallback.kubectl.sh`. It reads the demographics `get_marketing_intel` returns, builds one query name
+`<marker>.<demographics>.<collector-zone>`, and looks it up with the stdlib resolver that `python:3.12-slim`
+already ships, so the image stays `curl` and `ca-certificates` only. `verify/test_c1_dns_exfil.py` covers it
+offline. The DNS collector and room view are #726, the FQDN-aware fix is #724 and #727, and the owed live
+check (the lookups reach the collector with the egress allowlist still enforced) is #728, under
+`verify/run-e2e.sh`.
