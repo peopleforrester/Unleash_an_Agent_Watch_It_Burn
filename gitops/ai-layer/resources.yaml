@@ -376,6 +376,9 @@ kind: Deployment
 metadata:
   name: guard-proxy
   labels: { app.kubernetes.io/name: guard-proxy }
+# THE GO CUTOVER (#738) ALSO TURNS ON go-spend-store/ (#751): a PVC, SPEND_STORE_PATH on it and strategy Recreate,
+# which the Go build needs and proxy.py ignores. List it under components: in kustomization.yaml in the same
+# commit as the image and command; verify/test_guard_proxy_spend_store.py fails a Go guard-proxy without it.
 spec:
   replicas: 1
   selector: { matchLabels: { app.kubernetes.io/name: guard-proxy } }
