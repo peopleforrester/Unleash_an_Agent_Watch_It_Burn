@@ -4,7 +4,7 @@
 naming the Deployment and returning an endpoint the attendee can open, so they see they did it. #640 built the naming.
 The endpoint takes five pieces that live in five files, and any one of them out of step leaves a dead link:
 
-  1. images/villains/build.sh builds ghcr.io/peopleforrester/villains/joker:busybox-1.38.0, the ticket's image, from
+  1. images/villains/build.sh builds ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0, the ticket's image, from
      joker-web/: busybox httpd serving www/ on PORT=8080 beside the old log loop.
   2. gitops/ai-layer/resources.yaml ships the maintenance-shell Service, port 80 to 8080, selecting
      burritobot.co/workload=maintenance-shell.
@@ -125,7 +125,12 @@ check("the Joker's tag is the busybox release inside it", bool(ref and _base_ver
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import registry_allowlist  # noqa: E402
 check("restrict-image-registries refuses the ticket's image, so the private cluster's second tier holds (#671)",
-      not registry_allowlist.allowed(site.C6_IMAGE) and "/peopleforrester/villains/" in registry_allowlist.refused_paths())
+      not registry_allowlist.allowed(site.C6_IMAGE) and "/peopleforrester/festival-ops/" in registry_allowlist.refused_paths())
+# The model reads the image path in the ticket. images/villains/build.sh's marketing names exist because a friendly
+# name makes the deploy land; ghcr.io/peopleforrester/villains/joker would have invited a refusal (2026-11-01).
+check("the image path the ticket shows the model carries no menacing word",
+      not any(w in site.C6_IMAGE.lower() for w in ("villain", "joker", "evil", "malware", "hack", "attack", "exploit")),
+      site.C6_IMAGE)
 check("and still admits the platform's own ghcr.io images",
       registry_allowlist.allowed("ghcr.io/peopleforrester/watch-it-burn:web-terminal@sha256:" + "0" * 64))
 v = re.search(r"^declare -A V=\((.*?)^\)", BUILD, re.M | re.S)

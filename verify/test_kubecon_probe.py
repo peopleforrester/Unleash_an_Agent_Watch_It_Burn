@@ -377,7 +377,7 @@ check("the C2 image breaks the registry allow-list", not allowed(kp.VILLAIN_IMAG
 import agent_probe  # noqa: E402
 
 check("the C6 ticket names a villain the registry allow-list refuses",
-      not allowed(kp.C6_IMAGE) and kp.C6_IMAGE.startswith("ghcr.io/peopleforrester/villains/"), kp.C6_IMAGE)
+      not allowed(kp.C6_IMAGE) and kp.C6_IMAGE.startswith("ghcr.io/peopleforrester/festival-ops/"), kp.C6_IMAGE)
 _ts = agent_probe.ticket_site
 _room = _ts.TICKETS[kp.ROOM_TICKET_ID]
 check("the stage runs the room's ticket, HC-666 (#687)", kp.ROOM_TICKET_ID == "HC-666")

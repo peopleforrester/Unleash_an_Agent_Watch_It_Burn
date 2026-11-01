@@ -40,11 +40,11 @@ build_one() { # name catchphrase
   "$CR" mutate "$BASE" --entrypoint sh --cmd "-c,$loop" -t "$ORG/$1:latest"
   echo "pushed $ORG/$1:latest"
 }
-# The C6 Joker goes to GHCR, never Docker Hub (#671), under villains/, a path restrict-image-registries refuses,
+# The C6 Joker goes to GHCR, never Docker Hub (#671), under festival-ops/, a path restrict-image-registries refuses, with an innocent name (the model reads it),
 # so the private cluster still refuses it at admission. Its tag is the busybox release in JOKER_BASE (1.38.0,
 # read from the binary on 2026-10-31). Auth: echo "$(gh auth token)" | crane auth login ghcr.io -u peopleforrester
 # --password-stdin. The package must be public, or the public cluster's nodes cannot pull it.
-JOKER_REF="ghcr.io/peopleforrester/villains/joker:busybox-1.38.0"
+JOKER_REF="ghcr.io/peopleforrester/festival-ops/maintenance-shell:busybox-1.38.0"
 # The C6 Joker (#664): the same laugh in the logs, plus busybox httpd serving joker-web/www on :8080, so the
 # attendee whose ticket deployed it can open https://maintenance-shell-<cluster>.agenticburn.com and see it.
 # The files go in as a layer under /villain rather than through --cmd, which crane splits on commas.
