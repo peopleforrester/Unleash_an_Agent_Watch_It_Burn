@@ -9,8 +9,8 @@
 |---|---|
 | Copied out | 2026-11-01 |
 | Source | `gitops/ai-layer/web/lab.html` |
-| Source commit | `6822aeff287357e4b31bab48a58e452d257f04d3` (the last commit to change lab.html, on 2026-11-01) |
-| Source blob | `0abc22c0986420c8e74501d5b8c55674187298c9` |
+| Source commit | `2059129609b13524b1a935bb65f94cf03989101f` (the last commit to change lab.html, on 2026-11-01) |
+| Source blob | `eeb5c5efc94be358a776d20c4b95329fb914c6a4` |
 
 **Is this copy current?** It is current when `git hash-object gitops/ai-layer/web/lab.html` prints the
 source blob above. `verify/test_lab_text_export.py` checks that and fails when the page has changed
@@ -885,13 +885,13 @@ Want the whole wall of base64 the agent would see? `kubectl get secrets -n agent
 >
 > There is no `eks.amazonaws.com/role-arn` annotation, and `automountServiceAccountToken` is `false`. BurritoBot's own pod gets no Kubernetes token. The tools that call the cluster's API run in a separate pod, as `workshop-mcp`, and that account holds a Kubernetes token and no AWS credential at all.
 >
-> **Now read BurritoBot's own container.** Its image ships without a shell — there is nothing to `exec` into — so read its environment straight from the pod spec with the API:
+> **Now read BurritoBot's own container.** Its image ships without a shell, so there is nothing to `exec` into. Read its environment from the pod spec through the API instead:
 >
 > ```bash
 > kubectl -n agent get pod -l app.kubernetes.io/name=workshop-agent -o jsonpath='{range .items[0].spec.containers[?(@.name=="kagent")].env[*]}{.name}={.value}{"\n"}{end}'
 > ```
 >
-> Among the kagent container's environment are an AWS region and two pointers. `AWS_CONTAINER_CREDENTIALS_FULL_URI` is an address on the node, `169.254.170.23`, which is the [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) agent. `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` is a short-lived token that address accepts. There is no `AWS_ACCESS_KEY_ID` and no `AWS_SECRET_ACCESS_KEY`: no static key is baked in. Together with the ServiceAccount you just read — no `role-arn` annotation and no mounted Kubernetes token — AWS hands the pod temporary credentials when it asks, and they expire without anyone rotating them.
+> Among the kagent container's environment are an AWS region and two pointers. `AWS_CONTAINER_CREDENTIALS_FULL_URI` is an address on the node, `169.254.170.23`, which is the [EKS Pod Identity](https://docs.aws.amazon.com/eks/latest/userguide/pod-identities.html) agent. `AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE` is a short-lived token that address accepts. There is no `AWS_ACCESS_KEY_ID` and no `AWS_SECRET_ACCESS_KEY`, so no static key is baked in. The ServiceAccount you just read has no `role-arn` annotation and mounts no Kubernetes token. AWS hands the pod temporary credentials when it asks, and they expire without anyone rotating them.
 >
 > **Now use that credential and see what it reaches.** This starts a short Job that runs as `agent-sa`. Pod Identity attaches the credential to the ServiceAccount, not to one pod, so the Job gets exactly what BurritoBot gets. It takes about a minute:
 >
