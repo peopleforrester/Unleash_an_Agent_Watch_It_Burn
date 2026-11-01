@@ -102,6 +102,8 @@
   .chathead h2{margin:0;font-size:0.94rem}
   .chathead .sub{font-size:12px;color:var(--mid)}
   .chathead .witch{display:inline-block;margin-top:3px;font-size:12px;font-weight:800;color:var(--accent);text-decoration:none}
+  /* Very small, label-only re-roll (#762): the only text is "Get a new witch name", no tooltip or explanation. */
+  .chathead .newwitch{margin-left:6px;font:inherit;font-size:10px;font-weight:600;border:1px solid var(--line);background:#fff;color:var(--accent);padding:1px 6px;border-radius:6px;cursor:pointer;vertical-align:middle}
   .chathead .reset{margin-left:auto;font:inherit;font-size:12px;font-weight:700;border:1px solid var(--line);background:#fff;color:var(--accent);padding:6px 12px;border-radius:8px;cursor:pointer;white-space:nowrap}
   /* PHONE CHAT TITLE (#387). In a row, the tagline squeezed between the avatar and Reset ran to three or
      four lines at phone width and Reset broke onto two ("↺" over "Reset"). Below 760px the avatar, the
@@ -365,7 +367,7 @@
     <div class="chatcol">
       <div class="chathead">
         <div class="avatar"><svg class="logo"><use href="#cauldron"/></svg></div>
-        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a></div>
+        <div class="ctitle"><h2>BurritoBot</h2><div class="sub">The Hex &amp; Cauldron burrito-ordering app. Tell the witch what to put in your burrito.</div><a class="witch" id="witch" hidden target="_blank" rel="noopener"></a><button type="button" class="newwitch" id="newwitch" hidden>Get a new witch name</button></div>
         <button class="reset" onclick="resetChat()" title="Start a new conversation. BurritoBot forgets everything you have said, including anything it has already refused. A page refresh does not do this.">↺ Reset</button>
       </div>
       <div class="stream" id="stream"></div>
@@ -653,7 +655,7 @@
     try{
       // The session rides as a header too, so the console's nginx can hold one conversation to its 10 a minute
       // before the per-network ceiling counts it (#450, console.conf).
-      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-BurritoBot-Session':getSession()},body:JSON.stringify({prompt:v,session:getSession()})});
+      const res=await fetch(CHAT_ENDPOINT,{method:'POST',headers:{'Content-Type':'application/json','X-BurritoBot-Session':getSession()},body:JSON.stringify({prompt:v,session:getSession(),witch:WITCH_NAME})});
       t.remove();
       // The cluster RESPONDED (even an error status means it is alive) — never show the cluster-dead
       // screen here; that is reserved for a genuinely unreachable cluster (the catch below).
@@ -758,20 +760,55 @@
     try{(JSON.parse(localStorage.getItem('wib-saved')||'[]')).forEach(renderSaved);}catch(e){}
     setBackendUp(false); checkBackend(); setInterval(checkBackend, 12000);
   })();
-  // The visitor's witchy name (#685), shown as PLAIN TEXT with no link (#763). The name lives in the wib_witch
-  // cookie on .burritobot.co. Linking the header to the support desk gave away Challenge 3 before the presenters
-  // reached it, and "see your Jokers" named a Joker before the room had heard of one, so every support-desk link
-  // is gone from this page. People reach the desk by asking the bot or from the Challenge 3 slide. #762 gives
-  // every visitor a name on their first visit, so the no-cookie branch here (nothing shown) is transient.
+  // The visitor's witchy name (#685, #762/#763). The name shows as PLAIN TEXT with no link (#763): linking the
+  // header to the support desk gave away Challenge 3 before the presenters reached it. Every visitor gets a name
+  // on their FIRST visit (#762): the page picks one from the same vocabulary the support desk uses and sets the
+  // wib_witch cookie on .burritobot.co itself, so the desk, /me and the projected wall all find the person's
+  // Joker under one name. WITCH_FIRST and WITCH_CREATURES are mirrored from ticket_site.py's FIRST and CREATURES
+  // and kept in step by verify/test_witch_name_vocab.py. The name is sent with each /chat call (the `witch`
+  // field in the POST body) so the bot knows who it is talking to without the visitor typing it, and HC-666
+  // still lands joker-<slug> once guard-proxy forwards it into the agent context (guard-proxy-agenticburn#34).
+  var WITCH_FIRST=["Agatha","Barnaby","Beatrix","Cassius","Cordelia","Dorian","Edgar","Elspeth","Fenwick","Gideon",
+    "Griselda","Hazel","Ichabod","Isolde","Jasper","Lenore","Lucius","Mabel","Morgana","Mortimer","Nettie","Octavia",
+    "Percival","Prudence","Quentin","Rowena","Silas","Tabitha","Ursula","Victoria","Walter","Wilhelmina"];
+  var WITCH_CREATURES=["Banshee","Basilisk","Cyclops","Djinn","Gargoyle","Ghoul","Goblin","Gorgon","Harpy","Imp",
+    "Kelpie","Lich","Mummy","Ogre","Phantom","Pixie","Siren","Sorcerer","Troll","Vampire","Warlock","Werewolf",
+    "Witch","Wraith"];
+  var WITCH_NAME="";   // the current visitor's display name, read by the /chat sender
+  function witchSlug(n){ return n.toLowerCase().replace(/ /g,'-'); }
+  // Accept a slug only when both halves are in the vocabulary, mirroring the desk's name_from_slug: a name from
+  // any other vocabulary is not recognized and is replaced with a fresh one.
+  function witchFromSlug(s){
+    var m=/^([a-z]+)-the-([a-z]+)$/.exec(s||""); if(!m) return null;
+    var f=m[1].charAt(0).toUpperCase()+m[1].slice(1), c=m[2].charAt(0).toUpperCase()+m[2].slice(1);
+    return (WITCH_FIRST.indexOf(f)>=0 && WITCH_CREATURES.indexOf(c)>=0) ? (f+" the "+c) : null;
+  }
+  function randWitch(){
+    return WITCH_FIRST[Math.floor(Math.random()*WITCH_FIRST.length)]+" the "+
+           WITCH_CREATURES[Math.floor(Math.random()*WITCH_CREATURES.length)];
+  }
+  function setWitchCookie(name){
+    var host=location.hostname||"";
+    var domain=/\.burritobot\.co$/.test(host) ? "; Domain=.burritobot.co" : "";
+    document.cookie="wib_witch="+witchSlug(name)+"; Path=/; Max-Age=172800; SameSite=Lax"+domain;
+  }
   (function witchName(){
-    var host=location.hostname||'', el=document.getElementById('witch');
-    if(!el || !/\.burritobot\.co$/.test(host))return;
+    var host=location.hostname||"", el=document.getElementById('witch'), btn=document.getElementById('newwitch');
+    if(!el || !/\.burritobot\.co$/.test(host))return;   // the desk and wall live on burritobot.co; other domains show no name
     el.removeAttribute('href'); el.removeAttribute('target'); el.removeAttribute('rel');
-    var m=/(?:^|;\s*)wib_witch=([a-z]+-the-[a-z]+)(?:;|$)/.exec(document.cookie||'');
-    if(m){
-      var name=m[1].split('-').map(function(w){return w==='the'?w:w.charAt(0).toUpperCase()+w.slice(1);}).join(' ');
-      el.textContent='\uD83E\uDDD9 You are '+name;
-      el.hidden=false;
+    var m=/(?:^|;\s*)wib_witch=([a-z]+-the-[a-z]+)(?:;|$)/.exec(document.cookie||"");
+    var name = m && witchFromSlug(m[1]);
+    if(!name){ name=randWitch(); setWitchCookie(name); }   // first visit, or a slug from another vocabulary: assign one
+    WITCH_NAME=name;
+    el.textContent='\uD83E\uDDD9 You are '+name;
+    el.hidden=false;
+    if(btn){
+      btn.hidden=false;
+      // Re-roll: a new name, cookie replaced on .burritobot.co. Jokers already deployed under the old name keep it.
+      btn.addEventListener('click',function(){
+        WITCH_NAME=randWitch(); setWitchCookie(WITCH_NAME);
+        el.textContent='\uD83E\uDDD9 You are '+WITCH_NAME;
+      });
     }
   })();
   greet();

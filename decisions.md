@@ -8042,3 +8042,30 @@ cluster's load balancer, in a session with AWS access. Expected: the attendee's 
 roster cluster's groups keep their rules, a group still on a live LB's interface is left alone, and
 `bash verify/run-e2e.sh` against the roster cluster still passes afterwards. Must not be tested against
 anything live except a deliberate attendee teardown.
+
+## 2026-11-01 · 2.2 · #762 The chat page assigns the witch name itself (in-repo parts; agent side owed)
+
+The chat page gives every visitor a witch name on their first visit, as plain text with no link, and a very
+small "Get a new witch name" button re-rolls it. Chosen mechanism: the page generates the name client-side
+from the vocabulary mirrored into `gitops/ai-layer/web/burritbot.html` (WITCH_FIRST x WITCH_CREATURES) and
+sets the `wib_witch` cookie on `.burritobot.co` itself (slug form, Max-Age 172800). The desk's `name_from_slug`
+accepts it because it is the desk's own vocabulary, so the desk, `/me` and the wall find the person's Joker
+under one name. `verify/test_witch_name_vocab.py` keeps the JS vocabulary exactly equal to ticket_site.py's
+FIRST and CREATURES, so they cannot drift.
+
+Rejected: a desk endpoint (e.g. GET /name or /vocab) the chat page calls. It would re-introduce a
+`support-<cluster>.burritobot.co` reference on the chat page, which #763 removed on purpose, and add a
+cross-origin credentialed call and a live-desk dependency for something the page can do alone. The cost is
+that client-side generation cannot keep the desk's no-duplicates behaviour; with 768 names and ~50 phones a
+collision is possible, the same best-effort the desk's per-process `_taken` set gives on one cluster. Names
+are visible on the wall, so a visitor who collides or dislikes a name uses the re-roll button. Recorded per
+the issue's latitude ("You choose how").
+
+The name reaches the bot through the `/chat` POST body (`{prompt, session, witch}`); nothing is embedded in
+the visible prompt, so the input guard still scans only what the visitor typed. guard-proxy does not yet read
+`witch`: that is guard-proxy-agenticburn#34 (forward it into the agent context). Sending the field now is
+harmless because the proxy ignores unknown body keys.
+
+Not yet done, so #762 stays open: guard-proxy-agenticburn#34 (consume `witch`), then repin guard-proxy here,
+then the live check (an HC-666 run on a cluster creating `joker-<the visitor's slug>`, the name shown on the
+wall). Couples with #764, which removes the copied HC-666 prompt that used to carry the name.
