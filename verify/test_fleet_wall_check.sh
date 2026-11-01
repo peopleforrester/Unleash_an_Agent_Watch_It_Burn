@@ -67,7 +67,7 @@ check "the Night Before step names the health URL of the wall" 'section "Night B
 check "the Night Before keeps the wall off the lab-platform roster until after the event" \
   'section "Night Before" | tr "\n" " " | grep "lab-platform#137" >/dev/null'
 check "segment 1 puts the wall URL on screen (#639)" \
-  'section "Segment 1: Cold open" | grep -F "${WALL}" >/dev/null'
+  'section "Segment 1: Opening" | grep -F "${WALL}" >/dev/null'
 check "the segment table shows the wall on screen from segment 1" \
   'grep -E "^\| 1 \|" "${ROS}" | grep -F "prompts.agenticburn.com" >/dev/null'
 check "the /kubecon page projects the wall in segment 1, as the run-of-show does (#639)" \

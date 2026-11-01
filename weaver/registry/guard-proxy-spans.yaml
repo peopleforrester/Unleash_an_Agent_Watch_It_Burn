@@ -71,7 +71,11 @@ groups:
               stability: development
             - id: budget
               value: budget
-              brief: A spend cap refused the turn, the Challenge 4 budget guard or the always-on cost cap.
+              brief: The Challenge 4 budget guard refused the turn, this session's spend having passed its cap.
+              stability: development
+            - id: cost_cap
+              value: cost_cap
+              brief: The cluster-wide cost cap refused the turn, the backstop every conversation shares (the finale cap).
               stability: development
             - id: output_redacted
               value: output_redacted
