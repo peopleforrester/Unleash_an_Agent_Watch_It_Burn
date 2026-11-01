@@ -248,8 +248,8 @@ print("== the lab beat ==")
 m = re.search(r"Challenge 8:.*?(?=Challenge 9:)", LAB, re.S)
 c8 = m.group(0) if m else ""
 LAB_CMDS = ("kubectl -n agent get sa agent-sa -o yaml",
-            "kubectl -n agent exec deploy/workshop-agent -c kagent -- sh -c 'env | grep ^AWS_; "
-            "ls -a ~/.aws /var/run/secrets/kubernetes.io/serviceaccount'",
+            "kubectl -n agent get pod -l app.kubernetes.io/name=workshop-agent -o jsonpath="
+            "'{range .items[0].spec.containers[?(@.name==\"kagent\")].env[*]}{.name}={.value}{\"\\n\"}{end}'",
             "kubectl apply -f ~/challenges/cloud-credential-probe.yaml",
             "kubectl -n agent logs job/cloud-credential-probe",
             "kubectl get clusternetworkpolicy agent-deny-imds -o yaml",

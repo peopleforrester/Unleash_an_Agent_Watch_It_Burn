@@ -8,8 +8,9 @@ prerequisite is a failure with the reason, never a skip.
 The checks, in the order Challenge 8's beat shows them:
 1. agent-sa on the cluster has no identity annotation and does not automount its Kubernetes token;
 2. the running BurritoBot pod carries the Pod Identity pointer (169.254.170.23), no access key and no default
-   Kubernetes token, and the lab's own exec command, run as written, shows exactly that; workshop-mcp, whose tools
-   call the API, does mount its token;
+   Kubernetes token, and the lab's own read command, run as written off the pod spec, shows exactly that (the
+   kagent 0.10.1 image has no shell to exec into, #743); workshop-mcp, whose tools call the API, does mount its
+   token;
 3. the Admin-tier ClusterNetworkPolicy agent-deny-imds is on the cluster, as policies/cluster-network-policies/
    writes it;
 4. the probe Job, applied exactly as the lab applies it, reports Nova Pro ALLOWED, an off-list model DENIED by IAM
@@ -114,18 +115,18 @@ mounts = [v["mountPath"] for c in bot.get("spec", {}).get("containers", []) for 
 check("no container in BurritoBot's pod mounts the default Kubernetes token", TOKEN_DIR not in mounts, repr(mounts))
 
 m = re.search(r"Challenge 8:.*?(?=Challenge 9:)", LAB, re.S)
-exec_cmd = re.search(r'>(kubectl -n agent exec deploy/workshop-agent -c kagent -- [^<]*)<button', m.group(0) if m else "")
-check("the lab's exec command is found", bool(exec_cmd))
-if exec_cmd:
-    argv = shlex.split(exec_cmd.group(1).replace("&gt;", ">").replace("&amp;", "&"))
+read_cmd = re.search(r'>(kubectl -n agent get pod -l app\.kubernetes\.io/name=workshop-agent -o jsonpath=[^<]*)<button',
+                     m.group(0) if m else "")
+check("the lab's read command is found", bool(read_cmd))
+if read_cmd:
+    argv = shlex.split(read_cmd.group(1).replace("&gt;", ">").replace("&amp;", "&"))
     r = kubectl(*argv[1:])
     out = r.stdout + r.stderr
     print("\n".join(f"      | {line}" for line in out.splitlines()))
-    check("the lab's exec shows the Pod Identity pointer", "AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/" in out)
+    check("the lab's read shows the Pod Identity pointer (the image has no shell to exec into)",
+          "AWS_CONTAINER_CREDENTIALS_FULL_URI=http://169.254.170.23/" in out, out[-300:])
     check("and its token file", "AWS_CONTAINER_AUTHORIZATION_TOKEN_FILE=" in out)
     check("and no static key", "AWS_ACCESS_KEY_ID" not in out and "AWS_SECRET_ACCESS_KEY" not in out)
-    check("and neither ~/.aws nor the Kubernetes token directory exists",
-          out.count("No such file or directory") == 2, out[-300:])
 mcp = running_pod("workshop-mcp")
 mcp_mounts = [v["mountPath"] for c in mcp.get("spec", {}).get("containers", []) for v in c.get("volumeMounts", [])]
 check("workshop-mcp runs as its own account and does mount its token",
