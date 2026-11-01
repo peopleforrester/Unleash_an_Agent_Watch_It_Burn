@@ -7496,3 +7496,59 @@ and `bash verify/run-e2e-tools.sh` are green.
 pod and asserts the DNS collector's view records the query while the beacon count holds. It needs a fresh
 attendee cluster, AWS, and the DNS collector and zone, so it is tracked by the live-validation child #728, after
 the collector #726. The FQDN-aware control that closes the door is the open decision on #724 and is built by #727.
+## 2026-11-01 · #742 · A /chat turn past guard-proxy's forward limit now stops the agent, and the Agent says runtime: go
+
+**Where the time went.** Michael read the private Tempo trace f7fc16a5debc57b7240a11ccfdebef70 on 2026-10-31 (his
+comment on #742). The time went into tool calls, in a loop. guard-proxy gave up at PROXY_TIMEOUT (120 s) and
+answered the room's 502, and the agent ran on for 9,007 s. In that time it made 613 `deploy_app` calls sending 5
+distinct manifests, none of which parsed, and it kept going after deploy_app began raising its refusals as errors. attackme had two more such loops left over from #644's load replay.
+Deleting the workshop-agent pod on both clusters stopped them.
+
+**Where the fix belongs, of the three the issue named.**
+- *A cap on tool iterations in the Agent.* There is none to set. kagent v0.10.1's Agent CRD has no iteration, turn
+  or LLM-call limit (read in the v0.10.1 source, `go/api/v1alpha2/agent_types.go`).
+- *PROXY_TIMEOUT against TURN_TIMEOUT.* Unchanged, at 120 and 270. A runaway loop outlasts any timeout, so raising
+  PROXY_TIMEOUT only delays the same 502. The forward's 120 s is under the turn's 270 s, so the forward is what ends
+  a runaway turn, and the 270 s still fits under the console nginx's 285 s (verify/test_audience_path.py).
+- *The agent's concurrency.* Not the cause: the time went into one turn's tool calls, not a wait in front of it.
+
+The fix is the cancel. guard-proxy-agenticburn#27 (5fe5a7c) sends the /chat forward as a non-blocking A2A
+message/send and polls it with tasks/get. When the forward fails or its time runs out while the task is still running,
+it answers the 502 and then sends tasks/cancel for that task. ef66c77 pinned that build (fb6e2bf) here, and
+`verify/guard-proxy-pin-on-main.sh` passes on it. guard-proxy-agenticburn#29 checked the agent's side live on
+watch-it-burn-private on 2026-10-31: on the Go runtime, tasks/cancel through agentgateway's :3000 route stops the
+running tool call, and nothing runs after it.
+
+**The phone's sentence.** A turn that ends this way answers 502 with
+`{"reply": "BurritoBot's kitchen isn't answering. Try again in a moment.", "guarded": false, ...}`, the /chat shape
+the page shows whatever the status, so the phone reads that sentence and not "(502)".
+
+**What this run adds.**
+- `gitops/workshop-agent/agent.yaml` writes out `spec.declarative.runtime: go`. The v0.10.1 CRD already defaults
+  the field to go, and both #697 and guard-proxy-agenticburn#29 read go live, so the sync changes nothing on a
+  running cluster. It is written out because the cancel depends on it: kagent's Python runtime raises
+  NotImplementedError from cancel and keeps running (guard-proxy-agenticburn#29). A default that changed, or a
+  cluster created under an older CRD, would quietly bring back the 9,007 s loop.
+- `verify/test_chat_turn_cancel.py`, offline. It checks that the pin contains 5fe5a7c, that the Agent says runtime
+  go, and that PROXY_TIMEOUT is under TURN_TIMEOUT. Then it runs the pinned proxy.py with every value guard-proxy's
+  Deployment sets, with the two timeouts scaled from 120 s and 270 s down to 1 s and 2.25 s. A fake agent accepts the
+  turn as a task and never finishes it. The test checks that the room gets the 502 with the sentence above at
+  PROXY_TIMEOUT, that the agent then gets one tasks/cancel naming the task, and that guard-proxy logs
+  `forward_error` and `task_cancel`. With the submodule checked out at a022fa5, the build before the cancel, 6 of
+  its checks fail: that build reads the agent's submitted task as the reply and answers 200, and sends no cancel.
+- `verify/test_a2a_usage_key.py` checked that the runtime is python, reading an unset field as python, as kagent's
+  `EffectiveDeclarativeRuntime` does. The API server fills in the CRD default (go) first, so that check passed on a
+  value no cluster held. It now checks go, and that guard-proxy meters `adk_usage_metadata`, the Go runtime's key,
+  through its fallback. `docs/MASTER-RECREATION-SPEC.md` no longer calls Python the default runtime.
+
+**Not addressed here.** The issue's first sighting notes that the 14:45 trace never reached Datadog. The agent's
+spans could not end while its turn ran on, and the cancel ends the turn. This run did not check whether that alone
+gets such a trace to Datadog.
+
+**Not yet run on a cluster.** The proxy's own half, a `task_cancel` log line after a real runaway turn, needs the
+re-pinned guard-proxy synced on a cluster. A session with AWS access, after the next bring-up of a cluster it
+provisioned, replays load with `verify/load_replay.py` as in #644. Then it reads
+`KUBECONFIG=/tmp/<cluster>.kubeconfig kubectl --context <ctx> -n agent logs deploy/guard-proxy -c proxy | grep -E
+'"event": "(forward_error|task_cancel|task_cancel_failed)"'`. Every `forward_error` that had a task should be
+followed by `task_cancel`, with no `task_cancel_failed`, and the workshop-mcp log should show no tool call a minute
+later. guard-proxy-agenticburn#29's comment of 2026-10-31 records the agent-side check that already passed.

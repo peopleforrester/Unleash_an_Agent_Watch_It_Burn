@@ -1,5 +1,5 @@
 # ABOUTME: VERSIONS.lock, docs/TECH-STATUS.md and cost/README.md name kagent_usage_metadata as the A2A usage key,
-# ABOUTME: the workshop-agent runs the Python runtime that emits it, and guard-proxy meters it ahead of adk_.
+# ABOUTME: guard-proxy meters it ahead of adk_, and meters adk_, the key of the Go runtime the workshop-agent runs.
 #
 # Why (#578). The 2026-06-20 research spike read kagent's docs as emitting `adk_usage_metadata`, and VERSIONS.lock
 # and TECH-STATUS recorded that. The live check on kagent 0.9.9 (2026-06-21) found `kagent_usage_metadata`, and
@@ -37,13 +37,14 @@ for rel in ("VERSIONS.lock", "docs/TECH-STATUS.md", "cost/README.md"):
     check(f"{rel} names only kagent_usage_metadata as the key (found {claims})",
           claims and all(c.lower() == "kagent" for c in claims))
 
-print("== the workshop-agent runs the runtime that emits kagent_usage_metadata ==")
+print("== the workshop-agent runs the Go runtime, which emits adk_usage_metadata ==")
 docs = [d for d in yaml.safe_load_all((REPO / "gitops/workshop-agent/agent.yaml").read_text(encoding="utf-8")) if d]
 agents = [d for d in docs if d.get("kind") == "Agent" and d["metadata"]["name"] == "workshop-agent"]
 check("gitops/workshop-agent/agent.yaml has one workshop-agent Agent", len(agents) == 1, f"found {len(agents)}")
-runtime = (agents[0]["spec"].get("declarative") or {}).get("runtime", "python") if agents else None
-# kagent defaults an unset runtime to python (EffectiveDeclarativeRuntime); go would emit adk_usage_metadata.
-check(f"workshop-agent runtime is python (got {runtime!r})", runtime == "python")
+runtime = (agents[0]["spec"].get("declarative") or {}).get("runtime") if agents else None
+# The v0.10.1 CRD defaults the field to go, the clusters read go live (#697), and #742 writes it out because only the Go
+# runtime honours tasks/cancel. The Go runtime emits adk_usage_metadata, which guard-proxy meters as its fallback.
+check(f"workshop-agent runtime is go (got {runtime!r})", runtime == "go")
 
 print("== guard-proxy meters kagent_usage_metadata, ahead of adk_ ==")
 spec = importlib.util.spec_from_file_location("guard_proxy", REPO / "gitops/ai-layer/guard-proxy/proxy.py")
@@ -58,6 +59,13 @@ def usage(pin, pout):
 before = proxy._cost["input_tokens"]
 proxy.record_usage({"result": {"metadata": {"kagent_usage_metadata": usage(700, 50)}}})
 check("record_usage meters a kagent_usage_metadata response", proxy._cost["input_tokens"] - before == 700)
+
+before = proxy._cost["input_tokens"]
+proxy.record_usage({"result": {"metadata": {"adk_usage_metadata": usage(400, 20)}}})
+check("record_usage meters an adk_usage_metadata response, the Go runtime's key",
+      proxy._cost["input_tokens"] - before == 400, f"metered {proxy._cost['input_tokens'] - before}")
+check("chat_usage_tokens reads an adk_usage_metadata response",
+      proxy.chat_usage_tokens({"result": {"metadata": {"adk_usage_metadata": usage(400, 20)}}}) == (400, 20))
 
 before = proxy._cost["input_tokens"]
 proxy.record_usage({"result": {"metadata": {"kagent_usage_metadata": usage(300, 10),

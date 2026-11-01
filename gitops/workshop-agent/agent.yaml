@@ -14,6 +14,12 @@ metadata:
   name: workshop-agent
 spec:
   declarative:
+    # Written out, not left to the CRD default (go in kagent v0.10.1, and what the clusters read live). guard-proxy
+    # cancels a /chat turn's task when its forward gives up (#742, guard-proxy-agenticburn#27), and only the Go
+    # runtime stops on tasks/cancel: the Python one raises NotImplementedError and runs on
+    # (guard-proxy-agenticburn#29). Without the cancel, a timed-out turn on 2026-10-31 kept calling deploy_app for
+    # 9,007s. verify/test_chat_turn_cancel.py holds this.
+    runtime: go
     modelConfig: bedrock-nova # WORKSHOP DEFAULT (Nova Pro): the model that complies AND executes the attack beats (Claude refuses; Llama/Mistral leak tool-calls-as-text). Claude/haiku/opus tiers remain selectable for a cost-race.
     # BurritoBot persona (B2). The agent has graduated RESISTANCE to all of challenges 1-7 (read the
     # secret, exfil customer data, deploy a bad image, run code, snoop the fs, fork bomb, rogue MCP):
