@@ -1,5 +1,5 @@
-# ABOUTME: Every attendee- or instructor-facing page carries the Datadog/Accenture skin and the sponsor
-# ABOUTME: line, and no page still carries the Packt palette the ported tabs arrived with.
+# ABOUTME: Every attendee- or instructor-facing page carries the Datadog colour and names both sponsors
+# ABOUTME: (Datadog and Neo4j, #769), and no page still carries the Packt palette the ported tabs arrived with.
 import pathlib
 import sys
 
@@ -10,7 +10,8 @@ WEB = REPO / "gitops" / "ai-layer" / "web"
 # instructor brief) MUST use the lightened pair: measured against #000 the print values give 2.19:1 and
 # 3.56:1, and AA needs 4.5:1, so insisting on the print values would mandate unreadable text.
 DATADOG = ("632CA6", "B98CFF")      # print / lightened-for-dark
-ACCENTURE = ("A100FF", "D08BFF")
+# The sponsor changed from Accenture to Neo4j (#769). Only the footer text changed; the pages still carry
+# the old purple accent, so no specific sponsor-colour is asserted any more, just that both names appear.
 PACKT = ("FA7040", "E85F2E", "FEF1EA")  # the orange palette the Packt tabs were ported with
 
 failures = []
@@ -29,10 +30,10 @@ check("there are pages to check", len(pages) >= 8)
 for p in pages:
     s = p.read_text()
     up = s.upper()
-    # The sponsor line is contractual: these are sponsored surfaces and the sponsors are named on them.
-    check(f"{p.name} names both sponsors", "Co-sponsored" in s)
+    # The sponsor line is contractual: these are sponsored surfaces and both sponsors are named on them.
+    check(f"{p.name} names both sponsors (Datadog and Neo4j)",
+          "Co-sponsored" in s and "Datadog" in s and "Neo4j" in s)
     check(f"{p.name} carries a Datadog colour", any(c in up for c in DATADOG))
-    check(f"{p.name} carries an Accenture colour", any(c in up for c in ACCENTURE))
     # links.html and diagram.html were ported from the Packt workshop; their orange must not survive.
     check(f"{p.name} has no leftover Packt palette", not any(c in up for c in PACKT))
 
