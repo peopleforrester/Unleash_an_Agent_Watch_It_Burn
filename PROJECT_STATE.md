@@ -1,7 +1,7 @@
 # Project State: Unleash_an_Agent_Watch_It_Burn
 
-Phase: 2.2 Implement (PRD #412 M3: budgets; M0 to M2 done)
-Approved: 2026-10-10T23:36:09Z by Michael (sha256:3a5aa82f1a71) · PRD #412 guard-proxy Go rewrite
+Phase: 1.2 Plan (PRD #412 amended 2026-11-01, #736, pending re-approval; M0 to M2 and M4 done, M3 blocked on a model-path design, M5 next)
+Approved: pending re-approval. The 2026-10-10T23:36:09Z seal (sha256:3a5aa82f1a71) is superseded by the amendment · PRD #412 guard-proxy Go rewrite
 
 ## Bootstrap handed to lab-platform (#609)
 
@@ -113,6 +113,13 @@ Next, in order:
   and `/toggle` the Go build still cannot replace proxy.py in the workshop. M3 (budgets) is next.
   guard-proxy#3 (retry tokens never metered) is fixed in proxy.py (ccdda73, 167 conformance tests);
   the Go `/chat` must meter every attempt the same way, which the conformance tests now enforce.
+  **M4 done 2026-10-31** in guard-proxy-agenticburn (port a00beae, docs d0793a7), at proxy.py parity
+  as Michael approved ("port /chat as-is"): /chat, /cost, /prompts, /controls and /toggle, spend
+  metered after each reply, 305 of 323 conformance tests; the 18 `spans` tests are M5's. No TPM limit
+  or routing beyond `MODEL_TIER`. **M3 is blocked** on where the model-path hop goes (guard-proxy, or
+  a second hop, between kagent and Bedrock), a question put to Michael; the embedded store does not
+  depend on it. **M5 is next.** The PRD was amended for all three on 2026-11-01 (#736) and awaits
+  re-approval (decisions.md, 2026-11-01T05:00:33Z).
 - Closed this cycle: #331, #415, #393, #406, #408, #409, #410, #411, #413, #414, #416.
 
 ## Current cycle (2026-09-21, post-event defect burn-down)
@@ -238,14 +245,15 @@ each gated by the M0 conformance suite.)
 - [x] 1.3 Approve  <- sealed 2026-10-10, sha256:3a5aa82f1a71
 - [x] 2.1 Test  (M0: 163-test black-box conformance suite in guard-proxy-agenticburn, green against
   proxy.py, 16 of 16 mutants caught, CI green, on its main at c72cc28)
-- [ ] 2.2 Implement  <- M2 done (0679083); M3 next: budgets
+- [ ] 2.2 Implement  <- M2 done (0679083); M4 done (a00beae); M3 blocked on a model-path design; M5 next.
+  Back at 1.2 until Michael re-approves the 2026-11-01 amendment.
 - [ ] 2.3 Verify
 - [ ] 3.1 Stage
 - [ ] 3.2 Confirm CI
 - [ ] 3.3 Promote
 
 ## Contracts
-- 2026-10-10T23:36:09Z · PRD #412 guard-proxy Go rewrite, approved by Michael, sha256:3a5aa82f1a71f5c30360c684aa873704df14374e9468b63e50bc7d5fd118ac73 (`prds/412-guard-proxy-go-rewrite.md`)
+- 2026-10-10T23:36:09Z · PRD #412 guard-proxy Go rewrite, approved by Michael, sha256:3a5aa82f1a71f5c30360c684aa873704df14374e9468b63e50bc7d5fd118ac73 (`prds/412-guard-proxy-go-rewrite.md`). **Amended 2026-11-01 (#736), pending re-approval**: amended file sha256:47ccae9543fc, which a re-seal recomputes with its header.
 - 2026-07-03T19:59:22Z · sha256:5e110e425e70 · PRD 35 multi-cloud (AKS + GKE) incl. §3.7 hardening parity + §4.6 cluster-shape parameterization. APPROVED, read-only; changes need /prd-amend.
 - PRD 36 · multi-cloud attack -> control -> signal matrix (reference/acceptance spine; sibling of 35, no separate gate).
 - PRD 37 · curl/wget missing from workshop-mcp image (open NOTE, small fixture fix).
@@ -289,6 +297,7 @@ Open question: GCP VPC-SC (PRD 35 §6 risk 1 / PRD 36 §8 Q1), blocks M3 design 
 - 2026-10-14 2.2 (M1) Go skeleton done: 22 passthrough conformance tests green against the Go binary, full suite still green against proxy.py, guard-proxy CI green and promoted (1874403); pin bumped, render hash unchanged. Stays at 2.2; M2 next.
 - 2026-10-14 2.2 (M2) guards on the A2A path done: 44 conformance tests (passthrough or guards) green against the Go binary, 163 against proxy.py, guard-proxy CI green and promoted (0679083); pin bumped, render hash unchanged. Stays at 2.2; M3 next.
 - 2026-10-24 2.2 (M3 prerequisite) guard-proxy#3 fixed in proxy.py (ccdda73): every self-heal attempt is metered; pin and checksum/proxy-py bumped. Stays at 2.2.
+- 2026-11-01T05:00:33Z 2.2 -> 1.2 PRD-412 amended (#736): M4 done, M3 blocked on a model-path design, M5 next; awaiting re-approval.
 
 ## Audit log pointer
 The detailed technical decision + verification audit trail lives in `docs/DECISION-LOG.md` (PRD 35 approval / amendment / re-approval, the model-refusal rerun evidence, the Nova A/B). `decisions.md` at repo root carries lifecycle phase-transition entries going forward.

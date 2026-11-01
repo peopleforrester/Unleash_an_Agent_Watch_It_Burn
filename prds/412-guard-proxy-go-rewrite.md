@@ -3,7 +3,10 @@
 **GitHub Issue**: https://github.com/peopleforrester/Unleash_an_Agent_Watch_It_Burn/issues/412
 **Code lives in**: https://github.com/peopleforrester/guard-proxy-agenticburn (submodule at
 `gitops/ai-layer/guard-proxy/`, #411)
-**Status**: **Approved by Michael 2026-10-11 (lifecycle 1.3). Sealed:** changes go through an amendment. Work begins at M0.
+**Status**: **Draft, amended 2026-11-01 (#736), pending re-approval.** Approved-by: pending. Plan checksum:
+pending. The 2026-10-11 seal (sha256 3a5aa82f1a71) is superseded by the amendment.
+**Amendment**: 2026-11-01 · M4 done at proxy.py parity; M3 blocked on a model-path design decision; M5 next
+for the Go build, with the `spans` conformance tests in its done-when (#722).
 **Decided by Michael, 2026-10-05**: rewrite in Go, because it is expected to become a product and Go's
 libraries suit it better than Rust's; fold in what LiteLLM does better.
 
@@ -147,18 +150,42 @@ against a perfect trace, and M7 is gated on #333.
 
 ## Milestones
 
-| # | Deliverable | Done when |
-|---|---|---|
-| M0 | Conformance suite against the Python proxy | passes against `proxy.py`; every guard, endpoint, toggle and failure mode covered |
-| M1 | Go skeleton: listener, upstream proxying, config validation, health; Apache-2.0 `LICENSE` | conformance passes for the pass-through cases |
-| M2 | Guards at parity: LLM Guard input, regex output, fail closed | conformance passes for every guard case |
-| M3 | Budgets: reservation with a capped `max_tokens`, scopes, `CountTokens`, embedded store | a single request cannot exceed the cap, proven by a test that tries; a restart mid-window does not reset spend; `CountTokens` latency measured |
-| M4 | Rate limits (RPM and TPM), routing, toggles, the prompt feed | full conformance passes |
-| M5 | Telemetry: gen_ai spans from weaver-generated constants, content-capture modes | Datadog LLM Observability shows input and output, as it does today; root-span count matches the recorded Python baseline (#320) |
-| M6 | Image: signed with cosign 2.x, digest-pinned, ConfigMap delivery retired | `verify/sign-images.sh --check` passes; workshop deploys the image |
-| M7 | Live validation on a cluster | all eight challenges pass attack, fix, re-attack; `deny-llm-endpoint-bypass` exercised with a bypass-shaped pod (#333) |
+| # | Deliverable | Done when | Status |
+|---|---|---|---|
+| M0 | Conformance suite against the Python proxy | passes against `proxy.py`; every guard, endpoint, toggle and failure mode covered | done |
+| M1 | Go skeleton: listener, upstream proxying, config validation, health; Apache-2.0 `LICENSE` | conformance passes for the pass-through cases | done |
+| M2 | Guards at parity: LLM Guard input, regex output, fail closed | conformance passes for every guard case | done |
+| M3 | Budgets: reservation with a capped `max_tokens`, scopes, `CountTokens`, embedded store | a single request cannot exceed the cap, proven by a test that tries; a restart mid-window does not reset spend; `CountTokens` latency measured | **blocked on a model-path design decision** (below) |
+| M4 | Rate limits (RPM and TPM), routing, toggles, the prompt feed | the conformance suite passes against the Go build, less the span tests (M5) | **done** 2026-10-31, at proxy.py parity (below) |
+| M5 | Telemetry: gen_ai spans from weaver-generated constants, content-capture modes | the `spans` conformance tests pass against the Go build, for the /chat root attributes (`session.id`, `witb.guard.decision`); Datadog LLM Observability shows input and output, as it does today; root-span count matches the recorded Python baseline (#320) | **next** for the Go build |
+| M6 | Image: signed with cosign 2.x, digest-pinned, ConfigMap delivery retired | `verify/sign-images.sh --check` passes; workshop deploys the image | not started |
+| M7 | Live validation on a cluster | all eight challenges pass attack, fix, re-attack; `deny-llm-endpoint-bypass` exercised with a bypass-shaped pod (#333) | not started |
 
 M0 through M2 is the minimum to replace the Python in the workshop. M3 is the product claim.
+
+### Milestone status, amended 2026-11-01 (#722, #736)
+
+**M4 is done at proxy.py parity.** Michael approved the scope on 2026-10-31 as "port /chat as-is". The Go
+build in guard-proxy-agenticburn (port a00beae, docs d0793a7, closing guard-proxy-agenticburn#22) serves
+POST /chat and GET /cost, /prompts, /controls and /toggle, with the on-topic guard, the cluster and
+per-conversation RPM limits, the cost cap and the budget cap on both paths. It meters spend after each agent
+reply, exactly as `proxy.py` does. It passes 305 of the 323 conformance tests. The other 18 are the span
+tests, marked `spans` and deselected for Go (CI runs `-m "not spans"`); they are M5's. Parity is what the
+conformance suite pins, so the TPM limits and LiteLLM-style routing in M4's deliverable were not built: the
+Go build has request-count limits and the `MODEL_TIER` switch, as `proxy.py` does.
+
+**M3 is blocked on a design decision, not unstarted.** The reservation (count the request with Bedrock
+`CountTokens`, cap `max_tokens`, refuse before the model is called) cannot be built where guard-proxy sits.
+guard-proxy fronts the agent (kagent at `AGENT_URL`, through agentgateway `:3000`) and reads token usage
+from the agent's reply after the turn, so it never holds a model request it could count or cap. The model
+call goes from kagent to Bedrock. Before M3 can be built, either guard-proxy or a second hop has to go
+between kagent and Bedrock. Estimating tokens from the A2A prompt text, or cancelling the agent's turn
+mid-flight, are rejected (guard-proxy-agenticburn decisions.md, 2026-10-31): neither bounds what a single
+model call spends. The embedded store (decision 2 below) does not depend on the hop. It holds the spent-so-far
+that guard-proxy already meters, so it can land on its own, before the hop is chosen.
+
+**M5 is next for the Go build.** The `spans` conformance tests are its done-when for the /chat root span's
+attributes, `session.id` and `witb.guard.decision`, alongside the Datadog check and the #320 baseline.
 
 ## Decisions on the open questions
 
