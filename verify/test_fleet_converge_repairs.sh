@@ -38,11 +38,27 @@ case "$*" in
   *"-n agent get configmap cluster-identity"*) cat "${T}/public_host" 2>/dev/null ;;
   *"get configmap cluster-identity"*) cat "${T}/identity" 2>/dev/null ;;
   *"-n agent get agent workshop-agent"*) cat "${T}/agent_tools" 2>/dev/null ;;
+  *"-n agent get deployment guard-proxy -o json"*) cat "${T}/gp.json" 2>/dev/null ;;
+  *"-n agent get deployment agentgateway -o json"*) cat "${T}/gw.json" 2>/dev/null ;;
+  *"-n argocd get application ai-layer -o jsonpath={.status.sync.revision}"*) cat "${T}/ai_rev" 2>/dev/null ;;
+  "kustomize "*) [[ -f "${T}/render_fails" ]] && exit 1; cat "${T}/render.yaml" 2>/dev/null ;;
+  *"-n agent get deployments -o json"*) cat "${T}/deps.json" 2>/dev/null || echo '{"items":[]}' ;;
+  *"-n agent get configmaps,secrets -o name"*) cat "${T}/objs" 2>/dev/null ;;
   *"get secret datadog-secret -o jsonpath={.data.api-key}"*) printf '%s' "$(cat "${T}/live_key" 2>/dev/null)" | base64 ;;
   *"get secret datadog-admin-secret"*) [[ -f "${T}/admin_present" ]] && exit 0; exit 1 ;;
   *"create namespace"*|*"create secret generic"*) echo "kind: Placeholder" ;;
 esac
 exit 0
+S
+# git answers ai_layer_rollout's two questions from files the test controls; anything else is the real git.
+REAL_GIT="$(command -v git)"
+cat >"${SHIM}/git" <<S
+#!/usr/bin/env bash
+case "\$*" in
+  *" rev-parse HEAD") cat "\${T}/head" 2>/dev/null && exit 0 ;;
+  *" diff --quiet HEAD -- gitops/ai-layer") [[ -f "\${T}/dirty" ]] && exit 1; exit 0 ;;
+esac
+exec "${REAL_GIT}" "\$@"
 S
 chmod +x "${SHIM}"/*
 export T CALLS PATH="${SHIM}:${PATH}"
@@ -201,6 +217,111 @@ rm -f "${T}/agent_tools"; : >"${CALLS}"; src 'repair_agent_tools watch-it-burn-c
 check "no live Agent (Argo still recreating it): nothing is deleted" '! grep -q "delete agent" "${CALLS}"'
 : >"${T}/stderr"
 
+echo "== repair_env_order: a list Argo CD syncs in its live order is put back in git's (#679) =="
+# Both KubeCon clusters on 2026-10-29: CONSOLE_ORIGIN was added to guard-proxy live with `kubectl set env`, which
+# appends, so the live env ended ... OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, CONSOLE_ORIGIN while git puts
+# it before OTEL_SERVICE_NAME. ai-layer syncs the list in its live order (RespectIgnoreDifferences), so it never read
+# Synced again. The fixture is git's Deployment in that order, with a live guard toggle (MODEL_TIER=sonnet) on it.
+deploy_json() { # $1 file, $2 Deployment, $3 container, $4 "append NAME" | "same"; MODEL_TIER, if any, is set to sonnet
+  python3 - "${HERE}/../$1" "$2" "$3" "$4" <<'PY'
+import json, sys, yaml
+src, dep, ctr, how = sys.argv[1:5]
+d = next(d for d in yaml.safe_load_all(open(src, encoding="utf-8"))
+         if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == dep)
+c = next(c for c in d["spec"]["template"]["spec"]["containers"] if c["name"] == ctr)
+for e in c.get("env") or []:
+    if e["name"] == "MODEL_TIER":
+        e["value"] = "sonnet"
+if how.startswith("append "):
+    n = how.split()[1]
+    c["env"] = [e for e in c["env"] if e["name"] != n] + [e for e in c["env"] if e["name"] == n]
+print(json.dumps(d))
+PY
+}
+deploy_json gitops/ai-layer/resources.yaml guard-proxy proxy "append CONSOLE_ORIGIN" >"${T}/gp.json"
+deploy_json gitops/ai-layer/agentgateway.yaml agentgateway agentgateway same >"${T}/gw.json"
+: >"${CALLS}"; : >"${T}/stderr"; src 'repair_env_order watch-it-burn-community /dev/null'; rc=$?
+check "the 2026-10-29 guard-proxy: its env is patched, as the Argo controller, and the repair returns 0" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "^kubectl -n agent patch deployment guard-proxy --type json -p .* --as=system:serviceaccount:argocd:argocd-application-controller$" "${CALLS}"'
+python3 - "${CALLS}" "${HERE}/../gitops/ai-layer/resources.yaml" >"${T}/patched" <<'PY'
+import json, re, sys, yaml
+line = next(l for l in open(sys.argv[1]) if l.startswith("kubectl -n agent patch deployment guard-proxy"))
+patch = json.loads(re.search(r" -p (\[.*\]) --as=", line).group(1))
+git = next(d for d in yaml.safe_load_all(open(sys.argv[2], encoding="utf-8"))
+           if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
+want = [e["name"] for e in git["spec"]["template"]["spec"]["containers"][0]["env"]]
+env = patch[1]["value"]
+print("order" if [e["name"] for e in env] == want else "disorder")
+print("tier=" + next(e["value"] for e in env if e["name"] == "MODEL_TIER"))
+print("test" if patch[0] == {"op": "test", "path": "/spec/template/spec/containers/0/name", "value": "proxy"} else "untested")
+PY
+check "the patch writes git's order, CONSOLE_ORIGIN back before OTEL_SERVICE_NAME" 'grep -qx order "${T}/patched"'
+check "with every live value kept: the live MODEL_TIER=sonnet toggle stays" 'grep -qx tier=sonnet "${T}/patched"'
+check "and it first tests that container 0 is still proxy, so a moved container is not rewritten" 'grep -qx test "${T}/patched"'
+check "agentgateway, already in git's order, is not patched" '! grep -q "patch deployment agentgateway" "${CALLS}"'
+check "the reorder is logged, naming the Deployment and #679" \
+  'grep -q "watch-it-burn-community: guard-proxy.s proxy env is out of git.s order, which Argo CD cannot correct (#679)" "${T}/stderr"'
+deploy_json gitops/ai-layer/resources.yaml guard-proxy proxy same >"${T}/gp.json"
+: >"${CALLS}"; src 'repair_env_order watch-it-burn-community /dev/null'
+check "guard-proxy in git's order (a toggled value is not an order): nothing is patched" '! grep -q "patch deployment" "${CALLS}"'
+rm -f "${T}/gp.json" "${T}/gw.json"; : >"${CALLS}"; src 'repair_env_order watch-it-burn-community /dev/null'; rc=$?
+check "neither Deployment there yet: nothing is patched, and that is not a failure" '[[ "${rc}" -eq 0 ]] && ! grep -q "patch deployment" "${CALLS}"'
+: >"${T}/stderr"
+
+echo "== ai_layer_rollout: delivery is read from the hashed names, not the sync phase (#679) =="
+# After ed8dbf8 every ai-layer sync on both KubeCon clusters said Succeeded and applied nothing new: the pods kept
+# the old hashed ConfigMaps. The commit's render names what must be live and mounted; the fixture is a small one.
+cat >"${T}/render.yaml" <<'Y'
+apiVersion: v1
+kind: ConfigMap
+metadata: {name: guard-proxy-src-new1}
+---
+apiVersion: v1
+kind: Secret
+metadata: {name: llm-guard-auth-sec1}
+---
+apiVersion: v1
+kind: Service
+metadata: {name: guard-proxy}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata: {name: guard-proxy}
+spec:
+  template:
+    spec:
+      containers:
+        - name: proxy
+          env: [{name: LLM_GUARD_TOKEN, valueFrom: {secretKeyRef: {name: llm-guard-auth-sec1, key: token}}}]
+      volumes: [{name: src, configMap: {name: guard-proxy-src-new1}}]
+Y
+live_deps() { # $1: the guard-proxy-src name the live Deployment mounts
+  printf '{"items":[{"metadata":{"name":"guard-proxy"},"spec":{"template":{"spec":{"containers":[{"name":"proxy","env":[{"name":"LLM_GUARD_TOKEN","valueFrom":{"secretKeyRef":{"name":"llm-guard-auth-sec1","key":"token"}}}]}],"volumes":[{"name":"src","configMap":{"name":"%s"}}]}}}},{"metadata":{"name":"workshop-agent"},"spec":{"template":{"spec":{"containers":[{"name":"kagent"}]}}}}]}' "$1" >"${T}/deps.json"; }
+printf 'aaaa000000000000000000000000000000000000' >"${T}/head"; printf 'aaaa000000000000000000000000000000000000' >"${T}/ai_rev"
+printf 'configmap/guard-proxy-src-new1\nsecret/llm-guard-auth-sec1\nconfigmap/kube-root-ca.crt\n' >"${T}/objs"; live_deps guard-proxy-src-new1
+: >"${T}/stderr"; src 'ai_layer_rollout c /dev/null'; rc=$?
+check "the commit's hashed names live and mounted: rolled out, exit 0" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "c: ai-layer aaaa000 is rolled out" "${T}/stderr"'
+printf 'configmap/guard-proxy-src-old0\nsecret/llm-guard-auth-sec1\n' >"${T}/objs"; live_deps guard-proxy-src-old0
+: >"${T}/stderr"; src 'ai_layer_rollout c /dev/null'; rc=$?
+check "the 2026-10-29 state, Succeeded and nothing applied: exit 1, saying the sync phase is not delivery" \
+  '[[ "${rc}" -eq 1 ]] && grep -q "c: ai-layer says it synced aaaa000, and the cluster does not run it" "${T}/stderr"'
+check "it names the generated ConfigMap the commit needs" 'grep -q "configmap/guard-proxy-src-new1 is missing" "${T}/stderr"'
+check "and the Deployment still mounting the old one" \
+  'grep -q "deployment/guard-proxy mounts \[.configmap/guard-proxy-src-old0.\] where the commit mounts \[.configmap/guard-proxy-src-new1.\]" "${T}/stderr"'
+: >"${CALLS}"; src 'verify_one c /dev/null acct; cat "${FAIL_FILE}"; rm -f "${FAIL_FILE}"' >"${T}/out"
+check "verify_one records it as <name>:ai-layer-rollout" 'grep -qx "c:ai-layer-rollout" "${T}/out"'
+printf 'bbbb000000000000000000000000000000000000' >"${T}/ai_rev"; : >"${T}/stderr"; src 'ai_layer_rollout c /dev/null'; rc=$?
+check "a cluster that compares another commit is reported, not judged (exit 0)" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "c: ai-layer compares bbbb000 and this checkout is aaaa000; its rollout is not judged" "${T}/stderr"'
+printf 'aaaa000000000000000000000000000000000000' >"${T}/ai_rev"; touch "${T}/dirty"; : >"${T}/stderr"
+src 'ai_layer_rollout c /dev/null'; rc=$?
+check "uncommitted changes in gitops/ai-layer: the local render is not the commit, so not judged (exit 0)" \
+  '[[ "${rc}" -eq 0 ]] && grep -q "gitops/ai-layer has uncommitted changes here" "${T}/stderr"'
+rm -f "${T}/dirty"; touch "${T}/render_fails"; : >"${T}/stderr"; src 'ai_layer_rollout c /dev/null'; rc=$?
+check "a render that fails is a failure, not a pass" '[[ "${rc}" -eq 1 ]] && grep -q "could not render gitops/ai-layer" "${T}/stderr"'
+rm -f "${T}/render_fails" "${T}/render.yaml" "${T}/deps.json" "${T}/objs" "${T}/ai_rev" "${T}/head"; : >"${T}/stderr"
+
 echo "== repair_step: a repair that fails is logged and recorded, and the next one still runs (#635) =="
 : >"${CALLS}"
 WIB_LOG_DIR="${T}/logs" src 'boom() { false; echo "boom-went-on $1" >>"${CALLS}"; }; after() { echo "after-ran $1" >>"${CALLS}"; }
@@ -266,7 +387,10 @@ echo "== wiring =="
 check "converge_one runs repair_one" 'grep -q "^    repair_one \"\${name}\" \"\${kcfg}\" \"\${acct_profile}\"" "${FLEET}"'
 check "repair_one includes repair_failed_syncs" 'grep -q "^    repair_step repair_failed_syncs \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
 check "every repair and verifier in repair_one runs as a repair_step, but pin_bedrock_profiles (#635)" \
-  '[[ "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -cE "^    (repair_|verify_)" )" -eq 7 && "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -c "^    repair_step ")" -eq 7 ]]'
+  '[[ "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -cE "^    (repair_|verify_)" )" -eq 8 && "$(sed -n "/^repair_one() {/,/^}/p" "${FLEET}" | grep -c "^    repair_step ")" -eq 8 ]]'
+check "repair_one runs repair_env_order (#679)" 'grep -q "^    repair_step repair_env_order \"\${name}\" \"\${kcfg}\"" "${FLEET}"'
+check "verify_one judges the ai-layer rollout and records it (#679)" \
+  'sed -n "/^verify_one() {/,/^}/p" "${FLEET}" | grep -q "ai_layer_rollout \"\${name}\" \"\${kcfg}\" || record_fail \"\${name}:ai-layer-rollout\""'
 check "converge instructors skips roster slots with no state" 'grep -q "not provisioned, skipping" "${FLEET}"'
 check "up ends with a converge pass over what it built" 'grep -q "repair-and-verify pass over" "${FLEET}"'
 check "the post-up wait and verify iterate the PROVISION_SPEC names, never the register arguments" \

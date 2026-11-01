@@ -1,5 +1,5 @@
-# ABOUTME: Shows git's Agent tools landing on every profile since #707: the workshop-agent Application keeps C7's ignore
-# ABOUTME: and drops RespectIgnoreDifferences, whose Argo CD v3.5.2 sync (ported here) froze the whole tools array (#679).
+# ABOUTME: Ports Argo CD v3.5.2's RespectIgnoreDifferences sync (#679): a CRD array with an ignore inside freezes whole
+# ABOUTME: (the Agent's tools, fixed by #707's own Application), a built-in list with an ignored element freezes in order.
 #
 # Why (#679). Git gave workshop-mcp twelve tools, read_support_ticket among them (#640), and both KubeCon clusters
 # kept the older eleven. ai-layer showed Agent/workshop-agent OutOfSync, every auto-sync said serverside-applied,
@@ -15,12 +15,24 @@
 # RespectIgnoreDifferences. An ignore without it works on the diff alone: a student's guard-mcp-on leaves the Agent
 # Synced, so selfHeal has nothing to do, and a sync applies the committed Agent as git has it.
 #
-# This ports normalizeTargetResources for a resource outside the scheme (the jq deletion is the real jq, as Argo CD's
-# gojq del(<expression>)), shows it still reproduces #679 under ai-layer's old options, and then runs selfHeal on the
+# The second instance (#679, reopened). guard-proxy's new CONSOLE_ORIGIN env entry stuck on both KubeCon clusters, and
+# guard-proxy's endless selfHeal syncs held back every later commit while each reported Succeeded. guard-proxy is a
+# Deployment, a built-in kind, so the copy is a strategic merge patch with merge keys: a new env entry from git lands
+# in git's place and a live toggle survives. But the patch also carries `$setElementOrder/env` from live, so the list
+# is applied in the LIVE order. Once that differs from git's (`kubectl set env` appends a new entry, and a commit that
+# only reorders entries does the same), no sync corrects it while the diff predicts git's order: OutOfSync for good.
+# fleet.sh converge's repair_env_order puts the live list back in git's order, values kept.
+#
+# This ports normalizeTargetResources for both kinds (the jq deletion is the real jq, as Argo CD's gojq
+# del(<expression>); the merge patches are evanphx/json-patch's and apimachinery's strategicpatch, for maps and
+# merge-key lists of maps), shows it still reproduces #679 under ai-layer's old options, and then runs selfHeal on the
 # committed Agent with each profile's rendered workshop-agent ignores: git's tools land on attendee, burn, full and
 # admin with no fleet.sh converge, a student's guard-mcp-on survives a selfHeal with no git change, and the two costs
-# #707 accepted hold as recorded. The port is held to VERSIONS.lock's Argo CD version: a version bump fails here until
-# the port is read against the new sync.go.
+# #707 accepted hold as recorded. It then runs guard-proxy's env through ai-layer's ignores, and holds every ignored
+# list element under RespectIgnoreDifferences to a row of repair_env_order. The port was checked against the real code:
+# docs/research/2026-10-30-argo-sync-replay/ runs Argo CD v3.5.2's normalizeTargetResources and its diff against a
+# real kube-apiserver with server-side apply, and its results are the ones held here. The port is held to
+# VERSIONS.lock's Argo CD version: a version bump fails here until the port is read against the new sync.go.
 from __future__ import annotations
 
 import copy
@@ -58,9 +70,14 @@ EVIL = '.spec.declarative.tools[] | select(.mcpServer.name == "evil-mcp") | .mcp
 STALE_ELEVEN = ["lookup_customer_records", "check_inventory", "reorder_supply", "get_order_history",
                 "get_marketing_intel", "search_web", "post_marketing", "get_vault_entry", "list_services",
                 "deploy_app", "run_shell"]
+# The merge keys apimachinery's strategicpatch reads from the apps/v1 Deployment's Go types, for the lists a
+# Deployment's pod template carries.
+MERGE_KEYS = {"containers": "name", "initContainers": "name", "env": "name", "volumes": "name",
+              "volumeMounts": "mountPath", "ports": "containerPort", "imagePullSecrets": "name"}
+ORDER = "$setElementOrder/"
 
 
-# ---- the port: Argo CD v3.5.2 controller/sync.go, for a resource outside the scheme ------------------------------
+# ---- the port: Argo CD v3.5.2 controller/sync.go normalizeTargetResources ---------------------------------------
 def jq_delete(obj: dict, expression: str) -> dict:
     """Argo CD's jq normalizer: del(<expression>); a failing expression leaves the object as it was."""
     r = subprocess.run([JQ, "-c", f"del({expression})"], input=json.dumps(obj), capture_output=True, text=True)
@@ -106,6 +123,106 @@ def apply_merge_patch(doc, patch):
     return out
 
 
+def merge_list(key: str, cur, mod) -> bool:
+    return key in MERGE_KEYS and isinstance(cur, list) and isinstance(mod, list) \
+        and all(isinstance(x, dict) for x in cur + mod)
+
+
+def create_strategic_patch(cur: dict, mod: dict) -> dict:
+    """strategicpatch.CreateThreeWayMergePatch(live, live, normalizedLive): the additions and changes from current to
+    modified (original is modified, so there are no deletions), each changed merge-key list with its
+    `$setElementOrder` directive, which lists the MODIFIED (live) order of every element."""
+    out: dict = {}
+    for k, mv in mod.items():
+        if k not in cur:
+            out[k] = copy.deepcopy(mv)
+            continue
+        cv = cur[k]
+        if isinstance(mv, dict) and isinstance(cv, dict):
+            d = create_strategic_patch(cv, mv)
+            if d:
+                out[k] = d
+        elif merge_list(k, cv, mv):
+            mk, items = MERGE_KEYS[k], []
+            for m in mv:
+                c = next((c for c in cv if c.get(mk) == m.get(mk)), None)
+                if c is None:
+                    items.append(copy.deepcopy(m))
+                else:
+                    d = create_strategic_patch(c, m)
+                    if d:
+                        items.append({mk: m[mk], **d})
+            if items:
+                out[ORDER + k] = [{mk: m[mk]} for m in mv]
+                out[k] = items
+        elif mv != cv:
+            out[k] = copy.deepcopy(mv)
+    return out
+
+
+def _sorted_by(items: list, order: list, mk: str) -> list:
+    """normalizeSliceOrder: a stable sort by each item's index in order."""
+    pos = {o: i for i, o in enumerate(order)}
+    return sorted(items, key=lambda x: pos.get(x[mk], len(pos)))
+
+
+def _merge_sorted(left: list, right: list, server_order: list, mk: str) -> list:
+    """mergeSortedSlice: left is the server-only items, right the patch items; left first only when both are in the
+    server order and left comes first there."""
+    pos = {o: i for i, o in enumerate(server_order)}
+    out, i, j = [], 0, 0
+    while i < len(left) or j < len(right):
+        if i >= len(left):
+            out.append(right[j]); j += 1
+        elif j >= len(right):
+            out.append(left[i]); i += 1
+        elif left[i][mk] in pos and right[j][mk] in pos and pos[left[i][mk]] < pos[right[j][mk]]:
+            out.append(left[i]); i += 1
+        else:
+            out.append(right[j]); j += 1
+    return out
+
+
+def apply_strategic_patch(orig: dict, patch: dict) -> dict:
+    """strategicpatch.StrategicMergePatch for maps and merge-key lists of maps: mergePatchIntoOriginal merges each
+    list with an order directive, splits it into the items the directive names (sorted by the directive) and the
+    original's other items (sorted by the original), and merges the two."""
+    out = copy.deepcopy(orig)
+    orders = {k[len(ORDER):]: v for k, v in patch.items() if k.startswith(ORDER)}
+    for k, v in patch.items():
+        if k.startswith(ORDER):
+            continue
+        if k in MERGE_KEYS and isinstance(v, list):
+            mk, original = MERGE_KEYS[k], out.get(k)
+            merged = copy.deepcopy(original) if isinstance(original, list) else []
+            for item in v:
+                at = next((n for n, m in enumerate(merged) if m.get(mk) == item.get(mk)), None)
+                if at is None:
+                    merged.append(apply_strategic_patch({}, item))
+                else:
+                    merged[at] = apply_strategic_patch(merged[at], item)
+            if k in orders and isinstance(original, list):
+                order = [o[mk] for o in orders[k]]
+                server_order = [o[mk] for o in original]
+                patch_items = _sorted_by([m for m in merged if m[mk] in order], order, mk)
+                server_only = _sorted_by([m for m in merged if m[mk] not in order], server_order, mk)
+                merged = _merge_sorted(server_only, patch_items, server_order, mk)
+            out[k] = merged
+        elif isinstance(v, dict) and isinstance(out.get(k), dict):
+            out[k] = apply_strategic_patch(out[k], v)
+        elif v is None:
+            out.pop(k, None)
+        else:
+            out[k] = copy.deepcopy(v)
+    return out
+
+
+def in_scheme(obj: dict) -> bool:
+    """scheme.Scheme.New(gvk) succeeds: the built-in groups (core, apps, the *.k8s.io ones); a CRD's does not."""
+    group = obj.get("apiVersion", "").rpartition("/")[0]
+    return group == "" or "." not in group or group.endswith(".k8s.io")
+
+
 def restore_non_ignored_fields(patched: dict, original: dict, normalized_target: dict, normalized_live) -> None:
     """restoreNonIgnoredFields: undoes replace collateral, recursing through maps only."""
     for k, ov in original.items():
@@ -129,13 +246,18 @@ def synced_target(target: dict, live: dict | None, expressions: list[str]) -> di
     normalized_live = normalize(live, expressions)
     live_for_patch = {k: v for k, v in live.items() if k != "status"}
     normalized_live_for_patch = {k: v for k, v in normalized_live.items() if k != "status"}
-    patched = apply_merge_patch(normalized_target, create_merge_patch(normalized_live_for_patch, live_for_patch))
+    if in_scheme(target):
+        patched = apply_strategic_patch(normalized_target,
+                                        create_strategic_patch(normalized_live_for_patch, live_for_patch))
+    else:
+        patched = apply_merge_patch(normalized_target, create_merge_patch(normalized_live_for_patch, live_for_patch))
     restore_non_ignored_fields(patched, target, normalized_target, normalized_live)
     return patched
 
 
 def out_of_sync(target: dict, live: dict, expressions: list[str]) -> bool:
-    """The diff Argo CD shows: the two objects with the ignored fields deleted, spec compared."""
+    """The diff Argo CD shows: the two objects with the ignored fields deleted, spec compared, list order included
+    (the structured-merge diff predicts the committed order, which a server-side dry run confirms)."""
     return normalize(target, expressions)["spec"] != normalize(live, expressions)["spec"]
 
 
@@ -159,6 +281,11 @@ lock = (REPO / "VERSIONS.lock").read_text(encoding="utf-8")
 argocd = re.search(r"^argocd\s+chart \S+ / app (v\S+)", lock, re.M)
 check(f"VERSIONS.lock's argocd app is {PORTED_FROM}, the sync.go this ports (a bump: re-read normalizeTargetResources)",
       argocd is not None and argocd.group(1) == PORTED_FROM, argocd.group(1) if argocd else "no argocd line")
+REPLAY = REPO / "docs/research/2026-10-30-argo-sync-replay"
+check("the real-code replay this port is checked against is committed beside it",
+      all((REPLAY / f).is_file() for f in ("README.md", "main.go", "go.mod", "go.sum", "replay.sh")))
+check("and it is of the same Argo CD", (REPLAY / "README.md").is_file()
+      and PORTED_FROM in (REPLAY / "README.md").read_text(encoding="utf-8"))
 
 AGENT_BUNDLE = REPO / "gitops/workshop-agent"
 AGENT = next(d for d in yaml.safe_load_all((AGENT_BUNDLE / "agent.yaml").read_text(encoding="utf-8"))
@@ -229,6 +356,7 @@ print("== the port still reproduces #679 under ai-layer's old options ==")
 OLD_IGNORES = [EVIL, ".spec.declarative.modelConfig"]
 stale = live_agent(workshop_tools=STALE_ELEVEN)
 frozen = self_heal(AGENT, stale, OLD_IGNORES, respect=True)
+check("the Agent is a CRD, outside Argo CD's scheme, so the copy is a JSON merge patch", not in_scheme(AGENT))
 check("with RespectIgnoreDifferences, git's twelve show as drift on the stale Agent (OutOfSync)",
       out_of_sync(AGENT, stale, OLD_IGNORES))
 check("and the sync applies the LIVE tools array, so read_support_ticket never lands",
@@ -327,28 +455,150 @@ check("and it reads the committed list from the workshop-agent bundle",
 check("and its shim test recreates the Agent from the #679 state",
       "#679" in (REPO / "verify/test_fleet_converge_repairs.sh").read_text(encoding="utf-8"))
 
-print("== no other ignore freezes part of an array on sync ==")
+print("== guard-proxy's env, a built-in list with ignored elements, under ai-layer's RespectIgnoreDifferences ==")
+# The second instance of #679. The replay (docs/research/2026-10-30-argo-sync-replay) ran each case below through Argo
+# CD's own code against a real apiserver; this holds the same results offline.
+PROXY = next(d for d in yaml.safe_load_all((REPO / "gitops/ai-layer/resources.yaml").read_text(encoding="utf-8"))
+             if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == "guard-proxy")
+
+
+def proxy_env(obj: dict) -> list[dict]:
+    return next(c for c in obj["spec"]["template"]["spec"]["containers"] if c["name"] == "proxy")["env"]
+
+
+def ignores(app: dict, group: str, kind: str, name: str) -> list[str]:
+    return [e for i in app["spec"].get("ignoreDifferences") or []
+            if i.get("group", "") == group and i.get("kind") == kind and i.get("name") in (None, name)
+            for e in i.get("jqPathExpressions") or []]
+
+
+GIT_ENV = [e["name"] for e in proxy_env(PROXY)]
+ai = rendered("ai-layer.yaml", "burn")
+proxy_ignores = ignores(ai, "apps", "Deployment", "guard-proxy")
+check("ai-layer respects its ignores on sync, the option the strategic half of the port is",
+      "RespectIgnoreDifferences=true" in sync_options(ai))
+check("guard-proxy's ignores name env entries of the proxy container", len(proxy_ignores) == 1
+      and ".env[] | select(.name | test(" in proxy_ignores[0] and 'select(.name=="proxy")' in proxy_ignores[0])
+check("a Deployment is in Argo CD's scheme, so the copy is a strategic merge patch", in_scheme(PROXY))
+check("git puts CONSOLE_ORIGIN before OTEL_SERVICE_NAME",
+      GIT_ENV.index("CONSOLE_ORIGIN") < GIT_ENV.index("OTEL_SERVICE_NAME"))
+
+
+def live_proxy(drop: str | None = None, append: str | None = None, tier: str | None = None) -> dict:
+    live = copy.deepcopy(PROXY)
+    live["metadata"].update({"namespace": "agent", "uid": "5e1f", "resourceVersion": "777", "generation": 3})
+    live["status"] = {"replicas": 1, "readyReplicas": 1}
+    env = proxy_env(live)
+    if drop:
+        env[:] = [e for e in env if e["name"] != drop]
+    if append:
+        env[:] = [e for e in env if e["name"] != append] + [e for e in env if e["name"] == append]
+    for e in env:
+        if tier and e["name"] == "MODEL_TIER":
+            e["value"] = tier
+    return live
+
+
+def names(obj: dict) -> list[str]:
+    return [e["name"] for e in proxy_env(obj)]
+
+
+def values(obj: dict) -> dict:
+    return {e["name"]: e.get("value", "") for e in proxy_env(obj)}
+
+
+def reorder(live: dict, order: list[str]) -> dict:
+    """repair_env_order's rewrite: the live entries in git's order, values kept, entries git lacks last."""
+    out = copy.deepcopy(live)
+    env = proxy_env(out)
+    env[:] = [e for n in order for e in env if e["name"] == n] + [e for e in env if e["name"] not in order]
+    return out
+
+
+before = live_proxy(drop="CONSOLE_ORIGIN", tier="sonnet")
+got = synced_target(PROXY, before, proxy_ignores)
+check("a6af457, through Argo: git's new CONSOLE_ORIGIN lands, in git's place", names(got) == GIT_ENV, str(names(got)))
+check("with the live MODEL_TIER=sonnet toggle kept", values(got)["MODEL_TIER"] == "sonnet")
+check("and the Deployment reads Synced after it", not out_of_sync(PROXY, got, proxy_ignores))
+appended = live_proxy(append="CONSOLE_ORIGIN", tier="sonnet")
+check("the same entry added live with `kubectl set env`, which appends: OutOfSync on order alone",
+      out_of_sync(PROXY, appended, proxy_ignores) and values(appended) == values(live_proxy(tier="sonnet")))
+got = synced_target(PROXY, appended, proxy_ignores)
+check("#679: the sync applies the LIVE order, CONSOLE_ORIGIN still last", names(got)[-1] == "CONSOLE_ORIGIN",
+      str(names(got)[-3:]))
+check("so it is OutOfSync after every sync, and selfHeal syncs it alone for good",
+      out_of_sync(PROXY, got, proxy_ignores)
+      and out_of_sync(PROXY, synced_target(PROXY, got, proxy_ignores), proxy_ignores))
+fixed = synced_target(PROXY, reorder(appended, GIT_ENV), proxy_ignores)
+check("after repair_env_order puts the live list in git's order, the sync keeps it and the Deployment reads Synced",
+      names(fixed) == GIT_ENV and not out_of_sync(PROXY, fixed, proxy_ignores))
+check("with the toggle still kept", values(fixed)["MODEL_TIER"] == "sonnet")
+# A commit that only moves entries is the same freeze from git's side: the live list holds every entry, so the patch's
+# order directive names all of them in the live order.
+moved = copy.deepcopy(PROXY)
+env = proxy_env(moved)
+env[:] = [e for e in env if e["name"] == "CONSOLE_ORIGIN"] + [e for e in env if e["name"] != "CONSOLE_ORIGIN"]
+MOVED_ENV = names(moved)
+on_cluster = live_proxy(tier="sonnet")
+got = synced_target(moved, on_cluster, proxy_ignores)
+check("a commit that only reorders guard-proxy's env: the sync keeps the live order, so it reads OutOfSync for good",
+      names(got) == GIT_ENV and out_of_sync(moved, got, proxy_ignores))
+fixed = synced_target(moved, reorder(got, MOVED_ENV), proxy_ignores)
+check("and repair_env_order puts that right too", names(fixed) == MOVED_ENV and not out_of_sync(moved, fixed, proxy_ignores))
+
+print("== no Application freezes a list on sync that converge cannot put right ==")
 # A JSON merge patch replaces an array whole, so on a resource outside Argo CD's scheme (a CRD: a dotted group not
-# under k8s.io) an ignore that reaches INTO an array element freezes the whole array. Built-in kinds take a
-# strategic merge patch with their merge keys, and an ignore of a whole array field is the intended freeze.
+# under k8s.io) an ignore that reaches INTO an array element freezes the whole array, and nothing but deleting the
+# object repairs that. It is never allowed under RespectIgnoreDifferences, on any profile. On a built-in kind an
+# ignore that selects an ELEMENT of a merge-key list freezes that list's order, which repair_env_order puts right, so
+# each must be one of its rows. An ignore of a whole field (`.rules`, a ConfigMap's data key) freezes that field on
+# purpose and is not a list element.
 BUILTIN = re.compile(r"^$|^[a-z0-9]+$|\.k8s\.io$")
+rows = re.search(r"^ENV_ORDER_LISTS=\(\n(.*?)\n\)", fleet, re.M | re.S)
+order_rows = {tuple(r.strip().strip('"').split()) for r in rows.group(1).splitlines()} if rows else set()
+check("fleet.sh repair_one runs repair_env_order", re.search(
+    r"^repair_one\(\) \{\n(?:.*\n){0,10}?    repair_step repair_env_order \"\$\{name\}\" \"\$\{kcfg\}\"", fleet, re.M)
+      is not None)
+check(f"repair_env_order covers guard-proxy and agentgateway ({sorted(order_rows)})",
+      order_rows == {("guard-proxy", "proxy", "gitops/ai-layer/resources.yaml"),
+                     ("agentgateway", "agentgateway", "gitops/ai-layer/agentgateway.yaml")})
+for dep, ctr, rel in sorted(order_rows):
+    deps = [d for d in yaml.safe_load_all((REPO / rel).read_text(encoding="utf-8"))
+            if d and d.get("kind") == "Deployment" and d["metadata"]["name"] == dep]
+    check(f"repair_env_order's {dep}/{ctr} row names a Deployment and container {rel} commits",
+          len(deps) == 1 and any(c["name"] == ctr for c in deps[0]["spec"]["template"]["spec"]["containers"]))
+ELEMENT = re.compile(r'containers\[\] \| select\(\.name *== *"([^"]+)"\) \| \.env\[\] \| select\(')
 
 
 def into_array(i: dict) -> list[str]:
-    return [e for e in i.get("jqPathExpressions") or [] if "[" in e] + \
-        [p for p in i.get("jsonPointers") or [] if re.search(r"/\d+/", p)]
+    """The paths that reach into an array: jq's `[]` or `[<n>]` (`["key"]` is a map key), a pointer's /<n>/."""
+    return [e for e in i.get("jqPathExpressions") or [] if re.search(r"\[\d*\]", e)] + \
+        [p for p in i.get("jsonPointers") or [] if re.search(r"/\d+(/|$)", p)]
 
 
+seen_elements: set[tuple[str, str]] = set()
 for profile in profiles():
     for n in app_names(profile):
         raw = for_c7_control((APPS / f"{n}.yaml").read_text(encoding="utf-8"), c7_control(profile))
         for app in (d for d in yaml.safe_load_all(without_front_door(raw)) if d):
-            opts = ((app.get("spec") or {}).get("syncPolicy") or {}).get("syncOptions") or []
-            if "RespectIgnoreDifferences=true" not in opts:
+            if "RespectIgnoreDifferences=true" not in (((app.get("spec") or {}).get("syncPolicy") or {})
+                                                       .get("syncOptions") or []):
                 continue
             for i in app["spec"].get("ignoreDifferences") or []:
-                bad = [] if BUILTIN.search(i.get("group", "")) else into_array(i)
-                check(f"{profile} {n}: {i.get('kind')} ignores reach into no array {bad}", not bad)
+                reach = into_array(i)
+                if not BUILTIN.search(i.get("group", "")):
+                    check(f"{profile} {n}: {i.get('kind')} (a CRD) has no ignore inside an array {reach}", not reach)
+                    continue
+                for e in reach:
+                    m = ELEMENT.search(e)
+                    covered = bool(m) and i.get("kind") == "Deployment" and any(
+                        r[0] == i.get("name") and r[1] == m.group(1) for r in order_rows)
+                    if m:
+                        seen_elements.add((i.get("name"), m.group(1)))
+                    check(f"{profile} {n}: {i.get('kind')}/{i.get('name')}'s ignored list element is a list "
+                          f"repair_env_order orders ({e[:60]}...)", covered)
+check("and every row of repair_env_order is a list some profile does ignore an element of",
+      {(r[0], r[1]) for r in order_rows} == seen_elements, str(sorted(seen_elements)))
 
 print()
 if failures:

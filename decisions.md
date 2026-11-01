@@ -7668,3 +7668,84 @@ goes to Michael in this run's report.
  
  Answered by Michael on 2026-10-11, one at a time.
 ```
+## 2026-11-01 · #679 · guard-proxy's env froze in order, not content: converge reorders it, and verify reads the rollout from hashed names
+
+The issue was reopened twice after 69ba6cf. guard-proxy's new `CONSOLE_ORIGIN` (a6af457) never reached either KubeCon
+cluster, and guard-proxy stayed OutOfSync. Then, after ed8dbf8, every ai-layer sync reported Succeeded and applied
+nothing new. The thread asked for four things: a fix covering any list with an ignored element, guard-proxy Synced
+after an env change, the Agent Synced after a tools change, and a rollout check that reads the hashed ConfigMap
+names, not the sync phase. #707 (813404e) already gives the Agent an Application of its own without
+RespectIgnoreDifferences, so the Agent half is on staging. This entry covers the rest.
+
+**Redone on #707's layout, not cherry-picked.** The previous run's draft (run 12949, 208557d, cut from staging at
+eb57bae) was never merged, and `verify/draft-drift.sh` named 54 drifted paths. It moved the Agent into its own
+`ai-layer-agent` Application. #707 had made the same move as `workshop-agent`, with the Agent at
+`gitops/workshop-agent/agent.yaml`, so this run drops that half of the draft and its thirty reader edits. Run 14977 committed this on staging ef66c77 and failed on a stale base; run 15181 rebased it onto 4e86b30, where only this file overlapped (both sides append), and re-ran both suites. What is
+kept and redone here: the real-code replay, the strategic-merge half of the port, `repair_env_order`,
+`ai_layer_rollout` and the GOTCHAS section. The replay and the tests now read the Agent from #707's bundle and the
+workshop-agent Application.
+
+**Reproduced with Argo CD's own code.** `docs/research/2026-10-30-argo-sync-replay/replay.sh` runs v3.5.2's
+`normalizeTargetResources` (copied verbatim) and `util/argo/diff.StateDiff` against envtest v1.34.1's kube-apiserver,
+with server-side apply as argocd-controller. On 2026-11-01, on this layout, all 25 checks passed. What it shows:
+- A built-in kind (guard-proxy) takes a strategic merge patch with merge keys, so its env list does not freeze in
+  content. A `CONSOLE_ORIGIN` added in git lands in git's place on the first sync, a live `MODEL_TIER` toggle
+  survives, and the Deployment reads Synced. The thread's guess that the whole env list was held is wrong in that
+  form.
+- The list does freeze in order. The patch carries `$setElementOrder/env` from live, so a sync applies the live
+  order. The 2026-10-29 stopgap, `kubectl set env CONSOLE_ORIGIN=...`, appended the entry. From then on every sync
+  kept it last, while the diff (and a server dry run of git's Deployment) puts it before `OTEL_SERVICE_NAME`. So
+  guard-proxy read OutOfSync for good, and selfHeal synced it alone every few seconds. Those are the partial syncs
+  that held back ed8dbf8.
+- New this run: a commit that only moves an entry freezes the same way, from git's side.
+- After `repair_env_order`'s rewrite, one sync reads Synced, both after the stopgap and after a git-only reorder.
+- The Agent before #707 (in ai-layer, respecting its ignores) never gets `read_support_ticket`. In the workshop-agent
+  Application it gets git's twelve tools and reads Synced, and a student's guard-mcp-on still reads Synced.
+- One question stays open: why a6af457's own sync did not land `CONSOLE_ORIGIN` before the stopgap. Through this code
+  it lands. The live controller history is the only witness, and this run has no cluster.
+- The replay now reads the live object with its managedFields, as Argo CD's live cache holds it. The first draft's
+  `kubectl get` left them out.
+
+**What changed.**
+- `fleet.sh` `repair_env_order`, a converge step after `repair_agent_tools`. It has a row in `ENV_ORDER_LISTS` for
+  each list ai-layer ignores an element of: guard-proxy/proxy and agentgateway/agentgateway. When the live env order
+  differs from git's, it JSON-patches the live entries into git's order, values kept, as the Argo controller SA,
+  with a `test` op on the container name. The pod rolls, so guard-proxy's runtime toggles and cost counter start
+  again from its env.
+- `fleet.sh` `ai_layer_rollout`, run by `verify_one`. It runs only when ai-layer's sync revision is this checkout's
+  HEAD and gitops/ai-layer is clean. It then renders the bundle and checks two things: every hashed ConfigMap and
+  Secret the commit generates exists live, and each Deployment mounts the commit's hashed names. A miss records
+  `<name>:ai-layer-rollout`. A cluster at another revision is reported but not judged.
+- `verify/test_agent_tools_sync.py` keeps #707's Agent checks. It adds apimachinery's strategic merge patch with
+  `$setElementOrder` (mergePatchIntoOriginal, normalizeSliceOrder, mergeSortedSlice) beside the JSON merge patch. It
+  runs guard-proxy's env through ai-layer's rendered ignores: a6af457 from git, the stopgap, a git-only reorder, and
+  the repair. It now holds two rules over every profile. No Application that respects ignores may ignore inside a
+  CRD's array. Every ignored element of a built-in list must be a row of `ENV_ORDER_LISTS`, and every row must be
+  such a list.
+- `verify/test_fleet_converge_repairs.sh` gains the 2026-10-29 env state, five rollout cases and the wiring.
+- `docs/GOTCHAS-FLEET-AND-DELIVERY.md`'s guard-proxy section said the whole env was ignored and told operators to
+  `kubectl set env`. It now says what git delivers and that an env entry is never added live. It names the repair,
+  and it records the by-hand recovery from a stuck selfHeal operation that worked on 2026-10-29. ai-layer.yaml's
+  ignore and RespectIgnoreDifferences comments say the same.
+
+**Considered, not taken:** dropping RespectIgnoreDifferences from ai-layer, or moving guard-proxy into an Application
+without it, as #707 did for the Agent. A sync would then apply git's env whole and correct the order, but every
+guard-proxy commit would reset the Beat-2 toggles and the cost cap mid-workshop. On ai-layer it would also reset the
+Bedrock ARN pin, the C7 gateway rule and the C8 Role. The freeze needs a live addition or a pure reorder, and the GOTCHAS
+rule and the ai-layer comment forbid both. The converge repair covers the rest.
+
+**Tests and mutations.** `bash verify/run-tests.sh` and `bash verify/run-e2e-tools.sh` were run, with the results
+in the run report. Each of these mutations fails a test: repair_env_order never patching (5 shim failures), the
+agentgateway row dropped, the port ignoring `$setElementOrder`, and verify_one not running the rollout check (2).
+
+**Tooling.** The replay is a by-hand research tool, not a gate test. It builds the argo-cd module (about 600 Go
+modules) and runs an apiserver, about three minutes cold. Its pins are argo-cd v3.5.2 (VERSIONS.lock's), k8s.io/*
+v0.36.1 (argo-cd's replaces) and envtest v1.34.1, checked against the SHA-512 in controller-tools'
+envtest-releases.yaml (2026-10-30).
+
+**Not yet run on a cluster.** Owed on each KubeCon cluster (watch-it-burn-community, watch-it-burn-private), in a
+session with AWS access, once the root syncs this commit: run `./fleet.sh converge watch-it-burn-community
+watch-it-burn-private` from infra/terraform/fleet. If `CONSOLE_ORIGIN` is still appended there, expect one "env is out
+of git's order" line per cluster. Then guard-proxy should read Synced, and the run should print "ai-layer <sha> is
+rolled out". Also confirm the workshop-agent Application is Synced with twelve workshop-mcp tools (#707's owed
+check). On a fresh attendee cluster run `bash verify/run-e2e.sh` with CONTEXT set.
