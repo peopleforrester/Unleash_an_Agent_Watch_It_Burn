@@ -9030,3 +9030,25 @@ verify/test_iam_policy_aws.py`, which must pass the five application-profile cas
 (check 5; its check 2 reports both Bedrock policies as widened, as #513 intends). A green run on either cluster
 closes #562; record it here. If both clusters are down by then, the next fleet.sh bring-up of any cluster runs
 the same commands, and nothing else changes.
+
+## 2026-11-02 · #520 · Third re-dispatch: the public half still passes, and the issue is held until a session with accen-dev runs the in-cluster half
+
+**No code changed.** Run 15830 took #520 up a third time, and nothing outside the run had moved. No one has
+commented on the issue since the 11-01 report, this run still has no credentials (`aws sts` says NoCredentials,
+and `kubectl config get-contexts` lists no context), and the test is unchanged since the 2026-11-01 entry.
+
+**The public half, probed again on 2026-11-02 at 06:18Z** with the same 20 GET requests as on 11-01, sent to
+`attackme` and `burritobot-private` under agenticburn.com and burritobot.co, gave the same results. `/guards`
+returned 200 on all four hosts, and every guard was off (`input_blocklist`, `input_classifier`, `output`, `budget`
+and `topic` all false). `/a2a/toggle`, `/a2a/guards`, `/a2a/` and `/toggle` returned the console's own
+nginx/1.27.5 404 on all four hosts.
+
+**Why the issue is held instead of dispatched again.** Each re-dispatch can only repeat this outside probe. The
+in-cluster half is the only work left, and it needs the accen-dev profile. A dispatched run can't be given that
+profile, so the run reports the two exact commands as escalations and waits until 2026-11-05. That leaves time
+for a session with accen-dev to run them before the two timed run-throughs due by 11-08 (#615) and before the talk
+on 11-12. The commands are the ones in the 2026-11-01 entry, once with `C=watch-it-burn-private` and once with
+`C=watch-it-burn-community`.
+
+**Not yet run on a cluster:** `verify/test_console_no_toggle_live.py` on watch-it-burn-private and
+watch-it-burn-community. Each run should print ten PASS lines and `All live /toggle exposure checks passed.`
