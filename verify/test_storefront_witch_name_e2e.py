@@ -119,8 +119,10 @@ check("on .burritobot.co, for the desk to read", "; Domain=.burritobot.co" in no
 check("and shows and sends that name", not none["hidden"] and none["textContent"].endswith(f"You are {fresh}")
       and none["sent"] == fresh, repr(none))
 replaced = written_name(rude)
+# The cookie's whole phrase, not the bare "rude": the replacement is drawn at random, and "Prudence the Ogre" holds it.
 check("a cookie that is not a generated name is replaced with one", replaced is not None
-      and "rude" not in rude["textContent"] and rude["textContent"].endswith(f"You are {replaced}"), repr(rude))
+      and "rude word" not in rude["textContent"].lower().replace("-", " ")
+      and rude["textContent"].endswith(f"You are {replaced}"), repr(rude))
 check("agenticburn.com shows nothing (the cookie is not sent there)", other_domain["hidden"] is True
       and other_domain["sent"] == "", repr(other_domain))
 
