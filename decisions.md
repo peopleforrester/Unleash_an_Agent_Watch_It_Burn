@@ -9716,3 +9716,71 @@ chat page keeps folding `<thinking>` text and showing reasoning that arrives as 
 2026-11-02 · #773 entry ("question 5 ... is asked in run 15977's report") is settled by this answer. If the timed
 run-throughs (by 2026-11-08) show the leak making the room's job too easy, a prompt change and a fresh live measure
 of Challenges 1 to 3 on the public bot are the way to revisit it.
+## 2026-11-02 · #783 · Agent Observability's copy gets a trace id of its own; `verify/agent_obs_flow.py` goes red when nothing arrives
+
+**The cause.** #746's collector change (241f8e6, on staging 2026-11-01 15:51 UTC; both KubeCon clusters' `otel-collector`
+Applications sync staging on their own) sends Agent Observability a second copy of every trace through
+`otlp_http/llmobs`, and marks every span of APM's copy `dd_llmobs_enabled` false. The copy kept the original trace id.
+At Datadog the two copies were one trace: the issue's APM trace `a2b544f7bbf6e12cfca75d8927f01f13` (2026-11-01 16:42
+UTC, after the rollout) has two `POST` roots with `parentid: 0`, which is APM's `POST /chat` beside the copy's
+`POST /chat` under its derived span id. The llmobs intake wrote the copy into the APM trace, the overlap Datadog's
+page warns of ("some data sent to Agent Observability may also be written to the corresponding APM traces"). So the
+trace Datadog converts held APM's marked spans, and its page says "an explicit `false` on any span prevents conversion
+of the entire trace". The marker meant to keep APM's two-root rows out vetoed the copy as well, and every BurritoBot
+turn after the rollout made no row.
+
+**Why 03:30 UTC is not the start.** The last row (the probe's HC-666 chat, 03:26 UTC) is the last chat before the
+rollout that anybody looked for. Between 03:26 and 15:51 UTC no commit touched the trace path: the collector's own
+changes that night (0cef7b6, 89fcd0f) were on staging at 02:08 UTC, before the 03:26 row arrived; 4e86b30 only writes out
+`runtime: go`, which the clusters already ran; the rest changed pages, the persona and docs. The two chats the issue
+names as missing, 16:22 and 16:45 UTC, are the first after 241f8e6. Nothing in Datadog was read for this
+(dispatched runs have no access to the sandbox org until #759), so the outage's first missing chat is inferred from
+the repo's history and the issue's evidence. The live check below confirms or refutes it.
+
+**The fix** (`gitops/otel-collector/values.yaml`, `transform/llmobs_one_root`, every profile). Its first statement
+sets the copy's trace id to the first 32 hex digits of the SHA-256 of the original
+(`set(trace_id.string, Substring(SHA256(trace_id.string), 0, 32))`). The hash is the same on every collector pod for
+every span of a turn, so the turn stays one trace, and it shares no trace with a marked span. The derived turn span id
+and kagent's re-parent now come from the copy's trace id. APM keeps its trace ids, its parentage and its marker.
+`verify/test_trace_shape_e2e.py` (E2E tools tier, the real otelcol-contrib 0.160.0) checks on all three profiles
+that no span of the copy is in APM's trace and that every gen_ai span of the turn is in the copy's own. With the new
+statement removed, those two checks and every one-root check fail (confirmed on a temporary edit, restored).
+
+**What it costs.** Agent Observability's link from a row to APM opens the copy's own trace. If the intake writes the
+copy into APM as before, APM shows one extra trace per turn under `service:burritobot` (the copy's gen_ai spans, one
+root) next to the true one. The copy's two-root shape inside the true APM trace, which the issue saw, is gone.
+
+**The check** (`verify/agent_obs_flow.py`, offline test `verify/test_agent_obs_flow.py`). `chat` sends one marked chat
+to each KubeCon bot with a session of its own, then polls the LLM Observability spans API for `ml_app:burritobot` on
+that bot's `k8s.cluster.name` until ten minutes pass, and exits 1 with `AGENT OBSERVABILITY RECEIVED NOTHING from
+<cluster>` when none arrives. It prints the trace ids it found, which is the read-back #783's third criterion asks
+for. `watch` spends nothing: it reads APM's newest `service:burritobot env:burritobot-kubecon-na-26` span at least ten
+minutes old and exits 1 when Agent Observability has no span from two minutes before it. It also exits 1 when APM has
+nothing to compare. Both read Datadog with the read-only key in Secrets Manager `watch-it-burn/datadog`, as
+`verify/stage_traces.py` does. The run-of-show's Night Before list runs `chat` before every run-through and the morning
+of. A Datadog monitor on Agent Observability's own volume would page between runs; that needs its metric name read
+in the org first, so it is a follow-up.
+
+**If the live check is still red after the fix.** The two other readings of the evidence, and what each means:
+the intake refusing the copy shows as `otlp_http/llmobs` errors in the collector log (step 2 below), and the copy
+reaching Agent Observability under the new id but still not converting would show as no error and no row. Either way,
+the stage's rows come back at once by taking `transform/llmobs_apm_off` out of the traces processors of
+`values.yaml` and `values-burn.yaml` and `forward/llmobs` out of the traces exporters (APM's own conversion, the
+two-root shape that ran until 2026-11-01), and #746's one-root view waits.
+
+**Not yet run on a cluster.** Hecaton run 16035 has no AWS credentials, kubeconfig or Datadog access. Once this
+commit is on staging, both clusters' collectors sync it on their own. From a session with accen-dev, at the repo
+root, for C in `watch-it-burn-community` and `watch-it-burn-private`:
+
+    K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl config current-context); [[ $CTX == *"cluster/$C" ]] || exit 1
+    # 1. the collector runs this commit (the revision must contain it, and the sync must have succeeded)
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n argocd get application otel-collector \
+      -o jsonpath='{.status.sync.revision} {.status.sync.status} {.status.operationState.phase}{"\n"}'
+    # 2. the intake takes the copy: no output is the pass
+    KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl --context "$CTX" -n monitoring logs \
+      ds/otel-collector-opentelemetry-collector-agent -c opentelemetry-collector --since=1h | grep -i llmobs
+
+Then `python3 verify/agent_obs_flow.py chat --profile accen-dev` must end `AGENT OBSERVABILITY GREEN`, and its trace
+ids go in a comment on #783. Whitney's #746 look (one root row per chat) can be read on the same chats.
