@@ -9192,3 +9192,24 @@ swap `check_inventory` and `reorder_supply` in `gitops/workshop-agent/agent.yaml
 the issue's jsonpath read, which must print git's new order. Run `guard-mcp-on` in community's web terminal, wait a
 minute past a selfHeal, and read evil-mcp's toolNames, which must stay `["get_weather"]`. Run `guard-mcp-off`, and
 land the swap back the same way. Record the readings here; a pass closes #733.
+## 2026-11-02 · #544 · Sixth dispatch: nothing it checks has changed since `80123c0`, and one attendee bring-up also serves #668
+
+**No code changed.** Hecaton run 15940 is the sixth dispatch of #544, about an hour after run 15831 set a spend
+wait. Like the earlier runs it has no AWS credentials (`aws sts get-caller-identity`: NoCredentials) and no
+kubeconfig, so nothing ran on a cluster.
+
+**Staging since `80123c0`, the fifth dispatch's record.** The four commits since then (`bf5a492`, `948f628`,
+`3db0553` and `6ce4faa`, the base) touch only decisions.md. `git diff --stat 80123c0 6ce4faa` over `gitops/`,
+`observability-idp/`, `infra/terraform/fleet/`, `verify/test_service_hosts_live.py`, `verify/test_fleet_contract.py`
+and `verify/test_bootstrap_chart.py` is empty. So the counts are still 34 Argo CD Applications on attendee and 38 on
+admin, and the morning's entry still says what the live run should expect and which Tempo leftovers remain. No reply to
+the spend question in issue comment 6562456139 has appeared on the issue.
+
+**One attendee bring-up serves two issues.** The #668 entry above owes
+`CONTEXT=<attendee-context> python3 verify/test_service_hosts_live.py` on the next attendee bring-up. That is the same
+command as the attendee half of #544's point 4, so the one cluster the go would pay for, about $1 for two hours, closes
+the attendee side of both. watch-it-burn-community is not a stand-in: fleet.sh gives the community role the burn
+profile, not attendee (`infra/terraform/fleet/fleet.sh` line 196).
+
+**Not yet run on a cluster.** Unchanged from the morning's entry: points 1 and 2 and the attendee half of point 4 on
+a new attendee cluster, and point 3 and the admin half of point 4 on watch-it-burn-private.
