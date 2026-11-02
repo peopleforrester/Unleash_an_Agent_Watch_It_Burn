@@ -11024,3 +11024,51 @@ tests), then 45 tier tests, and failed one, `test_image_version_tags.py`: ghcr.i
 `sha256:68004fb5ed2d...`, the red already recorded under #815. Nothing here touches an image.
 
 No dependency was added.
+## 2026-11-02 · #608 · question 961's attendee build is refused at bootstrap with no attendee Datadog row, so the run goes on watch-it-burn-private
+
+Hecaton run 15799, the seventh on #608, again had no cluster and no AWS credentials (`kubectl config get-contexts`
+lists none, `aws sts get-caller-identity` returns NoCredentials), and `python3 verify/test_llm_bypass_live.py`
+stops at "CONTEXT names the cluster to run against", exit 1, as designed. Neither the test nor
+`policies/kyverno/deny-llm-endpoint-bypass.yaml` has changed since the 2026-10-31 #608 entry. Of the two bootstrap
+changes since then, d2c9e79 adds only comments to `gitops/bootstrap/apps/ai-layer.yaml`, and 0ebb252 adds Backstage,
+which the test does not read. No code changed.
+
+- **Question 961's build has not run, and as planned it stops at its step 2.** #655 and #532 are still open with no
+  live output. For an attendee name, `fleet.sh`'s bootstrap (`infra/terraform/fleet/fleet.sh`, the "BOOTSTRAP
+  FAILED ... refusing to fall back to the shared org" branch) refuses the cluster when `datadog_keys_for` finds no
+  non-admin row in `watch-it-burn/datadog-pool` or `-pool-2`. The #629 note above says no KubeCon pool was loaded,
+  because Datadog no longer issues per-student orgs. The 2026-11-02 #544 entry found the same gate for its own
+  attendee bring-up. The question 961 plan in the 2026-10-31 #655 entry does not load a row first. So
+  `fleet.sh up watch-it-burn-attendee-001` would record a failed bootstrap and leave no cluster for this test.
+  This run cannot read the secret, so whether the pool really is empty is still to be confirmed.
+- **watch-it-burn-private is up now and needs no new spend.** PROJECT_STATE.md "KubeCon platform up" and the
+  2026-11-01 rollout entry both have it running. The first #608 entry above sets out why its admin profile carries
+  everything the test reads. The second 2026-10-30 #608 entry shows that arming it, by fleet.sh or by #638's arm
+  parameter, does not refuse the test's pods. So the owed run is the guarded command in that first entry, and it
+  does not wait for question 961's build. If an attendee cluster comes up first, the 2026-10-31 command runs there
+  instead.
+- **The re-dispatch, run 16569 on 2026-11-03, was handed that cluster but could not read the handover.** Its
+  `clusters/` directory held a kubeconfig with the `watch-it-burn-private` context and an accen-dev profile. The
+  files are mode 0640, group `hecaton`, and the run's user is not in that group, which is the block runs 16389,
+  16446 and 16467 hit. `CONTEXT=watch-it-burn-private python3 verify/test_llm_bypass_live.py` passed its first two
+  prerequisites, then failed "cluster for context 'watch-it-burn-private' is reachable" with "permission denied" on
+  the kubeconfig, exit 1. No check reached the cluster. peopleforrester/hecaton#507 and #508 track the file mode.
+  Once #508 is fixed, a dispatched run can run that same command itself.
+
+**Not yet run on a cluster:** `verify/test_llm_bypass_live.py`, all of it, with:
+
+    C=watch-it-burn-private; K=/tmp/$C.kubeconfig
+    AWS_PROFILE=accen-dev aws eks update-kubeconfig --kubeconfig $K --name $C --region us-west-2
+    CTX=$(KUBECONFIG=$K AWS_PROFILE=accen-dev kubectl config current-context); [[ $CTX == *"cluster/$C" ]] && \
+      KUBECONFIG=$K AWS_PROFILE=accen-dev CONTEXT="$CTX" python3 verify/test_llm_bypass_live.py
+
+and the result goes here: whether the three #607 checks pass (terminal-auth refused by volume and by secretKeyRef,
+each with its message; ceo-personal-record admitted), and whether the #490 and #552 checks the TypeError hid pass.
+
+**The suites (run 16569).** `bash verify/run-tests.sh` exits 0 once the guard-proxy submodule checkout matches
+staging's 6d8505a pin. Before that update, `test_proxy_checksum.py` read the old checkout. On the first base the run
+was rebased onto, `bash verify/run-e2e-tools.sh` ran 45 checks and failed only `test_image_version_tags.py`, with two
+reds. The first was the bare `watch-it-burn:workshop-mcp` tag in `verify/test_tool_pin_live_check.py`'s shim fixture,
+which staging has since fixed (b6dc62b). The second is the web-terminal digest red the #794 entry above records. Its
+fix needs a ghcr.io write and the signing key. The run polled the tier to its end rather than waiting on it in the
+background, which is what stalled the attempt before it for 900 s, as it stalled run 16467.
