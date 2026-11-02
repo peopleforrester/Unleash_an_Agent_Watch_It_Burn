@@ -987,6 +987,16 @@ is merely slow rather than rebuilding:
   must end `SEEDED GREEN`. Whitney opens each link in her org and saves it as a
   view, in that order. The morning of: `python3 verify/stage_traces.py check
   --profile accen-dev` must end `STAGE TRACES GREEN`.
+- [ ] **Agent Observability is receiving from both bots (#783).** Before every
+  run-through, the Night Before and the morning of:
+  `python3 verify/agent_obs_flow.py chat --profile accen-dev`. It sends one marked
+  chat to each bot (two model calls, none in the room's feed) and waits up to ten
+  minutes for its spans in Agent Observability. It must end `AGENT OBSERVABILITY
+  GREEN`. A RED names the cluster that sent nothing: on 2026-11-01 APM kept every
+  trace while Agent Observability got none for six hours, and nothing else went red.
+  Between runs, `python3 verify/agent_obs_flow.py watch --profile accen-dev` spends
+  nothing and goes red when APM's newest BurritoBot span never reached Agent
+  Observability.
 - [ ] **C7 at the gateway, and its reload delay (#496).** From the repo root, against
   the admin cluster:
   `CONTEXT=<admin-ctx> challenges/03-bad-mcp-excessive-agency/fallback.curl.sh`.
