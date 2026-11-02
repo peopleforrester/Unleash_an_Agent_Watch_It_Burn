@@ -409,12 +409,21 @@ config:
             - 'set(attributes["dd_llmobs_enabled"], false)'
     # The Agent Observability copy (pipeline traces/llmobs, fed by forward/llmobs after every processor above has run,
     # PII scrub on burn included). The Datadog overlay sends it to Datadog's OTLP intake with dd-otlp-source: llmobs.
-    # It never reaches APM, Tempo or the service map, so moving a parent here changes no waterfall.
+    # It never reaches Tempo or the service map, so moving a parent here changes no waterfall there.
+    #
+    # The copy is a trace of its own (#783): its first statement replaces the trace id with the first 32 hex digits of
+    # the SHA-256 of the original. With the original id, the copy and APM's copy were one trace at Datadog. The intake
+    # wrote the copy into the APM trace too (the overlap Datadog's page warns of): APM trace
+    # a2b544f7bbf6e12cfca75d8927f01f13, 2026-11-01 16:42 UTC, had two POST roots, APM's POST /chat and the copy's
+    # under its derived id. APM's spans in that same trace carry dd_llmobs_enabled false, and "an explicit false on
+    # any span prevents conversion of the entire trace", so from this change's rollout (2026-11-01 ~15:55 UTC) Agent
+    # Observability received no BurritoBot turn at all. Under its own trace id the copy shares no trace with a marked
+    # span. The hash is the same on every node for every span of a turn, so the turn's spans stay one trace.
     #
     # The collector sees one span at a time, and the guard's spans and kagent's are handled on different nodes, so the
     # link cannot be looked up. It is computed instead: the guard span that holds the turn takes the low 64 bits of
-    # the trace id as its span id, and kagent's invocation names the same id as its parent. Both come from the trace
-    # id alone. The span that holds the turn is POST /chat, the storefront's turn (proxy.py, pin fb6e2bf, _handle_chat),
+    # the copy's trace id as its span id, and kagent's invocation names the same id as its parent. Both come from the
+    # trace id alone. The span that holds the turn is POST /chat, the storefront's turn (proxy.py, pin fb6e2bf, _handle_chat),
     # or sanitize on the raw A2A pass-through (_handle_post), whose own POST / server span has no gen_ai.* attribute.
     # Either one carries the prompt and the final reply, and lasts the whole turn. It becomes invoke_agent, Datadog's
     # agent kind: guard-proxy makes no model call of its own, and as an llm row with no tokens it made the trace
@@ -428,6 +437,7 @@ config:
       trace_statements:
         - context: span
           statements:
+            - 'set(trace_id.string, Substring(SHA256(trace_id.string), 0, 32))'
             - 'delete_key(attributes, "dd_llmobs_enabled")'
             - 'set(span_id.string, Substring(trace_id.string, 16, 16)) where resource.attributes["service.name"] == "burritobot" and attributes["gen_ai.operation.name"] == "chat" and ((kind == SPAN_KIND_SERVER and IsMatch(name, "^POST /chat/?$")) or name == "sanitize")'
             - 'set(attributes["gen_ai.operation.name"], "invoke_agent") where resource.attributes["service.name"] == "burritobot" and attributes["gen_ai.operation.name"] == "chat" and ((kind == SPAN_KIND_SERVER and IsMatch(name, "^POST /chat/?$")) or name == "sanitize")'
