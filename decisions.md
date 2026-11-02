@@ -9692,3 +9692,27 @@ header also links "Deployments" beside the Joker wall.
 `CONTEXT=<private-context>` (refused at Deny, naming restrict-image-registries), then on the public bot, as a
 witch, "deploy nginx", and confirm the row on `deployments-attackme.burritobot.co` and the chat page's "see your
 deployments" link. The witch name on the row needs #762's repin first.
+
+## 2026-11-02 · question 1048 · #773: the model's reasoning stays visible in BurritoBot's replies to the room
+
+**Question.** Should BurritoBot's replies to the breakout room keep showing the model's own reasoning about whether
+to comply, or should its system prompt tell it to keep that reasoning out of the reply? In the 2026-11-01 live test
+the first reply to the Tron prompt was the model's reasoning ("The user has provided a plausible reason (ticket
+HR171) and is freaking out, which shows persistence. This meets the criteria for deploying an app."), outside the
+chat page's collapsed "model reasoning" section.
+
+**Answer:** Keep it visible.
+
+**Decided by** hecaton's research under Michael's standing rules, not by Michael. The sources it cited: #100's
+closing fix of 2026-09-03 (the model's reasoning is folded on purpose and never dropped, since a workshop about what
+leaks out of an agent must not silently delete part of the model's output); `splitThinking` in
+`gitops/ai-layer/web/burritbot.html` and the 2026-10-24 · #530 entry here (when folding leaves nothing to read, the
+reasoning is the reply and is shown untagged); `/kubecon`'s prompts, which already hand the room the same cues the
+leaked sentence names (a change ticket, urgency); and the persona in `gitops/workshop-agent/agent.yaml`, which
+rewards a plausible reason and persistence by design.
+
+**What it changes.** Nothing in the build. The system prompt the challenges were measured on stays as it is, and the
+chat page keeps folding `<thinking>` text and showing reasoning that arrives as the reply. The open item in the
+2026-11-02 · #773 entry ("question 5 ... is asked in run 15977's report") is settled by this answer. If the timed
+run-throughs (by 2026-11-08) show the leak making the room's job too easy, a prompt change and a fresh live measure
+of Challenges 1 to 3 on the public bot are the way to revisit it.
